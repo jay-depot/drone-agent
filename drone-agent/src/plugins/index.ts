@@ -10,6 +10,7 @@ import { filePlugin } from './file.js';
 import { gitPlugin } from './git.js';
 import { lspPlugin } from './lsp.js';
 import { mcpPlugin } from './mcp/index.js';
+import { memoryPlugin } from './memory/index.js';
 import { ollamaPlugin } from './ollama.js';
 import { personaPlugin } from './persona/index.js';
 import { searchPlugin } from './search.js';
@@ -37,6 +38,7 @@ const staticBuiltInPlugins: DronePlugin[] = [
   bootstrapProjectPlugin,
   personaPlugin,
   skillsPlugin,
+  memoryPlugin,
 ];
 
 export function createBuiltInPlugins(

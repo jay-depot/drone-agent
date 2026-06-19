@@ -45,6 +45,14 @@ export type DroneCompactionConfig = {
   summaryBudgetPercent: number;
 };
 
+export type DroneMemoryConfig = {
+  enabled: boolean;
+  /** Max number of memory entries before oldest are pruned. 0 = unlimited. */
+  maxEntries: number;
+  /** Auto-save session summary on shutdown. */
+  autoSave: boolean;
+};
+
 export type DroneLspSpawnServerConfig = {
   transport?: 'stdio';
   language?: string;
@@ -140,6 +148,7 @@ export type DroneAgentConfig = {
   lsp: DroneLspConfig;
   mcp: DroneMcpConfig;
   compaction: DroneCompactionConfig;
+  memory: DroneMemoryConfig;
 };
 
 export type PartialDroneAgentConfig = Partial<{
@@ -151,6 +160,7 @@ export type PartialDroneAgentConfig = Partial<{
   lsp: Partial<DroneLspConfig>;
   mcp: Partial<DroneMcpConfig>;
   compaction: Partial<DroneCompactionConfig>;
+  memory: Partial<DroneMemoryConfig>;
 }>;
 
 export type DroneConfigScope = 'default' | 'user' | 'project';
@@ -604,6 +614,11 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
       summaryMaxTokens: 800,
       summaryBudgetPercent: 20,
     },
+    memory: {
+      enabled: true,
+      maxEntries: 0,
+      autoSave: true,
+    },
   };
 }
 
@@ -650,6 +665,12 @@ export function applyAgentConfigLayer(
           ...layer.compaction,
         }
       : baseConfig.compaction,
+    memory: layer.memory
+      ? {
+          ...baseConfig.memory,
+          ...layer.memory,
+        }
+      : baseConfig.memory,
   };
 }
 
