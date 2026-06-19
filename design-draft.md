@@ -48,7 +48,7 @@ Session agents are workers. Personas are the stateful layer. You get disposabili
 
 Each level works without the one above it:
 
-- **Offline:** Agent works with `.drone/` files at project/user scope. Beacon running on same host adds system-wide skills and memory, even if coordinator is unreachable, and its features unavailable.
+- **Offline:** Agent works with `.drone-agent/` files at project/user scope. Beacon running on same host adds system-wide skills and memory, even if coordinator is unreachable, and its features unavailable.
 - **LAN:** Agents share via beacon on the same network, even if coordinator is down. They get shared skills and can spawn agents on the beacon host, but no cross-beacon coordination.
 - **Cloud/Personal Tailnet/Corporate VPN:** Cross-site coordination via coordinator
 
@@ -80,19 +80,27 @@ After that, query tools:
 
 This would make drone the first coding agent treating LSP as a first-class capability, not an afterthought. Most coding agents (Claude Code, Cursor) treat "reading code" as file I/O. drone would do what an IDE LSP client does — maintain language server connections and query semantic information.
 
+#### Auto-install (shipped)
+
+When a language server isn't on `PATH`, the LSP plugin downloads a pinned copy from npm into a per-user cache (`$XDG_CACHE_HOME/drone-agent/lsp/` on Linux) and invokes it via the running Node interpreter. The integrity digest is hardcoded in the plugin source — the same `dist.integrity` field `npm install` would verify — so the security posture matches a manual install. The user can disable auto-install globally (`lsp.autoInstall: false`) or per-server, in which case the plugin falls back to today's behavior (status: `error`, lastError explaining the missing binary).
+
 ---
 
 ## Persistence Strategy
 
 Layered, matching the architecture:
 
-| Level       | Store                               | Notes                                                                                         |
-| ----------- | ----------------------------------- | --------------------------------------------------------------------------------------------- |
-| Project     | `.drone/` directory with JSON files | Inspectable, git-trackable, trivially debuggable. Unix philosophy.                            |
-| Beacon      | SQLite                              | Structured storage for local config, cached skills, session registry, beacon-scoped event log |
-| Coordinator | SQLite or Postgres                  | Postgres for multi-writer scenarios. User's choice.                                           |
+| Level       | Store                                     | Notes                                                                                         |
+| ----------- | ----------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Project     | `.drone-agent/` directory with JSON files | Inspectable, git-trackable, trivially debuggable. Unix philosophy.                            |
+| Beacon      | SQLite                                    | Structured storage for local config, cached skills, session registry, beacon-scoped event log |
+| Coordinator | SQLite or Postgres                        | Postgres for multi-writer scenarios. User's choice.                                           |
 
-Pluggable persistence considered and explicitly rejected — plugin architectures at every layer are a maintenance nightmare.
+Pluggable persistence **at the beacon and coordinator** levels considered and explicitly rejected — plugin engines at every layer of the stack are a maintenance nightmare. The beacon knows it uses SQLite; the coordinator can be SQLite or Postgres at the operator's choice, but neither hosts a plugin system for storage backends.
+
+At the **agent level**, retention strategy and memory indexing are behavioral concerns, not infrastructural ones. They _are_ pluggable — different users want different retention policies (full logs, summaries, fact extraction, or none) and different search/index approaches. These are implemented as `drone-agent` plugins that hook into the session lifecycle, not as storage backends swapped behind an abstraction layer. The storage _medium_ (files in `.drone-agent/`) is fixed; the _behavior_ around what gets stored, how it's organized, and how it's queried is pluggable.
+
+**Caveat:** When the `swarm` plugin connects to a beacon, the beacon's SQLite store effectively overrides the project-level file store for persistence. The agent-level memory plugins still control _what_ gets retained and _how_ it's indexed, but the _where_ shifts from files to the beacon database. This mirrors the fractal config model — the lower level provides the default, and the higher level overrides.
 
 ---
 
@@ -108,12 +116,12 @@ Config cascades with strict override:
 
 **Scope files:**
 
-- Project: `project/.drone/`
-- User system: `~/.config/drone/`
+- Project: `project/.drone-agent/`
+- User system: `~/.drone-agent/`
 - Beacon: beacon-side configuration
 - Swarm: coordinator registry
 
-**Scope discovery:** Agent walks directory tree for `.drone/` configs, asks beacon for higher-level overrides.
+**Scope discovery:** Agent walks directory tree for `.drone-agent/` configs, asks beacon for higher-level overrides.
 
 **Refresh:** On next LLM turn (hot-reload). Don't interrupt a multi-minute refactor to reload personality.
 

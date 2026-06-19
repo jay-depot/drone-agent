@@ -6,11 +6,20 @@ import type {
   DronePlugin,
 } from 'drone-core';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { constants as fsConstants } from 'node:fs';
 import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { createConnection, type Socket } from 'node:net';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  commandExistsOnPath,
+  computeCacheKey,
+  ensureServerInstalled,
+  resolveCacheDir,
+  type InstallerResolution,
+  type InstallerSpec,
+} from './lsp-installer.js';
 
 const HEADER_SEPARATOR = '\r\n\r\n';
 const EXCLUDED_DIRECTORIES = new Set([
@@ -56,13 +65,35 @@ type JsonRpcClient = {
   disconnect: (reason?: string) => void;
 };
 
-type KnownServerSpec = {
+/**
+ * Optional, declarative metadata for auto-installing a server when it isn't on
+ * PATH. When present, the plugin will lazily download the npm tarball into a
+ * per-user cache and invoke it via the running Node interpreter. Integrity is
+ * the npm `dist.integrity` value (sha512-base64) — the same field npm
+ * verifies before extracting — so the threat model matches a regular
+ * `npm install`.
+ *
+ * `nodeEntry` is the path inside the unpacked tarball that should be passed
+ * to `node` (e.g. `lib/cli.mjs`). It does not need to be executable; we
+ * resolve the absolute path and invoke Node directly, which sidesteps
+ * shebang/Windows-PATH issues.
+ */
+export type KnownServerInstallSpec = {
+  npmPackage: string;
+  version: string;
+  tarballUrl: string;
+  integrity: string;
+  nodeEntry: string;
+};
+
+export type KnownServerSpec = {
   id: string;
   language: string;
   command: string;
   args: string[];
   fileExtensions: string[];
   rootPatterns: string[];
+  install?: KnownServerInstallSpec;
 };
 
 type DocumentState = {
@@ -152,6 +183,26 @@ const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
       '.cjs',
     ],
     rootPatterns: ['tsconfig.json', 'jsconfig.json', 'package.json'],
+    install: {
+      npmPackage: 'typescript-language-server',
+      version: '5.3.0',
+      tarballUrl:
+        'https://registry.npmjs.org/typescript-language-server/-/typescript-language-server-5.3.0.tgz',
+      // Pinned sha512-base64 of the actual tarball bytes, computed locally
+      // (sha512sum / openssl dgst -sha512). Note: this intentionally
+      // differs by one base64 character from the `dist.integrity` field
+      // published in the npm registry metadata for v5.3.0 — that field
+      // appears to be stale, since the published `shasum` is also off
+      // by a bit. We pin to the digest the actual bytes produce so the
+      // safety property holds; if a future republish changes the
+      // tarball, bump this value alongside `version`.
+      integrity:
+        'sha512-5puofxZHgFdAYtfNpmwCAvgtaYgg8wrUnH30m7Ze3QuguId5RNRadKASpOpyDxTyUdAF51FjhTdjntLw/EuWcQ==',
+      // typescript-language-server is published as ESM with a `bin`
+      // declaration pointing at `lib/cli.mjs`. After extracting the
+      // tarball we invoke Node directly on that file.
+      nodeEntry: 'lib/cli.mjs',
+    },
   },
 ];
 
@@ -413,6 +464,23 @@ function normalizeSeverity(
   }
 }
 
+function severityToLsp(
+  severity: DroneLspDiagnostic['severity']
+): number {
+  switch (severity) {
+    case 'error':
+      return 1;
+    case 'warning':
+      return 2;
+    case 'information':
+      return 3;
+    case 'hint':
+      return 4;
+    default:
+      return 1;
+  }
+}
+
 function normalizeHoverContents(contents: unknown): string {
   if (typeof contents === 'string') {
     return contents;
@@ -534,6 +602,824 @@ function sortDiagnostics(
     }
     return left.range.start.character - right.range.start.character;
   });
+}
+
+// ---------------------------------------------------------------------------
+// LSP response shapes for the additional tools
+// ---------------------------------------------------------------------------
+
+type LspDocumentSymbolResponse = {
+  name?: string;
+  kind?: number | string;
+  detail?: string;
+  tags?: Array<number | string>;
+  deprecated?: boolean;
+  range?: LspRangeResponse;
+  selectionRange?: LspRangeResponse;
+  children?: LspDocumentSymbolResponse[];
+  containerName?: string;
+  location?: {
+    uri?: string;
+    range?: LspRangeResponse;
+  };
+};
+
+type LspWorkspaceSymbolResponse = {
+  name?: string;
+  kind?: number | string;
+  tags?: Array<number | string>;
+  containerName?: string;
+  location?: {
+    uri?: string;
+    range?: LspRangeResponse;
+  };
+};
+
+type LspParameterInformation = {
+  label?: string | [number, number];
+  documentation?: unknown;
+};
+
+type LspSignatureInformation = {
+  label?: string;
+  documentation?: unknown;
+  parameters?: LspParameterInformation[];
+  activeParameter?: number;
+};
+
+type LspSignatureHelpResponse = {
+  signatures?: LspSignatureInformation[];
+  activeSignature?: number;
+  activeParameter?: number;
+};
+
+type LspCompletionItemResponse = {
+  label?: string;
+  kind?: number | string;
+  tags?: Array<number | string>;
+  detail?: string;
+  documentation?: unknown;
+  sortText?: string;
+  filterText?: string;
+  insertText?: string;
+  insertTextFormat?: number;
+  textEdit?: {
+    range?: LspRangeResponse;
+    newText?: string;
+  };
+  additionalTextEdits?: Array<{
+    range?: LspRangeResponse;
+    newText?: string;
+  }>;
+  commitCharacters?: string[];
+  command?: { title?: string; command?: string; arguments?: unknown[] };
+};
+
+type LspCompletionListResponse = {
+  isIncomplete?: boolean;
+  items?: LspCompletionItemResponse[];
+};
+
+type LspCommandResponse = {
+  title?: string;
+  command?: string;
+  arguments?: unknown[];
+};
+
+type LspCodeActionResponse = {
+  title?: string;
+  kind?: string;
+  diagnostics?: Array<{ code?: string | number }>;
+  isPreferred?: boolean;
+  disabled?: { reason?: string };
+  edit?: LspWorkspaceEdit;
+  command?: LspCommandResponse;
+};
+
+type LspWorkspaceEdit = {
+  changes?: Array<{
+    uri?: string;
+    edits?: Array<{
+      range?: LspRangeResponse;
+      newText?: string;
+    }>;
+  }>;
+  documentChanges?: Array<LspDocumentChange>;
+};
+
+/**
+ * LSP documentChanges is a tagged union. Each entry either carries a
+ * `kind` (create/rename/delete) or is a TextDocumentEdit (no `kind`,
+ * has `textDocument` + `edits`). We model both variants explicitly so
+ * the runtime narrowing in `normalizeWorkspaceEdit` is type-safe.
+ */
+type LspDocumentChange =
+  | {
+      kind: 'create';
+      uri?: string;
+    }
+  | {
+      kind: 'delete';
+      uri?: string;
+    }
+  | {
+      kind: 'rename';
+      oldUri?: string;
+      newUri?: string;
+    }
+  | {
+      textDocument?: { uri?: string; version?: number };
+      edits?: Array<{
+        range?: LspRangeResponse;
+        newText?: string;
+      }>;
+    };
+
+type LspCallHierarchyItem = {
+  name?: string;
+  kind?: number | string;
+  detail?: string;
+  uri?: string;
+  range?: LspRangeResponse;
+  selectionRange?: LspRangeResponse;
+};
+
+type LspCallHierarchyCall = {
+  from?: LspCallHierarchyItem[];
+  to?: LspCallHierarchyItem[];
+};
+
+// LSP SymbolKind numeric values (3.17 spec). We expose them as named
+// constants so the agent sees "Function" / "Class" instead of "12".
+const LSP_SYMBOL_KIND: Record<number, string> = {
+  1: 'File',
+  2: 'Module',
+  3: 'Namespace',
+  4: 'Package',
+  5: 'Class',
+  6: 'Method',
+  7: 'Property',
+  8: 'Field',
+  9: 'Constructor',
+  10: 'Enum',
+  11: 'Interface',
+  12: 'Function',
+  13: 'Variable',
+  14: 'Constant',
+  15: 'String',
+  16: 'Number',
+  17: 'Boolean',
+  18: 'Array',
+  19: 'Object',
+  20: 'Key',
+  21: 'Null',
+  22: 'EnumMember',
+  23: 'Struct',
+  24: 'Event',
+  25: 'Operator',
+  26: 'TypeParameter',
+};
+
+const LSP_COMPLETION_ITEM_KIND: Record<number, string> = {
+  1: 'Text',
+  2: 'Method',
+  3: 'Function',
+  4: 'Constructor',
+  5: 'Field',
+  6: 'Variable',
+  7: 'Class',
+  8: 'Interface',
+  9: 'Module',
+  10: 'Property',
+  11: 'Unit',
+  12: 'Value',
+  13: 'Enum',
+  14: 'Keyword',
+  15: 'Snippet',
+  16: 'Color',
+  17: 'File',
+  18: 'Reference',
+  19: 'Folder',
+  20: 'EnumMember',
+  21: 'Constant',
+  22: 'Struct',
+  23: 'Event',
+  24: 'Operator',
+  25: 'TypeParameter',
+};
+
+function formatSymbolKind(kind: number | string | undefined): string {
+  if (kind === undefined) {
+    return 'Unknown';
+  }
+  if (typeof kind === 'string') {
+    return kind;
+  }
+  return LSP_SYMBOL_KIND[kind] ?? `kind:${kind}`;
+}
+
+function formatCompletionKind(
+  kind: number | string | undefined
+): string {
+  if (kind === undefined) {
+    return 'Unknown';
+  }
+  if (typeof kind === 'string') {
+    return kind;
+  }
+  return LSP_COMPLETION_ITEM_KIND[kind] ?? `kind:${kind}`;
+}
+
+function normalizeMarkupContent(value: unknown): string {
+  if (value === undefined || value === null) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (isRecord(value)) {
+    if (typeof value.value === 'string') {
+      return value.value;
+    }
+  }
+  return '';
+}
+
+type NormalizedSymbol = {
+  name: string;
+  kind: string;
+  containerName?: string;
+  filePath?: string;
+  line?: number;
+  column?: number;
+  detail?: string;
+  deprecated?: boolean;
+  children?: NormalizedSymbol[];
+};
+
+function flattenDocumentSymbols(
+  symbols: LspDocumentSymbolResponse[] | null | undefined
+): NormalizedSymbol[] {
+  if (!symbols) {
+    return [];
+  }
+  const out: NormalizedSymbol[] = [];
+  for (const symbol of symbols) {
+    if (!symbol || typeof symbol.name !== 'string') {
+      continue;
+    }
+    const range = symbol.range ?? symbol.selectionRange;
+    const normalized: NormalizedSymbol = {
+      name: symbol.name,
+      kind: formatSymbolKind(symbol.kind),
+      containerName:
+        typeof symbol.containerName === 'string'
+          ? symbol.containerName
+          : undefined,
+      detail:
+        typeof symbol.detail === 'string' ? symbol.detail : undefined,
+      deprecated:
+        symbol.deprecated === true ||
+        (Array.isArray(symbol.tags) && symbol.tags.includes(1)),
+      children:
+        symbol.children && symbol.children.length > 0
+          ? flattenDocumentSymbols(symbol.children)
+          : undefined,
+    };
+    if (range) {
+      normalized.line = (range.start?.line ?? 0) + 1;
+      normalized.column = (range.start?.character ?? 0) + 1;
+    }
+    out.push(normalized);
+  }
+  return out;
+}
+
+function normalizeWorkspaceSymbols(
+  symbols: LspWorkspaceSymbolResponse[] | null | undefined
+): NormalizedSymbol[] {
+  if (!symbols) {
+    return [];
+  }
+  const out: NormalizedSymbol[] = [];
+  for (const symbol of symbols) {
+    if (!symbol || typeof symbol.name !== 'string') {
+      continue;
+    }
+    const uri = symbol.location?.uri;
+    const filePath =
+      typeof uri === 'string' ? fromFileUri(uri) : undefined;
+    const range = symbol.location?.range;
+    const normalized: NormalizedSymbol = {
+      name: symbol.name,
+      kind: formatSymbolKind(symbol.kind),
+      containerName:
+        typeof symbol.containerName === 'string'
+          ? symbol.containerName
+          : undefined,
+      filePath: filePath ?? undefined,
+      line: range ? (range.start?.line ?? 0) + 1 : undefined,
+      column: range ? (range.start?.character ?? 0) + 1 : undefined,
+      deprecated:
+        Array.isArray(symbol.tags) && symbol.tags.includes(1),
+    };
+    out.push(normalized);
+  }
+  return out;
+}
+
+type NormalizedSignatureHelp = {
+  activeSignature: number;
+  activeParameter: number;
+  signatures: Array<{
+    label: string;
+    documentation?: string;
+    parameters: Array<{
+      label: string;
+      documentation?: string;
+    }>;
+    activeParameter?: number;
+  }>;
+};
+
+function normalizeSignatureHelp(
+  response: LspSignatureHelpResponse | null | undefined
+): NormalizedSignatureHelp {
+  const signatures = response?.signatures ?? [];
+  const activeSignature = response?.activeSignature ?? 0;
+  const fallbackActiveParameter = response?.activeParameter ?? 0;
+  return {
+    activeSignature,
+    activeParameter: fallbackActiveParameter,
+    signatures: signatures
+      .filter(
+        (signature): signature is LspSignatureInformation =>
+          typeof signature === 'object' && signature !== null
+      )
+      .map(signature => {
+        const activeParameter =
+          signature.activeParameter ?? fallbackActiveParameter;
+        return {
+          label: signature.label ?? '',
+          documentation: normalizeMarkupContent(signature.documentation),
+          parameters: (signature.parameters ?? []).map(parameter => {
+            let labelText = '';
+            if (typeof parameter.label === 'string') {
+              labelText = parameter.label;
+            } else if (
+              Array.isArray(parameter.label) &&
+              parameter.label.length === 2 &&
+              typeof signature.label === 'string'
+            ) {
+              const [start, end] = parameter.label;
+              labelText = signature.label.slice(start, end);
+            }
+            return {
+              label: labelText,
+              documentation: normalizeMarkupContent(
+                parameter.documentation
+              ),
+            };
+          }),
+          activeParameter,
+        };
+      }),
+  };
+}
+
+type NormalizedCompletionItem = {
+  label: string;
+  kind: string;
+  detail?: string;
+  documentation?: string;
+  sortText?: string;
+  filterText?: string;
+  insertText?: string;
+};
+
+function normalizeCompletionItems(
+  response:
+    | LspCompletionItemResponse[]
+    | LspCompletionListResponse
+    | null
+    | undefined
+): { isIncomplete: boolean; items: NormalizedCompletionItem[] } {
+  if (!response) {
+    return { isIncomplete: false, items: [] };
+  }
+  let isIncomplete = false;
+  let rawItems: LspCompletionItemResponse[];
+  if (Array.isArray(response)) {
+    rawItems = response;
+  } else {
+    isIncomplete = response.isIncomplete === true;
+    rawItems = response.items ?? [];
+  }
+  const items: NormalizedCompletionItem[] = [];
+  for (const item of rawItems) {
+    if (!item || typeof item.label !== 'string') {
+      continue;
+    }
+    items.push({
+      label: item.label,
+      kind: formatCompletionKind(item.kind),
+      detail: typeof item.detail === 'string' ? item.detail : undefined,
+      documentation: normalizeMarkupContent(item.documentation),
+      sortText:
+        typeof item.sortText === 'string' ? item.sortText : undefined,
+      filterText:
+        typeof item.filterText === 'string' ? item.filterText : undefined,
+      insertText:
+        typeof item.insertText === 'string' ? item.insertText : undefined,
+    });
+  }
+  return { isIncomplete, items };
+}
+
+type NormalizedTextEdit = {
+  range: {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+  };
+  newText: string;
+};
+
+function normalizeTextEdits(
+  edits:
+    | Array<{ range?: LspRangeResponse; newText?: string }>
+    | null
+    | undefined
+): NormalizedTextEdit[] {
+  if (!edits) {
+    return [];
+  }
+  return edits
+    .filter(edit => edit && typeof edit.newText === 'string')
+    .map(edit => ({
+      range: normalizeLspRange(edit.range),
+      newText: edit.newText ?? '',
+    }));
+}
+
+type NormalizedWorkspaceEdit = {
+  changes: Array<{ filePath: string; edits: NormalizedTextEdit[] }>;
+  documentChanges: Array<
+    | {
+        kind: 'textEdit';
+        filePath: string;
+        edits: NormalizedTextEdit[];
+        version?: number;
+      }
+    | { kind: 'create'; filePath: string }
+    | { kind: 'rename'; oldPath: string; newPath: string }
+    | { kind: 'delete'; filePath: string }
+  >;
+};
+
+function isCreateOp(
+  change: LspDocumentChange
+): change is { kind: 'create'; uri?: string } {
+  return (change as { kind?: string }).kind === 'create';
+}
+
+function isDeleteOp(
+  change: LspDocumentChange
+): change is { kind: 'delete'; uri?: string } {
+  return (change as { kind?: string }).kind === 'delete';
+}
+
+function isRenameOp(
+  change: LspDocumentChange
+): change is { kind: 'rename'; oldUri?: string; newUri?: string } {
+  return (change as { kind?: string }).kind === 'rename';
+}
+
+function normalizeWorkspaceEdit(
+  edit: LspWorkspaceEdit | null | undefined
+): NormalizedWorkspaceEdit {
+  const changes: NormalizedWorkspaceEdit['changes'] = [];
+  for (const change of edit?.changes ?? []) {
+    if (!change || typeof change.uri !== 'string') {
+      continue;
+    }
+    const filePath = fromFileUri(change.uri);
+    if (!filePath) {
+      continue;
+    }
+    changes.push({
+      filePath,
+      edits: normalizeTextEdits(change.edits),
+    });
+  }
+
+  const documentChanges: NormalizedWorkspaceEdit['documentChanges'] = [];
+  for (const change of edit?.documentChanges ?? []) {
+    if (!change) {
+      continue;
+    }
+    if (isCreateOp(change)) {
+      const filePath =
+        typeof change.uri === 'string' ? fromFileUri(change.uri) : null;
+      if (filePath) {
+        documentChanges.push({ kind: 'create', filePath });
+      }
+      continue;
+    }
+    if (isDeleteOp(change)) {
+      const filePath =
+        typeof change.uri === 'string' ? fromFileUri(change.uri) : null;
+      if (filePath) {
+        documentChanges.push({ kind: 'delete', filePath });
+      }
+      continue;
+    }
+    if (isRenameOp(change)) {
+      const oldPath =
+        typeof change.oldUri === 'string'
+          ? fromFileUri(change.oldUri)
+          : null;
+      const newPath =
+        typeof change.newUri === 'string'
+          ? fromFileUri(change.newUri)
+          : null;
+      if (oldPath && newPath) {
+        documentChanges.push({
+          kind: 'rename',
+          oldPath,
+          newPath,
+        });
+      }
+      continue;
+    }
+    // Anything without a recognized `kind` is treated as a
+    // TextDocumentEdit. We accept the `as` cast here because LSP
+    // servers in the wild occasionally omit `kind` discriminators.
+    const textDocEdit = change as {
+      textDocument?: { uri?: string; version?: number };
+      edits?: Array<{
+        range?: LspRangeResponse;
+        newText?: string;
+      }>;
+    };
+    const uri = textDocEdit.textDocument?.uri;
+    const filePath = typeof uri === 'string' ? fromFileUri(uri) : null;
+    if (!filePath) {
+      continue;
+    }
+    documentChanges.push({
+      kind: 'textEdit',
+      filePath,
+      edits: normalizeTextEdits(textDocEdit.edits),
+      version:
+        typeof textDocEdit.textDocument?.version === 'number'
+          ? textDocEdit.textDocument.version
+          : undefined,
+    });
+  }
+
+  return { changes, documentChanges };
+}
+
+type NormalizedCodeAction = {
+  title: string;
+  kind?: string;
+  isPreferred?: boolean;
+  disabledReason?: string;
+  edit?: NormalizedWorkspaceEdit;
+  command?: { title?: string; command?: string };
+  // True if the action's effects aren't fully captured in the edit and
+  // would need server-side execution. Agents should be cautious about
+  // these.
+  requiresServerCommand: boolean;
+};
+
+function normalizeCodeActions(
+  actions: LspCodeActionResponse[] | null | undefined
+): NormalizedCodeAction[] {
+  if (!actions) {
+    return [];
+  }
+  return actions
+    .filter(
+      (action): action is LspCodeActionResponse =>
+        typeof action === 'object' && action !== null
+    )
+    .filter(action => typeof action.title === 'string')
+    .map(action => ({
+      title: action.title as string,
+      kind: typeof action.kind === 'string' ? action.kind : undefined,
+      isPreferred: action.isPreferred === true,
+      disabledReason:
+        typeof action.disabled?.reason === 'string'
+          ? action.disabled.reason
+          : undefined,
+      edit: action.edit ? normalizeWorkspaceEdit(action.edit) : undefined,
+      command:
+        action.command && typeof action.command.command === 'string'
+          ? {
+              title:
+                typeof action.command.title === 'string'
+                  ? action.command.title
+                  : undefined,
+              command: action.command.command,
+            }
+          : undefined,
+      requiresServerCommand: Boolean(action.command) && !action.edit,
+    }));
+}
+
+type NormalizedCallHierarchyItem = {
+  name: string;
+  kind: string;
+  detail?: string;
+  filePath: string;
+  line: number;
+  column: number;
+  endLine: number;
+  endColumn: number;
+};
+
+function normalizeCallHierarchyItem(
+  item: LspCallHierarchyItem | null | undefined
+): NormalizedCallHierarchyItem | null {
+  if (!item || typeof item.name !== 'string') {
+    return null;
+  }
+  const filePath =
+    typeof item.uri === 'string' ? fromFileUri(item.uri) : null;
+  if (!filePath) {
+    return null;
+  }
+  const range = item.range ?? item.selectionRange;
+  return {
+    name: item.name,
+    kind: formatSymbolKind(item.kind),
+    detail: typeof item.detail === 'string' ? item.detail : undefined,
+    filePath,
+    line: (range?.start?.line ?? 0) + 1,
+    column: (range?.start?.character ?? 0) + 1,
+    endLine: (range?.end?.line ?? range?.start?.line ?? 0) + 1,
+    endColumn:
+      (range?.end?.character ?? range?.start?.character ?? 0) + 1,
+  };
+}
+
+function normalizeCallHierarchyCalls(
+  calls: LspCallHierarchyCall[] | null | undefined
+): {
+  from: NormalizedCallHierarchyItem[];
+  to: NormalizedCallHierarchyItem[];
+} {
+  const from: NormalizedCallHierarchyItem[] = [];
+  const to: NormalizedCallHierarchyItem[] = [];
+  for (const call of calls ?? []) {
+    for (const item of call.from ?? []) {
+      const normalized = normalizeCallHierarchyItem(item);
+      if (normalized) {
+        from.push(normalized);
+      }
+    }
+    for (const item of call.to ?? []) {
+      const normalized = normalizeCallHierarchyItem(item);
+      if (normalized) {
+        to.push(normalized);
+      }
+    }
+  }
+  return { from, to };
+}
+
+/**
+ * Truncate a WorkspaceEdit so the serialized JSON fits within a token
+ * budget. Past the budget, we drop the `edits[]` payload but keep the
+ * file list — so the agent still sees which files would change and
+ * can decide whether to fetch each one via file.read for the diff. The
+ * dropped-files set is reported as `droppedFiles` so the agent knows
+ * exactly what it's missing.
+ */
+function truncateWorkspaceEdit(
+  edit: NormalizedWorkspaceEdit,
+  tokenBudget: number
+): NormalizedWorkspaceEdit & {
+  truncated: boolean;
+  totalTokensBefore: number;
+  droppedFiles: string[];
+  retainedFiles: string[];
+} {
+  const before = JSON.stringify(edit);
+  const totalTokensBefore = estimateTokenCount(before);
+
+  // Collect every file referenced by `changes[]` or by textEdit
+  // documentChanges. The order we keep here is the order the agent
+  // will see in the response, so list the changed files first (which
+  // is also the order the LSP server returned them).
+  const orderedFiles: string[] = [];
+  const seenFiles = new Set<string>();
+  const collectFile = (filePath: string): void => {
+    if (!seenFiles.has(filePath)) {
+      seenFiles.add(filePath);
+      orderedFiles.push(filePath);
+    }
+  };
+  for (const change of edit.changes) {
+    collectFile(change.filePath);
+  }
+  for (const change of edit.documentChanges) {
+    if (change.kind === 'textEdit') {
+      collectFile(change.filePath);
+    }
+  }
+
+  if (totalTokensBefore <= tokenBudget) {
+    return {
+      ...edit,
+      truncated: false,
+      totalTokensBefore,
+      droppedFiles: [],
+      retainedFiles: orderedFiles,
+    };
+  }
+
+  // Greedily retain files until adding the next one would push us over
+  // budget. The retained edits are kept verbatim; dropped files have
+  // their `edits[]` array emptied (so the file is still listed but
+  // contains no payload). Resource ops (create/rename/delete) are
+  // always retained since they cost almost nothing.
+  const retainedFiles: string[] = [];
+  const droppedFiles: string[] = [];
+  let consumedTokens = 0;
+  const baseTokens = (() => {
+    // Cost of the response shell with all file edits emptied.
+    const empty: NormalizedWorkspaceEdit = {
+      changes: edit.changes.map(change => ({
+        filePath: change.filePath,
+        edits: [],
+      })),
+      documentChanges: edit.documentChanges.map(change => {
+        if (change.kind !== 'textEdit') {
+          return change;
+        }
+        return { ...change, edits: [] };
+      }),
+    };
+    return estimateTokenCount(JSON.stringify(empty));
+  })();
+
+  // Build a per-file cost estimate. Heuristic: file's edits contribute
+  // roughly proportional to their combined newText length. We measure
+  // by serializing each file's edits in isolation.
+  const perFileCost = new Map<string, number>();
+  for (const filePath of orderedFiles) {
+    const only = {
+      changes: edit.changes.filter(c => c.filePath === filePath),
+      documentChanges: edit.documentChanges.filter(
+        c => c.kind === 'textEdit' && c.filePath === filePath
+      ),
+    };
+    const cost = Math.max(
+      1,
+      estimateTokenCount(JSON.stringify(only)) -
+        // Subtract the per-file skeleton cost we already paid in
+        // baseTokens. The 8-char fudge accounts for the JSON
+        // separators around the file path.
+        Math.ceil(filePath.length / 4 + 8)
+    );
+    perFileCost.set(filePath, cost);
+  }
+
+  consumedTokens = baseTokens;
+  for (const filePath of orderedFiles) {
+    const cost = perFileCost.get(filePath) ?? 1;
+    if (consumedTokens + cost <= tokenBudget) {
+      retainedFiles.push(filePath);
+      consumedTokens += cost;
+    } else {
+      droppedFiles.push(filePath);
+    }
+  }
+
+  const retainedSet = new Set(retainedFiles);
+  const changes = edit.changes.map(change => ({
+    filePath: change.filePath,
+    edits: retainedSet.has(change.filePath) ? change.edits : [],
+  }));
+  const documentChanges = edit.documentChanges.map(change => {
+    if (change.kind !== 'textEdit') {
+      return change;
+    }
+    return retainedSet.has(change.filePath)
+      ? change
+      : { ...change, edits: [] };
+  });
+
+  return {
+    changes,
+    documentChanges,
+    truncated: droppedFiles.length > 0,
+    totalTokensBefore,
+    droppedFiles,
+    retainedFiles,
+  };
 }
 
 async function pathExists(candidatePath: string): Promise<boolean> {
@@ -823,7 +1709,8 @@ export const lspPlugin: DronePlugin = {
     async function createRuntimeFromConfig(
       serverId: string,
       language: string,
-      config: DroneLspServerConfig
+      config: DroneLspServerConfig,
+      resolved: { command: string; args: string[] } | null
     ): Promise<ServerRuntime> {
       const knownSpec = getKnownServerSpec(language);
       const fileExtensions = normalizeFileExtensions(
@@ -873,7 +1760,13 @@ export const lspPlugin: DronePlugin = {
         };
       }
 
-      const childProcess = spawn(config.command, config.args ?? [], {
+      if (!resolved) {
+        throw new Error(
+          `No executable command resolved for ${serverId} (command: ${config.command}).`
+        );
+      }
+
+      const childProcess = spawn(resolved.command, resolved.args, {
         cwd: workspaceRoot,
         env: process.env,
         stdio: 'pipe',
@@ -943,7 +1836,94 @@ export const lspPlugin: DronePlugin = {
       return resolved;
     }
 
-    async function initializeServers(): Promise<void> {
+    type ResolvedSpawn = {
+  command: string;
+  args: string[];
+  source: InstallerResolution['source'];
+  installStatus: DroneLspServerState['installStatus'];
+};
+
+async function resolveServerCommand(
+  serverId: string,
+  language: string,
+  config: DroneLspServerConfig,
+  knownSpec: KnownServerSpec | undefined
+): Promise<ResolvedSpawn | null> {
+  // External (TCP) servers are user-managed — nothing to resolve.
+  if (config.transport === 'tcp') {
+    return null;
+  }
+
+  const userAutoInstall =
+    config.transport === 'stdio' && config.autoInstall !== undefined
+      ? config.autoInstall
+      : undefined;
+  const autoInstall = userAutoInstall ?? lspConfig.autoInstall;
+
+  // 1. If the user's command resolves on PATH, use it as-is.
+  if (await commandExistsOnPath(config.command)) {
+    return {
+      command: config.command,
+      args: config.args ?? [],
+      source: 'path',
+      installStatus: 'unused',
+    };
+  }
+
+  // 2. No PATH hit. Try auto-install if enabled and we have install metadata.
+  const installSpec =
+    knownSpec?.install ??
+    (config.transport === 'stdio' && config.command === knownSpec?.command
+      ? knownSpec?.install
+      : undefined);
+
+  if (!autoInstall || !installSpec) {
+    throw new Error(
+      `${config.command} not found on PATH and auto-install is disabled.`
+    );
+  }
+
+  const installerSpec: InstallerSpec = {
+    id: serverId,
+    command: config.command,
+    args: config.args ?? [],
+    install: installSpec,
+  };
+
+  const wasCached = await (async () => {
+    const cacheRoot = resolveCacheDir();
+    const cacheKey = computeCacheKey({
+      serverId,
+      version: installSpec.version,
+    });
+    const cacheDir = path.join(
+      cacheRoot,
+      serverId,
+      installSpec.version,
+      cacheKey
+    );
+    const entry = path.join(cacheDir, installSpec.nodeEntry);
+    try {
+      await access(entry, fsConstants.R_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+
+  const resolution = await ensureServerInstalled(installerSpec, {
+    logger: registration.logger,
+  });
+
+  return {
+    command: resolution.command,
+    args: resolution.args,
+    source: resolution.source,
+    installStatus: wasCached ? 'cached' : 'downloaded',
+  };
+}
+
+async function initializeServers(): Promise<void> {
       const configuredRuntimes = await resolveConfiguredRuntimes();
       const configuredByLanguage = new Map<
         string,
@@ -960,6 +1940,7 @@ export const lspPlugin: DronePlugin = {
         serverId: string;
         language: string;
         config: DroneLspServerConfig;
+        knownSpec?: KnownServerSpec;
       }> = [];
       const languages = new Set<string>([
         ...configuredByLanguage.keys(),
@@ -974,11 +1955,14 @@ export const lspPlugin: DronePlugin = {
               item => item.config.transport === 'tcp'
             );
             if (external) {
-              selected.push(external);
+              selected.push({ ...external, knownSpec: undefined });
               continue;
             }
           }
-          selected.push(configured[0]);
+          selected.push({
+            ...configured[0],
+            knownSpec: getKnownServerSpec(language),
+          });
           continue;
         }
 
@@ -998,21 +1982,22 @@ export const lspPlugin: DronePlugin = {
             fileExtensions: knownSpec.fileExtensions,
             rootPatterns: knownSpec.rootPatterns,
           },
+          knownSpec,
         });
       }
 
       for (const candidate of selected) {
+        let resolved: ResolvedSpawn | null = null;
+        let installStatus: DroneLspServerState['installStatus'] = 'unused';
+
         try {
-          const runtime = await createRuntimeFromConfig(
+          resolved = await resolveServerCommand(
             candidate.serverId,
             candidate.language,
-            candidate.config
+            candidate.config,
+            candidate.knownSpec
           );
-          serverRuntimes.set(runtime.id, runtime);
-          await initializeClient(runtime);
-          registration.logger.info(
-            `lsp server ready: ${runtime.id} (${runtime.ownership}, ${runtime.detail})`
-          );
+          installStatus = resolved?.installStatus ?? 'unused';
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
@@ -1028,7 +2013,7 @@ export const lspPlugin: DronePlugin = {
             detail: formatServerDetail(candidate.config),
             fileExtensions: normalizeFileExtensions(
               candidate.config.fileExtensions ??
-                getKnownServerSpec(candidate.language)?.fileExtensions ??
+                candidate.knownSpec?.fileExtensions ??
                 []
             ),
             client: createJsonRpcClient({
@@ -1052,6 +2037,76 @@ export const lspPlugin: DronePlugin = {
               status: 'error',
               detail: formatServerDetail(candidate.config),
               lastError: message,
+              installSource: 'path',
+              installStatus: 'failed',
+            },
+            documents: new Map(),
+          });
+          continue;
+        }
+
+        try {
+          const runtime = await createRuntimeFromConfig(
+            candidate.serverId,
+            candidate.language,
+            candidate.config,
+            resolved
+              ? { command: resolved.command, args: resolved.args }
+              : null
+          );
+          // Surface install provenance on the runtime state.
+          if (resolved) {
+            updateServerState(runtime.id, {
+              installSource: resolved.source,
+              installStatus,
+            });
+          }
+          serverRuntimes.set(runtime.id, runtime);
+          await initializeClient(runtime);
+          registration.logger.info(
+            `lsp server ready: ${runtime.id} (${runtime.ownership}, ${runtime.detail}, install=${installStatus})`
+          );
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          registration.logger.warn(
+            `lsp server unavailable: ${candidate.serverId} (${message})`
+          );
+          serverRuntimes.set(candidate.serverId, {
+            id: candidate.serverId,
+            language: candidate.language,
+            transport: candidate.config.transport === 'tcp' ? 'tcp' : 'stdio',
+            ownership:
+              candidate.config.transport === 'tcp' ? 'external' : 'spawned',
+            detail: formatServerDetail(candidate.config),
+            fileExtensions: normalizeFileExtensions(
+              candidate.config.fileExtensions ??
+                candidate.knownSpec?.fileExtensions ??
+                []
+            ),
+            client: createJsonRpcClient({
+              transport: {
+                write: () => undefined,
+                close: () => undefined,
+                onData: () => undefined,
+                onClose: () => undefined,
+                onError: () => undefined,
+              },
+              requestTimeoutMs: lspConfig.requestTimeoutMs,
+              onNotification: () => undefined,
+              onTransportIssue: () => undefined,
+            }),
+            state: {
+              id: candidate.serverId,
+              language: candidate.language,
+              transport: candidate.config.transport === 'tcp' ? 'tcp' : 'stdio',
+              ownership:
+                candidate.config.transport === 'tcp' ? 'external' : 'spawned',
+              status: 'error',
+              detail: formatServerDetail(candidate.config),
+              lastError: message,
+              installSource: resolved?.source ?? 'path',
+              installStatus: resolved ? 'failed' : 'failed',
             },
             documents: new Map(),
           });
@@ -1543,6 +2598,958 @@ export const lspPlugin: DronePlugin = {
               column: location.range.start.character + 1,
               range: location.range,
             })),
+          },
+          null,
+          2
+        );
+      },
+    });
+
+    // ---------------------------------------------------------------
+    // Document / workspace navigation
+    // ---------------------------------------------------------------
+
+    type ResolvedPosition = {
+      runtime: ServerRuntime;
+      document: DocumentState;
+      line: number;
+      column: number;
+    };
+
+    async function resolveAtPosition(
+      toolName: string,
+      input: Record<string, unknown>
+    ): Promise<ResolvedPosition> {
+      await refreshWorkspaceIfNeeded();
+      const { filePath, line, column } = parsePositionInput(
+        toolName,
+        input
+      );
+      const runtime = findRuntimeForFile(filePath);
+      if (!runtime) {
+        throw new Error(
+          `No connected LSP server is available for ${filePath}.`
+        );
+      }
+      const document = await ensureDocumentLoaded(runtime, filePath);
+      return { runtime, document, line, column };
+    }
+
+    function locationToAgentShape(
+      locations: Array<{
+        filePath: string;
+        range: {
+          start: { line: number; character: number };
+          end: { line: number; character: number };
+        };
+      }>
+    ): Array<{
+      filePath: string;
+      line: number;
+      column: number;
+      range: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+      };
+    }> {
+      return locations.map(location => ({
+        filePath: location.filePath,
+        line: location.range.start.line + 1,
+        column: location.range.start.character + 1,
+        range: location.range,
+      }));
+    }
+
+    registration.registerTool({
+      name: 'document_symbols',
+      description:
+        'Return the symbols defined in a single file (functions, classes, variables, etc.).',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'Workspace-relative or absolute file path.',
+          },
+        },
+        required: ['filePath'],
+        additionalProperties: false,
+      },
+      execute: async input => {
+        if (
+          typeof input.filePath !== 'string' ||
+          input.filePath.trim().length === 0
+        ) {
+          throw new Error('lsp.document_symbols requires a filePath string.');
+        }
+        await refreshWorkspaceIfNeeded();
+        const filePath = resolveTargetFilePath(input.filePath);
+        const runtime = findRuntimeForFile(filePath);
+        if (!runtime) {
+          throw new Error(
+            `No connected LSP server is available for ${filePath}.`
+          );
+        }
+        const document = await ensureDocumentLoaded(runtime, filePath);
+        const response =
+          await runtime.client.request<LspDocumentSymbolResponse[]>(
+            'textDocument/documentSymbol',
+            { textDocument: { uri: document.uri } }
+          );
+        const symbols = flattenDocumentSymbols(response);
+        return JSON.stringify(
+          {
+            query: { filePath },
+            symbols,
+            serverStates: Array.from(serverRuntimes.values()).map(
+              r => r.state
+            ),
+          },
+          null,
+          2
+        );
+      },
+    });
+
+    registration.registerTool({
+      name: 'workspace_symbol',
+      description:
+        'Search for symbols across the workspace by name. Supports fuzzy matching where the language server supports it.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description:
+              'Symbol name (or substring) to search for. Empty string returns all symbols.',
+          },
+          limit: {
+            type: 'integer',
+            description:
+              'Optional maximum number of results. Defaults to 200.',
+          },
+        },
+        required: ['query'],
+        additionalProperties: false,
+      },
+      execute: async input => {
+        if (typeof input.query !== 'string') {
+          throw new Error(
+            'lsp.workspace_symbol requires a query string.'
+          );
+        }
+        await refreshWorkspaceIfNeeded();
+        const limit =
+          typeof input.limit === 'number' && Number.isInteger(input.limit) && input.limit > 0
+            ? Math.min(input.limit, 1000)
+            : 200;
+        const allResults: Array<{
+          serverId: string;
+          symbols: NormalizedSymbol[];
+        }> = [];
+        for (const runtime of serverRuntimes.values()) {
+          if (runtime.state.status !== 'connected') {
+            continue;
+          }
+          try {
+            const response =
+              await runtime.client.request<LspWorkspaceSymbolResponse[]>(
+                'workspace/symbol',
+                { query: input.query }
+              );
+            const symbols = normalizeWorkspaceSymbols(response);
+            if (symbols.length > 0) {
+              allResults.push({
+                serverId: runtime.id,
+                symbols,
+              });
+            }
+          } catch (error) {
+            registration.logger.warn(
+              `workspace/symbol failed on ${runtime.id}: ${
+                error instanceof Error ? error.message : String(error)
+              }`
+            );
+          }
+        }
+        const flat = allResults.flatMap(group =>
+          group.symbols.map(symbol => ({
+            ...symbol,
+            serverId: group.serverId,
+          }))
+        );
+        flat.sort((left, right) => left.name.localeCompare(right.name));
+        const truncated = flat.length > limit;
+        const symbols = truncated ? flat.slice(0, limit) : flat;
+        return JSON.stringify(
+          {
+            query: input.query,
+            symbols,
+            truncated,
+            totalMatches: flat.length,
+            serverStates: Array.from(serverRuntimes.values()).map(
+              r => r.state
+            ),
+          },
+          null,
+          2
+        );
+      },
+    });
+
+    // ---------------------------------------------------------------
+    // In-editor assistance
+    // ---------------------------------------------------------------
+
+    registration.registerTool({
+      name: 'signature_help',
+      description:
+        'Return LSP signature help for the function call at a given position.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'Workspace-relative or absolute file path.',
+          },
+          line: {
+            type: 'integer',
+            description: '1-based line number.',
+          },
+          column: {
+            type: 'integer',
+            description: '1-based column number.',
+          },
+        },
+        required: ['filePath', 'line', 'column'],
+        additionalProperties: false,
+      },
+      execute: async input => {
+        const { runtime, document, line, column } = await resolveAtPosition(
+          'lsp.signature_help',
+          input
+        );
+        const response =
+          await runtime.client.request<LspSignatureHelpResponse>(
+            'textDocument/signatureHelp',
+            {
+              textDocument: { uri: document.uri },
+              position: { line: line - 1, character: column - 1 },
+            }
+          );
+        const signatures = normalizeSignatureHelp(response);
+        return JSON.stringify(
+          {
+            query: { filePath: document.uri, line, column },
+            ...signatures,
+          },
+          null,
+          2
+        );
+      },
+    });
+
+    registration.registerTool({
+      name: 'completion',
+      description:
+        'Return LSP completion suggestions at a given position. Includes kind, detail, and documentation.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'Workspace-relative or absolute file path.',
+          },
+          line: {
+            type: 'integer',
+            description: '1-based line number.',
+          },
+          column: {
+            type: 'integer',
+            description: '1-based column number.',
+          },
+          limit: {
+            type: 'integer',
+            description:
+              'Optional maximum number of items to return. Defaults to 100.',
+          },
+        },
+        required: ['filePath', 'line', 'column'],
+        additionalProperties: false,
+      },
+      execute: async input => {
+        const { runtime, document, line, column } = await resolveAtPosition(
+          'lsp.completion',
+          input
+        );
+        const limit =
+          typeof input.limit === 'number' &&
+          Number.isInteger(input.limit) &&
+          input.limit > 0
+            ? Math.min(input.limit, 1000)
+            : 100;
+        const response =
+          await runtime.client.request<
+            LspCompletionItemResponse[] | LspCompletionListResponse
+          >('textDocument/completion', {
+            textDocument: { uri: document.uri },
+            position: { line: line - 1, character: column - 1 },
+          });
+        const { isIncomplete, items } = normalizeCompletionItems(response);
+        const truncated = items.length > limit;
+        const resultItems = truncated ? items.slice(0, limit) : items;
+        return JSON.stringify(
+          {
+            query: { filePath: document.uri, line, column },
+            isIncomplete,
+            items: resultItems,
+            truncated,
+            totalItems: items.length,
+          },
+          null,
+          2
+        );
+      },
+    });
+
+    // ---------------------------------------------------------------
+    // Refactoring (returns edits; never applies them)
+    // ---------------------------------------------------------------
+
+    function describeWorkspaceEdit(
+      edit: NormalizedWorkspaceEdit
+    ): {
+      filesTouched: number;
+      editCount: number;
+      editsByFile: Record<string, number>;
+    } {
+      const editsByFile: Record<string, number> = {};
+      let editCount = 0;
+      for (const change of edit.changes) {
+        editsByFile[change.filePath] =
+          (editsByFile[change.filePath] ?? 0) + change.edits.length;
+        editCount += change.edits.length;
+      }
+      for (const change of edit.documentChanges) {
+        if (change.kind !== 'textEdit') {
+          continue;
+        }
+        editsByFile[change.filePath] =
+          (editsByFile[change.filePath] ?? 0) + change.edits.length;
+        editCount += change.edits.length;
+      }
+      return {
+        filesTouched: Object.keys(editsByFile).length,
+        editCount,
+        editsByFile,
+      };
+    }
+
+    const HEAVY_EDIT_BUDGET = 3000;
+
+    registration.registerTool({
+      name: 'code_action',
+      description:
+        'Return LSP code actions (quick fixes, refactorings, source actions) for a file and range. Returns edits as JSON; the LSP plugin never applies them. The agent should review and apply via file.write.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'Workspace-relative or absolute file path.',
+          },
+          startLine: {
+            type: 'integer',
+            description: '1-based start line of the range.',
+          },
+          startColumn: {
+            type: 'integer',
+            description: '1-based start column of the range.',
+          },
+          endLine: {
+            type: 'integer',
+            description: '1-based end line of the range.',
+          },
+          endColumn: {
+            type: 'integer',
+            description: '1-based end column of the range.',
+          },
+          only: {
+            type: 'array',
+            items: { type: 'string' },
+            description:
+              'Optional list of LSP CodeActionKind values to filter by, e.g. ["quickfix", "refactor", "source.fixAll"].',
+          },
+        },
+        required: ['filePath', 'startLine', 'startColumn', 'endLine', 'endColumn'],
+        additionalProperties: false,
+      },
+      execute: async input => {
+        const startLine = input.startLine;
+        const startColumn = input.startColumn;
+        const endLine = input.endLine;
+        const endColumn = input.endColumn;
+        if (
+          typeof startLine !== 'number' ||
+          !Number.isInteger(startLine) ||
+          startLine <= 0 ||
+          typeof startColumn !== 'number' ||
+          !Number.isInteger(startColumn) ||
+          startColumn <= 0 ||
+          typeof endLine !== 'number' ||
+          !Number.isInteger(endLine) ||
+          endLine <= 0 ||
+          typeof endColumn !== 'number' ||
+          !Number.isInteger(endColumn) ||
+          endColumn <= 0
+        ) {
+          throw new Error(
+            'lsp.code_action requires positive integer line/column values for the range.'
+          );
+        }
+        await refreshWorkspaceIfNeeded();
+        if (
+          typeof input.filePath !== 'string' ||
+          input.filePath.trim().length === 0
+        ) {
+          throw new Error('lsp.code_action requires a filePath string.');
+        }
+        const filePath = resolveTargetFilePath(input.filePath);
+        const runtime = findRuntimeForFile(filePath);
+        if (!runtime) {
+          throw new Error(
+            `No connected LSP server is available for ${filePath}.`
+          );
+        }
+        const document = await ensureDocumentLoaded(runtime, filePath);
+        const only = Array.isArray(input.only)
+          ? input.only.filter(
+              (value): value is string => typeof value === 'string'
+            )
+          : undefined;
+        const range = {
+          start: {
+            line: startLine - 1,
+            character: startColumn - 1,
+          },
+          end: {
+            line: endLine - 1,
+            character: endColumn - 1,
+          },
+        };
+        // Include any diagnostics touching this range so the server can
+        // surface relevant quick-fixes.
+        const diagnostics = (diagnosticsByFile.get(document.uri) ?? []).filter(
+          diagnostic => {
+            const ds = diagnostic.range.start;
+            const de = diagnostic.range.end;
+            if (
+              ds.line > range.end.line ||
+              (ds.line === range.end.line &&
+                ds.character > range.end.character)
+            ) {
+              return false;
+            }
+            if (
+              de.line < range.start.line ||
+              (de.line === range.start.line &&
+                de.character < range.start.character)
+            ) {
+              return false;
+            }
+            return true;
+          }
+        );
+        const response =
+          await runtime.client.request<LspCodeActionResponse[]>(
+            'textDocument/codeAction',
+            {
+              textDocument: { uri: document.uri },
+              range,
+              context: {
+                diagnostics: diagnostics.map(diagnostic => ({
+                  range: diagnostic.range,
+                  message: diagnostic.message,
+                  severity: severityToLsp(diagnostic.severity),
+                  source: diagnostic.source,
+                  code: diagnostic.code,
+                })),
+                only,
+              },
+            }
+          );
+        const actions = normalizeCodeActions(response);
+        const result = actions.map(action => {
+          const edit = action.edit;
+          if (!edit) {
+            return {
+              title: action.title,
+              kind: action.kind,
+              isPreferred: action.isPreferred,
+              disabledReason: action.disabledReason,
+              requiresServerCommand: action.requiresServerCommand,
+              command: action.command,
+              edit: null,
+            };
+          }
+          const {
+            changes,
+            documentChanges,
+            truncated,
+            totalTokensBefore,
+            droppedFiles,
+            retainedFiles,
+          } = truncateWorkspaceEdit(edit, HEAVY_EDIT_BUDGET);
+          return {
+            title: action.title,
+            kind: action.kind,
+            isPreferred: action.isPreferred,
+            disabledReason: action.disabledReason,
+            requiresServerCommand: action.requiresServerCommand,
+            command: action.command,
+            edit: {
+              changes,
+              documentChanges,
+              truncated,
+              totalTokensBefore,
+              droppedFiles,
+              retainedFiles,
+            },
+            summary: describeWorkspaceEdit(edit),
+          };
+        });
+        return JSON.stringify(
+          {
+            query: { filePath, startLine, startColumn, endLine, endColumn },
+            actions: result,
+          },
+          null,
+          2
+        );
+      },
+    });
+
+    registration.registerTool({
+      name: 'rename',
+      description:
+        'Return the WorkspaceEdit for renaming a symbol across the workspace. Edits are returned as JSON only — the LSP plugin never applies them. The agent should review and apply via file.write.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'Workspace-relative or absolute file path.',
+          },
+          line: {
+            type: 'integer',
+            description: '1-based line number.',
+          },
+          column: {
+            type: 'integer',
+            description: '1-based column number.',
+          },
+          newName: {
+            type: 'string',
+            description: 'The new symbol name.',
+          },
+        },
+        required: ['filePath', 'line', 'column', 'newName'],
+        additionalProperties: false,
+      },
+      execute: async input => {
+        if (typeof input.newName !== 'string' || input.newName.length === 0) {
+          throw new Error('lsp.rename requires a non-empty newName.');
+        }
+        const { runtime, document, line, column } = await resolveAtPosition(
+          'lsp.rename',
+          input
+        );
+        const response =
+          await runtime.client.request<LspWorkspaceEdit>(
+            'textDocument/rename',
+            {
+              textDocument: { uri: document.uri },
+              position: { line: line - 1, character: column - 1 },
+              newName: input.newName,
+            }
+          );
+        const edit = normalizeWorkspaceEdit(response);
+        const truncated = truncateWorkspaceEdit(edit, HEAVY_EDIT_BUDGET);
+        return JSON.stringify(
+          {
+            query: {
+              filePath: document.uri,
+              line,
+              column,
+              newName: input.newName,
+            },
+            edit: truncated,
+            summary: describeWorkspaceEdit(edit),
+          },
+          null,
+          2
+        );
+      },
+    });
+
+    registration.registerTool({
+      name: 'implementation',
+      description:
+        'Return locations that implement the interface or method at a position.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'Workspace-relative or absolute file path.',
+          },
+          line: {
+            type: 'integer',
+            description: '1-based line number.',
+          },
+          column: {
+            type: 'integer',
+            description: '1-based column number.',
+          },
+        },
+        required: ['filePath', 'line', 'column'],
+        additionalProperties: false,
+      },
+      execute: async input => {
+        const { runtime, document, line, column } = await resolveAtPosition(
+          'lsp.implementation',
+          input
+        );
+        const response =
+          await runtime.client.request<DefinitionResponse>(
+            'textDocument/implementation',
+            {
+              textDocument: { uri: document.uri },
+              position: { line: line - 1, character: column - 1 },
+            }
+          );
+        const rawLocations = Array.isArray(response)
+          ? response
+          : response
+            ? [response]
+            : [];
+        const locations = rawLocations
+          .map(loc => normalizeLspLocation(loc))
+          .filter(
+            (loc): loc is NonNullable<typeof loc> => Boolean(loc)
+          );
+        return JSON.stringify(
+          {
+            query: { filePath: document.uri, line, column },
+            locations: locationToAgentShape(locations),
+          },
+          null,
+          2
+        );
+      },
+    });
+
+    registration.registerTool({
+      name: 'type_definition',
+      description:
+        'Return the type-definition location(s) for a symbol at a position.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'Workspace-relative or absolute file path.',
+          },
+          line: {
+            type: 'integer',
+            description: '1-based line number.',
+          },
+          column: {
+            type: 'integer',
+            description: '1-based column number.',
+          },
+        },
+        required: ['filePath', 'line', 'column'],
+        additionalProperties: false,
+      },
+      execute: async input => {
+        const { runtime, document, line, column } = await resolveAtPosition(
+          'lsp.type_definition',
+          input
+        );
+        const response =
+          await runtime.client.request<DefinitionResponse>(
+            'textDocument/typeDefinition',
+            {
+              textDocument: { uri: document.uri },
+              position: { line: line - 1, character: column - 1 },
+            }
+          );
+        const rawLocations = Array.isArray(response)
+          ? response
+          : response
+            ? [response]
+            : [];
+        const locations = rawLocations
+          .map(loc => normalizeLspLocation(loc))
+          .filter(
+            (loc): loc is NonNullable<typeof loc> => Boolean(loc)
+          );
+        return JSON.stringify(
+          {
+            query: { filePath: document.uri, line, column },
+            locations: locationToAgentShape(locations),
+          },
+          null,
+          2
+        );
+      },
+    });
+
+    // ---------------------------------------------------------------
+    // Call hierarchy
+    // ---------------------------------------------------------------
+
+    async function resolveCallHierarchy(
+      toolName: string,
+      input: Record<string, unknown>
+    ): Promise<{
+      runtime: ServerRuntime;
+      document: DocumentState;
+      item: NormalizedCallHierarchyItem;
+      line: number;
+      column: number;
+    }> {
+      const { runtime, document, line, column } = await resolveAtPosition(
+        toolName,
+        input
+      );
+      const response =
+        await runtime.client.request<LspCallHierarchyItem[]>(
+          'textDocument/prepareCallHierarchy',
+          {
+            textDocument: { uri: document.uri },
+            position: { line: line - 1, character: column - 1 },
+          }
+        );
+      const item = normalizeCallHierarchyItem(response?.[0]);
+      if (!item) {
+        throw new Error(
+          `${toolName}: no call-hierarchy item at the given position.`
+        );
+      }
+      return { runtime, document, item, line, column };
+    }
+
+    registration.registerTool({
+      name: 'call_hierarchy_incoming',
+      description:
+        'Return the call hierarchy chain of callers leading to the symbol at a position.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'Workspace-relative or absolute file path.',
+          },
+          line: {
+            type: 'integer',
+            description: '1-based line number.',
+          },
+          column: {
+            type: 'integer',
+            description: '1-based column number.',
+          },
+        },
+        required: ['filePath', 'line', 'column'],
+        additionalProperties: false,
+      },
+      execute: async input => {
+        const { runtime, item } = await resolveCallHierarchy(
+          'lsp.call_hierarchy_incoming',
+          input
+        );
+        const response =
+          await runtime.client.request<LspCallHierarchyCall[]>(
+            'callHierarchy/incomingCalls',
+            { item: callHierarchyItemToLsp(item) }
+          );
+        const { from } = normalizeCallHierarchyCalls(response);
+        return JSON.stringify(
+          {
+            query: {
+              item,
+              direction: 'incoming',
+            },
+            from,
+          },
+          null,
+          2
+        );
+      },
+    });
+
+    registration.registerTool({
+      name: 'call_hierarchy_outgoing',
+      description:
+        'Return the call hierarchy chain of callees invoked by the symbol at a position.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'Workspace-relative or absolute file path.',
+          },
+          line: {
+            type: 'integer',
+            description: '1-based line number.',
+          },
+          column: {
+            type: 'integer',
+            description: '1-based column number.',
+          },
+        },
+        required: ['filePath', 'line', 'column'],
+        additionalProperties: false,
+      },
+      execute: async input => {
+        const { runtime, item } = await resolveCallHierarchy(
+          'lsp.call_hierarchy_outgoing',
+          input
+        );
+        const response =
+          await runtime.client.request<LspCallHierarchyCall[]>(
+            'callHierarchy/outgoingCalls',
+            { item: callHierarchyItemToLsp(item) }
+          );
+        const { to } = normalizeCallHierarchyCalls(response);
+        return JSON.stringify(
+          {
+            query: {
+              item,
+              direction: 'outgoing',
+            },
+            to,
+          },
+          null,
+          2
+        );
+      },
+    });
+
+    function callHierarchyItemToLsp(
+      item: NormalizedCallHierarchyItem
+    ): LspCallHierarchyItem {
+      return {
+        name: item.name,
+        kind: item.kind,
+        detail: item.detail,
+        uri: toFileUri(item.filePath),
+        range: {
+          start: {
+            line: item.line - 1,
+            character: item.column - 1,
+          },
+          end: {
+            line: item.endLine - 1,
+            character: item.endColumn - 1,
+          },
+        },
+        selectionRange: {
+          start: {
+            line: item.line - 1,
+            character: item.column - 1,
+          },
+          end: {
+            line: item.endLine - 1,
+            character: item.endColumn - 1,
+          },
+        },
+      };
+    }
+
+    // ---------------------------------------------------------------
+    // Formatting (truncated)
+    // ---------------------------------------------------------------
+
+    registration.registerTool({
+      name: 'formatting',
+      description:
+        'Return LSP whole-file formatting edits for a single file. Returns edits as JSON; the LSP plugin never applies them. If the response would be too large it is truncated with head/tail previews per edit.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          filePath: {
+            type: 'string',
+            description: 'Workspace-relative or absolute file path.',
+          },
+          tabSize: {
+            type: 'integer',
+            description:
+              'Optional tab size hint forwarded to the server.',
+          },
+          insertSpaces: {
+            type: 'boolean',
+            description:
+              'Optional space-vs-tabs hint forwarded to the server.',
+          },
+        },
+        required: ['filePath'],
+        additionalProperties: false,
+      },
+      execute: async input => {
+        if (
+          typeof input.filePath !== 'string' ||
+          input.filePath.trim().length === 0
+        ) {
+          throw new Error('lsp.formatting requires a filePath string.');
+        }
+        await refreshWorkspaceIfNeeded();
+        const filePath = resolveTargetFilePath(input.filePath);
+        const runtime = findRuntimeForFile(filePath);
+        if (!runtime) {
+          throw new Error(
+            `No connected LSP server is available for ${filePath}.`
+          );
+        }
+        const document = await ensureDocumentLoaded(runtime, filePath);
+        const options: {
+          tabSize?: number;
+          insertSpaces?: boolean;
+        } = {};
+        if (
+          typeof input.tabSize === 'number' &&
+          Number.isInteger(input.tabSize) &&
+          input.tabSize > 0
+        ) {
+          options.tabSize = input.tabSize;
+        }
+        if (typeof input.insertSpaces === 'boolean') {
+          options.insertSpaces = input.insertSpaces;
+        }
+        const response =
+          await runtime.client.request<
+            Array<{ range?: LspRangeResponse; newText?: string }>
+          >('textDocument/formatting', {
+            textDocument: { uri: document.uri },
+            options,
+          });
+        const edits = normalizeTextEdits(response);
+        const wrapped: NormalizedWorkspaceEdit = {
+          changes: [
+            { filePath, edits },
+          ],
+          documentChanges: [],
+        };
+        const truncated = truncateWorkspaceEdit(
+          wrapped,
+          HEAVY_EDIT_BUDGET
+        );
+        return JSON.stringify(
+          {
+            query: { filePath },
+            edit: truncated,
+            summary: describeWorkspaceEdit(wrapped),
           },
           null,
           2

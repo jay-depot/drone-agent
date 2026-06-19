@@ -52,6 +52,14 @@ export type DroneLspSpawnServerConfig = {
   args?: string[];
   fileExtensions?: string[];
   rootPatterns?: string[];
+  /**
+   * When true, the LSP plugin will attempt to download a pinned copy of the
+   * server into a per-user cache and invoke it via Node if `command`
+   * isn't on PATH. Defaults to the top-level `lsp.autoInstall` value
+   * (true). When false, the plugin never auto-installs — only
+   * user-installed servers are used.
+   */
+  autoInstall?: boolean;
 };
 
 export type DroneLspExternalServerConfig = {
@@ -72,6 +80,12 @@ export type DroneLspConfig = {
   diagnosticTokenBudget: number;
   requestTimeoutMs: number;
   preferExternal: boolean;
+  /**
+   * When true (default), the LSP plugin will lazily download a known
+   * server into a per-user cache if it can't be found on PATH. Set to
+   * false to disable auto-installation entirely.
+   */
+  autoInstall: boolean;
   servers: Record<string, DroneLspServerConfig>;
 };
 
@@ -283,6 +297,21 @@ export type DroneLspServerState = {
   status: 'connected' | 'connecting' | 'disconnected' | 'error';
   detail: string;
   lastError?: string;
+  /**
+   * Where the running command came from. `'path'` means the user's
+   * installed binary on PATH; `'cache'` means the auto-installed copy
+   * in `~/.cache/drone-agent/lsp/...`.
+   */
+  installSource?: 'path' | 'cache';
+  /**
+   * Lifecycle of the auto-install step for this server. `'unused'`
+   * means the server was found on PATH or auto-install is disabled;
+   * `'cached'` means a previous install was reused; `'downloaded'`
+   * means we just fetched it for the first time; `'failed'` means
+   * the download/extract/integrity step failed and the server is
+   * offline.
+   */
+  installStatus?: 'unused' | 'cached' | 'downloaded' | 'failed';
 };
 
 export type DroneMcpServerState = {
@@ -444,6 +473,7 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
       diagnosticTokenBudget: 500,
       requestTimeoutMs: 5000,
       preferExternal: false,
+      autoInstall: true,
       servers: {},
     },
     mcp: {

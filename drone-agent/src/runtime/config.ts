@@ -149,11 +149,19 @@ function parseLspServerConfig(
     );
   }
 
+  const autoInstall = raw.autoInstall;
+  if (autoInstall !== undefined && typeof autoInstall !== 'boolean') {
+    throw new Error(
+      `Invalid config in ${source}: lsp.servers.${serverId}.autoInstall must be a boolean.`
+    );
+  }
+
   return {
     transport: 'stdio',
     language,
     command: raw.command,
     args,
+    autoInstall,
     fileExtensions,
     rootPatterns,
   };
@@ -565,6 +573,15 @@ function parsePartialConfig(
         );
       }
       lsp.preferExternal = raw.lsp.preferExternal;
+    }
+
+    if ('autoInstall' in raw.lsp) {
+      if (typeof raw.lsp.autoInstall !== 'boolean') {
+        throw new Error(
+          `Invalid config in ${source}: lsp.autoInstall must be a boolean.`
+        );
+      }
+      lsp.autoInstall = raw.lsp.autoInstall;
     }
 
     if ('servers' in raw.lsp) {

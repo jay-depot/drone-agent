@@ -59,6 +59,35 @@ Current phase-1 support is TypeScript/JavaScript first. The plugin architecture 
 
 If drone-agent spawns a language server itself, that server exits when drone-agent exits. If drone-agent connects to an externally managed server, it leaves that server running.
 
+#### Auto-installing language servers
+
+By default, the plugin tries to use a language server from your `PATH` and otherwise downloads a pinned copy into a per-user cache. The cache lives at:
+
+- Linux: `$XDG_CACHE_HOME/drone-agent/lsp/` (defaults to `~/.cache/drone-agent/lsp/`)
+- macOS: `~/Library/Caches/drone-agent/lsp/`
+- Windows: `%LOCALAPPDATA%\drone-agent\lsp\`
+
+Override the cache root with `DRONE_AGENT_LSP_CACHE`. Delete that directory to reset.
+
+Auto-install downloads the npm tarball for the server (currently `typescript-language-server@5.3.0`), verifies its sha512 integrity, extracts it, and invokes it via the running Node interpreter. The integrity digest is pinned in the plugin source, so the threat model matches a regular `npm install`.
+
+Disable auto-install globally or per-server:
+
+```json
+{
+  "lsp": {
+    "autoInstall": false,
+    "servers": {
+      "typescript": {
+        "autoInstall": true
+      }
+    }
+  }
+}
+```
+
+If auto-install is disabled and the server isn't on `PATH`, the runtime degrades to `status: "error"` with a clear `lastError`, identical to the pre–auto-install behavior. The `lsp.server_status` tool reports `installSource: "path" | "cache"` and `installStatus: "unused" | "cached" | "downloaded" | "failed"` so you can see what happened.
+
 Example project config:
 
 ```json
@@ -104,7 +133,7 @@ You can also attach to an existing external server instead of spawning your own:
 }
 ```
 
-For the built-in TypeScript path, install `typescript-language-server` somewhere on your `PATH`.
+For the built-in TypeScript path, you can either install `typescript-language-server` somewhere on your `PATH` (the plugin will use it directly) or rely on auto-install (the default).
 
 ### MCP Plugin
 
