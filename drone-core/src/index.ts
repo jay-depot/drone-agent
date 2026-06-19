@@ -98,6 +98,7 @@ export type DroneMcpConfig = {
 export type DroneAgentConfig = {
   enabledPlugins: string[];
   systemPrompt: string;
+  activePersona: string | null;
   ollama: DroneOllamaConfig;
   session: DroneSessionConfig;
   lsp: DroneLspConfig;
@@ -107,6 +108,7 @@ export type DroneAgentConfig = {
 export type PartialDroneAgentConfig = Partial<{
   enabledPlugins: string[];
   systemPrompt: string;
+  activePersona: string | null;
   ollama: Partial<DroneOllamaConfig>;
   session: Partial<DroneSessionConfig>;
   lsp: Partial<DroneLspConfig>;
@@ -189,6 +191,7 @@ export type DroneToolDescriptor = {
 
 export type DroneChatResponse = {
   message?: string;
+  reasoning?: string;
   toolCalls?: DroneToolCall[];
 };
 
@@ -306,6 +309,14 @@ export type DroneMcpResourceMeta = {
   mimeType?: string;
 };
 
+export type DronePersonaDefinition = {
+  id: string;
+  name: string;
+  description: string;
+  systemPromptOverride?: string;
+  promptFragments?: string[];
+};
+
 export type DroneMcpError = {
   code: string;
   message: string;
@@ -356,6 +367,7 @@ export type DronePluginRegistration = {
   getConfig: () => DroneAgentConfig;
   registerTool: (tool: DroneToolDefinition) => void;
   registerPromptFragment: (fragment: DronePromptFragment) => void;
+  registerHelp: (help: string) => void;
   hooks: DronePluginHooks;
   offer: <T>(capability: T) => void;
   request: <T>(pluginId: string) => T | undefined;
@@ -386,6 +398,7 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
     enabledPlugins: [],
     systemPrompt:
       'You are a coding agent. You have access to tools for reading and editing files, running shell commands, and querying language servers. Prefer small, focused changes.',
+    activePersona: null,
     ollama: {
       host: 'http://127.0.0.1:11434',
       model: 'llama3.1',
@@ -421,6 +434,10 @@ export function applyAgentConfigLayer(
   return {
     enabledPlugins: layer.enabledPlugins ?? baseConfig.enabledPlugins,
     systemPrompt: layer.systemPrompt ?? baseConfig.systemPrompt,
+    activePersona:
+      layer.activePersona !== undefined
+        ? layer.activePersona
+        : baseConfig.activePersona,
     ollama: layer.ollama
       ? {
           ...baseConfig.ollama,

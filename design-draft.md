@@ -48,9 +48,9 @@ Session agents are workers. Personas are the stateful layer. You get disposabili
 
 Each level works without the one above it:
 
-- **Offline:** Agent works with `.drone/` files at project scope
-- **LAN:** Agents share via beacon
-- **Cloud:** Cross-site coordination via coordinator
+- **Offline:** Agent works with `.drone/` files at project/user scope. Beacon running on same host adds system-wide skills and memory, even if coordinator is unreachable, and its features unavailable.
+- **LAN:** Agents share via beacon on the same network, even if coordinator is down. They get shared skills and can spawn agents on the beacon host, but no cross-beacon coordination.
+- **Cloud/Personal Tailnet/Corporate VPN:** Cross-site coordination via coordinator
 
 You can run `drone-agent` without the swarm plugin and just have a decent, very minimal, coding agent.
 

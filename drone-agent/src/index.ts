@@ -1,7 +1,12 @@
 import { createConsoleLogger } from 'drone-core';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
+import { mkdir, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { builtInPlugins } from './plugins/index.js';
+import type { DronePersonaCapability } from './plugins/persona/index.js';
+import { createTui } from './tui/index.js';
 import { createConversationService } from './runtime/conversation-service.js';
 import { loadAgentConfig } from './runtime/config.js';
 import { createDronePluginEngine } from './runtime/plugin-engine.js';
@@ -9,6 +14,7 @@ import { createSessionManager } from './runtime/session-manager.js';
 
 type CliOptions = {
   once: boolean;
+  plainOutput: boolean;
   modelOverride?: string;
   pluginOverrides: string[];
 };
@@ -42,6 +48,7 @@ function parseCliInvocation(argv: string[]): CliInvocation {
   const args = [...argv];
   const options: CliOptions = {
     once: false,
+    plainOutput: false,
     pluginOverrides: [],
   };
 
@@ -52,10 +59,16 @@ function parseCliInvocation(argv: string[]): CliInvocation {
       continue;
     }
 
+    if (args[0] === '--plain-output') {
+      options.plainOutput = true;
+      args.shift();
+      continue;
+    }
+
     if (args[0] === '--model') {
       if (args.length < 2) {
         throw new Error(
-          'Usage: drone-agent [--once] [--model <model>] [--plugin <id>] [chat <prompt>|tool <plugin.tool> [jsonInput]|exec <command>]'
+          'Usage: drone-agent [--once] [--plain-output] [--model <model>] [--plugin <id>] [chat <prompt>|tool <plugin.tool> [jsonInput]|exec <command>]'
         );
       }
       options.modelOverride = args[1];
@@ -66,7 +79,7 @@ function parseCliInvocation(argv: string[]): CliInvocation {
     if (args[0] === '--plugin') {
       if (args.length < 2) {
         throw new Error(
-          'Usage: drone-agent [--once] [--model <model>] [--plugin <id>] [chat <prompt>|tool <plugin.tool> [jsonInput]|exec <command>]'
+          'Usage: drone-agent [--once] [--plain-output] [--model <model>] [--plugin <id>] [chat <prompt>|tool <plugin.tool> [jsonInput]|exec <command>]'
         );
       }
       options.pluginOverrides.push(args[1]);
@@ -130,11 +143,122 @@ function printInteractiveHelp(): void {
   output.write(
     '  /plugins              List known plugins and enabled state\n'
   );
+  output.write('  /model [name]         List models or switch model\n');
+  output.write('  /persona list         List available personas\n');
+  output.write(
+    '  /persona select <id>  Switch active persona (or "none" to clear)\n'
+  );
+  output.write('  /persona current      Show current persona\n');
   output.write('  /tool <name> [json]   Run a registered tool directly\n');
   output.write(
     '  /exec <command>       Run a shell command through exec.run\n'
   );
   output.write('  Any other input is sent to the chat model\n');
+}
+
+function getPersonaCapability(
+  engine: ReturnType<typeof createDronePluginEngine>
+): DronePersonaCapability | undefined {
+  return engine.getCapability<DronePersonaCapability>('persona');
+}
+
+type OllamaListCapability = {
+  listModels: () => Promise<string[]>;
+};
+
+function getOllamaCapability(
+  engine: ReturnType<typeof createDronePluginEngine>
+): OllamaListCapability | undefined {
+  return engine.getCapability<OllamaListCapability>('ollama');
+}
+
+function buildPromptLabel(
+  _conversation: ReturnType<typeof createConversationService>,
+  engine: ReturnType<typeof createDronePluginEngine>
+): string {
+  const persona = getPersonaCapability(engine)?.getActivePersona();
+  return persona
+    ? `${persona.name.toLowerCase().replace(/\s+/g, '-')}> `
+    : 'drone> ';
+}
+
+async function handlePersonaSlashCommand(
+  line: string,
+  engine: ReturnType<typeof createDronePluginEngine>,
+  logger: ReturnType<typeof createConsoleLogger>
+): Promise<boolean> {
+  const parts = line.slice('/persona '.length).trim().split(/\s+/);
+  const subcommand = parts[0];
+
+  if (subcommand === 'list') {
+    const result = await engine.executeTool('persona.list', {});
+    logger.info(result);
+    return true;
+  }
+
+  if (subcommand === 'current') {
+    const result = await engine.executeTool('persona.current', {});
+    logger.info(result);
+    return true;
+  }
+
+  if (subcommand === 'select') {
+    const id = parts.slice(1).join(' ');
+    if (!id) {
+      logger.warn('Usage: /persona select <id> (or "none" to clear)');
+      return true;
+    }
+    const result = await engine.executeTool('persona.select', { id });
+    logger.info(result);
+    return true;
+  }
+
+  return false;
+}
+
+async function handleModelSlashCommand(
+  line: string,
+  conversation: ReturnType<typeof createConversationService>,
+  engine: ReturnType<typeof createDronePluginEngine>,
+  logger: ReturnType<typeof createConsoleLogger>
+): Promise<boolean> {
+  const rest = line.slice('/model'.length).trim();
+  const ollama = getOllamaCapability(engine);
+
+  if (!ollama) {
+    logger.warn(
+      'Ollama capability not available — cannot list or switch models.'
+    );
+    return true;
+  }
+
+  // No argument: list models
+  if (rest.length === 0) {
+    try {
+      const models = await ollama.listModels();
+      const current = conversation.getModel();
+      const lines = models.map(m =>
+        m === current ? `  * ${m} (current)` : `    ${m}`
+      );
+      logger.info(`Available models:\n${lines.join('\n')}`);
+      logger.info(`\nUse /model <name> to switch.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn(`Failed to list models: ${msg}`);
+    }
+    return true;
+  }
+
+  // Has argument: switch model
+  const modelName = rest;
+  try {
+    conversation.setModel(modelName);
+    logger.info(`Switched to model: ${modelName}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn(`Failed to switch model: ${msg}`);
+  }
+  return true;
 }
 
 async function runInteractiveLoop(
@@ -147,14 +271,7 @@ async function runInteractiveLoop(
 
   try {
     while (true) {
-      let promptLabel = 'drone> ';
-      try {
-        const contextUsePercent =
-          await conversation.getEstimatedContextUsagePercent();
-        promptLabel = `drone (${contextUsePercent}% ctx)> `;
-      } catch {
-        // Fall back to the default prompt if context estimation fails.
-      }
+      const promptLabel = buildPromptLabel(conversation, engine);
 
       const line = (await readline.question(promptLabel)).trim();
       if (line.length === 0) {
@@ -183,6 +300,21 @@ async function runInteractiveLoop(
           return `  - ${plugin.id} (${plugin.name}) ${state}${requiredLabel}`;
         });
         logger.info(`Plugins:\n${lines.join('\n')}`);
+        continue;
+      }
+
+      if (line.startsWith('/persona ')) {
+        const handled = await handlePersonaSlashCommand(line, engine, logger);
+        if (!handled) {
+          logger.warn(
+            'Unknown persona command. Try: /persona list, /persona select <id>, /persona current'
+          );
+        }
+        continue;
+      }
+
+      if (line.startsWith('/model')) {
+        await handleModelSlashCommand(line, conversation, engine, logger);
         continue;
       }
 
@@ -239,12 +371,16 @@ async function main(): Promise<void> {
 
   // Apply --plugin overrides: temporarily enable named plugins for this session.
   if (invocation.options.pluginOverrides.length > 0) {
-    const defaultEnabled = resolvedConfig.config.enabledPlugins.length > 0
-      ? resolvedConfig.config.enabledPlugins
-      : builtInPlugins
-          .filter(p => p.metadata.required || p.metadata.defaultEnabled)
-          .map(p => p.metadata.id);
-    const overrideSet = new Set([...defaultEnabled, ...invocation.options.pluginOverrides]);
+    const defaultEnabled =
+      resolvedConfig.config.enabledPlugins.length > 0
+        ? resolvedConfig.config.enabledPlugins
+        : builtInPlugins
+            .filter(p => p.metadata.required || p.metadata.defaultEnabled)
+            .map(p => p.metadata.id);
+    const overrideSet = new Set([
+      ...defaultEnabled,
+      ...invocation.options.pluginOverrides,
+    ]);
     resolvedConfig.config.enabledPlugins = [...overrideSet];
   }
 
@@ -268,20 +404,100 @@ async function main(): Promise<void> {
   await engine.runHooks('onPluginsLoaded');
   await engine.runHooks('onSessionStart');
 
+  // ── First-run setup ──────────────────────────────────────────────────
+  // If no user-level config exists, prompt the user to pick an Ollama model
+  // and write it to ~/.drone-agent/config.json.
+  const hasUserLayer = resolvedConfig.layers.some(l => l.scope === 'user');
+  if (!hasUserLayer && !invocation.options.modelOverride) {
+    const ollama = getOllamaCapability(engine);
+    if (ollama) {
+      try {
+        const models = await ollama.listModels();
+        if (models.length > 0) {
+          logger.info('No user config found — pick a default Ollama model.');
+          const modelList = models.map((m, i) => `  [${i}] ${m}`).join('\n');
+          logger.info(`Available models:\n${modelList}`);
+
+          const rl = createInterface({ input, output });
+          const answer = (
+            await rl.question('Select by number or name (Enter for first): ')
+          ).trim();
+          rl.close();
+          // Reset terminal state after readline's raw-mode prompt so
+          // blessed (or the next readline) doesn't get doubled keystrokes.
+          if (input.isTTY) {
+            input.setRawMode(false);
+          }
+          output.write('\n');
+
+          let selectedModel: string;
+          const numIndex = Number.parseInt(answer, 10);
+          if (answer.length === 0) {
+            selectedModel = models[0];
+          } else if (
+            !Number.isNaN(numIndex) &&
+            numIndex >= 0 &&
+            numIndex < models.length
+          ) {
+            selectedModel = models[numIndex];
+          } else if (models.includes(answer)) {
+            selectedModel = answer;
+          } else {
+            logger.warn(`"${answer}" not found, using "${models[0]}".`);
+            selectedModel = models[0];
+          }
+
+          const userConfigDir = path.join(os.homedir(), '.drone-agent');
+          const userConfigFile = path.join(userConfigDir, 'config.json');
+          await mkdir(userConfigDir, { recursive: true });
+          await writeFile(
+            userConfigFile,
+            JSON.stringify({ ollama: { model: selectedModel } }, null, 2) + '\n'
+          );
+
+          logger.info(`Wrote ${userConfigFile} with model "${selectedModel}".`);
+          conversation.setModel(selectedModel);
+        } else {
+          logger.warn(
+            'No Ollama models found. Pull a model first (e.g. "ollama pull llama3.1").'
+          );
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.warn(
+          `Could not reach Ollama at ${resolvedConfig.config.ollama.host}: ${msg}`
+        );
+        logger.warn(
+          'Start Ollama or create ~/.drone-agent/config.json manually.'
+        );
+      }
+    }
+  }
+
+  const activeModel = conversation.getModel();
   logger.info(`registered plugins: ${registeredPlugins.length}`);
   logger.info(`registered tools: ${engine.getRegisteredToolCount()}`);
   logger.info(
     `config layers: ${resolvedConfig.layers.map(layer => layer.scope).join(', ')}`
   );
   logger.info(`ollama host: ${resolvedConfig.config.ollama.host}`);
-  logger.info(`ollama model: ${model}`);
+  logger.info(`ollama model: ${activeModel}`);
 
   if (invocation.kind === 'chat') {
     await engine.runHooks('onBeforePrompt');
     logger.info(await conversation.sendUserMessage(invocation.prompt));
     await engine.runHooks('onAfterToolCall');
   } else if (invocation.kind === 'default' && !invocation.options.once) {
-    await runInteractiveLoop(conversation, engine, logger);
+    if (invocation.options.plainOutput) {
+      await runInteractiveLoop(conversation, engine, logger);
+    } else {
+      createTui({
+        engine,
+        conversation,
+        model,
+        logger,
+      });
+    }
   } else {
     const selectedTool =
       invocation.kind === 'tool'

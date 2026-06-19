@@ -32,12 +32,6 @@ export { createConversationService } from './runtime/conversation-service.js';
 export type { ConversationService } from './runtime/conversation-service.js';
 
 // ---------------------------------------------------------------------------
-// MCP client
-// ---------------------------------------------------------------------------
-export { createMcpClientConnection } from './runtime/mcp-client.js';
-export type { McpClientConnection, McpToolMeta } from './runtime/mcp-client.js';
-
-// ---------------------------------------------------------------------------
 // Built-in plugins
 // ---------------------------------------------------------------------------
 export { builtInPlugins } from './plugins/index.js';

@@ -8,7 +8,7 @@ import {
   createMcpClientConnection,
   type McpClientConnection,
   type McpToolMeta,
-} from '../runtime/mcp-client.js';
+} from './client.js';
 
 const TOOL_PROPERTY_TYPES: DroneToolJsonSchemaProperty['type'][] = [
   'string',
@@ -126,8 +126,7 @@ export const mcpPlugin: DronePlugin = {
     id: 'mcp',
     name: 'MCP',
     version: '0.1.0',
-    description:
-      'Connects to MCP servers and mounts their tools/resources/prompts.',
+    description: 'Connects to MCP servers and mounts their tools/resources/prompts.',
     defaultEnabled: true,
   },
   register: async registration => {

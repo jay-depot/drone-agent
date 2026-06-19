@@ -290,12 +290,19 @@ importers:
 
   drone-agent:
     dependencies:
+      blessed:
+        specifier: ^0.1.81
+        version: 0.1.81
       drone-core:
         specifier: workspace:*
         version: link:../drone-core
       ollama:
         specifier: ^0.6.0
         version: 0.6.3
+    devDependencies:
+      '@types/blessed':
+        specifier: ^0.1.27
+        version: 0.1.27
 
   drone-core: {}
 
@@ -404,6 +411,12 @@ packages:
         integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==,
       }
     engines: { node: '>=18.18' }
+
+  '@types/blessed@0.1.27':
+    resolution:
+      {
+        integrity: sha512-ZOQGjLvWDclAXp0rW5iuUBXeD6Gr1PkitN7tj7/G8FCoSzTsij6OhXusOzMKhwrZ9YlL2Pmu0d6xJ9zVvk+Hsg==,
+      }
 
   '@types/esrecurse@4.3.1':
     resolution:
@@ -558,6 +571,14 @@ packages:
         integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==,
       }
     engines: { node: 18 || 20 || >=22 }
+
+  blessed@0.1.81:
+    resolution:
+      {
+        integrity: sha512-LoF5gae+hlmfORcG1M5+5XZi4LBmvlXTzwJWzUlPryN/SJdSflZvROM2TwkT0GMpq7oqT48NRd4GS7BiVBc5OQ==,
+      }
+    engines: { node: '>= 0.8.0' }
+    hasBin: true
 
   brace-expansion@1.1.15:
     resolution:
@@ -1145,6 +1166,10 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
+  '@types/blessed@0.1.27':
+    dependencies:
+      '@types/node': 24.13.2
+
   '@types/esrecurse@4.3.1': {}
 
   '@types/estree@1.0.9': {}
@@ -1264,6 +1289,8 @@ snapshots:
   balanced-match@1.0.2: {}
 
   balanced-match@4.0.4: {}
+
+  blessed@0.1.81: {}
 
   brace-expansion@1.1.15:
     dependencies:

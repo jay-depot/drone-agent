@@ -25,7 +25,7 @@ export type DronePluginStatus = {
   defaultEnabled: boolean;
 };
 
-type StandardHookName = Exclude<
+export type StandardHookName = Exclude<
   keyof DronePluginHooks,
   'onSessionSafetyTrimWillRun' | 'onSessionSafetyTrimApplied'
 >;
@@ -52,6 +52,7 @@ export type DronePluginEngine = {
   listPlugins: () => DronePluginStatus[];
   getRegisteredPluginCount: () => number;
   getRegisteredToolCount: () => number;
+  getHelpSnippets: () => string[];
 };
 
 type CreateDronePluginEngineOptions = {
@@ -179,6 +180,7 @@ export function createDronePluginEngine({
   const promptKeys = new Set<string>();
   const capabilities = new Map<string, unknown>();
   const registeredPlugins: RegisteredPluginState[] = [];
+  const helpSnippets = new Map<string, string[]>();
   const sessionSafetyTrimWillRunHooks: Array<
     (payload: DroneSessionSafetyTrimPayload) => Promise<void>
   > = [];
@@ -218,6 +220,11 @@ export function createDronePluginEngine({
         promptKeys.add(promptKey);
         promptFragments.push(fragment);
         pluginPrompts.push(fragment);
+      },
+      registerHelp: (help: string) => {
+        const existing = helpSnippets.get(plugin.metadata.id) ?? [];
+        existing.push(help);
+        helpSnippets.set(plugin.metadata.id, existing);
       },
       hooks: {
         onPluginsLoaded: callback => hookBuckets.onPluginsLoaded.push(callback),
@@ -308,5 +315,14 @@ export function createDronePluginEngine({
       })),
     getRegisteredPluginCount: () => registeredPlugins.length,
     getRegisteredToolCount: () => tools.size,
+    getHelpSnippets: () => {
+      const result: string[] = [];
+      for (const [pluginId, snippets] of helpSnippets) {
+        if (enabledPluginIds.has(pluginId)) {
+          result.push(...snippets);
+        }
+      }
+      return result;
+    },
   };
 }

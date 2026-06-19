@@ -10,6 +10,7 @@ import type {
 
 type OllamaPluginCapability = {
   provider: DroneLlmProvider;
+  listModels: () => Promise<string[]>;
 };
 
 function toOllamaMessage(message: DroneChatMessage) {
@@ -154,6 +155,10 @@ export const ollamaPlugin: DronePlugin = {
           message: response.message.content || '',
         };
 
+        if (response.message.thinking) {
+          normalized.reasoning = response.message.thinking;
+        }
+
         if (
           response.message.tool_calls &&
           response.message.tool_calls.length > 0
@@ -166,7 +171,15 @@ export const ollamaPlugin: DronePlugin = {
       },
     };
 
-    registration.offer<OllamaPluginCapability>({ provider });
+    registration.offer<OllamaPluginCapability>({
+      provider,
+      listModels: async () => {
+        const agentConfig = registration.getConfig();
+        const client = new Ollama({ host: agentConfig.ollama.host });
+        const response = await client.list();
+        return response.models.map(m => m.name);
+      },
+    });
 
     registration.hooks.onPluginsLoaded(async () => {
       registration.logger.info('ollama provider ready');

@@ -689,6 +689,15 @@ function parsePartialConfig(
     parsed.mcp = mcp;
   }
 
+  if ('activePersona' in raw) {
+    if (raw.activePersona !== null && typeof raw.activePersona !== 'string') {
+      throw new Error(
+        `Invalid config in ${source}: activePersona must be a string or null.`
+      );
+    }
+    parsed.activePersona = raw.activePersona;
+  }
+
   return parsed;
 }
 

@@ -30,6 +30,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "blessed": "^0.1.81",
     "drone-core": "workspace:*",
     "ollama": "^0.6.0"
   },
@@ -39,5 +40,8 @@
       "version": "^11.8.0",
       "onFail": "download"
     }
+  },
+  "devDependencies": {
+    "@types/blessed": "^0.1.27"
   }
 }

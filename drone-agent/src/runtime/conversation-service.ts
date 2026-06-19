@@ -14,11 +14,25 @@ type OllamaCapability = {
   provider: DroneLlmProvider;
 };
 
+export type ConversationEvent =
+  | { kind: 'reasoning'; content: string }
+  | { kind: 'assistantMessage'; content: string }
+  | { kind: 'toolCall'; name: string; arguments: Record<string, unknown> }
+  | { kind: 'toolResult'; name: string; content: string }
+  | { kind: 'error'; message: string };
+
+export type ConversationEventHandler = (event: ConversationEvent) => void;
+
 export type ConversationService = {
-  sendUserMessage: (prompt: string) => Promise<string>;
+  sendUserMessage: (
+    prompt: string,
+    onEvent?: ConversationEventHandler
+  ) => Promise<string>;
   clearSession: () => void;
   getMessages: () => DroneChatMessage[];
   getEstimatedContextUsagePercent: () => Promise<number>;
+  setModel: (newModel: string) => void;
+  getModel: () => string;
 };
 
 type CreateConversationServiceOptions = {
@@ -32,7 +46,7 @@ type CreateConversationServiceOptions = {
 
 export function createConversationService({
   engine,
-  model,
+  model: initialModel,
   config,
   logger,
   sessionManager,
@@ -40,6 +54,7 @@ export function createConversationService({
 }: CreateConversationServiceOptions): ConversationService {
   let hasWarnedAboutSafetyTrim = false;
   let contextWindowInfoPromise: Promise<DroneContextWindowInfo> | undefined;
+  let currentModel = initialModel;
 
   function buildSystemMessages(): DroneChatMessage[] {
     const base: DroneChatMessage[] = [
@@ -62,13 +77,15 @@ export function createConversationService({
     provider: DroneLlmProvider
   ): Promise<DroneContextWindowInfo> {
     contextWindowInfoPromise ??= (async () => {
-      const probed = await provider.getContextWindowInfo?.({ model });
+      const probed = await provider.getContextWindowInfo?.({
+        model: currentModel,
+      });
       if (probed) {
         return probed;
       }
 
       return {
-        model,
+        model: currentModel,
         contextWindowTokens: config.session.contextWindowTokens,
         source: 'config',
       };
@@ -134,12 +151,12 @@ export function createConversationService({
 
       if (requiredDropTurnCount === null) {
         throw new Error(
-          `Session exceeds the safe context budget for ${model}, and no conversational turns remain to drop. Use /clear to reset the session.`
+          `Session exceeds the safe context budget for ${currentModel}, and no conversational turns remain to drop. Use /clear to reset the session.`
         );
       }
 
       const payload: DroneSessionSafetyTrimPayload = {
-        model,
+        model: currentModel,
         contextWindow,
         budget,
         currentTurns,
@@ -152,7 +169,7 @@ export function createConversationService({
       const droppedTurns = sessionManager.dropOldestTurns(turnsToDrop);
       if (droppedTurns.length === 0) {
         throw new Error(
-          `Session exceeds the safe context budget for ${model}, but no turns could be dropped. Use /clear to reset the session.`
+          `Session exceeds the safe context budget for ${currentModel}, but no turns could be dropped. Use /clear to reset the session.`
         );
       }
 
@@ -198,13 +215,24 @@ export function createConversationService({
   }
 
   return {
-    sendUserMessage: async prompt => {
+    sendUserMessage: async (prompt, onEvent) => {
       hasWarnedAboutSafetyTrim = false;
       sessionManager.appendUserMessage(prompt);
 
       const provider = getProvider();
       const tools = engine.listTools();
       let iterationCount = 0;
+
+      const emit = (event: ConversationEvent): void => {
+        if (onEvent) {
+          try {
+            onEvent(event);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn(`Conversation event handler threw: ${message}`);
+          }
+        }
+      };
 
       while (true) {
         const systemMessages = [
@@ -216,10 +244,14 @@ export function createConversationService({
         await ensureSafeBudget(provider, systemMessages, tools);
 
         const response = await provider.chat({
-          model,
+          model: currentModel,
           messages: [...systemMessages, ...sessionManager.getMessages()],
           tools,
         });
+
+        if (response.reasoning && response.reasoning.length > 0) {
+          emit({ kind: 'reasoning', content: response.reasoning });
+        }
 
         if (response.toolCalls && response.toolCalls.length > 0) {
           iterationCount += 1;
@@ -235,10 +267,16 @@ export function createConversationService({
           );
 
           for (const toolCall of response.toolCalls) {
+            emit({
+              kind: 'toolCall',
+              name: toolCall.name,
+              arguments: toolCall.arguments,
+            });
             const toolResult = await engine.executeTool(
               toolCall.name,
               toolCall.arguments
             );
+            emit({ kind: 'toolResult', name: toolCall.name, content: toolResult });
             sessionManager.appendToolResult(
               toolCall.name,
               toolResult,
@@ -251,6 +289,9 @@ export function createConversationService({
 
         const assistantMessage = response.message ?? '';
         sessionManager.appendAssistantMessage(assistantMessage);
+        if (assistantMessage.length > 0) {
+          emit({ kind: 'assistantMessage', content: assistantMessage });
+        }
         return assistantMessage;
       }
     },
@@ -260,5 +301,10 @@ export function createConversationService({
     },
     getMessages: () => sessionManager.getMessages(),
     getEstimatedContextUsagePercent: () => estimateCurrentContextUsagePercent(),
+    setModel: (newModel: string) => {
+      currentModel = newModel;
+      contextWindowInfoPromise = undefined; // Reset so next call re-probes
+    },
+    getModel: () => currentModel,
   };
 }
