@@ -106,15 +106,18 @@ export const personaPlugin: DronePlugin = {
         // Re-activate the previously active persona (if any) so the
         // activePersona reference still resolves to a current object.
         // If the previously active persona no longer exists, fall
-        // back to clearing the active persona.
+        // back to clearing the active persona. We always notify so
+        // subscribers (the TUI color override in particular) re-read
+        // the freshly loaded persona — even if the id is the same,
+        // the underlying object's `uiColor` may have changed.
         if (previous) {
           const stillExists = personas.get(previous.id);
           if (stillExists) {
             activePersona = stillExists;
           } else {
             activePersona = null;
-            notifyChange();
           }
+          notifyChange();
         }
         registration.logger.info(
           `reloaded ${personas.size} persona(s)`

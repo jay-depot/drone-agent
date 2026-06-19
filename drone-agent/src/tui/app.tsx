@@ -193,16 +193,11 @@ export function App(opts: DroneTuiOptions): JSX.Element {
   // question lives in state; its pending promise lives in a ref so the
   // `askQuestion` callback can resolve it once the user picks/submits.
   const [activeQuestion, setActiveQuestion] = useState<
-    | (DroneElicitationQuestion & { uiKey: string })
-    | null
+    (DroneElicitationQuestion & { uiKey: string }) | null
   >(null);
   const [pickerIndex, setPickerIndex] = useState<number>(0);
-  const questionResolveRef = useRef<
-    ((value: string) => void) | null
-  >(null);
-  const questionRejectRef = useRef<
-    ((reason: Error) => void) | null
-  >(null);
+  const questionResolveRef = useRef<((value: string) => void) | null>(null);
+  const questionRejectRef = useRef<((reason: Error) => void) | null>(null);
 
   // Wire the elicitation capability exactly once on mount. The
   // `askQuestion` callback updates React state and returns a Promise
@@ -210,7 +205,9 @@ export function App(opts: DroneTuiOptions): JSX.Element {
   // unmount so in-flight workflows don't hang).
   useEffect(() => {
     if (!opts.engine.setElicitation) return;
-    const askQuestion = (question: DroneElicitationQuestion): Promise<string> => {
+    const askQuestion = (
+      question: DroneElicitationQuestion
+    ): Promise<string> => {
       // If a question is already active, reject the previous one to
       // avoid hangs. The wizard only asks one question at a time, so
       // this is a defensive guard.
@@ -236,7 +233,8 @@ export function App(opts: DroneTuiOptions): JSX.Element {
         const reject = questionRejectRef.current;
         questionResolveRef.current = null;
         questionRejectRef.current = null;
-        if (reject) reject(new Error('TUI unmounted before question was answered.'));
+        if (reject)
+          reject(new Error('TUI unmounted before question was answered.'));
       }
       opts.engine.setElicitation?.(undefined);
     };
@@ -374,7 +372,10 @@ export function App(opts: DroneTuiOptions): JSX.Element {
               log('Workflow API not available in this build.', 'error');
             } else {
               await opts.engine.runHooks('onBeforePrompt');
-              const result = await opts.engine.runWorkflow('persona.create', {});
+              const result = await opts.engine.runWorkflow(
+                'persona.create',
+                {}
+              );
               if (result.toolResult) log(result.toolResult);
               await opts.engine.runHooks('onAfterToolCall');
               if (result.kickMessage) {
@@ -704,10 +705,13 @@ function ElicitationPrompt({
         <Box flexDirection="column">
           {(question.choices ?? []).map((choice, idx) => {
             const marker = idx === pickerIndex ? '▶' : ' ';
-            const def = question.defaultValue === choice.value ? ' (default)' : '';
+            const def =
+              question.defaultValue === choice.value ? ' (default)' : '';
             return (
               <Text key={choice.value}>
-                <ColorTag color={scheme.userInput}>{`  ${marker} ${idx + 1}. ${choice.label}${def}`}</ColorTag>
+                <ColorTag
+                  color={scheme.userInput}
+                >{`  ${marker} ${idx + 1}. ${choice.label}${def}`}</ColorTag>
               </Text>
             );
           })}

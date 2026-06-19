@@ -395,7 +395,23 @@ export const personaCreateWorkflow: DroneWorkflow = {
       }
     }
 
-    const kickMessage = `Created persona "${definition.name}" at ${filePath}. Use /persona select ${id} to activate it.`;
+    // The kick message is fed back into the chat as a synthetic user
+    // turn so the assistant can summarise the outcome. We deliberately
+    // do NOT instruct the assistant to activate the persona: that is
+    // a deliberate user action. Instead we report state (file written,
+    // active persona unchanged, uiColor set or unset) and ask for a
+    // one-line summary. This prevents the agent from "helpfully"
+    // switching personas on the user's behalf or running follow-up
+    // commands that aren't wanted.
+    const colorNote = definition.uiColor
+      ? `A UI color (${definition.uiColor}) is set; the TUI theme will tint when this persona is active.`
+      : `No UI color is set; the user can edit the frontmatter to add one (e.g. \`color: cyan\`).`;
+    const kickMessage =
+      `Persona "${definition.name}" (id: ${id}) is now available — the file ` +
+      `was written to ${filePath}. ${colorNote} The active persona has NOT ` +
+      `been changed; the user can switch with \`/persona select ${id}\` ` +
+      `whenever they want. Briefly describe what was created in one or two ` +
+      `sentences and stop. Do not run any other tools or take further action.`;
     const toolResult = JSON.stringify(
       {
         id,

@@ -169,7 +169,8 @@ export function createReadlineElicitation(): DroneElicitation & {
 }
 
 function validateQuestion(question: DroneElicitationQuestion): void {
-  const hasChoices = Array.isArray(question.choices) && question.choices.length > 0;
+  const hasChoices =
+    Array.isArray(question.choices) && question.choices.length > 0;
   if (hasChoices && question.freeform) {
     throw new Error(
       `Elicitation question "${question.id}" cannot set both "choices" and "freeform: true".`
@@ -402,11 +403,7 @@ function pickModelInteractive(
       resolve(model);
     };
     const instance = render(
-      <ModelPicker
-        models={models}
-        current={current}
-        onSelect={finish}
-      />,
+      <ModelPicker models={models} current={current} onSelect={finish} />,
       { exitOnCtrlC: true }
     );
   });
@@ -431,9 +428,7 @@ function makePlainOutputEventHandler(): import('./runtime/conversation-service.j
   const MAX_PREVIEW = 240;
   const preview = (text: string): string => {
     const flat = text.replace(/\s+/g, ' ').trim();
-    return flat.length > MAX_PREVIEW
-      ? `${flat.slice(0, MAX_PREVIEW)}…`
-      : flat;
+    return flat.length > MAX_PREVIEW ? `${flat.slice(0, MAX_PREVIEW)}…` : flat;
   };
   return event => {
     switch (event.kind) {
