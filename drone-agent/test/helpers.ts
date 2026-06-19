@@ -1,5 +1,6 @@
 import {
   createConsoleLogger,
+  type DroneElicitation,
   type DroneLogger,
   type DronePlugin,
   type DronePluginMetadata,
@@ -7,6 +8,7 @@ import {
   type DronePromptFragment,
   type DroneSessionSafetyTrimPayload,
   type DroneToolDefinition,
+  type DroneWorkflow,
 } from 'drone-core';
 
 /**
@@ -55,6 +57,7 @@ export type TestPluginOptions = {
   tools?: DroneToolDefinition[];
   prompts?: DronePromptFragment[];
   help?: string[];
+  workflows?: DroneWorkflow[];
   hooks?: TestPluginHookOptions;
   capability?: unknown;
   requestSpy?: (pluginId: string) => unknown;
@@ -85,6 +88,9 @@ export function createTestPlugin(options: TestPluginOptions): DronePlugin {
       }
       for (const help of options.help ?? []) {
         registration.registerHelp(help);
+      }
+      for (const workflow of options.workflows ?? []) {
+        registration.registerWorkflow(workflow);
       }
       if (options.capability !== undefined) {
         registration.offer(options.capability);
@@ -138,5 +144,50 @@ export function createTestPlugin(options: TestPluginOptions): DronePlugin {
         await options.register(registration);
       }
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Fake engine for unit tests that don't need the full engine.
+// ---------------------------------------------------------------------------
+
+export type FakeEngineOptions = {
+  promptFragments?: string[];
+  elicit?: DroneElicitation;
+};
+
+/**
+ * Build a fake `DronePluginEngine` good enough for unit-testing plugins
+ * that don't touch the tool registry. Includes the new workflow +
+ * elicitation surfaces added when we introduced `DroneWorkflow`.
+ */
+export function createFakeEngine(
+  options: FakeEngineOptions = {}
+): import('../src/runtime/plugin-engine.js').DronePluginEngine & {
+  __elicitation?: DroneElicitation;
+} {
+  let elicit: DroneElicitation | undefined = options.elicit;
+  return {
+    initialize: async () => [],
+    runHooks: async () => {},
+    runSessionSafetyTrimWillRunHooks: async () => {},
+    runSessionSafetyTrimAppliedHooks: async () => {},
+    renderPromptFragments: async () => options.promptFragments ?? [],
+    getTool: () => undefined,
+    executeTool: async () => '',
+    listTools: () => [],
+    getCapability: <T>() => undefined as T | undefined,
+    listPlugins: () => [],
+    getRegisteredPluginCount: () => 0,
+    getRegisteredToolCount: () => 0,
+    getHelpSnippets: () => [],
+    setElicitation: cap => {
+      elicit = cap;
+    },
+    getElicitation: () => elicit,
+    runWorkflow: async () => {
+      throw new Error('runWorkflow not implemented in fake engine');
+    },
+    __elicitation: options.elicit,
   };
 }

@@ -46,6 +46,11 @@ function makeEngine(options: EngineOptions): DronePluginEngine & {
     getRegisteredPluginCount: () => 0,
     getRegisteredToolCount: () => toolList.length,
     getHelpSnippets: () => [],
+    setElicitation: () => {},
+    getElicitation: () => undefined,
+    runWorkflow: async () => {
+      throw new Error('runWorkflow not used in conversation-service tests');
+    },
     __executeMock: executeMock,
   };
 }

@@ -100,6 +100,11 @@ function makeEngine(options: {
     getRegisteredPluginCount: () => 0,
     getRegisteredToolCount: () => 0,
     getHelpSnippets: () => [],
+    setElicitation: () => {},
+    getElicitation: () => undefined,
+    runWorkflow: async () => {
+      throw new Error('runWorkflow not used in compaction tests');
+    },
   };
 }
 
@@ -130,6 +135,7 @@ async function captureRegistration(
     registerTool: () => {},
     registerPromptFragment: () => {},
     registerHelp: () => {},
+    registerWorkflow: () => {},
     hooks: {
       onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
       onSessionStart: cb => hooks.onSessionStart.push(cb),
@@ -145,6 +151,8 @@ async function captureRegistration(
       capability.value = cap;
     },
     request: <T>() => undefined as T | undefined,
+    runWorkflow: async () => ({ toolResult: '{}' }),
+    requestElicitation: () => undefined,
   };
 
   await plugin.register(registration);
@@ -206,6 +214,7 @@ describe('createCompactionPlugin', () => {
         registerHelp: (help: string) => {
           helpRegistered = help;
         },
+        registerWorkflow: () => {},
         hooks: {
           onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
           onSessionStart: cb => hooks.onSessionStart.push(cb),
@@ -221,6 +230,8 @@ describe('createCompactionPlugin', () => {
           capability.value = cap;
         },
         request: <T>() => undefined as T | undefined,
+        runWorkflow: async () => ({ toolResult: '{}' }),
+        requestElicitation: () => undefined,
       };
       await plugin.register(registration);
       return { registration, hooks, capability };

@@ -39,6 +39,20 @@ export type DroneTuiOptions = {
       input: Record<string, unknown>
     ) => Promise<string>;
     getHelpSnippets: () => string[];
+    /**
+     * Optional. Set the host's elicitation capability; called by App
+     * on mount to register its TUI-flavoured implementation.
+     */
+    setElicitation?: (
+      cap: import('drone-core').DroneElicitation | undefined
+    ) => void;
+    /**
+     * Optional. Run a registered workflow by canonical name.
+     */
+    runWorkflow?: (
+      canonicalName: string,
+      args: Record<string, unknown>
+    ) => Promise<import('drone-core').DroneWorkflowResult>;
   };
   conversation: {
     sendUserMessage: (

@@ -19,7 +19,7 @@ const CONFIG_DIR = '.drone-agent';
  *   ---
  *   System prompt override body (optional)
  */
-function parsePersonaMd(id: string, content: string): DronePersonaDefinition {
+function _parsePersonaMdInternal(id: string, content: string): DronePersonaDefinition {
   const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!frontmatterMatch) {
     // No frontmatter — use the whole file as the system prompt override
@@ -115,10 +115,19 @@ async function loadPersonasFromDir(
     if (!entry.endsWith('.md')) continue;
     const id = entry.slice(0, -3); // strip .md
     const content = await readFile(path.join(dir, entry), 'utf-8');
-    personas.push(parsePersonaMd(id, content));
+    personas.push(_parsePersonaMdInternal(id, content));
   }
   return personas;
 }
+
+/**
+ * Exported alias for `parsePersonaMd`. Used by the persona creation
+ * wizard to validate the LLM's output before writing it to disk.
+ * The function does not throw on missing frontmatter — it falls back
+ * to a plain system-prompt-only persona. The wizard treats the
+ * presence of frontmatter + a matching id as the validation signal.
+ */
+export const parsePersonaMd = _parsePersonaMdInternal;
 
 /**
  * Load all personas from user and project directories.

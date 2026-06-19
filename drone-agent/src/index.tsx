@@ -1,5 +1,10 @@
-import { createConsoleLogger } from 'drone-core';
-import { createInterface } from 'node:readline/promises';
+import {
+  createConsoleLogger,
+  type DroneElicitation,
+  type DroneElicitationAnswers,
+  type DroneElicitationQuestion,
+} from 'drone-core';
+import { createInterface, type Interface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -19,6 +24,11 @@ type CliOptions = {
   plainOutput: boolean;
   modelOverride?: string;
   pluginOverrides: string[];
+  workflow?: {
+    pluginId: string;
+    workflowName: string;
+    args: Record<string, string>;
+  };
 };
 
 type CliInvocation =
@@ -34,9 +44,143 @@ type CliInvocation =
       options: CliOptions;
     }
   | {
+      kind: 'workflow';
+      options: CliOptions & {
+        workflow: NonNullable<CliOptions['workflow']>;
+      };
+    }
+  | {
       kind: 'default';
       options: CliOptions;
     };
+
+/**
+ * Build a `DroneElicitation` implementation backed by `node:readline`.
+ * Used by the plain-output (`--plain-output`) host. The TUI App
+ * constructs its own implementation; in non-interactive modes (e.g.
+ * `--once`) the host simply doesn't call `setElicitation` and the
+ * engine returns `undefined` to plugins that try to elicit.
+ *
+ * Closed-set questions render as a numbered list and accept either the
+ * digit or the typed `value`. Freeform questions prompt with a label
+ * and return the trimmed line. `defaultValue` is used for empty input.
+ */
+export function createReadlineElicitation(): DroneElicitation & {
+  close: () => void;
+} {
+  // Each `ask()` call gets its own readline instance so the wizard can
+  // do multi-step prompts without leaving a dangling interface. We
+  // expose `close()` for tests; production code uses one ask per
+  // workflow and lets the GC reclaim the interface.
+  let activeInterface: Interface | undefined;
+
+  function openInterface(): Interface {
+    const iface = createInterface({ input, output });
+    activeInterface = iface;
+    return iface;
+  }
+
+  async function askClosedSet(
+    question: DroneElicitationQuestion
+  ): Promise<string> {
+    const choices = question.choices ?? [];
+    if (choices.length === 0) {
+      throw new Error(
+        `Elicitation question "${question.id}" has no choices and is not freeform.`
+      );
+    }
+    const iface = openInterface();
+    output.write(`${question.prompt}\n`);
+    choices.forEach((choice, idx) => {
+      const marker = choice.value === question.defaultValue ? '*' : ' ';
+      output.write(`  ${marker} ${idx + 1}. ${choice.label}\n`);
+    });
+    if (question.defaultValue) {
+      const def = choices.find(c => c.value === question.defaultValue);
+      if (def) output.write(`(default: ${def.label})\n`);
+    }
+    const label = question.inputLabel ?? question.prompt;
+    while (true) {
+      const raw = (await iface.question(`${label} `)).trim();
+      if (raw.length === 0) {
+        if (question.defaultValue !== undefined) return question.defaultValue;
+        output.write('Please choose one of the options above.\n');
+        continue;
+      }
+      // Digit selection (1-based).
+      if (/^\d+$/.test(raw)) {
+        const idx = Number.parseInt(raw, 10) - 1;
+        if (idx >= 0 && idx < choices.length) {
+          return choices[idx].value;
+        }
+        output.write('Please choose one of the options above.\n');
+        continue;
+      }
+      // Typed value (case-insensitive match).
+      const lower = raw.toLowerCase();
+      const match = choices.find(c => c.value.toLowerCase() === lower);
+      if (match) return match.value;
+      output.write('Please choose one of the options above.\n');
+    }
+  }
+
+  async function askFreeform(
+    question: DroneElicitationQuestion
+  ): Promise<string> {
+    const iface = openInterface();
+    const label = question.inputLabel ?? question.prompt;
+    while (true) {
+      const raw = (await iface.question(`${label} `)).trim();
+      if (raw.length > 0) return raw;
+      if (question.defaultValue !== undefined) return question.defaultValue;
+      if (question.placeholder) {
+        output.write(`(e.g. ${question.placeholder})\n`);
+      }
+    }
+  }
+
+  return {
+    ask: async (questions): Promise<DroneElicitationAnswers> => {
+      const answers: DroneElicitationAnswers = {};
+      try {
+        for (const question of questions) {
+          validateQuestion(question);
+          if (question.freeform) {
+            answers[question.id] = await askFreeform(question);
+          } else {
+            answers[question.id] = await askClosedSet(question);
+          }
+        }
+      } finally {
+        if (activeInterface) {
+          activeInterface.close();
+          activeInterface = undefined;
+        }
+      }
+      return answers;
+    },
+    close: () => {
+      if (activeInterface) {
+        activeInterface.close();
+        activeInterface = undefined;
+      }
+    },
+  };
+}
+
+function validateQuestion(question: DroneElicitationQuestion): void {
+  const hasChoices = Array.isArray(question.choices) && question.choices.length > 0;
+  if (hasChoices && question.freeform) {
+    throw new Error(
+      `Elicitation question "${question.id}" cannot set both "choices" and "freeform: true".`
+    );
+  }
+  if (!hasChoices && !question.freeform) {
+    throw new Error(
+      `Elicitation question "${question.id}" must set either "choices" or "freeform: true".`
+    );
+  }
+}
 
 function parseJsonObject(raw: string): Record<string, unknown> {
   const parsed = JSON.parse(raw) as unknown;
@@ -46,7 +190,7 @@ function parseJsonObject(raw: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
-function parseCliInvocation(argv: string[]): CliInvocation {
+export function parseCliInvocation(argv: string[]): CliInvocation {
   const args = [...argv];
   const options: CliOptions = {
     once: false,
@@ -70,7 +214,7 @@ function parseCliInvocation(argv: string[]): CliInvocation {
     if (args[0] === '--model') {
       if (args.length < 2) {
         throw new Error(
-          'Usage: drone-agent [--once] [--plain-output] [--model <model>] [--plugin <id>] [chat <prompt>|tool <plugin.tool> [jsonInput]|exec <command>]'
+          'Usage: drone-agent [--once] [--plain-output] [--model <model>] [--plugin <id>] [--workflow <plugin>.<name> [--workflow-arg key=value]...] [chat <prompt>|tool <plugin.tool> [jsonInput]|exec <command>]'
         );
       }
       options.modelOverride = args[1];
@@ -81,7 +225,7 @@ function parseCliInvocation(argv: string[]): CliInvocation {
     if (args[0] === '--plugin') {
       if (args.length < 2) {
         throw new Error(
-          'Usage: drone-agent [--once] [--plain-output] [--model <model>] [--plugin <id>] [chat <prompt>|tool <plugin.tool> [jsonInput]|exec <command>]'
+          'Usage: drone-agent [--once] [--plain-output] [--model <model>] [--plugin <id>] [--workflow <plugin>.<name> [--workflow-arg key=value]...] [chat <prompt>|tool <plugin.tool> [jsonInput]|exec <command>]'
         );
       }
       options.pluginOverrides.push(args[1]);
@@ -89,7 +233,67 @@ function parseCliInvocation(argv: string[]): CliInvocation {
       continue;
     }
 
+    if (args[0] === '--workflow') {
+      if (args.length < 2) {
+        throw new Error(
+          'Usage: drone-agent --workflow <plugin>.<name> [--workflow-arg key=value]...'
+        );
+      }
+      const target = args[1];
+      const dot = target.indexOf('.');
+      if (dot <= 0 || dot === target.length - 1) {
+        throw new Error(
+          `--workflow target must be in the form <plugin>.<name>; got "${target}"`
+        );
+      }
+      options.workflow = {
+        pluginId: target.slice(0, dot),
+        workflowName: target.slice(dot + 1),
+        args: {},
+      };
+      args.splice(0, 2);
+      continue;
+    }
+
+    if (args[0] === '--workflow-arg') {
+      if (!options.workflow) {
+        throw new Error(
+          '--workflow-arg requires --workflow <plugin>.<name> to come first.'
+        );
+      }
+      if (args.length < 2) {
+        throw new Error('Usage: --workflow-arg key=value');
+      }
+      const raw = args[1];
+      const eq = raw.indexOf('=');
+      if (eq === -1) {
+        throw new Error(
+          `--workflow-arg must be in the form key=value; got "${raw}"`
+        );
+      }
+      const key = raw.slice(0, eq).trim();
+      const value = raw.slice(eq + 1);
+      if (key.length === 0) {
+        throw new Error(`--workflow-arg key cannot be empty: "${raw}"`);
+      }
+      options.workflow.args[key] = value;
+      args.splice(0, 2);
+      continue;
+    }
+
     break;
+  }
+
+  // If --workflow is present and no command was given, the invocation is a
+  // workflow run. We surface this as a separate `CliInvocation` kind so the
+  // caller can route it correctly.
+  if (options.workflow) {
+    return {
+      kind: 'workflow',
+      options: options as CliOptions & {
+        workflow: NonNullable<CliOptions['workflow']>;
+      },
+    };
   }
 
   const [command, ...rest] = args;
@@ -147,6 +351,9 @@ function printInteractiveHelp(): void {
   );
   output.write('  /model [name]         List models or switch model\n');
   output.write('  /persona list         List available personas\n');
+  output.write(
+    '  /persona create       Interactive wizard to author a new persona\n'
+  );
   output.write(
     '  /persona select <id>  Switch active persona (or "none" to clear)\n'
   );
@@ -255,7 +462,9 @@ function makePlainOutputEventHandler(): import('./runtime/conversation-service.j
 async function handlePersonaSlashCommand(
   line: string,
   engine: ReturnType<typeof createDronePluginEngine>,
-  logger: ReturnType<typeof createConsoleLogger>
+  logger: ReturnType<typeof createConsoleLogger>,
+  conversation: ReturnType<typeof createConversationService>,
+  sessionManager: ReturnType<typeof createSessionManager>
 ): Promise<boolean> {
   const parts = line.slice('/persona '.length).trim().split(/\s+/);
   const subcommand = parts[0];
@@ -280,6 +489,32 @@ async function handlePersonaSlashCommand(
     }
     const result = await engine.executeTool('persona.select', { id });
     logger.info(result);
+    return true;
+  }
+
+  if (subcommand === 'create') {
+    // Workflows that elicit the user need an interactive host. The
+    // readline elicitation is already wired into the engine in
+    // plain-output mode (see main()). In a non-interactive run (no
+    // host attached) runWorkflow itself throws a clear error.
+    await engine.runHooks('onBeforePrompt');
+    const result = await engine.runWorkflow('persona.create', {});
+    if (result.toolResult) {
+      logger.info(result.toolResult);
+    }
+    await engine.runHooks('onAfterToolCall');
+    if (result.kickMessage && conversation) {
+      // Re-enter the chat loop so the assistant can summarise.
+      sessionManager.appendUserMessage(result.kickMessage);
+      await engine.runHooks('onBeforePrompt');
+      const plainHandler = makePlainOutputEventHandler();
+      const reply = await conversation.sendUserMessage(
+        result.kickMessage,
+        plainHandler
+      );
+      output.write(`${reply}\n`);
+      await engine.runHooks('onAfterToolCall');
+    }
     return true;
   }
 
@@ -334,7 +569,8 @@ async function handleModelSlashCommand(
 async function runInteractiveLoop(
   conversation: ReturnType<typeof createConversationService>,
   engine: ReturnType<typeof createDronePluginEngine>,
-  logger: ReturnType<typeof createConsoleLogger>
+  logger: ReturnType<typeof createConsoleLogger>,
+  sessionManager: ReturnType<typeof createSessionManager>
 ): Promise<void> {
   const readline = createInterface({ input, output });
   output.write('Interactive chat ready. Type /help for commands.\n');
@@ -374,10 +610,16 @@ async function runInteractiveLoop(
       }
 
       if (line.startsWith('/persona ')) {
-        const handled = await handlePersonaSlashCommand(line, engine, logger);
+        const handled = await handlePersonaSlashCommand(
+          line,
+          engine,
+          logger,
+          conversation,
+          sessionManager
+        );
         if (!handled) {
           logger.warn(
-            'Unknown persona command. Try: /persona list, /persona select <id>, /persona current'
+            'Unknown persona command. Try: /persona list, /persona create, /persona select <id>, /persona current'
           );
         }
         continue;
@@ -494,6 +736,19 @@ async function main(): Promise<void> {
   });
   const registeredPlugins = await engine.initialize();
 
+  // ── Elicitation wiring ──────────────────────────────────────────────
+  // In plain-output mode we attach the readline-backed elicitation
+  // immediately. In TUI mode the App constructs its own elicitation
+  // capability; we wire it just before `createTui({...})` further down
+  // so the App has its UI handlers registered. In non-interactive
+  // modes (e.g. `--once`, workflow runs from non-interactive shells)
+  // we deliberately leave the capability unset so plugins that try to
+  // elicit get a clean "host is non-interactive" error rather than a
+  // hanging readline.
+  if (invocation.kind === 'default' && invocation.options.plainOutput) {
+    engine.setElicitation(createReadlineElicitation());
+  }
+
   await engine.runHooks('onPluginsLoaded');
   await engine.runHooks('onSessionStart');
 
@@ -564,13 +819,45 @@ async function main(): Promise<void> {
     // double-printing; render the final reply here.
     output.write(`${response}\n`);
     await engine.runHooks('onAfterToolCall');
+  } else if (invocation.kind === 'workflow') {
+    // For workflow runs we always need elicitation. If we're in plain
+    // mode the capability is already set; otherwise (e.g. someone ran
+    // `--workflow` without `--plain-output`) attach the readline
+    // elicitation here so the wizard can prompt.
+    if (!engine.getElicitation()) {
+      engine.setElicitation(createReadlineElicitation());
+    }
+    const { pluginId, workflowName, args } = invocation.options.workflow;
+    const canonicalName = `${pluginId}.${workflowName}`;
+    await engine.runHooks('onBeforePrompt');
+    const result = await engine.runWorkflow(canonicalName, args);
+    if (result.toolResult) {
+      logger.info(result.toolResult);
+    }
+    await engine.runHooks('onAfterToolCall');
+
+    if (result.kickMessage) {
+      // The workflow wants the agent to react to its completion. Inject
+      // the message as a synthetic user turn and re-enter the chat loop
+      // so the assistant can summarise the result.
+      sessionManager.appendUserMessage(result.kickMessage);
+      await engine.runHooks('onBeforePrompt');
+      const plainHandler = makePlainOutputEventHandler();
+      const reply = await conversation.sendUserMessage(
+        result.kickMessage,
+        plainHandler
+      );
+      output.write(`${reply}\n`);
+      await engine.runHooks('onAfterToolCall');
+    }
   } else if (invocation.kind === 'default' && !invocation.options.once) {
     if (invocation.options.plainOutput) {
-      await runInteractiveLoop(conversation, engine, logger);
+      await runInteractiveLoop(conversation, engine, logger, sessionManager);
     } else {
-      // Mount the Ink-based chat TUI and wait for the user to quit
-      // (Esc / Ctrl+C). `onShutdown` runs after the TUI unmounts so
-      // plugin teardown sees a clean slate.
+      // TUI mode: defer elicitation wiring to the App (it constructs a
+      // TUI-flavoured capability that draws prompts into the chat log).
+      // The App reads `engine.getElicitation()` indirectly through its
+      // own state — see tui/app.tsx for the construction site.
       const tui = createTui({
         engine,
         conversation,

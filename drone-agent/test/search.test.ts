@@ -20,6 +20,7 @@ function captureRegistration(): {
     },
     registerPromptFragment: () => {},
     registerHelp: () => {},
+    registerWorkflow: () => {},
     hooks: {
       onPluginsLoaded: () => {},
       onSessionStart: () => {},
@@ -31,6 +32,8 @@ function captureRegistration(): {
     },
     offer: () => {},
     request: <T>() => undefined as T | undefined,
+    runWorkflow: async () => ({ toolResult: '{}' }),
+    requestElicitation: () => undefined,
   };
   return { registration, tools };
 }

@@ -1,14 +1,19 @@
 import {
   createConsoleLogger,
-  type DroneSessionSafetyTrimPayload,
   getCanonicalToolName,
   type DroneAgentConfig,
+  type DroneElicitation,
   type DroneLogger,
   type DronePlugin,
   type DronePluginHooks,
   type DronePromptFragment,
+  type DroneSessionSafetyTrimPayload,
   type DroneToolDescriptor,
   type DroneToolDefinition,
+  type DroneWorkflow,
+  type DroneWorkflowContext,
+  type DroneWorkflowResult,
+  type DroneWorkflowRunReturn,
 } from 'drone-core';
 
 export type RegisteredPluginState = {
@@ -53,6 +58,24 @@ export type DronePluginEngine = {
   getRegisteredPluginCount: () => number;
   getRegisteredToolCount: () => number;
   getHelpSnippets: () => string[];
+  /**
+   * Set the host's elicitation capability. Must be called by the CLI shell
+   * or TUI App BEFORE any workflow runs (and before `onSessionStart` if
+   * plugins want to elicit during session bootstrap).
+   */
+  setElicitation: (capability: DroneElicitation | undefined) => void;
+  /** Returns the host's elicitation capability, or undefined in non-interactive modes. */
+  getElicitation: () => DroneElicitation | undefined;
+  /**
+   * Run a registered workflow by canonical name (`<plugin>.<workflow>`).
+   * Builds the workflow context (with `elicit`, `projectDir`, `config`,
+   * and `requestCapability`) and normalizes the workflow's return value
+   * into a `DroneWorkflowResult` shape.
+   */
+  runWorkflow: (
+    canonicalName: string,
+    args: Record<string, unknown>
+  ) => Promise<DroneWorkflowResult>;
 };
 
 type CreateDronePluginEngineOptions = {
@@ -177,6 +200,7 @@ export function createDronePluginEngine({
   const hookBuckets = createHookBuckets();
   const promptFragments: DronePromptFragment[] = [];
   const tools = new Map<string, DroneToolDefinition>();
+  const workflows = new Map<string, DroneWorkflow>();
   const promptKeys = new Set<string>();
   const capabilities = new Map<string, unknown>();
   const registeredPlugins: RegisteredPluginState[] = [];
@@ -187,6 +211,32 @@ export function createDronePluginEngine({
   const sessionSafetyTrimAppliedHooks: Array<
     (payload: DroneSessionSafetyTrimPayload) => Promise<void>
   > = [];
+  let elicitationCapability: DroneElicitation | undefined;
+
+  async function runWorkflow(
+    canonicalName: string,
+    args: Record<string, unknown>
+  ): Promise<DroneWorkflowResult> {
+    const workflow = workflows.get(canonicalName);
+    if (!workflow) {
+      throw new Error(`Unknown workflow: ${canonicalName}`);
+    }
+    const elicit = elicitationCapability;
+    if (!elicit) {
+      throw new Error(
+        `Workflow ${canonicalName} requested elicitation, but the host did not provide an interactive capability. Use --plain-output or the TUI; do not run workflows with --once.`
+      );
+    }
+    const ctx: DroneWorkflowContext = {
+      elicit,
+      projectDir: process.cwd(),
+      config,
+      requestCapability: <T>(pluginId: string) =>
+        capabilities.get(pluginId) as T | undefined,
+    };
+    const raw = await workflow.run(args, ctx);
+    return normalizeWorkflowResult(raw);
+  }
 
   async function registerPlugin(
     plugin: DronePlugin
@@ -226,6 +276,16 @@ export function createDronePluginEngine({
         existing.push(help);
         helpSnippets.set(plugin.metadata.id, existing);
       },
+      registerWorkflow: workflow => {
+        const canonicalName = getCanonicalToolName(
+          plugin.metadata.id,
+          workflow.name
+        );
+        if (workflows.has(canonicalName)) {
+          throw new Error(`Workflow already registered: ${canonicalName}`);
+        }
+        workflows.set(canonicalName, workflow);
+      },
       hooks: {
         onPluginsLoaded: callback => hookBuckets.onPluginsLoaded.push(callback),
         onSessionStart: callback => hookBuckets.onSessionStart.push(callback),
@@ -248,6 +308,8 @@ export function createDronePluginEngine({
         }
         return capabilities.get(pluginId) as T | undefined;
       },
+      runWorkflow: (canonicalName, args) => runWorkflow(canonicalName, args),
+      requestElicitation: () => elicitationCapability,
     });
 
     return {
@@ -324,5 +386,38 @@ export function createDronePluginEngine({
       }
       return result;
     },
+    setElicitation: capability => {
+      elicitationCapability = capability;
+    },
+    getElicitation: () => elicitationCapability,
+    runWorkflow,
   };
+}
+
+function normalizeWorkflowResult(
+  raw: DroneWorkflowRunReturn | undefined | null
+): DroneWorkflowResult {
+  if (raw === undefined || raw === null) {
+    return { toolResult: '{}' };
+  }
+  if (typeof raw === 'string') {
+    return { toolResult: raw };
+  }
+  // Treat any object with at least one of `kickMessage`/`toolResult` as a
+  // result shape (don't JSON.stringify it). Anything else gets serialized.
+  if (
+    typeof raw === 'object' &&
+    (Object.prototype.hasOwnProperty.call(raw, 'kickMessage') ||
+      Object.prototype.hasOwnProperty.call(raw, 'toolResult'))
+  ) {
+    const result: DroneWorkflowResult = {};
+    if (typeof raw.kickMessage === 'string') {
+      result.kickMessage = raw.kickMessage;
+    }
+    if (typeof raw.toolResult === 'string') {
+      result.toolResult = raw.toolResult;
+    }
+    return result;
+  }
+  return { toolResult: JSON.stringify(raw) };
 }

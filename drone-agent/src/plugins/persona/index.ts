@@ -4,6 +4,7 @@ import type {
   DronePromptFragment,
 } from 'drone-core';
 import { loadPersonas } from './loader.js';
+import { personaCreateWorkflow } from './wizard.js';
 
 export type DronePersonaCapability = {
   getActivePersona: () => DronePersonaDefinition | null;
@@ -12,6 +13,12 @@ export type DronePersonaCapability = {
   onPersonaChange: (
     callback: (persona: DronePersonaDefinition | null) => void
   ) => void;
+  /**
+   * Reload persona files from disk. Called by the persona.create
+   * workflow after writing a new file, and exposed so other plugins
+   * (or tests) can force a refresh.
+   */
+  reloadPersonas: () => Promise<void>;
 };
 
 export const personaPlugin: DronePlugin = {
@@ -93,6 +100,26 @@ export const personaPlugin: DronePlugin = {
       onPersonaChange: callback => {
         changeCallbacks.push(callback);
       },
+      reloadPersonas: async () => {
+        const previous = activePersona;
+        personas = await loadPersonas(projectDir);
+        // Re-activate the previously active persona (if any) so the
+        // activePersona reference still resolves to a current object.
+        // If the previously active persona no longer exists, fall
+        // back to clearing the active persona.
+        if (previous) {
+          const stillExists = personas.get(previous.id);
+          if (stillExists) {
+            activePersona = stillExists;
+          } else {
+            activePersona = null;
+            notifyChange();
+          }
+        }
+        registration.logger.info(
+          `reloaded ${personas.size} persona(s)`
+        );
+      },
     };
 
     registration.offer(capability);
@@ -101,7 +128,7 @@ export const personaPlugin: DronePlugin = {
     // onPluginsLoaded — load personas and activate configured persona
     // -----------------------------------------------------------------------
     registration.hooks.onPluginsLoaded(async () => {
-      personas = await loadPersonas(projectDir);
+      await capability.reloadPersonas();
 
       if (personas.size === 0) {
         registration.logger.info(
@@ -245,5 +272,38 @@ export const personaPlugin: DronePlugin = {
         );
       },
     });
+
+    // -----------------------------------------------------------------------
+    // persona.create — delegates to the persona-create workflow so all
+    // three entry points (tool call / slash command / --workflow CLI
+    // flag) share one implementation.
+    // -----------------------------------------------------------------------
+    registration.registerTool({
+      name: 'create',
+      description:
+        'Interactively create a new persona .md file. Asks for scope, id, and description; has the LLM write the persona; validates and installs it.',
+      inputSchema: personaCreateWorkflow.inputSchema ?? {
+        type: 'object',
+        additionalProperties: false,
+      },
+      execute: async input => {
+        const result = await registration.runWorkflow('persona.create', input);
+        return (
+          result.toolResult ??
+          JSON.stringify({ ok: true, message: 'Workflow completed.' }, null, 2)
+        );
+      },
+    });
+
+    // -----------------------------------------------------------------------
+    // persona.create workflow — same shape as the tool, but takes a
+    // workflow context (with elicit, projectDir, config, requestCapability).
+    // -----------------------------------------------------------------------
+    registration.registerWorkflow(personaCreateWorkflow);
+
+    // Help snippet surfaces in `/help` and the TUI help screen.
+    registration.registerHelp(
+      '/persona create       Interactive wizard to author a new persona'
+    );
   },
 };

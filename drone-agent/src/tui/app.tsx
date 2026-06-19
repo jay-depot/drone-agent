@@ -27,6 +27,7 @@ import { Box, Text, useApp, useInput } from 'ink';
 import os from 'node:os';
 import path from 'node:path';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { DroneElicitationQuestion } from 'drone-core';
 import { ChatLog, type ChatEntry } from './components/ChatLog.js';
 import { InputLine } from './components/InputLine.js';
 import { StatusBar } from './components/StatusBar.js';
@@ -37,6 +38,7 @@ import {
   type DroneColorOverride,
   type DroneColorScheme,
 } from './theme.js';
+import { createTuiElicitation } from './elicitation.js';
 import type { DroneTuiOptions } from './types.js';
 
 /** How long each override gets to be the active tint. */
@@ -185,6 +187,79 @@ export function App(opts: DroneTuiOptions): JSX.Element {
   const inputValueRef = useRef<string>('');
   inputValueRef.current = input;
 
+  // ── Elicitation state ──────────────────────────────────────────────
+  // When a workflow / plugin asks the user a question, we render an
+  // inline picker or text input just above the status bar. The active
+  // question lives in state; its pending promise lives in a ref so the
+  // `askQuestion` callback can resolve it once the user picks/submits.
+  const [activeQuestion, setActiveQuestion] = useState<
+    | (DroneElicitationQuestion & { uiKey: string })
+    | null
+  >(null);
+  const [pickerIndex, setPickerIndex] = useState<number>(0);
+  const questionResolveRef = useRef<
+    ((value: string) => void) | null
+  >(null);
+  const questionRejectRef = useRef<
+    ((reason: Error) => void) | null
+  >(null);
+
+  // Wire the elicitation capability exactly once on mount. The
+  // `askQuestion` callback updates React state and returns a Promise
+  // that resolves when the user commits an answer (or rejects on
+  // unmount so in-flight workflows don't hang).
+  useEffect(() => {
+    if (!opts.engine.setElicitation) return;
+    const askQuestion = (question: DroneElicitationQuestion): Promise<string> => {
+      // If a question is already active, reject the previous one to
+      // avoid hangs. The wizard only asks one question at a time, so
+      // this is a defensive guard.
+      if (questionResolveRef.current) {
+        const prev = questionRejectRef.current;
+        questionResolveRef.current = null;
+        questionRejectRef.current = null;
+        if (prev) prev(new Error('Superseded by a new elicitation question.'));
+      }
+      const uiKey = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      setPickerIndex(0);
+      setActiveQuestion({ ...question, uiKey });
+      return new Promise<string>((resolve, reject) => {
+        questionResolveRef.current = resolve;
+        questionRejectRef.current = reject;
+      });
+    };
+    opts.engine.setElicitation(createTuiElicitation({ askQuestion }));
+    return () => {
+      // Reject any in-flight question on unmount so the wizard's
+      // promise chain unwinds cleanly instead of hanging.
+      if (questionResolveRef.current) {
+        const reject = questionRejectRef.current;
+        questionResolveRef.current = null;
+        questionRejectRef.current = null;
+        if (reject) reject(new Error('TUI unmounted before question was answered.'));
+      }
+      opts.engine.setElicitation?.(undefined);
+    };
+  }, [opts.engine]);
+
+  const commitAnswer = useCallback((answer: string) => {
+    const resolve = questionResolveRef.current;
+    questionResolveRef.current = null;
+    questionRejectRef.current = null;
+    setActiveQuestion(null);
+    setPickerIndex(0);
+    if (resolve) resolve(answer);
+  }, []);
+
+  const cancelQuestion = useCallback(() => {
+    const reject = questionRejectRef.current;
+    questionResolveRef.current = null;
+    questionRejectRef.current = null;
+    setActiveQuestion(null);
+    setPickerIndex(0);
+    if (reject) reject(new Error('Elicitation cancelled.'));
+  }, []);
+
   // ── Status bar state ───────────────────────────────────────────────
   const [ctxPct, setCtxPct] = useState<number | null>(null);
   const [cwd, setCwd] = useState<string>(process.cwd());
@@ -290,6 +365,45 @@ export function App(opts: DroneTuiOptions): JSX.Element {
             log(await opts.engine.executeTool('persona.list', {}));
           } else if (sub === 'current') {
             log(await opts.engine.executeTool('persona.current', {}));
+          } else if (sub === 'create') {
+            // The workflow asks its own questions via the elicitation
+            // capability wired by useEffect on mount. Any user-facing
+            // output (kick summary, errors) is appended via the
+            // conversation event handler attached to sendUserMessage.
+            if (!opts.engine.runWorkflow) {
+              log('Workflow API not available in this build.', 'error');
+            } else {
+              await opts.engine.runHooks('onBeforePrompt');
+              const result = await opts.engine.runWorkflow('persona.create', {});
+              if (result.toolResult) log(result.toolResult);
+              await opts.engine.runHooks('onAfterToolCall');
+              if (result.kickMessage) {
+                await opts.engine.runHooks('onBeforePrompt');
+                await opts.conversation.sendUserMessage(
+                  result.kickMessage,
+                  event => {
+                    if (event.kind === 'assistantMessage') {
+                      log(event.content, 'plain');
+                    } else if (event.kind === 'reasoning') {
+                      log(`💭 ${event.content.trim()}`, 'reasoning');
+                    } else if (event.kind === 'toolCall') {
+                      log(
+                        `→ tool: ${event.name} ${preview(JSON.stringify(event.arguments))}`,
+                        'toolCall'
+                      );
+                    } else if (event.kind === 'toolResult') {
+                      log(
+                        `← ${event.name}: ${preview(event.content)}`,
+                        'toolResult'
+                      );
+                    } else if (event.kind === 'error') {
+                      log(`Error: ${event.message}`, 'error');
+                    }
+                  }
+                );
+                await opts.engine.runHooks('onAfterToolCall');
+              }
+            }
           } else if (sub === 'select') {
             const id = parts.slice(1).join(' ');
             if (id) {
@@ -298,7 +412,10 @@ export function App(opts: DroneTuiOptions): JSX.Element {
               log('Usage: /persona select <id> (or "none")', 'error');
             }
           } else {
-            log('Unknown persona command.', 'error');
+            log(
+              'Unknown persona command. Try: /persona list, /persona create, /persona select <id>, /persona current',
+              'error'
+            );
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -474,6 +591,49 @@ export function App(opts: DroneTuiOptions): JSX.Element {
     ctxPct ?? '?'
   }%${personaLabel} `;
 
+  // ── Elicitation useInput ──────────────────────────────────────────
+  // When a question is active, hijack arrow keys + Enter / Ctrl+C to
+  // drive the picker. We do this in a separate useInput (not the
+  // global one) so the chat input line keeps receiving typed text
+  // for freeform questions.
+  useInput((inputChar, key) => {
+    if (!activeQuestion) return;
+    if (key.ctrl && inputChar === 'c') {
+      cancelQuestion();
+      return;
+    }
+    if (activeQuestion.freeform) {
+      // Freeform questions are handled by their own TextInput, which
+      // commits via Enter. We only intercept Esc as a cancel.
+      if (key.escape) {
+        cancelQuestion();
+      }
+      return;
+    }
+    // Closed-set picker: arrow up/down to move selection, Enter to commit.
+    const choices = activeQuestion.choices ?? [];
+    if (key.upArrow) {
+      setPickerIndex(prev => (prev - 1 + choices.length) % choices.length);
+      return;
+    }
+    if (key.downArrow) {
+      setPickerIndex(prev => (prev + 1) % choices.length);
+      return;
+    }
+    if (key.return) {
+      const choice = choices[pickerIndex];
+      if (choice) commitAnswer(choice.value);
+      return;
+    }
+    // Number shortcuts: 1..9.
+    if (/^[1-9]$/.test(inputChar)) {
+      const idx = Number.parseInt(inputChar, 10) - 1;
+      if (idx >= 0 && idx < choices.length) {
+        commitAnswer(choices[idx].value);
+      }
+    }
+  });
+
   // ── Render ─────────────────────────────────────────────────────────
   return (
     <Box flexDirection="column" width="100%" height="100%">
@@ -488,6 +648,14 @@ export function App(opts: DroneTuiOptions): JSX.Element {
         scheme={scheme}
         promptLabel={promptLabel}
       />
+      {activeQuestion ? (
+        <ElicitationPrompt
+          question={activeQuestion}
+          pickerIndex={pickerIndex}
+          scheme={scheme}
+          onSubmit={commitAnswer}
+        />
+      ) : null}
       <StatusBar
         left={statusLeft}
         cwd={` ${shortHomePath(cwd)} `}
@@ -495,6 +663,131 @@ export function App(opts: DroneTuiOptions): JSX.Element {
       />
     </Box>
   );
+}
+
+/**
+ * Inline UI for an active elicitation question. Closed-set questions
+ * show a numbered list with the current picker index highlighted;
+ * freeform questions reuse the standard text input but commit on
+ * Enter.
+ */
+function ElicitationPrompt({
+  question,
+  pickerIndex,
+  scheme,
+  onSubmit,
+}: {
+  question: DroneElicitationQuestion & { uiKey: string };
+  pickerIndex: number;
+  scheme: DroneColorScheme;
+  onSubmit: (answer: string) => void;
+}): JSX.Element {
+  return (
+    <Box
+      borderStyle="single"
+      borderColor={scheme.border}
+      flexDirection="column"
+      paddingX={1}
+    >
+      <Text>
+        <ColorTag color={scheme.primary}>{question.prompt}</ColorTag>
+      </Text>
+      {question.freeform ? (
+        <FreeformPrompt
+          inputLabel={question.inputLabel ?? question.prompt}
+          placeholder={question.placeholder}
+          defaultValue={question.defaultValue}
+          onSubmit={onSubmit}
+          scheme={scheme}
+        />
+      ) : (
+        <Box flexDirection="column">
+          {(question.choices ?? []).map((choice, idx) => {
+            const marker = idx === pickerIndex ? '▶' : ' ';
+            const def = question.defaultValue === choice.value ? ' (default)' : '';
+            return (
+              <Text key={choice.value}>
+                <ColorTag color={scheme.userInput}>{`  ${marker} ${idx + 1}. ${choice.label}${def}`}</ColorTag>
+              </Text>
+            );
+          })}
+          <Text dimColor>
+            ↑/↓ to move, Enter to confirm, 1-9 to jump, Esc to cancel
+          </Text>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+function FreeformPrompt({
+  inputLabel,
+  placeholder,
+  defaultValue,
+  onSubmit,
+  scheme,
+}: {
+  inputLabel: string;
+  placeholder?: string;
+  defaultValue?: string;
+  onSubmit: (answer: string) => void;
+  scheme: DroneColorScheme;
+}): JSX.Element {
+  const [value, setValue] = useState<string>(defaultValue ?? '');
+  return (
+    <Box flexDirection="column">
+      <Box flexDirection="row">
+        <Text color={scheme.userInput}>{inputLabel} </Text>
+        <FreeformInput value={value} onChange={setValue} onSubmit={onSubmit} />
+      </Box>
+      {placeholder ? <Text dimColor>{`(e.g. ${placeholder})`}</Text> : null}
+      <Text dimColor>Enter to submit, Esc to cancel</Text>
+    </Box>
+  );
+}
+
+/**
+ * Minimal inline text input that doesn't conflict with the main
+ * chat input. We can't use ink-text-input here because the main
+ * InputLine already owns the global focus for the chat composer;
+ * nesting two TextInputs is unreliable. Instead we listen for the
+ * 'input' keystroke via the parent's useInput and append to a
+ * local string. Enter commits, Esc cancels.
+ *
+ * To avoid stepping on the parent's useInput, the parent only
+ * intercepts arrow/return/esc while a freeform question is active,
+ * letting printable characters fall through to this component via
+ * a separate useInput mounted here.
+ */
+function FreeformInput({
+  value,
+  onChange,
+  onSubmit,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  onSubmit: (answer: string) => void;
+}): JSX.Element {
+  useInput((inputChar, key) => {
+    if (key.return) {
+      if (value.trim().length === 0) return; // ignore empty submit
+      onSubmit(value.trim());
+      return;
+    }
+    if (key.backspace || key.delete) {
+      onChange(value.slice(0, -1));
+      return;
+    }
+    if (key.ctrl && inputChar === 'u') {
+      onChange('');
+      return;
+    }
+    // Filter out control characters that would render as garbage.
+    if (inputChar && !key.ctrl && !key.meta && inputChar.length > 0) {
+      onChange(value + inputChar);
+    }
+  });
+  return <Text>{value.length > 0 ? value : ' '}</Text>;
 }
 
 function printHelp(
@@ -529,6 +822,7 @@ function printHelp(
   if (personaEnabled) {
     helpLines.push(
       '  /persona list      List personas',
+      '  /persona create    Interactive wizard to author a new persona',
       '  /persona select    Switch persona',
       '  /persona current   Show current'
     );
