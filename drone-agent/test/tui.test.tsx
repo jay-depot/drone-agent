@@ -12,13 +12,17 @@
  *     on persona clear
  *   - The Ink ModelPicker renders the model list and exposes Enter
  *     to select the highlighted item
+ *   - The right sidebar renders only when widgets have content and
+ *     terminal is wide enough; it hides otherwise
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { render } from 'ink-testing-library';
 import { App } from '../src/tui/app.js';
+import { Sidebar } from '../src/tui/components/Sidebar.js';
 import { ModelPicker } from '../src/tui/components/ModelPicker.js';
-import type { DroneTuiOptions } from '../src/tui/types.js';
+import { DEFAULT_GRAYSCALE_SCHEME } from '../src/tui/theme.js';
+import type { DroneTuiOptions, SidebarWidget } from '../src/tui/types.js';
 import { silentLogger } from './helpers.js';
 
 function makeOptions(
@@ -111,6 +115,101 @@ describe('App', () => {
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
     expect(instance.lastFrame()).toBeDefined();
+  });
+
+  it('does not render sidebar when no plugin offers widget content', () => {
+    // getCapability returns undefined for all plugins — no sidebar widgets
+    // should appear.
+    const opts = makeOptions();
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+    const frame = instance.lastFrame() ?? '';
+    // The TODO label should not appear in the output.
+    expect(frame).not.toContain('TODO');
+  });
+
+  it('renders sidebar when a plugin offers a widget with content', async () => {
+    const widget: SidebarWidget = {
+      id: 'todo',
+      label: 'TODO',
+      getContent: () => [
+        ' 3 items (2 active)',
+        ' ○ Fix login bug',
+        ' ▶ Update docs',
+        ' ✓ Refactor tests',
+      ],
+    };
+    const opts = makeOptions({
+      engine: {
+        listTools: () => [],
+        listPlugins: () => [
+          { id: 'core', name: 'Core', enabled: true },
+          { id: 'persona', name: 'Persona', enabled: true },
+        ],
+        getRegisteredPluginCount: () => 2,
+        getRegisteredToolCount: () => 3,
+        getCapability: ((pluginId: string) => {
+          if (pluginId === 'todo') {
+            return widget;
+          }
+          return undefined;
+        }) as (<T>(pluginId: string) => T | undefined),
+        runHooks: async () => {},
+        executeTool: async () => 'ok',
+        getHelpSnippets: () => [],
+      },
+    });
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+    // Wait for the useEffect that discovers sidebar widgets to fire.
+    await new Promise(r => setTimeout(r, 100));
+    const frame = instance.lastFrame() ?? '';
+    // The sidebar should render the TODO widget content.
+    expect(frame).toContain('TODO');
+    expect(frame).toContain('Fix login bug');
+    expect(frame).toContain('Update docs');
+    expect(frame).toContain('Refactor tests');
+    expect(frame).toContain('3 items');
+  });
+});
+
+describe('Sidebar', () => {
+  it('returns nothing when widgets array is empty', () => {
+    const instance = render(
+      <Sidebar widgets={[]} scheme={DEFAULT_GRAYSCALE_SCHEME} />
+    );
+    const frame = instance.lastFrame() ?? '';
+    // No content — the component rendered nothing (or null).
+    expect(frame).toBe('');
+  });
+
+  it('returns nothing when all widgets have empty content', () => {
+    const widgets: SidebarWidget[] = [
+      { id: 'todo', label: 'TODO', getContent: () => [] },
+    ];
+    const instance = render(
+      <Sidebar widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
+    );
+    const frame = instance.lastFrame() ?? '';
+    expect(frame).toBe('');
+  });
+
+  it('renders widget header and content', () => {
+    const widgets: SidebarWidget[] = [
+      {
+        id: 'todo',
+        label: 'TODO',
+        getContent: () => [' 2 items', ' ○ Task A', ' ○ Task B'],
+      },
+    ];
+    const instance = render(
+      <Sidebar widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
+    );
+    const _cleanup = instance.cleanup;
+    const frame = instance.lastFrame() ?? '';
+    expect(frame).toContain('TODO');
+    expect(frame).toContain('Task A');
+    expect(frame).toContain('Task B');
   });
 });
 

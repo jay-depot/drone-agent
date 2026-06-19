@@ -30,6 +30,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DroneElicitationQuestion } from 'drone-core';
 import { ChatLog, type ChatEntry } from './components/ChatLog.js';
 import { InputLine } from './components/InputLine.js';
+import { Sidebar } from './components/Sidebar.js';
 import { StatusBar } from './components/StatusBar.js';
 import {
   ColorTag,
@@ -39,7 +40,7 @@ import {
   type DroneColorScheme,
 } from './theme.js';
 import { createTuiElicitation } from './elicitation.js';
-import type { DroneTuiOptions } from './types.js';
+import type { DroneTuiOptions, SidebarWidget } from './types.js';
 
 /** How long each override gets to be the active tint. */
 const COLOR_CYCLE_INTERVAL_MS = 5_000;
@@ -154,6 +155,31 @@ export function App(opts: DroneTuiOptions): JSX.Element {
     // the new index equals the previous one.
   }, []);
 
+
+  // ── Sidebar widget state ──────────────────────────────────────────
+  const [sidebarWidgets, setSidebarWidgets] = useState<SidebarWidget[]>([]);
+  const registerSidebarWidget = useCallback((widget: SidebarWidget) => {
+    setSidebarWidgets(prev => {
+      const existingIdx = prev.findIndex(w => w.id === widget.id);
+      if (existingIdx !== -1) {
+        const next = prev.slice();
+        next[existingIdx] = widget;
+        return next;
+      }
+      return [...prev, widget];
+    });
+  }, []);
+
+  // Discover sidebar widgets from plugin capabilities on mount.
+  useEffect(() => {
+    const knownWidgetPluginIds = ['todo'];
+    for (const pluginId of knownWidgetPluginIds) {
+      const widget = opts.engine.getCapability<SidebarWidget>(pluginId);
+      if (widget) {
+        registerSidebarWidget(widget);
+      }
+    }
+  }, [opts.engine, registerSidebarWidget]);
   // ── Chat log state ──────────────────────────────────────────────────
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   // Monotonic id counter, kept in a ref so it survives across renders
@@ -637,7 +663,8 @@ export function App(opts: DroneTuiOptions): JSX.Element {
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
-    <Box flexDirection="column" width="100%" height="100%">
+    <Box flexDirection="row" width="100%" height="100%">
+      <Box flexDirection="column" flexGrow={1}>
       <ChatLog entries={entries} scheme={scheme} />
       <InputLine
         value={input}
@@ -662,6 +689,8 @@ export function App(opts: DroneTuiOptions): JSX.Element {
         cwd={` ${shortHomePath(cwd)} `}
         scheme={scheme}
       />
+      </Box>
+      <Sidebar widgets={sidebarWidgets} scheme={scheme} />
     </Box>
   );
 }

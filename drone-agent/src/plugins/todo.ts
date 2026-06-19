@@ -270,5 +270,35 @@ export const todoPlugin: DronePlugin = {
     registration.hooks.onPluginsLoaded(async () => {
       registration.logger.info('todo tool ready');
     });
+
+    // Offer sidebar widget so the TUI can render the active todo list.
+    registration.offer({
+      id: 'todo',
+      label: 'TODO',
+      getContent: () => {
+        if (items.length === 0) return [];
+        const activeCount = items.filter(
+          i => i.status !== 'completed'
+        ).length;
+        const lines: string[] = [];
+        lines.push(` ${items.length} items (${activeCount} active)`);
+        for (const item of items) {
+          let icon: string;
+          if (item.status === 'in_progress') {
+            icon = ' ▶';
+          } else if (item.status === 'completed') {
+            icon = ' ✓';
+          } else {
+            icon = ' ○';
+          }
+          const title =
+            item.title.length > 18
+              ? item.title.slice(0, 17) + '…'
+              : item.title;
+          lines.push(` ${icon} ${title}`);
+        }
+        return lines;
+      },
+    });
   },
 };

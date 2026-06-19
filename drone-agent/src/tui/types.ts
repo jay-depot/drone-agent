@@ -5,12 +5,28 @@
 import type { DroneColorOverride } from './theme.js';
 
 /**
+ * A sidebar widget registered by a plugin.
+ *
+ * `id` must be unique across all widgets. `label` is a short header string
+ * shown above the widget's content (e.g. "TODO"). `getContent()` returns
+ * the lines to render; return an empty array to hide the widget.
+ */
+export type SidebarWidget = {
+  id: string;
+  label: string;
+  getContent: () => string[];
+};
+
+/**
  * Capability offered by the TUI for plugins to extend.
  *
  * `pushColorOverride` / `popColorOverride` manage a stack of tints
  * applied over the base grayscale theme. The TUI cycles through the
  * stack on a timer. A plugin is responsible for popping its override
  * when it is "done" — pushed overrides are not auto-cleaned up.
+ *
+ * `registerSidebarWidget` lets plugins register sidebars content that
+ * appears in the right-hand 25-char column of the TUI layout.
  *
  * The previous blessed-based capability also exposed
  * `registerPanel` / `registerStatusItem` / `registerKeybinding` /
@@ -21,6 +37,8 @@ import type { DroneColorOverride } from './theme.js';
 export type DroneTuiCapability = {
   pushColorOverride: (override: DroneColorOverride) => void;
   popColorOverride: (overrideId: string) => void;
+  /** Register a sidebar widget. Called by plugins that offer sidebar content. */
+  registerSidebarWidget: (widget: SidebarWidget) => void;
 };
 
 /** Options for creating the TUI. */
