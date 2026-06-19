@@ -98,32 +98,15 @@ export const fetchPlugin: DronePlugin = {
   register: async registration => {
     registration.registerTool({
       name: 'request',
-      description:
-        'Fetch data from an HTTP URL via GET or POST. Returns the response body up to an optional size limit.',
+      description: 'HTTP GET/POST. Returns body (truncated to limit chars).',
       inputSchema: {
         type: 'object',
         properties: {
-          url: {
-            type: 'string',
-            description: 'URL to fetch from.',
-          },
-          method: {
-            type: 'string',
-            description: 'HTTP method: GET (default) or POST.',
-          },
-          body: {
-            type: 'string',
-            description: 'Optional request body for POST requests.',
-          },
-          headers: {
-            type: 'object',
-            description: 'Optional custom headers.',
-            additionalProperties: true,
-          },
-          limit: {
-            type: 'number',
-            description: 'Optional maximum response size in characters.',
-          },
+          url: { type: 'string', description: 'URL to fetch.' },
+          method: { type: 'string', description: 'GET (default) or POST.' },
+          body: { type: 'string', description: 'Request body (POST).' },
+          headers: { type: 'object', description: 'Custom headers.', additionalProperties: true },
+          limit: { type: 'number', description: 'Max response size in chars.' },
         },
         required: ['url'],
         additionalProperties: false,

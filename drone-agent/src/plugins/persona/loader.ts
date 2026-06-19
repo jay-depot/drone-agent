@@ -13,6 +13,7 @@ const CONFIG_DIR = '.drone-agent';
  *   ---
  *   name: Coder
  *   description: Focused on implementation
+ *   color: cyan           # optional UI tint applied when active
  *   fragments:
  *     - Prefer TypeScript
  *   ---
@@ -72,6 +73,11 @@ function parsePersonaMd(id: string, content: string): DronePersonaDefinition {
       definition.name = value;
     } else if (key === 'description') {
       definition.description = value;
+    } else if (key === 'color' || key === 'uiColor' || key === 'tint') {
+      // Frontmatter-friendly aliases. `color` reads most naturally in a
+      // .md file; `uiColor` mirrors the type field; `tint` matches the
+      // vocabulary used in tui/theme.ts.
+      definition.uiColor = value;
     } else if (key === 'fragments') {
       if (value === '') {
         currentArrayKey = 'fragments';

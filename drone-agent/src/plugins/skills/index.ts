@@ -21,34 +21,18 @@ export const skillsPlugin: DronePlugin = {
       render: async () => {
         if (skills.size === 0) return false;
 
-        const lines: string[] = [
-          '## Available Skills',
-          '',
-          'The following skills are available. Each skill has recall conditions that describe when it is relevant.',
-          "When you encounter a task that matches a skill's recall conditions, use `skills.recall` with the skill id to load its full instructions.",
-          '',
-        ];
+        const lines: string[] = ['## Skills'];
 
         for (const skill of skills.values()) {
-          lines.push(`### ${skill.name}`);
-          lines.push(`**ID**: \`${skill.id}\``);
-          lines.push(`**Description**: ${skill.description}`);
-          if (skill.recall.length > 0) {
-            lines.push('**Recall when**:');
-            for (const condition of skill.recall) {
-              lines.push(`- ${condition}`);
-            }
-          }
-          lines.push('');
+          const recall = skill.recall.length > 0
+            ? ` — ${skill.recall.join('; ')}`
+            : '';
+          lines.push(`- \`${skill.id}\`: ${skill.description}${recall}`);
         }
 
         lines.push(
-          'To load a skill, call `skills.recall` with `{"id": "<skill-id>"}`.'
+          'Call `skills.recall` with `{"id": "..."}` to load full instructions.'
         );
-        lines.push(
-          'The tool returns the full skill body with step-by-step instructions.'
-        );
-
         return lines.join('\n');
       },
     };
@@ -69,16 +53,11 @@ export const skillsPlugin: DronePlugin = {
     // ── skills.recall ─────────────────────────────────────────────────
     registration.registerTool({
       name: 'recall',
-      description:
-        "Load the full instructions for a skill by its id. Call this when a task matches a skill's recall conditions.",
+      description: 'Load a skill body by id. Use when a task matches its recall conditions.',
       inputSchema: {
         type: 'object',
         properties: {
-          id: {
-            type: 'string',
-            description:
-              'The skill id to recall. Use skills.list to see available skills.',
-          },
+          id: { type: 'string', description: 'Skill id.' },
         },
         required: ['id'],
         additionalProperties: false,

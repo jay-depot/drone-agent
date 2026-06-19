@@ -6,6 +6,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Wraps a raw Node.js fs error (ENOENT, EACCES, EISDIR, ...) into a clearer
+ * message that names the tool and target path so the LLM can self-correct.
+ */
+function enhanceFsError(
+  toolName: string,
+  targetPath: string,
+  err: unknown
+): Error {
+  const code = (err as NodeJS.ErrnoException | undefined)?.code;
+  const raw = err instanceof Error ? err.message : String(err);
+
+  switch (code) {
+    case 'ENOENT':
+      return new Error(
+        `${toolName}: path not found: ${targetPath}. Verify the path exists and is spelled correctly.`
+      );
+    case 'EACCES':
+    case 'EPERM':
+      return new Error(
+        `${toolName}: permission denied for ${targetPath}. The current process cannot read or write this path.`
+      );
+    case 'EISDIR':
+      return new Error(
+        `${toolName}: expected a file but ${targetPath} is a directory. Use file.list for directories.`
+      );
+    case 'ENOTDIR':
+      return new Error(
+        `${toolName}: expected a directory but ${targetPath} is not one (or a parent path is not a directory).`
+      );
+    default:
+      return new Error(`${toolName} failed for ${targetPath}: ${raw}`);
+  }
+}
+
+/**
+ * @internal Exposed for unit tests. Not part of the public API.
+ */
+export const __testing = { enhanceFsError };
+
 export const filePlugin: DronePlugin = {
   metadata: {
     id: 'file',
@@ -20,25 +60,13 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'read',
-      description:
-        'Read a file by absolute path. Optionally specify startLine and endLine (1-based, inclusive) to read a range.',
+      description: 'Read a file (absolute path). Optional 1-based startLine/endLine.',
       inputSchema: {
         type: 'object',
         properties: {
-          path: {
-            type: 'string',
-            description: 'Absolute path to the file.',
-          },
-          startLine: {
-            type: 'number',
-            description:
-              'First line number (1-based). Omit to read from the beginning.',
-          },
-          endLine: {
-            type: 'number',
-            description:
-              'Last line number (1-based, inclusive). Omit to read to the end.',
-          },
+          path: { type: 'string', description: 'Absolute path to the file.' },
+          startLine: { type: 'number', description: 'First line (1-based).' },
+          endLine: { type: 'number', description: 'Last line (1-based, inclusive).' },
         },
         required: ['path'],
         additionalProperties: false,
@@ -48,7 +76,12 @@ export const filePlugin: DronePlugin = {
           throw new Error('file.read requires a non-empty path string.');
         }
         const filePath = path.resolve(input.path.trim());
-        const content = await readFile(filePath, 'utf-8');
+        let content: string;
+        try {
+          content = await readFile(filePath, 'utf-8');
+        } catch (err) {
+          throw enhanceFsError('file.read', filePath, err);
+        }
         const lines = content.split('\n');
 
         const startLine =
@@ -87,15 +120,11 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'list',
-      description:
-        'List directory contents at an absolute path. Returns file names, types (file/directory), and sizes.',
+      description: 'List a directory (absolute path). Returns names, types, sizes.',
       inputSchema: {
         type: 'object',
         properties: {
-          path: {
-            type: 'string',
-            description: 'Absolute path to the directory.',
-          },
+          path: { type: 'string', description: 'Absolute path to the directory.' },
         },
         required: ['path'],
         additionalProperties: false,
@@ -105,7 +134,12 @@ export const filePlugin: DronePlugin = {
           throw new Error('file.list requires a non-empty path string.');
         }
         const dirPath = path.resolve(input.path.trim());
-        const entries = await readdir(dirPath, { withFileTypes: true });
+        let entries: import('node:fs').Dirent[];
+        try {
+          entries = await readdir(dirPath, { withFileTypes: true });
+        } catch (err) {
+          throw enhanceFsError('file.list', dirPath, err);
+        }
         const items = await Promise.all(
           entries.map(async entry => {
             const fullPath = path.join(dirPath, entry.name);
@@ -133,19 +167,12 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'write',
-      description:
-        'Write content to a file at an absolute path. Creates parent directories if needed. Overwrites existing content.',
+      description: 'Write content to a file (absolute path). Creates parents; overwrites.',
       inputSchema: {
         type: 'object',
         properties: {
-          path: {
-            type: 'string',
-            description: 'Absolute path to the file.',
-          },
-          content: {
-            type: 'string',
-            description: 'Content to write.',
-          },
+          path: { type: 'string', description: 'Absolute path to the file.' },
+          content: { type: 'string', description: 'Content to write.' },
         },
         required: ['path', 'content'],
         additionalProperties: false,
@@ -158,7 +185,11 @@ export const filePlugin: DronePlugin = {
           throw new Error('file.write requires a content string.');
         }
         const filePath = path.resolve(input.path.trim());
-        await writeFile(filePath, input.content, 'utf-8');
+        try {
+          await writeFile(filePath, input.content, 'utf-8');
+        } catch (err) {
+          throw enhanceFsError('file.write', filePath, err);
+        }
         return JSON.stringify({ path: filePath, written: true }, null, 2);
       },
     });
@@ -168,36 +199,19 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'apply_diff',
-      description:
-        'Apply a unified-diff-style patch to a file. Each hunk specifies a startLine (1-based) and a list of oldLines to remove and newLines to insert in their place.',
+      description: 'Apply hunks to a file. Each hunk has startLine, optional oldLines (for verification), and newLines (to insert).',
       inputSchema: {
         type: 'object',
         properties: {
-          path: {
-            type: 'string',
-            description: 'Absolute path to the file to patch.',
-          },
+          path: { type: 'string', description: 'Absolute path to the file.' },
           hunks: {
             type: 'array',
-            description:
-              'Array of diff hunks. Each hunk has startLine (1-based), oldLines (strings to remove), and newLines (strings to insert).',
             items: {
               type: 'object',
               properties: {
-                startLine: {
-                  type: 'number',
-                  description: '1-based line number where this hunk applies.',
-                },
-                oldLines: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  description: 'Lines expected at this location (removed).',
-                },
-                newLines: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  description: 'Lines to insert at this location.',
-                },
+                startLine: { type: 'number', description: '1-based line number.' },
+                oldLines: { type: 'array', items: { type: 'string' }, description: 'Lines expected at this location (verified, then removed).' },
+                newLines: { type: 'array', items: { type: 'string' }, description: 'Lines to insert.' },
               },
               required: ['startLine', 'newLines'],
               additionalProperties: false,
@@ -216,7 +230,12 @@ export const filePlugin: DronePlugin = {
         }
 
         const filePath = path.resolve(input.path.trim());
-        const content = await readFile(filePath, 'utf-8');
+        let content: string;
+        try {
+          content = await readFile(filePath, 'utf-8');
+        } catch (err) {
+          throw enhanceFsError('file.apply_diff', filePath, err);
+        }
         const lines = content.split('\n');
 
         // Sort hunks descending by startLine so we apply bottom-up and avoid
@@ -260,7 +279,11 @@ export const filePlugin: DronePlugin = {
           }
         }
 
-        await writeFile(filePath, lines.join('\n'), 'utf-8');
+        try {
+          await writeFile(filePath, lines.join('\n'), 'utf-8');
+        } catch (err) {
+          throw enhanceFsError('file.apply_diff', filePath, err);
+        }
         return JSON.stringify({ path: filePath, patched: true }, null, 2);
       },
     });
@@ -270,20 +293,12 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'glob',
-      description:
-        'Find files matching a glob pattern relative to the workspace root. Uses fast-glob patterns (e.g. **/*.ts, src/**/*.css).',
+      description: 'Find files matching a glob (e.g. **/*.ts). Uses **, *, ? patterns.',
       inputSchema: {
         type: 'object',
         properties: {
-          pattern: {
-            type: 'string',
-            description: 'Glob pattern to match (e.g. **/*.ts, src/**/*.css).',
-          },
-          cwd: {
-            type: 'string',
-            description:
-              'Working directory for the glob. Defaults to the current working directory.',
-          },
+          pattern: { type: 'string', description: 'Glob pattern.' },
+          cwd: { type: 'string', description: 'Working directory (default: cwd).' },
         },
         required: ['pattern'],
         additionalProperties: false,
@@ -299,6 +314,20 @@ export const filePlugin: DronePlugin = {
           typeof input.cwd === 'string' && input.cwd.trim().length > 0
             ? path.resolve(input.cwd.trim())
             : process.cwd();
+
+        try {
+          const cwdStat = await stat(cwd);
+          if (!cwdStat.isDirectory()) {
+            throw new Error(
+              `file.glob: cwd is not a directory: ${cwd}.`
+            );
+          }
+        } catch (err) {
+          if (err instanceof Error && err.message.startsWith('file.glob')) {
+            throw err;
+          }
+          throw enhanceFsError('file.glob', cwd, err);
+        }
 
         // Use a simple recursive directory walk for glob matching to avoid
         // external dependencies. Supports **, *, and ? patterns.

@@ -500,6 +500,19 @@ function parsePartialConfig(
       }
       session.responseReserveTokens = raw.session.responseReserveTokens;
     }
+    if ('maxToolIterations' in raw.session) {
+      if (
+        typeof raw.session.maxToolIterations !== 'number' ||
+        !Number.isFinite(raw.session.maxToolIterations) ||
+        !Number.isInteger(raw.session.maxToolIterations) ||
+        raw.session.maxToolIterations <= 0
+      ) {
+        throw new Error(
+          `Invalid config in ${source}: session.maxToolIterations must be a positive integer.`
+        );
+      }
+      session.maxToolIterations = raw.session.maxToolIterations;
+    }
     parsed.session = session;
   }
 

@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "incremental": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": [
+    "drone-core/src/**/*.ts",
+    "drone-core/test/**/*.ts",
+    "drone-agent/src/**/*.ts",
+    "drone-agent/test/**/*.ts",
+    "vitest.config.ts"
+  ]
+}

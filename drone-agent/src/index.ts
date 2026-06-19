@@ -182,6 +182,43 @@ function buildPromptLabel(
     : 'drone> ';
 }
 
+/**
+ * Builds a plain-text event handler for `sendUserMessage` that mirrors what
+ * the TUI does, so `--plain-output` mode (and `chat` invocations) show tool
+ * calls and errors as they happen instead of just the final assistant reply.
+ */
+function makePlainOutputEventHandler(): import('./runtime/conversation-service.js').ConversationEventHandler {
+  const MAX_PREVIEW = 240;
+  const preview = (text: string): string => {
+    const flat = text.replace(/\s+/g, ' ').trim();
+    return flat.length > MAX_PREVIEW
+      ? `${flat.slice(0, MAX_PREVIEW)}…`
+      : flat;
+  };
+  return event => {
+    switch (event.kind) {
+      case 'reasoning':
+        output.write(`💭 ${preview(event.content)}\n`);
+        break;
+      case 'toolCall':
+        output.write(
+          `→ tool: ${event.name} ${preview(JSON.stringify(event.arguments))}\n`
+        );
+        break;
+      case 'toolResult':
+        output.write(`← ${event.name}: ${preview(event.content)}\n`);
+        break;
+      case 'error':
+        output.write(`! ${preview(event.message)}\n`);
+        break;
+      // assistantMessage is rendered by the caller via the return value;
+      // emitting it here would cause double-printing.
+      case 'assistantMessage':
+        break;
+    }
+  };
+}
+
 async function handlePersonaSlashCommand(
   line: string,
   engine: ReturnType<typeof createDronePluginEngine>,
@@ -356,7 +393,10 @@ async function runInteractiveLoop(
       }
 
       await engine.runHooks('onBeforePrompt');
-      logger.info(await conversation.sendUserMessage(line));
+      const plainHandler = makePlainOutputEventHandler();
+      const reply = await conversation.sendUserMessage(line, plainHandler);
+      // Handler suppresses assistantMessage; render the final reply here.
+      output.write(`${reply}\n`);
       await engine.runHooks('onAfterToolCall');
     }
   } finally {
@@ -505,7 +545,14 @@ async function main(): Promise<void> {
 
   if (invocation.kind === 'chat') {
     await engine.runHooks('onBeforePrompt');
-    logger.info(await conversation.sendUserMessage(invocation.prompt));
+    const plainHandler = makePlainOutputEventHandler();
+    const response = await conversation.sendUserMessage(
+      invocation.prompt,
+      plainHandler
+    );
+    // The handler deliberately suppresses assistantMessage events to avoid
+    // double-printing; render the final reply here.
+    output.write(`${response}\n`);
     await engine.runHooks('onAfterToolCall');
   } else if (invocation.kind === 'default' && !invocation.options.once) {
     if (invocation.options.plainOutput) {

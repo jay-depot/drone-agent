@@ -122,23 +122,13 @@ export const execPlugin: DronePlugin = {
   register: async registration => {
     registration.registerTool({
       name: 'run',
-      description:
-        'Execute a local shell command and return stdout, stderr, and exit code.',
+      description: 'Run a shell command. Returns stdout, stderr, exit code.',
       inputSchema: {
         type: 'object',
         properties: {
-          command: {
-            type: 'string',
-            description: 'Shell command to execute.',
-          },
-          cwd: {
-            type: 'string',
-            description: 'Optional working directory for the command.',
-          },
-          timeoutMs: {
-            type: 'number',
-            description: 'Optional timeout for the command in milliseconds.',
-          },
+          command: { type: 'string', description: 'Shell command to execute.' },
+          cwd: { type: 'string', description: 'Working directory (optional).' },
+          timeoutMs: { type: 'number', description: 'Timeout in milliseconds (optional).' },
         },
         required: ['command'],
         additionalProperties: false,

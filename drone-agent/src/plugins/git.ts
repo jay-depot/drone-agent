@@ -26,16 +26,11 @@ export const gitPlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'status',
-      description:
-        'Show the working tree status. Returns staged, unstaged, and untracked changes.',
+      description: 'Working tree status: staged, unstaged, untracked.',
       inputSchema: {
         type: 'object',
         properties: {
-          cwd: {
-            type: 'string',
-            description:
-              'Working directory for the git command. Defaults to current working directory.',
-          },
+          cwd: { type: 'string', description: 'Working directory (default: cwd).' },
         },
         additionalProperties: false,
       },
@@ -76,26 +71,13 @@ export const gitPlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'diff',
-      description:
-        'Show unstaged diff (default) or staged diff with --staged flag.',
+      description: 'Unstaged diff, or staged diff with staged=true.',
       inputSchema: {
         type: 'object',
         properties: {
-          staged: {
-            type: 'boolean',
-            description:
-              'If true, show staged diff (--cached). Default false (unstaged).',
-          },
-          path: {
-            type: 'string',
-            description:
-              'Optional file path to restrict the diff to a specific file.',
-          },
-          cwd: {
-            type: 'string',
-            description:
-              'Working directory for the git command. Defaults to current working directory.',
-          },
+          staged: { type: 'boolean', description: 'Show staged diff (--cached). Default false.' },
+          path: { type: 'string', description: 'Restrict to a single file (optional).' },
+          cwd: { type: 'string', description: 'Working directory (default: cwd).' },
         },
         additionalProperties: false,
       },
@@ -121,20 +103,12 @@ export const gitPlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'commit',
-      description:
-        'Stage all changes (git add -A) and commit with a message. Returns the commit hash.',
+      description: 'Stage all changes and commit. Returns the commit hash.',
       inputSchema: {
         type: 'object',
         properties: {
-          message: {
-            type: 'string',
-            description: 'Commit message.',
-          },
-          cwd: {
-            type: 'string',
-            description:
-              'Working directory for the git command. Defaults to current working directory.',
-          },
+          message: { type: 'string', description: 'Commit message.' },
+          cwd: { type: 'string', description: 'Working directory (default: cwd).' },
         },
         required: ['message'],
         additionalProperties: false,
@@ -175,25 +149,13 @@ export const gitPlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'log',
-      description:
-        'Show recent commit history. Returns commit hash, author, date, and message for each entry.',
+      description: 'Recent commits: hash, author, date, message.',
       inputSchema: {
         type: 'object',
         properties: {
-          maxCount: {
-            type: 'number',
-            description: 'Maximum number of commits to show. Default 10.',
-          },
-          path: {
-            type: 'string',
-            description:
-              'Optional file path to restrict the log to a specific file.',
-          },
-          cwd: {
-            type: 'string',
-            description:
-              'Working directory for the git command. Defaults to current working directory.',
-          },
+          maxCount: { type: 'number', description: 'Max commits. Default 10.' },
+          path: { type: 'string', description: 'Restrict to a file (optional).' },
+          cwd: { type: 'string', description: 'Working directory (default: cwd).' },
         },
         additionalProperties: false,
       },

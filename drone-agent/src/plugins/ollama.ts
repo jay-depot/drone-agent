@@ -38,36 +38,68 @@ function normalizeToolCall(toolCall: ToolCall): DroneToolCall {
   };
 }
 
-function extractContextWindowTokens(showResponse: ShowResponse): number | null {
+function extractContextWindowTokens(
+  showResponse: ShowResponse
+): number | null {
   const modelInfo = showResponse.model_info;
-  const candidateKeys = [
+  const readModelInfoValue = (key: string): unknown => {
+    if (modelInfo instanceof Map) {
+      return modelInfo.get(key);
+    }
+    if (typeof modelInfo === 'object' && modelInfo !== null) {
+      return (modelInfo as Record<string, unknown>)[key];
+    }
+    return undefined;
+  };
+
+  const coerceNumber = (rawValue: unknown): number | null => {
+    if (typeof rawValue === 'number' && Number.isFinite(rawValue) && rawValue > 0) {
+      return rawValue;
+    }
+    if (typeof rawValue === 'string') {
+      const parsed = Number(rawValue);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+    return null;
+  };
+
+  const generalArchitecture = readModelInfoValue('general.architecture');
+  const primaryKeys = [
     'general.context_length',
     'llama.context_length',
     'gemma.context_length',
     'qwen2.context_length',
     'context_length',
   ];
+  if (
+    typeof generalArchitecture === 'string' &&
+    generalArchitecture.trim().length > 0
+  ) {
+    primaryKeys.unshift(`${generalArchitecture}.context_length`);
+  }
 
-  for (const key of candidateKeys) {
-    const rawValue =
-      modelInfo instanceof Map
-        ? modelInfo.get(key)
-        : typeof modelInfo === 'object' && modelInfo !== null
-          ? (modelInfo as Record<string, unknown>)[key]
-          : undefined;
-
-    if (
-      typeof rawValue === 'number' &&
-      Number.isFinite(rawValue) &&
-      rawValue > 0
-    ) {
-      return rawValue;
+  for (const key of primaryKeys) {
+    const value = coerceNumber(readModelInfoValue(key));
+    if (value !== null) {
+      return value;
     }
+  }
 
-    if (typeof rawValue === 'string') {
-      const parsed = Number(rawValue);
-      if (Number.isFinite(parsed) && parsed > 0) {
-        return parsed;
+  // Last resort: scan any "<arch>.context_length" entry — covers new
+  // architectures (e.g. deepseek4) that haven't been added to primaryKeys yet.
+  if (typeof modelInfo === 'object' && modelInfo !== null) {
+    const entries: Iterable<[string, unknown]> =
+      modelInfo instanceof Map
+        ? modelInfo.entries()
+        : Object.entries(modelInfo);
+    for (const [key, value] of entries) {
+      if (typeof key === 'string' && key.endsWith('.context_length')) {
+        const parsed = coerceNumber(value);
+        if (parsed !== null) {
+          return parsed;
+        }
       }
     }
   }
@@ -89,6 +121,11 @@ function toOllamaTools(tools: DroneToolDescriptor[]) {
     },
   }));
 }
+
+/**
+ * @internal Exposed for unit tests. Not part of the public API.
+ */
+export const __testing = { extractContextWindowTokens };
 
 export const ollamaPlugin: DronePlugin = {
   metadata: {

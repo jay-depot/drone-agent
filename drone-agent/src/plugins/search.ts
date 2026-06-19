@@ -15,33 +15,15 @@ export const searchPlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'text',
-      description:
-        'Search for a pattern in files using ripgrep (rg) or a fallback grep. Supports regex and plain-text modes. Results include file path, line number, and matching line content.',
+      description: 'Regex/fixed-string search via ripgrep (falls back to grep). Returns file, line, content.',
       inputSchema: {
         type: 'object',
         properties: {
-          pattern: {
-            type: 'string',
-            description: 'Search pattern (regex by default, or plain text).',
-          },
-          path: {
-            type: 'string',
-            description:
-              'Directory or file to search in. Defaults to current working directory.',
-          },
-          fixed: {
-            type: 'boolean',
-            description:
-              'Treat pattern as a fixed/literal string instead of regex. Default false.',
-          },
-          maxResults: {
-            type: 'number',
-            description: 'Maximum number of matches to return. Default 50.',
-          },
-          glob: {
-            type: 'string',
-            description: 'Optional glob filter (e.g. "*.ts" or "src/**/*.js").',
-          },
+          pattern: { type: 'string', description: 'Search pattern (regex by default).' },
+          path: { type: 'string', description: 'Directory or file (default: cwd).' },
+          fixed: { type: 'boolean', description: 'Treat pattern as literal. Default false.' },
+          maxResults: { type: 'number', description: 'Max matches. Default 50.' },
+          glob: { type: 'string', description: 'Glob filter (e.g. "*.ts").' },
         },
         required: ['pattern'],
         additionalProperties: false,
@@ -83,11 +65,48 @@ export const searchPlugin: DronePlugin = {
           cmd = `grep -rn${fixedFlag ? 'F' : 'E'} --max-count=${maxResults}${globFlag} ${quoteArg(input.pattern.trim())} ${quoteArg(searchPath)}`;
         }
 
-        const stdout = execSync(cmd, {
-          encoding: 'utf-8',
-          maxBuffer: 10 * 1024 * 1024,
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
+        let stdout: string;
+        try {
+          stdout = execSync(cmd, {
+            encoding: 'utf-8',
+            maxBuffer: 10 * 1024 * 1024,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
+        } catch (err) {
+          // rg/grep exit 1 when no matches are found — that's a valid empty
+          // result. Exit 2+ indicates a real error (bad pattern, missing
+          // path, permission denied). Wrap it so the LLM sees a clear message.
+          const status =
+            (err as { status?: number | null })?.status ?? null;
+          if (status === 1) {
+            return JSON.stringify(
+              {
+                pattern: input.pattern.trim(),
+                searchPath,
+                resultCount: 0,
+                truncated: false,
+                results: [],
+              },
+              null,
+              2
+            );
+          }
+          const stderr = (() => {
+            if (err && typeof err === 'object' && 'stderr' in err) {
+              const s = (err as { stderr?: unknown }).stderr;
+              if (typeof s === 'string' && s.length > 0) {
+                return s.trim();
+              }
+              if (Buffer.isBuffer(s) && s.length > 0) {
+                return s.toString('utf-8').trim();
+              }
+            }
+            return '';
+          })();
+          throw new Error(
+            `search.text: command failed${status !== null ? ` (exit ${status})` : ''} for ${searchPath}: ${stderr || (err instanceof Error ? err.message : String(err))}`
+          );
+        }
 
         const results = stdout
           .trim()
@@ -125,15 +144,11 @@ export const searchPlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'semantic',
-      description:
-        'Semantic/code-aware search. Currently a placeholder that returns an informational message.',
+      description: 'Placeholder for semantic search. Use search.text with regex.',
       inputSchema: {
         type: 'object',
         properties: {
-          query: {
-            type: 'string',
-            description: 'Natural language query about the codebase.',
-          },
+          query: { type: 'string', description: 'Natural-language query.' },
         },
         required: ['query'],
         additionalProperties: false,

@@ -1,0 +1,142 @@
+import {
+  createConsoleLogger,
+  type DroneLogger,
+  type DronePlugin,
+  type DronePluginMetadata,
+  type DronePluginRegistration,
+  type DronePromptFragment,
+  type DroneSessionSafetyTrimPayload,
+  type DroneToolDefinition,
+} from 'drone-core';
+
+/**
+ * Returns a logger that swallows output, for noisy test runs.
+ */
+export function silentLogger(): DroneLogger {
+  return {
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+  };
+}
+
+/**
+ * Use the real console logger, useful for debugging failing tests locally.
+ */
+export function consoleLogger(scope = 'test'): DroneLogger {
+  return createConsoleLogger(scope);
+}
+
+type Register = (registration: DronePluginRegistration) => Promise<void> | void;
+
+export type TestPluginHookOptions = {
+  onPluginsLoaded?: () => Promise<void> | void;
+  onSessionStart?: () => Promise<void> | void;
+  onBeforePrompt?: () => Promise<void> | void;
+  onAfterToolCall?: () => Promise<void> | void;
+  onShutdown?: () => Promise<void> | void;
+  onSessionSafetyTrimWillRun?: (
+    payload: DroneSessionSafetyTrimPayload
+  ) => Promise<void> | void;
+  onSessionSafetyTrimApplied?: (
+    payload: DroneSessionSafetyTrimPayload
+  ) => Promise<void> | void;
+};
+
+export type TestPluginOptions = {
+  id: string;
+  name?: string;
+  version?: string;
+  description?: string;
+  required?: boolean;
+  defaultEnabled?: boolean;
+  dependencies?: { id: string; version?: string }[];
+  register?: Register;
+  tools?: DroneToolDefinition[];
+  prompts?: DronePromptFragment[];
+  help?: string[];
+  hooks?: TestPluginHookOptions;
+  capability?: unknown;
+  requestSpy?: (pluginId: string) => unknown;
+};
+
+export function createTestPlugin(options: TestPluginOptions): DronePlugin {
+  const metadata: DronePluginMetadata = {
+    id: options.id,
+    name: options.name ?? options.id,
+    version: options.version ?? '0.0.0',
+    description: options.description ?? '',
+    required: options.required,
+    // Default test plugins to enabled so the engine auto-picks them up.
+    // Individual tests can opt out by passing `defaultEnabled: false`.
+    defaultEnabled:
+      options.defaultEnabled === undefined ? true : options.defaultEnabled,
+    dependencies: options.dependencies,
+  };
+
+  return {
+    metadata,
+    register: async (registration: DronePluginRegistration) => {
+      for (const tool of options.tools ?? []) {
+        registration.registerTool(tool);
+      }
+      for (const prompt of options.prompts ?? []) {
+        registration.registerPromptFragment(prompt);
+      }
+      for (const help of options.help ?? []) {
+        registration.registerHelp(help);
+      }
+      if (options.capability !== undefined) {
+        registration.offer(options.capability);
+      }
+
+      const hooks = options.hooks;
+      if (hooks?.onPluginsLoaded) {
+        const cb = hooks.onPluginsLoaded;
+        registration.hooks.onPluginsLoaded(async () => {
+          await cb();
+        });
+      }
+      if (hooks?.onSessionStart) {
+        const cb = hooks.onSessionStart;
+        registration.hooks.onSessionStart(async () => {
+          await cb();
+        });
+      }
+      if (hooks?.onBeforePrompt) {
+        const cb = hooks.onBeforePrompt;
+        registration.hooks.onBeforePrompt(async () => {
+          await cb();
+        });
+      }
+      if (hooks?.onAfterToolCall) {
+        const cb = hooks.onAfterToolCall;
+        registration.hooks.onAfterToolCall(async () => {
+          await cb();
+        });
+      }
+      if (hooks?.onShutdown) {
+        const cb = hooks.onShutdown;
+        registration.hooks.onShutdown(async () => {
+          await cb();
+        });
+      }
+      if (hooks?.onSessionSafetyTrimWillRun) {
+        const cb = hooks.onSessionSafetyTrimWillRun;
+        registration.hooks.onSessionSafetyTrimWillRun(async payload => {
+          await cb(payload);
+        });
+      }
+      if (hooks?.onSessionSafetyTrimApplied) {
+        const cb = hooks.onSessionSafetyTrimApplied;
+        registration.hooks.onSessionSafetyTrimApplied(async payload => {
+          await cb(payload);
+        });
+      }
+
+      if (options.register) {
+        await options.register(registration);
+      }
+    },
+  };
+}

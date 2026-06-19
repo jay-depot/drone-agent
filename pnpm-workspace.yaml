@@ -3,3 +3,5 @@ packages:
   - drone-core
   - drone-beacon
   - drone-coordinator
+allowBuilds:
+  esbuild: true

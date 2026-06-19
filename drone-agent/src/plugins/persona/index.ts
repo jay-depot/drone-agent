@@ -150,6 +150,7 @@ export const personaPlugin: DronePlugin = {
               description: p.description,
               hasOverride: !!p.systemPromptOverride,
               fragmentCount: p.promptFragments?.length ?? 0,
+              uiColor: p.uiColor ?? null,
             })),
           },
           null,
@@ -203,6 +204,7 @@ export const personaPlugin: DronePlugin = {
           {
             activePersona: found.id,
             name: found.name,
+            uiColor: found.uiColor ?? null,
             message: `Switched to persona "${found.name}".`,
           },
           null,
@@ -236,6 +238,7 @@ export const personaPlugin: DronePlugin = {
             description: activePersona.description,
             hasOverride: !!activePersona.systemPromptOverride,
             fragmentCount: activePersona.promptFragments?.length ?? 0,
+            uiColor: activePersona.uiColor ?? null,
           },
           null,
           2

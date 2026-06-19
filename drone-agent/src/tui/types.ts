@@ -3,6 +3,7 @@
  */
 
 import type { StandardHookName } from '../runtime/plugin-engine.js';
+import type { DroneColorOverride } from './theme.js';
 
 /** A panel that can be registered by a plugin to extend the TUI. */
 export type DroneTuiPanel = {
@@ -24,12 +25,21 @@ export type DroneTuiKeybinding = {
   handler: () => void | Promise<void>;
 };
 
-/** Capability offered by the TUI for plugins to extend. */
+/**
+ * Capability offered by the TUI for plugins to extend.
+ *
+ * `pushColorOverride` / `popColorOverride` manage a stack of tints
+ * applied over the base grayscale theme. The TUI cycles through the
+ * stack on a timer. A plugin is responsible for popping its override
+ * when it is "done" — pushed overrides are not auto-cleaned up.
+ */
 export type DroneTuiCapability = {
   registerPanel: (panel: DroneTuiPanel) => void;
   registerStatusItem: (item: DroneTuiStatusItem) => void;
   registerKeybinding: (binding: DroneTuiKeybinding) => void;
   setStatusText: (text: string) => void;
+  pushColorOverride: (override: DroneColorOverride) => void;
+  popColorOverride: (overrideId: string) => void;
 };
 
 /** Options for creating the TUI. */

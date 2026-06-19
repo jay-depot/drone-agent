@@ -11,10 +11,24 @@
  *   └──────────────────────────────────────┘
  *   │ model:llama3.1 │ plugins:5 │ ctx:12% │
  *   └──────────────────────────────────────┘
+ *
+ * The base theme is grayscale. Plugins (and personas) can push color
+ * overrides onto a stack via the TUI capability; the TUI cycles through
+ * active overrides on a timer. See `tui/theme.ts` for the palette model.
  */
 
 import blessed from 'blessed';
 import type { DroneTuiOptions } from './types.js';
+import {
+  applyTint,
+  colorTag,
+  DEFAULT_GRAYSCALE_SCHEME,
+  type DroneColorOverride,
+  type DroneColorScheme,
+} from './theme.js';
+
+/** How long each override gets to be the active tint. */
+const COLOR_CYCLE_INTERVAL_MS = 5_000;
 
 function parseJsonInput(raw: string): Record<string, unknown> | undefined {
   try {
@@ -30,6 +44,40 @@ export function createTui(opts: DroneTuiOptions): void {
     title: 'drone-agent',
     autoPadding: true,
   });
+
+  // ── Theme + override stack ──────────────────────────────────────────
+  // The base scheme is grayscale. Plugins (and the persona plugin, when
+  // a persona with uiColor is active) push overrides onto this stack;
+  // the TUI cycles through them on a timer. See tui/theme.ts.
+  let scheme: DroneColorScheme = { ...DEFAULT_GRAYSCALE_SCHEME };
+  const colorOverrides: DroneColorOverride[] = [];
+  let activeOverrideIndex = 0;
+  let cycleTimer: NodeJS.Timeout | null = null;
+
+  function activeOverride(): DroneColorOverride | null {
+    if (colorOverrides.length === 0) return null;
+    return colorOverrides[activeOverrideIndex] ?? null;
+  }
+
+  function computeScheme(): DroneColorScheme {
+    const override = activeOverride();
+    if (!override) return DEFAULT_GRAYSCALE_SCHEME;
+    return applyTint(DEFAULT_GRAYSCALE_SCHEME, override.tint);
+  }
+
+  function restartCycleTimer(): void {
+    if (cycleTimer !== null) {
+      clearInterval(cycleTimer);
+      cycleTimer = null;
+    }
+    if (colorOverrides.length === 0) return;
+    cycleTimer = setInterval(() => {
+      if (colorOverrides.length === 0) return;
+      activeOverrideIndex =
+        (activeOverrideIndex + 1) % colorOverrides.length;
+      reapplyTheme();
+    }, COLOR_CYCLE_INTERVAL_MS);
+  }
 
   // ── Chat log ──────────────────────────────────────────────────────────
   const chatLog = blessed.log({
@@ -51,7 +99,7 @@ export function createTui(opts: DroneTuiOptions): void {
       type: 'line',
     },
     style: {
-      border: { fg: 'cyan' },
+      border: { fg: scheme.border },
     },
   });
 
@@ -64,8 +112,8 @@ export function createTui(opts: DroneTuiOptions): void {
     height: 1,
     inputOnFocus: true,
     style: {
-      bg: 'black',
-      fg: 'white',
+      bg: scheme.inputBg,
+      fg: scheme.inputFg,
     },
   });
 
@@ -77,8 +125,8 @@ export function createTui(opts: DroneTuiOptions): void {
     right: 0,
     height: 1,
     style: {
-      bg: 'blue',
-      fg: 'white',
+      bg: scheme.statusBg,
+      fg: scheme.statusFg,
     },
     content: ' loading... ',
   });
@@ -141,7 +189,7 @@ export function createTui(opts: DroneTuiOptions): void {
       keys: true,
       border: { type: 'line' },
       style: {
-        border: { fg: 'yellow' },
+        border: { fg: scheme.helpBorder },
         bg: 'black',
         fg: 'white',
       },
@@ -157,6 +205,47 @@ export function createTui(opts: DroneTuiOptions): void {
       screen.render();
     };
     screen.key(['escape', 'space', 'enter', 'q', 'C-c'], closeHelp);
+  }
+
+  // ── Theme application ────────────────────────────────────────────────
+  // blessed widgets read style values at render time, so we update the
+  // relevant style slots and call screen.render(). Re-styling borders on
+  // existing widgets works as expected for fg/bg, but we also need to
+  // re-apply `content` for any widget whose content embeds color tags.
+  function reapplyTheme(): void {
+    scheme = computeScheme();
+    chatLog.style.border.fg = scheme.border;
+    inputBox.style.bg = scheme.inputBg;
+    inputBox.style.fg = scheme.inputFg;
+    statusBar.style.bg = scheme.statusBg;
+    statusBar.style.fg = scheme.statusFg;
+    screen.render();
+  }
+
+  function pushColorOverride(override: DroneColorOverride): void {
+    // If an override with this id already exists, replace it in place so
+    // the order (and therefore the cycle position) is preserved.
+    const existingIdx = colorOverrides.findIndex(o => o.id === override.id);
+    if (existingIdx !== -1) {
+      colorOverrides[existingIdx] = override;
+    } else {
+      colorOverrides.push(override);
+    }
+    restartCycleTimer();
+    reapplyTheme();
+  }
+
+  function popColorOverride(overrideId: string): void {
+    const idx = colorOverrides.findIndex(o => o.id === overrideId);
+    if (idx === -1) return;
+    colorOverrides.splice(idx, 1);
+    if (colorOverrides.length === 0) {
+      activeOverrideIndex = 0;
+    } else if (activeOverrideIndex >= colorOverrides.length) {
+      activeOverrideIndex = 0;
+    }
+    restartCycleTimer();
+    reapplyTheme();
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────
@@ -200,7 +289,7 @@ export function createTui(opts: DroneTuiOptions): void {
     if (line.length === 0) return;
 
     // Log the input
-    log(`{yellow-fg}> {/yellow-fg}${line}`);
+    log(`${colorTag('> ', scheme.userInput)}${line}`);
 
     if (line === '/exit' || line === '/quit') {
       process.exit(0);
@@ -215,7 +304,7 @@ export function createTui(opts: DroneTuiOptions): void {
     if (line === '/clear') {
       opts.conversation.clearSession();
       chatLog.setContent('');
-      log('{cyan-fg}Session cleared.{/cyan-fg}');
+      log(colorTag('Session cleared.', scheme.info));
       updateStatusBar();
       return;
     }
@@ -228,7 +317,7 @@ export function createTui(opts: DroneTuiOptions): void {
           return `  - ${p.id} (${p.name}) ${state}`;
         })
         .join('\n');
-      log(`{green-fg}Plugins:{/green-fg}\n${plugins}`);
+      log(`${colorTag('Plugins:', scheme.success)}\n${plugins}`);
       updateStatusBar();
       return;
     }
@@ -240,7 +329,7 @@ export function createTui(opts: DroneTuiOptions): void {
       }>('ollama');
 
       if (!ollama) {
-        log('{red-fg}Ollama capability not available.{/red-fg}');
+        log(colorTag('Ollama capability not available.', scheme.error));
         updateStatusBar();
         return;
       }
@@ -253,16 +342,16 @@ export function createTui(opts: DroneTuiOptions): void {
           const lines = models.map(m =>
             m === current ? `  * ${m} (current)` : `    ${m}`
           );
-          log(`{cyan-fg}Available models:{/cyan-fg}\n${lines.join('\n')}`);
-          log('{cyan-fg}Use /model <name> to switch.{/cyan-fg}');
+          log(`${colorTag('Available models:', scheme.info)}\n${lines.join('\n')}`);
+          log(colorTag('Use /model <name> to switch.', scheme.info));
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          log(`{red-fg}Failed to list models: ${msg}{/red-fg}`);
+          log(colorTag(`Failed to list models: ${msg}`, scheme.error));
         }
       } else {
         // Switch model
         opts.conversation.setModel(rest);
-        log(`{green-fg}Switched to model: ${rest}{/green-fg}`);
+        log(colorTag(`Switched to model: ${rest}`, scheme.success));
         updateStatusBar();
       }
       return;
@@ -286,14 +375,14 @@ export function createTui(opts: DroneTuiOptions): void {
             });
             log(result);
           } else {
-            log('{red-fg}Usage: /persona select <id> (or "none"){/red-fg}');
+            log(colorTag('Usage: /persona select <id> (or "none")', scheme.error));
           }
         } else {
-          log('{red-fg}Unknown persona command.{/red-fg}');
+          log(colorTag('Unknown persona command.', scheme.error));
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        log(`{red-fg}Error: ${msg}{/red-fg}`);
+        log(colorTag(`Error: ${msg}`, scheme.error));
       }
       updateStatusBar();
       return;
@@ -306,7 +395,7 @@ export function createTui(opts: DroneTuiOptions): void {
       const rawJson = firstSpace === -1 ? '{}' : rest.slice(firstSpace + 1);
       const parsedInput = parseJsonInput(rawJson);
       if (parsedInput === undefined) {
-        log(`{red-fg}Invalid JSON: ${rawJson}{/red-fg}`);
+        log(colorTag(`Invalid JSON: ${rawJson}`, scheme.error));
         return;
       }
       try {
@@ -316,7 +405,7 @@ export function createTui(opts: DroneTuiOptions): void {
         await opts.engine.runHooks('onAfterToolCall');
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        log(`{red-fg}Error: ${msg}{/red-fg}`);
+        log(colorTag(`Error: ${msg}`, scheme.error));
       }
       updateStatusBar();
       return;
@@ -325,7 +414,7 @@ export function createTui(opts: DroneTuiOptions): void {
     if (line.startsWith('/exec ')) {
       const command = line.slice('/exec '.length).trim();
       if (!command) {
-        log('{red-fg}Usage: /exec <command>{/red-fg}');
+        log(colorTag('Usage: /exec <command>', scheme.error));
         return;
       }
       try {
@@ -338,7 +427,7 @@ export function createTui(opts: DroneTuiOptions): void {
         await opts.engine.runHooks('onAfterToolCall');
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        log(`{red-fg}Error: ${msg}{/red-fg}`);
+        log(colorTag(`Error: ${msg}`, scheme.error));
       }
       updateStatusBar();
       return;
@@ -353,7 +442,7 @@ export function createTui(opts: DroneTuiOptions): void {
           case 'reasoning': {
             const trimmed = event.content.trim();
             if (trimmed.length > 0) {
-              log(`{magenta-fg}💭 ${trimmed}{/magenta-fg}`);
+              log(colorTag(`💭 ${trimmed}`, scheme.reasoning));
             }
             break;
           }
@@ -363,14 +452,14 @@ export function createTui(opts: DroneTuiOptions): void {
               argsPreview.length > 200
                 ? `${argsPreview.slice(0, 200)}…`
                 : argsPreview;
-            log(`{cyan-fg}→ tool: ${event.name} ${trimmedArgs}{/cyan-fg}`);
+            log(colorTag(`→ tool: ${event.name} ${trimmedArgs}`, scheme.toolCall));
             break;
           }
           case 'toolResult': {
             const preview = event.content.replace(/\s+/g, ' ').trim();
             const trimmed =
               preview.length > 200 ? `${preview.slice(0, 200)}…` : preview;
-            log(`{gray-fg}← ${event.name}: ${trimmed}{/gray-fg}`);
+            log(colorTag(`← ${event.name}: ${trimmed}`, scheme.toolResult));
             break;
           }
           case 'assistantMessage': {
@@ -379,7 +468,7 @@ export function createTui(opts: DroneTuiOptions): void {
             break;
           }
           case 'error': {
-            log(`{red-fg}Error: ${event.message}{/red-fg}`);
+            log(colorTag(`Error: ${event.message}`, scheme.error));
             break;
           }
         }
@@ -393,7 +482,7 @@ export function createTui(opts: DroneTuiOptions): void {
       await opts.engine.runHooks('onAfterToolCall');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log(`{red-fg}Error: ${msg}{/red-fg}`);
+      log(colorTag(`Error: ${msg}`, scheme.error));
     }
     updateStatusBar();
   });
@@ -407,10 +496,48 @@ export function createTui(opts: DroneTuiOptions): void {
     showHelp();
   });
 
+  // ── Persona-driven color override ─────────────────────────────────────
+  // When the persona plugin is loaded, push its uiColor (if any) onto the
+  // override stack so the active persona tints the base scheme. Pop on
+  // switch / clear. Only one persona is active at a time, so we track
+  // exactly which override id we last pushed.
+  const PERSONA_OVERRIDE_PREFIX = 'persona:';
+  let activePersonaOverrideId: string | null = null;
+
+  const personaCap = opts.engine.getCapability<{
+    getActivePersona: () => { id: string; uiColor?: string } | null;
+    onPersonaChange: (
+      callback: (persona: { id: string; uiColor?: string } | null) => void
+    ) => void;
+  }>('persona');
+
+  if (personaCap) {
+    personaCap.onPersonaChange(persona => {
+      // Pop the override placed by the previously active persona (if any).
+      if (activePersonaOverrideId !== null) {
+        popColorOverride(activePersonaOverrideId);
+        activePersonaOverrideId = null;
+      }
+
+      // Push an override for the newly active persona, when it specifies
+      // a tint. Persona uiColor is optional — a persona without one just
+      // shows the default grayscale theme (or whatever other plugins push).
+      if (persona?.uiColor) {
+        activePersonaOverrideId = `${PERSONA_OVERRIDE_PREFIX}${persona.id}`;
+        pushColorOverride({
+          id: activePersonaOverrideId,
+          label: persona.id,
+          tint: persona.uiColor,
+        });
+      }
+    });
+  }
+
   // ── Start ─────────────────────────────────────────────────────────────
-  log(
-    '{cyan-fg}drone-agent TUI ready. Type /help or press F1 for commands.{/cyan-fg}'
-  );
+  log(colorTag(
+    'drone-agent TUI ready. Type /help or press F1 for commands.',
+    scheme.info
+  ));
   updateStatusBar();
   inputBox.focus();
   screen.render();

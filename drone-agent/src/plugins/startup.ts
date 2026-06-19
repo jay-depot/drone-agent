@@ -13,7 +13,7 @@ export const startupPlugin: DronePlugin = {
     registration.registerPromptFragment({
       key: 'startup-banner',
       phase: 'header',
-      render: async () => 'drone-agent bootstrap is active.',
+      render: async () => 'drone-agent ready.',
     });
 
     registration.registerTool({

@@ -90,6 +90,7 @@ function summarizeTokenCounts(input: {
     sessionConfig: {
       contextWindowTokens: input.contextWindowTokens,
       responseReserveTokens: 0,
+      maxToolIterations: 50,
     },
     contextWindowTokens: input.contextWindowTokens,
   }).estimatedPromptTokens;

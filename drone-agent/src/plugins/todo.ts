@@ -157,37 +157,21 @@ export const todoPlugin: DronePlugin = {
     registration.registerTool({
       name: 'manage_list',
       description:
-        'Manage the in-session todo list by adding items, changing status, removing items, listing, clearing completed items, or replacing the list.',
+        'Manage the in-session todo list. action: add_item | mark_in_progress | mark_completed | remove_item | list_items | clear_completed | replace_list.',
       inputSchema: {
         type: 'object',
         properties: {
-          action: {
-            type: 'string',
-            description:
-              'One of add_item, mark_in_progress, mark_completed, remove_item, list_items, clear_completed, or replace_list.',
-          },
-          id: {
-            type: 'string',
-            description:
-              'Item id for mark_in_progress, mark_completed, or remove_item actions.',
-          },
-          title: {
-            type: 'string',
-            description: 'Item title for add_item action.',
-          },
+          action: { type: 'string', description: 'add_item | mark_in_progress | mark_completed | remove_item | list_items | clear_completed | replace_list.' },
+          id: { type: 'string', description: 'Item id (for mark_*/remove_item).' },
+          title: { type: 'string', description: 'Item title (for add_item).' },
           items: {
             type: 'array',
-            description:
-              'List replacement payload for replace_list action. Each item should include title and optional status.',
+            description: 'Replacement list (for replace_list).',
             items: {
               type: 'object',
               properties: {
-                title: {
-                  type: 'string',
-                },
-                status: {
-                  type: 'string',
-                },
+                title: { type: 'string' },
+                status: { type: 'string' },
               },
               additionalProperties: false,
             },

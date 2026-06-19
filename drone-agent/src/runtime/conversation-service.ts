@@ -42,6 +42,11 @@ type CreateConversationServiceOptions = {
   logger: DroneLogger;
   sessionManager: DroneSessionManager;
   maxToolIterations?: number;
+  /**
+   * Number of consecutive tool errors with the same (name, errorCode) before
+   * the loop bails with a "model appears stuck" error. Defaults to 3.
+   */
+  stuckErrorThreshold?: number;
 };
 
 export function createConversationService({
@@ -50,8 +55,13 @@ export function createConversationService({
   config,
   logger,
   sessionManager,
-  maxToolIterations = 8,
+  maxToolIterations,
+  stuckErrorThreshold = 3,
 }: CreateConversationServiceOptions): ConversationService {
+  // Allow the constructor argument to override config, falling back to the
+  // configured value, then to a safe minimum.
+  const effectiveMaxToolIterations =
+    maxToolIterations ?? config.session.maxToolIterations ?? 50;
   let hasWarnedAboutSafetyTrim = false;
   let contextWindowInfoPromise: Promise<DroneContextWindowInfo> | undefined;
   let currentModel = initialModel;
@@ -215,6 +225,27 @@ export function createConversationService({
     return Math.min(percent, 100);
   }
 
+  async function executeToolSafely(
+    canonicalName: string,
+    input: Record<string, unknown>
+  ): Promise<
+    | { kind: 'ok'; content: string }
+    | { kind: 'error'; content: string; code: string | null }
+  > {
+    try {
+      const content = await engine.executeTool(canonicalName, input);
+      return { kind: 'ok', content };
+    } catch (err) {
+      const rawMessage = err instanceof Error ? err.message : String(err);
+      const code = (err as NodeJS.ErrnoException)?.code ?? null;
+      const message = code
+        ? `${canonicalName} failed (${code}): ${rawMessage}`
+        : `${canonicalName} failed: ${rawMessage}`;
+      logger.warn(`tool execution failed: ${canonicalName}: ${message}`);
+      return { kind: 'error', content: message, code };
+    }
+  }
+
   return {
     sendUserMessage: async (prompt, onEvent) => {
       hasWarnedAboutSafetyTrim = false;
@@ -223,6 +254,12 @@ export function createConversationService({
       const provider = getProvider();
       const tools = engine.listTools();
       let iterationCount = 0;
+      // Tracks the most recent failing tool signature and how many times
+      // we've seen it in a row. Reset to null on any success or on a new
+      // tool/error. If it reaches stuckErrorThreshold we abort the loop
+      // with a clear "model is stuck" error rather than burning rounds.
+      let stuckSignature: { name: string; code: string | null } | null = null;
+      let stuckCount = 0;
 
       const emit = (event: ConversationEvent): void => {
         if (onEvent) {
@@ -256,9 +293,10 @@ export function createConversationService({
 
         if (response.toolCalls && response.toolCalls.length > 0) {
           iterationCount += 1;
-          if (iterationCount > maxToolIterations) {
+          if (iterationCount > effectiveMaxToolIterations) {
             throw new Error(
-              'Tool call depth exceeded the current session limit.'
+              `Tool call depth exceeded the configured session limit of ${effectiveMaxToolIterations}. ` +
+                'Use /clear to reset the session, or raise session.maxToolIterations in your config.'
             );
           }
 
@@ -282,20 +320,57 @@ export function createConversationService({
               name: toolCall.name,
               arguments: toolCall.arguments,
             });
-            const toolResult = await engine.executeTool(
+            const toolResult = await executeToolSafely(
               toolCall.name,
               toolCall.arguments
             );
-            emit({
-              kind: 'toolResult',
-              name: toolCall.name,
-              content: toolResult,
-            });
+            if (toolResult.kind === 'error') {
+              emit({ kind: 'error', message: toolResult.content });
+              // Update the stuck detector: only count this round's tool calls
+              // if all of them fail with the SAME signature; otherwise reset.
+              const signature = { name: toolCall.name, code: toolResult.code };
+              if (
+                stuckSignature &&
+                stuckSignature.name === signature.name &&
+                stuckSignature.code === signature.code
+              ) {
+                stuckCount += 1;
+              } else {
+                stuckSignature = signature;
+                stuckCount = 1;
+              }
+            } else {
+              emit({
+                kind: 'toolResult',
+                name: toolCall.name,
+                content: toolResult.content,
+              });
+              // Any successful tool call resets the stuck detector.
+              stuckSignature = null;
+              stuckCount = 0;
+            }
             bufferedResults.push({
               name: toolCall.name,
-              content: toolResult,
+              content: toolResult.content,
               toolCallId: toolCall.id,
             });
+          }
+
+          if (
+            stuckSignature &&
+            stuckCount >= stuckErrorThreshold &&
+            // All tool calls in this round must have been errors; otherwise
+            // the model is making progress even if some calls failed.
+            bufferedResults.every(r => r.content.startsWith(`${stuckSignature!.name} failed`))
+          ) {
+            const codeSuffix = stuckSignature.code
+              ? ` (${stuckSignature.code})`
+              : '';
+            throw new Error(
+              `Model appears stuck on ${stuckSignature.name}${codeSuffix}: ` +
+                `failed ${stuckCount} times in a row. Aborting. ` +
+                'Use /clear to reset the session, or refine the prompt to give the model more context (e.g. the correct path or arguments).'
+            );
           }
 
           // Hooks observe the post-prompt session state, before tool results

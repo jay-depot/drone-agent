@@ -89,7 +89,11 @@ export function createSessionManager(): DroneSessionManager {
     },
     getMessages: () => flattenMessages(),
     getTurns: () =>
-      turns.map(turn => ({ id: turn.id, messages: [...turn.messages] })),
+      turns.map(turn => ({
+        id: turn.id,
+        messages: [...turn.messages],
+        kind: turn.kind,
+      })),
     dropOldestTurns: count => {
       if (count <= 0) {
         return [];
@@ -113,9 +117,11 @@ export function createSessionManager(): DroneSessionManager {
       return dropped;
     },
     getSummaryTurns: () =>
-      turns
-        .filter(isSummaryTurn)
-        .map(turn => ({ id: turn.id, messages: [...turn.messages] })),
+      turns.filter(isSummaryTurn).map(turn => ({
+        id: turn.id,
+        messages: [...turn.messages],
+        kind: turn.kind,
+      })),
     dropSummaryTurnById: id => {
       const index = turns.findIndex(
         turn => turn.id === id && isSummaryTurn(turn)
@@ -138,7 +144,11 @@ export function createSessionManager(): DroneSessionManager {
     },
     getState: () => ({
       messages: flattenMessages(),
-      turns: turns.map(turn => ({ id: turn.id, messages: [...turn.messages] })),
+      turns: turns.map(turn => ({
+        id: turn.id,
+        messages: [...turn.messages],
+        kind: turn.kind,
+      })),
     }),
   };
 }

@@ -21,6 +21,16 @@ export type DroneOllamaConfig = {
 export type DroneSessionConfig = {
   contextWindowTokens: number;
   responseReserveTokens: number;
+  /**
+   * Maximum number of model round-trips (each round-trip may include one or
+   * more tool calls) before the conversation loop aborts with a "tool call
+   * depth exceeded" error. Default is 50; the older hard-coded value was 8.
+   *
+   * This is a safety net against runaway loops, not a meaningful budget —
+   * 50 round-trips at typical ollama latency is roughly a few minutes of
+   * wall-clock time, and most well-formed agent tasks complete in 3-10.
+   */
+  maxToolIterations: number;
 };
 
 export type DroneCompactionStrategy = 'summary-drop';
@@ -330,6 +340,12 @@ export type DronePersonaDefinition = {
   description: string;
   systemPromptOverride?: string;
   promptFragments?: string[];
+  /**
+   * Optional TUI color tint. When the persona is active, the TUI cycles
+   * this color in as a tint over the base grayscale theme. Any blessed-
+   * compatible color string works (named, hex, or 256-color code).
+   */
+  uiColor?: string;
 };
 
 export type DroneMcpError = {
@@ -412,7 +428,7 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
   return {
     enabledPlugins: [],
     systemPrompt:
-      'You are a coding agent. You have access to tools for reading and editing files, running shell commands, and querying language servers. Prefer small, focused changes.',
+      'You are a coding agent. Prefer small, focused changes. Use the available tools; do not guess paths or contents.',
     activePersona: null,
     ollama: {
       host: 'http://127.0.0.1:11434',
@@ -421,6 +437,7 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
     session: {
       contextWindowTokens: 32768,
       responseReserveTokens: 4096,
+      maxToolIterations: 50,
     },
     lsp: {
       enabled: true,
