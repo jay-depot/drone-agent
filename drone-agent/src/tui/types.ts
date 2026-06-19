@@ -50,7 +50,9 @@ export type DroneTuiOptions = {
   conversation: {
     sendUserMessage: (
       prompt: string,
-      onEvent?: (event: import('../runtime/conversation-service.js').ConversationEvent) => void
+      onEvent?: (
+        event: import('../runtime/conversation-service.js').ConversationEvent
+      ) => void
     ) => Promise<string>;
     clearSession: () => void;
     getEstimatedContextUsagePercent: () => Promise<number>;

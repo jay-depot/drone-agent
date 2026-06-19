@@ -23,6 +23,18 @@ export type DroneSessionConfig = {
   responseReserveTokens: number;
 };
 
+export type DroneCompactionStrategy = 'summary-drop';
+
+export type DroneCompactionConfig = {
+  enabled: boolean;
+  strategy: DroneCompactionStrategy;
+  softThresholdPercent: number;
+  slicePercent: number;
+  minTurnsToCompact: number;
+  summaryMaxTokens: number;
+  summaryBudgetPercent: number;
+};
+
 export type DroneLspSpawnServerConfig = {
   transport?: 'stdio';
   language?: string;
@@ -103,6 +115,7 @@ export type DroneAgentConfig = {
   session: DroneSessionConfig;
   lsp: DroneLspConfig;
   mcp: DroneMcpConfig;
+  compaction: DroneCompactionConfig;
 };
 
 export type PartialDroneAgentConfig = Partial<{
@@ -113,6 +126,7 @@ export type PartialDroneAgentConfig = Partial<{
   session: Partial<DroneSessionConfig>;
   lsp: Partial<DroneLspConfig>;
   mcp: Partial<DroneMcpConfig>;
+  compaction: Partial<DroneCompactionConfig>;
 }>;
 
 export type DroneConfigScope = 'default' | 'user' | 'project';
@@ -170,6 +184,7 @@ export type DroneSessionMessage = DroneChatMessage;
 export type DroneSessionTurn = {
   id: string;
   messages: DroneSessionMessage[];
+  kind?: 'summary';
 };
 
 export type DroneSessionState = {
@@ -424,6 +439,15 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
       compatibilityMode: 'strict',
       servers: {},
     },
+    compaction: {
+      enabled: true,
+      strategy: 'summary-drop',
+      softThresholdPercent: 75,
+      slicePercent: 25,
+      minTurnsToCompact: 4,
+      summaryMaxTokens: 800,
+      summaryBudgetPercent: 20,
+    },
   };
 }
 
@@ -464,5 +488,19 @@ export function applyAgentConfigLayer(
           servers: layer.mcp.servers ?? baseConfig.mcp.servers,
         }
       : baseConfig.mcp,
+    compaction: layer.compaction
+      ? {
+          ...baseConfig.compaction,
+          ...layer.compaction,
+        }
+      : baseConfig.compaction,
   };
 }
+
+export {
+  estimateSessionBudget,
+  estimateMessageTokens,
+  estimateTurnTokens,
+  estimateToolDescriptorTokens,
+  estimateTextTokens,
+} from './token-estimate.js';

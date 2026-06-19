@@ -4,7 +4,7 @@ import { stdin as input, stdout as output } from 'node:process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { builtInPlugins } from './plugins/index.js';
+import { builtInPlugins, createBuiltInPlugins } from './plugins/index.js';
 import type { DronePersonaCapability } from './plugins/persona/index.js';
 import { createTui } from './tui/index.js';
 import { createConversationService } from './runtime/conversation-service.js';
@@ -386,12 +386,32 @@ async function main(): Promise<void> {
 
   const model =
     invocation.options.modelOverride ?? resolvedConfig.config.ollama.model;
+  const sessionManager = createSessionManager();
+  // The compaction plugin needs the live engine handle, but the engine is
+  // only constructable once we have the full plugin list. Use a deferred
+  // getter to break the cycle: the engine is assigned to a `let` binding
+  // after construction, and the compaction plugin reads it on demand.
+  const engineRef: {
+    current: ReturnType<typeof createDronePluginEngine> | undefined;
+  } = {
+    current: undefined,
+  };
+  const plugins = createBuiltInPlugins({
+    engine: () => {
+      if (!engineRef.current) {
+        throw new Error('compaction plugin accessed engine before init.');
+      }
+      return engineRef.current;
+    },
+    sessionManager,
+    getModel: () => model,
+  });
   const engine = createDronePluginEngine({
-    plugins: builtInPlugins,
+    plugins,
     config: resolvedConfig.config,
     logger,
   });
-  const sessionManager = createSessionManager();
+  engineRef.current = engine;
   const conversation = createConversationService({
     engine,
     model,

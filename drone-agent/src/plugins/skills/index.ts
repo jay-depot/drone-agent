@@ -1,15 +1,13 @@
 import type { DronePlugin, DronePromptFragment } from 'drone-core';
-import {
-  loadSkills,
-  type DroneSkillDefinition,
-} from './loader.js';
+import { loadSkills, type DroneSkillDefinition } from './loader.js';
 
 export const skillsPlugin: DronePlugin = {
   metadata: {
     id: 'skills',
     name: 'Skills',
     version: '0.1.0',
-    description: 'Loads skill .md files and provides skills.recall for on-demand retrieval.',
+    description:
+      'Loads skill .md files and provides skills.recall for on-demand retrieval.',
     defaultEnabled: false,
   },
   register: async registration => {

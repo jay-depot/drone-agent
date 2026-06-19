@@ -120,7 +120,7 @@ export function createTui(opts: DroneTuiOptions): void {
 
     helpLines.push(
       '  /tool <name>       Run a tool',
-      '  /exec <cmd>        Run a command',
+      '  /exec <cmd>        Run a command'
     );
 
     if (pluginHelp.length > 0) {
@@ -348,46 +348,42 @@ export function createTui(opts: DroneTuiOptions): void {
     try {
       await opts.engine.runHooks('onBeforePrompt');
       let assistantMessageRendered = false;
-      const response = await opts.conversation.sendUserMessage(
-        line,
-        event => {
-          switch (event.kind) {
-            case 'reasoning': {
-              const trimmed = event.content.trim();
-              if (trimmed.length > 0) {
-                log(`{magenta-fg}💭 ${trimmed}{/magenta-fg}`);
-              }
-              break;
+      const response = await opts.conversation.sendUserMessage(line, event => {
+        switch (event.kind) {
+          case 'reasoning': {
+            const trimmed = event.content.trim();
+            if (trimmed.length > 0) {
+              log(`{magenta-fg}💭 ${trimmed}{/magenta-fg}`);
             }
-            case 'toolCall': {
-              const argsPreview = JSON.stringify(event.arguments);
-              const trimmedArgs =
-                argsPreview.length > 200
-                  ? `${argsPreview.slice(0, 200)}…`
-                  : argsPreview;
-              log(`{cyan-fg}→ tool: ${event.name} ${trimmedArgs}{/cyan-fg}`);
-              break;
-            }
-            case 'toolResult': {
-              const preview = event.content.replace(/\s+/g, ' ').trim();
-              const trimmed = preview.length > 200
-                ? `${preview.slice(0, 200)}…`
-                : preview;
-              log(`{gray-fg}← ${event.name}: ${trimmed}{/gray-fg}`);
-              break;
-            }
-            case 'assistantMessage': {
-              assistantMessageRendered = true;
-              log(event.content);
-              break;
-            }
-            case 'error': {
-              log(`{red-fg}Error: ${event.message}{/red-fg}`);
-              break;
-            }
+            break;
+          }
+          case 'toolCall': {
+            const argsPreview = JSON.stringify(event.arguments);
+            const trimmedArgs =
+              argsPreview.length > 200
+                ? `${argsPreview.slice(0, 200)}…`
+                : argsPreview;
+            log(`{cyan-fg}→ tool: ${event.name} ${trimmedArgs}{/cyan-fg}`);
+            break;
+          }
+          case 'toolResult': {
+            const preview = event.content.replace(/\s+/g, ' ').trim();
+            const trimmed =
+              preview.length > 200 ? `${preview.slice(0, 200)}…` : preview;
+            log(`{gray-fg}← ${event.name}: ${trimmed}{/gray-fg}`);
+            break;
+          }
+          case 'assistantMessage': {
+            assistantMessageRendered = true;
+            log(event.content);
+            break;
+          }
+          case 'error': {
+            log(`{red-fg}Error: ${event.message}{/red-fg}`);
+            break;
           }
         }
-      );
+      });
       // If the loop ended without an assistantMessage event (e.g. an empty
       // response), still surface whatever sendUserMessage returned so the
       // user gets feedback.

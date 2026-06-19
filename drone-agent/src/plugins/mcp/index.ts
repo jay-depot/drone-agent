@@ -126,7 +126,8 @@ export const mcpPlugin: DronePlugin = {
     id: 'mcp',
     name: 'MCP',
     version: '0.1.0',
-    description: 'Connects to MCP servers and mounts their tools/resources/prompts.',
+    description:
+      'Connects to MCP servers and mounts their tools/resources/prompts.',
     defaultEnabled: true,
   },
   register: async registration => {

@@ -34,4 +34,12 @@ export type { ConversationService } from './runtime/conversation-service.js';
 // ---------------------------------------------------------------------------
 // Built-in plugins
 // ---------------------------------------------------------------------------
-export { builtInPlugins } from './plugins/index.js';
+export {
+  builtInPlugins,
+  createBuiltInPlugins,
+  createCompactionPlugin,
+} from './plugins/index.js';
+export type {
+  CompactionPluginDeps,
+  CompactionCapability,
+} from './plugins/index.js';

@@ -698,6 +698,104 @@ function parsePartialConfig(
     parsed.activePersona = raw.activePersona;
   }
 
+  if ('compaction' in raw) {
+    if (!isRecord(raw.compaction)) {
+      throw new Error(
+        `Invalid config in ${source}: compaction must be an object.`
+      );
+    }
+
+    const compaction: PartialDroneAgentConfig['compaction'] = {};
+
+    if ('enabled' in raw.compaction) {
+      if (typeof raw.compaction.enabled !== 'boolean') {
+        throw new Error(
+          `Invalid config in ${source}: compaction.enabled must be a boolean.`
+        );
+      }
+      compaction.enabled = raw.compaction.enabled;
+    }
+
+    if ('strategy' in raw.compaction) {
+      if (raw.compaction.strategy !== 'summary-drop') {
+        throw new Error(
+          `Invalid config in ${source}: compaction.strategy must be "summary-drop".`
+        );
+      }
+      compaction.strategy = raw.compaction.strategy;
+    }
+
+    if ('softThresholdPercent' in raw.compaction) {
+      if (
+        typeof raw.compaction.softThresholdPercent !== 'number' ||
+        !Number.isFinite(raw.compaction.softThresholdPercent) ||
+        raw.compaction.softThresholdPercent <= 0 ||
+        raw.compaction.softThresholdPercent > 100
+      ) {
+        throw new Error(
+          `Invalid config in ${source}: compaction.softThresholdPercent must be a number between 0 and 100.`
+        );
+      }
+      compaction.softThresholdPercent = raw.compaction.softThresholdPercent;
+    }
+
+    if ('slicePercent' in raw.compaction) {
+      if (
+        typeof raw.compaction.slicePercent !== 'number' ||
+        !Number.isFinite(raw.compaction.slicePercent) ||
+        raw.compaction.slicePercent <= 0 ||
+        raw.compaction.slicePercent > 100
+      ) {
+        throw new Error(
+          `Invalid config in ${source}: compaction.slicePercent must be a number between 0 and 100.`
+        );
+      }
+      compaction.slicePercent = raw.compaction.slicePercent;
+    }
+
+    if ('minTurnsToCompact' in raw.compaction) {
+      if (
+        typeof raw.compaction.minTurnsToCompact !== 'number' ||
+        !Number.isInteger(raw.compaction.minTurnsToCompact) ||
+        raw.compaction.minTurnsToCompact < 1
+      ) {
+        throw new Error(
+          `Invalid config in ${source}: compaction.minTurnsToCompact must be a positive integer.`
+        );
+      }
+      compaction.minTurnsToCompact = raw.compaction.minTurnsToCompact;
+    }
+
+    if ('summaryMaxTokens' in raw.compaction) {
+      if (
+        typeof raw.compaction.summaryMaxTokens !== 'number' ||
+        !Number.isFinite(raw.compaction.summaryMaxTokens) ||
+        raw.compaction.summaryMaxTokens <= 0
+      ) {
+        throw new Error(
+          `Invalid config in ${source}: compaction.summaryMaxTokens must be a positive number.`
+        );
+      }
+      compaction.summaryMaxTokens = raw.compaction.summaryMaxTokens;
+    }
+
+    if ('summaryBudgetPercent' in raw.compaction) {
+      if (
+        typeof raw.compaction.summaryBudgetPercent !== 'number' ||
+        !Number.isFinite(raw.compaction.summaryBudgetPercent) ||
+        raw.compaction.summaryBudgetPercent <= 0 ||
+        raw.compaction.summaryBudgetPercent > 100
+      ) {
+        throw new Error(
+          `Invalid config in ${source}: compaction.summaryBudgetPercent must be a number between 0 and 100.`
+        );
+      }
+      compaction.summaryBudgetPercent = raw.compaction.summaryBudgetPercent;
+    }
+
+    parsed.compaction = compaction;
+  }
+
   return parsed;
 }
 

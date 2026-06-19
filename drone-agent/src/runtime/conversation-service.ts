@@ -166,7 +166,8 @@ export function createConversationService({
       await engine.runSessionSafetyTrimWillRunHooks(payload);
 
       const turnsToDrop = Math.max(1, payload.proposedDropTurnCount);
-      const droppedTurns = sessionManager.dropOldestTurns(turnsToDrop);
+      const droppedTurns =
+        sessionManager.dropOldestNonSummaryTurns(turnsToDrop);
       if (droppedTurns.length === 0) {
         throw new Error(
           `Session exceeds the safe context budget for ${currentModel}, but no turns could be dropped. Use /clear to reset the session.`
@@ -266,6 +267,15 @@ export function createConversationService({
             response.toolCalls
           );
 
+          // Collect tool results without appending to the session yet, so
+          // that onAfterToolCall hooks observe a consistent session snapshot.
+          // Results are flushed in order once the hooks have returned.
+          const bufferedResults: Array<{
+            name: string;
+            content: string;
+            toolCallId: string | undefined;
+          }> = [];
+
           for (const toolCall of response.toolCalls) {
             emit({
               kind: 'toolCall',
@@ -276,11 +286,28 @@ export function createConversationService({
               toolCall.name,
               toolCall.arguments
             );
-            emit({ kind: 'toolResult', name: toolCall.name, content: toolResult });
+            emit({
+              kind: 'toolResult',
+              name: toolCall.name,
+              content: toolResult,
+            });
+            bufferedResults.push({
+              name: toolCall.name,
+              content: toolResult,
+              toolCallId: toolCall.id,
+            });
+          }
+
+          // Hooks observe the post-prompt session state, before tool results
+          // are appended. Plugins like compaction use this to inspect
+          // usage and decide whether to compact before the next chat call.
+          await engine.runHooks('onAfterToolCall');
+
+          for (const result of bufferedResults) {
             sessionManager.appendToolResult(
-              toolCall.name,
-              toolResult,
-              toolCall.id
+              result.name,
+              result.content,
+              result.toolCallId
             );
           }
 
