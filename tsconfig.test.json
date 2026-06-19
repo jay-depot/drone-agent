@@ -8,13 +8,17 @@
     "declarationMap": false,
     "sourceMap": false,
     "rootDir": ".",
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
     "types": ["node"]
   },
   "include": [
     "drone-core/src/**/*.ts",
     "drone-core/test/**/*.ts",
     "drone-agent/src/**/*.ts",
+    "drone-agent/src/**/*.tsx",
     "drone-agent/test/**/*.ts",
+    "drone-agent/test/**/*.tsx",
     "vitest.config.ts"
   ]
 }

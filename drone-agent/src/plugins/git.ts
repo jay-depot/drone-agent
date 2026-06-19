@@ -1,5 +1,8 @@
-import { execSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import type { DronePlugin } from 'drone-core';
+
+const execFilePromise = promisify(execFile);
 
 export const gitPlugin: DronePlugin = {
   metadata: {
@@ -10,13 +13,12 @@ export const gitPlugin: DronePlugin = {
     defaultEnabled: false,
   },
   register: async registration => {
-    function runGit(args: string[], cwd?: string): string {
+    async function runGit(args: string[], cwd?: string): Promise<string> {
       const dir = cwd ?? process.cwd();
-      const stdout = execSync(`git ${args.join(' ')}`, {
+      const { stdout } = await execFilePromise('git', args, {
         encoding: 'utf-8',
         maxBuffer: 10 * 1024 * 1024,
         cwd: dir,
-        stdio: ['ignore', 'pipe', 'pipe'],
       });
       return stdout.trim();
     }
@@ -39,7 +41,7 @@ export const gitPlugin: DronePlugin = {
           typeof input.cwd === 'string' && input.cwd.trim().length > 0
             ? input.cwd.trim()
             : undefined;
-        const output = runGit(['status', '--porcelain'], cwd);
+        const output = await runGit(['status', '--porcelain'], cwd);
         const lines = output.length > 0 ? output.split('\n') : [];
         const staged: string[] = [];
         const unstaged: string[] = [];
@@ -61,7 +63,7 @@ export const gitPlugin: DronePlugin = {
           }
         }
 
-        const branch = runGit(['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
+        const branch = await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
         return JSON.stringify({ branch, staged, unstaged, untracked }, null, 2);
       },
     });
@@ -93,7 +95,7 @@ export const gitPlugin: DronePlugin = {
         if (typeof input.path === 'string' && input.path.trim().length > 0) {
           args.push('--', input.path.trim());
         }
-        const output = runGit(args, cwd);
+        const output = await runGit(args, cwd);
         return JSON.stringify({ diff: output }, null, 2);
       },
     });
@@ -125,11 +127,8 @@ export const gitPlugin: DronePlugin = {
             ? input.cwd.trim()
             : undefined;
 
-        runGit(['add', '-A'], cwd);
-        const output = runGit(
-          ['commit', '-m', quoteArg(input.message.trim())],
-          cwd
-        );
+        await runGit(['add', '-A'], cwd);
+        const output = await runGit(['commit', '-m', input.message.trim()], cwd);
         // Extract commit hash from output like "[main abc1234] message"
         const hashMatch = output.match(/\[[^\]]+ ([a-f0-9]+)\]/);
         return JSON.stringify(
@@ -178,7 +177,7 @@ export const gitPlugin: DronePlugin = {
           args.push('--', input.path.trim());
         }
 
-        const output = runGit(args, cwd);
+        const output = await runGit(args, cwd);
         const entries = output
           .split('\n')
           .filter(line => line.length > 0)
@@ -197,10 +196,3 @@ export const gitPlugin: DronePlugin = {
     });
   },
 };
-
-function quoteArg(arg: string): string {
-  if (/^[a-zA-Z0-9_./@~-]+$/.test(arg)) {
-    return arg;
-  }
-  return `'${arg.replace(/'/g, "'\\''")}'`;
-}

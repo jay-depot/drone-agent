@@ -4,10 +4,10 @@ import {
   type DroneChatResponse,
   type DroneContextWindowInfo,
   type DroneLlmProvider,
-  type DronePluginEngine,
   type DroneSessionTurn,
   type DroneToolDescriptor,
 } from 'drone-core';
+import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { createConversationService } from '../src/runtime/conversation-service.js';
 import { createSessionManager } from '../src/runtime/session-manager.js';
 import { silentLogger } from './helpers.js';

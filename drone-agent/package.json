@@ -31,9 +31,14 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "blessed": "^0.1.81",
     "drone-core": "workspace:*",
-    "ollama": "^0.6.0"
+    "ink": "^5.2.0",
+    "ink-text-input": "^6.0.0",
+    "ollama": "^0.6.0",
+    "react": "^18.3.1"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0"
   },
   "devEngines": {
     "packageManager": {
@@ -43,6 +48,7 @@
     }
   },
   "devDependencies": {
-    "@types/blessed": "^0.1.27"
+    "@types/react": "^18.3.12",
+    "ink-testing-library": "^4.0.0"
   }
 }

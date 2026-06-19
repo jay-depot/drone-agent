@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { render } from 'ink-testing-library';
+import { ColorTag } from '../src/tui/theme.js';
 import {
   applyTint,
-  colorTag,
   DEFAULT_GRAYSCALE_SCHEME,
   type DroneColorScheme,
 } from '../src/tui/theme.js';
@@ -27,7 +28,6 @@ describe('applyTint', () => {
     expect(tinted.primary).toBe('cyan');
     expect(tinted.border).toBe('cyan');
     expect(tinted.userInput).toBe('cyan');
-    expect(tinted.helpBorder).toBe('cyan');
   });
 
   it('accepts hex colors as well as named colors', () => {
@@ -46,12 +46,45 @@ describe('applyTint', () => {
   });
 });
 
-describe('colorTag', () => {
-  it('wraps text in blessed fg color tags', () => {
-    expect(colorTag('hello', 'red')).toBe('{red-fg}hello{/red-fg}');
+describe('ColorTag', () => {
+  it('renders children wrapped with the given color', () => {
+    const { lastFrame, cleanup } = render(
+      <ColorTag color="red">hello</ColorTag>
+    );
+    try {
+      const frame = lastFrame() ?? '';
+      // ink-testing-library strips ANSI escape codes from the captured
+      // frame, so we can only assert the visible text. The point of
+      // ColorTag is to forward the color to <Text color="..."> and
+      // emit the children; the smoke test is "does it render?".
+      expect(frame).toContain('hello');
+    } finally {
+      cleanup();
+    }
   });
 
-  it('handles empty strings without crashing', () => {
-    expect(colorTag('', 'gray')).toBe('{gray-fg}{/gray-fg}');
+  it('renders empty children without crashing', () => {
+    const { lastFrame, cleanup } = render(
+      <ColorTag color="gray">{''}</ColorTag>
+    );
+    try {
+      // The frame should be non-null and not throw.
+      expect(typeof (lastFrame() ?? '')).toBe('string');
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('passes through multi-line children', () => {
+    const { lastFrame, cleanup } = render(
+      <ColorTag color="cyan">line1{'\n'}line2</ColorTag>
+    );
+    try {
+      const frame = lastFrame() ?? '';
+      expect(frame).toContain('line1');
+      expect(frame).toContain('line2');
+    } finally {
+      cleanup();
+    }
   });
 });

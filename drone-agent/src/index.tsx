@@ -4,9 +4,11 @@ import { stdin as input, stdout as output } from 'node:process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { render } from 'ink';
 import { builtInPlugins, createBuiltInPlugins } from './plugins/index.js';
 import type { DronePersonaCapability } from './plugins/persona/index.js';
 import { createTui } from './tui/index.js';
+import { ModelPicker } from './tui/components/ModelPicker.js';
 import { createConversationService } from './runtime/conversation-service.js';
 import { loadAgentConfig } from './runtime/config.js';
 import { createDronePluginEngine } from './runtime/plugin-engine.js';
@@ -170,6 +172,37 @@ function getOllamaCapability(
   engine: ReturnType<typeof createDronePluginEngine>
 ): OllamaListCapability | undefined {
   return engine.getCapability<OllamaListCapability>('ollama');
+}
+
+/**
+ * Show the Ink-based model picker and resolve with the chosen model id.
+ *
+ * Used during the first-run flow when no user-level config exists. The
+ * picker renders into the normal scrollback (no alt screen) and exits
+ * cleanly on Enter or Esc, leaving the terminal in a state where the
+ * chat TUI can mount on top without raw-mode collisions.
+ */
+function pickModelInteractive(
+  models: string[],
+  current: string
+): Promise<string> {
+  return new Promise<string>(resolve => {
+    let resolved = false;
+    const finish = (model: string): void => {
+      if (resolved) return;
+      resolved = true;
+      instance.unmount();
+      resolve(model);
+    };
+    const instance = render(
+      <ModelPicker
+        models={models}
+        current={current}
+        onSelect={finish}
+      />,
+      { exitOnCtrlC: true }
+    );
+  });
 }
 
 function buildPromptLabel(
@@ -466,7 +499,9 @@ async function main(): Promise<void> {
 
   // ── First-run setup ──────────────────────────────────────────────────
   // If no user-level config exists, prompt the user to pick an Ollama model
-  // and write it to ~/.drone-agent/config.json.
+  // and write it to ~/.drone-agent/config.json. We use the Ink-based
+  // ModelPicker (same component tree as the chat TUI) so the prompt
+  // matches the visual style of the rest of the app.
   const hasUserLayer = resolvedConfig.layers.some(l => l.scope === 'user');
   if (!hasUserLayer && !invocation.options.modelOverride) {
     const ollama = getOllamaCapability(engine);
@@ -474,38 +509,13 @@ async function main(): Promise<void> {
       try {
         const models = await ollama.listModels();
         if (models.length > 0) {
-          logger.info('No user config found — pick a default Ollama model.');
-          const modelList = models.map((m, i) => `  [${i}] ${m}`).join('\n');
-          logger.info(`Available models:\n${modelList}`);
-
-          const rl = createInterface({ input, output });
-          const answer = (
-            await rl.question('Select by number or name (Enter for first): ')
-          ).trim();
-          rl.close();
-          // Reset terminal state after readline's raw-mode prompt so
-          // blessed (or the next readline) doesn't get doubled keystrokes.
-          if (input.isTTY) {
-            input.setRawMode(false);
-          }
-          output.write('\n');
-
-          let selectedModel: string;
-          const numIndex = Number.parseInt(answer, 10);
-          if (answer.length === 0) {
-            selectedModel = models[0];
-          } else if (
-            !Number.isNaN(numIndex) &&
-            numIndex >= 0 &&
-            numIndex < models.length
-          ) {
-            selectedModel = models[numIndex];
-          } else if (models.includes(answer)) {
-            selectedModel = answer;
-          } else {
-            logger.warn(`"${answer}" not found, using "${models[0]}".`);
-            selectedModel = models[0];
-          }
+          // Pick a model via the Ink-based picker. Renders into the
+          // normal scrollback, then exits cleanly so the chat TUI can
+          // mount on the same terminal without state collisions.
+          const selectedModel = await pickModelInteractive(
+            models,
+            resolvedConfig.config.ollama.model
+          );
 
           const userConfigDir = path.join(os.homedir(), '.drone-agent');
           const userConfigFile = path.join(userConfigDir, 'config.json');
@@ -558,12 +568,16 @@ async function main(): Promise<void> {
     if (invocation.options.plainOutput) {
       await runInteractiveLoop(conversation, engine, logger);
     } else {
-      createTui({
+      // Mount the Ink-based chat TUI and wait for the user to quit
+      // (Esc / Ctrl+C). `onShutdown` runs after the TUI unmounts so
+      // plugin teardown sees a clean slate.
+      const tui = createTui({
         engine,
         conversation,
         model,
         logger,
       });
+      await tui.waitUntilExit();
     }
   } else {
     const selectedTool =

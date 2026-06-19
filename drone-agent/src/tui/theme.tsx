@@ -11,11 +11,15 @@
  * theme does not change semantics, only visual character.
  */
 
+import { Text } from 'ink';
+import type { ReactNode } from 'react';
+
 /**
- * A palette of named roles mapped to blessed color strings.
+ * A palette of named roles mapped to color strings.
  *
- * blessed accepts named colors ('red', 'cyan', 'gray'…), 256-color codes
- * ('203'), or hex strings ('#ff8800'). Anything in `string` form works.
+ * Ink (via chalk) accepts named colors ('red', 'cyan', 'gray'…),
+ * 256-color codes ('203'), or hex strings ('#ff8800'). Anything in
+ * `string` form works.
  */
 export type DroneColorScheme = {
   /** Border color for the chat log. */
@@ -38,8 +42,6 @@ export type DroneColorScheme = {
   toolCall: string;
   /** Tool result indicator (`← …`). */
   toolResult: string;
-  /** Help overlay border. */
-  helpBorder: string;
   /** Status bar background. */
   statusBg: string;
   /** Status bar foreground. */
@@ -65,7 +67,6 @@ export const DEFAULT_GRAYSCALE_SCHEME: DroneColorScheme = {
   reasoning: 'gray',
   toolCall: 'gray',
   toolResult: 'gray',
-  helpBorder: 'gray',
   statusBg: 'black',
   statusFg: 'white',
   inputBg: 'black',
@@ -77,7 +78,7 @@ export const DEFAULT_GRAYSCALE_SCHEME: DroneColorScheme = {
  *
  * `id` is how the plugin identifies itself when popping the override,
  * so it should be unique and stable (the plugin id, or a namespaced
- * variant like `persona:researcher`). `tint` is any blessed-compatible
+ * variant like `persona:researcher`). `tint` is any Ink-compatible
  * color string — the actual color that swaps into the accent slots.
  */
 export type DroneColorOverride = {
@@ -88,9 +89,9 @@ export type DroneColorOverride = {
 
 /**
  * Apply a tint to a base scheme. The tint replaces the primary accent
- * slots (border, primary, userInput, helpBorder) and leaves the rest
- * grayscale. This keeps overrides legible: a tinted theme still reads
- * as grayscale-with-a-hue rather than a full re-skin.
+ * slots (border, primary, userInput) and leaves the rest grayscale.
+ * This keeps overrides legible: a tinted theme still reads as grayscale-
+ * with-a-hue rather than a full re-skin.
  */
 export function applyTint(
   base: DroneColorScheme,
@@ -101,17 +102,22 @@ export function applyTint(
     border: tint,
     primary: tint,
     userInput: tint,
-    helpBorder: tint,
   };
 }
 
 /**
- * Wrap `text` with a blessed color tag using `color` as the fg color.
- * e.g. `colorTag('hello', 'red')` → `{red-fg}hello{/red-fg}`.
+ * ColorTag renders its children with the given foreground color.
  *
- * Centralising this keeps the message-rendering code in tui/index.ts
- * from caring about the blessed tag syntax.
+ * Replaces the previous blessed `colorTag(text, color)` string helper.
+ * Centralising the wrapping keeps message-rendering code from caring
+ * about ink's color prop.
  */
-export function colorTag(text: string, color: string): string {
-  return `{${color}-fg}${text}{/${color}-fg}`;
+export function ColorTag({
+  color,
+  children,
+}: {
+  color: string;
+  children: ReactNode;
+}): JSX.Element {
+  return <Text color={color}>{children}</Text>;
 }

@@ -6,6 +6,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = __dirname;
 
 export default defineConfig({
+  esbuild: {
+    jsx: 'automatic',
+    jsxImportSource: 'react',
+  },
   resolve: {
     alias: {
       // Tests import the workspace package by name. Resolve to source so we
@@ -14,7 +18,11 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['drone-core/test/**/*.test.ts', 'drone-agent/test/**/*.test.ts'],
+    include: [
+      'drone-core/test/**/*.test.ts',
+      'drone-agent/test/**/*.test.ts',
+      'drone-agent/test/**/*.test.tsx',
+    ],
     environment: 'node',
     globals: false,
     coverage: {

@@ -149,6 +149,7 @@ describe('estimateSessionBudget', () => {
   const sessionConfig = {
     contextWindowTokens: 1000,
     responseReserveTokens: 200,
+    maxToolIterations: 50,
   };
 
   it('aggregates system, session, and tool token estimates', () => {
@@ -216,7 +217,11 @@ describe('estimateSessionBudget', () => {
       systemMessages: [],
       turns: [],
       tools: [],
-      sessionConfig: { contextWindowTokens: 1, responseReserveTokens: 0 },
+      sessionConfig: {
+        contextWindowTokens: 1,
+        responseReserveTokens: 0,
+        maxToolIterations: 1,
+      },
       contextWindowTokens: 1,
     });
     expect(tinyBudget.maxPromptTokens).toBeGreaterThanOrEqual(1);
