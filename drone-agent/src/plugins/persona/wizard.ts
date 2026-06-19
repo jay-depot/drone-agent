@@ -40,8 +40,6 @@ import type {
 } from 'drone-core';
 import { parsePersonaMd } from './loader.js';
 
-const PERSONA_DIR = path.join('.drone-agent', 'personas');
-
 type PersonaCreateInput = {
   scope?: 'project' | 'user';
   id?: string;
@@ -77,7 +75,7 @@ function buildPersonaSystemPrompt(): string {
     '---',
     'name: <Display Name>',
     'description: <one-line summary>',
-    'color: <optional TUI tint, e.g. "cyan", "#ff8800", "magenta">',
+    'color: <optional TUI tint, use "#rrggbb" format only. For example, "#00ffff">',
     'fragments:',
     '  - <optional list of short prompt fragments>',
     '---',
@@ -236,7 +234,7 @@ function resolvePersonaCapability(
   return { reloadPersonas: cap.reloadPersonas };
 }
 
-function resolveLogger(ctx: WizardContext): DroneLogger {
+function resolveLogger(): DroneLogger {
   // We don't have direct access to the logger from the workflow
   // context, so we create a console logger scoped to the wizard.
   // This is the same approach the rest of the plugin uses via
@@ -297,7 +295,7 @@ export const personaCreateWorkflow: DroneWorkflow = {
   },
   run: async (rawInput, ctx) => {
     const input = (rawInput ?? {}) as PersonaCreateInput;
-    const logger = resolveLogger(ctx);
+    const logger = resolveLogger();
 
     // 1. Scope
     const scope = await askScope(ctx.elicit, input.scope);
@@ -396,7 +394,7 @@ export const personaCreateWorkflow: DroneWorkflow = {
     }
 
     // The kick message is fed back into the chat as a synthetic user
-    // turn so the assistant can summarise the outcome. We deliberately
+    // turn so the assistant can summarize the outcome. We deliberately
     // do NOT instruct the assistant to activate the persona: that is
     // a deliberate user action. Instead we report state (file written,
     // active persona unchanged, uiColor set or unset) and ask for a
