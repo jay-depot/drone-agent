@@ -1,0 +1,5 @@
+packages:
+  - drone-agent
+  - drone-core
+  - drone-beacon
+  - drone-coordinator

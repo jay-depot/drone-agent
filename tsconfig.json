@@ -1,0 +1,4 @@
+{
+  "files": [],
+  "references": [{ "path": "./drone-core" }, { "path": "./drone-agent" }]
+}
