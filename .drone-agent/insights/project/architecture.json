@@ -14,5 +14,9 @@
   {
     "timestamp": "2026-06-22T21:58:00.060Z",
     "insight": "The config system currently has no write path — config is loaded at startup and is read-only at runtime. A config plugin needs to bridge this gap by writing back to the config files on disk. The plugin will need access to the config layers (file paths) which are currently only available in main() before the engine is created."
+  },
+  {
+    "timestamp": "2026-06-22T22:10:02.396Z",
+    "insight": "The config plugin re-discovers layers from disk independently of the engine's config, which is necessary because the engine's config is set at init time and doesn't reflect disk changes. However, this means config.get and registration.getConfig() can disagree if the engine was initialized with a different config than what's on disk. The plugin handles this by merging discovered layers itself for config.get."
   }
 ]
