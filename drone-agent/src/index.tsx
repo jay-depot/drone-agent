@@ -3,6 +3,7 @@ import {
   type DroneElicitation,
   type DroneElicitationAnswers,
   type DroneElicitationQuestion,
+  type DroneLlmProvider,
 } from 'drone-core';
 import { createInterface, type Interface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
@@ -15,6 +16,7 @@ import type { DronePersonaCapability } from './plugins/persona/index.js';
 import { createTui } from './tui/index.js';
 import { ModelPicker } from './tui/components/ModelPicker.js';
 import { createConversationService } from './runtime/conversation-service.js';
+import { createContextBudgetService } from './runtime/context-budget-service.js';
 import { loadAgentConfig } from './runtime/config.js';
 import { createDronePluginEngine } from './runtime/plugin-engine.js';
 import { createSessionManager } from './runtime/session-manager.js';
@@ -582,24 +584,51 @@ async function main(): Promise<void> {
   const model =
     invocation.options.modelOverride ?? resolvedConfig.config.ollama.model;
   const sessionManager = createSessionManager();
-  // The compaction plugin needs the live engine handle, but the engine is
-  // only constructable once we have the full plugin list. Use a deferred
-  // getter to break the cycle: the engine is assigned to a `let` binding
-  // after construction, and the compaction plugin reads it on demand.
+
+  // The budget service needs renderPromptFragments from the engine, but the
+  // engine is only constructable once we have the full plugin list. Use a
+  // deferred getter to break the cycle.
   const engineRef: {
     current: ReturnType<typeof createDronePluginEngine> | undefined;
   } = {
     current: undefined,
   };
-  const plugins = createBuiltInPlugins({
-    engine: () => {
-      if (!engineRef.current) {
-        throw new Error('compaction plugin accessed engine before init.');
+  const getEngine = (): ReturnType<typeof createDronePluginEngine> => {
+    if (!engineRef.current) {
+      throw new Error('engine accessed before init.');
+    }
+    return engineRef.current;
+  };
+
+  // Create the budget service with a lazy renderPromptFragments getter.
+  const budgetService = createContextBudgetService({
+    config: resolvedConfig.config,
+    renderPromptFragments: () => getEngine().renderPromptFragments(),
+    getProvider: () => {
+      const ollama = getEngine().getCapability<{ provider: DroneLlmProvider }>(
+        'ollama'
+      );
+      if (!ollama) {
+        throw new Error('Ollama provider is not available.');
       }
-      return engineRef.current;
+      return ollama.provider;
     },
+    getModel: () => model,
+  });
+
+  const plugins = createBuiltInPlugins({
+    budgetService,
     sessionManager,
     getModel: () => model,
+    getProvider: () => {
+      const ollama = getEngine().getCapability<{ provider: DroneLlmProvider }>(
+        'ollama'
+      );
+      if (!ollama) {
+        throw new Error('Ollama provider is not available.');
+      }
+      return ollama.provider;
+    },
   });
   const engine = createDronePluginEngine({
     plugins,
@@ -613,6 +642,7 @@ async function main(): Promise<void> {
     config: resolvedConfig.config,
     logger,
     sessionManager,
+    budgetService,
   });
   const registeredPlugins = await engine.initialize();
 

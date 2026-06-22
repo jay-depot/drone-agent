@@ -4,7 +4,7 @@
   "description": "Local CLI runtime for the drone coding agent",
   "type": "module",
   "bin": {
-    "drone-agent": "./dist/index.js"
+    "drone-agent": "./bin/drone-agent"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

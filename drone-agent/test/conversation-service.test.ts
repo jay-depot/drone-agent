@@ -9,6 +9,8 @@ import {
 } from 'drone-core';
 import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { createConversationService } from '../src/runtime/conversation-service.js';
+import { createContextBudgetService } from '../src/runtime/context-budget-service.js';
+import type { ContextBudgetService } from '../src/runtime/context-budget-service.js';
 import { createSessionManager } from '../src/runtime/session-manager.js';
 import { silentLogger } from './helpers.js';
 
@@ -78,6 +80,18 @@ function makeProvider(
   };
 }
 
+function makeBudgetService(
+  provider: DroneLlmProvider,
+  promptFragments?: string[]
+): ContextBudgetService {
+  return createContextBudgetService({
+    config: createDefaultAgentConfig(),
+    renderPromptFragments: async () => promptFragments ?? [],
+    getProvider: () => provider,
+    getModel: () => 'fake',
+  });
+}
+
 describe('createConversationService — tool error handling', () => {
   it('returns a successful tool result to the model when the tool succeeds', async () => {
     const engine = makeEngine({
@@ -107,12 +121,14 @@ describe('createConversationService — tool error handling', () => {
 
     const config = createDefaultAgentConfig();
     const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
       model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
+      budgetService,
     });
     // Inject provider via the engine's ollama capability.
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
@@ -166,12 +182,14 @@ describe('createConversationService — tool error handling', () => {
 
     const config = createDefaultAgentConfig();
     const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
       model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
+      budgetService,
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
@@ -213,12 +231,14 @@ describe('createConversationService — tool error handling', () => {
 
     const config = createDefaultAgentConfig();
     const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
       model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
+      budgetService,
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
@@ -268,12 +288,14 @@ describe('createConversationService — tool error handling', () => {
 
     const config = createDefaultAgentConfig();
     const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
       model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
+      budgetService,
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
@@ -306,12 +328,14 @@ describe('createConversationService — tool error handling', () => {
     ]);
     const config = createDefaultAgentConfig();
     const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
       model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
+      budgetService,
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
@@ -370,12 +394,14 @@ describe('createConversationService — iteration limits', () => {
     const config = createDefaultAgentConfig();
     config.session.maxToolIterations = 3;
     const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
       model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
+      budgetService,
       // Push the stuck threshold well above the iteration limit so the
       // depth limit (not the stuck detector) is what trips first.
       stuckErrorThreshold: 100,
@@ -401,12 +427,14 @@ describe('createConversationService — iteration limits', () => {
     const config = createDefaultAgentConfig();
     config.session.maxToolIterations = 50; // would never fire on its own
     const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
       model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
+      budgetService,
       maxToolIterations: 2,
       stuckErrorThreshold: 100,
     });
@@ -447,12 +475,14 @@ describe('createConversationService — stuck detection', () => {
     const config = createDefaultAgentConfig();
     config.session.maxToolIterations = 50;
     const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
       model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
+      budgetService,
       // Tighten the threshold for a deterministic test.
       stuckErrorThreshold: 3,
     });
@@ -496,12 +526,14 @@ describe('createConversationService — stuck detection', () => {
     const config = createDefaultAgentConfig();
     config.session.maxToolIterations = 50;
     const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
       model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
+      budgetService,
       stuckErrorThreshold: 3,
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
@@ -568,12 +600,14 @@ describe('createConversationService — stuck detection', () => {
     const config = createDefaultAgentConfig();
     config.session.maxToolIterations = 50;
     const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
       model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
+      budgetService,
       stuckErrorThreshold: 3,
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (

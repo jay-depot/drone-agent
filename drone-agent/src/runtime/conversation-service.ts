@@ -1,14 +1,13 @@
 import type {
   DroneAgentConfig,
   DroneChatMessage,
-  DroneContextWindowInfo,
   DroneLlmProvider,
   DroneLogger,
   DroneSessionSafetyTrimPayload,
 } from 'drone-core';
 import type { DronePluginEngine } from './plugin-engine.js';
 import type { DroneSessionManager } from './session-manager.js';
-import { estimateSessionBudget } from './token-estimator.js';
+import type { ContextBudgetService } from './context-budget-service.js';
 
 type OllamaCapability = {
   provider: DroneLlmProvider;
@@ -41,6 +40,7 @@ type CreateConversationServiceOptions = {
   config: DroneAgentConfig;
   logger: DroneLogger;
   sessionManager: DroneSessionManager;
+  budgetService: ContextBudgetService;
   maxToolIterations?: number;
   /**
    * Number of consecutive tool errors with the same (name, errorCode) before
@@ -55,6 +55,7 @@ export function createConversationService({
   config,
   logger,
   sessionManager,
+  budgetService,
   maxToolIterations,
   stuckErrorThreshold = 3,
 }: CreateConversationServiceOptions): ConversationService {
@@ -63,16 +64,7 @@ export function createConversationService({
   const effectiveMaxToolIterations =
     maxToolIterations ?? config.session.maxToolIterations ?? 50;
   let hasWarnedAboutSafetyTrim = false;
-  let contextWindowInfoPromise: Promise<DroneContextWindowInfo> | undefined;
   let currentModel = initialModel;
-
-  function buildSystemMessages(): DroneChatMessage[] {
-    const base: DroneChatMessage[] = [
-      { role: 'system', content: config.systemPrompt },
-    ];
-    // Plugin prompt fragments come after the base system prompt.
-    return base;
-  }
 
   function getProvider(): DroneLlmProvider {
     const ollama = engine.getCapability<OllamaCapability>('ollama');
@@ -83,94 +75,44 @@ export function createConversationService({
     return ollama.provider;
   }
 
-  async function resolveContextWindowInfo(
-    provider: DroneLlmProvider
-  ): Promise<DroneContextWindowInfo> {
-    contextWindowInfoPromise ??= (async () => {
-      const probed = await provider.getContextWindowInfo?.({
-        model: currentModel,
-      });
-      if (probed) {
-        return probed;
-      }
-
-      return {
-        model: currentModel,
-        contextWindowTokens: config.session.contextWindowTokens,
-        source: 'config',
-      };
-    })();
-
-    return contextWindowInfoPromise;
-  }
-
-  function computeRequiredDropTurnCount(input: {
-    systemMessages: DroneChatMessage[];
-    tools: ReturnType<DronePluginEngine['listTools']>;
-    contextWindowTokens: number;
-    turns: ReturnType<DroneSessionManager['getTurns']>;
-  }): number | null {
-    for (
-      let dropTurnCount = 1;
-      dropTurnCount <= input.turns.length;
-      dropTurnCount += 1
-    ) {
-      const candidateBudget = estimateSessionBudget({
-        systemMessages: input.systemMessages,
-        turns: input.turns.slice(dropTurnCount),
-        tools: input.tools,
-        sessionConfig: config.session,
-        contextWindowTokens: input.contextWindowTokens,
-      });
-
-      if (!candidateBudget.requiresSafetyTrim) {
-        return dropTurnCount;
-      }
-    }
-
-    return null;
-  }
-
   async function ensureSafeBudget(
-    provider: DroneLlmProvider,
     systemMessages: DroneChatMessage[],
     tools: ReturnType<DronePluginEngine['listTools']>
   ): Promise<void> {
-    const contextWindow = await resolveContextWindowInfo(provider);
+    const contextWindow = await budgetService.resolveContextWindow();
 
     while (true) {
       const currentTurns = sessionManager.getTurns();
-      const budget = estimateSessionBudget({
+      const evaluation = budgetService.evaluateSafetyTrim({
         systemMessages,
+        contextWindow,
         turns: currentTurns,
         tools,
-        sessionConfig: config.session,
-        contextWindowTokens: contextWindow.contextWindowTokens,
       });
 
-      if (!budget.requiresSafetyTrim) {
-        return;
-      }
-
-      const requiredDropTurnCount = computeRequiredDropTurnCount({
-        systemMessages,
-        tools,
-        contextWindowTokens: contextWindow.contextWindowTokens,
-        turns: currentTurns,
-      });
-
-      if (requiredDropTurnCount === null) {
+      if (evaluation === null) {
         throw new Error(
           `Session exceeds the safe context budget for ${currentModel}, and no conversational turns remain to drop. Use /clear to reset the session.`
         );
       }
 
+      if (!evaluation.requiresTrim) {
+        return;
+      }
+
+      const snapshot = budgetService.getBudgetSnapshot({
+        systemMessages,
+        contextWindow,
+        turns: currentTurns,
+        tools,
+      });
+
       const payload: DroneSessionSafetyTrimPayload = {
         model: currentModel,
         contextWindow,
-        budget,
+        budget: snapshot.budget,
         currentTurns,
-        proposedDropTurnCount: requiredDropTurnCount,
+        proposedDropTurnCount: evaluation.requiredDropTurnCount,
       };
 
       await engine.runSessionSafetyTrimWillRunHooks(payload);
@@ -198,31 +140,17 @@ export function createConversationService({
   }
 
   async function estimateCurrentContextUsagePercent(): Promise<number> {
-    const provider = getProvider();
+    const systemMessages = await budgetService.buildSystemMessages();
+    const contextWindow = await budgetService.resolveContextWindow();
     const tools = engine.listTools();
-    const systemMessages = [
-      ...buildSystemMessages(),
-      ...(await engine.renderPromptFragments()).map(
-        content => ({ role: 'system', content }) satisfies DroneChatMessage
-      ),
-    ];
-    const contextWindow = await resolveContextWindowInfo(provider);
-    const budget = estimateSessionBudget({
+    const turns = sessionManager.getTurns();
+
+    return budgetService.getEstimatedContextUsagePercent({
       systemMessages,
-      turns: sessionManager.getTurns(),
+      contextWindow,
+      turns,
       tools,
-      sessionConfig: config.session,
-      contextWindowTokens: contextWindow.contextWindowTokens,
     });
-
-    const ratio =
-      budget.estimatedPromptTokens / contextWindow.contextWindowTokens;
-    const percent = Math.round(ratio * 100);
-    if (!Number.isFinite(percent) || percent < 0) {
-      return 0;
-    }
-
-    return Math.min(percent, 100);
   }
 
   async function executeToolSafely(
@@ -273,13 +201,8 @@ export function createConversationService({
       };
 
       while (true) {
-        const systemMessages = [
-          ...buildSystemMessages(),
-          ...(await engine.renderPromptFragments()).map(
-            content => ({ role: 'system', content }) satisfies DroneChatMessage
-          ),
-        ];
-        await ensureSafeBudget(provider, systemMessages, tools);
+        const systemMessages = await budgetService.buildSystemMessages();
+        await ensureSafeBudget(systemMessages, tools);
 
         const response = await provider.chat({
           model: currentModel,
@@ -405,7 +328,7 @@ export function createConversationService({
     getEstimatedContextUsagePercent: () => estimateCurrentContextUsagePercent(),
     setModel: (newModel: string) => {
       currentModel = newModel;
-      contextWindowInfoPromise = undefined; // Reset so next call re-probes
+      budgetService.resetContextWindowCache(); // Reset so next call re-probes
     },
     getModel: () => currentModel,
   };

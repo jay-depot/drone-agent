@@ -12,7 +12,8 @@ import {
 } from 'drone-core';
 import { createCompactionPlugin } from '../src/plugins/compaction/index.js';
 import { createSessionManager } from '../src/runtime/session-manager.js';
-import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
+import { createContextBudgetService } from '../src/runtime/context-budget-service.js';
+import type { ContextBudgetService } from '../src/runtime/context-budget-service.js';
 import { silentLogger } from './helpers.js';
 
 // ---------------------------------------------------------------------------
@@ -65,6 +66,20 @@ function makeProvider({
   };
 }
 
+function makeBudgetService(options: {
+  provider: DroneLlmProvider;
+  promptFragments?: string[];
+  config: DroneAgentConfig;
+}): ContextBudgetService {
+  const { provider, promptFragments = [], config } = options;
+  return createContextBudgetService({
+    config,
+    renderPromptFragments: async () => promptFragments ?? [],
+    getProvider: () => provider,
+    getModel: () => 'fake',
+  });
+}
+
 type HookBucket = {
   onPluginsLoaded: Array<() => Promise<void>>;
   onSessionStart: Array<() => Promise<void>>;
@@ -78,37 +93,6 @@ type HookBucket = {
     (payload: DroneSessionSafetyTrimPayload) => Promise<void>
   >;
 };
-
-function makeEngine(options: {
-  provider: DroneLlmProvider;
-  promptFragments?: string[];
-  config: DroneAgentConfig;
-}): DronePluginEngine {
-  const { provider, promptFragments = [] } = options;
-  return {
-    initialize: async () => [],
-    runHooks: async () => {},
-    runSessionSafetyTrimWillRunHooks: async () => {},
-    runSessionSafetyTrimAppliedHooks: async () => {},
-    renderPromptFragments: async () => promptFragments,
-    getTool: () => undefined,
-    executeTool: async () => '',
-    listTools: () => [],
-    getCapability: <T>(id: string) =>
-      id === 'ollama' ? ({ provider } as unknown as T) : undefined,
-    listPlugins: () => [],
-    getRegisteredPluginCount: () => 0,
-    getRegisteredToolCount: () => 0,
-    getHelpSnippets: () => [],
-    setElicitation: () => {},
-    getElicitation: () => undefined,
-    runWorkflow: async () => {
-      throw new Error('runWorkflow not used in compaction tests');
-    },
-    dispatchSlashCommand: async () => false,
-    getSlashCommands: () => [],
-  };
-}
 
 type RegistrationCapture = {
   registration: DronePluginRegistration;
@@ -175,10 +159,14 @@ async function runBeforePrompt(capture: RegistrationCapture): Promise<void> {
 
 describe('createCompactionPlugin', () => {
   it('reports the expected metadata', () => {
+    const config = makeConfig();
+    const provider = makeProvider();
+    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      engine: {} as unknown as DronePluginEngine,
+      budgetService,
       sessionManager: createSessionManager(),
       getModel: () => 'fake',
+      getProvider: () => provider,
     });
     expect(plugin.metadata).toMatchObject({
       id: 'compaction',
@@ -190,11 +178,12 @@ describe('createCompactionPlugin', () => {
   it('registers help text and a CompactionCapability', async () => {
     const config = makeConfig();
     const provider = makeProvider();
-    const engine = makeEngine({ provider, config });
+    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      engine,
+      budgetService,
       sessionManager: createSessionManager(),
       getModel: () => 'fake',
+      getProvider: () => provider,
     });
 
     let helpRegistered: string | undefined;
@@ -256,11 +245,12 @@ describe('createCompactionPlugin', () => {
 
     const config = makeConfig({ enabled: false });
     const provider = makeProvider();
-    const engine = makeEngine({ provider, config });
+    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      engine,
+      budgetService,
       sessionManager,
       getModel: () => 'fake',
+      getProvider: () => provider,
     });
 
     const capture = await captureRegistration(plugin, config);
@@ -276,11 +266,12 @@ describe('createCompactionPlugin', () => {
     const sessionManager = createSessionManager();
     const config = makeConfig();
     const provider = makeProvider();
-    const engine = makeEngine({ provider, config });
+    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      engine,
+      budgetService,
       sessionManager,
       getModel: () => 'fake',
+      getProvider: () => provider,
     });
 
     const capture = await captureRegistration(plugin, config);
@@ -301,11 +292,12 @@ describe('createCompactionPlugin', () => {
       minTurnsToCompact: 2,
     });
     const provider = makeProvider();
-    const engine = makeEngine({ provider, config });
+    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      engine,
+      budgetService,
       sessionManager,
       getModel: () => 'fake',
+      getProvider: () => provider,
     });
 
     const capture = await captureRegistration(plugin, config);
@@ -330,11 +322,12 @@ describe('createCompactionPlugin', () => {
     });
 
     const provider = makeProvider({ contextWindow: 200 });
-    const engine = makeEngine({ provider, config });
+    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      engine,
+      budgetService,
       sessionManager,
       getModel: () => 'fake',
+      getProvider: () => provider,
     });
 
     const capture = await captureRegistration(plugin, config);
@@ -372,11 +365,12 @@ describe('createCompactionPlugin', () => {
       contextWindow: 200,
       chatResponses: [{ message: 'A concise summary.' }],
     });
-    const engine = makeEngine({ provider, config });
+    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      engine,
+      budgetService,
       sessionManager,
       getModel: () => 'fake',
+      getProvider: () => provider,
     });
 
     const capture = await captureRegistration(plugin, config);
@@ -414,11 +408,12 @@ describe('createCompactionPlugin', () => {
       contextWindow: 200,
       chatResponses: [{ message: '' }], // empty -> "Ollama returned an empty summary."
     });
-    const engine = makeEngine({ provider, config });
+    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      engine,
+      budgetService,
       sessionManager,
       getModel: () => 'fake',
+      getProvider: () => provider,
     });
 
     const capture = await captureRegistration(plugin, config);
@@ -463,11 +458,12 @@ describe('createCompactionPlugin', () => {
         })
       ),
     };
-    const engine = makeEngine({ provider, config });
+    const budgetService = makeBudgetService({ provider, config, promptFragments: [] });
     const plugin = createCompactionPlugin({
-      engine,
+      budgetService,
       sessionManager,
       getModel: () => 'fake',
+      getProvider: () => provider,
     });
 
     const capture = await captureRegistration(plugin, config);
@@ -504,11 +500,12 @@ describe('createCompactionPlugin', () => {
       contextWindow: 200,
       chatResponses: [{ message: 'forced summary' }],
     });
-    const engine = makeEngine({ provider, config });
+    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      engine,
+      budgetService,
       sessionManager,
       getModel: () => 'fake',
+      getProvider: () => provider,
     });
 
     const capture = await captureRegistration(plugin, config);
@@ -523,25 +520,7 @@ describe('createCompactionPlugin', () => {
     expect(sessionManager.getSummaryTurns()).toHaveLength(1);
   });
 
-  it('resolves a lazy engine getter for circular initialization', async () => {
-    const sessionManager = createSessionManager();
-    const config = makeConfig();
-    const provider = makeProvider();
-    const engine = makeEngine({ provider, config });
-
-    const engineGetter = vi.fn(() => engine);
-    const plugin = createCompactionPlugin({
-      engine: engineGetter,
-      sessionManager,
-      getModel: () => 'fake',
-    });
-
-    const capture = await captureRegistration(plugin, config);
-    await runBeforePrompt(capture);
-    expect(engineGetter).toHaveBeenCalled();
-  });
-
-  it('throws a clear error when the ollama capability is missing', async () => {
+  it('throws a clear error when the ollama provider is missing', async () => {
     const sessionManager = createSessionManager();
     for (let i = 0; i < 5; i++) {
       sessionManager.appendUserMessage(`u${i} `.repeat(400));
@@ -555,15 +534,13 @@ describe('createCompactionPlugin', () => {
       summaryMaxTokens: 200,
     });
 
-    const engineWithoutOllama: DronePluginEngine = {
-      ...makeEngine({ provider: makeProvider(), config }),
-      getCapability: () => undefined,
-    };
-
     const plugin = createCompactionPlugin({
-      engine: engineWithoutOllama,
+      budgetService: {} as unknown as ContextBudgetService,
       sessionManager,
       getModel: () => 'fake',
+      getProvider: () => {
+        throw new Error('Ollama provider is not available.');
+      },
     });
 
     const capture = await captureRegistration(plugin, config);

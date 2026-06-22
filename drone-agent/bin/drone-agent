@@ -1,0 +1,4 @@
+#!/usr/bin/env node
+
+// We just need to import `./dist/index.js` to get started.
+import '../dist/index.js';

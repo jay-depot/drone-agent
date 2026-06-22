@@ -27,10 +27,7 @@ type PersonaCap = {
   onPersonaChange: (callback: PersonaCallback) => void;
 };
 
-function makeOptions(
-  personaCap?: PersonaCap,
-  activePersona?: { id: string; uiColor?: string } | null
-): DroneTuiOptions {
+function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
   let model = 'llama3.1:latest';
   const cap = personaCap;
   const engine = {
@@ -38,8 +35,11 @@ function makeOptions(
     listPlugins: () => [],
     getRegisteredPluginCount: () => 0,
     getRegisteredToolCount: () => 0,
-    getCapability: (id: string): unknown =>
-      id === 'persona' ? cap : undefined,
+    getCapability: ((_id: string) => (_id === 'persona' ? cap : undefined)) as <
+      T,
+    >(
+      pluginId: string
+    ) => T | undefined,
     runHooks: async (): Promise<void> => {},
     executeTool: async (): Promise<string> => 'ok',
     getHelpSnippets: (): string[] => [],
@@ -57,7 +57,6 @@ function makeOptions(
       },
       getModel: (): string => model,
     },
-    activePersona,
   };
 }
 

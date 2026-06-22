@@ -1,6 +1,5 @@
 import {
   estimateMessageTokens,
-  estimateSessionBudget,
   estimateTurnTokens,
   type DroneChatMessage,
   type DroneCompactionConfig,
@@ -9,19 +8,14 @@ import {
   type DronePlugin,
   type DroneSessionTurn,
 } from 'drone-core';
-import type { DronePluginEngine } from '../../runtime/plugin-engine.js';
+import type { ContextBudgetService } from '../../runtime/context-budget-service.js';
 import type { DroneSessionManager } from '../../runtime/session-manager.js';
-
-type OllamaCapability = {
-  provider: DroneLlmProvider;
-};
 
 type RegistrationContext = {
   config: DroneCompactionConfig;
-  getEngine: () => DronePluginEngine;
-  getSessionManager: () => DroneSessionManager;
   getProvider: () => DroneLlmProvider;
   getModel: () => string;
+  sessionManager: DroneSessionManager;
   logger: DroneLogger;
   compactionInFlight: { value: boolean };
 };
@@ -83,17 +77,19 @@ function summarizeTokenCounts(input: {
     0
   );
 
-  const promptTokens = estimateSessionBudget({
-    systemMessages: [...input.baseSystemMessages, ...input.fragmentMessages],
-    turns: input.turns,
-    tools: [],
-    sessionConfig: {
-      contextWindowTokens: input.contextWindowTokens,
-      responseReserveTokens: 0,
-      maxToolIterations: 50,
-    },
-    contextWindowTokens: input.contextWindowTokens,
-  }).estimatedPromptTokens;
+  const allSystemMessages = [
+    ...input.baseSystemMessages,
+    ...input.fragmentMessages,
+  ];
+  const systemTokens = allSystemMessages.reduce(
+    (sum, m) => sum + estimateMessageTokens(m),
+    0
+  );
+  const sessionTokens = input.turns.reduce(
+    (sum, turn) => sum + estimateTurnTokens(turn),
+    0
+  );
+  const promptTokens = systemTokens + sessionTokens;
 
   return {
     usagePercent:
@@ -114,14 +110,13 @@ async function maybeCompact(input: {
   baseSystemMessages: DroneChatMessage[];
   fragmentMessages: DroneChatMessage[];
 }): Promise<void> {
-  const { config, getSessionManager, getProvider, getModel, logger } =
+  const { config, sessionManager, getProvider, getModel, logger } =
     input.context;
 
   if (!config.enabled) {
     return;
   }
 
-  const sessionManager = getSessionManager();
   const turns = sessionManager.getTurns();
 
   if (turns.length === 0) {
@@ -250,29 +245,24 @@ export type CompactionCapability = {
 
 export type CompactionPluginDeps = {
   /**
-   * Lazy getter that resolves the live plugin engine. The engine is created
-   * after the plugin list is registered, so the compaction plugin captures
-   * a getter rather than a direct reference. The CLI wires the getter by
-   * creating the engine with `createBuiltInPlugins({ engine: () => engine,
-   * ... })` after it has the engine handle.
+   * The context budget service, used to build system messages and resolve
+   * context-window info. The compaction plugin uses this to get the data
+   * it needs for its own summarization decisions, without reaching into
+   * the plugin engine directly.
    */
-  engine: DronePluginEngine | (() => DronePluginEngine);
+  budgetService: ContextBudgetService;
   sessionManager: DroneSessionManager;
   getModel: () => string;
+  getProvider: () => DroneLlmProvider;
 };
-
-function resolveEngine(
-  engine: DronePluginEngine | (() => DronePluginEngine)
-): DronePluginEngine {
-  return typeof engine === 'function' ? engine() : engine;
-}
 
 export function createCompactionPlugin(
   deps: CompactionPluginDeps
 ): DronePlugin {
   const sessionManager = deps.sessionManager;
   const getModel = deps.getModel;
-  const getEngine = (): DronePluginEngine => resolveEngine(deps.engine);
+  const getProvider = deps.getProvider;
+  const budgetService = deps.budgetService;
 
   return {
     metadata: {
@@ -288,16 +278,9 @@ export function createCompactionPlugin(
 
       const context: RegistrationContext = {
         config,
-        getEngine: () => resolveEngine(deps.engine),
-        getSessionManager: () => sessionManager,
-        getProvider: () => {
-          const ollama = getEngine().getCapability<OllamaCapability>('ollama');
-          if (!ollama) {
-            throw new Error('Ollama provider is not available.');
-          }
-          return ollama.provider;
-        },
+        getProvider,
         getModel,
+        sessionManager,
         logger: registration.logger,
         compactionInFlight: { value: false },
       };
@@ -315,15 +298,11 @@ export function createCompactionPlugin(
         }
         context.compactionInFlight.value = true;
 
+        const systemMessages = await budgetService.buildSystemMessages();
         const baseSystemMessages: DroneChatMessage[] = [
           { role: 'system', content: registration.getConfig().systemPrompt },
         ];
-        const fragmentMessages = (
-          await getEngine().renderPromptFragments()
-        ).map(
-          (content: string) =>
-            ({ role: 'system', content }) satisfies DroneChatMessage
-        );
+        const fragmentMessages = systemMessages.slice(1); // Everything after the base system prompt
 
         await maybeCompact({
           context,
@@ -341,15 +320,11 @@ export function createCompactionPlugin(
             return;
           }
           context.compactionInFlight.value = true;
+          const systemMessages = await budgetService.buildSystemMessages();
           const baseSystemMessages: DroneChatMessage[] = [
             { role: 'system', content: registration.getConfig().systemPrompt },
           ];
-          const fragmentMessages = (
-            await getEngine().renderPromptFragments()
-          ).map(
-            (content: string) =>
-              ({ role: 'system', content }) satisfies DroneChatMessage
-          );
+          const fragmentMessages = systemMessages.slice(1);
           await maybeCompact({
             context,
             baseSystemMessages,
