@@ -58,6 +58,10 @@ export type DroneMemoryConfig = {
   enabled: boolean;
 };
 
+export type DroneLogConfig = {
+  enabled: boolean;
+};
+
 export type DroneLspSpawnServerConfig = {
   transport?: 'stdio';
   language?: string;
@@ -154,6 +158,7 @@ export type DroneAgentConfig = {
   mcp: DroneMcpConfig;
   compaction: DroneCompactionConfig;
   memory: DroneMemoryConfig;
+  log: DroneLogConfig;
 };
 
 export type PartialDroneAgentConfig = Partial<{
@@ -166,6 +171,7 @@ export type PartialDroneAgentConfig = Partial<{
   mcp: Partial<DroneMcpConfig>;
   compaction: Partial<DroneCompactionConfig>;
   memory: Partial<DroneMemoryConfig>;
+  log: Partial<DroneLogConfig>;
 }>;
 
 export type DroneConfigScope = 'default' | 'user' | 'project';
@@ -391,6 +397,12 @@ export type DronePersonaDefinition = {
    * compatible color string works (named, hex, or 256-color code).
    */
   uiColor?: string;
+  /**
+   * The scope this persona was loaded from. `'user'` means it came from
+   * `~/.drone-agent/personas/`, `'project'` means it came from
+   * `<project>/.drone-agent/personas/`.
+   */
+  scope?: 'user' | 'project';
 };
 
 export type DroneMcpError = {
@@ -754,6 +766,9 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
     memory: {
       enabled: true,
     },
+    log: {
+      enabled: true,
+    },
   };
 }
 
@@ -806,6 +821,12 @@ export function applyAgentConfigLayer(
           ...layer.memory,
         }
       : baseConfig.memory,
+    log: layer.log
+      ? {
+          ...baseConfig.log,
+          ...layer.log,
+        }
+      : baseConfig.log,
   };
 }
 

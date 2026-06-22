@@ -1,0 +1,18 @@
+/**
+ * Word lists for generating random log filenames.
+ * Each session gets a unique filename like `amber-fox-1687456789000.json`.
+ */
+
+export const ADJECTIVES = [
+  'amber', 'bold', 'bright', 'calm', 'crisp', 'dark', 'deep', 'eager',
+  'fast', 'golden', 'happy', 'icy', 'jolly', 'keen', 'lazy', 'mellow',
+  'neat', 'odd', 'proud', 'quick', 'rustic', 'shy', 'sleek', 'swift',
+  'tidy', 'upbeat', 'vivid', 'warm', 'young', 'zesty',
+] as const;
+
+export const NOUNS = [
+  'ant', 'bear', 'bison', 'cat', 'crane', 'deer', 'dove', 'eagle',
+  'elm', 'fox', 'goat', 'hawk', 'ibis', 'jay', 'koala', 'lion',
+  'moth', 'newt', 'owl', 'panda', 'quail', 'raven', 'seal', 'swan',
+  'toad', 'urchin', 'viper', 'wolf', 'yak', 'zebra',
+] as const;

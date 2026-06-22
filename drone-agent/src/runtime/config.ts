@@ -856,6 +856,27 @@ function parsePartialConfig(
     parsed.memory = memory;
   }
 
+  if ('log' in raw) {
+    if (!isRecord(raw.log)) {
+      throw new Error(
+        `Invalid config in ${source}: log must be an object.`
+      );
+    }
+
+    const log: PartialDroneAgentConfig['log'] = {};
+
+    if ('enabled' in raw.log) {
+      if (typeof raw.log.enabled !== 'boolean') {
+        throw new Error(
+          `Invalid config in ${source}: log.enabled must be a boolean.`
+        );
+      }
+      log.enabled = raw.log.enabled;
+    }
+
+    parsed.log = log;
+  }
+
   return parsed;
 }
 

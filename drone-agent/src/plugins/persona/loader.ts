@@ -19,7 +19,11 @@ const CONFIG_DIR = '.drone-agent';
  *   ---
  *   System prompt override body (optional)
  */
-function _parsePersonaMdInternal(id: string, content: string): DronePersonaDefinition {
+function _parsePersonaMdInternal(
+  id: string,
+  content: string,
+  scope?: 'user' | 'project'
+): DronePersonaDefinition {
   const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!frontmatterMatch) {
     // No frontmatter — use the whole file as the system prompt override
@@ -28,6 +32,7 @@ function _parsePersonaMdInternal(id: string, content: string): DronePersonaDefin
       name: id,
       description: `Persona: ${id}`,
       systemPromptOverride: content.trim() || undefined,
+      scope,
     };
   }
 
@@ -38,6 +43,7 @@ function _parsePersonaMdInternal(id: string, content: string): DronePersonaDefin
     id,
     name: id,
     description: `Persona: ${id}`,
+    scope,
   };
 
   // Parse YAML-like frontmatter (simple line-by-line, no nested objects beyond arrays)
@@ -101,7 +107,8 @@ function _parsePersonaMdInternal(id: string, content: string): DronePersonaDefin
  * Load all persona .md files from a given directory.
  */
 async function loadPersonasFromDir(
-  dir: string
+  dir: string,
+  scope: 'user' | 'project'
 ): Promise<DronePersonaDefinition[]> {
   let entries: string[];
   try {
@@ -115,7 +122,7 @@ async function loadPersonasFromDir(
     if (!entry.endsWith('.md')) continue;
     const id = entry.slice(0, -3); // strip .md
     const content = await readFile(path.join(dir, entry), 'utf-8');
-    personas.push(_parsePersonaMdInternal(id, content));
+    personas.push(_parsePersonaMdInternal(id, content, scope));
   }
   return personas;
 }
@@ -126,8 +133,13 @@ async function loadPersonasFromDir(
  * The function does not throw on missing frontmatter — it falls back
  * to a plain system-prompt-only persona. The wizard treats the
  * presence of frontmatter + a matching id as the validation signal.
+ *
+ * Note: The exported version does not accept a scope parameter since
+ * the wizard validates before the file is written to a specific location.
+ * The scope is assigned by `loadPersonasFromDir` when the file is loaded.
  */
-export const parsePersonaMd = _parsePersonaMdInternal;
+export const parsePersonaMd = (id: string, content: string): DronePersonaDefinition =>
+  _parsePersonaMdInternal(id, content);
 
 /**
  * Load all personas from user and project directories.
@@ -139,8 +151,8 @@ export async function loadPersonas(
   const userDir = path.join(os.homedir(), CONFIG_DIR, PERSONA_DIR);
   const projectPersonaDir = path.join(projectDir, CONFIG_DIR, PERSONA_DIR);
 
-  const userPersonas = await loadPersonasFromDir(userDir);
-  const projectPersonas = await loadPersonasFromDir(projectPersonaDir);
+  const userPersonas = await loadPersonasFromDir(userDir, 'user');
+  const projectPersonas = await loadPersonasFromDir(projectPersonaDir, 'project');
 
   const map = new Map<string, DronePersonaDefinition>();
   for (const p of userPersonas) {

@@ -4,6 +4,7 @@ import {
   createCompactionPlugin,
   type CompactionPluginDeps,
 } from './compaction/index.js';
+import { createLogPlugin } from './log/index.js';
 import { execPlugin } from './exec.js';
 import { fetchPlugin } from './fetch.js';
 import { filePlugin } from './file.js';
@@ -48,7 +49,11 @@ const staticBuiltInPlugins: DronePlugin[] = [
 export function createBuiltInPlugins(
   compactionDeps: CompactionPluginDeps
 ): DronePlugin[] {
-  return [...staticBuiltInPlugins, createCompactionPlugin(compactionDeps)];
+  return [
+    ...staticBuiltInPlugins,
+    createCompactionPlugin(compactionDeps),
+    createLogPlugin(compactionDeps),
+  ];
 }
 
 // Convenience for external consumers (and lib.ts) that want the list without
@@ -60,3 +65,4 @@ export const builtInPlugins: DronePlugin[] = staticBuiltInPlugins;
 export type { CompactionPluginDeps } from './compaction/index.js';
 export type { CompactionCapability } from './compaction/index.js';
 export { createCompactionPlugin } from './compaction/index.js';
+export { createLogPlugin } from './log/index.js';
