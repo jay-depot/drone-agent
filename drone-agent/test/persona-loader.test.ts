@@ -18,16 +18,19 @@ async function withProjectDir<T>(
   }
 }
 
+/** Helper: create a persona subdirectory with a persona.md file. */
+async function writePersona(personaDir: string, id: string, content: string): Promise<void> {
+  const subDir = path.join(personaDir, id);
+  await mkdir(subDir, { recursive: true });
+  await writeFile(path.join(subDir, 'persona.md'), content, 'utf-8');
+}
+
 describe('loadPersonas — scope field', () => {
   it('sets scope to "user" for personas in the user directory', async () => {
     await withProjectDir(async dir => {
       const userPersonaDir = path.join(os.homedir(), '.drone-agent', 'personas');
       await mkdir(userPersonaDir, { recursive: true });
-      await writeFile(
-        path.join(userPersonaDir, 'coder.md'),
-        '---\nname: Coder\n---\n',
-        'utf-8'
-      );
+      await writePersona(userPersonaDir, 'coder', '---\nname: Coder\n---\n');
 
       const personas = await loadPersonas(dir);
       expect(personas.get('coder')?.scope).toBe('user');
@@ -38,11 +41,7 @@ describe('loadPersonas — scope field', () => {
     await withProjectDir(async dir => {
       const projectPersonaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(projectPersonaDir, { recursive: true });
-      await writeFile(
-        path.join(projectPersonaDir, 'reviewer.md'),
-        '---\nname: Reviewer\n---\n',
-        'utf-8'
-      );
+      await writePersona(projectPersonaDir, 'reviewer', '---\nname: Reviewer\n---\n');
 
       const personas = await loadPersonas(dir);
       expect(personas.get('reviewer')?.scope).toBe('project');
@@ -53,19 +52,11 @@ describe('loadPersonas — scope field', () => {
     await withProjectDir(async dir => {
       const userPersonaDir = path.join(os.homedir(), '.drone-agent', 'personas');
       await mkdir(userPersonaDir, { recursive: true });
-      await writeFile(
-        path.join(userPersonaDir, 'shared.md'),
-        '---\nname: Shared User\n---\n',
-        'utf-8'
-      );
+      await writePersona(userPersonaDir, 'shared', '---\nname: Shared User\n---\n');
 
       const projectPersonaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(projectPersonaDir, { recursive: true });
-      await writeFile(
-        path.join(projectPersonaDir, 'shared.md'),
-        '---\nname: Shared Project\n---\n',
-        'utf-8'
-      );
+      await writePersona(projectPersonaDir, 'shared', '---\nname: Shared Project\n---\n');
 
       const personas = await loadPersonas(dir);
       const p = personas.get('shared');
@@ -85,19 +76,15 @@ describe('loadPersonas — color field', () => {
     await withProjectDir(async dir => {
       const personaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
-      await writeFile(
-        path.join(personaDir, 'researcher.md'),
-        [
-          '---',
-          'name: Researcher',
-          'description: investigative',
-          'color: cyan',
-          '---',
-          'You investigate thoroughly.',
-          '',
-        ].join('\n'),
-        'utf-8'
-      );
+      await writePersona(personaDir, 'researcher', [
+        '---',
+        'name: Researcher',
+        'description: investigative',
+        'color: cyan',
+        '---',
+        'You investigate thoroughly.',
+        '',
+      ].join('\n'));
 
       const personas = await loadPersonas(dir);
       expect(personas.size).toBe(1);
@@ -110,11 +97,7 @@ describe('loadPersonas — color field', () => {
     await withProjectDir(async dir => {
       const personaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
-      await writeFile(
-        path.join(personaDir, 'reviewer.md'),
-        '---\nname: Reviewer\ncolor: "#ff8800"\n---\n',
-        'utf-8'
-      );
+      await writePersona(personaDir, 'reviewer', '---\nname: Reviewer\ncolor: "#ff8800"\n---\n');
 
       const personas = await loadPersonas(dir);
       expect(personas.get('reviewer')?.uiColor).toBe('#ff8800');
@@ -125,16 +108,8 @@ describe('loadPersonas — color field', () => {
     await withProjectDir(async dir => {
       const personaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
-      await writeFile(
-        path.join(personaDir, 'a.md'),
-        '---\nuiColor: red\n---\n',
-        'utf-8'
-      );
-      await writeFile(
-        path.join(personaDir, 'b.md'),
-        '---\ntint: magenta\n---\n',
-        'utf-8'
-      );
+      await writePersona(personaDir, 'a', '---\nuiColor: red\n---\n');
+      await writePersona(personaDir, 'b', '---\ntint: magenta\n---\n');
 
       const personas = await loadPersonas(dir);
       expect(personas.get('a')?.uiColor).toBe('red');
@@ -146,11 +121,7 @@ describe('loadPersonas — color field', () => {
     await withProjectDir(async dir => {
       const personaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
-      await writeFile(
-        path.join(personaDir, 'plain.md'),
-        '---\nname: Plain\n---\n',
-        'utf-8'
-      );
+      await writePersona(personaDir, 'plain', '---\nname: Plain\n---\n');
 
       const personas = await loadPersonas(dir);
       expect(personas.get('plain')?.uiColor).toBeUndefined();
@@ -163,21 +134,17 @@ describe('loadPersonas — skills field', () => {
     await withProjectDir(async dir => {
       const personaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
-      await writeFile(
-        path.join(personaDir, 'expert.md'),
-        [
-          '---',
-          'name: Expert',
-          'description: domain expert',
-          'skills:',
-          '  - code-review',
-          '  - security-audit',
-          '---',
-          'You are an expert.',
-          '',
-        ].join('\n'),
-        'utf-8'
-      );
+      await writePersona(personaDir, 'expert', [
+        '---',
+        'name: Expert',
+        'description: domain expert',
+        'skills:',
+        '  - code-review',
+        '  - security-audit',
+        '---',
+        'You are an expert.',
+        '',
+      ].join('\n'));
 
       const personas = await loadPersonas(dir);
       expect(personas.size).toBe(1);
@@ -190,11 +157,7 @@ describe('loadPersonas — skills field', () => {
     await withProjectDir(async dir => {
       const personaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
-      await writeFile(
-        path.join(personaDir, 'plain.md'),
-        '---\nname: Plain\n---\n',
-        'utf-8'
-      );
+      await writePersona(personaDir, 'plain', '---\nname: Plain\n---\n');
 
       const personas = await loadPersonas(dir);
       expect(personas.get('plain')?.skillIds).toBeUndefined();

@@ -167,14 +167,25 @@ export const selfImprovementPlugin: DronePlugin = {
           }
         }
 
-        // Write insight to parallel JSON file
-        const insightsDir = path.join(
-          baseDir,
-          INSIGHTS_DIR,
-          INSIGHTS_SUBDIR,
-          targetType
-        );
-        const filePath = path.join(insightsDir, `${targetId}.json`);
+        // Write insight to the appropriate location
+        let insightsDir: string;
+        let filePath: string;
+
+        if (targetType === 'persona') {
+          // Persona insights live in <personaDir>/<id>/insights/insights.json
+          const personaDir = path.join(baseDir, '.drone-agent', 'personas', targetId);
+          insightsDir = path.join(personaDir, 'insights');
+          filePath = path.join(insightsDir, 'insights.json');
+        } else {
+          // Skill and project insights live in .drone-agent/insights/<type>/<id>.json
+          insightsDir = path.join(
+            baseDir,
+            INSIGHTS_DIR,
+            INSIGHTS_SUBDIR,
+            targetType
+          );
+          filePath = path.join(insightsDir, `${targetId}.json`);
+        }
 
         await mkdir(insightsDir, { recursive: true });
 

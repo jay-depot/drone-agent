@@ -11,10 +11,16 @@ import { selfImprovementPlugin } from '../src/plugins/self-improvement/index.js'
 import { createTestPlugin, silentLogger } from './helpers.js';
 
 function insightFilePath(projectDir: string, targetType: string, targetId: string): string {
+  if (targetType === 'persona') {
+    return path.join(projectDir, '.drone-agent', 'personas', targetId, 'insights', 'insights.json');
+  }
   return path.join(projectDir, '.drone-agent', 'insights', targetType, `${targetId}.json`);
 }
 
 function userInsightFilePath(targetType: string, targetId: string): string {
+  if (targetType === 'persona') {
+    return path.join(os.homedir(), '.drone-agent', 'personas', targetId, 'insights', 'insights.json');
+  }
   return path.join(os.homedir(), '.drone-agent', 'insights', targetType, `${targetId}.json`);
 }
 
@@ -128,7 +134,7 @@ describe('self-improvement plugin', () => {
     expect(parsed.targetId).toBe('coder');
     expect(parsed.entryCount).toBe(1);
 
-    // Verify the file was written at project level
+    // Verify the file was written at project level in the new location
     const filePath = insightFilePath(tmpDir, 'persona', 'coder');
     const raw = await readFile(filePath, 'utf-8');
     const entries = JSON.parse(raw);
@@ -166,7 +172,7 @@ describe('self-improvement plugin', () => {
       expect(parsed.targetId).toBe('helper');
       expect(parsed.entryCount).toBe(1);
 
-      // Verify the file was written at user level (under mocked homedir)
+      // Verify the file was written at user level (under mocked homedir) in the new location
       const filePath = userInsightFilePath('persona', 'helper');
       const raw = await readFile(filePath, 'utf-8');
       const entries = JSON.parse(raw);
@@ -376,7 +382,7 @@ describe('self-improvement plugin', () => {
     expect(parsed.targetId).toBe('any-persona');
     expect(parsed.entryCount).toBe(1);
 
-    // Verify the file was written
+    // Verify the file was written in the new location
     const filePath = insightFilePath(tmpDir, 'persona', 'any-persona');
     const raw = await readFile(filePath, 'utf-8');
     const entries = JSON.parse(raw);

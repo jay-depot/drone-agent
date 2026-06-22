@@ -20,7 +20,7 @@ import { searchPlugin } from './search.js';
 import { macrosPlugin } from './macros/index.js';
 import { selfImprovementPlugin } from './self-improvement/index.js';
 import { skillsPlugin } from './skills/index.js';
-import { skillsProviderProjectPlugin } from './skills-provider-project/index.js';
+import { skillProviderProjectPlugin } from './skill-provider-project/index.js';
 import { skillProviderUserPlugin } from './skill-provider-user/index.js';
 import { startupPlugin } from './startup.js';
 import { todoPlugin } from './todo.js';
@@ -48,7 +48,7 @@ const staticBuiltInPlugins: DronePlugin[] = [
   personaProviderProjectPlugin,
   personaProviderUserPlugin,
   skillsPlugin,
-  skillsProviderProjectPlugin,
+  skillProviderProjectPlugin,
   skillProviderUserPlugin,
   selfImprovementPlugin,
   memoryPlugin,

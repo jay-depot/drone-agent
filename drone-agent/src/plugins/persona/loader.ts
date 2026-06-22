@@ -1,4 +1,4 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, access, constants as fsConstants } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import type { DronePersonaDefinition } from 'drone-core';
@@ -116,6 +116,10 @@ function _parsePersonaMdInternal(
 
 /**
  * Load all persona .md files from a given directory.
+ *
+ * Each persona lives in a subdirectory named after its id, with the
+ * persona definition in a `persona.md` file inside that subdirectory.
+ * Subdirectories without a `persona.md` file are silently skipped.
  */
 export async function loadPersonasFromDir(
   dir: string,
@@ -130,9 +134,16 @@ export async function loadPersonasFromDir(
 
   const personas: DronePersonaDefinition[] = [];
   for (const entry of entries) {
-    if (!entry.endsWith('.md')) continue;
-    const id = entry.slice(0, -3); // strip .md
-    const content = await readFile(path.join(dir, entry), 'utf-8');
+    const personaDir = path.join(dir, entry);
+    const personaFile = path.join(personaDir, 'persona.md');
+    try {
+      await access(personaFile, fsConstants.F_OK);
+    } catch {
+      // Not a persona subdirectory — skip
+      continue;
+    }
+    const id = entry; // subdirectory name is the persona id
+    const content = await readFile(personaFile, 'utf-8');
     personas.push(_parsePersonaMdInternal(id, content, scope));
   }
   return personas;

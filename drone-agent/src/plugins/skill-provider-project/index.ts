@@ -11,9 +11,9 @@ import type { DroneSkillsCapability } from '../skills/index.js';
 const CONFIG_DIR = '.drone-agent';
 const SKILLS_DIR = 'skills';
 
-export const skillsProviderProjectPlugin: DronePlugin = {
+export const skillProviderProjectPlugin: DronePlugin = {
   metadata: {
-    id: 'skills-provider-project',
+    id: 'skill-provider-project',
     name: 'Skills Provider (Project)',
     version: '0.1.0',
     description:
@@ -28,7 +28,7 @@ export const skillsProviderProjectPlugin: DronePlugin = {
     let skills = new Map<string, DroneSkillDefinition>();
 
     const provider: DroneSkillProvider = {
-      id: 'skills-provider-project',
+      id: 'skill-provider-project',
       precedence: PRECEDENCE_PROJECT,
       getSkills: () => Array.from(skills.values()),
       getSkill: (id: string) => skills.get(id),

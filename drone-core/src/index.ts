@@ -420,7 +420,7 @@ export type DroneSkillDefinition = {
  * Providers are sorted by precedence (ascending); lower number = higher priority.
  */
 export type DroneSkillProvider = {
-  /** Unique id for this provider (e.g. 'skills-provider-project'). */
+  /** Unique id for this provider (e.g. 'skill-provider-project'). */
   id: string;
   /** Precedence value. Lower number = higher priority. */
   precedence: number;

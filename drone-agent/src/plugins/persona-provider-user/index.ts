@@ -62,13 +62,15 @@ export const personaProviderUserPlugin: DronePlugin = {
           // Unregister previous persona-owned skills provider
           skillsCap.unregisterProvider(PERSONA_SKILLS_PROVIDER_ID);
 
-          // Build new aggregated map of persona-owned skills
+          // Build new aggregated map of persona-owned skills.
+          // Each persona's skills live in <personaDir>/<id>/skills/.
           const newSkills = new Map<string, DroneSkillDefinition>();
-          const personaSkillsDir = path.join(personaDir, SKILLS_DIR);
-          const allSkills = await loadSkillsFromDir(personaSkillsDir, 'user');
 
           for (const persona of loaded) {
             if (!persona.skillIds || persona.skillIds.length === 0) continue;
+            const personaSkillsDir = path.join(personaDir, persona.id, SKILLS_DIR);
+            const allSkills = await loadSkillsFromDir(personaSkillsDir, 'user');
+
             for (const skillId of persona.skillIds) {
               const skill = allSkills.find(s => s.id === skillId);
               if (skill) {

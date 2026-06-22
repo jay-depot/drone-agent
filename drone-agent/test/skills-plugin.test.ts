@@ -9,7 +9,7 @@ import path from 'node:path';
 import { createDefaultAgentConfig } from 'drone-core';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { skillsPlugin } from '../src/plugins/skills/index.js';
-import { skillsProviderProjectPlugin } from '../src/plugins/skills-provider-project/index.js';
+import { skillProviderProjectPlugin } from '../src/plugins/skill-provider-project/index.js';
 
 const SKILL_MD = (id: string) =>
   `---
@@ -40,9 +40,9 @@ describe('skills.reload tool', () => {
       process.cwd = () => projectDir;
       try {
         const config = createDefaultAgentConfig();
-        config.enabledPlugins = ['skills', 'skills-provider-project'];
+        config.enabledPlugins = ['skills', 'skill-provider-project'];
         const engine = createDronePluginEngine({
-          plugins: [skillsPlugin, skillsProviderProjectPlugin],
+          plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
         });
         await engine.initialize();
@@ -84,9 +84,9 @@ describe('skills.reload tool', () => {
       process.cwd = () => projectDir;
       try {
         const config = createDefaultAgentConfig();
-        config.enabledPlugins = ['skills', 'skills-provider-project'];
+        config.enabledPlugins = ['skills', 'skill-provider-project'];
         const engine = createDronePluginEngine({
-          plugins: [skillsPlugin, skillsProviderProjectPlugin],
+          plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
         });
         await engine.initialize();
@@ -107,9 +107,9 @@ describe('skills.reload tool', () => {
       process.cwd = () => projectDir;
       try {
         const config = createDefaultAgentConfig();
-        config.enabledPlugins = ['skills', 'skills-provider-project'];
+        config.enabledPlugins = ['skills', 'skill-provider-project'];
         const engine = createDronePluginEngine({
-          plugins: [skillsPlugin, skillsProviderProjectPlugin],
+          plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
         });
         await engine.initialize();
@@ -155,9 +155,9 @@ describe('skills.reload tool', () => {
       process.cwd = () => projectDir;
       try {
         const config = createDefaultAgentConfig();
-        config.enabledPlugins = ['skills', 'skills-provider-project'];
+        config.enabledPlugins = ['skills', 'skill-provider-project'];
         const engine = createDronePluginEngine({
-          plugins: [skillsPlugin, skillsProviderProjectPlugin],
+          plugins: [skillsPlugin, skillProviderProjectPlugin],
           config,
         });
         await engine.initialize();

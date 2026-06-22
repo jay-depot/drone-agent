@@ -207,8 +207,8 @@ async function askScope(
       id: 'scope',
       prompt: 'Where should this persona live?',
       choices: [
-        { value: 'project', label: 'Project (./.drone-agent/personas/)' },
-        { value: 'user', label: 'User (~/.drone-agent/personas/)' },
+        { value: 'project', label: 'Project (./.drone-agent/personas/<name>/persona.md)' },
+        { value: 'user', label: 'User (~/.drone-agent/personas/<name>/persona.md)' },
       ],
       defaultValue: 'project',
     },
@@ -306,8 +306,8 @@ export const personaCreateWorkflow: DroneWorkflow = {
     // 3. Existence check #1
     const targetRoot =
       scope === 'user' ? os.homedir() : ctx.projectDir;
-    const targetDir = path.join(targetRoot, '.drone-agent', 'personas');
-    const filePath = path.join(targetDir, `${id}.md`);
+    const targetDir = path.join(targetRoot, '.drone-agent', 'personas', id);
+    const filePath = path.join(targetDir, 'persona.md');
     let overwriteApproved = false;
     if (await fileExists(filePath)) {
       overwriteApproved = await askOverwrite(

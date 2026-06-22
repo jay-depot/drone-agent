@@ -192,7 +192,7 @@ export const personaPlugin: DronePlugin = {
       const all = getAllPersonas();
       if (all.length === 0) {
         registration.logger.info(
-          'no persona files found (looked in ~/.drone-agent/personas/ and .drone-agent/personas/)'
+          'no persona files found (looked in ~/.drone-agent/personas/<name>/persona.md and .drone-agent/personas/<name>/persona.md)'
         );
         return;
       }
