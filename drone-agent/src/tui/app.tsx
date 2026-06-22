@@ -578,34 +578,34 @@ export function App(opts: DroneTuiOptions): JSX.Element {
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
-    <Box flexDirection="row" width="100%" height="100%">
-      <Box flexDirection="column" flexGrow={1}>
+    <Box flexDirection="column" width="100%" height="100%">
+      <Box flexDirection="row" flexGrow={1}>
         <ChatLog entries={entries} scheme={scheme} />
-        <InputLine
-          value={input}
-          onChange={setInput}
-          onSubmit={value => {
-            setInput('');
-            void runSlashCommand(value);
-          }}
-          scheme={scheme}
-          promptLabel={promptLabel}
-        />
-        {activeQuestion ? (
-          <ElicitationPrompt
-            question={activeQuestion}
-            pickerIndex={pickerIndex}
-            scheme={scheme}
-            onSubmit={commitAnswer}
-          />
-        ) : null}
-        <StatusBar
-          left={statusLeft}
-          cwd={` ${shortHomePath(cwd)} `}
-          scheme={scheme}
-        />
+        <Sidebar widgets={sidebarWidgets} scheme={scheme} />
       </Box>
-      <Sidebar widgets={sidebarWidgets} scheme={scheme} />
+      <InputLine
+        value={input}
+        onChange={setInput}
+        onSubmit={value => {
+          setInput('');
+          void runSlashCommand(value);
+        }}
+        scheme={scheme}
+        promptLabel={promptLabel}
+      />
+      {activeQuestion ? (
+        <ElicitationPrompt
+          question={activeQuestion}
+          pickerIndex={pickerIndex}
+          scheme={scheme}
+          onSubmit={commitAnswer}
+        />
+      ) : null}
+      <StatusBar
+        left={statusLeft}
+        cwd={` ${shortHomePath(cwd)} `}
+        scheme={scheme}
+      />
     </Box>
   );
 }
