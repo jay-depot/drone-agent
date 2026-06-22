@@ -72,6 +72,16 @@ function filterSystemMessages(
   return messages.filter(m => m.role !== 'system');
 }
 
+/**
+ * Filter system messages from all turns in an array.
+ */
+function filterTurns(turns: DroneSessionTurn[]): DroneSessionTurn[] {
+  return turns.map(turn => ({
+    ...turn,
+    messages: filterSystemMessages(turn.messages),
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Plugin factory
 // ---------------------------------------------------------------------------
@@ -94,17 +104,39 @@ export function createLogPlugin(deps: LogPluginDeps): DronePlugin {
 
       // ── State ──────────────────────────────────────────────────────
       let logFilePath: string | null = null;
-      let lastLoggedTurnCount = 0;
       let filename: string | null = null;
+
+      // ── Internal: write the full session snapshot ──────────────────
+      async function writeSessionSnapshot(): Promise<void> {
+        const dir = resolveLogDir(personaCap);
+        if (!filename) {
+          filename = generateLogFilename();
+        }
+        logFilePath = path.join(dir, filename);
+
+        await mkdir(dir, { recursive: true });
+
+        const turns = sessionManager.getTurns();
+        const filtered = filterTurns(turns);
+
+        await writeFile(
+          logFilePath,
+          JSON.stringify(filtered, null, 2),
+          'utf-8'
+        );
+      }
 
       // ── Capability ─────────────────────────────────────────────────
       const capability: DroneLogCapability = {
         appendTurn: async turn => {
+          // For external callers: read existing, append, write back.
+          // This is kept for backward compatibility but the internal
+          // flush mechanism uses writeSessionSnapshot instead.
           const dir = resolveLogDir(personaCap);
           if (!filename) {
             filename = generateLogFilename();
           }
-          logFilePath = path.join(dir, filename!);
+          logFilePath = path.join(dir, filename);
 
           await mkdir(dir, { recursive: true });
 
@@ -140,12 +172,10 @@ export function createLogPlugin(deps: LogPluginDeps): DronePlugin {
 
       // ── Flush helper ──────────────────────────────────────────────
       async function flushUnloggedTurns(): Promise<void> {
-        const turns = sessionManager.getTurns();
-        while (lastLoggedTurnCount < turns.length) {
-          const turn = turns[lastLoggedTurnCount];
-          await capability.appendTurn(turn);
-          lastLoggedTurnCount++;
-        }
+        // Write the complete session snapshot, replacing the file.
+        // This ensures all messages in each turn are captured, even
+        // though the session manager mutates turns in-place.
+        await writeSessionSnapshot();
       }
 
       // ── Persona change tracking ────────────────────────────────────
@@ -167,7 +197,7 @@ export function createLogPlugin(deps: LogPluginDeps): DronePlugin {
       // ── Hooks ──────────────────────────────────────────────────────
 
       registration.hooks.onSessionStart(async () => {
-        // Lazy init: filename is generated on first append
+        // Lazy init: filename is generated on first flush
         registration.logger.info('log plugin ready');
       });
 
