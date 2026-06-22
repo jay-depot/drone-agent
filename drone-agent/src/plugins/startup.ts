@@ -27,7 +27,7 @@ export const startupPlugin: DronePlugin = {
     });
 
     registration.offer({
-      startupMessage: 'drone-agent is ready for the next implementation slice.',
+      startupMessage: 'drone-agent ready. Ctrl+J for multi-line input, Enter to send.',
     });
   },
 };

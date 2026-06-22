@@ -723,8 +723,8 @@ function FreeformInput({
       onSubmit(value.trim());
       return;
     }
-    // Shift+Enter → insert newline at end
-    if (key.return && key.shift) {
+    // Ctrl+J (inputChar === '\n' with !key.return) → insert newline at end
+    if (inputChar === '\n' && !key.return) {
       onChange(value + '\n');
       return;
     }
@@ -755,6 +755,7 @@ function printHelp(
     '',
     '  Ctrl+C / Escape   Quit',
     '  F1 / ?            Show this help',
+    '  Ctrl+J            Insert newline in multi-line input',
     '',
     'Text selection:',
     '',
