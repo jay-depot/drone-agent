@@ -12,8 +12,8 @@ import {
   type PartialDroneAgentConfig,
 } from 'drone-core';
 
-const CONFIG_DIRECTORY_NAME = '.drone-agent';
-const CONFIG_FILE_NAME = 'config.json';
+export const CONFIG_DIRECTORY_NAME = '.drone-agent';
+export const CONFIG_FILE_NAME = 'config.json';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -420,7 +420,7 @@ function parseMcpServerConfig(
   };
 }
 
-function parsePartialConfig(
+export function parsePartialConfig(
   raw: unknown,
   source: string
 ): PartialDroneAgentConfig {
@@ -919,7 +919,7 @@ async function pathExists(candidatePath: string): Promise<boolean> {
   }
 }
 
-async function loadConfigLayer(
+export async function loadConfigLayer(
   scope: DroneConfigLayer['scope'],
   filePath: string
 ): Promise<DroneConfigLayer | null> {
@@ -937,7 +937,7 @@ async function loadConfigLayer(
   };
 }
 
-async function findProjectConfigPath(
+export async function findProjectConfigPath(
   startDirectory: string
 ): Promise<string | undefined> {
   let currentDirectory = path.resolve(startDirectory);

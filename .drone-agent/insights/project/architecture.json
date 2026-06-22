@@ -10,5 +10,9 @@
   {
     "timestamp": "2026-06-22T19:56:50.190Z",
     "insight": "The config merge in `applyAgentConfigLayer` uses `??` (replace) for all fields. The prompt-file plugin needs additive (concatenate) merging for its `files` array across config layers. This requires a new merge pattern in `applyAgentConfigLayer`."
+  },
+  {
+    "timestamp": "2026-06-22T21:58:00.060Z",
+    "insight": "The config system currently has no write path — config is loaded at startup and is read-only at runtime. A config plugin needs to bridge this gap by writing back to the config files on disk. The plugin will need access to the config layers (file paths) which are currently only available in main() before the engine is created."
   }
 ]

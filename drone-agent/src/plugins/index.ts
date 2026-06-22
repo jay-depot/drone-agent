@@ -1,5 +1,6 @@
 import type { DronePlugin } from 'drone-core';
 import { bootstrapProjectPlugin } from './bootstrap-project.js';
+import { configPlugin } from './config/index.js';
 import {
   createCompactionPlugin,
   type CompactionPluginDeps,
@@ -33,6 +34,7 @@ import { utilsPlugin } from './utils.js';
 // wired in.
 const staticBuiltInPlugins: DronePlugin[] = [
   startupPlugin,
+  configPlugin,
   execPlugin,
   todoPlugin,
   fetchPlugin,
