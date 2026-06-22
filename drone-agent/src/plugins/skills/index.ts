@@ -1,11 +1,15 @@
-import type { DronePlugin, DronePromptFragment } from 'drone-core';
-import { loadSkills, type DroneSkillDefinition } from './loader.js';
+import type {
+  DronePlugin,
+  DronePromptFragment,
+  DroneSkillDefinition,
+  DroneSkillProvider,
+} from 'drone-core';
 import { skillsCreateWorkflow } from './wizard.js';
 
 export type DroneSkillsCapability = {
-  /** Get all loaded skills. */
+  /** Get all loaded skills (union across all providers). */
   getSkills: () => DroneSkillDefinition[];
-  /** Get a single skill by id, or undefined. */
+  /** Get a single skill by id, or undefined (first match by precedence). */
   getSkill: (id: string) => DroneSkillDefinition | undefined;
   /**
    * Reload skill .md files from disk. Called by the skills.create
@@ -13,6 +17,10 @@ export type DroneSkillsCapability = {
    * (or tests) can force a refresh.
    */
   reloadSkills: () => Promise<void>;
+  /** Register a skill provider. Providers are sorted by precedence (ascending). */
+  registerProvider: (provider: DroneSkillProvider) => void;
+  /** Unregister a skill provider by id. */
+  unregisterProvider: (providerId: string) => void;
 };
 
 export const skillsPlugin: DronePlugin = {
@@ -21,23 +29,67 @@ export const skillsPlugin: DronePlugin = {
     name: 'Skills',
     version: '0.1.0',
     description:
-      'Loads skill .md files and provides skills.recall for on-demand retrieval.',
+      'Broker for skill providers. Provides skills.recall, skills.list, skills.reload, skills.create tools.',
     defaultEnabled: false,
   },
   register: async registration => {
-    const projectDir = process.cwd();
-    let skills = new Map<string, DroneSkillDefinition>();
+    const providers: DroneSkillProvider[] = [];
+
+    // ── Provider management ──────────────────────────────────────────
+    function insertProviderSorted(provider: DroneSkillProvider): void {
+      const idx = providers.findIndex(
+        p => p.precedence > provider.precedence
+      );
+      if (idx === -1) {
+        providers.push(provider);
+      } else {
+        providers.splice(idx, 0, provider);
+      }
+    }
+
+    function removeProvider(providerId: string): void {
+      const idx = providers.findIndex(p => p.id === providerId);
+      if (idx !== -1) {
+        providers.splice(idx, 1);
+      }
+    }
+
+    // ── Merge helpers ───────────────────────────────────────────────
+    function getAllSkills(): DroneSkillDefinition[] {
+      const seen = new Set<string>();
+      const result: DroneSkillDefinition[] = [];
+      // Iterate in precedence order (ascending). For duplicate ids,
+      // the first (highest-priority) provider wins.
+      for (const provider of providers) {
+        for (const skill of provider.getSkills()) {
+          if (!seen.has(skill.id)) {
+            seen.add(skill.id);
+            result.push(skill);
+          }
+        }
+      }
+      return result;
+    }
+
+    function getSkillById(id: string): DroneSkillDefinition | undefined {
+      for (const provider of providers) {
+        const skill = provider.getSkill(id);
+        if (skill) return skill;
+      }
+      return undefined;
+    }
 
     // ── Prompt fragment: tells the agent about the skills system ──────
     const skillsFragment: DronePromptFragment = {
       key: 'skills',
       phase: 'header',
       render: async () => {
-        if (skills.size === 0) return false;
+        const all = getAllSkills();
+        if (all.length === 0) return false;
 
         const lines: string[] = ['## Skills'];
 
-        for (const skill of skills.values()) {
+        for (const skill of all) {
           const recall = skill.recall.length > 0
             ? ` — ${skill.recall.join('; ')}`
             : '';
@@ -55,24 +107,38 @@ export const skillsPlugin: DronePlugin = {
 
     // ── Offer capability to other plugins ─────────────────────────────
     const capability: DroneSkillsCapability = {
-      getSkills: () => Array.from(skills.values()),
-      getSkill: (id: string) => skills.get(id),
+      getSkills: () => getAllSkills(),
+      getSkill: (id: string) => getSkillById(id),
       reloadSkills: async () => {
-        skills = await loadSkills(projectDir);
+        for (const provider of providers) {
+          await provider.reloadSkills();
+        }
         registration.logger.info(
-          `reloaded ${skills.size} skill(s)`
+          `reloaded skills from ${providers.length} provider(s)`
+        );
+      },
+      registerProvider: (provider: DroneSkillProvider) => {
+        insertProviderSorted(provider);
+        registration.logger.info(
+          `skill provider "${provider.id}" registered (precedence: ${provider.precedence})`
+        );
+      },
+      unregisterProvider: (providerId: string) => {
+        removeProvider(providerId);
+        registration.logger.info(
+          `skill provider "${providerId}" unregistered`
         );
       },
     };
     registration.offer(capability);
 
-    // ── onPluginsLoaded: load skills ──────────────────────────────────
+    // ── onPluginsLoaded: log status ──────────────────────────────────
     registration.hooks.onPluginsLoaded(async () => {
       await capability.reloadSkills();
-
-      if (skills.size > 0) {
+      const all = getAllSkills();
+      if (all.length > 0) {
         registration.logger.info(
-          `loaded ${skills.size} skill(s): ${Array.from(skills.keys()).join(', ')}`
+          `loaded ${all.length} skill(s): ${all.map(s => s.id).join(', ')}`
         );
       }
     });
@@ -96,10 +162,11 @@ export const skillsPlugin: DronePlugin = {
           throw new Error('skills.recall requires a non-empty id string.');
         }
 
-        const skill = skills.get(id);
+        const skill = getSkillById(id);
         if (!skill) {
+          const all = getAllSkills();
           throw new Error(
-            `Unknown skill "${id}". Available skills: ${Array.from(skills.keys()).join(', ')}`
+            `Unknown skill "${id}". Available skills: ${all.map(s => s.id).join(', ')}`
           );
         }
 
@@ -127,7 +194,7 @@ export const skillsPlugin: DronePlugin = {
         additionalProperties: false,
       },
       execute: async () => {
-        const all = Array.from(skills.values());
+        const all = getAllSkills();
         return JSON.stringify(
           {
             count: all.length,
@@ -157,10 +224,11 @@ export const skillsPlugin: DronePlugin = {
       },
       execute: async () => {
         await capability.reloadSkills();
+        const all = getAllSkills();
         return JSON.stringify(
           {
-            count: skills.size,
-            skills: Array.from(skills.keys()),
+            count: all.length,
+            skills: all.map(s => s.id),
           },
           null,
           2

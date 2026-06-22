@@ -16,6 +16,8 @@ const CONFIG_DIR = '.drone-agent';
  *   color: cyan           # optional UI tint applied when active
  *   fragments:
  *     - Prefer TypeScript
+ *   skills:
+ *     - code-review
  *   ---
  *   System prompt override body (optional)
  */
@@ -62,6 +64,8 @@ function _parsePersonaMdInternal(
     if (currentArrayKey) {
       if (currentArrayKey === 'fragments') {
         definition.promptFragments = [...arrayValues];
+      } else if (currentArrayKey === 'skills') {
+        definition.skillIds = [...arrayValues];
       }
       currentArrayKey = null;
       arrayValues.length = 0;
@@ -88,12 +92,19 @@ function _parsePersonaMdInternal(
       if (value === '') {
         currentArrayKey = 'fragments';
       }
+    } else if (key === 'skills') {
+      if (value === '') {
+        currentArrayKey = 'skills';
+      }
     }
   }
 
   // Flush trailing array
   if (currentArrayKey === 'fragments' && arrayValues.length > 0) {
     definition.promptFragments = [...arrayValues];
+  }
+  if (currentArrayKey === 'skills' && arrayValues.length > 0) {
+    definition.skillIds = [...arrayValues];
   }
 
   if (body.length > 0) {
@@ -106,7 +117,7 @@ function _parsePersonaMdInternal(
 /**
  * Load all persona .md files from a given directory.
  */
-async function loadPersonasFromDir(
+export async function loadPersonasFromDir(
   dir: string,
   scope: 'user' | 'project'
 ): Promise<DronePersonaDefinition[]> {

@@ -14,10 +14,14 @@ import { mcpPlugin } from './mcp/index.js';
 import { memoryPlugin } from './memory/index.js';
 import { ollamaPlugin } from './ollama.js';
 import { personaPlugin } from './persona/index.js';
+import { personaProviderProjectPlugin } from './persona-provider-project/index.js';
+import { personaProviderUserPlugin } from './persona-provider-user/index.js';
 import { searchPlugin } from './search.js';
 import { macrosPlugin } from './macros/index.js';
 import { selfImprovementPlugin } from './self-improvement/index.js';
 import { skillsPlugin } from './skills/index.js';
+import { skillsProviderProjectPlugin } from './skills-provider-project/index.js';
+import { skillProviderUserPlugin } from './skill-provider-user/index.js';
 import { startupPlugin } from './startup.js';
 import { todoPlugin } from './todo.js';
 import { utilsPlugin } from './utils.js';
@@ -41,7 +45,11 @@ const staticBuiltInPlugins: DronePlugin[] = [
   gitPlugin,
   bootstrapProjectPlugin,
   personaPlugin,
+  personaProviderProjectPlugin,
+  personaProviderUserPlugin,
   skillsPlugin,
+  skillsProviderProjectPlugin,
+  skillProviderUserPlugin,
   selfImprovementPlugin,
   memoryPlugin,
 ];

@@ -1,9 +1,9 @@
 import type {
   DronePersonaDefinition,
+  DronePersonaProvider,
   DronePlugin,
   DronePromptFragment,
 } from 'drone-core';
-import { loadPersonas } from './loader.js';
 import { personaCreateWorkflow } from './wizard.js';
 
 export type DronePersonaCapability = {
@@ -19,6 +19,10 @@ export type DronePersonaCapability = {
    * (or tests) can force a refresh.
    */
   reloadPersonas: () => Promise<void>;
+  /** Register a persona provider. Providers are sorted by precedence (ascending). */
+  registerProvider: (provider: DronePersonaProvider) => void;
+  /** Unregister a persona provider by id. */
+  unregisterProvider: (providerId: string) => void;
 };
 
 export const personaPlugin: DronePlugin = {
@@ -27,18 +31,61 @@ export const personaPlugin: DronePlugin = {
     name: 'Persona',
     version: '0.1.0',
     description:
-      'Manage named personas that customize system prompts and behavior.',
+      'Broker for persona providers. Manages active persona, selection, and persona management tools.',
     defaultEnabled: false,
   },
   register: async registration => {
     const config = registration.getConfig();
-    const projectDir = process.cwd();
 
-    let personas = new Map<string, DronePersonaDefinition>();
+    const providers: DronePersonaProvider[] = [];
     let activePersona: DronePersonaDefinition | null = null;
     const changeCallbacks: Array<
       (persona: DronePersonaDefinition | null) => void
     > = [];
+
+    // ── Provider management ──────────────────────────────────────────
+    function insertProviderSorted(provider: DronePersonaProvider): void {
+      const idx = providers.findIndex(
+        p => p.precedence > provider.precedence
+      );
+      if (idx === -1) {
+        providers.push(provider);
+      } else {
+        providers.splice(idx, 0, provider);
+      }
+    }
+
+    function removeProvider(providerId: string): void {
+      const idx = providers.findIndex(p => p.id === providerId);
+      if (idx !== -1) {
+        providers.splice(idx, 1);
+      }
+    }
+
+    // ── Merge helpers ───────────────────────────────────────────────
+    function getAllPersonas(): DronePersonaDefinition[] {
+      const seen = new Set<string>();
+      const result: DronePersonaDefinition[] = [];
+      // Iterate in precedence order (ascending). For duplicate ids,
+      // the first (highest-priority) provider wins.
+      for (const provider of providers) {
+        for (const persona of provider.getPersonas()) {
+          if (!seen.has(persona.id)) {
+            seen.add(persona.id);
+            result.push(persona);
+          }
+        }
+      }
+      return result;
+    }
+
+    function getPersonaById(id: string): DronePersonaDefinition | undefined {
+      for (const provider of providers) {
+        const persona = provider.getPersona(id);
+        if (persona) return persona;
+      }
+      return undefined;
+    }
 
     // Dynamic prompt fragment that renders the active persona's override/fragments
     const personaFragment: DronePromptFragment = {
@@ -77,7 +124,7 @@ export const personaPlugin: DronePlugin = {
         return null;
       }
 
-      const found = personas.get(id);
+      const found = getPersonaById(id);
       if (!found) {
         registration.logger.warn(
           `persona "${id}" not found in loaded personas.`
@@ -93,7 +140,7 @@ export const personaPlugin: DronePlugin = {
     // Capability offered to TUI and other plugins
     const capability: DronePersonaCapability = {
       getActivePersona: () => activePersona,
-      getPersonas: () => Array.from(personas.values()),
+      getPersonas: () => getAllPersonas(),
       selectPersona: (id: string | null) => {
         activatePersona(id);
       },
@@ -102,16 +149,13 @@ export const personaPlugin: DronePlugin = {
       },
       reloadPersonas: async () => {
         const previous = activePersona;
-        personas = await loadPersonas(projectDir);
+        for (const provider of providers) {
+          await provider.reloadPersonas();
+        }
         // Re-activate the previously active persona (if any) so the
         // activePersona reference still resolves to a current object.
-        // If the previously active persona no longer exists, fall
-        // back to clearing the active persona. We always notify so
-        // subscribers (the TUI color override in particular) re-read
-        // the freshly loaded persona — even if the id is the same,
-        // the underlying object's `uiColor` may have changed.
         if (previous) {
-          const stillExists = personas.get(previous.id);
+          const stillExists = getPersonaById(previous.id);
           if (stillExists) {
             activePersona = stillExists;
           } else {
@@ -120,7 +164,19 @@ export const personaPlugin: DronePlugin = {
           notifyChange();
         }
         registration.logger.info(
-          `reloaded ${personas.size} persona(s)`
+          `reloaded personas from ${providers.length} provider(s)`
+        );
+      },
+      registerProvider: (provider: DronePersonaProvider) => {
+        insertProviderSorted(provider);
+        registration.logger.info(
+          `persona provider "${provider.id}" registered (precedence: ${provider.precedence})`
+        );
+      },
+      unregisterProvider: (providerId: string) => {
+        removeProvider(providerId);
+        registration.logger.info(
+          `persona provider "${providerId}" unregistered`
         );
       },
     };
@@ -133,7 +189,8 @@ export const personaPlugin: DronePlugin = {
     registration.hooks.onPluginsLoaded(async () => {
       await capability.reloadPersonas();
 
-      if (personas.size === 0) {
+      const all = getAllPersonas();
+      if (all.length === 0) {
         registration.logger.info(
           'no persona files found (looked in ~/.drone-agent/personas/ and .drone-agent/personas/)'
         );
@@ -141,7 +198,7 @@ export const personaPlugin: DronePlugin = {
       }
 
       registration.logger.info(
-        `loaded ${personas.size} persona(s): ${Array.from(personas.keys()).join(', ')}`
+        `loaded ${all.length} persona(s): ${all.map(p => p.id).join(', ')}`
       );
 
       // Activate configured persona if set
@@ -170,7 +227,7 @@ export const personaPlugin: DronePlugin = {
         additionalProperties: false,
       },
       execute: async () => {
-        const all = Array.from(personas.values());
+        const all = getAllPersonas();
         return JSON.stringify(
           {
             activePersona: activePersona?.id ?? null,
@@ -221,7 +278,7 @@ export const personaPlugin: DronePlugin = {
           );
         }
 
-        const found = personas.get(rawId);
+        const found = getPersonaById(rawId);
         if (!found) {
           throw new Error(
             `Unknown persona "${rawId}". Use persona.list to see available personas.`

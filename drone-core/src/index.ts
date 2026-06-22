@@ -1,3 +1,17 @@
+// ── Precedence constants for skill/persona provider plugins ──────────
+/** Precedence for swarm-level providers (highest priority — lowest number). */
+export const PRECEDENCE_SWARM = 5000;
+/** Precedence for coordinator-level providers. */
+export const PRECEDENCE_COORDINATOR = 4000;
+/** Precedence for user-level providers. */
+export const PRECEDENCE_USER = 3000;
+/** Precedence for skills owned by a user-level persona. */
+export const PRECEDENCE_PERSONA_USER = 2500;
+/** Precedence for project-level providers. */
+export const PRECEDENCE_PROJECT = 2000;
+/** Precedence for skills owned by a project-level persona. */
+export const PRECEDENCE_PERSONA_PROJECT = 1500;
+
 export type DronePluginDependency = {
   id: string;
   version?: string;
@@ -385,6 +399,56 @@ export type DroneMcpResourceMeta = {
   mimeType?: string;
 };
 
+// ── Skill definition (moved from drone-agent/src/plugins/skills/loader.ts) ──
+
+export type DroneSkillDefinition = {
+  id: string;
+  name: string;
+  description: string;
+  recall: string[];
+  modelInvocation: boolean;
+  body: string;
+  source: 'user' | 'project';
+  /** Precedence assigned by the provider. Lower number = higher priority. */
+  precedence?: number;
+};
+
+// ── Provider types for skill/persona broker architecture ────────────
+
+/**
+ * A provider of skills registered with the skills broker plugin.
+ * Providers are sorted by precedence (ascending); lower number = higher priority.
+ */
+export type DroneSkillProvider = {
+  /** Unique id for this provider (e.g. 'skills-provider-project'). */
+  id: string;
+  /** Precedence value. Lower number = higher priority. */
+  precedence: number;
+  /** Get all skills from this provider. */
+  getSkills: () => DroneSkillDefinition[];
+  /** Get a single skill by id, or undefined. */
+  getSkill: (id: string) => DroneSkillDefinition | undefined;
+  /** Reload skills from source (disk, network, etc.). */
+  reloadSkills: () => Promise<void>;
+};
+
+/**
+ * A provider of personas registered with the persona broker plugin.
+ * Providers are sorted by precedence (ascending); lower number = higher priority.
+ */
+export type DronePersonaProvider = {
+  /** Unique id for this provider (e.g. 'persona-provider-project'). */
+  id: string;
+  /** Precedence value. Lower number = higher priority. */
+  precedence: number;
+  /** Get all personas from this provider. */
+  getPersonas: () => DronePersonaDefinition[];
+  /** Get a single persona by id, or undefined. */
+  getPersona: (id: string) => DronePersonaDefinition | undefined;
+  /** Reload personas from source (disk, network, etc.). */
+  reloadPersonas: () => Promise<void>;
+};
+
 export type DronePersonaDefinition = {
   id: string;
   name: string;
@@ -403,6 +467,11 @@ export type DronePersonaDefinition = {
    * `<project>/.drone-agent/personas/`.
    */
   scope?: 'user' | 'project';
+  /**
+   * Optional list of skill ids owned by this persona. Skills are loaded
+   * from a `skills/` subdirectory relative to the persona file.
+   */
+  skillIds?: string[];
 };
 
 export type DroneMcpError = {

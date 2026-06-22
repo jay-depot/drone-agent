@@ -157,3 +157,47 @@ describe('loadPersonas — color field', () => {
     });
   });
 });
+
+describe('loadPersonas — skills field', () => {
+  it('parses `skills:` from persona frontmatter', async () => {
+    await withProjectDir(async dir => {
+      const personaDir = path.join(dir, '.drone-agent', 'personas');
+      await mkdir(personaDir, { recursive: true });
+      await writeFile(
+        path.join(personaDir, 'expert.md'),
+        [
+          '---',
+          'name: Expert',
+          'description: domain expert',
+          'skills:',
+          '  - code-review',
+          '  - security-audit',
+          '---',
+          'You are an expert.',
+          '',
+        ].join('\n'),
+        'utf-8'
+      );
+
+      const personas = await loadPersonas(dir);
+      expect(personas.size).toBe(1);
+      const p = personas.get('expert');
+      expect(p?.skillIds).toEqual(['code-review', 'security-audit']);
+    });
+  });
+
+  it('leaves skillIds undefined when the persona omits the field', async () => {
+    await withProjectDir(async dir => {
+      const personaDir = path.join(dir, '.drone-agent', 'personas');
+      await mkdir(personaDir, { recursive: true });
+      await writeFile(
+        path.join(personaDir, 'plain.md'),
+        '---\nname: Plain\n---\n',
+        'utf-8'
+      );
+
+      const personas = await loadPersonas(dir);
+      expect(personas.get('plain')?.skillIds).toBeUndefined();
+    });
+  });
+});

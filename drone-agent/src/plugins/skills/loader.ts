@@ -1,19 +1,10 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import type { DroneSkillDefinition } from 'drone-core';
 
 const SKILLS_DIR = 'skills';
 const CONFIG_DIR = '.drone-agent';
-
-export type DroneSkillDefinition = {
-  id: string;
-  name: string;
-  description: string;
-  recall: string[];
-  modelInvocation: boolean;
-  body: string;
-  source: 'user' | 'project';
-};
 
 /**
  * Parse a skill .md file with YAML frontmatter.
@@ -108,7 +99,7 @@ function parseSkillMd(
 /**
  * Load all skill .md files from a given directory.
  */
-async function loadSkillsFromDir(
+export async function loadSkillsFromDir(
   dir: string,
   source: 'user' | 'project'
 ): Promise<DroneSkillDefinition[]> {
