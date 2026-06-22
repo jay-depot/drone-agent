@@ -717,9 +717,15 @@ function FreeformInput({
   onSubmit: (answer: string) => void;
 }): JSX.Element {
   useInput((inputChar, key) => {
-    if (key.return) {
+    // Enter alone → submit
+    if (key.return && !key.shift) {
       if (value.trim().length === 0) return; // ignore empty submit
       onSubmit(value.trim());
+      return;
+    }
+    // Shift+Enter → insert newline at end
+    if (key.return && key.shift) {
+      onChange(value + '\n');
       return;
     }
     if (key.backspace || key.delete) {

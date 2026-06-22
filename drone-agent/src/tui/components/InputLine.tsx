@@ -1,15 +1,12 @@
 /**
  * The bottom input line.
  *
- * Wraps `ink-text-input`. Submits the current value to the parent
- * (which clears its own value state). Esc on an empty input is the
- * global quit signal — that lives in App so it shares the useApp()
- * exit() instance; here we just expose a `value` / `onChange` /
- * `onSubmit` trio.
+ * Uses the custom `MultilineTextInput` component which supports
+ * Shift+Enter for newlines and plain Enter for submit.
  */
 
 import { Box, Text } from 'ink';
-import TextInput from 'ink-text-input';
+import { MultilineTextInput } from './MultilineTextInput.js';
 import type { DroneColorScheme } from '../theme.js';
 
 export function InputLine({
@@ -39,7 +36,11 @@ export function InputLine({
     >
       {promptLabel ? <Text color={scheme.userInput}>{promptLabel}</Text> : null}
       <Box flexGrow={1}>
-        <TextInput value={value} onChange={onChange} onSubmit={onSubmit} />
+        <MultilineTextInput
+          value={value}
+          onChange={onChange}
+          onSubmit={onSubmit}
+        />
       </Box>
     </Box>
   );
