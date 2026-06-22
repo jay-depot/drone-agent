@@ -476,6 +476,88 @@ export function parsePartialConfig(
     parsed.ollama = ollama;
   }
 
+  if ('llm' in raw) {
+    if (!isRecord(raw.llm)) {
+      throw new Error(`Invalid config in ${source}: llm must be an object.`);
+    }
+
+    const llm: PartialDroneAgentConfig['llm'] = {};
+    if ('provider' in raw.llm) {
+      if (typeof raw.llm.provider !== 'string') {
+        throw new Error(
+          `Invalid config in ${source}: llm.provider must be a string.`
+        );
+      }
+      llm.provider = raw.llm.provider;
+    }
+    parsed.llm = llm;
+  }
+
+  if ('openrouter' in raw) {
+    if (!isRecord(raw.openrouter)) {
+      throw new Error(`Invalid config in ${source}: openrouter must be an object.`);
+    }
+
+    const openrouter: PartialDroneAgentConfig['openrouter'] = {};
+    if ('apiKey' in raw.openrouter) {
+      if (typeof raw.openrouter.apiKey !== 'string') {
+        throw new Error(
+          `Invalid config in ${source}: openrouter.apiKey must be a string.`
+        );
+      }
+      openrouter.apiKey = raw.openrouter.apiKey;
+    }
+    if ('defaultModel' in raw.openrouter) {
+      if (typeof raw.openrouter.defaultModel !== 'string') {
+        throw new Error(
+          `Invalid config in ${source}: openrouter.defaultModel must be a string.`
+        );
+      }
+      openrouter.defaultModel = raw.openrouter.defaultModel;
+    }
+    if ('baseUrl' in raw.openrouter) {
+      if (typeof raw.openrouter.baseUrl !== 'string') {
+        throw new Error(
+          `Invalid config in ${source}: openrouter.baseUrl must be a string.`
+        );
+      }
+      openrouter.baseUrl = raw.openrouter.baseUrl;
+    }
+    if ('models' in raw.openrouter) {
+      if (!Array.isArray(raw.openrouter.models)) {
+        throw new Error(
+          `Invalid config in ${source}: openrouter.models must be an array.`
+        );
+      }
+      const models: { id: string; contextWindow: number }[] = [];
+      for (let i = 0; i < raw.openrouter.models.length; i++) {
+        const entry = raw.openrouter.models[i];
+        if (!isRecord(entry)) {
+          throw new Error(
+            `Invalid config in ${source}: openrouter.models[${i}] must be an object.`
+          );
+        }
+        if (typeof entry.id !== 'string' || entry.id.trim().length === 0) {
+          throw new Error(
+            `Invalid config in ${source}: openrouter.models[${i}].id must be a non-empty string.`
+          );
+        }
+        if (
+          typeof entry.contextWindow !== 'number' ||
+          !Number.isFinite(entry.contextWindow) ||
+          entry.contextWindow <= 0
+        ) {
+          throw new Error(
+            `Invalid config in ${source}: openrouter.models[${i}].contextWindow must be a positive number.`
+          );
+        }
+        models.push({ id: entry.id, contextWindow: entry.contextWindow });
+      }
+      openrouter.models = models;
+    }
+    parsed.openrouter = openrouter;
+  }
+
   if ('session' in raw) {
     if (!isRecord(raw.session)) {
       throw new Error(

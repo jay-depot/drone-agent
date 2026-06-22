@@ -1,4 +1,4 @@
-// ── Precedence constants for skill/persona provider plugins ──────────
+// ── Precedence constants for skill/persona/provider plugins ──────────
 /** Precedence for swarm-level providers (highest priority — lowest number). */
 export const PRECEDENCE_SWARM = 5000;
 /** Precedence for coordinator-level providers. */
@@ -11,6 +11,8 @@ export const PRECEDENCE_PERSONA_USER = 2500;
 export const PRECEDENCE_PROJECT = 2000;
 /** Precedence for skills owned by a project-level persona. */
 export const PRECEDENCE_PERSONA_PROJECT = 1500;
+/** Precedence for LLM provider plugins (e.g. ollama, openrouter). */
+export const PRECEDENCE_LLM_PROVIDER = 1000;
 
 export type DronePluginDependency = {
   id: string;
@@ -32,6 +34,23 @@ export type DronePluginMetadata = {
 export type DroneOllamaConfig = {
   host: string;
   model: string;
+};
+
+export type DroneLlmConfig = {
+  /** The id of the active LLM provider plugin (e.g. 'ollama', 'openrouter'). */
+  provider: string;
+};
+
+export type DroneOpenRouterModelConfig = {
+  id: string;
+  contextWindow: number;
+};
+
+export type DroneOpenRouterConfig = {
+  apiKey: string;
+  defaultModel: string;
+  baseUrl: string;
+  models: DroneOpenRouterModelConfig[];
 };
 
 export type DroneSessionConfig = {
@@ -171,7 +190,9 @@ export type DroneAgentConfig = {
   enabledPlugins: string[];
   systemPrompt: string;
   activePersona: string | null;
+  llm: DroneLlmConfig;
   ollama: DroneOllamaConfig;
+  openrouter: DroneOpenRouterConfig;
   session: DroneSessionConfig;
   lsp: DroneLspConfig;
   mcp: DroneMcpConfig;
@@ -185,7 +206,9 @@ export type PartialDroneAgentConfig = Partial<{
   enabledPlugins: string[];
   systemPrompt: string;
   activePersona: string | null;
+  llm: Partial<DroneLlmConfig>;
   ollama: Partial<DroneOllamaConfig>;
+  openrouter: Partial<DroneOpenRouterConfig>;
   session: Partial<DroneSessionConfig>;
   lsp: Partial<DroneLspConfig>;
   mcp: Partial<DroneMcpConfig>;
@@ -531,6 +554,46 @@ export type DroneLlmProvider = {
   }) => Promise<DroneContextWindowInfo | null>;
 };
 
+// ── LLM provider broker types ───────────────────────────────────────
+
+/**
+ * Registration for an LLM provider plugin (e.g. ollama, openrouter).
+ * Providers are sorted by precedence (ascending); lower number = higher priority.
+ */
+export type DroneLlmProviderRegistration = {
+  /** Unique id for this provider (e.g. 'ollama', 'openrouter'). */
+  id: string;
+  /** Precedence value. Lower number = higher priority. */
+  precedence: number;
+  /** Get the DroneLlmProvider implementation. */
+  getProvider: () => DroneLlmProvider;
+  /** List available model identifiers. */
+  listModels: () => Promise<string[]>;
+  /** The default model to use when this provider is activated. */
+  getDefaultModel: () => string;
+};
+
+/**
+ * Capability offered by the LLM broker plugin. Lets other plugins and
+ * the host resolve the active LLM provider and manage model selection.
+ */
+export type DroneLlmCapability = {
+  /** Get the active DroneLlmProvider implementation. */
+  getActiveProvider: () => DroneLlmProvider;
+  /** Get the id of the active provider (e.g. 'ollama', 'openrouter'). */
+  getActiveProviderId: () => string;
+  /** Get the currently selected model name. */
+  getModel: () => string;
+  /** Set the currently selected model name. */
+  setModel: (model: string) => void;
+  /** List available models from the active provider. */
+  listModels: () => Promise<string[]>;
+  /** Register a provider. Providers are sorted by precedence (ascending). */
+  registerProvider: (registration: DroneLlmProviderRegistration) => void;
+  /** Unregister a provider by id. */
+  unregisterProvider: (providerId: string) => void;
+};
+
 export type DroneToolDefinition = {
   name: string;
   description: string;
@@ -835,9 +898,22 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
     systemPrompt:
       'You are a coding agent. Prefer small, focused changes. Use the available tools; do not guess paths or contents.',
     activePersona: null,
+    llm: {
+      provider: 'ollama',
+    },
     ollama: {
       host: 'http://127.0.0.1:11434',
       model: 'llama3.1',
+    },
+    openrouter: {
+      apiKey: '',
+      defaultModel: 'openai/gpt-4o',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      models: [
+        { id: 'openai/gpt-4o', contextWindow: 128000 },
+        { id: 'anthropic/claude-3.5-sonnet', contextWindow: 200000 },
+        { id: 'google/gemini-2.0-flash-001', contextWindow: 1000000 },
+      ],
     },
     session: {
       contextWindowTokens: 32768,
@@ -896,12 +972,25 @@ export function applyAgentConfigLayer(
       layer.activePersona !== undefined
         ? layer.activePersona
         : baseConfig.activePersona,
+    llm: layer.llm
+      ? {
+          ...baseConfig.llm,
+          ...layer.llm,
+        }
+      : baseConfig.llm,
     ollama: layer.ollama
       ? {
           ...baseConfig.ollama,
           ...layer.ollama,
         }
       : baseConfig.ollama,
+    openrouter: layer.openrouter
+      ? {
+          ...baseConfig.openrouter,
+          ...layer.openrouter,
+          models: layer.openrouter.models ?? baseConfig.openrouter.models,
+        }
+      : baseConfig.openrouter,
     session: layer.session
       ? {
           ...baseConfig.session,
@@ -1023,4 +1112,3 @@ export function filterByGlobPatterns(
     return true;
   });
 }
-

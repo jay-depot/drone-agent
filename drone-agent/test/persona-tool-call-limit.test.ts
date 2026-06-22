@@ -4,6 +4,7 @@ import {
   createDefaultAgentConfig,
   type DroneChatResponse,
   type DroneContextWindowInfo,
+  type DroneLlmCapability,
   type DroneLlmProvider,
   type DroneToolDescriptor,
 } from 'drone-core';
@@ -137,7 +138,7 @@ function makeEngine(options: EngineOptions): DronePluginEngine & {
     executeTool: executeMock as unknown as DronePluginEngine['executeTool'],
     listTools: () => toolList,
     getCapability: <T>(id: string) => {
-      if (id === 'ollama') return {} as unknown as T;
+      if (id === 'llm') return {} as unknown as T;
       if (id === 'persona') return options.personaCap as unknown as T;
       return undefined;
     },
@@ -190,6 +191,21 @@ function makeBudgetService(
     getProvider: () => provider,
     getModel: () => 'fake',
   });
+}
+
+/**
+ * Build a fake DroneLlmCapability that wraps the given provider.
+ */
+function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
+  return {
+    getActiveProvider: () => provider,
+    getActiveProviderId: () => 'test-provider',
+    getModel: () => 'fake',
+    setModel: () => {},
+    listModels: async () => ['fake'],
+    registerProvider: () => {},
+    unregisterProvider: () => {},
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -256,7 +272,6 @@ describe('createConversationService — persona toolCallLimit', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -266,7 +281,7 @@ describe('createConversationService — persona toolCallLimit', () => {
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
     ) => {
-      if (id === 'ollama') return { provider };
+      if (id === 'llm') return makeLlmCapability(provider);
       if (id === 'persona') return personaCap;
       return undefined;
     };
@@ -292,7 +307,6 @@ describe('createConversationService — persona toolCallLimit', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -302,7 +316,7 @@ describe('createConversationService — persona toolCallLimit', () => {
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
     ) => {
-      if (id === 'ollama') return { provider };
+      if (id === 'llm') return makeLlmCapability(provider);
       if (id === 'persona') return personaCap;
       return undefined;
     };
@@ -328,7 +342,6 @@ describe('createConversationService — persona toolCallLimit', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -338,7 +351,7 @@ describe('createConversationService — persona toolCallLimit', () => {
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
     ) => {
-      if (id === 'ollama') return { provider };
+      if (id === 'llm') return makeLlmCapability(provider);
       if (id === 'persona') return personaCap;
       return undefined;
     };
@@ -364,7 +377,6 @@ describe('createConversationService — persona toolCallLimit', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -374,7 +386,7 @@ describe('createConversationService — persona toolCallLimit', () => {
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
     ) => {
-      if (id === 'ollama') return { provider };
+      if (id === 'llm') return makeLlmCapability(provider);
       // No persona capability registered
       return undefined;
     };
@@ -400,7 +412,6 @@ describe('createConversationService — persona toolCallLimit', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -411,7 +422,7 @@ describe('createConversationService — persona toolCallLimit', () => {
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
     ) => {
-      if (id === 'ollama') return { provider };
+      if (id === 'llm') return makeLlmCapability(provider);
       if (id === 'persona') return personaCap;
       return undefined;
     };

@@ -1,7 +1,7 @@
 import type {
   DroneAgentConfig,
   DroneChatMessage,
-  DroneLlmProvider,
+  DroneLlmCapability,
   DroneLogger,
   DroneSessionSafetyTrimPayload,
   DroneToolDescriptor,
@@ -9,10 +9,6 @@ import type {
 import type { DronePluginEngine } from './plugin-engine.js';
 import type { DroneSessionManager } from './session-manager.js';
 import type { ContextBudgetService } from './context-budget-service.js';
-
-type OllamaCapability = {
-  provider: DroneLlmProvider;
-};
 
 export type ConversationEvent =
   | { kind: 'reasoning'; content: string }
@@ -37,7 +33,6 @@ export type ConversationService = {
 
 type CreateConversationServiceOptions = {
   engine: DronePluginEngine;
-  model: string;
   config: DroneAgentConfig;
   logger: DroneLogger;
   sessionManager: DroneSessionManager;
@@ -62,7 +57,6 @@ type CreateConversationServiceOptions = {
 
 export function createConversationService({
   engine,
-  model: initialModel,
   config,
   logger,
   sessionManager,
@@ -72,7 +66,14 @@ export function createConversationService({
   onToolIterationLimitReached,
 }: CreateConversationServiceOptions): ConversationService {
   let hasWarnedAboutSafetyTrim = false;
-  let currentModel = initialModel;
+
+  function getLlmCapability(): DroneLlmCapability {
+    const llm = engine.getCapability<DroneLlmCapability>('llm');
+    if (!llm) {
+      throw new Error('LLM provider broker is not available.');
+    }
+    return llm;
+  }
 
   function resolveEffectiveMaxToolIterations(): number {
     // Check active persona's toolCallLimit first
@@ -86,13 +87,8 @@ export function createConversationService({
     return maxToolIterations ?? config.session.maxToolIterations ?? 50;
   }
 
-  function getProvider(): DroneLlmProvider {
-    const ollama = engine.getCapability<OllamaCapability>('ollama');
-    if (!ollama) {
-      throw new Error('Ollama provider is not available.');
-    }
-
-    return ollama.provider;
+  function getCurrentModel(): string {
+    return getLlmCapability().getModel();
   }
 
   /**
@@ -112,6 +108,7 @@ export function createConversationService({
     tools: ReturnType<DronePluginEngine['listTools']>
   ): Promise<void> {
     const contextWindow = await budgetService.resolveContextWindow();
+    const currentModel = getCurrentModel();
 
     while (true) {
       const currentTurns = sessionManager.getTurns();
@@ -211,7 +208,8 @@ export function createConversationService({
       hasWarnedAboutSafetyTrim = false;
       sessionManager.appendUserMessage(prompt);
 
-      const provider = getProvider();
+      const llm = getLlmCapability();
+      const provider = llm.getActiveProvider();
       const tools = getLlmTools();
       let iterationCount = 0;
       // Tracks the most recent failing tool signature and how many times
@@ -235,6 +233,8 @@ export function createConversationService({
       while (true) {
         const systemMessages = await budgetService.buildSystemMessages();
         await ensureSafeBudget(systemMessages, tools);
+
+        const currentModel = llm.getModel();
 
         const response = await provider.chat({
           model: currentModel,
@@ -370,9 +370,9 @@ export function createConversationService({
     getMessages: () => sessionManager.getMessages(),
     getEstimatedContextUsagePercent: () => estimateCurrentContextUsagePercent(),
     setModel: (newModel: string) => {
-      currentModel = newModel;
-      budgetService.resetContextWindowCache(); // Reset so next call re-probes
+      getLlmCapability().setModel(newModel);
+      budgetService.resetContextWindowCache();
     },
-    getModel: () => currentModel,
+    getModel: () => getLlmCapability().getModel(),
   };
 }

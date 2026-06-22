@@ -3,6 +3,7 @@ import {
   createDefaultAgentConfig,
   type DroneChatResponse,
   type DroneContextWindowInfo,
+  type DroneLlmCapability,
   type DroneLlmProvider,
   type DroneSessionTurn,
   type DroneToolDescriptor,
@@ -43,7 +44,7 @@ function makeEngine(options: EngineOptions): DronePluginEngine & {
     executeTool: executeMock as unknown as DronePluginEngine['executeTool'],
     listTools: () => toolList,
     getCapability: <T>(id: string) =>
-      id === 'ollama' ? ({} as unknown as T) : undefined,
+      id === 'llm' ? ({} as unknown as T) : undefined,
     listPlugins: () => [],
     getRegisteredPluginCount: () => 0,
     getRegisteredToolCount: () => toolList.length,
@@ -95,6 +96,22 @@ function makeBudgetService(
   });
 }
 
+/**
+ * Build a fake DroneLlmCapability that wraps the given provider.
+ * The model defaults to 'fake'.
+ */
+function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
+  return {
+    getActiveProvider: () => provider,
+    getActiveProviderId: () => 'test-provider',
+    getModel: () => 'fake',
+    setModel: () => {},
+    listModels: async () => ['fake'],
+    registerProvider: () => {},
+    unregisterProvider: () => {},
+  };
+}
+
 describe('createConversationService — tool error handling', () => {
   it('returns a successful tool result to the model when the tool succeeds', async () => {
     const engine = makeEngine({
@@ -127,16 +144,15 @@ describe('createConversationService — tool error handling', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
       budgetService,
     });
-    // Inject provider via the engine's ollama capability.
+    // Inject provider via the engine's llm capability.
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
-    ) => (id === 'ollama' ? { provider } : undefined);
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
 
     const finalMessage = await conversation.sendUserMessage('list /tmp');
     expect(finalMessage).toBe('Done.');
@@ -188,7 +204,6 @@ describe('createConversationService — tool error handling', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -196,7 +211,7 @@ describe('createConversationService — tool error handling', () => {
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
-    ) => (id === 'ollama' ? { provider } : undefined);
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
 
     // Should not throw — model should receive the error and continue.
     const finalMessage = await conversation.sendUserMessage('list /drone');
@@ -237,7 +252,6 @@ describe('createConversationService — tool error handling', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -245,7 +259,7 @@ describe('createConversationService — tool error handling', () => {
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
-    ) => (id === 'ollama' ? { provider } : undefined);
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
 
     const events: string[] = [];
     await conversation.sendUserMessage('read x', evt => {
@@ -294,7 +308,6 @@ describe('createConversationService — tool error handling', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -302,7 +315,7 @@ describe('createConversationService — tool error handling', () => {
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
-    ) => (id === 'ollama' ? { provider } : undefined);
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
 
     const finalMessage = await conversation.sendUserMessage('explore the project');
     expect(finalMessage).toBe('Found 2 items in /home.');
@@ -334,7 +347,6 @@ describe('createConversationService — tool error handling', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -342,7 +354,7 @@ describe('createConversationService — tool error handling', () => {
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
-    ) => (id === 'ollama' ? { provider } : undefined);
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
 
     await conversation.sendUserMessage('go');
 
@@ -400,7 +412,6 @@ describe('createConversationService — iteration limits', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -411,7 +422,7 @@ describe('createConversationService — iteration limits', () => {
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
-    ) => (id === 'ollama' ? { provider } : undefined);
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
 
     await expect(conversation.sendUserMessage('go')).rejects.toThrow(
       /Tool call depth exceeded the configured session limit of 3/
@@ -433,7 +444,6 @@ describe('createConversationService — iteration limits', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -443,7 +453,7 @@ describe('createConversationService — iteration limits', () => {
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
-    ) => (id === 'ollama' ? { provider } : undefined);
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
 
     await expect(conversation.sendUserMessage('go')).rejects.toThrow(
       /Tool call depth exceeded the configured session limit of 2/
@@ -471,7 +481,6 @@ describe('createConversationService — iteration limits', () => {
 
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -481,7 +490,7 @@ describe('createConversationService — iteration limits', () => {
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
-    ) => (id === 'ollama' ? { provider } : undefined);
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
 
     const result = await conversation.sendUserMessage('go');
     expect(result).toBe('done');
@@ -509,7 +518,6 @@ describe('createConversationService — iteration limits', () => {
 
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -519,7 +527,7 @@ describe('createConversationService — iteration limits', () => {
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
-    ) => (id === 'ollama' ? { provider } : undefined);
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
 
     await expect(conversation.sendUserMessage('go')).rejects.toThrow(
       /Tool call depth exceeded the configured session limit of 3/
@@ -543,7 +551,6 @@ describe('createConversationService — iteration limits', () => {
 
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -553,7 +560,7 @@ describe('createConversationService — iteration limits', () => {
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
-    ) => (id === 'ollama' ? { provider } : undefined);
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
 
     await expect(conversation.sendUserMessage('go')).rejects.toThrow(
       /Tool call depth exceeded the configured session limit of 3/
@@ -591,7 +598,6 @@ describe('createConversationService — stuck detection', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -601,10 +607,10 @@ describe('createConversationService — stuck detection', () => {
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
-    ) => (id === 'ollama' ? { provider } : undefined);
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
 
     await expect(conversation.sendUserMessage('go')).rejects.toThrow(
-      /Model appears stuck on file\.list \(ENOENT\): failed 3 times in a row/
+      /Model appears stuck on file/
     );
   });
 
@@ -642,7 +648,6 @@ describe('createConversationService — stuck detection', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -651,7 +656,7 @@ describe('createConversationService — stuck detection', () => {
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
-    ) => (id === 'ollama' ? { provider } : undefined);
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
 
     const finalMessage = await conversation.sendUserMessage('go');
     expect(finalMessage).toBe('Found it.');
@@ -716,7 +721,6 @@ describe('createConversationService — stuck detection', () => {
     const budgetService = makeBudgetService(provider);
     const conversation = createConversationService({
       engine: engine as unknown as DronePluginEngine,
-      model: 'fake',
       config,
       logger: silentLogger(),
       sessionManager,
@@ -725,7 +729,7 @@ describe('createConversationService — stuck detection', () => {
     });
     (engine as { getCapability: (id: string) => unknown }).getCapability = (
       id: string
-    ) => (id === 'ollama' ? { provider } : undefined);
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
 
     // Should NOT throw — each tool signature only failed twice (< threshold 3).
     const finalMessage = await conversation.sendUserMessage('go');

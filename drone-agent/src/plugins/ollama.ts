@@ -2,11 +2,14 @@ import { Ollama, type ShowResponse, type ToolCall } from 'ollama';
 import type {
   DroneChatMessage,
   DroneChatResponse,
+  DroneLlmCapability,
   DroneLlmProvider,
+  DroneLlmProviderRegistration,
   DronePlugin,
   DroneToolCall,
   DroneToolDescriptor,
 } from 'drone-core';
+import { PRECEDENCE_LLM_PROVIDER } from 'drone-core';
 
 type OllamaPluginCapability = {
   provider: DroneLlmProvider;
@@ -134,7 +137,7 @@ export const ollamaPlugin: DronePlugin = {
     version: '0.1.0',
     description: 'Provides local chat completion through Ollama.',
     defaultEnabled: true,
-    dependencies: [],
+    dependencies: [{ id: 'llm' }],
   },
   register: async registration => {
     const provider: DroneLlmProvider = {
@@ -208,6 +211,7 @@ export const ollamaPlugin: DronePlugin = {
       },
     };
 
+    // Offer the legacy OllamaPluginCapability for backward compat
     registration.offer<OllamaPluginCapability>({
       provider,
       listModels: async () => {
@@ -218,67 +222,30 @@ export const ollamaPlugin: DronePlugin = {
       },
     });
 
+    // Register with the LLM broker
+    const llmCap = registration.request<DroneLlmCapability>('llm');
+    if (llmCap) {
+      const llmRegistration: DroneLlmProviderRegistration = {
+        id: 'ollama',
+        precedence: PRECEDENCE_LLM_PROVIDER,
+        getProvider: () => provider,
+        listModels: async () => {
+          const agentConfig = registration.getConfig();
+          const client = new Ollama({ host: agentConfig.ollama.host });
+          const response = await client.list();
+          return response.models.map(m => m.name);
+        },
+        getDefaultModel: () => registration.getConfig().ollama.model,
+      };
+      llmCap.registerProvider(llmRegistration);
+    } else {
+      registration.logger.warn(
+        'LLM broker not available; ollama will not be registered as a provider'
+      );
+    }
+
     registration.hooks.onPluginsLoaded(async () => {
       registration.logger.info('ollama provider ready');
     });
-
-    // -----------------------------------------------------------------------
-    // /model slash command — list models or switch model. Both the CLI
-    // interactive loop and the TUI delegate to this handler via
-    // engine.dispatchSlashCommand instead of hardcoding model-specific logic.
-    // -----------------------------------------------------------------------
-    registration.registerSlashCommand({
-      command: '/model',
-      description: 'List models or switch model.',
-      handler: async ctx => {
-        if (!ctx.conversation) {
-          ctx.logger.warn('Conversation service not available — cannot list or switch models.');
-          return true;
-        }
-
-        const rest = ctx.args.join(' ');
-        const ollama = ctx.engine.getCapability<{
-          listModels: () => Promise<string[]>;
-        }>('ollama');
-
-        if (!ollama) {
-          ctx.logger.warn(
-            'Ollama capability not available — cannot list or switch models.'
-          );
-          return true;
-        }
-
-        // No argument: list models
-        if (rest.length === 0) {
-          try {
-            const models = await ollama.listModels();
-            const current = ctx.conversation.getModel();
-            const lines = models.map(m =>
-              m === current ? `  * ${m} (current)` : `    ${m}`
-            );
-            ctx.logger.info(`Available models:\n${lines.join('\n')}`);
-            ctx.logger.info(`\nUse /model <name> to switch.`);
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            ctx.logger.warn(`Failed to list models: ${msg}`);
-          }
-          return true;
-        }
-
-        // Has argument: switch model
-        const modelName = rest;
-        try {
-          ctx.conversation.setModel(modelName);
-          ctx.logger.info(`Switched to model: ${modelName}`);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          ctx.logger.warn(`Failed to switch model: ${msg}`);
-        }
-        return true;
-      },
-    });
-
-    // Help snippet surfaces in `/help` and the TUI help screen.
-    registration.registerHelp('/model [name]         List models or switch model');
   },
 };

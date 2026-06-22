@@ -10,10 +10,12 @@ import { execPlugin } from './exec.js';
 import { fetchPlugin } from './fetch.js';
 import { filePlugin } from './file.js';
 import { gitPlugin } from './git.js';
+import { llmPlugin } from './llm/index.js';
 import { lspPlugin } from './lsp/plugin.js';
 import { mcpPlugin } from './mcp/index.js';
 import { memoryPlugin } from './memory/index.js';
 import { ollamaPlugin } from './ollama.js';
+import { openrouterPlugin } from './openrouter/index.js';
 import { personaPlugin } from './persona/index.js';
 import { personaProviderProjectPlugin } from './persona-provider-project/index.js';
 import { personaProviderUserPlugin } from './persona-provider-user/index.js';
@@ -40,9 +42,11 @@ const staticBuiltInPlugins: DronePlugin[] = [
   fetchPlugin,
   utilsPlugin,
   macrosPlugin,
+  llmPlugin,
   lspPlugin,
   mcpPlugin,
   ollamaPlugin,
+  openrouterPlugin,
   filePlugin,
   searchPlugin,
   gitPlugin,

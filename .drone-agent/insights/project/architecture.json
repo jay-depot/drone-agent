@@ -18,5 +18,9 @@
   {
     "timestamp": "2026-06-22T22:10:02.396Z",
     "insight": "The config plugin re-discovers layers from disk independently of the engine's config, which is necessary because the engine's config is set at init time and doesn't reflect disk changes. However, this means config.get and registration.getConfig() can disagree if the engine was initialized with a different config than what's on disk. The plugin handles this by merging discovered layers itself for config.get."
+  },
+  {
+    "timestamp": "2026-06-22T22:46:13.707Z",
+    "insight": "The conversation service and CLI entry point hardcode `engine.getCapability<OllamaCapability>('ollama')` to resolve the LLM provider. This makes it difficult to add alternative providers like OpenRouter. A broker pattern (like skills/personas) would decouple provider resolution from the consumer."
   }
 ]

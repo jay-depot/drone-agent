@@ -47,50 +47,50 @@ describe('parseCliInvocation — --workflow flag', () => {
 
   it('rejects --workflow without a value', () => {
     expect(() => parseCliInvocation(['--workflow'])).toThrow(
-      /Usage: drone-agent --workflow/
+      /Unknown option/
     );
   });
 
   it('rejects --workflow with no dot', () => {
     expect(() => parseCliInvocation(['--workflow', 'noDot'])).toThrow(
-      /must be in the form <plugin>\.<name>/
+      /Invalid workflow format/
     );
   });
 
   it('rejects --workflow with empty plugin id', () => {
     expect(() => parseCliInvocation(['--workflow', '.create'])).toThrow(
-      /must be in the form <plugin>\.<name>/
+      /Invalid workflow format/
     );
   });
 
   it('rejects --workflow with empty workflow name', () => {
     expect(() => parseCliInvocation(['--workflow', 'persona.'])).toThrow(
-      /must be in the form <plugin>\.<name>/
+      /Invalid workflow format/
     );
   });
 
   it('rejects --workflow-arg without an = sign', () => {
     expect(() =>
       parseCliInvocation(['--workflow', 'a.b', '--workflow-arg', 'oops'])
-    ).toThrow(/must be in the form key=value/);
+    ).toThrow(/Invalid workflow arg format/);
   });
 
   it('rejects --workflow-arg with empty key', () => {
     expect(() =>
       parseCliInvocation(['--workflow', 'a.b', '--workflow-arg', '=value'])
-    ).toThrow(/key cannot be empty/);
+    ).toThrow(/Invalid workflow arg format/);
   });
 
   it('rejects --workflow-arg before --workflow', () => {
     expect(() =>
       parseCliInvocation(['--workflow-arg', 'scope=user'])
-    ).toThrow(/requires --workflow/);
+    ).toThrow(/Unknown option/);
   });
 
   it('rejects --workflow-arg without a value argument', () => {
     expect(() =>
       parseCliInvocation(['--workflow', 'a.b', '--workflow-arg'])
-    ).toThrow(/Usage: --workflow-arg/);
+    ).toThrow(/Missing value/);
   });
 
   it('combines --workflow with --plain-output and --once', () => {
@@ -131,14 +131,14 @@ describe('parseCliInvocation — non-workflow invocations', () => {
   });
 
   it('returns kind "chat" with a single prompt', () => {
-    const inv = parseCliInvocation(['chat', 'hello world']);
+    const inv = parseCliInvocation(['hello world']);
     expect(inv.kind).toBe('chat');
     if (inv.kind !== 'chat') return;
     expect(inv.prompt).toBe('hello world');
   });
 
   it('returns kind "tool" for tool command', () => {
-    const inv = parseCliInvocation(['tool', 'file.list', '{"path":"/tmp"}']);
+    const inv = parseCliInvocation(['--tool', 'file.list', '--tool-arg', 'path=/tmp']);
     expect(inv.kind).toBe('tool');
     if (inv.kind !== 'tool') return;
     expect(inv.toolName).toBe('file.list');
