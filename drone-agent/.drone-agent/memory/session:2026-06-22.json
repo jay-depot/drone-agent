@@ -1,0 +1,14 @@
+{
+  "id": "3ad3ca90-df3a-4e33-8c37-d5b76b924d20",
+  "key": "session:2026-06-22",
+  "value": {
+    "shutdownAt": "2026-06-22T01:29:29.678Z",
+    "details": "Session ended. Use memory.recall to retrieve stored facts."
+  },
+  "tags": [
+    "session",
+    "summary"
+  ],
+  "createdAt": "2026-06-22T01:15:34.155Z",
+  "updatedAt": "2026-06-22T01:29:29.679Z"
+}

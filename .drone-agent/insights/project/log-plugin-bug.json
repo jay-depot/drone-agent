@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-06-22T06:37:47.001Z",
+    "insight": "The log plugin's flush-once-per-turn strategy is fundamentally broken because the session manager mutates turns in-place (appending tool results and subsequent assistant messages to the same turn). The log plugin flushes on onAfterToolCall, but the conversation service appends tool results AFTER the hook fires. Since the plugin only logs each turn once, all subsequent messages added to the same turn are lost."
+  }
+]

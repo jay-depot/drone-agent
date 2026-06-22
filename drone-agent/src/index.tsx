@@ -649,25 +649,25 @@ async function main(): Promise<void> {
     // capability is set lazily (by the TUI App on mount, or by the
     // readline host in plain-output mode), so we resolve it at call
     // time via engine.getElicitation().
-    onToolIterationLimitReached:
-      resolvedConfig.config.session.promptOnToolIterationLimit
-        ? async (current, max) => {
-            const elicit = engine.getElicitation();
-            if (!elicit) return false; // non-interactive → abort
-            const answers = await elicit.ask([
-              {
-                id: 'continue',
-                prompt: `Tool call depth reached ${current}/${max}. Continue the session?`,
-                choices: [
-                  { value: 'yes', label: 'Yes, continue' },
-                  { value: 'no', label: 'No, stop' },
-                ],
-                defaultValue: 'no',
-              },
-            ]);
-            return answers.continue === 'yes';
-          }
-        : undefined,
+    onToolIterationLimitReached: resolvedConfig.config.session
+      .promptOnToolIterationLimit
+      ? async (current, max) => {
+          const elicit = engine.getElicitation();
+          if (!elicit) return false; // non-interactive → abort
+          const answers = await elicit.ask([
+            {
+              id: 'continue',
+              prompt: `Tool call depth reached ${current}/${max}. Continue the session?`,
+              choices: [
+                { value: 'yes', label: 'Yes, continue' },
+                { value: 'no', label: 'No, stop' },
+              ],
+              defaultValue: 'no',
+            },
+          ]);
+          return answers.continue === 'yes';
+        }
+      : undefined,
   });
   const registeredPlugins = await engine.initialize();
 

@@ -1,0 +1,10 @@
+[
+  {
+    "timestamp": "2026-06-22T06:18:11.008Z",
+    "insight": "The skills plugin lacks a reload mechanism entirely — skills are loaded once in onPluginsLoaded. The persona plugin has reloadPersonas() in its capability. A skills.create workflow will need a reloadSkills() capability and a skills.reload tool so the assistant can trigger a reload after writing the skill body."
+  },
+  {
+    "timestamp": "2026-06-22T18:15:49.149Z",
+    "insight": "The persona directory structure change is a significant refactor that touches persona loading, skill loading (persona-owned skills), insight storage, the persona wizard, and all tests. The current flat `personas/<name>.md` layout needs to become `personas/<name>/persona.md` with subdirectories for skills and insights."
+  }
+]
