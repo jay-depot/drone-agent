@@ -1,7 +1,7 @@
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import os, { tmpdir } from 'node:os';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createDefaultAgentConfig,
   type DronePlugin,
@@ -12,6 +12,22 @@ import { createTestPlugin, silentLogger } from './helpers.js';
 
 function insightFilePath(projectDir: string, targetType: string, targetId: string): string {
   return path.join(projectDir, '.drone-agent', 'insights', targetType, `${targetId}.json`);
+}
+
+function userInsightFilePath(targetType: string, targetId: string): string {
+  return path.join(os.homedir(), '.drone-agent', 'insights', targetType, `${targetId}.json`);
+}
+
+async function withTempHome<T>(fn: (homeDir: string) => Promise<T>): Promise<T> {
+  const dir = await mkdtemp(path.join(tmpdir(), 'self-improvement-home-'));
+  const origHome = os.homedir();
+  try {
+    vi.spyOn(os, 'homedir').mockReturnValue(dir);
+    return await fn(dir);
+  } finally {
+    vi.restoreAllMocks();
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 describe('self-improvement plugin', () => {
@@ -87,10 +103,10 @@ describe('self-improvement plugin', () => {
     expect(insightTool!.inputSchema!.required).toContain('insight');
   });
 
-  it('writes an insight for a persona', async () => {
+  it('writes an insight for a project-level persona', async () => {
     const personaCap = {
       getPersonas: () => [
-        { id: 'coder', name: 'Coder', description: 'A coding persona' },
+        { id: 'coder', name: 'Coder', description: 'A coding persona', scope: 'project' as const },
       ],
       getActivePersona: () => null,
       selectPersona: () => {},
@@ -112,7 +128,7 @@ describe('self-improvement plugin', () => {
     expect(parsed.targetId).toBe('coder');
     expect(parsed.entryCount).toBe(1);
 
-    // Verify the file was written
+    // Verify the file was written at project level
     const filePath = insightFilePath(tmpDir, 'persona', 'coder');
     const raw = await readFile(filePath, 'utf-8');
     const entries = JSON.parse(raw);
@@ -124,7 +140,44 @@ describe('self-improvement plugin', () => {
     expect(entries[0].timestamp).toBeDefined();
   });
 
-  it('writes an insight for a skill', async () => {
+  it('writes an insight for a user-level persona', async () => {
+    await withTempHome(async homeDir => {
+      const personaCap = {
+        getPersonas: () => [
+          { id: 'helper', name: 'Helper', description: 'A helper persona', scope: 'user' as const },
+        ],
+        getActivePersona: () => null,
+        selectPersona: () => {},
+        onPersonaChange: () => {},
+        reloadPersonas: async () => {},
+      };
+
+      const engine = await createEngine({ personaCapability: personaCap });
+
+      const result = await engine.executeTool('self-improvement.insight', {
+        targetType: 'persona',
+        targetId: 'helper',
+        insight: 'The helper persona should be more concise.',
+      });
+
+      const parsed = JSON.parse(result);
+      expect(parsed.ok).toBe(true);
+      expect(parsed.targetType).toBe('persona');
+      expect(parsed.targetId).toBe('helper');
+      expect(parsed.entryCount).toBe(1);
+
+      // Verify the file was written at user level (under mocked homedir)
+      const filePath = userInsightFilePath('persona', 'helper');
+      const raw = await readFile(filePath, 'utf-8');
+      const entries = JSON.parse(raw);
+      expect(Array.isArray(entries)).toBe(true);
+      expect(entries).toHaveLength(1);
+      expect(entries[0].insight).toBe('The helper persona should be more concise.');
+      expect(entries[0].timestamp).toBeDefined();
+    });
+  });
+
+  it('writes an insight for a project-level skill', async () => {
     const skillsCap = {
       getSkills: () => [
         { id: 'testing', name: 'Testing', description: 'Testing skill', recall: [], modelInvocation: true, body: '...', source: 'project' as const },
@@ -158,10 +211,47 @@ describe('self-improvement plugin', () => {
     );
   });
 
+  it('writes an insight for a user-level skill', async () => {
+    await withTempHome(async homeDir => {
+      const skillsCap = {
+        getSkills: () => [
+          { id: 'helper-skill', name: 'Helper', description: 'A helper skill', recall: [], modelInvocation: true, body: '...', source: 'user' as const },
+        ],
+        getSkill: (id: string) =>
+          id === 'helper-skill'
+            ? { id: 'helper-skill', name: 'Helper', description: 'A helper skill', recall: [], modelInvocation: true, body: '...', source: 'user' as const }
+            : undefined,
+      };
+
+      const engine = await createEngine({ skillsCapability: skillsCap });
+
+      const result = await engine.executeTool('self-improvement.insight', {
+        targetType: 'skill',
+        targetId: 'helper-skill',
+        insight: 'The helper skill should be more detailed.',
+      });
+
+      const parsed = JSON.parse(result);
+      expect(parsed.ok).toBe(true);
+      expect(parsed.targetType).toBe('skill');
+      expect(parsed.targetId).toBe('helper-skill');
+      expect(parsed.entryCount).toBe(1);
+
+      // Verify the file was written at user level (under mocked homedir)
+      const filePath = userInsightFilePath('skill', 'helper-skill');
+      const raw = await readFile(filePath, 'utf-8');
+      const entries = JSON.parse(raw);
+      expect(Array.isArray(entries)).toBe(true);
+      expect(entries).toHaveLength(1);
+      expect(entries[0].insight).toBe('The helper skill should be more detailed.');
+      expect(entries[0].timestamp).toBeDefined();
+    });
+  });
+
   it('appends to an existing insights file', async () => {
     const personaCap = {
       getPersonas: () => [
-        { id: 'reviewer', name: 'Reviewer', description: 'A review persona' },
+        { id: 'reviewer', name: 'Reviewer', description: 'A review persona', scope: 'project' as const },
       ],
       getActivePersona: () => null,
       selectPersona: () => {},

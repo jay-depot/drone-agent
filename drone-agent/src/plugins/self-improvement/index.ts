@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import type { DronePlugin, DronePromptFragment } from 'drone-core';
 import type { DronePersonaCapability } from '../persona/index.js';
 import type { DroneSkillsCapability } from '../skills/index.js';
@@ -144,9 +145,31 @@ export const selfImprovementPlugin: DronePlugin = {
           );
         }
 
+        // Determine base directory based on scope/source
+        let baseDir = projectDir;
+        if (targetType === 'persona') {
+          const personaCap = registration.request<DronePersonaCapability>('persona');
+          if (personaCap) {
+            const persona = personaCap
+              .getPersonas()
+              .find(p => p.id === targetId);
+            if (persona?.scope === 'user') {
+              baseDir = os.homedir();
+            }
+          }
+        } else if (targetType === 'skill') {
+          const skillsCap = registration.request<DroneSkillsCapability>('skills');
+          if (skillsCap) {
+            const skill = skillsCap.getSkill(targetId);
+            if (skill?.source === 'user') {
+              baseDir = os.homedir();
+            }
+          }
+        }
+
         // Write insight to parallel JSON file
         const insightsDir = path.join(
-          projectDir,
+          baseDir,
           INSIGHTS_DIR,
           INSIGHTS_SUBDIR,
           targetType
