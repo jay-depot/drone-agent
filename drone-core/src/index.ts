@@ -482,8 +482,28 @@ export type DronePersonaDefinition = {
   /**
    * Optional list of skill ids owned by this persona. Skills are loaded
    * from a `skills/` subdirectory relative to the persona file.
+   * @deprecated Skills are now auto-detected from the skills/ subdirectory.
    */
   skillIds?: string[];
+  /**
+   * Optional glob patterns for filtering which tools the LLM sees when
+   * this persona is active. Each pattern is matched against the canonical
+   * tool name (e.g. `exec.run`, `mcp.filesystem.read`). Supports `*` and
+   * `?` wildcards. Prefix a pattern with `!` to exclude matching tools.
+   * When absent, all tools are visible.
+   *
+   * Example: `['exec.*', 'file.*', '!exec.run']`
+   */
+  allowedTools?: string[];
+  /**
+   * Optional glob patterns for filtering which global skills the LLM
+   * sees when this persona is active. Each pattern is matched against
+   * the skill id. Supports `*` and `?` wildcards. Prefix a pattern with
+   * `!` to exclude matching skills. Persona-owned skills (from the
+   * `skills/` subdirectory) are always visible regardless of this filter.
+   * When absent, all global skills are visible.
+   */
+  allowedSkills?: string[];
 };
 
 export type DroneMcpError = {
@@ -932,3 +952,68 @@ export {
   estimateToolDescriptorTokens,
   estimateTextTokens,
 } from './token-estimate.js';
+/**
+ * Convert a simple glob pattern to a RegExp.
+ * Supports `*` (match any sequence of characters) and `?` (match any single char).
+ * The pattern is anchored to the full string.
+ */
+function globToRegex(pattern: string): RegExp {
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*')
+    .replace(/\?/g, '.');
+  return new RegExp(`^${escaped}$`);
+}
+
+/**
+ * Match a name against a single glob pattern.
+ * Supports `*` and `?` wildcards.
+ */
+export function matchGlob(pattern: string, name: string): boolean {
+  return globToRegex(pattern).test(name);
+}
+
+/**
+ * Filter a list of items by inclusion/exclusion glob patterns.
+ *
+ * - If `patterns` is empty or undefined, all items are returned.
+ * - Patterns starting with `!` are exclusion patterns (the `!` is stripped).
+ * - Items matching at least one inclusion pattern AND not matching any
+ *   exclusion pattern are returned.
+ * - If no inclusion patterns are given (all patterns are `!`-prefixed),
+ *   all items are included by default (only exclusions apply).
+ */
+export function filterByGlobPatterns(
+  items: string[],
+  patterns: string[] | undefined
+): string[] {
+  if (!patterns || patterns.length === 0) {
+    return [...items];
+  }
+
+  const inclusions: string[] = [];
+  const exclusions: string[] = [];
+
+  for (const pattern of patterns) {
+    if (pattern.startsWith('!')) {
+      exclusions.push(pattern.slice(1));
+    } else {
+      inclusions.push(pattern);
+    }
+  }
+
+  const hasInclusions = inclusions.length > 0;
+
+  return items.filter(item => {
+    // Must match at least one inclusion pattern (or all items if no inclusions)
+    if (hasInclusions && !inclusions.some(p => matchGlob(p, item))) {
+      return false;
+    }
+    // Must not match any exclusion pattern
+    if (exclusions.some(p => matchGlob(p, item))) {
+      return false;
+    }
+    return true;
+  });
+}
+

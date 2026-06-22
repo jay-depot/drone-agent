@@ -31,6 +31,9 @@ export const skillsPlugin: DronePlugin = {
     description:
       'Broker for skill providers. Provides skills.recall, skills.list, skills.reload, skills.create tools.',
     defaultEnabled: false,
+    dependencies: [
+      { id: 'persona', optional: true },
+    ],
   },
   register: async registration => {
     const providers: DroneSkillProvider[] = [];
@@ -87,9 +90,17 @@ export const skillsPlugin: DronePlugin = {
         const all = getAllSkills();
         if (all.length === 0) return false;
 
+        // Filter skills through the active persona's allowedSkills, if any.
+        const personaCap = registration.request<{
+          getFilteredSkills: (skills: DroneSkillDefinition[]) => DroneSkillDefinition[];
+        }>('persona');
+        const visible = personaCap ? personaCap.getFilteredSkills(all) : all;
+
+        if (visible.length === 0) return false;
+
         const lines: string[] = ['## Skills'];
 
-        for (const skill of all) {
+        for (const skill of visible) {
           const recall = skill.recall.length > 0
             ? ` — ${skill.recall.join('; ')}`
             : '';

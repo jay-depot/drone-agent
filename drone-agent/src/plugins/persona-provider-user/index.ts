@@ -64,20 +64,17 @@ export const personaProviderUserPlugin: DronePlugin = {
 
           // Build new aggregated map of persona-owned skills.
           // Each persona's skills live in <personaDir>/<id>/skills/.
+          // All .md files in that directory are auto-detected as owned skills.
           const newSkills = new Map<string, DroneSkillDefinition>();
 
           for (const persona of loaded) {
-            if (!persona.skillIds || persona.skillIds.length === 0) continue;
             const personaSkillsDir = path.join(personaDir, persona.id, SKILLS_DIR);
             const allSkills = await loadSkillsFromDir(personaSkillsDir, 'user');
 
-            for (const skillId of persona.skillIds) {
-              const skill = allSkills.find(s => s.id === skillId);
-              if (skill) {
-                skill.precedence = PRECEDENCE_PERSONA_USER;
-                skill.personaId = persona.id;
-                newSkills.set(skill.id, skill);
-              }
+            for (const skill of allSkills) {
+              skill.precedence = PRECEDENCE_PERSONA_USER;
+              skill.personaId = persona.id;
+              newSkills.set(skill.id, skill);
             }
           }
 

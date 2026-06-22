@@ -4,6 +4,7 @@ import type {
   DroneLlmProvider,
   DroneLogger,
   DroneSessionSafetyTrimPayload,
+  DroneToolDescriptor,
 } from 'drone-core';
 import type { DronePluginEngine } from './plugin-engine.js';
 import type { DroneSessionManager } from './session-manager.js';
@@ -84,6 +85,18 @@ export function createConversationService({
     }
 
     return ollama.provider;
+  }
+
+  /**
+   * Get the list of tools visible to the LLM, filtered by the active
+   * persona's `allowedTools` patterns (if any).
+   */
+  function getLlmTools(): DroneToolDescriptor[] {
+    const allTools = engine.listTools();
+    const personaCap = engine.getCapability<{
+      getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
+    }>('persona');
+    return personaCap ? personaCap.getFilteredTools(allTools) : allTools;
   }
 
   async function ensureSafeBudget(
@@ -191,7 +204,7 @@ export function createConversationService({
       sessionManager.appendUserMessage(prompt);
 
       const provider = getProvider();
-      const tools = engine.listTools();
+      const tools = getLlmTools();
       let iterationCount = 0;
       // Tracks the most recent failing tool signature and how many times
       // we've seen it in a row. Reset to null on any success or on a new

@@ -18,8 +18,16 @@ const CONFIG_DIR = '.drone-agent';
  *     - Prefer TypeScript
  *   skills:
  *     - code-review
+ *   tools:
+ *     - exec.*
+ *     - file.*
+ *     - !exec.run
  *   ---
  *   System prompt override body (optional)
+ *
+ * The `skills` field filters which global skills the LLM sees (glob patterns).
+ * The `tools` field filters which tools the LLM sees (glob patterns).
+ * Persona-owned skills (from the `skills/` subdirectory) are always visible.
  */
 function _parsePersonaMdInternal(
   id: string,
@@ -65,7 +73,9 @@ function _parsePersonaMdInternal(
       if (currentArrayKey === 'fragments') {
         definition.promptFragments = [...arrayValues];
       } else if (currentArrayKey === 'skills') {
-        definition.skillIds = [...arrayValues];
+        definition.allowedSkills = [...arrayValues];
+      } else if (currentArrayKey === 'tools') {
+        definition.allowedTools = [...arrayValues];
       }
       currentArrayKey = null;
       arrayValues.length = 0;
@@ -96,6 +106,10 @@ function _parsePersonaMdInternal(
       if (value === '') {
         currentArrayKey = 'skills';
       }
+    } else if (key === 'tools') {
+      if (value === '') {
+        currentArrayKey = 'tools';
+      }
     }
   }
 
@@ -104,7 +118,10 @@ function _parsePersonaMdInternal(
     definition.promptFragments = [...arrayValues];
   }
   if (currentArrayKey === 'skills' && arrayValues.length > 0) {
-    definition.skillIds = [...arrayValues];
+    definition.allowedSkills = [...arrayValues];
+  }
+  if (currentArrayKey === 'tools' && arrayValues.length > 0) {
+    definition.allowedTools = [...arrayValues];
   }
 
   if (body.length > 0) {

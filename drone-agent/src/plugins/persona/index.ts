@@ -3,7 +3,10 @@ import type {
   DronePersonaProvider,
   DronePlugin,
   DronePromptFragment,
+  DroneSkillDefinition,
+  DroneToolDescriptor,
 } from 'drone-core';
+import { filterByGlobPatterns } from 'drone-core';
 import { personaCreateWorkflow } from './wizard.js';
 
 export type DronePersonaCapability = {
@@ -23,6 +26,19 @@ export type DronePersonaCapability = {
   registerProvider: (provider: DronePersonaProvider) => void;
   /** Unregister a persona provider by id. */
   unregisterProvider: (providerId: string) => void;
+  /**
+   * Filter a list of tool descriptors based on the active persona's
+   * `allowedTools` patterns. Returns all tools when no persona is active
+   * or when the persona has no `allowedTools` field.
+   */
+  getFilteredTools: (allTools: DroneToolDescriptor[]) => DroneToolDescriptor[];
+  /**
+   * Filter a list of global skills based on the active persona's
+   * `allowedSkills` patterns, then append persona-owned skills (which
+   * are always visible). Returns all skills when no persona is active
+   * or when the persona has no `allowedSkills` field.
+   */
+  getFilteredSkills: (allSkills: DroneSkillDefinition[]) => DroneSkillDefinition[];
 };
 
 export const personaPlugin: DronePlugin = {
@@ -85,6 +101,57 @@ export const personaPlugin: DronePlugin = {
         if (persona) return persona;
       }
       return undefined;
+    }
+
+    // ── Filtering helpers ───────────────────────────────────────────
+    function getFilteredTools(
+      allTools: DroneToolDescriptor[]
+    ): DroneToolDescriptor[] {
+      if (!activePersona || !activePersona.allowedTools) {
+        return allTools;
+      }
+      const names = allTools.map(t => t.name);
+      const filtered = filterByGlobPatterns(names, activePersona.allowedTools);
+      const filteredSet = new Set(filtered);
+      return allTools.filter(t => filteredSet.has(t.name));
+    }
+
+    function getFilteredSkills(
+      allSkills: DroneSkillDefinition[]
+    ): DroneSkillDefinition[] {
+      if (!activePersona) {
+        return allSkills;
+      }
+
+      // Separate persona-owned skills (always visible) from global skills
+      const ownedSkills: DroneSkillDefinition[] = [];
+      const globalSkills: DroneSkillDefinition[] = [];
+
+      for (const skill of allSkills) {
+        if (skill.personaId === activePersona.id) {
+          ownedSkills.push(skill);
+        } else {
+          globalSkills.push(skill);
+        }
+      }
+
+      // If no allowedSkills filter, return all global + owned
+      if (!activePersona.allowedSkills) {
+        return [...globalSkills, ...ownedSkills];
+      }
+
+      // Filter global skills by allowedSkills patterns
+      const globalIds = globalSkills.map(s => s.id);
+      const filteredIds = filterByGlobPatterns(
+        globalIds,
+        activePersona.allowedSkills
+      );
+      const filteredSet = new Set(filteredIds);
+      const filteredGlobal = globalSkills.filter(s =>
+        filteredSet.has(s.id)
+      );
+
+      return [...filteredGlobal, ...ownedSkills];
     }
 
     // Dynamic prompt fragment that renders the active persona's override/fragments
@@ -179,6 +246,10 @@ export const personaPlugin: DronePlugin = {
           `persona provider "${providerId}" unregistered`
         );
       },
+      getFilteredTools: (allTools: DroneToolDescriptor[]) =>
+        getFilteredTools(allTools),
+      getFilteredSkills: (allSkills: DroneSkillDefinition[]) =>
+        getFilteredSkills(allSkills),
     };
 
     registration.offer(capability);

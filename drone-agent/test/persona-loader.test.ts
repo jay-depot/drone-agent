@@ -130,7 +130,7 @@ describe('loadPersonas — color field', () => {
 });
 
 describe('loadPersonas — skills field', () => {
-  it('parses `skills:` from persona frontmatter', async () => {
+  it('parses `skills:` from persona frontmatter as allowedSkills', async () => {
     await withProjectDir(async dir => {
       const personaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
@@ -149,18 +149,53 @@ describe('loadPersonas — skills field', () => {
       const personas = await loadPersonas(dir);
       expect(personas.size).toBe(1);
       const p = personas.get('expert');
-      expect(p?.skillIds).toEqual(['code-review', 'security-audit']);
+      expect(p?.allowedSkills).toEqual(['code-review', 'security-audit']);
     });
   });
 
-  it('leaves skillIds undefined when the persona omits the field', async () => {
+  it('leaves allowedSkills undefined when the persona omits the field', async () => {
     await withProjectDir(async dir => {
       const personaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
       await writePersona(personaDir, 'plain', '---\nname: Plain\n---\n');
 
       const personas = await loadPersonas(dir);
-      expect(personas.get('plain')?.skillIds).toBeUndefined();
+      expect(personas.get('plain')?.allowedSkills).toBeUndefined();
+    });
+  });
+});
+
+describe('loadPersonas — tools field', () => {
+  it('parses `tools:` from persona frontmatter as allowedTools', async () => {
+    await withProjectDir(async dir => {
+      const personaDir = path.join(dir, '.drone-agent', 'personas');
+      await mkdir(personaDir, { recursive: true });
+      await writePersona(personaDir, 'restricted', [
+        '---',
+        'name: Restricted',
+        'tools:',
+        '  - exec.*',
+        '  - file.*',
+        '  - !exec.run',
+        '---',
+        '',
+      ].join('\n'));
+
+      const personas = await loadPersonas(dir);
+      expect(personas.size).toBe(1);
+      const p = personas.get('restricted');
+      expect(p?.allowedTools).toEqual(['exec.*', 'file.*', '!exec.run']);
+    });
+  });
+
+  it('leaves allowedTools undefined when the persona omits the field', async () => {
+    await withProjectDir(async dir => {
+      const personaDir = path.join(dir, '.drone-agent', 'personas');
+      await mkdir(personaDir, { recursive: true });
+      await writePersona(personaDir, 'plain', '---\nname: Plain\n---\n');
+
+      const personas = await loadPersonas(dir);
+      expect(personas.get('plain')?.allowedTools).toBeUndefined();
     });
   });
 });

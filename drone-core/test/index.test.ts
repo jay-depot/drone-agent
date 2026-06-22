@@ -3,7 +3,9 @@ import {
   applyAgentConfigLayer,
   createConsoleLogger,
   createDefaultAgentConfig,
+  filterByGlobPatterns,
   getCanonicalToolName,
+  matchGlob,
   type DroneAgentConfig,
   type PartialDroneAgentConfig,
 } from '../src/index.js';
@@ -149,5 +151,100 @@ describe('applyAgentConfigLayer', () => {
       lsp: { enabled: false },
     });
     expect(Object.keys(merged.lsp.servers)).toEqual(['x']);
+  });
+});
+
+describe('matchGlob', () => {
+  it('matches exact names', () => {
+    expect(matchGlob('exec.run', 'exec.run')).toBe(true);
+    expect(matchGlob('exec.run', 'exec.list')).toBe(false);
+  });
+
+  it('matches wildcard * across a single segment', () => {
+    expect(matchGlob('exec.*', 'exec.run')).toBe(true);
+    expect(matchGlob('exec.*', 'exec.list')).toBe(true);
+    expect(matchGlob('exec.*', 'exec.run.extra')).toBe(true);
+  });
+
+  it('matches wildcard * across multiple segments', () => {
+    expect(matchGlob('mcp.*', 'mcp.filesystem.read')).toBe(true);
+    expect(matchGlob('mcp.*', 'mcp.filesystem')).toBe(true);
+    // mcp.* requires at least a dot + something after it
+    expect(matchGlob('mcp.*', 'mcp')).toBe(false);
+  });
+
+  it('matches single-character wildcard ?', () => {
+    expect(matchGlob('file.rea?', 'file.read')).toBe(true);
+    expect(matchGlob('file.rea?', 'file.real')).toBe(true);
+    expect(matchGlob('file.rea?', 'file.reads')).toBe(false);
+  });
+
+  it('matches the catch-all *', () => {
+    expect(matchGlob('*', 'exec.run')).toBe(true);
+    expect(matchGlob('*', 'anything.here')).toBe(true);
+  });
+
+  it('is case-sensitive', () => {
+    expect(matchGlob('Exec.Run', 'exec.run')).toBe(false);
+  });
+});
+
+describe('filterByGlobPatterns', () => {
+  const items = [
+    'exec.run',
+    'exec.list',
+    'file.read',
+    'file.write',
+    'mcp.filesystem.read',
+    'mcp.filesystem.write',
+    'search.text',
+  ];
+
+  it('returns all items when patterns is empty', () => {
+    expect(filterByGlobPatterns(items, [])).toEqual(items);
+  });
+
+  it('returns all items when patterns is undefined', () => {
+    expect(filterByGlobPatterns(items, undefined)).toEqual(items);
+  });
+
+  it('filters by inclusion patterns', () => {
+    const result = filterByGlobPatterns(items, ['exec.*']);
+    expect(result).toEqual(['exec.run', 'exec.list']);
+  });
+
+  it('filters by multiple inclusion patterns', () => {
+    const result = filterByGlobPatterns(items, ['exec.*', 'file.*']);
+    expect(result).toEqual(['exec.run', 'exec.list', 'file.read', 'file.write']);
+  });
+
+  it('excludes items matching ! patterns', () => {
+    const result = filterByGlobPatterns(items, ['*', '!exec.run']);
+    expect(result).not.toContain('exec.run');
+    expect(result).toContain('exec.list');
+    expect(result).toContain('file.read');
+  });
+
+  it('combines inclusion and exclusion', () => {
+    const result = filterByGlobPatterns(items, ['exec.*', '!exec.run']);
+    expect(result).toEqual(['exec.list']);
+  });
+
+  it('exclusion-only patterns include everything except matches', () => {
+    const result = filterByGlobPatterns(items, ['!mcp.*']);
+    expect(result).not.toContain('mcp.filesystem.read');
+    expect(result).not.toContain('mcp.filesystem.write');
+    expect(result).toContain('exec.run');
+    expect(result).toContain('file.read');
+  });
+
+  it('handles multiple exclusions', () => {
+    const result = filterByGlobPatterns(items, ['*', '!exec.*', '!file.*']);
+    expect(result).toEqual(['mcp.filesystem.read', 'mcp.filesystem.write', 'search.text']);
+  });
+
+  it('returns empty array when nothing matches', () => {
+    const result = filterByGlobPatterns(items, ['nonexistent.*']);
+    expect(result).toEqual([]);
   });
 });
