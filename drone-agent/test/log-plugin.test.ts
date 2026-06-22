@@ -243,6 +243,7 @@ async function getCapability(plugin: ReturnType<typeof createLogPlugin>): Promis
       mcp: { enabled: false, requestTimeoutMs: 10000, retryCount: 1, retryDelayMs: 200, maxListPages: 25, maxListItems: 500, compatibilityMode: 'strict', servers: {} },
       compaction: { enabled: false, strategy: 'summary-drop', softThresholdPercent: 75, slicePercent: 25, minTurnsToCompact: 4, summaryMaxTokens: 800, summaryBudgetPercent: 20 },
       memory: { enabled: false },
+      log: { enabled: false },
     }),
     registerTool: () => {},
     registerPromptFragment: () => {},
