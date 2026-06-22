@@ -43,6 +43,8 @@ function makeOptions(
       getCapability: () => undefined,
       runHooks: async () => {},
       executeTool: async () => 'ok',
+      renderPromptFragments: async () => [],
+      getConfig: () => { throw new Error("getConfig not used in tui tests"); },
       getHelpSnippets: () => [],
     },
     conversation: {
@@ -151,6 +153,8 @@ describe('App', () => {
         }) as (<T>(pluginId: string) => T | undefined),
         runHooks: async () => {},
         executeTool: async () => 'ok',
+        renderPromptFragments: async () => [],
+        getConfig: () => { throw new Error("getConfig not used in tui tests"); },
         getHelpSnippets: () => [],
       },
     });

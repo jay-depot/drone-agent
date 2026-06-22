@@ -188,6 +188,9 @@ export function createFakeEngine(
     getRegisteredPluginCount: () => 0,
     getRegisteredToolCount: () => 0,
     getHelpSnippets: () => [],
+    getConfig: () => {
+      throw new Error('getConfig not implemented in fake engine');
+    },
     setElicitation: cap => {
       elicit = cap;
     },

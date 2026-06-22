@@ -59,6 +59,14 @@ export type DroneTuiOptions = {
     ) => Promise<string>;
     getHelpSnippets: () => string[];
     /**
+     * Render all registered prompt fragments to strings.
+     */
+    renderPromptFragments: () => Promise<string[]>;
+    /**
+     * Returns the resolved DroneAgentConfig used by the engine.
+     */
+    getConfig: () => import('drone-core').DroneAgentConfig;
+    /**
      * Dispatch a user-entered line to registered plugin slash commands.
      * Returns true if a handler claimed the line.
      */

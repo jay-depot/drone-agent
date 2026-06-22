@@ -354,6 +354,7 @@ function printInteractiveHelp(
   output.write(
     '  /plugins              List known plugins and enabled state\n'
   );
+  output.write('  /systemprompt         Show the current system prompt\n');
   output.write('  /tool <name> [json]   Run a registered tool directly\n');
   output.write(
     '  /exec <command>       Run a shell command through exec.run\n'
@@ -499,6 +500,22 @@ async function runInteractiveLoop(
           return `  - ${plugin.id} (${plugin.name}) ${state}${requiredLabel}`;
         });
         logger.info(`Plugins:\n${lines.join('\n')}`);
+        continue;
+      }
+
+      if (line === '/systemprompt') {
+        const fragments = await engine.renderPromptFragments();
+        const config = engine.getConfig();
+        output.write('System Prompt:\n');
+        output.write('────────────────────────────────────────\n');
+        output.write(`${config.systemPrompt}\n`);
+        if (fragments.length > 0) {
+          output.write('────────────────────────────────────────\n');
+          output.write('Prompt Fragments:\n');
+          for (const fragment of fragments) {
+            output.write(`${fragment}\n`);
+          }
+        }
         continue;
       }
 

@@ -43,6 +43,10 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
     runHooks: async (): Promise<void> => {},
     executeTool: async (): Promise<string> => 'ok',
     getHelpSnippets: (): string[] => [],
+    renderPromptFragments: async (): Promise<string[]> => [],
+    getConfig: (): import('drone-core').DroneAgentConfig => {
+      throw new Error('getConfig not used in tui-persona-color tests');
+    },
   };
   return {
     model,

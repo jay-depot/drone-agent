@@ -353,6 +353,25 @@ export function App(opts: DroneTuiOptions): JSX.Element {
         return;
       }
 
+      if (trimmed === '/systemprompt') {
+        const fragments = await opts.engine.renderPromptFragments();
+        const config = opts.engine.getConfig();
+        const lines: string[] = [
+          'System Prompt:',
+          '────────────────────────────────────────',
+          config.systemPrompt,
+        ];
+        if (fragments.length > 0) {
+          lines.push('────────────────────────────────────────');
+          lines.push('Prompt Fragments:');
+          for (const fragment of fragments) {
+            lines.push(fragment);
+          }
+        }
+        log(lines.join('\n'), 'info');
+        return;
+      }
+
       if (
         await opts.engine.dispatchSlashCommand?.(trimmed, {
           logger: {
@@ -768,6 +787,7 @@ function printHelp(
     '  /help              Show this help',
     '  /clear             Clear session',
     '  /plugins           List enabled plugins',
+    '  /systemprompt      Show the current system prompt',
   ];
 
   helpLines.push(

@@ -57,6 +57,8 @@ export type DronePluginEngine = {
   getRegisteredPluginCount: () => number;
   getRegisteredToolCount: () => number;
   getHelpSnippets: () => string[];
+  /** Returns the resolved DroneAgentConfig used by the engine. */
+  getConfig: () => DroneAgentConfig;
   /**
    * Set the host's elicitation capability. Must be called by the CLI shell
    * or TUI App BEFORE any workflow runs (and before `onSessionStart` if
@@ -411,6 +413,7 @@ export function createDronePluginEngine({
       })),
     getRegisteredPluginCount: () => registeredPlugins.length,
     getRegisteredToolCount: () => tools.size,
+    getConfig: () => config,
     getHelpSnippets: () => {
       const result: string[] = [];
       for (const [pluginId, snippets] of helpSnippets) {
