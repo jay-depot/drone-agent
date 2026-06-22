@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { DronePlugin } from 'drone-core';
+import type { DronePlugin, DronePromptFragment } from 'drone-core';
 import type { DronePersonaCapability } from '../persona/index.js';
 import type { DroneSkillsCapability } from '../skills/index.js';
 
@@ -30,6 +30,33 @@ export const selfImprovementPlugin: DronePlugin = {
   register: async registration => {
     const projectDir = process.cwd();
 
+    // ── Prompt fragment: show current active persona ─────────────────
+    const insightFragment: DronePromptFragment = {
+      key: 'insight-targets',
+      phase: 'header',
+      render: async () => {
+        const lines: string[] = [];
+
+        const personaCap =
+          registration.request<DronePersonaCapability>('persona');
+        const activePersona = personaCap?.getActivePersona();
+        if (activePersona) {
+          lines.push(
+            `Current active persona: \`${activePersona.id}\`. ` +
+              `Use \`self-improvement.insight\` with \`targetType: "persona"\` to record insights about it.`
+          );
+        }
+
+        lines.push(
+          'Use `persona.list` to see all available personas and `skills.list` to see available skills.'
+        );
+
+        return lines.join('\n');
+      },
+    };
+
+    registration.registerPromptFragment(insightFragment);
+
     // ── self-improvement.insight ─────────────────────────────────────
     registration.registerTool({
       name: 'insight',
@@ -40,7 +67,8 @@ export const selfImprovementPlugin: DronePlugin = {
         'Do this proactively as you work, and do not worry about creating ' +
         'too many insights. They will be evaluated all together all at once ' +
         'to look for patterns, so more is better! Insights should be ' +
-        'short and focused on a single observation or issue.',
+        'short and focused on a single observation or issue. ' +
+        'Use `persona.list` and `skills.list` to discover valid IDs before calling this tool.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -54,6 +82,7 @@ export const selfImprovementPlugin: DronePlugin = {
             type: 'string',
             description:
               'The id of the persona or skill this insight applies to. ' +
+              'Use `persona.list` or `skills.list` to discover valid IDs. ' +
               'For project insights, use a descriptive category like "architecture" or "workflow".',
           },
           insight: {
