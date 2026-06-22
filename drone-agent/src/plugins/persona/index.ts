@@ -309,6 +309,7 @@ export const personaPlugin: DronePlugin = {
               hasOverride: !!p.systemPromptOverride,
               fragmentCount: p.promptFragments?.length ?? 0,
               uiColor: p.uiColor ?? null,
+              toolCallLimit: p.toolCallLimit ?? null,
             })),
           },
           null,
@@ -397,6 +398,7 @@ export const personaPlugin: DronePlugin = {
             hasOverride: !!activePersona.systemPromptOverride,
             fragmentCount: activePersona.promptFragments?.length ?? 0,
             uiColor: activePersona.uiColor ?? null,
+            toolCallLimit: activePersona.toolCallLimit ?? null,
           },
           null,
           2

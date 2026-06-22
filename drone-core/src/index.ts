@@ -504,6 +504,13 @@ export type DronePersonaDefinition = {
    * When absent, all global skills are visible.
    */
   allowedSkills?: string[];
+  /**
+   * Optional override for the chained tool call limit (session.maxToolIterations).
+   * When set, this value is used instead of the configured limit while this
+   * persona is active. Useful for personas that need many tool rounds (e.g.
+   * a `code` persona) without raising the global safety limit.
+   */
+  toolCallLimit?: number;
 };
 
 export type DroneMcpError = {

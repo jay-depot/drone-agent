@@ -71,12 +71,20 @@ export function createConversationService({
   stuckErrorThreshold = 3,
   onToolIterationLimitReached,
 }: CreateConversationServiceOptions): ConversationService {
-  // Allow the constructor argument to override config, falling back to the
-  // configured value, then to a safe minimum.
-  const effectiveMaxToolIterations =
-    maxToolIterations ?? config.session.maxToolIterations ?? 50;
   let hasWarnedAboutSafetyTrim = false;
   let currentModel = initialModel;
+
+  function resolveEffectiveMaxToolIterations(): number {
+    // Check active persona's toolCallLimit first
+    const personaCap = engine.getCapability<{
+      getActivePersona: () => { toolCallLimit?: number } | null;
+    }>('persona');
+    const personaLimit = personaCap?.getActivePersona()?.toolCallLimit;
+    if (personaLimit !== undefined && personaLimit > 0) {
+      return personaLimit;
+    }
+    return maxToolIterations ?? config.session.maxToolIterations ?? 50;
+  }
 
   function getProvider(): DroneLlmProvider {
     const ollama = engine.getCapability<OllamaCapability>('ollama');
@@ -240,11 +248,12 @@ export function createConversationService({
 
         if (response.toolCalls && response.toolCalls.length > 0) {
           iterationCount += 1;
-          if (iterationCount > effectiveMaxToolIterations) {
+          const effectiveMax = resolveEffectiveMaxToolIterations();
+          if (iterationCount > effectiveMax) {
             if (onToolIterationLimitReached) {
               const shouldContinue = await onToolIterationLimitReached(
                 iterationCount,
-                effectiveMaxToolIterations
+                effectiveMax
               );
               if (shouldContinue) {
                 iterationCount = 0;
@@ -252,7 +261,7 @@ export function createConversationService({
               }
             }
             throw new Error(
-              `Tool call depth exceeded the configured session limit of ${effectiveMaxToolIterations}. ` +
+              `Tool call depth exceeded the configured session limit of ${effectiveMax}. ` +
                 'Use /clear to reset the session, or raise session.maxToolIterations in your config.'
             );
           }

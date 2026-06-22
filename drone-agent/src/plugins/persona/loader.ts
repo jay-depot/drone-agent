@@ -110,6 +110,12 @@ function _parsePersonaMdInternal(
       if (value === '') {
         currentArrayKey = 'tools';
       }
+    } else if (key === 'toolCallLimit') {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed) && Number.isInteger(parsed) && parsed > 0) {
+        definition.toolCallLimit = parsed;
+      }
+      // Silently ignore invalid values (the user can fix the file)
     }
   }
 
