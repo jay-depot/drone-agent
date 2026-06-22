@@ -41,13 +41,6 @@
   "peerDependencies": {
     "react": "^18.0.0"
   },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.8.0",
-      "onFail": "download"
-    }
-  },
   "devDependencies": {
     "@types/react": "^18.3.12",
     "ink-testing-library": "^4.0.0"

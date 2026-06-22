@@ -105,6 +105,8 @@ function makeEngine(options: {
     runWorkflow: async () => {
       throw new Error('runWorkflow not used in compaction tests');
     },
+    dispatchSlashCommand: async () => false,
+    getSlashCommands: () => [],
   };
 }
 
@@ -135,6 +137,7 @@ async function captureRegistration(
     registerTool: () => {},
     registerPromptFragment: () => {},
     registerHelp: () => {},
+    registerSlashCommand: () => {},
     registerWorkflow: () => {},
     hooks: {
       onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
@@ -214,6 +217,7 @@ describe('createCompactionPlugin', () => {
         registerHelp: (help: string) => {
           helpRegistered = help;
         },
+        registerSlashCommand: () => {},
         registerWorkflow: () => {},
         hooks: {
           onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),

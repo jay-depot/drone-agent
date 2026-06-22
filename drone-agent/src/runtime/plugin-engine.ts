@@ -5,9 +5,11 @@ import {
   type DroneElicitation,
   type DroneLogger,
   type DronePlugin,
-  type DronePluginHooks,
   type DronePromptFragment,
   type DroneSessionSafetyTrimPayload,
+  type DroneSlashCommand,
+  type DroneSlashCommandContext,
+  type DroneStandardHookName,
   type DroneToolDescriptor,
   type DroneToolDefinition,
   type DroneWorkflow,
@@ -30,10 +32,7 @@ export type DronePluginStatus = {
   defaultEnabled: boolean;
 };
 
-export type StandardHookName = Exclude<
-  keyof DronePluginHooks,
-  'onSessionSafetyTrimWillRun' | 'onSessionSafetyTrimApplied'
->;
+export type StandardHookName = DroneStandardHookName;
 
 type HookBuckets = Record<StandardHookName, Array<() => Promise<void>>>;
 
@@ -76,6 +75,18 @@ export type DronePluginEngine = {
     canonicalName: string,
     args: Record<string, unknown>
   ) => Promise<DroneWorkflowResult>;
+  /**
+   * Dispatch a user-entered line to the first matching registered slash
+   * command from an enabled plugin. Returns `true` if a handler claimed
+   * the line, `false` if no registered command matched. The host should
+   * check this before its own hardcoded dispatch chain.
+   */
+  dispatchSlashCommand: (
+    line: string,
+    ctx: Omit<DroneSlashCommandContext, 'line' | 'args'>
+  ) => Promise<boolean>;
+  /** Returns all slash commands from enabled plugins (for help listings). */
+  getSlashCommands: () => DroneSlashCommand[];
 };
 
 type CreateDronePluginEngineOptions = {
@@ -205,6 +216,7 @@ export function createDronePluginEngine({
   const capabilities = new Map<string, unknown>();
   const registeredPlugins: RegisteredPluginState[] = [];
   const helpSnippets = new Map<string, string[]>();
+  const slashCommands = new Map<string, DroneSlashCommand[]>();
   const sessionSafetyTrimWillRunHooks: Array<
     (payload: DroneSessionSafetyTrimPayload) => Promise<void>
   > = [];
@@ -285,6 +297,17 @@ export function createDronePluginEngine({
           throw new Error(`Workflow already registered: ${canonicalName}`);
         }
         workflows.set(canonicalName, workflow);
+      },
+      registerSlashCommand: command => {
+        const existing = slashCommands.get(plugin.metadata.id) ?? [];
+        // Check for duplicates within the same plugin.
+        if (existing.some(cmd => cmd.command === command.command)) {
+          throw new Error(
+            `Slash command already registered: ${command.command}`
+          );
+        }
+        existing.push(command);
+        slashCommands.set(plugin.metadata.id, existing);
       },
       hooks: {
         onPluginsLoaded: callback => hookBuckets.onPluginsLoaded.push(callback),
@@ -391,6 +414,35 @@ export function createDronePluginEngine({
     },
     getElicitation: () => elicitationCapability,
     runWorkflow,
+    dispatchSlashCommand: async (line, ctx) => {
+      // Find slash commands from enabled plugins that match the line.
+      for (const [pluginId, commands] of slashCommands) {
+        if (!enabledPluginIds.has(pluginId)) continue;
+        for (const cmd of commands) {
+          // Match if the line is exactly the command, or starts with
+          // the command followed by a space/tab (subcommand or args).
+          if (
+            line === cmd.command ||
+            line.startsWith(cmd.command + ' ') ||
+            line.startsWith(cmd.command + '\t')
+          ) {
+            const args = line.slice(cmd.command.length).trim().split(/\s+/).filter(Boolean);
+            const handled = await cmd.handler({ ...ctx, line, args });
+            if (handled) return true;
+          }
+        }
+      }
+      return false;
+    },
+    getSlashCommands: () => {
+      const result: DroneSlashCommand[] = [];
+      for (const [pluginId, commands] of slashCommands) {
+        if (enabledPluginIds.has(pluginId)) {
+          result.push(...commands);
+        }
+      }
+      return result;
+    },
   };
 }
 

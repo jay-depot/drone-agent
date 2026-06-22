@@ -29,6 +29,7 @@ function captureRegistration(): {
     registerHelp: help => {
       helpText.push(help);
     },
+    registerSlashCommand: () => {},
     registerWorkflow: () => {},
     hooks: {
       onPluginsLoaded: () => {},

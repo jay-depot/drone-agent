@@ -5,7 +5,7 @@
  * status bar) using Ink. Three regions stacked vertically:
  *
  *   ┌──────────────────────────────────────┐
- *   │ Chat log (scrollable via <Static>)    │
+ *   │ Chat log (scrollable via <Static>)   │
  *   │                                      │
  *   ├──────────────────────────────────────┤
  *   │ Input line                           │
@@ -154,7 +154,6 @@ export function App(opts: DroneTuiOptions): JSX.Element {
     // recomputing based on the current value; setState is a no-op if
     // the new index equals the previous one.
   }, []);
-
 
   // ── Sidebar widget state ──────────────────────────────────────────
   const [sidebarWidgets, setSidebarWidgets] = useState<SidebarWidget[]>([]);
@@ -352,102 +351,18 @@ export function App(opts: DroneTuiOptions): JSX.Element {
         return;
       }
 
-      if (trimmed.startsWith('/model')) {
-        const rest = trimmed.slice('/model'.length).trim();
-        const ollama = opts.engine.getCapability<{
-          listModels: () => Promise<string[]>;
-        }>('ollama');
-        if (!ollama) {
-          log('Ollama capability not available.', 'error');
-          return;
-        }
-        if (rest.length === 0) {
-          try {
-            const models = await ollama.listModels();
-            const current = opts.conversation.getModel();
-            const lines = models.map(m =>
-              m === current ? `  * ${m} (current)` : `    ${m}`
-            );
-            log(`Available models:\n${lines.join('\n')}`, 'info');
-            log('Use /model <name> to switch.', 'info');
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            log(`Failed to list models: ${msg}`, 'error');
-          }
-        } else {
-          opts.conversation.setModel(rest);
-          log(`Switched to model: ${rest}`, 'success');
-        }
-        return;
-      }
-
-      if (trimmed.startsWith('/persona ')) {
-        try {
-          const parts = trimmed.slice('/persona '.length).trim().split(/\s+/);
-          const sub = parts[0];
-          if (sub === 'list') {
-            log(await opts.engine.executeTool('persona.list', {}));
-          } else if (sub === 'current') {
-            log(await opts.engine.executeTool('persona.current', {}));
-          } else if (sub === 'create') {
-            // The workflow asks its own questions via the elicitation
-            // capability wired by useEffect on mount. Any user-facing
-            // output (kick summary, errors) is appended via the
-            // conversation event handler attached to sendUserMessage.
-            if (!opts.engine.runWorkflow) {
-              log('Workflow API not available in this build.', 'error');
-            } else {
-              await opts.engine.runHooks('onBeforePrompt');
-              const result = await opts.engine.runWorkflow(
-                'persona.create',
-                {}
-              );
-              if (result.toolResult) log(result.toolResult);
-              await opts.engine.runHooks('onAfterToolCall');
-              if (result.kickMessage) {
-                await opts.engine.runHooks('onBeforePrompt');
-                await opts.conversation.sendUserMessage(
-                  result.kickMessage,
-                  event => {
-                    if (event.kind === 'assistantMessage') {
-                      log(event.content, 'plain');
-                    } else if (event.kind === 'reasoning') {
-                      log(`💭 ${event.content.trim()}`, 'reasoning');
-                    } else if (event.kind === 'toolCall') {
-                      log(
-                        `→ tool: ${event.name} ${preview(JSON.stringify(event.arguments))}`,
-                        'toolCall'
-                      );
-                    } else if (event.kind === 'toolResult') {
-                      log(
-                        `← ${event.name}: ${preview(event.content)}`,
-                        'toolResult'
-                      );
-                    } else if (event.kind === 'error') {
-                      log(`Error: ${event.message}`, 'error');
-                    }
-                  }
-                );
-                await opts.engine.runHooks('onAfterToolCall');
-              }
-            }
-          } else if (sub === 'select') {
-            const id = parts.slice(1).join(' ');
-            if (id) {
-              log(await opts.engine.executeTool('persona.select', { id }));
-            } else {
-              log('Usage: /persona select <id> (or "none")', 'error');
-            }
-          } else {
-            log(
-              'Unknown persona command. Try: /persona list, /persona create, /persona select <id>, /persona current',
-              'error'
-            );
-          }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          log(`Error: ${msg}`, 'error');
-        }
+      if (
+        await opts.engine.dispatchSlashCommand?.(trimmed, {
+          logger: {
+            info: msg => log(msg, 'plain'),
+            warn: msg => log(msg, 'error'),
+            error: msg => log(msg, 'error'),
+          },
+          engine: opts.engine,
+          conversation: opts.conversation,
+          sessionManager: undefined,
+        })
+      ) {
         return;
       }
 
@@ -665,30 +580,30 @@ export function App(opts: DroneTuiOptions): JSX.Element {
   return (
     <Box flexDirection="row" width="100%" height="100%">
       <Box flexDirection="column" flexGrow={1}>
-      <ChatLog entries={entries} scheme={scheme} />
-      <InputLine
-        value={input}
-        onChange={setInput}
-        onSubmit={value => {
-          setInput('');
-          void runSlashCommand(value);
-        }}
-        scheme={scheme}
-        promptLabel={promptLabel}
-      />
-      {activeQuestion ? (
-        <ElicitationPrompt
-          question={activeQuestion}
-          pickerIndex={pickerIndex}
+        <ChatLog entries={entries} scheme={scheme} />
+        <InputLine
+          value={input}
+          onChange={setInput}
+          onSubmit={value => {
+            setInput('');
+            void runSlashCommand(value);
+          }}
           scheme={scheme}
-          onSubmit={commitAnswer}
+          promptLabel={promptLabel}
         />
-      ) : null}
-      <StatusBar
-        left={statusLeft}
-        cwd={` ${shortHomePath(cwd)} `}
-        scheme={scheme}
-      />
+        {activeQuestion ? (
+          <ElicitationPrompt
+            question={activeQuestion}
+            pickerIndex={pickerIndex}
+            scheme={scheme}
+            onSubmit={commitAnswer}
+          />
+        ) : null}
+        <StatusBar
+          left={statusLeft}
+          cwd={` ${shortHomePath(cwd)} `}
+          scheme={scheme}
+        />
       </Box>
       <Sidebar widgets={sidebarWidgets} scheme={scheme} />
     </Box>
@@ -828,9 +743,6 @@ function printHelp(
   log: (text: string, kind?: ChatEntry['kind']) => void
 ): void {
   const pluginHelp = opts.engine.getHelpSnippets();
-  const personaEnabled = opts.engine
-    .listPlugins()
-    .some(p => p.id === 'persona' && p.enabled);
 
   const helpLines: string[] = [
     'Keybindings:',
@@ -849,17 +761,7 @@ function printHelp(
     '  /help              Show this help',
     '  /clear             Clear session',
     '  /plugins           List enabled plugins',
-    '  /model [name]      List models or switch model',
   ];
-
-  if (personaEnabled) {
-    helpLines.push(
-      '  /persona list      List personas',
-      '  /persona create    Interactive wizard to author a new persona',
-      '  /persona select    Switch persona',
-      '  /persona current   Show current'
-    );
-  }
 
   helpLines.push(
     '  /tool <name>       Run a tool',

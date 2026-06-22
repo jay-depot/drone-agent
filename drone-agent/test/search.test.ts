@@ -20,6 +20,7 @@ function captureRegistration(): {
     },
     registerPromptFragment: () => {},
     registerHelp: () => {},
+    registerSlashCommand: () => {},
     registerWorkflow: () => {},
     hooks: {
       onPluginsLoaded: () => {},

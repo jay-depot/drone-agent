@@ -342,7 +342,9 @@ export function parseCliInvocation(argv: string[]): CliInvocation {
 
   return { kind: 'default', options };
 }
-function printInteractiveHelp(): void {
+function printInteractiveHelp(
+  engine: ReturnType<typeof createDronePluginEngine>
+): void {
   output.write('Interactive commands:\n');
   output.write('  /exit                 Quit the agent\n');
   output.write('  /clear                Clear the current session context\n');
@@ -350,19 +352,19 @@ function printInteractiveHelp(): void {
   output.write(
     '  /plugins              List known plugins and enabled state\n'
   );
-  output.write('  /model [name]         List models or switch model\n');
-  output.write('  /persona list         List available personas\n');
-  output.write(
-    '  /persona create       Interactive wizard to author a new persona\n'
-  );
-  output.write(
-    '  /persona select <id>  Switch active persona (or "none" to clear)\n'
-  );
-  output.write('  /persona current      Show current persona\n');
   output.write('  /tool <name> [json]   Run a registered tool directly\n');
   output.write(
     '  /exec <command>       Run a shell command through exec.run\n'
   );
+
+  const pluginHelp = engine.getHelpSnippets();
+  if (pluginHelp.length > 0) {
+    output.write('Plugin commands:\n');
+    for (const snippet of pluginHelp) {
+      output.write(`  ${snippet}\n`);
+    }
+  }
+
   output.write('  Any other input is sent to the chat model\n');
 }
 
@@ -454,113 +456,6 @@ function makePlainOutputEventHandler(): import('./runtime/conversation-service.j
   };
 }
 
-async function handlePersonaSlashCommand(
-  line: string,
-  engine: ReturnType<typeof createDronePluginEngine>,
-  logger: ReturnType<typeof createConsoleLogger>,
-  conversation: ReturnType<typeof createConversationService>,
-  sessionManager: ReturnType<typeof createSessionManager>
-): Promise<boolean> {
-  const parts = line.slice('/persona '.length).trim().split(/\s+/);
-  const subcommand = parts[0];
-
-  if (subcommand === 'list') {
-    const result = await engine.executeTool('persona.list', {});
-    logger.info(result);
-    return true;
-  }
-
-  if (subcommand === 'current') {
-    const result = await engine.executeTool('persona.current', {});
-    logger.info(result);
-    return true;
-  }
-
-  if (subcommand === 'select') {
-    const id = parts.slice(1).join(' ');
-    if (!id) {
-      logger.warn('Usage: /persona select <id> (or "none" to clear)');
-      return true;
-    }
-    const result = await engine.executeTool('persona.select', { id });
-    logger.info(result);
-    return true;
-  }
-
-  if (subcommand === 'create') {
-    // Workflows that elicit the user need an interactive host. The
-    // readline elicitation is already wired into the engine in
-    // plain-output mode (see main()). In a non-interactive run (no
-    // host attached) runWorkflow itself throws a clear error.
-    await engine.runHooks('onBeforePrompt');
-    const result = await engine.runWorkflow('persona.create', {});
-    if (result.toolResult) {
-      logger.info(result.toolResult);
-    }
-    await engine.runHooks('onAfterToolCall');
-    if (result.kickMessage && conversation) {
-      // Re-enter the chat loop so the assistant can summarise.
-      sessionManager.appendUserMessage(result.kickMessage);
-      await engine.runHooks('onBeforePrompt');
-      const plainHandler = makePlainOutputEventHandler();
-      const reply = await conversation.sendUserMessage(
-        result.kickMessage,
-        plainHandler
-      );
-      output.write(`${reply}\n`);
-      await engine.runHooks('onAfterToolCall');
-    }
-    return true;
-  }
-
-  return false;
-}
-
-async function handleModelSlashCommand(
-  line: string,
-  conversation: ReturnType<typeof createConversationService>,
-  engine: ReturnType<typeof createDronePluginEngine>,
-  logger: ReturnType<typeof createConsoleLogger>
-): Promise<boolean> {
-  const rest = line.slice('/model'.length).trim();
-  const ollama = getOllamaCapability(engine);
-
-  if (!ollama) {
-    logger.warn(
-      'Ollama capability not available — cannot list or switch models.'
-    );
-    return true;
-  }
-
-  // No argument: list models
-  if (rest.length === 0) {
-    try {
-      const models = await ollama.listModels();
-      const current = conversation.getModel();
-      const lines = models.map(m =>
-        m === current ? `  * ${m} (current)` : `    ${m}`
-      );
-      logger.info(`Available models:\n${lines.join('\n')}`);
-      logger.info(`\nUse /model <name> to switch.`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.warn(`Failed to list models: ${msg}`);
-    }
-    return true;
-  }
-
-  // Has argument: switch model
-  const modelName = rest;
-  try {
-    conversation.setModel(modelName);
-    logger.info(`Switched to model: ${modelName}`);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    logger.warn(`Failed to switch model: ${msg}`);
-  }
-  return true;
-}
-
 async function runInteractiveLoop(
   conversation: ReturnType<typeof createConversationService>,
   engine: ReturnType<typeof createDronePluginEngine>,
@@ -584,7 +479,7 @@ async function runInteractiveLoop(
       }
 
       if (line === '/help') {
-        printInteractiveHelp();
+        printInteractiveHelp(engine);
         continue;
       }
 
@@ -604,24 +499,14 @@ async function runInteractiveLoop(
         continue;
       }
 
-      if (line.startsWith('/persona ')) {
-        const handled = await handlePersonaSlashCommand(
-          line,
-          engine,
+      if (
+        await engine.dispatchSlashCommand(line, {
           logger,
+          engine,
           conversation,
-          sessionManager
-        );
-        if (!handled) {
-          logger.warn(
-            'Unknown persona command. Try: /persona list, /persona create, /persona select <id>, /persona current'
-          );
-        }
-        continue;
-      }
-
-      if (line.startsWith('/model')) {
-        await handleModelSlashCommand(line, conversation, engine, logger);
+          sessionManager,
+        })
+      ) {
         continue;
       }
 

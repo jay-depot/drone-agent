@@ -58,6 +58,17 @@ export type DroneTuiOptions = {
     ) => Promise<string>;
     getHelpSnippets: () => string[];
     /**
+     * Dispatch a user-entered line to registered plugin slash commands.
+     * Returns true if a handler claimed the line.
+     */
+    dispatchSlashCommand?: (
+      line: string,
+      ctx: Omit<
+        import('drone-core').DroneSlashCommandContext,
+        'line' | 'args'
+      >
+    ) => Promise<boolean>;
+    /**
      * Optional. Set the host's elicitation capability; called by App
      * on mount to register its TUI-flavoured implementation.
      */

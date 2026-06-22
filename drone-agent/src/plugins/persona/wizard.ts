@@ -75,7 +75,7 @@ function buildPersonaSystemPrompt(): string {
     '---',
     'name: <Display Name>',
     'description: <one-line summary>',
-    'color: <optional TUI tint, use "#rrggbb" format only. For example, "#00ffff">',
+    'color: <optional TUI tint, use "#rrggbb" format only. For example, "#00ffff". Prefer lighter colors for better contrast with most terminals.>',
     'fragments:',
     '  - <optional list of short prompt fragments>',
     '---',

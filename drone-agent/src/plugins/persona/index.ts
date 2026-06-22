@@ -304,9 +304,88 @@ export const personaPlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerWorkflow(personaCreateWorkflow);
 
-    // Help snippet surfaces in `/help` and the TUI help screen.
+    // Help snippets surface in `/help` and the TUI help screen.
+    registration.registerHelp(
+      '/persona list         List available personas'
+    );
     registration.registerHelp(
       '/persona create       Interactive wizard to author a new persona'
     );
+    registration.registerHelp(
+      '/persona select <id>  Switch active persona (or "none" to clear)'
+    );
+    registration.registerHelp(
+      '/persona current      Show current persona'
+    );
+
+    // -----------------------------------------------------------------------
+    // /persona slash command — handles all subcommands (list, current,
+    // select, create) via the engine's slash command dispatch. Both
+    // the CLI interactive loop and the TUI delegate to this handler
+    // instead of hardcoding persona-specific logic.
+    // -----------------------------------------------------------------------
+    registration.registerSlashCommand({
+      command: '/persona',
+      description: 'Manage personas: list, create, select, current.',
+      handler: async ctx => {
+        const subcommand = ctx.args[0] ?? '';
+
+        if (subcommand === 'list') {
+          ctx.logger.info(await ctx.engine.executeTool('persona.list', {}));
+          return true;
+        }
+
+        if (subcommand === 'current') {
+          ctx.logger.info(await ctx.engine.executeTool('persona.current', {}));
+          return true;
+        }
+
+        if (subcommand === 'select') {
+          const id = ctx.args.slice(1).join(' ');
+          if (!id) {
+            ctx.logger.warn(
+              'Usage: /persona select <id> (or "none" to clear)'
+            );
+            return true;
+          }
+          ctx.logger.info(await ctx.engine.executeTool('persona.select', { id }));
+          return true;
+        }
+
+        if (subcommand === 'create') {
+          // Workflows that elicit the user need an interactive host.
+          // In a non-interactive run (no host attached) runWorkflow
+          // itself throws a clear error.
+          if (!ctx.engine.runWorkflow) {
+            ctx.logger.warn('Workflow API not available in this build.');
+            return true;
+          }
+          await ctx.engine.runHooks('onBeforePrompt');
+          const result = await ctx.engine.runWorkflow('persona.create', {});
+          if (result.toolResult) {
+            ctx.logger.info(result.toolResult);
+          }
+          await ctx.engine.runHooks('onAfterToolCall');
+          if (result.kickMessage && ctx.conversation && ctx.sessionManager) {
+            // Re-enter the chat loop so the assistant can summarise.
+            ctx.sessionManager.appendUserMessage(result.kickMessage);
+            await ctx.engine.runHooks('onBeforePrompt');
+            const reply = await ctx.conversation.sendUserMessage(
+              result.kickMessage
+            );
+            if (reply.length > 0) {
+              ctx.logger.info(reply);
+            }
+            await ctx.engine.runHooks('onAfterToolCall');
+          }
+          return true;
+        }
+
+        ctx.logger.warn(
+          'Unknown persona command. Try: /persona list, /persona create, /persona select <id>, /persona current'
+        );
+        return true;
+      },
+    });
   },
 };

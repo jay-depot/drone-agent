@@ -221,5 +221,64 @@ export const ollamaPlugin: DronePlugin = {
     registration.hooks.onPluginsLoaded(async () => {
       registration.logger.info('ollama provider ready');
     });
+
+    // -----------------------------------------------------------------------
+    // /model slash command — list models or switch model. Both the CLI
+    // interactive loop and the TUI delegate to this handler via
+    // engine.dispatchSlashCommand instead of hardcoding model-specific logic.
+    // -----------------------------------------------------------------------
+    registration.registerSlashCommand({
+      command: '/model',
+      description: 'List models or switch model.',
+      handler: async ctx => {
+        if (!ctx.conversation) {
+          ctx.logger.warn('Conversation service not available — cannot list or switch models.');
+          return true;
+        }
+
+        const rest = ctx.args.join(' ');
+        const ollama = ctx.engine.getCapability<{
+          listModels: () => Promise<string[]>;
+        }>('ollama');
+
+        if (!ollama) {
+          ctx.logger.warn(
+            'Ollama capability not available — cannot list or switch models.'
+          );
+          return true;
+        }
+
+        // No argument: list models
+        if (rest.length === 0) {
+          try {
+            const models = await ollama.listModels();
+            const current = ctx.conversation.getModel();
+            const lines = models.map(m =>
+              m === current ? `  * ${m} (current)` : `    ${m}`
+            );
+            ctx.logger.info(`Available models:\n${lines.join('\n')}`);
+            ctx.logger.info(`\nUse /model <name> to switch.`);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            ctx.logger.warn(`Failed to list models: ${msg}`);
+          }
+          return true;
+        }
+
+        // Has argument: switch model
+        const modelName = rest;
+        try {
+          ctx.conversation.setModel(modelName);
+          ctx.logger.info(`Switched to model: ${modelName}`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          ctx.logger.warn(`Failed to switch model: ${msg}`);
+        }
+        return true;
+      },
+    });
+
+    // Help snippet surfaces in `/help` and the TUI help screen.
+    registration.registerHelp('/model [name]         List models or switch model');
   },
 };

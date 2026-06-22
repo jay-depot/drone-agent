@@ -432,6 +432,16 @@ export type DronePluginHooks = {
   ) => void;
 };
 
+/**
+ * The set of hook names that `engine.runHooks` accepts — all
+ * `DronePluginHooks` keys except the safety-trim hooks (which use
+ * their own dedicated engine methods with payloads).
+ */
+export type DroneStandardHookName = Exclude<
+  keyof DronePluginHooks,
+  'onSessionSafetyTrimWillRun' | 'onSessionSafetyTrimApplied'
+>;
+
 export type DronePluginRegistration = {
   logger: DroneLogger;
   getConfig: () => DroneAgentConfig;
@@ -439,6 +449,14 @@ export type DronePluginRegistration = {
   registerPromptFragment: (fragment: DronePromptFragment) => void;
   registerHelp: (help: string) => void;
   registerWorkflow: (workflow: DroneWorkflow) => void;
+  /**
+   * Register a slash command handler. When the user enters a line
+   * starting with `command` (e.g. `/persona`), the engine dispatches
+   * to the handler instead of the host's hardcoded dispatch chain.
+   * Multiple plugins may register different commands; only commands
+   * from enabled plugins are dispatched.
+   */
+  registerSlashCommand: (command: DroneSlashCommand) => void;
   hooks: DronePluginHooks;
   offer: <T>(capability: T) => void;
   request: <T>(pluginId: string) => T | undefined;
@@ -550,6 +568,76 @@ export type DroneWorkflow = {
     input: Record<string, unknown>,
     ctx: DroneWorkflowContext
   ) => Promise<DroneWorkflowRunReturn> | DroneWorkflowRunReturn;
+};
+
+// ---------------------------------------------------------------------------
+// Slash commands: plugin-registered interactive command handlers
+// ---------------------------------------------------------------------------
+
+/**
+ * Context passed to a slash command handler. Bundles the host-side
+ * services a handler needs (engine for tool execution/capabilities,
+ * conversation for model switching, session manager, and a logger)
+ * without the handler needing to import host types directly.
+ *
+ * The host (CLI or TUI) constructs this context at dispatch time.
+ */
+export type DroneSlashCommandContext = {
+  /** The full raw line the user entered, including the leading slash command. */
+  line: string;
+  /** The subcommand arguments after the command string, split by whitespace. */
+  args: string[];
+  /** Logger for user-facing output (info/warn/error). */
+  logger: DroneLogger;
+  /** Engine handle for executing tools, running workflows, accessing capabilities. */
+  engine: {
+    executeTool: (
+      canonicalName: string,
+      input: Record<string, unknown>
+    ) => Promise<string>;
+    /** Optional — may be absent in minimal hosts. */
+    runWorkflow?: (
+      canonicalName: string,
+      args: Record<string, unknown>
+    ) => Promise<DroneWorkflowResult>;
+    runHooks: (hookName: DroneStandardHookName) => Promise<void>;
+    getCapability: <T>(pluginId: string) => T | undefined;
+  };
+  /**
+   * Conversation service for model management. Optional — hosts
+   * that don't expose model switching (e.g. non-interactive) may omit.
+   */
+  conversation?: {
+    getModel: () => string;
+    setModel: (model: string) => void;
+    sendUserMessage: (
+      prompt: string,
+      onEvent?: (event: unknown) => void
+    ) => Promise<string>;
+  };
+  /** Session manager for appending synthetic user messages. */
+  sessionManager?: {
+    appendUserMessage: (message: string) => void;
+  };
+};
+
+/**
+ * A plugin-registered slash command. When the user enters a line
+ * starting with `command` (e.g. `/persona`), the engine dispatches to
+ * `handler` with a context carrying the raw line, engine, conversation,
+ * and other host services.
+ */
+export type DroneSlashCommand = {
+  /** The command string including leading slash, e.g. `/persona` or `/model`. */
+  command: string;
+  /** Description for help output. */
+  description: string;
+  /**
+   * Handler invoked when the user enters a line starting with `command`.
+   * Receives the full raw line and host-side services. Return `true` if
+   * the command was handled; `false` to fall through to the next handler.
+   */
+  handler: (ctx: DroneSlashCommandContext) => Promise<boolean>;
 };
 
 export type DronePlugin = {

@@ -51,6 +51,8 @@ function makeEngine(options: EngineOptions): DronePluginEngine & {
     runWorkflow: async () => {
       throw new Error('runWorkflow not used in conversation-service tests');
     },
+    dispatchSlashCommand: async () => false,
+    getSlashCommands: () => [],
     __executeMock: executeMock,
   };
 }

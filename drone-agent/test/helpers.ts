@@ -188,6 +188,8 @@ export function createFakeEngine(
     runWorkflow: async () => {
       throw new Error('runWorkflow not implemented in fake engine');
     },
+    dispatchSlashCommand: async () => false,
+    getSlashCommands: () => [],
     __elicitation: options.elicit,
   };
 }

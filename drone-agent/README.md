@@ -1,5 +1,19 @@
 # DRONE-AGENT
 
+                   \   /
+               \    | |    /
+                 \ (o o) /
+      ____________(#####)____________    #####\   ######\  /#####\  ##\  ##  #######
+     /    /   /   )     (   \    \   \   ######\  #######  #######  ###  ##  #######
+    (__/____/__/_(#######)_\__\____\__)  ##  \##  ##  \##  ##/ \##  ###\ ##  ##
+      (   /    /  )     (  \    \   )    ##   ##  ##  /##  ##   ##  ##\# ##  #####
+       \___/_____(#######)_____\___/     ##   ##  ######/  ##   ##  ## #\##  #####
+                / (     ) \              ##  /##  #####\   ##\ /##  ## \###  ##
+              /    (###)    \            ######/  ##  \#\  #######  ##  ###  #######
+                    ( )                  #####/   ##   \#\ \#####/  ##  \##  #######
+                     V
+                     |
+
 This is the TUI for the `drone` coding agent. It is yet another "minimalist" coding agent running in yolo mode built on TypeScript.
 
 By default, drone-agent runs with a minimal built-in set so it can bootstrap a session, execute shell commands, and chat through Ollama.
