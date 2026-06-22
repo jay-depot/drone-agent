@@ -12,7 +12,7 @@ import {
   resolveCacheDir,
   verifyIntegrity,
   type InstallerSpec,
-} from '../src/plugins/lsp-installer.js';
+} from '../src/plugins/lsp/installer.js';
 
 const TEST_NODE_ENTRY = 'lib/cli.mjs';
 

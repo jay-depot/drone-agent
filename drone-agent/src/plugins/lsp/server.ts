@@ -19,7 +19,7 @@ import {
   resolveCacheDir,
   type InstallerResolution,
   type InstallerSpec,
-} from '../lsp-installer.js';
+} from './installer.js';
 import {
   createChildTransport,
   createJsonRpcClient,
