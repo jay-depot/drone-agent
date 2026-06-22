@@ -6,5 +6,9 @@
   {
     "timestamp": "2026-06-22T18:15:49.149Z",
     "insight": "The persona directory structure change is a significant refactor that touches persona loading, skill loading (persona-owned skills), insight storage, the persona wizard, and all tests. The current flat `personas/<name>.md` layout needs to become `personas/<name>/persona.md` with subdirectories for skills and insights."
+  },
+  {
+    "timestamp": "2026-06-22T19:56:50.190Z",
+    "insight": "The config merge in `applyAgentConfigLayer` uses `??` (replace) for all fields. The prompt-file plugin needs additive (concatenate) merging for its `files` array across config layers. This requires a new merge pattern in `applyAgentConfigLayer`."
   }
 ]
