@@ -45,7 +45,7 @@ export function ChatLog({
   return (
     <Box flexDirection="column" flexGrow={1} overflowY="hidden">
       {tail}
-      <Static items={entries}>
+      <Static items={entries} style={{ width: '100%' }}>
         {entry => (
           <Box key={entry.id} flexDirection="column">
             {renderEntry(entry, scheme)}
