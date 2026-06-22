@@ -437,4 +437,33 @@ describe('promptFilePlugin', () => {
       expect.stringContaining('no files configured')
     );
   });
+
+  it('re-reads file content on each render call (hot-reload)', async () => {
+    const filePath = path.join(tmpDir, 'hotreload.md');
+    await writeFile(filePath, 'Version 1');
+
+    const { registration, captured } = makeRegistration({
+      getConfig: () => ({
+        ...makeRegistration().registration.getConfig(),
+        promptFile: { enabled: true, files: ['./hotreload.md'] },
+      }),
+    });
+
+    await promptFilePlugin.register(registration);
+    await captured.hooks.onPluginsLoaded[0]();
+
+    expect(captured.prompts).toHaveLength(1);
+
+    // First render reads the original content
+    const firstRender = await captured.prompts[0].render();
+    expect(firstRender).toContain('Version 1');
+
+    // Modify the file
+    await writeFile(filePath, 'Version 2');
+
+    // Second render picks up the new content
+    const secondRender = await captured.prompts[0].render();
+    expect(secondRender).toContain('Version 2');
+    expect(secondRender).not.toContain('Version 1');
+  });
 });

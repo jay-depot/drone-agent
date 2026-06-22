@@ -97,7 +97,7 @@ export const promptFilePlugin: DronePlugin = {
         return;
       }
 
-      const contents: string[] = [];
+      const resolvedPaths: string[] = [];
       for (const pattern of config.files) {
         const resolvedPath = resolvePromptFilePath(pattern);
         if (!resolvedPath) {
@@ -107,23 +107,15 @@ export const promptFilePlugin: DronePlugin = {
           continue;
         }
 
-        const content = await readFileContent(resolvedPath);
-        if (content === null) {
-          registration.logger.warn(
-            `prompt-file: file not found or unreadable: ${resolvedPath} (from pattern "${pattern}")`
-          );
-          continue;
-        }
-
         registration.logger.info(
-          `prompt-file: loaded ${resolvedPath} (${content.length} chars)`
+          `prompt-file: resolved ${pattern} -> ${resolvedPath}`
         );
-        contents.push(`--- ${resolvedPath} ---\n${content}`);
+        resolvedPaths.push(resolvedPath);
       }
 
-      if (contents.length === 0) {
+      if (resolvedPaths.length === 0) {
         registration.logger.warn(
-          'prompt-file: no files could be loaded from the configured patterns'
+          'prompt-file: no files could be resolved from the configured patterns'
         );
         return;
       }
@@ -131,7 +123,20 @@ export const promptFilePlugin: DronePlugin = {
       registration.registerPromptFragment({
         key: 'prompt-file-content',
         phase: 'header',
-        render: async () => contents.join('\n\n'),
+        render: async () => {
+          const contents: string[] = [];
+          for (const filePath of resolvedPaths) {
+            const content = await readFileContent(filePath);
+            if (content === null) {
+              registration.logger.warn(
+                `prompt-file: file not found or unreadable: ${filePath}`
+              );
+              continue;
+            }
+            contents.push(`--- ${filePath} ---\n${content}`);
+          }
+          return contents.join('\n\n');
+        },
       });
     });
   },
