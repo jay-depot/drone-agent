@@ -35,9 +35,12 @@ export const selfImprovementPlugin: DronePlugin = {
       name: 'insight',
       description:
         'Record a self-improvement insight about a persona or skill. ' +
-        'Insights are stored in a parallel JSON file and are not visible ' +
-        'to the agent during normal operation. They will be used in a ' +
-        'future phase to drive improvements. Keep the insight to 1-3 sentences.',
+        'Whenever you encounter an issue, gap, or opportunity related ' +
+        'to a persona or skill, use this tool to log it as an insight. ' +
+        'Do this proactively as you work, and do not worry about creating ' +
+        'too many insights. They will be evaluated all together all at once ' +
+        'to look for patterns, so more is better! Insights should be ' +
+        'short and focused on a single observation or issue.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -121,7 +124,7 @@ export const selfImprovementPlugin: DronePlugin = {
 
         await mkdir(insightsDir, { recursive: true });
 
-        let entries: InsightFile = [];
+        let entries: InsightFile;
         try {
           const raw = await readFile(filePath, 'utf-8');
           entries = JSON.parse(raw) as InsightFile;
