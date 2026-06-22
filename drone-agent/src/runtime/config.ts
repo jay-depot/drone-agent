@@ -521,6 +521,15 @@ function parsePartialConfig(
       }
       session.maxToolIterations = raw.session.maxToolIterations;
     }
+    if ('promptOnToolIterationLimit' in raw.session) {
+      if (typeof raw.session.promptOnToolIterationLimit !== 'boolean') {
+        throw new Error(
+          `Invalid config in ${source}: session.promptOnToolIterationLimit must be a boolean.`
+        );
+      }
+      session.promptOnToolIterationLimit =
+        raw.session.promptOnToolIterationLimit;
+    }
     parsed.session = session;
   }
 

@@ -643,6 +643,30 @@ async function main(): Promise<void> {
     logger,
     sessionManager,
     budgetService,
+    // When the tool iteration limit is reached and the config allows
+    // prompting, ask the user whether to continue. The elicitation
+    // capability is set lazily (by the TUI App on mount, or by the
+    // readline host in plain-output mode), so we resolve it at call
+    // time via engine.getElicitation().
+    onToolIterationLimitReached:
+      resolvedConfig.config.session.promptOnToolIterationLimit
+        ? async (current, max) => {
+            const elicit = engine.getElicitation();
+            if (!elicit) return false; // non-interactive → abort
+            const answers = await elicit.ask([
+              {
+                id: 'continue',
+                prompt: `Tool call depth reached ${current}/${max}. Continue the session?`,
+                choices: [
+                  { value: 'yes', label: 'Yes, continue' },
+                  { value: 'no', label: 'No, stop' },
+                ],
+                defaultValue: 'no',
+              },
+            ]);
+            return answers.continue === 'yes';
+          }
+        : undefined,
   });
   const registeredPlugins = await engine.initialize();
 

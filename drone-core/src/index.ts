@@ -31,6 +31,13 @@ export type DroneSessionConfig = {
    * wall-clock time, and most well-formed agent tasks complete in 3-10.
    */
   maxToolIterations: number;
+  /**
+   * When true, the host prompts the user to continue when the tool
+   * iteration limit is reached, instead of aborting with a hard error.
+   * The user can choose to continue (resets the counter) or stop.
+   * Defaults to false (hard error).
+   */
+  promptOnToolIterationLimit?: boolean;
 };
 
 export type DroneCompactionStrategy = 'summary-drop';
@@ -674,6 +681,7 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
       contextWindowTokens: 32768,
       responseReserveTokens: 4096,
       maxToolIterations: 50,
+      promptOnToolIterationLimit: false,
     },
     lsp: {
       enabled: true,

@@ -47,6 +47,16 @@ type CreateConversationServiceOptions = {
    * the loop bails with a "model appears stuck" error. Defaults to 3.
    */
   stuckErrorThreshold?: number;
+  /**
+   * Optional callback invoked when the tool iteration limit is reached.
+   * The host can prompt the user to continue. Return `true` to reset the
+   * counter and keep going, or `false` to abort with the default error.
+   * When omitted, the limit always produces a hard error.
+   */
+  onToolIterationLimitReached?: (
+    currentCount: number,
+    maxCount: number
+  ) => Promise<boolean>;
 };
 
 export function createConversationService({
@@ -58,6 +68,7 @@ export function createConversationService({
   budgetService,
   maxToolIterations,
   stuckErrorThreshold = 3,
+  onToolIterationLimitReached,
 }: CreateConversationServiceOptions): ConversationService {
   // Allow the constructor argument to override config, falling back to the
   // configured value, then to a safe minimum.
@@ -217,6 +228,16 @@ export function createConversationService({
         if (response.toolCalls && response.toolCalls.length > 0) {
           iterationCount += 1;
           if (iterationCount > effectiveMaxToolIterations) {
+            if (onToolIterationLimitReached) {
+              const shouldContinue = await onToolIterationLimitReached(
+                iterationCount,
+                effectiveMaxToolIterations
+              );
+              if (shouldContinue) {
+                iterationCount = 0;
+                continue;
+              }
+            }
             throw new Error(
               `Tool call depth exceeded the configured session limit of ${effectiveMaxToolIterations}. ` +
                 'Use /clear to reset the session, or raise session.maxToolIterations in your config.'

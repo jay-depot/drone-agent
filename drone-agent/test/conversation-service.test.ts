@@ -446,6 +446,116 @@ describe('createConversationService — iteration limits', () => {
       /Tool call depth exceeded the configured session limit of 2/
     );
   });
+
+  it('calls onToolIterationLimitReached and continues when callback returns true', async () => {
+    const engine = makeErrnoEngine();
+    // Queue enough tool-call responses to exceed the limit multiple times.
+    const responses: DroneChatResponse[] = Array.from({ length: 8 }, () => ({
+      toolCalls: [
+        { id: 'c', name: 'file.list', arguments: { path: '/missing' } },
+      ],
+    }));
+    // After the last tool call, return a plain message so the loop ends.
+    responses.push({ message: 'done' });
+    const provider = makeProvider(responses);
+
+    const config = createDefaultAgentConfig();
+    config.session.maxToolIterations = 3;
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const onLimitReached = vi.fn<[number, number], Promise<boolean>>();
+    onLimitReached.mockResolvedValue(true); // always continue
+
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      model: 'fake',
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+      stuckErrorThreshold: 100,
+      onToolIterationLimitReached: onLimitReached,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'ollama' ? { provider } : undefined);
+
+    const result = await conversation.sendUserMessage('go');
+    expect(result).toBe('done');
+    // Should have been called at least once (the limit was hit and reset).
+    expect(onLimitReached).toHaveBeenCalled();
+    // The first call should report the exceeded count and the limit.
+    expect(onLimitReached).toHaveBeenNthCalledWith(1, 4, 3);
+  });
+
+  it('throws the original error when onToolIterationLimitReached returns false', async () => {
+    const engine = makeErrnoEngine();
+    const responses: DroneChatResponse[] = Array.from({ length: 5 }, () => ({
+      toolCalls: [
+        { id: 'c', name: 'file.list', arguments: { path: '/missing' } },
+      ],
+    }));
+    const provider = makeProvider(responses);
+
+    const config = createDefaultAgentConfig();
+    config.session.maxToolIterations = 3;
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const onLimitReached = vi.fn<[number, number], Promise<boolean>>();
+    onLimitReached.mockResolvedValue(false); // user says stop
+
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      model: 'fake',
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+      stuckErrorThreshold: 100,
+      onToolIterationLimitReached: onLimitReached,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'ollama' ? { provider } : undefined);
+
+    await expect(conversation.sendUserMessage('go')).rejects.toThrow(
+      /Tool call depth exceeded the configured session limit of 3/
+    );
+    expect(onLimitReached).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws the original error when no onToolIterationLimitReached is provided', async () => {
+    const engine = makeErrnoEngine();
+    const responses: DroneChatResponse[] = Array.from({ length: 5 }, () => ({
+      toolCalls: [
+        { id: 'c', name: 'file.list', arguments: { path: '/missing' } },
+      ],
+    }));
+    const provider = makeProvider(responses);
+
+    const config = createDefaultAgentConfig();
+    config.session.maxToolIterations = 3;
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      model: 'fake',
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+      stuckErrorThreshold: 100,
+      // No onToolIterationLimitReached — should fall back to hard error.
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'ollama' ? { provider } : undefined);
+
+    await expect(conversation.sendUserMessage('go')).rejects.toThrow(
+      /Tool call depth exceeded the configured session limit of 3/
+    );
+  });
 });
 
 describe('createConversationService — stuck detection', () => {
