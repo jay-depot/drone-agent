@@ -75,6 +75,7 @@ export const personaProviderUserPlugin: DronePlugin = {
               const skill = allSkills.find(s => s.id === skillId);
               if (skill) {
                 skill.precedence = PRECEDENCE_PERSONA_USER;
+                skill.personaId = persona.id;
                 newSkills.set(skill.id, skill);
               }
             }

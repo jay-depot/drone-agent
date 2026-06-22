@@ -176,8 +176,27 @@ export const selfImprovementPlugin: DronePlugin = {
           const personaDir = path.join(baseDir, '.drone-agent', 'personas', targetId);
           insightsDir = path.join(personaDir, 'insights');
           filePath = path.join(insightsDir, 'insights.json');
+        } else if (targetType === 'skill') {
+          // Check if this skill is owned by a persona
+          const skillsCap = registration.request<DroneSkillsCapability>('skills');
+          const skill = skillsCap?.getSkill(targetId);
+          if (skill?.personaId) {
+            // Persona-owned skill insights live in <personaDir>/<id>/insights/<skill-id>.json
+            const personaDir = path.join(baseDir, '.drone-agent', 'personas', skill.personaId);
+            insightsDir = path.join(personaDir, 'insights');
+            filePath = path.join(insightsDir, `${targetId}.json`);
+          } else {
+            // Standalone skill insights live in .drone-agent/insights/skill/<id>.json
+            insightsDir = path.join(
+              baseDir,
+              INSIGHTS_DIR,
+              INSIGHTS_SUBDIR,
+              targetType
+            );
+            filePath = path.join(insightsDir, `${targetId}.json`);
+          }
         } else {
-          // Skill and project insights live in .drone-agent/insights/<type>/<id>.json
+          // Project insights live in .drone-agent/insights/project/<id>.json
           insightsDir = path.join(
             baseDir,
             INSIGHTS_DIR,
@@ -224,7 +243,7 @@ export const selfImprovementPlugin: DronePlugin = {
     // ── onPluginsLoaded: log status ──────────────────────────────────
     registration.hooks.onPluginsLoaded(async () => {
       registration.logger.info(
-        'self-improvement plugin ready (insights stored in .drone-agent/insights/)'
+        'self-improvement plugin ready (persona insights stored in .drone-agent/personas/<id>/insights/; skill/project insights stored in .drone-agent/insights/)'
       );
     });
   },

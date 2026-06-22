@@ -411,6 +411,11 @@ export type DroneSkillDefinition = {
   source: 'user' | 'project';
   /** Precedence assigned by the provider. Lower number = higher priority. */
   precedence?: number;
+  /**
+   * If this skill is owned by a persona, the persona's id.
+   * Set by the persona provider plugin when loading persona-owned skills.
+   */
+  personaId?: string;
 };
 
 // ── Provider types for skill/persona broker architecture ────────────
