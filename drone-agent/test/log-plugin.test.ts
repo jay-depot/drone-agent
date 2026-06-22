@@ -42,36 +42,40 @@ async function withTempHome<T>(fn: (homeDir: string) => Promise<T>): Promise<T> 
 
 describe('log plugin — filename generation', () => {
   it('generates filenames matching the pattern word-word-digits.json', async () => {
-    const sessionManager = createSessionManager();
-    const plugin = createLogPlugin({ sessionManager });
-    const cap = await getCapability(plugin);
+    await withTempHome(async () => {
+      const sessionManager = createSessionManager();
+      const plugin = createLogPlugin({ sessionManager });
+      const cap = await getCapability(plugin);
 
-    // Trigger filename generation by appending a turn
-    const turn = makeTurn('t1', [{ role: 'user', content: 'hello' }]);
-    await cap.appendTurn(turn);
+      // Trigger filename generation by appending a turn
+      const turn = makeTurn('t1', [{ role: 'user', content: 'hello' }]);
+      await cap.appendTurn(turn);
 
-    const filePath = cap.getLogFilePath();
-    expect(filePath).not.toBeNull();
-    const basename = path.basename(filePath!);
-    expect(basename).toMatch(/^[a-z]+-[a-z]+-\d+\.json$/);
+      const filePath = cap.getLogFilePath();
+      expect(filePath).not.toBeNull();
+      const basename = path.basename(filePath!);
+      expect(basename).toMatch(/^[a-z]+-[a-z]+-\d+\.json$/);
+    });
   });
 
   it('generates different filenames for sequential sessions', async () => {
-    const sessionManager = createSessionManager();
-    const plugin1 = createLogPlugin({ sessionManager });
-    const cap1 = await getCapability(plugin1);
-    await cap1.appendTurn(makeTurn('t1', [{ role: 'user', content: 'a' }]));
-    const name1 = path.basename(cap1.getLogFilePath()!);
+    await withTempHome(async () => {
+      const sessionManager = createSessionManager();
+      const plugin1 = createLogPlugin({ sessionManager });
+      const cap1 = await getCapability(plugin1);
+      await cap1.appendTurn(makeTurn('t1', [{ role: 'user', content: 'a' }]));
+      const name1 = path.basename(cap1.getLogFilePath()!);
 
-    // Small delay so timestamps differ
-    await new Promise(r => setTimeout(r, 5));
+      // Small delay so timestamps differ
+      await new Promise(r => setTimeout(r, 5));
 
-    const plugin2 = createLogPlugin({ sessionManager });
-    const cap2 = await getCapability(plugin2);
-    await cap2.appendTurn(makeTurn('t2', [{ role: 'user', content: 'b' }]));
-    const name2 = path.basename(cap2.getLogFilePath()!);
+      const plugin2 = createLogPlugin({ sessionManager });
+      const cap2 = await getCapability(plugin2);
+      await cap2.appendTurn(makeTurn('t2', [{ role: 'user', content: 'b' }]));
+      const name2 = path.basename(cap2.getLogFilePath()!);
 
-    expect(name1).not.toBe(name2);
+      expect(name1).not.toBe(name2);
+    });
   });
 });
 
