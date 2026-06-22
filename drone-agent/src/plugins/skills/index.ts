@@ -1,6 +1,13 @@
 import type { DronePlugin, DronePromptFragment } from 'drone-core';
 import { loadSkills, type DroneSkillDefinition } from './loader.js';
 
+export type DroneSkillsCapability = {
+  /** Get all loaded skills. */
+  getSkills: () => DroneSkillDefinition[];
+  /** Get a single skill by id, or undefined. */
+  getSkill: (id: string) => DroneSkillDefinition | undefined;
+};
+
 export const skillsPlugin: DronePlugin = {
   metadata: {
     id: 'skills',
@@ -38,6 +45,13 @@ export const skillsPlugin: DronePlugin = {
     };
 
     registration.registerPromptFragment(skillsFragment);
+
+    // ── Offer capability to other plugins ─────────────────────────────
+    const capability: DroneSkillsCapability = {
+      getSkills: () => Array.from(skills.values()),
+      getSkill: (id: string) => skills.get(id),
+    };
+    registration.offer(capability);
 
     // ── onPluginsLoaded: load skills ──────────────────────────────────
     registration.hooks.onPluginsLoaded(async () => {

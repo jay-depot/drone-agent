@@ -176,6 +176,9 @@ function sortPluginsByDependencies(
     for (const dependency of plugin.metadata.dependencies ?? []) {
       const dependencyPlugin = pluginMap.get(dependency.id);
       if (!dependencyPlugin || !enabledPluginIds.has(dependency.id)) {
+        if (dependency.optional) {
+          continue;
+        }
         throw new Error(
           `Plugin ${pluginId} requires missing or disabled dependency ${dependency.id}`
         );
@@ -256,9 +259,15 @@ export function createDronePluginEngine({
     const pluginLogger = createConsoleLogger(plugin.metadata.id);
     const pluginTools: DroneToolDefinition[] = [];
     const pluginPrompts: DronePromptFragment[] = [];
-    const dependencyIds = new Set(
-      (plugin.metadata.dependencies ?? []).map(dependency => dependency.id)
-    );
+    const dependencyIds = new Set<string>();
+    const optionalDependencyIds = new Set<string>();
+    for (const dep of plugin.metadata.dependencies ?? []) {
+      if (dep.optional) {
+        optionalDependencyIds.add(dep.id);
+      } else {
+        dependencyIds.add(dep.id);
+      }
+    }
 
     await plugin.register({
       logger: pluginLogger,
@@ -324,7 +333,7 @@ export function createDronePluginEngine({
         capabilities.set(plugin.metadata.id, capability);
       },
       request: <T>(pluginId: string) => {
-        if (!dependencyIds.has(pluginId)) {
+        if (!dependencyIds.has(pluginId) && !optionalDependencyIds.has(pluginId)) {
           throw new Error(
             `Plugin ${plugin.metadata.id} requested undeclared capability ${pluginId}`
           );

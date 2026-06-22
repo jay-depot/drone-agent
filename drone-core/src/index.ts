@@ -1,6 +1,8 @@
 export type DronePluginDependency = {
   id: string;
   version?: string;
+  /** When true, the plugin can still load if this dependency is missing or disabled. */
+  optional?: boolean;
 };
 
 export type DronePluginMetadata = {
@@ -199,6 +201,7 @@ export type DroneLogger = {
 export type DroneToolJsonSchemaProperty = {
   type: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array';
   description?: string;
+  enum?: string[];
   properties?: Record<string, DroneToolJsonSchemaProperty>;
   required?: string[];
   additionalProperties?: boolean;
