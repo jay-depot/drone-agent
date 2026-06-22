@@ -301,7 +301,7 @@ describe('lsp-installer — ensureServerInstalled', () => {
 
     await withTempCache(async cacheDir => {
       const fetchMock = vi.fn(async () => {
-        return new Response(tarball, { status: 200 });
+        return new Response(new Blob([tarball]), { status: 200 });
       });
       const resolution = await ensureServerInstalled(spec, {
         cacheDir,
@@ -347,7 +347,7 @@ describe('lsp-installer — ensureServerInstalled', () => {
       await ensureServerInstalled(spec, {
         cacheDir,
         nodePath: '/path/to/node',
-        fetchImpl: (async () => new Response(tarball, { status: 200 })) as unknown as typeof fetch,
+        fetchImpl: (async () => new Response(new Blob([tarball]), { status: 200 })) as unknown as typeof fetch,
       });
 
       // Second call must not invoke fetch.
@@ -376,7 +376,7 @@ describe('lsp-installer — ensureServerInstalled', () => {
         ensureServerInstalled(baseSpec(wrongIntegrity), {
           cacheDir,
           nodePath: '/path/to/node',
-          fetchImpl: (async () => new Response(tarball, { status: 200 })) as unknown as typeof fetch,
+          fetchImpl: (async () => new Response(new Blob([tarball]), { status: 200 })) as unknown as typeof fetch,
         })
       ).rejects.toThrow(/Integrity check failed/);
     });
@@ -406,7 +406,7 @@ describe('lsp-installer — ensureServerInstalled', () => {
       const first = await ensureServerInstalled(spec, {
         cacheDir,
         nodePath: '/path/to/node',
-        fetchImpl: (async () => new Response(tarball, { status: 200 })) as unknown as typeof fetch,
+        fetchImpl: (async () => new Response(new Blob([tarball]), { status: 200 })) as unknown as typeof fetch,
       });
 
       // Plant garbage in the entry to simulate corruption.
@@ -419,7 +419,7 @@ describe('lsp-installer — ensureServerInstalled', () => {
       const second = await ensureServerInstalled(spec, {
         cacheDir,
         nodePath: '/path/to/node',
-        fetchImpl: (async () => new Response(tarball, { status: 200 })) as unknown as typeof fetch,
+        fetchImpl: (async () => new Response(new Blob([tarball]), { status: 200 })) as unknown as typeof fetch,
       });
 
       // The second call should have re-extracted, restoring the original

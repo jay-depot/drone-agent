@@ -8,7 +8,7 @@ import { execPlugin } from './exec.js';
 import { fetchPlugin } from './fetch.js';
 import { filePlugin } from './file.js';
 import { gitPlugin } from './git.js';
-import { lspPlugin } from './lsp.js';
+import { lspPlugin } from './lsp/plugin.js';
 import { mcpPlugin } from './mcp/index.js';
 import { memoryPlugin } from './memory/index.js';
 import { ollamaPlugin } from './ollama.js';
