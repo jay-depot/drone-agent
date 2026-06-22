@@ -24,6 +24,7 @@ export default defineConfig({
       'drone-agent/test/**/*.test.tsx',
     ],
     environment: 'node',
+    setupFiles: ['drone-agent/test/setup-color.ts'],
     globals: false,
     coverage: {
       provider: 'v8',

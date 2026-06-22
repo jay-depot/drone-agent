@@ -1,16 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { loadPersonas } from '../src/plugins/persona/loader.js';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import os from 'node:os';
 
 async function withProjectDir<T>(
   fn: (dir: string) => Promise<T>
 ): Promise<T> {
   const dir = await mkdtemp(path.join(tmpdir(), 'drone-personas-'));
   try {
+    vi.spyOn(os, 'homedir').mockReturnValue(path.join(dir, 'fake-home'));
     return await fn(dir);
   } finally {
+    vi.restoreAllMocks();
     await rm(dir, { recursive: true, force: true });
   }
 }

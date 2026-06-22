@@ -469,7 +469,11 @@ describe('createCompactionPlugin', () => {
     const capture = await captureRegistration(plugin, config);
 
     const first = runBeforePrompt(capture);
-    // Give the first call a tick to set the in-flight flag.
+    // Give the first call enough ticks to reach provider.chat().
+    // The async chain is: hookBody -> buildSystemMessages() -> maybeCompact()
+    // -> resolveContextWindow() -> getContextWindowInfo() -> .then() -> chat().
+    // That's 3 microtask ticks before chat() is called.
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
     // A second hook call must be a no-op while the first is still running.
@@ -535,7 +539,7 @@ describe('createCompactionPlugin', () => {
     });
 
     const plugin = createCompactionPlugin({
-      budgetService: {} as unknown as ContextBudgetService,
+      budgetService: { buildSystemMessages: async () => [] } as unknown as ContextBudgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => {

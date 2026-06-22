@@ -12,7 +12,7 @@
  * color output and the rendered frames would be indistinguishable).
  */
 
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { render } from 'ink-testing-library';
 import { App } from '../src/tui/app.js';
 import type { DroneTuiOptions } from '../src/tui/types.js';
@@ -62,14 +62,6 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
 
 describe('App — persona color override', () => {
   let cleanup: (() => void) | null = null;
-
-  beforeAll(() => {
-    // Force chalk to emit ANSI codes regardless of TTY detection.
-    // ink-testing-library's Stdout doesn't implement TTY semantics,
-    // so without this the rendered frames would all be color-stripped
-    // and we'd lose the ability to assert on the emitted escape codes.
-    process.env.FORCE_COLOR = '1';
-  });
 
   afterEach(() => {
     if (cleanup) {
