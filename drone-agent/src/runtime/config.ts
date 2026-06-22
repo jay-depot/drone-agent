@@ -877,6 +877,36 @@ function parsePartialConfig(
     parsed.log = log;
   }
 
+  if ('promptFile' in raw) {
+    if (!isRecord(raw.promptFile)) {
+      throw new Error(
+        `Invalid config in ${source}: promptFile must be an object.`
+      );
+    }
+
+    const promptFile: PartialDroneAgentConfig['promptFile'] = {};
+
+    if ('enabled' in raw.promptFile) {
+      if (typeof raw.promptFile.enabled !== 'boolean') {
+        throw new Error(
+          `Invalid config in ${source}: promptFile.enabled must be a boolean.`
+        );
+      }
+      promptFile.enabled = raw.promptFile.enabled;
+    }
+
+    if ('files' in raw.promptFile) {
+      if (!isStringArray(raw.promptFile.files)) {
+        throw new Error(
+          `Invalid config in ${source}: promptFile.files must be an array of strings.`
+        );
+      }
+      promptFile.files = raw.promptFile.files;
+    }
+
+    parsed.promptFile = promptFile;
+  }
+
   return parsed;
 }
 

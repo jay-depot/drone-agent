@@ -272,6 +272,7 @@ async function getCapability(plugin: ReturnType<typeof createLogPlugin>): Promis
       compaction: { enabled: false, strategy: 'summary-drop', softThresholdPercent: 75, slicePercent: 25, minTurnsToCompact: 4, summaryMaxTokens: 800, summaryBudgetPercent: 20 },
       memory: { enabled: false },
       log: { enabled: false },
+      promptFile: { enabled: false, files: [] },
     }),
     registerTool: () => {},
     registerPromptFragment: () => {},

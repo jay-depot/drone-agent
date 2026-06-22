@@ -76,6 +76,11 @@ export type DroneLogConfig = {
   enabled: boolean;
 };
 
+export type DronePromptFileConfig = {
+  enabled: boolean;
+  files: string[];
+};
+
 export type DroneLspSpawnServerConfig = {
   transport?: 'stdio';
   language?: string;
@@ -173,6 +178,7 @@ export type DroneAgentConfig = {
   compaction: DroneCompactionConfig;
   memory: DroneMemoryConfig;
   log: DroneLogConfig;
+  promptFile: DronePromptFileConfig;
 };
 
 export type PartialDroneAgentConfig = Partial<{
@@ -186,6 +192,7 @@ export type PartialDroneAgentConfig = Partial<{
   compaction: Partial<DroneCompactionConfig>;
   memory: Partial<DroneMemoryConfig>;
   log: Partial<DroneLogConfig>;
+  promptFile: Partial<DronePromptFileConfig>;
 }>;
 
 export type DroneConfigScope = 'default' | 'user' | 'project';
@@ -844,6 +851,10 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
     log: {
       enabled: true,
     },
+    promptFile: {
+      enabled: false,
+      files: [],
+    },
   };
 }
 
@@ -902,6 +913,15 @@ export function applyAgentConfigLayer(
           ...layer.log,
         }
       : baseConfig.log,
+    promptFile: layer.promptFile
+      ? {
+          ...baseConfig.promptFile,
+          ...layer.promptFile,
+          files: layer.promptFile.files
+            ? [...baseConfig.promptFile.files, ...layer.promptFile.files]
+            : baseConfig.promptFile.files,
+        }
+      : baseConfig.promptFile,
   };
 }
 
