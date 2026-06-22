@@ -15,6 +15,9 @@ type InsightEntry = {
 
 type InsightFile = InsightEntry[];
 
+/** In-memory counter for insights recorded this session. */
+let insightCount = 0;
+
 export const selfImprovementPlugin: DronePlugin = {
   metadata: {
     id: 'self-improvement',
@@ -225,6 +228,7 @@ export const selfImprovementPlugin: DronePlugin = {
         entries.push(newEntry);
 
         await writeFile(filePath, JSON.stringify(entries, null, 2), 'utf-8');
+        insightCount += 1;
 
         return JSON.stringify(
           {
@@ -245,6 +249,16 @@ export const selfImprovementPlugin: DronePlugin = {
       registration.logger.info(
         'self-improvement plugin ready (persona insights stored in .drone-agent/personas/<id>/insights/; skill/project insights stored in .drone-agent/insights/)'
       );
+    });
+
+    // Offer mid-panel widget showing the in-session insight count.
+    registration.offer({
+      id: 'self-improvement',
+      label: 'Insights',
+      getContent: () => {
+        if (insightCount === 0) return [];
+        return [String(insightCount)];
+      },
     });
   },
 };

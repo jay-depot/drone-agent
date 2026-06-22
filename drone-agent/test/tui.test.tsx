@@ -12,17 +12,17 @@
  *     on persona clear
  *   - The Ink ModelPicker renders the model list and exposes Enter
  *     to select the highlighted item
- *   - The right sidebar renders only when widgets have content and
- *     terminal is wide enough; it hides otherwise
+ *   - The mid panel renders only when widgets have content; it hides
+ *     otherwise
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { render } from 'ink-testing-library';
 import { App } from '../src/tui/app.js';
-import { Sidebar } from '../src/tui/components/Sidebar.js';
+import { MidPanel } from '../src/tui/components/MidPanel.js';
 import { ModelPicker } from '../src/tui/components/ModelPicker.js';
 import { DEFAULT_GRAYSCALE_SCHEME } from '../src/tui/theme.js';
-import type { DroneTuiOptions, SidebarWidget } from '../src/tui/types.js';
+import type { DroneTuiOptions, MidPanelWidget } from '../src/tui/types.js';
 import { silentLogger } from './helpers.js';
 
 function makeOptions(
@@ -117,8 +117,8 @@ describe('App', () => {
     expect(instance.lastFrame()).toBeDefined();
   });
 
-  it('does not render sidebar when no plugin offers widget content', () => {
-    // getCapability returns undefined for all plugins — no sidebar widgets
+  it('does not render mid panel when no plugin offers widget content', () => {
+    // getCapability returns undefined for all plugins — no mid-panel widgets
     // should appear.
     const opts = makeOptions();
     const instance = render(<App {...opts} />);
@@ -128,16 +128,11 @@ describe('App', () => {
     expect(frame).not.toContain('TODO');
   });
 
-  it('renders sidebar when a plugin offers a widget with content', async () => {
-    const widget: SidebarWidget = {
+  it('renders mid panel when a plugin offers a widget with content', async () => {
+    const widget: MidPanelWidget = {
       id: 'todo',
       label: 'TODO',
-      getContent: () => [
-        ' 3 items (2 active)',
-        ' ○ Fix login bug',
-        ' ▶ Update docs',
-        ' ✓ Refactor tests',
-      ],
+      getContent: () => ['3 / 5'],
     };
     const opts = makeOptions({
       engine: {
@@ -161,22 +156,19 @@ describe('App', () => {
     });
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
-    // Wait for the useEffect that discovers sidebar widgets to fire.
+    // Wait for the useEffect that discovers mid-panel widgets to fire.
     await new Promise(r => setTimeout(r, 100));
     const frame = instance.lastFrame() ?? '';
-    // The sidebar should render the TODO widget content.
+    // The mid panel should render the TODO widget content.
     expect(frame).toContain('TODO');
-    expect(frame).toContain('Fix login bug');
-    expect(frame).toContain('Update docs');
-    expect(frame).toContain('Refactor tests');
-    expect(frame).toContain('3 items');
+    expect(frame).toContain('3 / 5');
   });
 });
 
-describe('Sidebar', () => {
+describe('MidPanel', () => {
   it('returns nothing when widgets array is empty', () => {
     const instance = render(
-      <Sidebar widgets={[]} scheme={DEFAULT_GRAYSCALE_SCHEME} />
+      <MidPanel widgets={[]} scheme={DEFAULT_GRAYSCALE_SCHEME} />
     );
     const frame = instance.lastFrame() ?? '';
     // No content — the component rendered nothing (or null).
@@ -184,32 +176,57 @@ describe('Sidebar', () => {
   });
 
   it('returns nothing when all widgets have empty content', () => {
-    const widgets: SidebarWidget[] = [
+    const widgets: MidPanelWidget[] = [
       { id: 'todo', label: 'TODO', getContent: () => [] },
     ];
     const instance = render(
-      <Sidebar widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
+      <MidPanel widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
     );
     const frame = instance.lastFrame() ?? '';
     expect(frame).toBe('');
   });
 
-  it('renders widget header and content', () => {
-    const widgets: SidebarWidget[] = [
+  it('renders widget header and content inline', () => {
+    const widgets: MidPanelWidget[] = [
       {
         id: 'todo',
         label: 'TODO',
-        getContent: () => [' 2 items', ' ○ Task A', ' ○ Task B'],
+        getContent: () => ['3 / 5'],
       },
     ];
     const instance = render(
-      <Sidebar widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
+      <MidPanel widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
     );
     const _cleanup = instance.cleanup;
     const frame = instance.lastFrame() ?? '';
     expect(frame).toContain('TODO');
-    expect(frame).toContain('Task A');
-    expect(frame).toContain('Task B');
+    expect(frame).toContain('3 / 5');
+  });
+
+  it('renders multiple widgets with separator', () => {
+    const widgets: MidPanelWidget[] = [
+      {
+        id: 'todo',
+        label: 'TODO',
+        getContent: () => ['3 / 5'],
+      },
+      {
+        id: 'insights',
+        label: 'Insights',
+        getContent: () => ['12'],
+      },
+    ];
+    const instance = render(
+      <MidPanel widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
+    );
+    const _cleanup = instance.cleanup;
+    const frame = instance.lastFrame() ?? '';
+    expect(frame).toContain('TODO');
+    expect(frame).toContain('Insights');
+    expect(frame).toContain('3 / 5');
+    expect(frame).toContain('12');
+    // Should have a separator between the two widgets
+    expect(frame).toContain('│');
   });
 });
 

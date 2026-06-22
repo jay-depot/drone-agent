@@ -5,13 +5,14 @@
 import type { DroneColorOverride } from './theme.js';
 
 /**
- * A sidebar widget registered by a plugin.
+ * A mid-panel widget registered by a plugin.
  *
  * `id` must be unique across all widgets. `label` is a short header string
- * shown above the widget's content (e.g. "TODO"). `getContent()` returns
- * the lines to render; return an empty array to hide the widget.
+ * shown before the widget's content (e.g. "TODO"). `getContent()` returns
+ * the lines to render; return an empty array to hide the widget. Each line
+ * is rendered inline in a horizontal bar.
  */
-export type SidebarWidget = {
+export type MidPanelWidget = {
   id: string;
   label: string;
   getContent: () => string[];
@@ -25,8 +26,8 @@ export type SidebarWidget = {
  * stack on a timer. A plugin is responsible for popping its override
  * when it is "done" — pushed overrides are not auto-cleaned up.
  *
- * `registerSidebarWidget` lets plugins register sidebars content that
- * appears in the right-hand 25-char column of the TUI layout.
+ * `registerMidPanelWidget` lets plugins register content that
+ * appears in the mid-panel bar between the chat log and input line.
  *
  * The previous blessed-based capability also exposed
  * `registerPanel` / `registerStatusItem` / `registerKeybinding` /
@@ -37,8 +38,8 @@ export type SidebarWidget = {
 export type DroneTuiCapability = {
   pushColorOverride: (override: DroneColorOverride) => void;
   popColorOverride: (overrideId: string) => void;
-  /** Register a sidebar widget. Called by plugins that offer sidebar content. */
-  registerSidebarWidget: (widget: SidebarWidget) => void;
+  /** Register a mid-panel widget. Called by plugins that offer mid-panel content. */
+  registerMidPanelWidget: (widget: MidPanelWidget) => void;
 };
 
 /** Options for creating the TUI. */

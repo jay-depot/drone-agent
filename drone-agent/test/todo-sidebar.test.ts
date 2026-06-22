@@ -1,10 +1,10 @@
 /**
- * Tests for the todo plugin's sidebar widget capability.
+ * Tests for the todo plugin's mid-panel widget capability.
  *
- * The todo plugin offers a sidebar widget via `registration.offer()`.
- * The widget's `getContent()` returns lines describing the current
- * todo list. These tests verify the content formatting independently
- * of the TUI.
+ * The todo plugin offers a mid-panel widget via `registration.offer()`.
+ * The widget's `getContent()` returns a summary line describing the
+ * current todo list. These tests verify the content formatting
+ * independently of the TUI.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -13,7 +13,7 @@ import { todoPlugin } from '../src/plugins/todo.js';
 import { createDefaultAgentConfig } from 'drone-core';
 import { silentLogger, createTestPlugin } from './helpers.js';
 
-type SidebarWidgetShape = {
+type MidPanelWidgetShape = {
   id: string;
   label: string;
   getContent: () => string[];
@@ -35,36 +35,28 @@ async function createEngineWithTodo(): Promise<{
   };
 }
 
-describe('todo sidebar widget', () => {
+describe('todo mid-panel widget', () => {
   it('returns empty content when the todo list is empty', async () => {
     const { engine } = await createEngineWithTodo();
-    const widget = engine.getCapability<SidebarWidgetShape>('todo');
+    const widget = engine.getCapability<MidPanelWidgetShape>('todo');
     expect(widget).toBeDefined();
     expect(widget!.id).toBe('todo');
     expect(widget!.label).toBe('TODO');
     expect(widget!.getContent()).toEqual([]);
   });
 
-  it('returns lines for a single pending item', async () => {
+  it('returns summary with 0 / 1 for a single pending item', async () => {
     const { engine, executeTool } = await createEngineWithTodo();
     await executeTool('manage_list', {
       action: 'add_item',
       title: 'Fix login bug',
     });
-    const widget = engine.getCapability<SidebarWidgetShape>('todo');
+    const widget = engine.getCapability<MidPanelWidgetShape>('todo');
     const content = widget!.getContent();
-    expect(content.length).toBeGreaterThanOrEqual(2);
-    // First line should have the item count summary
-    expect(content[0]).toContain('1 items');
-    expect(content[0]).toContain('1 active');
-    // There should be a line with the item title
-    const itemLines = content.slice(1);
-    expect(itemLines.some(l => l.includes('Fix login bug'))).toBe(true);
-    // The pending item should use the ○ icon
-    expect(itemLines.some(l => l.includes('○'))).toBe(true);
+    expect(content).toEqual(['0 / 1']);
   });
 
-  it('shows correct active count with mixed status items', async () => {
+  it('shows correct completed count with mixed status items', async () => {
     const { engine, executeTool } = await createEngineWithTodo();
     await executeTool('manage_list', { action: 'add_item', title: 'Task A' });
     await executeTool('manage_list', { action: 'add_item', title: 'Task B' });
@@ -79,58 +71,27 @@ describe('todo sidebar widget', () => {
       id: '2',
     });
 
-    const widget = engine.getCapability<SidebarWidgetShape>('todo');
+    const widget = engine.getCapability<MidPanelWidgetShape>('todo');
     const content = widget!.getContent();
-    // Summary: 3 items (2 active — pending + in_progress)
-    expect(content[0]).toContain('3 items');
-    expect(content[0]).toContain('2 active');
+    // Summary: 1 / 3 (one completed out of three)
+    expect(content).toEqual(['1 / 3']);
   });
 
-  it('uses correct icons for each status', async () => {
+  it('shows correct count when all items completed', async () => {
     const { engine, executeTool } = await createEngineWithTodo();
-    await executeTool('manage_list', { action: 'add_item', title: 'Pending' });
+    await executeTool('manage_list', { action: 'add_item', title: 'Task A' });
+    await executeTool('manage_list', { action: 'add_item', title: 'Task B' });
     await executeTool('manage_list', {
-      action: 'add_item',
-      title: 'In Progress',
-    });
-    await executeTool('manage_list', {
-      action: 'add_item',
-      title: 'Done',
-    });
-    await executeTool('manage_list', {
-      action: 'mark_in_progress',
-      id: '2',
+      action: 'mark_completed',
+      id: '1',
     });
     await executeTool('manage_list', {
       action: 'mark_completed',
-      id: '3',
+      id: '2',
     });
 
-    const widget = engine.getCapability<SidebarWidgetShape>('todo');
+    const widget = engine.getCapability<MidPanelWidgetShape>('todo');
     const content = widget!.getContent();
-    const itemLines = content.slice(1);
-    // Pending: ○ icon
-    expect(itemLines[0]).toContain('○');
-    expect(itemLines[0]).toContain('Pending');
-    // In progress: ▶ icon
-    expect(itemLines[1]).toContain('▶');
-    expect(itemLines[1]).toContain('In Progress');
-    // Completed: ✓ icon
-    expect(itemLines[2]).toContain('✓');
-    expect(itemLines[2]).toContain('Done');
-  });
-
-  it('truncates long titles to fit sidebar', async () => {
-    const { engine, executeTool } = await createEngineWithTodo();
-    const longTitle =
-      'This is a very long title that should be truncated to fit in the narrow sidebar column';
-    await executeTool('manage_list', {
-      action: 'add_item',
-      title: longTitle,
-    });
-    const widget = engine.getCapability<SidebarWidgetShape>('todo');
-    const content = widget!.getContent();
-    const itemLines = content.slice(1);
-    expect(itemLines[0].length).toBeLessThanOrEqual(22); // 1 space + icon + space + 18 chars + … = 22
+    expect(content).toEqual(['2 / 2']);
   });
 });

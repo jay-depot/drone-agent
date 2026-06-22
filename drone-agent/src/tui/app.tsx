@@ -1,12 +1,13 @@
 /**
  * Root TUI component for drone-agent.
  *
- * Mirrors the layout of the old blessed-based TUI (chat log / input /
- * status bar) using Ink. Three regions stacked vertically:
+ * Four regions stacked vertically:
  *
  *   ┌──────────────────────────────────────┐
  *   │ Chat log (scrollable via <Static>)   │
  *   │                                      │
+ *   ├──────────────────────────────────────┤
+ *   │ Mid panel (widgets)                 │
  *   ├──────────────────────────────────────┤
  *   │ Input line                           │
  *   ├──────────────────────────────────────┤
@@ -30,7 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DroneElicitationQuestion } from 'drone-core';
 import { ChatLog, type ChatEntry } from './components/ChatLog.js';
 import { InputLine } from './components/InputLine.js';
-import { Sidebar } from './components/Sidebar.js';
+import { MidPanel } from './components/MidPanel.js';
 import { StatusBar } from './components/StatusBar.js';
 import {
   ColorTag,
@@ -40,7 +41,7 @@ import {
   type DroneColorScheme,
 } from './theme.js';
 import { createTuiElicitation } from './elicitation.js';
-import type { DroneTuiOptions, SidebarWidget } from './types.js';
+import type { DroneTuiOptions, MidPanelWidget } from './types.js';
 
 /** How long each override gets to be the active tint. */
 const COLOR_CYCLE_INTERVAL_MS = 5_000;
@@ -155,10 +156,10 @@ export function App(opts: DroneTuiOptions): JSX.Element {
     // the new index equals the previous one.
   }, []);
 
-  // ── Sidebar widget state ──────────────────────────────────────────
-  const [sidebarWidgets, setSidebarWidgets] = useState<SidebarWidget[]>([]);
-  const registerSidebarWidget = useCallback((widget: SidebarWidget) => {
-    setSidebarWidgets(prev => {
+  // ── Mid-panel widget state ────────────────────────────────────────
+  const [midPanelWidgets, setMidPanelWidgets] = useState<MidPanelWidget[]>([]);
+  const registerMidPanelWidget = useCallback((widget: MidPanelWidget) => {
+    setMidPanelWidgets(prev => {
       const existingIdx = prev.findIndex(w => w.id === widget.id);
       if (existingIdx !== -1) {
         const next = prev.slice();
@@ -169,16 +170,16 @@ export function App(opts: DroneTuiOptions): JSX.Element {
     });
   }, []);
 
-  // Discover sidebar widgets from plugin capabilities on mount.
+  // Discover mid-panel widgets from plugin capabilities on mount.
   useEffect(() => {
-    const knownWidgetPluginIds = ['todo'];
+    const knownWidgetPluginIds = ['todo', 'self-improvement'];
     for (const pluginId of knownWidgetPluginIds) {
-      const widget = opts.engine.getCapability<SidebarWidget>(pluginId);
+      const widget = opts.engine.getCapability<MidPanelWidget>(pluginId);
       if (widget) {
-        registerSidebarWidget(widget);
+        registerMidPanelWidget(widget);
       }
     }
-  }, [opts.engine, registerSidebarWidget]);
+  }, [opts.engine, registerMidPanelWidget]);
   // ── Chat log state ──────────────────────────────────────────────────
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   // Monotonic id counter, kept in a ref so it survives across renders
@@ -580,10 +581,8 @@ export function App(opts: DroneTuiOptions): JSX.Element {
   // ── Render ─────────────────────────────────────────────────────────
   return (
     <Box flexDirection="column" width="100%" height="100%">
-      <Box flexDirection="row" flexGrow={1}>
-        <ChatLog entries={entries} scheme={scheme} />
-        <Sidebar widgets={sidebarWidgets} scheme={scheme} />
-      </Box>
+      <ChatLog entries={entries} scheme={scheme} />
+      <MidPanel widgets={midPanelWidgets} scheme={scheme} />
       <InputLine
         value={input}
         onChange={setInput}
