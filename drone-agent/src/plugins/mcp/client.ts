@@ -140,6 +140,22 @@ function createStdioJsonRpcClient(options: {
   transport: RpcTransport;
   requestTimeoutMs: number;
   onTransportIssue: (error: string) => void;
+  encoding?: 'content-length' | 'line-delimited';
+}): JsonRpcClient {
+  if (options.encoding === 'line-delimited') {
+    return createLineDelimitedJsonRpcClient(options);
+  }
+  return createContentLengthJsonRpcClient(options);
+}
+
+/**
+ * Standard MCP HTTP-style framing: `Content-Length: N\r\n\r\n{payload}`.
+ * Compatible with most MCP servers (Claude Code, etc.).
+ */
+function createContentLengthJsonRpcClient(options: {
+  transport: RpcTransport;
+  requestTimeoutMs: number;
+  onTransportIssue: (error: string) => void;
 }): JsonRpcClient {
   let nextId = 1;
   let buffer = Buffer.alloc(0);
@@ -244,6 +260,154 @@ function createStdioJsonRpcClient(options: {
 
   options.transport.onData(chunk => {
     buffer = Buffer.concat([buffer, chunk]);
+    parseBuffer();
+  });
+  options.transport.onError(error => {
+    markClosed(error.message);
+  });
+  options.transport.onClose(reason => {
+    markClosed(reason);
+  });
+
+  return {
+    request: async <T>(method: string, params?: unknown): Promise<T> => {
+      if (closed) {
+        throw new Error('MCP transport is closed.');
+      }
+
+      const id = nextId;
+      nextId += 1;
+
+      return new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          pending.delete(id);
+          reject(new Error(`MCP request timed out: ${method}`));
+        }, options.requestTimeoutMs);
+
+        pending.set(id, {
+          resolve: value => resolve(value as T),
+          reject,
+          timer,
+        });
+
+        try {
+          sendMessage({ id, method, params });
+        } catch (error) {
+          clearTimeout(timer);
+          pending.delete(id);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
+      });
+    },
+    notify: (method: string, params?: unknown) => {
+      if (closed) {
+        return;
+      }
+      sendMessage({ method, params });
+    },
+    disconnect: () => {
+      markClosed('MCP transport disconnected');
+      options.transport.close();
+    },
+  };
+}
+
+/**
+ * Line-delimited JSON (NDJSON) framing: one JSON object per line, no
+ * Content-Length headers. Used by servers like Lightpanda that read stdin
+ * line-by-line instead of parsing MCP HTTP-style framing.
+ *
+ * On the write side, each message is serialized and written as a single
+ * line terminated by `\n`. On the read side, incoming data is split on
+ * `\n` and each non-empty line is parsed as a complete JSON message.
+ */
+function createLineDelimitedJsonRpcClient(options: {
+  transport: RpcTransport;
+  requestTimeoutMs: number;
+  onTransportIssue: (error: string) => void;
+}): JsonRpcClient {
+  let nextId = 1;
+  let buffer = '';
+  let closed = false;
+  const pending = new Map<
+    number,
+    {
+      resolve: (value: unknown) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+
+  function rejectAll(reason: string): void {
+    for (const [id, entry] of pending.entries()) {
+      clearTimeout(entry.timer);
+      entry.reject(new Error(reason));
+      pending.delete(id);
+    }
+  }
+
+  function markClosed(reason: string): void {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    rejectAll(reason);
+    options.onTransportIssue(reason);
+  }
+
+  function sendMessage(message: JsonRpcMessage): void {
+    if (closed) {
+      throw new Error('MCP transport is closed.');
+    }
+
+    const payload = JSON.stringify({ jsonrpc: '2.0', ...message });
+    options.transport.write(payload + '\n');
+  }
+
+  function parseBuffer(): void {
+    while (true) {
+      const newlineIndex = buffer.indexOf('\n');
+      if (newlineIndex === -1) {
+        return;
+      }
+
+      const line = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+
+      if (line.length === 0) {
+        continue;
+      }
+
+      let message: JsonRpcMessage;
+      try {
+        message = JSON.parse(line) as JsonRpcMessage;
+      } catch {
+        markClosed('MCP transport received invalid JSON.');
+        options.transport.close();
+        return;
+      }
+
+      if (typeof message.id === 'number') {
+        const entry = pending.get(message.id);
+        if (!entry) {
+          continue;
+        }
+
+        clearTimeout(entry.timer);
+        pending.delete(message.id);
+        if (message.error) {
+          entry.reject(
+            new Error(`MCP ${message.error.code}: ${message.error.message}`)
+          );
+          continue;
+        }
+        entry.resolve(message.result);
+      }
+    }
+  }
+
+  options.transport.onData(chunk => {
+    buffer += chunk.toString('utf8');
     parseBuffer();
   });
   options.transport.onError(error => {
@@ -596,6 +760,7 @@ export async function createMcpClientConnection(options: {
         state.lastError = error;
         state.lastErrorCategory = classifyErrorCategory(error);
       },
+      encoding: options.config.encoding,
     });
   }
 

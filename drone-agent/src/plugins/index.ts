@@ -26,6 +26,7 @@ import { skillsPlugin } from './skills/index.js';
 import { skillProviderProjectPlugin } from './skill-provider-project/index.js';
 import { promptFilePlugin } from './prompt-file/index.js';
 import { skillProviderUserPlugin } from './skill-provider-user/index.js';
+import { lightpandaPlugin } from './lightpanda/index.js';
 import { startupPlugin } from './startup.js';
 import { todoPlugin } from './todo.js';
 import { utilsPlugin } from './utils.js';
@@ -38,6 +39,7 @@ const staticBuiltInPlugins: DronePlugin[] = [
   startupPlugin,
   configPlugin,
   execPlugin,
+  lightpandaPlugin,
   todoPlugin,
   fetchPlugin,
   utilsPlugin,

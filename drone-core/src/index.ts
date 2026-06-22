@@ -156,6 +156,15 @@ export type DroneMcpStdioServerConfig = {
   retryDelayMs?: number;
   maxListPages?: number;
   maxListItems?: number;
+  /**
+   * Wire encoding for stdio transport.
+   * - `'content-length'` (default): standard MCP HTTP-style framing with
+   *   `Content-Length` headers. Compatible with most MCP servers.
+   * - `'line-delimited'`: one JSON object per line (newline-delimited JSON /
+   *   NDJSON). Use for servers like Lightpanda that read stdin line-by-line
+   *   instead of parsing Content-Length headers.
+   */
+  encoding?: 'content-length' | 'line-delimited';
 };
 
 export type DroneMcpStreamableHttpServerConfig = {

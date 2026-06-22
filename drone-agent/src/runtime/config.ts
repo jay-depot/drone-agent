@@ -388,6 +388,17 @@ function parseMcpServerConfig(
     );
   }
 
+  const encoding = raw.encoding;
+  if (
+    encoding !== undefined &&
+    encoding !== 'content-length' &&
+    encoding !== 'line-delimited'
+  ) {
+    throw new Error(
+      `Invalid config in ${source}: mcp.servers.${serverId}.encoding must be "content-length" or "line-delimited".`
+    );
+  }
+
   return {
     transport: 'stdio',
     command: interpolateEnvironmentVariables(
@@ -417,6 +428,7 @@ function parseMcpServerConfig(
     retryDelayMs,
     maxListPages,
     maxListItems,
+    encoding,
   };
 }
 
