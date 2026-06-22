@@ -463,7 +463,7 @@ describe('createConversationService — iteration limits', () => {
     config.session.maxToolIterations = 3;
     const sessionManager = createSessionManager();
     const budgetService = makeBudgetService(provider);
-    const onLimitReached = vi.fn<[number, number], Promise<boolean>>();
+    const onLimitReached = vi.fn<(currentCount: number, maxCount: number) => Promise<boolean>>();
     onLimitReached.mockResolvedValue(true); // always continue
 
     const conversation = createConversationService({
@@ -501,7 +501,7 @@ describe('createConversationService — iteration limits', () => {
     config.session.maxToolIterations = 3;
     const sessionManager = createSessionManager();
     const budgetService = makeBudgetService(provider);
-    const onLimitReached = vi.fn<[number, number], Promise<boolean>>();
+    const onLimitReached = vi.fn<(currentCount: number, maxCount: number) => Promise<boolean>>();
     onLimitReached.mockResolvedValue(false); // user says stop
 
     const conversation = createConversationService({
