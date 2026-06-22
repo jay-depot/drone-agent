@@ -486,6 +486,7 @@ async function runInteractiveLoop(
       }
 
       if (line === '/clear') {
+        await engine.runHooks('onSessionClear');
         conversation.clearSession();
         logger.info('Session context cleared.');
         continue;

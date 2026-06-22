@@ -175,6 +175,12 @@ export function createLogPlugin(deps: LogPluginDeps): DronePlugin {
         await flushUnloggedTurns();
       });
 
+      registration.hooks.onSessionClear(async () => {
+        await flushUnloggedTurns();
+        filename = null;
+        logFilePath = null;
+      });
+
       registration.hooks.onShutdown(async () => {
         await flushUnloggedTurns();
         if (logFilePath) {

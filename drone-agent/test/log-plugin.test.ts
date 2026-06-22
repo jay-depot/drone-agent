@@ -45,7 +45,7 @@ describe('log plugin — filename generation', () => {
     await withTempHome(async () => {
       const sessionManager = createSessionManager();
       const plugin = createLogPlugin({ sessionManager });
-      const cap = await getCapability(plugin);
+      const { cap } = await getCapability(plugin);
 
       // Trigger filename generation by appending a turn
       const turn = makeTurn('t1', [{ role: 'user', content: 'hello' }]);
@@ -62,7 +62,7 @@ describe('log plugin — filename generation', () => {
     await withTempHome(async () => {
       const sessionManager = createSessionManager();
       const plugin1 = createLogPlugin({ sessionManager });
-      const cap1 = await getCapability(plugin1);
+      const { cap: cap1 } = await getCapability(plugin1);
       await cap1.appendTurn(makeTurn('t1', [{ role: 'user', content: 'a' }]));
       const name1 = path.basename(cap1.getLogFilePath()!);
 
@@ -70,7 +70,7 @@ describe('log plugin — filename generation', () => {
       await new Promise(r => setTimeout(r, 5));
 
       const plugin2 = createLogPlugin({ sessionManager });
-      const cap2 = await getCapability(plugin2);
+      const { cap: cap2 } = await getCapability(plugin2);
       await cap2.appendTurn(makeTurn('t2', [{ role: 'user', content: 'b' }]));
       const name2 = path.basename(cap2.getLogFilePath()!);
 
@@ -84,7 +84,7 @@ describe('log plugin — path resolution', () => {
     await withTempHome(async homeDir => {
       const sessionManager = createSessionManager();
       const plugin = createLogPlugin({ sessionManager });
-      const cap = await getCapability(plugin);
+      const { cap } = await getCapability(plugin);
 
       await cap.appendTurn(makeTurn('t1', [{ role: 'user', content: 'hi' }]));
       const filePath = cap.getLogFilePath()!;
@@ -96,7 +96,7 @@ describe('log plugin — path resolution', () => {
     await withTempHome(async homeDir => {
       const sessionManager = createSessionManager();
       const plugin = createLogPlugin({ sessionManager });
-      const cap = await getCapability(plugin);
+      const { cap } = await getCapability(plugin);
 
       // Simulate a user-scoped persona being active by setting up the
       // persona capability. We can't easily mock the persona plugin
@@ -116,7 +116,7 @@ describe('log plugin — turn appending', () => {
     await withTempHome(async () => {
       const sessionManager = createSessionManager();
       const plugin = createLogPlugin({ sessionManager });
-      const cap = await getCapability(plugin);
+      const { cap } = await getCapability(plugin);
 
       const turn = makeTurn('t1', [{ role: 'user', content: 'hello' }]);
       await cap.appendTurn(turn);
@@ -133,7 +133,7 @@ describe('log plugin — turn appending', () => {
     await withTempHome(async () => {
       const sessionManager = createSessionManager();
       const plugin = createLogPlugin({ sessionManager });
-      const cap = await getCapability(plugin);
+      const { cap } = await getCapability(plugin);
 
       await cap.appendTurn(makeTurn('t1', [{ role: 'user', content: 'first' }]));
       await cap.appendTurn(makeTurn('t2', [{ role: 'user', content: 'second' }]));
@@ -150,7 +150,7 @@ describe('log plugin — turn appending', () => {
     await withTempHome(async () => {
       const sessionManager = createSessionManager();
       const plugin = createLogPlugin({ sessionManager });
-      const cap = await getCapability(plugin);
+      const { cap } = await getCapability(plugin);
 
       const turn = makeTurn('t1', [
         { role: 'system', content: 'You are a helpful assistant.' },
@@ -171,7 +171,7 @@ describe('log plugin — turn appending', () => {
     await withTempHome(async () => {
       const sessionManager = createSessionManager();
       const plugin = createLogPlugin({ sessionManager });
-      const cap = await getCapability(plugin);
+      const { cap } = await getCapability(plugin);
 
       const turn: DroneSessionTurn = {
         id: 't1',
@@ -196,7 +196,7 @@ describe('log plugin — flush integration', () => {
     await withTempHome(async () => {
       const sessionManager = createSessionManager();
       const plugin = createLogPlugin({ sessionManager });
-      const cap = await getCapability(plugin);
+      const { cap } = await getCapability(plugin);
 
       // Simulate a session: add a user turn, then trigger the hook
       sessionManager.appendUserMessage('hello');
@@ -221,12 +221,40 @@ describe('log plugin — flush integration', () => {
   });
 });
 
+describe('log plugin — session clear', () => {
+  it('starts a new log file after onSessionClear is triggered', async () => {
+    await withTempHome(async () => {
+      const sessionManager = createSessionManager();
+      const plugin = createLogPlugin({ sessionManager });
+      const { cap, onSessionClear } = await getCapability(plugin);
+
+      // Append a turn to create the first log file
+      await cap.appendTurn(makeTurn('t1', [{ role: 'user', content: 'first' }]));
+      const firstPath = cap.getLogFilePath();
+      expect(firstPath).not.toBeNull();
+
+      // Trigger session clear — should flush and reset filename
+      await onSessionClear();
+
+      // Append another turn — should create a new file
+      await cap.appendTurn(makeTurn('t2', [{ role: 'user', content: 'second' }]));
+      const secondPath = cap.getLogFilePath();
+      expect(secondPath).not.toBeNull();
+
+      // The paths should differ (new filename generated)
+      expect(secondPath).not.toBe(firstPath);
+    });
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Helper: extract capability from a plugin
 // ---------------------------------------------------------------------------
 
-async function getCapability(plugin: ReturnType<typeof createLogPlugin>): Promise<DroneLogCapability> {
+
+async function getCapability(plugin: ReturnType<typeof createLogPlugin>): Promise<{ cap: DroneLogCapability; onSessionClear: () => Promise<void> }> {
   let cap: DroneLogCapability | undefined;
+  let onSessionClear: () => Promise<void> = async () => {};
   await plugin.register({
     logger: {
       info: () => {},
@@ -255,6 +283,7 @@ async function getCapability(plugin: ReturnType<typeof createLogPlugin>): Promis
       onSessionStart: () => {},
       onBeforePrompt: () => {},
       onAfterToolCall: () => {},
+      onSessionClear: (cb: () => Promise<void>) => { onSessionClear = cb; },
       onShutdown: () => {},
       onSessionSafetyTrimWillRun: () => {},
       onSessionSafetyTrimApplied: () => {},
@@ -265,5 +294,5 @@ async function getCapability(plugin: ReturnType<typeof createLogPlugin>): Promis
     requestElicitation: () => undefined,
   });
   if (!cap) throw new Error('Capability not offered');
-  return cap;
+  return { cap, onSessionClear };
 }

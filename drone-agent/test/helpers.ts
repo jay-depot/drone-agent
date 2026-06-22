@@ -36,6 +36,7 @@ export type TestPluginHookOptions = {
   onSessionStart?: () => Promise<void> | void;
   onBeforePrompt?: () => Promise<void> | void;
   onAfterToolCall?: () => Promise<void> | void;
+  onSessionClear?: () => Promise<void> | void;
   onShutdown?: () => Promise<void> | void;
   onSessionSafetyTrimWillRun?: (
     payload: DroneSessionSafetyTrimPayload
@@ -118,6 +119,12 @@ export function createTestPlugin(options: TestPluginOptions): DronePlugin {
       if (hooks?.onAfterToolCall) {
         const cb = hooks.onAfterToolCall;
         registration.hooks.onAfterToolCall(async () => {
+          await cb();
+        });
+      }
+      if (hooks?.onSessionClear) {
+        const cb = hooks.onSessionClear;
+        registration.hooks.onSessionClear(async () => {
           await cb();
         });
       }

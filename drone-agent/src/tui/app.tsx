@@ -334,6 +334,7 @@ export function App(opts: DroneTuiOptions): JSX.Element {
       }
 
       if (trimmed === '/clear') {
+        await opts.engine.runHooks('onSessionClear');
         opts.conversation.clearSession();
         log('Session cleared.', 'info');
         return;

@@ -442,6 +442,7 @@ export type DronePluginHooks = {
   onBeforePrompt: (callback: () => Promise<void>) => void;
   onAfterToolCall: (callback: () => Promise<void>) => void;
   onShutdown: (callback: () => Promise<void>) => void;
+  onSessionClear: (callback: () => Promise<void>) => void;
   onSessionSafetyTrimWillRun: (
     callback: (payload: DroneSessionSafetyTrimPayload) => Promise<void>
   ) => void;

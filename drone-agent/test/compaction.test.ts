@@ -85,6 +85,7 @@ type HookBucket = {
   onSessionStart: Array<() => Promise<void>>;
   onBeforePrompt: Array<() => Promise<void>>;
   onAfterToolCall: Array<() => Promise<void>>;
+  onSessionClear: Array<() => Promise<void>>;
   onShutdown: Array<() => Promise<void>>;
   onSessionSafetyTrimWillRun: Array<
     (payload: DroneSessionSafetyTrimPayload) => Promise<void>
@@ -128,6 +129,7 @@ async function captureRegistration(
       onSessionStart: cb => hooks.onSessionStart.push(cb),
       onBeforePrompt: cb => hooks.onBeforePrompt.push(cb),
       onAfterToolCall: cb => hooks.onAfterToolCall.push(cb),
+      onSessionClear: cb => hooks.onSessionClear.push(cb),
       onShutdown: cb => hooks.onShutdown.push(cb),
       onSessionSafetyTrimWillRun: cb =>
         hooks.onSessionSafetyTrimWillRun.push(cb),
@@ -213,6 +215,7 @@ describe('createCompactionPlugin', () => {
           onSessionStart: cb => hooks.onSessionStart.push(cb),
           onBeforePrompt: cb => hooks.onBeforePrompt.push(cb),
           onAfterToolCall: cb => hooks.onAfterToolCall.push(cb),
+          onSessionClear: cb => hooks.onSessionClear.push(cb),
           onShutdown: cb => hooks.onShutdown.push(cb),
           onSessionSafetyTrimWillRun: cb =>
             hooks.onSessionSafetyTrimWillRun.push(cb),

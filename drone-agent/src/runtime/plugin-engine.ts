@@ -101,6 +101,7 @@ function createHookBuckets(): HookBuckets {
     onSessionStart: [],
     onBeforePrompt: [],
     onAfterToolCall: [],
+    onSessionClear: [],
     onShutdown: [],
   };
 }
@@ -323,6 +324,7 @@ export function createDronePluginEngine({
         onSessionStart: callback => hookBuckets.onSessionStart.push(callback),
         onBeforePrompt: callback => hookBuckets.onBeforePrompt.push(callback),
         onAfterToolCall: callback => hookBuckets.onAfterToolCall.push(callback),
+        onSessionClear: callback => hookBuckets.onSessionClear.push(callback),
         onShutdown: callback => hookBuckets.onShutdown.push(callback),
         onSessionSafetyTrimWillRun: callback =>
           sessionSafetyTrimWillRunHooks.push(callback),
