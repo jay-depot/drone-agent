@@ -352,8 +352,14 @@ export const personaPlugin: DronePlugin = {
 
         const found = getPersonaById(rawId);
         if (!found) {
-          throw new Error(
-            `Unknown persona "${rawId}". Use persona.list to see available personas.`
+          const all = getAllPersonas();
+          return JSON.stringify(
+            {
+              error: true,
+              message: `Unknown persona "${rawId}". Available personas: ${all.map(p => p.id).join(', ') || '(none)'}.`,
+            },
+            null,
+            2
           );
         }
 
