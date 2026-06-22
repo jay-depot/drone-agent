@@ -612,6 +612,15 @@ export type DroneSlashCommandContext = {
     ) => Promise<DroneWorkflowResult>;
     runHooks: (hookName: DroneStandardHookName) => Promise<void>;
     getCapability: <T>(pluginId: string) => T | undefined;
+    /**
+     * Optional — dispatch a slash command line through the engine's
+     * registered slash command handlers. Used by macros to invoke
+     * other slash commands.
+     */
+    dispatchSlashCommand?: (
+      line: string,
+      ctx: Omit<DroneSlashCommandContext, 'line' | 'args'>,
+    ) => Promise<boolean>;
   };
   /**
    * Conversation service for model management. Optional — hosts
@@ -648,6 +657,39 @@ export type DroneSlashCommand = {
    * the command was handled; `false` to fall through to the next handler.
    */
   handler: (ctx: DroneSlashCommandContext) => Promise<boolean>;
+};
+
+// ---------------------------------------------------------------------------
+// Macros: custom slash commands defined in .macro files
+// ---------------------------------------------------------------------------
+
+/**
+ * One step in a macro definition.
+ * - `slashCommand`: a line starting with `/` that is dispatched as a slash command
+ * - `chatPrompt`: any other non-empty, non-comment line sent as a chat message
+ */
+export type DroneMacroStep =
+  | { kind: 'slashCommand'; line: string }
+  | { kind: 'chatPrompt'; text: string };
+
+/**
+ * A parsed macro definition loaded from a .macro file.
+ */
+export type DroneMacroDefinition = {
+  /** The slash command name, e.g. "/plan" */
+  command: string;
+  /** Human-readable description (from the #! line or first comment) */
+  description: string;
+  /** The file path this macro was loaded from */
+  filePath: string;
+  /** Ordered list of steps to execute */
+  steps: DroneMacroStep[];
+  /** Whether each positional arg (1..N) is required or optional */
+  argSpec: { position: number; required: boolean }[];
+  /** Whether $$ (catch-all) is accepted */
+  hasCatchAll: boolean;
+  /** Whether $$ is optional */
+  catchAllOptional: boolean;
 };
 
 export type DronePlugin = {

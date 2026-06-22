@@ -14,6 +14,7 @@ import { memoryPlugin } from './memory/index.js';
 import { ollamaPlugin } from './ollama.js';
 import { personaPlugin } from './persona/index.js';
 import { searchPlugin } from './search.js';
+import { macrosPlugin } from './macros/index.js';
 import { selfImprovementPlugin } from './self-improvement/index.js';
 import { skillsPlugin } from './skills/index.js';
 import { startupPlugin } from './startup.js';
@@ -30,6 +31,7 @@ const staticBuiltInPlugins: DronePlugin[] = [
   todoPlugin,
   fetchPlugin,
   utilsPlugin,
+  macrosPlugin,
   lspPlugin,
   mcpPlugin,
   ollamaPlugin,
