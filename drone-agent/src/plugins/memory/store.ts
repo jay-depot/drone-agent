@@ -4,10 +4,8 @@ import {
   readFile,
   rename,
   rm,
-  stat,
   writeFile,
 } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { MemoryEntry } from './types.js';
 
@@ -47,7 +45,7 @@ export function sanitizeKey(key: string): string {
   }
 
   // Replace path separators with safe alternatives
-  let safe = trimmed.replace(/[/\\]/g, '__');
+  let safe = trimmed.replace(/[/\\\\]/g, '__');
 
   // Replace any remaining filesystem-unsafe characters
   safe = safe.replace(/[<>"|?*\x00-\x1f]/g, '_');
@@ -63,6 +61,94 @@ export function resolveMemoryDir(projectDir: string): string {
 }
 
 /**
+ * Serialize a MemoryEntry to a markdown string with YAML frontmatter.
+ */
+function serializeEntry(entry: MemoryEntry): string {
+  const tagsYaml = entry.tags.length > 0
+    ? entry.tags.map(t => `  - ${t}`).join('\n')
+    : '  []';
+  return [
+    '---',
+    `key: ${entry.key}`,
+    'tags:',
+    tagsYaml,
+    `created: ${entry.createdAt}`,
+    `updated: ${entry.updatedAt}`,
+    '---',
+    '',
+    entry.value,
+  ].join('\n');
+}
+
+/**
+ * Parse a markdown string with YAML frontmatter into a MemoryEntry.
+ *
+ * Expected format:
+ *   ---
+ *   key: my-key
+ *   tags:
+ *     - tag1
+ *   created: 2026-06-22T04:00:00.000Z
+ *   updated: 2026-06-22T04:00:00.000Z
+ *   ---
+ *
+ *   Body text here...
+ */
+function parseEntry(key: string, content: string): MemoryEntry | null {
+  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!frontmatterMatch) {
+    return null;
+  }
+
+  const rawFrontmatter = frontmatterMatch[1];
+  const body = frontmatterMatch[2].trim();
+
+  const entry: MemoryEntry = {
+    key,
+    value: body,
+    tags: [],
+    createdAt: '',
+    updatedAt: '',
+  };
+
+  const lines = rawFrontmatter.split('\n');
+  let inTags = false;
+
+  for (const line of lines) {
+    if (inTags) {
+      const tagMatch = line.match(/^\s+-\s+(.+)$/);
+      if (tagMatch) {
+        entry.tags.push(tagMatch[1]);
+        continue;
+      }
+      inTags = false;
+    }
+
+    const kvMatch = line.match(/^(\w+):\s*(.*)$/);
+    if (!kvMatch) continue;
+
+    const k = kvMatch[1];
+    const v = kvMatch[2].trim();
+
+    if (k === 'key') {
+      entry.key = v;
+    } else if (k === 'created') {
+      entry.createdAt = v;
+    } else if (k === 'updated') {
+      entry.updatedAt = v;
+    } else if (k === 'tags') {
+      if (v === '[]') {
+        entry.tags = [];
+      } else {
+        inTags = true;
+      }
+    }
+  }
+
+  return entry;
+}
+
+/**
  * Read a single memory entry from disk.
  *
  * @param memoryDir - The memory directory (from `resolveMemoryDir`).
@@ -74,11 +160,11 @@ export async function readMemoryEntry(
   key: string
 ): Promise<MemoryEntry | null> {
   const safeKey = sanitizeKey(key);
-  const filePath = path.join(memoryDir, `${safeKey}.json`);
+  const filePath = path.join(memoryDir, `${safeKey}.md`);
 
   try {
     const content = await readFile(filePath, 'utf-8');
-    return JSON.parse(content) as MemoryEntry;
+    return parseEntry(safeKey, content);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return null;
@@ -105,10 +191,10 @@ export async function writeMemoryEntry(
   const safeKey = sanitizeKey(entry.key);
   await mkdir(memoryDir, { recursive: true });
 
-  const filePath = path.join(memoryDir, `${safeKey}.json`);
-  const tmpPath = path.join(memoryDir, `${safeKey}.json${TMP_SUFFIX}`);
+  const filePath = path.join(memoryDir, `${safeKey}.md`);
+  const tmpPath = path.join(memoryDir, `${safeKey}.md${TMP_SUFFIX}`);
 
-  const serialized = JSON.stringify(entry, null, 2);
+  const serialized = serializeEntry(entry);
 
   // Atomic write: write to temp, then rename
   await writeFile(tmpPath, serialized, 'utf-8');
@@ -127,7 +213,7 @@ export async function deleteMemoryEntry(
   key: string
 ): Promise<boolean> {
   const safeKey = sanitizeKey(key);
-  const filePath = path.join(memoryDir, `${safeKey}.json`);
+  const filePath = path.join(memoryDir, `${safeKey}.md`);
 
   try {
     await rm(filePath, { force: false });
@@ -164,12 +250,12 @@ export async function listMemoryEntries(
   const results: { key: string; updatedAt: string }[] = [];
 
   for (const file of files) {
-    if (!file.endsWith('.json') || file.endsWith(`${TMP_SUFFIX}`)) {
+    if (!file.endsWith('.md') || file.endsWith(`${TMP_SUFFIX}`)) {
       continue;
     }
 
-    // Extract key from filename (strip .json)
-    const fileKey = file.slice(0, -5);
+    // Extract key from filename (strip .md)
+    const fileKey = file.slice(0, -3);
 
     // Read the entry to get the stored key (for prefix matching) and updatedAt
     const entry = await readMemoryEntry(memoryDir, fileKey);
@@ -194,7 +280,7 @@ export async function listMemoryEntries(
 }
 
 /**
- * Search memory entries by substring match against key and tags.
+ * Search memory entries by substring match against key, tags, and body text.
  *
  * @param memoryDir - The memory directory.
  * @param query - Substring to search for (case-insensitive).
@@ -219,7 +305,7 @@ export async function searchMemoryEntries(
   }
 
   for (const file of files) {
-    if (!file.endsWith('.json') || file.endsWith(`${TMP_SUFFIX}`)) {
+    if (!file.endsWith('.md') || file.endsWith(`${TMP_SUFFIX}`)) {
       continue;
     }
 
@@ -227,14 +313,14 @@ export async function searchMemoryEntries(
       break;
     }
 
-    const key = file.slice(0, -5);
+    const key = file.slice(0, -3);
     const entry = await readMemoryEntry(memoryDir, key);
 
     if (!entry) {
       continue;
     }
 
-    // Match against key (already in the filename)
+    // Match against key
     if (key.toLowerCase().includes(lowerQuery)) {
       results.push(entry);
       continue;
@@ -245,6 +331,12 @@ export async function searchMemoryEntries(
       tag.toLowerCase().includes(lowerQuery)
     );
     if (matchesTag) {
+      results.push(entry);
+      continue;
+    }
+
+    // Match against body text
+    if (entry.value.toLowerCase().includes(lowerQuery)) {
       results.push(entry);
       continue;
     }
@@ -266,7 +358,7 @@ export async function countMemoryEntries(memoryDir: string): Promise<number> {
   try {
     const files = await readdir(memoryDir);
     return files.filter(
-      f => f.endsWith('.json') && !f.endsWith(`${TMP_SUFFIX}`)
+      f => f.endsWith('.md') && !f.endsWith(`${TMP_SUFFIX}`)
     ).length;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -277,104 +369,36 @@ export async function countMemoryEntries(memoryDir: string): Promise<number> {
 }
 
 /**
- * Prune expired entries and, if `maxEntries > 0`, the oldest excess entries.
- *
- * Expired entries are those whose `ttlSeconds` has elapsed since `updatedAt`.
- *
- * @param memoryDir - The memory directory.
- * @param maxEntries - Maximum number of entries to keep (0 = unlimited).
- * @returns The number of entries removed.
- */
-export async function pruneMemoryEntries(
-  memoryDir: string,
-  maxEntries: number
-): Promise<number> {
-  let files: string[];
-  try {
-    files = await readdir(memoryDir);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return 0;
-    }
-    throw error;
-  }
-
-  const entryFiles = files.filter(
-    f => f.endsWith('.json') && !f.endsWith(`${TMP_SUFFIX}`)
-  );
-
-  const now = Date.now();
-  let removed = 0;
-
-  // Phase 1: Remove expired entries
-  for (const file of entryFiles) {
-    const key = file.slice(0, -5);
-    const entry = await readMemoryEntry(memoryDir, key);
-    if (!entry) {
-      continue;
-    }
-
-    if (
-      entry.ttlSeconds !== undefined &&
-      entry.ttlSeconds >= 0 &&
-      now - new Date(entry.updatedAt).getTime() >= entry.ttlSeconds * 1000
-    ) {
-      await deleteMemoryEntry(memoryDir, key);
-      removed += 1;
-    }
-  }
-
-  // Phase 2: If maxEntries > 0, trim excess by mtime
-  if (maxEntries > 0) {
-    const remaining = await listMemoryEntries(memoryDir);
-    if (remaining.length > maxEntries) {
-      const excess = remaining.slice(maxEntries); // oldest are at the end
-      for (const entry of excess) {
-        await deleteMemoryEntry(memoryDir, entry.key);
-        removed += 1;
-      }
-    }
-  }
-
-  return removed;
-}
-
-/**
  * Create a new MemoryEntry with the given parameters.
  */
 export function createMemoryEntry(
   key: string,
-  value: unknown,
-  tags: string[] = [],
-  ttlSeconds?: number
+  value: string,
+  tags: string[] = []
 ): MemoryEntry {
   const now = new Date().toISOString();
   return {
-    id: randomUUID(),
     key: sanitizeKey(key),
     value,
     tags,
     createdAt: now,
     updatedAt: now,
-    ttlSeconds,
   };
 }
 
 /**
- * Update an existing entry's value, tags, and updatedAt. Preserves `id` and
+ * Update an existing entry's value, tags, and updatedAt. Preserves
  * `createdAt`.
  */
 export function updateMemoryEntry(
   existing: MemoryEntry,
-  value: unknown,
-  tags?: string[],
-  ttlSeconds?: number
+  value: string,
+  tags?: string[]
 ): MemoryEntry {
   return {
     ...existing,
     value,
     tags: tags ?? existing.tags,
     updatedAt: new Date().toISOString(),
-    ttlSeconds: ttlSeconds ?? existing.ttlSeconds,
   };
 }

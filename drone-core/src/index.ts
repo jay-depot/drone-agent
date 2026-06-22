@@ -56,10 +56,6 @@ export type DroneCompactionConfig = {
 
 export type DroneMemoryConfig = {
   enabled: boolean;
-  /** Max number of memory entries before oldest are pruned. 0 = unlimited. */
-  maxEntries: number;
-  /** Auto-save session summary on shutdown. */
-  autoSave: boolean;
 };
 
 export type DroneLspSpawnServerConfig = {
@@ -757,8 +753,6 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
     },
     memory: {
       enabled: true,
-      maxEntries: 0,
-      autoSave: true,
     },
   };
 }

@@ -20,7 +20,7 @@ export const selfImprovementPlugin: DronePlugin = {
     name: 'Self-Improvement',
     version: '0.1.0',
     description:
-      'Records agent insights about personas and skills for later promotion into improvements.',
+      'Records agent insights about personas, skills, or the project for later promotion into improvements.',
     defaultEnabled: false,
     dependencies: [
       { id: 'persona', optional: true },
@@ -34,9 +34,9 @@ export const selfImprovementPlugin: DronePlugin = {
     registration.registerTool({
       name: 'insight',
       description:
-        'Record a self-improvement insight about a persona or skill. ' +
+        'Record a self-improvement insight about a persona, skill, or the project. ' +
         'Whenever you encounter an issue, gap, or opportunity related ' +
-        'to a persona or skill, use this tool to log it as an insight. ' +
+        'to a persona, skill, or the project itself, use this tool to log it as an insight. ' +
         'Do this proactively as you work, and do not worry about creating ' +
         'too many insights. They will be evaluated all together all at once ' +
         'to look for patterns, so more is better! Insights should be ' +
@@ -46,14 +46,15 @@ export const selfImprovementPlugin: DronePlugin = {
         properties: {
           targetType: {
             type: 'string',
-            enum: ['persona', 'skill'],
+            enum: ['persona', 'skill', 'project'],
             description:
-              'Whether this insight is about a persona or a skill.',
+              'Whether this insight is about a persona, a skill, or the project.',
           },
           targetId: {
             type: 'string',
             description:
-              'The id of the persona or skill this insight applies to.',
+              'The id of the persona or skill this insight applies to. ' +
+              'For project insights, use a descriptive category like "architecture" or "workflow".',
           },
           insight: {
             type: 'string',
@@ -77,7 +78,6 @@ export const selfImprovementPlugin: DronePlugin = {
           throw new Error('insight must be a non-empty string.');
         }
 
-        // Validate target exists (soft check — only if the relevant plugin is loaded)
         if (targetType === 'persona') {
           const personaCap = registration.request<DronePersonaCapability>('persona');
           if (personaCap) {
@@ -107,9 +107,11 @@ export const selfImprovementPlugin: DronePlugin = {
               );
             }
           }
+        } else if (targetType === 'project') {
+          // No validation needed — the project is always a valid target
         } else {
           throw new Error(
-            `Invalid targetType "${targetType}". Must be "persona" or "skill".`
+            `Invalid targetType "${targetType}". Must be "persona", "skill", or "project".`
           );
         }
 

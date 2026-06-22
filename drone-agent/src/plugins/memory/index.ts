@@ -4,7 +4,6 @@ import {
   createMemoryEntry,
   deleteMemoryEntry,
   listMemoryEntries,
-  pruneMemoryEntries,
   readMemoryEntry,
   resolveMemoryDir,
   searchMemoryEntries,
@@ -20,7 +19,7 @@ export const memoryPlugin: DronePlugin = {
     name: 'Memory',
     version: '0.1.0',
     description:
-      'Persistent project-level memory: store, recall, search, and prune facts across sessions.',
+      'Persistent project-level memory: store, recall, search, and delete facts across sessions.',
     defaultEnabled: false,
   },
   register: async registration => {
@@ -35,14 +34,14 @@ export const memoryPlugin: DronePlugin = {
 
     // ── capability: DroneMemoryCapability ──────────────────────────────
     const capability: DroneMemoryCapability = {
-      store: async (key, value, tags, ttlSeconds) => {
+      store: async (key, value, tags) => {
         if (!config.enabled) {
           throw new Error('Memory is disabled by configuration.');
         }
         const existing = cache.get(key) ?? (await readMemoryEntry(memoryDir, key));
         const entry = existing
-          ? updateMemoryEntry(existing, value, tags, ttlSeconds)
-          : createMemoryEntry(key, value, tags, ttlSeconds);
+          ? updateMemoryEntry(existing, value, tags)
+          : createMemoryEntry(key, value, tags);
 
         cache.set(entry.key, entry);
         await writeMemoryEntry(memoryDir, entry);
@@ -85,24 +84,6 @@ export const memoryPlugin: DronePlugin = {
         }
         cache.delete(key);
         return deleteMemoryEntry(memoryDir, key);
-      },
-
-      prune: async () => {
-        if (!config.enabled) {
-          return 0;
-        }
-        const removed = await pruneMemoryEntries(memoryDir, config.maxEntries);
-        if (removed > 0) {
-          registration.logger.info(`memory pruned: removed ${removed} entry(ies)`);
-        }
-        return removed;
-      },
-
-      count: async () => {
-        if (!config.enabled) {
-          return 0;
-        }
-        return countStoreEntries(memoryDir);
       },
     };
 
@@ -157,17 +138,13 @@ export const memoryPlugin: DronePlugin = {
             description: 'Human-readable key for the memory entry (filesystem-safe).',
           },
           value: {
-            type: 'object',
-            description: 'Arbitrary JSON-serializable value to store.',
+            type: 'string',
+            description: 'Arbitrary text value to store.',
           },
           tags: {
             type: 'array',
             items: { type: 'string' },
             description: 'Optional free-form tags for categorization.',
-          },
-          ttlSeconds: {
-            type: 'number',
-            description: 'Optional TTL in seconds after which the entry may be pruned.',
           },
         },
         required: ['key', 'value'],
@@ -177,16 +154,15 @@ export const memoryPlugin: DronePlugin = {
         if (typeof input.key !== 'string' || input.key.trim().length === 0) {
           throw new Error('memory.store requires a non-empty key string.');
         }
+        if (typeof input.value !== 'string') {
+          throw new Error('memory.store requires a string value.');
+        }
         const tags = Array.isArray(input.tags)
           ? (input.tags as string[]).filter(t => typeof t === 'string')
           : [];
-        const ttlSeconds =
-          typeof input.ttlSeconds === 'number' && input.ttlSeconds > 0
-            ? input.ttlSeconds
-            : undefined;
-        const entry = await capability.store(input.key.trim(), input.value, tags, ttlSeconds);
+        const entry = await capability.store(input.key.trim(), input.value, tags);
         return JSON.stringify(
-          { id: entry.id, key: entry.key, tags: entry.tags, createdAt: entry.createdAt },
+          { key: entry.key, tags: entry.tags, createdAt: entry.createdAt },
           null,
           2
         );
@@ -256,7 +232,7 @@ export const memoryPlugin: DronePlugin = {
     registration.registerTool({
       name: 'search',
       description:
-        'Search memory entries by substring match against key and tags. Returns up to 50 matching entries.',
+        'Search memory entries by substring match against key, tags, and body text. Returns up to 50 matching entries.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -318,25 +294,6 @@ export const memoryPlugin: DronePlugin = {
       },
     });
 
-    // memory.prune
-    registration.registerTool({
-      name: 'prune',
-      description:
-        'Manually prune expired and excess memory entries. Returns the number of entries removed.',
-      inputSchema: {
-        type: 'object',
-        additionalProperties: false,
-      },
-      execute: async () => {
-        const removed = await capability.prune();
-        return JSON.stringify(
-          { removed, maxEntries: config.maxEntries },
-          null,
-          2
-        );
-      },
-    });
-
     // ── help snippet ───────────────────────────────────────────────────
     registration.registerHelp(
       'Project Memory: store/recall/list/search/delete facts in .drone-agent/memory/. Enabled with --plugin memory.'
@@ -352,31 +309,8 @@ export const memoryPlugin: DronePlugin = {
       }
       const count = await countStoreEntries(memoryDir);
       registration.logger.info(
-        `memory plugin ready (${count} stored entry(ies), maxEntries=${config.maxEntries}, autoSave=${config.autoSave})`
+        `memory plugin ready (${count} stored entry(ies))`
       );
-    });
-
-    // onShutdown: auto-save session summary if enabled
-    registration.hooks.onShutdown(async () => {
-      if (!config.enabled || !config.autoSave) {
-        return;
-      }
-
-      // Generate a time-stamped session entry
-      const now = new Date().toISOString();
-      const sessionKey = `session:${now.slice(0, 10)}`;
-      const summary = {
-        shutdownAt: now,
-        details: 'Session ended. Use memory.recall to retrieve stored facts.',
-      };
-
-      try {
-        await capability.store(sessionKey, summary, ['session', 'summary']);
-        registration.logger.info(`memory auto-saved: ${sessionKey}`);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        registration.logger.warn(`memory auto-save failed: ${message}`);
-      }
     });
   },
 };

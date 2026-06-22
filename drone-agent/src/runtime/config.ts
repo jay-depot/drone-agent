@@ -853,28 +853,6 @@ function parsePartialConfig(
       memory.enabled = raw.memory.enabled;
     }
 
-    if ('maxEntries' in raw.memory) {
-      if (
-        typeof raw.memory.maxEntries !== 'number' ||
-        !Number.isInteger(raw.memory.maxEntries) ||
-        raw.memory.maxEntries < 0
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: memory.maxEntries must be a non-negative integer.`
-        );
-      }
-      memory.maxEntries = raw.memory.maxEntries;
-    }
-
-    if ('autoSave' in raw.memory) {
-      if (typeof raw.memory.autoSave !== 'boolean') {
-        throw new Error(
-          `Invalid config in ${source}: memory.autoSave must be a boolean.`
-        );
-      }
-      memory.autoSave = raw.memory.autoSave;
-    }
-
     parsed.memory = memory;
   }
 

@@ -1,24 +1,21 @@
 /**
  * A single memory entry stored in the project-level memory.
  *
- * Each entry is persisted as a JSON file under `.drone-agent/memory/<key>.json`.
+ * Each entry is persisted as a `.md` file under `.drone-agent/memory/<key>.md`
+ * with YAML frontmatter containing metadata and the body as the value text.
  * The `key` must be a filesystem-safe string (no path separators, no leading dots).
  */
 export type MemoryEntry = {
-  /** Unique identifier (auto-generated UUID). */
-  id: string;
   /** Human-readable key used as the filename stem. Must be filesystem-safe. */
   key: string;
-  /** Arbitrary JSON-serializable value. */
-  value: unknown;
+  /** The body text of the memory entry (markdown). */
+  value: string;
   /** Optional free-form tags for categorization and search. */
   tags: string[];
   /** ISO 8601 creation timestamp. */
   createdAt: string;
   /** ISO 8601 last-updated timestamp. */
   updatedAt: string;
-  /** Optional TTL in seconds. When set, the entry may be pruned after expiry. */
-  ttlSeconds?: number;
 };
 
 /**
@@ -32,9 +29,8 @@ export type DroneMemoryCapability = {
    */
   store: (
     key: string,
-    value: unknown,
-    tags?: string[],
-    ttlSeconds?: number
+    value: string,
+    tags?: string[]
   ) => Promise<MemoryEntry>;
 
   /**
@@ -50,7 +46,7 @@ export type DroneMemoryCapability = {
   list: (prefix?: string) => Promise<{ key: string; updatedAt: string }[]>;
 
   /**
-   * Search entries by substring match against the key and tags.
+   * Search entries by substring match against the key, tags, and body text.
    * Returns up to `limit` entries (default 50).
    */
   search: (query: string, limit?: number) => Promise<MemoryEntry[]>;
@@ -60,17 +56,4 @@ export type DroneMemoryCapability = {
    * `false` if no entry existed.
    */
   delete: (key: string) => Promise<boolean>;
-
-  /**
-   * Prune expired and excess entries. Returns the number of entries removed.
-   * Removes:
-   *   - Entries whose `ttlSeconds` has elapsed since `updatedAt`
-   *   - Oldest entries when `maxEntries > 0` and the count exceeds it
-   */
-  prune: () => Promise<number>;
-
-  /**
-   * Return the total number of stored entries.
-   */
-  count: () => Promise<number>;
 };

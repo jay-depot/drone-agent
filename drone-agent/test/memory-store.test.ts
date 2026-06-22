@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   createMemoryEntry,
   deleteMemoryEntry,
   listMemoryEntries,
-  pruneMemoryEntries,
   readMemoryEntry,
   resolveMemoryDir,
   sanitizeKey,
@@ -66,44 +65,38 @@ describe('resolveMemoryDir', () => {
 });
 
 describe('createMemoryEntry', () => {
-  it('creates an entry with a UUID, ISO dates, and sanitized key', () => {
-    const entry = createMemoryEntry('my-key', { hello: 'world' }, ['tag1'], 3600);
-    expect(entry.id).toMatch(/^[0-9a-f-]{36}$/);
+  it('creates an entry with ISO dates and sanitized key', () => {
+    const entry = createMemoryEntry('my-key', 'hello world', ['tag1']);
     expect(entry.key).toBe('my-key');
-    expect(entry.value).toEqual({ hello: 'world' });
+    expect(entry.value).toBe('hello world');
     expect(entry.tags).toEqual(['tag1']);
-    expect(entry.ttlSeconds).toBe(3600);
     expect(entry.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(entry.updatedAt).toBe(entry.createdAt);
   });
 
-  it('defaults tags to empty and ttlSeconds to undefined', () => {
-    const entry = createMemoryEntry('plain', 42);
+  it('defaults tags to empty', () => {
+    const entry = createMemoryEntry('plain', 'just text');
     expect(entry.tags).toEqual([]);
-    expect(entry.ttlSeconds).toBeUndefined();
   });
 });
 
 describe('updateMemoryEntry', () => {
-  it('preserves id and createdAt, updates value and updatedAt', async () => {
-    const original = createMemoryEntry('test', 'old', ['a'], 100);
+  it('preserves createdAt, updates value and updatedAt', async () => {
+    const original = createMemoryEntry('test', 'old', ['a']);
     await new Promise(r => setTimeout(r, 10));
-    const updated = updateMemoryEntry(original, 'new', ['b'], 200);
+    const updated = updateMemoryEntry(original, 'new', ['b']);
 
-    expect(updated.id).toBe(original.id);
     expect(updated.createdAt).toBe(original.createdAt);
     expect(updated.key).toBe('test');
     expect(updated.value).toBe('new');
     expect(updated.tags).toEqual(['b']);
-    expect(updated.ttlSeconds).toBe(200);
     expect(updated.updatedAt).not.toBe(original.updatedAt);
   });
 
-  it('preserves original tags/ttl when not overridden', () => {
-    const original = createMemoryEntry('test', 'val', ['x'], 99);
+  it('preserves original tags when not overridden', () => {
+    const original = createMemoryEntry('test', 'val', ['x']);
     const updated = updateMemoryEntry(original, 'new-val');
     expect(updated.tags).toEqual(['x']);
-    expect(updated.ttlSeconds).toBe(99);
   });
 });
 
@@ -117,14 +110,13 @@ describe('readMemoryEntry / writeMemoryEntry', () => {
 
   it('round-trips a value', async () => {
     await withTempMemory(async memoryDir => {
-      const written = createMemoryEntry('my-key', { data: [1, 2, 3] }, ['test']);
+      const written = createMemoryEntry('my-key', 'hello world', ['test']);
       await writeMemoryEntry(memoryDir, written);
 
       const read = await readMemoryEntry(memoryDir, 'my-key');
       expect(read).not.toBeNull();
-      expect(read!.id).toBe(written.id);
       expect(read!.key).toBe('my-key');
-      expect(read!.value).toEqual({ data: [1, 2, 3] });
+      expect(read!.value).toBe('hello world');
       expect(read!.tags).toEqual(['test']);
     });
   });
@@ -139,7 +131,6 @@ describe('readMemoryEntry / writeMemoryEntry', () => {
 
       const read = await readMemoryEntry(memoryDir, 'dup');
       expect(read!.value).toBe('v2');
-      expect(read!.id).toBe(second.id);
     });
   });
 
@@ -153,7 +144,31 @@ describe('readMemoryEntry / writeMemoryEntry', () => {
       expect(tmpFiles).toHaveLength(0);
 
       // The actual file should exist with the right name
-      expect(files).toContain('atomic.json');
+      expect(files).toContain('atomic.md');
+    });
+  });
+
+  it('writes and reads YAML frontmatter correctly', async () => {
+    await withTempMemory(async memoryDir => {
+      const entry = createMemoryEntry('frontmatter-test', 'Body text here', ['tag-a', 'tag-b']);
+      await writeMemoryEntry(memoryDir, entry);
+
+      // Read raw file to verify format
+      const raw = await readFile(path.join(memoryDir, 'frontmatter-test.md'), 'utf-8');
+      expect(raw).toContain('---');
+      expect(raw).toContain('key: frontmatter-test');
+      expect(raw).toContain('  - tag-a');
+      expect(raw).toContain('  - tag-b');
+      expect(raw).toContain('created:');
+      expect(raw).toContain('updated:');
+      expect(raw).toContain('---');
+      expect(raw).toContain('Body text here');
+
+      // Read back via API
+      const read = await readMemoryEntry(memoryDir, 'frontmatter-test');
+      expect(read).not.toBeNull();
+      expect(read!.value).toBe('Body text here');
+      expect(read!.tags).toEqual(['tag-a', 'tag-b']);
     });
   });
 });
@@ -190,20 +205,17 @@ describe('listMemoryEntries', () => {
 
   it('lists all entries sorted by updatedAt descending', async () => {
     await withTempMemory(async memoryDir => {
-      const a = createMemoryEntry('alpha', 1);
+      const a = createMemoryEntry('alpha', '1');
       await sleep(10);
-      const b = createMemoryEntry('beta', 2);
+      const b = createMemoryEntry('beta', '2');
       await sleep(10);
-      const c = createMemoryEntry('gamma', 3);
+      const c = createMemoryEntry('gamma', '3');
       await writeMemoryEntry(memoryDir, c);
       await writeMemoryEntry(memoryDir, b);
       await writeMemoryEntry(memoryDir, a);
 
       const entries = await listMemoryEntries(memoryDir);
       expect(entries).toHaveLength(3);
-      // Newest first: we wrote c, then b, then a — but updatedAt is set per key.
-      // Actually the order depends on write order and timestamps. Let's check
-      // that all keys are present.
       const keys = entries.map(e => e.key).sort();
       expect(keys).toEqual(['alpha', 'beta', 'gamma']);
     });
@@ -211,9 +223,9 @@ describe('listMemoryEntries', () => {
 
   it('filters by prefix', async () => {
     await withTempMemory(async memoryDir => {
-      await writeMemoryEntry(memoryDir, createMemoryEntry('session:abc', 1));
-      await writeMemoryEntry(memoryDir, createMemoryEntry('session:xyz', 2));
-      await writeMemoryEntry(memoryDir, createMemoryEntry('config:main', 3));
+      await writeMemoryEntry(memoryDir, createMemoryEntry('session:abc', '1'));
+      await writeMemoryEntry(memoryDir, createMemoryEntry('session:xyz', '2'));
+      await writeMemoryEntry(memoryDir, createMemoryEntry('config:main', '3'));
 
       const sess = await listMemoryEntries(memoryDir, 'session:');
       expect(sess).toHaveLength(2);
@@ -227,8 +239,8 @@ describe('listMemoryEntries', () => {
 describe('searchMemoryEntries', () => {
   it('matches by key substring', async () => {
     await withTempMemory(async memoryDir => {
-      await writeMemoryEntry(memoryDir, createMemoryEntry('bug-tracker', 1, ['bug']));
-      await writeMemoryEntry(memoryDir, createMemoryEntry('feature-list', 2, ['feature']));
+      await writeMemoryEntry(memoryDir, createMemoryEntry('bug-tracker', 'info', ['bug']));
+      await writeMemoryEntry(memoryDir, createMemoryEntry('feature-list', 'info', ['feature']));
 
       const results = await searchMemoryEntries(memoryDir, 'bug');
       expect(results).toHaveLength(1);
@@ -238,8 +250,8 @@ describe('searchMemoryEntries', () => {
 
   it('matches by tag', async () => {
     await withTempMemory(async memoryDir => {
-      await writeMemoryEntry(memoryDir, createMemoryEntry('thing', 1, ['important']));
-      await writeMemoryEntry(memoryDir, createMemoryEntry('other', 2, ['trivial']));
+      await writeMemoryEntry(memoryDir, createMemoryEntry('thing', 'info', ['important']));
+      await writeMemoryEntry(memoryDir, createMemoryEntry('other', 'info', ['trivial']));
 
       const results = await searchMemoryEntries(memoryDir, 'important');
       expect(results).toHaveLength(1);
@@ -247,48 +259,24 @@ describe('searchMemoryEntries', () => {
     });
   });
 
+  it('matches by body text', async () => {
+    await withTempMemory(async memoryDir => {
+      await writeMemoryEntry(memoryDir, createMemoryEntry('note1', 'This is about TypeScript types', ['code']));
+      await writeMemoryEntry(memoryDir, createMemoryEntry('note2', 'This is about Rust borrow checker', ['code']));
+
+      const results = await searchMemoryEntries(memoryDir, 'TypeScript');
+      expect(results).toHaveLength(1);
+      expect(results[0].key).toBe('note1');
+    });
+  });
+
   it('respects limit', async () => {
     await withTempMemory(async memoryDir => {
       for (let i = 0; i < 10; i++) {
-        await writeMemoryEntry(memoryDir, createMemoryEntry(`key${i}`, i, ['test']));
+        await writeMemoryEntry(memoryDir, createMemoryEntry(`key${i}`, `${i}`, ['test']));
       }
       const results = await searchMemoryEntries(memoryDir, 'key', 3);
       expect(results).toHaveLength(3);
-    });
-  });
-});
-
-describe('pruneMemoryEntries', () => {
-  it('does nothing with maxEntries=0', async () => {
-    await withTempMemory(async memoryDir => {
-      await writeMemoryEntry(memoryDir, createMemoryEntry('keep', 'val'));
-      const removed = await pruneMemoryEntries(memoryDir, 0);
-      expect(removed).toBe(0);
-    });
-  });
-
-  it('removes expired entries based on ttlSeconds', async () => {
-    await withTempMemory(async memoryDir => {
-      // Fresh entry with 0s TTL — technically expired after creation
-      const fresh = createMemoryEntry('fresh', 'val', [], 0);
-      await writeMemoryEntry(memoryDir, fresh);
-
-      const removed = await pruneMemoryEntries(memoryDir, 0);
-      expect(removed).toBe(1);
-    });
-  });
-
-  it('removes oldest entries when count exceeds maxEntries', async () => {
-    await withTempMemory(async memoryDir => {
-      await writeMemoryEntry(memoryDir, createMemoryEntry('oldest', 1));
-      await sleep(10);
-      await writeMemoryEntry(memoryDir, createMemoryEntry('newest', 2));
-
-      const removed = await pruneMemoryEntries(memoryDir, 1);
-      expect(removed).toBe(1);
-
-      const remaining = await listMemoryEntries(memoryDir);
-      expect(remaining).toHaveLength(1);
     });
   });
 });
@@ -302,8 +290,8 @@ describe('countMemoryEntries', () => {
 
   it('counts stored entries', async () => {
     await withTempMemory(async memoryDir => {
-      await writeMemoryEntry(memoryDir, createMemoryEntry('a', 1));
-      await writeMemoryEntry(memoryDir, createMemoryEntry('b', 2));
+      await writeMemoryEntry(memoryDir, createMemoryEntry('a', '1'));
+      await writeMemoryEntry(memoryDir, createMemoryEntry('b', '2'));
       expect(await countMemoryEntries(memoryDir)).toBe(2);
     });
   });

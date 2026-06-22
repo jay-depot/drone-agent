@@ -118,7 +118,6 @@ describe('memoryPlugin', () => {
     expect(toolNames).toContain('list');
     expect(toolNames).toContain('search');
     expect(toolNames).toContain('delete');
-    expect(toolNames).toContain('prune');
     expect(new Set(toolNames).size).toBe(toolNames.length); // no duplicates
 
     // Prompt fragment
@@ -135,20 +134,18 @@ describe('memoryPlugin', () => {
     expect(typeof cap.list).toBe('function');
     expect(typeof cap.search).toBe('function');
     expect(typeof cap.delete).toBe('function');
-    expect(typeof cap.prune).toBe('function');
-    expect(typeof cap.count).toBe('function');
 
     // Help
     expect(captured.help.length).toBeGreaterThan(0);
     expect(captured.help[0]).toContain('Memory');
   });
 
-  it('registers hooks: onPluginsLoaded and onShutdown', async () => {
+  it('registers hooks: onPluginsLoaded', async () => {
     const { registration, captured } = createMockRegistration();
     await memoryPlugin.register(registration);
 
     expect(captured.hooks.onPluginsLoaded).toHaveLength(1);
-    expect(captured.hooks.onShutdown).toHaveLength(1);
+    expect(captured.hooks.onShutdown).toHaveLength(0); // no more auto-save
     expect(captured.hooks.onBeforePrompt).toHaveLength(0); // prompt fragment, not hook
   });
 
@@ -158,17 +155,14 @@ describe('memoryPlugin', () => {
 
     const cap = captured.capabilities.get('memory') as DroneMemoryCapability;
 
-    // count starts at 0 (afterEach cleaned)
-    expect(await cap.count()).toBe(0);
-
     // store and recall
-    const stored = await cap.store('test-key', { foo: 'bar' }, ['test-tag']);
+    const stored = await cap.store('test-key', 'hello world', ['test-tag']);
     expect(stored.key).toBe('test-key');
     expect(stored.tags).toEqual(['test-tag']);
 
     const recalled = await cap.recall('test-key');
     expect(recalled).not.toBeNull();
-    expect(recalled!.value).toEqual({ foo: 'bar' });
+    expect(recalled!.value).toBe('hello world');
 
     // list
     const list = await cap.list();
@@ -184,8 +178,6 @@ describe('memoryPlugin', () => {
 
     const afterDelete = await cap.recall('test-key');
     expect(afterDelete).toBeNull();
-
-    expect(await cap.count()).toBe(0);
   });
 
   it('tools return proper error for missing keys', async () => {
@@ -203,8 +195,8 @@ describe('memoryPlugin', () => {
     await memoryPlugin.register(registration);
 
     const cap = captured.capabilities.get('memory') as DroneMemoryCapability;
-    await cap.store('session:abc', 1);
-    await cap.store('session:xyz', 2);
+    await cap.store('session:abc', '1');
+    await cap.store('session:xyz', '2');
 
     const listTool = captured.tools.find(t => t.name === 'list')!;
     const result = await listTool.execute({ prefix: 'session:' });
@@ -224,26 +216,5 @@ describe('memoryPlugin', () => {
     expect(typeof rendered).toBe('string');
     expect(rendered).toContain('Project Memories');
     expect(rendered).toContain('fact-1');
-  });
-
-  it('onShutdown auto-saves a session entry', async () => {
-    const { registration, captured } = createMockRegistration();
-    await memoryPlugin.register(registration);
-
-    // Run onPluginsLoaded (no-op for this check)
-    for (const cb of captured.hooks.onPluginsLoaded) {
-      await cb();
-    }
-
-    const cap = captured.capabilities.get('memory') as DroneMemoryCapability;
-
-    // Run shutdown hook to trigger auto-save
-    for (const cb of captured.hooks.onShutdown) {
-      await cb();
-    }
-
-    // Should have created a session: entry
-    const entries = await cap.list('session:');
-    expect(entries.length).toBeGreaterThanOrEqual(1);
   });
 });
