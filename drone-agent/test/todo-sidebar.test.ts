@@ -73,8 +73,8 @@ describe('todo mid-panel widget', () => {
 
     const widget = engine.getCapability<MidPanelWidgetShape>('todo');
     const content = widget!.getContent();
-    // Summary: 1 / 3 (one completed out of three)
-    expect(content).toEqual(['1 / 3']);
+    // Summary: 1 / 3 : 1 WORKING (one completed, one in-progress)
+    expect(content).toEqual(['1 / 3 : 1 WORKING']);
   });
 
   it('shows correct count when all items completed', async () => {

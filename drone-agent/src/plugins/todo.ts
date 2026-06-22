@@ -280,7 +280,14 @@ export const todoPlugin: DronePlugin = {
         const completedCount = items.filter(
           i => i.status === 'completed'
         ).length;
-        return [`${completedCount} / ${items.length}`];
+        const inProgressCount = items.filter(
+          i => i.status === 'in_progress'
+        ).length;
+        const summary = `${completedCount} / ${items.length}`;
+        if (inProgressCount > 0) {
+          return [`${summary} : ${inProgressCount} WORKING`];
+        }
+        return [summary];
       },
     });
   },
