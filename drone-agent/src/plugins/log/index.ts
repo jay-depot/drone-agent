@@ -112,7 +112,11 @@ export function createLogPlugin(deps: LogPluginDeps): DronePlugin {
         if (!filename) {
           filename = generateLogFilename();
         }
-        logFilePath = path.join(dir, filename);
+        // Use a local variable for the path so that the async gap
+        // between path resolution and writeFile is immune to the
+        // persona change handler nulling out the shared logFilePath.
+        const filePath = path.join(dir, filename);
+        logFilePath = filePath;
 
         await mkdir(dir, { recursive: true });
 
@@ -120,7 +124,7 @@ export function createLogPlugin(deps: LogPluginDeps): DronePlugin {
         const filtered = filterTurns(turns);
 
         await writeFile(
-          logFilePath,
+          filePath,
           JSON.stringify(filtered, null, 2),
           'utf-8'
         );
