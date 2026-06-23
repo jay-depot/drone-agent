@@ -3,6 +3,7 @@
  */
 
 import type { DroneColorOverride } from './theme.js';
+import type { DronePluginEngine } from '../runtime/plugin-engine.js';
 
 /**
  * A mid-panel widget registered by a plugin.
@@ -42,56 +43,51 @@ export type DroneTuiCapability = {
   registerMidPanelWidget: (widget: MidPanelWidget) => void;
 };
 
+/**
+ * A single entry in the chat log.
+ *
+ * `id` is a stable React key. `kind` categorises the entry for
+ * color/prefix rendering. `text` is the primary content; multi-line
+ * strings render with hard newlines.
+ */
+export type ChatEntry = {
+  /**
+   * Stable id used as a React key. Numbers come from a monotonic
+   * counter in App; strings are reserved for plugin-injected entries.
+   */
+  id: number | string;
+  /** Categorises the entry for color/prefix. */
+  kind:
+    | 'info'
+    | 'user'
+    | 'reasoning'
+    | 'toolCall'
+    | 'toolResult'
+    | 'error'
+    | 'plain'
+    | 'success';
+  /** Primary text. Multi-line strings render with hard newlines. */
+  text: string;
+};
+
 /** Options for creating the TUI. */
 export type DroneTuiOptions = {
-  engine: {
-    listTools: () => { name: string; description: string }[];
-    listPlugins: () => { id: string; name: string; enabled: boolean }[];
-    getRegisteredPluginCount: () => number;
-    getRegisteredToolCount: () => number;
-    getCapability: <T>(pluginId: string) => T | undefined;
-    runHooks: (
-      hookName: import('../runtime/plugin-engine.js').StandardHookName
-    ) => Promise<void>;
-    executeTool: (
-      name: string,
-      input: Record<string, unknown>
-    ) => Promise<string>;
-    getHelpSnippets: () => string[];
-    /**
-     * Render all registered prompt fragments to strings.
-     */
-    renderPromptFragments: () => Promise<string[]>;
-    /**
-     * Returns the resolved DroneAgentConfig used by the engine.
-     */
-    getConfig: () => import('drone-core').DroneAgentConfig;
-    /**
-     * Dispatch a user-entered line to registered plugin slash commands.
-     * Returns true if a handler claimed the line.
-     */
-    dispatchSlashCommand?: (
-      line: string,
-      ctx: Omit<
-        import('drone-core').DroneSlashCommandContext,
-        'line' | 'args'
-      >
-    ) => Promise<boolean>;
-    /**
-     * Optional. Set the host's elicitation capability; called by App
-     * on mount to register its TUI-flavoured implementation.
-     */
-    setElicitation?: (
-      cap: import('drone-core').DroneElicitation | undefined
-    ) => void;
-    /**
-     * Optional. Run a registered workflow by canonical name.
-     */
-    runWorkflow?: (
-      canonicalName: string,
-      args: Record<string, unknown>
-    ) => Promise<import('drone-core').DroneWorkflowResult>;
-  };
+  engine: Pick<
+    DronePluginEngine,
+    | 'listTools'
+    | 'listPlugins'
+    | 'getRegisteredPluginCount'
+    | 'getRegisteredToolCount'
+    | 'getCapability'
+    | 'runHooks'
+    | 'executeTool'
+    | 'getHelpSnippets'
+    | 'renderPromptFragments'
+    | 'getConfig'
+    | 'dispatchSlashCommand'
+    | 'setElicitation'
+    | 'runWorkflow'
+  >;
   conversation: {
     sendUserMessage: (
       prompt: string,

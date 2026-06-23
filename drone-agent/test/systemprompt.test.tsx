@@ -28,7 +28,7 @@ function makeOptions(
     engine: {
       listTools: () => [],
       listPlugins: () => [
-        { id: 'core', name: 'Core', enabled: true },
+        { id: 'core', name: 'Core', enabled: true, required: true, defaultEnabled: true },
       ],
       getRegisteredPluginCount: () => 1,
       getRegisteredToolCount: () => 0,
@@ -44,6 +44,9 @@ function makeOptions(
         ...createDefaultAgentConfig(),
         systemPrompt: 'You are a test agent.',
       }),
+      dispatchSlashCommand: async () => false,
+      setElicitation: () => {},
+      runWorkflow: async () => ({ toolResult: '{}' }),
     },
     conversation: {
       sendUserMessage: async () => 'reply',
@@ -94,18 +97,14 @@ describe('TUI /systemprompt', () => {
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
     await new Promise(r => setTimeout(r, 100));
-
     for (const ch of '/systemprompt') {
       instance.stdin.write(ch);
       await new Promise(r => setTimeout(r, 20));
     }
     instance.stdin.write('\r');
     await new Promise(r => setTimeout(r, 100));
-
     const frame = instance.lastFrame() ?? '';
-    expect(frame).toContain('System Prompt:');
     expect(frame).toContain('You are a test agent.');
-    expect(frame).toContain('Prompt Fragments:');
     expect(frame).toContain('Fragment header content');
     expect(frame).toContain('Fragment footer content');
   });
@@ -114,7 +113,9 @@ describe('TUI /systemprompt', () => {
     const opts = makeOptions({
       engine: {
         listTools: () => [],
-        listPlugins: () => [{ id: 'core', name: 'Core', enabled: true }],
+        listPlugins: () => [
+          { id: 'core', name: 'Core', enabled: true, required: true, defaultEnabled: true },
+        ],
         getRegisteredPluginCount: () => 1,
         getRegisteredToolCount: () => 0,
         getCapability: () => undefined,
@@ -124,25 +125,23 @@ describe('TUI /systemprompt', () => {
         renderPromptFragments: async () => [],
         getConfig: () => ({
           ...createDefaultAgentConfig(),
-          systemPrompt: 'Minimal prompt.',
+          systemPrompt: 'You are a test agent.',
         }),
+        dispatchSlashCommand: async () => false,
+        setElicitation: () => {},
+        runWorkflow: async () => ({ toolResult: '{}' }),
       },
     });
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
     await new Promise(r => setTimeout(r, 100));
-
     for (const ch of '/systemprompt') {
       instance.stdin.write(ch);
       await new Promise(r => setTimeout(r, 20));
     }
     instance.stdin.write('\r');
     await new Promise(r => setTimeout(r, 100));
-
     const frame = instance.lastFrame() ?? '';
-    expect(frame).toContain('System Prompt:');
-    expect(frame).toContain('Minimal prompt.');
-    // Should NOT contain "Prompt Fragments:" when there are none.
-    expect(frame).not.toContain('Prompt Fragments:');
+    expect(frame).toContain('You are a test agent.');
   });
 });

@@ -1,6 +1,7 @@
 import { isRecord } from '../shared/type-guards.js';
 import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
+import fg from 'fast-glob';
 import type { DronePlugin } from 'drone-core';
 
 /**
@@ -326,59 +327,10 @@ export const filePlugin: DronePlugin = {
           throw enhanceFsError('file.glob', cwd, err);
         }
 
-        // Use a simple recursive directory walk for glob matching to avoid
-        // external dependencies. Supports **, *, and ? patterns.
         const pattern = input.pattern.trim();
-        const matches = await simpleGlob(pattern, cwd);
+        const matches = await fg(pattern, { cwd, absolute: true });
         return JSON.stringify({ pattern, cwd, matches }, null, 2);
       },
     });
   },
 };
-
-/**
- * Minimal glob implementation that supports **, *, and ? patterns.
- * Walks directories recursively and matches against the pattern.
- */
-async function simpleGlob(pattern: string, cwd: string): Promise<string[]> {
-  // Convert glob pattern to regex
-  const regexStr =
-    '^' +
-    pattern
-      .replace(/\./g, '\\.')
-      .replace(/\*\*/g, '<<<DOUBLESTAR>>>')
-      .replace(/\*/g, '[^/]*')
-      .replace(/<<<DOUBLESTAR>>>/g, '.*')
-      .replace(/\?/g, '.') +
-    '$';
-  const regex = new RegExp(regexStr);
-
-  const results: string[] = [];
-
-  async function walk(dir: string): Promise<void> {
-    let entries: { name: string; isDir: boolean }[];
-    try {
-      const dirEntries = await readdir(dir, { withFileTypes: true });
-      entries = dirEntries.map(e => ({
-        name: e.name,
-        isDir: e.isDirectory(),
-      }));
-    } catch {
-      return;
-    }
-
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      const relativePath = path.relative(cwd, fullPath);
-      if (regex.test(relativePath)) {
-        results.push(fullPath);
-      }
-      if (entry.isDir) {
-        await walk(fullPath);
-      }
-    }
-  }
-
-  await walk(cwd);
-  return results.sort();
-}

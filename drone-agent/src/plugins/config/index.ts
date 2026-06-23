@@ -14,7 +14,6 @@ import {
   CONFIG_FILE_NAME,
   findProjectConfigPath,
   loadConfigLayer,
-  parsePartialConfig,
 } from '../../runtime/config.js';
 
 // ---------------------------------------------------------------------------

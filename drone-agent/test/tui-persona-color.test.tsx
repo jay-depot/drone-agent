@@ -47,6 +47,9 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
     getConfig: (): import('drone-core').DroneAgentConfig => {
       throw new Error('getConfig not used in tui-persona-color tests');
     },
+    dispatchSlashCommand: async (): Promise<boolean> => false,
+    setElicitation: (): void => {},
+    runWorkflow: async (): Promise<import('drone-core').DroneWorkflowResult> => ({ toolResult: '{}' }),
   };
   return {
     model,
@@ -86,14 +89,8 @@ describe('App — persona color override', () => {
     cleanup = instance.cleanup;
     await new Promise(r => setTimeout(r, 50));
     expect(callback).not.toBeNull();
-    // Activate the persona.
     callback!({ id: 'planner', uiColor: 'blue' });
-    // Let React flush.
     await new Promise(r => setTimeout(r, 50));
-    // ANSI escape for blue foreground is \x1b[34m. The persona override
-    // tints the input line's border (via `scheme.border`) and the
-    // prompt label (via `scheme.userInput`). Look for the blue escape
-    // anywhere in the latest frames.
     const frames = instance.stdout.frames.join('');
     expect(frames).toContain('\x1b[34m');
   });
@@ -112,8 +109,6 @@ describe('App — persona color override', () => {
     callback!({ id: 'researcher', uiColor: '#ff8800' });
     await new Promise(r => setTimeout(r, 50));
     const frames = instance.stdout.frames.join('');
-    // chalk's hex output for #ff8800 produces a specific escape
-    // sequence; just assert that some escape sequence appeared.
     expect(frames).toMatch(/\x1b\[\d+(;\d+)*m/);
   });
 
@@ -128,11 +123,8 @@ describe('App — persona color override', () => {
     const instance = render(<App {...makeOptions(personaCap)} />);
     cleanup = instance.cleanup;
     await new Promise(r => setTimeout(r, 50));
-    // Activate a persona with no uiColor.
     callback!({ id: 'plain', uiColor: undefined });
     await new Promise(r => setTimeout(r, 50));
-    // The default `border` is "gray" which renders with the gray ANSI
-    // escape (\x1b[90m for bright black / gray). Verify it appears.
     const frames = instance.stdout.frames.join('');
     expect(frames).toContain('\x1b[90m');
   });

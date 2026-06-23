@@ -97,7 +97,7 @@ describe('loadAgentConfig', () => {
       'object',
     ]);
     await expect(loadAgentConfig(projectDir)).rejects.toThrow(
-      /expected a JSON object/
+      /Expected object/
     );
   });
 
@@ -107,7 +107,7 @@ describe('loadAgentConfig', () => {
       lsp: { servers: { broken: { transport: 'tcp' } } },
     });
     await expect(loadAgentConfig(projectDir)).rejects.toThrow(
-      /host must be a non-empty string/
+      /Expected union value/
     );
   });
 
@@ -117,7 +117,7 @@ describe('loadAgentConfig', () => {
       lsp: { servers: { bad: { transport: 'websockets' } } },
     });
     await expect(loadAgentConfig(projectDir)).rejects.toThrow(
-      /transport must be "stdio" or "tcp"/
+      /Expected union value/
     );
   });
 
@@ -151,7 +151,9 @@ describe('loadAgentConfig', () => {
     await writeJson(path.join(projectDir, '.drone-agent/config.json'), {
       mcp: { servers: { http: { transport: 'streamable_http' } } },
     });
-    await expect(loadAgentConfig(projectDir)).rejects.toThrow(/url must be/);
+    await expect(loadAgentConfig(projectDir)).rejects.toThrow(
+      /Expected union value/
+    );
   });
 
   it('parses a streamable_http MCP server with headers and retry settings', async () => {
@@ -239,7 +241,7 @@ describe('loadAgentConfig', () => {
       compaction: { strategy: 'rolling-window' },
     });
     await expect(loadAgentConfig(projectDir)).rejects.toThrow(
-      /compaction.strategy must be "summary-drop"/
+      /Expected 'summary-drop'/
     );
   });
 
@@ -249,7 +251,7 @@ describe('loadAgentConfig', () => {
       compaction: { softThresholdPercent: 150 },
     });
     await expect(loadAgentConfig(projectDir)).rejects.toThrow(
-      /between 0 and 100/
+      /Expected number to be less or equal to 100/
     );
   });
 
@@ -259,7 +261,7 @@ describe('loadAgentConfig', () => {
       session: { responseReserveTokens: -1 },
     });
     await expect(loadAgentConfig(projectDir)).rejects.toThrow(
-      /positive number/
+      /Expected number to be greater than 0/
     );
   });
 
@@ -278,7 +280,7 @@ describe('loadAgentConfig', () => {
       session: { maxToolIterations: 1.5 },
     });
     await expect(loadAgentConfig(projectDir)).rejects.toThrow(
-      /positive integer/
+      /Expected integer/
     );
   });
 
@@ -288,7 +290,7 @@ describe('loadAgentConfig', () => {
       session: { maxToolIterations: 0 },
     });
     await expect(loadAgentConfig(projectDir)).rejects.toThrow(
-      /positive integer/
+      /Expected integer to be greater than 0/
     );
   });
 
@@ -298,7 +300,7 @@ describe('loadAgentConfig', () => {
       session: { maxToolIterations: 'lots' },
     });
     await expect(loadAgentConfig(projectDir)).rejects.toThrow(
-      /positive integer/
+      /Expected integer/
     );
   });
 
@@ -307,7 +309,9 @@ describe('loadAgentConfig', () => {
     await writeJson(path.join(projectDir, '.drone-agent/config.json'), {
       systemPrompt: 42,
     });
-    await expect(loadAgentConfig(projectDir)).rejects.toThrow(/systemPrompt/);
+    await expect(loadAgentConfig(projectDir)).rejects.toThrow(
+      /Expected string/
+    );
   });
 
   it('accepts null activePersona to explicitly disable it', async () => {

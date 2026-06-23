@@ -35,8 +35,8 @@ function makeOptions(
     engine: {
       listTools: () => [],
       listPlugins: () => [
-        { id: 'core', name: 'Core', enabled: true },
-        { id: 'persona', name: 'Persona', enabled: true },
+        { id: 'core', name: 'Core', enabled: true, required: true, defaultEnabled: true },
+        { id: 'persona', name: 'Persona', enabled: true, required: false, defaultEnabled: true },
       ],
       getRegisteredPluginCount: () => 2,
       getRegisteredToolCount: () => 3,
@@ -46,6 +46,9 @@ function makeOptions(
       renderPromptFragments: async () => [],
       getConfig: () => { throw new Error("getConfig not used in tui tests"); },
       getHelpSnippets: () => [],
+      dispatchSlashCommand: async () => false,
+      setElicitation: () => {},
+      runWorkflow: async () => ({ toolResult: '{}' }),
     },
     conversation: {
       sendUserMessage: async () => 'reply',
@@ -81,38 +84,21 @@ describe('App', () => {
   });
 
   it('mentions terminal-native text selection in the rendered output', async () => {
-    // The help text is produced on demand by `printHelp` inside App.
-    // Submit a `/help` slash command through stdin. The flow is:
-    //   - `ink-text-input` captures printable chars into the input
-    //   - on Enter, it fires `onSubmit` which dispatches the command
-    //   - `printHelp` appends entries which `<Static>` then renders
     const opts = makeOptions();
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
-    // Give the useInput effect time to register before any writes.
-    // Without this delay, the first write is consumed by the raw-mode
-    // setup before the listener is attached, and the test spuriously
-    // fails to see the help text. 100ms is enough for a single mount.
     await new Promise(r => setTimeout(r, 100));
-    // Type "/help" and press Enter. The test stdin treats each write
-    // as a separate input event; ink-text-input concatenates them
-    // into the buffer.
     for (const ch of '/help') {
       instance.stdin.write(ch);
       await new Promise(r => setTimeout(r, 20));
     }
     instance.stdin.write('\r');
-    // Give React a few ticks to flush state.
     await new Promise(r => setTimeout(r, 100));
     const frame = instance.lastFrame() ?? '';
     expect(frame).toMatch(/native selection|Shift-drag|native/i);
   });
 
   it('mounts and renders without throwing', () => {
-    // Sanity smoke: the TUI mounts in a test environment (without a real
-    // TTY) and produces a non-empty first frame. The blessed version
-    // required `autoPadding` and a `screen` element; the Ink version
-    // is just a React tree and can render in node:testing mode.
     const opts = makeOptions();
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
@@ -120,13 +106,10 @@ describe('App', () => {
   });
 
   it('does not render mid panel when no plugin offers widget content', () => {
-    // getCapability returns undefined for all plugins — no mid-panel widgets
-    // should appear.
     const opts = makeOptions();
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
     const frame = instance.lastFrame() ?? '';
-    // The TODO label should not appear in the output.
     expect(frame).not.toContain('TODO');
   });
 
@@ -140,8 +123,8 @@ describe('App', () => {
       engine: {
         listTools: () => [],
         listPlugins: () => [
-          { id: 'core', name: 'Core', enabled: true },
-          { id: 'persona', name: 'Persona', enabled: true },
+          { id: 'core', name: 'Core', enabled: true, required: true, defaultEnabled: true },
+          { id: 'persona', name: 'Persona', enabled: true, required: false, defaultEnabled: true },
         ],
         getRegisteredPluginCount: () => 2,
         getRegisteredToolCount: () => 3,
@@ -156,14 +139,15 @@ describe('App', () => {
         renderPromptFragments: async () => [],
         getConfig: () => { throw new Error("getConfig not used in tui tests"); },
         getHelpSnippets: () => [],
+        dispatchSlashCommand: async () => false,
+        setElicitation: () => {},
+        runWorkflow: async () => ({ toolResult: '{}' }),
       },
     });
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
-    // Wait for the useEffect that discovers mid-panel widgets to fire.
     await new Promise(r => setTimeout(r, 100));
     const frame = instance.lastFrame() ?? '';
-    // The mid panel should render the TODO widget content.
     expect(frame).toContain('TODO');
     expect(frame).toContain('3 / 5');
   });
@@ -175,7 +159,6 @@ describe('MidPanel', () => {
       <MidPanel widgets={[]} scheme={DEFAULT_GRAYSCALE_SCHEME} />
     );
     const frame = instance.lastFrame() ?? '';
-    // No content — the component rendered nothing (or null).
     expect(frame).toBe('');
   });
 
@@ -229,7 +212,6 @@ describe('MidPanel', () => {
     expect(frame).toContain('Insights');
     expect(frame).toContain('3 / 5');
     expect(frame).toContain('12');
-    // Should have a separator between the two widgets
     expect(frame).toContain('│');
   });
 });
@@ -271,7 +253,6 @@ describe('ModelPicker', () => {
     );
     cleanup = instance.cleanup;
     const frame = instance.lastFrame() ?? '';
-    // The current model line is suffixed with '(current)'.
     expect(frame).toContain('mistral:7b (current)');
   });
 
@@ -284,13 +265,10 @@ describe('ModelPicker', () => {
       <ModelPicker models={['a', 'b', 'c']} current="a" onSelect={onSelect} />
     );
     cleanup = instance.cleanup;
-    // Let the useInput effect register before driving the picker.
     await new Promise(r => setTimeout(r, 100));
-    // Move highlight to index 1 (down arrow escape sequence), then
-    // submit (Enter / carriage return).
-    instance.stdin.write('\u001b[B'); // down arrow
+    instance.stdin.write('\u001b[B');
     await new Promise(r => setTimeout(r, 20));
-    instance.stdin.write('\r'); // enter
+    instance.stdin.write('\r');
     await new Promise(r => setTimeout(r, 50));
     expect(chosen).toBe('b');
   });

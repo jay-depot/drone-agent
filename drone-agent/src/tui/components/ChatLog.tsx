@@ -11,26 +11,9 @@
 import { Box, Static, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { ColorTag, type DroneColorScheme } from '../theme.js';
+import type { ChatEntry } from '../types.js';
 
-export type ChatEntry = {
-  /**
-   * Stable id used as a React key. Numbers come from a monotonic
-   * counter in App; strings are reserved for plugin-injected entries.
-   */
-  id: number | string;
-  /** Categorises the entry for color/prefix. */
-  kind:
-    | 'info'
-    | 'user'
-    | 'reasoning'
-    | 'toolCall'
-    | 'toolResult'
-    | 'error'
-    | 'plain'
-    | 'success';
-  /** Primary text. Multi-line strings render with hard newlines. */
-  text: string;
-};
+export type { ChatEntry };
 
 export function ChatLog({
   entries,

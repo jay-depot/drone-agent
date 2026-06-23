@@ -1121,3 +1121,13 @@ export function filterByGlobPatterns(
     return true;
   });
 }
+
+
+// ── Config schema (TypeBox) ─────────────────────────────────────────
+
+export {
+  PartialDroneAgentConfigSchema,
+  parseConfigWithSchema,
+  transformEnvVars,
+} from './config-schema.js';
+export type { PartialDroneAgentConfigDecoded } from './config-schema.js';

@@ -153,7 +153,7 @@ describe('promptFile config parsing', () => {
     });
 
     await expect(loadAgentConfig(projectDir)).rejects.toThrow(
-      /promptFile\.enabled must be a boolean/
+      /Expected boolean/
     );
   });
 
@@ -164,7 +164,7 @@ describe('promptFile config parsing', () => {
     });
 
     await expect(loadAgentConfig(projectDir)).rejects.toThrow(
-      /promptFile\.files must be an array of strings/
+      /Expected array/
     );
   });
 
@@ -175,7 +175,7 @@ describe('promptFile config parsing', () => {
     });
 
     await expect(loadAgentConfig(projectDir)).rejects.toThrow(
-      /promptFile\.files must be an array of strings/
+      /Expected string/
     );
   });
 
@@ -186,7 +186,7 @@ describe('promptFile config parsing', () => {
     });
 
     await expect(loadAgentConfig(projectDir)).rejects.toThrow(
-      /promptFile must be an object/
+      /Expected object/
     );
   });
 

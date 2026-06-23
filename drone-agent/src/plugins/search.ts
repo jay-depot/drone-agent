@@ -1,5 +1,22 @@
-import { execSync } from 'node:child_process';
 import type { DronePlugin } from 'drone-core';
+import { execFileAsync } from '../shared/exec-async.js';
+
+// ── Ripgrep detection (cached) ──────────────────────────────────────
+
+let hasRipgrep: boolean | null = null;
+
+async function detectRipgrep(): Promise<boolean> {
+  if (hasRipgrep !== null) return hasRipgrep;
+  try {
+    await execFileAsync('which', ['rg']);
+    hasRipgrep = true;
+  } catch {
+    hasRipgrep = false;
+  }
+  return hasRipgrep;
+}
+
+// ── Plugin ───────────────────────────────────────────────────────────
 
 export const searchPlugin: DronePlugin = {
   metadata: {
@@ -45,40 +62,46 @@ export const searchPlugin: DronePlugin = {
           Number.isFinite(input.maxResults)
             ? Math.max(1, Math.floor(input.maxResults))
             : 50;
-        const fixedFlag = input.fixed === true;
+        const fixed = input.fixed === true;
+        const glob =
+          typeof input.glob === 'string' && input.glob.trim().length > 0
+            ? input.glob.trim()
+            : undefined;
 
         // Prefer ripgrep for speed, fall back to grep.
-        let cmd: string;
-        try {
-          execSync('which rg', { stdio: 'ignore' });
-          const globFlag =
-            typeof input.glob === 'string' && input.glob.trim().length > 0
-              ? ` --glob "${input.glob.trim()}"`
-              : '';
-          cmd = `rg --no-heading --line-number --max-count ${maxResults}${fixedFlag ? ' --fixed-strings' : ''}${globFlag} ${quoteArg(input.pattern.trim())} ${quoteArg(searchPath)}`;
-        } catch {
-          // Fallback to grep -rn
-          const globFlag =
-            typeof input.glob === 'string' && input.glob.trim().length > 0
-              ? ` --include="${input.glob.trim()}"`
-              : '';
-          cmd = `grep -rn${fixedFlag ? 'F' : 'E'} --max-count=${maxResults}${globFlag} ${quoteArg(input.pattern.trim())} ${quoteArg(searchPath)}`;
-        }
+        const useRg = await detectRipgrep();
 
         let stdout: string;
         try {
-          stdout = execSync(cmd, {
-            encoding: 'utf-8',
-            maxBuffer: 10 * 1024 * 1024,
-            stdio: ['ignore', 'pipe', 'pipe'],
-          });
+          if (useRg) {
+            const args: string[] = [
+              '--no-heading',
+              '--line-number',
+              `--max-count=${maxResults}`,
+            ];
+            if (fixed) args.push('--fixed-strings');
+            if (glob) args.push('--glob', glob);
+            args.push(input.pattern.trim(), searchPath);
+            const result = await execFileAsync('rg', args);
+            stdout = result.stdout;
+          } else {
+            const args: string[] = [
+              '-rn',
+              ...(fixed ? ['-F'] : ['-E']),
+              `--max-count=${maxResults}`,
+            ];
+            if (glob) args.push(`--include=${glob}`);
+            args.push(input.pattern.trim(), searchPath);
+            const result = await execFileAsync('grep', args);
+            stdout = result.stdout;
+          }
         } catch (err) {
           // rg/grep exit 1 when no matches are found — that's a valid empty
-          // result. Exit 2+ indicates a real error (bad pattern, missing
-          // path, permission denied). Wrap it so the LLM sees a clear message.
-          const status =
-            (err as { status?: number | null })?.status ?? null;
-          if (status === 1) {
+          // result. Exit 2+ indicates a real error.
+          // execFile errors have `code` set to the exit code (as a string).
+          const exitCode =
+            (err as { code?: number | string })?.code ?? null;
+          if (exitCode === 1 || exitCode === '1') {
             return JSON.stringify(
               {
                 pattern: input.pattern.trim(),
@@ -104,7 +127,7 @@ export const searchPlugin: DronePlugin = {
             return '';
           })();
           throw new Error(
-            `search.text: command failed${status !== null ? ` (exit ${status})` : ''} for ${searchPath}: ${stderr || (err instanceof Error ? err.message : String(err))}`
+            `search.text: command failed${exitCode !== null ? ` (exit ${exitCode})` : ''} for ${searchPath}: ${stderr || (err instanceof Error ? err.message : String(err))}`
           );
         }
 
@@ -165,11 +188,3 @@ export const searchPlugin: DronePlugin = {
     });
   },
 };
-
-function quoteArg(arg: string): string {
-  // Simple shell quoting for safety
-  if (/^[a-zA-Z0-9_./@~-]+$/.test(arg)) {
-    return arg;
-  }
-  return `'${arg.replace(/'/g, "'\\''")}'`;
-}

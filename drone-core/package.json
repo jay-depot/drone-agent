@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./config-schema": {
+      "types": "./dist/config-schema.d.ts",
+      "import": "./dist/config-schema.js"
     }
   },
   "files": [
@@ -19,5 +23,8 @@
     "typecheck": "tsc -b --pretty false",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.49"
   }
 }
