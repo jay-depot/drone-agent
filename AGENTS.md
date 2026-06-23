@@ -13,6 +13,9 @@ drone-agent/          ← The CLI + TUI coding agent (Ink-based)
   src/
     index.tsx         ← Main entry point, CLI arg parsing, first-run setup
     plugins/          ← All built-in plugins (skills, persona, memory, lsp, mcp, etc.)
+      bootstrap/     ← Bootstrap plugin (project/user setup workflows)
+        index.ts      ← Plugin registration, analyze tool, project & user workflows
+        project-detect.ts ← Project detection logic (shared by tool and workflow)
     runtime/          ← Plugin engine, config loader, conversation service, session manager
     tui/              ← Ink-based TUI (App, ChatLog, InputLine, StatusBar, etc.)
   test/               ← Vitest tests
@@ -42,7 +45,7 @@ Everything is a plugin. Each plugin implements `DronePlugin` with a `register(re
 
 - **Register tools** via `registration.registerTool(...)` — these become callable by the LLM
 - **Register prompt fragments** via `registration.registerPromptFragment(...)` — injected into the system prompt as header or footer
-- **Register workflows** via `registration.registerWorkflow(...)` — multi-step interactive flows (e.g., `skills.create`, `persona.create`)
+- **Register workflows** via `registration.registerWorkflow(...)` — multi-step interactive flows (e.g., `skills.create`, `persona.create`, `bootstrap.project`, `bootstrap.user`)
 - **Register slash commands** via `registration.registerSlashCommand(...)` — interactive `/command` handlers
 - **Offer capabilities** via `registration.offer(...)` — expose an API to other plugins
 - **Request capabilities** via `registration.request<T>(pluginId)` — consume another plugin's API
@@ -50,6 +53,18 @@ Everything is a plugin. Each plugin implements `DronePlugin` with a `register(re
 - **Hook into lifecycle events** via `registration.hooks.onPluginsLoaded(...)`, `onSessionStart(...)`, `onBeforePrompt(...)`, `onAfterToolCall(...)`, `onShutdown(...)`, `onSessionClear(...)`
 
 The plugin engine (`runtime/plugin-engine.ts`) manages all of this. The built-in plugins are listed in `plugins/index.ts`.
+
+### Dynamic Plugin Enabling
+
+The engine supports `enablePlugin(pluginId)` — dynamically enabling and registering a plugin mid-session. This is used by bootstrap workflows to activate recommended plugins immediately after writing config, without requiring a restart. The method:
+
+- Returns `false` if the plugin ID is unknown
+- Returns `true` (idempotent) if the plugin is already enabled
+- Throws if a non-optional dependency is not enabled
+- Registers tools, workflows, hooks, and capabilities
+- Runs `onPluginsLoaded` and `onSessionStart` hooks for catch-up
+
+The `--plugin` CLI flag enables plugins for the current session by merging plugin IDs into the `enabledPlugins` config before engine initialization. Supports comma-separated names (`--plugin bootstrap,lsp,git`) and repeated flags.
 
 ### Broker + Provider Pattern (Skills & Personas)
 
@@ -84,9 +99,19 @@ The `self-improvement` plugin records insights about personas, skills, or the pr
 
 ### Workflow System
 
-Workflows are multi-step interactive flows registered by plugins. They receive a `DroneWorkflowContext` with `elicit` (for asking the user questions), `projectDir`, `config`, and `requestCapability`. Workflows can return a `toolResult` (JSON for the caller) and/or a `kickMessage` (synthetic user message to re-enter the chat loop).
+Workflows are multi-step interactive flows registered by plugins. They receive a `DroneWorkflowContext` with `elicit` (for asking the user questions), `projectDir`, `config`, `requestCapability`, and `enablePlugin` (for dynamically enabling plugins mid-session). Workflows can return a `toolResult` (JSON for the caller) and/or a `kickMessage` (synthetic user message to re-enter the chat loop).
 
-Existing workflows: `skills.create`, `persona.create`.
+Existing workflows: `skills.create`, `persona.create`, `bootstrap.project`, `bootstrap.user`.
+
+### Bootstrap Plugin
+
+The `bootstrap` plugin provides setup workflows for new projects and users. It is not enabled by default — use `--plugin bootstrap` to enable it.
+
+- **`bootstrap.analyze`** (tool) — Detects project language, framework, build system, and suggests plugins
+- **`bootstrap.project`** (workflow) — Interactive project setup: detects project type, suggests plugins, writes config, enables them immediately via `enablePlugin()`
+- **`bootstrap.user`** (workflow) — Interactive user setup: probes for LLM providers (Ollama, OpenRouter), configures defaults, writes user config
+
+Future workflows (not yet implemented): `bootstrap.standalone-agent`, `bootstrap.swarm`.
 
 ### Macros
 
@@ -112,7 +137,7 @@ Call `registration.registerPromptFragment({ key, phase: 'header'|'footer', rende
 
 ### Adding a new workflow
 
-Call `registration.registerWorkflow({ name, description, inputSchema, run })`. The `run` function receives `(input, ctx)` where `ctx` has `elicit`, `projectDir`, `config`, and `requestCapability`.
+Call `registration.registerWorkflow({ name, description, inputSchema, run })`. The `run` function receives `(input, ctx)` where `ctx` has `elicit`, `projectDir`, `config`, `requestCapability`, and `enablePlugin`.
 
 ### Adding a new slash command
 
@@ -146,6 +171,8 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-agent/src/runtime/context-budget-service.ts` | Context window budgeting, compaction triggers       |
 | `drone-agent/src/tui/app.tsx`                       | Root TUI component                                  |
 | `drone-agent/src/plugins/index.ts`                  | Built-in plugin registry                            |
+| `drone-agent/src/plugins/bootstrap/index.ts`        | Bootstrap plugin (project/user setup workflows)    |
+| `drone-agent/src/plugins/bootstrap/project-detect.ts` | Project detection logic (shared by tool and workflow) |
 | `drone-core/src/index.ts`                           | All shared types and config defaults                |
 
 ## Existing Skills
