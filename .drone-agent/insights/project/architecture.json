@@ -26,5 +26,25 @@
   {
     "timestamp": "2026-06-23T00:01:35.192Z",
     "insight": "The LSP diagnostics show two test files (log-plugin.test.ts and prompt-file.test.ts) have type errors because the DroneAgentConfig type now requires `llm` and `openrouter` fields that the test fixtures don't provide. These are pre-existing issues unrelated to this feature."
+  },
+  {
+    "timestamp": "2026-06-23T02:36:11.560Z",
+    "insight": "The config.ts file had massive duplication in validation logic (~500 lines of near-identical type checks). Extracting reusable validation helpers (validateString, validateBoolean, validatePositiveNumber, etc.) reduced the file by ~14% and made the validation patterns consistent. The same pattern of duplication exists in other parts of the codebase (e.g., the 8 copies of isRecord) — a shared type-guards module was created to address this."
+  },
+  {
+    "timestamp": "2026-06-23T02:41:55.164Z",
+    "insight": "The config validation in config.ts is ~700 lines of repetitive boilerplate that could be replaced with a schema library. This is a high-impact refactor because every new config field requires manual validation code, and the hand-rolled validators are easy to get wrong (e.g., the `validatePercent` function rejects 0 but the compaction `softThresholdPercent` might legitimately be 0 to disable it)."
+  },
+  {
+    "timestamp": "2026-06-23T02:41:55.174Z",
+    "insight": "The app.tsx TUI component is 834 lines with 15+ useState/useRef/useCallback/useEffect calls at the top level. This is a god component that mixes state management, event handling, slash command dispatch, and rendering. Extracting custom hooks would make the code more testable and maintainable."
+  },
+  {
+    "timestamp": "2026-06-23T02:41:55.179Z",
+    "insight": "The search.ts plugin uses execSync (synchronous child process) inside an async execute function, blocking the event loop. It also constructs shell command strings with a fragile quoteArg function instead of using args arrays like git.ts does correctly."
+  },
+  {
+    "timestamp": "2026-06-23T02:41:55.183Z",
+    "insight": "The DroneTuiOptions type in types.ts manually re-declares a subset of the engine interface instead of using Pick<DronePluginEngine, ...>. This will drift as the engine interface evolves."
   }
 ]
