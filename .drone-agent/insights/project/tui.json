@@ -1,0 +1,18 @@
+[
+  {
+    "timestamp": "2026-06-23T00:44:07.359Z",
+    "insight": "The InputLine's MultilineTextInput uses a <Text> component with default textWrap='wrap', which causes the input box to grow vertically when text exceeds the available width. This breaks the single-line input assumption and causes border rendering artifacts."
+  },
+  {
+    "timestamp": "2026-06-23T01:13:31.189Z",
+    "insight": "The MultilineTextInput's renderWithCursor uses nested <Text inverse>{' '}</Text> for the cursor block. Nested <Text> elements create separate yoga nodes, and during re-render the text node measurement gets confused, causing the inverse cursor space to be positioned on the BOTTOM BORDER LINE instead of the content line. This is why every character typed adds a \"copy of the top border\" to the chat stream: the cursor renders on the border, corrupting it, and the log-update eraseLines mechanism leaves artifacts. Using raw ANSI escape codes (\\u001b[7m \\u001b[27m) within a single <Text> string avoids this entirely — only one text node to measure and position."
+  },
+  {
+    "timestamp": "2026-06-23T01:13:37.539Z",
+    "insight": "The MultilineTextInput's <Text> uses default textWrap='wrap', which causes the input box to grow vertically when text exceeds the available width. This breaks the single-line input assumption and pushes the right border to the next line. Using wrap=\"truncate\" keeps the input on a single line and truncates with an ellipsis, which is the correct behavior for a chat input line."
+  },
+  {
+    "timestamp": "2026-06-23T01:13:40.303Z",
+    "insight": "ink-text-input (the original library that was replaced by MultilineTextInput) uses chalk.inverse() to render the cursor within a single text string, not nested <Text> elements. This is the correct pattern — a single text node with ANSI escape codes for styling avoids the yoga layout/measure bugs that nested <Text> causes during re-render."
+  }
+]
