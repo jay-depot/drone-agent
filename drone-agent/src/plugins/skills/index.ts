@@ -6,21 +6,20 @@ import type {
 } from 'drone-core';
 import { skillsCreateWorkflow } from './wizard.js';
 
+/**
+ * Callback invoked after a skill is recalled. Receives the skill id and
+ * the current body text. Returns a modified body (or the original).
+ */
+export type RecallEnhancer = (id: string, body: string) => Promise<string>;
+
 export type DroneSkillsCapability = {
-  /** Get all loaded skills (union across all providers). */
   getSkills: () => DroneSkillDefinition[];
-  /** Get a single skill by id, or undefined (first match by precedence). */
   getSkill: (id: string) => DroneSkillDefinition | undefined;
-  /**
-   * Reload skill .md files from disk. Called by the skills.create
-   * workflow after writing a new file, and exposed so other plugins
-   * (or tests) can force a refresh.
-   */
   reloadSkills: () => Promise<void>;
-  /** Register a skill provider. Providers are sorted by precedence (ascending). */
   registerProvider: (provider: DroneSkillProvider) => void;
-  /** Unregister a skill provider by id. */
   unregisterProvider: (providerId: string) => void;
+  /** Register a callback that can enhance skill recall results. */
+  onRecall: (enhancer: RecallEnhancer) => void;
 };
 
 export const skillsPlugin: DronePlugin = {
@@ -33,12 +32,13 @@ export const skillsPlugin: DronePlugin = {
     defaultEnabled: false,
     dependencies: [
       { id: 'persona', optional: true },
+//      { id: 'self-improvement', optional: true },
     ],
   },
   register: async registration => {
     const providers: DroneSkillProvider[] = [];
+    const recallEnhancers: RecallEnhancer[] = [];
 
-    // ── Provider management ──────────────────────────────────────────
     function insertProviderSorted(provider: DroneSkillProvider): void {
       const idx = providers.findIndex(
         p => p.precedence > provider.precedence
@@ -57,12 +57,9 @@ export const skillsPlugin: DronePlugin = {
       }
     }
 
-    // ── Merge helpers ───────────────────────────────────────────────
     function getAllSkills(): DroneSkillDefinition[] {
       const seen = new Set<string>();
       const result: DroneSkillDefinition[] = [];
-      // Iterate in precedence order (ascending). For duplicate ids,
-      // the first (highest-priority) provider wins.
       for (const provider of providers) {
         for (const skill of provider.getSkills()) {
           if (!seen.has(skill.id)) {
@@ -82,7 +79,6 @@ export const skillsPlugin: DronePlugin = {
       return undefined;
     }
 
-    // ── Prompt fragment: tells the agent about the skills system ──────
     const skillsFragment: DronePromptFragment = {
       key: 'skills',
       phase: 'header',
@@ -90,7 +86,6 @@ export const skillsPlugin: DronePlugin = {
         const all = getAllSkills();
         if (all.length === 0) return false;
 
-        // Filter skills through the active persona's allowedSkills, if any.
         const personaCap = registration.request<{
           getFilteredSkills: (skills: DroneSkillDefinition[]) => DroneSkillDefinition[];
         }>('persona');
@@ -102,9 +97,9 @@ export const skillsPlugin: DronePlugin = {
 
         for (const skill of visible) {
           const recall = skill.recall.length > 0
-            ? ` — ${skill.recall.join('; ')}`
+            ? ' \u2014 ' + skill.recall.join('; ')
             : '';
-          lines.push(`- \`${skill.id}\`: ${skill.description}${recall}`);
+          lines.push('- `' + skill.id + '`: ' + skill.description + recall);
         }
 
         lines.push(
@@ -116,7 +111,6 @@ export const skillsPlugin: DronePlugin = {
 
     registration.registerPromptFragment(skillsFragment);
 
-    // ── Offer capability to other plugins ─────────────────────────────
     const capability: DroneSkillsCapability = {
       getSkills: () => getAllSkills(),
       getSkill: (id: string) => getSkillById(id),
@@ -125,36 +119,37 @@ export const skillsPlugin: DronePlugin = {
           await provider.reloadSkills();
         }
         registration.logger.info(
-          `reloaded skills from ${providers.length} provider(s)`
+          'reloaded skills from ' + providers.length + ' provider(s)'
         );
       },
       registerProvider: (provider: DroneSkillProvider) => {
         insertProviderSorted(provider);
         registration.logger.info(
-          `skill provider "${provider.id}" registered (precedence: ${provider.precedence})`
+          'skill provider "' + provider.id + '" registered (precedence: ' + provider.precedence + ')'
         );
       },
       unregisterProvider: (providerId: string) => {
         removeProvider(providerId);
         registration.logger.info(
-          `skill provider "${providerId}" unregistered`
+          'skill provider "' + providerId + '" unregistered'
         );
+      },
+      onRecall: (enhancer: RecallEnhancer) => {
+        recallEnhancers.push(enhancer);
       },
     };
     registration.offer(capability);
 
-    // ── onPluginsLoaded: log status ──────────────────────────────────
     registration.hooks.onPluginsLoaded(async () => {
       await capability.reloadSkills();
       const all = getAllSkills();
       if (all.length > 0) {
         registration.logger.info(
-          `loaded ${all.length} skill(s): ${all.map(s => s.id).join(', ')}`
+          'loaded ' + all.length + ' skill(s): ' + all.map(s => s.id).join(', ')
         );
       }
     });
 
-    // ── skills.recall ─────────────────────────────────────────────────
     registration.registerTool({
       name: 'recall',
       description: 'Load a skill body by id. Use when a task matches its recall conditions.',
@@ -177,8 +172,14 @@ export const skillsPlugin: DronePlugin = {
         if (!skill) {
           const all = getAllSkills();
           throw new Error(
-            `Unknown skill "${id}". Available skills: ${all.map(s => s.id).join(', ')}`
+            'Unknown skill "' + id + '". Available skills: ' + all.map(s => s.id).join(', ')
           );
+        }
+
+        // Run recall enhancers (e.g. self-improvement principles injection)
+        let body = skill.body;
+        for (const enhancer of recallEnhancers) {
+          body = await enhancer(id, body);
         }
 
         return JSON.stringify(
@@ -187,7 +188,7 @@ export const skillsPlugin: DronePlugin = {
             name: skill.name,
             description: skill.description,
             source: skill.source,
-            body: skill.body,
+            body,
           },
           null,
           2
@@ -195,7 +196,6 @@ export const skillsPlugin: DronePlugin = {
       },
     });
 
-    // ── skills.list ───────────────────────────────────────────────────
     registration.registerTool({
       name: 'list',
       description:
@@ -224,7 +224,6 @@ export const skillsPlugin: DronePlugin = {
       },
     });
 
-    // ── skills.reload ─────────────────────────────────────────────────
     registration.registerTool({
       name: 'reload',
       description:
@@ -247,7 +246,6 @@ export const skillsPlugin: DronePlugin = {
       },
     });
 
-    // ── skills.create ─────────────────────────────────────────────────
     registration.registerTool({
       name: 'create',
       description:
@@ -265,10 +263,8 @@ export const skillsPlugin: DronePlugin = {
       },
     });
 
-    // ── skills.create workflow ────────────────────────────────────────
     registration.registerWorkflow(skillsCreateWorkflow);
 
-    // ── Help snippets ─────────────────────────────────────────────────
     registration.registerHelp(
       '/skills list         List available skills'
     );
@@ -282,7 +278,6 @@ export const skillsPlugin: DronePlugin = {
       '/skills reload       Reload skill files from disk'
     );
 
-    // ── /skills slash command ─────────────────────────────────────────
     registration.registerSlashCommand({
       command: '/skills',
       description: 'Manage skills: list, create, recall, reload.',

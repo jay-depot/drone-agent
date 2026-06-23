@@ -10,7 +10,9 @@
 
 import { useEffect, useState } from 'react';
 
-const LLM_WORKING_FRAMES = ['○', '◔', '◑', '◕', '●'];
+const LLM_WORKING_FRAMES = [
+  '○', '◎', '◉', '●', '●', '◉', '◎', '○', '○', '◎', '◎', '◉', '◉', '●', '●', '●', '◉', '◉', '◎', '◎', '○', '○'
+];
 
 export function useLlmIndicator(): {
   isLlmActive: boolean;

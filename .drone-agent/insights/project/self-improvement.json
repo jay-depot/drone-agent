@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-06-23T03:29:39.660Z",
+    "insight": "The self-improvement plugin currently only has a write-only insight tool. The other side of the loop — reading insights and managing principles — is entirely missing. Principles need to be injected into persona prompt fragments and skill recall results dynamically."
+  }
+]

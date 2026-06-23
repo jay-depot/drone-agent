@@ -603,6 +603,33 @@ export type DroneLlmCapability = {
   unregisterProvider: (providerId: string) => void;
 };
 
+// ── Self-improvement types ────────────────────────────────────────────
+
+/**
+ * A single principle entry stored in a principles JSON file.
+ * Principles are derived from patterns found in insights.
+ */
+export type DronePrincipleEntry = {
+  /** The principle text. */
+  principle: string;
+  /** Optional description of where this principle came from. */
+  source?: string;
+  /** ISO-8601 timestamp of when this principle was created. */
+  createdAt: string;
+};
+
+/**
+ * Capability offered by the self-improvement plugin. Lets other plugins
+ * (e.g. skills) read principles without coupling to the file system.
+ */
+export type DronePrinciplesCapability = {
+  /** Get all principles for a given target type and id. */
+  getPrinciples: (
+    targetType: string,
+    targetId: string
+  ) => Promise<DronePrincipleEntry[]>;
+};
+
 export type DroneToolDefinition = {
   name: string;
   description: string;

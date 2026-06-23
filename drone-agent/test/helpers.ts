@@ -53,7 +53,7 @@ export type TestPluginOptions = {
   description?: string;
   required?: boolean;
   defaultEnabled?: boolean;
-  dependencies?: { id: string; version?: string }[];
+  dependencies?: { id: string; version?: string, optional?: boolean }[];
   register?: Register;
   tools?: DroneToolDefinition[];
   prompts?: DronePromptFragment[];
