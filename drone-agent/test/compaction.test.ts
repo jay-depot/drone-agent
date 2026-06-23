@@ -156,6 +156,12 @@ async function runBeforePrompt(capture: RegistrationCapture): Promise<void> {
   }
 }
 
+async function runAfterToolCall(capture: RegistrationCapture): Promise<void> {
+  for (const cb of capture.hooks.onAfterToolCall) {
+    await cb();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -556,5 +562,138 @@ describe('createCompactionPlugin', () => {
     await expect(runBeforePrompt(capture)).rejects.toThrow(
       /Ollama provider is not available/
     );
+  });
+
+  it('fires compaction via onAfterToolCall when tool results push usage over threshold', async () => {
+    // Simulates a multi-round tool-call loop: usage is below threshold initially,
+    // but after several rounds of tool results are appended to the session,
+    // compaction should fire when the onAfterToolCall hook runs.
+    //
+    // This mirrors the conversation service behavior where tool results are
+    // appended BEFORE the onAfterToolCall hook fires, giving the compaction
+    // plugin an accurate view of context usage.
+    const sessionManager = createSessionManager();
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 50,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'Summary of tool results.' }],
+    });
+    const budgetService = makeBudgetService({ provider, config });
+    const plugin = createCompactionPlugin({
+      budgetService,
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+
+    // Start with a small session that's under the threshold.
+    // (Two short turns are well under 5% of a 200-token window.)
+    sessionManager.appendUserMessage('q1');
+    sessionManager.appendAssistantMessage('a1');
+    await runBeforePrompt(capture);
+    expect(provider.__chatMock).not.toHaveBeenCalled();
+    expect(sessionManager.getSummaryTurns()).toHaveLength(0);
+
+    // Simulate tool-call rounds that add large content, mirroring the
+    // conversation service where tool results are appended before
+    // onAfterToolCall fires. Each user message starts a new turn.
+    sessionManager.appendUserMessage('q2');
+    sessionManager.appendAssistantMessage('working', [{
+      id: 'call_1',
+      name: 'file.read',
+      arguments: { path: '/some/file.ts' },
+    }]);
+    sessionManager.appendToolResult('file.read', 'x '.repeat(300));
+
+    sessionManager.appendUserMessage('q3');
+    sessionManager.appendAssistantMessage('more work', [{
+      id: 'call_2',
+      name: 'search.text',
+      arguments: { pattern: 'TODO' },
+    }]);
+    sessionManager.appendToolResult('search.text', 'y '.repeat(300));
+
+    // Now the session should exceed the threshold. Running the
+    // onAfterToolCall hook (which is what fires mid-loop in the
+    // conversation service) should trigger compaction.
+    await runAfterToolCall(capture);
+
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    expect(sessionManager.getSummaryTurns()).toHaveLength(1);
+    expect(sessionManager.getSummaryTurns()[0].messages[0].content).toContain(
+      'Summary of tool results.'
+    );
+  });
+
+  it('resets compactionInFlight after the empty-turns early return', async () => {
+    // Verifies that compactionInFlight is correctly reset when maybeCompact
+    // hits the turns.length === 0 early return, allowing subsequent hook
+    // calls to proceed normally.
+    const sessionManager = createSessionManager();
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 50,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    // Use a large context window so the empty session doesn't need to
+    // probe the provider for context info (which would consume the
+    // chat response).
+    const provider = makeProvider({ contextWindow: 4096 });
+    const budgetService = makeBudgetService({ provider, config });
+    const plugin = createCompactionPlugin({
+      budgetService,
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+
+    // First call: no turns -> early return. compactionInFlight must be reset.
+    await runBeforePrompt(capture);
+    expect(provider.__chatMock).not.toHaveBeenCalled();
+
+    // Add turns and verify compaction can run on the next hook call.
+    // (If compactionInFlight were stuck true, this would be a no-op.)
+    for (let i = 0; i < 6; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    // Use a provider with a small context window and a summary response.
+    const smallProvider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'Summary after adding turns.' }],
+    });
+    const smallBudgetService = makeBudgetService({
+      provider: smallProvider,
+      config,
+      promptFragments: [],
+    });
+    const smallPlugin = createCompactionPlugin({
+      budgetService: smallBudgetService,
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => smallProvider,
+    });
+    const smallCapture = await captureRegistration(smallPlugin, config);
+
+    // This should trigger compaction because usage is now above threshold.
+    await runBeforePrompt(smallCapture);
+    expect(smallProvider.__chatMock).toHaveBeenCalledTimes(1);
+    expect(sessionManager.getSummaryTurns()).toHaveLength(1);
   });
 });

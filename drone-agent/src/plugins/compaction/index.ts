@@ -120,6 +120,7 @@ async function maybeCompact(input: {
   const turns = sessionManager.getTurns();
 
   if (turns.length === 0) {
+    input.context.compactionInFlight.value = false;
     return;
   }
 

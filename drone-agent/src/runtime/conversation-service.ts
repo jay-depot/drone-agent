@@ -339,11 +339,10 @@ export function createConversationService({
             );
           }
 
-          // Hooks observe the post-prompt session state, before tool results
-          // are appended. Plugins like compaction use this to inspect
-          // usage and decide whether to compact before the next chat call.
-          await engine.runHooks('onAfterToolCall');
-
+          // Tool results are appended before onAfterToolCall hooks run, so that
+          // hooks observe the full session state including the latest tool
+          // results. This is critical for plugins like compaction, which need
+          // an accurate view of context usage to decide whether to summarize.
           for (const result of bufferedResults) {
             sessionManager.appendToolResult(
               result.name,
@@ -351,6 +350,8 @@ export function createConversationService({
               result.toolCallId
             );
           }
+
+          await engine.runHooks('onAfterToolCall');
 
           continue;
         }
