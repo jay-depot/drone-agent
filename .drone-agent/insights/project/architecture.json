@@ -22,5 +22,9 @@
   {
     "timestamp": "2026-06-22T22:46:13.707Z",
     "insight": "The conversation service and CLI entry point hardcode `engine.getCapability<OllamaCapability>('ollama')` to resolve the LLM provider. This makes it difficult to add alternative providers like OpenRouter. A broker pattern (like skills/personas) would decouple provider resolution from the consumer."
+  },
+  {
+    "timestamp": "2026-06-23T00:01:35.192Z",
+    "insight": "The LSP diagnostics show two test files (log-plugin.test.ts and prompt-file.test.ts) have type errors because the DroneAgentConfig type now requires `llm` and `openrouter` fields that the test fixtures don't provide. These are pre-existing issues unrelated to this feature."
   }
 ]

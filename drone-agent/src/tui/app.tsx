@@ -46,6 +46,18 @@ import type { DroneTuiOptions, MidPanelWidget } from './types.js';
 /** How long each override gets to be the active tint. */
 const COLOR_CYCLE_INTERVAL_MS = 5_000;
 
+/**
+ * Animation frames for the LLM working indicator.
+ *
+ * These are trigram symbols (I Ching hexagram halves) that cycle
+ * while the LLM is processing a response. The first frame (☷) is
+ * used as the static idle indicator.
+ */
+const LLM_WORKING_FRAMES = [
+  '☷', '☳', '☱', '☴', '☶', '☷', '☷', '☳', '☱', '☰',
+  '☴', '☶', '☷', '☷', '☳', '☵', '☶', '☷', '☷', '☷', '☷',
+];
+
 /** Maximum chars rendered in a tool argument or result preview. */
 const PREVIEW_MAX = 200;
 
@@ -106,6 +118,9 @@ export function App(opts: DroneTuiOptions): JSX.Element {
     if (!activeOverride) return DEFAULT_GRAYSCALE_SCHEME;
     return applyTint(DEFAULT_GRAYSCALE_SCHEME, activeOverride.tint);
   }, [activeOverride]);
+  // ── LLM working indicator state ────────────────────────────────────
+  const [isLlmActive, setIsLlmActive] = useState<boolean>(false);
+  const [llmFrameIndex, setLlmFrameIndex] = useState<number>(0);
 
   // Cycle timer: bump the active index every COLOR_CYCLE_INTERVAL_MS.
   // The original blessed TUI did exactly this; we preserve behavior.
@@ -127,6 +142,19 @@ export function App(opts: DroneTuiOptions): JSX.Element {
       setActiveIndex(0);
     }
   }, [overrides.length, activeIndex]);
+
+  // LLM working indicator: cycle through animation frames while active.
+  // When the LLM becomes idle, reset the frame index to 0 (the idle frame).
+  useEffect(() => {
+    if (!isLlmActive) {
+      setLlmFrameIndex(0);
+      return;
+    }
+    const id = setInterval(() => {
+      setLlmFrameIndex(prev => (prev + 1) % LLM_WORKING_FRAMES.length);
+    }, 250);
+    return () => clearInterval(id);
+  }, [isLlmActive]);
 
   const pushColorOverride = useCallback((override: DroneColorOverride) => {
     setOverrides(prev => {
@@ -431,6 +459,7 @@ export function App(opts: DroneTuiOptions): JSX.Element {
       }
 
       // Default: send to chat.
+      setIsLlmActive(true);
       try {
         await opts.engine.runHooks('onBeforePrompt');
         let assistantRendered = false;
@@ -479,6 +508,8 @@ export function App(opts: DroneTuiOptions): JSX.Element {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         log(`Error: ${msg}`, 'error');
+      } finally {
+        setIsLlmActive(false);
       }
     },
     [opts, log, exit]
@@ -597,6 +628,10 @@ export function App(opts: DroneTuiOptions): JSX.Element {
     }
   });
 
+  // ── LLM working indicator: compute current frame and color ────────
+  const llmFrame = LLM_WORKING_FRAMES[llmFrameIndex];
+  const llmColor = isLlmActive ? scheme.border : 'gray';
+
   // ── Render ─────────────────────────────────────────────────────────
   return (
     <Box flexDirection="column" width="100%" height="100%">
@@ -611,6 +646,8 @@ export function App(opts: DroneTuiOptions): JSX.Element {
         }}
         scheme={scheme}
         promptLabel={promptLabel}
+        llmFrame={llmFrame}
+        llmColor={llmColor}
       />
       {activeQuestion ? (
         <ElicitationPrompt

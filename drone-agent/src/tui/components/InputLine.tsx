@@ -3,6 +3,9 @@
  *
  * Uses the custom `MultilineTextInput` component which supports
  * Shift+Enter for newlines and plain Enter for submit.
+ *
+ * Renders an optional LLM working indicator (a trigram character)
+ * to the left of the prompt label.
  */
 
 import { Box, Text } from 'ink';
@@ -15,6 +18,8 @@ export function InputLine({
   onSubmit,
   scheme,
   promptLabel,
+  llmFrame,
+  llmColor,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -26,6 +31,17 @@ export function InputLine({
    * two modes feel consistent.
    */
   promptLabel?: string;
+  /**
+   * Current frame of the LLM working animation. When undefined, no
+   * indicator is rendered.
+   */
+  llmFrame?: string;
+  /**
+   * Color for the LLM working indicator. When the LLM is idle this
+   * should be a dim color (e.g. 'gray'); when active it should match
+   * the current border/accent color.
+   */
+  llmColor?: string;
 }): JSX.Element {
   return (
     <Box
@@ -34,6 +50,7 @@ export function InputLine({
       paddingX={1}
       flexDirection="row"
     >
+      {llmFrame ? <Text color={llmColor}>{llmFrame} </Text> : null}
       {promptLabel ? <Text color={scheme.userInput}>{promptLabel}</Text> : null}
       <Box flexGrow={1}>
         <MultilineTextInput
