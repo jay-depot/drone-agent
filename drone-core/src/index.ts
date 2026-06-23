@@ -819,6 +819,17 @@ export type DroneWorkflowContext = {
    * needing the engine handle directly.
    */
   requestCapability: <T>(pluginId: string) => T | undefined;
+  /**
+   * Dynamically enable and register a plugin mid-session.
+   * Returns `true` if the plugin was enabled (or was already enabled),
+   * `false` if the plugin ID is unknown. Throws if a hard dependency
+   * is not enabled.
+   *
+   * This is the key mechanism for bootstrap workflows: after writing
+   * plugin config to disk, the workflow can immediately enable the
+   * plugins so they're available for the kickMessage chat turn.
+   */
+  enablePlugin: (pluginId: string) => Promise<boolean>;
 };
 
 /**

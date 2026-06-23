@@ -68,6 +68,7 @@ function makeContext(input: {
     config,
     requestCapability: <T>(id: string): T | undefined =>
       caps.get(id) as T | undefined,
+    enablePlugin: async (_pluginId: string) => false,
   };
 }
 

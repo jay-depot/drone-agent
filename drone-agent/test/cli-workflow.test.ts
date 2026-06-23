@@ -125,6 +125,36 @@ describe('parseCliInvocation — --workflow flag', () => {
   });
 });
 
+describe('parseCliInvocation — --plugin flag', () => {
+  it('parses a single --plugin flag', () => {
+    const inv = parseCliInvocation(['--plugin', 'bootstrap']);
+    expect(inv.options.pluginOverrides).toEqual(['bootstrap']);
+  });
+
+  it('parses comma-separated plugin names in --plugin', () => {
+    const inv = parseCliInvocation(['--plugin', 'bootstrap,lsp,git']);
+    expect(inv.options.pluginOverrides).toEqual(['bootstrap', 'lsp', 'git']);
+  });
+
+  it('trims whitespace around comma-separated plugin names', () => {
+    const inv = parseCliInvocation(['--plugin', ' bootstrap , lsp , git ']);
+    expect(inv.options.pluginOverrides).toEqual(['bootstrap', 'lsp', 'git']);
+  });
+
+  it('supports repeated --plugin flags alongside comma-separated', () => {
+    const inv = parseCliInvocation([
+      '--plugin', 'bootstrap',
+      '--plugin', 'lsp,git',
+    ]);
+    expect(inv.options.pluginOverrides).toEqual(['bootstrap', 'lsp', 'git']);
+  });
+
+  it('ignores empty segments in comma-separated plugin names', () => {
+    const inv = parseCliInvocation(['--plugin', 'bootstrap,,lsp']);
+    expect(inv.options.pluginOverrides).toEqual(['bootstrap', 'lsp']);
+  });
+});
+
 describe('parseCliInvocation — non-workflow invocations', () => {
   it('returns kind "default" with no args', () => {
     expect(parseCliInvocation([]).kind).toBe('default');

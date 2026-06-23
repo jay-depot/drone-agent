@@ -176,6 +176,7 @@ export function createFakeEngine(
   let elicit: DroneElicitation | undefined = options.elicit;
   return {
     initialize: async () => [],
+    enablePlugin: async (_pluginId: string) => false,
     runHooks: async () => {},
     runSessionSafetyTrimWillRunHooks: async () => {},
     runSessionSafetyTrimAppliedHooks: async () => {},

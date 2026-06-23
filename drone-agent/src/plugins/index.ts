@@ -1,5 +1,5 @@
 import type { DronePlugin } from 'drone-core';
-import { bootstrapProjectPlugin } from './bootstrap-project.js';
+import { bootstrapPlugin } from './bootstrap/index.js';
 import { configPlugin } from './config/index.js';
 import {
   createCompactionPlugin,
@@ -52,7 +52,7 @@ const staticBuiltInPlugins: DronePlugin[] = [
   filePlugin,
   searchPlugin,
   gitPlugin,
-  bootstrapProjectPlugin,
+  bootstrapPlugin,
   personaPlugin,
   personaProviderProjectPlugin,
   personaProviderUserPlugin,

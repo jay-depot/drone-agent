@@ -38,6 +38,16 @@ type HookBuckets = Record<StandardHookName, Array<() => Promise<void>>>;
 
 export type DronePluginEngine = {
   initialize: () => Promise<RegisteredPluginState[]>;
+  /**
+   * Dynamically enable and register a plugin mid-session.
+   *
+   * If the plugin is already enabled, returns `true` (idempotent).
+   * If the plugin ID is unknown (not in the plugin registry), returns `false`.
+   * Validates that all non-optional dependencies are enabled; throws if not.
+   * After registration, runs the plugin's `onPluginsLoaded` and
+   * `onSessionStart` hooks so it catches up with the session lifecycle.
+   */
+  enablePlugin: (pluginId: string) => Promise<boolean>;
   runHooks: (hookName: StandardHookName) => Promise<void>;
   runSessionSafetyTrimWillRunHooks: (
     payload: DroneSessionSafetyTrimPayload
@@ -70,8 +80,8 @@ export type DronePluginEngine = {
   /**
    * Run a registered workflow by canonical name (`<plugin>.<workflow>`).
    * Builds the workflow context (with `elicit`, `projectDir`, `config`,
-   * and `requestCapability`) and normalizes the workflow's return value
-   * into a `DroneWorkflowResult` shape.
+   * `requestCapability`, and `enablePlugin`) and normalizes the workflow's
+   * return value into a `DroneWorkflowResult` shape.
    */
   runWorkflow: (
     canonicalName: string,
@@ -231,6 +241,41 @@ export function createDronePluginEngine({
   > = [];
   let elicitationCapability: DroneElicitation | undefined;
 
+  // --- Local functions (declared before the return object so they can ---)
+  // --- reference each other and be used in the return object)       ---
+
+  async function doEnablePlugin(pluginId: string): Promise<boolean> {
+    // Unknown plugin — nothing to enable.
+    const plugin = pluginMap.get(pluginId);
+    if (!plugin) {
+      return false;
+    }
+    // Already enabled — idempotent.
+    if (enabledPluginIds.has(pluginId)) {
+      return true;
+    }
+    // Validate non-optional dependencies are enabled.
+    for (const dep of plugin.metadata.dependencies ?? []) {
+      if (!dep.optional && !enabledPluginIds.has(dep.id)) {
+        throw new Error(
+          `Cannot enable plugin ${pluginId}: requires dependency ${dep.id} which is not enabled`
+        );
+      }
+    }
+    // Add to enabled set and register.
+    enabledPluginIds.add(pluginId);
+    registeredPlugins.push(await registerPlugin(plugin));
+    logger.info(`enabled plugin: ${pluginId}`);
+    // Run lifecycle hooks so the plugin catches up.
+    for (const callback of hookBuckets.onPluginsLoaded) {
+      await callback();
+    }
+    for (const callback of hookBuckets.onSessionStart) {
+      await callback();
+    }
+    return true;
+  }
+
   async function runWorkflow(
     canonicalName: string,
     args: Record<string, unknown>
@@ -251,6 +296,7 @@ export function createDronePluginEngine({
       config,
       requestCapability: <T>(pluginId: string) =>
         capabilities.get(pluginId) as T | undefined,
+      enablePlugin: (pluginId: string) => doEnablePlugin(pluginId),
     };
     const raw = await workflow.run(args, ctx);
     return normalizeWorkflowResult(raw);
@@ -363,6 +409,7 @@ export function createDronePluginEngine({
       }
       return registeredPlugins;
     },
+    enablePlugin: doEnablePlugin,
     runHooks: async hookName => {
       for (const callback of hookBuckets[hookName]) {
         await callback();

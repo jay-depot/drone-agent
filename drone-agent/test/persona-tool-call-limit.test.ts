@@ -156,6 +156,7 @@ function makeEngine(options: EngineOptions): DronePluginEngine & {
     },
     dispatchSlashCommand: async () => false,
     getSlashCommands: () => [],
+    enablePlugin: async (_pluginId: string) => false,
     __executeMock: executeMock,
   };
 }

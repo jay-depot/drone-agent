@@ -437,4 +437,184 @@ describe('createDronePluginEngine', () => {
     // The willRun hook mutated the payload, and the engine forwards it.
     expect(payload.proposedDropTurnCount).toBe(2);
   });
+
+  describe('enablePlugin', () => {
+    it('enables a default-disabled plugin and makes its tools available', async () => {
+      const tool: DroneToolDefinition = {
+        name: 'ping',
+        description: 'ping tool',
+        inputSchema: { type: 'object', additionalProperties: false },
+        execute: async () => 'pong',
+      };
+
+      const plugins: DronePlugin[] = [
+        createTestPlugin({
+          id: 'bootstrap',
+          defaultEnabled: false,
+          tools: [tool],
+        }),
+      ];
+
+      const engine = createDronePluginEngine({
+        plugins,
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+
+      // Not enabled initially
+      expect(engine.getTool('bootstrap.ping')).toBeUndefined();
+      expect(engine.listPlugins().find(p => p.id === 'bootstrap')?.enabled).toBe(false);
+
+      // Enable it
+      const result = await engine.enablePlugin('bootstrap');
+      expect(result).toBe(true);
+      expect(engine.getTool('bootstrap.ping')).toBeDefined();
+      expect(engine.listPlugins().find(p => p.id === 'bootstrap')?.enabled).toBe(true);
+
+      // Tool is callable
+      const output = await engine.executeTool('bootstrap.ping', {});
+      expect(output).toBe('pong');
+    });
+
+    it('returns true when enabling an already-enabled plugin (idempotent)', async () => {
+      const plugins: DronePlugin[] = [
+        createTestPlugin({ id: 'always', defaultEnabled: true }),
+      ];
+
+      const engine = createDronePluginEngine({
+        plugins,
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+
+      const result = await engine.enablePlugin('always');
+      expect(result).toBe(true);
+    });
+
+    it('returns false for an unknown plugin ID', async () => {
+      const plugins: DronePlugin[] = [
+        createTestPlugin({ id: 'known' }),
+      ];
+
+      const engine = createDronePluginEngine({
+        plugins,
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+
+      const result = await engine.enablePlugin('nonexistent');
+      expect(result).toBe(false);
+    });
+
+    it('throws when a hard dependency is not enabled', async () => {
+      const plugins: DronePlugin[] = [
+        createTestPlugin({
+          id: 'dependent',
+          defaultEnabled: false,
+          dependencies: [{ id: 'missing-dep' }],
+        }),
+      ];
+
+      const engine = createDronePluginEngine({
+        plugins,
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+
+      await expect(engine.enablePlugin('dependent')).rejects.toThrow(
+        /requires dependency missing-dep which is not enabled/
+      );
+    });
+
+    it('succeeds when an optional dependency is not enabled', async () => {
+      const plugins: DronePlugin[] = [
+        createTestPlugin({
+          id: 'flexible',
+          defaultEnabled: false,
+          dependencies: [{ id: 'optional-dep', optional: true }],
+        }),
+      ];
+
+      const engine = createDronePluginEngine({
+        plugins,
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+
+      const result = await engine.enablePlugin('flexible');
+      expect(result).toBe(true);
+    });
+
+    it('runs onPluginsLoaded and onSessionStart hooks when enabling mid-session', async () => {
+      const calls: string[] = [];
+
+      const plugins: DronePlugin[] = [
+        createTestPlugin({
+          id: 'late',
+          defaultEnabled: false,
+          hooks: {
+            onPluginsLoaded: async () => { calls.push('late:loaded'); },
+            onSessionStart: async () => { calls.push('late:start'); },
+          },
+        }),
+      ];
+
+      const engine = createDronePluginEngine({
+        plugins,
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+      await engine.runHooks('onPluginsLoaded');
+      await engine.runHooks('onSessionStart');
+
+      // Not called during init since plugin was disabled
+      expect(calls).toEqual([]);
+
+      // Enable — hooks should fire
+      await engine.enablePlugin('late');
+      expect(calls).toEqual(['late:loaded', 'late:start']);
+    });
+
+    it('registers workflows when enabling', async () => {
+      const plugins: DronePlugin[] = [
+        createTestPlugin({
+          id: 'wf',
+          defaultEnabled: false,
+          workflows: [{
+            name: 'setup',
+            description: 'Setup workflow',
+            inputSchema: { type: 'object', additionalProperties: false },
+            run: async () => ({ toolResult: 'done' }),
+          }],
+        }),
+      ];
+
+      const engine = createDronePluginEngine({
+        plugins,
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+
+      // Workflow not available before enabling
+      await expect(engine.runWorkflow('wf.setup', {})).rejects.toThrow(/Unknown workflow/);
+
+      // Enable — workflow should now be registered
+      await engine.enablePlugin('wf');
+      // Workflow exists now but needs elicitation; we just confirm it's registered
+      // by checking it doesn't throw 'Unknown workflow'
+      try {
+        await engine.runWorkflow('wf.setup', {});
+      } catch (err) {
+        // It should throw about missing elicitation, not unknown workflow
+        expect((err as Error).message).not.toMatch(/Unknown workflow/);
+      }
+    });
+  });
 });

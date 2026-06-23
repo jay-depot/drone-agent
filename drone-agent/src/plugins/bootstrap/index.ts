@@ -18,7 +18,7 @@ type ProjectAnalysis = {
   detectedFiles: string[];
 };
 
-async function detectProject(cwd: string): Promise<ProjectAnalysis> {
+export async function detectProject(cwd: string): Promise<ProjectAnalysis> {
   const homeDir = os.homedir();
   const resolvedCwd = path.resolve(cwd);
   const isHomeDirectory = resolvedCwd === path.resolve(homeDir);
@@ -215,45 +215,34 @@ async function importFsRead(
   }
 }
 
-export const bootstrapProjectPlugin: DronePlugin = {
+export const bootstrapPlugin: DronePlugin = {
   metadata: {
-    id: 'bootstrap-project',
-    name: 'Bootstrap Project',
-    version: '0.1.0',
+    id: 'bootstrap',
+    name: 'Bootstrap',
+    version: '0.2.0',
     description:
-      'Analyzes the current project and suggests plugins and setup steps. Use with --plugin bootstrap-project.',
+      'Project setup and plugin configuration workflows. Use with --plugin bootstrap to enable.',
     defaultEnabled: false,
   },
   register: async registration => {
-    // Startup warning for home directory
-    registration.hooks.onPluginsLoaded(async () => {
-      const homeDir = path.resolve(os.homedir());
-      const cwd = path.resolve(process.cwd());
-      if (cwd === homeDir) {
-        registration.logger.warn(
-          'bootstrap-project: running from your home directory \u2014 this is probably not a project. Use --plugin bootstrap-project from a project directory.'
-        );
-      }
-    });
-
     // -----------------------------------------------------------------------
-    // bootstrap_project.analyze
+    // bootstrap.analyze
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'analyze',
       description:
         'Analyze the current project directory and return detected language, framework, build system, and suggested plugins to enable.',
       inputSchema: {
-        type: 'object',
-        properties: {
-          path: {
-            type: 'string',
-            description:
-              'Optional project path to analyze. Defaults to current working directory.',
+          type: 'object',
+          properties: {
+            path: {
+              type: 'string',
+              description:
+                'Optional project path to analyze. Defaults to current working directory.',
+            },
           },
+          additionalProperties: false,
         },
-        additionalProperties: false,
-      },
       execute: async input => {
         const cwd =
           typeof input.path === 'string' && input.path.trim().length > 0

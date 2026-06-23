@@ -76,7 +76,14 @@ function parseCliArgs(argv: string[]): CliInvocation {
     } else if (arg === '--model' && i + 1 < argv.length) {
       options.modelOverride = argv[++i];
     } else if (arg === '--plugin' && i + 1 < argv.length) {
-      options.pluginOverrides.push(argv[++i]);
+      // Support comma-separated plugin names: --plugin bootstrap,lsp,git
+      // Also support repeated flags: --plugin bootstrap --plugin lsp
+      for (const name of argv[++i].split(',')) {
+        const trimmed = name.trim();
+        if (trimmed.length > 0) {
+          options.pluginOverrides.push(trimmed);
+        }
+      }
     } else if (arg === '--workflow' && i + 1 < argv.length) {
       const raw = argv[++i];
       const parts = raw.split('.');
@@ -446,6 +453,31 @@ async function main(): Promise<void> {
       return llm.getActiveProvider();
     },
   });
+
+  // ── Plugin overrides from --plugin flag ─────────────────────────────
+  // Merge --plugin overrides into the config's enabledPlugins so that
+  // plugins specified on the CLI are enabled for this session. If
+  // enabledPlugins is empty (default), compute the default set first,
+  // then add the overrides. If it's non-empty (explicit config), just
+  // append the overrides.
+  if (invocation.options.pluginOverrides.length > 0) {
+    if (resolvedConfig.config.enabledPlugins.length === 0) {
+      // Compute the default set: all required or defaultEnabled plugins.
+      const defaultIds = plugins
+        .filter(p => p.metadata.required || p.metadata.defaultEnabled)
+        .map(p => p.metadata.id);
+      resolvedConfig.config.enabledPlugins = [
+        ...defaultIds,
+        ...invocation.options.pluginOverrides,
+      ];
+    } else {
+      // Config already specifies enabledPlugins — append overrides.
+      resolvedConfig.config.enabledPlugins = [
+        ...resolvedConfig.config.enabledPlugins,
+        ...invocation.options.pluginOverrides,
+      ];
+    }
+  }
   const engine = createDronePluginEngine({
     plugins,
     config: resolvedConfig.config,
