@@ -62,5 +62,9 @@
   {
     "timestamp": "2026-06-23T21:50:32.675Z",
     "insight": "The `--plugin` flag doesn't need true \"hot-loading\" for built-in plugins. All built-in plugins are always in the plugins array — the engine just filters by `enabledPluginIds`. The fix is to merge `pluginOverrides` into the config's `enabledPlugins` before engine creation. True hot-loading (loading external plugin modules at runtime) would be a separate, much larger feature."
+  },
+  {
+    "timestamp": "2026-06-23T22:20:13.213Z",
+    "insight": "The compaction plugin's onAfterToolCall hook fires BEFORE tool results are appended to the session (conversation-service.ts line ~341-345), meaning compaction consistently underestimates context usage by the size of the just-completed tool results. In long tool-call chains (typical of coding agents), this means ensureSafeBudget hard-drops turns before compaction gets a chance to summarize them."
   }
 ]
