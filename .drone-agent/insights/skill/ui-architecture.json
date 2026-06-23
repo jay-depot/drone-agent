@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-06-23T19:03:12.409Z",
+    "insight": "Not relevant to this fix, but noting that the ui-architecture skill was loaded and available for recall. No TUI changes are needed for this circular dependency fix."
+  }
+]

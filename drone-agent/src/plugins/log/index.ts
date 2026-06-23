@@ -3,11 +3,11 @@ import path from 'node:path';
 import os from 'node:os';
 import { randomInt } from 'node:crypto';
 import type {
+  DronePersonaCapability,
   DronePlugin,
   DroneSessionTurn,
   DroneSessionMessage,
 } from 'drone-core';
-import type { DronePersonaCapability } from '../persona/index.js';
 import type { DroneSessionManager } from '../../runtime/session-manager.js';
 import { ADJECTIVES, NOUNS } from './words.js';
 

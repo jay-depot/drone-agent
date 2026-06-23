@@ -1,4 +1,5 @@
 import type {
+  DronePersonaCapability,
   DronePersonaDefinition,
   DronePersonaProvider,
   DronePlugin,
@@ -9,37 +10,8 @@ import type {
 import { filterByGlobPatterns } from 'drone-core';
 import { personaCreateWorkflow } from './wizard.js';
 
-export type DronePersonaCapability = {
-  getActivePersona: () => DronePersonaDefinition | null;
-  getPersonas: () => DronePersonaDefinition[];
-  selectPersona: (id: string | null) => void;
-  onPersonaChange: (
-    callback: (persona: DronePersonaDefinition | null) => void
-  ) => void;
-  /**
-   * Reload persona files from disk. Called by the persona.create
-   * workflow after writing a new file, and exposed so other plugins
-   * (or tests) can force a refresh.
-   */
-  reloadPersonas: () => Promise<void>;
-  /** Register a persona provider. Providers are sorted by precedence (ascending). */
-  registerProvider: (provider: DronePersonaProvider) => void;
-  /** Unregister a persona provider by id. */
-  unregisterProvider: (providerId: string) => void;
-  /**
-   * Filter a list of tool descriptors based on the active persona's
-   * `allowedTools` patterns. Returns all tools when no persona is active
-   * or when the persona has no `allowedTools` field.
-   */
-  getFilteredTools: (allTools: DroneToolDescriptor[]) => DroneToolDescriptor[];
-  /**
-   * Filter a list of global skills based on the active persona's
-   * `allowedSkills` patterns, then append persona-owned skills (which
-   * are always visible). Returns all skills when no persona is active
-   * or when the persona has no `allowedSkills` field.
-   */
-  getFilteredSkills: (allSkills: DroneSkillDefinition[]) => DroneSkillDefinition[];
-};
+// Re-export capability type from drone-core for backward compatibility.
+export type { DronePersonaCapability } from 'drone-core';
 
 export const personaPlugin: DronePlugin = {
   metadata: {

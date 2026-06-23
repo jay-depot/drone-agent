@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { render } from 'ink';
 import { builtInPlugins, createBuiltInPlugins } from './plugins/index.js';
-import type { DronePersonaCapability } from './plugins/persona/index.js';
+import type { DronePersonaCapability } from 'drone-core';
 import { createTui } from './tui/index.js';
 import { ModelPicker } from './tui/components/ModelPicker.js';
 import { createConversationService } from './runtime/conversation-service.js';

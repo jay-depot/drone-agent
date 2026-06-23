@@ -3,10 +3,10 @@ import type {
   DronePlugin,
   DroneSkillDefinition,
   DroneSkillProvider,
+  DroneSkillsCapability,
 } from 'drone-core';
 import { PRECEDENCE_PROJECT } from 'drone-core';
 import { loadSkillsFromDir } from '../skills/loader.js';
-import type { DroneSkillsCapability } from '../skills/index.js';
 
 const CONFIG_DIR = '.drone-agent';
 const SKILLS_DIR = 'skills';

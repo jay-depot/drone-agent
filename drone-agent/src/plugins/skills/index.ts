@@ -1,26 +1,15 @@
 import type {
   DronePlugin,
   DronePromptFragment,
+  DroneRecallEnhancer,
   DroneSkillDefinition,
   DroneSkillProvider,
+  DroneSkillsCapability,
 } from 'drone-core';
 import { skillsCreateWorkflow } from './wizard.js';
 
-/**
- * Callback invoked after a skill is recalled. Receives the skill id and
- * the current body text. Returns a modified body (or the original).
- */
-export type RecallEnhancer = (id: string, body: string) => Promise<string>;
-
-export type DroneSkillsCapability = {
-  getSkills: () => DroneSkillDefinition[];
-  getSkill: (id: string) => DroneSkillDefinition | undefined;
-  reloadSkills: () => Promise<void>;
-  registerProvider: (provider: DroneSkillProvider) => void;
-  unregisterProvider: (providerId: string) => void;
-  /** Register a callback that can enhance skill recall results. */
-  onRecall: (enhancer: RecallEnhancer) => void;
-};
+// Re-export capability types from drone-core for backward compatibility.
+export type { DroneSkillsCapability, DroneRecallEnhancer } from 'drone-core';
 
 export const skillsPlugin: DronePlugin = {
   metadata: {
@@ -32,12 +21,11 @@ export const skillsPlugin: DronePlugin = {
     defaultEnabled: false,
     dependencies: [
       { id: 'persona', optional: true },
-//      { id: 'self-improvement', optional: true },
     ],
   },
   register: async registration => {
     const providers: DroneSkillProvider[] = [];
-    const recallEnhancers: RecallEnhancer[] = [];
+    const recallEnhancers: DroneRecallEnhancer[] = [];
 
     function insertProviderSorted(provider: DroneSkillProvider): void {
       const idx = providers.findIndex(
@@ -134,7 +122,7 @@ export const skillsPlugin: DronePlugin = {
           'skill provider "' + providerId + '" unregistered'
         );
       },
-      onRecall: (enhancer: RecallEnhancer) => {
+      onRecall: (enhancer: DroneRecallEnhancer) => {
         recallEnhancers.push(enhancer);
       },
     };

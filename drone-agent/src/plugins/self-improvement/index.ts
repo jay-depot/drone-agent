@@ -2,13 +2,13 @@ import { mkdir, readFile, readdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import type {
+  DronePersonaCapability,
   DronePlugin,
   DronePrincipleEntry,
   DronePrinciplesCapability,
   DronePromptFragment,
+  DroneSkillsCapability,
 } from 'drone-core';
-import type { DronePersonaCapability } from '../persona/index.js';
-import type { DroneSkillsCapability } from '../skills/index.js';
 
 const CONFIG_DIR = '.drone-agent';
 const INSIGHTS_SUBDIR = 'insights';
@@ -249,13 +249,8 @@ export const selfImprovementPlugin: DronePlugin = {
     // Resolve capabilities once for reuse
     const personaCap = () =>
       registration.request<DronePersonaCapability>('persona');
-    const skillsCap = () => {
-      try {
-        return registration.request<DroneSkillsCapability>('skills');
-      } catch {
-        return undefined;
-      }
-    };
+    const skillsCap = () =>
+      registration.request<DroneSkillsCapability>('skills');
 
     // ── Prompt fragment: show current active persona and available tools ──
     const insightFragment: DronePromptFragment = {
@@ -868,8 +863,22 @@ export const selfImprovementPlugin: DronePlugin = {
 
     registration.registerPromptFragment(personaPrinciplesFragment);
 
-    // ── onPluginsLoaded: log status ──────────────────────────────────
+    // ── onPluginsLoaded: register recall enhancer + log status ──────
     registration.hooks.onPluginsLoaded(async () => {
+      // Register recall enhancer to inject principles into skill recall results
+      const sCap = skillsCap();
+      if (sCap?.onRecall) {
+        sCap.onRecall(async (id, body) => {
+          const principles = await principlesCapability.getPrinciples('skill', id);
+          if (principles.length === 0) return body;
+          const lines = ['\n## Principles'];
+          for (const p of principles) {
+            lines.push('- ' + p.principle);
+          }
+          return body + lines.join('\n');
+        });
+      }
+
       registration.logger.info(
         'self-improvement plugin ready (persona insights/principles stored in .drone-agent/personas/<id>/insights/ and .../principles/; ' +
           'skill/project insights/principles stored in .drone-agent/insights/ and .drone-agent/principles/)'

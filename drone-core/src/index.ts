@@ -477,6 +477,26 @@ export type DroneSkillProvider = {
 };
 
 /**
+ * Callback invoked after a skill is recalled. Receives the skill id and
+ * the current body text. Returns a modified body (or the original).
+ */
+export type DroneRecallEnhancer = (id: string, body: string) => Promise<string>;
+
+/**
+ * Capability offered by the skills broker plugin. Lets other plugins
+ * query skills, manage providers, and register recall enhancers.
+ */
+export type DroneSkillsCapability = {
+  getSkills: () => DroneSkillDefinition[];
+  getSkill: (id: string) => DroneSkillDefinition | undefined;
+  reloadSkills: () => Promise<void>;
+  registerProvider: (provider: DroneSkillProvider) => void;
+  unregisterProvider: (providerId: string) => void;
+  /** Register a callback that can enhance skill recall results. */
+  onRecall: (enhancer: DroneRecallEnhancer) => void;
+};
+
+/**
  * A provider of personas registered with the persona broker plugin.
  * Providers are sorted by precedence (ascending); lower number = higher priority.
  */
@@ -543,6 +563,43 @@ export type DronePersonaDefinition = {
    * a `code` persona) without raising the global safety limit.
    */
   toolCallLimit?: number;
+};
+
+/**
+ * Capability offered by the persona broker plugin. Lets other plugins
+ * query and manage personas, filter tools/skills, and react to persona
+ * changes.
+ */
+export type DronePersonaCapability = {
+  getActivePersona: () => DronePersonaDefinition | null;
+  getPersonas: () => DronePersonaDefinition[];
+  selectPersona: (id: string | null) => void;
+  onPersonaChange: (
+    callback: (persona: DronePersonaDefinition | null) => void
+  ) => void;
+  /**
+   * Reload persona files from disk. Called by the persona.create
+   * workflow after writing a new file, and exposed so other plugins
+   * (or tests) can force a refresh.
+   */
+  reloadPersonas: () => Promise<void>;
+  /** Register a persona provider. Providers are sorted by precedence (ascending). */
+  registerProvider: (provider: DronePersonaProvider) => void;
+  /** Unregister a persona provider by id. */
+  unregisterProvider: (providerId: string) => void;
+  /**
+   * Filter a list of tool descriptors based on the active persona's
+   * `allowedTools` patterns. Returns all tools when no persona is active
+   * or when the persona has no `allowedTools` field.
+   */
+  getFilteredTools: (allTools: DroneToolDescriptor[]) => DroneToolDescriptor[];
+  /**
+   * Filter a list of global skills based on the active persona's
+   * `allowedSkills` patterns, then append persona-owned skills (which
+   * are always visible). Returns all skills when no persona is active
+   * or when the persona has no `allowedSkills` field.
+   */
+  getFilteredSkills: (allSkills: DroneSkillDefinition[]) => DroneSkillDefinition[];
 };
 
 export type DroneMcpError = {

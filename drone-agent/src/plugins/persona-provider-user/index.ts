@@ -1,17 +1,17 @@
 import path from 'node:path';
 import os from 'node:os';
 import type {
+  DronePersonaCapability,
   DronePersonaDefinition,
   DronePersonaProvider,
   DronePlugin,
   DroneSkillDefinition,
   DroneSkillProvider,
+  DroneSkillsCapability,
 } from 'drone-core';
 import { PRECEDENCE_PERSONA_USER, PRECEDENCE_USER } from 'drone-core';
 import { loadPersonasFromDir } from '../persona/loader.js';
 import { loadSkillsFromDir } from '../skills/loader.js';
-import type { DronePersonaCapability } from '../persona/index.js';
-import type { DroneSkillsCapability } from '../skills/index.js';
 
 const CONFIG_DIR = '.drone-agent';
 const PERSONA_DIR = 'personas';

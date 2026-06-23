@@ -1117,7 +1117,6 @@ describe('self-improvement plugin', () => {
 
       const mockSkillsPlugin = createTestPlugin({
         id: 'skills',
-        dependencies: [{ id: 'self-improvement', optional: true }],
         register: reg => {
           // Register a tool that runs recall enhancers
           reg.registerTool({
@@ -1140,8 +1139,13 @@ describe('self-improvement plugin', () => {
               return JSON.stringify({ id, name: 'Test', description: 'A test skill', source: 'project', body }, null, 2);
             },
           });
-          // Register onRecall callback
+          // Register full skills capability (including onRecall)
           reg.offer({
+            getSkills: () => [{ id: 'test-skill', name: 'Test', description: 'A test skill', source: 'project' as const, recall: [], modelInvocation: false, body: 'Original body.' }],
+            getSkill: (id: string) => id === 'test-skill' ? { id: 'test-skill', name: 'Test', description: 'A test skill', source: 'project' as const, recall: [], modelInvocation: false, body: 'Original body.' } : undefined,
+            reloadSkills: async () => {},
+            registerProvider: () => {},
+            unregisterProvider: () => {},
             onRecall: (enhancer: (id: string, body: string) => Promise<string>) => {
               recallEnhancers.push(enhancer);
             },
@@ -1158,6 +1162,7 @@ describe('self-improvement plugin', () => {
         logger: silentLogger(),
       });
       await engine.initialize();
+      await engine.runHooks('onPluginsLoaded');
 
       // The self-improvement plugin should have registered a recall enhancer
       // via the skills capability's onRecall callback
@@ -1221,7 +1226,6 @@ describe('self-improvement plugin', () => {
 
       const mockSkillsPlugin = createTestPlugin({
         id: 'skills',
-        dependencies: [{ id: 'self-improvement', optional: true }],
         register: reg => {
           reg.registerTool({
             name: 'recall',
@@ -1244,6 +1248,11 @@ describe('self-improvement plugin', () => {
             },
           });
           reg.offer({
+            getSkills: () => [{ id: 'test-skill', name: 'Test', description: 'A test skill', source: 'project' as const, recall: [], modelInvocation: false, body: 'Original body.' }],
+            getSkill: (id: string) => id === 'test-skill' ? { id: 'test-skill', name: 'Test', description: 'A test skill', source: 'project' as const, recall: [], modelInvocation: false, body: 'Original body.' } : undefined,
+            reloadSkills: async () => {},
+            registerProvider: () => {},
+            unregisterProvider: () => {},
             onRecall: (enhancer: (id: string, body: string) => Promise<string>) => {
               recallEnhancers.push(enhancer);
             },
@@ -1260,6 +1269,7 @@ describe('self-improvement plugin', () => {
         logger: silentLogger(),
       });
       await engine.initialize();
+      await engine.runHooks('onPluginsLoaded');
 
       const result = await engine.executeTool('skills.recall', {
         id: 'test-skill',

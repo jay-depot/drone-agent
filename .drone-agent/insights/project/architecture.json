@@ -46,5 +46,9 @@
   {
     "timestamp": "2026-06-23T02:41:55.183Z",
     "insight": "The DroneTuiOptions type in types.ts manually re-declares a subset of the engine interface instead of using Pick<DronePluginEngine, ...>. This will drift as the engine interface evolves."
+  },
+  {
+    "timestamp": "2026-06-23T19:03:15.420Z",
+    "insight": "The plugin capability type pattern (DroneSkillsCapability, DronePersonaCapability) is a recurring coupling point. Moving these types to drone-core centralizes the contract and eliminates cross-plugin file imports. This same pattern should be applied to any future broker plugins — define the capability type in drone-core from the start."
   }
 ]
