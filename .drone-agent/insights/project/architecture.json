@@ -50,5 +50,17 @@
   {
     "timestamp": "2026-06-23T19:03:15.420Z",
     "insight": "The plugin capability type pattern (DroneSkillsCapability, DronePersonaCapability) is a recurring coupling point. Moving these types to drone-core centralizes the contract and eliminates cross-plugin file imports. This same pattern should be applied to any future broker plugins — define the capability type in drone-core from the start."
+  },
+  {
+    "timestamp": "2026-06-23T19:17:20.078Z",
+    "insight": "The plugin engine's sortPluginsByDependencies detects cycles at registration time, not runtime. This means the cycle error appears as a thrown exception during engine.initialize(), not as a subtle runtime bug. The fix was to make the dependency graph a DAG by removing the bidirectional edge and using inversion of control (onRecall hooks) for cross-plugin communication."
+  },
+  {
+    "timestamp": "2026-06-23T19:26:02.077Z",
+    "insight": "The `--plugin` CLI flag is parsed into `pluginOverrides` but never consumed anywhere in `main()`. It's dead code. This will need to be wired up for the bootstrap plugin rework — `--plugin bootstrap` needs to actually enable the bootstrap plugin."
+  },
+  {
+    "timestamp": "2026-06-23T21:50:32.675Z",
+    "insight": "The `--plugin` flag doesn't need true \"hot-loading\" for built-in plugins. All built-in plugins are always in the plugins array — the engine just filters by `enabledPluginIds`. The fix is to merge `pluginOverrides` into the config's `enabledPlugins` before engine creation. True hot-loading (loading external plugin modules at runtime) would be a separate, much larger feature."
   }
 ]
