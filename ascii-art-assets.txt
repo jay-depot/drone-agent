@@ -1,9 +1,3 @@
-An idea for the "working" animation sequence that might go in at some point:
-
-['☷', '☳', '☱', '☴', '☶', '☷', '☷', '☳', '☱', '☰', '☴', '☶', '☷', '☷', '☳', '☵', '☶', '☷', '☷', '☷', '☷']
-
-
-
 The obligatory "thematic" ASCII art for the TUI. It's a bee, of course:
 
                    \   /

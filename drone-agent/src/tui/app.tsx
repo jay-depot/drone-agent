@@ -7,7 +7,7 @@
  *   │ Chat log (scrollable via <Static>)   │
  *   │                                      │
  *   ├──────────────────────────────────────┤
- *   │ Mid panel (widgets)                 │
+ *   │ Mid panel (widgets)                  │
  *   ├──────────────────────────────────────┤
  *   │ Input line                           │
  *   ├──────────────────────────────────────┤
@@ -45,18 +45,7 @@ import type { DroneTuiOptions, MidPanelWidget } from './types.js';
 
 /** How long each override gets to be the active tint. */
 const COLOR_CYCLE_INTERVAL_MS = 5_000;
-
-/**
- * Animation frames for the LLM working indicator.
- *
- * These are trigram symbols (I Ching hexagram halves) that cycle
- * while the LLM is processing a response. The first frame (☷) is
- * used as the static idle indicator.
- */
-const LLM_WORKING_FRAMES = [
-  '☷', '☳', '☱', '☴', '☶', '☷', '☷', '☳', '☱', '☰',
-  '☴', '☶', '☷', '☷', '☳', '☵', '☶', '☷', '☷', '☷', '☷',
-];
+const LLM_WORKING_FRAMES = ['○', '◔', '◑', '◕', '●'];
 
 /** Maximum chars rendered in a tool argument or result preview. */
 const PREVIEW_MAX = 200;

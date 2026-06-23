@@ -1,3 +1,4 @@
+import { isRecord } from '../../shared/type-guards.js';
 import type {
   DroneMcpServerState,
   DronePlugin,
@@ -18,10 +19,6 @@ const TOOL_PROPERTY_TYPES: DroneToolJsonSchemaProperty['type'][] = [
   'object',
   'array',
 ];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function toToolPropertySchema(
   value: unknown

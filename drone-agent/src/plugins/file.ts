@@ -1,10 +1,7 @@
+import { isRecord } from '../shared/type-guards.js';
 import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { DronePlugin } from 'drone-core';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 /**
  * Wraps a raw Node.js fs error (ENOENT, EACCES, EISDIR, ...) into a clearer

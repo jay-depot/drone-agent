@@ -1,3 +1,4 @@
+import { isRecord } from '../shared/type-guards.js';
 import { spawn } from 'node:child_process';
 import type { DronePlugin } from 'drone-core';
 
@@ -6,10 +7,6 @@ type ExecInput = {
   cwd?: string;
   timeoutMs?: number;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function parseExecInput(input: Record<string, unknown>): ExecInput {
   if (!isRecord(input)) {

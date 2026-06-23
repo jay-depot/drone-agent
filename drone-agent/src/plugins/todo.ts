@@ -1,3 +1,4 @@
+import { isRecord } from '../shared/type-guards.js';
 import type { DronePlugin } from 'drone-core';
 
 type TodoStatus = 'pending' | 'in_progress' | 'completed';
@@ -28,10 +29,6 @@ type TodoManageInput = {
     status?: TodoStatus;
   }>;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function isTodoStatus(value: unknown): value is TodoStatus {
   return (

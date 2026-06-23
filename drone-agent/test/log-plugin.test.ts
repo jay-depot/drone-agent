@@ -265,7 +265,18 @@ async function getCapability(plugin: ReturnType<typeof createLogPlugin>): Promis
       enabledPlugins: [],
       systemPrompt: '',
       activePersona: null,
+      llm: { provider: 'ollama' },
       ollama: { host: '', model: '' },
+      openrouter: {
+        apiKey: '',
+        defaultModel: 'openai/gpt-4o',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        models: [
+          { id: 'openai/gpt-4o', contextWindow: 128000 },
+          { id: 'anthropic/claude-3.5-sonnet', contextWindow: 200000 },
+          { id: 'google/gemini-2.0-flash-001', contextWindow: 1000000 },
+        ],
+      },
       session: { contextWindowTokens: 32768, responseReserveTokens: 4096, maxToolIterations: 50 },
       lsp: { enabled: false, diagnosticTokenBudget: 500, requestTimeoutMs: 5000, preferExternal: false, autoInstall: true, servers: {} },
       mcp: { enabled: false, requestTimeoutMs: 10000, retryCount: 1, retryDelayMs: 200, maxListPages: 25, maxListItems: 500, compatibilityMode: 'strict', servers: {} },

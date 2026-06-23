@@ -1,3 +1,4 @@
+import { isRecord } from '../../shared/type-guards.js';
 import type {
   DroneLogger,
   DroneMcpResourceMeta,
@@ -58,10 +59,6 @@ export type McpClientConnection = {
   getPrompt: (name: string, args?: Record<string, unknown>) => Promise<unknown>;
   disconnect: () => Promise<void>;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];

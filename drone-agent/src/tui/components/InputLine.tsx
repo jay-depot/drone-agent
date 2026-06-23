@@ -50,9 +50,15 @@ export function InputLine({
       paddingX={1}
       flexDirection="row"
     >
-      {llmFrame ? <Text color={llmColor}>{llmFrame} </Text> : null}
-      {promptLabel ? <Text color={scheme.userInput}>{promptLabel}</Text> : null}
-      <Box flexGrow={1}>
+      <Box flexGrow={0}>
+        {llmFrame ? <Text color={llmColor}>{llmFrame} </Text> : null}
+      </Box>
+      <Box flexGrow={0}>
+        {promptLabel ? (
+          <Text color={scheme.userInput}>{promptLabel}</Text>
+        ) : null}
+      </Box>
+      <Box flexGrow={0}>
         <MultilineTextInput
           value={value}
           onChange={onChange}

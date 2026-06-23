@@ -11,17 +11,152 @@ import {
   type DroneResolvedConfig,
   type PartialDroneAgentConfig,
 } from 'drone-core';
+import { isRecord, isStringArray } from '../shared/type-guards.js';
+
+// ── Validation helpers ────────────────────────────────────────────────
+
+function validateString(
+  raw: unknown,
+  _key: string,
+  source: string,
+  keyPath: string
+): string {
+  if (typeof raw !== 'string') {
+    throw new Error(
+      `Invalid config in ${source}: ${keyPath} must be a string.`
+    );
+  }
+  return raw;
+}
+
+function validateNonEmptyString(
+  raw: unknown,
+  _key: string,
+  source: string,
+  keyPath: string
+): string {
+  if (typeof raw !== 'string' || raw.trim().length === 0) {
+    throw new Error(
+      `Invalid config in ${source}: ${keyPath} must be a non-empty string.`
+    );
+  }
+  return raw;
+}
+
+function validateBoolean(
+  raw: unknown,
+  _key: string,
+  source: string,
+  keyPath: string
+): boolean {
+  if (typeof raw !== 'boolean') {
+    throw new Error(
+      `Invalid config in ${source}: ${keyPath} must be a boolean.`
+    );
+  }
+  return raw;
+}
+
+function validatePositiveNumber(
+  raw: unknown,
+  _key: string,
+  source: string,
+  keyPath: string
+): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
+    throw new Error(
+      `Invalid config in ${source}: ${keyPath} must be a positive number.`
+    );
+  }
+  return raw;
+}
+
+function validatePositiveInteger(
+  raw: unknown,
+  _key: string,
+  source: string,
+  keyPath: string
+): number {
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw <= 0) {
+    throw new Error(
+      `Invalid config in ${source}: ${keyPath} must be a positive integer.`
+    );
+  }
+  return raw;
+}
+
+function validateNonNegativeInteger(
+  raw: unknown,
+  _key: string,
+  source: string,
+  keyPath: string
+): number {
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 0) {
+    throw new Error(
+      `Invalid config in ${source}: ${keyPath} must be a non-negative integer.`
+    );
+  }
+  return raw;
+}
+
+function validateNonNegativeNumber(
+  raw: unknown,
+  _key: string,
+  source: string,
+  keyPath: string
+): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) {
+    throw new Error(
+      `Invalid config in ${source}: ${keyPath} must be a non-negative number.`
+    );
+  }
+  return raw;
+}
+
+function validatePercent(
+  raw: unknown,
+  _key: string,
+  source: string,
+  keyPath: string
+): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0 || raw > 100) {
+    throw new Error(
+      `Invalid config in ${source}: ${keyPath} must be a number between 0 and 100.`
+    );
+  }
+  return raw;
+}
+
+function validateStringArray(
+  raw: unknown,
+  _key: string,
+  source: string,
+  keyPath: string
+): string[] {
+  if (!Array.isArray(raw) || raw.some(item => typeof item !== 'string')) {
+    throw new Error(
+      `Invalid config in ${source}: ${keyPath} must be an array of strings.`
+    );
+  }
+  return raw;
+}
+
+function validateStringOrNull(
+  raw: unknown,
+  _key: string,
+  source: string,
+  keyPath: string
+): string | null {
+  if (raw !== null && typeof raw !== 'string') {
+    throw new Error(
+      `Invalid config in ${source}: ${keyPath} must be a string or null.`
+    );
+  }
+  return raw;
+}
 
 export const CONFIG_DIRECTORY_NAME = '.drone-agent';
 export const CONFIG_FILE_NAME = 'config.json';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every(item => typeof item === 'string');
-}
 
 function interpolateEnvironmentVariables(
   value: string,
@@ -83,48 +218,26 @@ function parseLspServerConfig(
     );
   }
 
-  const language = raw.language;
-  if (language !== undefined && typeof language !== 'string') {
-    throw new Error(
-      `Invalid config in ${source}: lsp.servers.${serverId}.language must be a string.`
-    );
-  }
+  const language = raw.language !== undefined
+    ? validateString(raw.language, 'language', source, `lsp.servers.${serverId}.language`)
+    : undefined;
 
-  const fileExtensions = raw.fileExtensions;
-  if (fileExtensions !== undefined && !isStringArray(fileExtensions)) {
-    throw new Error(
-      `Invalid config in ${source}: lsp.servers.${serverId}.fileExtensions must be an array of strings.`
-    );
-  }
+  const fileExtensions = raw.fileExtensions !== undefined
+    ? validateStringArray(raw.fileExtensions, 'fileExtensions', source, `lsp.servers.${serverId}.fileExtensions`)
+    : undefined;
 
-  const rootPatterns = raw.rootPatterns;
-  if (rootPatterns !== undefined && !isStringArray(rootPatterns)) {
-    throw new Error(
-      `Invalid config in ${source}: lsp.servers.${serverId}.rootPatterns must be an array of strings.`
-    );
-  }
+  const rootPatterns = raw.rootPatterns !== undefined
+    ? validateStringArray(raw.rootPatterns, 'rootPatterns', source, `lsp.servers.${serverId}.rootPatterns`)
+    : undefined;
 
   if (raw.transport === 'tcp') {
-    if (typeof raw.host !== 'string' || raw.host.trim().length === 0) {
-      throw new Error(
-        `Invalid config in ${source}: lsp.servers.${serverId}.host must be a non-empty string.`
-      );
-    }
-    if (
-      typeof raw.port !== 'number' ||
-      !Number.isInteger(raw.port) ||
-      raw.port <= 0
-    ) {
-      throw new Error(
-        `Invalid config in ${source}: lsp.servers.${serverId}.port must be a positive integer.`
-      );
-    }
-
+    const host = validateNonEmptyString(raw.host, 'host', source, `lsp.servers.${serverId}.host`);
+    const port = validatePositiveInteger(raw.port, 'port', source, `lsp.servers.${serverId}.port`);
     return {
       transport: 'tcp',
       language,
-      host: raw.host,
-      port: raw.port,
+      host,
+      port,
       fileExtensions,
       rootPatterns,
     };
@@ -136,30 +249,20 @@ function parseLspServerConfig(
     );
   }
 
-  if (typeof raw.command !== 'string' || raw.command.trim().length === 0) {
-    throw new Error(
-      `Invalid config in ${source}: lsp.servers.${serverId}.command must be a non-empty string for stdio servers.`
-    );
-  }
+  const command = validateNonEmptyString(raw.command, 'command', source, `lsp.servers.${serverId}.command`);
 
-  const args = raw.args;
-  if (args !== undefined && !isStringArray(args)) {
-    throw new Error(
-      `Invalid config in ${source}: lsp.servers.${serverId}.args must be an array of strings.`
-    );
-  }
+  const args = raw.args !== undefined
+    ? validateStringArray(raw.args, 'args', source, `lsp.servers.${serverId}.args`)
+    : undefined;
 
-  const autoInstall = raw.autoInstall;
-  if (autoInstall !== undefined && typeof autoInstall !== 'boolean') {
-    throw new Error(
-      `Invalid config in ${source}: lsp.servers.${serverId}.autoInstall must be a boolean.`
-    );
-  }
+  const autoInstall = raw.autoInstall !== undefined
+    ? validateBoolean(raw.autoInstall, 'autoInstall', source, `lsp.servers.${serverId}.autoInstall`)
+    : undefined;
 
   return {
     transport: 'stdio',
     language,
-    command: raw.command,
+    command,
     args,
     autoInstall,
     fileExtensions,
@@ -179,11 +282,7 @@ function parseMcpServerConfig(
   }
 
   if (raw.transport === 'streamable_http') {
-    if (typeof raw.url !== 'string' || raw.url.trim().length === 0) {
-      throw new Error(
-        `Invalid config in ${source}: mcp.servers.${serverId}.url must be a non-empty string.`
-      );
-    }
+    const url = validateNonEmptyString(raw.url, 'url', source, `mcp.servers.${serverId}.url`);
 
     const headers =
       raw.headers !== undefined
@@ -194,72 +293,30 @@ function parseMcpServerConfig(
             true
           )
         : undefined;
-    const allowedTools = raw.allowedTools;
-    if (allowedTools !== undefined && !isStringArray(allowedTools)) {
-      throw new Error(
-        `Invalid config in ${source}: mcp.servers.${serverId}.allowedTools must be an array of strings.`
-      );
-    }
 
-    const requestTimeoutMs = raw.requestTimeoutMs;
-    if (
-      requestTimeoutMs !== undefined &&
-      (typeof requestTimeoutMs !== 'number' ||
-        !Number.isFinite(requestTimeoutMs) ||
-        requestTimeoutMs <= 0)
-    ) {
-      throw new Error(
-        `Invalid config in ${source}: mcp.servers.${serverId}.requestTimeoutMs must be a positive number.`
-      );
-    }
+    const allowedTools = raw.allowedTools !== undefined
+      ? validateStringArray(raw.allowedTools, 'allowedTools', source, `mcp.servers.${serverId}.allowedTools`)
+      : undefined;
 
-    const retryCount = raw.retryCount;
-    if (
-      retryCount !== undefined &&
-      (typeof retryCount !== 'number' ||
-        !Number.isInteger(retryCount) ||
-        retryCount < 0)
-    ) {
-      throw new Error(
-        `Invalid config in ${source}: mcp.servers.${serverId}.retryCount must be a non-negative integer.`
-      );
-    }
+    const requestTimeoutMs = raw.requestTimeoutMs !== undefined
+      ? validatePositiveNumber(raw.requestTimeoutMs, 'requestTimeoutMs', source, `mcp.servers.${serverId}.requestTimeoutMs`)
+      : undefined;
 
-    const retryDelayMs = raw.retryDelayMs;
-    if (
-      retryDelayMs !== undefined &&
-      (typeof retryDelayMs !== 'number' ||
-        !Number.isFinite(retryDelayMs) ||
-        retryDelayMs < 0)
-    ) {
-      throw new Error(
-        `Invalid config in ${source}: mcp.servers.${serverId}.retryDelayMs must be a non-negative number.`
-      );
-    }
+    const retryCount = raw.retryCount !== undefined
+      ? validateNonNegativeInteger(raw.retryCount, 'retryCount', source, `mcp.servers.${serverId}.retryCount`)
+      : undefined;
 
-    const maxListPages = raw.maxListPages;
-    if (
-      maxListPages !== undefined &&
-      (typeof maxListPages !== 'number' ||
-        !Number.isInteger(maxListPages) ||
-        maxListPages <= 0)
-    ) {
-      throw new Error(
-        `Invalid config in ${source}: mcp.servers.${serverId}.maxListPages must be a positive integer.`
-      );
-    }
+    const retryDelayMs = raw.retryDelayMs !== undefined
+      ? validateNonNegativeNumber(raw.retryDelayMs, 'retryDelayMs', source, `mcp.servers.${serverId}.retryDelayMs`)
+      : undefined;
 
-    const maxListItems = raw.maxListItems;
-    if (
-      maxListItems !== undefined &&
-      (typeof maxListItems !== 'number' ||
-        !Number.isInteger(maxListItems) ||
-        maxListItems <= 0)
-    ) {
-      throw new Error(
-        `Invalid config in ${source}: mcp.servers.${serverId}.maxListItems must be a positive integer.`
-      );
-    }
+    const maxListPages = raw.maxListPages !== undefined
+      ? validatePositiveInteger(raw.maxListPages, 'maxListPages', source, `mcp.servers.${serverId}.maxListPages`)
+      : undefined;
+
+    const maxListItems = raw.maxListItems !== undefined
+      ? validatePositiveInteger(raw.maxListItems, 'maxListItems', source, `mcp.servers.${serverId}.maxListItems`)
+      : undefined;
 
     const compatibilityMode = raw.compatibilityMode;
     if (
@@ -275,7 +332,7 @@ function parseMcpServerConfig(
     return {
       transport: 'streamable_http',
       url: interpolateEnvironmentVariables(
-        raw.url,
+        url,
         source,
         `mcp.servers.${serverId}.url`
       ),
@@ -296,97 +353,44 @@ function parseMcpServerConfig(
     );
   }
 
-  if (typeof raw.command !== 'string' || raw.command.trim().length === 0) {
-    throw new Error(
-      `Invalid config in ${source}: mcp.servers.${serverId}.command must be a non-empty string for stdio servers.`
-    );
-  }
+  const command = validateNonEmptyString(raw.command, 'command', source, `mcp.servers.${serverId}.command`);
 
-  const args = raw.args;
-  if (args !== undefined && !isStringArray(args)) {
-    throw new Error(
-      `Invalid config in ${source}: mcp.servers.${serverId}.args must be an array of strings.`
-    );
-  }
+  const args = raw.args !== undefined
+    ? validateStringArray(raw.args, 'args', source, `mcp.servers.${serverId}.args`)
+    : undefined;
 
-  const cwd = raw.cwd;
-  if (cwd !== undefined && typeof cwd !== 'string') {
-    throw new Error(
-      `Invalid config in ${source}: mcp.servers.${serverId}.cwd must be a string.`
-    );
-  }
+  const cwd = raw.cwd !== undefined
+    ? validateString(raw.cwd, 'cwd', source, `mcp.servers.${serverId}.cwd`)
+    : undefined;
 
   const env =
     raw.env !== undefined
       ? parseStringRecord(raw.env, source, `mcp.servers.${serverId}.env`, true)
       : undefined;
 
-  const allowedTools = raw.allowedTools;
-  if (allowedTools !== undefined && !isStringArray(allowedTools)) {
-    throw new Error(
-      `Invalid config in ${source}: mcp.servers.${serverId}.allowedTools must be an array of strings.`
-    );
-  }
+  const allowedTools = raw.allowedTools !== undefined
+    ? validateStringArray(raw.allowedTools, 'allowedTools', source, `mcp.servers.${serverId}.allowedTools`)
+    : undefined;
 
-  const requestTimeoutMs = raw.requestTimeoutMs;
-  if (
-    requestTimeoutMs !== undefined &&
-    (typeof requestTimeoutMs !== 'number' ||
-      !Number.isFinite(requestTimeoutMs) ||
-      requestTimeoutMs <= 0)
-  ) {
-    throw new Error(
-      `Invalid config in ${source}: mcp.servers.${serverId}.requestTimeoutMs must be a positive number.`
-    );
-  }
+  const requestTimeoutMs = raw.requestTimeoutMs !== undefined
+    ? validatePositiveNumber(raw.requestTimeoutMs, 'requestTimeoutMs', source, `mcp.servers.${serverId}.requestTimeoutMs`)
+    : undefined;
 
-  const retryCount = raw.retryCount;
-  if (
-    retryCount !== undefined &&
-    (typeof retryCount !== 'number' ||
-      !Number.isInteger(retryCount) ||
-      retryCount < 0)
-  ) {
-    throw new Error(
-      `Invalid config in ${source}: mcp.servers.${serverId}.retryCount must be a non-negative integer.`
-    );
-  }
+  const retryCount = raw.retryCount !== undefined
+    ? validateNonNegativeInteger(raw.retryCount, 'retryCount', source, `mcp.servers.${serverId}.retryCount`)
+    : undefined;
 
-  const retryDelayMs = raw.retryDelayMs;
-  if (
-    retryDelayMs !== undefined &&
-    (typeof retryDelayMs !== 'number' ||
-      !Number.isFinite(retryDelayMs) ||
-      retryDelayMs < 0)
-  ) {
-    throw new Error(
-      `Invalid config in ${source}: mcp.servers.${serverId}.retryDelayMs must be a non-negative number.`
-    );
-  }
+  const retryDelayMs = raw.retryDelayMs !== undefined
+    ? validateNonNegativeNumber(raw.retryDelayMs, 'retryDelayMs', source, `mcp.servers.${serverId}.retryDelayMs`)
+    : undefined;
 
-  const maxListPages = raw.maxListPages;
-  if (
-    maxListPages !== undefined &&
-    (typeof maxListPages !== 'number' ||
-      !Number.isInteger(maxListPages) ||
-      maxListPages <= 0)
-  ) {
-    throw new Error(
-      `Invalid config in ${source}: mcp.servers.${serverId}.maxListPages must be a positive integer.`
-    );
-  }
+  const maxListPages = raw.maxListPages !== undefined
+    ? validatePositiveInteger(raw.maxListPages, 'maxListPages', source, `mcp.servers.${serverId}.maxListPages`)
+    : undefined;
 
-  const maxListItems = raw.maxListItems;
-  if (
-    maxListItems !== undefined &&
-    (typeof maxListItems !== 'number' ||
-      !Number.isInteger(maxListItems) ||
-      maxListItems <= 0)
-  ) {
-    throw new Error(
-      `Invalid config in ${source}: mcp.servers.${serverId}.maxListItems must be a positive integer.`
-    );
-  }
+  const maxListItems = raw.maxListItems !== undefined
+    ? validatePositiveInteger(raw.maxListItems, 'maxListItems', source, `mcp.servers.${serverId}.maxListItems`)
+    : undefined;
 
   const encoding = raw.encoding;
   if (
@@ -402,7 +406,7 @@ function parseMcpServerConfig(
   return {
     transport: 'stdio',
     command: interpolateEnvironmentVariables(
-      raw.command,
+      command,
       source,
       `mcp.servers.${serverId}.command`
     ),
@@ -414,7 +418,7 @@ function parseMcpServerConfig(
       )
     ),
     cwd:
-      typeof cwd === 'string'
+      cwd !== undefined
         ? interpolateEnvironmentVariables(
             cwd,
             source,
@@ -443,24 +447,21 @@ export function parsePartialConfig(
   const parsed: PartialDroneAgentConfig = {};
 
   if ('enabledPlugins' in raw) {
-    if (
-      !Array.isArray(raw.enabledPlugins) ||
-      raw.enabledPlugins.some(item => typeof item !== 'string')
-    ) {
-      throw new Error(
-        `Invalid config in ${source}: enabledPlugins must be an array of strings.`
-      );
-    }
-    parsed.enabledPlugins = raw.enabledPlugins;
+    parsed.enabledPlugins = validateStringArray(
+      raw.enabledPlugins,
+      'enabledPlugins',
+      source,
+      'enabledPlugins'
+    );
   }
 
   if ('systemPrompt' in raw) {
-    if (typeof raw.systemPrompt !== 'string') {
-      throw new Error(
-        `Invalid config in ${source}: systemPrompt must be a string.`
-      );
-    }
-    parsed.systemPrompt = raw.systemPrompt;
+    parsed.systemPrompt = validateString(
+      raw.systemPrompt,
+      'systemPrompt',
+      source,
+      'systemPrompt'
+    );
   }
 
   if ('ollama' in raw) {
@@ -470,20 +471,10 @@ export function parsePartialConfig(
 
     const ollama: PartialDroneAgentConfig['ollama'] = {};
     if ('host' in raw.ollama) {
-      if (typeof raw.ollama.host !== 'string') {
-        throw new Error(
-          `Invalid config in ${source}: ollama.host must be a string.`
-        );
-      }
-      ollama.host = raw.ollama.host;
+      ollama.host = validateString(raw.ollama.host, 'host', source, 'ollama.host');
     }
     if ('model' in raw.ollama) {
-      if (typeof raw.ollama.model !== 'string') {
-        throw new Error(
-          `Invalid config in ${source}: ollama.model must be a string.`
-        );
-      }
-      ollama.model = raw.ollama.model;
+      ollama.model = validateString(raw.ollama.model, 'model', source, 'ollama.model');
     }
     parsed.ollama = ollama;
   }
@@ -495,12 +486,7 @@ export function parsePartialConfig(
 
     const llm: PartialDroneAgentConfig['llm'] = {};
     if ('provider' in raw.llm) {
-      if (typeof raw.llm.provider !== 'string') {
-        throw new Error(
-          `Invalid config in ${source}: llm.provider must be a string.`
-        );
-      }
-      llm.provider = raw.llm.provider;
+      llm.provider = validateString(raw.llm.provider, 'provider', source, 'llm.provider');
     }
     parsed.llm = llm;
   }
@@ -512,28 +498,13 @@ export function parsePartialConfig(
 
     const openrouter: PartialDroneAgentConfig['openrouter'] = {};
     if ('apiKey' in raw.openrouter) {
-      if (typeof raw.openrouter.apiKey !== 'string') {
-        throw new Error(
-          `Invalid config in ${source}: openrouter.apiKey must be a string.`
-        );
-      }
-      openrouter.apiKey = raw.openrouter.apiKey;
+      openrouter.apiKey = validateString(raw.openrouter.apiKey, 'apiKey', source, 'openrouter.apiKey');
     }
     if ('defaultModel' in raw.openrouter) {
-      if (typeof raw.openrouter.defaultModel !== 'string') {
-        throw new Error(
-          `Invalid config in ${source}: openrouter.defaultModel must be a string.`
-        );
-      }
-      openrouter.defaultModel = raw.openrouter.defaultModel;
+      openrouter.defaultModel = validateString(raw.openrouter.defaultModel, 'defaultModel', source, 'openrouter.defaultModel');
     }
     if ('baseUrl' in raw.openrouter) {
-      if (typeof raw.openrouter.baseUrl !== 'string') {
-        throw new Error(
-          `Invalid config in ${source}: openrouter.baseUrl must be a string.`
-        );
-      }
-      openrouter.baseUrl = raw.openrouter.baseUrl;
+      openrouter.baseUrl = validateString(raw.openrouter.baseUrl, 'baseUrl', source, 'openrouter.baseUrl');
     }
     if ('models' in raw.openrouter) {
       if (!Array.isArray(raw.openrouter.models)) {
@@ -549,21 +520,9 @@ export function parsePartialConfig(
             `Invalid config in ${source}: openrouter.models[${i}] must be an object.`
           );
         }
-        if (typeof entry.id !== 'string' || entry.id.trim().length === 0) {
-          throw new Error(
-            `Invalid config in ${source}: openrouter.models[${i}].id must be a non-empty string.`
-          );
-        }
-        if (
-          typeof entry.contextWindow !== 'number' ||
-          !Number.isFinite(entry.contextWindow) ||
-          entry.contextWindow <= 0
-        ) {
-          throw new Error(
-            `Invalid config in ${source}: openrouter.models[${i}].contextWindow must be a positive number.`
-          );
-        }
-        models.push({ id: entry.id, contextWindow: entry.contextWindow });
+        const modelId = validateNonEmptyString(entry.id, 'id', source, `openrouter.models[${i}].id`);
+        const modelCtx = validatePositiveNumber(entry.contextWindow, 'contextWindow', source, `openrouter.models[${i}].contextWindow`);
+        models.push({ id: modelId, contextWindow: modelCtx });
       }
       openrouter.models = models;
     }
@@ -579,50 +538,36 @@ export function parsePartialConfig(
 
     const session: PartialDroneAgentConfig['session'] = {};
     if ('contextWindowTokens' in raw.session) {
-      if (
-        typeof raw.session.contextWindowTokens !== 'number' ||
-        !Number.isFinite(raw.session.contextWindowTokens) ||
-        raw.session.contextWindowTokens <= 0
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: session.contextWindowTokens must be a positive number.`
-        );
-      }
-      session.contextWindowTokens = raw.session.contextWindowTokens;
+      session.contextWindowTokens = validatePositiveNumber(
+        raw.session.contextWindowTokens,
+        'contextWindowTokens',
+        source,
+        'session.contextWindowTokens'
+      );
     }
     if ('responseReserveTokens' in raw.session) {
-      if (
-        typeof raw.session.responseReserveTokens !== 'number' ||
-        !Number.isFinite(raw.session.responseReserveTokens) ||
-        raw.session.responseReserveTokens <= 0
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: session.responseReserveTokens must be a positive number.`
-        );
-      }
-      session.responseReserveTokens = raw.session.responseReserveTokens;
+      session.responseReserveTokens = validatePositiveNumber(
+        raw.session.responseReserveTokens,
+        'responseReserveTokens',
+        source,
+        'session.responseReserveTokens'
+      );
     }
     if ('maxToolIterations' in raw.session) {
-      if (
-        typeof raw.session.maxToolIterations !== 'number' ||
-        !Number.isFinite(raw.session.maxToolIterations) ||
-        !Number.isInteger(raw.session.maxToolIterations) ||
-        raw.session.maxToolIterations <= 0
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: session.maxToolIterations must be a positive integer.`
-        );
-      }
-      session.maxToolIterations = raw.session.maxToolIterations;
+      session.maxToolIterations = validatePositiveInteger(
+        raw.session.maxToolIterations,
+        'maxToolIterations',
+        source,
+        'session.maxToolIterations'
+      );
     }
     if ('promptOnToolIterationLimit' in raw.session) {
-      if (typeof raw.session.promptOnToolIterationLimit !== 'boolean') {
-        throw new Error(
-          `Invalid config in ${source}: session.promptOnToolIterationLimit must be a boolean.`
-        );
-      }
-      session.promptOnToolIterationLimit =
-        raw.session.promptOnToolIterationLimit;
+      session.promptOnToolIterationLimit = validateBoolean(
+        raw.session.promptOnToolIterationLimit,
+        'promptOnToolIterationLimit',
+        source,
+        'session.promptOnToolIterationLimit'
+      );
     }
     parsed.session = session;
   }
@@ -635,56 +580,33 @@ export function parsePartialConfig(
     const lsp: PartialDroneAgentConfig['lsp'] = {};
 
     if ('enabled' in raw.lsp) {
-      if (typeof raw.lsp.enabled !== 'boolean') {
-        throw new Error(
-          `Invalid config in ${source}: lsp.enabled must be a boolean.`
-        );
-      }
-      lsp.enabled = raw.lsp.enabled;
+      lsp.enabled = validateBoolean(raw.lsp.enabled, 'enabled', source, 'lsp.enabled');
     }
 
     if ('diagnosticTokenBudget' in raw.lsp) {
-      if (
-        typeof raw.lsp.diagnosticTokenBudget !== 'number' ||
-        !Number.isFinite(raw.lsp.diagnosticTokenBudget) ||
-        raw.lsp.diagnosticTokenBudget <= 0
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: lsp.diagnosticTokenBudget must be a positive number.`
-        );
-      }
-      lsp.diagnosticTokenBudget = raw.lsp.diagnosticTokenBudget;
+      lsp.diagnosticTokenBudget = validatePositiveNumber(
+        raw.lsp.diagnosticTokenBudget,
+        'diagnosticTokenBudget',
+        source,
+        'lsp.diagnosticTokenBudget'
+      );
     }
 
     if ('requestTimeoutMs' in raw.lsp) {
-      if (
-        typeof raw.lsp.requestTimeoutMs !== 'number' ||
-        !Number.isFinite(raw.lsp.requestTimeoutMs) ||
-        raw.lsp.requestTimeoutMs <= 0
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: lsp.requestTimeoutMs must be a positive number.`
-        );
-      }
-      lsp.requestTimeoutMs = raw.lsp.requestTimeoutMs;
+      lsp.requestTimeoutMs = validatePositiveNumber(
+        raw.lsp.requestTimeoutMs,
+        'requestTimeoutMs',
+        source,
+        'lsp.requestTimeoutMs'
+      );
     }
 
     if ('preferExternal' in raw.lsp) {
-      if (typeof raw.lsp.preferExternal !== 'boolean') {
-        throw new Error(
-          `Invalid config in ${source}: lsp.preferExternal must be a boolean.`
-        );
-      }
-      lsp.preferExternal = raw.lsp.preferExternal;
+      lsp.preferExternal = validateBoolean(raw.lsp.preferExternal, 'preferExternal', source, 'lsp.preferExternal');
     }
 
     if ('autoInstall' in raw.lsp) {
-      if (typeof raw.lsp.autoInstall !== 'boolean') {
-        throw new Error(
-          `Invalid config in ${source}: lsp.autoInstall must be a boolean.`
-        );
-      }
-      lsp.autoInstall = raw.lsp.autoInstall;
+      lsp.autoInstall = validateBoolean(raw.lsp.autoInstall, 'autoInstall', source, 'lsp.autoInstall');
     }
 
     if ('servers' in raw.lsp) {
@@ -716,77 +638,52 @@ export function parsePartialConfig(
     const mcp: PartialDroneAgentConfig['mcp'] = {};
 
     if ('enabled' in raw.mcp) {
-      if (typeof raw.mcp.enabled !== 'boolean') {
-        throw new Error(
-          `Invalid config in ${source}: mcp.enabled must be a boolean.`
-        );
-      }
-      mcp.enabled = raw.mcp.enabled;
+      mcp.enabled = validateBoolean(raw.mcp.enabled, 'enabled', source, 'mcp.enabled');
     }
 
     if ('requestTimeoutMs' in raw.mcp) {
-      if (
-        typeof raw.mcp.requestTimeoutMs !== 'number' ||
-        !Number.isFinite(raw.mcp.requestTimeoutMs) ||
-        raw.mcp.requestTimeoutMs <= 0
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: mcp.requestTimeoutMs must be a positive number.`
-        );
-      }
-      mcp.requestTimeoutMs = raw.mcp.requestTimeoutMs;
+      mcp.requestTimeoutMs = validatePositiveNumber(
+        raw.mcp.requestTimeoutMs,
+        'requestTimeoutMs',
+        source,
+        'mcp.requestTimeoutMs'
+      );
     }
 
     if ('retryCount' in raw.mcp) {
-      if (
-        typeof raw.mcp.retryCount !== 'number' ||
-        !Number.isInteger(raw.mcp.retryCount) ||
-        raw.mcp.retryCount < 0
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: mcp.retryCount must be a non-negative integer.`
-        );
-      }
-      mcp.retryCount = raw.mcp.retryCount;
+      mcp.retryCount = validateNonNegativeInteger(
+        raw.mcp.retryCount,
+        'retryCount',
+        source,
+        'mcp.retryCount'
+      );
     }
 
     if ('retryDelayMs' in raw.mcp) {
-      if (
-        typeof raw.mcp.retryDelayMs !== 'number' ||
-        !Number.isFinite(raw.mcp.retryDelayMs) ||
-        raw.mcp.retryDelayMs < 0
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: mcp.retryDelayMs must be a non-negative number.`
-        );
-      }
-      mcp.retryDelayMs = raw.mcp.retryDelayMs;
+      mcp.retryDelayMs = validateNonNegativeNumber(
+        raw.mcp.retryDelayMs,
+        'retryDelayMs',
+        source,
+        'mcp.retryDelayMs'
+      );
     }
 
     if ('maxListPages' in raw.mcp) {
-      if (
-        typeof raw.mcp.maxListPages !== 'number' ||
-        !Number.isInteger(raw.mcp.maxListPages) ||
-        raw.mcp.maxListPages <= 0
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: mcp.maxListPages must be a positive integer.`
-        );
-      }
-      mcp.maxListPages = raw.mcp.maxListPages;
+      mcp.maxListPages = validatePositiveInteger(
+        raw.mcp.maxListPages,
+        'maxListPages',
+        source,
+        'mcp.maxListPages'
+      );
     }
 
     if ('maxListItems' in raw.mcp) {
-      if (
-        typeof raw.mcp.maxListItems !== 'number' ||
-        !Number.isInteger(raw.mcp.maxListItems) ||
-        raw.mcp.maxListItems <= 0
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: mcp.maxListItems must be a positive integer.`
-        );
-      }
-      mcp.maxListItems = raw.mcp.maxListItems;
+      mcp.maxListItems = validatePositiveInteger(
+        raw.mcp.maxListItems,
+        'maxListItems',
+        source,
+        'mcp.maxListItems'
+      );
     }
 
     if ('compatibilityMode' in raw.mcp) {
@@ -823,12 +720,12 @@ export function parsePartialConfig(
   }
 
   if ('activePersona' in raw) {
-    if (raw.activePersona !== null && typeof raw.activePersona !== 'string') {
-      throw new Error(
-        `Invalid config in ${source}: activePersona must be a string or null.`
-      );
-    }
-    parsed.activePersona = raw.activePersona;
+    parsed.activePersona = validateStringOrNull(
+      raw.activePersona,
+      'activePersona',
+      source,
+      'activePersona'
+    );
   }
 
   if ('compaction' in raw) {
@@ -841,12 +738,7 @@ export function parsePartialConfig(
     const compaction: PartialDroneAgentConfig['compaction'] = {};
 
     if ('enabled' in raw.compaction) {
-      if (typeof raw.compaction.enabled !== 'boolean') {
-        throw new Error(
-          `Invalid config in ${source}: compaction.enabled must be a boolean.`
-        );
-      }
-      compaction.enabled = raw.compaction.enabled;
+      compaction.enabled = validateBoolean(raw.compaction.enabled, 'enabled', source, 'compaction.enabled');
     }
 
     if ('strategy' in raw.compaction) {
@@ -859,71 +751,48 @@ export function parsePartialConfig(
     }
 
     if ('softThresholdPercent' in raw.compaction) {
-      if (
-        typeof raw.compaction.softThresholdPercent !== 'number' ||
-        !Number.isFinite(raw.compaction.softThresholdPercent) ||
-        raw.compaction.softThresholdPercent <= 0 ||
-        raw.compaction.softThresholdPercent > 100
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: compaction.softThresholdPercent must be a number between 0 and 100.`
-        );
-      }
-      compaction.softThresholdPercent = raw.compaction.softThresholdPercent;
+      compaction.softThresholdPercent = validatePercent(
+        raw.compaction.softThresholdPercent,
+        'softThresholdPercent',
+        source,
+        'compaction.softThresholdPercent'
+      );
     }
 
     if ('slicePercent' in raw.compaction) {
-      if (
-        typeof raw.compaction.slicePercent !== 'number' ||
-        !Number.isFinite(raw.compaction.slicePercent) ||
-        raw.compaction.slicePercent <= 0 ||
-        raw.compaction.slicePercent > 100
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: compaction.slicePercent must be a number between 0 and 100.`
-        );
-      }
-      compaction.slicePercent = raw.compaction.slicePercent;
+      compaction.slicePercent = validatePercent(
+        raw.compaction.slicePercent,
+        'slicePercent',
+        source,
+        'compaction.slicePercent'
+      );
     }
 
     if ('minTurnsToCompact' in raw.compaction) {
-      if (
-        typeof raw.compaction.minTurnsToCompact !== 'number' ||
-        !Number.isInteger(raw.compaction.minTurnsToCompact) ||
-        raw.compaction.minTurnsToCompact < 1
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: compaction.minTurnsToCompact must be a positive integer.`
-        );
-      }
-      compaction.minTurnsToCompact = raw.compaction.minTurnsToCompact;
+      compaction.minTurnsToCompact = validatePositiveInteger(
+        raw.compaction.minTurnsToCompact,
+        'minTurnsToCompact',
+        source,
+        'compaction.minTurnsToCompact'
+      );
     }
 
     if ('summaryMaxTokens' in raw.compaction) {
-      if (
-        typeof raw.compaction.summaryMaxTokens !== 'number' ||
-        !Number.isFinite(raw.compaction.summaryMaxTokens) ||
-        raw.compaction.summaryMaxTokens <= 0
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: compaction.summaryMaxTokens must be a positive number.`
-        );
-      }
-      compaction.summaryMaxTokens = raw.compaction.summaryMaxTokens;
+      compaction.summaryMaxTokens = validatePositiveNumber(
+        raw.compaction.summaryMaxTokens,
+        'summaryMaxTokens',
+        source,
+        'compaction.summaryMaxTokens'
+      );
     }
 
     if ('summaryBudgetPercent' in raw.compaction) {
-      if (
-        typeof raw.compaction.summaryBudgetPercent !== 'number' ||
-        !Number.isFinite(raw.compaction.summaryBudgetPercent) ||
-        raw.compaction.summaryBudgetPercent <= 0 ||
-        raw.compaction.summaryBudgetPercent > 100
-      ) {
-        throw new Error(
-          `Invalid config in ${source}: compaction.summaryBudgetPercent must be a number between 0 and 100.`
-        );
-      }
-      compaction.summaryBudgetPercent = raw.compaction.summaryBudgetPercent;
+      compaction.summaryBudgetPercent = validatePercent(
+        raw.compaction.summaryBudgetPercent,
+        'summaryBudgetPercent',
+        source,
+        'compaction.summaryBudgetPercent'
+      );
     }
 
     parsed.compaction = compaction;
@@ -939,12 +808,7 @@ export function parsePartialConfig(
     const memory: PartialDroneAgentConfig['memory'] = {};
 
     if ('enabled' in raw.memory) {
-      if (typeof raw.memory.enabled !== 'boolean') {
-        throw new Error(
-          `Invalid config in ${source}: memory.enabled must be a boolean.`
-        );
-      }
-      memory.enabled = raw.memory.enabled;
+      memory.enabled = validateBoolean(raw.memory.enabled, 'enabled', source, 'memory.enabled');
     }
 
     parsed.memory = memory;
@@ -960,12 +824,7 @@ export function parsePartialConfig(
     const log: PartialDroneAgentConfig['log'] = {};
 
     if ('enabled' in raw.log) {
-      if (typeof raw.log.enabled !== 'boolean') {
-        throw new Error(
-          `Invalid config in ${source}: log.enabled must be a boolean.`
-        );
-      }
-      log.enabled = raw.log.enabled;
+      log.enabled = validateBoolean(raw.log.enabled, 'enabled', source, 'log.enabled');
     }
 
     parsed.log = log;
@@ -981,21 +840,11 @@ export function parsePartialConfig(
     const promptFile: PartialDroneAgentConfig['promptFile'] = {};
 
     if ('enabled' in raw.promptFile) {
-      if (typeof raw.promptFile.enabled !== 'boolean') {
-        throw new Error(
-          `Invalid config in ${source}: promptFile.enabled must be a boolean.`
-        );
-      }
-      promptFile.enabled = raw.promptFile.enabled;
+      promptFile.enabled = validateBoolean(raw.promptFile.enabled, 'enabled', source, 'promptFile.enabled');
     }
 
     if ('files' in raw.promptFile) {
-      if (!isStringArray(raw.promptFile.files)) {
-        throw new Error(
-          `Invalid config in ${source}: promptFile.files must be an array of strings.`
-        );
-      }
-      promptFile.files = raw.promptFile.files;
+      promptFile.files = validateStringArray(raw.promptFile.files, 'files', source, 'promptFile.files');
     }
 
     parsed.promptFile = promptFile;

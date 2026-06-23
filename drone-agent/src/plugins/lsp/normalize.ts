@@ -1,3 +1,4 @@
+import { isRecord } from '../../shared/type-guards.js';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { DroneLspDiagnostic } from 'drone-core';
@@ -340,10 +341,7 @@ const LSP_COMPLETION_ITEM_KIND: Record<number, string> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
+export { isRecord };
 export function normalizeFileExtensions(fileExtensions: string[]): string[] {
   return Array.from(
     new Set(
