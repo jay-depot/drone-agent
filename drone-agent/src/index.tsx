@@ -12,7 +12,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { render } from 'ink';
-import { builtInPlugins, createBuiltInPlugins } from './plugins/index.js';
+import { createBuiltInPlugins } from './plugins/index.js';
 import type { DronePersonaCapability } from 'drone-core';
 import { createTui } from './tui/index.js';
 import { ModelPicker } from './tui/components/ModelPicker.js';
@@ -252,7 +252,11 @@ function createReadlineElicitation(): DroneElicitation & { close: () => void } {
     ask: async (questions: DroneElicitationQuestion[]) => {
       // Validate questions
       for (const question of questions) {
-        if (question.choices && question.choices.length > 0 && question.freeform) {
+        if (
+          question.choices &&
+          question.choices.length > 0 &&
+          question.freeform
+        ) {
           throw new Error(
             'Invalid question: cannot set both "choices" and "freeform: true".'
           );
@@ -278,9 +282,7 @@ function createReadlineElicitation(): DroneElicitation & { close: () => void } {
             question.prompt,
             ...lines,
             `Enter choice [1-${question.choices.length}]`,
-            question.defaultValue
-              ? ` (default: ${question.defaultValue})`
-              : '',
+            question.defaultValue ? ` (default: ${question.defaultValue})` : '',
             ': ',
           ].join('\n');
 
@@ -290,11 +292,7 @@ function createReadlineElicitation(): DroneElicitation & { close: () => void } {
             answers[question.id] = question.defaultValue;
           } else {
             const idx = parseInt(trimmed, 10) - 1;
-            if (
-              !isNaN(idx) &&
-              idx >= 0 &&
-              idx < question.choices.length
-            ) {
+            if (!isNaN(idx) && idx >= 0 && idx < question.choices.length) {
               answers[question.id] = question.choices[idx].value;
             } else {
               answers[question.id] = question.defaultValue ?? '';
@@ -545,12 +543,19 @@ async function main(): Promise<void> {
   if (!hasUserLayer && !invocation.options.modelOverride) {
     const llm = getLlmCapability(engine);
     if (llm) {
-      await runFirstRunSetup(llm, engine, conversation, logger, resolvedConfig.config);
+      await runFirstRunSetup(
+        llm,
+        engine,
+        conversation,
+        logger,
+        resolvedConfig.config
+      );
     }
   }
 
   const activeModel = conversation.getModel();
-  const activeProviderId = getLlmCapability(engine)?.getActiveProviderId() ?? 'unknown';
+  const activeProviderId =
+    getLlmCapability(engine)?.getActiveProviderId() ?? 'unknown';
   logger.info(`registered plugins: ${registeredPlugins.length}`);
   logger.info(`registered tools: ${engine.getRegisteredToolCount()}`);
   logger.info(

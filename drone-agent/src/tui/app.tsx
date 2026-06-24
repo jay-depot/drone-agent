@@ -24,7 +24,7 @@
  * keeping the rest legible regardless of the tint.
  */
 
-import { Box, Text, useApp, useInput } from 'ink';
+import { Box, useApp, useInput } from 'ink';
 import os from 'node:os';
 import path from 'node:path';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -180,6 +180,7 @@ export function App(opts: DroneTuiOptions): JSX.Element {
           lines.push('────────────────────────────────────────');
           lines.push('Prompt Fragments:');
           for (const fragment of fragments) {
+            lines.push('────────────────────────────────────────');
             lines.push(fragment);
           }
         }
