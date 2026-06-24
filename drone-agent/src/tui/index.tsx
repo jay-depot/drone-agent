@@ -28,6 +28,8 @@
 import { render } from 'ink';
 import type { Instance } from 'ink';
 import { App } from './app.js';
+import { Markdown } from './components/Markdown.js';
+export { Markdown };
 import type { DroneTuiOptions } from './types.js';
 
 /**

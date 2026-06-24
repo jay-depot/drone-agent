@@ -324,7 +324,6 @@ async function runInteractiveLoop(
   const promptLabel = buildPromptLabel(conversation, engine);
 
   try {
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const raw = await rl.question(promptLabel);
       const line = raw.trim();

@@ -65,7 +65,8 @@ export type ChatEntry = {
     | 'toolResult'
     | 'error'
     | 'plain'
-    | 'success';
+    | 'success'
+    | 'markdown';
   /** Primary text. Multi-line strings render with hard newlines. */
   text: string;
 };
