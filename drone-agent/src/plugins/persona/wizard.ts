@@ -73,7 +73,7 @@ function buildPersonaSystemPrompt(): string {
     'The expected format is a YAML frontmatter block followed by an optional body:',
     '',
     '---',
-    'name: <Display Name>',
+    'name: <name>',
     'description: <one-line summary>',
     'color: <optional TUI tint, use "#rrggbb" format only. For example, "#00ffff". Prefer lighter colors for better contrast with most terminals.>',
     'fragments:',
@@ -88,6 +88,7 @@ function buildPersonaSystemPrompt(): string {
     '- Keep the body concise (≤200 words).',
     '- Pick a `color` that fits the persona\'s vibe (omit the field if uncertain).',
     '- Use `fragments:` only if you have 2+ short, actionable directives.',
+    '- The `name` field MUST be exactly the id provided in the user prompt (lowercase, hyphenated).',
   ].join('\n');
 }
 
