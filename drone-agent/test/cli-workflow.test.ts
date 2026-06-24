@@ -119,8 +119,6 @@ describe('parseCliInvocation — --workflow flag', () => {
     expect(() => parseCliInvocation(['--output-plain', '--output-json'])).toThrow(/Cannot use --output-plain and --output-json/);
     expect(() => parseCliInvocation(['--output-json', '--output-plain'])).toThrow(/Cannot use --output-plain and --output-json/);
   });
-    expect(inv.options.workflow?.args).toEqual({ scope: 'project' });
-  });
 
   it('combines --workflow with --model and --plugin overrides', () => {
     const inv = parseCliInvocation([

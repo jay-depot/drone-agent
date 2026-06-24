@@ -3,6 +3,7 @@ import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import fg from 'fast-glob';
 import type { DronePlugin } from 'drone-core';
+import { renderDiff, supportsColor } from '../shared/diff-renderer.js';
 
 /**
  * Wraps a raw Node.js fs error (ENOENT, EACCES, EISDIR, ...) into a clearer
@@ -215,6 +216,10 @@ export const filePlugin: DronePlugin = {
               additionalProperties: false,
             },
           },
+          color: {
+            type: 'boolean',
+            description: 'Enable ANSI color coding in output. Default: auto-detect from environment.',
+          },
         },
         required: ['path', 'hunks'],
         additionalProperties: false,
@@ -277,12 +282,23 @@ export const filePlugin: DronePlugin = {
           }
         }
 
+        // Determine whether to use colors
+        const useColor = input.color !== false && supportsColor();
+        const diffResult = renderDiff(filePath, hunks, useColor);
+        const diffOutput = useColor ? diffResult.colored : diffResult.plain;
+
         try {
           await writeFile(filePath, lines.join('\n'), 'utf-8');
         } catch (err) {
           throw enhanceFsError('file.apply_diff', filePath, err);
         }
-        return JSON.stringify({ path: filePath, patched: true }, null, 2);
+
+        return JSON.stringify({
+          path: filePath,
+          patched: true,
+          summary: diffResult.summary,
+          diff: diffOutput,
+        }, null, 2);
       },
     });
 
