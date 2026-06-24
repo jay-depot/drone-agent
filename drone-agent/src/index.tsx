@@ -26,6 +26,7 @@ type CliOptions = {
   once: boolean;
   plainOutput: boolean;
   modelOverride?: string;
+  configDir?: string;
   pluginOverrides: string[];
   workflow?: {
     pluginId: string;
@@ -75,6 +76,8 @@ function parseCliArgs(argv: string[]): CliInvocation {
       options.plainOutput = true;
     } else if (arg === '--model' && i + 1 < argv.length) {
       options.modelOverride = argv[++i];
+    } else if (arg === '--config-dir' && i + 1 < argv.length) {
+      options.configDir = argv[++i];
     } else if (arg === '--plugin' && i + 1 < argv.length) {
       // Support comma-separated plugin names: --plugin bootstrap,lsp,git
       // Also support repeated flags: --plugin bootstrap --plugin lsp
@@ -392,7 +395,9 @@ async function main(): Promise<void> {
   const logger = createConsoleLogger('drone-agent');
   const invocation = parseCliArgs(process.argv.slice(2));
 
-  const resolvedConfig = await loadAgentConfig(process.cwd());
+  const resolvedConfig = await loadAgentConfig(process.cwd(), {
+    configDir: invocation.options.configDir,
+  });
 
   const model =
     invocation.options.modelOverride ?? resolvedConfig.config.ollama.model;

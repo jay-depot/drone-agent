@@ -64,9 +64,28 @@ export async function findProjectConfigPath(
   }
 }
 
+export interface LoadAgentConfigOptions {
+  /** 
+   * Override the default config directory.
+   * When provided, the user config will be loaded from this directory
+   * instead of ~/.drone-agent.
+   */
+  configDir?: string;
+}
+
+/**
+ * Load the agent configuration from the default layered sources:
+ * default -> user -> project
+ * 
+ * @param startDirectory - Directory to start searching for project config
+ * @param options - Optional configuration options
+ */
 export async function loadAgentConfig(
-  startDirectory: string
+  startDirectory: string,
+  options: LoadAgentConfigOptions = {}
 ): Promise<DroneResolvedConfig> {
+  const { configDir } = options;
+
   const layers: DroneConfigLayer[] = [
     {
       scope: 'default',
@@ -74,8 +93,10 @@ export async function loadAgentConfig(
     },
   ];
 
+  // Determine user config path - use configDir if provided, otherwise use home directory
+  const userConfigDir = configDir || os.homedir();
   const userConfigPath = path.join(
-    os.homedir(),
+    userConfigDir,
     CONFIG_DIRECTORY_NAME,
     CONFIG_FILE_NAME
   );
