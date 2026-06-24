@@ -1,0 +1,129 @@
+# Docker Compose for Swarm Smoke Testing
+# This configuration provides a minimal swarm environment for smoke testing
+# all three components (coordinator, beacon, agent) together.
+
+services:
+  # Mock Echo LLM Provider for deterministic smoke tests
+  # This provider echoes back the prompt with a fixed response pattern
+  # allowing for deterministic, reproducible tests.
+  echo-llm:
+    build:
+      context: ..
+      dockerfile: docker/echo-llm.Dockerfile
+    container_name: echo-llm
+    ports:
+      - "3458:3458"
+    environment:
+      - PORT=3458
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3458/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    networks:
+      - drone-swarm
+
+  # Drone Coordinator - the central coordination layer
+  drone-coordinator:
+    build:
+      context: ..
+      dockerfile: docker/drone-coordinator.Dockerfile
+    container_name: drone-coordinator
+    ports:
+      - "3456:3456"
+    environment:
+      - PORT=3456
+      - HOST=0.0.0.0
+      - CONFIG_DIR=/config
+    volumes:
+      - coordinator-config:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3456/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    networks:
+      - drone-swarm
+    depends_on:
+      echo-llm:
+        condition: service_healthy
+
+  # Drone Beacon - the local agent hub
+  drone-beacon:
+    build:
+      context: ..
+      dockerfile: docker/drone-beacon.Dockerfile
+    container_name: drone-beacon
+    ports:
+      - "3457:3457"
+    environment:
+      - PORT=3457
+      - HOST=0.0.0.0
+      - CONFIG_DIR=/config
+      - COORDINATOR_HOST=drone-coordinator
+      - COORDINATOR_PORT=3456
+      - BEACON_NAME=test-beacon
+    volumes:
+      - beacon-config:/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3457/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    networks:
+      - drone-swarm
+    depends_on:
+      drone-coordinator:
+        condition: service_healthy
+
+  # Drone Agent - the coding agent
+  drone-agent:
+    build:
+      context: ..
+      dockerfile: docker/drone-agent.Dockerfile
+    container_name: drone-agent
+    ports:
+      - "3459:3459"
+    environment:
+      - DRONE_BEACON_HOST=drone-beacon
+      - DRONE_BEACON_PORT=3457
+      - LLM_PROVIDER=echo
+      - LLM_ECHO_URL=http://echo-llm:3458
+      - DRONE_CONFIG_DIR=/config
+    volumes:
+      - agent-config:/config
+      - agent-work:/workspace
+    networks:
+      - drone-swarm
+    depends_on:
+      drone-beacon:
+        condition: service_healthy
+      echo-llm:
+        condition: service_healthy
+
+  # Smoke test runner - executes a suite of smoke tests
+  smoke-test-runner:
+    build:
+      context: ..
+      dockerfile: docker/smoke-test.Dockerfile
+    container_name: smoke-test-runner
+    environment:
+      - COORDINATOR_URL=http://drone-coordinator:3456
+      - BEACON_URL=http://drone-beacon:3457
+      - AGENT_URL=http://drone-agent:3459
+      - ECHO_LLM_URL=http://echo-llm:3458
+    networks:
+      - drone-swarm
+    depends_on:
+      drone-agent:
+        condition: service_started
+
+networks:
+  drone-swarm:
+    driver: bridge
+
+volumes:
+  coordinator-config:
+  beacon-config:
+  agent-config:
+  agent-work:

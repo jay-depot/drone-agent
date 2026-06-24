@@ -1,0 +1,23 @@
+{
+  "name": "echo-llm",
+  "version": "1.0.0",
+  "description": "Mock echo LLM provider for deterministic smoke testing",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node ./dist/index.js",
+    "dev": "tsx watch ./src/index.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "fastify": "^5.2.1",
+    "pino": "^9.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.10",
+    "tsx": "^4.19.0"
+  }
+}
