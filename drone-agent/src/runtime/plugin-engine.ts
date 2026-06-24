@@ -105,6 +105,11 @@ type CreateDronePluginEngineOptions = {
   plugins: DronePlugin[];
   config: DroneAgentConfig;
   logger?: DroneLogger;
+  // NEW:
+  runtimeOptions?: {
+    subagentId?: string;
+    persona?: string;
+  };
 };
 
 function createHookBuckets(): HookBuckets {
@@ -214,6 +219,7 @@ export function createDronePluginEngine({
   plugins,
   config,
   logger = createConsoleLogger('plugin-engine'),
+  runtimeOptions,
 }: CreateDronePluginEngineOptions): DronePluginEngine {
   const pluginMap = validatePluginRegistry(plugins);
   const enabledPluginIds = resolveEnabledPluginIds(plugins, config);
@@ -381,8 +387,21 @@ export function createDronePluginEngine({
       },
       offer: capability => {
         capabilities.set(plugin.metadata.id, capability);
+        // Also expose runtime options as a special 'runtime' capability
+        // that any plugin can request
+        if (plugin.metadata.id === 'subagent') {
+          capabilities.set('_runtime', {
+            subagentId: runtimeOptions?.subagentId,
+            persona: runtimeOptions?.persona,
+            isSubagent: !!runtimeOptions?.subagentId,
+          });
+        }
       },
       request: <T>(pluginId: string) => {
+        // Special case: allow requesting 'runtime' without declaration
+        if (pluginId === 'runtime') {
+          return capabilities.get('_runtime') as T | undefined;
+        }
         if (!dependencyIds.has(pluginId) && !optionalDependencyIds.has(pluginId)) {
           throw new Error(
             `Plugin ${plugin.metadata.id} requested undeclared capability ${pluginId}`

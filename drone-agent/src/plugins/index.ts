@@ -29,6 +29,8 @@ import { promptFilePlugin } from './prompt-file/index.js';
 import { skillProviderUserPlugin } from './skill-provider-user/index.js';
 import { lightpandaPlugin } from './lightpanda/index.js';
 import { startupPlugin } from './startup.js';
+// NEW:
+import { subagentPlugin } from './subagent/index.js';
 import { swarmPlugin, createSwarmPlugin, type SwarmConfig } from './swarm/index.js';
 import { todoPlugin } from './todo.js';
 import { utilsPlugin } from './utils.js';
@@ -38,6 +40,7 @@ import { utilsPlugin } from './utils.js';
 // createBuiltInPlugins() to assemble the full list with the compaction plugin
 // wired in.
 const staticBuiltInPlugins: DronePlugin[] = [
+  subagentPlugin, // NEW
   startupPlugin,
   configPlugin,
   execPlugin,

@@ -109,6 +109,10 @@ async function main(): Promise<void> {
     plugins,
     config: resolvedConfig.config,
     logger,
+    runtimeOptions: {
+      subagentId: invocation.options.subagentId,
+      persona: invocation.options.persona,
+    },
   });
   engineRef.current = engine;
   const conversation = createConversationService({

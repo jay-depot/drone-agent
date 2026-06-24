@@ -1,0 +1,1 @@
+export { subagentPlugin } from './plugin.js';

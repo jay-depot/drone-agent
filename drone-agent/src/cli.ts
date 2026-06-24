@@ -5,6 +5,9 @@ export type CliOptions = {
   modelOverride?: string;
   configDir?: string;
   pluginOverrides: string[];
+  // NEW:
+  subagentId?: string;
+  persona?: string;
   workflow?: {
     pluginId: string;
     workflowName: string;
@@ -76,6 +79,11 @@ export function parseCliArgs(argv: string[]): CliInvocation {
           options.pluginOverrides.push(trimmed);
         }
       }
+    // NEW: subagent mode flags
+    } else if (arg === '--subagent-id' && i + 1 < argv.length) {
+      options.subagentId = argv[++i];
+    } else if (arg === '--persona' && i + 1 < argv.length) {
+      options.persona = argv[++i];
     } else if (arg === '--workflow' && i + 1 < argv.length) {
       const raw = argv[++i];
       const parts = raw.split('.');
@@ -146,6 +154,10 @@ export function parseCliArgs(argv: string[]): CliInvocation {
   if (positionalArgs.length > 0) {
     return { kind: 'chat', prompt: positionalArgs.join(' '), options };
   }
+
+  // NEW: env var fallback for subagent mode flags
+  options.subagentId ??= process.env.DRONE_SUBAGENT_ID;
+  options.persona ??= process.env.DRONE_PERSONA;
 
   return { kind: 'default', options };
 }
