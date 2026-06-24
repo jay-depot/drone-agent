@@ -12,7 +12,7 @@ import { parseCliArgs, type CliInvocation, type CliOptions } from './cli.js';
 import { makePlainOutputEventHandler } from './output-handlers.js';
 import { createReadlineElicitation } from './elicitation.js';
 import { runFirstRunSetup } from './first-run.js';
-import { runInteractiveLoop, getLlmCapability } from './interactive.js';
+import { runInteractiveLoop, runJsonMode, getLlmCapability } from './interactive.js';
 
 async function main(): Promise<void> {
   const logger = createConsoleLogger('drone-agent');
@@ -232,6 +232,22 @@ async function main(): Promise<void> {
         plainHandler
       );
       output.write(`${reply}\n`);
+      await engine.runHooks('onAfterToolCall');
+    }
+  } else if (invocation.kind === 'default' && invocation.options.once) {
+    // === Subagent mode: --once (+ optionally --output-json) ===
+    // Run JSON mode if --output-json: read kickoff from stdin, output NDJSON
+    if (invocation.options.outputJson) {
+      await runJsonMode(conversation, engine, logger);
+    } else {
+      // --once without --output-json: run a single tool
+      const selectedTool = engine.getTool('startup.status');
+      if (!selectedTool) {
+        throw new Error('Startup status tool is unavailable.');
+      }
+      await engine.runHooks('onBeforePrompt');
+      const result = await selectedTool.execute({});
+      logger.info(result);
       await engine.runHooks('onAfterToolCall');
     }
   } else if (invocation.kind === 'default' && !invocation.options.once) {
