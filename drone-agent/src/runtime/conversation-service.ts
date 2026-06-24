@@ -14,7 +14,7 @@ export type ConversationEvent =
   | { kind: 'reasoning'; content: string }
   | { kind: 'assistantMessage'; content: string }
   | { kind: 'toolCall'; name: string; arguments: Record<string, unknown> }
-  | { kind: 'toolResult'; name: string; content: string }
+  | { kind: 'toolResult'; name: string; content: string; arguments: Record<string, unknown> }
   | { kind: 'error'; message: string };
 
 export type ConversationEventHandler = (event: ConversationEvent) => void;
@@ -198,7 +198,6 @@ export function createConversationService({
       const message = code
         ? `${canonicalName} failed (${code}): ${rawMessage}`
         : `${canonicalName} failed: ${rawMessage}`;
-      logger.warn(`tool execution failed: ${canonicalName}: ${message}`);
       return { kind: 'error', content: message, code };
     }
   }
@@ -310,6 +309,7 @@ export function createConversationService({
                 kind: 'toolResult',
                 name: toolCall.name,
                 content: toolResult.content,
+                arguments: toolCall.arguments,
               });
               // Any successful tool call resets the stuck detector.
               stuckSignature = null;

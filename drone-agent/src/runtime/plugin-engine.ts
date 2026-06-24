@@ -287,7 +287,7 @@ export function createDronePluginEngine({
     const elicit = elicitationCapability;
     if (!elicit) {
       throw new Error(
-        `Workflow ${canonicalName} requested elicitation, but the host did not provide an interactive capability. Use --plain-output or the TUI; do not run workflows with --once.`
+        `Workflow ${canonicalName} requested elicitation, but the host did not provide an interactive capability. Use --output-plain or the TUI; do not run workflows with --once.`
       );
     }
     const ctx: DroneWorkflowContext = {

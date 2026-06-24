@@ -43,6 +43,13 @@ import type { DroneTuiOptions, MidPanelWidget } from './types.js';
 /** Maximum chars rendered in a tool argument or result preview. */
 const PREVIEW_MAX = 200;
 
+/** ANSI color codes for diff output */
+const ANSI = {
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  reset: '\x1b[0m',
+};
+
 /** Build a prompt label like `drone> ` or `unix-beard> `. */
 function buildPromptLabel(opts: DroneTuiOptions): string {
   const persona = opts.engine
@@ -84,6 +91,103 @@ function tryParseJson(raw: string): Record<string, unknown> | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Format a diff result for display with colored +/- indicators and line numbers.
+ * Expected format: JSON with { path, written } or similar success marker,
+ * or the raw diff content from git diff.
+ */
+function formatDiffResult(content: string): string {
+  // Try to parse as JSON first to detect apply_diff results
+  const parsed = tryParseJson(content);
+  if (parsed && typeof parsed === 'object') {
+    // Check if it's a file.apply_diff result
+    const obj = parsed as Record<string, unknown>;
+    if (obj.path !== undefined && obj.written === true) {
+      return `✓ Applied diff to ${obj.path}`;
+    }
+    // If it's a git diff result, it might have a 'diff' field
+    if (obj.diff && typeof obj.diff === 'string') {
+      return formatDiffOutput(obj.diff);
+    }
+  }
+
+  // If content looks like a diff, format it
+  if (content.includes('---') || content.includes('@@')) {
+    return formatDiffOutput(content);
+  }
+
+  // Fall back to showing raw content
+  return content;
+}
+
+/**
+ * Format diff output with colored +/- prefixes and line numbers.
+ * Uses ANSI escape codes for red (deletions) and green (additions).
+ */
+function formatDiffOutput(diff: string): string {
+  const lines = diff.split('\n');
+  const output: string[] = [];
+  let lineNum = 0;
+
+  for (const line of lines) {
+    lineNum++;
+    if (line.startsWith('+')) {
+      // Green for additions
+      output.push(
+        `${ANSI.green}+${ANSI.reset}${String(lineNum).padStart(4)} │ ${ANSI.green}${line}${ANSI.reset}`
+      );
+    } else if (line.startsWith('-')) {
+      // Red for deletions
+      output.push(
+        `${ANSI.red}-${ANSI.reset}${String(lineNum).padStart(4)} │ ${ANSI.red}${line}${ANSI.reset}`
+      );
+    } else if (line.startsWith('@@')) {
+      // Hunk header - keep as is with line number
+      output.push(` ${String(lineNum).padStart(4)} │ ${line}`);
+    } else if (
+      line.startsWith('diff ') ||
+      line.startsWith('index ') ||
+      line.startsWith('---') ||
+      line.startsWith('+++')
+    ) {
+      // Metadata lines - neutral
+      output.push(` ${String(lineNum).padStart(4)} │ ${line}`);
+    } else {
+      // Context lines
+      output.push(` ${String(lineNum).padStart(4)} │ ${line}`);
+    }
+  }
+
+  return output.join('\n');
+}
+
+/**
+ * Format an exec.run result to show full command and full output without truncation.
+ */
+function formatExecResult(
+  arguments_: Record<string, unknown>,
+  content: string
+): string {
+  const command = arguments_.command as string | undefined;
+  const cwd = arguments_.cwd as string | undefined;
+
+  // Build output with full command
+  const lines: string[] = [];
+
+  if (cwd) {
+    lines.push(`$ cd ${cwd} && ${command}`);
+  } else {
+    lines.push(`$ ${command}`);
+  }
+
+  lines.push('');
+
+  // Add full output without truncation
+  lines.push(content);
+
+  return lines.join('\n');
 }
 
 export function App(opts: DroneTuiOptions): JSX.Element {
@@ -271,8 +375,26 @@ export function App(opts: DroneTuiOptions): JSX.Element {
                 break;
               }
               case 'toolResult': {
-                const resultPreview = preview(event.content, PREVIEW_MAX);
-                log(`← ${event.name}: ${resultPreview}`, 'toolResult');
+                let resultContent: string;
+
+                // Special handling for exec.run - full output, no truncation
+                if (event.name === 'exec.run') {
+                  resultContent = formatExecResult(event.arguments, event.content);
+                  log(`← ${event.name}:\n${resultContent}`, 'toolResult');
+                }
+                // Special handling for file.apply_diff - formatted diff display
+                else if (
+                  event.name === 'file.apply_diff' ||
+                  event.name === 'git.diff'
+                ) {
+                  resultContent = formatDiffResult(event.content);
+                  log(`← ${event.name}:\n${resultContent}`, 'toolResult');
+                }
+                // Default: truncated preview
+                else {
+                  resultContent = preview(event.content, PREVIEW_MAX);
+                  log(`← ${event.name}: ${resultContent}`, 'toolResult');
+                }
                 break;
               }
               case 'assistantMessage': {

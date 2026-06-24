@@ -93,10 +93,10 @@ describe('parseCliInvocation — --workflow flag', () => {
     ).toThrow(/Missing value/);
   });
 
-  it('combines --workflow with --plain-output and --once', () => {
+  it('combines --workflow with --output-plain and --once', () => {
     const inv = parseCliInvocation([
       '--once',
-      '--plain-output',
+      '--output-plain',
       '--workflow',
       'persona.create',
       '--workflow-arg',
@@ -105,7 +105,20 @@ describe('parseCliInvocation — --workflow flag', () => {
     expect(inv.kind).toBe('workflow');
     if (inv.kind !== 'workflow') return;
     expect(inv.options.once).toBe(true);
-    expect(inv.options.plainOutput).toBe(true);
+    expect(inv.options.outputPlain).toBe(true);
+  });
+
+  it('parses --output-json', () => {
+    const inv = parseCliInvocation(['--output-json']);
+    expect(inv.kind).toBe('default');
+    if (inv.kind !== 'default') return;
+    expect(inv.options.outputJson).toBe(true);
+  });
+
+  it('rejects --output-plain and --output-json together', () => {
+    expect(() => parseCliInvocation(['--output-plain', '--output-json'])).toThrow(/Cannot use --output-plain and --output-json/);
+    expect(() => parseCliInvocation(['--output-json', '--output-plain'])).toThrow(/Cannot use --output-plain and --output-json/);
+  });
     expect(inv.options.workflow?.args).toEqual({ scope: 'project' });
   });
 

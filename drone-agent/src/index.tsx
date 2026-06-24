@@ -24,7 +24,8 @@ import { createSessionManager } from './runtime/session-manager.js';
 
 type CliOptions = {
   once: boolean;
-  plainOutput: boolean;
+  outputPlain: boolean;
+  outputJson: boolean;
   modelOverride?: string;
   configDir?: string;
   pluginOverrides: string[];
@@ -61,7 +62,8 @@ type CliInvocation =
 function parseCliArgs(argv: string[]): CliInvocation {
   const options: CliOptions = {
     once: false,
-    plainOutput: false,
+    outputPlain: false,
+    outputJson: false,
     pluginOverrides: [],
   };
 
@@ -72,8 +74,16 @@ function parseCliArgs(argv: string[]): CliInvocation {
 
     if (arg === '--once') {
       options.once = true;
-    } else if (arg === '--plain-output') {
-      options.plainOutput = true;
+    } else if (arg === '--output-plain') {
+      if (options.outputJson) {
+        throw new Error("Cannot use --output-plain and --output-json at the same time.");
+      }
+      options.outputPlain = true;
+    } else if (arg === '--output-json') {
+      if (options.outputPlain) {
+        throw new Error("Cannot use --output-plain and --output-json at the same time.");
+      }
+      options.outputJson = true;
     } else if (arg === '--model' && i + 1 < argv.length) {
       options.modelOverride = argv[++i];
     } else if (arg === '--config-dir' && i + 1 < argv.length) {
@@ -244,6 +254,15 @@ function makePlainOutputEventHandler() {
   };
 }
 
+/** Builds a JSON event handler for `sendUserMessage` that collects all events into an array for structured output. */
+function makeJsonOutputEventHandler() {
+  const events: Array<{ kind: string; content?: string; name?: string; message?: string; }> = [];
+  const handler = (event: { kind: string; content?: string; name?: string; message?: string; }): void => {
+    events.push(event);
+  };
+  return { handler, getEvents: () => events };
+}
+
 function createReadlineElicitation(): DroneElicitation & { close: () => void } {
   const rl: Interface = createInterface({ input, output });
 
@@ -319,7 +338,8 @@ async function runInteractiveLoop(
   engine: ReturnType<typeof createDronePluginEngine>,
   logger: ReturnType<typeof createConsoleLogger>,
   sessionManager: ReturnType<typeof createSessionManager>
-): Promise<void> {
+,
+  options: CliOptions): Promise<void> {
   const rl: Interface = createInterface({ input, output });
   const promptLabel = buildPromptLabel(conversation, engine);
 
@@ -528,7 +548,7 @@ async function main(): Promise<void> {
   // we deliberately leave the capability unset so plugins that try to
   // elicit get a clean "host is non-interactive" error rather than a
   // hanging readline.
-  if (invocation.kind === 'default' && invocation.options.plainOutput) {
+  if (invocation.kind === 'default' && invocation.options.outputPlain) {
     engine.setElicitation(createReadlineElicitation());
   }
 
@@ -606,8 +626,8 @@ async function main(): Promise<void> {
       await engine.runHooks('onAfterToolCall');
     }
   } else if (invocation.kind === 'default' && !invocation.options.once) {
-    if (invocation.options.plainOutput) {
-      await runInteractiveLoop(conversation, engine, logger, sessionManager);
+    if (invocation.options.outputPlain || invocation.options.outputJson) {
+      await runInteractiveLoop(conversation, engine, logger, sessionManager, invocation.options);
     } else {
       // TUI mode: defer elicitation wiring to the App (it constructs a
       // TUI-flavoured capability that draws prompts into the chat log).

@@ -66,7 +66,7 @@ export const DEFAULT_GRAYSCALE_SCHEME: DroneColorScheme = {
   error: 'white',
   reasoning: 'gray',
   toolCall: 'gray',
-  toolResult: 'gray',
+  toolResult: 'white',
   statusBg: 'black',
   statusFg: 'white',
   inputBg: 'black',
@@ -89,7 +89,7 @@ export type DroneColorOverride = {
 
 /**
  * Apply a tint to a base scheme. The tint replaces the primary accent
- * slots (border, primary, userInput) and leaves the rest grayscale.
+ * slots (border, primary, userInput, toolCall) and leaves the rest grayscale.
  * This keeps overrides legible: a tinted theme still reads as grayscale-
  * with-a-hue rather than a full re-skin.
  */
@@ -102,6 +102,7 @@ export function applyTint(
     border: tint,
     primary: tint,
     userInput: tint,
+    toolCall: tint,
   };
 }
 

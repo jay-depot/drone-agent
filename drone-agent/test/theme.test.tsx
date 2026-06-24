@@ -19,7 +19,7 @@ describe('applyTint', () => {
     expect(tinted.success).toBe(DEFAULT_GRAYSCALE_SCHEME.success);
     expect(tinted.error).toBe(DEFAULT_GRAYSCALE_SCHEME.error);
     expect(tinted.warning).toBe(DEFAULT_GRAYSCALE_SCHEME.warning);
-    expect(tinted.toolCall).toBe(DEFAULT_GRAYSCALE_SCHEME.toolCall);
+    // toolCall is now part of the persona tint, toolResult stays grayscale
     expect(tinted.toolResult).toBe(DEFAULT_GRAYSCALE_SCHEME.toolResult);
   });
 
@@ -28,12 +28,14 @@ describe('applyTint', () => {
     expect(tinted.primary).toBe('cyan');
     expect(tinted.border).toBe('cyan');
     expect(tinted.userInput).toBe('cyan');
+    expect(tinted.toolCall).toBe('cyan');
   });
 
   it('accepts hex colors as well as named colors', () => {
     const tinted = applyTint(DEFAULT_GRAYSCALE_SCHEME, '#ff8800');
     expect(tinted.border).toBe('#ff8800');
     expect(tinted.userInput).toBe('#ff8800');
+    expect(tinted.toolCall).toBe('#ff8800');
   });
 
   it('does not mutate the base scheme (returns a new object)', () => {
