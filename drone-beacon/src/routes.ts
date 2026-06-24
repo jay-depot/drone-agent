@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import * as db from "./db.js";
-import type { CreatePersonaRequest, CreateSkillRequest, RegisterAgentRequest } from "./types.js";
+import type { CreatePersonaRequest, CreateSkillRequest, RegisterAgentRequest, CreateMemoryRequest, UpdateMemoryRequest } from "./types.js";
 import { createCoordinatorClient, type CoordinatorClient } from "./coordinator-client.js";
 import type { CoordinatorConfig } from "./types.js";
 import { logger } from "./logger.js";
@@ -13,6 +13,11 @@ export function setCoordinatorClient(client: CoordinatorClient | undefined) {
 
 function getCoordinatorClient(): CoordinatorClient | undefined {
   return coordinatorClient;
+}
+
+interface MemoryQuery {
+  namespace?: string;
+  includeExpired?: string;
 }
 
 export async function registerRoutes(app: FastifyInstance) {
@@ -68,10 +73,12 @@ export async function registerRoutes(app: FastifyInstance) {
     const skill = db.createSkill(request.body, "local");
     return reply.code(201).send(skill);
   });
+
   // List all skills (local + synced from coordinator)
   app.get("/skills", async () => {
     return db.listSkills();
   });
+
   // Get a single skill
   app.get<{ Params: { id: string } }>("/skills/:id", async (request, reply) => {
     const skill = db.getSkill(request.params.id);
@@ -106,6 +113,7 @@ export async function registerRoutes(app: FastifyInstance) {
     const session = db.registerAgent(request.body);
     return reply.code(201).send(session);
   });
+
   // List active agents
   app.get("/agents", async () => {
     return db.listAgents();
@@ -134,6 +142,66 @@ export async function registerRoutes(app: FastifyInstance) {
     const deleted = db.unregisterAgent(request.params.id);
     if (!deleted) {
       return reply.code(404).send({ error: "Agent not found" });
+    }
+    return { success: true };
+  });
+
+  // === Memory Routes ===
+
+  // Create a memory
+  app.post<{ Body: CreateMemoryRequest }>("/memory", async (request, reply) => {
+    const memory = db.createMemory(request.body);
+    return reply.code(201).send(memory);
+  });
+
+  // List memories (with optional namespace filter)
+  app.get<{ Querystring: MemoryQuery }>("/memory", async (request, reply) => {
+    const namespace = request.query.namespace;
+    const includeExpired = request.query.includeExpired === "true";
+    return db.listMemories(namespace, includeExpired);
+  });
+
+  // Get memory by ID
+  app.get<{ Params: { id: string } }>("/memory/:id", async (request, reply) => {
+    const memory = db.getMemory(request.params.id);
+    if (!memory) {
+      return reply.code(404).send({ error: "Memory not found" });
+    }
+    // Check if expired
+    if (db.isMemoryExpired(memory)) {
+      return reply.code(404).send({ error: "Memory not found (expired)" });
+    }
+    return memory;
+  });
+
+  // Get memory by key
+  app.get<{ Params: { key: string }; Querystring: MemoryQuery }>("/memory/key/:key", async (request, reply) => {
+    const namespace = request.query.namespace || "default";
+    const memory = db.getMemoryByKey(request.params.key, namespace);
+    if (!memory) {
+      return reply.code(404).send({ error: "Memory not found" });
+    }
+    // Check if expired
+    if (db.isMemoryExpired(memory)) {
+      return reply.code(404).send({ error: "Memory not found (expired)" });
+    }
+    return memory;
+  });
+
+  // Update a memory
+  app.put<{ Params: { id: string }; Body: Partial<UpdateMemoryRequest> }>("/memory/:id", async (request, reply) => {
+    const memory = db.updateMemory(request.params.id, request.body);
+    if (!memory) {
+      return reply.code(404).send({ error: "Memory not found" });
+    }
+    return memory;
+  });
+
+  // Delete a memory
+  app.delete<{ Params: { id: string } }>("/memory/:id", async (request, reply) => {
+    const deleted = db.deleteMemory(request.params.id);
+    if (!deleted) {
+      return reply.code(404).send({ error: "Memory not found" });
     }
     return { success: true };
   });

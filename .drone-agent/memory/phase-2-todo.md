@@ -6,17 +6,17 @@ tags:
   - todo
   - swarm
 created: 2026-06-24T01:57:59.883Z
-updated: 2026-06-24T01:57:59.883Z
+updated: 2026-06-24T02:07:12.554Z
 ---
 
 # Phase 2 Todo List
 
 ## Beacon Memory Store Implementation
 
-- [ ] 1. Add memory types to types.ts
-- [ ] 2. Add memory table schema and CRUD functions to db.ts
-- [ ] 3. Add memory routes to routes.ts
-- [ ] 4. Implement TTL cleanup (lazy or periodic)
+- [x] 1. Add memory types to types.ts
+- [x] 2. Add memory table schema and CRUD functions to db.ts
+- [x] 3. Add memory routes to routes.ts
+- [x] 4. Implement TTL cleanup (lazy or periodic)
 
 ## Integration & Testing
 

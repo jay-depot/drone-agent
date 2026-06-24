@@ -1,5 +1,5 @@
 import fastify from "fastify";
-import { initDatabase, closeDatabase } from "./db.js";
+import { initDatabase, closeDatabase, cleanupExpiredMemories } from "./db.js";
 import { registerRoutes, setCoordinatorClient } from "./routes.js";
 import { createCoordinatorClient, type CoordinatorClient } from "./coordinator-client.js";
 import { logger } from "./logger.js";
@@ -110,9 +110,19 @@ async function main() {
   // Register routes
   await registerRoutes(app);
 
+  // Start periodic TTL cleanup (every minute)
+  const cleanupInterval = setInterval(() => {
+    try {
+      cleanupExpiredMemories();
+    } catch (err) {
+      logger.error(err, "TTL cleanup failed");
+    }
+  }, 60000);
+
   // Graceful shutdown
   const shutdown = async () => {
     logger.info("Shutting down...");
+    clearInterval(cleanupInterval);
     await app.close();
     closeDatabase();
     process.exit(0);
