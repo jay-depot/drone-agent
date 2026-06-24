@@ -447,7 +447,7 @@ export type DroneSkillDefinition = {
   recall: string[];
   modelInvocation: boolean;
   body: string;
-  source: 'user' | 'project';
+  source: 'user' | 'project' | 'beacon' | 'coordinator';
   /** Precedence assigned by the provider. Lower number = higher priority. */
   precedence?: number;
   /**
@@ -530,7 +530,7 @@ export type DronePersonaDefinition = {
    * `~/.drone-agent/personas/`, `'project'` means it came from
    * `<project>/.drone-agent/personas/`.
    */
-  scope?: 'user' | 'project';
+  scope?: 'user' | 'project' | 'beacon' | 'coordinator';
   /**
    * Optional list of skill ids owned by this persona. Skills are loaded
    * from a `skills/` subdirectory relative to the persona file.

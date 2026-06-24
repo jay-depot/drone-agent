@@ -21,6 +21,7 @@ export function MidPanel({
   // Collect non-empty widget sections
   const sections: { label: string; content: string[] }[] = [];
   for (const widget of widgets) {
+    if (typeof widget.getContent !== 'function') continue;
     const content = widget.getContent();
     if (content.length > 0) {
       sections.push({ label: widget.label, content });
@@ -42,9 +43,7 @@ export function MidPanel({
     >
       {sections.map((section, idx) => (
         <Box key={section.label} flexDirection="row">
-          {idx > 0 ? (
-            <Text color={scheme.border}> │ </Text>
-          ) : null}
+          {idx > 0 ? <Text color={scheme.border}> │ </Text> : null}
           <Text color={scheme.primary} bold>
             {`${section.label}: `}
           </Text>

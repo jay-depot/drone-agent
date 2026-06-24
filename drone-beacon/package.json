@@ -1,0 +1,31 @@
+{
+  "name": "drone-beacon",
+  "version": "1.0.0",
+  "description": "Local hub for drone swarm",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "drone-beacon": "./bin/drone-beacon"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "start": "node ./bin/drone-beacon",
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "drone-core": "workspace:*",
+    "better-sqlite3": "^11.8.1",
+    "fastify": "^5.2.1",
+    "pino": "^9.6.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.0.10"
+  }
+}

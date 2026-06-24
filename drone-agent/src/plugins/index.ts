@@ -28,6 +28,7 @@ import { promptFilePlugin } from './prompt-file/index.js';
 import { skillProviderUserPlugin } from './skill-provider-user/index.js';
 import { lightpandaPlugin } from './lightpanda/index.js';
 import { startupPlugin } from './startup.js';
+import { swarmPlugin, createSwarmPlugin, type SwarmConfig } from './swarm/index.js';
 import { todoPlugin } from './todo.js';
 import { utilsPlugin } from './utils.js';
 
@@ -62,6 +63,7 @@ const staticBuiltInPlugins: DronePlugin[] = [
   selfImprovementPlugin,
   memoryPlugin,
   promptFilePlugin,
+  swarmPlugin,
 ];
 
 export function createBuiltInPlugins(
@@ -84,3 +86,4 @@ export type { CompactionPluginDeps } from './compaction/index.js';
 export type { CompactionCapability } from './compaction/index.js';
 export { createCompactionPlugin } from './compaction/index.js';
 export { createLogPlugin } from './log/index.js';
+export { createSwarmPlugin, type SwarmConfig } from './swarm/index.js';
