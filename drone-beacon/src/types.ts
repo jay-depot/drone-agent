@@ -77,3 +77,60 @@ export interface UpdateMemoryRequest {
   value?: string;
   ttlSeconds?: number;
 }
+
+// === Spawn Types ===
+
+export interface SpawnConfig {
+  model?: string;
+  preamble?: string;
+  workingDir?: string;
+  env?: Record<string, string>;
+}
+
+export interface SpawnRequest {
+  personaId?: string;
+  task?: string;
+  config?: SpawnConfig;
+  spawnId?: string;
+}
+
+export interface SpawnResponse {
+  spawnId: string;
+  agentId: string;
+  status: "spawning" | "running" | "failed";
+  beaconUrl: string;
+  message?: string;
+}
+
+export interface SpawnStatus {
+  spawnId: string;
+  agentId: string | null;
+  status: "spawning" | "running" | "failed" | "terminated";
+  createdAt: number;
+  startedAt?: number;
+  terminatedAt?: number;
+  exitCode?: number;
+  error?: string;
+}
+
+export interface SpawnRecord {
+  id: string;
+  agentId: string | null;
+  personaId: string | null;
+  task: string | null;
+  configJson: string | null;
+  status: "spawning" | "running" | "failed" | "terminated";
+  error: string | null;
+  createdAt: number;
+  startedAt: number | null;
+  terminatedAt: number | null;
+  exitCode: number | null;
+}
+
+// === Spawn Configuration (CLI) ===
+
+export interface SpawnBeaconConfig {
+  spawnAgentPath: string;
+  spawnTimeoutMs: number;
+  maxConcurrentSpawns: number;
+}

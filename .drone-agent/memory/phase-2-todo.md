@@ -6,7 +6,7 @@ tags:
   - todo
   - swarm
 created: 2026-06-24T01:57:59.883Z
-updated: 2026-06-24T02:07:12.554Z
+updated: 2026-06-24T06:31:41.275Z
 ---
 
 # Phase 2 Todo List
@@ -31,8 +31,22 @@ updated: 2026-06-24T02:07:12.554Z
 
 - [ ] 8. Inter-agent messaging (communication channel)
 - [ ] 9. Agent spawn execution
+  - [x] SPEC: Agent spawn spec created (memory: agent-spawn-spec)
+  - [x] IMPLEMENTED: Core spawn functionality (Phase 1)
+    - [x] Add spawn types to types.ts
+    - [x] Add spawns table to db.ts
+    - [x] Create spawner.ts with spawn logic
+    - [x] Add spawn routes to routes.ts
+    - [x] Add CLI args to index.ts
+  - [x] IMPLEMENTED: Monitoring & management (Phase 2)
+    - [x] GET /spawn/:id endpoint
+    - [x] GET /spawn list endpoint
+    - [x] DELETE /spawn/:id (terminate)
+    - [x] Track agent exit and update status
+  - [ ] TODO: Integration testing (Phase 3)
 - [ ] 10. Beacon-level config override
 
 ---
 
 *Last updated: 2026-06-24*
+*Item 9 spec: see memory `agent-spawn-spec`*
