@@ -546,6 +546,7 @@ export function App(opts: DroneTuiOptions): JSX.Element {
         promptLabel={buildPromptLabel(opts)}
         llmFrame={llmFrame}
         llmColor={llmColor}
+        disabled={activeQuestion !== null}
       />
       {activeQuestion ? (
         <ElicitationPrompt

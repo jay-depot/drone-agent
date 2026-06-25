@@ -20,6 +20,7 @@ export function InputLine({
   promptLabel,
   llmFrame,
   llmColor,
+  disabled,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -42,6 +43,11 @@ export function InputLine({
    * the current border/accent color.
    */
   llmColor?: string;
+  /**
+   * When true, the input is disabled and won't process keystrokes.
+   * Used when an elicitation question is active.
+   */
+  disabled?: boolean;
 }): JSX.Element {
   return (
     <Box
@@ -64,6 +70,7 @@ export function InputLine({
           value={value}
           onChange={onChange}
           onSubmit={onSubmit}
+          focus={!disabled}
         />
       </Box>
     </Box>
