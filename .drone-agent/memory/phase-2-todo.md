@@ -6,7 +6,7 @@ tags:
   - todo
   - swarm
 created: 2026-06-24T01:57:59.883Z
-updated: 2026-06-25T04:31:43.066Z
+updated: 2026-06-25T04:39:41.796Z
 ---
 
 # Phase 2 Todo List
@@ -67,8 +67,19 @@ updated: 2026-06-25T04:31:43.066Z
 ## What's Still Needed
 
 ### High Priority
-- [ ] Sync knowledge from coordinator (push/pull)
-- [ ] Push sessions to coordinator on agent end
+- [x] Sync knowledge from coordinator (push/pull)
+  - IMPLEMENTED:
+    - [x] Coordinator: beacon_sessions table + endpoints
+    - [x] Beacon: Session sync on connect/disconnect (with duration)
+    - [x] Beacon: Auto-push local personas on create/update/delete
+    - [x] Beacon: Auto-push local skills on create/update/delete
+    - [x] POST /sync endpoint for manual pull from coordinator
+  - TODO: Periodic auto-pull (can use POST /sync on interval)
+- [x] Push sessions to coordinator on agent end
+  - IMPLEMENTED:
+    - [x] Coordinator: beacon_sessions table with duration tracking
+    - [x] Beacon: registerSession() on agent connect
+    - [x] Beacon: endSession() on agent disconnect with connectedAt timestamp
 
 ### Medium Priority
 - [ ] Event log (append-only log for agent events)
