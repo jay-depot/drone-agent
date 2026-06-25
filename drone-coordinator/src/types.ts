@@ -47,3 +47,26 @@ export interface RegisterBeaconRequest {
   host: string;
   port: number;
 }
+
+export interface BeaconSession {
+  id: string;
+  beaconId: string;
+  agentId: string;
+  personaId: string | null;
+  connectedAt: number;
+  disconnectedAt: number | null;
+  durationMs: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CreateSessionRequest {
+  id: string;
+  agentId: string;
+  personaId?: string;
+}
+
+export interface EndSessionRequest {
+  disconnectedAt: number;
+  durationMs: number;
+}

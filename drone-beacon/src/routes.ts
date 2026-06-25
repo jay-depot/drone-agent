@@ -49,6 +49,15 @@ export async function registerRoutes(app: FastifyInstance) {
   // Create a local persona (beacon-scoped)
   app.post<{ Body: CreatePersonaRequest }>("/personas", async (request, reply) => {
     const persona = db.createPersona(request.body, "local");
+    
+    // Sync to coordinator
+    const client = getCoordinatorClient();
+    if (client) {
+      client.pushPersona(persona).catch(err => {
+        logger.warn(`Failed to push persona to coordinator: ${err}`);
+      });
+    }
+    
     return reply.code(201).send(persona);
   });
 
@@ -72,15 +81,38 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!persona) {
       return reply.code(404).send({ error: "Persona not found" });
     }
+    
+    // Sync update to coordinator (only local scope)
+    if (persona.scope === "local") {
+      const client = getCoordinatorClient();
+      if (client) {
+        client.pushPersona(persona).catch(err => {
+          logger.warn(`Failed to push persona update to coordinator: ${err}`);
+        });
+      }
+    }
+    
     return persona;
   });
 
   // Delete a local persona
   app.delete<{ Params: { id: string } }>("/personas/:id", async (request, reply) => {
+    const existing = db.getPersona(request.params.id);
     const deleted = db.deletePersona(request.params.id);
     if (!deleted) {
       return reply.code(404).send({ error: "Persona not found" });
     }
+    
+    // Sync delete to coordinator (only local scope)
+    if (existing?.scope === "local") {
+      const client = getCoordinatorClient();
+      if (client) {
+        client.deletePersona(request.params.id).catch(err => {
+          logger.warn(`Failed to delete persona from coordinator: ${err}`);
+        });
+      }
+    }
+    
     return { success: true };
   });
 
@@ -89,6 +121,15 @@ export async function registerRoutes(app: FastifyInstance) {
   // Create a local skill
   app.post<{ Body: CreateSkillRequest }>("/skills", async (request, reply) => {
     const skill = db.createSkill(request.body, "local");
+    
+    // Sync to coordinator
+    const client = getCoordinatorClient();
+    if (client) {
+      client.pushSkill(skill).catch(err => {
+        logger.warn(`Failed to push skill to coordinator: ${err}`);
+      });
+    }
+    
     return reply.code(201).send(skill);
   });
 
@@ -112,15 +153,38 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!skill) {
       return reply.code(404).send({ error: "Skill not found" });
     }
+    
+    // Sync update to coordinator (only local scope)
+    if (skill.scope === "local") {
+      const client = getCoordinatorClient();
+      if (client) {
+        client.pushSkill(skill).catch(err => {
+          logger.warn(`Failed to push skill update to coordinator: ${err}`);
+        });
+      }
+    }
+    
     return skill;
   });
 
   // Delete a local skill
   app.delete<{ Params: { id: string } }>("/skills/:id", async (request, reply) => {
+    const existing = db.getSkill(request.params.id);
     const deleted = db.deleteSkill(request.params.id);
     if (!deleted) {
       return reply.code(404).send({ error: "Skill not found" });
     }
+    
+    // Sync delete to coordinator (only local scope)
+    if (existing?.scope === "local") {
+      const client = getCoordinatorClient();
+      if (client) {
+        client.deleteSkill(request.params.id).catch(err => {
+          logger.warn(`Failed to delete skill from coordinator: ${err}`);
+        });
+      }
+    }
+    
     return { success: true };
   });
 
@@ -135,6 +199,14 @@ export async function registerRoutes(app: FastifyInstance) {
     if (spawnRecord) {
       db.updateSpawnStatus(spawnRecord.id, "running", request.body.id);
       logger.info(`Spawn ${spawnRecord.id} agent connected: ${request.body.id}`);
+    }
+    
+    // Sync session to coordinator
+    const client = getCoordinatorClient();
+    if (client) {
+      client.registerSession(request.body.id, request.body.personaId).catch(err => {
+        logger.warn(`Failed to sync session to coordinator: ${err}`);
+      });
     }
     
     return reply.code(201).send(session);
@@ -165,10 +237,23 @@ export async function registerRoutes(app: FastifyInstance) {
 
   // Unregister agent
   app.delete<{ Params: { id: string } }>("/agents/:id", async (request, reply) => {
+    // Get agent info before unregistering (for session sync)
+    const agent = db.getAgent(request.params.id);
+    const connectedAt = agent?.connectedAt ?? Date.now();
+    
     const deleted = db.unregisterAgent(request.params.id);
     if (!deleted) {
       return reply.code(404).send({ error: "Agent not found" });
     }
+    
+    // Sync session end to coordinator
+    const client = getCoordinatorClient();
+    if (client) {
+      client.endSession(request.params.id, connectedAt).catch(err => {
+        logger.warn(`Failed to sync session end to coordinator: ${err}`);
+      });
+    }
+    
     return { success: true };
   });
 
@@ -302,7 +387,6 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   // === Spawn Routes ===
-
   // Spawn a new agent
   app.post<{ Body: SpawnRequest }>("/spawn", async (request, reply) => {
     const { personaId, task, config, spawnId } = request.body;

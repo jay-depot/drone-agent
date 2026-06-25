@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import * as db from "./db.js";
-import type { CreatePersonaRequest, CreateSkillRequest, RegisterBeaconRequest } from "./types.js";
+import type { CreatePersonaRequest, CreateSkillRequest, RegisterBeaconRequest, CreateSessionRequest, EndSessionRequest } from "./types.js";
 
 export async function registerRoutes(app: FastifyInstance) {
   // Health check
@@ -111,5 +111,45 @@ export async function registerRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Beacon not found" });
     }
     return { success: true };
+  });
+
+  // === Beacon Session Routes ===
+
+  // Register a new agent session
+  app.post<{ Params: { id: string }; Body: CreateSessionRequest }>("/beacons/:id/sessions", async (request, reply) => {
+    const beacon = db.getBeacon(request.params.id);
+    if (!beacon) {
+      return reply.code(404).send({ error: "Beacon not found" });
+    }
+    const session = db.createBeaconSession(request.params.id, request.body);
+    return reply.code(201).send(session);
+  });
+
+  // List all sessions for a beacon
+  app.get<{ Params: { id: string } }>("/beacons/:id/sessions", async (request, reply) => {
+    const beacon = db.getBeacon(request.params.id);
+    if (!beacon) {
+      return reply.code(404).send({ error: "Beacon not found" });
+    }
+    return db.listBeaconSessions(request.params.id);
+  });
+
+  // Get specific session for a beacon
+  app.get<{ Params: { id: string; agentId: string } }>("/beacons/:id/sessions/:agentId", async (request, reply) => {
+    const session = db.getBeaconSession(request.params.id, request.params.agentId);
+    if (!session) {
+      return reply.code(404).send({ error: "Session not found" });
+    }
+    return session;
+  });
+
+  // End a session (mark as disconnected)
+  app.delete<{ Params: { id: string; agentId: string }; Body: EndSessionRequest }>("/beacons/:id/sessions/:agentId", async (request, reply) => {
+    const { disconnectedAt, durationMs } = request.body;
+    const session = db.endBeaconSession(request.params.id, request.params.agentId, disconnectedAt, durationMs);
+    if (!session) {
+      return reply.code(404).send({ error: "Session not found" });
+    }
+    return session;
   });
 }
