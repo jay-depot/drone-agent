@@ -62,6 +62,13 @@ interface SpawnQuery {
   status?: string;
 }
 
+interface EventQuery {
+  agentId?: string;
+  eventType?: string;
+  since?: string;
+  limit?: string;
+}
+
 export async function registerRoutes(app: FastifyInstance) {
   // Health check
   app.get("/health", async () => {
@@ -81,6 +88,13 @@ export async function registerRoutes(app: FastifyInstance) {
         logger.warn(`Failed to push persona to coordinator: ${err}`);
       });
     }
+    
+    // Log the event
+    db.createEventLog({
+      eventType: "persona.created",
+      targetId: persona.id,
+      targetType: "persona",
+    });
     
     return reply.code(201).send(persona);
   });
@@ -233,6 +247,14 @@ export async function registerRoutes(app: FastifyInstance) {
       });
     }
     
+    // Log the event
+    db.createEventLog({
+      eventType: "agent.connected",
+      agentId: request.body.id,
+      targetId: spawnRecord?.id ?? null,
+      targetType: spawnRecord ? "spawn" : null,
+    });
+    
     return reply.code(201).send(session);
   });
 
@@ -277,6 +299,13 @@ export async function registerRoutes(app: FastifyInstance) {
         logger.warn(`Failed to sync session end to coordinator: ${err}`);
       });
     }
+    
+    // Log the event
+    db.createEventLog({
+      eventType: "agent.disconnected",
+      agentId: request.params.id,
+      metadata: { connectedAt, durationMs: Date.now() - connectedAt },
+    });
     
     return { success: true };
   });
@@ -555,5 +584,25 @@ export async function registerRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Config not found" });
     }
     return { success: true };
+  });
+
+  // === Event Log Routes ===
+
+  // List event logs with optional filters
+  app.get<{ Querystring: EventQuery }>("/events", async (request, reply) => {
+    const agentId = request.query.agentId;
+    const eventType = request.query.eventType as db.ListEventLogsOptions["eventType"];
+    const since = request.query.since ? parseInt(request.query.since) : undefined;
+    const limit = request.query.limit ? parseInt(request.query.limit) : 100;
+    return db.listEventLogs({ agentId, eventType, since, limit });
+  });
+
+  // Get specific event log
+  app.get<{ Params: { id: string } }>("/events/:id", async (request, reply) => {
+    const eventLog = db.getEventLog(request.params.id);
+    if (!eventLog) {
+      return reply.code(404).send({ error: "Event not found" });
+    }
+    return eventLog;
   });
 }

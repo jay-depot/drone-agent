@@ -152,6 +152,7 @@ export interface SpawnBeaconConfig {
   spawnTimeoutMs: number;
   maxConcurrentSpawns: number;
 }
+
 // === Beacon Config Types ===
 
 export interface BeaconConfigEntry {
@@ -166,4 +167,41 @@ export interface CreateConfigRequest {
   key: string;
   value: string;  // JSON string
   scope?: "local" | "swarm";  // default: "local"
+}
+
+// === Event Log Types ===
+
+export type EventType =
+  | "agent.connected"
+  | "agent.disconnected"
+  | "agent.heartbeat"
+  | "agent.spawned"
+  | "agent.terminated"
+  | "message.sent"
+  | "message.delivered"
+  | "persona.created"
+  | "persona.updated"
+  | "persona.deleted"
+  | "skill.created"
+  | "skill.updated"
+  | "skill.deleted"
+  | "sync.completed"
+  | "sync.failed";
+
+export interface EventLog {
+  id: string;
+  eventType: EventType;
+  agentId: string | null;
+  targetId: string | null;
+  targetType: string | null;
+  metadata: string | null;
+  timestamp: number;
+}
+
+export interface CreateEventLogRequest {
+  eventType: EventType;
+  agentId?: string | null;
+  targetId?: string | null;
+  targetType?: string | null;
+  metadata?: Record<string, unknown>;
 }
