@@ -6,8 +6,10 @@ import type {
   DroneSkillDefinition,
   DroneSkillProvider,
   DroneSkillsCapability,
+  DroneToolDefinition,
 } from 'drone-core';
 import { PRECEDENCE_COORDINATOR, PRECEDENCE_SWARM } from 'drone-core';
+import { randomUUID } from 'crypto';
 
 const DEFAULT_BEACON_HOST = 'localhost';
 const DEFAULT_BEACON_PORT = 3457;
@@ -176,12 +178,184 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         );
       }
 
+      // Register tool for messaging
+
+
       // Initial load
       registration.hooks.onPluginsLoaded(async () => {
         await reloadFromBeacon();
+        // Connect WebSocket for messaging
+        connectWebSocket();
       });
 
       // Heartbeat to keep session alive
+
+      // ── WebSocket client for real-time messaging ────────────────────────
+      const wsUrl = `ws://${beaconHost}:${beaconPort}/ws?agentId=${sessionId}`;
+      let ws: WebSocket | null = null;
+      let wsReconnectAttempts = 0;
+      const maxReconnectAttempts = 5;
+      const messageQueue: Array<{ toAgentId?: string; toChannel?: string; body: string }> = [];
+
+      // Queue incoming messages for the agent
+      const pendingMessages: Array<{ id: string; fromAgentId: string; channel: string | null; body: unknown; receivedAt: number }> = [];
+
+      // Connect to WebSocket
+      const connectWebSocket = () => {
+        try {
+          ws = new WebSocket(wsUrl);
+
+          ws.onopen = () => {
+            registration.logger.info('WebSocket connected to beacon');
+            wsReconnectAttempts = 0;
+            // Send any queued messages
+            while (messageQueue.length > 0) {
+              const msg = messageQueue.shift();
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'message', payload: msg }));
+              }
+            }
+          };
+
+          ws.onmessage = (event) => {
+            try {
+              const wsMsg = JSON.parse(event.data);
+              if (wsMsg.type === 'message') {
+                // Queue message for agent
+                pendingMessages.push(wsMsg.payload);
+                registration.logger.info(`Received message from ${wsMsg.payload.fromAgentId}`);
+              } else if (wsMsg.type === 'connected') {
+                registration.logger.info('WebSocket handshake complete');
+              } else if (wsMsg.type === 'ack') {
+                registration.logger.info(`Message ${wsMsg.payload.messageId} acknowledged`);
+              } else if (wsMsg.type === 'error') {
+                registration.logger.error(`WebSocket error: ${wsMsg.payload.message}`);
+              }
+            } catch (err) {
+              registration.logger.error(`Failed to parse WebSocket message: ${err}`);
+            }
+          };
+
+          ws.onclose = (event) => {
+            registration.logger.warn(`WebSocket closed: ${event.code} ${event.reason}`);
+            ws = null;
+            // Attempt reconnect
+            if (wsReconnectAttempts < maxReconnectAttempts) {
+              wsReconnectAttempts++;
+              const delay = Math.min(1000 * Math.pow(2, wsReconnectAttempts), 30000);
+              setTimeout(connectWebSocket, delay);
+            }
+          };
+
+          ws.onerror = (error) => {
+            registration.logger.error(`WebSocket error: ${error}`);
+          };
+        } catch (err) {
+          registration.logger.error(`Failed to connect WebSocket: ${err}`);
+        }
+      };
+
+      // Send a message via WebSocket or queue it
+      const sendMessage = (toAgentId: string | undefined, toChannel: string | undefined, body: string) => {
+        const payload = { toAgentId, toChannel, body };
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'message', payload }));
+        } else {
+          messageQueue.push(payload);
+        }
+      };
+
+      // Subscribe to a channel
+      const subscribeToChannel = (channel: string) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'subscribe', payload: { channel } }));
+        }
+      };
+
+      // Unsubscribe from a channel
+      const unsubscribeFromChannel = (channel: string) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'unsubscribe', payload: { channel } }));
+        }
+      };
+
+      // Get pending messages (for the agent to consume)
+      const getPendingMessages = () => {
+        const messages = [...pendingMessages];
+        pendingMessages.length = 0;
+        return messages;
+      };
+
+      // ── Swarm messaging tool ───────────────────────────────────────────
+      const swarmMessageTool: DroneToolDefinition = {
+        name: 'swarm_message',
+        description: 'Send a message to another agent in the swarm or subscribe to a channel.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            action: {
+              type: 'string',
+              enum: ['send', 'subscribe', 'unsubscribe', 'get_messages'],
+              description: 'The action to perform',
+            },
+            toAgentId: {
+              type: 'string',
+              description: 'Target agent ID (for send action)',
+            },
+            toChannel: {
+              type: 'string',
+              description: 'Channel name (for subscribe/unsubscribe/send actions)',
+            },
+            body: {
+              type: 'string',
+              description: 'Message body (JSON string, for send action)',
+            },
+          },
+          required: ['action'],
+        },
+        execute: async (params) => {
+          const action = (params.action as string) || '';
+
+          switch (action) {
+            case 'send': {
+              const toAgentId = params.toAgentId as string | undefined;
+              const toChannel = params.toChannel as string | undefined;
+              const body = params.body as string;
+              if (!toAgentId && !toChannel) {
+                return JSON.stringify({ success: false, error: 'Must specify toAgentId or toChannel' });
+              }
+              sendMessage(toAgentId, toChannel, body);
+              return JSON.stringify({ success: true, message: 'Message sent' });
+            }
+            case 'subscribe': {
+              const channel = params.toChannel as string;
+              if (!channel) {
+                return JSON.stringify({ success: false, error: 'Channel name required' });
+              }
+              subscribeToChannel(channel);
+              return JSON.stringify({ success: true, message: `Subscribed to ${channel}` });
+            }
+            case 'unsubscribe': {
+              const channel = params.toChannel as string;
+              if (!channel) {
+                return JSON.stringify({ success: false, error: 'Channel name required' });
+              }
+              unsubscribeFromChannel(channel);
+              return JSON.stringify({ success: true, message: `Unsubscribed from ${channel}` });
+            }
+            case 'get_messages': {
+              const messages = getPendingMessages();
+              return JSON.stringify({ success: true, messages });
+            }
+            default:
+              return JSON.stringify({ success: false, error: `Unknown action: ${action}` });
+          }
+        },
+      };
+
+
+      // Register the messaging tool
+      registration.registerTool(swarmMessageTool);
       const heartbeat = async () => {
         try {
           await fetch(`${baseUrl}/agents/${sessionId}/heartbeat`, {
@@ -198,6 +372,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       // Cleanup on shutdown
       registration.hooks.onShutdown(async () => {
         clearInterval(heartbeatInterval);
+        if (ws) ws.close();
         try {
           await fetch(`${baseUrl}/agents/${sessionId}`, {
             method: 'DELETE',
