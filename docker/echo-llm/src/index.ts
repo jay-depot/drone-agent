@@ -1,4 +1,4 @@
-import fastify from "fastify";
+import fastify, { FastifyRequest, FastifyReply } from "fastify";
 
 const DEFAULT_PORT = parseInt(process.env.PORT || "3458", 10);
 const DEFAULT_HOST = process.env.HOST || "0.0.0.0";
@@ -99,7 +99,10 @@ app.get("/health", async () => {
 });
 
 // Chat completions endpoint (OpenAI-compatible)
-app.post<{ Body: ChatRequest }>("/v1/chat/completions", async (request, reply) => {
+app.post<{ Body: ChatRequest }>("/v1/chat/completions", async (
+  request: FastifyRequest<{ Body: ChatRequest }>,
+  reply: FastifyReply
+) => {
   const response = createEchoResponse(request.body);
 
   // Apply configured delay if set
@@ -111,7 +114,10 @@ app.post<{ Body: ChatRequest }>("/v1/chat/completions", async (request, reply) =
 });
 
 // Alternative endpoint path (without /v1 prefix)
-app.post<{ Body: ChatRequest }>("/chat/completions", async (request, reply) => {
+app.post<{ Body: ChatRequest }>("/chat/completions", async (
+  request: FastifyRequest<{ Body: ChatRequest }>,
+  reply: FastifyReply
+) => {
   const response = createEchoResponse(request.body);
 
   if (ECHO_CONFIG.responseDelay > 0) {
@@ -122,7 +128,10 @@ app.post<{ Body: ChatRequest }>("/chat/completions", async (request, reply) => {
 });
 
 // Simple chat endpoint for basic testing
-app.post<{ Body: { message: string } }>("/chat", async (request, reply) => {
+app.post<{ Body: { message: string } }>("/chat", async (
+  request: FastifyRequest<{ Body: { message: string } }>,
+  reply: FastifyReply
+) => {
   const { message } = request.body;
   return reply.send({
     response: `Echo: ${message}`,
