@@ -152,3 +152,18 @@ export interface SpawnBeaconConfig {
   spawnTimeoutMs: number;
   maxConcurrentSpawns: number;
 }
+// === Beacon Config Types ===
+
+export interface BeaconConfigEntry {
+  key: string;
+  value: string;  // JSON string
+  scope: "local" | "swarm";
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CreateConfigRequest {
+  key: string;
+  value: string;  // JSON string
+  scope?: "local" | "swarm";  // default: "local"
+}

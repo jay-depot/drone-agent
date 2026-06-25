@@ -1,4 +1,5 @@
 import type {
+  DroneConfigInjector,
   DronePlugin,
   DronePersonaCapability,
   DronePersonaDefinition,
@@ -10,6 +11,42 @@ import type {
 } from 'drone-core';
 import { PRECEDENCE_COORDINATOR, PRECEDENCE_SWARM } from 'drone-core';
 import { randomUUID } from 'crypto';
+
+/**
+ * BeaconConfigInjector fetches config from the beacon and provides it as an underlay.
+ */
+class BeaconConfigInjector {
+  id = 'beacon';
+  precedence = 75; // runs after coordinator (50), before agent local (100)
+
+  private baseUrl: string;
+  private cachedConfig: Record<string, unknown> = {};
+
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl;
+  }
+
+  async inject(): Promise<Record<string, unknown>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/config`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch config: ${response.status}`);
+      }
+      const entries = await response.json() as Array<{key: string; value: string}>;
+      
+      // Parse JSON values and cache
+      this.cachedConfig = {};
+      for (const entry of entries) {
+        this.cachedConfig[entry.key] = JSON.parse(entry.value);
+      }
+      
+      return this.cachedConfig;
+    } catch (error) {
+      // On failure, return cached config if available
+      return this.cachedConfig;
+    }
+  }
+}
 
 const DEFAULT_BEACON_HOST = 'localhost';
 const DEFAULT_BEACON_PORT = 3457;
@@ -175,6 +212,19 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       } else {
         registration.logger.warn(
           'skills broker not available; swarm skills will not be loaded'
+        );
+      }
+
+      // ── Config injector for beacon config underlay ─────────────────────
+      let beaconConfigInjector: BeaconConfigInjector | null = null;
+      const configCap = registration.request<import('drone-core').DroneConfigCapability>('config');
+      if (configCap) {
+        beaconConfigInjector = new BeaconConfigInjector(baseUrl);
+        configCap.registerInjector(beaconConfigInjector);
+        registration.logger.info('Registered beacon config injector');
+      } else {
+        registration.logger.warn(
+          'config capability not available; beacon config underlay will not work'
         );
       }
 
@@ -373,6 +423,10 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       registration.hooks.onShutdown(async () => {
         clearInterval(heartbeatInterval);
         if (ws) ws.close();
+        // Unregister config injector
+        if (beaconConfigInjector && configCap) {
+          configCap.unregisterInjector(beaconConfigInjector.id);
+        }
         try {
           await fetch(`${baseUrl}/agents/${sessionId}`, {
             method: 'DELETE',

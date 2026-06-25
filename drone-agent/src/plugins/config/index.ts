@@ -5,6 +5,7 @@ import {
   applyAgentConfigLayer,
   createDefaultAgentConfig,
   type DroneAgentConfig,
+  type DroneConfigInjector,
   type DroneConfigLayer,
   type DronePlugin,
   type DroneToolJsonSchema,
@@ -32,7 +33,45 @@ export type DroneConfigCapability = {
    * @param value The JSON value to set
    */
   setValue: (scope: 'project' | 'user', key: string, value: unknown) => Promise<void>;
+  /** Register a config injector for injecting config as underlay. */
+  registerInjector: (injector: DroneConfigInjector) => void;
+  /** Unregister a config injector by id. */
+  unregisterInjector: (injectorId: string) => void;
+  /** Get all registered injectors sorted by precedence. */
+  getInjectors: () => DroneConfigInjector[];
 };
+
+// ---------------------------------------------------------------------------
+// Config Injector Registry
+// ---------------------------------------------------------------------------
+
+const configInjectors: import('drone-core').DroneConfigInjector[] = [];
+
+function registerInjector(injector: import('drone-core').DroneConfigInjector): void {
+  // Remove existing injector with same id
+  const existingIdx = configInjectors.findIndex(i => i.id === injector.id);
+  if (existingIdx !== -1) {
+    configInjectors.splice(existingIdx, 1);
+  }
+  // Insert in precedence order (lower first)
+  const idx = configInjectors.findIndex(i => i.precedence > injector.precedence);
+  if (idx === -1) {
+    configInjectors.push(injector);
+  } else {
+    configInjectors.splice(idx, 0, injector);
+  }
+}
+
+function unregisterInjector(injectorId: string): void {
+  const idx = configInjectors.findIndex(i => i.id === injectorId);
+  if (idx !== -1) {
+    configInjectors.splice(idx, 1);
+  }
+}
+
+function getInjectors(): import('drone-core').DroneConfigInjector[] {
+  return [...configInjectors];
+}
 
 // ---------------------------------------------------------------------------
 // Known config key paths (for validation in config.set)
@@ -475,6 +514,13 @@ export const configPlugin: DronePlugin = {
         await writeConfigValue(scope, key, value);
         cachedLayers = null;
       },
+      registerInjector: (injector) => {
+        registerInjector(injector);
+      },
+      unregisterInjector: (injectorId) => {
+        unregisterInjector(injectorId);
+      },
+      getInjectors: () => getInjectors(),
     };
     registration.offer(capability);
 

@@ -482,6 +482,46 @@ export type DroneSkillProvider = {
  */
 export type DroneRecallEnhancer = (id: string, body: string) => Promise<string>;
 
+// ---------------------------------------------------------------------------
+// Config Injector: hook system for injecting config as underlay
+// ---------------------------------------------------------------------------
+
+/**
+ * A config injector that provides config values as an underlay.
+ * Lower priority = runs first (underlay), higher priority = runs last (overlay).
+ * Since beacon config is an underlay, it should have a lower priority than
+ * the agent's local config (which wins for conflicts under "most local wins").
+ */
+export type DroneConfigInjector = {
+  /** Unique identifier for this injector (e.g. 'beacon', 'coordinator'). */
+  id: string;
+  /**
+   * Priority value. Lower number = runs first = underlay.
+   * Recommended: coordinator=50, beacon=75, agent=100.
+   */
+  precedence: number;
+  /** Inject config values that will be merged as underlay. */
+  inject: () => Promise<PartialDroneAgentConfig>;
+};
+
+/**
+ * Capability offered by the config system. Lets plugins register
+ * config injectors that provide defaults (underlay) for the agent config.
+ */
+export type DroneConfigCapability = {
+  /** Register a config injector. */
+  registerInjector: (injector: DroneConfigInjector) => void;
+  /** Unregister a config injector by id. */
+  unregisterInjector: (injectorId: string) => void;
+  /** Get all registered injectors sorted by precedence. */
+  getInjectors: () => DroneConfigInjector[];
+  /**
+   * Rebuild the config by calling all injectors and merging results.
+   * Returns the merged config.
+   */
+  rebuild: () => Promise<DroneAgentConfig>;
+};
+
 /**
  * Capability offered by the skills broker plugin. Lets other plugins
  * query skills, manage providers, and register recall enhancers.
