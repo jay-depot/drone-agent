@@ -15,11 +15,6 @@ services:
       - PORT=3458
     networks:
       - test-swarm
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3458/health"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
   # Drone Coordinator - the central coordination layer
   drone-coordinator:
@@ -37,13 +32,7 @@ services:
     networks:
       - test-swarm
     depends_on:
-      echo-llm:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3456/health"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - echo-llm
 
   # Drone Beacon - the local agent hub
   drone-beacon:
@@ -63,13 +52,7 @@ services:
     networks:
       - test-swarm
     depends_on:
-      drone-coordinator:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3457/health"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - drone-coordinator
 
   # Dummy Agent - controlled testing agent
   # This is a minimal agent for testing agent-beacon interactions
@@ -92,8 +75,7 @@ services:
     networks:
       - test-swarm
     depends_on:
-      drone-beacon:
-        condition: service_healthy
+      - drone-beacon
 
   # Test Runner - executes integration tests
   test-runner:
@@ -111,12 +93,9 @@ services:
     networks:
       - test-swarm
     depends_on:
-      drone-coordinator:
-        condition: service_healthy
-      drone-beacon:
-        condition: service_healthy
-      dummy-agent:
-        condition: service_started
+      - drone-coordinator
+      - drone-beacon
+      - dummy-agent
 
 networks:
   test-swarm:

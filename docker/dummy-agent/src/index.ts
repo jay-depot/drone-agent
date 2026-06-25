@@ -104,7 +104,7 @@ async function fetchMessages(): Promise<void> {
   try {
     const response = await fetch(`http://${BEACON_HOST}:${BEACON_PORT}/agents/${AGENT_ID}/messages`);
     if (response.ok) {
-      const messages = await response.json();
+      const messages = await response.json() as Message[];
       state.messages = messages;
       state.lastActivity = new Date();
     }
@@ -128,7 +128,7 @@ async function callEchoLlm(prompt: string): Promise<string> {
     });
 
     if (response.ok) {
-      const data = await response.json();
+      const data = await response.json() as { choices?: { message?: { content?: string } }[] };
       return data.choices?.[0]?.message?.content ?? 'No response';
     }
     return `Error: ${response.status}`;
