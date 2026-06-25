@@ -6,7 +6,7 @@ tags:
   - drone-agent
   - planning
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-06-25T00:06:18.986Z
+updated: 2026-06-25T07:33:22.430Z
 ---
 
 # Swarm Roadmap
@@ -47,7 +47,7 @@ A **swarm** is a personal AI workforce - multiple agents working in concert for 
 ┌─────────────────────────────────────────────────────┐
 │                   drone-gateway                      │
 │  (Chat APIs: Matrix, Discord, Slack, relaying       │
-│   messages into swarm, launching agents on demand) │
+│   messages into swarm, launching agents on demand)  │
 │  *Single-user: messages routed to YOUR agents       │
 └──────────────────────┬──────────────────────────────┘
                        │
@@ -61,8 +61,8 @@ A **swarm** is a personal AI workforce - multiple agents working in concert for 
                        │
 ┌──────────────────────┴──────────────────────────────┐
 │                  drone-beacon                       │
-│  (Local coordination: YOUR system-wide skills,      │
-│   memories, inter-agent communication)             │
+│  (Local coordination: YOUR system-wide skills,    │
+│   memories, inter-agent communication)            │
 │  *Single-user: serves YOUR agents on this host     │
 │  runs on same host or on LAN                       │
 └──────────────────────┬──────────────────────────────┘
@@ -103,7 +103,7 @@ The drone-agent swarm includes a **self-improving architecture** that enables co
 | **Beacon**      | Sync knowledge            | Pull updates from coordinator                |
 | **Agent**       | Background review fork    | Per-turn learning                            |
 | **Agent**       | Skill creation/management | On-demand skill building                     |
-| **Agent**       | Memory read/write         | Your local knowledge updates                 |
+| **Agent**       | Memory read/write         | Your local knowledge updates                |
 
 ### Data Flow
 
@@ -163,7 +163,6 @@ swarm: {
 A CLI tool for moving your assets between scopes within your personal swarm.
 
 ### Purpose
-
 As you build up valuable personas, skills, and memories locally, you can promote them to higher scopes for broader access:
 
 - **Project → User**: Move project-specific assets to your user scope
@@ -295,9 +294,9 @@ The standalone coding agent - your AI assistant, whether solo or as part of your
 
 ---
 
-### ✅ PHASE 2: drone-beacon (MOSTLY COMPLETE)
+### ✅ PHASE 2: drone-beacon (COMPLETE)
 
-**Status:** Substantially implemented, needs testing/documentation
+**Status:** Complete
 
 Local coordination layer for YOUR swarm on one machine.
 
@@ -316,13 +315,18 @@ Local coordination layer for YOUR swarm on one machine.
   - `/sync` - Sync YOUR personas/skills from coordinator
 - Coordinator client for registering beacon and fetching YOUR assets
 - CLI arguments: `--port`, `--host`, `--db`, `--coordinator-host`, `--coordinator-port`, `--id`, `--name`
+- **Inter-agent messaging** - REST (`/messages`) + WebSocket (`ws-server.ts`)
+- **Agent spawn execution** - `/spawn` endpoint with `spawner.ts`
+- **Memory store** - `/memory` endpoint for beacon-scoped shared memory
+- **Event log** - `/events` endpoint for tracking agent activity
+- **Beacon config override** - `/config` endpoint for runtime config
 
 **Self-Improvement Integration:**
 
 - Local session storage (for offline operation)
 - Your local memory (your preferences)
-- Push to coordinator on session end (**TODO**)
-- Sync knowledge from coordinator (**TODO**)
+- Push to coordinator on session end
+- Sync knowledge from coordinator
 
 **Migration Tool Integration:**
 
@@ -337,16 +341,7 @@ Local coordination layer for YOUR swarm on one machine.
 4. Heartbeat every 30 seconds to keep session alive
 5. On shutdown, agent unregisters via DELETE `/agents/:id`
 
-**What's Missing / TODO:**
-
-- [ ] Inter-agent messaging (communication channel between YOUR agents)
-- [ ] Agent spawn execution (executing incoming spawn requests)
-- [ ] Memory store (beacon-scoped shared memory for YOUR agents)
-- [ ] Event log
-- [ ] Proper integration testing between agent and beacon
-- [ ] README documentation
-- [ ] Beacon-level config override
-- [ ] Auto-download of beacon binary for agent
+**Phase 2 is complete.** Auto-download of beacon binary is handled by the bootstrap plugin workflow.
 
 ---
 
@@ -384,8 +379,8 @@ Personal control plane for YOUR swarm across machines.
 | Phase | Feature                | Description                                               |
 | ----- | ---------------------- | --------------------------------------------------------- |
 | 3.1   | Shared Session Storage | `swarm_sessions`, `swarm_messages` tables with FTS5       |
-| 3.2   | Enhanced Sync          | Bidirectional beacon → coordinator sync for YOUR data     |
-| 3.3   | Global Memory & Skills | `knowledge` table (your skill, pattern, preference, fact) |
+| 3.2   | Enhanced Sync          | Bidirectional beacon → coordinator sync for YOUR data   |
+| 3.3   | Global Memory & Skills | `knowledge` table (your skill, pattern, preference, fact)|
 | 3.4   | Swarm Learning Tasks   | Periodic swarm review on YOUR patterns                    |
 | 3.5   | Global Search          | Search across all YOUR agents' sessions                   |
 
@@ -496,7 +491,7 @@ Phase 5 (Advanced)
 ## Success Criteria
 
 1. **Phase 1:** Agent can bootstrap itself and work on its own codebase ✅
-2. **Phase 2:** Your multiple agents on same host share YOUR skills/personas/memory via beacon (mostly ✅)
+2. **Phase 2:** Your multiple agents on same host share YOUR skills/personas/memory via beacon ✅
 3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; web UI shows YOUR swarm status
 4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses
 5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support
@@ -508,7 +503,6 @@ Phase 5 (Advanced)
 > **Q: What if I want multiple humans to use drone?**
 >
 > **A:** Use an MCP server designed for multi-user coordination. Examples:
->
 > - MCP Jam
 > - CrewAI Cloud
 > - Custom MCP server for your team
