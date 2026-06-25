@@ -10,6 +10,8 @@ Drone Beacon is the host-local coordination layer for drone-agent when the swarm
 - **Local State** - SQLite-backed storage for personas, skills, and memory
 - **Coordinator Integration** - Syncs global personas/skills from the coordinator
 - **Memory with TTL** - Key-value store with optional time-to-live for inter-agent communication
+- **WebSocket Support** - Real-time communication with connected agents
+- **Message Passing** - Agent-to-agent and channel-based messaging
 
 ## Quick Start
 
@@ -39,6 +41,7 @@ pnpm start
 | `--spawn-agent-path` | drone-agent | Path to drone-agent binary |
 | `--spawn-timeout-ms` | 30000 | Agent connection timeout (ms) |
 | `--max-concurrent-spawns` | 10 | Max concurrent spawned agents |
+| `--sync-interval-minutes` | 5 | Interval for periodic coordinator sync (minutes) |
 
 ## API Endpoints
 
@@ -74,6 +77,13 @@ pnpm start
 - `PUT /memory/:id` - Update memory
 - `DELETE /memory/:id` - Delete memory
 
+### Messages
+- `POST /messages` - Send a message (REST)
+- `GET /messages` - List messages for an agent (query: agentId, unreadOnly)
+- `GET /messages/:id` - Get single message
+- `POST /messages/:id/read` - Mark message as read
+- `GET /messages/channel/:channel` - List messages in a channel
+
 ### Spawn Management
 - `POST /spawn` - Spawn new agent
 - `GET /spawn` - List spawns (query: status)
@@ -83,25 +93,55 @@ pnpm start
 ### Coordinator Sync
 - `POST /sync` - Sync personas/skills from coordinator
 
-## Architecture
+### Config
+- `GET /config` - List all config overrides
+- `GET /config/:key` - Get specific config value
+- `POST /config` - Set a config override
+- `PUT /config/:key` - Update config override
+- `DELETE /config/:key` - Remove config override
 
+### Event Logs
+- `GET /events` - List event logs (query: agentId, eventType, since, limit)
+- `GET /events/:id` - Get specific event log
+
+### WebSocket
+
+Agents can connect via WebSocket for real-time communication. The WebSocket endpoint is at `/ws`:
+
+```
+ws://<host>:<port>/ws
+```
+
+Upon connection, agents should send a registration message:
+```json
+{
+  "type": "register",
+  "agentId": "agent-xxx",
+  "personaId": "optional-persona-id"
+}
+```
+
+## Architecture
 ```
 ┌─────────────────┐     ┌──────────────────┐
 │  drone-agent    │────▶│   drone-beacon   │
 │  (worker)       │◀────│   (port 3457)    │
-└─────────────────┘     └────────┬─────────┘
-                                 │
-                                 │ HTTP
-                                 ▼
-                        ┌──────────────────┐
-                        │ drone-coordinator│
-                        │   (port 3456)    │
-                        └──────────────────┘
+└────────┬────────┘     └────────┬─────────┘
+         │ WebSocket              │
+         └────────────────────────┼─────────┘
+                                  │
+                                  │ HTTP
+                                  ▼
+                         ┌──────────────────┐
+                         │ drone-coordinator│
+                         │   (port 3456)    │
+                         └──────────────────┘
 ```
 
 ## Dependencies
 
 - **fastify** - HTTP server
+- **@fastify/websocket** - WebSocket support
 - **better-sqlite3** - SQLite database
 - **pino** - Logging
 - **drone-core** - Shared core types

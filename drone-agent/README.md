@@ -1,5 +1,3 @@
-# DRONE-AGENT
-
                    \   /
                \    | |    /
                  \ (o o) /
@@ -14,20 +12,46 @@
                      V
                      |
 
-This is the TUI for the `drone` coding agent. It is yet another "minimalist" coding agent running in yolo mode built on TypeScript.
+# DRONE-AGENT
+
+This is the TUI for the `drone` coding agent. It is yet another "minimalist" coding agent running in yolo mode by default, built on TypeScript.
 
 By default, drone-agent runs with a minimal built-in set so it can bootstrap a session, execute shell commands, and chat through Ollama.
 
-Plugins allow you to extend the capabilities of `drone`. The current built-in plugins are:
+## Plugins
 
-- `startup`: boots the local runtime and provides a simple status tool.
-- `exec`: provides `exec.run` for local shell execution.
-- `todo`: provides `todo.manage_list` and injects the current todo list into system prompts. This plugin is built in but opt-in (not enabled by default).
-- `fetch`: provides `fetch.request` for simple HTTP GET and POST requests. This plugin is built in but opt-in.
-- `utils`: provides deterministic arithmetic and text-metric tools. This plugin is built in but opt-in.
-- `lsp`: provides diagnostics, hover lookups, and server status through language servers. This plugin is built in but opt-in.
-- `mcp`: connects to MCP servers and mounts their tools/resources/prompts under the `mcp.` tool namespace.
-- `ollama`: provides the chat model capability.
+The following built-in plugins are available. Most are opt-in and must be enabled in configuration:
+
+- `bootstrap` - Session bootstrapping and initialization
+- `compaction` - Context management and compaction
+- `config` - Configuration management
+- `echo` - Echo tool for testing
+- `exec` - Shell execution
+- `fetch` - HTTP requests
+- `file` - File operations
+- `git` - Git operations
+- `llm` - Generic LLM provider interface
+- `lsp` - Language server protocol support
+- `macros` - Macro expansion
+- `mcp` - Model Context Protocol client
+- `memory` - Project memory store
+- `ollama` - Ollama chat provider
+- `openrouter` - OpenRouter chat provider
+- `persona` - Persona management
+- `persona-provider-project` - Project-level persona loading
+- `persona-provider-user` - User-level persona loading
+- `prompt-file` - Prompt file loading
+- `search` - Code search (ripgrep)
+- `self-improvement` - Self-improvement insights and principles
+- `skill-provider-project` - Project-level skill loading
+- `skill-provider-user` - User-level skill loading
+- `skills` - Skill management
+- `startup` - Runtime initialization
+- `subagent` - Sub-agent execution
+- `swarm` - Swarm coordination (connect to drone-beacon)
+- `todo` - Todo list management
+- `utils` - Utility tools (arithmetic, text metrics)
+- `lightpanda` - Browser automation
 
 ## Installation
 
@@ -61,13 +85,24 @@ User level configuration is stored in the user's home directory under `.drone-ag
 
 The `lsp` plugin is opt-in. It is intended to make `drone-agent` behave more like an IDE client by maintaining language-server connections, collecting diagnostics, and exposing semantic queries to the model.
 
-Current phase-1 tools:
+LSP tools available:
 
-- `lsp.get_diagnostics`: returns current diagnostics for the workspace or a specific file.
-- `lsp.hover`: returns hover information for a symbol at a file, line, and column.
-- `lsp.go_to_definition`: resolves definition location(s) for a symbol at a file, line, and column.
-- `lsp.find_references`: finds references for a symbol at a file, line, and column.
-- `lsp.server_status`: shows whether a server was connected, spawned, skipped, or failed.
+- `lsp.get_diagnostics` - Returns current diagnostics for the workspace or a specific file
+- `lsp.hover` - Returns hover information for a symbol
+- `lsp.go_to_definition` - Resolves definition location(s) for a symbol
+- `lsp.find_references` - Finds references for a symbol
+- `lsp.document_symbols` - Lists symbols defined in a file
+- `lsp.workspace_symbol` - Searches for symbols across the workspace
+- `lsp.signature_help` - Returns signature help for function calls
+- `lsp.completion` - Returns completion suggestions
+- `lsp.code_action` - Returns code actions (quick fixes, refactorings)
+- `lsp.rename` - Renames a symbol across the workspace
+- `lsp.implementation` - Returns locations that implement an interface
+- `lsp.type_definition` - Returns type-definition locations
+- `lsp.call_hierarchy_incoming` - Returns callers of a symbol
+- `lsp.call_hierarchy_outgoing` - Returns callees of a symbol
+- `lsp.formatting` - Returns whole-file formatting edits
+- `lsp.server_status` - Shows server connection status
 
 Current phase-1 support is TypeScript/JavaScript first. The plugin architecture is generic, but only TypeScript/JavaScript has a built-in auto-spawn path right now.
 
@@ -252,16 +287,18 @@ Example with allowlist and pagination controls:
 }
 ```
 
-## Future Swarm Direction
+## Swarm Mode
 
 The longer-term plan is to support a distributed "swarm" mode, while keeping the default local runtime minimal and replaceable.
 
-Status: Planned (not implemented in the current release).
+Status: Implemented.
 
-Planned pieces include:
+The swarm mode includes:
 
 - `drone-beacon`: host-local coordination for multiple drone instances, shared memory channels, and autonomous task scheduling.
 - `drone-coordinator`: cross-host control plane for managing beacons across machines.
 - swarm-level shared assets: shared skills, memories, and personas (without forcing shared plugin sets).
 
 In that model, local and user config remain the base, with optional beacon/swarm overlays for collaboration use cases such as team-wide troubleshooting personas.
+
+To use swarm mode, enable the `swarm` plugin in your configuration and ensure a `drone-beacon` instance is running.

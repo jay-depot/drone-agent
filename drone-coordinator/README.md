@@ -9,6 +9,7 @@ Drone Coordinator is the cross-host control plane for managing beacons in a dron
 - **Beacon Registry** - Tracks all beacons running across hosts
 - **Global State** - SQLite-backed storage for swarm-wide personas and skills
 - **Heartbeat Monitoring** - Monitors beacon health via heartbeats
+- **Session Tracking** - Tracks agent sessions across all beacons
 - **Central Authority** - Single source of truth for persona/skill definitions
 
 ## Quick Start
@@ -58,6 +59,12 @@ pnpm start
 - `GET /beacons/:id` - Get beacon info
 - `POST /beacons/:id/heartbeat` - Beacon heartbeat
 - `DELETE /beacons/:id` - Remove beacon
+
+### Beacon Sessions
+- `POST /beacons/:id/sessions` - Register a new agent session
+- `GET /beacons/:id/sessions` - List all sessions for a beacon
+- `GET /beacons/:id/sessions/:agentId` - Get specific session
+- `DELETE /beacons/:id/sessions/:agentId` - End a session
 
 ## Architecture
 

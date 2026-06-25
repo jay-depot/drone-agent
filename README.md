@@ -16,7 +16,7 @@
 
 The `drone` agent platform aims to be "the Arch of AI agents": minimalist out of the box, flexible, and capable of becoming a very intricate, customized and powerful, distributed system with the right know-how and effort.
 
-## Architecture (Future looking)
+## Architecture
 
 - `drone-agent`: The coding agent at the core of the platform. It can be run as a "full-fat" AI coding agent with the obligatory Ink-based TUI, and can also be run in plain text output, and in the very near future, structured JSON output modes for easier use as a background or autonomous process. Out of the box, `drone-agent` comes with almost nothing enabled, but it should be just enough for you to ask it to help you get everything set up, including enabling the built-in plugins you want, possibly helping you code a few custom ones, and write your starting skills and personas (what other platforms call "agents").
 - `drone-beacon`: If `drone-agent` has the built-in "swarm" plugin enabled, it will expect to connect to a `drone-beacon` instance, which will typically be running as a service on the same host. The `drone-beacon` provides beacon-wide skills and personas, as well as a shared memory store, and a communication channel for agents to send messages to each other. The `drone-beacon` must connect to a `drone-coordinator` instance to get its instructions and configuration.
@@ -25,10 +25,11 @@ The `drone` agent platform aims to be "the Arch of AI agents": minimalist out of
 
 ## Current State
 
-Right now, the `drone-agent` is the only component that exists, and it works as a standalone coding agent, with some rough edges. That said, it's good enough to work on itself already, so development of the beacon and coordinator layers should start very soon.
+The `drone-agent`, `drone-beacon`, and `drone-coordinator` are all implemented and functional. The swarm mode is operational with agents connecting to beacons, and beacons coordinating through the coordinator. The gateway layer remains a future goal.
 
 ## Design Principles
 
 - Minimalist: The core agent should be as minimal as possible, with most of the functionality provided through plugins. This allows users to have a very lightweight agent if they want, and only add the functionality they need. More importantly, it means we're not opinionated about _how_ basic functionality gets done. `drone-agent` provides an mcp client, a todo list manager, file operations, project memory, persona management, lsp connection, git tools, and context management and compaction. Almost none of it is enabled by default though, because `drone-agent` should still work, even if you replace any of these components with one that better aligns with your needs or opinions.
 - Model-centric: `drone-agent` doesn't come with hundreds of lines of built in system prompts. In fact by default it doesn't come with any, except the enabled tools. Turns out, the LLM can usually figure it out with just those, and skills/prompts are only really needed to fill in gaps, and those gaps usually need to be discovered.
 - Project-first: `drone-agent` applies configuration "top-down", meaning that beacon level configuration is overlaid on coordinator level configuration, then user-level configuration is overlaid on top of that, and finally project level configuration is overlaid on top of all of that. Only the user level, and below can specify loaded plugins, and project level plugins are added to user-level plugins, rather than replacing them. This allows projects to, for example, define the project-level memory system it wants to use, so that project memory could be meaningfully shared in version control.
+- Single-user swarm: The swarm is designed to work with a single human, meaning that all agents in the swarm are expected to be working for the same user. If you are trying to set up coordination between multiple users, you would want to set up separate swarms for each user, and then have each set up to connect to an MCP server that is designed for multi-user coordination.
