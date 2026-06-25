@@ -49,6 +49,7 @@ export function InputLine({
       borderColor={scheme.border}
       paddingX={1}
       flexDirection="row"
+      flexGrow={0}
     >
       <Box flexGrow={0}>
         {llmFrame ? <Text color={llmColor}>{llmFrame} </Text> : null}
@@ -58,7 +59,7 @@ export function InputLine({
           <Text color={scheme.userInput}>{promptLabel}</Text>
         ) : null}
       </Box>
-      <Box flexGrow={0}>
+      <Box flexGrow={1} flexDirection="column">
         <MultilineTextInput
           value={value}
           onChange={onChange}

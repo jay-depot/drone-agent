@@ -106,7 +106,7 @@ export function MultilineTextInput({
   // bottom border line instead of the content line.
   const rendered = renderWithCursor(value, cursorOffset, focus);
 
-  return <Text wrap="truncate">{rendered}</Text>;
+  return <Text wrap="wrap">{rendered}</Text>;
 }
 
 /**
