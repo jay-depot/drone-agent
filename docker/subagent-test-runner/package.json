@@ -1,0 +1,10 @@
+{
+  "name": "subagent-test-runner",
+  "version": "1.0.0",
+  "description": "Subagent integration test runner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run test/subagent/dispatch.test.ts"
+  }
+}

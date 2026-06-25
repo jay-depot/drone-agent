@@ -1,0 +1,78 @@
+# Docker Compose for Subagent Integration Testing
+# This configuration provides a minimal environment for testing subagent dispatch,
+# including the echo LLM for deterministic responses.
+
+services:
+  # Mock Echo LLM Provider for deterministic tests
+  # Echoes back the prompt with a fixed response pattern
+  echo-llm:
+    build:
+      context: ..
+      dockerfile: docker/echo-llm.Dockerfile
+    container_name: echo-llm
+    ports:
+      - '3458:3458'
+    environment:
+      - PORT=3458
+    networks:
+      - subagent-test
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3458/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Drone Agent - the coding agent that will dispatch subagents
+  drone-agent:
+    build:
+      context: ..
+      dockerfile: docker/drone-agent.Dockerfile
+    container_name: drone-agent
+    ports:
+      - '3459:3459'
+    environment:
+      - LLM_PROVIDER=echo
+      - LLM_ECHO_URL=http://echo-llm:3458
+      - DRONE_CONFIG_DIR=/config
+    volumes:
+      - agent-config:/config
+      - agent-binaries:/drone-agent
+    networks:
+      - subagent-test
+    depends_on:
+      echo-llm:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "--check", "/drone-agent/bin/drone-agent"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Subagent Test Runner - executes subagent integration tests
+  subagent-test-runner:
+    build:
+      context: ..
+      dockerfile: docker/subagent-test-runner.Dockerfile
+    container_name: subagent-test-runner
+    environment:
+      - ECHO_LLM_URL=http://echo-llm:3458
+      - AGENT_PATH=/drone-agent/bin/drone-agent
+      # Vitest configuration
+      - VITEST_CONFIG_DIR=/app
+    volumes:
+      - agent-binaries:/drone-agent
+      - subagent-test-results:/results
+    networks:
+      - subagent-test
+    depends_on:
+      drone-agent:
+        condition: service_healthy
+
+networks:
+  subagent-test:
+    driver: bridge
+
+volumes:
+  agent-config:
+  agent-binaries:
+  subagent-test-results:
