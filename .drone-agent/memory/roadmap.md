@@ -287,6 +287,11 @@ The standalone coding agent - your AI assistant, whether solo or as part of your
 - `drone-agent/src/plugins/swarm/index.ts` - Swarm plugin (connects to beacon)
 - `drone-core/src/index.ts` - Shared types
 
+**Future: Swarm Setup Workflow**
+- The bootstrap plugin will be updated to add a guided workflow for setting up a swarm
+- Interactive prompts to configure beacon, coordinator, and gateway
+- Simplifies the "getting started" experience for new swarm users
+
 ---
 
 ### ✅ PHASE 2: drone-beacon (MOSTLY COMPLETE)
