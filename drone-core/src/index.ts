@@ -1000,7 +1000,7 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
   return {
     enabledPlugins: [],
     systemPrompt:
-      'You are a coding agent. Prefer small, focused changes. Use the available tools; do not guess paths or contents.',
+      '`drone agent` harness initialized. You are primarily a coding agent. Use available tools to answer questions and perform tasks. If a question is ambiguous, ask for clarification. If a question is unanswerable, respond with "I don\'t know."',
     activePersona: null,
     llm: {
       provider: 'ollama',

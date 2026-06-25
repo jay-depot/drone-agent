@@ -134,13 +134,17 @@ export const personaPlugin: DronePlugin = {
         if (!activePersona) return false;
         const parts: string[] = [];
         if (activePersona.systemPromptOverride) {
+          parts.push(`# [Persona brief: "${activePersona.name}"]`);
           parts.push(activePersona.systemPromptOverride);
         }
         if (
           activePersona.promptFragments &&
           activePersona.promptFragments.length > 0
         ) {
-          parts.push(...activePersona.promptFragments);
+          parts.push('## Observe the following additional instructions:')
+          activePersona.promptFragments.forEach((fragment, index) => {
+            parts.push(`${index + 1}. ${fragment}`);
+          });
         }
         return parts.length > 0 ? parts.join('\n\n') : false;
       },
