@@ -1,5 +1,4 @@
 import fastify from "fastify";
-import { logger } from "./logger.js";
 
 const DEFAULT_PORT = parseInt(process.env.PORT || "3458", 10);
 const DEFAULT_HOST = process.env.HOST || "0.0.0.0";
@@ -91,7 +90,8 @@ function createEchoResponse(request: ChatRequest): ChatResponse {
   };
 }
 
-const app = fastify({ logger });
+// Use fastify's built-in logger
+const app = fastify({ logger: true });
 
 // Health check endpoint
 app.get("/health", async () => {
@@ -148,16 +148,16 @@ app.get("/v1/models", async () => {
 async function start() {
   try {
     await app.listen({ port: DEFAULT_PORT, host: DEFAULT_HOST });
-    logger.info(`Echo LLM provider listening on http://${DEFAULT_HOST}:${DEFAULT_PORT}`);
+    app.log.info(`Echo LLM provider listening on http://${DEFAULT_HOST}:${DEFAULT_PORT}`);
   } catch (err) {
-    logger.error(err);
+    app.log.error(err);
     process.exit(1);
   }
 }
 
 // Graceful shutdown
 const shutdown = async () => {
-  logger.info("Shutting down echo-llm...");
+  app.log.info("Shutting down echo-llm...");
   await app.close();
   process.exit(0);
 };

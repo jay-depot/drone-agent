@@ -303,10 +303,12 @@ export function unregisterAgent(id: string): boolean {
 export function createMemory(req: CreateMemoryRequest, namespace: string = "default"): Memory {
   const now = Date.now();
   const ttl = req.ttlSeconds ? now + req.ttlSeconds * 1000 : null;
+  // Convert value to string if it's an object
+  const value = typeof req.value === 'object' ? JSON.stringify(req.value) : req.value;
   const memory: Memory = {
     id: randomUUID(),
     key: req.key,
-    value: req.value,
+    value: value,
     namespace: req.namespace ?? namespace,
     ttl,
     createdAt: now,
@@ -365,7 +367,7 @@ export function updateMemory(id: string, req: UpdateMemoryRequest): Memory | und
   const updated: Memory = {
     ...existing,
     key: req.key ?? existing.key,
-    value: req.value ?? existing.value,
+    value: (typeof req.value === 'object' ? JSON.stringify(req.value) : req.value) ?? existing.value,
     ttl,
     updatedAt: Date.now(),
   };

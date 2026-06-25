@@ -65,9 +65,11 @@ async function main() {
   // Initialize database
   initDatabase(config.dbPath);
 
-  // Create Fastify instance
+  // Create Fastify instance with built-in logger (simpler for Docker)
   const app = fastify({
-    logger: logger,
+    logger: {
+      level: process.env.LOG_LEVEL || "info",
+    },
   });
 
   // Register routes

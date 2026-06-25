@@ -210,7 +210,14 @@ export async function registerRoutes(app: FastifyInstance) {
     if (db.isMemoryExpired(memory)) {
       return reply.code(404).send({ error: "Memory not found (expired)" });
     }
-    return memory;
+    // Parse the value back to object if it's JSON
+    let parsedValue = memory.value;
+    try {
+      parsedValue = JSON.parse(memory.value);
+    } catch {
+      // Not JSON, keep as string
+    }
+    return { ...memory, value: parsedValue };
   });
 
   // Update a memory

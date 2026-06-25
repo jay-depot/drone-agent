@@ -6,7 +6,7 @@ tags:
   - implementation
   - plan
 created: 2026-06-25T01:27:12.872Z
-updated: 2026-06-25T01:29:41.485Z
+updated: 2026-06-25T01:30:11.805Z
 ---
 
 # Smoke Test Implementation Plan
@@ -28,8 +28,8 @@ Get `docker:smoke-test` script to run successfully with beacon+agent smoke tests
 ### 3. Fix memory test route ✅ DONE
 - [x] Change test to use GET /memory/key/:key?namespace=default
 
-### 4. Add build scripts to root package.json
-- [ ] Add docker:build, docker:up, docker:down
+### 4. Add build scripts to root package.json ✅ DONE
+- [x] Add docker:build, docker:up, docker:down
 
 ### 5. Make coordinator actually register beacons
 - [ ] Beacon should auto-register on startup if coordinator configured
@@ -46,5 +46,5 @@ Get `docker:smoke-test` script to run successfully with beacon+agent smoke tests
 ---
 
 *Created: 2026-06-25*
-*Status: Item 3 complete*
-*Commit: [Will commit after item 4]*
+*Status: Item 4 complete*
+*Commit: 640dc2c*

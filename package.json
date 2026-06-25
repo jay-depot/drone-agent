@@ -24,13 +24,6 @@
   "author": "",
   "license": "MIT",
   "packageManager": "pnpm@11.8.0",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "11.8.0",
-      "onFail": "download"
-    }
-  },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
     "@eslint/js": "^10.0.1",

@@ -100,7 +100,6 @@ Options:
 
 async function main() {
   const config = parseArgs();
-
   logger.info(`Starting drone-beacon on ${config.host}:${config.port}`);
   logger.info(`Configuration directory: ${config.configDir}`);
   logger.info(`Database path: ${config.dbPath}`);
@@ -144,9 +143,11 @@ async function main() {
     }
   }
 
-  // Create Fastify instance
+  // Create Fastify instance with built-in logger (simpler for Docker)
   const app = fastify({
-    logger: logger,
+    logger: {
+      level: process.env.LOG_LEVEL || "info",
+    },
   });
 
   // Register routes

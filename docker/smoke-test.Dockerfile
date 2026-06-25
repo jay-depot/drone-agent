@@ -5,18 +5,22 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Install root dependencies for build tools
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable pnpm && pnpm install --frozen-lockfile
+# Copy smoke-test package.json and install dependencies (fresh install)
+COPY docker/smoke-test/package.json ./docker/smoke-test/package.json
 
-# Copy smoke-test source and config
-COPY docker/smoke-test/src ./docker/smoke-test/src
-COPY docker/smoke-test/tsconfig.json ./docker/smoke-test/
-COPY docker/smoke-test/package.json ./docker/smoke-test/
-
-# Build smoke-test
+# Install without lockfile (to avoid pnpm supply-chain policy issues)
 WORKDIR /app/docker/smoke-test
-RUN pnpm install && pnpm build
+RUN npm install
+
+# Copy source
+COPY docker/smoke-test/src ./src
+COPY docker/smoke-test/tsconfig.json ./
+
+# Build
+RUN npm run build
+
+# Set the working directory
+WORKDIR /app/docker/smoke-test
 
 # Run smoke tests
 CMD ["node", "dist/index.js"]
