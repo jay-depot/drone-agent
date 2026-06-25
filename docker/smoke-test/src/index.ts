@@ -129,6 +129,7 @@ async function testBeaconMemoryStore(): Promise<TestResult> {
   try {
     const testKey = `test-key-${Date.now()}`;
     const testValue = { message: "test-value", timestamp: Date.now() };
+    const namespace = "default";
 
     // Store a memory
     const storeResponse = await fetch(`${BEACON_URL}/memory`, {
@@ -137,6 +138,7 @@ async function testBeaconMemoryStore(): Promise<TestResult> {
       body: JSON.stringify({
         key: testKey,
         value: testValue,
+        namespace: namespace,
         ttlSeconds: 60,
       }),
     });
@@ -145,8 +147,8 @@ async function testBeaconMemoryStore(): Promise<TestResult> {
       return { name: "beacon-memory-store", passed: false, error: `Store failed: ${storeResponse.status}`, duration: Date.now() - start };
     }
 
-    // Retrieve the memory
-    const getResponse = await fetch(`${BEACON_URL}/memory/${testKey}`);
+    // Retrieve the memory using the correct route: GET /memory/key/:key?namespace=
+    const getResponse = await fetch(`${BEACON_URL}/memory/key/${testKey}?namespace=${namespace}`);
     if (!getResponse.ok) {
       return { name: "beacon-memory-store", passed: false, error: `Get failed: ${getResponse.status}`, duration: Date.now() - start };
     }

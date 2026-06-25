@@ -12,7 +12,13 @@
     "test:coverage": "vitest run --coverage",
     "lint:eslint": "eslint . --ext .ts,.tsx --fix",
     "lint:prettier": "prettier --write .",
-    "lint": "pnpm lint:eslint && pnpm lint:prettier"
+    "lint": "pnpm lint:eslint && pnpm lint:prettier",
+    "docker:build": "docker compose -f docker/docker-compose.smoke-test.yaml build",
+    "docker:up": "docker compose -f docker/docker-compose.smoke-test.yaml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.smoke-test.yaml down",
+    "docker:smoke-test": "pnpm docker:build && pnpm docker:up && pnpm docker:smoke-test:run",
+    "docker:smoke-test:run": "docker compose -f docker/docker-compose.smoke-test.yaml run --rm smoke-test-runner",
+    "docker:clean": "docker compose -f docker/docker-compose.smoke-test.yaml down -v --remove-orphans"
   },
   "keywords": [],
   "author": "",

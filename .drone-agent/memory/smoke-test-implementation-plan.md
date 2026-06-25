@@ -6,7 +6,7 @@ tags:
   - implementation
   - plan
 created: 2026-06-25T01:27:12.872Z
-updated: 2026-06-25T01:27:12.872Z
+updated: 2026-06-25T01:29:41.485Z
 ---
 
 # Smoke Test Implementation Plan
@@ -16,17 +16,17 @@ Get `docker:smoke-test` script to run successfully with beacon+agent smoke tests
 
 ## Items (Sequential)
 
-### 1. Fix echo-llm
-- [ ] Add docker/echo-llm/src/logger.ts
-- [ ] Add docker/echo-llm/tsconfig.json
-- [ ] Update docker/echo-llm.Dockerfile to build
+### 1. Fix echo-llm ✅ DONE
+- [x] Add docker/echo-llm/src/logger.ts
+- [x] Add docker/echo-llm/tsconfig.json
+- [x] Update docker/echo-llm.Dockerfile to build
 
-### 2. Fix smoke-test
-- [ ] Verify docker/smoke-test/package.json has dependencies
-- [ ] Update docker/smoke-test.Dockerfile to build properly
+### 2. Fix smoke-test ✅ DONE
+- [x] Verify docker/smoke-test/package.json has dependencies
+- [x] Update docker/smoke-test.Dockerfile to build properly
 
-### 3. Fix memory test route
-- [ ] Change test to use GET /memory/key/:key?namespace=default
+### 3. Fix memory test route ✅ DONE
+- [x] Change test to use GET /memory/key/:key?namespace=default
 
 ### 4. Add build scripts to root package.json
 - [ ] Add docker:build, docker:up, docker:down
@@ -46,4 +46,5 @@ Get `docker:smoke-test` script to run successfully with beacon+agent smoke tests
 ---
 
 *Created: 2026-06-25*
-*Status: Not started*
+*Status: Item 3 complete*
+*Commit: [Will commit after item 4]*
