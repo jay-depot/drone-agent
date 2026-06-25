@@ -6,7 +6,7 @@ tags:
   - todo
   - swarm
 created: 2026-06-24T01:57:59.883Z
-updated: 2026-06-25T04:39:41.796Z
+updated: 2026-06-25T04:42:02.151Z
 ---
 
 # Phase 2 Todo List
@@ -74,7 +74,8 @@ updated: 2026-06-25T04:39:41.796Z
     - [x] Beacon: Auto-push local personas on create/update/delete
     - [x] Beacon: Auto-push local skills on create/update/delete
     - [x] POST /sync endpoint for manual pull from coordinator
-  - TODO: Periodic auto-pull (can use POST /sync on interval)
+    - [x] Periodic auto-pull with configurable interval (--sync-interval-minutes, default 5min)
+    - [x] Initial sync on beacon startup
 - [x] Push sessions to coordinator on agent end
   - IMPLEMENTED:
     - [x] Coordinator: beacon_sessions table with duration tracking
