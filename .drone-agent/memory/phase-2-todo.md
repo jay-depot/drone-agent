@@ -6,7 +6,7 @@ tags:
   - todo
   - swarm
 created: 2026-06-24T01:57:59.883Z
-updated: 2026-06-25T04:52:48.641Z
+updated: 2026-06-25T04:55:43.303Z
 ---
 
 # Phase 2 Todo List
@@ -89,7 +89,6 @@ updated: 2026-06-25T04:52:48.641Z
     - [x] Add CRUD functions (createEventLog, getEventLog, listEventLogs, cleanupOldEventLogs)
     - [x] Add REST routes: GET /events, GET /events/:id
     - [x] Add event logging for agent connect/disconnect and persona created
-- [ ] Auto-download of beacon binary for agent
 - [x] Agent-side WebSocket client in swarm plugin
   - IMPLEMENTED in drone-agent/src/plugins/swarm/index.ts:
     - [x] WebSocket connection with reconnection (exponential backoff)
@@ -97,6 +96,9 @@ updated: 2026-06-25T04:52:48.641Z
     - [x] Channel subscribe/unsubscribe
     - [x] swarm_message tool with actions: send, subscribe, unsubscribe, get_messages
     - [x] Heartbeat for session maintenance
+
+### Moved to Future Phase
+- [ ] Auto-download of beacon binary for agent (moving to Phase X)
 
 ---
 
