@@ -295,7 +295,7 @@ export async function registerWebSocketServer(
 // Cleanup old messages periodically
 let cleanupInterval: NodeJS.Timeout | null = null;
 
-export function startMessageCleanup(intervalHours: number = 24): void {
+export function startMessageCleanup(): void {
   // Run cleanup every hour
   cleanupInterval = setInterval(
     () => {

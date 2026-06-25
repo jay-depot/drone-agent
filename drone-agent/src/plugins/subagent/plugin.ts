@@ -59,8 +59,6 @@ export const subagentPlugin: DronePlugin = {
           };
           writeNdjsonEvent(returnEvent);
           process.exit(0);
-          // Never reached
-          return JSON.stringify(returnEvent);
         },
       });
 

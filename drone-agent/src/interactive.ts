@@ -79,8 +79,7 @@ export async function readNdjsonInput(): Promise<unknown[]> {
  */
 export async function runJsonMode(
   conversation: CreateConversationService,
-  engine: CreateDronePluginEngine,
-  logger: CreateConsoleLogger
+  engine: CreateDronePluginEngine
 ): Promise<void> {
   // Read stdin as NDJSON
   const events = await readNdjsonInput();

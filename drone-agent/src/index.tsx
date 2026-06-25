@@ -242,7 +242,7 @@ async function main(): Promise<void> {
     // === Subagent mode: --once (+ optionally --output-json) ===
     // Run JSON mode if --output-json: read kickoff from stdin, output NDJSON
     if (invocation.options.outputJson) {
-      await runJsonMode(conversation, engine, logger);
+      await runJsonMode(conversation, engine);
     } else {
       // --once without --output-json: run a single tool
       const selectedTool = engine.getTool('startup.status');

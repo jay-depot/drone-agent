@@ -11,7 +11,7 @@
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import React from 'react';
-import { marked, Lexer } from 'marked';
+import { marked } from 'marked';
 import { createLowlight, common } from 'lowlight';
 
 /**
@@ -98,7 +98,7 @@ function renderToken(
       return (
         <Text color={textColor}>
           {token.tokens
-            ?.map((t: any, i: number) => renderInlineToken(t, color))
+            ?.map((t: any) => renderInlineToken(t, color))
             .flat()}
         </Text>
       );

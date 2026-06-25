@@ -1,5 +1,4 @@
 import Database from 'better-sqlite3';
-import { randomUUID } from 'crypto';
 import type {
   Persona,
   Skill,

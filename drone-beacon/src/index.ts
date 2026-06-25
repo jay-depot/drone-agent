@@ -182,7 +182,7 @@ async function main() {
 
   // Register WebSocket server
   await wsServer.registerWebSocketServer(app);
-  wsServer.startMessageCleanup(24);
+  wsServer.startMessageCleanup();
 
   // Start periodic TTL cleanup (every minute)
   const cleanupInterval = setInterval(() => {
