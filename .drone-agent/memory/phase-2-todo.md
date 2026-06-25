@@ -6,7 +6,7 @@ tags:
   - todo
   - swarm
 created: 2026-06-24T01:57:59.883Z
-updated: 2026-06-25T01:18:59.123Z
+updated: 2026-06-25T03:38:19.919Z
 ---
 
 # Phase 2 Todo List
@@ -20,7 +20,8 @@ updated: 2026-06-25T01:18:59.123Z
 
 ## Integration & Testing
 
-- [ ] 5. Integration test: Run beacon + agent with swarm plugin
+- [x] 5. Integration test: Run beacon + agent with swarm plugin
+  - Note: Automatic smoke test in Docker covers this
 
 ## Documentation
 
@@ -29,8 +30,12 @@ updated: 2026-06-25T01:18:59.123Z
 
 ## Additional Features (Phase 2 scope)
 
-- [ ] 8. Inter-agent messaging (communication channel)
-  - Note: Memory store with namespace support provides basic kv, need dedicated messaging
+- [x] 8. Inter-agent messaging (communication channel)
+  - SPEC: Memory: inter-agent-messaging-spec
+  - WebSocket-based real-time messaging
+  - Direct messages (agent → agent) + channel broadcast
+  - 24h retention after delivery, then auto-cleanup
+  - Phase 3 will add cross-beacon via coordinator
 - [x] 9. Agent spawn execution
   - [x] SPEC: Agent spawn spec created (memory: agent-spawn-spec)
   - [x] IMPLEMENTED: Core spawn functionality (Phase 1)
@@ -50,19 +55,20 @@ updated: 2026-06-25T01:18:59.123Z
 ## What's Still Needed
 
 ### High Priority
-- [ ] Inter-agent messaging - Memory store provides KV but no pub/sub or message queue
-- [ ] Integration test - beacon + agent with swarm plugin
-
-### Medium Priority
 - [ ] Beacon-level config override - Allow beacon to override project/user config
 - [ ] Sync knowledge from coordinator (push/pull)
 - [ ] Push sessions to coordinator on agent end
 
-### Lower Priority
+### Medium Priority
 - [ ] Event log (append-only log for agent events)
 - [ ] Auto-download of beacon binary for agent
+- [ ] Inter-agent messaging - Implementation
+  - [ ] Add messages table to db.ts
+  - [ ] Create WebSocket server (ws-server.ts)
+  - [ ] Add message routes to routes.ts
+  - [ ] Update swarm plugin with WS client
 
 ---
 
-*Last updated: 2026-06-25*
+*Last updated: 2026-06-26*
 *Checked against actual implementation in drone-beacon/src/*
