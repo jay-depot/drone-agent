@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import * as db from './db.js';
 import * as spawner from './spawner.js';

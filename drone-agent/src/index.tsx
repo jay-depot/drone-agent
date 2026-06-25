@@ -1,4 +1,4 @@
-import { createConsoleLogger } from 'drone-core';
+import { createConsoleLogger, type DroneLlmCapability } from 'drone-core';
 import { stdout as output } from 'node:process';
 import { createBuiltInPlugins } from './plugins/index.js';
 import { createTui } from './tui/index.js';
@@ -242,7 +242,7 @@ async function main(): Promise<void> {
     // === Subagent mode: --once (+ optionally --output-json) ===
     // Run JSON mode if --output-json: read kickoff from stdin, output NDJSON
     if (invocation.options.outputJson) {
-      await runJsonMode(conversation, engine);
+      await runJsonMode(conversation, engine, logger);
     } else {
       // --once without --output-json: run a single tool
       const selectedTool = engine.getTool('startup.status');
