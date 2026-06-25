@@ -6,7 +6,7 @@ tags:
   - todo
   - swarm
 created: 2026-06-24T01:57:59.883Z
-updated: 2026-06-25T03:45:58.376Z
+updated: 2026-06-25T04:31:43.066Z
 ---
 
 # Phase 2 Todo List
@@ -58,19 +58,28 @@ updated: 2026-06-25T03:45:58.376Z
     - [x] DELETE /spawn/:id (terminate)
     - [x] Track agent exit and update status
   - [ ] TODO: Integration testing (Phase 3)
-- [ ] 10. Beacon-level config override
+- [x] 10. Beacon-level config override
+  - IMPLEMENTED:
+    - [x] Add beacon_config table to db.ts
+    - [x] Add CRUD functions (createBeaconConfig, getBeaconConfig, listBeaconConfig, updateBeaconConfig, deleteBeaconConfig)
+    - [x] Add REST routes: GET/POST /config, GET/PUT/DELETE /config/:key
 
 ## What's Still Needed
 
 ### High Priority
-- [ ] Beacon-level config override - Allow beacon to override project/user config
 - [ ] Sync knowledge from coordinator (push/pull)
 - [ ] Push sessions to coordinator on agent end
 
 ### Medium Priority
 - [ ] Event log (append-only log for agent events)
 - [ ] Auto-download of beacon binary for agent
-- [ ] Agent-side WebSocket client in swarm plugin
+- [x] Agent-side WebSocket client in swarm plugin
+  - IMPLEMENTED in drone-agent/src/plugins/swarm/index.ts:
+    - [x] WebSocket connection with reconnection (exponential backoff)
+    - [x] Message queue for offline delivery
+    - [x] Channel subscribe/unsubscribe
+    - [x] swarm_message tool with actions: send, subscribe, unsubscribe, get_messages
+    - [x] Heartbeat for session maintenance
 
 ---
 
