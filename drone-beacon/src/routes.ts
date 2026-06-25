@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import * as db from "./db.js";
 import * as spawner from "./spawner.js";
-import type { CreatePersonaRequest, CreateSkillRequest, RegisterAgentRequest, CreateMemoryRequest, UpdateMemoryRequest, SpawnRequest } from "./types.js";
+import type { CreatePersonaRequest, CreateSkillRequest, RegisterAgentRequest, CreateMemoryRequest, UpdateMemoryRequest, SpawnRequest, CreateMessageRequest } from "./types.js";
 import { createCoordinatorClient, type CoordinatorClient } from "./coordinator-client.js";
 import type { CoordinatorConfig } from "./types.js";
+import * as wsServer from "./ws-server.js";
 import { logger } from "./logger.js";
 import { randomUUID } from "crypto";
 
@@ -236,6 +237,68 @@ export async function registerRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Memory not found" });
     }
     return { success: true };
+  });
+
+
+  // === Message Routes ===
+
+  // Send a message (REST fallback for non-WS clients)
+  app.post<{ Body: CreateMessageRequest & { fromAgentId: string } }>("/messages", async (request, reply) => {
+    const { fromAgentId, toAgentId, toChannel, body } = request.body;
+
+    if (!toAgentId && !toChannel) {
+      return reply.code(400).send({ error: "Must specify toAgentId or toChannel" });
+    }
+
+    const message = db.createMessage(fromAgentId, toAgentId ?? null, toChannel ?? null, body);
+
+    // Try to deliver immediately if recipient is connected
+    if (toAgentId && wsServer.isAgentConnected(toAgentId)) {
+      wsServer.sendToAgent(toAgentId, {
+        type: "message",
+        payload: {
+          id: message.id,
+          fromAgentId,
+          body: JSON.parse(body),
+          receivedAt: message.createdAt,
+        },
+      });
+      db.markMessageDelivered(message.id);
+    }
+
+    return reply.code(201).send(message);
+  });
+
+  // List messages for an agent
+  app.get<{ Querystring: { agentId: string; unreadOnly?: string } }>("/messages", async (request, reply) => {
+    const { agentId, unreadOnly } = request.query;
+    if (!agentId) {
+      return reply.code(400).send({ error: "agentId query parameter required" });
+    }
+    return db.listMessagesForAgent(agentId, unreadOnly !== "false");
+  });
+
+  // Get single message
+  app.get<{ Params: { id: string } }>("/messages/:id", async (request, reply) => {
+    const message = db.getMessage(request.params.id);
+    if (!message) {
+      return reply.code(404).send({ error: "Message not found" });
+    }
+    return message;
+  });
+
+  // Mark message as read
+  app.post<{ Params: { id: string } }>("/messages/:id/read", async (request, reply) => {
+    const marked = db.markMessageDelivered(request.params.id);
+    if (!marked) {
+      return reply.code(404).send({ error: "Message not found" });
+    }
+    return { success: true };
+  });
+
+  // List messages in a channel
+  app.get<{ Params: { channel: string } }>("/messages/channel/:channel", async (request, reply) => {
+    return db.listMessagesByChannel(request.params.channel);
   });
 
   // === Spawn Routes ===

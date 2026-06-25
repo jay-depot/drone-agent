@@ -1,9 +1,11 @@
 import fastify from "fastify";
+import websocket from "@fastify/websocket";
 import path from "path";
 import { initDatabase, closeDatabase, cleanupExpiredMemories } from "./db.js";
 import { registerRoutes, setCoordinatorClient, setBeaconAddress } from "./routes.js";
 import { createCoordinatorClient, type CoordinatorClient } from "./coordinator-client.js";
 import { initSpawner, cleanupAllSpawns, type SpawnerConfig } from "./spawner.js";
+import * as wsServer from "./ws-server.js";
 import { logger } from "./logger.js";
 
 const DEFAULT_PORT = 3457;
@@ -152,6 +154,10 @@ async function main() {
 
   // Register routes
   await registerRoutes(app);
+
+  // Register WebSocket server
+  await wsServer.registerWebSocketServer(app);
+  wsServer.startMessageCleanup(24);
 
   // Start periodic TTL cleanup (every minute)
   const cleanupInterval = setInterval(() => {

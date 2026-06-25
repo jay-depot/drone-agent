@@ -272,6 +272,17 @@ export function App(opts: DroneTuiOptions): JSX.Element {
         return;
       }
 
+      if (trimmed === '/tools') {
+        const tools = opts.engine.listTools();
+        const lines = ['Registered tools:'];
+        for (const tool of tools) {
+          lines.push(`  ${tool.name}`);
+          lines.push(`    ${tool.description}`);
+        }
+        log(lines.join('\n'), 'success');
+        return;
+      }
+
       if (trimmed === '/systemprompt') {
         const fragments = await opts.engine.renderPromptFragments();
         const config = opts.engine.getConfig();
@@ -577,6 +588,7 @@ function printHelp(
     '  /help              Show this help',
     '  /clear             Clear session',
     '  /plugins           List enabled plugins',
+    '  /tools             List registered tools',
     '  /systemprompt      Show the current system prompt',
   ];
 

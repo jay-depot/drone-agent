@@ -78,6 +78,24 @@ export interface UpdateMemoryRequest {
   ttlSeconds?: number;
 }
 
+// === Message Types ===
+
+export interface AgentMessage {
+  id: string;
+  fromAgentId: string;
+  toAgentId: string | null;
+  channel: string | null;
+  body: string; // JSON string
+  delivered: boolean;
+  createdAt: number;
+}
+
+export interface CreateMessageRequest {
+  toAgentId?: string;
+  toChannel?: string;
+  body: string; // JSON string
+}
+
 // === Spawn Types ===
 
 export interface SpawnConfig {

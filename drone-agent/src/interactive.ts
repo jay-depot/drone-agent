@@ -158,6 +158,17 @@ export async function runInteractiveLoop(
           continue;
         }
 
+        if (line === '/tools') {
+          const tools = engine.listTools();
+          const lines = ['Registered tools:'];
+          for (const tool of tools) {
+            lines.push(`  ${tool.name}`);
+            lines.push(`    ${tool.description}`);
+          }
+          logger.info(lines.join('\n'));
+          continue;
+        }
+
         // Try plugin-registered slash commands
         const handled = await engine.dispatchSlashCommand(line, {
           logger,

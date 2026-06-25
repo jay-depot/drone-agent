@@ -6,7 +6,7 @@ tags:
   - todo
   - swarm
 created: 2026-06-24T01:57:59.883Z
-updated: 2026-06-25T03:38:19.919Z
+updated: 2026-06-25T03:45:58.376Z
 ---
 
 # Phase 2 Todo List
@@ -32,9 +32,17 @@ updated: 2026-06-25T03:38:19.919Z
 
 - [x] 8. Inter-agent messaging (communication channel)
   - SPEC: Memory: inter-agent-messaging-spec
-  - WebSocket-based real-time messaging
-  - Direct messages (agent → agent) + channel broadcast
-  - 24h retention after delivery, then auto-cleanup
+  - IMPLEMENTED:
+    - [x] Add messages table to db.ts
+    - [x] Add message CRUD functions (createMessage, getMessage, listMessagesForAgent, listMessagesByChannel, markMessageDelivered, cleanupOldMessages)
+    - [x] Create WebSocket server (ws-server.ts) with:
+      - /ws endpoint for real-time messaging
+      - Direct messages (agent → agent)
+      - Channel broadcast
+      - Subscribe/unsubscribe to channels
+      - Keepalive ping/pong
+    - [x] Add message REST routes to routes.ts
+    - [x] Message cleanup (24h retention after delivery)
   - Phase 3 will add cross-beacon via coordinator
 - [x] 9. Agent spawn execution
   - [x] SPEC: Agent spawn spec created (memory: agent-spawn-spec)
@@ -62,11 +70,7 @@ updated: 2026-06-25T03:38:19.919Z
 ### Medium Priority
 - [ ] Event log (append-only log for agent events)
 - [ ] Auto-download of beacon binary for agent
-- [ ] Inter-agent messaging - Implementation
-  - [ ] Add messages table to db.ts
-  - [ ] Create WebSocket server (ws-server.ts)
-  - [ ] Add message routes to routes.ts
-  - [ ] Update swarm plugin with WS client
+- [ ] Agent-side WebSocket client in swarm plugin
 
 ---
 

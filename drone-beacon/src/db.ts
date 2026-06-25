@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import type { Persona, Skill, AgentSession, CreatePersonaRequest, CreateSkillRequest, RegisterAgentRequest, CreateMemoryRequest, UpdateMemoryRequest, Memory, SpawnRecord, SpawnConfig } from "./types.js";
+import type { Persona, Skill, AgentSession, CreatePersonaRequest, CreateSkillRequest, RegisterAgentRequest, CreateMemoryRequest, UpdateMemoryRequest, Memory, SpawnRecord, SpawnConfig, AgentMessage } from "./types.js";
 import { logger } from "./logger.js";
 import { randomUUID } from "crypto";
 
@@ -48,6 +48,16 @@ export function initDatabase(dataPath: string): Database.Database {
       updatedAt INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      from_agent_id TEXT NOT NULL,
+      to_agent_id TEXT,
+      channel TEXT,
+      body TEXT NOT NULL,
+      delivered INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS spawns (
       id TEXT PRIMARY KEY,
       agent_id TEXT,
@@ -64,6 +74,9 @@ export function initDatabase(dataPath: string): Database.Database {
 
     CREATE INDEX IF NOT EXISTS idx_memory_namespace ON memory(namespace);
     CREATE INDEX IF NOT EXISTS idx_memory_ttl ON memory(ttl);
+    CREATE INDEX IF NOT EXISTS idx_messages_to ON messages(to_agent_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel);
+    CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
     CREATE INDEX IF NOT EXISTS idx_spawns_status ON spawns(status);
     CREATE INDEX IF NOT EXISTS idx_spawns_agent_id ON spawns(agent_id);
   `);
@@ -403,6 +416,81 @@ export function cleanupExpiredMemories(): number {
 // Helper to check if memory is expired
 export function isMemoryExpired(memory: Memory): boolean {
   return memory.ttl !== null && memory.ttl <= Date.now();
+}
+
+// === Message Operations ===
+
+
+interface MessageRow {
+  id: string;
+  from_agent_id: string;
+  to_agent_id: string | null;
+  channel: string | null;
+  body: string;
+  delivered: number;
+  created_at: number;
+}
+
+function rowToMessage(row: MessageRow): AgentMessage {
+  return {
+    id: row.id,
+    fromAgentId: row.from_agent_id,
+    toAgentId: row.to_agent_id,
+    channel: row.channel,
+    body: row.body,
+    delivered: row.delivered === 1,
+    createdAt: row.created_at,
+  };
+}
+
+export function createMessage(fromAgentId: string, toAgentId: string | null, channel: string | null, body: string): AgentMessage {
+  const now = Date.now();
+  const id = randomUUID();
+
+  const stmt = getDatabase().prepare(`
+    INSERT INTO messages (id, from_agent_id, to_agent_id, channel, body, delivered, created_at)
+    VALUES (?, ?, ?, ?, ?, 0, ?)
+  `);
+
+  stmt.run(id, fromAgentId, toAgentId, channel, body, now);
+
+  logger.info(`Created message ${id} from ${fromAgentId}`);
+  return { id, fromAgentId, toAgentId, channel, body, delivered: false, createdAt: now };
+}
+
+export function getMessage(id: string): AgentMessage | undefined {
+  const stmt = getDatabase().prepare("SELECT * FROM messages WHERE id = ?");
+  const row = stmt.get(id) as MessageRow | undefined;
+  if (!row) return undefined;
+  return rowToMessage(row);
+}
+
+export function listMessagesForAgent(agentId: string, unreadOnly: boolean = true): AgentMessage[] {
+  const sql = unreadOnly
+    ? "SELECT * FROM messages WHERE to_agent_id = ? AND delivered = 0 ORDER BY created_at DESC"
+    : "SELECT * FROM messages WHERE to_agent_id = ? ORDER BY created_at DESC";
+  const stmt = getDatabase().prepare(sql);
+  return (stmt.all(agentId) as MessageRow[]).map(rowToMessage);
+}
+
+export function listMessagesByChannel(channel: string): AgentMessage[] {
+  const stmt = getDatabase().prepare("SELECT * FROM messages WHERE channel = ? ORDER BY created_at DESC");
+  return (stmt.all(channel) as MessageRow[]).map(rowToMessage);
+}
+
+export function markMessageDelivered(id: string): boolean {
+  const stmt = getDatabase().prepare("UPDATE messages SET delivered = 1 WHERE id = ?");
+  const result = stmt.run(id);
+  if (result.changes > 0) logger.info(`Marked message ${id} delivered`);
+  return result.changes > 0;
+}
+
+export function cleanupOldMessages(maxAgeHours: number = 24): number {
+  const cutoff = Date.now() - maxAgeHours * 60 * 60 * 1000;
+  const stmt = getDatabase().prepare("DELETE FROM messages WHERE delivered = 1 AND created_at < ?");
+  const result = stmt.run(cutoff);
+  if (result.changes > 0) logger.info(`Cleaned up ${result.changes} old messages`);
+  return result.changes;
 }
 
 // === Spawn Operations ===
