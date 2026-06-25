@@ -31,10 +31,7 @@ export const personaProviderUserPlugin: DronePlugin = {
     description:
       'Loads persona .md files from the user ~/.drone-agent/personas/ directory.',
     defaultEnabled: false,
-    dependencies: [
-      { id: 'persona' },
-      { id: 'skills', optional: true },
-    ],
+    dependencies: [{ id: 'persona' }, { id: 'skills', optional: true }],
   },
   register: async registration => {
     const personaDir = path.join(os.homedir(), CONFIG_DIR, PERSONA_DIR);
@@ -52,9 +49,7 @@ export const personaProviderUserPlugin: DronePlugin = {
       reloadPersonas: async () => {
         const loaded = await loadPersonasFromDir(personaDir, 'user');
         personas = new Map(loaded.map(p => [p.id, p]));
-        registration.logger.info(
-          `reloaded ${personas.size} user persona(s)`
-        );
+        registration.logger.info(`reloaded ${personas.size} user persona(s)`);
 
         // ── Reload persona-owned skills ────────────────────────────
         const skillsCap = registration.request<DroneSkillsCapability>('skills');
@@ -68,7 +63,11 @@ export const personaProviderUserPlugin: DronePlugin = {
           const newSkills = new Map<string, DroneSkillDefinition>();
 
           for (const persona of loaded) {
-            const personaSkillsDir = path.join(personaDir, persona.id, SKILLS_DIR);
+            const personaSkillsDir = path.join(
+              personaDir,
+              persona.id,
+              SKILLS_DIR
+            );
             const allSkills = await loadSkillsFromDir(personaSkillsDir, 'user');
 
             for (const skill of allSkills) {

@@ -58,12 +58,16 @@ export function parseCliArgs(argv: string[]): CliInvocation {
       options.once = true;
     } else if (arg === '--output-plain') {
       if (options.outputJson) {
-        throw new Error("Cannot use --output-plain and --output-json at the same time.");
+        throw new Error(
+          'Cannot use --output-plain and --output-json at the same time.'
+        );
       }
       options.outputPlain = true;
     } else if (arg === '--output-json') {
       if (options.outputPlain) {
-        throw new Error("Cannot use --output-plain and --output-json at the same time.");
+        throw new Error(
+          'Cannot use --output-plain and --output-json at the same time.'
+        );
       }
       options.outputJson = true;
     } else if (arg === '--model' && i + 1 < argv.length) {
@@ -79,7 +83,7 @@ export function parseCliArgs(argv: string[]): CliInvocation {
           options.pluginOverrides.push(trimmed);
         }
       }
-    // NEW: subagent mode flags
+      // NEW: subagent mode flags
     } else if (arg === '--subagent-id' && i + 1 < argv.length) {
       options.subagentId = argv[++i];
     } else if (arg === '--persona' && i + 1 < argv.length) {

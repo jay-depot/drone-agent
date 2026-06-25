@@ -21,6 +21,7 @@ updated: 2026-06-24T06:06:34.444Z
 ### Purpose
 
 Enable the beacon to spawn new agent processes on demand. This is foundational for:
+
 - **Phase 3**: Coordinator directing beacons to spawn agents
 - **Phase 4**: Gateway spawning agents for chat conversations
 - **Phase 5**: Distributed task routing across beacons
@@ -30,15 +31,19 @@ Enable the beacon to spawn new agent processes on demand. This is foundational f
 ## Use Cases
 
 ### UC1: Manual Spawn via API
+
 A user or system sends a spawn request to the beacon API. The beacon spawns an agent with a specified persona to handle a task.
 
 ### UC2: Coordinator-Directed Spawn
+
 The coordinator sends a spawn request to a beacon (via beacon's API) to launch an agent for swarm-wide task execution.
 
 ### UC3: Gateway-Initiated Spawn
+
 The gateway receives a chat message and spawns an agent via the beacon to handle the conversation.
 
 ### UC4: Scheduled/Background Spawn
+
 Beacon could have internal triggers to spawn agents based on conditions (future: not in initial spec).
 
 ---
@@ -48,39 +53,42 @@ Beacon could have internal triggers to spawn agents based on conditions (future:
 ### POST /spawn
 
 **Request:**
+
 ```typescript
 interface SpawnRequest {
-  personaId?: string;        // Persona to load (optional)
-  task?: string;            // Initial task/message for the agent
+  personaId?: string; // Persona to load (optional)
+  task?: string; // Initial task/message for the agent
   config?: {
-    model?: string;         // Model to use (e.g., "llama3")
-    preamble?: string;     // Override persona's system prompt
-    workingDir?: string;   // Working directory for the agent
-    env?: Record<string, string>;  // Environment variables
+    model?: string; // Model to use (e.g., "llama3")
+    preamble?: string; // Override persona's system prompt
+    workingDir?: string; // Working directory for the agent
+    env?: Record<string, string>; // Environment variables
   };
-  spawnId?: string;         // Client-provided ID (optional, for tracking)
+  spawnId?: string; // Client-provided ID (optional, for tracking)
 }
 ```
 
 **Response (202 Accepted):**
+
 ```typescript
 interface SpawnResponse {
-  spawnId: string;          // Beacon-generated or client-provided ID
-  agentId: string;          // The session ID the agent will use
-  status: "spawning" | "running" | "failed";
-  beaconUrl: string;        // Beacon URL for agent to connect to
-  message?: string;        // Human-readable status
+  spawnId: string; // Beacon-generated or client-provided ID
+  agentId: string; // The session ID the agent will use
+  status: 'spawning' | 'running' | 'failed';
+  beaconUrl: string; // Beacon URL for agent to connect to
+  message?: string; // Human-readable status
 }
 ```
 
 ### GET /spawn/:spawnId
 
 **Response:**
+
 ```typescript
 interface SpawnStatusResponse {
   spawnId: string;
   agentId: string | null;
-  status: "spawning" | "running" | "failed" | "terminated";
+  status: 'spawning' | 'running' | 'failed' | 'terminated';
   createdAt: number;
   startedAt?: number;
   terminatedAt?: number;
@@ -120,6 +128,7 @@ CREATE TABLE IF NOT EXISTS spawns (
 ```
 
 ### Indexes
+
 ```sql
 CREATE INDEX IF NOT EXISTS idx_spawns_status ON spawns(status);
 CREATE INDEX IF NOT EXISTS idx_spawns_agent_id ON spawns(agent_id);
@@ -160,18 +169,19 @@ CREATE INDEX IF NOT EXISTS idx_spawns_agent_id ON spawns(agent_id);
 
 The spawned agent should receive arguments to connect to the beacon:
 
-| Argument | Description | Example |
-|----------|-------------|---------|
-| `--swarm` | Enable swarm plugin | flag |
-| `--session-id` | Unique session ID | `agent-uuid` |
-| `--beacon-host` | Beacon hostname | `localhost` |
-| `--beacon-port` | Beacon port | `3457` |
-| `--persona` | Persona ID to load | `coder` |
-| `--task` | Initial task/message | `"Fix the bug in..."` |
-| `--model` | Model to use | `llama3` |
-| `--working-dir` | Working directory | `/project` |
+| Argument        | Description          | Example               |
+| --------------- | -------------------- | --------------------- |
+| `--swarm`       | Enable swarm plugin  | flag                  |
+| `--session-id`  | Unique session ID    | `agent-uuid`          |
+| `--beacon-host` | Beacon hostname      | `localhost`           |
+| `--beacon-port` | Beacon port          | `3457`                |
+| `--persona`     | Persona ID to load   | `coder`               |
+| `--task`        | Initial task/message | `"Fix the bug in..."` |
+| `--model`       | Model to use         | `llama3`              |
+| `--working-dir` | Working directory    | `/project`            |
 
 **Spawn command example:**
+
 ```bash
 drone-agent --swarm --session-id agent-123 --beacon-host localhost --beacon-port 3457 --persona coder --task "Hello"
 ```
@@ -181,27 +191,28 @@ drone-agent --swarm --session-id agent-123 --beacon-host localhost --beacon-port
 ## Configuration
 
 ### CLI Arguments (drone-beacon)
+
 ```bash
 drone-beacon --port 3457 --spawn-agent-path /usr/local/bin/drone-agent
 ```
 
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--spawn-agent-path` | `drone-agent` | Path to drone-agent binary |
-| `--spawn-timeout-ms` | `30000` | Timeout for agent to connect |
-| `--max-concurrent-spawns` | `10` | Max parallel spawned agents |
+| Argument                  | Default       | Description                  |
+| ------------------------- | ------------- | ---------------------------- |
+| `--spawn-agent-path`      | `drone-agent` | Path to drone-agent binary   |
+| `--spawn-timeout-ms`      | `30000`       | Timeout for agent to connect |
+| `--max-concurrent-spawns` | `10`          | Max parallel spawned agents  |
 
 ---
 
 ## Error Handling
 
-| Scenario | Behavior |
-|----------|----------|
-| Invalid personaId | 400 Bad Request with error message |
-| Spawn binary not found | 500, spawn record status: "failed", error: "binary not found" |
-| Process exits immediately | Update spawn record with exit code, status: "failed" |
-| Agent doesn't connect within timeout | Update status: "failed", error: "timeout" |
-| Max concurrent spawns reached | 503 Service Unavailable |
+| Scenario                             | Behavior                                                      |
+| ------------------------------------ | ------------------------------------------------------------- |
+| Invalid personaId                    | 400 Bad Request with error message                            |
+| Spawn binary not found               | 500, spawn record status: "failed", error: "binary not found" |
+| Process exits immediately            | Update spawn record with exit code, status: "failed"          |
+| Agent doesn't connect within timeout | Update status: "failed", error: "timeout"                     |
+| Max concurrent spawns reached        | 503 Service Unavailable                                       |
 
 ---
 
@@ -218,6 +229,7 @@ drone-beacon --port 3457 --spawn-agent-path /usr/local/bin/drone-agent
 ## Implementation Tasks
 
 ### Phase 1: Core Spawn Functionality
+
 - [ ] Add spawn types to `types.ts`
 - [ ] Add `spawns` table to `db.ts`
 - [ ] Create `spawner.ts` with spawn logic
@@ -225,12 +237,14 @@ drone-beacon --port 3457 --spawn-agent-path /usr/local/bin/drone-agent
 - [ ] Add CLI args to `index.ts`
 
 ### Phase 2: Monitoring & Management
+
 - [ ] GET /spawn/:id endpoint
 - [ ] GET /spawn list endpoint
 - [ ] DELETE /spawn/:id (terminate)
 - [ ] Track agent exit and update status
 
 ### Phase 3: Integration
+
 - [ ] Integration test: spawn agent via API
 - [ ] Integration test: spawned agent connects to beacon
 - [ ] Integration test: terminate spawned agent
@@ -258,14 +272,14 @@ drone-beacon --port 3457 --spawn-agent-path /usr/local/bin/drone-agent
 
 ## Related Files
 
-| File | Changes |
-|------|---------|
-| `src/types.ts` | Add `SpawnRequest`, `SpawnResponse`, `SpawnStatus` |
-| `src/db.ts` | Add `createSpawn`, `getSpawn`, `updateSpawn`, `listSpawns`, `deleteSpawn` |
-| `src/spawner.ts` | **NEW** - Spawn process logic |
-| `src/routes.ts` | Add `/spawn` routes |
-| `src/index.ts` | Add CLI args for spawn config |
-| `drone-agent/src/plugins/swarm/index.ts` | Add `--task` argument support |
+| File                                     | Changes                                                                   |
+| ---------------------------------------- | ------------------------------------------------------------------------- |
+| `src/types.ts`                           | Add `SpawnRequest`, `SpawnResponse`, `SpawnStatus`                        |
+| `src/db.ts`                              | Add `createSpawn`, `getSpawn`, `updateSpawn`, `listSpawns`, `deleteSpawn` |
+| `src/spawner.ts`                         | **NEW** - Spawn process logic                                             |
+| `src/routes.ts`                          | Add `/spawn` routes                                                       |
+| `src/index.ts`                           | Add CLI args for spawn config                                             |
+| `drone-agent/src/plugins/swarm/index.ts` | Add `--task` argument support                                             |
 
 ---
 

@@ -32,7 +32,10 @@ export const gitPlugin: DronePlugin = {
       inputSchema: {
         type: 'object',
         properties: {
-          cwd: { type: 'string', description: 'Working directory (default: cwd).' },
+          cwd: {
+            type: 'string',
+            description: 'Working directory (default: cwd).',
+          },
         },
         additionalProperties: false,
       },
@@ -77,9 +80,18 @@ export const gitPlugin: DronePlugin = {
       inputSchema: {
         type: 'object',
         properties: {
-          staged: { type: 'boolean', description: 'Show staged diff (--cached). Default false.' },
-          path: { type: 'string', description: 'Restrict to a single file (optional).' },
-          cwd: { type: 'string', description: 'Working directory (default: cwd).' },
+          staged: {
+            type: 'boolean',
+            description: 'Show staged diff (--cached). Default false.',
+          },
+          path: {
+            type: 'string',
+            description: 'Restrict to a single file (optional).',
+          },
+          cwd: {
+            type: 'string',
+            description: 'Working directory (default: cwd).',
+          },
         },
         additionalProperties: false,
       },
@@ -110,7 +122,10 @@ export const gitPlugin: DronePlugin = {
         type: 'object',
         properties: {
           message: { type: 'string', description: 'Commit message.' },
-          cwd: { type: 'string', description: 'Working directory (default: cwd).' },
+          cwd: {
+            type: 'string',
+            description: 'Working directory (default: cwd).',
+          },
         },
         required: ['message'],
         additionalProperties: false,
@@ -128,7 +143,10 @@ export const gitPlugin: DronePlugin = {
             : undefined;
 
         await runGit(['add', '-A'], cwd);
-        const output = await runGit(['commit', '-m', input.message.trim()], cwd);
+        const output = await runGit(
+          ['commit', '-m', input.message.trim()],
+          cwd
+        );
         // Extract commit hash from output like "[main abc1234] message"
         const hashMatch = output.match(/\[[^\]]+ ([a-f0-9]+)\]/);
         return JSON.stringify(
@@ -153,8 +171,14 @@ export const gitPlugin: DronePlugin = {
         type: 'object',
         properties: {
           maxCount: { type: 'number', description: 'Max commits. Default 10.' },
-          path: { type: 'string', description: 'Restrict to a file (optional).' },
-          cwd: { type: 'string', description: 'Working directory (default: cwd).' },
+          path: {
+            type: 'string',
+            description: 'Restrict to a file (optional).',
+          },
+          cwd: {
+            type: 'string',
+            description: 'Working directory (default: cwd).',
+          },
         },
         additionalProperties: false,
       },

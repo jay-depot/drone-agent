@@ -3,7 +3,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createDefaultAgentConfig, type DronePersonaProvider } from 'drone-core';
+import {
+  createDefaultAgentConfig,
+  type DronePersonaProvider,
+} from 'drone-core';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { personaPlugin } from '../src/plugins/persona/index.js';
 
@@ -11,7 +14,9 @@ import { personaPlugin } from '../src/plugins/persona/index.js';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeMockProvider(personas: { id: string; name: string }[]): DronePersonaProvider {
+function makeMockProvider(
+  personas: { id: string; name: string }[]
+): DronePersonaProvider {
   const map = new Map(personas.map(p => [p.id, p]));
   return {
     id: 'test-provider',
@@ -63,7 +68,9 @@ describe('persona.select tool — graceful error handling', () => {
     );
 
     // Reload to pick up the provider's personas
-    const reloadCap = engine.getCapability<{ reloadPersonas: () => Promise<void> }>('persona');
+    const reloadCap = engine.getCapability<{
+      reloadPersonas: () => Promise<void>;
+    }>('persona');
     await reloadCap!.reloadPersonas();
 
     // Try selecting a typo'd persona
@@ -90,12 +97,12 @@ describe('persona.select tool — graceful error handling', () => {
       registerProvider: (p: DronePersonaProvider) => void;
     }>('persona');
     personaCap!.registerProvider(
-      makeMockProvider([
-        { id: 'coder', name: 'Coder' },
-      ])
+      makeMockProvider([{ id: 'coder', name: 'Coder' }])
     );
 
-    const reloadCap = engine.getCapability<{ reloadPersonas: () => Promise<void> }>('persona');
+    const reloadCap = engine.getCapability<{
+      reloadPersonas: () => Promise<void>;
+    }>('persona');
     await reloadCap!.reloadPersonas();
 
     const result = await engine.executeTool('persona.select', { id: 'coder' });
@@ -117,7 +124,9 @@ describe('persona.select tool — graceful error handling', () => {
     await engine.initialize();
 
     // No provider registered — no personas
-    const result = await engine.executeTool('persona.select', { id: 'anything' });
+    const result = await engine.executeTool('persona.select', {
+      id: 'anything',
+    });
     const parsed = JSON.parse(result);
 
     expect(parsed.error).toBe(true);

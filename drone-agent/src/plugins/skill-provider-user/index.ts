@@ -35,9 +35,7 @@ export const skillProviderUserPlugin: DronePlugin = {
       reloadSkills: async () => {
         const loaded = await loadSkillsFromDir(skillsDir, 'user');
         skills = new Map(loaded.map(s => [s.id, s]));
-        registration.logger.info(
-          `reloaded ${skills.size} user skill(s)`
-        );
+        registration.logger.info(`reloaded ${skills.size} user skill(s)`);
       },
     };
 

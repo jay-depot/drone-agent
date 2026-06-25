@@ -20,9 +20,7 @@ import { createDefaultAgentConfig } from 'drone-core';
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function withTempDir<T>(
-  fn: (dir: string) => Promise<T>
-): Promise<T> {
+async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   const dir = await mkdtemp(path.join(tmpdir(), 'drone-macros-'));
   try {
     vi.spyOn(os, 'homedir').mockReturnValue(path.join(dir, 'fake-home'));
@@ -61,7 +59,9 @@ describe('parseMacroFile', () => {
 
     const result = parseMacroFile(content, '/fake/path/plan.macro');
     expect(result.command).toBe('/plan');
-    expect(result.description).toBe('Switch to plan persona and start planning');
+    expect(result.description).toBe(
+      'Switch to plan persona and start planning'
+    );
     expect(result.filePath).toBe('/fake/path/plan.macro');
     expect(result.steps).toHaveLength(2);
     expect(result.steps[0]).toEqual({
@@ -105,11 +105,9 @@ describe('parseMacroFile', () => {
   });
 
   it('detects optional arguments $1?, $$?', () => {
-    const content = [
-      '#! /greet',
-      'Hello $1?',
-      'How are you doing $$?',
-    ].join('\n');
+    const content = ['#! /greet', 'Hello $1?', 'How are you doing $$?'].join(
+      '\n'
+    );
 
     const result = parseMacroFile(content, '/fake/path/greet.macro');
     expect(result.argSpec).toEqual([{ position: 1, required: false }]);
@@ -118,10 +116,7 @@ describe('parseMacroFile', () => {
   });
 
   it('detects required catch-all $$', () => {
-    const content = [
-      '#! /echo',
-      'You said: $$',
-    ].join('\n');
+    const content = ['#! /echo', 'You said: $$'].join('\n');
 
     const result = parseMacroFile(content, '/fake/path/echo.macro');
     expect(result.hasCatchAll).toBe(true);
@@ -130,10 +125,9 @@ describe('parseMacroFile', () => {
   });
 
   it('throws on missing #! declaration', () => {
-    const content = [
-      '/persona select plan',
-      'Design a new feature.',
-    ].join('\n');
+    const content = ['/persona select plan', 'Design a new feature.'].join(
+      '\n'
+    );
 
     expect(() => parseMacroFile(content, '/fake/path/bad.macro')).toThrow(
       'first non-empty line must be "#! /<command> [description]"'
@@ -156,16 +150,13 @@ describe('parseMacroFile', () => {
     // Actually, the regex requires / before the command name.
     // Let's test a malformed declaration.
     const badContent = '#! plan\n/persona list\n';
-    expect(() =>
-      parseMacroFile(badContent, '/fake/path/bad.macro')
-    ).toThrow('first non-empty line must be "#! /<command> [description]"');
+    expect(() => parseMacroFile(badContent, '/fake/path/bad.macro')).toThrow(
+      'first non-empty line must be "#! /<command> [description]"'
+    );
   });
 
   it('throws on duplicate argument positions', () => {
-    const content = [
-      '#! /test',
-      '/cmd $1 $1',
-    ].join('\n');
+    const content = ['#! /test', '/cmd $1 $1'].join('\n');
 
     expect(() => parseMacroFile(content, '/fake/path/dup.macro')).toThrow(
       'duplicate argument $1'
@@ -173,11 +164,7 @@ describe('parseMacroFile', () => {
   });
 
   it('throws when no steps are defined', () => {
-    const content = [
-      '#! /empty',
-      '# just a comment',
-      '',
-    ].join('\n');
+    const content = ['#! /empty', '# just a comment', ''].join('\n');
 
     expect(() => parseMacroFile(content, '/fake/path/empty.macro')).toThrow(
       'no steps defined'
@@ -228,13 +215,14 @@ describe('parseMacroFile', () => {
 // ---------------------------------------------------------------------------
 
 describe('substituteMacroArgs', () => {
-  const macro = parseMacroFile(
-    '#! /test\n$1 $2 $$\n',
-    '/fake/path/test.macro'
-  );
+  const macro = parseMacroFile('#! /test\n$1 $2 $$\n', '/fake/path/test.macro');
 
   it('substitutes positional arguments', () => {
-    const result = substituteMacroArgs('Hello $1 and $2', ['world', 'universe'], macro);
+    const result = substituteMacroArgs(
+      'Hello $1 and $2',
+      ['world', 'universe'],
+      macro
+    );
     expect(result).toBe('Hello world and universe');
   });
 
@@ -249,9 +237,9 @@ describe('substituteMacroArgs', () => {
   });
 
   it('throws on missing required positional argument', () => {
-    expect(() =>
-      substituteMacroArgs('$1 $2', ['only'], macro)
-    ).toThrow('requires argument $2');
+    expect(() => substituteMacroArgs('$1 $2', ['only'], macro)).toThrow(
+      'requires argument $2'
+    );
   });
 
   it('throws on missing required catch-all', () => {
@@ -261,19 +249,13 @@ describe('substituteMacroArgs', () => {
   });
 
   it('substitutes optional $1? with empty string when missing', () => {
-    const optMacro = parseMacroFile(
-      '#! /test\n$1?\n',
-      '/fake/path/opt.macro'
-    );
+    const optMacro = parseMacroFile('#! /test\n$1?\n', '/fake/path/opt.macro');
     const result = substituteMacroArgs('Hello $1?', [], optMacro);
     expect(result).toBe('Hello ');
   });
 
   it('substitutes optional $$? with empty string when missing', () => {
-    const optMacro = parseMacroFile(
-      '#! /test\n$$?\n',
-      '/fake/path/opt2.macro'
-    );
+    const optMacro = parseMacroFile('#! /test\n$$?\n', '/fake/path/opt2.macro');
     const result = substituteMacroArgs('Args: $$?', [], optMacro);
     expect(result).toBe('Args: ');
   });
@@ -288,11 +270,7 @@ describe('substituteMacroArgs', () => {
       '#! /test\n$1 $2? $$?\n',
       '/fake/path/mixed.macro'
     );
-    const result = substituteMacroArgs(
-      '$1 $2? $$?',
-      ['first'],
-      mixedMacro
-    );
+    const result = substituteMacroArgs('$1 $2? $$?', ['first'], mixedMacro);
     expect(result).toBe('first  ');
   });
 });

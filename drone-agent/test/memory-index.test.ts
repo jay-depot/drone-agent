@@ -27,7 +27,11 @@ function createMockRegistration(): {
     workflows: DroneWorkflow[];
     hooks: Record<string, Function[]>;
   };
-  logger: { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
+  logger: {
+    info: ReturnType<typeof vi.fn>;
+    warn: ReturnType<typeof vi.fn>;
+    error: ReturnType<typeof vi.fn>;
+  };
 } {
   const logger = {
     info: vi.fn(),
@@ -38,7 +42,11 @@ function createMockRegistration(): {
   const captured = {
     capabilities: new Map<string, unknown>(),
     tools: [] as { name: string; execute: Function }[],
-    prompts: [] as { key: string; phase: string; render: () => Promise<string | false> }[],
+    prompts: [] as {
+      key: string;
+      phase: string;
+      render: () => Promise<string | false>;
+    }[],
     help: [] as string[],
     workflows: [] as DroneWorkflow[],
     hooks: {
@@ -76,8 +84,10 @@ function createMockRegistration(): {
       onAfterToolCall: cb => captured.hooks.onAfterToolCall.push(cb),
       onSessionClear: cb => captured.hooks.onSessionClear.push(cb),
       onShutdown: cb => captured.hooks.onShutdown.push(cb),
-      onSessionSafetyTrimWillRun: cb => captured.hooks.onSessionSafetyTrimWillRun.push(cb),
-      onSessionSafetyTrimApplied: cb => captured.hooks.onSessionSafetyTrimApplied.push(cb),
+      onSessionSafetyTrimWillRun: cb =>
+        captured.hooks.onSessionSafetyTrimWillRun.push(cb),
+      onSessionSafetyTrimApplied: cb =>
+        captured.hooks.onSessionSafetyTrimApplied.push(cb),
     },
     offer: <T>(capability: T) => {
       captured.capabilities.set('memory', capability);

@@ -32,7 +32,11 @@ export type DroneConfigCapability = {
    * @param key Dot-notation key path (e.g. 'ollama.model')
    * @param value The JSON value to set
    */
-  setValue: (scope: 'project' | 'user', key: string, value: unknown) => Promise<void>;
+  setValue: (
+    scope: 'project' | 'user',
+    key: string,
+    value: unknown
+  ) => Promise<void>;
   /** Register a config injector for injecting config as underlay. */
   registerInjector: (injector: DroneConfigInjector) => void;
   /** Unregister a config injector by id. */
@@ -47,14 +51,18 @@ export type DroneConfigCapability = {
 
 const configInjectors: import('drone-core').DroneConfigInjector[] = [];
 
-function registerInjector(injector: import('drone-core').DroneConfigInjector): void {
+function registerInjector(
+  injector: import('drone-core').DroneConfigInjector
+): void {
   // Remove existing injector with same id
   const existingIdx = configInjectors.findIndex(i => i.id === injector.id);
   if (existingIdx !== -1) {
     configInjectors.splice(existingIdx, 1);
   }
   // Insert in precedence order (lower first)
-  const idx = configInjectors.findIndex(i => i.precedence > injector.precedence);
+  const idx = configInjectors.findIndex(
+    i => i.precedence > injector.precedence
+  );
   if (idx === -1) {
     configInjectors.push(injector);
   } else {
@@ -156,7 +164,7 @@ function getByPath(obj: Record<string, unknown>, keyPath: string): unknown {
 function deepSet(
   obj: Record<string, unknown>,
   keyPath: string,
-  value: unknown,
+  value: unknown
 ): void {
   const parts = keyPath.split('.');
   let current = obj;
@@ -177,7 +185,7 @@ function deepSet(
 function validateConfigKey(key: string): void {
   if (!KNOWN_CONFIG_KEYS.includes(key)) {
     throw new Error(
-      `Unknown config key "${key}". Valid keys: ${KNOWN_CONFIG_KEYS.join(', ')}`,
+      `Unknown config key "${key}". Valid keys: ${KNOWN_CONFIG_KEYS.join(', ')}`
     );
   }
 }
@@ -196,7 +204,7 @@ function resolveUserConfigPath(): string {
  */
 function resolveLayerProvenance(
   key: string,
-  layers: DroneConfigLayer[],
+  layers: DroneConfigLayer[]
 ): string {
   // Walk layers in reverse (highest priority first)
   for (let i = layers.length - 1; i >= 0; i--) {
@@ -212,9 +220,7 @@ function resolveLayerProvenance(
 /**
  * Collect all leaf keys with their provenance from the layers.
  */
-function collectProvenance(
-  layers: DroneConfigLayer[],
-): Record<string, string> {
+function collectProvenance(layers: DroneConfigLayer[]): Record<string, string> {
   const provenance: Record<string, string> = {};
   for (const key of KNOWN_CONFIG_KEYS) {
     // Skip top-level container keys — only track leaf keys
@@ -232,7 +238,7 @@ function collectProvenance(
 async function writeConfigValue(
   scope: 'project' | 'user',
   key: string,
-  value: unknown,
+  value: unknown
 ): Promise<string> {
   const filePath =
     scope === 'user'
@@ -252,7 +258,7 @@ async function writeConfigValue(
     await writeFile(
       resolvedPath,
       JSON.stringify(newConfig, null, 2) + '\n',
-      'utf-8',
+      'utf-8'
     );
     return resolvedPath;
   }
@@ -403,7 +409,10 @@ export const configPlugin: DronePlugin = {
 
         if (key) {
           validateConfigKey(key);
-          const value = getByPath(mergedConfig as unknown as Record<string, unknown>, key);
+          const value = getByPath(
+            mergedConfig as unknown as Record<string, unknown>,
+            key
+          );
           const source = resolveLayerProvenance(key, layers);
           return JSON.stringify(
             {
@@ -412,7 +421,7 @@ export const configPlugin: DronePlugin = {
               source,
             },
             null,
-            2,
+            2
           );
         }
 
@@ -424,7 +433,7 @@ export const configPlugin: DronePlugin = {
             _provenance: provenance,
           },
           null,
-          2,
+          2
         );
       },
     });
@@ -444,7 +453,9 @@ export const configPlugin: DronePlugin = {
         const scope = (input.scope as string) || 'project';
         if (scope !== 'project' && scope !== 'user') {
           throw new Error(
-            'config.set scope must be "project" or "user". Got: "' + scope + '".',
+            'config.set scope must be "project" or "user". Got: "' +
+              scope +
+              '".'
           );
         }
 
@@ -470,7 +481,7 @@ export const configPlugin: DronePlugin = {
             message: `Config value "${key}" written to ${scope} scope (${filePath}). The change will take effect on the next session restart.`,
           },
           null,
-          2,
+          2
         );
       },
     });
@@ -497,7 +508,7 @@ export const configPlugin: DronePlugin = {
             layers: layerInfo,
           },
           null,
-          2,
+          2
         );
       },
     });
@@ -514,10 +525,10 @@ export const configPlugin: DronePlugin = {
         await writeConfigValue(scope, key, value);
         cachedLayers = null;
       },
-      registerInjector: (injector) => {
+      registerInjector: injector => {
         registerInjector(injector);
       },
-      unregisterInjector: (injectorId) => {
+      unregisterInjector: injectorId => {
         unregisterInjector(injectorId);
       },
       getInjectors: () => getInjectors(),
@@ -527,7 +538,7 @@ export const configPlugin: DronePlugin = {
     // ── Lifecycle ───────────────────────────────────────────────────
     registration.hooks.onPluginsLoaded(async () => {
       registration.logger.info(
-        'config plugin ready (use config.get, config.set, config.list_layers tools)',
+        'config plugin ready (use config.get, config.set, config.list_layers tools)'
       );
     });
   },

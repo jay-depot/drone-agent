@@ -139,7 +139,9 @@ describe('readMemoryEntry / writeMemoryEntry', () => {
       const entry = createMemoryEntry('atomic', 'data');
       await writeMemoryEntry(memoryDir, entry);
 
-      const files = await import('node:fs/promises').then(m => m.readdir(memoryDir));
+      const files = await import('node:fs/promises').then(m =>
+        m.readdir(memoryDir)
+      );
       const tmpFiles = files.filter(f => f.endsWith('.tmp'));
       expect(tmpFiles).toHaveLength(0);
 
@@ -150,11 +152,17 @@ describe('readMemoryEntry / writeMemoryEntry', () => {
 
   it('writes and reads YAML frontmatter correctly', async () => {
     await withTempMemory(async memoryDir => {
-      const entry = createMemoryEntry('frontmatter-test', 'Body text here', ['tag-a', 'tag-b']);
+      const entry = createMemoryEntry('frontmatter-test', 'Body text here', [
+        'tag-a',
+        'tag-b',
+      ]);
       await writeMemoryEntry(memoryDir, entry);
 
       // Read raw file to verify format
-      const raw = await readFile(path.join(memoryDir, 'frontmatter-test.md'), 'utf-8');
+      const raw = await readFile(
+        path.join(memoryDir, 'frontmatter-test.md'),
+        'utf-8'
+      );
       expect(raw).toContain('---');
       expect(raw).toContain('key: frontmatter-test');
       expect(raw).toContain('  - tag-a');
@@ -239,8 +247,14 @@ describe('listMemoryEntries', () => {
 describe('searchMemoryEntries', () => {
   it('matches by key substring', async () => {
     await withTempMemory(async memoryDir => {
-      await writeMemoryEntry(memoryDir, createMemoryEntry('bug-tracker', 'info', ['bug']));
-      await writeMemoryEntry(memoryDir, createMemoryEntry('feature-list', 'info', ['feature']));
+      await writeMemoryEntry(
+        memoryDir,
+        createMemoryEntry('bug-tracker', 'info', ['bug'])
+      );
+      await writeMemoryEntry(
+        memoryDir,
+        createMemoryEntry('feature-list', 'info', ['feature'])
+      );
 
       const results = await searchMemoryEntries(memoryDir, 'bug');
       expect(results).toHaveLength(1);
@@ -250,8 +264,14 @@ describe('searchMemoryEntries', () => {
 
   it('matches by tag', async () => {
     await withTempMemory(async memoryDir => {
-      await writeMemoryEntry(memoryDir, createMemoryEntry('thing', 'info', ['important']));
-      await writeMemoryEntry(memoryDir, createMemoryEntry('other', 'info', ['trivial']));
+      await writeMemoryEntry(
+        memoryDir,
+        createMemoryEntry('thing', 'info', ['important'])
+      );
+      await writeMemoryEntry(
+        memoryDir,
+        createMemoryEntry('other', 'info', ['trivial'])
+      );
 
       const results = await searchMemoryEntries(memoryDir, 'important');
       expect(results).toHaveLength(1);
@@ -261,8 +281,16 @@ describe('searchMemoryEntries', () => {
 
   it('matches by body text', async () => {
     await withTempMemory(async memoryDir => {
-      await writeMemoryEntry(memoryDir, createMemoryEntry('note1', 'This is about TypeScript types', ['code']));
-      await writeMemoryEntry(memoryDir, createMemoryEntry('note2', 'This is about Rust borrow checker', ['code']));
+      await writeMemoryEntry(
+        memoryDir,
+        createMemoryEntry('note1', 'This is about TypeScript types', ['code'])
+      );
+      await writeMemoryEntry(
+        memoryDir,
+        createMemoryEntry('note2', 'This is about Rust borrow checker', [
+          'code',
+        ])
+      );
 
       const results = await searchMemoryEntries(memoryDir, 'TypeScript');
       expect(results).toHaveLength(1);
@@ -273,7 +301,10 @@ describe('searchMemoryEntries', () => {
   it('respects limit', async () => {
     await withTempMemory(async memoryDir => {
       for (let i = 0; i < 10; i++) {
-        await writeMemoryEntry(memoryDir, createMemoryEntry(`key${i}`, `${i}`, ['test']));
+        await writeMemoryEntry(
+          memoryDir,
+          createMemoryEntry(`key${i}`, `${i}`, ['test'])
+        );
       }
       const results = await searchMemoryEntries(memoryDir, 'key', 3);
       expect(results).toHaveLength(3);

@@ -15,6 +15,7 @@ updated: 2026-06-25T03:48:04.214Z
 ## Problem
 
 Currently the config system cascades as:
+
 - Project > User > Beacon > Coordinator > System defaults
 
 But there's no way for the beacon to actively **override** or **inject** config into this cascade. This is needed for:
@@ -26,8 +27,9 @@ But there's no way for the beacon to actively **override** or **inject** config 
 ## Current State
 
 The beacon stores:
+
 - Personas
-- Skills  
+- Skills
 - Memory (KV store)
 - Messages
 
@@ -52,20 +54,21 @@ CREATE TABLE IF NOT EXISTS beacon_config (
 ### 2. Config Merge Strategy
 
 When agent connects to beacon:
+
 1. Agent sends its current config (or just requests beacon config)
 2. Beacon returns its overrides
 3. Agent merges into config cascade: **Beacon > Agent's existing config**
 
 ### 3. API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/config` | Get all beacon config overrides |
-| GET | `/config/:key` | Get specific config value |
-| POST | `/config` | Set a config override |
-| PUT | `/config/:key` | Update config override |
-| DELETE | `/config/:key` | Remove config override |
-| POST | `/config/sync` | Sync to coordinator (if swarm config) |
+| Method | Endpoint       | Description                           |
+| ------ | -------------- | ------------------------------------- |
+| GET    | `/config`      | Get all beacon config overrides       |
+| GET    | `/config/:key` | Get specific config value             |
+| POST   | `/config`      | Set a config override                 |
+| PUT    | `/config/:key` | Update config override                |
+| DELETE | `/config/:key` | Remove config override                |
+| POST   | `/config/sync` | Sync to coordinator (if swarm config) |
 
 ### 4. Request/Response Types
 
@@ -73,7 +76,7 @@ When agent connects to beacon:
 interface BeaconConfigEntry {
   key: string;
   value: string; // JSON
-  scope: "local" | "swarm";
+  scope: 'local' | 'swarm';
   createdAt: number;
   updatedAt: number;
 }
@@ -81,7 +84,7 @@ interface BeaconConfigEntry {
 interface CreateConfigRequest {
   key: string;
   value: string; // JSON
-  scope?: "local" | "swarm"; // default: "local"
+  scope?: 'local' | 'swarm'; // default: "local"
 }
 
 interface ConfigSyncResponse {
@@ -92,16 +95,21 @@ interface ConfigSyncResponse {
 ### 5. Agent Integration
 
 When agent connects via swarm plugin:
+
 1. Fetch beacon config: `GET /config`
 2. Merge into agent config (beacon values override agent values)
 3. Log/notify agent of config changes
 
 Example merge:
+
 ```typescript
-function mergeBeaconConfig(agentConfig: Config, beaconConfig: Record<string, unknown>): Config {
+function mergeBeaconConfig(
+  agentConfig: Config,
+  beaconConfig: Record<string, unknown>
+): Config {
   return {
     ...agentConfig,
-    ...beaconConfig,  // Beacon wins for same keys
+    ...beaconConfig, // Beacon wins for same keys
   };
 }
 ```
@@ -109,6 +117,7 @@ function mergeBeaconConfig(agentConfig: Config, beaconConfig: Record<string, unk
 ## Implementation Plan
 
 ### Step 1: Database (db.ts)
+
 - Add `beacon_config` table schema
 - Add CRUD functions:
   - `createBeaconConfig(key, value, scope?)`
@@ -118,12 +127,15 @@ function mergeBeaconConfig(agentConfig: Config, beaconConfig: Record<string, unk
   - `deleteBeaconConfig(key)`
 
 ### Step 2: Types (types.ts)
+
 - Add `BeaconConfigEntry`, `CreateConfigRequest` types
 
 ### Step 3: Routes (routes.ts)
+
 - Add REST endpoints for config CRUD
 
 ### Step 4: Agent-Side (swarm plugin)
+
 - On connect, fetch `/config`
 - Merge into runtime config
 - Provide a way to notify the agent of config changes
@@ -131,6 +143,7 @@ function mergeBeaconConfig(agentConfig: Config, beaconConfig: Record<string, unk
 ## Priority
 
 **High Priority** because:
+
 - Needed for beacon to control model selection across agents
 - Enables environment-specific configuration
 - Foundation for swarm-wide coordination

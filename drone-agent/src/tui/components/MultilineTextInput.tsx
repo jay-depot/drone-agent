@@ -54,8 +54,7 @@ export function MultilineTextInput({
 
       // Ctrl+J (input === '\n' with !key.return) → insert newline at cursor
       if (input === '\n' && !key.return) {
-        const next =
-          value.slice(0, offset) + '\n' + value.slice(offset);
+        const next = value.slice(0, offset) + '\n' + value.slice(offset);
         onChange(next);
         setCursorOffset(offset + 1);
         return;
@@ -64,8 +63,7 @@ export function MultilineTextInput({
       // Backspace / Delete
       if (key.backspace || key.delete) {
         if (offset > 0) {
-          const next =
-            value.slice(0, offset - 1) + value.slice(offset);
+          const next = value.slice(0, offset - 1) + value.slice(offset);
           onChange(next);
           setCursorOffset(offset - 1);
         }
@@ -86,8 +84,7 @@ export function MultilineTextInput({
 
       // Printable characters (ignore ctrl/meta sequences)
       if (input && !key.ctrl && !key.meta) {
-        const next =
-          value.slice(0, offset) + input + value.slice(offset);
+        const next = value.slice(0, offset) + input + value.slice(offset);
         onChange(next);
         setCursorOffset(offset + input.length);
       }
@@ -141,9 +138,7 @@ function renderWithCursor(
   // Use raw ANSI escape codes for inverse video within a single
   // text string. \u001b[7m = inverse on, \u001b[27m = inverse off.
   // This avoids nested <Text> elements which cause Yoga layout bugs.
-  const cursor = at
-    ? `\u001b[7m${at}\u001b[27m`
-    : '\u001b[7m \u001b[27m';
+  const cursor = at ? `\u001b[7m${at}\u001b[27m` : '\u001b[7m \u001b[27m';
 
   return before + cursor + after;
 }

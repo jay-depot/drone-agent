@@ -91,9 +91,7 @@ export const promptFilePlugin: DronePlugin = {
       }
 
       if (config.files.length === 0) {
-        registration.logger.info(
-          'prompt-file enabled but no files configured'
-        );
+        registration.logger.info('prompt-file enabled but no files configured');
         return;
       }
 

@@ -9,10 +9,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { render } from 'ink-testing-library';
-import {
-  createDefaultAgentConfig,
-  type DroneAgentConfig,
-} from 'drone-core';
+import { createDefaultAgentConfig, type DroneAgentConfig } from 'drone-core';
 import { App } from '../src/tui/app.js';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { createTestPlugin, silentLogger } from './helpers.js';
@@ -28,7 +25,13 @@ function makeOptions(
     engine: {
       listTools: () => [],
       listPlugins: () => [
-        { id: 'core', name: 'Core', enabled: true, required: true, defaultEnabled: true },
+        {
+          id: 'core',
+          name: 'Core',
+          enabled: true,
+          required: true,
+          defaultEnabled: true,
+        },
       ],
       getRegisteredPluginCount: () => 1,
       getRegisteredToolCount: () => 0,
@@ -114,7 +117,13 @@ describe('TUI /systemprompt', () => {
       engine: {
         listTools: () => [],
         listPlugins: () => [
-          { id: 'core', name: 'Core', enabled: true, required: true, defaultEnabled: true },
+          {
+            id: 'core',
+            name: 'Core',
+            enabled: true,
+            required: true,
+            defaultEnabled: true,
+          },
         ],
         getRegisteredPluginCount: () => 1,
         getRegisteredToolCount: () => 0,

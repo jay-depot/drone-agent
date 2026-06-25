@@ -11,8 +11,12 @@ import type { createConsoleLogger } from 'drone-core';
 import { createReadlineElicitation } from './elicitation.js';
 
 export type CreateConsoleLogger = ReturnType<typeof createConsoleLogger>;
-export type CreateConversationService = ReturnType<typeof createConversationService>;
-export type CreateDronePluginEngine = ReturnType<typeof createDronePluginEngine>;
+export type CreateConversationService = ReturnType<
+  typeof createConversationService
+>;
+export type CreateDronePluginEngine = ReturnType<
+  typeof createDronePluginEngine
+>;
 
 /**
  * Show the Ink-based model picker and resolve with the chosen model id.
@@ -86,7 +90,6 @@ export async function runFirstRunSetup(
   // Use the readline elicitation to ask the user
   const elicit = createReadlineElicitation();
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const answers = await elicit.ask([
       {

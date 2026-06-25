@@ -3,7 +3,7 @@ export interface Persona {
   name: string;
   description: string;
   systemPrompt: string;
-  scope: "local" | "coordinator";
+  scope: 'local' | 'coordinator';
   createdAt: number;
   updatedAt: number;
 }
@@ -14,7 +14,7 @@ export interface Skill {
   description: string;
   trigger: string;
   body: string;
-  scope: "local" | "coordinator";
+  scope: 'local' | 'coordinator';
   createdAt: number;
   updatedAt: number;
 }
@@ -115,7 +115,7 @@ export interface SpawnRequest {
 export interface SpawnResponse {
   spawnId: string;
   agentId: string;
-  status: "spawning" | "running" | "failed";
+  status: 'spawning' | 'running' | 'failed';
   beaconUrl: string;
   message?: string;
 }
@@ -123,7 +123,7 @@ export interface SpawnResponse {
 export interface SpawnStatus {
   spawnId: string;
   agentId: string | null;
-  status: "spawning" | "running" | "failed" | "terminated";
+  status: 'spawning' | 'running' | 'failed' | 'terminated';
   createdAt: number;
   startedAt?: number;
   terminatedAt?: number;
@@ -137,7 +137,7 @@ export interface SpawnRecord {
   personaId: string | null;
   task: string | null;
   configJson: string | null;
-  status: "spawning" | "running" | "failed" | "terminated";
+  status: 'spawning' | 'running' | 'failed' | 'terminated';
   error: string | null;
   createdAt: number;
   startedAt: number | null;
@@ -157,36 +157,36 @@ export interface SpawnBeaconConfig {
 
 export interface BeaconConfigEntry {
   key: string;
-  value: string;  // JSON string
-  scope: "local" | "swarm";
+  value: string; // JSON string
+  scope: 'local' | 'swarm';
   createdAt: number;
   updatedAt: number;
 }
 
 export interface CreateConfigRequest {
   key: string;
-  value: string;  // JSON string
-  scope?: "local" | "swarm";  // default: "local"
+  value: string; // JSON string
+  scope?: 'local' | 'swarm'; // default: "local"
 }
 
 // === Event Log Types ===
 
 export type EventType =
-  | "agent.connected"
-  | "agent.disconnected"
-  | "agent.heartbeat"
-  | "agent.spawned"
-  | "agent.terminated"
-  | "message.sent"
-  | "message.delivered"
-  | "persona.created"
-  | "persona.updated"
-  | "persona.deleted"
-  | "skill.created"
-  | "skill.updated"
-  | "skill.deleted"
-  | "sync.completed"
-  | "sync.failed";
+  | 'agent.connected'
+  | 'agent.disconnected'
+  | 'agent.heartbeat'
+  | 'agent.spawned'
+  | 'agent.terminated'
+  | 'message.sent'
+  | 'message.delivered'
+  | 'persona.created'
+  | 'persona.updated'
+  | 'persona.deleted'
+  | 'skill.created'
+  | 'skill.updated'
+  | 'skill.deleted'
+  | 'sync.completed'
+  | 'sync.failed';
 
 export interface EventLog {
   id: string;

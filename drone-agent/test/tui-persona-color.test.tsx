@@ -49,7 +49,9 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
     },
     dispatchSlashCommand: async (): Promise<boolean> => false,
     setElicitation: (): void => {},
-    runWorkflow: async (): Promise<import('drone-core').DroneWorkflowResult> => ({ toolResult: '{}' }),
+    runWorkflow: async (): Promise<
+      import('drone-core').DroneWorkflowResult
+    > => ({ toolResult: '{}' }),
   };
   return {
     model,

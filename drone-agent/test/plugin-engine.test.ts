@@ -464,13 +464,17 @@ describe('createDronePluginEngine', () => {
 
       // Not enabled initially
       expect(engine.getTool('bootstrap.ping')).toBeUndefined();
-      expect(engine.listPlugins().find(p => p.id === 'bootstrap')?.enabled).toBe(false);
+      expect(
+        engine.listPlugins().find(p => p.id === 'bootstrap')?.enabled
+      ).toBe(false);
 
       // Enable it
       const result = await engine.enablePlugin('bootstrap');
       expect(result).toBe(true);
       expect(engine.getTool('bootstrap.ping')).toBeDefined();
-      expect(engine.listPlugins().find(p => p.id === 'bootstrap')?.enabled).toBe(true);
+      expect(
+        engine.listPlugins().find(p => p.id === 'bootstrap')?.enabled
+      ).toBe(true);
 
       // Tool is callable
       const output = await engine.executeTool('bootstrap.ping', {});
@@ -494,9 +498,7 @@ describe('createDronePluginEngine', () => {
     });
 
     it('returns false for an unknown plugin ID', async () => {
-      const plugins: DronePlugin[] = [
-        createTestPlugin({ id: 'known' }),
-      ];
+      const plugins: DronePlugin[] = [createTestPlugin({ id: 'known' })];
 
       const engine = createDronePluginEngine({
         plugins,
@@ -558,8 +560,12 @@ describe('createDronePluginEngine', () => {
           id: 'late',
           defaultEnabled: false,
           hooks: {
-            onPluginsLoaded: async () => { calls.push('late:loaded'); },
-            onSessionStart: async () => { calls.push('late:start'); },
+            onPluginsLoaded: async () => {
+              calls.push('late:loaded');
+            },
+            onSessionStart: async () => {
+              calls.push('late:start');
+            },
           },
         }),
       ];
@@ -586,12 +592,14 @@ describe('createDronePluginEngine', () => {
         createTestPlugin({
           id: 'wf',
           defaultEnabled: false,
-          workflows: [{
-            name: 'setup',
-            description: 'Setup workflow',
-            inputSchema: { type: 'object', additionalProperties: false },
-            run: async () => ({ toolResult: 'done' }),
-          }],
+          workflows: [
+            {
+              name: 'setup',
+              description: 'Setup workflow',
+              inputSchema: { type: 'object', additionalProperties: false },
+              run: async () => ({ toolResult: 'done' }),
+            },
+          ],
         }),
       ];
 
@@ -603,7 +611,9 @@ describe('createDronePluginEngine', () => {
       await engine.initialize();
 
       // Workflow not available before enabling
-      await expect(engine.runWorkflow('wf.setup', {})).rejects.toThrow(/Unknown workflow/);
+      await expect(engine.runWorkflow('wf.setup', {})).rejects.toThrow(
+        /Unknown workflow/
+      );
 
       // Enable — workflow should now be registered
       await engine.enablePlugin('wf');

@@ -116,7 +116,10 @@ describe('skillsCreateWorkflow — happy path', () => {
             { scope: 'project' },
             { id: 'webapp-testing' },
             { description: 'Test web applications using Playwright.' },
-            { recall: 'The user mentions testing a web app\n- The project has Playwright config' },
+            {
+              recall:
+                'The user mentions testing a web app\n- The project has Playwright config',
+            },
           ]),
         })
       );
@@ -128,11 +131,15 @@ describe('skillsCreateWorkflow — happy path', () => {
       );
       const written = await readFile(filePath, 'utf-8');
       expect(written).toContain('name: webapp-testing');
-      expect(written).toContain("description: 'Test web applications using Playwright.'");
+      expect(written).toContain(
+        "description: 'Test web applications using Playwright.'"
+      );
       expect(written).toContain('The user mentions testing a web app');
       expect(written).toContain('The project has Playwright config');
       expect(written).toContain('model-invocation: true');
-      expect(written).toContain('<!-- TODO: The coding agent should fill in this body');
+      expect(written).toContain(
+        '<!-- TODO: The coding agent should fill in this body'
+      );
       expect(result.toolResult).toBeDefined();
       expect(result.kickMessage).toMatch(/webapp-testing/);
       expect(result.kickMessage).toMatch(/explore the codebase/);
@@ -255,7 +262,9 @@ describe('skillsCreateWorkflow — overwrite prompts', () => {
         })
       );
       const written = await readFile(filePath, 'utf-8');
-      expect(written).toContain("description: 'Test web applications using Playwright.'");
+      expect(written).toContain(
+        "description: 'Test web applications using Playwright.'"
+      );
       expect(written).not.toContain('OLD');
       expect(result.toolResult).toBeDefined();
     });
@@ -420,7 +429,9 @@ describe('skillsCreateWorkflow — skeleton content', () => {
       expect(written).toContain('## Overview');
       expect(written).toContain('## Instructions');
       expect(written).toContain('## Examples');
-      expect(written).toContain('<!-- TODO: The coding agent should fill in this body');
+      expect(written).toContain(
+        '<!-- TODO: The coding agent should fill in this body'
+      );
     });
   });
 });

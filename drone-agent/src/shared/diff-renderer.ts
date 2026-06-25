@@ -82,16 +82,12 @@ function renderHunk(
       // Deletion
       const prefix = '-';
       plainLines.push(`${prefix}${oldLine}`);
-      coloredLines.push(
-        `${ANSI.red}${prefix}${oldLine}${ANSI.reset}`
-      );
+      coloredLines.push(`${ANSI.red}${prefix}${oldLine}${ANSI.reset}`);
     } else if (oldLine === undefined && newLine !== undefined) {
       // Insertion
       const prefix = '+';
       plainLines.push(`${prefix}${newLine}`);
-      coloredLines.push(
-        `${ANSI.green}${prefix}${newLine}${ANSI.reset}`
-      );
+      coloredLines.push(`${ANSI.green}${prefix}${newLine}${ANSI.reset}`);
     } else if (oldLine !== undefined && newLine !== undefined) {
       // Context (unchanged) - show both old and new if they differ
       if (oldLine === newLine) {
@@ -104,12 +100,8 @@ function renderHunk(
         const addPrefix = '+';
         plainLines.push(`${delPrefix}${oldLine}`);
         plainLines.push(`${addPrefix}${newLine}`);
-        coloredLines.push(
-          `${ANSI.red}${delPrefix}${oldLine}${ANSI.reset}`
-        );
-        coloredLines.push(
-          `${ANSI.green}${addPrefix}${newLine}${ANSI.reset}`
-        );
+        coloredLines.push(`${ANSI.red}${delPrefix}${oldLine}${ANSI.reset}`);
+        coloredLines.push(`${ANSI.green}${addPrefix}${newLine}${ANSI.reset}`);
       }
     }
   }
@@ -207,8 +199,27 @@ export function supportsColor(): boolean {
   }
 
   // Terminal type suggests color support (common terminals known to support color)
-  const knownTerminals = ['xterm', 'screen', 'tmux', 'vt100', 'vt220', 'rxvt', 'ansi', 'cygwin', 'linux', 'alacritty', 'kitty', 'wezterm', 'ios'];
-  if (term.includes('color') || term.includes('256') || term === 'xterm' || knownTerminals.some(t => term.includes(t))) {
+  const knownTerminals = [
+    'xterm',
+    'screen',
+    'tmux',
+    'vt100',
+    'vt220',
+    'rxvt',
+    'ansi',
+    'cygwin',
+    'linux',
+    'alacritty',
+    'kitty',
+    'wezterm',
+    'ios',
+  ];
+  if (
+    term.includes('color') ||
+    term.includes('256') ||
+    term === 'xterm' ||
+    knownTerminals.some(t => term.includes(t))
+  ) {
     return true;
   }
 

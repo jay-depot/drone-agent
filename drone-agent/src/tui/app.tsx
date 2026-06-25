@@ -390,7 +390,10 @@ export function App(opts: DroneTuiOptions): JSX.Element {
 
                 // Special handling for exec.run - full output, no truncation
                 if (event.name === 'exec.run') {
-                  resultContent = formatExecResult(event.arguments, event.content);
+                  resultContent = formatExecResult(
+                    event.arguments,
+                    event.content
+                  );
                   log(`← ${event.name}:\n${resultContent}`, 'toolResult');
                 }
                 // Special handling for file.apply_diff - formatted diff display

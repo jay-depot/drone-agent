@@ -27,11 +27,7 @@ export type DroneMemoryCapability = {
    * Store a value under a given key. Overwrites any existing entry with
    * the same key. Returns the stored entry.
    */
-  store: (
-    key: string,
-    value: string,
-    tags?: string[]
-  ) => Promise<MemoryEntry>;
+  store: (key: string, value: string, tags?: string[]) => Promise<MemoryEntry>;
 
   /**
    * Retrieve a single entry by its exact key. Returns `null` when no

@@ -402,7 +402,10 @@ export function createDronePluginEngine({
         if (pluginId === 'runtime') {
           return capabilities.get('_runtime') as T | undefined;
         }
-        if (!dependencyIds.has(pluginId) && !optionalDependencyIds.has(pluginId)) {
+        if (
+          !dependencyIds.has(pluginId) &&
+          !optionalDependencyIds.has(pluginId)
+        ) {
           throw new Error(
             `Plugin ${plugin.metadata.id} requested undeclared capability ${pluginId}`
           );
@@ -506,7 +509,11 @@ export function createDronePluginEngine({
             line.startsWith(cmd.command + ' ') ||
             line.startsWith(cmd.command + '\t')
           ) {
-            const args = line.slice(cmd.command.length).trim().split(/\s+/).filter(Boolean);
+            const args = line
+              .slice(cmd.command.length)
+              .trim()
+              .split(/\s+/)
+              .filter(Boolean);
             const handled = await cmd.handler({ ...ctx, line, args });
             if (handled) return true;
           }

@@ -2,36 +2,82 @@ import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os, { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  createDefaultAgentConfig,
-  type DronePlugin,
-} from 'drone-core';
+import { createDefaultAgentConfig, type DronePlugin } from 'drone-core';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { selfImprovementPlugin } from '../src/plugins/self-improvement/index.js';
 import { createTestPlugin, silentLogger } from './helpers.js';
 
-function insightFilePath(projectDir: string, targetType: string, targetId: string): string {
+function insightFilePath(
+  projectDir: string,
+  targetType: string,
+  targetId: string
+): string {
   if (targetType === 'persona') {
-    return path.join(projectDir, '.drone-agent', 'personas', targetId, 'insights', 'insights.json');
+    return path.join(
+      projectDir,
+      '.drone-agent',
+      'personas',
+      targetId,
+      'insights',
+      'insights.json'
+    );
   }
-  return path.join(projectDir, '.drone-agent', 'insights', targetType, `${targetId}.json`);
+  return path.join(
+    projectDir,
+    '.drone-agent',
+    'insights',
+    targetType,
+    `${targetId}.json`
+  );
 }
 
-function principleFilePath(projectDir: string, targetType: string, targetId: string): string {
+function principleFilePath(
+  projectDir: string,
+  targetType: string,
+  targetId: string
+): string {
   if (targetType === 'persona') {
-    return path.join(projectDir, '.drone-agent', 'personas', targetId, 'principles', 'principles.json');
+    return path.join(
+      projectDir,
+      '.drone-agent',
+      'personas',
+      targetId,
+      'principles',
+      'principles.json'
+    );
   }
-  return path.join(projectDir, '.drone-agent', 'principles', targetType, `${targetId}.json`);
+  return path.join(
+    projectDir,
+    '.drone-agent',
+    'principles',
+    targetType,
+    `${targetId}.json`
+  );
 }
 
 function userInsightFilePath(targetType: string, targetId: string): string {
   if (targetType === 'persona') {
-    return path.join(os.homedir(), '.drone-agent', 'personas', targetId, 'insights', 'insights.json');
+    return path.join(
+      os.homedir(),
+      '.drone-agent',
+      'personas',
+      targetId,
+      'insights',
+      'insights.json'
+    );
   }
-  return path.join(os.homedir(), '.drone-agent', 'insights', targetType, `${targetId}.json`);
+  return path.join(
+    os.homedir(),
+    '.drone-agent',
+    'insights',
+    targetType,
+    `${targetId}.json`
+  );
 }
 
-async function withTempHome<T>(fn: (homeDir: string) => Promise<T>): Promise<T> {
+async function withTempHome<T>(
+  fn: (homeDir: string) => Promise<T>
+): Promise<T> {
   const dir = await mkdtemp(path.join(tmpdir(), 'self-improvement-home-'));
   try {
     vi.spyOn(os, 'homedir').mockReturnValue(dir);
@@ -115,7 +161,12 @@ describe('self-improvement plugin', () => {
   it('writes an insight for a project-level persona', async () => {
     const personaCap = {
       getPersonas: () => [
-        { id: 'coder', name: 'Coder', description: 'A coding persona', scope: 'project' as const },
+        {
+          id: 'coder',
+          name: 'Coder',
+          description: 'A coding persona',
+          scope: 'project' as const,
+        },
       ],
       getActivePersona: () => null,
       selectPersona: () => {},
@@ -128,7 +179,8 @@ describe('self-improvement plugin', () => {
     const result = await engine.executeTool('self-improvement.insight', {
       targetType: 'persona',
       targetId: 'coder',
-      insight: 'The coder persona could benefit from more concise system prompts.',
+      insight:
+        'The coder persona could benefit from more concise system prompts.',
     });
 
     const parsed = JSON.parse(result);
@@ -152,7 +204,12 @@ describe('self-improvement plugin', () => {
     await withTempHome(async () => {
       const personaCap = {
         getPersonas: () => [
-          { id: 'helper', name: 'Helper', description: 'A helper persona', scope: 'user' as const },
+          {
+            id: 'helper',
+            name: 'Helper',
+            description: 'A helper persona',
+            scope: 'user' as const,
+          },
         ],
         getActivePersona: () => null,
         selectPersona: () => {},
@@ -179,7 +236,9 @@ describe('self-improvement plugin', () => {
       const entries = JSON.parse(raw);
       expect(Array.isArray(entries)).toBe(true);
       expect(entries).toHaveLength(1);
-      expect(entries[0].insight).toBe('The helper persona should be more concise.');
+      expect(entries[0].insight).toBe(
+        'The helper persona should be more concise.'
+      );
       expect(entries[0].timestamp).toBeDefined();
     });
   });
@@ -187,11 +246,27 @@ describe('self-improvement plugin', () => {
   it('writes an insight for a project-level skill', async () => {
     const skillsCap = {
       getSkills: () => [
-        { id: 'testing', name: 'Testing', description: 'Testing skill', recall: [], modelInvocation: true, body: '...', source: 'project' as const },
+        {
+          id: 'testing',
+          name: 'Testing',
+          description: 'Testing skill',
+          recall: [],
+          modelInvocation: true,
+          body: '...',
+          source: 'project' as const,
+        },
       ],
       getSkill: (id: string) =>
         id === 'testing'
-          ? { id: 'testing', name: 'Testing', description: 'Testing skill', recall: [], modelInvocation: true, body: '...', source: 'project' as const }
+          ? {
+              id: 'testing',
+              name: 'Testing',
+              description: 'Testing skill',
+              recall: [],
+              modelInvocation: true,
+              body: '...',
+              source: 'project' as const,
+            }
           : undefined,
     };
 
@@ -222,11 +297,27 @@ describe('self-improvement plugin', () => {
     await withTempHome(async () => {
       const skillsCap = {
         getSkills: () => [
-          { id: 'helper-skill', name: 'Helper', description: 'A helper skill', recall: [], modelInvocation: true, body: '...', source: 'user' as const },
+          {
+            id: 'helper-skill',
+            name: 'Helper',
+            description: 'A helper skill',
+            recall: [],
+            modelInvocation: true,
+            body: '...',
+            source: 'user' as const,
+          },
         ],
         getSkill: (id: string) =>
           id === 'helper-skill'
-            ? { id: 'helper-skill', name: 'Helper', description: 'A helper skill', recall: [], modelInvocation: true, body: '...', source: 'user' as const }
+            ? {
+                id: 'helper-skill',
+                name: 'Helper',
+                description: 'A helper skill',
+                recall: [],
+                modelInvocation: true,
+                body: '...',
+                source: 'user' as const,
+              }
             : undefined,
       };
 
@@ -249,7 +340,9 @@ describe('self-improvement plugin', () => {
       const entries = JSON.parse(raw);
       expect(Array.isArray(entries)).toBe(true);
       expect(entries).toHaveLength(1);
-      expect(entries[0].insight).toBe('The helper skill should be more detailed.');
+      expect(entries[0].insight).toBe(
+        'The helper skill should be more detailed.'
+      );
       expect(entries[0].timestamp).toBeDefined();
     });
   });
@@ -257,7 +350,12 @@ describe('self-improvement plugin', () => {
   it('appends to an existing insights file', async () => {
     const personaCap = {
       getPersonas: () => [
-        { id: 'reviewer', name: 'Reviewer', description: 'A review persona', scope: 'project' as const },
+        {
+          id: 'reviewer',
+          name: 'Reviewer',
+          description: 'A review persona',
+          scope: 'project' as const,
+        },
       ],
       getActivePersona: () => null,
       selectPersona: () => {},
@@ -426,7 +524,9 @@ describe('self-improvement plugin', () => {
       const entries = JSON.parse(raw);
       expect(Array.isArray(entries)).toBe(true);
       expect(entries).toHaveLength(1);
-      expect(entries[0].insight).toBe('The plugin architecture should use dependency injection.');
+      expect(entries[0].insight).toBe(
+        'The plugin architecture should use dependency injection.'
+      );
       expect(entries[0].timestamp).toBeDefined();
     });
 
@@ -509,7 +609,11 @@ describe('self-improvement plugin', () => {
         getPersonas: () => [
           { id: 'code', name: 'Code', description: 'A coding persona' },
         ],
-        getActivePersona: () => ({ id: 'code', name: 'Code', description: 'A coding persona' }),
+        getActivePersona: () => ({
+          id: 'code',
+          name: 'Code',
+          description: 'A coding persona',
+        }),
         selectPersona: () => {},
         onPersonaChange: () => {},
         reloadPersonas: async () => {},
@@ -517,7 +621,9 @@ describe('self-improvement plugin', () => {
 
       const engine = await createEngine({ personaCapability: personaCap });
       const fragments = await engine.renderPromptFragments();
-      const fragment = fragments.find(f => f.includes('Current active persona'));
+      const fragment = fragments.find(f =>
+        f.includes('Current active persona')
+      );
       expect(fragment).toBeDefined();
       expect(fragment).toContain('code');
       expect(fragment).toContain('self-improvement.insight');
@@ -586,7 +692,10 @@ describe('self-improvement plugin', () => {
   describe('self-improvement.insights-list', () => {
     it('returns empty list when no insights exist', async () => {
       const engine = await createEngine();
-      const result = await engine.executeTool('self-improvement.insights-list', {});
+      const result = await engine.executeTool(
+        'self-improvement.insights-list',
+        {}
+      );
       const parsed = JSON.parse(result);
       expect(parsed.insights).toEqual([]);
     });
@@ -600,7 +709,10 @@ describe('self-improvement plugin', () => {
         insight: 'Architecture insight.',
       });
 
-      const result = await engine.executeTool('self-improvement.insights-list', {});
+      const result = await engine.executeTool(
+        'self-improvement.insights-list',
+        {}
+      );
       const parsed = JSON.parse(result);
       expect(parsed.insights).toHaveLength(1);
       expect(parsed.insights[0].targetType).toBe('project');
@@ -618,7 +730,10 @@ describe('self-improvement plugin', () => {
         insight: 'Skill insight.',
       });
 
-      const result = await engine.executeTool('self-improvement.insights-list', {});
+      const result = await engine.executeTool(
+        'self-improvement.insights-list',
+        {}
+      );
       const parsed = JSON.parse(result);
       expect(parsed.insights).toHaveLength(1);
       expect(parsed.insights[0].targetType).toBe('skill');
@@ -634,7 +749,10 @@ describe('self-improvement plugin', () => {
         insight: 'Persona insight.',
       });
 
-      const result = await engine.executeTool('self-improvement.insights-list', {});
+      const result = await engine.executeTool(
+        'self-improvement.insights-list',
+        {}
+      );
       const parsed = JSON.parse(result);
       expect(parsed.insights).toHaveLength(1);
       expect(parsed.insights[0].targetType).toBe('persona');
@@ -655,9 +773,12 @@ describe('self-improvement plugin', () => {
         insight: 'Test insight.',
       });
 
-      const result = await engine.executeTool('self-improvement.insights-list', {
-        targetType: 'project',
-      });
+      const result = await engine.executeTool(
+        'self-improvement.insights-list',
+        {
+          targetType: 'project',
+        }
+      );
       const parsed = JSON.parse(result);
       expect(parsed.insights).toHaveLength(1);
       expect(parsed.insights[0].targetType).toBe('project');
@@ -680,10 +801,13 @@ describe('self-improvement plugin', () => {
         insight: 'Test insight two.',
       });
 
-      const result = await engine.executeTool('self-improvement.insights-recall', {
-        targetType: 'project',
-        targetId: 'testing',
-      });
+      const result = await engine.executeTool(
+        'self-improvement.insights-recall',
+        {
+          targetType: 'project',
+          targetId: 'testing',
+        }
+      );
       const parsed = JSON.parse(result);
       expect(parsed.targetType).toBe('project');
       expect(parsed.targetId).toBe('testing');
@@ -695,10 +819,13 @@ describe('self-improvement plugin', () => {
     it('returns empty array when no insights exist', async () => {
       const engine = await createEngine();
 
-      const result = await engine.executeTool('self-improvement.insights-recall', {
-        targetType: 'project',
-        targetId: 'nonexistent',
-      });
+      const result = await engine.executeTool(
+        'self-improvement.insights-recall',
+        {
+          targetType: 'project',
+          targetId: 'nonexistent',
+        }
+      );
       const parsed = JSON.parse(result);
       expect(parsed.entries).toEqual([]);
     });
@@ -730,12 +857,15 @@ describe('self-improvement plugin', () => {
     it('stores a principle for a project', async () => {
       const engine = await createEngine();
 
-      const result = await engine.executeTool('self-improvement.principles-store', {
-        targetType: 'project',
-        targetId: 'architecture',
-        principle: 'Always use dependency injection.',
-        source: 'Derived from insights',
-      });
+      const result = await engine.executeTool(
+        'self-improvement.principles-store',
+        {
+          targetType: 'project',
+          targetId: 'architecture',
+          principle: 'Always use dependency injection.',
+          source: 'Derived from insights',
+        }
+      );
 
       const parsed = JSON.parse(result);
       expect(parsed.ok).toBe(true);
@@ -755,11 +885,14 @@ describe('self-improvement plugin', () => {
     it('stores a principle for a persona', async () => {
       const engine = await createEngine();
 
-      const result = await engine.executeTool('self-improvement.principles-store', {
-        targetType: 'persona',
-        targetId: 'coder',
-        principle: 'Be concise in responses.',
-      });
+      const result = await engine.executeTool(
+        'self-improvement.principles-store',
+        {
+          targetType: 'persona',
+          targetId: 'coder',
+          principle: 'Be concise in responses.',
+        }
+      );
 
       const parsed = JSON.parse(result);
       expect(parsed.ok).toBe(true);
@@ -776,11 +909,14 @@ describe('self-improvement plugin', () => {
     it('stores a principle for a skill', async () => {
       const engine = await createEngine();
 
-      const result = await engine.executeTool('self-improvement.principles-store', {
-        targetType: 'skill',
-        targetId: 'testing',
-        principle: 'Always include edge cases.',
-      });
+      const result = await engine.executeTool(
+        'self-improvement.principles-store',
+        {
+          targetType: 'skill',
+          targetId: 'testing',
+          principle: 'Always include edge cases.',
+        }
+      );
 
       const parsed = JSON.parse(result);
       expect(parsed.ok).toBe(true);
@@ -803,11 +939,14 @@ describe('self-improvement plugin', () => {
         principle: 'First principle.',
       });
 
-      const result = await engine.executeTool('self-improvement.principles-store', {
-        targetType: 'project',
-        targetId: 'workflow',
-        principle: 'Second principle.',
-      });
+      const result = await engine.executeTool(
+        'self-improvement.principles-store',
+        {
+          targetType: 'project',
+          targetId: 'workflow',
+          principle: 'Second principle.',
+        }
+      );
 
       const parsed = JSON.parse(result);
       expect(parsed.principleCount).toBe(2);
@@ -847,11 +986,14 @@ describe('self-improvement plugin', () => {
     it('stores a principle without source', async () => {
       const engine = await createEngine();
 
-      const result = await engine.executeTool('self-improvement.principles-store', {
-        targetType: 'project',
-        targetId: 'test',
-        principle: 'No source principle.',
-      });
+      const result = await engine.executeTool(
+        'self-improvement.principles-store',
+        {
+          targetType: 'project',
+          targetId: 'test',
+          principle: 'No source principle.',
+        }
+      );
 
       const parsed = JSON.parse(result);
       expect(parsed.ok).toBe(true);
@@ -866,7 +1008,10 @@ describe('self-improvement plugin', () => {
   describe('self-improvement.principles-list', () => {
     it('returns empty list when no principles exist', async () => {
       const engine = await createEngine();
-      const result = await engine.executeTool('self-improvement.principles-list', {});
+      const result = await engine.executeTool(
+        'self-improvement.principles-list',
+        {}
+      );
       const parsed = JSON.parse(result);
       expect(parsed.principles).toEqual([]);
     });
@@ -885,7 +1030,10 @@ describe('self-improvement plugin', () => {
         principle: 'Principle two.',
       });
 
-      const result = await engine.executeTool('self-improvement.principles-list', {});
+      const result = await engine.executeTool(
+        'self-improvement.principles-list',
+        {}
+      );
       const parsed = JSON.parse(result);
       expect(parsed.principles).toHaveLength(2);
     });
@@ -904,9 +1052,12 @@ describe('self-improvement plugin', () => {
         principle: 'Skill principle.',
       });
 
-      const result = await engine.executeTool('self-improvement.principles-list', {
-        targetType: 'project',
-      });
+      const result = await engine.executeTool(
+        'self-improvement.principles-list',
+        {
+          targetType: 'project',
+        }
+      );
       const parsed = JSON.parse(result);
       expect(parsed.principles).toHaveLength(1);
       expect(parsed.principles[0].targetType).toBe('project');
@@ -928,10 +1079,13 @@ describe('self-improvement plugin', () => {
         principle: 'Principle two.',
       });
 
-      const result = await engine.executeTool('self-improvement.principles-recall', {
-        targetType: 'project',
-        targetId: 'testing',
-      });
+      const result = await engine.executeTool(
+        'self-improvement.principles-recall',
+        {
+          targetType: 'project',
+          targetId: 'testing',
+        }
+      );
       const parsed = JSON.parse(result);
       expect(parsed.targetType).toBe('project');
       expect(parsed.targetId).toBe('testing');
@@ -943,10 +1097,13 @@ describe('self-improvement plugin', () => {
     it('returns empty array when no principles exist', async () => {
       const engine = await createEngine();
 
-      const result = await engine.executeTool('self-improvement.principles-recall', {
-        targetType: 'project',
-        targetId: 'nonexistent',
-      });
+      const result = await engine.executeTool(
+        'self-improvement.principles-recall',
+        {
+          targetType: 'project',
+          targetId: 'nonexistent',
+        }
+      );
       const parsed = JSON.parse(result);
       expect(parsed.principles).toEqual([]);
     });
@@ -978,20 +1135,26 @@ describe('self-improvement plugin', () => {
         principle: 'Delete me.',
       });
 
-      const result = await engine.executeTool('self-improvement.principles-delete', {
-        targetType: 'project',
-        targetId: 'test',
-        index: 1,
-      });
+      const result = await engine.executeTool(
+        'self-improvement.principles-delete',
+        {
+          targetType: 'project',
+          targetId: 'test',
+          index: 1,
+        }
+      );
 
       const parsed = JSON.parse(result);
       expect(parsed.ok).toBe(true);
       expect(parsed.remainingCount).toBe(1);
 
-      const recallResult = await engine.executeTool('self-improvement.principles-recall', {
-        targetType: 'project',
-        targetId: 'test',
-      });
+      const recallResult = await engine.executeTool(
+        'self-improvement.principles-recall',
+        {
+          targetType: 'project',
+          targetId: 'test',
+        }
+      );
       const recallParsed = JSON.parse(recallResult);
       expect(recallParsed.principles).toHaveLength(1);
       expect(recallParsed.principles[0].principle).toBe('Keep me.');
@@ -1053,7 +1216,11 @@ describe('self-improvement plugin', () => {
         getPersonas: () => [
           { id: 'coder', name: 'Coder', description: 'A coding persona' },
         ],
-        getActivePersona: () => ({ id: 'coder', name: 'Coder', description: 'A coding persona' }),
+        getActivePersona: () => ({
+          id: 'coder',
+          name: 'Coder',
+          description: 'A coding persona',
+        }),
         selectPersona: () => {},
         onPersonaChange: () => {},
         reloadPersonas: async () => {},
@@ -1068,7 +1235,9 @@ describe('self-improvement plugin', () => {
       });
 
       const fragments = await engine.renderPromptFragments();
-      const fragment = fragments.find(f => f.includes('Principles for this persona'));
+      const fragment = fragments.find(f =>
+        f.includes('Principles for this persona')
+      );
       expect(fragment).toBeDefined();
       expect(fragment).toContain('Be concise.');
     });
@@ -1078,7 +1247,11 @@ describe('self-improvement plugin', () => {
         getPersonas: () => [
           { id: 'coder', name: 'Coder', description: 'A coding persona' },
         ],
-        getActivePersona: () => ({ id: 'coder', name: 'Coder', description: 'A coding persona' }),
+        getActivePersona: () => ({
+          id: 'coder',
+          name: 'Coder',
+          description: 'A coding persona',
+        }),
         selectPersona: () => {},
         onPersonaChange: () => {},
         reloadPersonas: async () => {},
@@ -1087,7 +1260,9 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine({ personaCapability: personaCap });
 
       const fragments = await engine.renderPromptFragments();
-      const fragment = fragments.find(f => f.includes('Principles for this persona'));
+      const fragment = fragments.find(f =>
+        f.includes('Principles for this persona')
+      );
       expect(fragment).toBeUndefined();
     });
 
@@ -1105,7 +1280,9 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine({ personaCapability: personaCap });
 
       const fragments = await engine.renderPromptFragments();
-      const fragment = fragments.find(f => f.includes('Principles for this persona'));
+      const fragment = fragments.find(f =>
+        f.includes('Principles for this persona')
+      );
       expect(fragment).toBeUndefined();
     });
   });
@@ -1113,7 +1290,9 @@ describe('self-improvement plugin', () => {
   describe('skill principles injection', () => {
     it('injects principles into skills.recall result when self-improvement is loaded', async () => {
       // Mock skills plugin that uses onRecall callback
-      const recallEnhancers: Array<(id: string, body: string) => Promise<string>> = [];
+      const recallEnhancers: Array<
+        (id: string, body: string) => Promise<string>
+      > = [];
 
       const mockSkillsPlugin = createTestPlugin({
         id: 'skills',
@@ -1131,22 +1310,58 @@ describe('self-improvement plugin', () => {
               additionalProperties: false,
             },
             execute: async input => {
-              const id = typeof input.id === 'string' ? input.id.trim().toLowerCase() : '';
+              const id =
+                typeof input.id === 'string'
+                  ? input.id.trim().toLowerCase()
+                  : '';
               let body = 'Original body.';
               for (const enhancer of recallEnhancers) {
                 body = await enhancer(id, body);
               }
-              return JSON.stringify({ id, name: 'Test', description: 'A test skill', source: 'project', body }, null, 2);
+              return JSON.stringify(
+                {
+                  id,
+                  name: 'Test',
+                  description: 'A test skill',
+                  source: 'project',
+                  body,
+                },
+                null,
+                2
+              );
             },
           });
           // Register full skills capability (including onRecall)
           reg.offer({
-            getSkills: () => [{ id: 'test-skill', name: 'Test', description: 'A test skill', source: 'project' as const, recall: [], modelInvocation: false, body: 'Original body.' }],
-            getSkill: (id: string) => id === 'test-skill' ? { id: 'test-skill', name: 'Test', description: 'A test skill', source: 'project' as const, recall: [], modelInvocation: false, body: 'Original body.' } : undefined,
+            getSkills: () => [
+              {
+                id: 'test-skill',
+                name: 'Test',
+                description: 'A test skill',
+                source: 'project' as const,
+                recall: [],
+                modelInvocation: false,
+                body: 'Original body.',
+              },
+            ],
+            getSkill: (id: string) =>
+              id === 'test-skill'
+                ? {
+                    id: 'test-skill',
+                    name: 'Test',
+                    description: 'A test skill',
+                    source: 'project' as const,
+                    recall: [],
+                    modelInvocation: false,
+                    body: 'Original body.',
+                  }
+                : undefined,
             reloadSkills: async () => {},
             registerProvider: () => {},
             unregisterProvider: () => {},
-            onRecall: (enhancer: (id: string, body: string) => Promise<string>) => {
+            onRecall: (
+              enhancer: (id: string, body: string) => Promise<string>
+            ) => {
               recallEnhancers.push(enhancer);
             },
           });
@@ -1185,22 +1400,37 @@ describe('self-improvement plugin', () => {
     it('does not inject principles when self-improvement is not loaded', async () => {
       const mockSkillsPlugin = createTestPlugin({
         id: 'skills',
-        tools: [{
-          name: 'recall',
-          description: 'Mock recall.',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', description: 'Skill id.' },
+        tools: [
+          {
+            name: 'recall',
+            description: 'Mock recall.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Skill id.' },
+              },
+              required: ['id'],
+              additionalProperties: false,
             },
-            required: ['id'],
-            additionalProperties: false,
+            execute: async input => {
+              const id =
+                typeof input.id === 'string'
+                  ? input.id.trim().toLowerCase()
+                  : '';
+              return JSON.stringify(
+                {
+                  id,
+                  name: 'Test',
+                  description: 'A test skill',
+                  source: 'project',
+                  body: 'Original body.',
+                },
+                null,
+                2
+              );
+            },
           },
-          execute: async input => {
-            const id = typeof input.id === 'string' ? input.id.trim().toLowerCase() : '';
-            return JSON.stringify({ id, name: 'Test', description: 'A test skill', source: 'project', body: 'Original body.' }, null, 2);
-          },
-        }],
+        ],
       });
 
       const plugins: DronePlugin[] = [mockSkillsPlugin];
@@ -1222,7 +1452,9 @@ describe('self-improvement plugin', () => {
     });
 
     it('does not add principles section when no principles exist', async () => {
-      const recallEnhancers: Array<(id: string, body: string) => Promise<string>> = [];
+      const recallEnhancers: Array<
+        (id: string, body: string) => Promise<string>
+      > = [];
 
       const mockSkillsPlugin = createTestPlugin({
         id: 'skills',
@@ -1239,21 +1471,57 @@ describe('self-improvement plugin', () => {
               additionalProperties: false,
             },
             execute: async input => {
-              const id = typeof input.id === 'string' ? input.id.trim().toLowerCase() : '';
+              const id =
+                typeof input.id === 'string'
+                  ? input.id.trim().toLowerCase()
+                  : '';
               let body = 'Original body.';
               for (const enhancer of recallEnhancers) {
                 body = await enhancer(id, body);
               }
-              return JSON.stringify({ id, name: 'Test', description: 'A test skill', source: 'project', body }, null, 2);
+              return JSON.stringify(
+                {
+                  id,
+                  name: 'Test',
+                  description: 'A test skill',
+                  source: 'project',
+                  body,
+                },
+                null,
+                2
+              );
             },
           });
           reg.offer({
-            getSkills: () => [{ id: 'test-skill', name: 'Test', description: 'A test skill', source: 'project' as const, recall: [], modelInvocation: false, body: 'Original body.' }],
-            getSkill: (id: string) => id === 'test-skill' ? { id: 'test-skill', name: 'Test', description: 'A test skill', source: 'project' as const, recall: [], modelInvocation: false, body: 'Original body.' } : undefined,
+            getSkills: () => [
+              {
+                id: 'test-skill',
+                name: 'Test',
+                description: 'A test skill',
+                source: 'project' as const,
+                recall: [],
+                modelInvocation: false,
+                body: 'Original body.',
+              },
+            ],
+            getSkill: (id: string) =>
+              id === 'test-skill'
+                ? {
+                    id: 'test-skill',
+                    name: 'Test',
+                    description: 'A test skill',
+                    source: 'project' as const,
+                    recall: [],
+                    modelInvocation: false,
+                    body: 'Original body.',
+                  }
+                : undefined,
             reloadSkills: async () => {},
             registerProvider: () => {},
             unregisterProvider: () => {},
-            onRecall: (enhancer: (id: string, body: string) => Promise<string>) => {
+            onRecall: (
+              enhancer: (id: string, body: string) => Promise<string>
+            ) => {
               recallEnhancers.push(enhancer);
             },
           });

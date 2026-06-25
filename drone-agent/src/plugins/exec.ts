@@ -125,7 +125,10 @@ export const execPlugin: DronePlugin = {
         properties: {
           command: { type: 'string', description: 'Shell command to execute.' },
           cwd: { type: 'string', description: 'Working directory (optional).' },
-          timeoutMs: { type: 'number', description: 'Timeout in milliseconds (optional).' },
+          timeoutMs: {
+            type: 'number',
+            description: 'Timeout in milliseconds (optional).',
+          },
         },
         required: ['command'],
         additionalProperties: false,

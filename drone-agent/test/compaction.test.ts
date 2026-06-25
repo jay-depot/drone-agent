@@ -469,7 +469,11 @@ describe('createCompactionPlugin', () => {
         })
       ),
     };
-    const budgetService = makeBudgetService({ provider, config, promptFragments: [] });
+    const budgetService = makeBudgetService({
+      provider,
+      config,
+      promptFragments: [],
+    });
     const plugin = createCompactionPlugin({
       budgetService,
       sessionManager,
@@ -550,7 +554,9 @@ describe('createCompactionPlugin', () => {
     });
 
     const plugin = createCompactionPlugin({
-      budgetService: { buildSystemMessages: async () => [] } as unknown as ContextBudgetService,
+      budgetService: {
+        buildSystemMessages: async () => [],
+      } as unknown as ContextBudgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => {
@@ -608,19 +614,23 @@ describe('createCompactionPlugin', () => {
     // conversation service where tool results are appended before
     // onAfterToolCall fires. Each user message starts a new turn.
     sessionManager.appendUserMessage('q2');
-    sessionManager.appendAssistantMessage('working', [{
-      id: 'call_1',
-      name: 'file.read',
-      arguments: { path: '/some/file.ts' },
-    }]);
+    sessionManager.appendAssistantMessage('working', [
+      {
+        id: 'call_1',
+        name: 'file.read',
+        arguments: { path: '/some/file.ts' },
+      },
+    ]);
     sessionManager.appendToolResult('file.read', 'x '.repeat(300));
 
     sessionManager.appendUserMessage('q3');
-    sessionManager.appendAssistantMessage('more work', [{
-      id: 'call_2',
-      name: 'search.text',
-      arguments: { pattern: 'TODO' },
-    }]);
+    sessionManager.appendAssistantMessage('more work', [
+      {
+        id: 'call_2',
+        name: 'search.text',
+        arguments: { pattern: 'TODO' },
+      },
+    ]);
     sessionManager.appendToolResult('search.text', 'y '.repeat(300));
 
     // Now the session should exceed the threshold. Running the

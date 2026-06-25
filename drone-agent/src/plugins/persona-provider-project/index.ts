@@ -30,10 +30,7 @@ export const personaProviderProjectPlugin: DronePlugin = {
     description:
       'Loads persona .md files from the project .drone-agent/personas/ directory.',
     defaultEnabled: false,
-    dependencies: [
-      { id: 'persona' },
-      { id: 'skills', optional: true },
-    ],
+    dependencies: [{ id: 'persona' }, { id: 'skills', optional: true }],
   },
   register: async registration => {
     const projectDir = process.cwd();
@@ -68,8 +65,15 @@ export const personaProviderProjectPlugin: DronePlugin = {
           const newSkills = new Map<string, DroneSkillDefinition>();
 
           for (const persona of loaded) {
-            const personaSkillsDir = path.join(personaDir, persona.id, SKILLS_DIR);
-            const allSkills = await loadSkillsFromDir(personaSkillsDir, 'project');
+            const personaSkillsDir = path.join(
+              personaDir,
+              persona.id,
+              SKILLS_DIR
+            );
+            const allSkills = await loadSkillsFromDir(
+              personaSkillsDir,
+              'project'
+            );
 
             for (const skill of allSkills) {
               skill.precedence = PRECEDENCE_PERSONA_PROJECT;

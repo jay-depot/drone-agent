@@ -23,9 +23,7 @@ export const llmPlugin: DronePlugin = {
     function insertProviderSorted(
       provider: DroneLlmProviderRegistration
     ): void {
-      const idx = providers.findIndex(
-        p => p.precedence > provider.precedence
-      );
+      const idx = providers.findIndex(p => p.precedence > provider.precedence);
       if (idx === -1) {
         providers.push(provider);
       } else {
@@ -98,9 +96,7 @@ export const llmPlugin: DronePlugin = {
       },
       unregisterProvider: (providerId: string) => {
         removeProvider(providerId);
-        registration.logger.info(
-          `LLM provider "${providerId}" unregistered`
-        );
+        registration.logger.info(`LLM provider "${providerId}" unregistered`);
       },
     };
     registration.offer(capability);
@@ -133,7 +129,8 @@ export const llmPlugin: DronePlugin = {
     // ── /model slash command ──────────────────────────────────────────
     registration.registerSlashCommand({
       command: '/model',
-      description: 'List models or switch model. Use --provider <id> to switch provider.',
+      description:
+        'List models or switch model. Use --provider <id> to switch provider.',
       handler: async ctx => {
         if (!ctx.conversation) {
           ctx.logger.warn(
@@ -144,9 +141,7 @@ export const llmPlugin: DronePlugin = {
 
         const llm = ctx.engine.getCapability<DroneLlmCapability>('llm');
         if (!llm) {
-          ctx.logger.warn(
-            'LLM broker capability not available.'
-          );
+          ctx.logger.warn('LLM broker capability not available.');
           return true;
         }
 

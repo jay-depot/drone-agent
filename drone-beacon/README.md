@@ -28,27 +28,29 @@ pnpm start
 
 ## Command-Line Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--port` | 3457 | Port to listen on |
-| `--host` | 0.0.0.0 | Host to bind to |
-| `--config-dir` | ./config | Configuration directory |
-| `--db` | config/drone-beacon.db | Path to SQLite database |
-| `--coordinator-host` | - | Coordinator host to connect to |
-| `--coordinator-port` | 3456 | Coordinator port |
-| `--id` | auto-generated | Beacon ID |
-| `--name` | default-beacon | Beacon name |
-| `--spawn-agent-path` | drone-agent | Path to drone-agent binary |
-| `--spawn-timeout-ms` | 30000 | Agent connection timeout (ms) |
-| `--max-concurrent-spawns` | 10 | Max concurrent spawned agents |
-| `--sync-interval-minutes` | 5 | Interval for periodic coordinator sync (minutes) |
+| Option                    | Default                | Description                                      |
+| ------------------------- | ---------------------- | ------------------------------------------------ |
+| `--port`                  | 3457                   | Port to listen on                                |
+| `--host`                  | 0.0.0.0                | Host to bind to                                  |
+| `--config-dir`            | ./config               | Configuration directory                          |
+| `--db`                    | config/drone-beacon.db | Path to SQLite database                          |
+| `--coordinator-host`      | -                      | Coordinator host to connect to                   |
+| `--coordinator-port`      | 3456                   | Coordinator port                                 |
+| `--id`                    | auto-generated         | Beacon ID                                        |
+| `--name`                  | default-beacon         | Beacon name                                      |
+| `--spawn-agent-path`      | drone-agent            | Path to drone-agent binary                       |
+| `--spawn-timeout-ms`      | 30000                  | Agent connection timeout (ms)                    |
+| `--max-concurrent-spawns` | 10                     | Max concurrent spawned agents                    |
+| `--sync-interval-minutes` | 5                      | Interval for periodic coordinator sync (minutes) |
 
 ## API Endpoints
 
 ### Health
+
 - `GET /health` - Health check
 
 ### Personas
+
 - `POST /personas` - Create persona
 - `GET /personas` - List all personas
 - `GET /personas/:id` - Get persona
@@ -56,6 +58,7 @@ pnpm start
 - `DELETE /personas/:id` - Delete persona
 
 ### Skills
+
 - `POST /skills` - Create skill
 - `GET /skills` - List all skills
 - `GET /skills/:id` - Get skill
@@ -63,6 +66,7 @@ pnpm start
 - `DELETE /skills/:id` - Delete skill
 
 ### Agent Sessions
+
 - `POST /agents` - Register agent session
 - `GET /agents` - List active agents
 - `GET /agents/:id` - Get agent info
@@ -70,6 +74,7 @@ pnpm start
 - `DELETE /agents/:id` - Unregister agent
 
 ### Memory
+
 - `POST /memory` - Create memory
 - `GET /memory` - List memories (query: namespace, includeExpired)
 - `GET /memory/:id` - Get memory by ID
@@ -78,6 +83,7 @@ pnpm start
 - `DELETE /memory/:id` - Delete memory
 
 ### Messages
+
 - `POST /messages` - Send a message (REST)
 - `GET /messages` - List messages for an agent (query: agentId, unreadOnly)
 - `GET /messages/:id` - Get single message
@@ -85,15 +91,18 @@ pnpm start
 - `GET /messages/channel/:channel` - List messages in a channel
 
 ### Spawn Management
+
 - `POST /spawn` - Spawn new agent
 - `GET /spawn` - List spawns (query: status)
 - `GET /spawn/:spawnId` - Get spawn status
 - `DELETE /spawn/:spawnId` - Terminate spawned agent
 
 ### Coordinator Sync
+
 - `POST /sync` - Sync personas/skills from coordinator
 
 ### Config
+
 - `GET /config` - List all config overrides
 - `GET /config/:key` - Get specific config value
 - `POST /config` - Set a config override
@@ -101,6 +110,7 @@ pnpm start
 - `DELETE /config/:key` - Remove config override
 
 ### Event Logs
+
 - `GET /events` - List event logs (query: agentId, eventType, since, limit)
 - `GET /events/:id` - Get specific event log
 
@@ -113,6 +123,7 @@ ws://<host>:<port>/ws
 ```
 
 Upon connection, agents should send a registration message:
+
 ```json
 {
   "type": "register",
@@ -122,6 +133,7 @@ Upon connection, agents should send a registration message:
 ```
 
 ## Architecture
+
 ```
 ┌─────────────────┐     ┌──────────────────┐
 │  drone-agent    │────▶│   drone-beacon   │

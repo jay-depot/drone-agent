@@ -21,25 +21,26 @@ import { silentLogger } from './helpers.js';
 
 describe('parsePersonaMd — toolCallLimit field', () => {
   it('parses a valid positive integer toolCallLimit from frontmatter', () => {
-    const p = parsePersonaMd('coder', [
-      '---',
-      'name: Coder',
-      'description: Focused on implementation',
-      'toolCallLimit: 100',
-      '---',
-      'You are a coding agent.',
-    ].join('\n'));
+    const p = parsePersonaMd(
+      'coder',
+      [
+        '---',
+        'name: Coder',
+        'description: Focused on implementation',
+        'toolCallLimit: 100',
+        '---',
+        'You are a coding agent.',
+      ].join('\n')
+    );
 
     expect(p.toolCallLimit).toBe(100);
   });
 
   it('leaves toolCallLimit undefined when the persona omits the field', () => {
-    const p = parsePersonaMd('plain', [
-      '---',
-      'name: Plain',
-      'description: A plain persona',
-      '---',
-    ].join('\n'));
+    const p = parsePersonaMd(
+      'plain',
+      ['---', 'name: Plain', 'description: A plain persona', '---'].join('\n')
+    );
 
     expect(p.toolCallLimit).toBeUndefined();
   });
@@ -57,51 +58,46 @@ describe('parsePersonaMd — toolCallLimit field', () => {
 
 describe('parsePersonaMd — invalid toolCallLimit values', () => {
   it('silently ignores a negative toolCallLimit', () => {
-    const p = parsePersonaMd('coder', [
-      '---',
-      'toolCallLimit: -1',
-      '---',
-    ].join('\n'));
+    const p = parsePersonaMd(
+      'coder',
+      ['---', 'toolCallLimit: -1', '---'].join('\n')
+    );
 
     expect(p.toolCallLimit).toBeUndefined();
   });
 
   it('silently ignores a zero toolCallLimit', () => {
-    const p = parsePersonaMd('coder', [
-      '---',
-      'toolCallLimit: 0',
-      '---',
-    ].join('\n'));
+    const p = parsePersonaMd(
+      'coder',
+      ['---', 'toolCallLimit: 0', '---'].join('\n')
+    );
 
     expect(p.toolCallLimit).toBeUndefined();
   });
 
   it('silently ignores a non-integer toolCallLimit', () => {
-    const p = parsePersonaMd('coder', [
-      '---',
-      'toolCallLimit: 3.14',
-      '---',
-    ].join('\n'));
+    const p = parsePersonaMd(
+      'coder',
+      ['---', 'toolCallLimit: 3.14', '---'].join('\n')
+    );
 
     expect(p.toolCallLimit).toBeUndefined();
   });
 
   it('silently ignores a non-numeric toolCallLimit string', () => {
-    const p = parsePersonaMd('coder', [
-      '---',
-      'toolCallLimit: unlimited',
-      '---',
-    ].join('\n'));
+    const p = parsePersonaMd(
+      'coder',
+      ['---', 'toolCallLimit: unlimited', '---'].join('\n')
+    );
 
     expect(p.toolCallLimit).toBeUndefined();
   });
 
   it('silently ignores a NaN toolCallLimit', () => {
-    const p = parsePersonaMd('coder', [
-      '---',
-      'toolCallLimit: not-a-number',
-      '---',
-    ].join('\n'));
+    const p = parsePersonaMd(
+      'coder',
+      ['---', 'toolCallLimit: not-a-number', '---'].join('\n')
+    );
 
     expect(p.toolCallLimit).toBeUndefined();
   });
@@ -113,7 +109,10 @@ describe('parsePersonaMd — invalid toolCallLimit values', () => {
 
 type EngineOptions = {
   tools: DroneToolDescriptor[];
-  executeToolImpl: (name: string, input: Record<string, unknown>) => Promise<string>;
+  executeToolImpl: (
+    name: string,
+    input: Record<string, unknown>
+  ) => Promise<string>;
   promptFragments?: string[];
   /** Optional persona capability to return from getCapability('persona'). */
   personaCap?: {
@@ -219,7 +218,10 @@ describe('createConversationService — persona toolCallLimit', () => {
     getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
   } {
     return {
-      getActivePersona: () => (limit !== undefined ? { toolCallLimit: limit } : { toolCallLimit: undefined }),
+      getActivePersona: () =>
+        limit !== undefined
+          ? { toolCallLimit: limit }
+          : { toolCallLimit: undefined },
       getFilteredTools: (tools: DroneToolDescriptor[]) => tools,
     };
   }

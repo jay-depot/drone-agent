@@ -41,14 +41,10 @@ export type FakeLspServer = {
 };
 
 export async function startFakeLspServer(): Promise<FakeLspServer> {
-  const child = spawn(
-    process.execPath,
-    [SERVER_SCRIPT],
-    {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, NODE_NO_WARNINGS: '1' },
-    }
-  );
+  const child = spawn(process.execPath, [SERVER_SCRIPT], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, NODE_NO_WARNINGS: '1' },
+  });
 
   let resolveInitialized: (() => void) | undefined;
   const initializedPromise = new Promise<void>(resolve => {
@@ -86,9 +82,7 @@ export async function startFakeLspServer(): Promise<FakeLspServer> {
     child,
     onRequest: (method, handler) => {
       const wrapped: Handler =
-        typeof handler === 'function'
-          ? (handler as Handler)
-          : () => handler;
+        typeof handler === 'function' ? (handler as Handler) : () => handler;
       handlers.set(method, wrapped);
     },
     offRequest: method => {

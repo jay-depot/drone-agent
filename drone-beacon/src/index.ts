@@ -1,18 +1,30 @@
-import fastify from "fastify";
-import websocket from "@fastify/websocket";
-import path from "path";
-import { initDatabase, closeDatabase, cleanupExpiredMemories } from "./db.js";
-import { registerRoutes, setCoordinatorClient, setBeaconAddress, triggerCoordinatorSync } from "./routes.js";
-import { createCoordinatorClient, type CoordinatorClient } from "./coordinator-client.js";
-import { initSpawner, cleanupAllSpawns, type SpawnerConfig } from "./spawner.js";
-import * as wsServer from "./ws-server.js";
-import { logger } from "./logger.js";
+import fastify from 'fastify';
+import '@fastify/websocket';
+import path from 'path';
+import { initDatabase, closeDatabase, cleanupExpiredMemories } from './db.js';
+import {
+  registerRoutes,
+  setCoordinatorClient,
+  setBeaconAddress,
+  triggerCoordinatorSync,
+} from './routes.js';
+import {
+  createCoordinatorClient,
+  type CoordinatorClient,
+} from './coordinator-client.js';
+import {
+  initSpawner,
+  cleanupAllSpawns,
+  type SpawnerConfig,
+} from './spawner.js';
+import * as wsServer from './ws-server.js';
+import { logger } from './logger.js';
 
 const DEFAULT_PORT = 3457;
-const DEFAULT_HOST = "0.0.0.0";
-const DEFAULT_CONFIG_DIR = "./config";
-const DEFAULT_DB_FILENAME = "drone-beacon.db";
-const DEFAULT_SPAWN_AGENT_PATH = "drone-agent";
+const DEFAULT_HOST = '0.0.0.0';
+const DEFAULT_CONFIG_DIR = './config';
+const DEFAULT_DB_FILENAME = 'drone-beacon.db';
+const DEFAULT_SPAWN_AGENT_PATH = 'drone-agent';
 const DEFAULT_SPAWN_TIMEOUT_MS = 30000;
 const DEFAULT_MAX_CONCURRENT_SPAWNS = 10;
 const DEFAULT_SYNC_INTERVAL_MINUTES = 5;
@@ -40,7 +52,7 @@ function parseArgs(): Config {
     configDir: DEFAULT_CONFIG_DIR,
     dbPath: path.join(DEFAULT_CONFIG_DIR, DEFAULT_DB_FILENAME),
     beaconId: `beacon-${Date.now()}`,
-    beaconName: "default-beacon",
+    beaconName: 'default-beacon',
     spawnAgentPath: DEFAULT_SPAWN_AGENT_PATH,
     spawnTimeoutMs: DEFAULT_SPAWN_TIMEOUT_MS,
     maxConcurrentSpawns: DEFAULT_MAX_CONCURRENT_SPAWNS,
@@ -49,33 +61,33 @@ function parseArgs(): Config {
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === "--port" && i + 1 < args.length) {
+    if (arg === '--port' && i + 1 < args.length) {
       config.port = parseInt(args[++i], 10);
-    } else if (arg === "--host" && i + 1 < args.length) {
+    } else if (arg === '--host' && i + 1 < args.length) {
       config.host = args[++i];
-    } else if (arg === "--db" && i + 1 < args.length) {
+    } else if (arg === '--db' && i + 1 < args.length) {
       config.dbPath = args[++i];
-    } else if (arg === "--config-dir" && i + 1 < args.length) {
+    } else if (arg === '--config-dir' && i + 1 < args.length) {
       config.configDir = args[++i];
       // Update dbPath to be relative to the new config dir
       config.dbPath = path.join(config.configDir, DEFAULT_DB_FILENAME);
-    } else if (arg === "--coordinator-host" && i + 1 < args.length) {
+    } else if (arg === '--coordinator-host' && i + 1 < args.length) {
       config.coordinatorHost = args[++i];
-    } else if (arg === "--coordinator-port" && i + 1 < args.length) {
+    } else if (arg === '--coordinator-port' && i + 1 < args.length) {
       config.coordinatorPort = parseInt(args[++i], 10);
-    } else if (arg === "--id" && i + 1 < args.length) {
+    } else if (arg === '--id' && i + 1 < args.length) {
       config.beaconId = args[++i];
-    } else if (arg === "--name" && i + 1 < args.length) {
+    } else if (arg === '--name' && i + 1 < args.length) {
       config.beaconName = args[++i];
-    } else if (arg === "--spawn-agent-path" && i + 1 < args.length) {
+    } else if (arg === '--spawn-agent-path' && i + 1 < args.length) {
       config.spawnAgentPath = args[++i];
-    } else if (arg === "--spawn-timeout-ms" && i + 1 < args.length) {
+    } else if (arg === '--spawn-timeout-ms' && i + 1 < args.length) {
       config.spawnTimeoutMs = parseInt(args[++i], 10);
-    } else if (arg === "--max-concurrent-spawns" && i + 1 < args.length) {
+    } else if (arg === '--max-concurrent-spawns' && i + 1 < args.length) {
       config.maxConcurrentSpawns = parseInt(args[++i], 10);
-    } else if (arg === "--sync-interval-minutes" && i + 1 < args.length) {
+    } else if (arg === '--sync-interval-minutes' && i + 1 < args.length) {
       config.syncIntervalMinutes = parseInt(args[++i], 10);
-    } else if (arg === "--help" || arg === "-h") {
+    } else if (arg === '--help' || arg === '-h') {
       console.log(`
 drone-beacon [options]
 
@@ -120,14 +132,19 @@ async function main() {
     agentPath: config.spawnAgentPath,
     timeoutMs: config.spawnTimeoutMs,
     maxConcurrentSpawns: config.maxConcurrentSpawns,
-    beaconHost: config.host === "0.0.0.0" ? "localhost" : config.host,
+    beaconHost: config.host === '0.0.0.0' ? 'localhost' : config.host,
     beaconPort: config.port,
   };
   initSpawner(spawnerConfig);
-  logger.info(`Spawner configured: path=${config.spawnAgentPath}, timeout=${config.spawnTimeoutMs}ms, max=${config.maxConcurrentSpawns}`);
+  logger.info(
+    `Spawner configured: path=${config.spawnAgentPath}, timeout=${config.spawnTimeoutMs}ms, max=${config.maxConcurrentSpawns}`
+  );
 
   // Set beacon address for routes
-  setBeaconAddress(config.host === "0.0.0.0" ? "localhost" : config.host, config.port);
+  setBeaconAddress(
+    config.host === '0.0.0.0' ? 'localhost' : config.host,
+    config.port
+  );
 
   // Set up coordinator client if configured
   let coordinatorClient: CoordinatorClient | undefined;
@@ -147,14 +164,16 @@ async function main() {
         beaconName: config.beaconName,
       });
     } catch (err) {
-      logger.warn(`Failed to register with coordinator: ${err}. Running in offline mode.`);
+      logger.warn(
+        `Failed to register with coordinator: ${err}. Running in offline mode.`
+      );
     }
   }
 
   // Create Fastify instance with built-in logger (simpler for Docker)
   const app = fastify({
     logger: {
-      level: process.env.LOG_LEVEL || "info",
+      level: process.env.LOG_LEVEL || 'info',
     },
   });
 
@@ -170,7 +189,7 @@ async function main() {
     try {
       cleanupExpiredMemories();
     } catch (err) {
-      logger.error(err, "TTL cleanup failed");
+      logger.error(err, 'TTL cleanup failed');
     }
   }, 60000);
 
@@ -178,15 +197,17 @@ async function main() {
   let syncInterval: NodeJS.Timeout | undefined;
   if (coordinatorClient) {
     const syncIntervalMs = config.syncIntervalMinutes * 60 * 1000;
-    logger.info(`Starting periodic coordinator sync every ${config.syncIntervalMinutes} minutes`);
-    
+    logger.info(
+      `Starting periodic coordinator sync every ${config.syncIntervalMinutes} minutes`
+    );
+
     // Do an initial sync
     try {
       await triggerCoordinatorSync();
     } catch (err) {
       logger.warn(`Initial sync failed: ${err}`);
     }
-    
+
     // Set up periodic sync
     syncInterval = setInterval(async () => {
       try {
@@ -199,22 +220,22 @@ async function main() {
 
   // Graceful shutdown
   const shutdown = async () => {
-    logger.info("Shutting down...");
+    logger.info('Shutting down...');
     clearInterval(cleanupInterval);
     if (syncInterval) {
       clearInterval(syncInterval);
     }
-    
+
     // Clean up all spawned agents
     cleanupAllSpawns();
-    
+
     await app.close();
     closeDatabase();
     process.exit(0);
   };
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 
   // Start server
   try {

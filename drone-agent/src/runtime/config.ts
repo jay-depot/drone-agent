@@ -65,7 +65,7 @@ export async function findProjectConfigPath(
 }
 
 export interface LoadAgentConfigOptions {
-  /** 
+  /**
    * Override the default config directory.
    * When provided, the user config will be loaded from this directory
    * instead of ~/.drone-agent.
@@ -76,7 +76,7 @@ export interface LoadAgentConfigOptions {
 /**
  * Load the agent configuration from the default layered sources:
  * default -> user -> project
- * 
+ *
  * @param startDirectory - Directory to start searching for project config
  * @param options - Optional configuration options
  */

@@ -10,9 +10,7 @@ const CONFIG_DIR = '.drone-agent';
 /**
  * Load all .macro files from a given directory.
  */
-async function loadMacrosFromDir(
-  dir: string
-): Promise<DroneMacroDefinition[]> {
+async function loadMacrosFromDir(dir: string): Promise<DroneMacroDefinition[]> {
   let entries: string[];
   try {
     entries = await readdir(dir);

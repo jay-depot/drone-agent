@@ -1,7 +1,7 @@
-import { spawn, type ChildProcess } from "child_process";
-import * as db from "./db.js";
-import { logger } from "./logger.js";
-import type { SpawnConfig, SpawnRecord } from "./types.js";
+import { spawn, type ChildProcess } from 'child_process';
+import * as db from './db.js';
+import { logger } from './logger.js';
+import type { SpawnConfig, SpawnRecord } from './types.js';
 
 export interface SpawnerConfig {
   agentPath: string;
@@ -23,7 +23,9 @@ let config: SpawnerConfig | null = null;
 
 export function initSpawner(cfg: SpawnerConfig): void {
   config = cfg;
-  logger.info(`Spawner initialized: agentPath=${cfg.agentPath}, maxConcurrent=${cfg.maxConcurrentSpawns}`);
+  logger.info(
+    `Spawner initialized: agentPath=${cfg.agentPath}, maxConcurrent=${cfg.maxConcurrentSpawns}`
+  );
 }
 
 export function getSpawnerConfig(): SpawnerConfig | null {
@@ -43,48 +45,56 @@ export async function spawnAgent(
   configOverride?: SpawnConfig
 ): Promise<SpawnRecord> {
   if (!config) {
-    throw new Error("Spawner not initialized. Call initSpawner() first.");
+    throw new Error('Spawner not initialized. Call initSpawner() first.');
   }
 
   // Check max concurrent spawns
   if (getActiveSpawnCount() >= config.maxConcurrentSpawns) {
-    throw new Error("Max concurrent spawns reached");
+    throw new Error('Max concurrent spawns reached');
   }
 
   // Build command arguments
   const args: string[] = [
-    "--swarm",
-    "--session-id", agentId,
-    "--beacon-host", config.beaconHost,
-    "--beacon-port", String(config.beaconPort),
+    '--swarm',
+    '--session-id',
+    agentId,
+    '--beacon-host',
+    config.beaconHost,
+    '--beacon-port',
+    String(config.beaconPort),
   ];
 
   if (personaId) {
-    args.push("--persona", personaId);
+    args.push('--persona', personaId);
   }
 
   if (task) {
-    args.push("--task", task);
+    args.push('--task', task);
   }
 
   // Add config overrides
   if (configOverride) {
     if (configOverride.model) {
-      args.push("--model", configOverride.model);
+      args.push('--model', configOverride.model);
     }
     if (configOverride.workingDir) {
-      args.push("--working-dir", configOverride.workingDir);
+      args.push('--working-dir', configOverride.workingDir);
     }
   }
 
-  logger.info(`Spawning agent: ${agentId} with args: ${args.join(" ")}`);
+  logger.info(`Spawning agent: ${agentId} with args: ${args.join(' ')}`);
 
   // Create spawn record in database
-  const spawnRecord = db.createSpawn(spawnId, personaId, task, configOverride ?? null);
+  const spawnRecord = db.createSpawn(
+    spawnId,
+    personaId,
+    task,
+    configOverride ?? null
+  );
 
   // Spawn the process
   const childProcess = spawn(config.agentPath, args, {
-    stdio: ["pipe", "pipe", "pipe"],
+    stdio: ['pipe', 'pipe', 'pipe'],
     env: {
       ...process.env,
       ...(configOverride?.env || {}),
@@ -100,35 +110,41 @@ export async function spawnAgent(
   });
 
   // Handle process events
-  childProcess.on("exit", (code, signal) => {
+  childProcess.on('exit', (code, signal) => {
     logger.info(`Agent ${agentId} exited with code=${code}, signal=${signal}`);
-    
+
     // Update spawn record
-    db.updateSpawnStatus(spawnId, "terminated", null, undefined, code ?? undefined);
-    
+    db.updateSpawnStatus(
+      spawnId,
+      'terminated',
+      null,
+      undefined,
+      code ?? undefined
+    );
+
     // Clean up tracking
     activeSpawns.delete(spawnId);
   });
 
-  childProcess.on("error", (err) => {
+  childProcess.on('error', err => {
     logger.error(`Agent ${agentId} error: ${err.message}`);
-    
+
     // Update spawn record with error
-    db.updateSpawnStatus(spawnId, "failed", null, err.message);
-    
+    db.updateSpawnStatus(spawnId, 'failed', null, err.message);
+
     // Clean up tracking
     activeSpawns.delete(spawnId);
   });
 
   // Log stdout/stderr
   if (childProcess.stdout) {
-    childProcess.stdout.on("data", (data) => {
+    childProcess.stdout.on('data', data => {
       logger.debug(`[${agentId}] stdout: ${data.toString().trim()}`);
     });
   }
 
   if (childProcess.stderr) {
-    childProcess.stderr.on("data", (data) => {
+    childProcess.stderr.on('data', data => {
       logger.debug(`[${agentId}] stderr: ${data.toString().trim()}`);
     });
   }
@@ -138,9 +154,9 @@ export async function spawnAgent(
     const managed = activeSpawns.get(spawnId);
     if (managed) {
       const spawn = db.getSpawn(spawnId);
-      if (spawn && spawn.status === "spawning") {
+      if (spawn && spawn.status === 'spawning') {
         logger.warn(`Agent ${agentId} did not connect within timeout`);
-        db.updateSpawnStatus(spawnId, "failed", null, "timeout");
+        db.updateSpawnStatus(spawnId, 'failed', null, 'timeout');
         // Don't kill the process - let it run, but mark as failed
       }
     }
@@ -150,7 +166,10 @@ export async function spawnAgent(
   return spawnRecord;
 }
 
-export function terminateAgent(spawnId: string, force: boolean = false): boolean {
+export function terminateAgent(
+  spawnId: string,
+  force: boolean = false
+): boolean {
   const managed = activeSpawns.get(spawnId);
   if (!managed) {
     logger.warn(`No active spawn found for ${spawnId}`);
@@ -161,15 +180,17 @@ export function terminateAgent(spawnId: string, force: boolean = false): boolean
   logger.info(`Terminating agent: ${sid}, force=${force}`);
 
   if (force) {
-    process.kill("SIGKILL");
+    process.kill('SIGKILL');
   } else {
-    process.kill("SIGTERM");
+    process.kill('SIGTERM');
     // Set a timeout to send SIGKILL if it doesn't exit
     setTimeout(() => {
       const stillActive = activeSpawns.get(spawnId);
       if (stillActive && stillActive.process && !stillActive.process.killed) {
-        logger.warn(`Agent ${sid} did not terminate gracefully, sending SIGKILL`);
-        stillActive.process.kill("SIGKILL");
+        logger.warn(
+          `Agent ${sid} did not terminate gracefully, sending SIGKILL`
+        );
+        stillActive.process.kill('SIGKILL');
       }
     }, 5000);
   }
@@ -190,7 +211,7 @@ export function cleanupAllSpawns(): void {
   logger.info(`Cleaning up ${activeSpawns.size} active spawns`);
   for (const [spawnId, managed] of activeSpawns) {
     logger.info(`Terminating spawn: ${spawnId}`);
-    managed.process.kill("SIGTERM");
+    managed.process.kill('SIGTERM');
   }
   activeSpawns.clear();
 }

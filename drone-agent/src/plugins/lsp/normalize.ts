@@ -601,8 +601,7 @@ export function flattenDocumentSymbols(
         typeof symbol.containerName === 'string'
           ? symbol.containerName
           : undefined,
-      detail:
-        typeof symbol.detail === 'string' ? symbol.detail : undefined,
+      detail: typeof symbol.detail === 'string' ? symbol.detail : undefined,
       deprecated:
         symbol.deprecated === true ||
         (Array.isArray(symbol.tags) && symbol.tags.includes(1)),
@@ -636,8 +635,7 @@ export function normalizeWorkspaceSymbols(
       continue;
     }
     const uri = symbol.location?.uri;
-    const filePath =
-      typeof uri === 'string' ? fromFileUri(uri) : undefined;
+    const filePath = typeof uri === 'string' ? fromFileUri(uri) : undefined;
     const range = symbol.location?.range;
     const normalized: NormalizedSymbol = {
       name: symbol.name,
@@ -649,8 +647,7 @@ export function normalizeWorkspaceSymbols(
       filePath: filePath ?? undefined,
       line: range ? (range.start?.line ?? 0) + 1 : undefined,
       column: range ? (range.start?.character ?? 0) + 1 : undefined,
-      deprecated:
-        Array.isArray(symbol.tags) && symbol.tags.includes(1),
+      deprecated: Array.isArray(symbol.tags) && symbol.tags.includes(1),
     };
     out.push(normalized);
   }
@@ -695,9 +692,7 @@ export function normalizeSignatureHelp(
             }
             return {
               label: labelText,
-              documentation: normalizeMarkupContent(
-                parameter.documentation
-              ),
+              documentation: normalizeMarkupContent(parameter.documentation),
             };
           }),
           activeParameter,
@@ -738,8 +733,7 @@ export function normalizeCompletionItems(
       kind: formatCompletionKind(item.kind),
       detail: typeof item.detail === 'string' ? item.detail : undefined,
       documentation: normalizeMarkupContent(item.documentation),
-      sortText:
-        typeof item.sortText === 'string' ? item.sortText : undefined,
+      sortText: typeof item.sortText === 'string' ? item.sortText : undefined,
       filterText:
         typeof item.filterText === 'string' ? item.filterText : undefined,
       insertText:
@@ -833,13 +827,9 @@ export function normalizeWorkspaceEdit(
     }
     if (isRenameOp(change)) {
       const oldPath =
-        typeof change.oldUri === 'string'
-          ? fromFileUri(change.oldUri)
-          : null;
+        typeof change.oldUri === 'string' ? fromFileUri(change.oldUri) : null;
       const newPath =
-        typeof change.newUri === 'string'
-          ? fromFileUri(change.newUri)
-          : null;
+        typeof change.newUri === 'string' ? fromFileUri(change.newUri) : null;
       if (oldPath && newPath) {
         documentChanges.push({
           kind: 'rename',
@@ -927,8 +917,7 @@ export function normalizeCallHierarchyItem(
   if (!item || typeof item.name !== 'string') {
     return null;
   }
-  const filePath =
-    typeof item.uri === 'string' ? fromFileUri(item.uri) : null;
+  const filePath = typeof item.uri === 'string' ? fromFileUri(item.uri) : null;
   if (!filePath) {
     return null;
   }
@@ -941,8 +930,7 @@ export function normalizeCallHierarchyItem(
     line: (range?.start?.line ?? 0) + 1,
     column: (range?.start?.character ?? 0) + 1,
     endLine: (range?.end?.line ?? range?.start?.line ?? 0) + 1,
-    endColumn:
-      (range?.end?.character ?? range?.start?.character ?? 0) + 1,
+    endColumn: (range?.end?.character ?? range?.start?.character ?? 0) + 1,
   };
 }
 
@@ -1124,9 +1112,7 @@ export function truncateWorkspaceEdit(
     if (change.kind !== 'textEdit') {
       return change;
     }
-    return retainedSet.has(change.filePath)
-      ? change
-      : { ...change, edits: [] };
+    return retainedSet.has(change.filePath) ? change : { ...change, edits: [] };
   });
 
   return {
@@ -1139,9 +1125,7 @@ export function truncateWorkspaceEdit(
   };
 }
 
-export function describeWorkspaceEdit(
-  edit: NormalizedWorkspaceEdit
-): {
+export function describeWorkspaceEdit(edit: NormalizedWorkspaceEdit): {
   filesTouched: number;
   editCount: number;
   editsByFile: Record<string, number>;

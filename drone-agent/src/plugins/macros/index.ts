@@ -68,32 +68,20 @@ export const macrosPlugin: DronePlugin = {
     ): Promise<void> {
       for (const step of macro.steps) {
         if (step.kind === 'slashCommand') {
-          const substituted = substituteMacroArgs(
-            step.line,
-            ctx.args,
-            macro
-          );
+          const substituted = substituteMacroArgs(step.line, ctx.args, macro);
           const handled = await ctx.engine.dispatchSlashCommand?.(
             substituted,
             ctx
           );
           if (!handled) {
-            ctx.logger.warn(
-              `Macro step not handled: ${substituted}`
-            );
+            ctx.logger.warn(`Macro step not handled: ${substituted}`);
           }
         } else {
           // chatPrompt step
-          const substituted = substituteMacroArgs(
-            step.text,
-            ctx.args,
-            macro
-          );
+          const substituted = substituteMacroArgs(step.text, ctx.args, macro);
           if (ctx.conversation) {
             await ctx.engine.runHooks?.('onBeforePrompt');
-            const reply = await ctx.conversation.sendUserMessage(
-              substituted
-            );
+            const reply = await ctx.conversation.sendUserMessage(substituted);
             if (reply.length > 0) {
               ctx.logger.info(reply);
             }
@@ -149,9 +137,7 @@ export const macrosPlugin: DronePlugin = {
 
         if (subcommand === 'reload') {
           await reloadAndRegister();
-          ctx.logger.info(
-            `Reloaded ${macros.size} macro(s).`
-          );
+          ctx.logger.info(`Reloaded ${macros.size} macro(s).`);
           return true;
         }
 
@@ -166,7 +152,9 @@ export const macrosPlugin: DronePlugin = {
             ctx.logger.warn(`Unknown macro: ${name}`);
             return true;
           }
-          const lines = [`Macro: ${macro.command}`, `  Description: ${macro.description || '(none)'}`,
+          const lines = [
+            `Macro: ${macro.command}`,
+            `  Description: ${macro.description || '(none)'}`,
             `  File: ${macro.filePath}`,
             `  Steps:`,
           ];
@@ -191,8 +179,6 @@ export const macrosPlugin: DronePlugin = {
     // Help snippets.
     registration.registerHelp('/macro list          List loaded macros');
     registration.registerHelp('/macro reload        Re-scan macro directories');
-    registration.registerHelp(
-      '/macro show <name>   Show macro definition'
-    );
+    registration.registerHelp('/macro show <name>   Show macro definition');
   },
 };

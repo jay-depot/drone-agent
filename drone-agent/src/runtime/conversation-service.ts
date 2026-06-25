@@ -14,7 +14,12 @@ export type ConversationEvent =
   | { kind: 'reasoning'; content: string }
   | { kind: 'assistantMessage'; content: string }
   | { kind: 'toolCall'; name: string; arguments: Record<string, unknown> }
-  | { kind: 'toolResult'; name: string; content: string; arguments: Record<string, unknown> }
+  | {
+      kind: 'toolResult';
+      name: string;
+      content: string;
+      arguments: Record<string, unknown>;
+    }
   | { kind: 'error'; message: string };
 
 export type ConversationEventHandler = (event: ConversationEvent) => void;
@@ -327,7 +332,9 @@ export function createConversationService({
             stuckCount >= stuckErrorThreshold &&
             // All tool calls in this round must have been errors; otherwise
             // the model is making progress even if some calls failed.
-            bufferedResults.every(r => r.content.startsWith(`${stuckSignature!.name} failed`))
+            bufferedResults.every(r =>
+              r.content.startsWith(`${stuckSignature!.name} failed`)
+            )
           ) {
             const codeSuffix = stuckSignature.code
               ? ` (${stuckSignature.code})`

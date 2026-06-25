@@ -33,9 +33,7 @@ export const personaPlugin: DronePlugin = {
 
     // ── Provider management ──────────────────────────────────────────
     function insertProviderSorted(provider: DronePersonaProvider): void {
-      const idx = providers.findIndex(
-        p => p.precedence > provider.precedence
-      );
+      const idx = providers.findIndex(p => p.precedence > provider.precedence);
       if (idx === -1) {
         providers.push(provider);
       } else {
@@ -119,9 +117,7 @@ export const personaPlugin: DronePlugin = {
         activePersona.allowedSkills
       );
       const filteredSet = new Set(filteredIds);
-      const filteredGlobal = globalSkills.filter(s =>
-        filteredSet.has(s.id)
-      );
+      const filteredGlobal = globalSkills.filter(s => filteredSet.has(s.id));
 
       return [...filteredGlobal, ...ownedSkills];
     }
@@ -141,7 +137,7 @@ export const personaPlugin: DronePlugin = {
           activePersona.promptFragments &&
           activePersona.promptFragments.length > 0
         ) {
-          parts.push('## Observe the following additional instructions:')
+          parts.push('## Observe the following additional instructions:');
           activePersona.promptFragments.forEach((fragment, index) => {
             parts.push(`${index + 1}. ${fragment}`);
           });
@@ -417,18 +413,14 @@ export const personaPlugin: DronePlugin = {
     registration.registerWorkflow(personaCreateWorkflow);
 
     // Help snippets surface in `/help` and the TUI help screen.
-    registration.registerHelp(
-      '/persona list         List available personas'
-    );
+    registration.registerHelp('/persona list         List available personas');
     registration.registerHelp(
       '/persona create       Interactive wizard to author a new persona'
     );
     registration.registerHelp(
       '/persona select <id>  Switch active persona (or "none" to clear)'
     );
-    registration.registerHelp(
-      '/persona current      Show current persona'
-    );
+    registration.registerHelp('/persona current      Show current persona');
 
     // -----------------------------------------------------------------------
     // /persona slash command — handles all subcommands (list, current,
@@ -455,12 +447,12 @@ export const personaPlugin: DronePlugin = {
         if (subcommand === 'select') {
           const id = ctx.args.slice(1).join(' ');
           if (!id) {
-            ctx.logger.warn(
-              'Usage: /persona select <id> (or "none" to clear)'
-            );
+            ctx.logger.warn('Usage: /persona select <id> (or "none" to clear)');
             return true;
           }
-          ctx.logger.info(await ctx.engine.executeTool('persona.select', { id }));
+          ctx.logger.info(
+            await ctx.engine.executeTool('persona.select', { id })
+          );
           return true;
         }
 

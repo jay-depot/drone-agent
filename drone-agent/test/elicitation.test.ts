@@ -4,10 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createReadlineElicitation } from '../src/index.js';
-import type {
-  DroneElicitation,
-  DroneElicitationQuestion,
-} from 'drone-core';
+import type { DroneElicitation, DroneElicitationQuestion } from 'drone-core';
 
 describe('DroneElicitationQuestion validation (real helper)', () => {
   it('rejects questions that set both choices and freeform', async () => {
@@ -70,7 +67,11 @@ describe('DroneElicitationQuestion validation (real helper)', () => {
         ],
       },
     ]);
-    expect(answers).toEqual({ scope: 'project', id: 'reviewer', overwrite: '1' });
+    expect(answers).toEqual({
+      scope: 'project',
+      id: 'reviewer',
+      overwrite: '1',
+    });
     expect(asked.map(q => q.id)).toEqual(['scope', 'id', 'overwrite']);
   });
 });

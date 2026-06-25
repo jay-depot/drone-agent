@@ -28,7 +28,9 @@ async function buildSyntheticTarball(
   try {
     const packageDir = path.join(stage, 'package');
     const libDir = path.join(packageDir, 'lib');
-    await import('node:fs/promises').then(m => m.mkdir(libDir, { recursive: true }));
+    await import('node:fs/promises').then(m =>
+      m.mkdir(libDir, { recursive: true })
+    );
     for (const [name, content] of Object.entries(files)) {
       const full = path.join(packageDir, name);
       await import('node:fs/promises').then(m =>
@@ -38,10 +40,9 @@ async function buildSyntheticTarball(
     }
     // Use the promise form of `create` to a memory file.
     const target = path.join(stage, 'pkg.tgz');
-    await createTar(
-      { gzip: true, file: target, cwd: stage, portable: true },
-      ['package']
-    );
+    await createTar({ gzip: true, file: target, cwd: stage, portable: true }, [
+      'package',
+    ]);
     return await readFile(target);
   } finally {
     await rm(stage, { recursive: true, force: true });
@@ -235,9 +236,9 @@ describe('lsp-installer — verifyIntegrity', () => {
   });
 
   it('rejects a malformed integrity string', async () => {
-    await expect(verifyIntegrity(Buffer.from('x'), 'justgarbage')).rejects.toThrow(
-      /Invalid integrity string/
-    );
+    await expect(
+      verifyIntegrity(Buffer.from('x'), 'justgarbage')
+    ).rejects.toThrow(/Invalid integrity string/);
   });
 });
 
@@ -249,9 +250,9 @@ describe('lsp-installer — commandExistsOnPath', () => {
   });
 
   it('returns false for an absolute path that does not exist', async () => {
-    expect(
-      await commandExistsOnPath('/definitely/not/a/real/binary-xyz')
-    ).toBe(false);
+    expect(await commandExistsOnPath('/definitely/not/a/real/binary-xyz')).toBe(
+      false
+    );
   });
 
   it('returns false for an empty command', async () => {
@@ -301,7 +302,9 @@ describe('lsp-installer — ensureServerInstalled', () => {
 
     await withTempCache(async cacheDir => {
       const fetchMock = vi.fn(async () => {
-        return new Response(new Blob([new Uint8Array(tarball)]), { status: 200 });
+        return new Response(new Blob([new Uint8Array(tarball)]), {
+          status: 200,
+        });
       });
       const resolution = await ensureServerInstalled(spec, {
         cacheDir,
@@ -326,7 +329,10 @@ describe('lsp-installer — ensureServerInstalled', () => {
       expect(content).toContain('main');
 
       // The install manifest should have been written alongside it.
-      const manifestPath = path.join(resolution.cacheDir!, '.drone-agent-install.json');
+      const manifestPath = path.join(
+        resolution.cacheDir!,
+        '.drone-agent-install.json'
+      );
       const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
       expect(manifest.serverId).toBe('typescript');
       expect(manifest.version).toBe('5.3.0');
@@ -347,7 +353,10 @@ describe('lsp-installer — ensureServerInstalled', () => {
       await ensureServerInstalled(spec, {
         cacheDir,
         nodePath: '/path/to/node',
-        fetchImpl: (async () => new Response(new Blob([new Uint8Array(tarball)]), { status: 200 })) as unknown as typeof fetch,
+        fetchImpl: (async () =>
+          new Response(new Blob([new Uint8Array(tarball)]), {
+            status: 200,
+          })) as unknown as typeof fetch,
       });
 
       // Second call must not invoke fetch.
@@ -376,7 +385,10 @@ describe('lsp-installer — ensureServerInstalled', () => {
         ensureServerInstalled(baseSpec(wrongIntegrity), {
           cacheDir,
           nodePath: '/path/to/node',
-          fetchImpl: (async () => new Response(new Blob([new Uint8Array(tarball)]), { status: 200 })) as unknown as typeof fetch,
+          fetchImpl: (async () =>
+            new Response(new Blob([new Uint8Array(tarball)]), {
+              status: 200,
+            })) as unknown as typeof fetch,
         })
       ).rejects.toThrow(/Integrity check failed/);
     });
@@ -389,7 +401,10 @@ describe('lsp-installer — ensureServerInstalled', () => {
           cacheDir,
           nodePath: '/path/to/node',
           fetchImpl: (async () =>
-            new Response('boom', { status: 500, statusText: 'Internal Server Error' })) as unknown as typeof fetch,
+            new Response('boom', {
+              status: 500,
+              statusText: 'Internal Server Error',
+            })) as unknown as typeof fetch,
         })
       ).rejects.toThrow(/LSP server download failed: 500/);
     });
@@ -406,7 +421,10 @@ describe('lsp-installer — ensureServerInstalled', () => {
       const first = await ensureServerInstalled(spec, {
         cacheDir,
         nodePath: '/path/to/node',
-        fetchImpl: (async () => new Response(new Blob([new Uint8Array(tarball)]), { status: 200 })) as unknown as typeof fetch,
+        fetchImpl: (async () =>
+          new Response(new Blob([new Uint8Array(tarball)]), {
+            status: 200,
+          })) as unknown as typeof fetch,
       });
 
       // Plant garbage in the entry to simulate corruption.
@@ -419,7 +437,10 @@ describe('lsp-installer — ensureServerInstalled', () => {
       const second = await ensureServerInstalled(spec, {
         cacheDir,
         nodePath: '/path/to/node',
-        fetchImpl: (async () => new Response(new Blob([new Uint8Array(tarball)]), { status: 200 })) as unknown as typeof fetch,
+        fetchImpl: (async () =>
+          new Response(new Blob([new Uint8Array(tarball)]), {
+            status: 200,
+          })) as unknown as typeof fetch,
       });
 
       // The second call should have re-extracted, restoring the original

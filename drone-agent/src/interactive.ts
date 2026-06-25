@@ -1,15 +1,26 @@
 import { createInterface, type Interface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { makePlainOutputEventHandler, makeNdjsonOutputEventHandler } from './output-handlers.js';
-import type { createConversationService, ConversationEvent, ConversationEventHandler } from './runtime/conversation-service.js';
+import {
+  makePlainOutputEventHandler,
+  makeNdjsonOutputEventHandler,
+} from './output-handlers.js';
+import type {
+  createConversationService,
+  ConversationEvent,
+  ConversationEventHandler,
+} from './runtime/conversation-service.js';
 import type { createDronePluginEngine } from './runtime/plugin-engine.js';
 import type { createConsoleLogger, DroneLlmCapability } from 'drone-core';
 import type { createSessionManager } from './runtime/session-manager.js';
 import type { CliOptions } from './cli.js';
 
 export type CreateConsoleLogger = ReturnType<typeof createConsoleLogger>;
-export type CreateConversationService = ReturnType<typeof createConversationService>;
-export type CreateDronePluginEngine = ReturnType<typeof createDronePluginEngine>;
+export type CreateConversationService = ReturnType<
+  typeof createConversationService
+>;
+export type CreateDronePluginEngine = ReturnType<
+  typeof createDronePluginEngine
+>;
 export type CreateSessionManager = ReturnType<typeof createSessionManager>;
 
 /**
@@ -22,7 +33,9 @@ export type InputEvent =
 function getPersonaCapability(
   engine: CreateDronePluginEngine
 ): { getActivePersona: () => { name: string } } | undefined {
-  return engine.getCapability<{ getActivePersona: () => { name: string } }>('persona');
+  return engine.getCapability<{ getActivePersona: () => { name: string } }>(
+    'persona'
+  );
 }
 
 function buildPromptLabel(
@@ -42,7 +55,7 @@ function buildPromptLabel(
 export async function readNdjsonInput(): Promise<unknown[]> {
   const rl = createInterface({ input });
   const lines: string[] = [];
-  
+
   for await (const line of rl) {
     const trimmed = line.trim();
     if (trimmed) {
@@ -50,7 +63,7 @@ export async function readNdjsonInput(): Promise<unknown[]> {
     }
   }
   rl.close();
-  
+
   return lines.map(line => {
     try {
       return JSON.parse(line);
@@ -71,27 +84,35 @@ export async function runJsonMode(
 ): Promise<void> {
   // Read stdin as NDJSON
   const events = await readNdjsonInput();
-  
+
   // Find the first kickoff event
-  const kickoffEvent = events.find((e): e is InputEvent => 
-    typeof e === 'object' && e !== null && 'type' in e && (e as InputEvent).type === 'kickoff'
+  const kickoffEvent = events.find(
+    (e): e is InputEvent =>
+      typeof e === 'object' &&
+      e !== null &&
+      'type' in e &&
+      (e as InputEvent).type === 'kickoff'
   );
-  
+
   if (!kickoffEvent) {
-    throw new Error('No kickoff event found in input. Expected: { "type": "kickoff", "task": "..." }');
+    throw new Error(
+      'No kickoff event found in input. Expected: { "type": "kickoff", "task": "..." }'
+    );
   }
-  
+
   const task = (kickoffEvent as { type: 'kickoff'; task: string }).task;
   if (typeof task !== 'string' || !task.trim()) {
     throw new Error('Invalid kickoff event: task must be a non-empty string');
   }
-  
+
   // Run the task with NDJSON output
   await engine.runHooks('onBeforePrompt');
-  
+
   // Create handler that converts OutputEvent to ConversationEvent
   const ndjsonHandler = makeNdjsonOutputEventHandler();
-  const conversationHandler: ConversationEventHandler = (event: ConversationEvent) => {
+  const conversationHandler: ConversationEventHandler = (
+    event: ConversationEvent
+  ) => {
     // Convert ConversationEvent to OutputEvent format
     switch (event.kind) {
       case 'assistantMessage':
@@ -101,22 +122,33 @@ export async function runJsonMode(
         ndjsonHandler({ kind: 'reasoning', content: event.content });
         break;
       case 'toolCall':
-        ndjsonHandler({ kind: 'toolCall', name: event.name, input: event.arguments });
+        ndjsonHandler({
+          kind: 'toolCall',
+          name: event.name,
+          input: event.arguments,
+        });
         break;
       case 'toolResult':
-        ndjsonHandler({ kind: 'toolResult', name: event.name, result: event.content });
+        ndjsonHandler({
+          kind: 'toolResult',
+          name: event.name,
+          result: event.content,
+        });
         break;
       case 'error':
         ndjsonHandler({ kind: 'error', message: event.message });
         break;
     }
   };
-  
-  const response = await conversation.sendUserMessage(task, conversationHandler);
-  
+
+  const response = await conversation.sendUserMessage(
+    task,
+    conversationHandler
+  );
+
   // Output the final assistant message
   ndjsonHandler({ kind: 'assistantMessage', content: response });
-  
+
   await engine.runHooks('onAfterToolCall');
 }
 
@@ -176,7 +208,7 @@ export async function runInteractiveLoop(
             executeTool: (name, input) => engine.executeTool(name, input),
             runWorkflow: (name, args) => engine.runWorkflow(name, args),
             runHooks: hookName => engine.runHooks(hookName),
-            getCapability: <T,>(id: string) => engine.getCapability<T>(id),
+            getCapability: <T>(id: string) => engine.getCapability<T>(id),
             dispatchSlashCommand: (l, ctx) =>
               engine.dispatchSlashCommand(l, ctx),
           },

@@ -639,7 +639,9 @@ export type DronePersonaCapability = {
    * are always visible). Returns all skills when no persona is active
    * or when the persona has no `allowedSkills` field.
    */
-  getFilteredSkills: (allSkills: DroneSkillDefinition[]) => DroneSkillDefinition[];
+  getFilteredSkills: (
+    allSkills: DroneSkillDefinition[]
+  ) => DroneSkillDefinition[];
 };
 
 export type DroneMcpError = {
@@ -943,7 +945,7 @@ export type DroneSlashCommandContext = {
      */
     dispatchSlashCommand?: (
       line: string,
-      ctx: Omit<DroneSlashCommandContext, 'line' | 'args'>,
+      ctx: Omit<DroneSlashCommandContext, 'line' | 'args'>
     ) => Promise<boolean>;
   };
   /**
@@ -1256,7 +1258,6 @@ export function filterByGlobPatterns(
     return true;
   });
 }
-
 
 // ── Config schema (TypeBox) ─────────────────────────────────────────
 

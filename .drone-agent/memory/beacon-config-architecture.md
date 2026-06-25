@@ -18,6 +18,7 @@ updated: 2026-06-25T03:58:34.666Z
 ## Core Principle: Underlay, Not Overlay
 
 Config operates on **"most local wins"** basis. Therefore:
+
 - **Beacon config = underlay** (applied first, provides defaults)
 - **Agent config = overlay** (applied second, wins for conflicts)
 
@@ -33,13 +34,13 @@ Final Config = System Defaults → Coordinator → Beacon (underlay) → Agent (
 interface ConfigInjector {
   /** Unique identifier for this injector */
   id: string;
-  
+
   /** Priority (lower = runs first = underlay) */
   priority: number;
-  
+
   /** Inject config values that will be merged as underlay */
   inject(): Promise<Record<string, unknown>>;
-  
+
   /** Optional: watch for config changes and react */
   onConfigChanged?(key: string, value: unknown): void;
 }
@@ -51,10 +52,10 @@ interface ConfigInjector {
 interface ConfigSystem {
   /** Register a config injector */
   registerInjector(injector: ConfigInjector): void;
-  
+
   /** Unregister a config injector */
   unregisterInjector(id: string): void;
-  
+
   /** Get all registered injectors (sorted by priority) */
   getInjectors(): ConfigInjector[];
 }
@@ -66,20 +67,20 @@ interface ConfigSystem {
 async function buildConfig(): Promise<ResolvedConfig> {
   // 1. Load system defaults
   let config = await loadSystemDefaults();
-  
+
   // 2. Apply coordinator config (if connected)
   config = merge(config, await coordinatorConfig);
-  
+
   // 3. Apply injectors (sorted by priority, lower first)
   const injectors = configSystem.getInjectors();
   for (const injector of injectors) {
     const injected = await injector.inject();
     config = merge(config, injected); // underlay: injected underlays existing
   }
-  
+
   // 4. Apply local agent config (wins for conflicts)
   config = merge(config, agentLocalConfig);
-  
+
   return config;
 }
 ```
@@ -104,32 +105,32 @@ function merge(base: Config, underlay: Config): Config {
 class BeaconConfigInjector implements ConfigInjector {
   id = 'beacon';
   priority = 50; // runs after coordinator (0-100 range), before agent (100+)
-  
+
   private beaconUrl: string;
   private cachedConfig: Record<string, unknown> = {};
-  
+
   constructor(beaconUrl: string) {
     this.beaconUrl = beaconUrl;
   }
-  
+
   async inject(): Promise<Record<string, unknown>> {
     try {
       const response = await fetch(`${this.beaconUrl}/config`);
       const entries = await response.json();
-      
+
       // Parse JSON values and cache
       this.cachedConfig = {};
       for (const entry of entries) {
         this.cachedConfig[entry.key] = JSON.parse(entry.value);
       }
-      
+
       return this.cachedConfig;
     } catch (error) {
       // On failure, return cached config if available
       return this.cachedConfig;
     }
   }
-  
+
   onConfigChanged?(key: string, value: unknown): void {
     // Notify agent of beacon-driven config changes
     eventBus.emit('config:beacon-update', { key, value });
@@ -142,16 +143,16 @@ class BeaconConfigInjector implements ConfigInjector {
 ```typescript
 class SwarmPlugin {
   private beaconInjector: BeaconConfigInjector;
-  
+
   async connect(beaconUrl: string): Promise<void> {
     // Register beacon as config injector
     this.beaconInjector = new BeaconConfigInjector(beaconUrl);
     configSystem.registerInjector(this.beaconInjector);
-    
+
     // Initial config load
     await configSystem.rebuild();
   }
-  
+
   disconnect(): void {
     configSystem.unregisterInjector(this.beaconInjector.id);
   }
@@ -174,12 +175,12 @@ class SwarmPlugin {
 
 ## Priority Order
 
-| Injector | Priority | Purpose |
-|----------|----------|---------|
-| System Defaults | 0 | Baseline |
-| Coordinator | 50 | Org-wide defaults |
-| **Beacon** | **75** | **Host-specific defaults (underlay)** |
-| Agent Local | 100 | User/project config (wins) |
+| Injector        | Priority | Purpose                               |
+| --------------- | -------- | ------------------------------------- |
+| System Defaults | 0        | Baseline                              |
+| Coordinator     | 50       | Org-wide defaults                     |
+| **Beacon**      | **75**   | **Host-specific defaults (underlay)** |
+| Agent Local     | 100      | User/project config (wins)            |
 
 ## Reconnection Handling
 

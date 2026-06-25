@@ -41,9 +41,7 @@ function normalizeToolCall(toolCall: ToolCall): DroneToolCall {
   };
 }
 
-function extractContextWindowTokens(
-  showResponse: ShowResponse
-): number | null {
+function extractContextWindowTokens(showResponse: ShowResponse): number | null {
   const modelInfo = showResponse.model_info;
   const readModelInfoValue = (key: string): unknown => {
     if (modelInfo instanceof Map) {
@@ -56,7 +54,11 @@ function extractContextWindowTokens(
   };
 
   const coerceNumber = (rawValue: unknown): number | null => {
-    if (typeof rawValue === 'number' && Number.isFinite(rawValue) && rawValue > 0) {
+    if (
+      typeof rawValue === 'number' &&
+      Number.isFinite(rawValue) &&
+      rawValue > 0
+    ) {
       return rawValue;
     }
     if (typeof rawValue === 'string') {

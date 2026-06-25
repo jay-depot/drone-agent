@@ -29,12 +29,12 @@ ALICE (orchestrator) → drone-agents (workers on remote machines)
 
 ## Tools to Register
 
-| Tool | Description |
-|------|-------------|
-| `drone.spawn` | Spawn a new drone-agent worker on remote machine |
-| `drone.list` | List all active drone instances |
-| `drone.send` | Send a message to a running drone |
-| `drone.terminate` | Kill a drone instance |
+| Tool              | Description                                      |
+| ----------------- | ------------------------------------------------ |
+| `drone.spawn`     | Spawn a new drone-agent worker on remote machine |
+| `drone.list`      | List all active drone instances                  |
+| `drone.send`      | Send a message to a running drone                |
+| `drone.terminate` | Kill a drone instance                            |
 
 ## Parameters for `drone.spawn`
 
@@ -61,6 +61,7 @@ ALICE (orchestrator) → drone-agents (workers on remote machines)
 ## Killer Feature: "Ambient Remote Hands"
 
 Voice-driven remote execution:
+
 1. User: "Hey ALICE, check the NAS logs"
 2. ALICE spawns drone on NAS
 3. Drone runs diagnostics
@@ -76,27 +77,27 @@ Voice-driven remote execution:
 
 ## What's Needed to Build
 
-| Component | Effort |
-|-----------|--------|
-| SSH/spawn logic | Medium |
-| Tool implementations | Small |
-| Beacon relay | Medium |
-| Web UI dashboard | Medium |
-| Voice command hooks | Small |
-| Integration with agents plugin | Small |
+| Component                      | Effort |
+| ------------------------------ | ------ |
+| SSH/spawn logic                | Medium |
+| Tool implementations           | Small  |
+| Beacon relay                   | Medium |
+| Web UI dashboard               | Medium |
+| Voice command hooks            | Small  |
+| Integration with agents plugin | Small  |
 
 ## Complementary Strengths
 
-| ALICE Has | drone Adds |
-|-----------|-------------|
-| Voice I/O | Remote execution |
-| 66+ plugins | Minimal tool-focused agents |
-| MikroORM DB | Worker checkpointing |
-| Web UI (local) | Fleet monitoring |
-| Ambient/long-running | Spawn-on-demand workers |
-| Personality system | Per-task personas |
-| Gmail/Calendar | Can spawn drones on those machines |
+| ALICE Has            | drone Adds                         |
+| -------------------- | ---------------------------------- |
+| Voice I/O            | Remote execution                   |
+| 66+ plugins          | Minimal tool-focused agents        |
+| MikroORM DB          | Worker checkpointing               |
+| Web UI (local)       | Fleet monitoring                   |
+| Ambient/long-running | Spawn-on-demand workers            |
+| Personality system   | Per-task personas                  |
+| Gmail/Calendar       | Can spawn drones on those machines |
 
 ---
 
-*Last updated: 2025 (hypothetical design)*
+_Last updated: 2025 (hypothetical design)_

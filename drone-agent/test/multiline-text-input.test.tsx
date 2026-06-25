@@ -109,9 +109,7 @@ describe('MultilineTextInput', () => {
       <InputLineShell value="" onChange={() => {}} />
     );
 
-    rerender(
-      <InputLineShell value="a" onChange={() => {}} />
-    );
+    rerender(<InputLineShell value="a" onChange={() => {}} />);
 
     const frame = lastFrame() ?? '';
     const lines = frame.split('\n');

@@ -21,7 +21,10 @@ type MidPanelWidgetShape = {
 
 async function createEngineWithTodo(): Promise<{
   engine: ReturnType<typeof createDronePluginEngine>;
-  executeTool: (name: string, input: Record<string, unknown>) => Promise<string>;
+  executeTool: (
+    name: string,
+    input: Record<string, unknown>
+  ) => Promise<string>;
 }> {
   const engine = createDronePluginEngine({
     plugins: [todoPlugin],
@@ -31,7 +34,8 @@ async function createEngineWithTodo(): Promise<{
   await engine.initialize();
   return {
     engine,
-    executeTool: async (name, input) => engine.executeTool(`todo.${name}`, input),
+    executeTool: async (name, input) =>
+      engine.executeTool(`todo.${name}`, input),
   };
 }
 

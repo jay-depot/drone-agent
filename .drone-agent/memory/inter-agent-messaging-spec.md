@@ -55,6 +55,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 ## WebSocket Protocol
 
 ### Connection
+
 - Path: `/ws` (upgrade from HTTP)
 - Each agent connects with its `agentId` in the query string: `/ws?agentId=agent-xxx`
 - Auth: Agent must be registered via `/agents` first (verified via session)
@@ -62,6 +63,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 ### Message Types (JSON)
 
 **1. Send a message (client → server)**
+
 ```json
 {
   "type": "message",
@@ -74,6 +76,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 ```
 
 **2. Incoming message (server → client)**
+
 ```json
 {
   "type": "message",
@@ -88,6 +91,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 ```
 
 **3. Acknowledge delivery (client → server)**
+
 ```json
 {
   "type": "ack",
@@ -96,6 +100,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 ```
 
 **4. Ping/pong (keepalive)**
+
 ```json
 { "type": "ping" }
 { "type": "pong" }
@@ -105,25 +110,26 @@ CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 
 ### REST (for non-WebSocket clients or debugging)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/messages` | Send a message (direct or channel) |
-| GET | `/messages` | List messages for agent (unread by default) |
-| GET | `/messages/:id` | Get single message |
-| POST | `/messages/:id/read` | Mark message as read/delivered |
-| GET | `/messages/channel/:channel` | List messages in a channel |
+| Method | Endpoint                     | Description                                 |
+| ------ | ---------------------------- | ------------------------------------------- |
+| POST   | `/messages`                  | Send a message (direct or channel)          |
+| GET    | `/messages`                  | List messages for agent (unread by default) |
+| GET    | `/messages/:id`              | Get single message                          |
+| POST   | `/messages/:id/read`         | Mark message as read/delivered              |
+| GET    | `/messages/channel/:channel` | List messages in a channel                  |
 
 ### WebSocket
 
-| Event | Direction | Description |
-|-------|-----------|-------------|
-| `message` | bidirectional | Send/receive messages |
-| `ack` | client → server | Acknowledge receipt |
-| `ping/pong` | bidirectional | Keepalive |
+| Event       | Direction       | Description           |
+| ----------- | --------------- | --------------------- |
+| `message`   | bidirectional   | Send/receive messages |
+| `ack`       | client → server | Acknowledge receipt   |
+| `ping/pong` | bidirectional   | Keepalive             |
 
 ## Message Flow
 
 ### Direct Message (A → B)
+
 ```
 1. Agent A sends WebSocket message:
    { "type": "message", "payload": { "toAgentId": "agent-B", "body": {...} } }
@@ -142,6 +148,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 ```
 
 ### Channel Message (Broadcast)
+
 ```
 1. Agent A sends to channel:
    { "type": "message", "payload": { "toChannel": "review-queue", "body": {...} } }
@@ -162,6 +169,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 ## Implementation Plan
 
 ### Step 1: Database (db.ts)
+
 - Add `messages` table schema
 - Add CRUD functions:
   - `createMessage(fromAgentId, toAgentId?, channel?, body)`
@@ -172,6 +180,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
   - `cleanupOldMessages(maxAgeHours)`
 
 ### Step 2: WebSocket Server (ws-server.ts)
+
 - New file: Fastify WebSocket plugin
 - Handle `/ws` upgrade request
 - Maintain Map<agentId, WSConnection>
@@ -179,10 +188,12 @@ CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 - Ping/pong keepalive (30s interval)
 
 ### Step 3: Routes (routes.ts)
+
 - Add REST endpoints for message CRUD
 - Integrate with existing agent registration
 
 ### Step 4: Agent-Side (swarm plugin)
+
 - On agent init, connect to WebSocket
 - On message received, queue for delivery to agent
 - Provide message-polling tool or inject as system message
@@ -190,6 +201,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 ## Agent-Side Integration
 
 The swarm plugin needs:
+
 1. **WebSocket connection** on init
 2. **Message queue** - buffer incoming messages
 3. **Delivery mechanism** - either:

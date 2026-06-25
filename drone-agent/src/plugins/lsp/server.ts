@@ -105,11 +105,36 @@ export type ServerManager = {
   getServerStates: () => DroneLspServerState[];
   renderDiagnosticsPrompt: () => string | false;
   findRuntimeForFile: (filePath: string) => ServerRuntime | undefined;
-  ensureDocumentLoaded: (runtime: ServerRuntime, filePath: string) => Promise<DocumentState>;
+  ensureDocumentLoaded: (
+    runtime: ServerRuntime,
+    filePath: string
+  ) => Promise<DocumentState>;
   resolveTargetFilePath: (inputPath: string) => string;
-  parsePositionInput: (toolName: string, input: Record<string, unknown>) => { filePath: string; line: number; column: number };
-  resolveAtPosition: (toolName: string, input: Record<string, unknown>) => Promise<ResolvedPosition>;
-  locationToAgentShape: (locations: Array<{ filePath: string; range: { start: { line: number; character: number }; end: { line: number; character: number } } }>) => Array<{ filePath: string; line: number; column: number; range: { start: { line: number; character: number }; end: { line: number; character: number } } }>;
+  parsePositionInput: (
+    toolName: string,
+    input: Record<string, unknown>
+  ) => { filePath: string; line: number; column: number };
+  resolveAtPosition: (
+    toolName: string,
+    input: Record<string, unknown>
+  ) => Promise<ResolvedPosition>;
+  locationToAgentShape: (
+    locations: Array<{
+      filePath: string;
+      range: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+      };
+    }>
+  ) => Array<{
+    filePath: string;
+    line: number;
+    column: number;
+    range: {
+      start: { line: number; character: number };
+      end: { line: number; character: number };
+    };
+  }>;
   shutdown: () => Promise<void>;
 };
 
@@ -123,7 +148,9 @@ type CreateServerManagerOptions = {
 // Factory
 // ---------------------------------------------------------------------------
 
-export function createServerManager(options: CreateServerManagerOptions): ServerManager {
+export function createServerManager(
+  options: CreateServerManagerOptions
+): ServerManager {
   const { workspaceRoot, lspConfig, logger } = options;
   const diagnosticsByFile = new Map<string, DroneLspDiagnostic[]>();
   const serverRuntimes = new Map<string, ServerRuntime>();
@@ -162,8 +189,7 @@ export function createServerManager(options: CreateServerManagerOptions): Server
 
     const normalized: DroneLspDiagnostic[] = value.diagnostics
       .filter(
-        diagnostic =>
-          typeof diagnostic.message === 'string' && diagnostic.range
+        diagnostic => typeof diagnostic.message === 'string' && diagnostic.range
       )
       .map(diagnostic => ({
         filePath,
@@ -174,9 +200,7 @@ export function createServerManager(options: CreateServerManagerOptions): Server
           },
           end: {
             line:
-              diagnostic.range?.end?.line ??
-              diagnostic.range?.start?.line ??
-              0,
+              diagnostic.range?.end?.line ?? diagnostic.range?.start?.line ?? 0,
             character:
               diagnostic.range?.end?.character ??
               diagnostic.range?.start?.character ??
@@ -256,10 +280,7 @@ export function createServerManager(options: CreateServerManagerOptions): Server
     };
 
     if (config.transport === 'tcp') {
-      const socket = await connectTcpServer(
-        config,
-        lspConfig.requestTimeoutMs
-      );
+      const socket = await connectTcpServer(config, lspConfig.requestTimeoutMs);
       const client = createJsonRpcClient({
         transport: createSocketTransport(socket),
         requestTimeoutMs: lspConfig.requestTimeoutMs,
@@ -353,9 +374,7 @@ export function createServerManager(options: CreateServerManagerOptions): Server
       language: string;
       config: DroneLspServerConfig;
     }> = [];
-    for (const [serverId, serverConfig] of Object.entries(
-      lspConfig.servers
-    )) {
+    for (const [serverId, serverConfig] of Object.entries(lspConfig.servers)) {
       const language = serverConfig.language ?? serverId;
       resolved.push({
         serverId,
@@ -522,8 +541,7 @@ export function createServerManager(options: CreateServerManagerOptions): Server
         );
         installStatus = resolved?.installStatus ?? 'unused';
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
         logger.warn(
           `lsp server unavailable: ${candidate.serverId} (${message})`
         );
@@ -573,9 +591,7 @@ export function createServerManager(options: CreateServerManagerOptions): Server
           candidate.serverId,
           candidate.language,
           candidate.config,
-          resolved
-            ? { command: resolved.command, args: resolved.args }
-            : null
+          resolved ? { command: resolved.command, args: resolved.args } : null
         );
         // Surface install provenance on the runtime state.
         if (resolved) {
@@ -590,8 +606,7 @@ export function createServerManager(options: CreateServerManagerOptions): Server
           `lsp server ready: ${runtime.id} (${runtime.ownership}, ${runtime.detail}, install=${installStatus})`
         );
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
         logger.warn(
           `lsp server unavailable: ${candidate.serverId} (${message})`
         );
@@ -816,15 +831,10 @@ export function createServerManager(options: CreateServerManagerOptions): Server
     toolName: string,
     input: Record<string, unknown>
   ): Promise<ResolvedPosition> {
-    const { filePath, line, column } = parsePositionInput(
-      toolName,
-      input
-    );
+    const { filePath, line, column } = parsePositionInput(toolName, input);
     const runtime = findRuntimeForFile(filePath);
     if (!runtime) {
-      throw new Error(
-        `No connected LSP server is available for ${filePath}.`
-      );
+      throw new Error(`No connected LSP server is available for ${filePath}.`);
     }
     const document = await ensureDocumentLoaded(runtime, filePath);
     return { runtime, document, line, column };

@@ -3,7 +3,10 @@ import { mkdtemp, mkdir, rm, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import os from 'node:os';
-import { createLogPlugin, type DroneLogCapability } from '../src/plugins/log/index.js';
+import {
+  createLogPlugin,
+  type DroneLogCapability,
+} from '../src/plugins/log/index.js';
 import { createSessionManager } from '../src/runtime/session-manager.js';
 import type { DronePersonaDefinition, DroneSessionTurn } from 'drone-core';
 
@@ -24,7 +27,9 @@ function makeTurn(
   };
 }
 
-async function withTempHome<T>(fn: (homeDir: string) => Promise<T>): Promise<T> {
+async function withTempHome<T>(
+  fn: (homeDir: string) => Promise<T>
+): Promise<T> {
   const dir = await mkdtemp(path.join(tmpdir(), 'drone-log-test-'));
   const origHome = os.homedir();
   try {
@@ -88,7 +93,9 @@ describe('log plugin — path resolution', () => {
 
       await cap.appendTurn(makeTurn('t1', [{ role: 'user', content: 'hi' }]));
       const filePath = cap.getLogFilePath()!;
-      expect(filePath).toContain(path.join(homeDir, '.drone-agent', 'logs', 'default'));
+      expect(filePath).toContain(
+        path.join(homeDir, '.drone-agent', 'logs', 'default')
+      );
     });
   });
 
@@ -135,8 +142,12 @@ describe('log plugin — turn appending', () => {
       const plugin = createLogPlugin({ sessionManager });
       const { cap } = await getCapability(plugin);
 
-      await cap.appendTurn(makeTurn('t1', [{ role: 'user', content: 'first' }]));
-      await cap.appendTurn(makeTurn('t2', [{ role: 'user', content: 'second' }]));
+      await cap.appendTurn(
+        makeTurn('t1', [{ role: 'user', content: 'first' }])
+      );
+      await cap.appendTurn(
+        makeTurn('t2', [{ role: 'user', content: 'second' }])
+      );
 
       const content = await readFile(cap.getLogFilePath()!, 'utf-8');
       const parsed = JSON.parse(content);
@@ -176,8 +187,17 @@ describe('log plugin — turn appending', () => {
       const turn: DroneSessionTurn = {
         id: 't1',
         messages: [
-          { role: 'assistant', content: '', toolCalls: [{ name: 'test.tool', arguments: { x: 1 } }] },
-          { role: 'tool', content: 'result', toolName: 'test.tool', toolCallId: 'call1' },
+          {
+            role: 'assistant',
+            content: '',
+            toolCalls: [{ name: 'test.tool', arguments: { x: 1 } }],
+          },
+          {
+            role: 'tool',
+            content: 'result',
+            toolName: 'test.tool',
+            toolCallId: 'call1',
+          },
         ],
       };
       await cap.appendTurn(turn);
@@ -229,7 +249,9 @@ describe('log plugin — session clear', () => {
       const { cap, onSessionClear } = await getCapability(plugin);
 
       // Append a turn to create the first log file
-      await cap.appendTurn(makeTurn('t1', [{ role: 'user', content: 'first' }]));
+      await cap.appendTurn(
+        makeTurn('t1', [{ role: 'user', content: 'first' }])
+      );
       const firstPath = cap.getLogFilePath();
       expect(firstPath).not.toBeNull();
 
@@ -237,7 +259,9 @@ describe('log plugin — session clear', () => {
       await onSessionClear();
 
       // Append another turn — should create a new file
-      await cap.appendTurn(makeTurn('t2', [{ role: 'user', content: 'second' }]));
+      await cap.appendTurn(
+        makeTurn('t2', [{ role: 'user', content: 'second' }])
+      );
       const secondPath = cap.getLogFilePath();
       expect(secondPath).not.toBeNull();
 
@@ -251,8 +275,9 @@ describe('log plugin — session clear', () => {
 // Helper: extract capability from a plugin
 // ---------------------------------------------------------------------------
 
-
-async function getCapability(plugin: ReturnType<typeof createLogPlugin>): Promise<{ cap: DroneLogCapability; onSessionClear: () => Promise<void> }> {
+async function getCapability(
+  plugin: ReturnType<typeof createLogPlugin>
+): Promise<{ cap: DroneLogCapability; onSessionClear: () => Promise<void> }> {
   let cap: DroneLogCapability | undefined;
   let onSessionClear: () => Promise<void> = async () => {};
   await plugin.register({
@@ -277,10 +302,38 @@ async function getCapability(plugin: ReturnType<typeof createLogPlugin>): Promis
           { id: 'google/gemini-2.0-flash-001', contextWindow: 1000000 },
         ],
       },
-      session: { contextWindowTokens: 32768, responseReserveTokens: 4096, maxToolIterations: 50 },
-      lsp: { enabled: false, diagnosticTokenBudget: 500, requestTimeoutMs: 5000, preferExternal: false, autoInstall: true, servers: {} },
-      mcp: { enabled: false, requestTimeoutMs: 10000, retryCount: 1, retryDelayMs: 200, maxListPages: 25, maxListItems: 500, compatibilityMode: 'strict', servers: {} },
-      compaction: { enabled: false, strategy: 'summary-drop', softThresholdPercent: 75, slicePercent: 25, minTurnsToCompact: 4, summaryMaxTokens: 800, summaryBudgetPercent: 20 },
+      session: {
+        contextWindowTokens: 32768,
+        responseReserveTokens: 4096,
+        maxToolIterations: 50,
+      },
+      lsp: {
+        enabled: false,
+        diagnosticTokenBudget: 500,
+        requestTimeoutMs: 5000,
+        preferExternal: false,
+        autoInstall: true,
+        servers: {},
+      },
+      mcp: {
+        enabled: false,
+        requestTimeoutMs: 10000,
+        retryCount: 1,
+        retryDelayMs: 200,
+        maxListPages: 25,
+        maxListItems: 500,
+        compatibilityMode: 'strict',
+        servers: {},
+      },
+      compaction: {
+        enabled: false,
+        strategy: 'summary-drop',
+        softThresholdPercent: 75,
+        slicePercent: 25,
+        minTurnsToCompact: 4,
+        summaryMaxTokens: 800,
+        summaryBudgetPercent: 20,
+      },
       memory: { enabled: false },
       log: { enabled: false },
       promptFile: { enabled: false, files: [] },
@@ -295,12 +348,16 @@ async function getCapability(plugin: ReturnType<typeof createLogPlugin>): Promis
       onSessionStart: () => {},
       onBeforePrompt: () => {},
       onAfterToolCall: () => {},
-      onSessionClear: (cb: () => Promise<void>) => { onSessionClear = cb; },
+      onSessionClear: (cb: () => Promise<void>) => {
+        onSessionClear = cb;
+      },
       onShutdown: () => {},
       onSessionSafetyTrimWillRun: () => {},
       onSessionSafetyTrimApplied: () => {},
     },
-    offer: <T>(c: T) => { cap = c as unknown as DroneLogCapability; },
+    offer: <T>(c: T) => {
+      cap = c as unknown as DroneLogCapability;
+    },
     request: () => undefined,
     runWorkflow: async () => ({ toolResult: '{}' }),
     requestElicitation: () => undefined,

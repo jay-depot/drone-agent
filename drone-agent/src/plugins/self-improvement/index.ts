@@ -133,7 +133,12 @@ function resolveInsightPaths(
     const skill = skillsCap?.getSkill(targetId);
     if (skill?.personaId) {
       // Persona-owned skill insights live in <personaDir>/<id>/insights/<skill-id>.json
-      const personaDir = path.join(baseDir, CONFIG_DIR, 'personas', skill.personaId);
+      const personaDir = path.join(
+        baseDir,
+        CONFIG_DIR,
+        'personas',
+        skill.personaId
+      );
       return {
         insightsDir: path.join(personaDir, INSIGHTS_SUBDIR),
         filePath: path.join(personaDir, INSIGHTS_SUBDIR, `${targetId}.json`),
@@ -144,7 +149,13 @@ function resolveInsightPaths(
   // Standalone skill or project insights
   return {
     insightsDir: path.join(baseDir, CONFIG_DIR, INSIGHTS_SUBDIR, targetType),
-    filePath: path.join(baseDir, CONFIG_DIR, INSIGHTS_SUBDIR, targetType, `${targetId}.json`),
+    filePath: path.join(
+      baseDir,
+      CONFIG_DIR,
+      INSIGHTS_SUBDIR,
+      targetType,
+      `${targetId}.json`
+    ),
   };
 }
 
@@ -169,7 +180,12 @@ function resolvePrinciplePaths(
     const skill = skillsCap?.getSkill(targetId);
     if (skill?.personaId) {
       // Persona-owned skill principles live in <personaDir>/<id>/principles/<skill-id>.json
-      const personaDir = path.join(baseDir, CONFIG_DIR, 'personas', skill.personaId);
+      const personaDir = path.join(
+        baseDir,
+        CONFIG_DIR,
+        'personas',
+        skill.personaId
+      );
       return {
         principlesDir: path.join(personaDir, PRINCIPLES_SUBDIR),
         filePath: path.join(personaDir, PRINCIPLES_SUBDIR, `${targetId}.json`),
@@ -179,8 +195,19 @@ function resolvePrinciplePaths(
 
   // Standalone skill or project principles
   return {
-    principlesDir: path.join(baseDir, CONFIG_DIR, PRINCIPLES_SUBDIR, targetType),
-    filePath: path.join(baseDir, CONFIG_DIR, PRINCIPLES_SUBDIR, targetType, `${targetId}.json`),
+    principlesDir: path.join(
+      baseDir,
+      CONFIG_DIR,
+      PRINCIPLES_SUBDIR,
+      targetType
+    ),
+    filePath: path.join(
+      baseDir,
+      CONFIG_DIR,
+      PRINCIPLES_SUBDIR,
+      targetType,
+      `${targetId}.json`
+    ),
   };
 }
 
@@ -207,7 +234,11 @@ async function scanJsonDir<T>(
 ): Promise<Array<{ id: string; entryCount: number; lastTimestamp?: string }>> {
   try {
     const entries = await readdir(dir);
-    const results: Array<{ id: string; entryCount: number; lastTimestamp?: string }> = [];
+    const results: Array<{
+      id: string;
+      entryCount: number;
+      lastTimestamp?: string;
+    }> = [];
 
     for (const entry of entries) {
       if (!entry.endsWith('.json')) continue;
@@ -218,7 +249,9 @@ async function scanJsonDir<T>(
       results.push({
         id,
         entryCount: data.length,
-        lastTimestamp: (lastEntry as Record<string, unknown>)?.timestamp as string | undefined,
+        lastTimestamp: (lastEntry as Record<string, unknown>)?.timestamp as
+          | string
+          | undefined,
       });
     }
 
@@ -263,7 +296,9 @@ export const selfImprovementPlugin: DronePlugin = {
         const activePersona = pCap?.getActivePersona();
         if (activePersona) {
           lines.push(
-            'Current active persona: `' + activePersona.id + '`. ' +
+            'Current active persona: `' +
+              activePersona.id +
+              '`. ' +
               'Use `self-improvement.insight` with `targetType: "persona"` to record insights about it.'
           );
         }
@@ -403,9 +438,10 @@ export const selfImprovementPlugin: DronePlugin = {
           lastTimestamp?: string;
         }> = [];
 
-        const typesToScan: TargetType[] = filterType && isValidTargetType(filterType)
-          ? [filterType]
-          : [...VALID_TARGET_TYPES];
+        const typesToScan: TargetType[] =
+          filterType && isValidTargetType(filterType)
+            ? [filterType]
+            : [...VALID_TARGET_TYPES];
 
         for (const tt of typesToScan) {
           if (tt === 'persona') {
@@ -423,7 +459,8 @@ export const selfImprovementPlugin: DronePlugin = {
                 for (const f of files) {
                   results.push({
                     targetType: 'persona',
-                    targetId: f.id === 'insights' ? personaId : `${personaId}/${f.id}`,
+                    targetId:
+                      f.id === 'insights' ? personaId : `${personaId}/${f.id}`,
                     entryCount: f.entryCount,
                     lastTimestamp: f.lastTimestamp,
                   });
@@ -466,8 +503,7 @@ export const selfImprovementPlugin: DronePlugin = {
           },
           targetId: {
             type: 'string',
-            description:
-              'The id of the persona, skill, or project category.',
+            description: 'The id of the persona, skill, or project category.',
           },
         },
         required: ['targetType', 'targetId'],
@@ -548,7 +584,8 @@ export const selfImprovementPlugin: DronePlugin = {
         const targetType = input.targetType as string;
         const targetId = (input.targetId as string).trim().toLowerCase();
         const principle = (input.principle as string).trim();
-        const source = (input.source as string | undefined)?.trim() || undefined;
+        const source =
+          (input.source as string | undefined)?.trim() || undefined;
 
         if (!principle) {
           throw new Error('principle must be a non-empty string.');
@@ -625,9 +662,10 @@ export const selfImprovementPlugin: DronePlugin = {
           principleCount: number;
         }> = [];
 
-        const typesToScan: TargetType[] = filterType && isValidTargetType(filterType)
-          ? [filterType]
-          : [...VALID_TARGET_TYPES];
+        const typesToScan: TargetType[] =
+          filterType && isValidTargetType(filterType)
+            ? [filterType]
+            : [...VALID_TARGET_TYPES];
 
         for (const tt of typesToScan) {
           if (tt === 'persona') {
@@ -641,11 +679,15 @@ export const selfImprovementPlugin: DronePlugin = {
                   personaId,
                   PRINCIPLES_SUBDIR
                 );
-                const files = await scanJsonDir<DronePrincipleEntry>(principlesDir);
+                const files =
+                  await scanJsonDir<DronePrincipleEntry>(principlesDir);
                 for (const f of files) {
                   results.push({
                     targetType: 'persona',
-                    targetId: f.id === 'principles' ? personaId : `${personaId}/${f.id}`,
+                    targetId:
+                      f.id === 'principles'
+                        ? personaId
+                        : `${personaId}/${f.id}`,
                     principleCount: f.entryCount,
                   });
                 }
@@ -655,7 +697,12 @@ export const selfImprovementPlugin: DronePlugin = {
             }
           } else {
             // skill or project: scan .drone-agent/principles/<type>/
-            const dir = path.join(projectDir, CONFIG_DIR, PRINCIPLES_SUBDIR, tt);
+            const dir = path.join(
+              projectDir,
+              CONFIG_DIR,
+              PRINCIPLES_SUBDIR,
+              tt
+            );
             const files = await scanJsonDir<DronePrincipleEntry>(dir);
             for (const f of files) {
               results.push({
@@ -686,8 +733,7 @@ export const selfImprovementPlugin: DronePlugin = {
           },
           targetId: {
             type: 'string',
-            description:
-              'The id of the persona, skill, or project category.',
+            description: 'The id of the persona, skill, or project category.',
           },
         },
         required: ['targetType', 'targetId'],
@@ -743,13 +789,11 @@ export const selfImprovementPlugin: DronePlugin = {
           },
           targetId: {
             type: 'string',
-            description:
-              'The id of the persona, skill, or project category.',
+            description: 'The id of the persona, skill, or project category.',
           },
           index: {
             type: 'integer',
-            description:
-              'The 0-based index of the principle to delete.',
+            description: 'The 0-based index of the principle to delete.',
           },
         },
         required: ['targetType', 'targetId', 'index'],
@@ -760,7 +804,11 @@ export const selfImprovementPlugin: DronePlugin = {
         const targetId = (input.targetId as string).trim().toLowerCase();
         const index = input.index as number;
 
-        if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) {
+        if (
+          typeof index !== 'number' ||
+          !Number.isInteger(index) ||
+          index < 0
+        ) {
           throw new Error('index must be a non-negative integer.');
         }
 
@@ -869,7 +917,10 @@ export const selfImprovementPlugin: DronePlugin = {
       const sCap = skillsCap();
       if (sCap?.onRecall) {
         sCap.onRecall(async (id, body) => {
-          const principles = await principlesCapability.getPrinciples('skill', id);
+          const principles = await principlesCapability.getPrinciples(
+            'skill',
+            id
+          );
           if (principles.length === 0) return body;
           const lines = ['\n## Principles'];
           for (const p of principles) {

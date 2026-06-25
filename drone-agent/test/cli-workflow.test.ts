@@ -20,7 +20,7 @@ describe('parseCliInvocation — --workflow flag', () => {
       '--workflow-arg',
       'scope=user',
       '--workflow-arg',
-      "description=reviews code",
+      'description=reviews code',
     ]);
     expect(inv.kind).toBe('workflow');
     if (inv.kind !== 'workflow') return;
@@ -46,9 +46,7 @@ describe('parseCliInvocation — --workflow flag', () => {
   });
 
   it('rejects --workflow without a value', () => {
-    expect(() => parseCliInvocation(['--workflow'])).toThrow(
-      /Unknown option/
-    );
+    expect(() => parseCliInvocation(['--workflow'])).toThrow(/Unknown option/);
   });
 
   it('rejects --workflow with no dot', () => {
@@ -82,9 +80,9 @@ describe('parseCliInvocation — --workflow flag', () => {
   });
 
   it('rejects --workflow-arg before --workflow', () => {
-    expect(() =>
-      parseCliInvocation(['--workflow-arg', 'scope=user'])
-    ).toThrow(/Unknown option/);
+    expect(() => parseCliInvocation(['--workflow-arg', 'scope=user'])).toThrow(
+      /Unknown option/
+    );
   });
 
   it('rejects --workflow-arg without a value argument', () => {
@@ -116,8 +114,12 @@ describe('parseCliInvocation — --workflow flag', () => {
   });
 
   it('rejects --output-plain and --output-json together', () => {
-    expect(() => parseCliInvocation(['--output-plain', '--output-json'])).toThrow(/Cannot use --output-plain and --output-json/);
-    expect(() => parseCliInvocation(['--output-json', '--output-plain'])).toThrow(/Cannot use --output-plain and --output-json/);
+    expect(() =>
+      parseCliInvocation(['--output-plain', '--output-json'])
+    ).toThrow(/Cannot use --output-plain and --output-json/);
+    expect(() =>
+      parseCliInvocation(['--output-json', '--output-plain'])
+    ).toThrow(/Cannot use --output-plain and --output-json/);
   });
 
   it('combines --workflow with --model and --plugin overrides', () => {
@@ -154,8 +156,10 @@ describe('parseCliInvocation — --plugin flag', () => {
 
   it('supports repeated --plugin flags alongside comma-separated', () => {
     const inv = parseCliInvocation([
-      '--plugin', 'bootstrap',
-      '--plugin', 'lsp,git',
+      '--plugin',
+      'bootstrap',
+      '--plugin',
+      'lsp,git',
     ]);
     expect(inv.options.pluginOverrides).toEqual(['bootstrap', 'lsp', 'git']);
   });
@@ -179,7 +183,12 @@ describe('parseCliInvocation — non-workflow invocations', () => {
   });
 
   it('returns kind "tool" for tool command', () => {
-    const inv = parseCliInvocation(['--tool', 'file.list', '--tool-arg', 'path=/tmp']);
+    const inv = parseCliInvocation([
+      '--tool',
+      'file.list',
+      '--tool-arg',
+      'path=/tmp',
+    ]);
     expect(inv.kind).toBe('tool');
     if (inv.kind !== 'tool') return;
     expect(inv.toolName).toBe('file.list');

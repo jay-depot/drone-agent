@@ -1,10 +1,11 @@
 ---
 name: ui-architecture
-description: 'A description of drone-agent''s ui architecture and how to work with it'
+description: "A description of drone-agent's ui architecture and how to work with it"
 recall:
   - you are going to work on the drone-agent TUI's Ink components
 model-invocation: true
 ---
+
 # Ui-architecture
 
 ## Overview
@@ -51,7 +52,7 @@ Four (or five) regions stacked vertically via `flexDirection="column"`:
 └──────────────────────────────────────┘
 ```
 
-The mid panel is a full-width horizontal bar between the chat log and input line. It renders widget content inline with ` │ ` separators. It only appears when at least one widget has non-empty content.
+The mid panel is a full-width horizontal bar between the chat log and input line. It renders widget content inline with `│` separators. It only appears when at least one widget has non-empty content.
 
 ### Key design decisions
 
@@ -96,7 +97,7 @@ Defined in `src/tui/types.ts`:
 
 ### Model picker
 
-`ModelPicker` (in `src/tui/components/ModelPicker.tsx`) is a standalone Ink component rendered *before* the chat TUI during first-run setup. It's mounted via its own `render()` call and unmounted after selection, so it doesn't conflict with the chat TUI's raw mode.
+`ModelPicker` (in `src/tui/components/ModelPicker.tsx`) is a standalone Ink component rendered _before_ the chat TUI during first-run setup. It's mounted via its own `render()` call and unmounted after selection, so it doesn't conflict with the chat TUI's raw mode.
 
 ## Patterns and conventions
 
@@ -139,7 +140,7 @@ Color overrides are currently only wired for the persona plugin. To add a new on
 useEffect(() => {
   const myPluginCap = opts.engine.getCapability<MyPluginCap>('my-plugin');
   if (!myPluginCap) return;
-  myPluginCap.onChange((active) => {
+  myPluginCap.onChange(active => {
     if (active) {
       pushColorOverride({ id: 'my-plugin', tint: '#ff8800' });
     } else {
@@ -154,6 +155,7 @@ useEffect(() => {
 Plugins offer their widget as a capability under their own plugin ID. The TUI discovers it by iterating a hardcoded list of known widget plugin IDs in `app.tsx`.
 
 **In the plugin:**
+
 ```ts
 registration.offer({
   id: 'my-widget',
@@ -163,6 +165,7 @@ registration.offer({
 ```
 
 **In `app.tsx`:** Add the plugin's ID to the hardcoded list:
+
 ```ts
 const knownWidgetPluginIds = ['todo', 'self-improvement', 'my-widget'];
 ```
@@ -182,7 +185,11 @@ Use `ink-testing-library` for component tests. See `ink-testing-library` docs fo
 The `ChatLog` component accepts an optional `tail` prop (`ReactNode`) rendered above the static entries. This is used for in-flight content that updates without re-rendering the log. **Note:** The `tail` prop is currently not passed by `App` — it's available for future use:
 
 ```tsx
-<ChatLog entries={entries} tail={<Text dimColor>Agent is thinking...</Text>} scheme={scheme} />
+<ChatLog
+  entries={entries}
+  tail={<Text dimColor>Agent is thinking...</Text>}
+  scheme={scheme}
+/>
 ```
 
 ### Example: Custom status bar item

@@ -59,13 +59,17 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'read',
-      description: 'Read a file (absolute path). Optional 1-based startLine/endLine.',
+      description:
+        'Read a file (absolute path). Optional 1-based startLine/endLine.',
       inputSchema: {
         type: 'object',
         properties: {
           path: { type: 'string', description: 'Absolute path to the file.' },
           startLine: { type: 'number', description: 'First line (1-based).' },
-          endLine: { type: 'number', description: 'Last line (1-based, inclusive).' },
+          endLine: {
+            type: 'number',
+            description: 'Last line (1-based, inclusive).',
+          },
         },
         required: ['path'],
         additionalProperties: false,
@@ -119,11 +123,15 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'list',
-      description: 'List a directory (absolute path). Returns names, types, sizes.',
+      description:
+        'List a directory (absolute path). Returns names, types, sizes.',
       inputSchema: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'Absolute path to the directory.' },
+          path: {
+            type: 'string',
+            description: 'Absolute path to the directory.',
+          },
         },
         required: ['path'],
         additionalProperties: false,
@@ -166,7 +174,8 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'write',
-      description: 'Write content to a file (absolute path). Creates parents; overwrites.',
+      description:
+        'Write content to a file (absolute path). Creates parents; overwrites.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -198,7 +207,8 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'apply_diff',
-      description: 'Apply hunks to a file. Each hunk has startLine, optional oldLines (for verification), and newLines (to insert).',
+      description:
+        'Apply hunks to a file. Each hunk has startLine, optional oldLines (for verification), and newLines (to insert).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -208,9 +218,21 @@ export const filePlugin: DronePlugin = {
             items: {
               type: 'object',
               properties: {
-                startLine: { type: 'number', description: '1-based line number.' },
-                oldLines: { type: 'array', items: { type: 'string' }, description: 'Lines expected at this location (verified, then removed).' },
-                newLines: { type: 'array', items: { type: 'string' }, description: 'Lines to insert.' },
+                startLine: {
+                  type: 'number',
+                  description: '1-based line number.',
+                },
+                oldLines: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'Lines expected at this location (verified, then removed).',
+                },
+                newLines: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Lines to insert.',
+                },
               },
               required: ['startLine', 'newLines'],
               additionalProperties: false,
@@ -218,7 +240,8 @@ export const filePlugin: DronePlugin = {
           },
           color: {
             type: 'boolean',
-            description: 'Enable ANSI color coding in output. Default: auto-detect from environment.',
+            description:
+              'Enable ANSI color coding in output. Default: auto-detect from environment.',
           },
         },
         required: ['path', 'hunks'],
@@ -293,12 +316,16 @@ export const filePlugin: DronePlugin = {
           throw enhanceFsError('file.apply_diff', filePath, err);
         }
 
-        return JSON.stringify({
-          path: filePath,
-          patched: true,
-          summary: diffResult.summary,
-          diff: diffOutput,
-        }, null, 2);
+        return JSON.stringify(
+          {
+            path: filePath,
+            patched: true,
+            summary: diffResult.summary,
+            diff: diffOutput,
+          },
+          null,
+          2
+        );
       },
     });
 
@@ -307,12 +334,16 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'glob',
-      description: 'Find files matching a glob (e.g. **/*.ts). Uses **, *, ? patterns.',
+      description:
+        'Find files matching a glob (e.g. **/*.ts). Uses **, *, ? patterns.',
       inputSchema: {
         type: 'object',
         properties: {
           pattern: { type: 'string', description: 'Glob pattern.' },
-          cwd: { type: 'string', description: 'Working directory (default: cwd).' },
+          cwd: {
+            type: 'string',
+            description: 'Working directory (default: cwd).',
+          },
         },
         required: ['pattern'],
         additionalProperties: false,
@@ -332,9 +363,7 @@ export const filePlugin: DronePlugin = {
         try {
           const cwdStat = await stat(cwd);
           if (!cwdStat.isDirectory()) {
-            throw new Error(
-              `file.glob: cwd is not a directory: ${cwd}.`
-            );
+            throw new Error(`file.glob: cwd is not a directory: ${cwd}.`);
           }
         } catch (err) {
           if (err instanceof Error && err.message.startsWith('file.glob')) {

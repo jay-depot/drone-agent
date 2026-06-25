@@ -72,13 +72,18 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
   },
 ];
 
-export function getKnownServerSpec(language: string): KnownServerSpec | undefined {
+export function getKnownServerSpec(
+  language: string
+): KnownServerSpec | undefined {
   return KNOWN_SERVER_SPECS.find(
     spec => spec.language === language || spec.id === language
   );
 }
 
-export function resolveLanguageId(filePath: string, fallbackLanguage: string): string {
+export function resolveLanguageId(
+  filePath: string,
+  fallbackLanguage: string
+): string {
   switch (path.extname(filePath).toLowerCase()) {
     case '.js':
     case '.mjs':

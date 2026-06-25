@@ -27,19 +27,21 @@ pnpm start
 
 ## Command-Line Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--port` | 3456 | Port to listen on |
-| `--host` | 0.0.0.0 | Host to bind to |
-| `--config-dir` | ./config | Configuration directory |
-| `--db` | config/drone-coordinator.db | Path to SQLite database |
+| Option         | Default                     | Description             |
+| -------------- | --------------------------- | ----------------------- |
+| `--port`       | 3456                        | Port to listen on       |
+| `--host`       | 0.0.0.0                     | Host to bind to         |
+| `--config-dir` | ./config                    | Configuration directory |
+| `--db`         | config/drone-coordinator.db | Path to SQLite database |
 
 ## API Endpoints
 
 ### Health
+
 - `GET /health` - Health check
 
 ### Personas
+
 - `POST /personas` - Create persona (coordinator-scoped)
 - `GET /personas` - List all personas
 - `GET /personas/:id` - Get persona
@@ -47,6 +49,7 @@ pnpm start
 - `DELETE /personas/:id` - Delete persona
 
 ### Skills
+
 - `POST /skills` - Create skill (coordinator-scoped)
 - `GET /skills` - List all skills
 - `GET /skills/:id` - Get skill
@@ -54,6 +57,7 @@ pnpm start
 - `DELETE /skills/:id` - Delete skill
 
 ### Beacons
+
 - `POST /beacons` - Register beacon
 - `GET /beacons` - List all beacons
 - `GET /beacons/:id` - Get beacon info
@@ -61,6 +65,7 @@ pnpm start
 - `DELETE /beacons/:id` - Remove beacon
 
 ### Beacon Sessions
+
 - `POST /beacons/:id/sessions` - Register a new agent session
 - `GET /beacons/:id/sessions` - List all sessions for a beacon
 - `GET /beacons/:id/sessions/:agentId` - Get specific session

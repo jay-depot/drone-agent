@@ -215,7 +215,12 @@ describe('filterByGlobPatterns', () => {
 
   it('filters by multiple inclusion patterns', () => {
     const result = filterByGlobPatterns(items, ['exec.*', 'file.*']);
-    expect(result).toEqual(['exec.run', 'exec.list', 'file.read', 'file.write']);
+    expect(result).toEqual([
+      'exec.run',
+      'exec.list',
+      'file.read',
+      'file.write',
+    ]);
   });
 
   it('excludes items matching ! patterns', () => {
@@ -240,7 +245,11 @@ describe('filterByGlobPatterns', () => {
 
   it('handles multiple exclusions', () => {
     const result = filterByGlobPatterns(items, ['*', '!exec.*', '!file.*']);
-    expect(result).toEqual(['mcp.filesystem.read', 'mcp.filesystem.write', 'search.text']);
+    expect(result).toEqual([
+      'mcp.filesystem.read',
+      'mcp.filesystem.write',
+      'search.text',
+    ]);
   });
 
   it('returns empty array when nothing matches', () => {

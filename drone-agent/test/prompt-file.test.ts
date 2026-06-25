@@ -93,10 +93,7 @@ describe('promptFile config parsing', () => {
   let testHomeDir = '';
   const originalHomedir = os.homedir;
 
-  async function writeJson(
-    filePath: string,
-    payload: unknown
-  ): Promise<void> {
+  async function writeJson(filePath: string, payload: unknown): Promise<void> {
     await mkdir(path.dirname(filePath), { recursive: true });
     await writeFile(filePath, JSON.stringify(payload, null, 2), 'utf-8');
   }
@@ -105,9 +102,7 @@ describe('promptFile config parsing', () => {
     homeDir: string;
     projectDir: string;
   }> {
-    const homeDir = await mkdtemp(
-      path.join(os.tmpdir(), 'drone-agent-home-')
-    );
+    const homeDir = await mkdtemp(path.join(os.tmpdir(), 'drone-agent-home-'));
     const projectDir = await mkdtemp(
       path.join(os.tmpdir(), 'drone-agent-project-')
     );
@@ -163,9 +158,7 @@ describe('promptFile config parsing', () => {
       promptFile: { enabled: true, files: 'not-an-array' },
     });
 
-    await expect(loadAgentConfig(projectDir)).rejects.toThrow(
-      /Expected array/
-    );
+    await expect(loadAgentConfig(projectDir)).rejects.toThrow(/Expected array/);
   });
 
   it('rejects promptFile with non-string array elements', async () => {
@@ -224,9 +217,7 @@ describe('promptFilePlugin', () => {
   let originalCwd: string;
   let originalHome: string;
 
-  function makeRegistration(
-    overrides?: Partial<DronePluginRegistration>
-  ): {
+  function makeRegistration(overrides?: Partial<DronePluginRegistration>): {
     registration: DronePluginRegistration;
     captured: {
       hooks: {
@@ -237,7 +228,11 @@ describe('promptFilePlugin', () => {
         phase: string;
         render: () => Promise<string | false>;
       }>;
-      logger: { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
+      logger: {
+        info: ReturnType<typeof vi.fn>;
+        warn: ReturnType<typeof vi.fn>;
+        error: ReturnType<typeof vi.fn>;
+      };
     };
   } {
     const logger = {

@@ -31,7 +31,11 @@ import { lightpandaPlugin } from './lightpanda/index.js';
 import { startupPlugin } from './startup.js';
 // NEW:
 import { subagentPlugin } from './subagent/index.js';
-import { swarmPlugin, createSwarmPlugin, type SwarmConfig } from './swarm/index.js';
+import {
+  swarmPlugin,
+  createSwarmPlugin,
+  type SwarmConfig,
+} from './swarm/index.js';
 import { todoPlugin } from './todo.js';
 import { utilsPlugin } from './utils.js';
 

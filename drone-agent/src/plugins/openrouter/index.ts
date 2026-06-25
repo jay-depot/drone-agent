@@ -152,9 +152,7 @@ export const openrouterPlugin: DronePlugin = {
         model,
       }): Promise<DroneContextWindowInfo | null> => {
         const config = registration.getConfig();
-        const modelEntry = config.openrouter.models.find(
-          m => m.id === model
-        );
+        const modelEntry = config.openrouter.models.find(m => m.id === model);
         if (modelEntry) {
           return {
             model,
@@ -190,16 +188,19 @@ export const openrouterPlugin: DronePlugin = {
 
         let response: Response;
         try {
-          response = await fetch(config.openrouter.baseUrl + '/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
-              'HTTP-Referer': 'https://drone-agent.dev',
-              'X-Title': 'drone-agent',
-            },
-            body: JSON.stringify(body),
-          });
+          response = await fetch(
+            config.openrouter.baseUrl + '/chat/completions',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+                'HTTP-Referer': 'https://drone-agent.dev',
+                'X-Title': 'drone-agent',
+              },
+              body: JSON.stringify(body),
+            }
+          );
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
@@ -227,9 +228,7 @@ export const openrouterPlugin: DronePlugin = {
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
-          throw new Error(
-            `OpenRouter returned invalid JSON: ${message}`
-          );
+          throw new Error(`OpenRouter returned invalid JSON: ${message}`);
         }
 
         return fromOpenAiResponse(data);

@@ -11,7 +11,10 @@ function captureRegistration(): {
   registration: DronePluginRegistration;
   tools: Map<string, (input: Record<string, unknown>) => Promise<string>>;
 } {
-  const tools = new Map<string, (input: Record<string, unknown>) => Promise<string>>();
+  const tools = new Map<
+    string,
+    (input: Record<string, unknown>) => Promise<string>
+  >();
   const registration: DronePluginRegistration = {
     logger: silentLogger(),
     getConfig: () => createDefaultAgentConfig(),

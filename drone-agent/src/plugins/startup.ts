@@ -57,7 +57,8 @@ export const startupPlugin: DronePlugin = {
     });
 
     registration.offer({
-      startupMessage: 'drone-agent ready. Ctrl+J for multi-line input, Enter to send.',
+      startupMessage:
+        'drone-agent ready. Ctrl+J for multi-line input, Enter to send.',
     });
   },
 };

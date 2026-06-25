@@ -19,18 +19,14 @@ export const skillsPlugin: DronePlugin = {
     description:
       'Broker for skill providers. Provides skills.recall, skills.list, skills.reload, skills.create tools.',
     defaultEnabled: false,
-    dependencies: [
-      { id: 'persona', optional: true },
-    ],
+    dependencies: [{ id: 'persona', optional: true }],
   },
   register: async registration => {
     const providers: DroneSkillProvider[] = [];
     const recallEnhancers: DroneRecallEnhancer[] = [];
 
     function insertProviderSorted(provider: DroneSkillProvider): void {
-      const idx = providers.findIndex(
-        p => p.precedence > provider.precedence
-      );
+      const idx = providers.findIndex(p => p.precedence > provider.precedence);
       if (idx === -1) {
         providers.push(provider);
       } else {
@@ -75,7 +71,9 @@ export const skillsPlugin: DronePlugin = {
         if (all.length === 0) return false;
 
         const personaCap = registration.request<{
-          getFilteredSkills: (skills: DroneSkillDefinition[]) => DroneSkillDefinition[];
+          getFilteredSkills: (
+            skills: DroneSkillDefinition[]
+          ) => DroneSkillDefinition[];
         }>('persona');
         const visible = personaCap ? personaCap.getFilteredSkills(all) : all;
 
@@ -84,9 +82,8 @@ export const skillsPlugin: DronePlugin = {
         const lines: string[] = ['## Skills'];
 
         for (const skill of visible) {
-          const recall = skill.recall.length > 0
-            ? ' \u2014 ' + skill.recall.join('; ')
-            : '';
+          const recall =
+            skill.recall.length > 0 ? ' \u2014 ' + skill.recall.join('; ') : '';
           lines.push('- `' + skill.id + '`: ' + skill.description + recall);
         }
 
@@ -113,7 +110,11 @@ export const skillsPlugin: DronePlugin = {
       registerProvider: (provider: DroneSkillProvider) => {
         insertProviderSorted(provider);
         registration.logger.info(
-          'skill provider "' + provider.id + '" registered (precedence: ' + provider.precedence + ')'
+          'skill provider "' +
+            provider.id +
+            '" registered (precedence: ' +
+            provider.precedence +
+            ')'
         );
       },
       unregisterProvider: (providerId: string) => {
@@ -140,7 +141,8 @@ export const skillsPlugin: DronePlugin = {
 
     registration.registerTool({
       name: 'recall',
-      description: 'Load a skill body by id. Use when a task matches its recall conditions.',
+      description:
+        'Load a skill body by id. Use when a task matches its recall conditions.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -160,7 +162,10 @@ export const skillsPlugin: DronePlugin = {
         if (!skill) {
           const all = getAllSkills();
           throw new Error(
-            'Unknown skill "' + id + '". Available skills: ' + all.map(s => s.id).join(', ')
+            'Unknown skill "' +
+              id +
+              '". Available skills: ' +
+              all.map(s => s.id).join(', ')
           );
         }
 
@@ -253,9 +258,7 @@ export const skillsPlugin: DronePlugin = {
 
     registration.registerWorkflow(skillsCreateWorkflow);
 
-    registration.registerHelp(
-      '/skills list         List available skills'
-    );
+    registration.registerHelp('/skills list         List available skills');
     registration.registerHelp(
       '/skills create       Interactive wizard to author a new skill'
     );
@@ -280,12 +283,12 @@ export const skillsPlugin: DronePlugin = {
         if (subcommand === 'recall') {
           const id = ctx.args.slice(1).join(' ');
           if (!id) {
-            ctx.logger.warn(
-              'Usage: /skills recall <id>'
-            );
+            ctx.logger.warn('Usage: /skills recall <id>');
             return true;
           }
-          ctx.logger.info(await ctx.engine.executeTool('skills.recall', { id }));
+          ctx.logger.info(
+            await ctx.engine.executeTool('skills.recall', { id })
+          );
           return true;
         }
 

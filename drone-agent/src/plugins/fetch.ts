@@ -102,7 +102,11 @@ export const fetchPlugin: DronePlugin = {
           url: { type: 'string', description: 'URL to fetch.' },
           method: { type: 'string', description: 'GET (default) or POST.' },
           body: { type: 'string', description: 'Request body (POST).' },
-          headers: { type: 'object', description: 'Custom headers.', additionalProperties: true },
+          headers: {
+            type: 'object',
+            description: 'Custom headers.',
+            additionalProperties: true,
+          },
           limit: { type: 'number', description: 'Max response size in chars.' },
         },
         required: ['url'],

@@ -1,5 +1,4 @@
 import type {
-  DroneConfigInjector,
   DronePlugin,
   DronePersonaCapability,
   DronePersonaDefinition,
@@ -32,14 +31,17 @@ class BeaconConfigInjector {
       if (!response.ok) {
         throw new Error(`Failed to fetch config: ${response.status}`);
       }
-      const entries = await response.json() as Array<{key: string; value: string}>;
-      
+      const entries = (await response.json()) as Array<{
+        key: string;
+        value: string;
+      }>;
+
       // Parse JSON values and cache
       this.cachedConfig = {};
       for (const entry of entries) {
         this.cachedConfig[entry.key] = JSON.parse(entry.value);
       }
-      
+
       return this.cachedConfig;
     } catch (error) {
       // On failure, return cached config if available
@@ -78,12 +80,9 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       description:
         'Connects to a drone-beacon for swarm-wide personas and skills.',
       defaultEnabled: false,
-      dependencies: [
-        { id: 'persona' },
-        { id: 'skills', optional: true },
-      ],
+      dependencies: [{ id: 'persona' }, { id: 'skills', optional: true }],
     },
-    register: async (registration) => {
+    register: async registration => {
       registration.logger.info(
         `Connecting to beacon at ${baseUrl} (session: ${sessionId})`
       );
@@ -117,7 +116,8 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
           if (!personasResp.ok) {
             throw new Error(`Failed to fetch personas: ${personasResp.status}`);
           }
-          const personasData = await personasResp.json() as DronePersonaDefinition[];
+          const personasData =
+            (await personasResp.json()) as DronePersonaDefinition[];
           beaconPersonas = new Map();
           coordinatorPersonas = new Map();
 
@@ -134,7 +134,8 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
           if (!skillsResp.ok) {
             throw new Error(`Failed to fetch skills: ${skillsResp.status}`);
           }
-          const skillsData = await skillsResp.json() as DroneSkillDefinition[];
+          const skillsData =
+            (await skillsResp.json()) as DroneSkillDefinition[];
           beaconSkills = new Map();
           coordinatorSkills = new Map();
 
@@ -194,7 +195,8 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       };
 
       // Register with persona broker
-      const personaCap = registration.request<DronePersonaCapability>('persona');
+      const personaCap =
+        registration.request<DronePersonaCapability>('persona');
       if (personaCap) {
         personaCap.registerProvider(beaconPersonaProvider);
         personaCap.registerProvider(coordinatorPersonaProvider);
@@ -217,7 +219,10 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
 
       // ── Config injector for beacon config underlay ─────────────────────
       let beaconConfigInjector: BeaconConfigInjector | null = null;
-      const configCap = registration.request<import('drone-core').DroneConfigCapability>('config');
+      const configCap =
+        registration.request<import('drone-core').DroneConfigCapability>(
+          'config'
+        );
       if (configCap) {
         beaconConfigInjector = new BeaconConfigInjector(baseUrl);
         configCap.registerInjector(beaconConfigInjector);
@@ -229,7 +234,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       }
 
       // Register tool for messaging
-
 
       // Initial load
       registration.hooks.onPluginsLoaded(async () => {
@@ -245,10 +249,20 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       let ws: WebSocket | null = null;
       let wsReconnectAttempts = 0;
       const maxReconnectAttempts = 5;
-      const messageQueue: Array<{ toAgentId?: string; toChannel?: string; body: string }> = [];
+      const messageQueue: Array<{
+        toAgentId?: string;
+        toChannel?: string;
+        body: string;
+      }> = [];
 
       // Queue incoming messages for the agent
-      const pendingMessages: Array<{ id: string; fromAgentId: string; channel: string | null; body: unknown; receivedAt: number }> = [];
+      const pendingMessages: Array<{
+        id: string;
+        fromAgentId: string;
+        channel: string | null;
+        body: unknown;
+        receivedAt: number;
+      }> = [];
 
       // Connect to WebSocket
       const connectWebSocket = () => {
@@ -267,37 +281,50 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
             }
           };
 
-          ws.onmessage = (event) => {
+          ws.onmessage = event => {
             try {
               const wsMsg = JSON.parse(event.data);
               if (wsMsg.type === 'message') {
                 // Queue message for agent
                 pendingMessages.push(wsMsg.payload);
-                registration.logger.info(`Received message from ${wsMsg.payload.fromAgentId}`);
+                registration.logger.info(
+                  `Received message from ${wsMsg.payload.fromAgentId}`
+                );
               } else if (wsMsg.type === 'connected') {
                 registration.logger.info('WebSocket handshake complete');
               } else if (wsMsg.type === 'ack') {
-                registration.logger.info(`Message ${wsMsg.payload.messageId} acknowledged`);
+                registration.logger.info(
+                  `Message ${wsMsg.payload.messageId} acknowledged`
+                );
               } else if (wsMsg.type === 'error') {
-                registration.logger.error(`WebSocket error: ${wsMsg.payload.message}`);
+                registration.logger.error(
+                  `WebSocket error: ${wsMsg.payload.message}`
+                );
               }
             } catch (err) {
-              registration.logger.error(`Failed to parse WebSocket message: ${err}`);
+              registration.logger.error(
+                `Failed to parse WebSocket message: ${err}`
+              );
             }
           };
 
-          ws.onclose = (event) => {
-            registration.logger.warn(`WebSocket closed: ${event.code} ${event.reason}`);
+          ws.onclose = event => {
+            registration.logger.warn(
+              `WebSocket closed: ${event.code} ${event.reason}`
+            );
             ws = null;
             // Attempt reconnect
             if (wsReconnectAttempts < maxReconnectAttempts) {
               wsReconnectAttempts++;
-              const delay = Math.min(1000 * Math.pow(2, wsReconnectAttempts), 30000);
+              const delay = Math.min(
+                1000 * Math.pow(2, wsReconnectAttempts),
+                30000
+              );
               setTimeout(connectWebSocket, delay);
             }
           };
 
-          ws.onerror = (error) => {
+          ws.onerror = error => {
             registration.logger.error(`WebSocket error: ${error}`);
           };
         } catch (err) {
@@ -306,7 +333,11 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       };
 
       // Send a message via WebSocket or queue it
-      const sendMessage = (toAgentId: string | undefined, toChannel: string | undefined, body: string) => {
+      const sendMessage = (
+        toAgentId: string | undefined,
+        toChannel: string | undefined,
+        body: string
+      ) => {
         const payload = { toAgentId, toChannel, body };
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'message', payload }));
@@ -325,7 +356,9 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       // Unsubscribe from a channel
       const unsubscribeFromChannel = (channel: string) => {
         if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'unsubscribe', payload: { channel } }));
+          ws.send(
+            JSON.stringify({ type: 'unsubscribe', payload: { channel } })
+          );
         }
       };
 
@@ -339,7 +372,8 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       // ── Swarm messaging tool ───────────────────────────────────────────
       const swarmMessageTool: DroneToolDefinition = {
         name: 'swarm_message',
-        description: 'Send a message to another agent in the swarm or subscribe to a channel.',
+        description:
+          'Send a message to another agent in the swarm or subscribe to a channel.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -354,7 +388,8 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
             },
             toChannel: {
               type: 'string',
-              description: 'Channel name (for subscribe/unsubscribe/send actions)',
+              description:
+                'Channel name (for subscribe/unsubscribe/send actions)',
             },
             body: {
               type: 'string',
@@ -363,7 +398,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
           },
           required: ['action'],
         },
-        execute: async (params) => {
+        execute: async params => {
           const action = (params.action as string) || '';
 
           switch (action) {
@@ -372,7 +407,10 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
               const toChannel = params.toChannel as string | undefined;
               const body = params.body as string;
               if (!toAgentId && !toChannel) {
-                return JSON.stringify({ success: false, error: 'Must specify toAgentId or toChannel' });
+                return JSON.stringify({
+                  success: false,
+                  error: 'Must specify toAgentId or toChannel',
+                });
               }
               sendMessage(toAgentId, toChannel, body);
               return JSON.stringify({ success: true, message: 'Message sent' });
@@ -380,29 +418,43 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
             case 'subscribe': {
               const channel = params.toChannel as string;
               if (!channel) {
-                return JSON.stringify({ success: false, error: 'Channel name required' });
+                return JSON.stringify({
+                  success: false,
+                  error: 'Channel name required',
+                });
               }
               subscribeToChannel(channel);
-              return JSON.stringify({ success: true, message: `Subscribed to ${channel}` });
+              return JSON.stringify({
+                success: true,
+                message: `Subscribed to ${channel}`,
+              });
             }
             case 'unsubscribe': {
               const channel = params.toChannel as string;
               if (!channel) {
-                return JSON.stringify({ success: false, error: 'Channel name required' });
+                return JSON.stringify({
+                  success: false,
+                  error: 'Channel name required',
+                });
               }
               unsubscribeFromChannel(channel);
-              return JSON.stringify({ success: true, message: `Unsubscribed from ${channel}` });
+              return JSON.stringify({
+                success: true,
+                message: `Unsubscribed from ${channel}`,
+              });
             }
             case 'get_messages': {
               const messages = getPendingMessages();
               return JSON.stringify({ success: true, messages });
             }
             default:
-              return JSON.stringify({ success: false, error: `Unknown action: ${action}` });
+              return JSON.stringify({
+                success: false,
+                error: `Unknown action: ${action}`,
+              });
           }
         },
       };
-
 
       // Register the messaging tool
       registration.registerTool(swarmMessageTool);

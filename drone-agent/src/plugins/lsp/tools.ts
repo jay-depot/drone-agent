@@ -39,7 +39,9 @@ const HEAVY_EDIT_BUDGET = 3000;
 // Tool: get_diagnostics
 // ---------------------------------------------------------------------------
 
-export function createGetDiagnosticsTool(server: ServerManager): DroneToolDefinition {
+export function createGetDiagnosticsTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'get_diagnostics',
     description:
@@ -160,9 +162,7 @@ export function createHoverTool(server: ServerManager): DroneToolDefinition {
         line,
         column,
         contents,
-        range: response?.range
-          ? normalizeLspRange(response.range)
-          : undefined,
+        range: response?.range ? normalizeLspRange(response.range) : undefined,
       };
 
       return JSON.stringify(result, null, 2);
@@ -174,7 +174,9 @@ export function createHoverTool(server: ServerManager): DroneToolDefinition {
 // Tool: go_to_definition
 // ---------------------------------------------------------------------------
 
-export function createGoToDefinitionTool(server: ServerManager): DroneToolDefinition {
+export function createGoToDefinitionTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'go_to_definition',
     description:
@@ -256,7 +258,9 @@ export function createGoToDefinitionTool(server: ServerManager): DroneToolDefini
 // Tool: find_references
 // ---------------------------------------------------------------------------
 
-export function createFindReferencesTool(server: ServerManager): DroneToolDefinition {
+export function createFindReferencesTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'find_references',
     description:
@@ -347,7 +351,9 @@ export function createFindReferencesTool(server: ServerManager): DroneToolDefini
 // Tool: document_symbols
 // ---------------------------------------------------------------------------
 
-export function createDocumentSymbolsTool(server: ServerManager): DroneToolDefinition {
+export function createDocumentSymbolsTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'document_symbols',
     description:
@@ -379,11 +385,9 @@ export function createDocumentSymbolsTool(server: ServerManager): DroneToolDefin
         );
       }
       const document = await server.ensureDocumentLoaded(runtime, filePath);
-      const response =
-        await runtime.client.request<LspDocumentSymbolResponse[]>(
-          'textDocument/documentSymbol',
-          { textDocument: { uri: document.uri } }
-        );
+      const response = await runtime.client.request<
+        LspDocumentSymbolResponse[]
+      >('textDocument/documentSymbol', { textDocument: { uri: document.uri } });
       const symbols = flattenDocumentSymbols(response);
       return JSON.stringify(
         {
@@ -402,7 +406,9 @@ export function createDocumentSymbolsTool(server: ServerManager): DroneToolDefin
 // Tool: workspace_symbol
 // ---------------------------------------------------------------------------
 
-export function createWorkspaceSymbolTool(server: ServerManager): DroneToolDefinition {
+export function createWorkspaceSymbolTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'workspace_symbol',
     description:
@@ -417,8 +423,7 @@ export function createWorkspaceSymbolTool(server: ServerManager): DroneToolDefin
         },
         limit: {
           type: 'integer',
-          description:
-            'Optional maximum number of results. Defaults to 200.',
+          description: 'Optional maximum number of results. Defaults to 200.',
         },
       },
       required: ['query'],
@@ -426,13 +431,13 @@ export function createWorkspaceSymbolTool(server: ServerManager): DroneToolDefin
     },
     execute: async input => {
       if (typeof input.query !== 'string') {
-        throw new Error(
-          'lsp.workspace_symbol requires a query string.'
-        );
+        throw new Error('lsp.workspace_symbol requires a query string.');
       }
       await server.refreshIfNeeded();
       const limit =
-        typeof input.limit === 'number' && Number.isInteger(input.limit) && input.limit > 0
+        typeof input.limit === 'number' &&
+        Number.isInteger(input.limit) &&
+        input.limit > 0
           ? Math.min(input.limit, 1000)
           : 200;
       const allResults: Array<{
@@ -460,11 +465,9 @@ export function createWorkspaceSymbolTool(server: ServerManager): DroneToolDefin
           continue;
         }
         try {
-          const response =
-            await runtime.client.request<LspWorkspaceSymbolResponse[]>(
-              'workspace/symbol',
-              { query: input.query }
-            );
+          const response = await runtime.client.request<
+            LspWorkspaceSymbolResponse[]
+          >('workspace/symbol', { query: input.query });
           const symbols = normalizeWorkspaceSymbols(response);
           if (symbols.length > 0) {
             allResults.push({
@@ -504,7 +507,9 @@ export function createWorkspaceSymbolTool(server: ServerManager): DroneToolDefin
 // Tool: signature_help
 // ---------------------------------------------------------------------------
 
-export function createSignatureHelpTool(server: ServerManager): DroneToolDefinition {
+export function createSignatureHelpTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'signature_help',
     description:
@@ -529,18 +534,15 @@ export function createSignatureHelpTool(server: ServerManager): DroneToolDefinit
       additionalProperties: false,
     },
     execute: async input => {
-      const { runtime, document, line, column } = await server.resolveAtPosition(
-        'lsp.signature_help',
-        input
+      const { runtime, document, line, column } =
+        await server.resolveAtPosition('lsp.signature_help', input);
+      const response = await runtime.client.request<LspSignatureHelpResponse>(
+        'textDocument/signatureHelp',
+        {
+          textDocument: { uri: document.uri },
+          position: { line: line - 1, character: column - 1 },
+        }
       );
-      const response =
-        await runtime.client.request<LspSignatureHelpResponse>(
-          'textDocument/signatureHelp',
-          {
-            textDocument: { uri: document.uri },
-            position: { line: line - 1, character: column - 1 },
-          }
-        );
       const signatures = normalizeSignatureHelp(response);
       return JSON.stringify(
         {
@@ -558,7 +560,9 @@ export function createSignatureHelpTool(server: ServerManager): DroneToolDefinit
 // Tool: completion
 // ---------------------------------------------------------------------------
 
-export function createCompletionTool(server: ServerManager): DroneToolDefinition {
+export function createCompletionTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'completion',
     description:
@@ -588,23 +592,20 @@ export function createCompletionTool(server: ServerManager): DroneToolDefinition
       additionalProperties: false,
     },
     execute: async input => {
-      const { runtime, document, line, column } = await server.resolveAtPosition(
-        'lsp.completion',
-        input
-      );
+      const { runtime, document, line, column } =
+        await server.resolveAtPosition('lsp.completion', input);
       const limit =
         typeof input.limit === 'number' &&
         Number.isInteger(input.limit) &&
         input.limit > 0
           ? Math.min(input.limit, 1000)
           : 100;
-      const response =
-        await runtime.client.request<
-          LspCompletionItemResponse[] | LspCompletionListResponse
-        >('textDocument/completion', {
-          textDocument: { uri: document.uri },
-          position: { line: line - 1, character: column - 1 },
-        });
+      const response = await runtime.client.request<
+        LspCompletionItemResponse[] | LspCompletionListResponse
+      >('textDocument/completion', {
+        textDocument: { uri: document.uri },
+        position: { line: line - 1, character: column - 1 },
+      });
       const { isIncomplete, items } = normalizeCompletionItems(response);
       const truncated = items.length > limit;
       const resultItems = truncated ? items.slice(0, limit) : items;
@@ -627,7 +628,9 @@ export function createCompletionTool(server: ServerManager): DroneToolDefinition
 // Tool: code_action
 // ---------------------------------------------------------------------------
 
-export function createCodeActionTool(server: ServerManager): DroneToolDefinition {
+export function createCodeActionTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'code_action',
     description:
@@ -662,7 +665,13 @@ export function createCodeActionTool(server: ServerManager): DroneToolDefinition
             'Optional list of LSP CodeActionKind values to filter by, e.g. ["quickfix", "refactor", "source.fixAll"].',
         },
       },
-      required: ['filePath', 'startLine', 'startColumn', 'endLine', 'endColumn'],
+      required: [
+        'filePath',
+        'startLine',
+        'startColumn',
+        'endLine',
+        'endColumn',
+      ],
       additionalProperties: false,
     },
     execute: async input => {
@@ -720,45 +729,40 @@ export function createCodeActionTool(server: ServerManager): DroneToolDefinition
       };
       // Include any diagnostics touching this range so the server can
       // surface relevant quick-fixes.
-      const diagnostics = server.getDiagnostics().filter(
-        diagnostic => {
-          const ds = diagnostic.range.start;
-          const de = diagnostic.range.end;
-          if (
-            ds.line > range.end.line ||
-            (ds.line === range.end.line &&
-              ds.character > range.end.character)
-          ) {
-            return false;
-          }
-          if (
-            de.line < range.start.line ||
-            (de.line === range.start.line &&
-              de.character < range.start.character)
-          ) {
-            return false;
-          }
-          return true;
+      const diagnostics = server.getDiagnostics().filter(diagnostic => {
+        const ds = diagnostic.range.start;
+        const de = diagnostic.range.end;
+        if (
+          ds.line > range.end.line ||
+          (ds.line === range.end.line && ds.character > range.end.character)
+        ) {
+          return false;
+        }
+        if (
+          de.line < range.start.line ||
+          (de.line === range.start.line && de.character < range.start.character)
+        ) {
+          return false;
+        }
+        return true;
+      });
+      const response = await runtime.client.request<LspCodeActionResponse[]>(
+        'textDocument/codeAction',
+        {
+          textDocument: { uri: document.uri },
+          range,
+          context: {
+            diagnostics: diagnostics.map(diagnostic => ({
+              range: diagnostic.range,
+              message: diagnostic.message,
+              severity: severityToLsp(diagnostic.severity),
+              source: diagnostic.source,
+              code: diagnostic.code,
+            })),
+            only,
+          },
         }
       );
-      const response =
-        await runtime.client.request<LspCodeActionResponse[]>(
-          'textDocument/codeAction',
-          {
-            textDocument: { uri: document.uri },
-            range,
-            context: {
-              diagnostics: diagnostics.map(diagnostic => ({
-                range: diagnostic.range,
-                message: diagnostic.message,
-                severity: severityToLsp(diagnostic.severity),
-                source: diagnostic.source,
-                code: diagnostic.code,
-              })),
-              only,
-            },
-          }
-        );
       const actions = normalizeCodeActions(response);
       const result = actions.map(action => {
         const edit = action.edit;
@@ -833,19 +837,16 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
       if (typeof input.newName !== 'string' || input.newName.length === 0) {
         throw new Error('lsp.rename requires a non-empty newName.');
       }
-      const { runtime, document, line, column } = await server.resolveAtPosition(
-        'lsp.rename',
-        input
+      const { runtime, document, line, column } =
+        await server.resolveAtPosition('lsp.rename', input);
+      const response = await runtime.client.request<LspWorkspaceEdit>(
+        'textDocument/rename',
+        {
+          textDocument: { uri: document.uri },
+          position: { line: line - 1, character: column - 1 },
+          newName: input.newName,
+        }
       );
-      const response =
-        await runtime.client.request<LspWorkspaceEdit>(
-          'textDocument/rename',
-          {
-            textDocument: { uri: document.uri },
-            position: { line: line - 1, character: column - 1 },
-            newName: input.newName,
-          }
-        );
       const edit = normalizeWorkspaceEdit(response);
       const truncated = truncateWorkspaceEdit(edit, HEAVY_EDIT_BUDGET);
       return JSON.stringify(
@@ -870,7 +871,9 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
 // Tool: implementation
 // ---------------------------------------------------------------------------
 
-export function createImplementationTool(server: ServerManager): DroneToolDefinition {
+export function createImplementationTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'implementation',
     description:
@@ -895,18 +898,15 @@ export function createImplementationTool(server: ServerManager): DroneToolDefini
       additionalProperties: false,
     },
     execute: async input => {
-      const { runtime, document, line, column } = await server.resolveAtPosition(
-        'lsp.implementation',
-        input
+      const { runtime, document, line, column } =
+        await server.resolveAtPosition('lsp.implementation', input);
+      const response = await runtime.client.request<DefinitionResponse>(
+        'textDocument/implementation',
+        {
+          textDocument: { uri: document.uri },
+          position: { line: line - 1, character: column - 1 },
+        }
       );
-      const response =
-        await runtime.client.request<DefinitionResponse>(
-          'textDocument/implementation',
-          {
-            textDocument: { uri: document.uri },
-            position: { line: line - 1, character: column - 1 },
-          }
-        );
       const rawLocations = Array.isArray(response)
         ? response
         : response
@@ -914,9 +914,7 @@ export function createImplementationTool(server: ServerManager): DroneToolDefini
           : [];
       const locations = rawLocations
         .map(loc => normalizeLspLocation(loc))
-        .filter(
-          (loc): loc is NonNullable<typeof loc> => Boolean(loc)
-        );
+        .filter((loc): loc is NonNullable<typeof loc> => Boolean(loc));
       return JSON.stringify(
         {
           query: { filePath: document.uri, line, column },
@@ -933,7 +931,9 @@ export function createImplementationTool(server: ServerManager): DroneToolDefini
 // Tool: type_definition
 // ---------------------------------------------------------------------------
 
-export function createTypeDefinitionTool(server: ServerManager): DroneToolDefinition {
+export function createTypeDefinitionTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'type_definition',
     description:
@@ -958,18 +958,15 @@ export function createTypeDefinitionTool(server: ServerManager): DroneToolDefini
       additionalProperties: false,
     },
     execute: async input => {
-      const { runtime, document, line, column } = await server.resolveAtPosition(
-        'lsp.type_definition',
-        input
+      const { runtime, document, line, column } =
+        await server.resolveAtPosition('lsp.type_definition', input);
+      const response = await runtime.client.request<DefinitionResponse>(
+        'textDocument/typeDefinition',
+        {
+          textDocument: { uri: document.uri },
+          position: { line: line - 1, character: column - 1 },
+        }
       );
-      const response =
-        await runtime.client.request<DefinitionResponse>(
-          'textDocument/typeDefinition',
-          {
-            textDocument: { uri: document.uri },
-            position: { line: line - 1, character: column - 1 },
-          }
-        );
       const rawLocations = Array.isArray(response)
         ? response
         : response
@@ -977,9 +974,7 @@ export function createTypeDefinitionTool(server: ServerManager): DroneToolDefini
           : [];
       const locations = rawLocations
         .map(loc => normalizeLspLocation(loc))
-        .filter(
-          (loc): loc is NonNullable<typeof loc> => Boolean(loc)
-        );
+        .filter((loc): loc is NonNullable<typeof loc> => Boolean(loc));
       return JSON.stringify(
         {
           query: { filePath: document.uri, line, column },
@@ -996,7 +991,9 @@ export function createTypeDefinitionTool(server: ServerManager): DroneToolDefini
 // Tool: call_hierarchy_incoming
 // ---------------------------------------------------------------------------
 
-export function createCallHierarchyIncomingTool(server: ServerManager): DroneToolDefinition {
+export function createCallHierarchyIncomingTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'call_hierarchy_incoming',
     description:
@@ -1021,29 +1018,25 @@ export function createCallHierarchyIncomingTool(server: ServerManager): DroneToo
       additionalProperties: false,
     },
     execute: async input => {
-      const { runtime, document, line, column } = await server.resolveAtPosition(
-        'lsp.call_hierarchy_incoming',
-        input
+      const { runtime, document, line, column } =
+        await server.resolveAtPosition('lsp.call_hierarchy_incoming', input);
+      const response = await runtime.client.request<LspCallHierarchyItem[]>(
+        'textDocument/prepareCallHierarchy',
+        {
+          textDocument: { uri: document.uri },
+          position: { line: line - 1, character: column - 1 },
+        }
       );
-      const response =
-        await runtime.client.request<LspCallHierarchyItem[]>(
-          'textDocument/prepareCallHierarchy',
-          {
-            textDocument: { uri: document.uri },
-            position: { line: line - 1, character: column - 1 },
-          }
-        );
       const item = normalizeCallHierarchyItem(response?.[0]);
       if (!item) {
         throw new Error(
           'lsp.call_hierarchy_incoming: no call-hierarchy item at the given position.'
         );
       }
-      const calls =
-        await runtime.client.request<LspCallHierarchyCall[]>(
-          'callHierarchy/incomingCalls',
-          { item: callHierarchyItemToLsp(item) }
-        );
+      const calls = await runtime.client.request<LspCallHierarchyCall[]>(
+        'callHierarchy/incomingCalls',
+        { item: callHierarchyItemToLsp(item) }
+      );
       const { from } = normalizeCallHierarchyCalls(calls);
       return JSON.stringify(
         {
@@ -1061,7 +1054,9 @@ export function createCallHierarchyIncomingTool(server: ServerManager): DroneToo
 // Tool: call_hierarchy_outgoing
 // ---------------------------------------------------------------------------
 
-export function createCallHierarchyOutgoingTool(server: ServerManager): DroneToolDefinition {
+export function createCallHierarchyOutgoingTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'call_hierarchy_outgoing',
     description:
@@ -1086,29 +1081,25 @@ export function createCallHierarchyOutgoingTool(server: ServerManager): DroneToo
       additionalProperties: false,
     },
     execute: async input => {
-      const { runtime, document, line, column } = await server.resolveAtPosition(
-        'lsp.call_hierarchy_outgoing',
-        input
+      const { runtime, document, line, column } =
+        await server.resolveAtPosition('lsp.call_hierarchy_outgoing', input);
+      const response = await runtime.client.request<LspCallHierarchyItem[]>(
+        'textDocument/prepareCallHierarchy',
+        {
+          textDocument: { uri: document.uri },
+          position: { line: line - 1, character: column - 1 },
+        }
       );
-      const response =
-        await runtime.client.request<LspCallHierarchyItem[]>(
-          'textDocument/prepareCallHierarchy',
-          {
-            textDocument: { uri: document.uri },
-            position: { line: line - 1, character: column - 1 },
-          }
-        );
       const item = normalizeCallHierarchyItem(response?.[0]);
       if (!item) {
         throw new Error(
           'lsp.call_hierarchy_outgoing: no call-hierarchy item at the given position.'
         );
       }
-      const calls =
-        await runtime.client.request<LspCallHierarchyCall[]>(
-          'callHierarchy/outgoingCalls',
-          { item: callHierarchyItemToLsp(item) }
-        );
+      const calls = await runtime.client.request<LspCallHierarchyCall[]>(
+        'callHierarchy/outgoingCalls',
+        { item: callHierarchyItemToLsp(item) }
+      );
       const { to } = normalizeCallHierarchyCalls(calls);
       return JSON.stringify(
         {
@@ -1126,7 +1117,9 @@ export function createCallHierarchyOutgoingTool(server: ServerManager): DroneToo
 // Tool: formatting
 // ---------------------------------------------------------------------------
 
-export function createFormattingTool(server: ServerManager): DroneToolDefinition {
+export function createFormattingTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'formatting',
     description:
@@ -1140,13 +1133,11 @@ export function createFormattingTool(server: ServerManager): DroneToolDefinition
         },
         tabSize: {
           type: 'integer',
-          description:
-            'Optional tab size hint forwarded to the server.',
+          description: 'Optional tab size hint forwarded to the server.',
         },
         insertSpaces: {
           type: 'boolean',
-          description:
-            'Optional space-vs-tabs hint forwarded to the server.',
+          description: 'Optional space-vs-tabs hint forwarded to the server.',
         },
       },
       required: ['filePath'],
@@ -1182,24 +1173,24 @@ export function createFormattingTool(server: ServerManager): DroneToolDefinition
       if (typeof input.insertSpaces === 'boolean') {
         options.insertSpaces = input.insertSpaces;
       }
-      const response =
-        await runtime.client.request<
-          Array<{ range?: { start?: { line?: number; character?: number }; end?: { line?: number; character?: number } }; newText?: string }>
-        >('textDocument/formatting', {
-          textDocument: { uri: document.uri },
-          options,
-        });
+      const response = await runtime.client.request<
+        Array<{
+          range?: {
+            start?: { line?: number; character?: number };
+            end?: { line?: number; character?: number };
+          };
+          newText?: string;
+        }>
+      >('textDocument/formatting', {
+        textDocument: { uri: document.uri },
+        options,
+      });
       const edits = normalizeTextEdits(response);
       const wrapped: NormalizedWorkspaceEdit = {
-        changes: [
-          { filePath, edits },
-        ],
+        changes: [{ filePath, edits }],
         documentChanges: [],
       };
-      const truncated = truncateWorkspaceEdit(
-        wrapped,
-        HEAVY_EDIT_BUDGET
-      );
+      const truncated = truncateWorkspaceEdit(wrapped, HEAVY_EDIT_BUDGET);
       return JSON.stringify(
         {
           query: { filePath },
@@ -1213,12 +1204,13 @@ export function createFormattingTool(server: ServerManager): DroneToolDefinition
   };
 }
 
-
 // ---------------------------------------------------------------------------
 // Tool: server_status
 // ---------------------------------------------------------------------------
 
-export function createServerStatusTool(server: ServerManager): DroneToolDefinition {
+export function createServerStatusTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'server_status',
     description: 'List LSP server connection state for this session.',

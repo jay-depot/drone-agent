@@ -79,9 +79,7 @@ export const lspPlugin: DronePlugin = {
       await server.initialize();
       server.markDirty();
       if (
-        server.getServerStates().every(
-          state => state.status !== 'connected'
-        )
+        server.getServerStates().every(state => state.status !== 'connected')
       ) {
         registration.logger.warn('no LSP servers connected for this session');
       }

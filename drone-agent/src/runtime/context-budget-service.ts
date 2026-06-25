@@ -172,7 +172,8 @@ export function createContextBudgetService({
       contextWindowTokens: input.contextWindow.contextWindowTokens,
     });
 
-    const ratio = budget.estimatedPromptTokens / input.contextWindow.contextWindowTokens;
+    const ratio =
+      budget.estimatedPromptTokens / input.contextWindow.contextWindowTokens;
     const rawPercent = Math.round(ratio * 100);
     const usagePercent = Math.min(
       Number.isFinite(rawPercent) && rawPercent >= 0 ? rawPercent : 0,

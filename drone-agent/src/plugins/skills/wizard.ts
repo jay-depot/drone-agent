@@ -35,11 +35,7 @@ import { access, mkdir, writeFile } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type {
-  DroneElicitation,
-  DroneLogger,
-  DroneWorkflow,
-} from 'drone-core';
+import type { DroneElicitation, DroneLogger, DroneWorkflow } from 'drone-core';
 
 type SkillsCreateInput = {
   scope?: 'project' | 'user';
@@ -108,7 +104,8 @@ async function askId(
     const answers = await elicit.ask([
       {
         id: 'id',
-        prompt: 'Name your skill (short, lowercase, hyphenated, e.g. "webapp-testing")',
+        prompt:
+          'Name your skill (short, lowercase, hyphenated, e.g. "webapp-testing")',
         freeform: true,
         placeholder: 'my-skill',
         inputLabel: 'Skill id:',
@@ -129,7 +126,10 @@ async function askDescription(
   inputDescription: string | undefined,
   logger: DroneLogger
 ): Promise<string> {
-  if (typeof inputDescription === 'string' && inputDescription.trim().length > 0) {
+  if (
+    typeof inputDescription === 'string' &&
+    inputDescription.trim().length > 0
+  ) {
     return inputDescription.trim();
   }
   let attempts = 0;
@@ -178,7 +178,9 @@ async function askRecall(
   ]);
   const raw = (answers.recall ?? '').trim();
   if (raw.length === 0) {
-    logger.warn('No recall conditions provided — the skill will not be automatically suggested.');
+    logger.warn(
+      'No recall conditions provided — the skill will not be automatically suggested.'
+    );
     return [];
   }
   return raw
@@ -217,9 +219,7 @@ async function askOverwrite(
  */
 function resolveSkillsCapability(
   ctx: WizardContext
-):
-  | { reloadSkills: () => Promise<void> }
-  | undefined {
+): { reloadSkills: () => Promise<void> } | undefined {
   const cap = ctx.requestCapability<{
     reloadSkills?: () => Promise<void>;
   }>('skills');
@@ -232,9 +232,10 @@ function buildSkeletonMd(
   description: string,
   recall: string[]
 ): string {
-  const recallLines = recall.length > 0
-    ? recall.map(r => `  - ${r}`).join('\n')
-    : '  - <TODO: add recall conditions>';
+  const recallLines =
+    recall.length > 0
+      ? recall.map(r => `  - ${r}`).join('\n')
+      : '  - <TODO: add recall conditions>';
 
   return [
     '---',
@@ -302,8 +303,7 @@ export const skillsCreateWorkflow: DroneWorkflow = {
     const id = await askId(ctx.elicit, input.id, logger);
 
     // 3. Existence check #1
-    const targetRoot =
-      scope === 'user' ? os.homedir() : ctx.projectDir;
+    const targetRoot = scope === 'user' ? os.homedir() : ctx.projectDir;
     const targetDir = path.join(targetRoot, '.drone-agent', 'skills');
     const filePath = path.join(targetDir, `${id}.md`);
     let overwriteApproved = false;
@@ -369,9 +369,10 @@ export const skillsCreateWorkflow: DroneWorkflow = {
     // The kick message instructs the assistant to fill in the skill body
     // by exploring the codebase. The assistant should NOT run any other
     // tools or take further action beyond writing the skill body.
-    const recallNote = recall.length > 0
-      ? `The skill will be suggested when the user mentions: ${recall.join('; ')}.`
-      : 'No recall conditions were set; the skill will not be automatically suggested.';
+    const recallNote =
+      recall.length > 0
+        ? `The skill will be suggested when the user mentions: ${recall.join('; ')}.`
+        : 'No recall conditions were set; the skill will not be automatically suggested.';
     const kickMessage =
       `Skill "${id}" (${description}) is now available — the skeleton file ` +
       `was written to ${filePath}. ${recallNote} ` +

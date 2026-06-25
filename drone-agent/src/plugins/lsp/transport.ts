@@ -1,5 +1,5 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { createConnection, type Socket } from 'node:net';
+import { type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { type Socket } from 'node:net';
 
 const HEADER_SEPARATOR = '\r\n\r\n';
 

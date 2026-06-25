@@ -2,10 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  createDefaultAgentConfig,
-  type DronePlugin,
-} from 'drone-core';
+import { createDefaultAgentConfig, type DronePlugin } from 'drone-core';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { configPlugin } from '../src/plugins/config/index.js';
 import type { DroneConfigCapability } from '../src/plugins/config/index.js';
@@ -28,7 +25,7 @@ async function setupDirs(): Promise<{
 }> {
   const homeDir = await mkdtemp(path.join(os.tmpdir(), 'config-plugin-home-'));
   const projectDir = await mkdtemp(
-    path.join(os.tmpdir(), 'config-plugin-project-'),
+    path.join(os.tmpdir(), 'config-plugin-project-')
   );
   testHomeDir = homeDir;
   vi.spyOn(os, 'homedir').mockImplementation(() => testHomeDir);
@@ -138,10 +135,9 @@ describe('config plugin', () => {
       process.chdir(projectDir);
 
       // Write a project-level config that overrides the model
-      await writeJson(
-        path.join(projectDir, '.drone-agent', 'config.json'),
-        { ollama: { model: 'custom-model' } },
-      );
+      await writeJson(path.join(projectDir, '.drone-agent', 'config.json'), {
+        ollama: { model: 'custom-model' },
+      });
 
       const engine = createDronePluginEngine({
         plugins: [configPlugin],
@@ -187,9 +183,7 @@ describe('config plugin', () => {
 
       // Verify the file was written
       const { readFile } = await import('node:fs/promises');
-      const written = JSON.parse(
-        await readFile(parsed.filePath, 'utf-8'),
-      );
+      const written = JSON.parse(await readFile(parsed.filePath, 'utf-8'));
       expect(written.ollama.model).toBe('llama3.2');
     });
 
@@ -218,9 +212,7 @@ describe('config plugin', () => {
 
       // Verify the file was written in the home dir
       const { readFile } = await import('node:fs/promises');
-      const written = JSON.parse(
-        await readFile(parsed.filePath, 'utf-8'),
-      );
+      const written = JSON.parse(await readFile(parsed.filePath, 'utf-8'));
       expect(written.ollama.model).toBe('user-model');
     });
 
@@ -240,7 +232,7 @@ describe('config plugin', () => {
         engine.executeTool('config.set', {
           key: 'nonexistent.setting',
           value: 'foo',
-        }),
+        })
       ).rejects.toThrow(/Unknown config key/);
     });
 
@@ -261,7 +253,7 @@ describe('config plugin', () => {
           scope: 'invalid',
           key: 'ollama.model',
           value: 'test',
-        }),
+        })
       ).rejects.toThrow(/scope must be "project" or "user"/);
     });
 
@@ -285,9 +277,7 @@ describe('config plugin', () => {
       expect(parsed.ok).toBe(true);
 
       const { readFile } = await import('node:fs/promises');
-      const written = JSON.parse(
-        await readFile(parsed.filePath, 'utf-8'),
-      );
+      const written = JSON.parse(await readFile(parsed.filePath, 'utf-8'));
       expect(written.ollama.host).toBe('http://localhost:11435');
       expect(written.ollama.model).toBe('nested-model');
     });
@@ -299,10 +289,9 @@ describe('config plugin', () => {
       process.chdir(projectDir);
 
       // Write a project-level config
-      await writeJson(
-        path.join(projectDir, '.drone-agent', 'config.json'),
-        { ollama: { model: 'project-model' } },
-      );
+      await writeJson(path.join(projectDir, '.drone-agent', 'config.json'), {
+        ollama: { model: 'project-model' },
+      });
 
       const engine = createDronePluginEngine({
         plugins: [configPlugin],
@@ -319,13 +308,13 @@ describe('config plugin', () => {
       expect(parsed.layers.length).toBeGreaterThanOrEqual(2);
 
       const defaultLayer = parsed.layers.find(
-        (l: { scope: string }) => l.scope === 'default',
+        (l: { scope: string }) => l.scope === 'default'
       );
       expect(defaultLayer).toBeDefined();
       expect(defaultLayer.path).toBeNull();
 
       const projectLayer = parsed.layers.find(
-        (l: { scope: string }) => l.scope === 'project',
+        (l: { scope: string }) => l.scope === 'project'
       );
       expect(projectLayer).toBeDefined();
       expect(projectLayer.path).toContain('.drone-agent/config.json');
@@ -388,8 +377,8 @@ describe('config plugin', () => {
       const written = JSON.parse(
         await readFile(
           path.join(projectDir, '.drone-agent', 'config.json'),
-          'utf-8',
-        ),
+          'utf-8'
+        )
       );
       expect(written.ollama.model).toBe('capability-model');
     });

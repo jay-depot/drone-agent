@@ -35,8 +35,20 @@ function makeOptions(
     engine: {
       listTools: () => [],
       listPlugins: () => [
-        { id: 'core', name: 'Core', enabled: true, required: true, defaultEnabled: true },
-        { id: 'persona', name: 'Persona', enabled: true, required: false, defaultEnabled: true },
+        {
+          id: 'core',
+          name: 'Core',
+          enabled: true,
+          required: true,
+          defaultEnabled: true,
+        },
+        {
+          id: 'persona',
+          name: 'Persona',
+          enabled: true,
+          required: false,
+          defaultEnabled: true,
+        },
       ],
       getRegisteredPluginCount: () => 2,
       getRegisteredToolCount: () => 3,
@@ -44,7 +56,9 @@ function makeOptions(
       runHooks: async () => {},
       executeTool: async () => 'ok',
       renderPromptFragments: async () => [],
-      getConfig: () => { throw new Error("getConfig not used in tui tests"); },
+      getConfig: () => {
+        throw new Error('getConfig not used in tui tests');
+      },
       getHelpSnippets: () => [],
       dispatchSlashCommand: async () => false,
       setElicitation: () => {},
@@ -123,8 +137,20 @@ describe('App', () => {
       engine: {
         listTools: () => [],
         listPlugins: () => [
-          { id: 'core', name: 'Core', enabled: true, required: true, defaultEnabled: true },
-          { id: 'persona', name: 'Persona', enabled: true, required: false, defaultEnabled: true },
+          {
+            id: 'core',
+            name: 'Core',
+            enabled: true,
+            required: true,
+            defaultEnabled: true,
+          },
+          {
+            id: 'persona',
+            name: 'Persona',
+            enabled: true,
+            required: false,
+            defaultEnabled: true,
+          },
         ],
         getRegisteredPluginCount: () => 2,
         getRegisteredToolCount: () => 3,
@@ -133,11 +159,13 @@ describe('App', () => {
             return widget;
           }
           return undefined;
-        }) as (<T>(pluginId: string) => T | undefined),
+        }) as <T>(pluginId: string) => T | undefined,
         runHooks: async () => {},
         executeTool: async () => 'ok',
         renderPromptFragments: async () => [],
-        getConfig: () => { throw new Error("getConfig not used in tui tests"); },
+        getConfig: () => {
+          throw new Error('getConfig not used in tui tests');
+        },
         getHelpSnippets: () => [],
         dispatchSlashCommand: async () => false,
         setElicitation: () => {},

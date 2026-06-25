@@ -1,4 +1,9 @@
-import { readdir, readFile, access, constants as fsConstants } from 'node:fs/promises';
+import {
+  readdir,
+  readFile,
+  access,
+  constants as fsConstants,
+} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import type { DronePersonaDefinition } from 'drone-core';
@@ -183,8 +188,10 @@ export async function loadPersonasFromDir(
  * the wizard validates before the file is written to a specific location.
  * The scope is assigned by `loadPersonasFromDir` when the file is loaded.
  */
-export const parsePersonaMd = (id: string, content: string): DronePersonaDefinition =>
-  _parsePersonaMdInternal(id, content);
+export const parsePersonaMd = (
+  id: string,
+  content: string
+): DronePersonaDefinition => _parsePersonaMdInternal(id, content);
 
 /**
  * Load all personas from user and project directories.
@@ -197,7 +204,10 @@ export async function loadPersonas(
   const projectPersonaDir = path.join(projectDir, CONFIG_DIR, PERSONA_DIR);
 
   const userPersonas = await loadPersonasFromDir(userDir, 'user');
-  const projectPersonas = await loadPersonasFromDir(projectPersonaDir, 'project');
+  const projectPersonas = await loadPersonasFromDir(
+    projectPersonaDir,
+    'project'
+  );
 
   const map = new Map<string, DronePersonaDefinition>();
   for (const p of userPersonas) {

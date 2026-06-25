@@ -1,6 +1,6 @@
 /**
  * Echo LLM Provider Plugin
- * 
+ *
  * A mock LLM provider that echoes back prompts for deterministic testing.
  * This provider connects to the echo-llm Docker service or any compatible endpoint.
  */
@@ -76,7 +76,8 @@ export const echoPlugin: DronePlugin = {
     id: 'echo',
     name: 'Echo LLM Provider',
     version: '1.0.0',
-    description: 'Mock LLM provider that echoes prompts for deterministic testing',
+    description:
+      'Mock LLM provider that echoes prompts for deterministic testing',
     defaultEnabled: false,
     dependencies: [{ id: 'llm' }],
   },
@@ -107,7 +108,9 @@ export const echoPlugin: DronePlugin = {
 
         if (!response.ok) {
           const errorBody = await response.text();
-          throw new Error(`Echo provider API error (${response.status}): ${errorBody}`);
+          throw new Error(
+            `Echo provider API error (${response.status}): ${errorBody}`
+          );
         }
 
         const data = (await response.json()) as EchoChatResponse;
@@ -137,7 +140,9 @@ export const echoPlugin: DronePlugin = {
       llmCap.registerProvider(llmRegistration);
       registration.logger.info('Echo provider registered with LLM broker');
     } else {
-      registration.logger.warn('LLM broker not available; echo will not be registered as a provider');
+      registration.logger.warn(
+        'LLM broker not available; echo will not be registered as a provider'
+      );
     }
 
     registration.hooks.onPluginsLoaded(async () => {

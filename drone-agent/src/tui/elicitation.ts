@@ -55,7 +55,9 @@ function validateQuestion(question: DroneElicitationQuestion): void {
   }
 }
 
-export function createTuiElicitation(host: TuiElicitationHost): DroneElicitation {
+export function createTuiElicitation(
+  host: TuiElicitationHost
+): DroneElicitation {
   return {
     ask: async (questions): Promise<DroneElicitationAnswers> => {
       const answers: DroneElicitationAnswers = {};

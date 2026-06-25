@@ -44,9 +44,7 @@ function generateLogFilename(): string {
  * Resolve the log directory for the current persona state.
  * Uses os.homedir() lazily so tests can mock it.
  */
-function resolveLogDir(
-  personaCap: DronePersonaCapability | undefined
-): string {
+function resolveLogDir(personaCap: DronePersonaCapability | undefined): string {
   const baseDir = path.join(os.homedir(), '.drone-agent', 'logs');
   const activePersona = personaCap?.getActivePersona();
 
@@ -123,11 +121,7 @@ export function createLogPlugin(deps: LogPluginDeps): DronePlugin {
         const turns = sessionManager.getTurns();
         const filtered = filterTurns(turns);
 
-        await writeFile(
-          filePath,
-          JSON.stringify(filtered, null, 2),
-          'utf-8'
-        );
+        await writeFile(filePath, JSON.stringify(filtered, null, 2), 'utf-8');
       }
 
       // ── Capability ─────────────────────────────────────────────────
@@ -163,11 +157,7 @@ export function createLogPlugin(deps: LogPluginDeps): DronePlugin {
 
           turns.push(filteredTurn);
 
-          await writeFile(
-            logFilePath,
-            JSON.stringify(turns, null, 2),
-            'utf-8'
-          );
+          await writeFile(logFilePath, JSON.stringify(turns, null, 2), 'utf-8');
         },
         getLogFilePath: () => logFilePath,
       };

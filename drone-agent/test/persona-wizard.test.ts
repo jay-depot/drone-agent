@@ -126,7 +126,11 @@ async function runWizard(
 }
 
 /** Helper: create a persona subdirectory with a persona.md file. */
-async function writePersona(personaDir: string, id: string, content: string): Promise<string> {
+async function writePersona(
+  personaDir: string,
+  id: string,
+  content: string
+): Promise<string> {
   const subDir = path.join(personaDir, id);
   await mkdir(subDir, { recursive: true });
   const filePath = path.join(subDir, 'persona.md');
@@ -331,7 +335,11 @@ describe('personaCreateWorkflow — overwrite prompts', () => {
     await withProjectDir(async projectDir => {
       const personaDir = path.join(projectDir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
-      const filePath = await writePersona(personaDir, 'reviewer', '---\nname: reviewer\ndescription: OLD\n---\n# OLD body\n');
+      const filePath = await writePersona(
+        personaDir,
+        'reviewer',
+        '---\nname: reviewer\ndescription: OLD\n---\n# OLD body\n'
+      );
       const provider = makeProvider(PERSONA_MD('reviewer'));
       const result = await runWizard(
         {
@@ -356,7 +364,11 @@ describe('personaCreateWorkflow — overwrite prompts', () => {
     await withProjectDir(async projectDir => {
       const personaDir = path.join(projectDir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
-      const filePath = await writePersona(personaDir, 'reviewer', '---\nname: reviewer\ndescription: OLD\n---\n# OLD body\n');
+      const filePath = await writePersona(
+        personaDir,
+        'reviewer',
+        '---\nname: reviewer\ndescription: OLD\n---\n# OLD body\n'
+      );
       const provider = makeProvider(PERSONA_MD('reviewer'));
       await expect(
         runWizard(
@@ -381,7 +393,11 @@ describe('personaCreateWorkflow — overwrite prompts', () => {
     await withProjectDir(async projectDir => {
       const personaDir = path.join(projectDir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
-      const filePath = await writePersona(personaDir, 'reviewer', '---\nname: reviewer\ndescription: OLD\n---\n# OLD body\n');
+      const filePath = await writePersona(
+        personaDir,
+        'reviewer',
+        '---\nname: reviewer\ndescription: OLD\n---\n# OLD body\n'
+      );
       const provider = makeProvider(PERSONA_MD('reviewer'));
       const result = await runWizard(
         {
@@ -416,7 +432,9 @@ describe('personaCreateWorkflow — overwrite prompts', () => {
             }
             if (q.id === 'description') {
               // Race: file appears mid-wizard.
-              await mkdir(path.join(personaDir, 'reviewer'), { recursive: true });
+              await mkdir(path.join(personaDir, 'reviewer'), {
+                recursive: true,
+              });
               await writeFile(
                 filePath,
                 '---\nname: reviewer\ndescription: SURPRISE\n---\n# surprise\n',

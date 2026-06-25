@@ -158,8 +158,15 @@ export const todoPlugin: DronePlugin = {
       inputSchema: {
         type: 'object',
         properties: {
-          action: { type: 'string', description: 'add_item | mark_in_progress | mark_completed | remove_item | list_items | clear_completed | replace_list.' },
-          id: { type: 'string', description: 'Item id (for mark_*/remove_item).' },
+          action: {
+            type: 'string',
+            description:
+              'add_item | mark_in_progress | mark_completed | remove_item | list_items | clear_completed | replace_list.',
+          },
+          id: {
+            type: 'string',
+            description: 'Item id (for mark_*/remove_item).',
+          },
           title: { type: 'string', description: 'Item title (for add_item).' },
           items: {
             type: 'array',

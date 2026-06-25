@@ -1,4 +1,4 @@
-import { createConsoleLogger, type DroneLlmCapability } from 'drone-core';
+import { createConsoleLogger } from 'drone-core';
 import { stdout as output } from 'node:process';
 import { createBuiltInPlugins } from './plugins/index.js';
 import { createTui } from './tui/index.js';
@@ -8,11 +8,15 @@ import { loadAgentConfig } from './runtime/config.js';
 import { createDronePluginEngine } from './runtime/plugin-engine.js';
 import { createSessionManager } from './runtime/session-manager.js';
 
-import { parseCliArgs, type CliInvocation, type CliOptions } from './cli.js';
+import { parseCliArgs } from './cli.js';
 import { makePlainOutputEventHandler } from './output-handlers.js';
 import { createReadlineElicitation } from './elicitation.js';
 import { runFirstRunSetup } from './first-run.js';
-import { runInteractiveLoop, runJsonMode, getLlmCapability } from './interactive.js';
+import {
+  runInteractiveLoop,
+  runJsonMode,
+  getLlmCapability,
+} from './interactive.js';
 
 async function main(): Promise<void> {
   const logger = createConsoleLogger('drone-agent');
@@ -238,7 +242,7 @@ async function main(): Promise<void> {
     // === Subagent mode: --once (+ optionally --output-json) ===
     // Run JSON mode if --output-json: read kickoff from stdin, output NDJSON
     if (invocation.options.outputJson) {
-      await runJsonMode(conversation, engine, logger);
+      await runJsonMode(conversation, engine);
     } else {
       // --once without --output-json: run a single tool
       const selectedTool = engine.getTool('startup.status');
@@ -252,7 +256,13 @@ async function main(): Promise<void> {
     }
   } else if (invocation.kind === 'default' && !invocation.options.once) {
     if (invocation.options.outputPlain || invocation.options.outputJson) {
-      await runInteractiveLoop(conversation, engine, logger, sessionManager, invocation.options);
+      await runInteractiveLoop(
+        conversation,
+        engine,
+        logger,
+        sessionManager,
+        invocation.options
+      );
     } else {
       // TUI mode: defer elicitation wiring to the App (it constructs a
       // TUI-flavoured capability that draws prompts into the chat log).

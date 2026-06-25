@@ -16,7 +16,10 @@ function captureRegistration(): {
   tools: Map<string, (input: Record<string, unknown>) => Promise<string>>;
   helpText: string[];
 } {
-  const tools = new Map<string, (input: Record<string, unknown>) => Promise<string>>();
+  const tools = new Map<
+    string,
+    (input: Record<string, unknown>) => Promise<string>
+  >();
   const helpText: string[] = [];
 
   const registration: DronePluginRegistration = {
@@ -124,7 +127,9 @@ describe('file plugin — error surfacing', () => {
     const list = tools.get('list');
     expect(list).toBeDefined();
 
-    await expect(list!({ path: '/definitely/not/a/real/path' })).rejects.toThrow(
+    await expect(
+      list!({ path: '/definitely/not/a/real/path' })
+    ).rejects.toThrow(
       /file\.list.*not found.*\/definitely\/not\/a\/real\/path/
     );
   });
@@ -135,9 +140,9 @@ describe('file plugin — error surfacing', () => {
     const read = tools.get('read');
     expect(read).toBeDefined();
 
-    await expect(
-      read!({ path: '/no/such/file/abcxyz.txt' })
-    ).rejects.toThrow(/file\.read.*not found/);
+    await expect(read!({ path: '/no/such/file/abcxyz.txt' })).rejects.toThrow(
+      /file\.read.*not found/
+    );
   });
 
   it('reads an existing file', async () => {
@@ -146,10 +151,7 @@ describe('file plugin — error surfacing', () => {
     const read = tools.get('read');
     expect(read).toBeDefined();
 
-    const target = path.join(
-      tmpdir(),
-      `drone-agent-read-${Date.now()}.txt`
-    );
+    const target = path.join(tmpdir(), `drone-agent-read-${Date.now()}.txt`);
     await writeFile(target, 'round-trip content', 'utf-8');
     try {
       const result = JSON.parse(await read!({ path: target }));
@@ -204,9 +206,7 @@ describe('file plugin — read/write round trip', () => {
       const statResult = await stat(target);
       expect(statResult.isFile()).toBe(true);
 
-      const readResult = JSON.parse(
-        await read!({ path: target })
-      );
+      const readResult = JSON.parse(await read!({ path: target }));
       expect(readResult.content).toBe('hello world');
     } finally {
       // Cleanup

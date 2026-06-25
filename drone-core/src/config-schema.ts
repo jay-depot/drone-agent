@@ -66,10 +66,9 @@ const McpStdioServerConfigSchema = Type.Object({
   retryDelayMs: Type.Optional(NonNegativeNumber),
   maxListPages: Type.Optional(PositiveInteger),
   maxListItems: Type.Optional(PositiveInteger),
-  encoding: Type.Optional(Type.Union([
-    Type.Literal('content-length'),
-    Type.Literal('line-delimited'),
-  ])),
+  encoding: Type.Optional(
+    Type.Union([Type.Literal('content-length'), Type.Literal('line-delimited')])
+  ),
 });
 
 const McpStreamableHttpServerConfigSchema = Type.Object({
@@ -82,10 +81,9 @@ const McpStreamableHttpServerConfigSchema = Type.Object({
   retryDelayMs: Type.Optional(NonNegativeNumber),
   maxListPages: Type.Optional(PositiveInteger),
   maxListItems: Type.Optional(PositiveInteger),
-  compatibilityMode: Type.Optional(Type.Union([
-    Type.Literal('strict'),
-    Type.Literal('permissive'),
-  ])),
+  compatibilityMode: Type.Optional(
+    Type.Union([Type.Literal('strict'), Type.Literal('permissive')])
+  ),
 });
 
 const McpServerConfigSchema = Type.Union([
@@ -136,10 +134,9 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       retryDelayMs: Type.Optional(NonNegativeNumber),
       maxListPages: Type.Optional(PositiveInteger),
       maxListItems: Type.Optional(PositiveInteger),
-      compatibilityMode: Type.Optional(Type.Union([
-        Type.Literal('strict'),
-        Type.Literal('permissive'),
-      ])),
+      compatibilityMode: Type.Optional(
+        Type.Union([Type.Literal('strict'), Type.Literal('permissive')])
+      ),
       servers: Type.Optional(Type.Record(Type.String(), McpServerConfigSchema)),
     }),
     compaction: Type.Object({

@@ -1,4 +1,10 @@
-import { access, chmod, constants as fsConstants, mkdir, stat, writeFile } from 'node:fs/promises';
+import {
+  access,
+  chmod,
+  constants as fsConstants,
+  mkdir,
+  writeFile,
+} from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -121,7 +127,9 @@ async function commandExistsOnPath(command: string): Promise<boolean> {
   return false;
 }
 
-async function readManifest(cacheDir: string): Promise<LightpandaManifest | null> {
+async function readManifest(
+  cacheDir: string
+): Promise<LightpandaManifest | null> {
   try {
     const data = await import('node:fs/promises').then(fs =>
       fs.readFile(path.join(cacheDir, '.drone-agent-install.json'), 'utf8')
@@ -134,12 +142,12 @@ async function readManifest(cacheDir: string): Promise<LightpandaManifest | null
 
 async function writeManifest(
   cacheDir: string,
-  manifest: LightpandaManifest,
+  manifest: LightpandaManifest
 ): Promise<void> {
   await writeFile(
     path.join(cacheDir, '.drone-agent-install.json'),
     JSON.stringify(manifest, null, 2),
-    'utf8',
+    'utf8'
   );
 }
 
@@ -183,7 +191,7 @@ export const lightpandaPlugin: DronePlugin = {
       const downloadUrl = getDownloadUrl();
       if (!downloadUrl) {
         registration.logger.warn(
-          `lightpanda does not provide a binary for ${process.platform}-${process.arch}; skipping download`,
+          `lightpanda does not provide a binary for ${process.platform}-${process.arch}; skipping download`
         );
         return;
       }
@@ -201,20 +209,20 @@ export const lightpandaPlugin: DronePlugin = {
         try {
           await access(binaryPath, fsConstants.X_OK);
           registration.logger.info(
-            `lightpanda found in cache (downloaded ${manifest!.downloadedAt})`,
+            `lightpanda found in cache (downloaded ${manifest!.downloadedAt})`
           );
           prependToPath(cacheDir);
           return;
         } catch {
           registration.logger.info(
-            'lightpanda cache entry missing binary; re-downloading',
+            'lightpanda cache entry missing binary; re-downloading'
           );
         }
       }
 
       // 4. Download the binary.
       registration.logger.info(
-        `downloading lightpanda nightly for ${process.platform}-${process.arch}…`,
+        `downloading lightpanda nightly for ${process.platform}-${process.arch}…`
       );
 
       try {
@@ -223,7 +231,7 @@ export const lightpandaPlugin: DronePlugin = {
         const response = await fetch(downloadUrl);
         if (!response.ok) {
           throw new Error(
-            `lightpanda download failed: ${response.status} ${response.statusText}`,
+            `lightpanda download failed: ${response.status} ${response.statusText}`
           );
         }
 
@@ -246,13 +254,13 @@ export const lightpandaPlugin: DronePlugin = {
         });
 
         registration.logger.info(
-          `lightpanda downloaded to ${binaryPath} (sha256: ${sha256.slice(0, 16)}…)`,
+          `lightpanda downloaded to ${binaryPath} (sha256: ${sha256.slice(0, 16)}…)`
         );
 
         prependToPath(cacheDir);
       } catch (error) {
         registration.logger.error(
-          `failed to install lightpanda: ${error instanceof Error ? error.message : String(error)}`,
+          `failed to install lightpanda: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     });

@@ -38,7 +38,8 @@ export const memoryPlugin: DronePlugin = {
         if (!config.enabled) {
           throw new Error('Memory is disabled by configuration.');
         }
-        const existing = cache.get(key) ?? (await readMemoryEntry(memoryDir, key));
+        const existing =
+          cache.get(key) ?? (await readMemoryEntry(memoryDir, key));
         const entry = existing
           ? updateMemoryEntry(existing, value, tags)
           : createMemoryEntry(key, value, tags);
@@ -106,9 +107,8 @@ export const memoryPlugin: DronePlugin = {
         const recent = entries.slice(0, 10);
         const lines: string[] = ['## Project Memories'];
         for (const entry of recent) {
-          const summary = entry.key.length > 60
-            ? entry.key.slice(0, 57) + '...'
-            : entry.key;
+          const summary =
+            entry.key.length > 60 ? entry.key.slice(0, 57) + '...' : entry.key;
           lines.push(`- \`${summary}\` (updated ${entry.updatedAt})`);
         }
         if (entries.length > 10) {
@@ -135,7 +135,8 @@ export const memoryPlugin: DronePlugin = {
         properties: {
           key: {
             type: 'string',
-            description: 'Human-readable key for the memory entry (filesystem-safe).',
+            description:
+              'Human-readable key for the memory entry (filesystem-safe).',
           },
           value: {
             type: 'string',
@@ -160,7 +161,11 @@ export const memoryPlugin: DronePlugin = {
         const tags = Array.isArray(input.tags)
           ? (input.tags as string[]).filter(t => typeof t === 'string')
           : [];
-        const entry = await capability.store(input.key.trim(), input.value, tags);
+        const entry = await capability.store(
+          input.key.trim(),
+          input.value,
+          tags
+        );
         return JSON.stringify(
           { key: entry.key, tags: entry.tags, createdAt: entry.createdAt },
           null,
@@ -192,7 +197,11 @@ export const memoryPlugin: DronePlugin = {
         const entry = await capability.recall(input.key.trim());
         if (!entry) {
           return JSON.stringify(
-            { key: input.key, entry: null, message: 'No entry found for this key.' },
+            {
+              key: input.key,
+              entry: null,
+              message: 'No entry found for this key.',
+            },
             null,
             2
           );
@@ -249,7 +258,10 @@ export const memoryPlugin: DronePlugin = {
         additionalProperties: false,
       },
       execute: async input => {
-        if (typeof input.query !== 'string' || input.query.trim().length === 0) {
+        if (
+          typeof input.query !== 'string' ||
+          input.query.trim().length === 0
+        ) {
           throw new Error('memory.search requires a non-empty query string.');
         }
         const limit =
@@ -286,11 +298,7 @@ export const memoryPlugin: DronePlugin = {
           throw new Error('memory.delete requires a non-empty key string.');
         }
         const removed = await capability.delete(input.key.trim());
-        return JSON.stringify(
-          { key: input.key, removed },
-          null,
-          2
-        );
+        return JSON.stringify({ key: input.key, removed }, null, 2);
       },
     });
 

@@ -1,14 +1,30 @@
-import Database from "better-sqlite3";
-import type { Persona, Skill, AgentSession, CreatePersonaRequest, CreateSkillRequest, RegisterAgentRequest, CreateMemoryRequest, UpdateMemoryRequest, Memory, SpawnRecord, SpawnConfig, AgentMessage, EventLog, CreateEventLogRequest, EventType } from "./types.js";
-import { logger } from "./logger.js";
-import { randomUUID } from "crypto";
+import Database from 'better-sqlite3';
+import type {
+  Persona,
+  Skill,
+  AgentSession,
+  CreatePersonaRequest,
+  CreateSkillRequest,
+  RegisterAgentRequest,
+  CreateMemoryRequest,
+  UpdateMemoryRequest,
+  Memory,
+  SpawnRecord,
+  SpawnConfig,
+  AgentMessage,
+  EventLog,
+  CreateEventLogRequest,
+  EventType,
+} from './types.js';
+import { logger } from './logger.js';
+import { randomUUID } from 'crypto';
 
 let db: Database.Database | null = null;
 
 export function initDatabase(dataPath: string): Database.Database {
   logger.info(`Initializing database at: ${dataPath}`);
   db = new Database(dataPath);
-  
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS personas (
       id TEXT PRIMARY KEY,
@@ -102,13 +118,13 @@ export function initDatabase(dataPath: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_event_log_type ON event_log(event_type);
   `);
 
-  logger.info("Beacon database initialized successfully");
+  logger.info('Beacon database initialized successfully');
   return db;
 }
 
 export function getDatabase(): Database.Database {
   if (!db) {
-    throw new Error("Database not initialized. Call initDatabase() first.");
+    throw new Error('Database not initialized. Call initDatabase() first.');
   }
   return db;
 }
@@ -117,13 +133,16 @@ export function closeDatabase(): void {
   if (db) {
     db.close();
     db = null;
-    logger.info("Beacon database closed");
+    logger.info('Beacon database closed');
   }
 }
 
 // === Persona Operations ===
 
-export function createPersona(req: CreatePersonaRequest, scope: "local" | "coordinator" = "local"): Persona {
+export function createPersona(
+  req: CreatePersonaRequest,
+  scope: 'local' | 'coordinator' = 'local'
+): Persona {
   const now = Date.now();
   const persona: Persona = {
     id: req.id,
@@ -134,36 +153,41 @@ export function createPersona(req: CreatePersonaRequest, scope: "local" | "coord
     createdAt: now,
     updatedAt: now,
   };
-  
+
   const stmt = getDatabase().prepare(`
     INSERT INTO personas (id, name, description, systemPrompt, scope, createdAt, updatedAt)
     VALUES (@id, @name, @description, @systemPrompt, @scope, @createdAt, @updatedAt)
   `);
-  
+
   stmt.run(persona);
   logger.info(`Created ${scope} persona: ${persona.id}`);
   return persona;
 }
 
 export function getPersona(id: string): Persona | undefined {
-  const stmt = getDatabase().prepare("SELECT * FROM personas WHERE id = ?");
+  const stmt = getDatabase().prepare('SELECT * FROM personas WHERE id = ?');
   return stmt.get(id) as Persona | undefined;
 }
 
 export function listPersonas(): Persona[] {
-  const stmt = getDatabase().prepare("SELECT * FROM personas ORDER BY name");
+  const stmt = getDatabase().prepare('SELECT * FROM personas ORDER BY name');
   return stmt.all() as Persona[];
 }
 
 export function listLocalPersonas(): Persona[] {
-  const stmt = getDatabase().prepare("SELECT * FROM personas WHERE scope = 'local' ORDER BY name");
+  const stmt = getDatabase().prepare(
+    "SELECT * FROM personas WHERE scope = 'local' ORDER BY name"
+  );
   return stmt.all() as Persona[];
 }
 
-export function updatePersona(id: string, req: Partial<CreatePersonaRequest>): Persona | undefined {
+export function updatePersona(
+  id: string,
+  req: Partial<CreatePersonaRequest>
+): Persona | undefined {
   const existing = getPersona(id);
   if (!existing) return undefined;
-  
+
   const updated: Persona = {
     ...existing,
     ...req,
@@ -172,20 +196,20 @@ export function updatePersona(id: string, req: Partial<CreatePersonaRequest>): P
     createdAt: existing.createdAt,
     updatedAt: Date.now(),
   };
-  
+
   const stmt = getDatabase().prepare(`
     UPDATE personas 
     SET name = @name, description = @description, systemPrompt = @systemPrompt, updatedAt = @updatedAt
     WHERE id = @id
   `);
-  
+
   stmt.run(updated);
   logger.info(`Updated persona: ${id}`);
   return updated;
 }
 
 export function deletePersona(id: string): boolean {
-  const stmt = getDatabase().prepare("DELETE FROM personas WHERE id = ?");
+  const stmt = getDatabase().prepare('DELETE FROM personas WHERE id = ?');
   const result = stmt.run(id);
   logger.info(`Deleted persona: ${id}`);
   return result.changes > 0;
@@ -202,7 +226,10 @@ export function upsertPersonaFromCoordinator(p: Persona): void {
 
 // === Skill Operations ===
 
-export function createSkill(req: CreateSkillRequest, scope: "local" | "coordinator" = "local"): Skill {
+export function createSkill(
+  req: CreateSkillRequest,
+  scope: 'local' | 'coordinator' = 'local'
+): Skill {
   const now = Date.now();
   const skill: Skill = {
     id: req.id,
@@ -214,36 +241,41 @@ export function createSkill(req: CreateSkillRequest, scope: "local" | "coordinat
     createdAt: now,
     updatedAt: now,
   };
-  
+
   const stmt = getDatabase().prepare(`
     INSERT INTO skills (id, name, description, trigger, body, scope, createdAt, updatedAt)
     VALUES (@id, @name, @description, @trigger, @body, @scope, @createdAt, @updatedAt)
   `);
-  
+
   stmt.run(skill);
   logger.info(`Created ${scope} skill: ${skill.id}`);
   return skill;
 }
 
 export function getSkill(id: string): Skill | undefined {
-  const stmt = getDatabase().prepare("SELECT * FROM skills WHERE id = ?");
+  const stmt = getDatabase().prepare('SELECT * FROM skills WHERE id = ?');
   return stmt.get(id) as Skill | undefined;
 }
 
 export function listSkills(): Skill[] {
-  const stmt = getDatabase().prepare("SELECT * FROM skills ORDER BY name");
+  const stmt = getDatabase().prepare('SELECT * FROM skills ORDER BY name');
   return stmt.all() as Skill[];
 }
 
 export function listLocalSkills(): Skill[] {
-  const stmt = getDatabase().prepare("SELECT * FROM skills WHERE scope = 'local' ORDER BY name");
+  const stmt = getDatabase().prepare(
+    "SELECT * FROM skills WHERE scope = 'local' ORDER BY name"
+  );
   return stmt.all() as Skill[];
 }
 
-export function updateSkill(id: string, req: Partial<CreateSkillRequest>): Skill | undefined {
+export function updateSkill(
+  id: string,
+  req: Partial<CreateSkillRequest>
+): Skill | undefined {
   const existing = getSkill(id);
   if (!existing) return undefined;
-  
+
   const updated: Skill = {
     ...existing,
     ...req,
@@ -252,20 +284,20 @@ export function updateSkill(id: string, req: Partial<CreateSkillRequest>): Skill
     createdAt: existing.createdAt,
     updatedAt: Date.now(),
   };
-  
+
   const stmt = getDatabase().prepare(`
     UPDATE skills 
     SET name = @name, description = @description, trigger = @trigger, body = @body, updatedAt = @updatedAt
     WHERE id = @id
   `);
-  
+
   stmt.run(updated);
   logger.info(`Updated skill: ${id}`);
   return updated;
 }
 
 export function deleteSkill(id: string): boolean {
-  const stmt = getDatabase().prepare("DELETE FROM skills WHERE id = ?");
+  const stmt = getDatabase().prepare('DELETE FROM skills WHERE id = ?');
   const result = stmt.run(id);
   logger.info(`Deleted skill: ${id}`);
   return result.changes > 0;
@@ -290,43 +322,45 @@ export function registerAgent(req: RegisterAgentRequest): AgentSession {
     connectedAt: now,
     lastActivity: now,
   };
-  
+
   const stmt = getDatabase().prepare(`
     INSERT OR REPLACE INTO agent_sessions (id, personaId, connectedAt, lastActivity)
     VALUES (@id, @personaId, @connectedAt, @lastActivity)
   `);
-  
+
   stmt.run(session);
   logger.info(`Registered agent: ${session.id}`);
   return session;
 }
 
 export function getAgent(id: string): AgentSession | undefined {
-  const stmt = getDatabase().prepare("SELECT * FROM agent_sessions WHERE id = ?");
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM agent_sessions WHERE id = ?'
+  );
   return stmt.get(id) as AgentSession | undefined;
 }
 
 export function listAgents(): AgentSession[] {
-  const stmt = getDatabase().prepare("SELECT * FROM agent_sessions");
+  const stmt = getDatabase().prepare('SELECT * FROM agent_sessions');
   return stmt.all() as AgentSession[];
 }
 
 export function updateAgentActivity(id: string): AgentSession | undefined {
   const session = getAgent(id);
   if (!session) return undefined;
-  
+
   session.lastActivity = Date.now();
-  
+
   const stmt = getDatabase().prepare(`
     UPDATE agent_sessions SET lastActivity = @lastActivity WHERE id = @id
   `);
-  
+
   stmt.run(session);
   return session;
 }
 
 export function unregisterAgent(id: string): boolean {
-  const stmt = getDatabase().prepare("DELETE FROM agent_sessions WHERE id = ?");
+  const stmt = getDatabase().prepare('DELETE FROM agent_sessions WHERE id = ?');
   const result = stmt.run(id);
   logger.info(`Unregistered agent: ${id}`);
   return result.changes > 0;
@@ -334,11 +368,15 @@ export function unregisterAgent(id: string): boolean {
 
 // === Memory Operations ===
 
-export function createMemory(req: CreateMemoryRequest, namespace: string = "default"): Memory {
+export function createMemory(
+  req: CreateMemoryRequest,
+  namespace: string = 'default'
+): Memory {
   const now = Date.now();
   const ttl = req.ttlSeconds ? now + req.ttlSeconds * 1000 : null;
   // Convert value to string if it's an object
-  const value = typeof req.value === 'object' ? JSON.stringify(req.value) : req.value;
+  const value =
+    typeof req.value === 'object' ? JSON.stringify(req.value) : req.value;
   const memory: Memory = {
     id: randomUUID(),
     key: req.key,
@@ -348,77 +386,93 @@ export function createMemory(req: CreateMemoryRequest, namespace: string = "defa
     createdAt: now,
     updatedAt: now,
   };
-  
+
   const stmt = getDatabase().prepare(`
     INSERT INTO memory (id, key, value, namespace, ttl, createdAt, updatedAt)
     VALUES (@id, @key, @value, @namespace, @ttl, @createdAt, @updatedAt)
   `);
-  
+
   stmt.run(memory);
   logger.info(`Created memory: ${memory.key} (${memory.id})`);
   return memory;
 }
 
 export function getMemory(id: string): Memory | undefined {
-  const stmt = getDatabase().prepare("SELECT * FROM memory WHERE id = ?");
+  const stmt = getDatabase().prepare('SELECT * FROM memory WHERE id = ?');
   return stmt.get(id) as Memory | undefined;
 }
 
-export function getMemoryByKey(key: string, namespace: string = "default"): Memory | undefined {
-  const stmt = getDatabase().prepare("SELECT * FROM memory WHERE key = ? AND namespace = ?");
+export function getMemoryByKey(
+  key: string,
+  namespace: string = 'default'
+): Memory | undefined {
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM memory WHERE key = ? AND namespace = ?'
+  );
   return stmt.get(key, namespace) as Memory | undefined;
 }
 
-export function listMemories(namespace?: string, includeExpired: boolean = false): Memory[] {
-  let sql = "SELECT * FROM memory";
+export function listMemories(
+  namespace?: string,
+  includeExpired: boolean = false
+): Memory[] {
+  let sql = 'SELECT * FROM memory';
   const params: (string | number)[] = [];
-  
+
   if (namespace) {
-    sql += " WHERE namespace = ?";
+    sql += ' WHERE namespace = ?';
     params.push(namespace);
   }
-  
+
   if (!includeExpired) {
-    sql += namespace ? " AND" : " WHERE";
-    sql += " (ttl IS NULL OR ttl > ?)";
+    sql += namespace ? ' AND' : ' WHERE';
+    sql += ' (ttl IS NULL OR ttl > ?)';
     params.push(Date.now());
   }
-  
-  sql += " ORDER BY key";
-  
+
+  sql += ' ORDER BY key';
+
   const stmt = getDatabase().prepare(sql);
   return (params.length > 0 ? stmt.all(...params) : stmt.all()) as Memory[];
 }
 
-export function updateMemory(id: string, req: UpdateMemoryRequest): Memory | undefined {
+export function updateMemory(
+  id: string,
+  req: UpdateMemoryRequest
+): Memory | undefined {
   const existing = getMemory(id);
   if (!existing) return undefined;
-  
-  const ttl = req.ttlSeconds !== undefined
-    ? (req.ttlSeconds > 0 ? Date.now() + req.ttlSeconds * 1000 : null)
-    : existing.ttl;
-  
+
+  const ttl =
+    req.ttlSeconds !== undefined
+      ? req.ttlSeconds > 0
+        ? Date.now() + req.ttlSeconds * 1000
+        : null
+      : existing.ttl;
+
   const updated: Memory = {
     ...existing,
     key: req.key ?? existing.key,
-    value: (typeof req.value === 'object' ? JSON.stringify(req.value) : req.value) ?? existing.value,
+    value:
+      (typeof req.value === 'object' ? JSON.stringify(req.value) : req.value) ??
+      existing.value,
     ttl,
     updatedAt: Date.now(),
   };
-  
+
   const stmt = getDatabase().prepare(`
     UPDATE memory
     SET key = @key, value = @value, ttl = @ttl, updatedAt = @updatedAt
     WHERE id = @id
   `);
-  
+
   stmt.run(updated);
   logger.info(`Updated memory: ${id}`);
   return updated;
 }
 
 export function deleteMemory(id: string): boolean {
-  const stmt = getDatabase().prepare("DELETE FROM memory WHERE id = ?");
+  const stmt = getDatabase().prepare('DELETE FROM memory WHERE id = ?');
   const result = stmt.run(id);
   logger.info(`Deleted memory: ${id}`);
   return result.changes > 0;
@@ -426,7 +480,9 @@ export function deleteMemory(id: string): boolean {
 
 export function cleanupExpiredMemories(): number {
   const now = Date.now();
-  const stmt = getDatabase().prepare("DELETE FROM memory WHERE ttl IS NOT NULL AND ttl <= ?");
+  const stmt = getDatabase().prepare(
+    'DELETE FROM memory WHERE ttl IS NOT NULL AND ttl <= ?'
+  );
   const result = stmt.run(now);
   if (result.changes > 0) {
     logger.info(`Cleaned up ${result.changes} expired memories`);
@@ -440,7 +496,6 @@ export function isMemoryExpired(memory: Memory): boolean {
 }
 
 // === Message Operations ===
-
 
 interface MessageRow {
   id: string;
@@ -464,7 +519,12 @@ function rowToMessage(row: MessageRow): AgentMessage {
   };
 }
 
-export function createMessage(fromAgentId: string, toAgentId: string | null, channel: string | null, body: string): AgentMessage {
+export function createMessage(
+  fromAgentId: string,
+  toAgentId: string | null,
+  channel: string | null,
+  body: string
+): AgentMessage {
   const now = Date.now();
   const id = randomUUID();
 
@@ -476,31 +536,46 @@ export function createMessage(fromAgentId: string, toAgentId: string | null, cha
   stmt.run(id, fromAgentId, toAgentId, channel, body, now);
 
   logger.info(`Created message ${id} from ${fromAgentId}`);
-  return { id, fromAgentId, toAgentId, channel, body, delivered: false, createdAt: now };
+  return {
+    id,
+    fromAgentId,
+    toAgentId,
+    channel,
+    body,
+    delivered: false,
+    createdAt: now,
+  };
 }
 
 export function getMessage(id: string): AgentMessage | undefined {
-  const stmt = getDatabase().prepare("SELECT * FROM messages WHERE id = ?");
+  const stmt = getDatabase().prepare('SELECT * FROM messages WHERE id = ?');
   const row = stmt.get(id) as MessageRow | undefined;
   if (!row) return undefined;
   return rowToMessage(row);
 }
 
-export function listMessagesForAgent(agentId: string, unreadOnly: boolean = true): AgentMessage[] {
+export function listMessagesForAgent(
+  agentId: string,
+  unreadOnly: boolean = true
+): AgentMessage[] {
   const sql = unreadOnly
-    ? "SELECT * FROM messages WHERE to_agent_id = ? AND delivered = 0 ORDER BY created_at DESC"
-    : "SELECT * FROM messages WHERE to_agent_id = ? ORDER BY created_at DESC";
+    ? 'SELECT * FROM messages WHERE to_agent_id = ? AND delivered = 0 ORDER BY created_at DESC'
+    : 'SELECT * FROM messages WHERE to_agent_id = ? ORDER BY created_at DESC';
   const stmt = getDatabase().prepare(sql);
   return (stmt.all(agentId) as MessageRow[]).map(rowToMessage);
 }
 
 export function listMessagesByChannel(channel: string): AgentMessage[] {
-  const stmt = getDatabase().prepare("SELECT * FROM messages WHERE channel = ? ORDER BY created_at DESC");
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM messages WHERE channel = ? ORDER BY created_at DESC'
+  );
   return (stmt.all(channel) as MessageRow[]).map(rowToMessage);
 }
 
 export function markMessageDelivered(id: string): boolean {
-  const stmt = getDatabase().prepare("UPDATE messages SET delivered = 1 WHERE id = ?");
+  const stmt = getDatabase().prepare(
+    'UPDATE messages SET delivered = 1 WHERE id = ?'
+  );
   const result = stmt.run(id);
   if (result.changes > 0) logger.info(`Marked message ${id} delivered`);
   return result.changes > 0;
@@ -508,9 +583,12 @@ export function markMessageDelivered(id: string): boolean {
 
 export function cleanupOldMessages(maxAgeHours: number = 24): number {
   const cutoff = Date.now() - maxAgeHours * 60 * 60 * 1000;
-  const stmt = getDatabase().prepare("DELETE FROM messages WHERE delivered = 1 AND created_at < ?");
+  const stmt = getDatabase().prepare(
+    'DELETE FROM messages WHERE delivered = 1 AND created_at < ?'
+  );
   const result = stmt.run(cutoff);
-  if (result.changes > 0) logger.info(`Cleaned up ${result.changes} old messages`);
+  if (result.changes > 0)
+    logger.info(`Cleaned up ${result.changes} old messages`);
   return result.changes;
 }
 
@@ -537,7 +615,7 @@ function rowToSpawnRecord(row: SpawnRow): SpawnRecord {
     personaId: row.persona_id,
     task: row.task,
     configJson: row.config_json,
-    status: row.status as SpawnRecord["status"],
+    status: row.status as SpawnRecord['status'],
     error: row.error,
     createdAt: row.created_at,
     startedAt: row.started_at ?? null,
@@ -546,7 +624,12 @@ function rowToSpawnRecord(row: SpawnRow): SpawnRecord {
   };
 }
 
-export function createSpawn(spawnId: string, personaId: string | null, task: string | null, config: SpawnConfig | null): SpawnRecord {
+export function createSpawn(
+  spawnId: string,
+  personaId: string | null,
+  task: string | null,
+  config: SpawnConfig | null
+): SpawnRecord {
   const now = Date.now();
   const spawn: SpawnRecord = {
     id: spawnId,
@@ -554,19 +637,19 @@ export function createSpawn(spawnId: string, personaId: string | null, task: str
     personaId,
     task,
     configJson: config ? JSON.stringify(config) : null,
-    status: "spawning",
+    status: 'spawning',
     error: null,
     createdAt: now,
     startedAt: null,
     terminatedAt: null,
     exitCode: null,
   };
-  
+
   const stmt = getDatabase().prepare(`
     INSERT INTO spawns (id, agent_id, persona_id, task, config_json, status, error, created_at, started_at, terminated_at, exit_code)
     VALUES (@id, @agentId, @personaId, @task, @configJson, @status, @error, @createdAt, @startedAt, @terminatedAt, @exitCode)
   `);
-  
+
   stmt.run({
     id: spawn.id,
     agentId: spawn.agentId,
@@ -580,90 +663,94 @@ export function createSpawn(spawnId: string, personaId: string | null, task: str
     terminatedAt: spawn.terminatedAt,
     exitCode: spawn.exitCode,
   });
-  
+
   logger.info(`Created spawn: ${spawn.id}`);
   return spawn;
 }
 
 export function getSpawn(id: string): SpawnRecord | undefined {
-  const stmt = getDatabase().prepare("SELECT * FROM spawns WHERE id = ?");
+  const stmt = getDatabase().prepare('SELECT * FROM spawns WHERE id = ?');
   const row = stmt.get(id) as SpawnRow | undefined;
   if (!row) return undefined;
   return rowToSpawnRecord(row);
 }
 
 export function listSpawns(status?: string): SpawnRecord[] {
-  let sql = "SELECT * FROM spawns";
+  let sql = 'SELECT * FROM spawns';
   const params: string[] = [];
-  
+
   if (status) {
-    sql += " WHERE status = ?";
+    sql += ' WHERE status = ?';
     params.push(status);
   }
-  sql += " ORDER BY created_at DESC";
-  
+  sql += ' ORDER BY created_at DESC';
+
   const stmt = getDatabase().prepare(sql);
-  const rows = (params.length > 0 ? stmt.all(...params) : stmt.all()) as SpawnRow[];
+  const rows = (
+    params.length > 0 ? stmt.all(...params) : stmt.all()
+  ) as SpawnRow[];
   return rows.map(rowToSpawnRecord);
 }
 
 export function updateSpawnStatus(
   id: string,
-  status: SpawnRecord["status"],
+  status: SpawnRecord['status'],
   agentId?: string | null,
   error?: string,
   exitCode?: number
 ): SpawnRecord | undefined {
   const existing = getSpawn(id);
   if (!existing) return undefined;
-  
+
   const now = Date.now();
-  const updates: string[] = ["status = ?"];
+  const updates: string[] = ['status = ?'];
   const params: (string | number | null)[] = [status];
-  
+
   if (agentId !== undefined) {
-    updates.push("agent_id = ?");
+    updates.push('agent_id = ?');
     params.push(agentId);
   }
-  
-  if (status === "running" && !existing.startedAt) {
-    updates.push("started_at = ?");
+
+  if (status === 'running' && !existing.startedAt) {
+    updates.push('started_at = ?');
     params.push(now);
   }
-  
+
   if (error !== undefined) {
-    updates.push("error = ?");
+    updates.push('error = ?');
     params.push(error);
   }
-  
+
   if (exitCode !== undefined) {
-    updates.push("exit_code = ?");
+    updates.push('exit_code = ?');
     params.push(exitCode);
   }
-  
-  if (status === "terminated") {
-    updates.push("terminated_at = ?");
+
+  if (status === 'terminated') {
+    updates.push('terminated_at = ?');
     params.push(now);
   }
-  
+
   params.push(id);
-  
-  const stmt = getDatabase().prepare(`UPDATE spawns SET ${updates.join(", ")} WHERE id = ?`);
+
+  const stmt = getDatabase().prepare(
+    `UPDATE spawns SET ${updates.join(', ')} WHERE id = ?`
+  );
   stmt.run(...params);
-  
+
   logger.info(`Updated spawn ${id}: status=${status}`);
   return getSpawn(id);
 }
 
 export function deleteSpawn(id: string): boolean {
-  const stmt = getDatabase().prepare("DELETE FROM spawns WHERE id = ?");
+  const stmt = getDatabase().prepare('DELETE FROM spawns WHERE id = ?');
   const result = stmt.run(id);
   logger.info(`Deleted spawn: ${id}`);
   return result.changes > 0;
 }
 
 export function getSpawnByAgentId(agentId: string): SpawnRecord | undefined {
-  const stmt = getDatabase().prepare("SELECT * FROM spawns WHERE agent_id = ?");
+  const stmt = getDatabase().prepare('SELECT * FROM spawns WHERE agent_id = ?');
   const row = stmt.get(agentId) as SpawnRow | undefined;
   if (!row) return undefined;
   return rowToSpawnRecord(row);
@@ -674,21 +761,23 @@ export function getSpawnByAgentId(agentId: string): SpawnRecord | undefined {
 
 export interface BeaconConfigEntry {
   key: string;
-  value: string;  // JSON string
-  scope: "local" | "swarm";
+  value: string; // JSON string
+  scope: 'local' | 'swarm';
   createdAt: number;
   updatedAt: number;
 }
 
 export interface CreateConfigRequest {
   key: string;
-  value: string;  // JSON string
-  scope?: "local" | "swarm";  // default: "local"
+  value: string; // JSON string
+  scope?: 'local' | 'swarm'; // default: "local"
 }
 
-export function createBeaconConfig(req: CreateConfigRequest): BeaconConfigEntry {
+export function createBeaconConfig(
+  req: CreateConfigRequest
+): BeaconConfigEntry {
   const now = Date.now();
-  const scope = req.scope ?? "local";
+  const scope = req.scope ?? 'local';
   const stmt = getDatabase().prepare(`
     INSERT INTO beacon_config (key, value, scope, createdAt, updatedAt)
     VALUES (?, ?, ?, ?, ?)
@@ -705,16 +794,23 @@ export function createBeaconConfig(req: CreateConfigRequest): BeaconConfigEntry 
 }
 
 export function getBeaconConfig(key: string): BeaconConfigEntry | null {
-  const stmt = getDatabase().prepare("SELECT * FROM beacon_config WHERE key = ?");
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM beacon_config WHERE key = ?'
+  );
   return stmt.get(key) as BeaconConfigEntry | null;
 }
 
 export function listBeaconConfig(): BeaconConfigEntry[] {
-  const stmt = getDatabase().prepare("SELECT * FROM beacon_config ORDER BY key");
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM beacon_config ORDER BY key'
+  );
   return stmt.all() as BeaconConfigEntry[];
 }
 
-export function updateBeaconConfig(key: string, value: string): BeaconConfigEntry | null {
+export function updateBeaconConfig(
+  key: string,
+  value: string
+): BeaconConfigEntry | null {
   const existing = getBeaconConfig(key);
   if (!existing) {
     return null;
@@ -729,7 +825,7 @@ export function updateBeaconConfig(key: string, value: string): BeaconConfigEntr
 }
 
 export function deleteBeaconConfig(key: string): boolean {
-  const stmt = getDatabase().prepare("DELETE FROM beacon_config WHERE key = ?");
+  const stmt = getDatabase().prepare('DELETE FROM beacon_config WHERE key = ?');
   const result = stmt.run(key);
   logger.info(`Deleted beacon config: ${key}`);
   return result.changes > 0;
@@ -775,21 +871,31 @@ export function createEventLog(req: CreateEventLogRequest): EventLog {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
-  stmt.run(id, eventLog.eventType, eventLog.agentId, eventLog.targetId, eventLog.targetType, eventLog.metadata, eventLog.timestamp);
+  stmt.run(
+    id,
+    eventLog.eventType,
+    eventLog.agentId,
+    eventLog.targetId,
+    eventLog.targetType,
+    eventLog.metadata,
+    eventLog.timestamp
+  );
   return eventLog;
 }
 
 export function getEventLog(id: string): EventLog | undefined {
-  const stmt = getDatabase().prepare("SELECT * FROM event_log WHERE id = ?");
-  const row = stmt.get(id) as {
-    id: string;
-    event_type: string;
-    agent_id: string | null;
-    target_id: string | null;
-    target_type: string | null;
-    metadata: string | null;
-    timestamp: number;
-  } | undefined;
+  const stmt = getDatabase().prepare('SELECT * FROM event_log WHERE id = ?');
+  const row = stmt.get(id) as
+    | {
+        id: string;
+        event_type: string;
+        agent_id: string | null;
+        target_id: string | null;
+        target_type: string | null;
+        metadata: string | null;
+        timestamp: number;
+      }
+    | undefined;
   if (!row) return undefined;
   return rowToEventLog(row);
 }
@@ -803,26 +909,26 @@ export interface ListEventLogsOptions {
 
 export function listEventLogs(options: ListEventLogsOptions = {}): EventLog[] {
   const { agentId, eventType, since, limit = 100 } = options;
-  
-  let sql = "SELECT * FROM event_log WHERE 1=1";
+
+  let sql = 'SELECT * FROM event_log WHERE 1=1';
   const params: (string | number)[] = [];
 
   if (agentId) {
-    sql += " AND agent_id = ?";
+    sql += ' AND agent_id = ?';
     params.push(agentId);
   }
 
   if (eventType) {
-    sql += " AND event_type = ?";
+    sql += ' AND event_type = ?';
     params.push(eventType);
   }
 
   if (since) {
-    sql += " AND timestamp >= ?";
+    sql += ' AND timestamp >= ?';
     params.push(since);
   }
 
-  sql += " ORDER BY timestamp DESC LIMIT ?";
+  sql += ' ORDER BY timestamp DESC LIMIT ?';
   params.push(limit);
 
   const stmt = getDatabase().prepare(sql);
@@ -841,7 +947,9 @@ export function listEventLogs(options: ListEventLogsOptions = {}): EventLog[] {
 
 export function cleanupOldEventLogs(maxAgeDays: number = 30): number {
   const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
-  const stmt = getDatabase().prepare("DELETE FROM event_log WHERE timestamp < ?");
+  const stmt = getDatabase().prepare(
+    'DELETE FROM event_log WHERE timestamp < ?'
+  );
   const result = stmt.run(cutoff);
   if (result.changes > 0) {
     logger.info(`Cleaned up ${result.changes} old event logs`);

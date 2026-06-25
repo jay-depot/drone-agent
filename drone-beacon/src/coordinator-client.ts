@@ -1,16 +1,16 @@
-import { logger } from "./logger.js";
-import type { Persona, Skill, CoordinatorConfig } from "./types.js";
+import { logger } from './logger.js';
+import type { Persona, Skill, CoordinatorConfig } from './types.js';
 
 export interface CoordinatorClient {
   registerBeacon(config: CoordinatorConfig): Promise<void>;
   heartbeat(): Promise<void>;
   fetchPersonas(): Promise<Persona[]>;
   fetchSkills(): Promise<Skill[]>;
-  
+
   // Session management
   registerSession(agentId: string, personaId: string | null): Promise<void>;
   endSession(agentId: string, connectedAt: number): Promise<void>;
-  
+
   // Knowledge sync (push)
   pushPersona(persona: Persona): Promise<void>;
   pushSkill(skill: Skill): Promise<void>;
@@ -24,15 +24,17 @@ export interface SessionInfo {
   personaId: string | null;
 }
 
-export function createCoordinatorClient(config: CoordinatorConfig): CoordinatorClient {
+export function createCoordinatorClient(
+  config: CoordinatorConfig
+): CoordinatorClient {
   const baseUrl = `http://${config.host}:${config.port}`;
 
   return {
     async registerBeacon(cfg: CoordinatorConfig): Promise<void> {
       logger.info(`Registering beacon with coordinator at ${baseUrl}`);
       const res = await fetch(`${baseUrl}/beacons`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: cfg.beaconId,
           name: cfg.beaconName,
@@ -43,13 +45,16 @@ export function createCoordinatorClient(config: CoordinatorConfig): CoordinatorC
       if (!res.ok) {
         throw new Error(`Failed to register beacon: ${res.status}`);
       }
-      logger.info("Beacon registered with coordinator");
+      logger.info('Beacon registered with coordinator');
     },
 
     async heartbeat(): Promise<void> {
-      const res = await fetch(`${baseUrl}/beacons/${config.beaconId}/heartbeat`, {
-        method: "POST",
-      });
+      const res = await fetch(
+        `${baseUrl}/beacons/${config.beaconId}/heartbeat`,
+        {
+          method: 'POST',
+        }
+      );
       if (!res.ok) {
         logger.warn(`Heartbeat failed: ${res.status}`);
       }
@@ -60,10 +65,10 @@ export function createCoordinatorClient(config: CoordinatorConfig): CoordinatorC
       if (!res.ok) {
         throw new Error(`Failed to fetch personas: ${res.status}`);
       }
-      const data = await res.json() as unknown;
+      const data = (await res.json()) as unknown;
       const personas = data as Persona[];
       // Mark them as coordinator scope
-      return personas.map(p => ({ ...p, scope: "coordinator" as const }));
+      return personas.map(p => ({ ...p, scope: 'coordinator' as const }));
     },
 
     async fetchSkills(): Promise<Skill[]> {
@@ -71,24 +76,30 @@ export function createCoordinatorClient(config: CoordinatorConfig): CoordinatorC
       if (!res.ok) {
         throw new Error(`Failed to fetch skills: ${res.status}`);
       }
-      const data = await res.json() as unknown;
+      const data = (await res.json()) as unknown;
       const skills = data as Skill[];
       // Mark them as coordinator scope
-      return skills.map(s => ({ ...s, scope: "coordinator" as const }));
+      return skills.map(s => ({ ...s, scope: 'coordinator' as const }));
     },
 
     // Session management
-    async registerSession(agentId: string, personaId: string | null): Promise<void> {
+    async registerSession(
+      agentId: string,
+      personaId: string | null
+    ): Promise<void> {
       try {
-        const res = await fetch(`${baseUrl}/beacons/${config.beaconId}/sessions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: `session-${agentId}-${Date.now()}`,
-            agentId,
-            personaId: personaId ?? undefined,
-          }),
-        });
+        const res = await fetch(
+          `${baseUrl}/beacons/${config.beaconId}/sessions`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: `session-${agentId}-${Date.now()}`,
+              agentId,
+              personaId: personaId ?? undefined,
+            }),
+          }
+        );
         if (!res.ok) {
           logger.warn(`Failed to register session: ${res.status}`);
         } else {
@@ -103,18 +114,23 @@ export function createCoordinatorClient(config: CoordinatorConfig): CoordinatorC
       try {
         const disconnectedAt = Date.now();
         const durationMs = disconnectedAt - connectedAt;
-        const res = await fetch(`${baseUrl}/beacons/${config.beaconId}/sessions/${agentId}`, {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            disconnectedAt,
-            durationMs,
-          }),
-        });
+        const res = await fetch(
+          `${baseUrl}/beacons/${config.beaconId}/sessions/${agentId}`,
+          {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              disconnectedAt,
+              durationMs,
+            }),
+          }
+        );
         if (!res.ok) {
           logger.warn(`Failed to end session: ${res.status}`);
         } else {
-          logger.info(`Ended session for agent ${agentId}, duration: ${durationMs}ms`);
+          logger.info(
+            `Ended session for agent ${agentId}, duration: ${durationMs}ms`
+          );
         }
       } catch (err) {
         logger.warn(`Failed to end session: ${err}`);
@@ -125,8 +141,8 @@ export function createCoordinatorClient(config: CoordinatorConfig): CoordinatorC
     async pushPersona(persona: Persona): Promise<void> {
       try {
         const res = await fetch(`${baseUrl}/personas`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(persona),
         });
         if (!res.ok) {
@@ -142,8 +158,8 @@ export function createCoordinatorClient(config: CoordinatorConfig): CoordinatorC
     async pushSkill(skill: Skill): Promise<void> {
       try {
         const res = await fetch(`${baseUrl}/skills`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(skill),
         });
         if (!res.ok) {
@@ -159,7 +175,7 @@ export function createCoordinatorClient(config: CoordinatorConfig): CoordinatorC
     async deletePersona(id: string): Promise<void> {
       try {
         const res = await fetch(`${baseUrl}/personas/${id}`, {
-          method: "DELETE",
+          method: 'DELETE',
         });
         if (!res.ok) {
           logger.warn(`Failed to delete persona: ${res.status}`);
@@ -174,7 +190,7 @@ export function createCoordinatorClient(config: CoordinatorConfig): CoordinatorC
     async deleteSkill(id: string): Promise<void> {
       try {
         const res = await fetch(`${baseUrl}/skills/${id}`, {
-          method: "DELETE",
+          method: 'DELETE',
         });
         if (!res.ok) {
           logger.warn(`Failed to delete skill: ${res.status}`);

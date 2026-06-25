@@ -86,7 +86,7 @@ function buildPersonaSystemPrompt(): string {
     '- No prose, no commentary, no code fences.',
     '- The first non-empty line must be the `---` that opens the frontmatter.',
     '- Keep the body concise (≤200 words).',
-    '- Pick a `color` that fits the persona\'s vibe (omit the field if uncertain).',
+    "- Pick a `color` that fits the persona's vibe (omit the field if uncertain).",
     '- Use `fragments:` only if you have 2+ short, actionable directives.',
     '- The `name` field MUST be exactly the id provided in the user prompt (lowercase, hyphenated).',
   ].join('\n');
@@ -155,7 +155,8 @@ async function askId(
     const answers = await elicit.ask([
       {
         id: 'id',
-        prompt: 'Name your persona (short, lowercase, hyphenated, e.g. "strict-reviewer")',
+        prompt:
+          'Name your persona (short, lowercase, hyphenated, e.g. "strict-reviewer")',
         freeform: true,
         placeholder: 'my-persona',
         inputLabel: 'Persona id:',
@@ -176,7 +177,10 @@ async function askDescription(
   inputDescription: string | undefined,
   logger: DroneLogger
 ): Promise<string> {
-  if (typeof inputDescription === 'string' && inputDescription.trim().length > 0) {
+  if (
+    typeof inputDescription === 'string' &&
+    inputDescription.trim().length > 0
+  ) {
     return inputDescription.trim();
   }
   let attempts = 0;
@@ -208,8 +212,14 @@ async function askScope(
       id: 'scope',
       prompt: 'Where should this persona live?',
       choices: [
-        { value: 'project', label: 'Project (./.drone-agent/personas/<name>/persona.md)' },
-        { value: 'user', label: 'User (~/.drone-agent/personas/<name>/persona.md)' },
+        {
+          value: 'project',
+          label: 'Project (./.drone-agent/personas/<name>/persona.md)',
+        },
+        {
+          value: 'user',
+          label: 'User (~/.drone-agent/personas/<name>/persona.md)',
+        },
       ],
       defaultValue: 'project',
     },
@@ -225,9 +235,7 @@ async function askScope(
  */
 function resolvePersonaCapability(
   ctx: WizardContext
-):
-  | { reloadPersonas: () => Promise<void> }
-  | undefined {
+): { reloadPersonas: () => Promise<void> } | undefined {
   const cap = ctx.requestCapability<{
     reloadPersonas?: () => Promise<void>;
   }>('persona');
@@ -305,8 +313,7 @@ export const personaCreateWorkflow: DroneWorkflow = {
     const id = await askId(ctx.elicit, input.id, logger);
 
     // 3. Existence check #1
-    const targetRoot =
-      scope === 'user' ? os.homedir() : ctx.projectDir;
+    const targetRoot = scope === 'user' ? os.homedir() : ctx.projectDir;
     const targetDir = path.join(targetRoot, '.drone-agent', 'personas', id);
     const filePath = path.join(targetDir, 'persona.md');
     let overwriteApproved = false;

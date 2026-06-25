@@ -1,7 +1,7 @@
-import type { FastifyInstance } from "fastify";
-import type { WebSocket } from "@fastify/websocket";
-import * as db from "./db.js";
-import { logger } from "./logger.js";
+import type { FastifyInstance } from 'fastify';
+import type { WebSocket } from '@fastify/websocket';
+import * as db from './db.js';
+import { logger } from './logger.js';
 
 interface WSConnection {
   socket: WebSocket;
@@ -48,7 +48,7 @@ function unsubscribeFromChannel(agentId: string, channel: string): void {
 
 export function sendToAgent(agentId: string, message: object): boolean {
   const conn = connections.get(agentId);
-  if (conn && conn.socket.readyState === "OPEN") {
+  if (conn && conn.socket.readyState === 'OPEN') {
     conn.socket.send(JSON.stringify(message));
     return true;
   }
@@ -69,7 +69,7 @@ export function sendToChannel(channel: string, message: object): number {
 }
 
 interface WSMessage {
-  type: "message" | "ack" | "ping" | "pong" | "subscribe" | "unsubscribe";
+  type: 'message' | 'ack' | 'ping' | 'pong' | 'subscribe' | 'unsubscribe';
   payload: unknown;
 }
 
@@ -89,21 +89,28 @@ interface ChannelPayload {
 
 function handleMessage(agentId: string, wsMsg: WSMessage): void {
   switch (wsMsg.type) {
-    case "message": {
+    case 'message': {
       const payload = wsMsg.payload as MessagePayload;
       const { toAgentId, toChannel, body } = payload;
 
       if (!toAgentId && !toChannel) {
         sendToAgent(agentId, {
-          type: "error",
-          payload: { message: "Must specify toAgentId or toChannel" },
+          type: 'error',
+          payload: { message: 'Must specify toAgentId or toChannel' },
         });
         return;
       }
 
       // Create message in database
-      const message = db.createMessage(agentId, toAgentId ?? null, toChannel ?? null, body);
-      logger.info(`Message ${message.id} from ${agentId} to ${toAgentId ?? toChannel}`);
+      const message = db.createMessage(
+        agentId,
+        toAgentId ?? null,
+        toChannel ?? null,
+        body
+      );
+      logger.info(
+        `Message ${message.id} from ${agentId} to ${toAgentId ?? toChannel}`
+      );
 
       // Deliver to recipient(s)
       if (toAgentId) {
@@ -111,7 +118,7 @@ function handleMessage(agentId: string, wsMsg: WSMessage): void {
         if (connections.has(toAgentId)) {
           // Recipient connected - push immediately
           sendToAgent(toAgentId, {
-            type: "message",
+            type: 'message',
             payload: {
               id: message.id,
               fromAgentId: agentId,
@@ -127,7 +134,7 @@ function handleMessage(agentId: string, wsMsg: WSMessage): void {
       } else if (toChannel) {
         // Channel broadcast
         const count = sendToChannel(toChannel, {
-          type: "message",
+          type: 'message',
           payload: {
             id: message.id,
             fromAgentId: agentId,
@@ -136,52 +143,62 @@ function handleMessage(agentId: string, wsMsg: WSMessage): void {
             receivedAt: Date.now(),
           },
         });
-        logger.info(`Broadcast to ${count} subscribers on channel ${toChannel}`);
+        logger.info(
+          `Broadcast to ${count} subscribers on channel ${toChannel}`
+        );
         // Mark as delivered for all (for cleanup purposes)
         db.markMessageDelivered(message.id);
       }
 
       // Confirm to sender
       sendToAgent(agentId, {
-        type: "ack",
-        payload: { messageId: message.id, status: "sent" },
+        type: 'ack',
+        payload: { messageId: message.id, status: 'sent' },
       });
       break;
     }
 
-    case "ack": {
+    case 'ack': {
       const payload = wsMsg.payload as AckPayload;
       db.markMessageDelivered(payload.messageId);
       logger.debug(`Message ${payload.messageId} acknowledged by ${agentId}`);
       break;
     }
 
-    case "ping": {
-      sendToAgent(agentId, { type: "pong" });
+    case 'ping': {
+      sendToAgent(agentId, { type: 'pong' });
       break;
     }
 
-    case "pong": {
+    case 'pong': {
       // Keepalive acknowledged
       break;
     }
 
-    case "subscribe": {
+    case 'subscribe': {
       const payload = wsMsg.payload as ChannelPayload;
       subscribeToChannel(agentId, payload.channel);
       sendToAgent(agentId, {
-        type: "ack",
-        payload: { messageId: "subscribe", status: "subscribed", channel: payload.channel },
+        type: 'ack',
+        payload: {
+          messageId: 'subscribe',
+          status: 'subscribed',
+          channel: payload.channel,
+        },
       });
       break;
     }
 
-    case "unsubscribe": {
+    case 'unsubscribe': {
       const payload = wsMsg.payload as ChannelPayload;
       unsubscribeFromChannel(agentId, payload.channel);
       sendToAgent(agentId, {
-        type: "ack",
-        payload: { messageId: "unsubscribe", status: "unsubscribed", channel: payload.channel },
+        type: 'ack',
+        payload: {
+          messageId: 'unsubscribe',
+          status: 'unsubscribed',
+          channel: payload.channel,
+        },
       });
       break;
     }
@@ -191,27 +208,29 @@ function handleMessage(agentId: string, wsMsg: WSMessage): void {
   }
 }
 
-export async function registerWebSocketServer(app: FastifyInstance): Promise<void> {
+export async function registerWebSocketServer(
+  app: FastifyInstance
+): Promise<void> {
   // Register WebSocket plugin
-  await app.register(import("@fastify/websocket"), {
+  await app.register(import('@fastify/websocket'), {
     options: {
       maxPayload: 1024 * 1024, // 1MB max message size
     },
   });
 
   // WebSocket upgrade handler
-  app.get("/ws", { websocket: true }, (socket, request) => {
+  app.get('/ws', { websocket: true }, (socket, request) => {
     const agentId = (request.query as Record<string, string>).agentId;
 
     if (!agentId) {
-      socket.close(4001, "Missing agentId query parameter");
+      socket.close(4001, 'Missing agentId query parameter');
       return;
     }
 
     // Verify agent is registered
     const agent = db.getAgent(agentId);
     if (!agent) {
-      socket.close(4002, "Agent not registered");
+      socket.close(4002, 'Agent not registered');
       return;
     }
 
@@ -223,7 +242,7 @@ export async function registerWebSocketServer(app: FastifyInstance): Promise<voi
     const unreadMessages = db.listMessagesForAgent(agentId, true);
     for (const msg of unreadMessages) {
       sendToAgent(agentId, {
-        type: "message",
+        type: 'message',
         payload: {
           id: msg.id,
           fromAgentId: msg.fromAgentId,
@@ -234,22 +253,29 @@ export async function registerWebSocketServer(app: FastifyInstance): Promise<voi
       });
     }
     if (unreadMessages.length > 0) {
-      logger.info(`Delivered ${unreadMessages.length} unread messages to ${agentId}`);
+      logger.info(
+        `Delivered ${unreadMessages.length} unread messages to ${agentId}`
+      );
     }
 
     // Handle incoming messages
-    socket.on("message", (data: Buffer) => {
+    socket.on('message', (data: Buffer) => {
       try {
         const wsMsg = JSON.parse(data.toString()) as WSMessage;
         handleMessage(agentId, wsMsg);
       } catch (err) {
-        logger.error(err, "Failed to parse WebSocket message");
-        socket.send(JSON.stringify({ type: "error", payload: { message: "Invalid message format" } }));
+        logger.error(err, 'Failed to parse WebSocket message');
+        socket.send(
+          JSON.stringify({
+            type: 'error',
+            payload: { message: 'Invalid message format' },
+          })
+        );
       }
     });
 
     // Handle disconnect
-    socket.on("close", () => {
+    socket.on('close', () => {
       connections.delete(agentId);
       logger.info(`Agent ${agentId} disconnected from WebSocket`);
 
@@ -260,10 +286,10 @@ export async function registerWebSocketServer(app: FastifyInstance): Promise<voi
     });
 
     // Send welcome message
-    socket.send(JSON.stringify({ type: "connected", payload: { agentId } }));
+    socket.send(JSON.stringify({ type: 'connected', payload: { agentId } }));
   });
 
-  logger.info("WebSocket server registered at /ws");
+  logger.info('WebSocket server registered at /ws');
 }
 
 // Cleanup old messages periodically
@@ -271,12 +297,15 @@ let cleanupInterval: NodeJS.Timeout | null = null;
 
 export function startMessageCleanup(intervalHours: number = 24): void {
   // Run cleanup every hour
-  cleanupInterval = setInterval(() => {
-    const deleted = db.cleanupOldMessages(24);
-    if (deleted > 0) {
-      logger.info(`Message cleanup: removed ${deleted} old messages`);
-    }
-  }, 60 * 60 * 1000);
+  cleanupInterval = setInterval(
+    () => {
+      const deleted = db.cleanupOldMessages(24);
+      if (deleted > 0) {
+        logger.info(`Message cleanup: removed ${deleted} old messages`);
+      }
+    },
+    60 * 60 * 1000
+  );
   logger.info(`Message cleanup scheduled every hour (retention: 24h)`);
 }
 
@@ -284,6 +313,6 @@ export function stopMessageCleanup(): void {
   if (cleanupInterval) {
     clearInterval(cleanupInterval);
     cleanupInterval = null;
-    logger.info("Message cleanup stopped");
+    logger.info('Message cleanup stopped');
   }
 }

@@ -1,11 +1,17 @@
 import { createInterface, type Interface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import type { DroneElicitation, DroneElicitationAnswers, DroneElicitationQuestion } from 'drone-core';
+import type {
+  DroneElicitation,
+  DroneElicitationAnswers,
+  DroneElicitationQuestion,
+} from 'drone-core';
 
 /**
  * Creates a readline-based elicitation implementation for non-TUI modes.
  */
-export function createReadlineElicitation(): DroneElicitation & { close: () => void } {
+export function createReadlineElicitation(): DroneElicitation & {
+  close: () => void;
+} {
   const rl: Interface = createInterface({ input, output });
 
   return {

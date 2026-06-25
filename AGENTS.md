@@ -174,19 +174,19 @@ When working on the project, proactively log insights using `self-improvement.in
 
 ## Key Files to Know
 
-| File                                                | Purpose                                             |
-| --------------------------------------------------- | --------------------------------------------------- |
-| `drone-agent/src/index.tsx`                         | CLI entry point, arg parsing, first-run setup       |
-| `drone-agent/src/runtime/plugin-engine.ts`          | Plugin lifecycle, tool dispatch, workflow execution |
-| `drone-agent/src/runtime/config.ts`                 | Config loading, merging, environment interpolation  |
-| `drone-agent/src/runtime/conversation-service.ts`   | LLM conversation loop, tool iteration               |
-| `drone-agent/src/runtime/session-manager.ts`        | Session state, turn tracking                        |
-| `drone-agent/src/runtime/context-budget-service.ts` | Context window budgeting, compaction triggers       |
-| `drone-agent/src/tui/app.tsx`                       | Root TUI component                                  |
-| `drone-agent/src/plugins/index.ts`                  | Built-in plugin registry                            |
-| `drone-agent/src/plugins/bootstrap/index.ts`        | Bootstrap plugin (project/user setup workflows)    |
+| File                                                  | Purpose                                               |
+| ----------------------------------------------------- | ----------------------------------------------------- |
+| `drone-agent/src/index.tsx`                           | CLI entry point, arg parsing, first-run setup         |
+| `drone-agent/src/runtime/plugin-engine.ts`            | Plugin lifecycle, tool dispatch, workflow execution   |
+| `drone-agent/src/runtime/config.ts`                   | Config loading, merging, environment interpolation    |
+| `drone-agent/src/runtime/conversation-service.ts`     | LLM conversation loop, tool iteration                 |
+| `drone-agent/src/runtime/session-manager.ts`          | Session state, turn tracking                          |
+| `drone-agent/src/runtime/context-budget-service.ts`   | Context window budgeting, compaction triggers         |
+| `drone-agent/src/tui/app.tsx`                         | Root TUI component                                    |
+| `drone-agent/src/plugins/index.ts`                    | Built-in plugin registry                              |
+| `drone-agent/src/plugins/bootstrap/index.ts`          | Bootstrap plugin (project/user setup workflows)       |
 | `drone-agent/src/plugins/bootstrap/project-detect.ts` | Project detection logic (shared by tool and workflow) |
-| `drone-core/src/index.ts`                           | All shared types and config defaults                |
+| `drone-core/src/index.ts`                             | All shared types and config defaults                  |
 
 ## Existing Skills
 

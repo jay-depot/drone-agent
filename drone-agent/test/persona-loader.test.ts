@@ -5,9 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import os from 'node:os';
 
-async function withProjectDir<T>(
-  fn: (dir: string) => Promise<T>
-): Promise<T> {
+async function withProjectDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   const dir = await mkdtemp(path.join(tmpdir(), 'drone-personas-'));
   try {
     vi.spyOn(os, 'homedir').mockReturnValue(path.join(dir, 'fake-home'));
@@ -19,7 +17,11 @@ async function withProjectDir<T>(
 }
 
 /** Helper: create a persona subdirectory with a persona.md file. */
-async function writePersona(personaDir: string, id: string, content: string): Promise<void> {
+async function writePersona(
+  personaDir: string,
+  id: string,
+  content: string
+): Promise<void> {
   const subDir = path.join(personaDir, id);
   await mkdir(subDir, { recursive: true });
   await writeFile(path.join(subDir, 'persona.md'), content, 'utf-8');
@@ -28,7 +30,11 @@ async function writePersona(personaDir: string, id: string, content: string): Pr
 describe('loadPersonas — scope field', () => {
   it('sets scope to "user" for personas in the user directory', async () => {
     await withProjectDir(async dir => {
-      const userPersonaDir = path.join(os.homedir(), '.drone-agent', 'personas');
+      const userPersonaDir = path.join(
+        os.homedir(),
+        '.drone-agent',
+        'personas'
+      );
       await mkdir(userPersonaDir, { recursive: true });
       await writePersona(userPersonaDir, 'coder', '---\nname: Coder\n---\n');
 
@@ -41,7 +47,11 @@ describe('loadPersonas — scope field', () => {
     await withProjectDir(async dir => {
       const projectPersonaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(projectPersonaDir, { recursive: true });
-      await writePersona(projectPersonaDir, 'reviewer', '---\nname: Reviewer\n---\n');
+      await writePersona(
+        projectPersonaDir,
+        'reviewer',
+        '---\nname: Reviewer\n---\n'
+      );
 
       const personas = await loadPersonas(dir);
       expect(personas.get('reviewer')?.scope).toBe('project');
@@ -50,13 +60,25 @@ describe('loadPersonas — scope field', () => {
 
   it('project persona overrides user persona but keeps project scope', async () => {
     await withProjectDir(async dir => {
-      const userPersonaDir = path.join(os.homedir(), '.drone-agent', 'personas');
+      const userPersonaDir = path.join(
+        os.homedir(),
+        '.drone-agent',
+        'personas'
+      );
       await mkdir(userPersonaDir, { recursive: true });
-      await writePersona(userPersonaDir, 'shared', '---\nname: Shared User\n---\n');
+      await writePersona(
+        userPersonaDir,
+        'shared',
+        '---\nname: Shared User\n---\n'
+      );
 
       const projectPersonaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(projectPersonaDir, { recursive: true });
-      await writePersona(projectPersonaDir, 'shared', '---\nname: Shared Project\n---\n');
+      await writePersona(
+        projectPersonaDir,
+        'shared',
+        '---\nname: Shared Project\n---\n'
+      );
 
       const personas = await loadPersonas(dir);
       const p = personas.get('shared');
@@ -76,15 +98,19 @@ describe('loadPersonas — color field', () => {
     await withProjectDir(async dir => {
       const personaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
-      await writePersona(personaDir, 'researcher', [
-        '---',
-        'name: Researcher',
-        'description: investigative',
-        'color: cyan',
-        '---',
-        'You investigate thoroughly.',
-        '',
-      ].join('\n'));
+      await writePersona(
+        personaDir,
+        'researcher',
+        [
+          '---',
+          'name: Researcher',
+          'description: investigative',
+          'color: cyan',
+          '---',
+          'You investigate thoroughly.',
+          '',
+        ].join('\n')
+      );
 
       const personas = await loadPersonas(dir);
       expect(personas.size).toBe(1);
@@ -97,7 +123,11 @@ describe('loadPersonas — color field', () => {
     await withProjectDir(async dir => {
       const personaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
-      await writePersona(personaDir, 'reviewer', '---\nname: Reviewer\ncolor: "#ff8800"\n---\n');
+      await writePersona(
+        personaDir,
+        'reviewer',
+        '---\nname: Reviewer\ncolor: "#ff8800"\n---\n'
+      );
 
       const personas = await loadPersonas(dir);
       expect(personas.get('reviewer')?.uiColor).toBe('#ff8800');
@@ -134,17 +164,21 @@ describe('loadPersonas — skills field', () => {
     await withProjectDir(async dir => {
       const personaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
-      await writePersona(personaDir, 'expert', [
-        '---',
-        'name: Expert',
-        'description: domain expert',
-        'skills:',
-        '  - code-review',
-        '  - security-audit',
-        '---',
-        'You are an expert.',
-        '',
-      ].join('\n'));
+      await writePersona(
+        personaDir,
+        'expert',
+        [
+          '---',
+          'name: Expert',
+          'description: domain expert',
+          'skills:',
+          '  - code-review',
+          '  - security-audit',
+          '---',
+          'You are an expert.',
+          '',
+        ].join('\n')
+      );
 
       const personas = await loadPersonas(dir);
       expect(personas.size).toBe(1);
@@ -170,16 +204,20 @@ describe('loadPersonas — tools field', () => {
     await withProjectDir(async dir => {
       const personaDir = path.join(dir, '.drone-agent', 'personas');
       await mkdir(personaDir, { recursive: true });
-      await writePersona(personaDir, 'restricted', [
-        '---',
-        'name: Restricted',
-        'tools:',
-        '  - exec.*',
-        '  - file.*',
-        '  - !exec.run',
-        '---',
-        '',
-      ].join('\n'));
+      await writePersona(
+        personaDir,
+        'restricted',
+        [
+          '---',
+          'name: Restricted',
+          'tools:',
+          '  - exec.*',
+          '  - file.*',
+          '  - !exec.run',
+          '---',
+          '',
+        ].join('\n')
+      );
 
       const personas = await loadPersonas(dir);
       expect(personas.size).toBe(1);

@@ -36,11 +36,23 @@ describe('plugin-engine workflow registry', () => {
     // namespaced by plugin id, matching tools.
     const a = createTestPlugin({
       id: 'a',
-      workflows: [{ name: 'do', description: 'a.do', run: async () => ({ toolResult: '"a"' }) }],
+      workflows: [
+        {
+          name: 'do',
+          description: 'a.do',
+          run: async () => ({ toolResult: '"a"' }),
+        },
+      ],
     });
     const b = createTestPlugin({
       id: 'b',
-      workflows: [{ name: 'do', description: 'b.do', run: async () => ({ toolResult: '"b"' }) }],
+      workflows: [
+        {
+          name: 'do',
+          description: 'b.do',
+          run: async () => ({ toolResult: '"b"' }),
+        },
+      ],
     });
     const engine = createDronePluginEngine({
       plugins: [a, b],
@@ -203,9 +215,9 @@ describe('plugin-engine workflow context', () => {
           name: 'use-ollama',
           description: 'use ollama',
           run: async (_args, ctx) => {
-            const cap = ctx.requestCapability<{ provider: { chat: () => Promise<{ message: string }> } }>(
-              'ollama'
-            );
+            const cap = ctx.requestCapability<{
+              provider: { chat: () => Promise<{ message: string }> };
+            }>('ollama');
             if (cap?.provider) {
               sawProvider = true;
             }

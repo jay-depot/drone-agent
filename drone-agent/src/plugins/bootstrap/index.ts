@@ -1,18 +1,18 @@
-import { readdir, access, mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, writeFile } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import type {
-  DroneAgentConfig,
-  DronePlugin,
-  DroneWorkflow,
-} from 'drone-core';
+import type { DroneAgentConfig, DronePlugin, DroneWorkflow } from 'drone-core';
 import { detectProject } from './project-detect.js';
 
 type DroneConfigCapability = {
   getConfig: () => DroneAgentConfig;
   getLayers: () => Promise<unknown>;
-  setValue: (scope: 'project' | 'user', key: string, value: unknown) => Promise<void>;
+  setValue: (
+    scope: 'project' | 'user',
+    key: string,
+    value: unknown
+  ) => Promise<void>;
 };
 
 // ---------------------------------------------------------------------------
@@ -77,7 +77,8 @@ export const bootstrapPlugin: DronePlugin = {
       },
       run: async (input, ctx) => {
         const cwd =
-          typeof input.path === 'string' && (input.path as string).trim().length > 0
+          typeof input.path === 'string' &&
+          (input.path as string).trim().length > 0
             ? path.resolve((input.path as string).trim())
             : process.cwd();
 
@@ -86,11 +87,14 @@ export const bootstrapPlugin: DronePlugin = {
         // Show what we detected
         const detected: string[] = [];
         if (analysis.language) detected.push(`Language: ${analysis.language}`);
-        if (analysis.framework) detected.push(`Framework: ${analysis.framework}`);
-        if (analysis.buildSystem) detected.push(`Build system: ${analysis.buildSystem}`);
+        if (analysis.framework)
+          detected.push(`Framework: ${analysis.framework}`);
+        if (analysis.buildSystem)
+          detected.push(`Build system: ${analysis.buildSystem}`);
         if (analysis.hasGit) detected.push('Git repository detected');
         if (analysis.hasLspConfig) detected.push('LSP configuration detected');
-        if (analysis.hasDroneConfig) detected.push('Existing drone-agent config');
+        if (analysis.hasDroneConfig)
+          detected.push('Existing drone-agent config');
         if (analysis.hasAgentsMd) detected.push('AGENTS.md found');
 
         const detectionSummary =
@@ -112,7 +116,9 @@ export const bootstrapPlugin: DronePlugin = {
 
         // Always recommend file and search as base
         const basePlugins = ['file', 'search'];
-        const suggested = [...new Set([...basePlugins, ...analysis.suggestedPlugins])];
+        const suggested = [
+          ...new Set([...basePlugins, ...analysis.suggestedPlugins]),
+        ];
 
         const pluginChoices = suggested.map(id => ({
           value: id,
@@ -136,7 +142,11 @@ export const bootstrapPlugin: DronePlugin = {
 
         if (selectedPluginIds.length === 0) {
           return {
-            toolResult: JSON.stringify({ ok: true, message: 'No plugins selected.' }, null, 2),
+            toolResult: JSON.stringify(
+              { ok: true, message: 'No plugins selected.' },
+              null,
+              2
+            ),
           };
         }
 
@@ -146,7 +156,8 @@ export const bootstrapPlugin: DronePlugin = {
         const merged = [...new Set([...existingEnabled, ...selectedPluginIds])];
 
         // Use config capability if available, otherwise write directly
-        const configCap = ctx.requestCapability<DroneConfigCapability>('config');
+        const configCap =
+          ctx.requestCapability<DroneConfigCapability>('config');
         if (configCap) {
           await configCap.setValue('project', 'enabledPlugins', merged);
         } else {
@@ -154,14 +165,20 @@ export const bootstrapPlugin: DronePlugin = {
           const configDir = path.join(cwd, '.drone-agent');
           const configPath = path.join(configDir, 'config.json');
           await mkdir(configDir, { recursive: true });
-          await writeFile(configPath, JSON.stringify({ enabledPlugins: merged }, null, 2) + '\n', 'utf-8');
+          await writeFile(
+            configPath,
+            JSON.stringify({ enabledPlugins: merged }, null, 2) + '\n',
+            'utf-8'
+          );
         }
 
         // Enable plugins immediately in this session
         const enabledResults: string[] = [];
         for (const pluginId of selectedPluginIds) {
           const result = await ctx.enablePlugin(pluginId);
-          enabledResults.push(`${pluginId}: ${result ? 'enabled' : 'not found'}`);
+          enabledResults.push(
+            `${pluginId}: ${result ? 'enabled' : 'not found'}`
+          );
         }
 
         const summaryLines = [
@@ -176,10 +193,14 @@ export const bootstrapPlugin: DronePlugin = {
         ];
 
         return {
-          toolResult: JSON.stringify({
-            ok: true,
-            enabledPlugins: selectedPluginIds,
-          }, null, 2),
+          toolResult: JSON.stringify(
+            {
+              ok: true,
+              enabledPlugins: selectedPluginIds,
+            },
+            null,
+            2
+          ),
           kickMessage: summaryLines.join('\n'),
         };
       },
@@ -222,23 +243,37 @@ export const bootstrapPlugin: DronePlugin = {
           try {
             const models = await ollamaCap.listModels();
             if (models.length > 0) {
-              availableProviders.push({ id: 'ollama', label: `Ollama (local, ${models.length} model(s) available)` });
+              availableProviders.push({
+                id: 'ollama',
+                label: `Ollama (local, ${models.length} model(s) available)`,
+              });
             } else {
-              availableProviders.push({ id: 'ollama', label: 'Ollama (local, no models pulled yet)' });
+              availableProviders.push({
+                id: 'ollama',
+                label: 'Ollama (local, no models pulled yet)',
+              });
             }
           } catch {
             availableProviders.push({ id: 'ollama', label: 'Ollama (local)' });
           }
         }
 
-        availableProviders.push({ id: 'openrouter', label: 'OpenRouter (cloud)' });
+        availableProviders.push({
+          id: 'openrouter',
+          label: 'OpenRouter (cloud)',
+        });
 
         if (availableProviders.length === 0) {
           return {
-            toolResult: JSON.stringify({
-              ok: false,
-              message: 'No LLM providers available. Install Ollama or configure OpenRouter.',
-            }, null, 2),
+            toolResult: JSON.stringify(
+              {
+                ok: false,
+                message:
+                  'No LLM providers available. Install Ollama or configure OpenRouter.',
+              },
+              null,
+              2
+            ),
           };
         }
 
@@ -266,7 +301,8 @@ export const bootstrapPlugin: DronePlugin = {
             const msgAnswer = await ctx.elicit.ask([
               {
                 id: 'model',
-                prompt: 'No Ollama models found. Enter the model name to use (or press Enter for default):',
+                prompt:
+                  'No Ollama models found. Enter the model name to use (or press Enter for default):',
                 freeform: true,
                 placeholder: 'e.g. llama3.1',
                 defaultValue: 'llama3.1',
@@ -280,7 +316,11 @@ export const bootstrapPlugin: DronePlugin = {
             // Enable ollama plugin if not already enabled
             await ctx.enablePlugin('ollama');
             return {
-              toolResult: JSON.stringify({ ok: true, provider: 'ollama', model: selectedModel }, null, 2),
+              toolResult: JSON.stringify(
+                { ok: true, provider: 'ollama', model: selectedModel },
+                null,
+                2
+              ),
               kickMessage: `User configuration set up with Ollama (model: ${selectedModel}).\nConfig written to ${userConfigPath}.`,
             };
           }
@@ -301,7 +341,11 @@ export const bootstrapPlugin: DronePlugin = {
           });
           await ctx.enablePlugin('ollama');
           return {
-            toolResult: JSON.stringify({ ok: true, provider: 'ollama', model: selectedModel }, null, 2),
+            toolResult: JSON.stringify(
+              { ok: true, provider: 'ollama', model: selectedModel },
+              null,
+              2
+            ),
             kickMessage: `User configuration set up with Ollama (model: ${selectedModel}).\nConfig written to ${userConfigPath}.`,
           };
         }
@@ -311,7 +355,8 @@ export const bootstrapPlugin: DronePlugin = {
           const keyAnswer = await ctx.elicit.ask([
             {
               id: 'apiKey',
-              prompt: 'Enter your OpenRouter API key (it will be stored with env var interpolation):',
+              prompt:
+                'Enter your OpenRouter API key (it will be stored with env var interpolation):',
               freeform: true,
               placeholder: 'sk-or-v1-...',
               inputLabel: 'API key',
@@ -321,7 +366,11 @@ export const bootstrapPlugin: DronePlugin = {
           const apiKey = (keyAnswer.apiKey as string).trim();
           if (!apiKey) {
             return {
-              toolResult: JSON.stringify({ ok: false, message: 'API key is required for OpenRouter.' }, null, 2),
+              toolResult: JSON.stringify(
+                { ok: false, message: 'API key is required for OpenRouter.' },
+                null,
+                2
+              ),
             };
           }
 
@@ -331,8 +380,14 @@ export const bootstrapPlugin: DronePlugin = {
               prompt: 'Which model would you like as default?',
               choices: [
                 { value: 'openai/gpt-4o', label: 'GPT-4o' },
-                { value: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet' },
-                { value: 'google/gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
+                {
+                  value: 'anthropic/claude-3.5-sonnet',
+                  label: 'Claude 3.5 Sonnet',
+                },
+                {
+                  value: 'google/gemini-2.0-flash-001',
+                  label: 'Gemini 2.0 Flash',
+                },
               ],
               defaultValue: 'openai/gpt-4o',
             },
@@ -353,13 +408,21 @@ export const bootstrapPlugin: DronePlugin = {
 
           await ctx.enablePlugin('openrouter');
           return {
-            toolResult: JSON.stringify({ ok: true, provider: 'openrouter', model: selectedModel }, null, 2),
+            toolResult: JSON.stringify(
+              { ok: true, provider: 'openrouter', model: selectedModel },
+              null,
+              2
+            ),
             kickMessage: `User configuration set up with OpenRouter (model: ${selectedModel}).\nConfig written to ${userConfigPath}.\nSet OPENROUTER_API_KEY in your environment.`,
           };
         }
 
         return {
-          toolResult: JSON.stringify({ ok: false, message: `Unknown provider: ${chosenProvider}` }, null, 2),
+          toolResult: JSON.stringify(
+            { ok: false, message: `Unknown provider: ${chosenProvider}` },
+            null,
+            2
+          ),
         };
       },
     };
@@ -374,7 +437,7 @@ export const bootstrapPlugin: DronePlugin = {
 
 async function writeUserConfig(
   filePath: string,
-  config: Record<string, unknown>,
+  config: Record<string, unknown>
 ): Promise<void> {
   const dir = path.dirname(filePath);
   await mkdir(dir, { recursive: true });

@@ -11,7 +11,10 @@ import { detectProject } from '../src/plugins/bootstrap/project-detect.js';
 describe('bootstrap plugin', () => {
   describe('detectProject', () => {
     it('detects a Node.js project with package.json', async () => {
-      const tmpDir = path.join(os.tmpdir(), `drone-bootstrap-test-${Date.now()}`);
+      const tmpDir = path.join(
+        os.tmpdir(),
+        `drone-bootstrap-test-${Date.now()}`
+      );
       await mkdir(tmpDir, { recursive: true });
       try {
         await writeFile(
@@ -33,10 +36,16 @@ describe('bootstrap plugin', () => {
     });
 
     it('detects a Rust project', async () => {
-      const tmpDir = path.join(os.tmpdir(), `drone-bootstrap-test-${Date.now()}`);
+      const tmpDir = path.join(
+        os.tmpdir(),
+        `drone-bootstrap-test-${Date.now()}`
+      );
       await mkdir(tmpDir, { recursive: true });
       try {
-        await writeFile(path.join(tmpDir, 'Cargo.toml'), '[package]\nname = "test"\n');
+        await writeFile(
+          path.join(tmpDir, 'Cargo.toml'),
+          '[package]\nname = "test"\n'
+        );
 
         const result = await detectProject(tmpDir);
         expect(result.language).toBe('Rust');
@@ -47,10 +56,16 @@ describe('bootstrap plugin', () => {
     });
 
     it('detects a Python project', async () => {
-      const tmpDir = path.join(os.tmpdir(), `drone-bootstrap-test-${Date.now()}`);
+      const tmpDir = path.join(
+        os.tmpdir(),
+        `drone-bootstrap-test-${Date.now()}`
+      );
       await mkdir(tmpDir, { recursive: true });
       try {
-        await writeFile(path.join(tmpDir, 'pyproject.toml'), '[project]\nname = "test"\n');
+        await writeFile(
+          path.join(tmpDir, 'pyproject.toml'),
+          '[project]\nname = "test"\n'
+        );
 
         const result = await detectProject(tmpDir);
         expect(result.language).toBe('Python');
@@ -61,7 +76,10 @@ describe('bootstrap plugin', () => {
     });
 
     it('detects an empty directory', async () => {
-      const tmpDir = path.join(os.tmpdir(), `drone-bootstrap-test-${Date.now()}`);
+      const tmpDir = path.join(
+        os.tmpdir(),
+        `drone-bootstrap-test-${Date.now()}`
+      );
       await mkdir(tmpDir, { recursive: true });
       try {
         const result = await detectProject(tmpDir);
@@ -85,7 +103,10 @@ describe('bootstrap plugin', () => {
     it('registers the analyze tool', async () => {
       const engine = createDronePluginEngine({
         plugins: [bootstrapPlugin],
-        config: { ...createDefaultAgentConfig(), enabledPlugins: ['bootstrap'] },
+        config: {
+          ...createDefaultAgentConfig(),
+          enabledPlugins: ['bootstrap'],
+        },
         logger: silentLogger(),
       });
       await engine.initialize();
@@ -95,7 +116,10 @@ describe('bootstrap plugin', () => {
     it('registers the project and user workflows', async () => {
       const engine = createDronePluginEngine({
         plugins: [bootstrapPlugin],
-        config: { ...createDefaultAgentConfig(), enabledPlugins: ['bootstrap'] },
+        config: {
+          ...createDefaultAgentConfig(),
+          enabledPlugins: ['bootstrap'],
+        },
         logger: silentLogger(),
       });
       await engine.initialize();
@@ -112,12 +136,14 @@ describe('bootstrap plugin', () => {
       const gitPlugin = createTestPlugin({
         id: 'git',
         defaultEnabled: false,
-        tools: [{
-          name: 'status',
-          description: 'git status',
-          inputSchema: { type: 'object', additionalProperties: false },
-          execute: async () => 'ok',
-        }],
+        tools: [
+          {
+            name: 'status',
+            description: 'git status',
+            inputSchema: { type: 'object', additionalProperties: false },
+            execute: async () => 'ok',
+          },
+        ],
       });
 
       const engine = createDronePluginEngine({
@@ -128,13 +154,17 @@ describe('bootstrap plugin', () => {
       await engine.initialize();
 
       // git should not be enabled initially
-      expect(engine.listPlugins().find(p => p.id === 'git')?.enabled).toBe(false);
+      expect(engine.listPlugins().find(p => p.id === 'git')?.enabled).toBe(
+        false
+      );
       expect(engine.getTool('git.status')).toBeUndefined();
 
       // Enable git plugin
       const result = await engine.enablePlugin('git');
       expect(result).toBe(true);
-      expect(engine.listPlugins().find(p => p.id === 'git')?.enabled).toBe(true);
+      expect(engine.listPlugins().find(p => p.id === 'git')?.enabled).toBe(
+        true
+      );
       expect(engine.getTool('git.status')).toBeDefined();
     });
   });

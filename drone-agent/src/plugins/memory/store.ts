@@ -33,9 +33,7 @@ export function sanitizeKey(key: string): string {
   const trimmed = key.trim();
 
   if (trimmed.includes('..')) {
-    throw new Error(
-      `Memory key "${trimmed}" is invalid: ".." is not allowed.`
-    );
+    throw new Error(`Memory key "${trimmed}" is invalid: ".." is not allowed.`);
   }
 
   if (trimmed.startsWith('.')) {
@@ -64,9 +62,8 @@ export function resolveMemoryDir(projectDir: string): string {
  * Serialize a MemoryEntry to a markdown string with YAML frontmatter.
  */
 function serializeEntry(entry: MemoryEntry): string {
-  const tagsYaml = entry.tags.length > 0
-    ? entry.tags.map(t => `  - ${t}`).join('\n')
-    : '  []';
+  const tagsYaml =
+    entry.tags.length > 0 ? entry.tags.map(t => `  - ${t}`).join('\n') : '  []';
   return [
     '---',
     `key: ${entry.key}`,
@@ -272,8 +269,7 @@ export async function listMemoryEntries(
 
   // Sort by updatedAt descending (newest first)
   results.sort(
-    (a, b) =>
-      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   );
 
   return results;
@@ -344,8 +340,7 @@ export async function searchMemoryEntries(
 
   // Sort by updatedAt descending
   results.sort(
-    (a, b) =>
-      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   );
 
   return results;
@@ -357,9 +352,8 @@ export async function searchMemoryEntries(
 export async function countMemoryEntries(memoryDir: string): Promise<number> {
   try {
     const files = await readdir(memoryDir);
-    return files.filter(
-      f => f.endsWith('.md') && !f.endsWith(`${TMP_SUFFIX}`)
-    ).length;
+    return files.filter(f => f.endsWith('.md') && !f.endsWith(`${TMP_SUFFIX}`))
+      .length;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return 0;

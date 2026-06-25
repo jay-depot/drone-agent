@@ -12,7 +12,7 @@ services:
       dockerfile: docker/echo-llm.Dockerfile
     container_name: echo-llm
     ports:
-      - "3458:3458"
+      - '3458:3458'
     environment:
       - PORT=3458
     networks:
@@ -25,7 +25,7 @@ services:
       dockerfile: docker/drone-coordinator.Dockerfile
     container_name: drone-coordinator
     ports:
-      - "3456:3456"
+      - '3456:3456'
     volumes:
       - coordinator-config:/config
     networks:
@@ -40,7 +40,7 @@ services:
       dockerfile: docker/drone-beacon.Dockerfile
     container_name: drone-beacon
     ports:
-      - "3457:3457"
+      - '3457:3457'
     volumes:
       - beacon-config:/config
     networks:
@@ -55,7 +55,7 @@ services:
       dockerfile: docker/drone-agent.Dockerfile
     container_name: drone-agent
     ports:
-      - "3459:3459"
+      - '3459:3459'
     environment:
       - DRONE_BEACON_HOST=drone-beacon
       - DRONE_BEACON_PORT=3457

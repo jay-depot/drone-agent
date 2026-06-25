@@ -32,14 +32,27 @@ export const searchPlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'text',
-      description: 'Regex/fixed-string search via ripgrep (falls back to grep). Returns file, line, content.',
+      description:
+        'Regex/fixed-string search via ripgrep (falls back to grep). Returns file, line, content.',
       inputSchema: {
         type: 'object',
         properties: {
-          pattern: { type: 'string', description: 'Search pattern (regex by default).' },
-          path: { type: 'string', description: 'Directory or file (default: cwd).' },
-          fixed: { type: 'boolean', description: 'Treat pattern as literal. Default false.' },
-          maxResults: { type: 'number', description: 'Max matches. Default 50.' },
+          pattern: {
+            type: 'string',
+            description: 'Search pattern (regex by default).',
+          },
+          path: {
+            type: 'string',
+            description: 'Directory or file (default: cwd).',
+          },
+          fixed: {
+            type: 'boolean',
+            description: 'Treat pattern as literal. Default false.',
+          },
+          maxResults: {
+            type: 'number',
+            description: 'Max matches. Default 50.',
+          },
           glob: { type: 'string', description: 'Glob filter (e.g. "*.ts").' },
         },
         required: ['pattern'],
@@ -99,8 +112,7 @@ export const searchPlugin: DronePlugin = {
           // rg/grep exit 1 when no matches are found — that's a valid empty
           // result. Exit 2+ indicates a real error.
           // execFile errors have `code` set to the exit code (as a string).
-          const exitCode =
-            (err as { code?: number | string })?.code ?? null;
+          const exitCode = (err as { code?: number | string })?.code ?? null;
           if (exitCode === 1 || exitCode === '1') {
             return JSON.stringify(
               {
@@ -167,7 +179,8 @@ export const searchPlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'semantic',
-      description: 'Placeholder for semantic search. Use search.text with regex.',
+      description:
+        'Placeholder for semantic search. Use search.text with regex.',
       inputSchema: {
         type: 'object',
         properties: {

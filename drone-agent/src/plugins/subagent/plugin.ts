@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import type { DronePlugin } from 'drone-core';
 import { writeNdjsonEvent, type OutputEvent } from '../../output-handlers.js';
@@ -49,7 +49,7 @@ export const subagentPlugin: DronePlugin = {
           required: ['result'],
           additionalProperties: false,
         },
-        execute: async (input) => {
+        execute: async input => {
           // Output proper NDJSON return event and exit
           const returnEvent: OutputEvent = {
             kind: 'return',
@@ -76,11 +76,14 @@ export const subagentPlugin: DronePlugin = {
     } else {
       // === MAIN AGENT MODE ===
       // Track pending subagents for parallel execution
-      const pendingSubagents = new Map<string, {
-        resolve: (jsonResult: string) => void;
-        reject: (error: Error) => void;
-        timeoutId: ReturnType<typeof setTimeout> | null;
-      }>();
+      const pendingSubagents = new Map<
+        string,
+        {
+          resolve: (jsonResult: string) => void;
+          reject: (error: Error) => void;
+          timeoutId: ReturnType<typeof setTimeout> | null;
+        }
+      >();
 
       ctx.registerTool({
         name: 'subagent.dispatch',
@@ -88,31 +91,42 @@ export const subagentPlugin: DronePlugin = {
         inputSchema: {
           type: 'object',
           properties: {
-            task: { type: 'string', description: 'The prompt to send to subagent' },
-            persona: { type: 'string', description: 'Optional persona override' },
-            timeout: { type: 'number', description: 'Timeout in ms (default: 300000)' },
+            task: {
+              type: 'string',
+              description: 'The prompt to send to subagent',
+            },
+            persona: {
+              type: 'string',
+              description: 'Optional persona override',
+            },
+            timeout: {
+              type: 'number',
+              description: 'Timeout in ms (default: 300000)',
+            },
           },
           required: ['task'],
           additionalProperties: false,
         },
         execute: async (input): Promise<string> => {
           const subagentId = generateSubagentId();
-          const timeoutMs = (input.timeout as number | undefined) ?? DEFAULT_TIMEOUT_MS;
+          const timeoutMs =
+            (input.timeout as number | undefined) ?? DEFAULT_TIMEOUT_MS;
 
           // Build command args
-          const args = [
-            '--subagent-id', subagentId,
-            '--output-json',
-            '--once',
-          ];
-          
+          const args = ['--subagent-id', subagentId, '--output-json', '--once'];
+
           if (input.persona) {
             args.push('--persona', input.persona as string);
           }
 
           // Find the drone-agent executable
-          const execPath = resolve(process.cwd(), 'drone-agent', 'bin', 'drone-agent');
-          
+          const execPath = resolve(
+            process.cwd(),
+            'drone-agent',
+            'bin',
+            'drone-agent'
+          );
+
           return new Promise((resolvePromise, rejectPromise) => {
             let timedOut = false;
             const collectedOutput: string[] = [];
@@ -157,13 +171,19 @@ export const subagentPlugin: DronePlugin = {
               return;
             }
 
-            const kickoffEvent = JSON.stringify({ type: 'kickoff', task: input.task });
+            const kickoffEvent = JSON.stringify({
+              type: 'kickoff',
+              task: input.task,
+            });
             stdin.write(kickoffEvent + '\n');
             stdin.end();
 
             // Collect stdout
             child.stdout?.on('data', (data: Buffer) => {
-              const lines = data.toString().split('\n').filter(l => l.trim());
+              const lines = data
+                .toString()
+                .split('\n')
+                .filter(l => l.trim());
               collectedOutput.push(...lines);
             });
 
@@ -173,7 +193,7 @@ export const subagentPlugin: DronePlugin = {
             });
 
             // Handle process exit
-            child.on('close', (code) => {
+            child.on('close', code => {
               clearTimeout(timeoutId);
               pendingSubagents.delete(subagentId);
 
@@ -197,21 +217,29 @@ export const subagentPlugin: DronePlugin = {
               }
 
               if (timedOut) {
-                resolvePromise(JSON.stringify({
-                  error: 'Subagent timed out',
-                  timedOut: true,
-                  exitCode,
-                }));
+                resolvePromise(
+                  JSON.stringify({
+                    error: 'Subagent timed out',
+                    timedOut: true,
+                    exitCode,
+                  })
+                );
               } else if (exitCode !== 0 && exitCode !== undefined) {
-                resolvePromise(JSON.stringify({
-                  error: error || `Subagent exited with code ${exitCode}${stderr ? `: ${stderr}` : ''}`,
-                  exitCode,
-                }));
+                resolvePromise(
+                  JSON.stringify({
+                    error:
+                      error ||
+                      `Subagent exited with code ${exitCode}${stderr ? `: ${stderr}` : ''}`,
+                    exitCode,
+                  })
+                );
               } else if (!result) {
-                resolvePromise(JSON.stringify({
-                  error: 'Subagent did not return a result',
-                  exitCode,
-                }));
+                resolvePromise(
+                  JSON.stringify({
+                    error: 'Subagent did not return a result',
+                    exitCode,
+                  })
+                );
               } else {
                 resolvePromise(JSON.stringify({ result, exitCode }));
               }

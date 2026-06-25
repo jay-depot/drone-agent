@@ -24,7 +24,10 @@ type EngineOptions = {
   // The executeTool mock returns a string on success, or throws on error.
   // Tests pass in a real or stubbed function so the service can route
   // errors back to the model as tool messages.
-  executeToolImpl: (name: string, input: Record<string, unknown>) => Promise<string>;
+  executeToolImpl: (
+    name: string,
+    input: Record<string, unknown>
+  ) => Promise<string>;
   promptFragments?: string[];
 };
 
@@ -297,9 +300,17 @@ describe('createConversationService — tool error handling', () => {
     });
     const provider = makeProvider([
       // Round 1: try /drone (fails)
-      { toolCalls: [{ id: '1', name: 'file.list', arguments: { path: '/drone' } }] },
+      {
+        toolCalls: [
+          { id: '1', name: 'file.list', arguments: { path: '/drone' } },
+        ],
+      },
       // Round 2: try /home (succeeds)
-      { toolCalls: [{ id: '2', name: 'file.list', arguments: { path: '/home' } }] },
+      {
+        toolCalls: [
+          { id: '2', name: 'file.list', arguments: { path: '/home' } },
+        ],
+      },
       // Round 3: model summarises
       { message: 'Found 2 items in /home.' },
     ]);
@@ -318,7 +329,9 @@ describe('createConversationService — tool error handling', () => {
       id: string
     ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
 
-    const finalMessage = await conversation.sendUserMessage('explore the project');
+    const finalMessage = await conversation.sendUserMessage(
+      'explore the project'
+    );
     expect(finalMessage).toBe('Found 2 items in /home.');
 
     const messages = sessionManager.getMessages();
@@ -340,7 +353,11 @@ describe('createConversationService — tool error handling', () => {
       executeToolImpl: async () => 'ok',
     });
     const provider = makeProvider([
-      { toolCalls: [{ id: 'tc1', name: 'file.read', arguments: { path: '/x' } }] },
+      {
+        toolCalls: [
+          { id: 'tc1', name: 'file.read', arguments: { path: '/x' } },
+        ],
+      },
       { message: 'finished' },
     ]);
     const config = createDefaultAgentConfig();
@@ -477,7 +494,8 @@ describe('createConversationService — iteration limits', () => {
     config.session.maxToolIterations = 3;
     const sessionManager = createSessionManager();
     const budgetService = makeBudgetService(provider);
-    const onLimitReached = vi.fn<(currentCount: number, maxCount: number) => Promise<boolean>>();
+    const onLimitReached =
+      vi.fn<(currentCount: number, maxCount: number) => Promise<boolean>>();
     onLimitReached.mockResolvedValue(true); // always continue
 
     const conversation = createConversationService({
@@ -514,7 +532,8 @@ describe('createConversationService — iteration limits', () => {
     config.session.maxToolIterations = 3;
     const sessionManager = createSessionManager();
     const budgetService = makeBudgetService(provider);
-    const onLimitReached = vi.fn<(currentCount: number, maxCount: number) => Promise<boolean>>();
+    const onLimitReached =
+      vi.fn<(currentCount: number, maxCount: number) => Promise<boolean>>();
     onLimitReached.mockResolvedValue(false); // user says stop
 
     const conversation = createConversationService({
@@ -637,9 +656,15 @@ describe('createConversationService — stuck detection', () => {
     });
     const provider = makeProvider([
       // Two failing rounds, then a successful round, then a final message.
-      { toolCalls: [{ id: 'a', name: 'file.list', arguments: { path: '/a' } }] },
-      { toolCalls: [{ id: 'b', name: 'file.list', arguments: { path: '/b' } }] },
-      { toolCalls: [{ id: 'c', name: 'file.list', arguments: { path: '/c' } }] },
+      {
+        toolCalls: [{ id: 'a', name: 'file.list', arguments: { path: '/a' } }],
+      },
+      {
+        toolCalls: [{ id: 'b', name: 'file.list', arguments: { path: '/b' } }],
+      },
+      {
+        toolCalls: [{ id: 'c', name: 'file.list', arguments: { path: '/c' } }],
+      },
       { message: 'Found it.' },
     ]);
 
@@ -664,21 +689,19 @@ describe('createConversationService — stuck detection', () => {
   });
 
   it('treats a different tool signature as a fresh start, not a continuation', async () => {
-    const toolImpl = vi.fn(
-      async (name: string): Promise<string> => {
-        if (name === 'file.list') {
-          const e: NodeJS.ErrnoException = new Error('not found');
-          e.code = 'ENOENT';
-          throw e;
-        }
-        if (name === 'search.text') {
-          const e: NodeJS.ErrnoException = new Error('not found');
-          e.code = 'ENOENT';
-          throw e;
-        }
-        return 'ok';
+    const toolImpl = vi.fn(async (name: string): Promise<string> => {
+      if (name === 'file.list') {
+        const e: NodeJS.ErrnoException = new Error('not found');
+        e.code = 'ENOENT';
+        throw e;
       }
-    );
+      if (name === 'search.text') {
+        const e: NodeJS.ErrnoException = new Error('not found');
+        e.code = 'ENOENT';
+        throw e;
+      }
+      return 'ok';
+    });
 
     const engine = makeEngine({
       tools: [

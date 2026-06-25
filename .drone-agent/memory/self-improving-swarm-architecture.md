@@ -76,25 +76,30 @@ Agent Turn Ends
 ## Implementation Phases
 
 ### Phase 1: Shared Session Storage (Coordinator)
+
 - Add `swarm_sessions`, `swarm_messages` tables with FTS5
 - Routes: POST /swarm/sessions/:beaconId, POST /swarm/messages/:sessionId, GET /swarm/search
 
 ### Phase 2: Enhanced Beacon → Coordinator Sync
+
 - Make sync bidirectional (beacon pushes on session end)
 - Store full session data or summaries
 
 ### Phase 3: Global Memory & Skills
+
 - Extend coordinator with `knowledge` table
 - Categories: skill, pattern, preference, fact
 - Routes: GET/POST /knowledge, GET /knowledge/search
 
 ### Phase 4: Swarm Learning Tasks
+
 - Coordinator runs periodic swarm review
 - Identifies patterns across beacons
 - Merges into shared knowledge
 - Broadcasts to all beacons
 
 ### Phase 5: Config Integration
+
 ```typescript
 swarm: {
   enabled: boolean,
@@ -110,33 +115,34 @@ swarm: {
 
 ## Key Differences from Hermes
 
-| Aspect | Hermes | Drone Swarm |
-|--------|--------|-------------|
-| Learning | Single agent | All beacons |
-| Storage | Local SQLite | Coordinator DB |
-| Search | Local FTS5 | Global search |
-| Patterns | Per-agent | Cross-beacon |
-| Skills | Local | Shared registry |
+| Aspect   | Hermes       | Drone Swarm     |
+| -------- | ------------ | --------------- |
+| Learning | Single agent | All beacons     |
+| Storage  | Local SQLite | Coordinator DB  |
+| Search   | Local FTS5   | Global search   |
+| Patterns | Per-agent    | Cross-beacon    |
+| Skills   | Local        | Shared registry |
 
 ## Implementation Effort
 
-| Component | Changes | Effort |
-|-----------|---------|--------|
-| Coordinator DB | Add swarm_sessions, swarm_messages, knowledge tables | 1 day |
-| Coordinator Routes | Add /swarm/* routes for push/search | 1 day |
-| Beacon | Push sessions to coordinator on end | 1 day |
-| Agent Config | Add swarm config section | 0.5 day |
-| Swarm Review | Coordinator periodic task | 2 days |
-| Global Search | Query all beacons sessions | 1 day |
+| Component          | Changes                                              | Effort  |
+| ------------------ | ---------------------------------------------------- | ------- |
+| Coordinator DB     | Add swarm_sessions, swarm_messages, knowledge tables | 1 day   |
+| Coordinator Routes | Add /swarm/\* routes for push/search                 | 1 day   |
+| Beacon             | Push sessions to coordinator on end                  | 1 day   |
+| Agent Config       | Add swarm config section                             | 0.5 day |
+| Swarm Review       | Coordinator periodic task                            | 2 days  |
+| Global Search      | Query all beacons sessions                           | 1 day   |
 
 **Total**: ~6-7 days
 
 ## Key Files Reference
 
 From Hermes (patterns to adapt):
+
 - `agent/background_review.py` - Background review fork
 - `agent/curator.py` - Periodic maintenance
-- `agent/memory_manager.py` - Memory orchestration  
+- `agent/memory_manager.py` - Memory orchestration
 - `agent/learn_prompt.py` - Skill creation
 - `tools/session_search_tool.py` - FTS5 search
 - `tools/skill_usage.py` - Skill tracking
@@ -157,5 +163,6 @@ From Hermes (patterns to adapt):
 4. **Swarm intelligence** - Coordinator identifies patterns across entire swarm
 
 ---
-*Last updated: 2025*
-*Source: Analysis of Hermes Agent continuous improvement loop + drone-agent architecture*
+
+_Last updated: 2025_
+_Source: Analysis of Hermes Agent continuous improvement loop + drone-agent architecture_
