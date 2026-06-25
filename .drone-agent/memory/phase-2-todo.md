@@ -6,7 +6,7 @@ tags:
   - todo
   - swarm
 created: 2026-06-24T01:57:59.883Z
-updated: 2026-06-25T04:42:02.151Z
+updated: 2026-06-25T04:52:48.641Z
 ---
 
 # Phase 2 Todo List
@@ -83,7 +83,12 @@ updated: 2026-06-25T04:42:02.151Z
     - [x] Beacon: endSession() on agent disconnect with connectedAt timestamp
 
 ### Medium Priority
-- [ ] Event log (append-only log for agent events)
+- [x] Event log (append-only log for agent events)
+  - IMPLEMENTED:
+    - [x] Add event_log table with indexes
+    - [x] Add CRUD functions (createEventLog, getEventLog, listEventLogs, cleanupOldEventLogs)
+    - [x] Add REST routes: GET /events, GET /events/:id
+    - [x] Add event logging for agent connect/disconnect and persona created
 - [ ] Auto-download of beacon binary for agent
 - [x] Agent-side WebSocket client in swarm plugin
   - IMPLEMENTED in drone-agent/src/plugins/swarm/index.ts:
