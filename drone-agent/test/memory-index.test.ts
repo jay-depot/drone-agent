@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { rm } from 'node:fs/promises';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import {
@@ -90,17 +91,22 @@ function createMockRegistration(): {
 }
 
 describe('memoryPlugin', () => {
-  // Clean the project's .drone-agent/memory dir between tests so leftover
-  // entries don't leak across tests. The plugin uses process.cwd() as its
-  // project dir.
-  const memoryDir = resolveMemoryDir(process.cwd());
+  // Use a temp directory instead of process.cwd() to avoid deleting
+  // real project memories during test runs.
+  let tmpDir: string;
+  let originalCwd: string;
+
+  beforeEach(async () => {
+    originalCwd = process.cwd();
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), 'drone-memory-test-'));
+    // Ensure .drone-agent directory exists for the memory plugin
+    await mkdir(path.join(tmpDir, '.drone-agent'), { recursive: true });
+    process.chdir(tmpDir);
+  });
 
   afterEach(async () => {
-    try {
-      await rm(memoryDir, { recursive: true, force: true });
-    } catch {
-      // Ignore
-    }
+    process.chdir(originalCwd);
+    await rm(tmpDir, { recursive: true, force: true });
   });
 
   it('has correct metadata', () => {

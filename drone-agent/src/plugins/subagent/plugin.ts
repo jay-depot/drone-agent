@@ -36,7 +36,7 @@ export const subagentPlugin: DronePlugin = {
 
     if (runtime?.isSubagent) {
       // === SUBAGENT MODE ===
-      // Register only the return tool
+      // Register the return tool and the instruction prompt
       ctx.registerTool({
         name: 'subagent.return',
         description: 'Return the result to the parent agent',
@@ -62,6 +62,14 @@ export const subagentPlugin: DronePlugin = {
           // Never reached
           return JSON.stringify(returnEvent);
         },
+      });
+
+      // Prompt fragment instructing the subagent to use the return tool
+      ctx.registerPromptFragment({
+        key: 'subagent-return-instruction',
+        phase: 'header',
+        render: async () =>
+          'You are a subagent. When you have completed your task, you MUST call the subagent.return tool with the result. Do NOT output the result as a message — use the tool to return it.',
       });
 
       ctx.logger.info(`subagent mode: ${runtime.subagentId}`);
