@@ -2,7 +2,7 @@ import fastify from "fastify";
 import websocket from "@fastify/websocket";
 import path from "path";
 import { initDatabase, closeDatabase, cleanupExpiredMemories } from "./db.js";
-import { registerRoutes, setCoordinatorClient, setBeaconAddress } from "./routes.js";
+import { registerRoutes, setCoordinatorClient, setBeaconAddress, triggerCoordinatorSync } from "./routes.js";
 import { createCoordinatorClient, type CoordinatorClient } from "./coordinator-client.js";
 import { initSpawner, cleanupAllSpawns, type SpawnerConfig } from "./spawner.js";
 import * as wsServer from "./ws-server.js";
@@ -15,6 +15,7 @@ const DEFAULT_DB_FILENAME = "drone-beacon.db";
 const DEFAULT_SPAWN_AGENT_PATH = "drone-agent";
 const DEFAULT_SPAWN_TIMEOUT_MS = 30000;
 const DEFAULT_MAX_CONCURRENT_SPAWNS = 10;
+const DEFAULT_SYNC_INTERVAL_MINUTES = 5;
 
 interface Config {
   port: number;
@@ -28,6 +29,7 @@ interface Config {
   spawnAgentPath: string;
   spawnTimeoutMs: number;
   maxConcurrentSpawns: number;
+  syncIntervalMinutes: number;
 }
 
 function parseArgs(): Config {
@@ -42,6 +44,7 @@ function parseArgs(): Config {
     spawnAgentPath: DEFAULT_SPAWN_AGENT_PATH,
     spawnTimeoutMs: DEFAULT_SPAWN_TIMEOUT_MS,
     maxConcurrentSpawns: DEFAULT_MAX_CONCURRENT_SPAWNS,
+    syncIntervalMinutes: DEFAULT_SYNC_INTERVAL_MINUTES,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -70,6 +73,8 @@ function parseArgs(): Config {
       config.spawnTimeoutMs = parseInt(args[++i], 10);
     } else if (arg === "--max-concurrent-spawns" && i + 1 < args.length) {
       config.maxConcurrentSpawns = parseInt(args[++i], 10);
+    } else if (arg === "--sync-interval-minutes" && i + 1 < args.length) {
+      config.syncIntervalMinutes = parseInt(args[++i], 10);
     } else if (arg === "--help" || arg === "-h") {
       console.log(`
 drone-beacon [options]
@@ -86,6 +91,7 @@ Options:
   --spawn-agent-path <path>  Path to drone-agent binary (default: ${DEFAULT_SPAWN_AGENT_PATH})
   --spawn-timeout-ms <n>     Timeout for agent to connect (default: ${DEFAULT_SPAWN_TIMEOUT_MS})
   --max-concurrent-spawns <n> Max concurrent spawned agents (default: ${DEFAULT_MAX_CONCURRENT_SPAWNS})
+  --sync-interval-minutes <n> Interval for periodic coordinator sync (default: ${DEFAULT_SYNC_INTERVAL_MINUTES})
   --help                     Show this help message
       `);
       process.exit(0);
@@ -168,10 +174,36 @@ async function main() {
     }
   }, 60000);
 
+  // Start periodic coordinator sync if configured
+  let syncInterval: NodeJS.Timeout | undefined;
+  if (coordinatorClient) {
+    const syncIntervalMs = config.syncIntervalMinutes * 60 * 1000;
+    logger.info(`Starting periodic coordinator sync every ${config.syncIntervalMinutes} minutes`);
+    
+    // Do an initial sync
+    try {
+      await triggerCoordinatorSync();
+    } catch (err) {
+      logger.warn(`Initial sync failed: ${err}`);
+    }
+    
+    // Set up periodic sync
+    syncInterval = setInterval(async () => {
+      try {
+        await triggerCoordinatorSync();
+      } catch (err) {
+        logger.warn(`Periodic sync failed: ${err}`);
+      }
+    }, syncIntervalMs);
+  }
+
   // Graceful shutdown
   const shutdown = async () => {
     logger.info("Shutting down...");
     clearInterval(cleanupInterval);
+    if (syncInterval) {
+      clearInterval(syncInterval);
+    }
     
     // Clean up all spawned agents
     cleanupAllSpawns();

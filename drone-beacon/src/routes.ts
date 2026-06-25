@@ -29,6 +29,30 @@ function getBeaconUrl(): string {
   return `http://${beaconHost}:${beaconPort}`;
 }
 
+// Exported function for periodic sync (called from index.ts)
+export async function triggerCoordinatorSync(): Promise<{ success: boolean; synced?: { personas: number; skills: number }; error?: string }> {
+  const client = getCoordinatorClient();
+  if (!client) {
+    return { success: false, error: "Coordinator not configured" };
+  }
+
+  try {
+    const personas = await client.fetchPersonas();
+    for (const p of personas) {
+      db.upsertPersonaFromCoordinator(p);
+    }
+    const skills = await client.fetchSkills();
+    for (const s of skills) {
+      db.upsertSkillFromCoordinator(s);
+    }
+    logger.info(`Synced ${personas.length} personas and ${skills.length} skills from coordinator`);
+    return { success: true, synced: { personas: personas.length, skills: skills.length } };
+  } catch (err) {
+    logger.error(err, "Sync failed");
+    return { success: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
 interface MemoryQuery {
   namespace?: string;
   includeExpired?: string;
@@ -483,37 +507,13 @@ export async function registerRoutes(app: FastifyInstance) {
 
   // === Coordinator Sync Routes ===
   
-  // Trigger a sync from coordinator
+  // Trigger a sync from coordinator (manual endpoint)
   app.post("/sync", async (request, reply) => {
-    const client = getCoordinatorClient();
-    if (!client) {
-      return reply.code(400).send({ error: "Coordinator not configured" });
+    const result = await triggerCoordinatorSync();
+    if (!result.success) {
+      return reply.code(400).send({ error: result.error });
     }
-
-    try {
-      // Fetch and sync personas
-      const personas = await client.fetchPersonas();
-      for (const p of personas) {
-        db.upsertPersonaFromCoordinator(p);
-      }
-
-      // Fetch and sync skills
-      const skills = await client.fetchSkills();
-      for (const s of skills) {
-        db.upsertSkillFromCoordinator(s);
-      }
-
-      return { 
-        success: true, 
-        synced: { 
-          personas: personas.length, 
-          skills: skills.length 
-        } 
-      };
-    } catch (err) {
-      logger.error(err, "Sync failed");
-      return reply.code(500).send({ error: "Sync failed" });
-    }
+    return result;
   });
 
 
