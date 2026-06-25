@@ -58,11 +58,12 @@ const logger = {
  */
 async function registerWithBeacon(): Promise<void> {
   try {
-    const response = await fetch(`http://${BEACON_HOST}:${BEACON_PORT}/agents/${AGENT_ID}`, {
-      method: 'PUT',
+    const response = await fetch(`http://${BEACON_HOST}:${BEACON_PORT}/agents`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: AGENT_ID,
+        id: AGENT_ID,
+        personaId: null,
         capabilities: ['file', 'memory', 'exec', 'git'],
       }),
     });
@@ -84,7 +85,7 @@ async function registerWithBeacon(): Promise<void> {
  */
 async function unregisterFromBeacon(): Promise<void> {
   try {
-    const response = await fetch(`http://${BEACON_HOST}:${BEACON_PORT}/agents/${AGENT_ID}`, {
+    const response = await fetch(`http://${BEACON_HOST}:${BEACON_PORT}/agents`, {
       method: 'DELETE',
     });
 
@@ -102,7 +103,7 @@ async function unregisterFromBeacon(): Promise<void> {
  */
 async function fetchMessages(): Promise<void> {
   try {
-    const response = await fetch(`http://${BEACON_HOST}:${BEACON_PORT}/agents/${AGENT_ID}/messages`);
+    const response = await fetch(`http://${BEACON_HOST}:${BEACON_PORT}/agents/messages`);
     if (response.ok) {
       const messages = await response.json() as Message[];
       state.messages = messages;
