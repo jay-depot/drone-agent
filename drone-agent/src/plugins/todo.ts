@@ -1,5 +1,5 @@
 import { isRecord } from '../shared/type-guards.js';
-import type { DronePlugin } from 'drone-core';
+import type { DronePlugin, DroneSlashCommandContext } from 'drone-core';
 
 type TodoStatus = 'pending' | 'in_progress' | 'completed';
 
@@ -271,6 +271,137 @@ export const todoPlugin: DronePlugin = {
       },
     });
 
+    // Helper function to format todo list with optional status filter
+    function formatTodoListFiltered(filterStatus?: TodoStatus): string {
+      const filteredItems = filterStatus
+        ? items.filter(item => item.status === filterStatus)
+        : items;
+      return formatTodoList(filteredItems);
+    }
+
+    // Slash command: /todo
+    registration.registerSlashCommand({
+      command: '/todo',
+      description: 'Todo management: show, add, clear',
+      handler: async (ctx: DroneSlashCommandContext) => {
+        const subcommand = ctx.args[0] ?? '';
+
+        // /todo show
+        if (subcommand === 'show') {
+          const statusIndex = ctx.args.indexOf('--status');
+          const filterStatus: TodoStatus | undefined =
+            statusIndex !== -1
+              ? (ctx.args[statusIndex + 1] as TodoStatus)
+              : undefined;
+
+          if (filterStatus && !isTodoStatus(filterStatus)) {
+            ctx.logger.warn(
+              'Invalid status. Use: pending, in_progress, or completed'
+            );
+            return true;
+          }
+
+          const list = formatTodoListFiltered(filterStatus);
+          if (items.length === 0) {
+            ctx.logger.info(
+              'No todo items yet. Use /todo add <description> to add one.'
+            );
+          } else if (filterStatus) {
+            ctx.logger.info(`Todo items [${filterStatus}]:\n${list}`);
+          } else {
+            ctx.logger.info(`Todo list:\n${list}`);
+          }
+          return true;
+        }
+
+        // /todo add
+        if (subcommand === 'add') {
+          const title = ctx.args.slice(1).join(' ').trim();
+
+          if (!title) {
+            ctx.logger.info(
+              'Usage: /todo add <description>\nExample: /todo add Fix bug in login'
+            );
+            return true;
+          }
+
+          await ctx.engine.executeTool('todo.manage_list', {
+            action: 'add_item',
+            title,
+          });
+          ctx.logger.info(`Added: ${title}`);
+          return true;
+        }
+
+        // /todo clear
+        if (subcommand === 'clear') {
+          const target = ctx.args[1];
+
+          if (!target) {
+            // Clear completed items (default)
+            const completedCount = items.filter(
+              i => i.status === 'completed'
+            ).length;
+            if (completedCount === 0) {
+              ctx.logger.info('No completed items to clear.');
+              return true;
+            }
+            await ctx.engine.executeTool('todo.manage_list', {
+              action: 'clear_completed',
+            });
+            ctx.logger.info(`Cleared ${completedCount} completed item(s).`);
+            return true;
+          }
+
+          if (target === 'all') {
+            if (items.length === 0) {
+              ctx.logger.info('No items to clear.');
+              return true;
+            }
+            // Clear all items
+            items.length = 0;
+            nextId = 1;
+            ctx.logger.info('Cleared all todo items.');
+            return true;
+          }
+
+          // Try to clear specific item by ID
+          const targetItem = items.find(i => i.id === target);
+          if (!targetItem) {
+            ctx.logger.warn(
+              `Item "${target}" not found. Use /todo show to see all items.`
+            );
+            return true;
+          }
+          await ctx.engine.executeTool('todo.manage_list', {
+            action: 'remove_item',
+            id: target,
+          });
+          ctx.logger.info(`Cleared item: ${targetItem.title}`);
+          return true;
+        }
+
+        // Unknown subcommand - show help
+        ctx.logger.info(
+          `Usage: /todo <subcommand> [args]
+  Subcommands:
+    show           Show all todo items
+    show --status <status>  Filter by status (pending, in_progress, completed)
+    add <desc>    Add a new todo item
+    clear          Clear completed items
+    clear <id>     Clear specific item by ID
+    clear all      Clear all items`
+        );
+        return true;
+      },
+    });
+
+    // Help text
+    registration.registerHelp('/todo show           Show all todo items');
+    registration.registerHelp('/todo show --status <status>  Filter by status');
+    registration.registerHelp('/todo add <desc>     Add a new todo item');
+    registration.registerHelp('/todo clear [id|all] Clear items');
+
     registration.hooks.onPluginsLoaded(async () => {
       registration.logger.info('todo tool ready');
     });
@@ -296,3 +427,4 @@ export const todoPlugin: DronePlugin = {
     });
   },
 };
+
