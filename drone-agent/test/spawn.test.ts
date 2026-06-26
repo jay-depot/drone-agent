@@ -55,7 +55,7 @@ describe('Agent Spawning', () => {
         // Verify the agent has the persona
         const agents = await getBeaconAgents(BEACON_URL);
         const spawned = agents.find(a => a.id === agentId);
-        
+
         if (spawned) {
           expect(spawned.persona).toBe('coder');
         }
@@ -98,7 +98,7 @@ describe('Agent Spawning', () => {
         // Verify agent is gone
         const agents = await getBeaconAgents(BEACON_URL);
         const found = agents.find(a => a.id === agentId);
-        
+
         expect(found).toBeUndefined();
       } catch (error) {
         // Spawn/terminate API might not be implemented yet

@@ -69,14 +69,15 @@ async function testAgentHealth(): Promise<void> {
 async function testBeaconAgents(): Promise<void> {
   const response = await fetch(`${BEACON_URL}/agents`);
   if (!response.ok) throw new Error(`Failed to get agents: ${response.status}`);
-  const agents = await response.json() as unknown[];
+  const agents = (await response.json()) as unknown[];
   log(`  Found ${agents.length} agent(s)`);
 }
 
 async function testBeaconPersonas(): Promise<void> {
   const response = await fetch(`${BEACON_URL}/personas`);
-  if (!response.ok) throw new Error(`Failed to get personas: ${response.status}`);
-  const personas = await response.json() as unknown[];
+  if (!response.ok)
+    throw new Error(`Failed to get personas: ${response.status}`);
+  const personas = (await response.json()) as unknown[];
   log(`  Found ${personas.length} persona(s)`);
 }
 
@@ -90,7 +91,9 @@ async function testEchoLlmChat(): Promise<void> {
     }),
   });
   if (!response.ok) throw new Error(`Echo LLM chat failed: ${response.status}`);
-  const data = await response.json() as { choices?: { message?: { content?: string } }[] };
+  const data = (await response.json()) as {
+    choices?: { message?: { content?: string } }[];
+  };
   if (!data.choices?.[0]?.message?.content) throw new Error('Invalid response');
 }
 

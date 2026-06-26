@@ -6,7 +6,13 @@
  */
 
 import { request } from './http';
-import type { Agent, CreatePersonaRequest, Message, Persona, RequestOptions } from './index';
+import type {
+  Agent,
+  CreatePersonaRequest,
+  Message,
+  Persona,
+  RequestOptions,
+} from './index';
 
 /**
  * Wait for a service to be available
@@ -25,7 +31,7 @@ export async function waitForService(
     } catch {
       // Service not available yet
     }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
   }
   return false;
 }

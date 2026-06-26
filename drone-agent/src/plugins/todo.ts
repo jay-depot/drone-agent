@@ -427,4 +427,3 @@ export const todoPlugin: DronePlugin = {
     });
   },
 };
-

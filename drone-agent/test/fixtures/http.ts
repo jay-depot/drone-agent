@@ -13,11 +13,7 @@ export async function request<T>(
   url: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const {
-    method = 'GET',
-    headers = {},
-    body,
-  } = options;
+  const { method = 'GET', headers = {}, body } = options;
 
   const response = await fetch(url, {
     method,

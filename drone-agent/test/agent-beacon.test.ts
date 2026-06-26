@@ -34,24 +34,26 @@ describe('Agent ↔ Beacon', () => {
   describe('agent-registers', () => {
     it('should register agent with beacon', async () => {
       const agents = await getBeaconAgents(BEACON_URL);
-      
+
       // The dummy agent should auto-register on startup
-      const agent = agents.find(a => a.id.includes('dummy') || a.id === agentId);
-      
+      const agent = agents.find(
+        a => a.id.includes('dummy') || a.id === agentId
+      );
+
       expect(agent).toBeDefined();
       expect(agent?.status).toBeDefined();
     });
 
     it('should show agent in /agents list', async () => {
       const agents = await getBeaconAgents(BEACON_URL);
-      
+
       expect(agents.length).toBeGreaterThan(0);
     });
 
     it('should get specific agent details', async () => {
       const agents = await getBeaconAgents(BEACON_URL);
       const agent = agents[0];
-      
+
       if (agent) {
         const details = await getBeaconAgent(BEACON_URL, agent.id);
         expect(details).toBeDefined();
@@ -63,7 +65,7 @@ describe('Agent ↔ Beacon', () => {
   describe('agent-fetches-personas', () => {
     it('should load personas from beacon', async () => {
       const personas = await getBeaconPersonas(BEACON_URL);
-      
+
       // Beacon should have personas (at least default ones)
       expect(personas).toBeDefined();
       expect(Array.isArray(personas)).toBe(true);
@@ -89,7 +91,7 @@ describe('Agent ↔ Beacon', () => {
   describe('agent-fetches-skills', () => {
     it('should load skills from beacon', async () => {
       const skills = await getBeaconSkills(BEACON_URL);
-      
+
       expect(skills).toBeDefined();
       expect(Array.isArray(skills)).toBe(true);
     });
@@ -99,13 +101,13 @@ describe('Agent ↔ Beacon', () => {
     it('should show recent activity in agent status', async () => {
       const agents = await getBeaconAgents(BEACON_URL);
       const agent = agents.find(a => a.status === 'connected');
-      
+
       if (agent) {
         expect(agent.lastActivity).toBeDefined();
-        
+
         const lastActivityTime = new Date(agent.lastActivity).getTime();
         const now = Date.now();
-        
+
         // Activity should be recent (within last minute)
         expect(now - lastActivityTime).toBeLessThan(60000);
       }
@@ -116,9 +118,9 @@ describe('Agent ↔ Beacon', () => {
     it('should have proper agent state on disconnect', async () => {
       // This test verifies the cleanup mechanism works
       // In a real scenario, we'd trigger agent shutdown and verify removal
-      
+
       const agents = await getBeaconAgents(BEACON_URL);
-      
+
       // Just verify we have the expected structure
       for (const agent of agents) {
         expect(agent.id).toBeDefined();

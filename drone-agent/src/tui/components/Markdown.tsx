@@ -97,9 +97,7 @@ function renderToken(
     case 'paragraph':
       return (
         <Text color={textColor}>
-          {token.tokens
-            ?.map((t: any) => renderInlineToken(t, color))
-            .flat()}
+          {token.tokens?.map((t: any) => renderInlineToken(t, color)).flat()}
         </Text>
       );
 

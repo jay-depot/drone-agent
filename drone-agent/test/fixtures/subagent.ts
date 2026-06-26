@@ -82,7 +82,7 @@ function parseNdjsonOutput(stdout: string): {
   result?: string;
   error?: string;
 } {
-  const lines = stdout.split('\n').filter((l) => l.trim());
+  const lines = stdout.split('\n').filter(l => l.trim());
 
   for (const line of lines) {
     try {
@@ -196,7 +196,7 @@ export async function launchSubagent(
       const lines = data
         .toString()
         .split('\n')
-        .filter((l) => l.trim());
+        .filter(l => l.trim());
       collectedOutput.push(...lines);
     });
 
@@ -206,7 +206,7 @@ export async function launchSubagent(
     });
 
     // Handle process exit
-    child.on('close', (code) => {
+    child.on('close', code => {
       clearTimeout(timeoutId);
       pendingSubagents.delete(subagentId);
 
@@ -225,7 +225,9 @@ export async function launchSubagent(
         });
       } else if (exitCode !== 0 && exitCode !== undefined) {
         resolvePromise({
-          error: error || `Subagent exited with code ${exitCode}${stderr ? `: ${stderr}` : ''}`,
+          error:
+            error ||
+            `Subagent exited with code ${exitCode}${stderr ? `: ${stderr}` : ''}`,
           timedOut: false,
           exitCode,
           stdout: stdoutText,
@@ -318,7 +320,7 @@ export async function launchParallelSubagents(
     running.push(promise);
 
     const index = i;
-    promise.then((result) => {
+    promise.then(result => {
       runningCount.delete(index);
       results[index] = result;
     });

@@ -1,5 +1,10 @@
 // Shared types imported from drone-core
-export type { Persona, Skill, CreatePersonaRequest, CreateSkillRequest } from 'drone-core';
+export type {
+  Persona,
+  Skill,
+  CreatePersonaRequest,
+  CreateSkillRequest,
+} from 'drone-core';
 
 // === Coordinator-specific types ===
 

@@ -34,7 +34,9 @@ describe('E2E Swarm Flows', () => {
       expect(initialAgents.length).toBeGreaterThan(0);
 
       // Verify agent is connected
-      const connectedAgents = initialAgents.filter(a => a.status === 'connected');
+      const connectedAgents = initialAgents.filter(
+        a => a.status === 'connected'
+      );
       expect(connectedAgents.length).toBeGreaterThan(0);
 
       // Verify agent has activity
@@ -53,7 +55,7 @@ describe('E2E Swarm Flows', () => {
   describe('multi-agent-coordination', () => {
     it('should coordinate multiple agents', async () => {
       const agents = await getBeaconAgents(BEACON_URL);
-      
+
       // Need at least 2 agents for multi-agent coordination
       if (agents.length < 2) {
         console.log('Skipping multi-agent test - need at least 2 agents');
@@ -63,7 +65,7 @@ describe('E2E Swarm Flows', () => {
 
       // Send message from agent A to agent B
       const [agentA, agentB] = agents;
-      
+
       const message = await sendBeaconMessage(
         BEACON_URL,
         agentA.id,
@@ -78,7 +80,7 @@ describe('E2E Swarm Flows', () => {
       // Verify recipient received message
       const messages = await getBeaconMessages(BEACON_URL, agentB.id);
       const receivedMessage = messages.find(m => m.id === message.id);
-      
+
       expect(receivedMessage).toBeDefined();
     });
   });
@@ -86,7 +88,7 @@ describe('E2E Swarm Flows', () => {
   describe('swarm-memory-across-agents', () => {
     it('should share memory across agents', async () => {
       const agents = await getBeaconAgents(BEACON_URL);
-      
+
       if (agents.length === 0) {
         expect(agents.length).toBeGreaterThan(0);
         return;
@@ -95,10 +97,10 @@ describe('E2E Swarm Flows', () => {
       // Memory is stored in beacon and accessible to all agents
       // This test verifies the memory infrastructure is in place
       const personas = await getBeaconPersonas(BEACON_URL);
-      
+
       // Personas represent stored agent configurations
       expect(personas).toBeDefined();
-      
+
       // Additional memory tests would require the memory API
       expect(true).toBe(true);
     });
@@ -111,7 +113,8 @@ describe('E2E Swarm Flows', () => {
         id: `e2e-persona-${Date.now()}`,
         name: 'E2E Test Persona',
         description: 'Testing persona propagation',
-        systemPrompt: 'You are an E2E test assistant that validates swarm behavior.',
+        systemPrompt:
+          'You are an E2E test assistant that validates swarm behavior.',
       };
 
       await createBeaconPersona(BEACON_URL, testPersona);
@@ -119,7 +122,7 @@ describe('E2E Swarm Flows', () => {
       // Verify persona exists in beacon
       const personas = await getBeaconPersonas(BEACON_URL);
       const created = personas.find(p => p.id === testPersona.id);
-      
+
       expect(created).toBeDefined();
       expect(created?.name).toBe(testPersona.name);
       expect(created?.systemPrompt).toBe(testPersona.systemPrompt);

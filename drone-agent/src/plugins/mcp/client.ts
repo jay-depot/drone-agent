@@ -927,8 +927,12 @@ export async function createMcpClientConnection(options: {
         } catch (error) {
           // Method not found (-32601) is expected for servers like Lightpanda
           // that don't implement the optional shutdown method
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          if (errorMessage.includes('-32601') || errorMessage.includes('Method not found')) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          if (
+            errorMessage.includes('-32601') ||
+            errorMessage.includes('Method not found')
+          ) {
             // Gracefully ignore - server may not implement shutdown
           } else {
             options.logger.warn(

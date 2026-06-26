@@ -103,7 +103,7 @@ The drone-agent swarm includes a **self-improving architecture** that enables co
 | **Beacon**      | Sync knowledge            | Pull updates from coordinator                |
 | **Agent**       | Background review fork    | Per-turn learning                            |
 | **Agent**       | Skill creation/management | On-demand skill building                     |
-| **Agent**       | Memory read/write         | Your local knowledge updates                |
+| **Agent**       | Memory read/write         | Your local knowledge updates                 |
 
 ### Data Flow
 
@@ -163,6 +163,7 @@ swarm: {
 A CLI tool for moving your assets between scopes within your personal swarm.
 
 ### Purpose
+
 As you build up valuable personas, skills, and memories locally, you can promote them to higher scopes for broader access:
 
 - **Project → User**: Move project-specific assets to your user scope
@@ -379,8 +380,8 @@ Personal control plane for YOUR swarm across machines.
 | Phase | Feature                | Description                                               |
 | ----- | ---------------------- | --------------------------------------------------------- |
 | 3.1   | Shared Session Storage | `swarm_sessions`, `swarm_messages` tables with FTS5       |
-| 3.2   | Enhanced Sync          | Bidirectional beacon → coordinator sync for YOUR data   |
-| 3.3   | Global Memory & Skills | `knowledge` table (your skill, pattern, preference, fact)|
+| 3.2   | Enhanced Sync          | Bidirectional beacon → coordinator sync for YOUR data     |
+| 3.3   | Global Memory & Skills | `knowledge` table (your skill, pattern, preference, fact) |
 | 3.4   | Swarm Learning Tasks   | Periodic swarm review on YOUR patterns                    |
 | 3.5   | Global Search          | Search across all YOUR agents' sessions                   |
 
@@ -503,6 +504,7 @@ Phase 5 (Advanced)
 > **Q: What if I want multiple humans to use drone?**
 >
 > **A:** Use an MCP server designed for multi-user coordination. Examples:
+>
 > - MCP Jam
 > - CrewAI Cloud
 > - Custom MCP server for your team

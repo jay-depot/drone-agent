@@ -12,7 +12,9 @@ import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3459;
 const BEACON_HOST = process.env.BEACON_HOST || 'localhost';
-const BEACON_PORT = process.env.BEACON_PORT ? parseInt(process.env.BEACON_PORT, 10) : 3457;
+const BEACON_PORT = process.env.BEACON_PORT
+  ? parseInt(process.env.BEACON_PORT, 10)
+  : 3457;
 const AGENT_ID = process.env.AGENT_ID || `dummy-${Date.now()}`;
 const LLM_ECHO_URL = process.env.LLM_ECHO_URL || 'http://localhost:3458';
 
@@ -58,15 +60,18 @@ const logger = {
  */
 async function registerWithBeacon(): Promise<void> {
   try {
-    const response = await fetch(`http://${BEACON_HOST}:${BEACON_PORT}/agents`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: AGENT_ID,
-        personaId: null,
-        capabilities: ['file', 'memory', 'exec', 'git'],
-      }),
-    });
+    const response = await fetch(
+      `http://${BEACON_HOST}:${BEACON_PORT}/agents`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: AGENT_ID,
+          personaId: null,
+          capabilities: ['file', 'memory', 'exec', 'git'],
+        }),
+      }
+    );
 
     if (response.ok) {
       state.status = 'connected';
@@ -85,9 +90,12 @@ async function registerWithBeacon(): Promise<void> {
  */
 async function unregisterFromBeacon(): Promise<void> {
   try {
-    const response = await fetch(`http://${BEACON_HOST}:${BEACON_PORT}/agents`, {
-      method: 'DELETE',
-    });
+    const response = await fetch(
+      `http://${BEACON_HOST}:${BEACON_PORT}/agents`,
+      {
+        method: 'DELETE',
+      }
+    );
 
     if (response.ok) {
       state.status = 'disconnected';
@@ -103,9 +111,11 @@ async function unregisterFromBeacon(): Promise<void> {
  */
 async function fetchMessages(): Promise<void> {
   try {
-    const response = await fetch(`http://${BEACON_HOST}:${BEACON_PORT}/agents/messages`);
+    const response = await fetch(
+      `http://${BEACON_HOST}:${BEACON_PORT}/agents/messages`
+    );
     if (response.ok) {
-      const messages = await response.json() as Message[];
+      const messages = (await response.json()) as Message[];
       state.messages = messages;
       state.lastActivity = new Date();
     }
@@ -129,7 +139,9 @@ async function callEchoLlm(prompt: string): Promise<string> {
     });
 
     if (response.ok) {
-      const data = await response.json() as { choices?: { message?: { content?: string } }[] };
+      const data = (await response.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
       return data.choices?.[0]?.message?.content ?? 'No response';
     }
     return `Error: ${response.status}`;
@@ -141,7 +153,10 @@ async function callEchoLlm(prompt: string): Promise<string> {
 /**
  * Handle HTTP requests
  */
-async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handleRequest(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<void> {
   const url = req.url ?? '/';
   const method = req.method ?? 'GET';
 
@@ -159,11 +174,13 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     // Get agent status
     if (url === '/status' && method === 'GET') {
       res.writeHead(200);
-      res.end(JSON.stringify({
-        status: state.status,
-        persona: state.persona,
-        lastActivity: state.lastActivity.toISOString(),
-      }));
+      res.end(
+        JSON.stringify({
+          status: state.status,
+          persona: state.persona,
+          lastActivity: state.lastActivity.toISOString(),
+        })
+      );
       return;
     }
 
@@ -196,20 +213,20 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
         body += chunk;
       }
       const { task } = JSON.parse(body);
-      
+
       state.status = 'busy';
       const result = await callEchoLlm(task);
-      
+
       state.toolCalls.push({
         tool: 'echo-llm',
         args: { prompt: task },
         timestamp: new Date(),
         result,
       });
-      
+
       state.status = 'idle';
       state.lastActivity = new Date();
-      
+
       res.writeHead(200);
       res.end(JSON.stringify({ result }));
       return;
@@ -260,7 +277,7 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((error) => {
+main().catch(error => {
   logger.error('Failed to start:', error);
   process.exit(1);
 });

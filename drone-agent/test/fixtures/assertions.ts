@@ -10,7 +10,10 @@ import type { Agent, Message, Persona } from './index';
  * AssertionError with detailed context
  */
 export class AssertionError extends Error {
-  constructor(message: string, public readonly context?: object) {
+  constructor(
+    message: string,
+    public readonly context?: object
+  ) {
     super(message);
     this.name = 'AssertionError';
   }
@@ -44,14 +47,11 @@ export function assertDefined<T>(
 /**
  * Assert that two values are equal
  */
-export function assertEqual<T>(
-  actual: T,
-  expected: T,
-  message?: string
-): void {
+export function assertEqual<T>(actual: T, expected: T, message?: string): void {
   if (actual !== expected) {
     throw new AssertionError(
-      message ?? `Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
+      message ??
+        `Expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
       { actual, expected }
     );
   }
@@ -83,25 +83,38 @@ export function assertAgentRegistered(
   agentId: string,
   options: { status?: Agent['status']; persona?: string } = {}
 ): void {
-  const agent = agents.find((a) => a.id === agentId);
+  const agent = agents.find(a => a.id === agentId);
   assertDefined(agent, `Agent ${agentId} not found`);
 
   if (options.status) {
-    assertEqual(agent.status, options.status, `Expected agent status to be ${options.status}`);
+    assertEqual(
+      agent.status,
+      options.status,
+      `Expected agent status to be ${options.status}`
+    );
   }
 
   if (options.persona) {
-    assertEqual(agent.persona, options.persona, `Expected agent persona to be ${options.persona}`);
+    assertEqual(
+      agent.persona,
+      options.persona,
+      `Expected agent persona to be ${options.persona}`
+    );
   }
 }
 
 /**
  * Assert that an agent is NOT registered
  */
-export function assertAgentNotRegistered(agents: Agent[], agentId: string): void {
-  const agent = agents.find((a) => a.id === agentId);
+export function assertAgentNotRegistered(
+  agents: Agent[],
+  agentId: string
+): void {
+  const agent = agents.find(a => a.id === agentId);
   if (agent) {
-    throw new AssertionError(`Agent ${agentId} should not be registered`, { agent });
+    throw new AssertionError(`Agent ${agentId} should not be registered`, {
+      agent,
+    });
   }
 }
 
@@ -134,11 +147,15 @@ export function assertPersonaExists(
   personaId: string,
   options: { name?: string; systemPrompt?: string } = {}
 ): void {
-  const persona = personas.find((p) => p.id === personaId);
+  const persona = personas.find(p => p.id === personaId);
   assertDefined(persona, `Persona ${personaId} not found`);
 
   if (options.name) {
-    assertEqual(persona.name, options.name, `Expected persona name to be ${options.name}`);
+    assertEqual(
+      persona.name,
+      options.name,
+      `Expected persona name to be ${options.name}`
+    );
   }
 
   if (options.systemPrompt) {
@@ -153,10 +170,15 @@ export function assertPersonaExists(
 /**
  * Assert that a persona does NOT exist
  */
-export function assertPersonaNotExists(personas: Persona[], personaId: string): void {
-  const persona = personas.find((p) => p.id === personaId);
+export function assertPersonaNotExists(
+  personas: Persona[],
+  personaId: string
+): void {
+  const persona = personas.find(p => p.id === personaId);
   if (persona) {
-    throw new AssertionError(`Persona ${personaId} should not exist`, { persona });
+    throw new AssertionError(`Persona ${personaId} should not exist`, {
+      persona,
+    });
   }
 }
 
@@ -165,26 +187,31 @@ export function assertPersonaNotExists(personas: Persona[], personaId: string): 
 /**
  * Assert that a message was delivered
  */
-export function assertMessageDelivered(messages: Message[], messageId: string): void {
-  const message = messages.find((m) => m.id === messageId);
+export function assertMessageDelivered(
+  messages: Message[],
+  messageId: string
+): void {
+  const message = messages.find(m => m.id === messageId);
   assertDefined(message, `Message ${messageId} not found`);
 
   if (!message.delivered) {
-    throw new AssertionError(`Message ${messageId} was not delivered`, { message });
+    throw new AssertionError(`Message ${messageId} was not delivered`, {
+      message,
+    });
   }
 }
 
 /**
  * Assert that a message was read
  */
-export function assertMessageRead(messages: Message[], messageId: string): void {
-  const message = messages.find((m) => m.id === messageId);
+export function assertMessageRead(
+  messages: Message[],
+  messageId: string
+): void {
+  const message = messages.find(m => m.id === messageId);
   assertDefined(message, `Message ${messageId} not found`);
 
-  assertDefined(
-    message.readAt,
-    `Message ${messageId} has not been read`
-  );
+  assertDefined(message.readAt, `Message ${messageId} has not been read`);
 }
 
 /**
@@ -194,7 +221,7 @@ export function assertMessageExists(
   messages: Message[],
   options: { from?: string; to?: string; channel?: string }
 ): void {
-  const message = messages.find((m) => {
+  const message = messages.find(m => {
     if (options.from && m.from !== options.from) return false;
     if (options.to && m.to !== options.to) return false;
     if (options.channel && m.channel !== options.channel) return false;
@@ -216,7 +243,8 @@ export function assertLength<T>(
 ): void {
   if (collection.length !== length) {
     throw new AssertionError(
-      message ?? `Expected collection to have ${length} items, got ${collection.length}`,
+      message ??
+        `Expected collection to have ${length} items, got ${collection.length}`,
       { expected: length, actual: collection.length }
     );
   }
@@ -289,7 +317,7 @@ export async function waitFor(
     if (result) {
       return true;
     }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
   }
 
   return false;
@@ -312,7 +340,7 @@ export async function waitForAssertion(
       return;
     } catch (err) {
       lastError = err as Error;
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
     }
   }
 

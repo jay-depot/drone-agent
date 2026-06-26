@@ -1,7 +1,6 @@
 ---
 key: review-state
-tags:
-  []
+tags: []
 created: 2026-06-26T01:58:17.133Z
 updated: 2026-06-26T03:03:08.328Z
 ---
@@ -10,12 +9,12 @@ updated: 2026-06-26T03:03:08.328Z
 
 ## Overall State: Good — actively maintained, but some cleanup needed
 
-| Metric | Value |
-|--------|-------|
-| Source files | 155 |
-| Total lines | ~42,000 |
-| Errors (tests) | 0 |
-| Hints (unused code) | ~70 |
+| Metric              | Value   |
+| ------------------- | ------- |
+| Source files        | 155     |
+| Total lines         | ~42,000 |
+| Errors (tests)      | 0       |
+| Hints (unused code) | ~70     |
 
 ---
 
@@ -24,6 +23,7 @@ updated: 2026-06-26T03:03:08.328Z
 ### 1. Test Files Have Errors ✅ FIXED
 
 **Files affected** (FIXED):
+
 - `agent-beacon.test.ts` — wrong import path `../fixtures/index.js` → `./fixtures/index.js`
 - `coordinator-sync.test.ts` — wrong import path
 - `e2e-swarm.test.ts` — wrong import path
@@ -32,6 +32,7 @@ updated: 2026-06-26T03:03:08.328Z
 - `test/fixtures/docker.ts` — missing `exec` import
 
 **Note**: Some items listed were inaccurate:
+
 - `fixtures/index.js` existed (at `test/fixtures/index.ts`)
 - `assertDefined` signature was correct
 - `SubagentResult` had `timedOut` property
@@ -43,6 +44,7 @@ These are integration tests that require Docker containers to run (hook timeouts
 ### 2. Unused Code (70+ hints)
 
 **Examples**:
+
 - `drone-agent/src/plugins/index.ts` — `createSwarmPlugin`, `SwarmConfig` unused
 - `drone-agent/src/plugins/swarm/index.ts` — `randomUUID` unused
 - `drone-agent/src/plugins/llm/index.ts` — `newProviderId` unused
@@ -55,6 +57,7 @@ These are integration tests that require Docker containers to run (hook timeouts
 ### 3. Type Duplication ✅ DONE
 
 Types duplicated across:
+
 - `drone-beacon/src/types.ts`
 - `drone-coordinator/src/types.ts`
 - `drone-core/src/index.ts`
@@ -67,13 +70,13 @@ Types duplicated across:
 
 ### 4. Large Files
 
-| File | Lines | Recommendation |
-|------|-------|----------------|
-| `drone-core/src/index.ts` | 1,269 | Split into smaller modules |
-| `drone-agent/src/plugins/lsp/tools.ts` | 1,230 | Extract LSP-specific logic |
-| `drone-agent/src/plugins/lsp/normalize.ts` | 1,153 | Extract normalization |
-| `drone-beacon/src/db.ts` | 958 | Consider service-layer extraction |
-| `drone-agent/src/plugins/self-improvement/index.ts` | 941 | Split by feature |
+| File                                                | Lines | Recommendation                    |
+| --------------------------------------------------- | ----- | --------------------------------- |
+| `drone-core/src/index.ts`                           | 1,269 | Split into smaller modules        |
+| `drone-agent/src/plugins/lsp/tools.ts`              | 1,230 | Extract LSP-specific logic        |
+| `drone-agent/src/plugins/lsp/normalize.ts`          | 1,153 | Extract normalization             |
+| `drone-beacon/src/db.ts`                            | 958   | Consider service-layer extraction |
+| `drone-agent/src/plugins/self-improvement/index.ts` | 941   | Split by feature                  |
 
 ---
 
@@ -100,10 +103,10 @@ Types duplicated across:
 
 ## Refactoring Priority
 
-| Priority | Issue | Effort |
-|----------|-------|--------|
-| 1 | ~~Fix test errors~~ | Low |
-| 2 | Remove unused code (70+ hints) | Low |
-| 3 | Add beacon/coordinator tests | Medium |
-| 4 | Split large files (LSP, db) | Medium |
-| 5 | Create shared `drone-domain` types | High |
+| Priority | Issue                              | Effort |
+| -------- | ---------------------------------- | ------ |
+| 1        | ~~Fix test errors~~                | Low    |
+| 2        | Remove unused code (70+ hints)     | Low    |
+| 3        | Add beacon/coordinator tests       | Medium |
+| 4        | Split large files (LSP, db)        | Medium |
+| 5        | Create shared `drone-domain` types | High   |

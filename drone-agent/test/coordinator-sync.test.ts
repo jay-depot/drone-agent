@@ -49,7 +49,7 @@ describe('Beacon ↔ Coordinator Sync', () => {
 
         const personas = await getCoordinatorPersonas(COORDINATOR_URL);
         const found = personas.find(p => p.id === testPersona.id);
-        
+
         expect(found).toBeDefined();
       } catch (error) {
         // Push API might require different format
@@ -77,7 +77,7 @@ describe('Beacon ↔ Coordinator Sync', () => {
 
         const skills = await getCoordinatorSkills(COORDINATOR_URL);
         const found = skills.find(s => s.id === testSkill.id);
-        
+
         expect(found).toBeDefined();
       } catch (error) {
         // Push API might require different format
@@ -121,8 +121,10 @@ describe('Beacon ↔ Coordinator Sync', () => {
 
       // Try to verify in coordinator (sync may not be automatic)
       const coordinatorPersonas = await getCoordinatorPersonas(COORDINATOR_URL);
-      const inCoordinator = coordinatorPersonas.find(p => p.id === testPersona.id);
-      
+      const inCoordinator = coordinatorPersonas.find(
+        p => p.id === testPersona.id
+      );
+
       // This may or may not sync automatically depending on implementation
       // Just log the state for debugging
       console.log('Persona in beacon:', !!inBeacon);

@@ -60,7 +60,10 @@ export type {
   DroneSessionPhase,
 } from './config-types.js';
 
-export { createDefaultAgentConfig, applyAgentConfigLayer } from './config-types.js';
+export {
+  createDefaultAgentConfig,
+  applyAgentConfigLayer,
+} from './config-types.js';
 
 // ── Session types ────────────────────────────────────────────────────
 
@@ -86,7 +89,10 @@ export type { DroneSkillDefinition } from './skill-types.js';
 
 // ── Persona types ────────────────────────────────────────────────────
 
-export type { DronePersonaDefinition, DronePersonaCapability } from './persona-types.js';
+export type {
+  DronePersonaDefinition,
+  DronePersonaCapability,
+} from './persona-types.js';
 
 // ── Domain types ────────────────────────────────────────────────────
 
@@ -164,7 +170,12 @@ export type {
 
 // ── Utils ───────────────────────────────────────────────────────────
 
-export { matchGlob, filterByGlobPatterns, createConsoleLogger, getCanonicalToolName } from './utils.js';
+export {
+  matchGlob,
+  filterByGlobPatterns,
+  createConsoleLogger,
+  getCanonicalToolName,
+} from './utils.js';
 
 // ── Token estimation ─────────────────────────────────────────────────
 

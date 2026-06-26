@@ -2,7 +2,12 @@
 
 import type { DroneSkillDefinition } from './skill-types.js';
 import type { DronePersonaDefinition } from './persona-types.js';
-import type { DroneChatMessage, DroneToolDescriptor, DroneContextWindowInfo, DroneChatResponse } from './session-types.js';
+import type {
+  DroneChatMessage,
+  DroneToolDescriptor,
+  DroneContextWindowInfo,
+  DroneChatResponse,
+} from './session-types.js';
 
 /**
  * A provider of skills registered with the skills broker plugin.

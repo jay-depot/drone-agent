@@ -1,10 +1,16 @@
 // ── Capability types ───────────────────────────────────────────────
 
-import type { DroneAgentConfig, PartialDroneAgentConfig } from './config-types.js';
+import type {
+  DroneAgentConfig,
+  PartialDroneAgentConfig,
+} from './config-types.js';
 import type { DroneSkillDefinition } from './skill-types.js';
-import type { DroneSkillProvider, DroneRecallEnhancer, DronePersonaProvider, DroneLlmProvider, DroneLlmProviderRegistration } from './provider-types.js';
-import type { DronePersonaDefinition } from './persona-types.js';
-import type { DroneToolDescriptor } from './session-types.js';
+import type {
+  DroneSkillProvider,
+  DroneRecallEnhancer,
+  DroneLlmProvider,
+  DroneLlmProviderRegistration,
+} from './provider-types.js';
 
 // ── Config capability ──────────────────────────────────────────────
 

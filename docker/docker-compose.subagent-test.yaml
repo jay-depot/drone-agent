@@ -17,7 +17,7 @@ services:
     networks:
       - subagent-test
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3458/health"]
+      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:3458/health']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -43,7 +43,7 @@ services:
       echo-llm:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "--check", "/drone-agent/bin/drone-agent"]
+      test: ['CMD', 'node', '--check', '/drone-agent/bin/drone-agent']
       interval: 10s
       timeout: 5s
       retries: 3

@@ -143,7 +143,11 @@ describe('MultilineTextInput', () => {
     // There should be more than one content line with text
     let contentLineCount = 0;
     for (let i = 1; i < lines.length - 1; i++) {
-      if (lines[i].includes('this is') || lines[i].includes('line of') || lines[i].includes('would wrap')) {
+      if (
+        lines[i].includes('this is') ||
+        lines[i].includes('line of') ||
+        lines[i].includes('would wrap')
+      ) {
         contentLineCount++;
       }
     }

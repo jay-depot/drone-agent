@@ -1,8 +1,6 @@
 // ── Plugin system types ────────────────────────────────────────────
 
-import type { DroneSkillDefinition } from './skill-types.js';
-import type { DronePersonaDefinition } from './persona-types.js';
-import type { DroneChatMessage, DroneToolDescriptor, DroneContextWindowInfo, DroneChatResponse, DroneToolJsonSchema } from './session-types.js';
+import type { DroneToolJsonSchema } from './session-types.js';
 import type { DroneAgentConfig } from './config-types.js';
 
 // ── Plugin infrastructure ─────────────────────────────────────────
@@ -33,10 +31,14 @@ export type DronePluginHooks = {
   onShutdown: (callback: () => Promise<void>) => void;
   onSessionClear: (callback: () => Promise<void>) => void;
   onSessionSafetyTrimWillRun: (
-    callback: (payload: import('./session-types.js').DroneSessionSafetyTrimPayload) => Promise<void>
+    callback: (
+      payload: import('./session-types.js').DroneSessionSafetyTrimPayload
+    ) => Promise<void>
   ) => void;
   onSessionSafetyTrimApplied: (
-    callback: (payload: import('./session-types.js').DroneSessionSafetyTrimPayload) => Promise<void>
+    callback: (
+      payload: import('./session-types.js').DroneSessionSafetyTrimPayload
+    ) => Promise<void>
   ) => void;
 };
 

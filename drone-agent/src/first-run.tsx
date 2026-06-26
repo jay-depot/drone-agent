@@ -49,7 +49,6 @@ export function pickModelInteractive(
  * one to use. Writes the user's choice to ~/.drone-agent/config.json.
  */
 export async function runFirstRunSetup(
-  
   engine: CreateDronePluginEngine,
   conversation: CreateConversationService,
   logger: CreateConsoleLogger,

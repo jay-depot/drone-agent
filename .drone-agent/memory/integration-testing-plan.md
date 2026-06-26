@@ -29,6 +29,7 @@ Automated integration tests for the drone swarm, leveraging Docker containers fo
 The following have been implemented:
 
 ### ✅ Test Fixtures Library
+
 - `drone-agent/test/fixtures/index.ts` - Main exports
 - `drone-agent/test/fixtures/docker.ts` - Container management
 - `drone-agent/test/fixtures/swarm.ts` - Swarm utilities
@@ -36,11 +37,13 @@ The following have been implemented:
 - `drone-agent/test/fixtures/assertions.ts` - Custom assertions
 
 ### ✅ Docker Configuration
+
 - `docker/docker-compose.integration-test.yaml` - Full swarm compose
 - `docker/dummy-agent/` - Minimal agent for testing
 - `docker/test-runner/` - Test orchestrator
 
 ### ✅ Test Suites
+
 - `drone-agent/test/agent-beacon.test.ts` - Agent ↔ Beacon tests
 - `drone-agent/test/inter-agent.test.ts` - Inter-agent communication
 - `drone-agent/test/spawn.test.ts` - Agent spawning
@@ -48,6 +51,7 @@ The following have been implemented:
 - `drone-agent/test/e2e-swarm.test.ts` - Full swarm E2E flows
 
 ### ✅ CI
+
 - `.github/workflows/integration-test.yml` - GitHub Actions workflow
 
 ---

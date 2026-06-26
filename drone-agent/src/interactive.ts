@@ -179,8 +179,7 @@ export async function runInteractiveLoop(
   conversation: CreateConversationService,
   engine: CreateDronePluginEngine,
   logger: CreateConsoleLogger,
-  sessionManager: CreateSessionManager,
-  
+  sessionManager: CreateSessionManager
 ): Promise<void> {
   const rl: Interface = createInterface({ input, output });
   const promptLabel = buildPromptLabel(conversation, engine);

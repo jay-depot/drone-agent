@@ -37,14 +37,14 @@ async function dockerCommand(args: string[]): Promise<string> {
     let stdout = '';
     let stderr = '';
 
-    child.stdout?.on('data', (data) => {
+    child.stdout?.on('data', data => {
       stdout += data.toString();
     });
-    child.stderr?.on('data', (data) => {
+    child.stderr?.on('data', data => {
       stderr += data.toString();
     });
 
-    child.on('close', (code) => {
+    child.on('close', code => {
       if (code === 0) {
         resolve(stdout.trim());
       } else {
@@ -52,7 +52,7 @@ async function dockerCommand(args: string[]): Promise<string> {
       }
     });
 
-    child.on('error', (err) => {
+    child.on('error', err => {
       reject(err);
     });
   });
@@ -61,7 +61,9 @@ async function dockerCommand(args: string[]): Promise<string> {
 /**
  * Get container info by name
  */
-export async function getContainerInfo(name: string): Promise<ContainerInfo | null> {
+export async function getContainerInfo(
+  name: string
+): Promise<ContainerInfo | null> {
   try {
     const output = await dockerCommand([
       'inspect',
@@ -137,7 +139,7 @@ export async function waitForContainer(
     if (info && (info.health === 'healthy' || info.status === 'running')) {
       return true;
     }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
   }
   return false;
 }
@@ -183,8 +185,8 @@ export async function startTestEnvironment(
 
   const containers = output
     .split('\n')
-    .filter((l) => l.trim())
-    .map((line) => {
+    .filter(l => l.trim())
+    .map(line => {
       try {
         return JSON.parse(line).Name;
       } catch {
@@ -193,7 +195,9 @@ export async function startTestEnvironment(
     })
     .filter((n): n is string => n !== null);
 
-  console.log(`Started ${containers.length} containers: ${containers.join(', ')}`);
+  console.log(
+    `Started ${containers.length} containers: ${containers.join(', ')}`
+  );
 
   return {
     composeFile,
@@ -236,19 +240,19 @@ export async function execInContainer(
   command: string[]
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const args = ['exec', '-t', containerName, ...command];
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const child = spawn('docker', args, { stdio: 'pipe' });
     let stdout = '';
     let stderr = '';
 
-    child.stdout?.on('data', (data) => {
+    child.stdout?.on('data', data => {
       stdout += data.toString();
     });
-    child.stderr?.on('data', (data) => {
+    child.stderr?.on('data', data => {
       stderr += data.toString();
     });
 
-    child.on('close', (code) => {
+    child.on('close', code => {
       resolve({
         stdout: stdout.trim(),
         stderr: stderr.trim(),
@@ -256,7 +260,7 @@ export async function execInContainer(
       });
     });
 
-    child.on('error', (err) => {
+    child.on('error', err => {
       resolve({
         stdout: '',
         stderr: err.message,
@@ -317,7 +321,7 @@ export async function getServiceUrls(
   ]);
 
   const services: Record<string, string> = {};
-  const lines = output.split('\n').filter((l) => l.trim());
+  const lines = output.split('\n').filter(l => l.trim());
 
   for (const line of lines) {
     try {

@@ -28,7 +28,7 @@ describe('Inter-Agent Communication', () => {
   describe('send-message-to-agent', () => {
     it('should send a message between agents', async () => {
       const agents = await getBeaconAgents(BEACON_URL);
-      
+
       if (agents.length < 2) {
         // Need at least 2 agents to test messaging
         expect(agents.length).toBeGreaterThanOrEqual(2);
@@ -36,7 +36,7 @@ describe('Inter-Agent Communication', () => {
       }
 
       const [sender, recipient] = agents;
-      
+
       const message = await sendBeaconMessage(
         BEACON_URL,
         sender.id,
@@ -51,7 +51,7 @@ describe('Inter-Agent Communication', () => {
 
     it('should retrieve messages for an agent', async () => {
       const agents = await getBeaconAgents(BEACON_URL);
-      
+
       if (agents.length === 0) {
         expect(agents.length).toBeGreaterThan(0);
         return;
@@ -68,7 +68,7 @@ describe('Inter-Agent Communication', () => {
 
     it('should join a channel', async () => {
       const agents = await getBeaconAgents(BEACON_URL);
-      
+
       if (agents.length === 0) {
         expect(agents.length).toBeGreaterThan(0);
         return;
@@ -82,7 +82,7 @@ describe('Inter-Agent Communication', () => {
 
     it('should post a message to a channel', async () => {
       const agents = await getBeaconAgents(BEACON_URL);
-      
+
       if (agents.length === 0) {
         expect(agents.length).toBeGreaterThan(0);
         return;
@@ -101,7 +101,7 @@ describe('Inter-Agent Communication', () => {
 
     it('should leave a channel', async () => {
       const agents = await getBeaconAgents(BEACON_URL);
-      
+
       if (agents.length === 0) {
         expect(agents.length).toBeGreaterThan(0);
         return;
@@ -116,14 +116,14 @@ describe('Inter-Agent Communication', () => {
   describe('message-delivery-status', () => {
     it('should track message delivery status', async () => {
       const agents = await getBeaconAgents(BEACON_URL);
-      
+
       if (agents.length < 2) {
         expect(agents.length).toBeGreaterThanOrEqual(2);
         return;
       }
 
       const [sender, recipient] = agents;
-      
+
       const message = await sendBeaconMessage(
         BEACON_URL,
         sender.id,

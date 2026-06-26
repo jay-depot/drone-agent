@@ -64,7 +64,7 @@ describe('subagent dispatch', () => {
       });
 
       // Verify stdout contains valid JSON lines
-      const lines = result.stdout.split('\n').filter((l) => l.trim());
+      const lines = result.stdout.split('\n').filter(l => l.trim());
       expect(lines.length).toBeGreaterThan(0);
 
       // Each line should be valid JSON
@@ -198,26 +198,28 @@ describe('subagent parallel execution', () => {
   describe('parallel-basic', () => {
     it('should run multiple subagents and collect results', async () => {
       const results = await launchParallelSubagents(3, {
-        taskFactory: (i) => `Return the number ${i}`,
+        taskFactory: i => `Return the number ${i}`,
         timeout: 120000,
       });
 
       expect(results).toHaveLength(3);
       // All should complete (some might error, but they should all finish)
-      expect(results.every((r) => r.exitCode !== undefined)).toBe(true);
+      expect(results.every(r => r.exitCode !== undefined)).toBe(true);
     });
   });
 
   describe('parallel-isolation', () => {
     it('each subagent should get correct task', async () => {
       const results = await launchParallelSubagents(5, {
-        taskFactory: (i) => `Return the exact number: ${i}`,
+        taskFactory: i => `Return the exact number: ${i}`,
         timeout: 120000,
       });
 
       expect(results).toHaveLength(5);
       // Verify each result exists (actual task verification depends on LLM)
-      expect(results.every((r) => r.result !== undefined || r.error !== undefined)).toBe(true);
+      expect(
+        results.every(r => r.result !== undefined || r.error !== undefined)
+      ).toBe(true);
     });
   });
 
@@ -226,7 +228,7 @@ describe('subagent parallel execution', () => {
       const start = Date.now();
 
       const results = await launchParallelSubagents(3, {
-        taskFactory: (i) => `Task ${i}: Wait 1 second then return done`,
+        taskFactory: i => `Task ${i}: Wait 1 second then return done`,
         timeout: 30000,
       });
 
@@ -245,7 +247,7 @@ describe('subagent parallel execution', () => {
       const start = Date.now();
 
       const results = await launchParallelSubagents(4, {
-        taskFactory: (i) => `Task ${i}: return ${i}`,
+        taskFactory: i => `Task ${i}: return ${i}`,
         timeout: 60000,
         maxConcurrency: 2,
       });

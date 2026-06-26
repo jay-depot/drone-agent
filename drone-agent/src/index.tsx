@@ -273,13 +273,7 @@ async function main(): Promise<void> {
     }
   } else if (invocation.kind === 'default' && !invocation.options.once) {
     if (invocation.options.outputPlain || invocation.options.outputJson) {
-      await runInteractiveLoop(
-        conversation,
-        engine,
-        logger,
-        sessionManager,
-        
-      );
+      await runInteractiveLoop(conversation, engine, logger, sessionManager);
     } else {
       // TUI mode: defer elicitation wiring to the App (it constructs a
       // TUI-flavoured capability that draws prompts into the chat log).
