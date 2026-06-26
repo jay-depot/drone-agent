@@ -23,6 +23,7 @@ export function initDatabase(dataPath: string): Database.Database {
       name TEXT NOT NULL,
       description TEXT NOT NULL,
       systemPrompt TEXT NOT NULL,
+      scope TEXT NOT NULL,
       createdAt INTEGER NOT NULL,
       updatedAt INTEGER NOT NULL
     );
@@ -33,6 +34,7 @@ export function initDatabase(dataPath: string): Database.Database {
       description TEXT NOT NULL,
       trigger TEXT NOT NULL,
       body TEXT NOT NULL,
+      scope TEXT NOT NULL,
       createdAt INTEGER NOT NULL,
       updatedAt INTEGER NOT NULL
     );
@@ -90,13 +92,14 @@ export function createPersona(req: CreatePersonaRequest): Persona {
     name: req.name,
     description: req.description,
     systemPrompt: req.systemPrompt,
+    scope: 'coordinator',
     createdAt: now,
     updatedAt: now,
   };
 
   const stmt = getDatabase().prepare(`
-    INSERT INTO personas (id, name, description, systemPrompt, createdAt, updatedAt)
-    VALUES (@id, @name, @description, @systemPrompt, @createdAt, @updatedAt)
+    INSERT INTO personas (id, name, description, systemPrompt, scope, createdAt, updatedAt)
+    VALUES (@id, @name, @description, @systemPrompt, @scope, @createdAt, @updatedAt)
   `);
 
   stmt.run(persona);
@@ -156,13 +159,14 @@ export function createSkill(req: CreateSkillRequest): Skill {
     description: req.description,
     trigger: req.trigger,
     body: req.body,
+    scope: 'coordinator',
     createdAt: now,
     updatedAt: now,
   };
 
   const stmt = getDatabase().prepare(`
-    INSERT INTO skills (id, name, description, trigger, body, createdAt, updatedAt)
-    VALUES (@id, @name, @description, @trigger, @body, @createdAt, @updatedAt)
+    INSERT INTO skills (id, name, description, trigger, body, scope, createdAt, updatedAt)
+    VALUES (@id, @name, @description, @trigger, @body, @scope, @createdAt, @updatedAt)
   `);
 
   stmt.run(skill);

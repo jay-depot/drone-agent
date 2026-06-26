@@ -1,23 +1,7 @@
-export interface Persona {
-  id: string;
-  name: string;
-  description: string;
-  systemPrompt: string;
-  scope: 'local' | 'coordinator';
-  createdAt: number;
-  updatedAt: number;
-}
+// Shared types imported from drone-core
+export type { Persona, Skill, CreatePersonaRequest, CreateSkillRequest } from 'drone-core';
 
-export interface Skill {
-  id: string;
-  name: string;
-  description: string;
-  trigger: string;
-  body: string;
-  scope: 'local' | 'coordinator';
-  createdAt: number;
-  updatedAt: number;
-}
+// === Beacon-specific types ===
 
 export interface AgentSession {
   id: string;
@@ -31,21 +15,6 @@ export interface CoordinatorConfig {
   port: number;
   beaconId: string;
   beaconName: string;
-}
-
-export interface CreatePersonaRequest {
-  id: string;
-  name: string;
-  description: string;
-  systemPrompt: string;
-}
-
-export interface CreateSkillRequest {
-  id: string;
-  name: string;
-  description: string;
-  trigger: string;
-  body: string;
 }
 
 export interface RegisterAgentRequest {
