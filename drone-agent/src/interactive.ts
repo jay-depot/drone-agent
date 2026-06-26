@@ -12,7 +12,6 @@ import type {
 import type { createDronePluginEngine } from './runtime/plugin-engine.js';
 import type { createConsoleLogger, DroneLlmCapability } from 'drone-core';
 import type { createSessionManager } from './runtime/session-manager.js';
-import type { CliOptions } from './cli.js';
 
 export type CreateConsoleLogger = ReturnType<typeof createConsoleLogger>;
 export type CreateConversationService = ReturnType<
