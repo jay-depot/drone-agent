@@ -18,31 +18,19 @@ export default defineConfig({
     },
   },
   test: {
+    // Only include Docker-dependent integration tests
     include: [
-      'drone-core/test/**/*.test.ts',
-      'drone-agent/test/**/*.test.ts',
-      'drone-agent/test/**/*.test.tsx',
-    ],
-    // Exclude Docker-dependent integration tests (run separately with docker)
-    exclude: [
-      '**/e2e-swarm.test.ts',
-      '**/coordinator-sync.test.ts',
-      '**/spawn.test.ts',
-      '**/inter-agent.test.ts',
-      '**/agent-beacon.test.ts',
+      'drone-agent/test/e2e-swarm.test.ts',
+      'drone-agent/test/coordinator-sync.test.ts',
+      'drone-agent/test/spawn.test.ts',
+      'drone-agent/test/inter-agent.test.ts',
+      'drone-agent/test/agent-beacon.test.ts',
     ],
     environment: 'node',
     setupFiles: ['drone-agent/test/setup-color.ts'],
     globals: false,
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json-summary'],
-      include: ['drone-core/src/**/*.ts', 'drone-agent/src/**/*.ts'],
-      exclude: [
-        'drone-agent/src/tui/**',
-        'drone-agent/src/index.ts',
-        '**/*.d.ts',
-      ],
-    },
+    // Allow longer hook timeout for service discovery
+    hookTimeout: 60000,
+    testTimeout: 60000,
   },
 });

@@ -1,5 +1,5 @@
 # Integration Tests GitHub Workflow
-name: Integration Tests
+name: Tests
 
 on:
   push:
@@ -8,7 +8,33 @@ on:
     branches: [main]
 
 jobs:
-  integration:
+  # Unit tests - run without Docker dependencies
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run unit tests
+        run: pnpm test
+
+      - name: Run linter
+        run: pnpm lint
+
+  # Docker-based integration tests
+  integration-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +47,8 @@ jobs:
           docker compose -f docker/docker-compose.integration-test.yaml build
 
       - name: Run integration tests
+        env:
+          RUN_INTEGRATION_TESTS: true
         run: |
           docker compose -f docker/docker-compose.integration-test.yaml up --abort-on-container-exit
         timeout-minutes: 15

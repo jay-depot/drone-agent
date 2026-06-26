@@ -8,15 +8,16 @@
  *      <Text inverse> caused Yoga to position the cursor on the
  *      bottom border line).
  *
- *   2. Long input text truncates with an ellipsis instead of wrapping
- *      to a second line — this was bugs #1 and #2 (default
- *      wrap="wrap" made the input box grow vertically).
+ *   2. Long input text soft-wraps to multiple lines within the box.
+ *      Note: This differs from the original behavior where text
+ *      truncated with an ellipsis — the design was changed to allow
+ *      soft-wrap so users can see more of their input.
  *
  *   3. The unfocused (!showCursor) case renders plain text without
  *      ANSI cursor escapes.
  *
  *   4. Ctrl+J newlines still work (explicit multiline is still
- *      supported even though automatic word-wrap is disabled).
+ *      supported).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -122,12 +123,11 @@ describe('MultilineTextInput', () => {
     cleanup();
   });
 
-  // ── Bugs #1 and #2: wrapping / right border pushed down ───────
-  // The old code used default wrap="wrap", causing the input box to
-  // grow vertically when text exceeded the available width. The fix
-  // uses wrap="truncate" so the box stays single-line.
+  // ── Soft-wrap behavior ─────────────────────────────────────────
+  // Long text wraps to multiple lines within the box, allowing users
+  // to see more of their input. No ellipsis is shown.
 
-  it('truncates long input text with an ellipsis instead of wrapping', () => {
+  it('soft-wraps long input text to multiple lines', () => {
     // A very long string that would wrap in a 30-char-wide box
     const longText = 'this is a very long line of text that would wrap';
     const { lastFrame, cleanup } = render(
@@ -135,36 +135,44 @@ describe('MultilineTextInput', () => {
     );
     const frame = lastFrame() ?? '';
 
-    // The content should end with '…' (ellipsis) indicating truncation
-    expect(frame).toContain('…');
+    // The content should NOT contain an ellipsis (no truncation)
+    expect(frame).not.toContain('…');
 
-    // There should be exactly one content line (no wrapped continuation)
+    // The content should appear on multiple lines (soft-wrapped)
     const lines = frame.split('\n');
-    const contentLine = lines[1];
-    // The content line should contain the ellipsis
-    expect(contentLine).toContain('…');
+    // There should be more than one content line with text
+    let contentLineCount = 0;
+    for (let i = 1; i < lines.length - 1; i++) {
+      if (lines[i].includes('this is') || lines[i].includes('line of') || lines[i].includes('would wrap')) {
+        contentLineCount++;
+      }
+    }
+    expect(contentLineCount).toBeGreaterThan(1);
 
     cleanup();
   });
 
-  it('does not create a second content line with long text', () => {
+  it('wraps long text across multiple content lines', () => {
     const longText = 'x'.repeat(200);
     const { lastFrame, cleanup } = render(
       <InputLineShell value={longText} onChange={() => {}} />
     );
     const frame = lastFrame() ?? '';
 
-    const lines = frame.split('\n');
-    // The content line (index 1) should contain the ellipsis
-    const contentLine = lines[1];
-    expect(contentLine).toContain('…');
+    // No ellipsis should appear
+    expect(frame).not.toContain('…');
 
-    // Lines after the content line should be padding or border,
-    // not a second content line with text content
-    for (let i = 2; i < lines.length - 1; i++) {
-      // These lines should NOT contain the ellipsis (no wrapped text)
-      expect(lines[i]).not.toContain('…');
+    // The content should span multiple lines within the border
+    const lines = frame.split('\n');
+    // Count content lines that have the 'x' character (excluding border lines)
+    let wrappedLines = 0;
+    for (let i = 1; i < lines.length - 1; i++) {
+      if (lines[i].includes('x')) {
+        wrappedLines++;
+      }
     }
+    // Should have wrapped to multiple lines
+    expect(wrappedLines).toBeGreaterThan(1);
 
     cleanup();
   });
@@ -201,7 +209,7 @@ describe('MultilineTextInput', () => {
   });
 
   // ── Ctrl+J newlines still work ────────────────────────────────
-  // Even though automatic word-wrap is disabled, explicit newlines
+  // Even though automatic word-wrap is enabled, explicit newlines
   // inserted via Ctrl+J should still render correctly.
 
   it('renders explicit newlines (Ctrl+J) in the text', () => {
@@ -219,7 +227,7 @@ describe('MultilineTextInput', () => {
     cleanup();
   });
 
-  // ── Cursor at end of text ──────────────────────────────────────
+  // ── Cursor at end of text ─────────────────────────────────────
   // Verify the cursor renders as an inverse space after the text.
 
   it('renders cursor as inverse space at end of text', () => {
