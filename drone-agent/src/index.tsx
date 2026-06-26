@@ -194,7 +194,6 @@ async function main(): Promise<void> {
     const llm = getLlmCapability(engine);
     if (llm) {
       await runFirstRunSetup(
-        llm,
         engine,
         conversation,
         logger,
@@ -279,7 +278,7 @@ async function main(): Promise<void> {
         engine,
         logger,
         sessionManager,
-        invocation.options
+        
       );
     } else {
       // TUI mode: defer elicitation wiring to the App (it constructs a

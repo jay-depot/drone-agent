@@ -2,8 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { render } from 'ink';
-import React from 'react';
-import type { DroneAgentConfig, DroneLlmCapability } from 'drone-core';
+import type { DroneAgentConfig } from 'drone-core';
 import { ModelPicker } from './tui/components/ModelPicker.js';
 import type { createConversationService } from './runtime/conversation-service.js';
 import type { createDronePluginEngine } from './runtime/plugin-engine.js';
@@ -50,7 +49,7 @@ export function pickModelInteractive(
  * one to use. Writes the user's choice to ~/.drone-agent/config.json.
  */
 export async function runFirstRunSetup(
-  llm: DroneLlmCapability,
+  
   engine: CreateDronePluginEngine,
   conversation: CreateConversationService,
   logger: CreateConsoleLogger,

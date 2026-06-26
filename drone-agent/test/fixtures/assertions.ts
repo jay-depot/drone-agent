@@ -201,7 +201,7 @@ export function assertMessageExists(
     return true;
   });
 
-  assertDefined(message, `Message not found matching criteria`, options);
+  assertDefined(message, `Message not found matching criteria`);
 }
 
 // ============ Collection Assertions ============

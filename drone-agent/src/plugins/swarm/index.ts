@@ -9,7 +9,6 @@ import type {
   DroneToolDefinition,
 } from 'drone-core';
 import { PRECEDENCE_COORDINATOR, PRECEDENCE_SWARM } from 'drone-core';
-import { randomUUID } from 'crypto';
 
 /**
  * BeaconConfigInjector fetches config from the beacon and provides it as an underlay.

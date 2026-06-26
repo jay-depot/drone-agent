@@ -22,7 +22,7 @@ type RegistrationContext = {
 
 const SUMMARY_PREFIX = 'Conversation summary (compacted):\n';
 
-function resolveContextWindow(
+async function resolveContextWindow(
   provider: DroneLlmProvider,
   model: string,
   fallback: number

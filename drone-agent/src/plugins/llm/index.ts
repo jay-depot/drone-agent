@@ -150,7 +150,6 @@ export const llmPlugin: DronePlugin = {
         // Check for --provider flag
         const providerIdx = args.indexOf('--provider');
         if (providerIdx !== -1 && providerIdx + 1 < args.length) {
-          const newProviderId = args[providerIdx + 1];
           try {
             // We need to activate the new provider. Since the capability
             // doesn't expose activation directly, we use the engine to

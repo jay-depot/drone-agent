@@ -226,6 +226,7 @@ export async function launchSubagent(
       } else if (exitCode !== 0 && exitCode !== undefined) {
         resolvePromise({
           error: error || `Subagent exited with code ${exitCode}${stderr ? `: ${stderr}` : ''}`,
+          timedOut: false,
           exitCode,
           stdout: stdoutText,
           stderr,
@@ -235,6 +236,7 @@ export async function launchSubagent(
         resolvePromise({
           error: 'Subagent did not return a result',
           exitCode,
+          timedOut: false,
           stdout: stdoutText,
           stderr,
           subagentId,
