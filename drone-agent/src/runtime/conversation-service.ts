@@ -58,6 +58,18 @@ type CreateConversationServiceOptions = {
     currentCount: number,
     maxCount: number
   ) => Promise<boolean>;
+  /**
+   * Optional callback invoked when the stuck error threshold is reached
+   * (same tool failing repeatedly). The host can prompt the user to continue.
+   * Return `true` to reset the stuck counter and keep going, or `false` to
+   * abort with the default error. When omitted, the threshold always produces
+   * a hard error.
+   */
+  onStuckErrorThresholdReached?: (
+    toolName: string,
+    errorCode: string | null,
+    failureCount: number
+  ) => Promise<boolean>;
 };
 
 export function createConversationService({
@@ -69,6 +81,7 @@ export function createConversationService({
   maxToolIterations,
   stuckErrorThreshold = 3,
   onToolIterationLimitReached,
+  onStuckErrorThresholdReached,
 }: CreateConversationServiceOptions): ConversationService {
   let hasWarnedAboutSafetyTrim = false;
 
@@ -339,6 +352,19 @@ export function createConversationService({
             const codeSuffix = stuckSignature.code
               ? ` (${stuckSignature.code})`
               : '';
+            if (onStuckErrorThresholdReached) {
+              const shouldContinue = await onStuckErrorThresholdReached(
+                stuckSignature.name,
+                stuckSignature.code,
+                stuckCount
+              );
+              if (shouldContinue) {
+                // Reset the stuck detector and continue.
+                stuckSignature = null;
+                stuckCount = 0;
+                continue;
+              }
+            }
             throw new Error(
               `Model appears stuck on ${stuckSignature.name}${codeSuffix}: ` +
                 `failed ${stuckCount} times in a row. Aborting. ` +

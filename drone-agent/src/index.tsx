@@ -149,6 +149,24 @@ async function main(): Promise<void> {
           return answers.continue === 'yes';
         }
       : undefined,
+    // When the same tool keeps failing, prompt the user to continue or stop.
+    onStuckErrorThresholdReached: async (toolName, errorCode, failureCount) => {
+      const elicit = engine.getElicitation();
+      if (!elicit) return false; // non-interactive → abort
+      const codeSuffix = errorCode ? ` (${errorCode})` : '';
+      const answers = await elicit.ask([
+        {
+          id: 'continue',
+          prompt: `Tool ${toolName}${codeSuffix} failed ${failureCount} times in a row. Continue anyway?`,
+          choices: [
+            { value: 'yes', label: 'Yes, continue' },
+            { value: 'no', label: 'No, stop' },
+          ],
+          defaultValue: 'no',
+        },
+      ]);
+      return answers.continue === 'yes';
+    },
   });
   const registeredPlugins = await engine.initialize();
 
