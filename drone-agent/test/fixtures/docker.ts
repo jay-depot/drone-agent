@@ -4,7 +4,7 @@
  * Provides utilities for managing Docker containers during integration testing.
  */
 
-import { spawn, ChildProcess } from 'node:child_process';
+import { spawn, exec, ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';

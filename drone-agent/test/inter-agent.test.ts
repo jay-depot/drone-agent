@@ -16,7 +16,7 @@ import {
   leaveChannel,
   sendChannelMessage,
   waitForService,
-} from '../fixtures/index.js';
+} from './fixtures/index.js';
 
 const BEACON_URL = process.env.BEACON_URL || 'http://localhost:3457';
 

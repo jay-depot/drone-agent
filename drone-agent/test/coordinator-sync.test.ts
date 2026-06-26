@@ -18,7 +18,7 @@ import {
   pushPersonaToCoordinator,
   pushSkillToCoordinator,
   waitForService,
-} from '../fixtures/index.js';
+} from './fixtures/index.js';
 
 const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3456';
 const BEACON_URL = process.env.BEACON_URL || 'http://localhost:3457';
