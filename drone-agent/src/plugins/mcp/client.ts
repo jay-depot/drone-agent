@@ -920,23 +920,60 @@ export async function createMcpClientConnection(options: {
       );
     },
     disconnect: async () => {
-      try {
-        if (state.ownership === 'spawned' && state.status === 'connected') {
+      // Attempt graceful shutdown for spawned servers
+      if (state.ownership === 'spawned' && state.status === 'connected') {
+        try {
           await requestWithRetry('shutdown', {}, false);
+        } catch (error) {
+          // Method not found (-32601) is expected for servers like Lightpanda
+          // that don't implement the optional shutdown method
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (errorMessage.includes('-32601') || errorMessage.includes('Method not found')) {
+            // Gracefully ignore - server may not implement shutdown
+          } else {
+            options.logger.warn(
+              `mcp server ${options.serverId} shutdown request failed: ${errorMessage}`
+            );
+          }
         }
-      } catch (error) {
-        options.logger.warn(
-          `mcp server ${options.serverId} shutdown request failed: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
-      } finally {
-        rpc.disconnect();
-        if (state.ownership === 'spawned') {
-          childProcess?.kill();
+
+        // Send exit notification (required by MCP spec for graceful server termination)
+        try {
+          rpc.notify('exit');
+        } catch {
+          // Ignore notification failures during teardown
         }
-        state.status = 'disconnected';
       }
+
+      // Disconnect RPC transport
+      rpc.disconnect();
+
+      // Forcefully terminate spawned process after timeout if it hasn't exited
+      if (state.ownership === 'spawned' && childProcess) {
+        const FORCE_KILL_DELAY_MS = 2500;
+        const exitPromise = new Promise<void>(resolve => {
+          const onExit = () => resolve();
+          childProcess!.once('exit', onExit);
+          // Also resolve if process is already dead
+          if (!childProcess.pid || childProcess.killed) {
+            resolve();
+          }
+        });
+
+        const timeoutPromise = new Promise<void>(resolve => {
+          setTimeout(() => {
+            options.logger.warn(
+              `mcp server ${options.serverId} did not exit gracefully, forcing termination`
+            );
+            childProcess?.kill();
+            resolve();
+          }, FORCE_KILL_DELAY_MS);
+        });
+
+        await Promise.race([exitPromise, timeoutPromise]);
+      }
+
+      state.status = 'disconnected';
     },
   };
 }
