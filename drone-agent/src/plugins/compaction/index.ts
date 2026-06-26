@@ -22,7 +22,7 @@ type RegistrationContext = {
 
 const SUMMARY_PREFIX = 'Conversation summary (compacted):\n';
 
-async function resolveContextWindow(
+function resolveContextWindow(
   provider: DroneLlmProvider,
   model: string,
   fallback: number
@@ -120,7 +120,6 @@ async function maybeCompact(input: {
   const turns = sessionManager.getTurns();
 
   if (turns.length === 0) {
-    input.context.compactionInFlight.value = false;
     return;
   }
 
