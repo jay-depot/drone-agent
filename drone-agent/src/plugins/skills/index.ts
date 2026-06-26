@@ -286,9 +286,16 @@ export const skillsPlugin: DronePlugin = {
             ctx.logger.warn('Usage: /skills recall <id>');
             return true;
           }
-          ctx.logger.info(
-            await ctx.engine.executeTool('skills.recall', { id })
-          );
+
+          // Execute the tool to get skill data
+          const result = await ctx.engine.executeTool('skills.recall', { id });
+          const skill = JSON.parse(result);
+
+          // Append to conversation context as synthetic tool result
+          ctx.sessionManager?.appendToolResult('skills.recall', result);
+
+          // Tell the user it worked (not the full body)
+          ctx.logger.info(`Loaded skill: ${skill.name} (${skill.source})`);
           return true;
         }
 

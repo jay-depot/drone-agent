@@ -239,6 +239,8 @@ export async function runInteractiveLoop(
           },
           sessionManager: {
             appendUserMessage: m => sessionManager.appendUserMessage(m),
+            appendToolResult: (name, content, id) =>
+              sessionManager.appendToolResult(name, content, id),
           },
         });
 

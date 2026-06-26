@@ -239,9 +239,14 @@ export type DroneSlashCommandContext = {
       onEvent?: (event: unknown) => void
     ) => Promise<string>;
   };
-  /** Session manager for appending synthetic user messages. */
+  /** Session manager for appending synthetic messages. */
   sessionManager?: {
     appendUserMessage: (message: string) => void;
+    appendToolResult: (
+      toolName: string,
+      content: string,
+      toolCallId?: string
+    ) => void;
   };
 };
 
