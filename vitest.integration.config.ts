@@ -18,13 +18,16 @@ export default defineConfig({
     },
   },
   test: {
-    // Only include Docker-dependent integration tests
+    // Integration tests requiring external services:
+    // - Docker services: e2e-swarm, coordinator-sync, spawn, inter-agent, agent-beacon
+    // - LLM with subagent.return support: subagent/dispatch
     include: [
       'drone-agent/test/e2e-swarm.test.ts',
       'drone-agent/test/coordinator-sync.test.ts',
       'drone-agent/test/spawn.test.ts',
       'drone-agent/test/inter-agent.test.ts',
       'drone-agent/test/agent-beacon.test.ts',
+      'drone-agent/test/subagent/dispatch.test.ts',
     ],
     environment: 'node',
     setupFiles: ['drone-agent/test/setup-color.ts'],
