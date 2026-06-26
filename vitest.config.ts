@@ -34,6 +34,13 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['drone-agent/test/setup-color.ts'],
     globals: false,
+    // Force single fork to avoid hanging on process cleanup
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],
