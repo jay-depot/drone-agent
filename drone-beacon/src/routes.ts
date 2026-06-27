@@ -39,7 +39,7 @@ function getBeaconUrl(): string {
 // Exported function for periodic sync (called from index.ts)
 export async function triggerCoordinatorSync(): Promise<{
   success: boolean;
-  synced?: { personas: number; skills: number };
+  synced?: { personas: number; skills: number; knowledge: number };
   error?: string;
 }> {
   const client = getCoordinatorClient();
@@ -56,12 +56,25 @@ export async function triggerCoordinatorSync(): Promise<{
     for (const s of skills) {
       db.upsertSkillFromCoordinator(s);
     }
+
+    // Sync knowledge from coordinator
+    let knowledgeCount = 0;
+    try {
+      const knowledge = await client.pullKnowledge();
+      if (knowledge.length > 0) {
+        db.replaceKnowledgeCache(knowledge);
+        knowledgeCount = knowledge.length;
+      }
+    } catch (err) {
+      logger.warn(`Knowledge sync failed: ${err}`);
+    }
+
     logger.info(
-      `Synced ${personas.length} personas and ${skills.length} skills from coordinator`
+      `Synced ${personas.length} personas, ${skills.length} skills, and ${knowledgeCount} knowledge entries from coordinator`
     );
     return {
       success: true,
-      synced: { personas: personas.length, skills: skills.length },
+      synced: { personas: personas.length, skills: skills.length, knowledge: knowledgeCount },
     };
   } catch (err) {
     logger.error(err, 'Sync failed');

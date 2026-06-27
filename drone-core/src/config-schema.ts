@@ -158,6 +158,16 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       enabled: Type.Optional(Type.Boolean()),
       files: Type.Optional(Type.Array(Type.String())),
     }),
+    swarm: Type.Object({
+      knowledgeSync: Type.Optional(
+        Type.Object({
+          enabled: Type.Optional(Type.Boolean()),
+          pushInsights: Type.Optional(Type.Boolean()),
+          pullOnStartup: Type.Optional(Type.Boolean()),
+          pullIntervalMinutes: Type.Optional(PositiveInteger),
+        })
+      ),
+    }),
   })
 );
 

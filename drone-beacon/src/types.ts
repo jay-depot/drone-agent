@@ -179,3 +179,26 @@ export interface CreateEventLogRequest {
   targetType?: string | null;
   metadata?: Record<string, unknown>;
 }
+
+// === Knowledge Types ===
+
+export type KnowledgeType = 'fact' | 'preference' | 'skill_pattern' | 'principle';
+
+export interface Knowledge {
+  id: string;
+  type: KnowledgeType;
+  key: string;
+  value: string; // JSON-encoded content
+  sourceBeaconId: string | null;
+  sourceAgentId: string | null;
+  confidence: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface KnowledgeSyncConfig {
+  enabled: boolean;
+  pushInsights: boolean;
+  pullOnStartup: boolean;
+  pullIntervalMinutes: number;
+}

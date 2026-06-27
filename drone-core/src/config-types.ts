@@ -102,6 +102,17 @@ export type DronePromptFileConfig = {
   files: string[];
 };
 
+export type DroneKnowledgeSyncConfig = {
+  enabled: boolean;
+  pushInsights: boolean;
+  pullOnStartup: boolean;
+  pullIntervalMinutes: number;
+};
+
+export type DroneSwarmConfig = {
+  knowledgeSync: DroneKnowledgeSyncConfig;
+};
+
 export type DroneLspSpawnServerConfig = {
   transport?: 'stdio';
   language?: string;
@@ -211,6 +222,7 @@ export type DroneAgentConfig = {
   memory: DroneMemoryConfig;
   log: DroneLogConfig;
   promptFile: DronePromptFileConfig;
+  swarm: DroneSwarmConfig;
 };
 
 export type PartialDroneAgentConfig = Partial<{
@@ -227,6 +239,7 @@ export type PartialDroneAgentConfig = Partial<{
   memory: Partial<DroneMemoryConfig>;
   log: Partial<DroneLogConfig>;
   promptFile: Partial<DronePromptFileConfig>;
+  swarm: Partial<DroneSwarmConfig>;
 }>;
 
 export type DroneConfigScope = 'default' | 'user' | 'project';
@@ -317,6 +330,14 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
       enabled: false,
       files: [],
     },
+    swarm: {
+      knowledgeSync: {
+        enabled: true,
+        pushInsights: true,
+        pullOnStartup: true,
+        pullIntervalMinutes: 60,
+      },
+    },
   };
 }
 
@@ -397,5 +418,17 @@ export function applyAgentConfigLayer(
             : baseConfig.promptFile.files,
         }
       : baseConfig.promptFile,
+    swarm: layer.swarm
+      ? {
+          ...baseConfig.swarm,
+          ...layer.swarm,
+          knowledgeSync: layer.swarm.knowledgeSync
+            ? {
+                ...baseConfig.swarm.knowledgeSync,
+                ...layer.swarm.knowledgeSync,
+              }
+            : baseConfig.swarm.knowledgeSync,
+        }
+      : baseConfig.swarm,
   };
 }

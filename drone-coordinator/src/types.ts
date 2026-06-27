@@ -80,3 +80,41 @@ export interface EndSessionRequest {
   disconnectedAt: number;
   durationMs: number;
 }
+
+// === Knowledge Types ===
+
+export type KnowledgeType = 'fact' | 'preference' | 'skill_pattern' | 'principle';
+
+export interface Knowledge {
+  id: string;
+  type: KnowledgeType;
+  key: string;
+  value: string; // JSON-encoded content
+  sourceBeaconId: string | null;
+  sourceAgentId: string | null;
+  confidence: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CreateKnowledgeRequest {
+  id: string;
+  type: KnowledgeType;
+  key: string;
+  value: string;
+  sourceBeaconId?: string;
+  sourceAgentId?: string;
+  confidence?: number;
+}
+
+export interface UpdateKnowledgeRequest {
+  type?: KnowledgeType;
+  key?: string;
+  value?: string;
+  confidence?: number;
+}
+
+export interface SearchKnowledgeQuery {
+  q?: string; // Search query
+  type?: KnowledgeType; // Filter by type
+}

@@ -44,6 +44,8 @@ export type {
   DroneMemoryConfig,
   DroneLogConfig,
   DronePromptFileConfig,
+  DroneKnowledgeSyncConfig,
+  DroneSwarmConfig,
   DroneLspSpawnServerConfig,
   DroneLspExternalServerConfig,
   DroneLspServerConfig,

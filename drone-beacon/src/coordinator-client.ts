@@ -1,5 +1,5 @@
 import { logger } from './logger.js';
-import type { Persona, Skill, CoordinatorConfig } from './types.js';
+import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
 import type { TlsIdentity } from './tls.js';
 
@@ -27,6 +27,11 @@ export interface CoordinatorClient {
   pushSkill(skill: Skill): Promise<void>;
   deletePersona(id: string): Promise<void>;
   deleteSkill(id: string): Promise<void>;
+
+  // Knowledge sync (global memory)
+  pushKnowledge(knowledge: Knowledge): Promise<void>;
+  pullKnowledge(since?: number): Promise<Knowledge[]>;
+  searchKnowledge(query: string, type?: string): Promise<Knowledge[]>;
 }
 
 export interface SessionInfo {
@@ -253,6 +258,60 @@ export function createCoordinatorClient(
         }
       } catch (err) {
         logger.warn(`Failed to delete skill: ${err}`);
+      }
+    },
+
+    // Knowledge sync (global memory)
+    async pushKnowledge(knowledge: Knowledge): Promise<void> {
+      try {
+        const res = await fetch(`${baseUrl}/sync/knowledge/push`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(knowledge),
+        });
+        if (!res.ok) {
+          logger.warn(`Failed to push knowledge: ${res.status}`);
+        } else {
+          logger.info(`Pushed knowledge ${knowledge.id} to coordinator`);
+        }
+      } catch (err) {
+        logger.warn(`Failed to push knowledge: ${err}`);
+      }
+    },
+
+    async pullKnowledge(since?: number): Promise<Knowledge[]> {
+      try {
+        let url = `${baseUrl}/sync/knowledge/pull`;
+        if (since) {
+          url += `?since=${since}`;
+        }
+        const res = await fetch(url);
+        if (!res.ok) {
+          logger.warn(`Failed to pull knowledge: ${res.status}`);
+          return [];
+        }
+        return (await res.json()) as Knowledge[];
+      } catch (err) {
+        logger.warn(`Failed to pull knowledge: ${err}`);
+        return [];
+      }
+    },
+
+    async searchKnowledge(query: string, type?: string): Promise<Knowledge[]> {
+      try {
+        let url = `${baseUrl}/knowledge/search?q=${encodeURIComponent(query)}`;
+        if (type) {
+          url += `&type=${encodeURIComponent(type)}`;
+        }
+        const res = await fetch(url);
+        if (!res.ok) {
+          logger.warn(`Failed to search knowledge: ${res.status}`);
+          return [];
+        }
+        return (await res.json()) as Knowledge[];
+      } catch (err) {
+        logger.warn(`Failed to search knowledge: ${err}`);
+        return [];
       }
     },
   };

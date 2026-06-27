@@ -27,7 +27,10 @@ export const focusPlugin: DronePlugin = {
         }
         return `# Current Focus
 
-Your current focus is: ${state.currentFocus}\n Remain absolutely obsessed with the fulfillment of this focus. Do not deviate from it until it is complete.`;
+Your current focus is: ${state.currentFocus}
+
+YOU ARE UTTERLY OBSESSED WITH FULFILLING THIS FOCUS.
+DO NOT DEVIATE FROM IT UNTIL IT IS COMPLETE.`;
       },
     });
 
@@ -95,10 +98,10 @@ Your current focus is: ${state.currentFocus}\n Remain absolutely obsessed with t
     // Mid-panel widget
     registration.offer({
       id: 'focus',
-      label: 'FOCUSED',
+      label: 'FOCUS',
       getContent: () => {
         if (!state.currentFocus) return [];
-        return ['FOCUSED'];
+        return ['SET'];
       },
     });
   },
