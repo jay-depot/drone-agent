@@ -1210,8 +1210,26 @@ describe('self-improvement plugin', () => {
     });
   });
 
-  describe('persona-principles prompt fragment', () => {
-    it('renders principles when persona is active and has principles', async () => {
+  describe('combined principles prompt fragment', () => {
+    it('renders project principles when they exist', async () => {
+      const engine = await createEngine();
+
+      // Store a project principle
+      await engine.executeTool('self-improvement.principles-store', {
+        targetType: 'project',
+        targetId: 'architecture',
+        principle: 'Use dependency injection.',
+      });
+
+      const fragments = await engine.renderPromptFragments();
+      const fragment = fragments.find(f => f.includes('## Current Project'));
+      expect(fragment).toBeDefined();
+      expect(fragment).toContain('## Current Project');
+      expect(fragment).toContain('### architecture');
+      expect(fragment).toContain('Use dependency injection.');
+    });
+
+    it('renders persona principles when persona is active and has principles', async () => {
       const personaCap = {
         getPersonas: () => [
           { id: 'coder', name: 'Coder', description: 'A coding persona' },
@@ -1235,14 +1253,14 @@ describe('self-improvement plugin', () => {
       });
 
       const fragments = await engine.renderPromptFragments();
-      const fragment = fragments.find(f =>
-        f.includes('Principles for this persona')
-      );
+      const fragment = fragments.find(f => f.includes('## Current Persona'));
       expect(fragment).toBeDefined();
+      expect(fragment).toContain('## Current Persona');
+      expect(fragment).toContain('### coder');
       expect(fragment).toContain('Be concise.');
     });
 
-    it('returns false when no principles exist', async () => {
+    it('renders both project and persona principles when both exist', async () => {
       const personaCap = {
         getPersonas: () => [
           { id: 'coder', name: 'Coder', description: 'A coding persona' },
@@ -1259,10 +1277,36 @@ describe('self-improvement plugin', () => {
 
       const engine = await createEngine({ personaCapability: personaCap });
 
+      // Store project principle
+      await engine.executeTool('self-improvement.principles-store', {
+        targetType: 'project',
+        targetId: 'workflow',
+        principle: 'Confirm destructive operations.',
+      });
+
+      // Store persona principle
+      await engine.executeTool('self-improvement.principles-store', {
+        targetType: 'persona',
+        targetId: 'coder',
+        principle: 'Be concise.',
+      });
+
       const fragments = await engine.renderPromptFragments();
-      const fragment = fragments.find(f =>
-        f.includes('Principles for this persona')
-      );
+      const fragment = fragments.find(f => f.includes('## Current Project') && f.includes('## Current Persona'));
+      expect(fragment).toBeDefined();
+      expect(fragment).toContain('## Current Project');
+      expect(fragment).toContain('### workflow');
+      expect(fragment).toContain('Confirm destructive operations.');
+      expect(fragment).toContain('## Current Persona');
+      expect(fragment).toContain('### coder');
+      expect(fragment).toContain('Be concise.');
+    });
+
+    it('returns false when no principles exist', async () => {
+      const engine = await createEngine();
+
+      const fragments = await engine.renderPromptFragments();
+      const fragment = fragments.find(f => f.includes('## Current Project') || f.includes('## Current Persona'));
       expect(fragment).toBeUndefined();
     });
 
@@ -1279,11 +1323,18 @@ describe('self-improvement plugin', () => {
 
       const engine = await createEngine({ personaCapability: personaCap });
 
+      // Store a project principle to test it still renders without active persona
+      await engine.executeTool('self-improvement.principles-store', {
+        targetType: 'project',
+        targetId: 'architecture',
+        principle: 'Use dependency injection.',
+      });
+
       const fragments = await engine.renderPromptFragments();
-      const fragment = fragments.find(f =>
-        f.includes('Principles for this persona')
-      );
-      expect(fragment).toBeUndefined();
+      const fragment = fragments.find(f => f.includes('## Current Project'));
+      expect(fragment).toBeDefined();
+      expect(fragment).toContain('## Current Project');
+      expect(fragment).not.toContain('## Current Persona');
     });
   });
 

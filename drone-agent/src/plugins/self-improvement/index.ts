@@ -886,30 +886,74 @@ export const selfImprovementPlugin: DronePlugin = {
 
     registration.offer(principlesCapability);
 
-    // ── Persona principles prompt fragment ────────────────────────────
-    const personaPrinciplesFragment: DronePromptFragment = {
-      key: 'persona-principles',
+    // ── Combined principles prompt fragment (project + persona) ────
+    const principlesFragment: DronePromptFragment = {
+      key: 'principles',
       phase: 'footer',
       render: async () => {
+        const sections: string[] = [];
+
+        // ── Project Principles ───────────────────────────────────────
+        const projectPrinciplesDir = path.join(
+          projectDir,
+          CONFIG_DIR,
+          PRINCIPLES_SUBDIR,
+          'project'
+        );
+        const projectFiles = await scanJsonDir<DronePrincipleEntry>(projectPrinciplesDir);
+
+        if (projectFiles.length > 0) {
+          const projectLines: string[] = ['## Current Project'];
+          for (const file of projectFiles) {
+            const filePath = path.join(projectPrinciplesDir, `${file.id}.json`);
+            const principles = await readJsonArray<DronePrincipleEntry>(filePath);
+            if (principles.length > 0) {
+              // Subheading = filename (category)
+              projectLines.push(`### ${file.id}`);
+              for (const p of principles) {
+                projectLines.push(`- ${p.principle}`);
+              }
+            }
+          }
+          if (projectLines.length > 1) {
+            sections.push(projectLines.join('\n'));
+          }
+        }
+
+        // ── Persona Principles ────────────────────────────────────────
         const pCap = personaCap();
         const activePersona = pCap?.getActivePersona();
-        if (!activePersona) return false;
+        if (activePersona) {
+          const baseDir = resolveBaseDir(
+            'persona',
+            activePersona.id,
+            projectDir,
+            personaCap(),
+            skillsCap()
+          );
+          const { filePath } = resolvePrinciplePaths(
+            'persona',
+            activePersona.id,
+            baseDir,
+            skillsCap()
+          );
+          const principles = await readJsonArray<DronePrincipleEntry>(filePath);
 
-        const principles = await principlesCapability.getPrinciples(
-          'persona',
-          activePersona.id
-        );
-        if (principles.length === 0) return false;
-
-        const lines = ['## Principles for this persona'];
-        for (const p of principles) {
-          lines.push('- ' + p.principle);
+          if (principles.length > 0) {
+            const personaLines = ['## Current Persona'];
+            personaLines.push(`### ${activePersona.id}`);
+            for (const p of principles) {
+              personaLines.push(`- ${p.principle}`);
+            }
+            sections.push(personaLines.join('\n'));
+          }
         }
-        return lines.join('\n');
+
+        return sections.length > 0 ? sections.join('\n\n') : false;
       },
     };
 
-    registration.registerPromptFragment(personaPrinciplesFragment);
+    registration.registerPromptFragment(principlesFragment);
 
     // ── onPluginsLoaded: register recall enhancer + log status ──────
     registration.hooks.onPluginsLoaded(async () => {

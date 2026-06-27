@@ -2,5 +2,9 @@
   {
     "timestamp": "2026-06-27T23:09:36.513Z",
     "insight": "The self-improvement plugin registers a 'persona-principles' prompt fragment but it wasn't visible in /systemprompt output. Root cause: project-level principles have no prompt fragment at all, and the persona fragment logic may have been returning false due to no existing principles. Fixed by planning combined 'principles' fragment that includes both project and persona principles."
+  },
+  {
+    "timestamp": "2026-06-27T23:13:30.408Z",
+    "insight": "Implemented combined 'principles' prompt fragment that renders project principles from .drone-agent/principles/project/*.json and persona principles from .drone-agent/personas/{id}/principles/. Output format uses ## Current Project and ## Current Persona headings with ### subheadings for category/persona id."
   }
 ]
