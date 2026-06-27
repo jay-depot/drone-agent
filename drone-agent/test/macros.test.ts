@@ -635,4 +635,76 @@ describe('macrosPlugin', () => {
       expect(warnings[0]).toContain('/greet <arg1>');
     });
   });
+
+  it('logs chatPrompt text and streams events from sendUserMessage', async () => {
+    await withTempDir(async dir => {
+      vi.spyOn(process, 'cwd').mockReturnValue(dir);
+
+      const macroDir = path.join(dir, '.drone-agent', 'macros');
+      await mkdir(macroDir, { recursive: true });
+      await writeFile(
+        path.join(macroDir, 'ask.macro'),
+        '#! /ask\nWhat is the meaning of life?\n',
+        'utf-8'
+      );
+
+      const engine = createDronePluginEngine({
+        plugins: [macrosPlugin],
+        config: {
+          ...createDefaultAgentConfig(),
+          enabledPlugins: ['macros'],
+        },
+        logger: silentLogger(),
+      });
+
+      await engine.initialize();
+      await engine.runHooks('onPluginsLoaded');
+
+      // Build a mock conversation that exercises the onEvent callback
+      const infoMessages: string[] = [];
+      const warnMessages: string[] = [];
+
+      const handled = await engine.dispatchSlashCommand('/ask', {
+        logger: {
+          info: (msg: string) => infoMessages.push(msg),
+          warn: (msg: string) => warnMessages.push(msg),
+          error: () => {},
+        },
+        engine,
+        conversation: {
+          getModel: () => 'test-model',
+          setModel: () => {},
+          sendUserMessage: async (_prompt: string, onEvent?: (event: unknown) => void) => {
+            // Simulate the events that conversation-service emits
+            if (onEvent) {
+              onEvent({ kind: 'reasoning', content: 'Thinking deeply...' });
+              onEvent({ kind: 'toolCall', name: 'file.read', arguments: { path: '/test.txt' } });
+              onEvent({ kind: 'toolResult', name: 'file.read', content: 'file contents', arguments: { path: '/test.txt' } });
+              onEvent({ kind: 'assistantMessage', content: '42' });
+            }
+            return '42';
+          },
+        },
+        sessionManager: undefined,
+      });
+
+      expect(handled).toBe(true);
+
+      // The substituted prompt text should be logged first
+      expect(infoMessages[0]).toBe('What is the meaning of life?');
+
+      // Reasoning event should be logged
+      expect(infoMessages.some(m => m.includes('Thinking deeply...'))).toBe(true);
+
+      // Tool call event should be logged
+      expect(infoMessages.some(m => m.includes('→ tool: file.read'))).toBe(true);
+
+      // Tool result event should be logged
+      expect(infoMessages.some(m => m.includes('← file.read:'))).toBe(true);
+
+      // Assistant message should be logged
+      expect(infoMessages.some(m => m.includes('42'))).toBe(true);
+    });
+  });
+
 });

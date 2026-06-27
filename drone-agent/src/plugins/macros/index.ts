@@ -102,9 +102,42 @@ export const macrosPlugin: DronePlugin = {
           } else {
             // chatPrompt step
             const substituted = substituteMacroArgs(step.text, ctx.args, macro);
+            ctx.logger.info(substituted);
             if (ctx.conversation) {
               await ctx.engine.runHooks?.('onBeforePrompt');
-              const reply = await ctx.conversation.sendUserMessage(substituted);
+              const reply = await ctx.conversation.sendUserMessage(
+                substituted,
+                event => {
+                  const evt = event as {
+                    kind?: string;
+                    content?: string;
+                    name?: string;
+                    message?: string;
+                    arguments?: Record<string, unknown>;
+                  };
+                  switch (evt.kind) {
+                    case 'reasoning':
+                      ctx.logger.info(`💭 ${evt.content ?? ''}`);
+                      break;
+                    case 'toolCall':
+                      ctx.logger.info(
+                        `→ tool: ${evt.name ?? ''} ${JSON.stringify(evt.arguments ?? {})}`
+                      );
+                      break;
+                    case 'toolResult':
+                      ctx.logger.info(
+                        `← ${evt.name ?? ''}: ${(evt.content ?? '').slice(0, 200)}`
+                      );
+                      break;
+                    case 'assistantMessage':
+                      ctx.logger.info(evt.content ?? '');
+                      break;
+                    case 'error':
+                      ctx.logger.warn(`Error: ${evt.message ?? ''}`);
+                      break;
+                  }
+                }
+              );
               if (reply.length > 0) {
                 ctx.logger.info(reply);
               }

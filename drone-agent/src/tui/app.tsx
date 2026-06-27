@@ -303,19 +303,24 @@ export function App(opts: DroneTuiOptions): JSX.Element {
         return;
       }
 
-      if (
-        await opts.engine.dispatchSlashCommand?.(trimmed, {
-          logger: {
-            info: msg => log(msg, 'plain'),
-            warn: msg => log(msg, 'error'),
-            error: msg => log(msg, 'error'),
-          },
-          engine: opts.engine,
-          conversation: opts.conversation,
-          sessionManager: undefined,
-        })
-      ) {
-        return;
+      setIsLlmActive(true);
+      try {
+        if (
+          await opts.engine.dispatchSlashCommand?.(trimmed, {
+            logger: {
+              info: msg => log(msg, 'user'),
+              warn: msg => log(msg, 'error'),
+              error: msg => log(msg, 'error'),
+            },
+            engine: opts.engine,
+            conversation: opts.conversation,
+            sessionManager: undefined,
+          })
+        ) {
+          return;
+        }
+      } finally {
+        setIsLlmActive(false);
       }
 
       if (trimmed.startsWith('/tool ')) {
