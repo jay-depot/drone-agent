@@ -255,7 +255,7 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
   return {
     enabledPlugins: [],
     systemPrompt:
-      '`drone agent` harness initialized. Use available tools to answer questions and perform tasks exactly as instructed. If a question is ambiguous, ask for clarification. If a question is unanswerable, respond with "I don\'t know." If a task is impossible, respond with "I cannot, because..."',
+      '`drone agent` harness initialized. Use available tools to answer questions and perform tasks exactly as instructed. If a question or request is ambiguous, ask for clarification. If a question is unanswerable, respond with "I don\'t know." If a task is impossible, respond with "I cannot, because..."',
     activePersona: null,
     llm: {
       provider: 'ollama',

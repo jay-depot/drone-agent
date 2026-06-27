@@ -190,7 +190,7 @@ When working on the project, proactively log insights using `self-improvement.in
 
 ## Existing Skills
 
-The project has one skill loaded:
+The project has one skill available:
 
 - **`ui-architecture`** — Detailed description of the Ink-based TUI architecture. **Recall this when working on any TUI component.**
 
