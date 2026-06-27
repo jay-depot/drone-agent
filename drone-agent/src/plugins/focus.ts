@@ -27,71 +27,7 @@ export const focusPlugin: DronePlugin = {
         }
         return `# Current Focus
 
-Your current focus is: ${state.currentFocus}`;
-      },
-    });
-
-    registration.registerTool({
-      name: 'focus',
-      description:
-        'Manage session focus. Actions: get, set, clear.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          action: {
-            type: 'string',
-            description: 'Action: get, set, clear',
-            enum: ['get', 'set', 'clear'],
-          },
-          focus: {
-            type: 'string',
-            description: 'The thing to focus on (for set action)',
-          },
-        },
-        required: ['action'],
-        additionalProperties: false,
-      },
-      execute: async input => {
-        const { action, focus } = input;
-
-        if (action === 'get') {
-          return JSON.stringify(
-            {
-              currentFocus: state.currentFocus,
-            },
-            null,
-            2
-          );
-        }
-
-        if (action === 'set') {
-          if (typeof focus !== 'string' || focus.trim().length === 0) {
-            throw new Error('focus set requires a non-empty focus string.');
-          }
-          state.currentFocus = focus.trim();
-          return JSON.stringify(
-            {
-              action: 'set',
-              currentFocus: state.currentFocus,
-            },
-            null,
-            2
-          );
-        }
-
-        if (action === 'clear') {
-          state.currentFocus = null;
-          return JSON.stringify(
-            {
-              action: 'clear',
-              currentFocus: null,
-            },
-            null,
-            2
-          );
-        }
-
-        throw new Error('focus action must be one of: get, set, clear');
+Your current focus is: ${state.currentFocus}\n Remain absolutely obsessed with the fulfillment of this focus. Do not deviate from it until it is complete.`;
       },
     });
 
