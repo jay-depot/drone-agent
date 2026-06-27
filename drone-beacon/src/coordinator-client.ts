@@ -1,8 +1,19 @@
 import { logger } from './logger.js';
 import type { Persona, Skill, CoordinatorConfig } from './types.js';
+import type { BeaconIdentity } from './identity.js';
+import type { TlsIdentity } from './tls.js';
+
+export interface BeaconStatusResponse {
+  status: 'pending' | 'approved' | 'rejected' | 'rejected';
+  approvalToken?: string;
+}
 
 export interface CoordinatorClient {
-  registerBeacon(config: CoordinatorConfig): Promise<void>;
+  registerBeacon(
+    identity: BeaconIdentity,
+    tlsFingerprint: string
+  ): Promise<{ status: 'pending' | 'approved' | 'rejected'; approvalToken?: string }>;
+  pollForApproval(): Promise<BeaconStatusResponse>;
   heartbeat(): Promise<void>;
   fetchPersonas(): Promise<Persona[]>;
   fetchSkills(): Promise<Skill[]>;
@@ -24,39 +35,82 @@ export interface SessionInfo {
   personaId: string | null;
 }
 
+export interface CoordinatorClientOptions {
+  identity: BeaconIdentity;
+  tlsIdentity: TlsIdentity;
+  useHttps?: boolean;
+}
+
 export function createCoordinatorClient(
-  config: CoordinatorConfig
+  config: CoordinatorConfig,
+  options: CoordinatorClientOptions
 ): CoordinatorClient {
-  const baseUrl = `http://${config.host}:${config.port}`;
+  const protocol = options.useHttps ? 'https' : 'http';
+  const baseUrl = `${protocol}://${config.host}:${config.port}`;
 
   return {
-    async registerBeacon(cfg: CoordinatorConfig): Promise<void> {
+    async registerBeacon(
+      identity: BeaconIdentity,
+      tlsFingerprint: string
+    ): Promise<{ status: 'pending' | 'approved' | 'rejected'; approvalToken?: string }> {
       logger.info(`Registering beacon with coordinator at ${baseUrl}`);
+      
       const res = await fetch(`${baseUrl}/beacons`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: cfg.beaconId,
-          name: cfg.beaconName,
-          host: cfg.host,
-          port: cfg.port,
+          id: config.beaconId,
+          name: config.beaconName,
+          host: config.host,
+          port: config.port,
+          publicKey: identity.publicKey,
+          tlsFingerprint,
         }),
       });
+      
       if (!res.ok) {
-        throw new Error(`Failed to register beacon: ${res.status}`);
+        throw new Error(`Failed to register beacon: ${res.status} ${await res.text()}`);
       }
-      logger.info('Beacon registered with coordinator');
+      
+      const data = (await res.json()) as BeaconStatusResponse;
+      logger.info(`Beacon registered with status: ${data.status}`);
+      
+      if (data.approvalToken) {
+        logger.info(`Approval token: ${data.approvalToken}`);
+      }
+      
+      return { status: data.status, approvalToken: data.approvalToken };
+    },
+
+    async pollForApproval(): Promise<BeaconStatusResponse> {
+      try {
+        const res = await fetch(`${baseUrl}/beacons/trust/${config.beaconId}`);
+        if (!res.ok) {
+          if (res.status === 404) {
+            return { status: 'pending' };
+          }
+          throw new Error(`Failed to poll for approval: ${res.status}`);
+        }
+        return (await res.json()) as BeaconStatusResponse;
+      } catch (err) {
+        logger.warn(`Failed to poll for approval: ${err}`);
+        return { status: 'pending' };
+      }
     },
 
     async heartbeat(): Promise<void> {
-      const res = await fetch(
-        `${baseUrl}/beacons/${config.beaconId}/heartbeat`,
-        {
-          method: 'POST',
+      try {
+        const res = await fetch(
+          `${baseUrl}/beacons/${config.beaconId}/heartbeat`,
+          {
+            method: 'POST',
+          }
+        );
+        if (!res.ok) {
+          logger.warn(`Heartbeat failed: ${res.status}`);
         }
-      );
-      if (!res.ok) {
-        logger.warn(`Heartbeat failed: ${res.status}`);
+      } catch (err) {
+        logger.warn(`Heartbeat failed: ${err}`);
       }
     },
 

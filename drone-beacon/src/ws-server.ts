@@ -3,6 +3,27 @@ import type { WebSocket } from '@fastify/websocket';
 import * as db from './db.js';
 import { logger } from './logger.js';
 
+// Error codes
+export const ERROR_MISSING_AGENT_ID = 4001;
+export const ERROR_AGENT_NOT_REGISTERED = 4002;
+export const ERROR_NON_LOCAL_CONNECTION = 4003;
+
+/**
+ * Check if a connection is from a local address.
+ */
+export function isLocalConnection(socket: { remoteAddress?: string }): boolean {
+  const ip = socket.remoteAddress;
+  if (!ip) return false;
+  return (
+    ip === '127.0.0.1' ||
+    ip === '::1' ||
+    ip === '::ffff:127.0.0.1' ||
+    ip.startsWith('192.168.') || // Local network
+    ip.startsWith('10.') || // Local network
+    ip.startsWith('172.16.') // Local network
+  );
+}
+
 interface WSConnection {
   socket: WebSocket;
   agentId: string;
@@ -209,7 +230,8 @@ function handleMessage(agentId: string, wsMsg: WSMessage): void {
 }
 
 export async function registerWebSocketServer(
-  app: FastifyInstance
+  app: FastifyInstance,
+  options: { enforceLocalOnly?: boolean } = {}
 ): Promise<void> {
   // Register WebSocket plugin
   await app.register(import('@fastify/websocket'), {
@@ -220,17 +242,26 @@ export async function registerWebSocketServer(
 
   // WebSocket upgrade handler
   app.get('/ws', { websocket: true }, (socket, request) => {
+    // Check for local-only connection
+    if (options.enforceLocalOnly !== false && !isLocalConnection(socket)) {
+      logger.warn(
+        `Rejected non-local WebSocket connection from ${socket.remoteAddress}`
+      );
+      socket.close(ERROR_NON_LOCAL_CONNECTION, 'Non-local connections not allowed');
+      return;
+    }
+
     const agentId = (request.query as Record<string, string>).agentId;
 
     if (!agentId) {
-      socket.close(4001, 'Missing agentId query parameter');
+      socket.close(ERROR_MISSING_AGENT_ID, 'Missing agentId query parameter');
       return;
     }
 
     // Verify agent is registered
     const agent = db.getAgent(agentId);
     if (!agent) {
-      socket.close(4002, 'Agent not registered');
+      socket.close(ERROR_AGENT_NOT_REGISTERED, 'Agent not registered');
       return;
     }
 
@@ -289,7 +320,9 @@ export async function registerWebSocketServer(
     socket.send(JSON.stringify({ type: 'connected', payload: { agentId } }));
   });
 
-  logger.info('WebSocket server registered at /ws');
+  logger.info(
+    `WebSocket server registered at /ws (local-only: ${options.enforceLocalOnly !== false})`
+  );
 }
 
 // Cleanup old messages periodically

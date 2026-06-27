@@ -6,6 +6,9 @@ import type {
   CreatePersonaRequest,
   CreateSkillRequest,
   RegisterBeaconRequest,
+  RegisterBeaconTrustRequest,
+  BeaconTrust,
+  BeaconTrustStatus,
   BeaconSession,
   CreateSessionRequest,
 } from './types.js';
@@ -63,6 +66,19 @@ export function initDatabase(dataPath: string): Database.Database {
 
     CREATE INDEX IF NOT EXISTS idx_beacon_sessions_beacon ON beacon_sessions(beacon_id);
     CREATE INDEX IF NOT EXISTS idx_beacon_sessions_agent ON beacon_sessions(agent_id);
+    CREATE TABLE IF NOT EXISTS beacon_trust (
+      beacon_id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      public_key TEXT NOT NULL,
+      host TEXT NOT NULL,
+      port INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      approval_token TEXT,
+      approved_at INTEGER,
+      tls_fingerprint TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
 
   logger.info('Database initialized successfully');
@@ -269,6 +285,188 @@ export function deleteBeacon(id: string): boolean {
   logger.info(`Deleted beacon: ${id}`);
   return result.changes > 0;
 }
+
+// Beacon Trust operations
+function generateApprovalToken(): string {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export function registerBeaconTrust(req: RegisterBeaconTrustRequest): BeaconTrust {
+  const now = Date.now();
+  const isLocal = req.host === 'localhost' || req.host === '127.0.0.1';
+  
+  // Auto-approve local beacons
+  const status: BeaconTrustStatus = isLocal ? 'approved' : 'pending';
+  const approvalToken = isLocal ? null : generateApprovalToken();
+  
+  const trust: BeaconTrust = {
+    beaconId: req.id,
+    name: req.name,
+    publicKey: req.publicKey,
+    host: req.host,
+    port: req.port,
+    status,
+    approvalToken,
+    approvedAt: isLocal ? now : null,
+    tlsFingerprint: req.tlsFingerprint ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const stmt = getDatabase().prepare(`
+    INSERT OR REPLACE INTO beacon_trust 
+    (beacon_id, name, public_key, host, port, status, approval_token, approved_at, tls_fingerprint, created_at, updated_at)
+    VALUES (@beaconId, @name, @publicKey, @host, @port, @status, @approvalToken, @approvedAt, @tlsFingerprint, @createdAt, @updatedAt)
+  `);
+
+  stmt.run({
+    beaconId: trust.beaconId,
+    name: trust.name,
+    publicKey: trust.publicKey,
+    host: trust.host,
+    port: trust.port,
+    status: trust.status,
+    approvalToken: trust.approvalToken,
+    approvedAt: trust.approvedAt,
+    tlsFingerprint: trust.tlsFingerprint,
+    createdAt: trust.createdAt,
+    updatedAt: trust.updatedAt,
+  });
+
+  logger.info(`Registered beacon trust: ${trust.beaconId} (status: ${trust.status})`);
+  return trust;
+}
+
+export function getBeaconTrust(beaconId: string): BeaconTrust | undefined {
+  const stmt = getDatabase().prepare('SELECT * FROM beacon_trust WHERE beacon_id = ?');
+  const row = stmt.get(beaconId) as {
+    beacon_id: string;
+    name: string;
+    public_key: string;
+    host: string;
+    port: number;
+    status: BeaconTrustStatus;
+    approval_token: string | null;
+    approved_at: number | null;
+    tls_fingerprint: string | null;
+    created_at: number;
+    updated_at: number;
+  } | undefined;
+  if (!row) return undefined;
+  return {
+    beaconId: row.beacon_id,
+    name: row.name,
+    publicKey: row.public_key,
+    host: row.host,
+    port: row.port,
+    status: row.status,
+    approvalToken: row.approval_token,
+    approvedAt: row.approved_at,
+    tlsFingerprint: row.tls_fingerprint,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function listBeaconTrust(): BeaconTrust[] {
+  const stmt = getDatabase().prepare('SELECT * FROM beacon_trust ORDER BY name');
+  const rows = stmt.all() as Array<{
+    beacon_id: string;
+    name: string;
+    public_key: string;
+    host: string;
+    port: number;
+    status: BeaconTrustStatus;
+    approval_token: string | null;
+    approved_at: number | null;
+    tls_fingerprint: string | null;
+    created_at: number;
+    updated_at: number;
+  }>;
+  return rows.map(row => ({
+    beaconId: row.beacon_id,
+    name: row.name,
+    publicKey: row.public_key,
+    host: row.host,
+    port: row.port,
+    status: row.status,
+    approvalToken: row.approval_token,
+    approvedAt: row.approved_at,
+    tlsFingerprint: row.tls_fingerprint,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
+export function approveBeacon(approvalToken: string): BeaconTrust | null {
+  const now = Date.now();
+  const stmt = getDatabase().prepare(`
+    UPDATE beacon_trust 
+    SET status = 'approved', approval_token = NULL, approved_at = ?, updated_at = ?
+    WHERE approval_token = ? AND status = 'pending'
+  `);
+  const result = stmt.run(now, now, approvalToken);
+  
+  if (result.changes === 0) {
+    return null;
+  }
+  
+  // Fetch and return the updated trust
+  const stmt2 = getDatabase().prepare('SELECT * FROM beacon_trust WHERE approval_token = ?');
+  const row = stmt2.get(approvalToken) as {
+    beacon_id: string;
+    name: string;
+    public_key: string;
+    host: string;
+    port: number;
+    status: BeaconTrustStatus;
+    approval_token: string | null;
+    approved_at: number | null;
+    tls_fingerprint: string | null;
+    created_at: number;
+    updated_at: number;
+  } | undefined;
+  if (!row) return null;
+  
+  logger.info(`Approved beacon: ${row.beacon_id}`);
+  return {
+    beaconId: row.beacon_id,
+    name: row.name,
+    publicKey: row.public_key,
+    host: row.host,
+    port: row.port,
+    status: row.status,
+    approvalToken: row.approval_token,
+    approvedAt: row.approved_at,
+    tlsFingerprint: row.tls_fingerprint,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function rejectBeacon(beaconId: string): boolean {
+  const now = Date.now();
+  const stmt = getDatabase().prepare(`
+    UPDATE beacon_trust 
+    SET status = 'rejected', approval_token = NULL, updated_at = ?
+    WHERE beacon_id = ?
+  `);
+  const result = stmt.run(now, beaconId);
+  if (result.changes > 0) {
+    logger.info(`Rejected beacon: ${beaconId}`);
+  }
+  return result.changes > 0;
+}
+
+export function deleteBeaconTrust(beaconId: string): boolean {
+  const stmt = getDatabase().prepare('DELETE FROM beacon_trust WHERE beacon_id = ?');
+  const result = stmt.run(beaconId);
+  logger.info(`Deleted beacon trust: ${beaconId}`);
+  return result.changes > 0;
+}
+
 
 // Beacon Session operations
 function rowToBeaconSession(row: {

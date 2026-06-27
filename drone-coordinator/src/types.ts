@@ -22,6 +22,40 @@ export interface RegisterBeaconRequest {
   name: string;
   host: string;
   port: number;
+  publicKey?: string; // Ed25519 public key (base64)
+  tlsFingerprint?: string; // SHA-256 of TLS cert for pinning
+}
+
+// === Beacon Trust Types ===
+
+export type BeaconTrustStatus = 'pending' | 'approved' | 'rejected';
+
+export interface BeaconTrust {
+  beaconId: string;
+  name: string;
+  publicKey: string; // Ed25519 public key (base64)
+  host: string;
+  port: number;
+  status: BeaconTrustStatus;
+  approvalToken: string | null;
+  approvedAt: number | null;
+  tlsFingerprint: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface RegisterBeaconTrustRequest {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  publicKey: string;
+  tlsFingerprint?: string;
+}
+
+export interface BeaconStatusResponse {
+  status: BeaconTrustStatus;
+  approvalToken?: string; // Only provided when status is 'pending'
 }
 
 export interface BeaconSession {

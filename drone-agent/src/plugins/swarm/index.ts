@@ -68,7 +68,7 @@ export interface SwarmConfig {
 export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
   const beaconHost = config.beaconHost ?? DEFAULT_BEACON_HOST;
   const beaconPort = config.beaconPort ?? DEFAULT_BEACON_PORT;
-  const baseUrl = `http://${beaconHost}:${beaconPort}`;
+  const baseUrl = `https://${beaconHost}:${beaconPort}`;
   const sessionId = config.sessionId ?? `agent-${Date.now()}`;
 
   return {
@@ -244,7 +244,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       // Heartbeat to keep session alive
 
       // ── WebSocket client for real-time messaging ────────────────────────
-      const wsUrl = `ws://${beaconHost}:${beaconPort}/ws?agentId=${sessionId}`;
+      const wsUrl = `wss://${beaconHost}:${beaconPort}/ws?agentId=${sessionId}`;
       let ws: WebSocket | null = null;
       let wsReconnectAttempts = 0;
       const maxReconnectAttempts = 5;
