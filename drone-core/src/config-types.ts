@@ -239,7 +239,7 @@ export type PartialDroneAgentConfig = Partial<{
   memory: Partial<DroneMemoryConfig>;
   log: Partial<DroneLogConfig>;
   promptFile: Partial<DronePromptFileConfig>;
-  swarm: Partial<DroneSwarmConfig>;
+  swarm: { knowledgeSync?: Partial<DroneKnowledgeSyncConfig> };
 }>;
 
 export type DroneConfigScope = 'default' | 'user' | 'project';

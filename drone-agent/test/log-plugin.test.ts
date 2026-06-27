@@ -337,6 +337,14 @@ async function getCapability(
       memory: { enabled: false },
       log: { enabled: false },
       promptFile: { enabled: false, files: [] },
+      swarm: {
+        knowledgeSync: {
+          enabled: true,
+          pushInsights: true,
+          pullOnStartup: true,
+          pullIntervalMinutes: 60,
+        },
+      },
     }),
     registerTool: () => {},
     registerPromptFragment: () => {},

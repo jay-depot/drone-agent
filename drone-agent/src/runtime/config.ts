@@ -33,6 +33,12 @@ export async function loadConfigLayer(
   const fileContents = await readFile(filePath, 'utf-8');
   const parsed = parseConfigWithSchema(JSON.parse(fileContents), filePath);
 
+  if (!parsed) {
+    throw new Error(
+      `Failed to parse config file "${filePath}": does not conform to schema.`
+    );
+  }
+
   return {
     scope,
     path: filePath,

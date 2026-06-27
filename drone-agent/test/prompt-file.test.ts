@@ -306,6 +306,14 @@ describe('promptFilePlugin', () => {
         memory: { enabled: false },
         log: { enabled: false },
         promptFile: { enabled: true, files: [] },
+        swarm: {
+          knowledgeSync: {
+            enabled: true,
+            pushInsights: true,
+            pullOnStartup: true,
+            pullIntervalMinutes: 60,
+          },
+        },
       }),
       registerTool: () => {},
       registerPromptFragment: fragment => {
@@ -432,6 +440,14 @@ describe('promptFilePlugin', () => {
       getConfig: () => ({
         ...makeRegistration().registration.getConfig(),
         promptFile: { enabled: true, files: [] },
+        swarm: {
+          knowledgeSync: {
+            enabled: true,
+            pushInsights: true,
+            pullOnStartup: true,
+            pullIntervalMinutes: 60,
+          },
+        },
       }),
     });
 

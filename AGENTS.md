@@ -1,6 +1,6 @@
 # AGENTS.md — drone-agent
 
-This file describes how to work on the `drone-agent` project itself. The project is a monorepo (pnpm workspace) with four packages, though only `drone-agent` and `drone-core` are implemented so far.
+This file describes how to work on the `drone-agent` project itself. The project is a monorepo (pnpm workspace) with four packages: `drone-agent`, `drone-core`, `drone-beacon`, and `drone-coordinator`.
 
 **If you encounter any discrepancy between this document and the code, with the exception of aspirational statements, the code is the source of truth, and this document should be updated.**
 
@@ -12,18 +12,107 @@ This file describes how to work on the `drone-agent` project itself. The project
 drone-agent/          ← The CLI + TUI coding agent (Ink-based)
   src/
     index.tsx         ← Main entry point, CLI arg parsing, first-run setup
-    plugins/          ← All built-in plugins (skills, persona, memory, lsp, mcp, etc.)
+    cli.ts            ← CLI argument parsing (--once, --plugin, --workflow, etc.)
+    elicitation.ts    ← Readline-based elicitation for plain-output mode
+    interactive.ts    ← Interactive loop and JSON mode for non-TUI sessions
+    output-handlers.ts← Plain output event handler
+    first-run.tsx     ← First-run setup wizard (LLM provider probing)
+    lib.ts            ← Public library exports for embedding drone-agent
+    plugins/          ← All built-in plugins
       bootstrap/     ← Bootstrap plugin (project/user setup workflows)
         index.ts      ← Plugin registration, analyze tool, project & user workflows
         project-detect.ts ← Project detection logic (shared by tool and workflow)
+      compaction/    ← Context compaction (summary-drop strategy)
+      config/        ← Config capability (injectors, rebuild)
+      echo/          ← Mock LLM provider for deterministic testing
+      lightpanda/    ← Lightpanda browser automation MCP integration
+      llm/           ← LLM provider broker
+      log/           ← Session logging to JSON files
+      lsp/           ← LSP server connections
+      macros/        ← Custom slash commands from .macro files
+      mcp/           ← MCP client (stdio and streamable HTTP)
+      memory/        ← Project-level memory (JSON files)
+      ollama.ts      ← Ollama LLM provider
+      openrouter/    ← OpenRouter LLM provider
+      persona/       ← Persona broker plugin
+      persona-provider-project/ ← Project-level persona provider
+      persona-provider-user/    ← User-level persona provider
+      prompt-file/   ← Prompt file injection
+      search.ts      ← Text search (ripgrep/grep)
+      self-improvement/ ← Insight and principle system
+      skill-provider-project/  ← Project-level skill provider
+      skill-provider-user/     ← User-level skill provider
+      skills/        ← Skills broker plugin
+      startup.ts     ← Startup banner and status tool
+      subagent/      ← Subagent spawning
+      swarm/         ← Swarm plugin (beacon/coordinator integration)
+      todo.ts        ← TODO list management
+      utils.ts       ← Utility tools (arithmetic, counting, spelling)
+      exec.ts        ← Shell command execution
+      fetch.ts       ← HTTP fetch tool
+      file.ts        ← File read/write/glob/diff tools
+      focus.ts       ← Session focus management
+      git.ts         ← Git status/diff/commit/log tools
     runtime/          ← Plugin engine, config loader, conversation service, session manager
+      plugin-engine.ts
+      config.ts
+      conversation-service.ts
+      session-manager.ts
+      context-budget-service.ts
+      token-estimator.ts
+    shared/           ← Shared utilities
+      diff-renderer.ts
+      exec-async.ts
+      type-guards.ts
     tui/              ← Ink-based TUI (App, ChatLog, InputLine, StatusBar, etc.)
+      app.tsx
+      index.tsx
+      theme.tsx
+      types.ts
+      elicitation.ts
+      components/
+      hooks/
   test/               ← Vitest tests
 drone-core/           ← Shared types, contracts, config defaults, token estimation
-  src/index.ts        ← All shared types (DronePlugin, DroneAgentConfig, etc.)
+  src/
+    index.ts          ← Re-exports all public types
+    config-types.ts   ← DroneAgentConfig, PartialDroneAgentConfig, defaults
+    config-schema.ts  ← JSON schema parsing and validation
+    session-types.ts  ← Session, message, tool, and token types
+    plugin-system.ts  ← DronePlugin, DronePluginRegistration, workflows, slash commands
+    capabilities.ts   ← Capability registry types (config, skills, LLM, principles)
+    provider-types.ts ← Provider types for brokers
+    skill-types.ts    ← Skill definition types
+    persona-types.ts  ← Persona definition and capability types
+    domain-types.ts   ← Domain types for beacon/coordinator
+    lsp-types.ts      ← LSP server types
+    mcp-types.ts      ← MCP server types
+    token-estimate.ts ← Token estimation functions
+    utils.ts          ← Utility functions
   test/
-drone-beacon/         ← Placeholder (not yet implemented)
-drone-coordinator/    ← Placeholder (not yet implemented)
+drone-beacon/         ← Local hub for drone swarm (Fastify + SQLite + WebSocket)
+  src/
+    index.ts          ← Server entry point, CLI arg parsing
+    routes.ts         ← REST API routes
+    ws-server.ts      ← WebSocket server for agent messaging
+    db.ts             ← SQLite database layer
+    coordinator-client.ts ← HTTP client to drone-coordinator
+    spawner.ts        ← Agent process spawning
+    identity.ts       ← Ed25519 keypair identity
+    tls.ts            ← TLS certificate management
+    types.ts          ← Internal types
+    logger.ts         ← Pino logger
+  test/
+drone-coordinator/    ← Global hub for swarm coordination (Fastify + SQLite)
+  src/
+    index.ts          ← Server entry point, CLI arg parsing
+    routes.ts         ← REST API routes
+    db.ts             ← SQLite database layer
+    tls.ts            ← TLS certificate management
+    types.ts          ← Internal types
+    logger.ts         ← Pino logger
+  test/
+skill-library/        ← Reusable skill .md files (not a workspace package)
 ```
 
 ## Development Commands
@@ -50,7 +139,7 @@ Everything is a plugin. Each plugin implements `DronePlugin` with a `register(re
 - **Offer capabilities** via `registration.offer(...)` — expose an API to other plugins
 - **Request capabilities** via `registration.request<T>(pluginId)` — consume another plugin's API
 - **Register help snippets** via `registration.registerHelp(...)`
-- **Hook into lifecycle events** via `registration.hooks.onPluginsLoaded(...)`, `onSessionStart(...)`, `onBeforePrompt(...)`, `onAfterToolCall(...)`, `onShutdown(...)`, `onSessionClear(...)`
+- **Hook into lifecycle events** via `registration.hooks.onPluginsLoaded(...)`, `onSessionStart(...)`, `onBeforePrompt(...)`, `onAfterToolCall(...)`, `onShutdown(...)`, `onSessionClear(...)`, `onSessionSafetyTrimWillRun(...)`, `onSessionSafetyTrimApplied(...)`
 
 The plugin engine (`runtime/plugin-engine.ts`) manages all of this. The built-in plugins are listed in `plugins/index.ts`.
 
@@ -94,7 +183,7 @@ Config cascades: **Project > User > Default** (last-write-wins per key, except `
 
 Config files live in `.drone-agent/config.json` at each scope. The config loader (`runtime/config.ts`) walks up the directory tree looking for `.drone-agent/` directories.
 
-Key config sections: `enabledPlugins`, `ollama`, `session`, `lsp`, `mcp`, `compaction`, `memory`, `log`, `promptFile`.
+Key config sections: `enabledPlugins`, `systemPrompt`, `activePersona`, `llm`, `ollama`, `openrouter`, `session`, `lsp`, `mcp`, `compaction`, `memory`, `log`, `promptFile`, `swarm`.
 
 ### TUI Architecture
 
@@ -129,6 +218,10 @@ Future workflows (not yet implemented): `bootstrap.standalone-agent`, `bootstrap
 ### Macros
 
 Custom slash commands defined in `.macro` files. The `macros` plugin loads them from the project directory. Each macro file defines a command name, description, and a sequence of steps (slash commands and chat prompts).
+
+### Swarm Plugin
+
+The `swarm` plugin connects to a `drone-beacon` instance to provide swarm-wide personas, skills, and config injection. It registers persona and skill providers at both the beacon and coordinator precedence levels, and provides a WebSocket-based messaging channel for inter-agent communication. The swarm plugin is not enabled by default.
 
 ## Working on the Project
 
@@ -176,23 +269,33 @@ When working on the project, proactively log insights using `self-improvement.in
 
 | File                                                  | Purpose                                               |
 | ----------------------------------------------------- | ----------------------------------------------------- |
-| `drone-agent/src/index.tsx`                           | CLI entry point, arg parsing, first-run setup         |
+| `drone-agent/src/index.tsx`                           | CLI entry point, first-run setup, engine init         |
+| `drone-agent/src/cli.ts`                              | CLI argument parsing                                  |
+| `drone-agent/src/elicitation.ts`                      | Readline-based elicitation for plain-output mode      |
+| `drone-agent/src/interactive.ts`                      | Interactive loop and JSON mode for non-TUI sessions   |
+| `drone-agent/src/first-run.tsx`                        | First-run setup wizard (LLM provider probing)         |
+| `drone-agent/src/lib.ts`                              | Public library exports for embedding drone-agent      |
 | `drone-agent/src/runtime/plugin-engine.ts`            | Plugin lifecycle, tool dispatch, workflow execution   |
 | `drone-agent/src/runtime/config.ts`                   | Config loading, merging, environment interpolation    |
 | `drone-agent/src/runtime/conversation-service.ts`     | LLM conversation loop, tool iteration                 |
 | `drone-agent/src/runtime/session-manager.ts`          | Session state, turn tracking                          |
-| `drone-agent/src/runtime/context-budget-service.ts`   | Context window budgeting, compaction triggers         |
+| `drone-agent/src/runtime/context-budget-service.ts`  | Context window budgeting, compaction triggers         |
 | `drone-agent/src/tui/app.tsx`                         | Root TUI component                                    |
 | `drone-agent/src/plugins/index.ts`                    | Built-in plugin registry                              |
 | `drone-agent/src/plugins/bootstrap/index.ts`          | Bootstrap plugin (project/user setup workflows)       |
 | `drone-agent/src/plugins/bootstrap/project-detect.ts` | Project detection logic (shared by tool and workflow) |
+| `drone-agent/src/plugins/swarm/index.ts`              | Swarm plugin (beacon/coordinator integration)         |
+| `drone-agent/src/plugins/subagent/plugin.ts`          | Subagent spawning plugin                              |
+| `drone-agent/src/plugins/macros/index.ts`             | Macros plugin (.macro file loading)                   |
+| `drone-agent/src/plugins/self-improvement/index.ts`   | Insight and principle system                          |
+| `drone-agent/src/plugins/startup.ts`                  | Startup banner and status tool                       |
+| `drone-agent/src/plugins/focus.ts`                    | Session focus management                             |
 | `drone-core/src/index.ts`                             | All shared types and config defaults                  |
-
-## Existing Skills
-
-The project has one skill available:
-
-- **`ui-architecture`** — Detailed description of the Ink-based TUI architecture. **Recall this when working on any TUI component.**
+| `drone-core/src/config-types.ts`                      | DroneAgentConfig, PartialDroneAgentConfig, defaults   |
+| `drone-core/src/config-schema.ts`                     | JSON schema parsing and validation                    |
+| `drone-core/src/plugin-system.ts`                     | DronePlugin, DronePluginRegistration, workflows       |
+| `drone-core/src/capabilities.ts`                      | Capability registry types                             |
+| `drone-core/src/session-types.ts`                     | Session, message, tool, and token types               |
 
 ## Design Principles
 
@@ -200,3 +303,4 @@ The project has one skill available:
 - **Model-centric**: No hundreds of lines of system prompts. Let the LLM figure it out with tools.
 - **Project-first**: Config cascades top-down. Project-level config overrides user-level.
 - **Self-dogfooding**: The project should be developed using itself. Use the tools to improve the tools.
+- **Single-user swarm**: The swarm is designed to work with a single human, meaning that all agents in the swarm are expected to be working for the same user. If you are trying to set up coordination between multiple users, you would want to set up separate swarms for each user, and then have each set up to connect to an MCP server that is designed for multi-user coordination.
