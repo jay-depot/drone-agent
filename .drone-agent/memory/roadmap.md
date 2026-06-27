@@ -6,7 +6,7 @@ tags:
   - drone-agent
   - planning
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-06-25T07:33:22.430Z
+updated: 2026-06-27T21:39:00.382Z
 ---
 
 # Swarm Roadmap
@@ -92,7 +92,7 @@ The drone-agent swarm includes a **self-improving architecture** that enables co
 ### Components
 
 | Layer           | Component                 | Self-Improvement Role                        |
-| --------------- | ------------------------- | -------------------------------------------- |
+| --------------- | ------------------------- | ------------------------------------------------- |
 | **Coordinator** | Global session storage    | Your agents' sessions searchable             |
 | **Coordinator** | Knowledge registry        | Your skills, patterns, facts, preferences    |
 | **Coordinator** | Swarm review task         | Identifies patterns across YOUR beacons      |
@@ -149,7 +149,7 @@ swarm: {
   coordinatorUrl: string,
   shareSessions: boolean,      // Push your sessions to coordinator
   shareMemory: boolean,       // Share your memory across YOUR agents
-  shareSkills: boolean,       // Sync your skills across your beacons
+  shareSkills: boolean,         // Sync your skills across your beacons
   localNudgeInterval: number,      // default: 10 turns
   swarmReviewIntervalMinutes: number,
   searchableByDefault: boolean,
@@ -346,14 +346,13 @@ Local coordination layer for YOUR swarm on one machine.
 
 ---
 
-### 🔜 PHASE 3: drone-coordinator
+### 🚧 PHASE 3: drone-coordinator
 
-**Status:** Placeholder exists, not yet implemented
+**Status:** In Progress (Secure Foundation & Global Knowledge Complete)
 
 Personal control plane for YOUR swarm across machines.
 
 **Goals:**
-
 - Web UI for monitoring YOUR agents in the swarm
 - Task management and inter-beacon agent spawning
 - YOUR swarm-wide personas, skills, and memory store
@@ -362,28 +361,38 @@ Personal control plane for YOUR swarm across machines.
 - SQLite or Postgres persistence (your choice)
 - Must have a beacon on same host (for self-maintenance)
 
-**Why No Multi-User:**
+**Security Architecture (Complete):**
+- **Agent ↔ Beacon:** Local-only connection enforcement via WSS encryption.
+- **Beacon ↔ Coordinator:**
+    - **Identity:** Beacons use Ed25519 keypairs.
+    - **Authentication:** HTTPS connection with public key exchange.
+    - **Trust Model:** Beacons must be approved via token (`drone-coordinator --approve <token>`), with auto-approval for localhost.
+    - **Connectivity:** TLS certificate management.
 
-- There's only one user: YOU
-- No permissions, no sharing, no team management
-- If you need multi-user, use an MCP server (e.g., MCP Jam, CrewAI Cloud)
+**Implementation Progress:**
 
-**Self-Improvement Role:**
-
-- Global session storage (YOUR beacon sessions searchable)
-- YOUR knowledge registry (skills, patterns, facts, preferences)
-- Swarm review task (identifies patterns across YOUR beacons)
-- Broadcast mechanism (propagates learned knowledge to YOUR beacons)
+| Component | Feature | Status |
+| :--- | :--- | :--- |
+| **Core** | Basic Fastify/SQLite infrastructure | ✅ Complete |
+| **Security** | Ed25519 Keypair Management (`identity.ts`) | ✅ Complete |
+| **Security** | TLS Certificate Generation (`tls.ts`) | ✅ Complete |
+| **Security** | Beacon Approval Flow & Trust Tables | ✅ Complete |
+| **Security** | Local-only WSS Enforcement | ✅ Complete |
+| **Security** | HTTPS Server Configuration (Fastify TLS) | ✅ Complete |
+| **Data** | Global Memory & Skills (Phase 3.3) | ✅ Complete |
+| **UI** | Web Dashboard for Swarm Monitoring | ❌ Not Started |
+| **Coordination** | Inter-beacon task routing & spawning | ❌ Not Started |
+| **DX** | Make `--https` default for servers | ⏳ Pending |
 
 **Implementation Phases:**
 
-| Phase | Feature                | Description                                               |
-| ----- | ---------------------- | --------------------------------------------------------- |
-| 3.1   | Shared Session Storage | `swarm_sessions`, `swarm_messages` tables with FTS5       |
-| 3.2   | Enhanced Sync          | Bidirectional beacon → coordinator sync for YOUR data     |
-| 3.3   | Global Memory & Skills | `knowledge` table (your skill, pattern, preference, fact) |
-| 3.4   | Swarm Learning Tasks   | Periodic swarm review on YOUR patterns                    |
-| 3.5   | Global Search          | Search across all YOUR agents' sessions                   |
+| Phase | Feature | Description |
+| :--- | :--- | :--- |
+| **3.1** | **Secure Foundation** | Identity, TLS, and Beacon Approval flow ✅ |
+| **3.2** | **Shared Session Storage** | `swarm_sessions`, `swarm_messages` tables with FTS5 |
+| **3.3** | **Global Memory & Skills** | `knowledge` table (your skill, pattern, preference, fact) ✅ |
+| **3.4** | **Swarm Learning Tasks** | Periodic swarm review on YOUR patterns |
+| **3.5** | **Global Search & UI** | Web UI and search across all YOUR agents' sessions |
 
 ---
 
@@ -467,10 +476,10 @@ Phase 5 (Advanced)
 ## Development Commands
 
 | Command           | Purpose                      |
-| ----------------- | ---------------------------- |
+| ----------------- | ------------------------------------------------- |
 | `pnpm build`      | Compile all packages         |
-| `pnpm typecheck`  | Type-check all packages      |
-| `pnpm test`       | Run all tests (vitest)       |
+| `pnpm typecheck`  | Type-check all packages       |
+| `pnpm test`        | Run all tests (vitest)        |
 | `pnpm test:watch` | Watch mode                   |
 | `pnpm lint`       | ESLint + Prettier            |
 | `pnpm clean`      | Remove all dist/ directories |
@@ -513,4 +522,4 @@ Phase 5 (Advanced)
 
 ---
 
-_Last updated: 2026-06-25_
+_Last updated: 2026-06-27_
