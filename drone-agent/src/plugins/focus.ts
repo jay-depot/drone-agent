@@ -98,7 +98,7 @@ Your current focus is: ${state.currentFocus}\n Remain absolutely obsessed with t
       label: 'FOCUSED',
       getContent: () => {
         if (!state.currentFocus) return [];
-        return [state.currentFocus];
+        return ['FOCUSED'];
       },
     });
   },
