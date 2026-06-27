@@ -30,5 +30,9 @@
   {
     "timestamp": "2026-06-27T20:46:52.441Z",
     "insight": "The TUI's runSlashCommand returns early when a slash command is handled by the engine, without ever calling setIsLlmActive(true). This means any slash command that triggers LLM work (like a macro with chatPrompt steps) won't show the working indicator. The fix is to wrap the dispatchSlashCommand call in setIsLlmActive(true/false)."
+  },
+  {
+    "timestamp": "2026-06-27T21:02:03.069Z",
+    "insight": "The ConversationEvent type is defined in conversation-service.ts but not exported from drone-core. Plugins that need to handle events from sendUserMessage must use a runtime type guard (event as { kind?: string; ... }) instead of proper TypeScript types. Consider exporting ConversationEvent from drone-core for type-safe plugin event handling."
   }
 ]
