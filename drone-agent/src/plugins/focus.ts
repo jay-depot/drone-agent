@@ -91,5 +91,15 @@ Your current focus is: ${state.currentFocus}\n Remain absolutely obsessed with t
     registration.hooks.onPluginsLoaded(async () => {
       registration.logger.info('focus plugin ready');
     });
+
+    // Mid-panel widget
+    registration.offer({
+      id: 'focus',
+      label: 'FOCUSED',
+      getContent: () => {
+        if (!state.currentFocus) return [];
+        return [state.currentFocus];
+      },
+    });
   },
 };

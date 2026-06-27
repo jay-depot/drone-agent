@@ -214,7 +214,7 @@ export function App(opts: DroneTuiOptions): JSX.Element {
 
   // Discover mid-panel widgets from plugin capabilities on mount.
   useEffect(() => {
-    const knownWidgetPluginIds = ['todo'];
+    const knownWidgetPluginIds = ['todo', 'focus'];
     for (const pluginId of knownWidgetPluginIds) {
       const widget = opts.engine.getCapability<MidPanelWidget>(pluginId);
       if (widget) {
