@@ -34,5 +34,9 @@
   {
     "timestamp": "2026-06-27T21:02:03.069Z",
     "insight": "The ConversationEvent type is defined in conversation-service.ts but not exported from drone-core. Plugins that need to handle events from sendUserMessage must use a runtime type guard (event as { kind?: string; ... }) instead of proper TypeScript types. Consider exporting ConversationEvent from drone-core for type-safe plugin event handling."
+  },
+  {
+    "timestamp": "2026-06-27T22:15:20.982Z",
+    "insight": "When planning distributed systems like the drone swarm, specifically addressing the ' la trace' (event-log) pattern vs. a simple 'state' pattern early on allows for much better support of later features like knowledge distillation and real-time monitoring."
   }
 ]

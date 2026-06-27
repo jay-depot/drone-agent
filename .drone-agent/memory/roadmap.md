@@ -6,7 +6,7 @@ tags:
   - drone-agent
   - planning
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-06-27T21:39:00.382Z
+updated: 2026-06-27T21:47:23.217Z
 ---
 
 # Swarm Roadmap
@@ -433,6 +433,7 @@ Advanced swarm capabilities for YOU, built on phases 1-4.
 **Inter-Beacon Agent Spawning:**
 
 - Beacon A asks coordinator to tell Beacon B to spawn an agent
+- Vector Search for global session/memory retrieval (Promoted from Phase 3)
 - Distributed task routing within YOUR swarm
 - Route to node with best model for task
 
@@ -504,7 +505,7 @@ Phase 5 (Advanced)
 2. **Phase 2:** Your multiple agents on same host share YOUR skills/personas/memory via beacon ✅
 3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; web UI shows YOUR swarm status
 4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses
-5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support
+| 5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support
 
 ---
 
