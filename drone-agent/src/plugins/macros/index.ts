@@ -29,7 +29,7 @@ export const macrosPlugin: DronePlugin = {
     const registeredCommands = new Set<string>();
 
     async function reloadAndRegister(): Promise<void> {
-      macros = await loadMacros(projectDir);
+      macros = await loadMacros(projectDir, registration.logger);
 
       if (macros.size === 0) {
         registration.logger.info('no .macro files found');
@@ -62,34 +62,68 @@ export const macrosPlugin: DronePlugin = {
       }
     }
 
+    /**
+     * Build a usage hint string for a macro, showing its command and expected arguments.
+     */
+    function formatMacroUsage(macro: DroneMacroDefinition): string {
+      const parts: string[] = [macro.command];
+      for (const arg of macro.argSpec) {
+        if (arg.required) {
+          parts.push(`<arg${arg.position}>`);
+        } else {
+          parts.push(`[arg${arg.position}]`);
+        }
+      }
+      if (macro.hasCatchAll) {
+        if (macro.catchAllOptional) {
+          parts.push('[args...]');
+        } else {
+          parts.push('<args...>');
+        }
+      }
+      return parts.join(' ');
+    }
+
     async function executeMacro(
       macro: DroneMacroDefinition,
       ctx: DroneSlashCommandContext
     ): Promise<void> {
       for (const step of macro.steps) {
-        if (step.kind === 'slashCommand') {
-          const substituted = substituteMacroArgs(step.line, ctx.args, macro);
-          const handled = await ctx.engine.dispatchSlashCommand?.(
-            substituted,
-            ctx
-          );
-          if (!handled) {
-            ctx.logger.warn(`Macro step not handled: ${substituted}`);
-          }
-        } else {
-          // chatPrompt step
-          const substituted = substituteMacroArgs(step.text, ctx.args, macro);
-          if (ctx.conversation) {
-            await ctx.engine.runHooks?.('onBeforePrompt');
-            const reply = await ctx.conversation.sendUserMessage(substituted);
-            if (reply.length > 0) {
-              ctx.logger.info(reply);
+        try {
+          if (step.kind === 'slashCommand') {
+            const substituted = substituteMacroArgs(step.line, ctx.args, macro);
+            const handled = await ctx.engine.dispatchSlashCommand?.(
+              substituted,
+              ctx
+            );
+            if (!handled) {
+              ctx.logger.warn(`Macro step not handled: ${substituted}`);
             }
-            await ctx.engine.runHooks?.('onAfterToolCall');
           } else {
-            // Fallback: append as user message if no conversation available.
-            ctx.sessionManager?.appendUserMessage(substituted);
+            // chatPrompt step
+            const substituted = substituteMacroArgs(step.text, ctx.args, macro);
+            if (ctx.conversation) {
+              await ctx.engine.runHooks?.('onBeforePrompt');
+              const reply = await ctx.conversation.sendUserMessage(substituted);
+              if (reply.length > 0) {
+                ctx.logger.info(reply);
+              }
+              await ctx.engine.runHooks?.('onAfterToolCall');
+            } else {
+              // Fallback: append as user message if no conversation available.
+              ctx.sessionManager?.appendUserMessage(substituted);
+            }
           }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          const usage = formatMacroUsage(macro);
+          ctx.logger.warn(
+            `Macro "${macro.command}" failed: ${message}\n` +
+              `Usage: ${usage}\n` +
+              `Description: ${macro.description || '(no description)'}`
+          );
+          // Stop executing further steps for this macro invocation.
+          return;
         }
       }
     }

@@ -362,6 +362,52 @@ describe('loadMacros', () => {
       expect(macros.size).toBe(0);
     });
   });
+
+  it('skips malformed macro files and logs a warning', async () => {
+    await withTempDir(async dir => {
+      const macroDir = path.join(dir, '.drone-agent', 'macros');
+      await mkdir(macroDir, { recursive: true });
+
+      // Write one valid macro
+      await writeFile(
+        path.join(macroDir, 'valid.macro'),
+        '#! /valid\n/persona list\n',
+        'utf-8'
+      );
+      // Write a malformed macro (missing #! declaration)
+      await writeFile(
+        path.join(macroDir, 'bad.macro'),
+        '/persona list\n',
+        'utf-8'
+      );
+      // Write an empty macro
+      await writeFile(
+        path.join(macroDir, 'empty.macro'),
+        '',
+        'utf-8'
+      );
+
+      const warnings: string[] = [];
+      const logger = {
+        info: () => {},
+        warn: (msg: string) => warnings.push(msg),
+        error: () => {},
+      };
+
+      const macros = await loadMacros(dir, logger);
+
+      // Only the valid macro should be loaded
+      expect(macros.size).toBe(1);
+      expect(macros.has('/valid')).toBe(true);
+
+      // Two warnings should have been logged (one for each invalid file)
+      expect(warnings.length).toBe(2);
+      expect(warnings[0]).toContain('Skipping invalid macro file');
+      expect(warnings[0]).toContain('bad.macro');
+      expect(warnings[1]).toContain('Skipping invalid macro file');
+      expect(warnings[1]).toContain('empty.macro');
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -537,6 +583,56 @@ describe('macrosPlugin', () => {
       // Only /macro should be registered (no user macros).
       expect(commands.length).toBe(1);
       expect(commands[0].command).toBe('/macro');
+    });
+  });
+
+  it('handles missing required args gracefully with helpful message', async () => {
+    await withTempDir(async dir => {
+      vi.spyOn(process, 'cwd').mockReturnValue(dir);
+
+      const macroDir = path.join(dir, '.drone-agent', 'macros');
+      await mkdir(macroDir, { recursive: true });
+      await writeFile(
+        path.join(macroDir, 'greet.macro'),
+        '#! /greet Greet someone\nHello $1!\n',
+        'utf-8'
+      );
+
+      const engine = createDronePluginEngine({
+        plugins: [macrosPlugin],
+        config: {
+          ...createDefaultAgentConfig(),
+          enabledPlugins: ['macros'],
+        },
+        logger: silentLogger(),
+      });
+
+      await engine.initialize();
+      await engine.runHooks('onPluginsLoaded');
+
+      // Dispatch /greet with no args — should not crash, should log a warning
+      const warnings: string[] = [];
+      const handled = await engine.dispatchSlashCommand('/greet', {
+        logger: {
+          info: () => {},
+          warn: (msg: string) => warnings.push(msg),
+          error: () => {},
+        },
+        engine,
+        conversation: undefined,
+        sessionManager: undefined,
+      });
+
+      // The macro should still be handled (the handler returns true)
+      expect(handled).toBe(true);
+
+      // A warning should have been logged about the missing argument
+      expect(warnings.length).toBeGreaterThanOrEqual(1);
+      expect(warnings[0]).toContain('Macro "');
+      expect(warnings[0]).toContain('failed');
+      expect(warnings[0]).toContain('requires argument $1');
+      expect(warnings[0]).toContain('Usage:');
+      expect(warnings[0]).toContain('/greet <arg1>');
     });
   });
 });
