@@ -1,13 +1,9 @@
 ---
 key: phase-3.3-global-memory-skills
 tags:
-  - phase-3.3
-  - implementation
-  - knowledge-registry
-  - coordinator
-  - beacon
+  []
 created: 2026-06-27T17:47:21.488Z
-updated: 2026-06-27T17:47:21.488Z
+updated: 2026-06-27T20:19:01.075Z
 ---
 
 # Phase 3.3: Global Memory & Skills - Implementation Plan
@@ -101,17 +97,20 @@ swarm: {
 | `drone-beacon/src/routes.ts` | Add `/sync/knowledge/*` endpoints |
 | `drone-beacon/src/index.ts` | Integrate knowledge sync on startup |
 | `drone-core/src/config-types.ts` | Add `knowledgeSync` config options |
+| `drone-core/src/config-schema.ts` | Add swarm config schema |
+| `drone-core/src/index.ts` | Export new types |
+| `drone-coordinator/test/knowledge.test.ts` | Add tests |
 
 ## Implementation Order
 
-1. **Step 1**: Add `knowledge` table and types to coordinator DB
-2. **Step 2**: Add `/knowledge` REST endpoints to coordinator
-3. **Step 3**: Add sync endpoints (`/sync/knowledge/push`, `/sync/knowledge/pull`)
-4. **Step 4**: Update beacon's coordinator client with knowledge sync methods
-5. **Step 5**: Add local knowledge cache to beacon DB
-6. **Step 6**: Integrate sync into beacon lifecycle (startup, periodic)
-7. **Step 7**: Add config options to drone-core
-8. **Step 8**: Add tests
+1. **Step 1**: Add `knowledge` table and types to coordinator DB ✅
+2. **Step 2**: Add `/knowledge` REST endpoints to coordinator ✅
+3. **Step 3**: Add sync endpoints (`/sync/knowledge/push`, `/sync/knowledge/pull`) ✅
+4. **Step 4**: Update beacon's coordinator client with knowledge sync methods ✅
+5. **Step 5**: Add local knowledge cache to beacon DB ✅
+6. **Step 6**: Integrate sync into beacon lifecycle (startup, periodic) ✅
+7. **Step 7**: Add config options to drone-core ✅
+8. **Step 8**: Add tests ✅
 
 ## Considerations
 
@@ -119,3 +118,23 @@ swarm: {
 - **Offline support**: Beacon caches knowledge locally; works when coordinator is down
 - **Security**: No auth needed (single-user) but could add optional API key
 - **TTL**: Knowledge doesn't expire by default, but could add optional TTL
+
+## Work Completed (2026-06-27)
+
+All 8 steps of the implementation plan have been completed:
+
+1. **Coordinator DB**: Added `knowledge` table with indexes, plus CRUD operations (`createKnowledge`, `getKnowledge`, `listKnowledge`, `updateKnowledge`, `deleteKnowledge`, `searchKnowledge`, `upsertKnowledge`). The `upsertKnowledge` function implements conflict resolution by keeping the entry with the highest confidence.
+
+2. **Coordinator Routes**: Added full REST API at `/knowledge` (CRUD + search) and sync endpoints at `/sync/knowledge/push` (upsert) and `/sync/knowledge/pull` (list with optional `since` timestamp filter).
+
+3. **Beacon Coordinator Client**: Added `pushKnowledge`, `pullKnowledge`, and `searchKnowledge` methods to the `CoordinatorClient` interface and implementation.
+
+4. **Beacon DB**: Added `knowledge_cache` table with `cacheKnowledge`, `getCachedKnowledge`, `listCachedKnowledge`, `clearKnowledgeCache`, and `replaceKnowledgeCache` operations. The `replaceKnowledgeCache` uses a transaction for atomic replacement.
+
+5. **Beacon Lifecycle**: Updated `triggerCoordinatorSync` in `routes.ts` to also pull knowledge from the coordinator and cache it locally. This runs on startup and periodically.
+
+6. **Config**: Added `DroneKnowledgeSyncConfig` and `DroneSwarmConfig` types to `drone-core`, with defaults (`enabled: true`, `pushInsights: true`, `pullOnStartup: true`, `pullIntervalMinutes: 60`). Added schema validation in `config-schema.ts` and config layering in `applyAgentConfigLayer`.
+
+7. **Tests**: 13 tests covering all knowledge CRUD operations, search, filtering, and upsert conflict resolution. All 495 tests pass.
+
+**Commit**: `bd91f09`

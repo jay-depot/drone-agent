@@ -10,5 +10,9 @@
   {
     "timestamp": "2026-06-27T19:49:28.386Z",
     "insight": "The mid-panel widget system allows plugins to contribute UI elements to a horizontal bar in the TUI. Each widget needs an id, label, and getContent() function. Multiple widgets are rendered side-by-side with \" │ \" separators. The system is extensible - any plugin can offer a widget."
+  },
+  {
+    "timestamp": "2026-06-27T20:19:07.078Z",
+    "insight": "Phase 3.3 knowledge registry implementation went smoothly. The coordinator-beacon sync pattern (push/pull with upsert) is consistent with the existing persona/skill sync pattern, making integration straightforward."
   }
 ]
