@@ -34,6 +34,7 @@ import { subagentPlugin } from './subagent/index.js';
 import { swarmPlugin } from './swarm/index.js';
 import { todoPlugin } from './todo.js';
 import { utilsPlugin } from './utils.js';
+import { focusPlugin } from './focus.js';
 
 // Static built-ins — everything except the compaction plugin, which needs
 // access to the live engine and session manager. The CLI calls
@@ -47,6 +48,7 @@ const staticBuiltInPlugins: DronePlugin[] = [
   echoPlugin,
   lightpandaPlugin,
   todoPlugin,
+  focusPlugin,
   fetchPlugin,
   utilsPlugin,
   macrosPlugin,
