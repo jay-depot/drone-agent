@@ -2,5 +2,9 @@
   {
     "timestamp": "2026-06-22T20:05:57.739Z",
     "insight": "The `file.apply_diff` tool can produce incorrect results when the oldLines don't exactly match the file content. In this case, the diff was applied inside the wrong block (inside the `log` block instead of after it). I had to fall back to `file.write` with the full file content to fix it. For large files, it's safer to use `file.read` + `file.write` for structural changes rather than `file.apply_diff`."
+  },
+  {
+    "timestamp": "2026-06-27T19:39:59.971Z",
+    "insight": "When implementing database schema changes or complex code, avoid sed for multi-line insertions - it breaks easily and produces syntax errors. Write complete files or use proper tooling instead."
   }
 ]

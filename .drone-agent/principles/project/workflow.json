@@ -1,0 +1,7 @@
+[
+  {
+    "principle": "For database schema changes or complex multi-line code insertions, write complete files or use proper tooling rather than sed commands which break easily.",
+    "source": "Insight from security implementation - sed failed multiple times causing syntax errors",
+    "createdAt": "2026-06-27T19:40:21.848Z"
+  }
+]
