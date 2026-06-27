@@ -1019,18 +1019,22 @@ export function cacheKnowledge(knowledge: Knowledge): void {
 }
 
 export function getCachedKnowledge(id: string): Knowledge | undefined {
-  const stmt = getDatabase().prepare('SELECT * FROM knowledge_cache WHERE id = ?');
-  const row = stmt.get(id) as {
-    id: string;
-    type: string;
-    key: string;
-    value: string;
-    source_beacon_id: string | null;
-    source_agent_id: string | null;
-    confidence: number;
-    createdAt: number;
-    updatedAt: number;
-  } | undefined;
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM knowledge_cache WHERE id = ?'
+  );
+  const row = stmt.get(id) as
+    | {
+        id: string;
+        type: string;
+        key: string;
+        value: string;
+        source_beacon_id: string | null;
+        source_agent_id: string | null;
+        confidence: number;
+        createdAt: number;
+        updatedAt: number;
+      }
+    | undefined;
   if (!row) return undefined;
   return rowToKnowledge(row);
 }
@@ -1038,8 +1042,28 @@ export function getCachedKnowledge(id: string): Knowledge | undefined {
 export function listCachedKnowledge(type?: string): Knowledge[] {
   let stmt;
   if (type) {
-    stmt = getDatabase().prepare('SELECT * FROM knowledge_cache WHERE type = ? ORDER BY key');
-    return (stmt.all(type) as Array<{
+    stmt = getDatabase().prepare(
+      'SELECT * FROM knowledge_cache WHERE type = ? ORDER BY key'
+    );
+    return (
+      stmt.all(type) as Array<{
+        id: string;
+        type: string;
+        key: string;
+        value: string;
+        source_beacon_id: string | null;
+        source_agent_id: string | null;
+        confidence: number;
+        createdAt: number;
+        updatedAt: number;
+      }>
+    ).map(rowToKnowledge);
+  }
+  stmt = getDatabase().prepare(
+    'SELECT * FROM knowledge_cache ORDER BY type, key'
+  );
+  return (
+    stmt.all() as Array<{
       id: string;
       type: string;
       key: string;
@@ -1049,20 +1073,8 @@ export function listCachedKnowledge(type?: string): Knowledge[] {
       confidence: number;
       createdAt: number;
       updatedAt: number;
-    }>).map(rowToKnowledge);
-  }
-  stmt = getDatabase().prepare('SELECT * FROM knowledge_cache ORDER BY type, key');
-  return (stmt.all() as Array<{
-    id: string;
-    type: string;
-    key: string;
-    value: string;
-    source_beacon_id: string | null;
-    source_agent_id: string | null;
-    confidence: number;
-    createdAt: number;
-    updatedAt: number;
-  }>).map(rowToKnowledge);
+    }>
+  ).map(rowToKnowledge);
 }
 
 export function clearKnowledgeCache(): void {

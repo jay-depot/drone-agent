@@ -14,6 +14,7 @@ updated: 2026-06-27T21:01:53.668Z
 ## Summary
 
 When a macro has a `chatPrompt` step, three things are broken:
+
 1. The substituted prompt text is not displayed in the TUI chat log
 2. The LLM working indicator (spinning `○◎◉●`) does not activate
 3. Reasoning, tool calls, and tool results from the macro-triggered LLM call are not displayed
@@ -49,6 +50,7 @@ Wrap the `dispatchSlashCommand` call in `setIsLlmActive(true/false)` so the indi
 **File:** `drone-agent/test/macros.test.ts`
 
 Add a test that creates a macro with a `chatPrompt` step, dispatches it, and verifies:
+
 - The substituted text appears in the logger's `info` calls
 - The `onEvent` callback is exercised (reasoning/toolCall/toolResult events are logged)
 
@@ -63,6 +65,7 @@ Add a test that creates a macro with a `chatPrompt` step, dispatches it, and ver
 ## Work Completed (2026-06-27)
 
 All four steps implemented and committed in `5b51a3a`:
+
 - **Step 1**: Added `onEvent` callback in `executeMacro` that maps `reasoning`, `toolCall`, `toolResult`, `assistantMessage`, and `error` events to `ctx.logger` calls. Also logs the substituted prompt text before sending.
 - **Step 2**: Changed `info: msg => log(msg, 'plain')` to `info: msg => log(msg, 'user')` in the TUI's slash command dispatch logger.
 - **Step 3**: Wrapped `dispatchSlashCommand` in `setIsLlmActive(true/false)` with try/finally.

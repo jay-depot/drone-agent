@@ -15,13 +15,19 @@ export interface BeaconIdentity {
  */
 export function generateIdentity(id: string): BeaconIdentity {
   const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
-  
+
   const publicKeyDer = publicKey.export({ type: 'spki', format: 'der' });
-  const publicKeyHex = crypto.createHash('sha256').update(publicKeyDer).digest('hex');
+  const publicKeyHex = crypto
+    .createHash('sha256')
+    .update(publicKeyDer)
+    .digest('hex');
   const publicKeyBase64 = publicKeyDer.toString('base64');
-  
-  const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' }) as string;
-  
+
+  const privateKeyPem = privateKey.export({
+    type: 'pkcs8',
+    format: 'pem',
+  }) as string;
+
   return {
     id,
     publicKey: publicKeyBase64,
@@ -38,13 +44,16 @@ export function loadOrCreateIdentity(
   configDir: string
 ): BeaconIdentity {
   const identityPath = path.join(configDir, 'beacon-identity.json');
-  
+
   if (fs.existsSync(identityPath)) {
     try {
       const data = JSON.parse(fs.readFileSync(identityPath, 'utf-8'));
       if (data.id === id && data.publicKey && data.privateKeyPem) {
         const publicKeyDer = Buffer.from(data.publicKey, 'base64');
-        const publicKeyHex = crypto.createHash('sha256').update(publicKeyDer).digest('hex');
+        const publicKeyHex = crypto
+          .createHash('sha256')
+          .update(publicKeyDer)
+          .digest('hex');
         logger.info(`Loaded existing identity for beacon: ${id}`);
         return {
           id: data.id,
@@ -57,13 +66,13 @@ export function loadOrCreateIdentity(
       logger.warn(`Failed to load identity, generating new one: ${err}`);
     }
   }
-  
+
   const identity = generateIdentity(id);
-  
+
   if (!fs.existsSync(configDir)) {
     fs.mkdirSync(configDir, { recursive: true });
   }
-  
+
   const dataToSave = {
     id: identity.id,
     publicKey: identity.publicKey,
@@ -71,7 +80,7 @@ export function loadOrCreateIdentity(
   };
   fs.writeFileSync(identityPath, JSON.stringify(dataToSave, null, 2));
   logger.info(`Generated and saved new identity for beacon: ${id}`);
-  
+
   return identity;
 }
 

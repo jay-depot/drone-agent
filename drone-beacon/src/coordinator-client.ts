@@ -12,7 +12,10 @@ export interface CoordinatorClient {
   registerBeacon(
     identity: BeaconIdentity,
     tlsFingerprint: string
-  ): Promise<{ status: 'pending' | 'approved' | 'rejected'; approvalToken?: string }>;
+  ): Promise<{
+    status: 'pending' | 'approved' | 'rejected';
+    approvalToken?: string;
+  }>;
   pollForApproval(): Promise<BeaconStatusResponse>;
   heartbeat(): Promise<void>;
   fetchPersonas(): Promise<Persona[]>;
@@ -32,6 +35,23 @@ export interface CoordinatorClient {
   pushKnowledge(knowledge: Knowledge): Promise<void>;
   pullKnowledge(since?: number): Promise<Knowledge[]>;
   searchKnowledge(query: string, type?: string): Promise<Knowledge[]>;
+
+  // Swarm session storage
+  registerSwarmSession(
+    sessionId: string,
+    personaId: string | null
+  ): Promise<void>;
+  pushEvents(
+    events: Array<{
+      id: string;
+      sessionId: string;
+      correlationId?: string;
+      type: string;
+      payload?: string;
+      metadata?: string;
+      createdAt: number;
+    }>
+  ): Promise<void>;
 }
 
 export interface SessionInfo {
@@ -57,9 +77,12 @@ export function createCoordinatorClient(
     async registerBeacon(
       identity: BeaconIdentity,
       tlsFingerprint: string
-    ): Promise<{ status: 'pending' | 'approved' | 'rejected'; approvalToken?: string }> {
+    ): Promise<{
+      status: 'pending' | 'approved' | 'rejected';
+      approvalToken?: string;
+    }> {
       logger.info(`Registering beacon with coordinator at ${baseUrl}`);
-      
+
       const res = await fetch(`${baseUrl}/beacons`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -72,18 +95,20 @@ export function createCoordinatorClient(
           tlsFingerprint,
         }),
       });
-      
+
       if (!res.ok) {
-        throw new Error(`Failed to register beacon: ${res.status} ${await res.text()}`);
+        throw new Error(
+          `Failed to register beacon: ${res.status} ${await res.text()}`
+        );
       }
-      
+
       const data = (await res.json()) as BeaconStatusResponse;
       logger.info(`Beacon registered with status: ${data.status}`);
-      
+
       if (data.approvalToken) {
         logger.info(`Approval token: ${data.approvalToken}`);
       }
-      
+
       return { status: data.status, approvalToken: data.approvalToken };
     },
 
@@ -312,6 +337,58 @@ export function createCoordinatorClient(
       } catch (err) {
         logger.warn(`Failed to search knowledge: ${err}`);
         return [];
+      }
+    },
+
+    // Swarm session storage
+    async registerSwarmSession(
+      sessionId: string,
+      personaId: string | null
+    ): Promise<void> {
+      try {
+        const res = await fetch(`${baseUrl}/sync/sessions/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: sessionId,
+            personaId: personaId ?? undefined,
+            beaconId: config.beaconId,
+          }),
+        });
+        if (!res.ok) {
+          logger.warn(`Failed to register swarm session: ${res.status}`);
+        } else {
+          logger.info(`Registered swarm session ${sessionId}`);
+        }
+      } catch (err) {
+        logger.warn(`Failed to register swarm session: ${err}`);
+      }
+    },
+
+    async pushEvents(
+      events: Array<{
+        id: string;
+        sessionId: string;
+        correlationId?: string;
+        type: string;
+        payload?: string;
+        metadata?: string;
+        createdAt: number;
+      }>
+    ): Promise<void> {
+      try {
+        const res = await fetch(`${baseUrl}/sync/events/push`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ events }),
+        });
+        if (!res.ok) {
+          logger.warn(`Failed to push events: ${res.status}`);
+        } else {
+          logger.debug(`Pushed ${events.length} events to coordinator`);
+        }
+      } catch (err) {
+        logger.warn(`Failed to push events: ${err}`);
       }
     },
   };

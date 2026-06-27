@@ -273,13 +273,13 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-agent/src/cli.ts`                              | CLI argument parsing                                  |
 | `drone-agent/src/elicitation.ts`                      | Readline-based elicitation for plain-output mode      |
 | `drone-agent/src/interactive.ts`                      | Interactive loop and JSON mode for non-TUI sessions   |
-| `drone-agent/src/first-run.tsx`                        | First-run setup wizard (LLM provider probing)         |
+| `drone-agent/src/first-run.tsx`                       | First-run setup wizard (LLM provider probing)         |
 | `drone-agent/src/lib.ts`                              | Public library exports for embedding drone-agent      |
 | `drone-agent/src/runtime/plugin-engine.ts`            | Plugin lifecycle, tool dispatch, workflow execution   |
 | `drone-agent/src/runtime/config.ts`                   | Config loading, merging, environment interpolation    |
 | `drone-agent/src/runtime/conversation-service.ts`     | LLM conversation loop, tool iteration                 |
 | `drone-agent/src/runtime/session-manager.ts`          | Session state, turn tracking                          |
-| `drone-agent/src/runtime/context-budget-service.ts`  | Context window budgeting, compaction triggers         |
+| `drone-agent/src/runtime/context-budget-service.ts`   | Context window budgeting, compaction triggers         |
 | `drone-agent/src/tui/app.tsx`                         | Root TUI component                                    |
 | `drone-agent/src/plugins/index.ts`                    | Built-in plugin registry                              |
 | `drone-agent/src/plugins/bootstrap/index.ts`          | Bootstrap plugin (project/user setup workflows)       |
@@ -288,8 +288,8 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-agent/src/plugins/subagent/plugin.ts`          | Subagent spawning plugin                              |
 | `drone-agent/src/plugins/macros/index.ts`             | Macros plugin (.macro file loading)                   |
 | `drone-agent/src/plugins/self-improvement/index.ts`   | Insight and principle system                          |
-| `drone-agent/src/plugins/startup.ts`                  | Startup banner and status tool                       |
-| `drone-agent/src/plugins/focus.ts`                    | Session focus management                             |
+| `drone-agent/src/plugins/startup.ts`                  | Startup banner and status tool                        |
+| `drone-agent/src/plugins/focus.ts`                    | Session focus management                              |
 | `drone-core/src/index.ts`                             | All shared types and config defaults                  |
 | `drone-core/src/config-types.ts`                      | DroneAgentConfig, PartialDroneAgentConfig, defaults   |
 | `drone-core/src/config-schema.ts`                     | JSON schema parsing and validation                    |

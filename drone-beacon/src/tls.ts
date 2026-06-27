@@ -28,24 +28,26 @@ function generateTlsCertificateWithOpenssl(
   commonName: string = 'localhost'
 ): { certPem: string; keyPem: string } {
   const tempDir = configDir;
-  
+
   try {
     execSync(
       `openssl req -x509 -newkey rsa:2048 -keyout "${tempDir}/temp-key.pem" -out "${tempDir}/temp-cert.pem" -days 365 -nodes -subj "/CN=${commonName}/O=Drone+Agent" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>/dev/null`,
       { stdio: 'pipe' }
     );
-    
+
     const certPem = fs.readFileSync(`${tempDir}/temp-cert.pem`, 'utf-8');
     const keyPem = fs.readFileSync(`${tempDir}/temp-key.pem`, 'utf-8');
-    
+
     fs.unlinkSync(`${tempDir}/temp-cert.pem`);
     fs.unlinkSync(`${tempDir}/temp-key.pem`);
-    
+
     return { certPem, keyPem };
   } catch (err) {
     try {
-      if (fs.existsSync(`${tempDir}/temp-cert.pem`)) fs.unlinkSync(`${tempDir}/temp-cert.pem`);
-      if (fs.existsSync(`${tempDir}/temp-key.pem`)) fs.unlinkSync(`${tempDir}/temp-key.pem`);
+      if (fs.existsSync(`${tempDir}/temp-cert.pem`))
+        fs.unlinkSync(`${tempDir}/temp-cert.pem`);
+      if (fs.existsSync(`${tempDir}/temp-key.pem`))
+        fs.unlinkSync(`${tempDir}/temp-key.pem`);
     } catch {}
     throw err;
   }
@@ -60,27 +62,29 @@ export function loadOrCreateTlsIdentity(
 ): TlsIdentity {
   const certPath = path.join(configDir, 'beacon-cert.pem');
   const keyPath = path.join(configDir, 'beacon-key.pem');
-  
+
   if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
     try {
       const certPem = fs.readFileSync(certPath, 'utf-8');
       const keyPem = fs.readFileSync(keyPath, 'utf-8');
       const fingerprint = calculateCertFingerprint(certPem);
-      
-      logger.info(`Loaded existing TLS certificate (fingerprint: ${fingerprint})`);
+
+      logger.info(
+        `Loaded existing TLS certificate (fingerprint: ${fingerprint})`
+      );
       return { certPath, keyPath, fingerprint, certPem, keyPem };
     } catch (err) {
       logger.warn(`Failed to load TLS certificate, generating new one: ${err}`);
     }
   }
-  
+
   if (!fs.existsSync(configDir)) {
     fs.mkdirSync(configDir, { recursive: true });
   }
-  
+
   let certPem: string;
   let keyPem: string;
-  
+
   try {
     const result = generateTlsCertificateWithOpenssl(configDir, commonName);
     certPem = result.certPem;
@@ -91,14 +95,16 @@ export function loadOrCreateTlsIdentity(
       'Certificate generation failed. Install openssl or provide certificates manually.'
     );
   }
-  
+
   const fingerprint = calculateCertFingerprint(certPem);
-  
+
   fs.writeFileSync(certPath, certPem);
   fs.writeFileSync(keyPath, keyPem);
   fs.chmodSync(keyPath, 0o600);
-  
-  logger.info(`Generated and saved new TLS certificate (fingerprint: ${fingerprint})`);
+
+  logger.info(
+    `Generated and saved new TLS certificate (fingerprint: ${fingerprint})`
+  );
   return { certPath, keyPath, fingerprint, certPem, keyPem };
 }
 

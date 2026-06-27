@@ -1,7 +1,6 @@
 ---
 key: phase-3.3-global-memory-skills
-tags:
-  []
+tags: []
 created: 2026-06-27T17:47:21.488Z
 updated: 2026-06-27T20:19:01.075Z
 ---
@@ -36,32 +35,32 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_source ON knowledge(source_beacon_id);
 
 ## Knowledge Types
 
-| Type | Description | Example |
-|------|-------------|---------|
-| `fact` | Verified fact across swarm | `"vite": "Use Vite for TypeScript projects"` |
-| `preference` | User preference | `"theme": "dark"` |
+| Type            | Description                      | Example                                                 |
+| --------------- | -------------------------------- | ------------------------------------------------------- |
+| `fact`          | Verified fact across swarm       | `"vite": "Use Vite for TypeScript projects"`            |
+| `preference`    | User preference                  | `"theme": "dark"`                                       |
 | `skill_pattern` | Learned pattern from skill usage | `"test-pattern": "Always add tests before refactoring"` |
-| `principle` | Derived principle from insights | `"code-style": "Prefer explicit over implicit"` |
+| `principle`     | Derived principle from insights  | `"code-style": "Prefer explicit over implicit"`         |
 
 ## API Endpoints
 
 ### Coordinator routes (`/knowledge`)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/knowledge` | List knowledge with optional filtering by `type` |
-| `GET` | `/knowledge/:id` | Get single knowledge entry |
-| `POST` | `/knowledge` | Create knowledge entry |
-| `PUT` | `/knowledge/:id` | Update knowledge entry |
-| `DELETE` | `/knowledge/:id` | Delete knowledge entry |
-| `GET` | `/knowledge/search?q=` | Full-text search across knowledge |
+| Method   | Endpoint               | Description                                      |
+| -------- | ---------------------- | ------------------------------------------------ |
+| `GET`    | `/knowledge`           | List knowledge with optional filtering by `type` |
+| `GET`    | `/knowledge/:id`       | Get single knowledge entry                       |
+| `POST`   | `/knowledge`           | Create knowledge entry                           |
+| `PUT`    | `/knowledge/:id`       | Update knowledge entry                           |
+| `DELETE` | `/knowledge/:id`       | Delete knowledge entry                           |
+| `GET`    | `/knowledge/search?q=` | Full-text search across knowledge                |
 
 ### Beacon → Coordinator sync
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/sync/knowledge/push` | Beacon pushes knowledge to coordinator |
-| `GET` | `/sync/knowledge/pull` | Beacon pulls latest knowledge from coordinator |
+| Method | Endpoint               | Description                                    |
+| ------ | ---------------------- | ---------------------------------------------- |
+| `POST` | `/sync/knowledge/push` | Beacon pushes knowledge to coordinator         |
+| `GET`  | `/sync/knowledge/pull` | Beacon pulls latest knowledge from coordinator |
 
 ## Beacon Integration
 
@@ -87,19 +86,19 @@ swarm: {
 
 ## Implementation Files
 
-| File | Changes |
-|------|---------|
-| `drone-coordinator/src/db.ts` | Add `knowledge` table and CRUD operations |
-| `drone-coordinator/src/routes.ts` | Add `/knowledge` and `/sync/knowledge/*` routes |
-| `drone-coordinator/src/types.ts` | Add knowledge types |
-| `drone-beacon/src/coordinator-client.ts` | Add push/pull knowledge methods |
-| `drone-beacon/src/db.ts` | Add local knowledge cache table |
-| `drone-beacon/src/routes.ts` | Add `/sync/knowledge/*` endpoints |
-| `drone-beacon/src/index.ts` | Integrate knowledge sync on startup |
-| `drone-core/src/config-types.ts` | Add `knowledgeSync` config options |
-| `drone-core/src/config-schema.ts` | Add swarm config schema |
-| `drone-core/src/index.ts` | Export new types |
-| `drone-coordinator/test/knowledge.test.ts` | Add tests |
+| File                                       | Changes                                         |
+| ------------------------------------------ | ----------------------------------------------- |
+| `drone-coordinator/src/db.ts`              | Add `knowledge` table and CRUD operations       |
+| `drone-coordinator/src/routes.ts`          | Add `/knowledge` and `/sync/knowledge/*` routes |
+| `drone-coordinator/src/types.ts`           | Add knowledge types                             |
+| `drone-beacon/src/coordinator-client.ts`   | Add push/pull knowledge methods                 |
+| `drone-beacon/src/db.ts`                   | Add local knowledge cache table                 |
+| `drone-beacon/src/routes.ts`               | Add `/sync/knowledge/*` endpoints               |
+| `drone-beacon/src/index.ts`                | Integrate knowledge sync on startup             |
+| `drone-core/src/config-types.ts`           | Add `knowledgeSync` config options              |
+| `drone-core/src/config-schema.ts`          | Add swarm config schema                         |
+| `drone-core/src/index.ts`                  | Export new types                                |
+| `drone-coordinator/test/knowledge.test.ts` | Add tests                                       |
 
 ## Implementation Order
 

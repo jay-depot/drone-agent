@@ -92,7 +92,7 @@ The drone-agent swarm includes a **self-improving architecture** that enables co
 ### Components
 
 | Layer           | Component                 | Self-Improvement Role                        |
-| --------------- | ------------------------- | ------------------------------------------------- |
+| --------------- | ------------------------- | -------------------------------------------- |
 | **Coordinator** | Global session storage    | Your agents' sessions searchable             |
 | **Coordinator** | Knowledge registry        | Your skills, patterns, facts, preferences    |
 | **Coordinator** | Swarm review task         | Identifies patterns across YOUR beacons      |
@@ -353,6 +353,7 @@ Local coordination layer for YOUR swarm on one machine.
 Personal control plane for YOUR swarm across machines.
 
 **Goals:**
+
 - Web UI for monitoring YOUR agents in the swarm
 - Task management and inter-beacon agent spawning
 - YOUR swarm-wide personas, skills, and memory store
@@ -362,37 +363,38 @@ Personal control plane for YOUR swarm across machines.
 - Must have a beacon on same host (for self-maintenance)
 
 **Security Architecture (Complete):**
+
 - **Agent ↔ Beacon:** Local-only connection enforcement via WSS encryption.
 - **Beacon ↔ Coordinator:**
-    - **Identity:** Beacons use Ed25519 keypairs.
-    - **Authentication:** HTTPS connection with public key exchange.
-    - **Trust Model:** Beacons must be approved via token (`drone-coordinator --approve <token>`), with auto-approval for localhost.
-    - **Connectivity:** TLS certificate management.
+  - **Identity:** Beacons use Ed25519 keypairs.
+  - **Authentication:** HTTPS connection with public key exchange.
+  - **Trust Model:** Beacons must be approved via token (`drone-coordinator --approve <token>`), with auto-approval for localhost.
+  - **Connectivity:** TLS certificate management.
 
 **Implementation Progress:**
 
-| Component | Feature | Status |
-| :--- | :--- | :--- |
-| **Core** | Basic Fastify/SQLite infrastructure | ✅ Complete |
-| **Security** | Ed25519 Keypair Management (`identity.ts`) | ✅ Complete |
-| **Security** | TLS Certificate Generation (`tls.ts`) | ✅ Complete |
-| **Security** | Beacon Approval Flow & Trust Tables | ✅ Complete |
-| **Security** | Local-only WSS Enforcement | ✅ Complete |
-| **Security** | HTTPS Server Configuration (Fastify TLS) | ✅ Complete |
-| **Data** | Global Memory & Skills (Phase 3.3) | ✅ Complete |
-| **UI** | Web Dashboard for Swarm Monitoring | ❌ Not Started |
-| **Coordination** | Inter-beacon task routing & spawning | ❌ Not Started |
-| **DX** | Make `--https` default for servers | ⏳ Pending |
+| Component        | Feature                                    | Status         |
+| :--------------- | :----------------------------------------- | :------------- |
+| **Core**         | Basic Fastify/SQLite infrastructure        | ✅ Complete    |
+| **Security**     | Ed25519 Keypair Management (`identity.ts`) | ✅ Complete    |
+| **Security**     | TLS Certificate Generation (`tls.ts`)      | ✅ Complete    |
+| **Security**     | Beacon Approval Flow & Trust Tables        | ✅ Complete    |
+| **Security**     | Local-only WSS Enforcement                 | ✅ Complete    |
+| **Security**     | HTTPS Server Configuration (Fastify TLS)   | ✅ Complete    |
+| **Data**         | Global Memory & Skills (Phase 3.3)         | ✅ Complete    |
+| **UI**           | Web Dashboard for Swarm Monitoring         | ❌ Not Started |
+| **Coordination** | Inter-beacon task routing & spawning       | ❌ Not Started |
+| **DX**           | Make `--https` default for servers         | ⏳ Pending     |
 
 **Implementation Phases:**
 
-| Phase | Feature | Description |
-| :--- | :--- | :--- |
-| **3.1** | **Secure Foundation** | Identity, TLS, and Beacon Approval flow ✅ |
-| **3.2** | **Shared Session Storage** | `swarm_sessions`, `swarm_messages` tables with FTS5 |
+| Phase   | Feature                    | Description                                                  |
+| :------ | :------------------------- | :----------------------------------------------------------- |
+| **3.1** | **Secure Foundation**      | Identity, TLS, and Beacon Approval flow ✅                   |
+| **3.2** | **Shared Session Storage** | `swarm_sessions`, `swarm_messages` tables with FTS5          |
 | **3.3** | **Global Memory & Skills** | `knowledge` table (your skill, pattern, preference, fact) ✅ |
-| **3.4** | **Swarm Learning Tasks** | Periodic swarm review on YOUR patterns |
-| **3.5** | **Global Search & UI** | Web UI and search across all YOUR agents' sessions |
+| **3.4** | **Swarm Learning Tasks**   | Periodic swarm review on YOUR patterns                       |
+| **3.5** | **Global Search & UI**     | Web UI and search across all YOUR agents' sessions           |
 
 ---
 
@@ -477,10 +479,10 @@ Phase 5 (Advanced)
 ## Development Commands
 
 | Command           | Purpose                      |
-| ----------------- | ------------------------------------------------- |
+| ----------------- | ---------------------------- |
 | `pnpm build`      | Compile all packages         |
-| `pnpm typecheck`  | Type-check all packages       |
-| `pnpm test`        | Run all tests (vitest)        |
+| `pnpm typecheck`  | Type-check all packages      |
+| `pnpm test`       | Run all tests (vitest)       |
 | `pnpm test:watch` | Watch mode                   |
 | `pnpm lint`       | ESLint + Prettier            |
 | `pnpm clean`      | Remove all dist/ directories |
@@ -505,7 +507,7 @@ Phase 5 (Advanced)
 2. **Phase 2:** Your multiple agents on same host share YOUR skills/personas/memory via beacon ✅
 3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; web UI shows YOUR swarm status
 4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses
-| 5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support
+   | 5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support
 
 ---
 

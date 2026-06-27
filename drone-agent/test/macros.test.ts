@@ -381,11 +381,7 @@ describe('loadMacros', () => {
         'utf-8'
       );
       // Write an empty macro
-      await writeFile(
-        path.join(macroDir, 'empty.macro'),
-        '',
-        'utf-8'
-      );
+      await writeFile(path.join(macroDir, 'empty.macro'), '', 'utf-8');
 
       const warnings: string[] = [];
       const logger = {
@@ -674,12 +670,24 @@ describe('macrosPlugin', () => {
         conversation: {
           getModel: () => 'test-model',
           setModel: () => {},
-          sendUserMessage: async (_prompt: string, onEvent?: (event: unknown) => void) => {
+          sendUserMessage: async (
+            _prompt: string,
+            onEvent?: (event: unknown) => void
+          ) => {
             // Simulate the events that conversation-service emits
             if (onEvent) {
               onEvent({ kind: 'reasoning', content: 'Thinking deeply...' });
-              onEvent({ kind: 'toolCall', name: 'file.read', arguments: { path: '/test.txt' } });
-              onEvent({ kind: 'toolResult', name: 'file.read', content: 'file contents', arguments: { path: '/test.txt' } });
+              onEvent({
+                kind: 'toolCall',
+                name: 'file.read',
+                arguments: { path: '/test.txt' },
+              });
+              onEvent({
+                kind: 'toolResult',
+                name: 'file.read',
+                content: 'file contents',
+                arguments: { path: '/test.txt' },
+              });
               onEvent({ kind: 'assistantMessage', content: '42' });
             }
             return '42';
@@ -694,10 +702,14 @@ describe('macrosPlugin', () => {
       expect(infoMessages[0]).toBe('What is the meaning of life?');
 
       // Reasoning event should be logged
-      expect(infoMessages.some(m => m.includes('Thinking deeply...'))).toBe(true);
+      expect(infoMessages.some(m => m.includes('Thinking deeply...'))).toBe(
+        true
+      );
 
       // Tool call event should be logged
-      expect(infoMessages.some(m => m.includes('→ tool: file.read'))).toBe(true);
+      expect(infoMessages.some(m => m.includes('→ tool: file.read'))).toBe(
+        true
+      );
 
       // Tool result event should be logged
       expect(infoMessages.some(m => m.includes('← file.read:'))).toBe(true);
@@ -706,5 +718,4 @@ describe('macrosPlugin', () => {
       expect(infoMessages.some(m => m.includes('42'))).toBe(true);
     });
   });
-
 });

@@ -1,6 +1,12 @@
 import fastify from 'fastify';
 import path from 'path';
-import { initDatabase, closeDatabase, approveBeacon, listBeaconTrust } from './db.js';
+import {
+  initDatabase,
+  closeDatabase,
+  approveBeacon,
+  listBeaconTrust,
+} from './db.js';
+import { initStorage } from './storage.js';
 import { registerRoutes } from './routes.js';
 import { logger } from './logger.js';
 import { loadOrCreateTlsIdentity, getTlsOptions } from './tls.js';
@@ -86,7 +92,7 @@ async function handleApprove(config: Config) {
   }
 
   initDatabase(config.dbPath);
-  
+
   const trust = approveBeacon(config.approvalToken);
   if (!trust) {
     console.error('Error: Invalid or expired approval token');
@@ -94,14 +100,16 @@ async function handleApprove(config: Config) {
     process.exit(1);
   }
 
-  console.log(`Successfully approved beacon: ${trust.name} (${trust.beaconId})`);
+  console.log(
+    `Successfully approved beacon: ${trust.name} (${trust.beaconId})`
+  );
   closeDatabase();
   process.exit(0);
 }
 
 async function handleListBeacons(config: Config) {
   initDatabase(config.dbPath);
-  
+
   const beacons = listBeaconTrust();
   if (beacons.length === 0) {
     console.log('No beacons registered');
@@ -123,7 +131,7 @@ async function handleListBeacons(config: Config) {
     }
     console.log('');
   }
-  
+
   closeDatabase();
   process.exit(0);
 }
@@ -135,7 +143,7 @@ async function main() {
     await handleApprove(config);
     return;
   }
-  
+
   if (config.command === 'list-beacons') {
     await handleListBeacons(config);
     return;
@@ -149,6 +157,9 @@ async function main() {
 
   // Initialize database
   initDatabase(config.dbPath);
+
+  // Initialize storage engine for large payloads
+  initStorage(config.configDir);
 
   // Create Fastify instance
   const app = fastify({

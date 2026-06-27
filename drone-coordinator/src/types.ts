@@ -83,7 +83,11 @@ export interface EndSessionRequest {
 
 // === Knowledge Types ===
 
-export type KnowledgeType = 'fact' | 'preference' | 'skill_pattern' | 'principle';
+export type KnowledgeType =
+  | 'fact'
+  | 'preference'
+  | 'skill_pattern'
+  | 'principle';
 
 export interface Knowledge {
   id: string;

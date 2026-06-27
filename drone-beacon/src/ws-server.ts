@@ -247,7 +247,10 @@ export async function registerWebSocketServer(
       logger.warn(
         `Rejected non-local WebSocket connection from ${socket.remoteAddress}`
       );
-      socket.close(ERROR_NON_LOCAL_CONNECTION, 'Non-local connections not allowed');
+      socket.close(
+        ERROR_NON_LOCAL_CONNECTION,
+        'Non-local connections not allowed'
+      );
       return;
     }
 

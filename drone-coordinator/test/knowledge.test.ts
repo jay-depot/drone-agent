@@ -2,12 +2,24 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { initDatabase, closeDatabase, createKnowledge, getKnowledge, listKnowledge, updateKnowledge, deleteKnowledge, searchKnowledge, upsertKnowledge } from '../src/db.js';
+import {
+  initDatabase,
+  closeDatabase,
+  createKnowledge,
+  getKnowledge,
+  listKnowledge,
+  updateKnowledge,
+  deleteKnowledge,
+  searchKnowledge,
+  upsertKnowledge,
+} from '../src/db.js';
 
 let dbPath = '';
 
 async function setupDb(): Promise<string> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'drone-coordinator-knowledge-'));
+  const dir = await mkdtemp(
+    path.join(os.tmpdir(), 'drone-coordinator-knowledge-')
+  );
   const dbFile = path.join(dir, 'test.db');
   initDatabase(dbFile);
   return dbFile;
@@ -60,15 +72,21 @@ describe('Knowledge CRUD', () => {
 
   it('should list all knowledge entries', () => {
     createKnowledge({
-      id: 'k1', type: 'fact', key: 'fact-1',
+      id: 'k1',
+      type: 'fact',
+      key: 'fact-1',
       value: JSON.stringify({ a: 1 }),
     });
     createKnowledge({
-      id: 'k2', type: 'preference', key: 'pref-1',
+      id: 'k2',
+      type: 'preference',
+      key: 'pref-1',
       value: JSON.stringify({ theme: 'dark' }),
     });
     createKnowledge({
-      id: 'k3', type: 'skill_pattern', key: 'pattern-1',
+      id: 'k3',
+      type: 'skill_pattern',
+      key: 'pattern-1',
       value: JSON.stringify({ pattern: 'test-first' }),
     });
 
@@ -78,11 +96,15 @@ describe('Knowledge CRUD', () => {
 
   it('should list knowledge filtered by type', () => {
     createKnowledge({
-      id: 'k1', type: 'fact', key: 'fact-1',
+      id: 'k1',
+      type: 'fact',
+      key: 'fact-1',
       value: JSON.stringify({ a: 1 }),
     });
     createKnowledge({
-      id: 'k2', type: 'preference', key: 'pref-1',
+      id: 'k2',
+      type: 'preference',
+      key: 'pref-1',
       value: JSON.stringify({ theme: 'dark' }),
     });
 
@@ -97,7 +119,9 @@ describe('Knowledge CRUD', () => {
 
   it('should update a knowledge entry', () => {
     createKnowledge({
-      id: 'k1', type: 'fact', key: 'fact-1',
+      id: 'k1',
+      type: 'fact',
+      key: 'fact-1',
       value: JSON.stringify({ a: 1 }),
     });
 
@@ -120,7 +144,9 @@ describe('Knowledge CRUD', () => {
 
   it('should delete a knowledge entry', () => {
     createKnowledge({
-      id: 'k1', type: 'fact', key: 'fact-1',
+      id: 'k1',
+      type: 'fact',
+      key: 'fact-1',
       value: JSON.stringify({ a: 1 }),
     });
 
@@ -138,15 +164,21 @@ describe('Knowledge CRUD', () => {
 
   it('should search knowledge by key and value', () => {
     createKnowledge({
-      id: 'k1', type: 'fact', key: 'vite-preference',
+      id: 'k1',
+      type: 'fact',
+      key: 'vite-preference',
       value: JSON.stringify({ tool: 'Vite' }),
     });
     createKnowledge({
-      id: 'k2', type: 'fact', key: 'webpack-preference',
+      id: 'k2',
+      type: 'fact',
+      key: 'webpack-preference',
       value: JSON.stringify({ tool: 'Webpack' }),
     });
     createKnowledge({
-      id: 'k3', type: 'preference', key: 'theme',
+      id: 'k3',
+      type: 'preference',
+      key: 'theme',
       value: JSON.stringify({ theme: 'dark' }),
     });
 
@@ -160,11 +192,15 @@ describe('Knowledge CRUD', () => {
 
   it('should search knowledge filtered by type', () => {
     createKnowledge({
-      id: 'k1', type: 'fact', key: 'vite',
+      id: 'k1',
+      type: 'fact',
+      key: 'vite',
       value: JSON.stringify({ tool: 'Vite' }),
     });
     createKnowledge({
-      id: 'k2', type: 'preference', key: 'theme',
+      id: 'k2',
+      type: 'preference',
+      key: 'theme',
       value: JSON.stringify({ theme: 'dark' }),
     });
 
@@ -178,7 +214,9 @@ describe('Knowledge CRUD', () => {
 
   it('should upsert - create new entry', () => {
     const result = upsertKnowledge({
-      id: 'k1', type: 'fact', key: 'test-key',
+      id: 'k1',
+      type: 'fact',
+      key: 'test-key',
       value: JSON.stringify({ data: 'original' }),
     });
 
@@ -189,14 +227,18 @@ describe('Knowledge CRUD', () => {
   it('should upsert - keep existing when confidence is lower', () => {
     // Create with high confidence
     upsertKnowledge({
-      id: 'k1', type: 'fact', key: 'test-key',
+      id: 'k1',
+      type: 'fact',
+      key: 'test-key',
       value: JSON.stringify({ data: 'original' }),
       confidence: 0.9,
     });
 
     // Try to upsert with lower confidence
     const result = upsertKnowledge({
-      id: 'k2', type: 'fact', key: 'test-key',
+      id: 'k2',
+      type: 'fact',
+      key: 'test-key',
       value: JSON.stringify({ data: 'newer-but-worse' }),
       confidence: 0.5,
     });
@@ -209,14 +251,18 @@ describe('Knowledge CRUD', () => {
   it('should upsert - replace when confidence is higher', () => {
     // Create with low confidence
     upsertKnowledge({
-      id: 'k1', type: 'fact', key: 'test-key',
+      id: 'k1',
+      type: 'fact',
+      key: 'test-key',
       value: JSON.stringify({ data: 'original' }),
       confidence: 0.3,
     });
 
     // Upsert with higher confidence
     const result = upsertKnowledge({
-      id: 'k2', type: 'fact', key: 'test-key',
+      id: 'k2',
+      type: 'fact',
+      key: 'test-key',
       value: JSON.stringify({ data: 'better-data' }),
       confidence: 0.9,
     });

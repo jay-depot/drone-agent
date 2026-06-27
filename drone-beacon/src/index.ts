@@ -134,10 +134,10 @@ Options:
 
 async function main() {
   const config = parseArgs();
-  
+
   const beaconProtocol = config.useHttps ? 'https' : 'http';
   const coordinatorProtocol = config.coordinatorUseHttps ? 'https' : 'http';
-  
+
   logger.info(`Starting drone-beacon on ${config.host}:${config.port}`);
   logger.info(`Configuration directory: ${config.configDir}`);
   logger.info(`Database path: ${config.dbPath}`);
@@ -149,7 +149,9 @@ async function main() {
 
   // Load or create beacon identity (Ed25519 keypair)
   const identity = loadOrCreateIdentity(config.beaconId, config.configDir);
-  logger.info(`Beacon identity loaded (public key: ${identity.publicKeyHex.slice(0, 16)}...)`);
+  logger.info(
+    `Beacon identity loaded (public key: ${identity.publicKeyHex.slice(0, 16)}...)`
+  );
 
   // Load or create TLS certificate
   const tlsIdentity = loadOrCreateTlsIdentity(config.configDir);
@@ -182,26 +184,29 @@ async function main() {
       tlsIdentity,
       useHttps: config.coordinatorUseHttps,
     };
-    
-    coordinatorClient = createCoordinatorClient({
-      host: config.coordinatorHost,
-      port: config.coordinatorPort,
-      beaconId: config.beaconId,
-      beaconName: config.beaconName,
-    }, coordinatorClientOptions);
-    
+
+    coordinatorClient = createCoordinatorClient(
+      {
+        host: config.coordinatorHost,
+        port: config.coordinatorPort,
+        beaconId: config.beaconId,
+        beaconName: config.beaconName,
+      },
+      coordinatorClientOptions
+    );
+
     setCoordinatorClient(coordinatorClient);
-    
+
     try {
       const result = await coordinatorClient.registerBeacon(
         identity,
         tlsIdentity.fingerprint
       );
-      
+
       if (result.status === 'pending' && result.approvalToken) {
         logger.info(`Beacon pending approval. Token: ${result.approvalToken}`);
         logger.info('Run: drone-coordinator --approve <token> to approve');
-        
+
         // Poll for approval
         const pollInterval = setInterval(async () => {
           try {
@@ -307,7 +312,9 @@ async function main() {
     }
 
     await app.listen(listenOptions);
-    logger.info(`Beacon listening on ${beaconProtocol}://${config.host}:${config.port}`);
+    logger.info(
+      `Beacon listening on ${beaconProtocol}://${config.host}:${config.port}`
+    );
   } catch (err) {
     logger.error(err);
     process.exit(1);

@@ -38,5 +38,9 @@
   {
     "timestamp": "2026-06-27T22:15:20.982Z",
     "insight": "When planning distributed systems like the drone swarm, specifically addressing the ' la trace' (event-log) pattern vs. a simple 'state' pattern early on allows for much better support of later features like knowledge distillation and real-time monitoring."
+  },
+  {
+    "timestamp": "2026-06-27T22:30:47.272Z",
+    "insight": "Phase 3.2 shared session storage implementation: Added swarm_sessions and swarm_events tables with FTS5 to drone-coordinator, a file-based blob storage engine for large payloads (>10KB), REST API endpoints for session/event CRUD, beacon coordinator client methods for registerSwarmSession/pushEvents, and swarm plugin correlationId generation with push-through event buffering. The DroneLogger type lacks a debug() method, which required changing debug calls to info() in the swarm plugin."
   }
 ]

@@ -97,6 +97,33 @@ export function initDatabase(dataPath: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_knowledge_type ON knowledge(type);
     CREATE INDEX IF NOT EXISTS idx_knowledge_key ON knowledge(key);
     CREATE INDEX IF NOT EXISTS idx_knowledge_source ON knowledge(source_beacon_id);
+
+    CREATE TABLE IF NOT EXISTS swarm_sessions (
+      id TEXT PRIMARY KEY,
+      persona_id TEXT,
+      beacon_id TEXT NOT NULL,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active'
+    );
+
+    CREATE TABLE IF NOT EXISTS swarm_events (
+      id TEXT PRIMARY KEY,
+      sessionId TEXT NOT NULL,
+      correlationId TEXT,
+      type TEXT NOT NULL,
+      payload TEXT,
+      metadata TEXT,
+      createdAt INTEGER NOT NULL,
+      FOREIGN KEY (sessionId) REFERENCES swarm_sessions(id)
+    );
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS swarm_events_fts USING fts5(
+      payload, content='swarm_events', content_rowid='id'
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_swarm_events_session ON swarm_events(sessionId);
+    CREATE INDEX IF NOT EXISTS idx_swarm_events_correlation ON swarm_events(correlationId);
   `);
 
   logger.info('Database initialized successfully');
@@ -311,14 +338,16 @@ function generateApprovalToken(): string {
   return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-export function registerBeaconTrust(req: RegisterBeaconTrustRequest): BeaconTrust {
+export function registerBeaconTrust(
+  req: RegisterBeaconTrustRequest
+): BeaconTrust {
   const now = Date.now();
   const isLocal = req.host === 'localhost' || req.host === '127.0.0.1';
-  
+
   // Auto-approve local beacons
   const status: BeaconTrustStatus = isLocal ? 'approved' : 'pending';
   const approvalToken = isLocal ? null : generateApprovalToken();
-  
+
   const trust: BeaconTrust = {
     beaconId: req.id,
     name: req.name,
@@ -353,25 +382,31 @@ export function registerBeaconTrust(req: RegisterBeaconTrustRequest): BeaconTrus
     updatedAt: trust.updatedAt,
   });
 
-  logger.info(`Registered beacon trust: ${trust.beaconId} (status: ${trust.status})`);
+  logger.info(
+    `Registered beacon trust: ${trust.beaconId} (status: ${trust.status})`
+  );
   return trust;
 }
 
 export function getBeaconTrust(beaconId: string): BeaconTrust | undefined {
-  const stmt = getDatabase().prepare('SELECT * FROM beacon_trust WHERE beacon_id = ?');
-  const row = stmt.get(beaconId) as {
-    beacon_id: string;
-    name: string;
-    public_key: string;
-    host: string;
-    port: number;
-    status: BeaconTrustStatus;
-    approval_token: string | null;
-    approved_at: number | null;
-    tls_fingerprint: string | null;
-    created_at: number;
-    updated_at: number;
-  } | undefined;
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM beacon_trust WHERE beacon_id = ?'
+  );
+  const row = stmt.get(beaconId) as
+    | {
+        beacon_id: string;
+        name: string;
+        public_key: string;
+        host: string;
+        port: number;
+        status: BeaconTrustStatus;
+        approval_token: string | null;
+        approved_at: number | null;
+        tls_fingerprint: string | null;
+        created_at: number;
+        updated_at: number;
+      }
+    | undefined;
   if (!row) return undefined;
   return {
     beaconId: row.beacon_id,
@@ -389,7 +424,9 @@ export function getBeaconTrust(beaconId: string): BeaconTrust | undefined {
 }
 
 export function listBeaconTrust(): BeaconTrust[] {
-  const stmt = getDatabase().prepare('SELECT * FROM beacon_trust ORDER BY name');
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM beacon_trust ORDER BY name'
+  );
   const rows = stmt.all() as Array<{
     beacon_id: string;
     name: string;
@@ -426,28 +463,32 @@ export function approveBeacon(approvalToken: string): BeaconTrust | null {
     WHERE approval_token = ? AND status = 'pending'
   `);
   const result = stmt.run(now, now, approvalToken);
-  
+
   if (result.changes === 0) {
     return null;
   }
-  
+
   // Fetch and return the updated trust
-  const stmt2 = getDatabase().prepare('SELECT * FROM beacon_trust WHERE approval_token = ?');
-  const row = stmt2.get(approvalToken) as {
-    beacon_id: string;
-    name: string;
-    public_key: string;
-    host: string;
-    port: number;
-    status: BeaconTrustStatus;
-    approval_token: string | null;
-    approved_at: number | null;
-    tls_fingerprint: string | null;
-    created_at: number;
-    updated_at: number;
-  } | undefined;
+  const stmt2 = getDatabase().prepare(
+    'SELECT * FROM beacon_trust WHERE approval_token = ?'
+  );
+  const row = stmt2.get(approvalToken) as
+    | {
+        beacon_id: string;
+        name: string;
+        public_key: string;
+        host: string;
+        port: number;
+        status: BeaconTrustStatus;
+        approval_token: string | null;
+        approved_at: number | null;
+        tls_fingerprint: string | null;
+        created_at: number;
+        updated_at: number;
+      }
+    | undefined;
   if (!row) return null;
-  
+
   logger.info(`Approved beacon: ${row.beacon_id}`);
   return {
     beaconId: row.beacon_id,
@@ -479,12 +520,13 @@ export function rejectBeacon(beaconId: string): boolean {
 }
 
 export function deleteBeaconTrust(beaconId: string): boolean {
-  const stmt = getDatabase().prepare('DELETE FROM beacon_trust WHERE beacon_id = ?');
+  const stmt = getDatabase().prepare(
+    'DELETE FROM beacon_trust WHERE beacon_id = ?'
+  );
   const result = stmt.run(beaconId);
   logger.info(`Deleted beacon trust: ${beaconId}`);
   return result.changes > 0;
 }
-
 
 // Beacon Session operations
 function rowToBeaconSession(row: {
@@ -704,23 +746,27 @@ export function createKnowledge(req: CreateKnowledgeRequest): Knowledge {
     updatedAt: knowledge.updatedAt,
   });
 
-  logger.info(`Created knowledge: ${knowledge.id} (${knowledge.type}:${knowledge.key})`);
+  logger.info(
+    `Created knowledge: ${knowledge.id} (${knowledge.type}:${knowledge.key})`
+  );
   return knowledge;
 }
 
 export function getKnowledge(id: string): Knowledge | undefined {
   const stmt = getDatabase().prepare('SELECT * FROM knowledge WHERE id = ?');
-  const row = stmt.get(id) as {
-    id: string;
-    type: string;
-    key: string;
-    value: string;
-    source_beacon_id: string | null;
-    source_agent_id: string | null;
-    confidence: number;
-    createdAt: number;
-    updatedAt: number;
-  } | undefined;
+  const row = stmt.get(id) as
+    | {
+        id: string;
+        type: string;
+        key: string;
+        value: string;
+        source_beacon_id: string | null;
+        source_agent_id: string | null;
+        confidence: number;
+        createdAt: number;
+        updatedAt: number;
+      }
+    | undefined;
   if (!row) return undefined;
   return rowToKnowledge(row);
 }
@@ -728,8 +774,26 @@ export function getKnowledge(id: string): Knowledge | undefined {
 export function listKnowledge(type?: string): Knowledge[] {
   let stmt;
   if (type) {
-    stmt = getDatabase().prepare('SELECT * FROM knowledge WHERE type = ? ORDER BY key');
-    return (stmt.all(type) as Array<{
+    stmt = getDatabase().prepare(
+      'SELECT * FROM knowledge WHERE type = ? ORDER BY key'
+    );
+    return (
+      stmt.all(type) as Array<{
+        id: string;
+        type: string;
+        key: string;
+        value: string;
+        source_beacon_id: string | null;
+        source_agent_id: string | null;
+        confidence: number;
+        createdAt: number;
+        updatedAt: number;
+      }>
+    ).map(rowToKnowledge);
+  }
+  stmt = getDatabase().prepare('SELECT * FROM knowledge ORDER BY type, key');
+  return (
+    stmt.all() as Array<{
       id: string;
       type: string;
       key: string;
@@ -739,20 +803,8 @@ export function listKnowledge(type?: string): Knowledge[] {
       confidence: number;
       createdAt: number;
       updatedAt: number;
-    }>).map(rowToKnowledge);
-  }
-  stmt = getDatabase().prepare('SELECT * FROM knowledge ORDER BY type, key');
-  return (stmt.all() as Array<{
-    id: string;
-    type: string;
-    key: string;
-    value: string;
-    source_beacon_id: string | null;
-    source_agent_id: string | null;
-    confidence: number;
-    createdAt: number;
-    updatedAt: number;
-  }>).map(rowToKnowledge);
+    }>
+  ).map(rowToKnowledge);
 }
 
 export function updateKnowledge(
@@ -800,14 +852,35 @@ export function deleteKnowledge(id: string): boolean {
 export function searchKnowledge(query: string, type?: string): Knowledge[] {
   let stmt;
   const searchPattern = `%${query}%`;
-  
+
   if (type) {
     stmt = getDatabase().prepare(`
       SELECT * FROM knowledge 
       WHERE type = ? AND (key LIKE ? OR value LIKE ?)
       ORDER BY confidence DESC
     `);
-    return (stmt.all(type, searchPattern, searchPattern) as Array<{
+    return (
+      stmt.all(type, searchPattern, searchPattern) as Array<{
+        id: string;
+        type: string;
+        key: string;
+        value: string;
+        source_beacon_id: string | null;
+        source_agent_id: string | null;
+        confidence: number;
+        createdAt: number;
+        updatedAt: number;
+      }>
+    ).map(rowToKnowledge);
+  }
+
+  stmt = getDatabase().prepare(`
+    SELECT * FROM knowledge 
+    WHERE key LIKE ? OR value LIKE ?
+    ORDER BY confidence DESC
+  `);
+  return (
+    stmt.all(searchPattern, searchPattern) as Array<{
       id: string;
       type: string;
       key: string;
@@ -817,41 +890,28 @@ export function searchKnowledge(query: string, type?: string): Knowledge[] {
       confidence: number;
       createdAt: number;
       updatedAt: number;
-    }>).map(rowToKnowledge);
-  }
-  
-  stmt = getDatabase().prepare(`
-    SELECT * FROM knowledge 
-    WHERE key LIKE ? OR value LIKE ?
-    ORDER BY confidence DESC
-  `);
-  return (stmt.all(searchPattern, searchPattern) as Array<{
-    id: string;
-    type: string;
-    key: string;
-    value: string;
-    source_beacon_id: string | null;
-    source_agent_id: string | null;
-    confidence: number;
-    createdAt: number;
-    updatedAt: number;
-  }>).map(rowToKnowledge);
+    }>
+  ).map(rowToKnowledge);
 }
 
 export function upsertKnowledge(req: CreateKnowledgeRequest): Knowledge {
   // Check if knowledge with same type+key already exists
-  const stmt = getDatabase().prepare('SELECT * FROM knowledge WHERE type = ? AND key = ?');
-  const existing = stmt.get(req.type, req.key) as {
-    id: string;
-    type: string;
-    key: string;
-    value: string;
-    source_beacon_id: string | null;
-    source_agent_id: string | null;
-    confidence: number;
-    createdAt: number;
-    updatedAt: number;
-  } | undefined;
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM knowledge WHERE type = ? AND key = ?'
+  );
+  const existing = stmt.get(req.type, req.key) as
+    | {
+        id: string;
+        type: string;
+        key: string;
+        value: string;
+        source_beacon_id: string | null;
+        source_agent_id: string | null;
+        confidence: number;
+        createdAt: number;
+        updatedAt: number;
+      }
+    | undefined;
 
   if (existing) {
     // Conflict resolution: keep highest confidence or latest timestamp
@@ -869,4 +929,165 @@ export function upsertKnowledge(req: CreateKnowledgeRequest): Knowledge {
 
   // No existing entry, create new
   return createKnowledge(req);
+}
+
+// === Swarm Session operations ===
+
+export interface SwarmSession {
+  id: string;
+  personaId: string | null;
+  beaconId: string;
+  createdAt: number;
+  updatedAt: number;
+  status: string;
+}
+
+export interface SwarmEvent {
+  id: string;
+  sessionId: string;
+  correlationId: string | null;
+  type: string;
+  payload: string | null;
+  metadata: string | null;
+  createdAt: number;
+}
+
+export function createSwarmSession(
+  id: string,
+  personaId: string | null,
+  beaconId: string
+): SwarmSession {
+  const now = Date.now();
+  const session: SwarmSession = {
+    id,
+    personaId,
+    beaconId,
+    createdAt: now,
+    updatedAt: now,
+    status: 'active',
+  };
+
+  const stmt = getDatabase().prepare(`
+    INSERT INTO swarm_sessions (id, persona_id, beacon_id, createdAt, updatedAt, status)
+    VALUES (@id, @personaId, @beaconId, @createdAt, @updatedAt, @status)
+  `);
+
+  stmt.run({
+    id: session.id,
+    personaId: session.personaId,
+    beaconId: session.beaconId,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+    status: session.status,
+  });
+
+  logger.info(`Created swarm session: ${session.id}`);
+  return session;
+}
+
+export function getSwarmSession(id: string): SwarmSession | undefined {
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM swarm_sessions WHERE id = ?'
+  );
+  const row = stmt.get(id) as
+    | {
+        id: string;
+        persona_id: string | null;
+        beacon_id: string;
+        createdAt: number;
+        updatedAt: number;
+        status: string;
+      }
+    | undefined;
+  if (!row) return undefined;
+  return {
+    id: row.id,
+    personaId: row.persona_id,
+    beaconId: row.beacon_id,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    status: row.status,
+  };
+}
+
+export function updateSwarmSessionStatus(
+  id: string,
+  status: string
+): SwarmSession | undefined {
+  const existing = getSwarmSession(id);
+  if (!existing) return undefined;
+
+  const now = Date.now();
+  const stmt = getDatabase().prepare(`
+    UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt WHERE id = @id
+  `);
+  stmt.run({ id, status, updatedAt: now });
+
+  return { ...existing, status, updatedAt: now };
+}
+
+export function createSwarmEvent(event: SwarmEvent): SwarmEvent {
+  const stmt = getDatabase().prepare(`
+    INSERT INTO swarm_events (id, sessionId, correlationId, type, payload, metadata, createdAt)
+    VALUES (@id, @sessionId, @correlationId, @type, @payload, @metadata, @createdAt)
+  `);
+
+  stmt.run({
+    id: event.id,
+    sessionId: event.sessionId,
+    correlationId: event.correlationId,
+    type: event.type,
+    payload: event.payload,
+    metadata: event.metadata,
+    createdAt: event.createdAt,
+  });
+
+  return event;
+}
+
+export function getSwarmEvents(
+  sessionId: string,
+  options?: { correlationId?: string; limit?: number; offset?: number }
+): SwarmEvent[] {
+  let query = 'SELECT * FROM swarm_events WHERE sessionId = ?';
+  const params: unknown[] = [sessionId];
+
+  if (options?.correlationId) {
+    query += ' AND correlationId = ?';
+    params.push(options.correlationId);
+  }
+
+  query += ' ORDER BY createdAt ASC';
+
+  if (options?.limit) {
+    query += ' LIMIT ?';
+    params.push(options.limit);
+  }
+  if (options?.offset) {
+    query += ' OFFSET ?';
+    params.push(options.offset);
+  }
+
+  const stmt = getDatabase().prepare(query);
+  return stmt.all(...params) as SwarmEvent[];
+}
+
+export function getLatestSwarmEvents(
+  sessionId: string,
+  limit: number = 10
+): SwarmEvent[] {
+  const stmt = getDatabase().prepare(`
+    SELECT * FROM swarm_events WHERE sessionId = ? ORDER BY createdAt DESC LIMIT ?
+  `);
+  return stmt.all(sessionId, limit) as SwarmEvent[];
+}
+
+export function searchSwarmEvents(query: string): SwarmEvent[] {
+  const stmt = getDatabase().prepare(`
+    SELECT se.* FROM swarm_events se
+    JOIN swarm_events_fts fts ON se.id = fts.id
+    WHERE swarm_events_fts MATCH ?
+    ORDER BY se.createdAt ASC
+  `);
+  return stmt.all(query) as SwarmEvent[];
 }

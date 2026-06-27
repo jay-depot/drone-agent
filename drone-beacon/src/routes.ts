@@ -74,7 +74,11 @@ export async function triggerCoordinatorSync(): Promise<{
     );
     return {
       success: true,
-      synced: { personas: personas.length, skills: skills.length, knowledge: knowledgeCount },
+      synced: {
+        personas: personas.length,
+        skills: skills.length,
+        knowledge: knowledgeCount,
+      },
     };
   } catch (err) {
     logger.error(err, 'Sync failed');

@@ -138,7 +138,7 @@ export const personaPlugin: DronePlugin = {
           activePersona.promptFragments.length > 0
         ) {
           parts.push('## Observe the following additional instructions:');
-          activePersona.promptFragments.forEach((fragment) => {
+          activePersona.promptFragments.forEach(fragment => {
             parts.push(`- ${fragment}`);
           });
         }

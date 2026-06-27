@@ -11,6 +11,20 @@ import type {
 import { PRECEDENCE_COORDINATOR, PRECEDENCE_SWARM } from 'drone-core';
 
 /**
+ * Generate a UUID v4 string.
+ */
+function generateUuid(): string {
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  // Set version 4 bits
+  array[6] = (array[6] & 0x0f) | 0x40;
+  // Set variant bits
+  array[8] = (array[8] & 0x3f) | 0x80;
+  const hex = Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/**
  * BeaconConfigInjector fetches config from the beacon and provides it as an underlay.
  */
 class BeaconConfigInjector {
@@ -64,6 +78,8 @@ export interface SwarmConfig {
 /**
  * The swarm plugin connects to a drone-beacon and provides
  * personas and skills from the beacon's aggregated store.
+ * It also implements a push-through mechanism that records
+ * all conversation events to the coordinator via the beacon.
  */
 export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
   const beaconHost = config.beaconHost ?? DEFAULT_BEACON_HOST;
@@ -107,7 +123,71 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       let beaconSkills = new Map<string, DroneSkillDefinition>();
       let coordinatorSkills = new Map<string, DroneSkillDefinition>();
 
-      // Helper to load all data from beacon
+      // ── Push-through session storage state ──────────────────────────────
+      // Tracks the current correlationId for the active user turn.
+      let currentCorrelationId: string | null = null;
+      // Tracks how many events we've already pushed so we only push new ones.
+      let pushedEventCount = 0;
+      // Buffer of events to push on the next onAfterToolCall.
+      const eventBuffer: Array<{
+        id: string;
+        sessionId: string;
+        correlationId?: string;
+        type: string;
+        payload?: string;
+        metadata?: string;
+        createdAt: number;
+      }> = [];
+
+      // Helper to push buffered events to the coordinator via the beacon.
+      const flushEventBuffer = async () => {
+        if (eventBuffer.length === 0) return;
+        const batch = eventBuffer.splice(0);
+        try {
+          const res = await fetch(`${baseUrl}/sync/events/push`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ events: batch }),
+          });
+          if (!res.ok) {
+            registration.logger.warn(
+              `Failed to push ${batch.length} events: ${res.status}`
+            );
+          } else {
+            registration.logger.info(
+              `Pushed ${batch.length} events to coordinator`
+            );
+          }
+        } catch (err) {
+          registration.logger.warn(`Failed to push events: ${err}`);
+        }
+      };
+
+      // Helper to register a swarm session with the coordinator via the beacon.
+      const registerSwarmSession = async () => {
+        try {
+          const res = await fetch(`${baseUrl}/sync/sessions/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: sessionId,
+              personaId: null,
+              beaconId: sessionId,
+            }),
+          });
+          if (!res.ok) {
+            registration.logger.warn(
+              `Failed to register swarm session: ${res.status}`
+            );
+          } else {
+            registration.logger.info(`Registered swarm session ${sessionId}`);
+          }
+        } catch (err) {
+          registration.logger.warn(`Failed to register swarm session: ${err}`);
+        }
+      };
+
+      // Helper to reload all data from beacon
       const reloadFromBeacon = async () => {
         try {
           // Fetch personas
@@ -232,16 +312,32 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         );
       }
 
-      // Register tool for messaging
+      // ── Lifecycle hooks ────────────────────────────────────────────────
 
-      // Initial load
+      // onPluginsLoaded: initial data load, register swarm session, connect WebSocket
       registration.hooks.onPluginsLoaded(async () => {
         await reloadFromBeacon();
-        // Connect WebSocket for messaging
+        await registerSwarmSession();
         connectWebSocket();
       });
 
-      // Heartbeat to keep session alive
+      // onBeforePrompt: generate a new correlationId for each user turn
+      registration.hooks.onBeforePrompt(async () => {
+        currentCorrelationId = generateUuid();
+        registration.logger.info(`New correlationId: ${currentCorrelationId}`);
+      });
+
+      // onAfterToolCall: push any buffered events to the coordinator
+      registration.hooks.onAfterToolCall(async () => {
+        await flushEventBuffer();
+      });
+
+      // onSessionClear: reset correlation tracking
+      registration.hooks.onSessionClear(async () => {
+        currentCorrelationId = null;
+        pushedEventCount = 0;
+        eventBuffer.length = 0;
+      });
 
       // ── WebSocket client for real-time messaging ────────────────────────
       const wsUrl = `wss://${beaconHost}:${beaconPort}/ws?agentId=${sessionId}`;
@@ -457,6 +553,8 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
 
       // Register the messaging tool
       registration.registerTool(swarmMessageTool);
+
+      // ── Heartbeat ───────────────────────────────────────────────────────
       const heartbeat = async () => {
         try {
           await fetch(`${baseUrl}/agents/${sessionId}/heartbeat`, {
@@ -474,6 +572,8 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       registration.hooks.onShutdown(async () => {
         clearInterval(heartbeatInterval);
         if (ws) ws.close();
+        // Flush any remaining events
+        await flushEventBuffer();
         // Unregister config injector
         if (beaconConfigInjector && configCap) {
           configCap.unregisterInjector(beaconConfigInjector.id);
