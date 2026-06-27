@@ -413,8 +413,9 @@ export function applyAgentConfigLayer(
       ? {
           ...baseConfig.promptFile,
           ...layer.promptFile,
+          // Merge and deduplicate files from both layers
           files: layer.promptFile.files
-            ? [...baseConfig.promptFile.files, ...layer.promptFile.files]
+            ? [...new Set([...baseConfig.promptFile.files, ...layer.promptFile.files])]
             : baseConfig.promptFile.files,
         }
       : baseConfig.promptFile,

@@ -46,5 +46,25 @@
   {
     "timestamp": "2026-06-27T22:31:13.415Z",
     "insight": "The DroneLogger type in drone-core/src/session-types.ts only has info/warn/error methods but no debug method. This caused a type error when the swarm plugin tried to use logger.debug(). The fix was to use logger.info() instead. Consider adding debug() to DroneLogger for future use."
+  },
+  {
+    "timestamp": "2026-06-27T22:44:12.280Z",
+    "insight": "Phase 3.2 shared session storage demonstrated several reusable patterns: (1) Use FTS5 for full-text search in SQLite, (2) Content-addressable storage with SHA-256 hash references for large payloads (>10KB threshold), (3) Foreign key constraints to maintain SESSIONS→EVENTS relationship integrity, (4) CorrelationId (UUID v4) to link all events from a single user turn together."
+  },
+  {
+    "timestamp": "2026-06-27T22:44:12.284Z",
+    "insight": "Security architecture used Ed25519 keypairs for beacon identity, TLS for transport encryption, auto-approval for localhost beacons to simplify local development, and local-only WSS enforcement to restrict connections to localhost. Trust table model with approval tokens provides a simple but effective beacon authorization flow."
+  },
+  {
+    "timestamp": "2026-06-27T22:44:12.289Z",
+    "insight": "Macro UI feedback fix used event callback pattern to stream conversation events from sendUserMessage to the logger, with type guards to safely handle unknown event types. UI indicator activation (setIsLlmActive) should wrap any async dispatch that may trigger LLM calls for proper visual feedback."
+  },
+  {
+    "timestamp": "2026-06-27T22:44:12.295Z",
+    "insight": "Global memory/skills used confidence-based conflict resolution (keep highest confidence when same key from multiple sources), pull-based sync with optional push, and local caching for offline operation. Knowledge types (fact, preference, skill_pattern, principle) provide useful categorization for swarm-wide knowledge."
+  },
+  {
+    "timestamp": "2026-06-27T23:09:41.457Z",
+    "insight": "The persona-principles fragment exists in the code but was not rendering because: (1) it only reads from persona-specific principles files, ignoring project-level principles entirely, and (2) the rendering logic was scoped too narrowly. The combined fragment approach fixes this by scanning both project and persona principles directories."
   }
 ]

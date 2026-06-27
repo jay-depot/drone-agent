@@ -183,20 +183,22 @@ describe('promptFile config parsing', () => {
     );
   });
 
-  it('additively merges promptFile.files across user and project layers', async () => {
+  it('merges and deduplicates promptFile.files across layers', async () => {
     const { homeDir, projectDir } = await setupDirs();
     await writeJson(path.join(homeDir, '.drone-agent/config.json'), {
-      promptFile: { enabled: true, files: ['~/global-rules.md'] },
+      promptFile: { enabled: true, files: ['~/global-rules.md', '..?/AGENTS.md'] },
     });
     await writeJson(path.join(projectDir, '.drone-agent/config.json'), {
-      promptFile: { files: ['..?/AGENTS.md'] },
+      promptFile: { files: ['..?/AGENTS.md', './CONTRIBUTING.md'] },
     });
 
     const resolved = await loadAgentConfig(projectDir);
     expect(resolved.config.promptFile.enabled).toBe(true);
+    // Should include all unique files from both layers
     expect(resolved.config.promptFile.files).toEqual([
       '~/global-rules.md',
       '..?/AGENTS.md',
+      './CONTRIBUTING.md',
     ]);
   });
 
