@@ -14,5 +14,21 @@
   {
     "timestamp": "2026-06-27T20:19:07.078Z",
     "insight": "Phase 3.3 knowledge registry implementation went smoothly. The coordinator-beacon sync pattern (push/pull with upsert) is consistent with the existing persona/skill sync pattern, making integration straightforward."
+  },
+  {
+    "timestamp": "2026-06-27T20:38:09.673Z",
+    "insight": "The macros loader had no error handling around parseMacroFile() — any malformed .macro file would crash the entire agent during plugin initialization. The fix was to wrap the call in try-catch and log a warning, which is a pattern that should be applied more broadly across the plugin system."
+  },
+  {
+    "timestamp": "2026-06-27T20:38:14.493Z",
+    "insight": "The executeMacro function in the macros plugin had no error handling around substituteMacroArgs() — missing required args would throw and crash the agent mid-execution. The fix wraps each step in try-catch and logs a helpful message with usage info. This pattern of catching runtime errors in slash command handlers and showing usage hints is worth standardizing."
+  },
+  {
+    "timestamp": "2026-06-27T20:46:46.760Z",
+    "insight": "The macro plugin's executeMacro calls sendUserMessage without an onEvent callback, so all ConversationEvent emissions (reasoning, toolCall, toolResult, assistantMessage) are lost. The event type is defined in conversation-service.ts, not in drone-core, so plugins can't type-check it — they must use a runtime type guard. Consider exporting ConversationEvent from drone-core so plugins can handle events properly."
+  },
+  {
+    "timestamp": "2026-06-27T20:46:52.441Z",
+    "insight": "The TUI's runSlashCommand returns early when a slash command is handled by the engine, without ever calling setIsLlmActive(true). This means any slash command that triggers LLM work (like a macro with chatPrompt steps) won't show the working indicator. The fix is to wrap the dispatchSlashCommand call in setIsLlmActive(true/false)."
   }
 ]
