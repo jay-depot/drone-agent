@@ -30,9 +30,9 @@ function generateTlsCertificateWithOpenssl(
   const tempDir = configDir;
 
   try {
-    // Generate certificate using openssl
+    // Generate certificate using openssl (use -subj with just CN to avoid + being interpreted as RDN separator)
     execSync(
-      `openssl req -x509 -newkey rsa:2048 -keyout "${tempDir}/temp-key.pem" -out "${tempDir}/temp-cert.pem" -days 365 -nodes -subj "/CN=${commonName}/O=Drone+Agent" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>/dev/null`,
+      `openssl req -x509 -newkey rsa:2048 -keyout "${tempDir}/temp-key.pem" -out "${tempDir}/temp-cert.pem" -days 365 -nodes -subj "/CN=${commonName}" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>/dev/null`,
       { stdio: 'pipe' }
     );
 

@@ -21,6 +21,9 @@ RUN corepack enable pnpm && pnpm install --frozen-lockfile && pnpm build
 # Stage 2: Runtime
 FROM node:22-alpine
 
+# Install openssl for TLS certificate generation
+RUN apk add --no-cache openssl
+
 WORKDIR /app
 
 # Copy ALL artifacts from builder
