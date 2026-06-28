@@ -148,7 +148,7 @@ export const todoPlugin: DronePlugin = {
     registration.registerPromptFragment({
       key: 'todo-current-list',
       phase: 'header',
-      render: async () => `Current todo list:\n${formatTodoList(items)}`,
+      render: async () => `# Todo List\n\n${formatTodoList(items)}`,
     });
 
     registration.registerTool({

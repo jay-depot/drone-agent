@@ -241,6 +241,8 @@ Call `registration.registerTool({ name, description, inputSchema, execute })` in
 
 Call `registration.registerPromptFragment({ key, phase: 'header'|'footer', render })`. The `render` function returns a string or `false` (to hide). Fragments are injected into the system prompt.
 
+**Note:** Prompt fragments are sent as separate messages to the LLM, so each fragment should start with a top-level `# Heading` (e.g., `# Skills`, `# Personas`) to clearly delineate sections in the conversation history.
+
 ### Adding a new workflow
 
 Call `registration.registerWorkflow({ name, description, inputSchema, run })`. The `run` function receives `(input, ctx)` where `ctx` has `elicit`, `projectDir`, `config`, `requestCapability`, and `enablePlugin`.

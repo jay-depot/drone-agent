@@ -896,7 +896,7 @@ export function createServerManager(
         lines.push(line);
       }
 
-      return `Current LSP diagnostics:\n${lines.join('\n')}`;
+      return `# LSP Diagnostics\n\n${lines.join('\n')}`;
     },
 
     findRuntimeForFile,

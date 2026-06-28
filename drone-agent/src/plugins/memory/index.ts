@@ -105,7 +105,7 @@ export const memoryPlugin: DronePlugin = {
 
         // Show the most recent 10 entries
         const recent = entries.slice(0, 10);
-        const lines: string[] = ['## Project Memories'];
+        const lines: string[] = ['# Project Memories'];
         for (const entry of recent) {
           const summary =
             entry.key.length > 60 ? entry.key.slice(0, 57) + '...' : entry.key;

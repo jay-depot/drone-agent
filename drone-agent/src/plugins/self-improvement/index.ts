@@ -290,7 +290,7 @@ export const selfImprovementPlugin: DronePlugin = {
       key: 'insight-targets',
       phase: 'header',
       render: async () => {
-        const lines: string[] = [];
+        const lines: string[] = ['# Self-Improvement', ''];
 
         const pCap = personaCap();
         const activePersona = pCap?.getActivePersona();
@@ -902,50 +902,60 @@ export const selfImprovementPlugin: DronePlugin = {
         );
         const projectFiles = await scanJsonDir<DronePrincipleEntry>(projectPrinciplesDir);
 
-        if (projectFiles.length > 0) {
-          const projectLines: string[] = ['## Current Project'];
-          for (const file of projectFiles) {
-            const filePath = path.join(projectPrinciplesDir, `${file.id}.json`);
-            const principles = await readJsonArray<DronePrincipleEntry>(filePath);
-            if (principles.length > 0) {
-              // Subheading = filename (category)
-              projectLines.push(`### ${file.id}`);
-              for (const p of principles) {
-                projectLines.push(`- ${p.principle}`);
+        const haveProject = projectFiles.length > 0;
+        const activePersona = personaCap()?.getActivePersona();
+        const havePersona = !!activePersona;
+
+
+        if (haveProject || havePersona) {
+          sections.push('# Principles');
+          sections.push(
+            '**You have learned the following principles from your prior experiences. Let them guide your decisions.**'
+          );
+
+          if (haveProject) {
+            const projectLines: string[] = ['## Current Project'];
+            for (const file of projectFiles) {
+              const filePath = path.join(projectPrinciplesDir, `${file.id}.json`);
+              const principles = await readJsonArray<DronePrincipleEntry>(filePath);
+              if (principles.length > 0) {
+                // Subheading = filename (category)
+                projectLines.push(`### ${file.id}`);
+                for (const p of principles) {
+                  projectLines.push(`- ${p.principle}`);
+                }
               }
             }
-          }
-          if (projectLines.length > 1) {
-            sections.push(projectLines.join('\n'));
-          }
-        }
-
-        // ── Persona Principles ────────────────────────────────────────
-        const pCap = personaCap();
-        const activePersona = pCap?.getActivePersona();
-        if (activePersona) {
-          const baseDir = resolveBaseDir(
-            'persona',
-            activePersona.id,
-            projectDir,
-            personaCap(),
-            skillsCap()
-          );
-          const { filePath } = resolvePrinciplePaths(
-            'persona',
-            activePersona.id,
-            baseDir,
-            skillsCap()
-          );
-          const principles = await readJsonArray<DronePrincipleEntry>(filePath);
-
-          if (principles.length > 0) {
-            const personaLines = ['## Current Persona'];
-            personaLines.push(`### ${activePersona.id}`);
-            for (const p of principles) {
-              personaLines.push(`- ${p.principle}`);
+            if (projectLines.length > 1) {
+              sections.push(projectLines.join('\n'));
             }
-            sections.push(personaLines.join('\n'));
+          }
+
+          // ── Persona Principles ────────────────────────────────────────
+          if (havePersona) {
+            const baseDir = resolveBaseDir(
+              'persona',
+              activePersona.id,
+              projectDir,
+              personaCap(),
+              skillsCap()
+            );
+            const { filePath } = resolvePrinciplePaths(
+              'persona',
+              activePersona.id,
+              baseDir,
+              skillsCap()
+            );
+            const principles = await readJsonArray<DronePrincipleEntry>(filePath);
+
+            if (principles.length > 0) {
+              const personaLines = ['## Current Persona'];
+              personaLines.push(`### ${activePersona.id}`);
+              for (const p of principles) {
+                personaLines.push(`- ${p.principle}`);
+              }
+              sections.push(personaLines.join('\n'));
+            }
           }
         }
 

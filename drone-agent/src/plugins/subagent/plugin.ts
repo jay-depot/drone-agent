@@ -67,7 +67,7 @@ export const subagentPlugin: DronePlugin = {
         key: 'subagent-return-instruction',
         phase: 'header',
         render: async () =>
-          'You are a subagent. When you have completed your task, you MUST call the subagent.return tool with the result. Do NOT output the result as a message — use the tool to return it.',
+          `# Subagent Instructions\n\nYou are a subagent. When you have completed your task, you MUST call the subagent.return tool with the result. Do NOT output the result as a message — use the tool to return it.`,
       });
 
       ctx.logger.info(`subagent mode: ${runtime.subagentId}`);

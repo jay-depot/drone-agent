@@ -79,12 +79,21 @@ export const skillsPlugin: DronePlugin = {
 
         if (visible.length === 0) return false;
 
-        const lines: string[] = ['## Skills'];
+        const lines: string[] = ['# Skills'];
 
         for (const skill of visible) {
-          const recall =
-            skill.recall.length > 0 ? ' \u2014 ' + skill.recall.join('; ') : '';
-          lines.push('- `' + skill.id + '`: ' + skill.description + recall);
+          lines.push(`## ${skill.id}`);
+          lines.push(`- id: ${skill.id}`);
+          lines.push(`- description: ${skill.description}`);
+          lines.push('- recall when:');
+          for (const condition of skill.recall) {
+            lines.push(`  - ${condition}`);
+          }
+        }
+
+        if (lines.length === 1) {
+          // Only "# Skills" — no skills to show
+          return false;
         }
 
         lines.push(

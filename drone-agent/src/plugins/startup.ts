@@ -43,7 +43,9 @@ export const startupPlugin: DronePlugin = {
       key: 'startup-banner',
       phase: 'header',
       render: async () =>
-        `WORKSPACE ROOT: ${cwd}
+        `# Workspace
+
+WORKSPACE ROOT: ${cwd}
 All file paths in this session should be relative to this directory.
 Do NOT assume paths outside this workspace (e.g., do not use paths like /workspace/... or /home/... unless explicitly provided).
 

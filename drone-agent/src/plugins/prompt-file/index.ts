@@ -133,7 +133,8 @@ export const promptFilePlugin: DronePlugin = {
             }
             contents.push(`--- ${filePath} ---\n${content}`);
           }
-          return contents.join('\n\n');
+          if (contents.length === 0) return false;
+          return `# Prompt Files\n\n` + contents.join('\n\n');
         },
       });
     });

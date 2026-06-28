@@ -507,7 +507,7 @@ Phase 5 (Advanced)
 2. **Phase 2:** Your multiple agents on same host share YOUR skills/personas/memory via beacon ✅
 3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; web UI shows YOUR swarm status
 4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses
-   | 5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support
+5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support
 
 ---
 
