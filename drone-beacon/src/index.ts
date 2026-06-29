@@ -215,11 +215,16 @@ async function main() {
   }
 
   // Create Fastify instance
+  // For HTTPS, pass the cert/key in the constructor's https property.
+  // Fastify's https option creates an HTTP/2 secure server when allowHTTP1
+  // is set, and the TLS options must be provided here (not in listen()).
   const app = fastify({
     logger: {
       level: process.env.LOG_LEVEL || 'info',
     },
-    ...(config.useHttps ? { https: { allowHTTP1: true } } : {}),
+    ...(config.useHttps
+      ? { https: { allowHTTP1: true, ...getTlsOptions(tlsIdentity) } }
+      : {}),
   });
 
   // Register routes
@@ -280,23 +285,10 @@ async function main() {
 
   // Start server
   try {
-    const listenOptions: {
-      port: number;
-      host: string;
-      cert?: Buffer;
-      key?: Buffer;
-    } = {
+    await app.listen({
       port: config.port,
       host: config.host,
-    };
-
-    if (config.useHttps) {
-      const tlsOptions = getTlsOptions(tlsIdentity);
-      listenOptions.cert = tlsOptions.cert;
-      listenOptions.key = tlsOptions.key;
-    }
-
-    await app.listen(listenOptions);
+    });
     logger.info(
       `Beacon listening on ${beaconProtocol}://${config.host}:${config.port}`
     );

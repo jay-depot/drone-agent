@@ -161,12 +161,25 @@ async function main() {
   // Initialize storage engine for large payloads
   initStorage(config.configDir);
 
+  // Load TLS identity if HTTPS is enabled
+  let tlsOptions: { cert: Buffer; key: Buffer } | undefined;
+  if (config.useHttps) {
+    const tlsIdentity = loadOrCreateTlsIdentity(config.configDir);
+    tlsOptions = getTlsOptions(tlsIdentity);
+    logger.info(`TLS certificate fingerprint: ${tlsIdentity.fingerprint}`);
+  }
+
   // Create Fastify instance
+  // For HTTPS, pass the cert/key in the constructor's https property.
+  // Fastify's https option creates an HTTP/2 secure server when allowHTTP1
+  // is set, and the TLS options must be provided here (not in listen()).
   const app = fastify({
     logger: {
       level: process.env.LOG_LEVEL || 'info',
     },
-    ...(config.useHttps ? { https: { allowHTTP1: true } } : {}),
+    ...(config.useHttps && tlsOptions
+      ? { https: { allowHTTP1: true, ...tlsOptions } }
+      : {}),
   });
 
   // Register routes
@@ -185,25 +198,10 @@ async function main() {
 
   // Start server
   try {
-    const listenOptions: {
-      port: number;
-      host: string;
-      cert?: Buffer;
-      key?: Buffer;
-    } = {
+    await app.listen({
       port: config.port,
       host: config.host,
-    };
-
-    if (config.useHttps) {
-      const tlsIdentity = loadOrCreateTlsIdentity(config.configDir);
-      const tlsOptions = getTlsOptions(tlsIdentity);
-      listenOptions.cert = tlsOptions.cert;
-      listenOptions.key = tlsOptions.key;
-      logger.info(`TLS certificate fingerprint: ${tlsIdentity.fingerprint}`);
-    }
-
-    await app.listen(listenOptions);
+    });
     logger.info(
       `Coordinator listening on ${protocol}://${config.host}:${config.port}`
     );

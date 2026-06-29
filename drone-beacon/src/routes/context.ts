@@ -1,7 +1,17 @@
 import type { FastifyInstance } from 'fastify';
-import type { CoordinatorClient } from '../coordinator-client.js';
+import { type CoordinatorClient, createCoordinatorFetch } from '../coordinator-client.js';
 import { logger } from '../logger.js';
 import * as db from '../db.js';
+
+// Lazy-initialized fetch wrapper that accepts the coordinator's self-signed TLS cert
+let _coordinatorFetch: typeof fetch | undefined;
+function coordinatorFetch(url: string, init?: RequestInit): Promise<Response> {
+  const client = getCoordinatorClient();
+  if (!_coordinatorFetch && client) {
+    _coordinatorFetch = createCoordinatorFetch(client.getBaseUrl());
+  }
+  return (_coordinatorFetch ?? fetch)(url, init);
+}
 
 let coordinatorClient: CoordinatorClient | undefined;
 let beaconHost = 'localhost';
@@ -35,7 +45,7 @@ export async function proxyToCoordinator(
     return null;
   }
   const url = `${client.getBaseUrl()}${path}`;
-  const res = await fetch(url, {
+  const res = await coordinatorFetch(url, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
@@ -55,7 +65,7 @@ export async function proxyWikiToCoordinator(
     return null;
   }
   const url = `${client.getBaseUrl()}${path}`;
-  const res = await fetch(url, {
+  const res = await coordinatorFetch(url, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,

@@ -86,7 +86,7 @@ export interface CoordinatorClientOptions {
  * The coordinator uses a self-signed cert, so Node.js's built-in fetch rejects it.
  * This wrapper uses Node.js http/https modules with rejectUnauthorized: false.
  */
-function createCoordinatorFetch(baseUrl: string): typeof fetch {
+export function createCoordinatorFetch(baseUrl: string): typeof fetch {
   const urlObj = new URL(baseUrl);
   const isHttps = urlObj.protocol === 'https:';
 
