@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-06-29T03:47:20.903Z",
+    "insight": "The beacon's coordinator-independent operation was verified via live endpoint testing (starting the beacon with no coordinator and hitting all endpoints with curl). This is effective but manual — adding automated integration tests that start the beacon and test endpoints without a coordinator would prevent regressions."
+  }
+]

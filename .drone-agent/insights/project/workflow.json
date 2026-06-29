@@ -18,5 +18,9 @@
   {
     "timestamp": "2026-06-29T02:35:51.619Z",
     "insight": "The beacon routes.ts had a syntax error in the principles delete handler (missing closing braces) that caused the wiki routes to be placed outside the registerRoutes function. This was a pre-existing bug that needed fixing alongside the wiki implementation. Always check for syntax errors in files you're modifying."
+  },
+  {
+    "timestamp": "2026-06-29T03:47:20.915Z",
+    "insight": "The wiki storage uses `./knowledge-base/` as default directory (relative to CWD). When the beacon is started from the project root, wiki pages end up in the project tree. The `setKnowledgeBaseDir()` function exists but is never called from the CLI args — there's no `--knowledge-base-dir` flag. This could cause confusion if the beacon is run from unexpected directories."
   }
 ]
