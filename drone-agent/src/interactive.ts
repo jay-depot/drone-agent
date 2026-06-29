@@ -184,6 +184,8 @@ export async function runInteractiveLoop(
   const rl: Interface = createInterface({ input, output });
   const promptLabel = buildPromptLabel(conversation, engine);
 
+  let shouldExit = false;
+
   try {
     while (true) {
       const raw = await rl.question(promptLabel);
@@ -193,34 +195,7 @@ export async function runInteractiveLoop(
 
       // Check for slash commands first
       if (line.startsWith('/')) {
-        if (line === '/exit' || line === '/quit') {
-          break;
-        }
-
-        if (line === '/clear') {
-          conversation.clearSession();
-          logger.info('Session cleared.');
-          continue;
-        }
-
-        if (line === '/help') {
-          const snippets = engine.getHelpSnippets();
-          logger.info(`Available commands:\n${snippets.join('\n')}`);
-          continue;
-        }
-
-        if (line === '/tools') {
-          const tools = engine.listTools();
-          const lines = ['Registered tools:'];
-          for (const tool of tools) {
-            lines.push(`  ${tool.name}`);
-            lines.push(`    ${tool.description}`);
-          }
-          logger.info(lines.join('\n'));
-          continue;
-        }
-
-        // Try plugin-registered slash commands
+        // Dispatch through engine (checks plugin commands, then built-ins).
         const handled = await engine.dispatchSlashCommand(line, {
           logger,
           engine: {
@@ -236,16 +211,34 @@ export async function runInteractiveLoop(
             setModel: m => conversation.setModel(m),
             sendUserMessage: (p, onEvent) =>
               conversation.sendUserMessage(p, onEvent),
+            clearSession: () => conversation.clearSession(),
           },
           sessionManager: {
             appendUserMessage: m => sessionManager.appendUserMessage(m),
             appendToolResult: (name, content, id) =>
               sessionManager.appendToolResult(name, content, id),
           },
+          exit: () => {
+            shouldExit = true;
+          },
+          printHelp: () => {
+            const commands = engine.getSlashCommands();
+            const lines = ['Available slash commands:'];
+            for (const cmd of commands) {
+              lines.push(`  ${cmd.command.padEnd(20)} ${cmd.description}`);
+            }
+            logger.info(lines.join('\n'));
+          },
         });
 
-        if (handled) continue;
-        logger.warn(`Unknown command: ${line}. Try /help.`);
+        if (handled) {
+          if (shouldExit) break;
+          continue;
+        }
+
+        logger.warn(
+          `Unknown command: ${line}. Type /help for available commands.`
+        );
         continue;
       }
 

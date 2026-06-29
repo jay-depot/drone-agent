@@ -59,6 +59,7 @@ CREATE INDEX IF NOT EXISTS idx_swarm_agents_beacon ON swarm_agents(beacon_id);
 ```
 
 Add functions:
+
 - `registerSwarmAgent(agentId, beaconId, personaId?)`
 - `getSwarmAgent(agentId)` → returns agent location
 - `updateSwarmAgentHeartbeat(agentId)`
@@ -82,23 +83,23 @@ The existing `messages` table already supports the schema needed.
 ```typescript
 // Register agent with coordinator
 POST /agents/register
-Body: { 
-  agentId: string, 
-  beaconId: string, 
-  personaId?: string 
+Body: {
+  agentId: string,
+  beaconId: string,
+  personaId?: string
 }
 Response: { success: true, agentId, beaconId }
 
 // Get agent location
 GET /agents/:agentId
-Response: { 
-  agentId, 
-  beaconId, 
-  beaconHost, 
-  beaconPort, 
-  personaId?, 
-  status, 
-  connectedAt 
+Response: {
+  agentId,
+  beaconId,
+  beaconHost,
+  beaconPort,
+  personaId?,
+  status,
+  connectedAt
 }
 
 // Update heartbeat
@@ -119,15 +120,15 @@ Response: [{ agentId, personaId, connectedAt, status }]
 ```typescript
 // Relay message to agent on (possibly) different beacon
 POST /messages/relay
-Body: { 
+Body: {
   fromBeaconId: string,
-  fromAgentId: string, 
-  toAgentId: string, 
+  fromAgentId: string,
+  toAgentId: string,
   body: string,
   toChannel?: string  // optional channel broadcast
 }
-Response: { 
-  success: boolean, 
+Response: {
+  success: boolean,
   delivered: boolean,  // true if recipient online
   messageId?: string    // if stored for later delivery
 }
@@ -143,10 +144,10 @@ Response: [{ id, fromAgentId, body, createdAt, delivered }]
 ```typescript
 // Broadcast to channel across all beacons
 POST /messages/broadcast
-Body: { 
+Body: {
   fromAgentId: string,
-  channel: string, 
-  body: string 
+  channel: string,
+  body: string
 }
 Response: { success: true, deliveredCount: number }
 ```
@@ -160,9 +161,9 @@ Response: { success: true, deliveredCount: number }
 ```typescript
 // Modify POST /messages to accept fromBeaconId
 POST /messages
-Body: { 
-  fromAgentId: string, 
-  toAgentId?: string, 
+Body: {
+  fromAgentId: string,
+  toAgentId?: string,
   toChannel?: string,
   body: string,
   fromBeaconId?: string  // NEW: for relay from coordinator
@@ -170,6 +171,7 @@ Body: {
 ```
 
 When `fromBeaconId` is present, the beacon knows this is a relayed message and should:
+
 1. Not require the sender to be a local agent
 2. Still deliver to local recipient(s)
 
@@ -184,8 +186,8 @@ Add methods:
 ```typescript
 // Register this beacon's agent with coordinator
 async registerSwarmAgent(
-  agentId: string, 
-  beaconId: string, 
+  agentId: string,
+  beaconId: string,
   personaId?: string
 ): Promise<void>
 
@@ -230,9 +232,9 @@ async broadcastToChannel(
    → Look up: getSwarmAgent("agent-B") → { beaconId: "beacon-2", ... }
 
 5. Coordinator forwards to Beacon 2
-   → POST http://beacon-2:3457/messages { 
-        fromAgentId: "agent-A", 
-        toAgentId: "agent-B", 
+   → POST http://beacon-2:3457/messages {
+        fromAgentId: "agent-A",
+        toAgentId: "agent-B",
         body: "...",
         fromBeaconId: "beacon-1"
       }
@@ -266,14 +268,14 @@ async broadcastToChannel(
 
 ## Edge Cases
 
-| Scenario | Handling |
-|----------|----------|
-| Recipient offline | Store in beacon's `messages` table, deliver on next connect |
-| Unknown recipient | Return 404: "Agent not found" |
-| Target beacon offline | Coordinator returns error: "Target beacon unavailable" |
-| Coordinator offline | Beacon queues messages, retries on reconnect |
-| Message size limit | Reject messages > 1MB (configurable) |
-| Circular relay | Beacon detects `fromBeaconId === self` and rejects |
+| Scenario              | Handling                                                    |
+| --------------------- | ----------------------------------------------------------- |
+| Recipient offline     | Store in beacon's `messages` table, deliver on next connect |
+| Unknown recipient     | Return 404: "Agent not found"                               |
+| Target beacon offline | Coordinator returns error: "Target beacon unavailable"      |
+| Coordinator offline   | Beacon queues messages, retries on reconnect                |
+| Message size limit    | Reject messages > 1MB (configurable)                        |
+| Circular relay        | Beacon detects `fromBeaconId === self` and rejects          |
 
 ---
 
@@ -289,16 +291,19 @@ async broadcastToChannel(
 ## Implementation Order
 
 ### Phase 1: Core Infrastructure
+
 1. Add `swarm_agents` table to coordinator DB
 2. Add registry API endpoints (`/agents/register`, `/agents/:id`, etc.)
 3. Add beacon client methods
 
 ### Phase 2: Message Relay
+
 4. Add `/messages/relay` endpoint to coordinator
 5. Modify beacon `/messages` to accept `fromBeaconId`
 6. Implement relay flow in beacon client
 
 ### Phase 3: Polish
+
 7. Add channel broadcast via coordinator
 8. Add offline message retrieval (`GET /agents/:id/messages`)
 9. Error handling and retries
@@ -308,7 +313,7 @@ async broadcastToChannel(
 ## Testing Plan
 
 1. **Unit tests**: Database functions, message relay logic
-2. **Integration tests**: 
+2. **Integration tests**:
    - Two beacons + coordinator, message relay
    - Channel broadcast across beacons
 3. **E2E**: Full workflow: spawn agent on Beacon 1, spawn agent on Beacon 2, send messages between them
@@ -317,21 +322,21 @@ async broadcastToChannel(
 
 ## Files to Modify
 
-| File | Changes |
-|------|---------|
-| `drone-coordinator/src/db.ts` | Add `swarm_agents` table and functions |
-| `drone-coordinator/src/routes.ts` | Add agent registry + message relay endpoints |
-| `drone-coordinator/src/types.ts` | Add types for new endpoints |
-| `drone-beacon/src/coordinator-client.ts` | Add relay methods |
-| `drone-beacon/src/routes.ts` | Modify `/messages` to accept `fromBeaconId` |
-| `drone-beacon/src/ws-server.ts` | May need minor adjustments |
+| File                                     | Changes                                      |
+| ---------------------------------------- | -------------------------------------------- |
+| `drone-coordinator/src/db.ts`            | Add `swarm_agents` table and functions       |
+| `drone-coordinator/src/routes.ts`        | Add agent registry + message relay endpoints |
+| `drone-coordinator/src/types.ts`         | Add types for new endpoints                  |
+| `drone-beacon/src/coordinator-client.ts` | Add relay methods                            |
+| `drone-beacon/src/routes.ts`             | Modify `/messages` to accept `fromBeaconId`  |
+| `drone-beacon/src/ws-server.ts`          | May need minor adjustments                   |
 
 ---
 
 ## Estimated Effort
 
 - **Phase 1 (Core)**: ~2 hours
-- **Phase 2 (Relay)**: ~2 hours  
+- **Phase 2 (Relay)**: ~2 hours
 - **Phase 3 (Polish)**: ~1 hour
 - **Testing**: ~2 hours
 

@@ -383,22 +383,22 @@ Personal control plane for YOUR swarm across machines.
 | **Security**     | Local-only WSS Enforcement                 | ✅ Complete    |
 | **Security**     | HTTPS Server Configuration (Fastify TLS)   | ✅ Complete    |
 | **Data**         | Global Memory & Skills (Phase 3.3)         | ✅ Complete    |
-| **Data**         | Shared Session Storage (Phase 3.2)        | ✅ Complete    |
+| **Data**         | Shared Session Storage (Phase 3.2)         | ✅ Complete    |
 | **Data**         | Agent Location Registry (Phase 3.2)        | ✅ Complete    |
-| **Coordination** | Cross-beacon messaging                   | ✅ Complete    |
+| **Coordination** | Cross-beacon messaging                     | ✅ Complete    |
 | **UI**           | Web Dashboard for Swarm Monitoring         | ❌ Not Started |
 | **Coordination** | Inter-beacon task routing & spawning       | ❌ Not Started |
 | **DX**           | Make `--https` default for servers         | ⏳ Pending     |
 
 **Implementation Phases:**
 
-| Phase   | Feature                    | Description                                                  |
-| :------ | :------------------------- | :----------------------------------------------------------- |
-| **3.1** | **Secure Foundation**      | Identity, TLS, and Beacon Approval flow ✅                   |
+| Phase   | Feature                    | Description                                                             |
+| :------ | :------------------------- | :---------------------------------------------------------------------- |
+| **3.1** | **Secure Foundation**      | Identity, TLS, and Beacon Approval flow ✅                              |
 | **3.2** | **Shared Session Storage** | `swarm_sessions`, `swarm_events`, `agent_locations` tables with FTS5 ✅ |
-| **3.3** | **Global Memory & Skills** | `knowledge` table (your skill, pattern, preference, fact) ✅ |
-| **3.4** | **Swarm Learning Tasks**   | Periodic swarm review on YOUR patterns                       |
-| **3.5** | **Global Search & UI**     | Web UI and search across all YOUR agents' sessions           |
+| **3.3** | **Global Memory & Skills** | `knowledge` table (your skill, pattern, preference, fact) ✅            |
+| **3.4** | **Swarm Learning Tasks**   | Periodic swarm review on YOUR patterns                                  |
+| **3.5** | **Global Search & UI**     | Web UI and search across all YOUR agents' sessions                      |
 
 **Note on Messaging:**
 
@@ -490,11 +490,11 @@ Phase 5 (Advanced)
 | Command           | Purpose                      |
 | ----------------- | ---------------------------- |
 | `pnpm build`      | Compile all packages         |
-| `pnpm typecheck` | Type-check all packages      |
+| `pnpm typecheck`  | Type-check all packages      |
 | `pnpm test`       | Run all tests (vitest)       |
 | `pnpm test:watch` | Watch mode                   |
 | `pnpm lint`       | ESLint + Prettier            |
-| `pnpm clean`      | Remove all dist/ directories  |
+| `pnpm clean`      | Remove all dist/ directories |
 
 ---
 

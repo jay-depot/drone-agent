@@ -576,9 +576,10 @@ describe('macrosPlugin', () => {
       await engine.runHooks('onPluginsLoaded');
 
       const commands = engine.getSlashCommands();
-      // Only /macro should be registered (no user macros).
-      expect(commands.length).toBe(1);
-      expect(commands[0].command).toBe('/macro');
+      // Only /macro should be registered (no user macros), plus built-in commands.
+      const macroCommands = commands.filter(c => c.command === '/macro');
+      expect(macroCommands.length).toBe(1);
+      expect(macroCommands[0].command).toBe('/macro');
     });
   });
 

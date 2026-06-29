@@ -226,6 +226,22 @@ export type DroneSlashCommandContext = {
       line: string,
       ctx: Omit<DroneSlashCommandContext, 'line' | 'args'>
     ) => Promise<boolean>;
+    /** List all plugins (for /plugins). */
+    listPlugins?: () => {
+      id: string;
+      name: string;
+      enabled: boolean;
+      required: boolean;
+      defaultEnabled: boolean;
+    }[];
+    /** List all tools (for /tools). */
+    listTools?: () => import('./session-types.js').DroneToolDescriptor[];
+    /** Render prompt fragments (for /systemprompt). */
+    renderPromptFragments?: () => Promise<string[]>;
+    /** Get the resolved config (for /systemprompt). */
+    getConfig?: () => import('./config-types.js').DroneAgentConfig;
+    /** Get all slash commands (for /help fallback). */
+    getSlashCommands?: () => DroneSlashCommand[];
   };
   /**
    * Conversation service for model management. Optional — hosts
@@ -238,6 +254,8 @@ export type DroneSlashCommandContext = {
       prompt: string,
       onEvent?: (event: unknown) => void
     ) => Promise<string>;
+    /** Clear the session (for /clear). */
+    clearSession?: () => void;
   };
   /** Session manager for appending synthetic messages. */
   sessionManager?: {
@@ -248,6 +266,10 @@ export type DroneSlashCommandContext = {
       toolCallId?: string
     ) => void;
   };
+  /** Request the host to exit (for /exit, /quit). */
+  exit?: () => void;
+  /** Host-provided help display function (TUI passes its printHelp, CLI passes its own). */
+  printHelp?: () => void;
 };
 
 /**

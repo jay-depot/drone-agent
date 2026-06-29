@@ -201,6 +201,8 @@ export function createFakeEngine(
     },
     dispatchSlashCommand: async () => false,
     getSlashCommands: () => [],
+    registerBuiltinSlashCommand: () => {},
+    getBuiltinSlashCommands: () => [],
     __elicitation: options.elicit,
   };
 }

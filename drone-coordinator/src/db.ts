@@ -1137,14 +1137,18 @@ export function registerAgentLocation(
 }
 
 export function getAgentLocation(agentId: string): AgentLocation | undefined {
-  const stmt = getDatabase().prepare('SELECT * FROM agent_locations WHERE agent_id = ?');
-  const row = stmt.get(agentId) as {
-      agent_id: string;
-      beacon_id: string;
-      persona_id: string | null;
-      connected_at: number;
-      last_heartbeat: number;
-    } | undefined;
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM agent_locations WHERE agent_id = ?'
+  );
+  const row = stmt.get(agentId) as
+    | {
+        agent_id: string;
+        beacon_id: string;
+        persona_id: string | null;
+        connected_at: number;
+        last_heartbeat: number;
+      }
+    | undefined;
   if (!row) return undefined;
   return {
     agentId: row.agent_id,
@@ -1155,7 +1159,9 @@ export function getAgentLocation(agentId: string): AgentLocation | undefined {
   };
 }
 
-export function updateAgentLocationHeartbeat(agentId: string): AgentLocation | undefined {
+export function updateAgentLocationHeartbeat(
+  agentId: string
+): AgentLocation | undefined {
   const existing = getAgentLocation(agentId);
   if (!existing) return undefined;
 
@@ -1169,7 +1175,9 @@ export function updateAgentLocationHeartbeat(agentId: string): AgentLocation | u
 }
 
 export function unregisterAgentLocation(agentId: string): boolean {
-  const stmt = getDatabase().prepare('DELETE FROM agent_locations WHERE agent_id = ?');
+  const stmt = getDatabase().prepare(
+    'DELETE FROM agent_locations WHERE agent_id = ?'
+  );
   const result = stmt.run(agentId);
   if (result.changes > 0) {
     logger.info(`Unregistered agent location: ${agentId}`);
@@ -1178,7 +1186,9 @@ export function unregisterAgentLocation(agentId: string): boolean {
 }
 
 export function listAgentLocationsByBeacon(beaconId: string): AgentLocation[] {
-  const stmt = getDatabase().prepare('SELECT * FROM agent_locations WHERE beacon_id = ? ORDER BY connected_at DESC');
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM agent_locations WHERE beacon_id = ? ORDER BY connected_at DESC'
+  );
   const rows = stmt.all(beaconId) as Array<{
     agent_id: string;
     beacon_id: string;
@@ -1196,7 +1206,9 @@ export function listAgentLocationsByBeacon(beaconId: string): AgentLocation[] {
 }
 
 export function listAllAgentLocations(): AgentLocation[] {
-  const stmt = getDatabase().prepare('SELECT * FROM agent_locations ORDER BY connected_at DESC');
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM agent_locations ORDER BY connected_at DESC'
+  );
   const rows = stmt.all() as Array<{
     agent_id: string;
     beacon_id: string;

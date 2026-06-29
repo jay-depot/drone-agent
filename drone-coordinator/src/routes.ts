@@ -529,9 +529,15 @@ export async function registerRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const { agentId, beaconId, personaId } = request.body;
       if (!agentId || !beaconId) {
-        return reply.code(400).send({ error: 'agentId and beaconId are required' });
+        return reply
+          .code(400)
+          .send({ error: 'agentId and beaconId are required' });
       }
-      const location = db.registerAgentLocation(agentId, beaconId, personaId ?? null);
+      const location = db.registerAgentLocation(
+        agentId,
+        beaconId,
+        personaId ?? null
+      );
       return reply.code(201).send(location);
     }
   );
@@ -580,7 +586,7 @@ export async function registerRoutes(app: FastifyInstance) {
   // List agents by beacon
   app.get<{ Querystring: { beaconId?: string } }>(
     '/agents/location',
-    async (request) => {
+    async request => {
       const { beaconId } = request.query;
       if (beaconId) {
         return db.listAgentLocationsByBeacon(beaconId);
@@ -592,54 +598,71 @@ export async function registerRoutes(app: FastifyInstance) {
   // === Message Relay Routes ===
 
   // Relay message to agent on (possibly) different beacon
-  app.post<{ Body: { fromBeaconId: string; fromAgentId: string; toAgentId: string; body: string } }>(
-    '/messages/relay',
-    async (request, reply) => {
-      const { fromBeaconId, fromAgentId, toAgentId, body } = request.body;
+  app.post<{
+    Body: {
+      fromBeaconId: string;
+      fromAgentId: string;
+      toAgentId: string;
+      body: string;
+    };
+  }>('/messages/relay', async (request, reply) => {
+    const { fromBeaconId, fromAgentId, toAgentId, body } = request.body;
 
-      if (!fromBeaconId || !fromAgentId || !toAgentId || !body) {
-        return reply.code(400).send({ error: 'fromBeaconId, fromAgentId, toAgentId, and body are required' });
-      }
-
-      const location = db.getAgentLocation(toAgentId);
-      if (!location) {
-        return reply.code(404).send({ error: 'Target agent not found', code: 'AGENT_NOT_FOUND' });
-      }
-
-      const beacon = db.getBeacon(location.beaconId);
-      if (!beacon) {
-        return reply.code(503).send({ error: 'Target beacon not found', code: 'BEACON_NOT_FOUND' });
-      }
-
-      try {
-        const targetUrl = `http://${beacon.host}:${beacon.port}`;
-        const response = await fetch(`${targetUrl}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fromAgentId,
-            fromBeaconId,
-            toAgentId,
-            body,
-          }),
+    if (!fromBeaconId || !fromAgentId || !toAgentId || !body) {
+      return reply
+        .code(400)
+        .send({
+          error: 'fromBeaconId, fromAgentId, toAgentId, and body are required',
         });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          return reply.code(502).send({ error: 'Failed to deliver message to target beacon', details: errorText });
-        }
-
-        const messageData = await response.json() as { id: string };
-        return { success: true, messageId: messageData.id, delivered: true };
-      } catch (err) {
-        return reply.code(503).send({ 
-          error: 'Target beacon unavailable', 
-          details: err instanceof Error ? err.message : 'Unknown error',
-          code: 'BEACON_UNAVAILABLE'
-        });
-      }
     }
-  );
+
+    const location = db.getAgentLocation(toAgentId);
+    if (!location) {
+      return reply
+        .code(404)
+        .send({ error: 'Target agent not found', code: 'AGENT_NOT_FOUND' });
+    }
+
+    const beacon = db.getBeacon(location.beaconId);
+    if (!beacon) {
+      return reply
+        .code(503)
+        .send({ error: 'Target beacon not found', code: 'BEACON_NOT_FOUND' });
+    }
+
+    try {
+      const targetUrl = `http://${beacon.host}:${beacon.port}`;
+      const response = await fetch(`${targetUrl}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fromAgentId,
+          fromBeaconId,
+          toAgentId,
+          body,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return reply
+          .code(502)
+          .send({
+            error: 'Failed to deliver message to target beacon',
+            details: errorText,
+          });
+      }
+
+      const messageData = (await response.json()) as { id: string };
+      return { success: true, messageId: messageData.id, delivered: true };
+    } catch (err) {
+      return reply.code(503).send({
+        error: 'Target beacon unavailable',
+        details: err instanceof Error ? err.message : 'Unknown error',
+        code: 'BEACON_UNAVAILABLE',
+      });
+    }
+  });
 
   // Broadcast to channel across all beacons
   app.post<{ Body: { fromAgentId: string; channel: string; body: string } }>(
@@ -648,7 +671,9 @@ export async function registerRoutes(app: FastifyInstance) {
       const { fromAgentId, channel, body } = request.body;
 
       if (!fromAgentId || !channel || !body) {
-        return reply.code(400).send({ error: 'fromAgentId, channel, and body are required' });
+        return reply
+          .code(400)
+          .send({ error: 'fromAgentId, channel, and body are required' });
       }
 
       const beacons = db.listBeacons();

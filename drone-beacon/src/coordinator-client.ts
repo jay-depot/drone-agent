@@ -29,7 +29,11 @@ export interface CoordinatorClient {
   registerAgentLocation(agentId: string, personaId?: string): Promise<void>;
   updateAgentLocationHeartbeat(agentId: string): Promise<void>;
   unregisterAgentLocation(agentId: string): Promise<void>;
-  relayMessage(toAgentId: string, fromAgentId: string, body: string): Promise<{ success: boolean; messageId?: string }>;
+  relayMessage(
+    toAgentId: string,
+    fromAgentId: string,
+    body: string
+  ): Promise<{ success: boolean; messageId?: string }>;
 
   // Knowledge sync (push)
   pushPersona(persona: Persona): Promise<void>;
@@ -228,7 +232,10 @@ export function createCoordinatorClient(
     },
 
     // Agent location (for cross-beacon messaging)
-    async registerAgentLocation(agentId: string, personaId?: string): Promise<void> {
+    async registerAgentLocation(
+      agentId: string,
+      personaId?: string
+    ): Promise<void> {
       try {
         const res = await fetch(`${baseUrl}/agents/location`, {
           method: 'POST',
@@ -251,11 +258,16 @@ export function createCoordinatorClient(
 
     async updateAgentLocationHeartbeat(agentId: string): Promise<void> {
       try {
-        const res = await fetch(`${baseUrl}/agents/location/${agentId}/heartbeat`, {
-          method: 'POST',
-        });
+        const res = await fetch(
+          `${baseUrl}/agents/location/${agentId}/heartbeat`,
+          {
+            method: 'POST',
+          }
+        );
         if (!res.ok) {
-          logger.warn(`Failed to update agent location heartbeat: ${res.status}`);
+          logger.warn(
+            `Failed to update agent location heartbeat: ${res.status}`
+          );
         }
       } catch (err) {
         logger.warn(`Failed to update agent location heartbeat: ${err}`);
@@ -295,10 +307,12 @@ export function createCoordinatorClient(
         });
         if (!res.ok) {
           const error = await res.json();
-          logger.warn(`Failed to relay message: ${res.status} - ${(error as any).error}`);
+          logger.warn(
+            `Failed to relay message: ${res.status} - ${(error as any).error}`
+          );
           return { success: false };
         }
-        const data = await res.json() as { messageId: string };
+        const data = (await res.json()) as { messageId: string };
         return { success: true, messageId: data.messageId };
       } catch (err) {
         logger.warn(`Failed to relay message: ${err}`);

@@ -900,12 +900,12 @@ export const selfImprovementPlugin: DronePlugin = {
           PRINCIPLES_SUBDIR,
           'project'
         );
-        const projectFiles = await scanJsonDir<DronePrincipleEntry>(projectPrinciplesDir);
+        const projectFiles =
+          await scanJsonDir<DronePrincipleEntry>(projectPrinciplesDir);
 
         const haveProject = projectFiles.length > 0;
         const activePersona = personaCap()?.getActivePersona();
         const havePersona = !!activePersona;
-
 
         if (haveProject || havePersona) {
           sections.push('# Principles');
@@ -916,8 +916,12 @@ export const selfImprovementPlugin: DronePlugin = {
           if (haveProject) {
             const projectLines: string[] = ['## Current Project'];
             for (const file of projectFiles) {
-              const filePath = path.join(projectPrinciplesDir, `${file.id}.json`);
-              const principles = await readJsonArray<DronePrincipleEntry>(filePath);
+              const filePath = path.join(
+                projectPrinciplesDir,
+                `${file.id}.json`
+              );
+              const principles =
+                await readJsonArray<DronePrincipleEntry>(filePath);
               if (principles.length > 0) {
                 // Subheading = filename (category)
                 projectLines.push(`### ${file.id}`);
@@ -946,7 +950,8 @@ export const selfImprovementPlugin: DronePlugin = {
               baseDir,
               skillsCap()
             );
-            const principles = await readJsonArray<DronePrincipleEntry>(filePath);
+            const principles =
+              await readJsonArray<DronePrincipleEntry>(filePath);
 
             if (principles.length > 0) {
               const personaLines = ['## Current Persona'];

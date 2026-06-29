@@ -243,130 +243,30 @@ export function App(opts: DroneTuiOptions): JSX.Element {
 
       log(`> ${trimmed}`, 'user');
 
-      if (trimmed === '/exit' || trimmed === '/quit') {
-        exit();
+      if (trimmed.startsWith('/')) {
+        // Dispatch through engine (checks plugin commands, then built-ins).
+        const handled = await opts.engine.dispatchSlashCommand(trimmed, {
+          logger: {
+            info: msg => log(msg, 'user'),
+            warn: msg => log(msg, 'error'),
+            error: msg => log(msg, 'error'),
+          },
+          engine: opts.engine,
+          conversation: opts.conversation,
+          sessionManager: undefined,
+          exit: () => exit(),
+          printHelp: () => printHelp(opts, log),
+        });
+        if (handled) return;
+        // Unrecognized slash command.
+        log(
+          `Unknown command: ${trimmed}. Type /help for available commands.`,
+          'error'
+        );
         return;
       }
 
-      if (trimmed === '/help' || trimmed === '?') {
-        printHelp(opts, log);
-        return;
-      }
-
-      if (trimmed === '/clear') {
-        await opts.engine.runHooks('onSessionClear');
-        opts.conversation.clearSession();
-        log('Session cleared.', 'info');
-        return;
-      }
-
-      if (trimmed === '/plugins') {
-        const plugins = opts.engine
-          .listPlugins()
-          .map(p => {
-            const state = p.enabled ? '[enabled]' : '[disabled]';
-            return `  - ${p.id} (${p.name}) ${state}`;
-          })
-          .join('\n');
-        log(`Plugins:\n${plugins}`, 'success');
-        return;
-      }
-
-      if (trimmed === '/tools') {
-        const tools = opts.engine.listTools();
-        const lines = ['Registered tools:'];
-        for (const tool of tools) {
-          lines.push(`  ${tool.name}`);
-          lines.push(`    ${tool.description}`);
-        }
-        log(lines.join('\n'), 'success');
-        return;
-      }
-
-      if (trimmed === '/systemprompt') {
-        const fragments = await opts.engine.renderPromptFragments();
-        const config = opts.engine.getConfig();
-        const lines: string[] = [
-          'System Prompt:',
-          '────────────────────────────────────────',
-          config.systemPrompt,
-        ];
-        if (fragments.length > 0) {
-          lines.push('────────────────────────────────────────');
-          lines.push('Prompt Fragments:');
-          for (const fragment of fragments) {
-            lines.push('────────────────────────────────────────');
-            lines.push(fragment);
-          }
-        }
-        log(lines.join('\n'), 'info');
-        return;
-      }
-
-      setIsLlmActive(true);
-      try {
-        if (
-          await opts.engine.dispatchSlashCommand?.(trimmed, {
-            logger: {
-              info: msg => log(msg, 'user'),
-              warn: msg => log(msg, 'error'),
-              error: msg => log(msg, 'error'),
-            },
-            engine: opts.engine,
-            conversation: opts.conversation,
-            sessionManager: undefined,
-          })
-        ) {
-          return;
-        }
-      } finally {
-        setIsLlmActive(false);
-      }
-
-      if (trimmed.startsWith('/tool ')) {
-        const rest = trimmed.slice('/tool '.length).trim();
-        const firstSpace = rest.indexOf(' ');
-        const toolName = firstSpace === -1 ? rest : rest.slice(0, firstSpace);
-        const rawJson = firstSpace === -1 ? '{}' : rest.slice(firstSpace + 1);
-        const parsed = tryParseJson(rawJson);
-        if (parsed === undefined) {
-          log(`Invalid JSON: ${rawJson}`, 'error');
-          return;
-        }
-        try {
-          await opts.engine.runHooks('onBeforePrompt');
-          log(await opts.engine.executeTool(toolName, parsed));
-          await opts.engine.runHooks('onAfterToolCall');
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          log(`Error: ${msg}`, 'error');
-        }
-        return;
-      }
-
-      if (trimmed.startsWith('/exec ')) {
-        const command = trimmed.slice('/exec '.length).trim();
-        if (!command) {
-          log('Usage: /exec <command>', 'error');
-          return;
-        }
-        try {
-          await opts.engine.runHooks('onBeforePrompt');
-          log(
-            await opts.engine.executeTool('exec.run', {
-              command,
-              cwd: process.cwd(),
-            })
-          );
-          await opts.engine.runHooks('onAfterToolCall');
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          log(`Error: ${msg}`, 'error');
-        }
-        return;
-      }
-
-      // Default: send to chat.
+      // Regular chat message
       setIsLlmActive(true);
       try {
         await opts.engine.runHooks('onBeforePrompt');
@@ -577,8 +477,6 @@ function printHelp(
   opts: DroneTuiOptions,
   log: (text: string, kind?: import('./types.js').ChatEntry['kind']) => void
 ): void {
-  const pluginHelp = opts.engine.getHelpSnippets();
-
   const helpLines: string[] = [
     'Keybindings:',
     '',
@@ -594,23 +492,12 @@ function printHelp(
     '',
     'Slash commands:',
     '',
-    '  /help              Show this help',
-    '  /clear             Clear session',
-    '  /plugins           List enabled plugins',
-    '  /tools             List registered tools',
-    '  /systemprompt      Show the current system prompt',
   ];
 
-  helpLines.push(
-    '  /tool <name>       Run a tool',
-    '  /exec <cmd>        Run a command'
-  );
-
-  if (pluginHelp.length > 0) {
-    helpLines.push('', 'Plugin commands:');
-    for (const snippet of pluginHelp) {
-      helpLines.push(`  ${snippet}`);
-    }
+  // Dynamically list all slash commands from the engine (built-in + plugin).
+  const commands = opts.engine.getSlashCommands();
+  for (const cmd of commands) {
+    helpLines.push(`  ${cmd.command.padEnd(20)} ${cmd.description}`);
   }
 
   log('Help', 'info');

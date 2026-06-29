@@ -186,7 +186,10 @@ describe('promptFile config parsing', () => {
   it('merges and deduplicates promptFile.files across layers', async () => {
     const { homeDir, projectDir } = await setupDirs();
     await writeJson(path.join(homeDir, '.drone-agent/config.json'), {
-      promptFile: { enabled: true, files: ['~/global-rules.md', '..?/AGENTS.md'] },
+      promptFile: {
+        enabled: true,
+        files: ['~/global-rules.md', '..?/AGENTS.md'],
+      },
     });
     await writeJson(path.join(projectDir, '.drone-agent/config.json'), {
       promptFile: { files: ['..?/AGENTS.md', './CONTRIBUTING.md'] },

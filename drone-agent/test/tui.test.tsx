@@ -60,9 +60,57 @@ function makeOptions(
         throw new Error('getConfig not used in tui tests');
       },
       getHelpSnippets: () => [],
-      dispatchSlashCommand: async () => false,
+      dispatchSlashCommand: async (_line, ctx) => {
+        // Handle built-in commands for testing
+        if (_line === '/help' || _line === '?') {
+          if (ctx.printHelp) {
+            ctx.printHelp();
+          }
+          return true;
+        }
+        return false;
+      },
       setElicitation: () => {},
       runWorkflow: async () => ({ toolResult: '{}' }),
+      getSlashCommands: () => [
+        {
+          command: '/help',
+          description: 'Show this help',
+          handler: async () => true,
+        },
+        {
+          command: '/clear',
+          description: 'Clear session',
+          handler: async () => true,
+        },
+        {
+          command: '/plugins',
+          description: 'List plugins',
+          handler: async () => true,
+        },
+        {
+          command: '/tools',
+          description: 'List tools',
+          handler: async () => true,
+        },
+        {
+          command: '/systemprompt',
+          description: 'Show system prompt',
+          handler: async () => true,
+        },
+        {
+          command: '/tool',
+          description: 'Run a tool',
+          handler: async () => true,
+        },
+        {
+          command: '/exec',
+          description: 'Run a command',
+          handler: async () => true,
+        },
+        { command: '/exit', description: 'Exit', handler: async () => true },
+        { command: '/quit', description: 'Exit', handler: async () => true },
+      ],
     },
     conversation: {
       sendUserMessage: async () => 'reply',
@@ -167,9 +215,56 @@ describe('App', () => {
           throw new Error('getConfig not used in tui tests');
         },
         getHelpSnippets: () => [],
-        dispatchSlashCommand: async () => false,
+        dispatchSlashCommand: async (_line, ctx) => {
+          if (_line === '/help' || _line === '?') {
+            if (ctx.printHelp) {
+              ctx.printHelp();
+            }
+            return true;
+          }
+          return false;
+        },
         setElicitation: () => {},
         runWorkflow: async () => ({ toolResult: '{}' }),
+        getSlashCommands: () => [
+          {
+            command: '/help',
+            description: 'Show this help',
+            handler: async () => true,
+          },
+          {
+            command: '/clear',
+            description: 'Clear session',
+            handler: async () => true,
+          },
+          {
+            command: '/plugins',
+            description: 'List plugins',
+            handler: async () => true,
+          },
+          {
+            command: '/tools',
+            description: 'List tools',
+            handler: async () => true,
+          },
+          {
+            command: '/systemprompt',
+            description: 'Show system prompt',
+            handler: async () => true,
+          },
+          {
+            command: '/tool',
+            description: 'Run a tool',
+            handler: async () => true,
+          },
+          {
+            command: '/exec',
+            description: 'Run a command',
+            handler: async () => true,
+          },
+          { command: '/exit', description: 'Exit', handler: async () => true },
+          { command: '/quit', description: 'Exit', handler: async () => true },
+        ],
       },
     });
     const instance = render(<App {...opts} />);

@@ -47,9 +47,32 @@ function makeOptions(
         ...createDefaultAgentConfig(),
         systemPrompt: 'You are a test agent.',
       }),
-      dispatchSlashCommand: async () => false,
+      dispatchSlashCommand: async (_line, ctx) => {
+        // Handle /systemprompt by calling the engine methods directly
+        if (_line === '/systemprompt') {
+          const fragments = (await ctx.engine.renderPromptFragments?.()) ?? [];
+          const config = ctx.engine.getConfig?.();
+          const lines: string[] = [
+            'System Prompt:',
+            '────────────────────────────────────────',
+            config?.systemPrompt ?? '(not available)',
+          ];
+          if (fragments.length > 0) {
+            lines.push('────────────────────────────────────────');
+            lines.push('Prompt Fragments:');
+            for (const fragment of fragments) {
+              lines.push('────────────────────────────────────────');
+              lines.push(fragment);
+            }
+          }
+          ctx.logger.info(lines.join('\n'));
+          return true;
+        }
+        return false;
+      },
       setElicitation: () => {},
       runWorkflow: async () => ({ toolResult: '{}' }),
+      getSlashCommands: () => [],
     },
     conversation: {
       sendUserMessage: async () => 'reply',
@@ -136,9 +159,32 @@ describe('TUI /systemprompt', () => {
           ...createDefaultAgentConfig(),
           systemPrompt: 'You are a test agent.',
         }),
-        dispatchSlashCommand: async () => false,
+        dispatchSlashCommand: async (_line, ctx) => {
+          if (_line === '/systemprompt') {
+            const fragments =
+              (await ctx.engine.renderPromptFragments?.()) ?? [];
+            const config = ctx.engine.getConfig?.();
+            const lines: string[] = [
+              'System Prompt:',
+              '────────────────────────────────────────',
+              config?.systemPrompt ?? '(not available)',
+            ];
+            if (fragments.length > 0) {
+              lines.push('────────────────────────────────────────');
+              lines.push('Prompt Fragments:');
+              for (const fragment of fragments) {
+                lines.push('────────────────────────────────────────');
+                lines.push(fragment);
+              }
+            }
+            ctx.logger.info(lines.join('\n'));
+            return true;
+          }
+          return false;
+        },
         setElicitation: () => {},
         runWorkflow: async () => ({ toolResult: '{}' }),
+        getSlashCommands: () => [],
       },
     });
     const instance = render(<App {...opts} />);

@@ -88,6 +88,7 @@ export type DroneTuiOptions = {
     | 'dispatchSlashCommand'
     | 'setElicitation'
     | 'runWorkflow'
+    | 'getSlashCommands'
   >;
   conversation: {
     sendUserMessage: (

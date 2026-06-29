@@ -457,7 +457,8 @@ export async function registerRoutes(app: FastifyInstance) {
   app.post<{ Body: CreateMessageRequest }>(
     '/messages',
     async (request, reply) => {
-      const { fromAgentId, fromBeaconId, toAgentId, toChannel, body } = request.body;
+      const { fromAgentId, fromBeaconId, toAgentId, toChannel, body } =
+        request.body;
 
       // Validate sender - either local agent or cross-beacon relay
       if (!fromAgentId) {
@@ -471,7 +472,9 @@ export async function registerRoutes(app: FastifyInstance) {
         // Verify sender is registered locally
         const sender = db.getAgent(fromAgentId);
         if (!sender) {
-          return reply.code(403).send({ error: 'Sender agent not registered locally' });
+          return reply
+            .code(403)
+            .send({ error: 'Sender agent not registered locally' });
         }
       }
 

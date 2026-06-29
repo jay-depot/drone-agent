@@ -13,9 +13,11 @@ updated: 2026-06-27T23:09:32.662Z
 # Self-Improvement Plugin Enhancement Plan
 
 ## Goal
+
 Organize, format and add promoted "principles" for the current project and persona to system prompt fragments.
 
 ## Current State
+
 - ✅ Insights (record/list/recall) - fully implemented
 - ✅ Principles (store/list/recall/delete) - fully implemented
 - ✅ DronePrinciplesCapability - offered for other plugins
@@ -37,15 +39,18 @@ Organize, format and add promoted "principles" for the current project and perso
 ## Current Project
 
 ### {category-filename}
+
 - {principle1}
 - {principle2}
 
 ### {another-category}
+
 - {principle1}
 
 ## Current Persona
 
 ### {persona-id}
+
 - {principle1}
 - {principle2}
 ```
@@ -69,7 +74,7 @@ Organize, format and add promoted "principles" for the current project and perso
 
 1. Remove existing `persona-principles` fragment (lines ~745-763)
 2. Add new combined `principles` fragment with:
-   - Scan .drone-agent/principles/project/*.json for project principles
+   - Scan .drone-agent/principles/project/\*.json for project principles
    - Read active persona principles from .drone-agent/personas/{id}/principles/
    - Format with two headings: "## Current Project" and "## Current Persona"
    - Subheadings for each category (filenames at project level, persona id for persona)
@@ -78,12 +83,13 @@ Organize, format and add promoted "principles" for the current project and perso
 
 ## Files to Modify
 
-| File | Change |
-|------|--------|
+| File                                              | Change                                            |
+| ------------------------------------------------- | ------------------------------------------------- |
 | drone-agent/src/plugins/self-improvement/index.ts | Replace fragment, add project principles scanning |
-| drone-agent/test/self-improvement.test.ts | Add tests for combined fragment |
+| drone-agent/test/self-improvement.test.ts         | Add tests for combined fragment                   |
 
 ## Notes
+
 - Skill principles should remain in recall result only (not in system prompt)
 - Fragment returns false when no principles exist (correct current behavior)
 - Tool descriptions for principles tools ARE being registered (user sees them via /systemprompt), but the principles content itself isn't being rendered

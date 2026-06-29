@@ -1292,7 +1292,10 @@ describe('self-improvement plugin', () => {
       });
 
       const fragments = await engine.renderPromptFragments();
-      const fragment = fragments.find(f => f.includes('## Current Project') && f.includes('## Current Persona'));
+      const fragment = fragments.find(
+        f =>
+          f.includes('## Current Project') && f.includes('## Current Persona')
+      );
       expect(fragment).toBeDefined();
       expect(fragment).toContain('## Current Project');
       expect(fragment).toContain('### workflow');
@@ -1306,7 +1309,10 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       const fragments = await engine.renderPromptFragments();
-      const fragment = fragments.find(f => f.includes('## Current Project') || f.includes('## Current Persona'));
+      const fragment = fragments.find(
+        f =>
+          f.includes('## Current Project') || f.includes('## Current Persona')
+      );
       expect(fragment).toBeUndefined();
     });
 

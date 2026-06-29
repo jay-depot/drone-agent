@@ -61,6 +61,7 @@ Purpose: Track which beacon each agent is currently connected to.
 ### 2. Coordinator Routes
 
 #### 2.1 Register Agent Location
+
 ```
 POST /agents/location
 Body: { agentId: string, beaconId: string, personaId?: string }
@@ -71,6 +72,7 @@ Response: { success: true }
 Called by beacon when agent connects (via existing `/sync/sessions/register` or new endpoint).
 
 #### 2.2 Update Heartbeat
+
 ```
 POST /agents/location/:agentId/heartbeat
 Body: { beaconId: string }
@@ -81,6 +83,7 @@ Response: { success: true }
 Called by beacon periodically to keep agent location fresh.
 
 #### 2.3 Unregister Agent Location
+
 ```
 DELETE /agents/location/:agentId
 Body: { beaconId: string }
@@ -91,6 +94,7 @@ Response: { success: true }
 Called by beacon when agent disconnects.
 
 #### 2.4 Get Agent Location
+
 ```
 GET /agents/location/:agentId
 
@@ -100,6 +104,7 @@ Response: { agentId, beaconId, personaId, connectedAt } or 404
 Lookup endpoint for other beacons to find where an agent is.
 
 #### 2.5 List Agents by Beacon
+
 ```
 GET /agents/location?beaconId=:id
 
@@ -109,9 +114,10 @@ Response: [{ agentId, beaconId, personaId, connectedAt }, ...]
 For beacon monitoring and admin.
 
 #### 2.6 Message Relay (Main Feature)
+
 ```
 POST /messages/relay
-Body: { 
+Body: {
   fromBeaconId: string,   // beacon sending the message
   fromAgentId: string,   // agent sending (for attribution)
   toAgentId: string,      // recipient agent ID
@@ -124,6 +130,7 @@ Response: { success: true, messageId: string }
 ```
 
 Flow:
+
 1. Validate request
 2. Look up `toAgentId` in `agent_locations` table
 3. Get target beacon's host/port from `beacons` table
@@ -140,7 +147,7 @@ Update existing `POST /messages` to accept `fromBeaconId`:
 // New field in CreateMessageRequest
 interface CreateMessageRequest {
   fromAgentId: string;
-  fromBeaconId?: string;  // NEW: for cross-beacon messages
+  fromBeaconId?: string; // NEW: for cross-beacon messages
   toAgentId?: string;
   toChannel?: string;
   body: string;
@@ -148,6 +155,7 @@ interface CreateMessageRequest {
 ```
 
 When `fromBeaconId` is present:
+
 - Don't require `fromAgentId` to be registered locally
 - Store message with `fromBeaconId` attribution
 - Deliver normally to local recipient
@@ -160,7 +168,7 @@ Add methods to `coordinator-client.ts`:
 // Register agent location
 registerAgentLocation(agentId: string, beaconId: string, personaId?: string): Promise<void>
 
-// Update heartbeat  
+// Update heartbeat
 heartbeatAgentLocation(agentId: string, beaconId: string): Promise<void>
 
 // Unregister agent location
@@ -173,6 +181,7 @@ relayMessage(toAgentId: string, fromAgentId: string, body: string): Promise<{ me
 #### 3.3 Update Beacon Routes
 
 When agent connects (`POST /agents`):
+
 ```typescript
 // Register with coordinator
 const client = getCoordinatorClient();
@@ -182,6 +191,7 @@ if (client) {
 ```
 
 When agent disconnects (`DELETE /agents/:id`):
+
 ```typescript
 // Unregister from coordinator
 if (client) {
@@ -190,6 +200,7 @@ if (client) {
 ```
 
 When sending message to remote agent:
+
 ```typescript
 // In POST /messages handler
 const recipientBeacon = db.getAgentBeacon(toAgentId); // NEW: lookup
@@ -216,16 +227,16 @@ Or use coordinator client directly.
 
 ## File Changes Summary
 
-| File | Change |
-|------|--------|
-| `drone-coordinator/src/db.ts` | Add `agent_locations` table + CRUD functions |
-| `drone-coordinator/src/routes.ts` | Add location and relay endpoints |
-| `drone-coordinator/src/types.ts` | Add `AgentLocation` type |
-| `drone-coordinator/src/coordinator-client.ts` | Add location/relay methods (called by beacon) |
-| `drone-beacon/src/types.ts` | Add `fromBeaconId` to `CreateMessageRequest` |
-| `drone-beacon/src/routes.ts` | Handle `fromBeaconId`, call coordinator on message send |
-| `drone-beacon/src/coordinator-client.ts` | Add location registration and message relay methods |
-| `drone-beacon/src/db.ts` | Optionally cache agent locations |
+| File                                          | Change                                                  |
+| --------------------------------------------- | ------------------------------------------------------- |
+| `drone-coordinator/src/db.ts`                 | Add `agent_locations` table + CRUD functions            |
+| `drone-coordinator/src/routes.ts`             | Add location and relay endpoints                        |
+| `drone-coordinator/src/types.ts`              | Add `AgentLocation` type                                |
+| `drone-coordinator/src/coordinator-client.ts` | Add location/relay methods (called by beacon)           |
+| `drone-beacon/src/types.ts`                   | Add `fromBeaconId` to `CreateMessageRequest`            |
+| `drone-beacon/src/routes.ts`                  | Handle `fromBeaconId`, call coordinator on message send |
+| `drone-beacon/src/coordinator-client.ts`      | Add location registration and message relay methods     |
+| `drone-beacon/src/db.ts`                      | Optionally cache agent locations                        |
 
 ## Alternative: Direct Beacon-to-Beacon
 
@@ -236,10 +247,12 @@ Agent A → Beacon 1 → Beacon 2 → Agent B
 ```
 
 Pros:
+
 - Lower latency
 - Less load on coordinator
 
 Cons:
+
 - Requires each beacon to know about other beacons
 - More complex connection management
 - No coordinator oversight/logging

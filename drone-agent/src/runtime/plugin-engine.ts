@@ -18,6 +18,8 @@ import {
   type DroneWorkflowRunReturn,
 } from 'drone-core';
 
+import { BUILT_IN_SLASH_COMMANDS } from './builtin-commands.js';
+
 export type RegisteredPluginState = {
   plugin: DronePlugin;
   tools: DroneToolDefinition[];
@@ -97,8 +99,15 @@ export type DronePluginEngine = {
     line: string,
     ctx: Omit<DroneSlashCommandContext, 'line' | 'args'>
   ) => Promise<boolean>;
-  /** Returns all slash commands from enabled plugins (for help listings). */
+  /** Returns all slash commands (plugin + built-in) for help listings. */
   getSlashCommands: () => DroneSlashCommand[];
+  /**
+   * Register a built-in slash command (lower precedence than plugin commands).
+   * Built-in commands are checked after plugin commands during dispatch.
+   */
+  registerBuiltinSlashCommand: (command: DroneSlashCommand) => void;
+  /** Returns all built-in slash commands. */
+  getBuiltinSlashCommands: () => DroneSlashCommand[];
 };
 
 type CreateDronePluginEngineOptions = {
@@ -239,6 +248,7 @@ export function createDronePluginEngine({
   const registeredPlugins: RegisteredPluginState[] = [];
   const helpSnippets = new Map<string, string[]>();
   const slashCommands = new Map<string, DroneSlashCommand[]>();
+  const builtInSlashCommands: DroneSlashCommand[] = [];
   const sessionSafetyTrimWillRunHooks: Array<
     (payload: DroneSessionSafetyTrimPayload) => Promise<void>
   > = [];
@@ -423,12 +433,47 @@ export function createDronePluginEngine({
     };
   }
 
+  /**
+   * Detect built-in commands that have been overridden by plugin commands
+   * and log a warning for each.
+   */
+  function logOverrideWarnings(): void {
+    const pluginCommandSet = new Set<string>();
+    for (const [, commands] of slashCommands) {
+      for (const cmd of commands) {
+        pluginCommandSet.add(cmd.command);
+      }
+    }
+    for (const builtIn of builtInSlashCommands) {
+      if (pluginCommandSet.has(builtIn.command)) {
+        // Find which plugin overrode it.
+        for (const [pluginId, commands] of slashCommands) {
+          if (commands.some(cmd => cmd.command === builtIn.command)) {
+            logger.warn(
+              `⚠ Built-in command ${builtIn.command} overridden by plugin "${pluginId}"`
+            );
+            break;
+          }
+        }
+      }
+    }
+  }
+
   return {
     initialize: async () => {
+      // Register built-in slash commands before plugins load.
+      for (const cmd of BUILT_IN_SLASH_COMMANDS) {
+        builtInSlashCommands.push(cmd);
+      }
+
       logger.info(`initializing ${sortedPlugins.length} plugin(s)`);
       for (const plugin of sortedPlugins) {
         registeredPlugins.push(await registerPlugin(plugin));
       }
+
+      // Log override warnings after all plugins are loaded.
+      logOverrideWarnings();
+
       return registeredPlugins;
     },
     enablePlugin: doEnablePlugin,
@@ -498,7 +543,7 @@ export function createDronePluginEngine({
     getElicitation: () => elicitationCapability,
     runWorkflow,
     dispatchSlashCommand: async (line, ctx) => {
-      // Find slash commands from enabled plugins that match the line.
+      // First: check plugin slash commands (higher precedence).
       for (const [pluginId, commands] of slashCommands) {
         if (!enabledPluginIds.has(pluginId)) continue;
         for (const cmd of commands) {
@@ -519,17 +564,48 @@ export function createDronePluginEngine({
           }
         }
       }
+
+      // Second: check built-in slash commands (lower precedence).
+      for (const cmd of builtInSlashCommands) {
+        if (
+          line === cmd.command ||
+          line.startsWith(cmd.command + ' ') ||
+          line.startsWith(cmd.command + '\t')
+        ) {
+          const args = line
+            .slice(cmd.command.length)
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean);
+          const handled = await cmd.handler({ ...ctx, line, args });
+          if (handled) return true;
+        }
+      }
+
       return false;
     },
     getSlashCommands: () => {
       const result: DroneSlashCommand[] = [];
+      // Plugin commands first.
       for (const [pluginId, commands] of slashCommands) {
         if (enabledPluginIds.has(pluginId)) {
           result.push(...commands);
         }
       }
+      // Then built-in commands.
+      result.push(...builtInSlashCommands);
       return result;
     },
+    registerBuiltinSlashCommand: (command: DroneSlashCommand) => {
+      // Check for duplicates.
+      if (builtInSlashCommands.some(cmd => cmd.command === command.command)) {
+        throw new Error(
+          `Built-in slash command already registered: ${command.command}`
+        );
+      }
+      builtInSlashCommands.push(command);
+    },
+    getBuiltinSlashCommands: () => [...builtInSlashCommands],
   };
 }
 
