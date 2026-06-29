@@ -1,3 +1,5 @@
+import https from 'https';
+import http from 'http';
 import { logger } from './logger.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
@@ -79,12 +81,77 @@ export interface CoordinatorClientOptions {
   useHttps?: boolean;
 }
 
+/**
+ * Create a fetch-compatible function that accepts self-signed TLS certificates.
+ * The coordinator uses a self-signed cert, so Node.js's built-in fetch rejects it.
+ * This wrapper uses Node.js http/https modules with rejectUnauthorized: false.
+ */
+function createCoordinatorFetch(baseUrl: string): typeof fetch {
+  const urlObj = new URL(baseUrl);
+  const isHttps = urlObj.protocol === 'https:';
+
+  return async function coordinatorFetch(
+    url: string | URL | Request,
+    init?: RequestInit
+  ): Promise<Response> {
+    const urlStr = typeof url === 'string' ? url : url.toString();
+    const fullUrl = urlStr.startsWith('http') ? urlStr : `${baseUrl}${urlStr}`;
+    const parsedUrl = new URL(fullUrl);
+
+    const method = init?.method ?? 'GET';
+    const headers = (init?.headers as Record<string, string>) ?? {};
+    const body = init?.body as string | undefined;
+
+    return new Promise((resolve, reject) => {
+      const options: http.RequestOptions = {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || (isHttps ? 443 : 80),
+        path: parsedUrl.pathname + parsedUrl.search,
+        method,
+        headers,
+      };
+
+      // For HTTPS connections to the coordinator (which uses a self-signed cert),
+      // disable certificate validation
+      if (isHttps) {
+        (options as https.RequestOptions).rejectUnauthorized = false;
+      }
+
+      const req = (isHttps ? https : http).request(options, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => {
+          const bodyBuffer = Buffer.concat(chunks);
+          resolve(
+            new Response(bodyBuffer, {
+              status: res.statusCode ?? 500,
+              statusText: res.statusMessage ?? '',
+              headers: res.headers as Record<string, string>,
+            })
+          );
+        });
+      });
+
+      req.on('error', (err) => {
+        reject(err);
+      });
+
+      if (body) {
+        req.write(body);
+      }
+
+      req.end();
+    });
+  };
+}
+
 export function createCoordinatorClient(
   config: CoordinatorConfig,
   options: CoordinatorClientOptions
 ): CoordinatorClient {
   const protocol = options.useHttps ? 'https' : 'http';
   const baseUrl = `${protocol}://${config.host}:${config.port}`;
+  const cfetch = createCoordinatorFetch(baseUrl);
 
   return {
     getBaseUrl(): string {
@@ -100,7 +167,7 @@ export function createCoordinatorClient(
     }> {
       logger.info(`Registering beacon with coordinator at ${baseUrl}`);
 
-      const res = await fetch(`${baseUrl}/beacons`, {
+      const res = await cfetch(`${baseUrl}/beacons`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -131,7 +198,7 @@ export function createCoordinatorClient(
 
     async pollForApproval(): Promise<BeaconStatusResponse> {
       try {
-        const res = await fetch(`${baseUrl}/beacons/trust/${config.beaconId}`);
+        const res = await cfetch(`${baseUrl}/beacons/trust/${config.beaconId}`);
         if (!res.ok) {
           if (res.status === 404) {
             return { status: 'pending' };
@@ -147,7 +214,7 @@ export function createCoordinatorClient(
 
     async heartbeat(): Promise<void> {
       try {
-        const res = await fetch(
+        const res = await cfetch(
           `${baseUrl}/beacons/${config.beaconId}/heartbeat`,
           {
             method: 'POST',
@@ -162,7 +229,7 @@ export function createCoordinatorClient(
     },
 
     async fetchPersonas(): Promise<Persona[]> {
-      const res = await fetch(`${baseUrl}/personas`);
+      const res = await cfetch(`${baseUrl}/personas`);
       if (!res.ok) {
         throw new Error(`Failed to fetch personas: ${res.status}`);
       }
@@ -173,7 +240,7 @@ export function createCoordinatorClient(
     },
 
     async fetchSkills(): Promise<Skill[]> {
-      const res = await fetch(`${baseUrl}/skills`);
+      const res = await cfetch(`${baseUrl}/skills`);
       if (!res.ok) {
         throw new Error(`Failed to fetch skills: ${res.status}`);
       }
@@ -189,7 +256,7 @@ export function createCoordinatorClient(
       personaId: string | null
     ): Promise<void> {
       try {
-        const res = await fetch(
+        const res = await cfetch(
           `${baseUrl}/beacons/${config.beaconId}/sessions`,
           {
             method: 'POST',
@@ -215,7 +282,7 @@ export function createCoordinatorClient(
       try {
         const disconnectedAt = Date.now();
         const durationMs = disconnectedAt - connectedAt;
-        const res = await fetch(
+        const res = await cfetch(
           `${baseUrl}/beacons/${config.beaconId}/sessions/${agentId}`,
           {
             method: 'DELETE',
@@ -244,7 +311,7 @@ export function createCoordinatorClient(
       personaId?: string
     ): Promise<void> {
       try {
-        const res = await fetch(`${baseUrl}/agents/location`, {
+        const res = await cfetch(`${baseUrl}/agents/location`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -265,7 +332,7 @@ export function createCoordinatorClient(
 
     async updateAgentLocationHeartbeat(agentId: string): Promise<void> {
       try {
-        const res = await fetch(
+        const res = await cfetch(
           `${baseUrl}/agents/location/${agentId}/heartbeat`,
           {
             method: 'POST',
@@ -283,7 +350,7 @@ export function createCoordinatorClient(
 
     async unregisterAgentLocation(agentId: string): Promise<void> {
       try {
-        const res = await fetch(`${baseUrl}/agents/location/${agentId}`, {
+        const res = await cfetch(`${baseUrl}/agents/location/${agentId}`, {
           method: 'DELETE',
         });
         if (!res.ok) {
@@ -302,7 +369,7 @@ export function createCoordinatorClient(
       body: string
     ): Promise<{ success: boolean; messageId?: string }> {
       try {
-        const res = await fetch(`${baseUrl}/messages/relay`, {
+        const res = await cfetch(`${baseUrl}/messages/relay`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -330,7 +397,7 @@ export function createCoordinatorClient(
     // Knowledge push
     async pushPersona(persona: Persona): Promise<void> {
       try {
-        const res = await fetch(`${baseUrl}/personas`, {
+        const res = await cfetch(`${baseUrl}/personas`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(persona),
@@ -347,7 +414,7 @@ export function createCoordinatorClient(
 
     async pushSkill(skill: Skill): Promise<void> {
       try {
-        const res = await fetch(`${baseUrl}/skills`, {
+        const res = await cfetch(`${baseUrl}/skills`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(skill),
@@ -364,7 +431,7 @@ export function createCoordinatorClient(
 
     async deletePersona(id: string): Promise<void> {
       try {
-        const res = await fetch(`${baseUrl}/personas/${id}`, {
+        const res = await cfetch(`${baseUrl}/personas/${id}`, {
           method: 'DELETE',
         });
         if (!res.ok) {
@@ -379,7 +446,7 @@ export function createCoordinatorClient(
 
     async deleteSkill(id: string): Promise<void> {
       try {
-        const res = await fetch(`${baseUrl}/skills/${id}`, {
+        const res = await cfetch(`${baseUrl}/skills/${id}`, {
           method: 'DELETE',
         });
         if (!res.ok) {
@@ -395,7 +462,7 @@ export function createCoordinatorClient(
     // Knowledge sync (global memory)
     async pushKnowledge(knowledge: Knowledge): Promise<void> {
       try {
-        const res = await fetch(`${baseUrl}/sync/knowledge/push`, {
+        const res = await cfetch(`${baseUrl}/sync/knowledge/push`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(knowledge),
@@ -416,7 +483,7 @@ export function createCoordinatorClient(
         if (since) {
           url += `?since=${since}`;
         }
-        const res = await fetch(url);
+        const res = await cfetch(url);
         if (!res.ok) {
           logger.warn(`Failed to pull knowledge: ${res.status}`);
           return [];
@@ -434,7 +501,7 @@ export function createCoordinatorClient(
         if (type) {
           url += `&type=${encodeURIComponent(type)}`;
         }
-        const res = await fetch(url);
+        const res = await cfetch(url);
         if (!res.ok) {
           logger.warn(`Failed to search knowledge: ${res.status}`);
           return [];
@@ -452,7 +519,7 @@ export function createCoordinatorClient(
       personaId: string | null
     ): Promise<void> {
       try {
-        const res = await fetch(`${baseUrl}/sync/sessions/register`, {
+        const res = await cfetch(`${baseUrl}/sync/sessions/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -483,7 +550,7 @@ export function createCoordinatorClient(
       }>
     ): Promise<void> {
       try {
-        const res = await fetch(`${baseUrl}/sync/events/push`, {
+        const res = await cfetch(`${baseUrl}/sync/events/push`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ events }),

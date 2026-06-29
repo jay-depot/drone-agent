@@ -98,5 +98,9 @@
   {
     "timestamp": "2026-06-29T19:28:12.218Z",
     "insight": "The migration service uses raw fetch() calls to the beacon HTTP API rather than going through the existing coordinator-client.ts. This is intentional for the standalone CLI tool (no engine needed), but means the migration service duplicates some HTTP logic. A future refactor could extract a shared HTTP client library."
+  },
+  {
+    "timestamp": "2026-06-29T23:14:43.447Z",
+    "insight": "Fastify 5.x type overloads are sensitive to the presence of the `https` property in the options object. Passing `https: undefined` still triggers the Http2SecureServer overload, causing type mismatches downstream. The fix is to use spread syntax (`...(cond ? { https: ... } : {})`) to conditionally include the property only when HTTPS is actually enabled."
   }
 ]
