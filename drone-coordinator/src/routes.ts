@@ -112,7 +112,6 @@ export async function registerRoutes(app: FastifyInstance) {
   app.post<{ Body: RegisterBeaconRequest }>(
     '/beacons',
     async (request, reply) => {
-      // If publicKey is provided, this is a trust registration
       if (request.body.publicKey) {
         const trustReq: RegisterBeaconTrustRequest = {
           id: request.body.id,
@@ -123,29 +122,20 @@ export async function registerRoutes(app: FastifyInstance) {
           tlsFingerprint: request.body.tlsFingerprint,
         };
         const trust = db.registerBeaconTrust(trustReq);
-
-        // Return status response
-        const response: BeaconStatusResponse = {
-          status: trust.status,
-        };
+        const response: BeaconStatusResponse = { status: trust.status };
         if (trust.approvalToken) {
           response.approvalToken = trust.approvalToken;
         }
         return reply.code(201).send(response);
       }
-
-      // Legacy: simple beacon registration
       const beacon = db.registerBeacon(request.body);
       return reply.code(201).send(beacon);
     }
   );
 
   app.get('/beacons', async () => {
-    // Return both legacy beacons and trust entries
     const beacons = db.listBeacons();
     const trustList = db.listBeaconTrust();
-
-    // Merge trust status into beacons
     const beaconsWithTrust = beacons.map(b => {
       const trust = trustList.find(t => t.beaconId === b.id);
       return {
@@ -154,7 +144,6 @@ export async function registerRoutes(app: FastifyInstance) {
         publicKey: trust?.publicKey ?? null,
       };
     });
-
     return beaconsWithTrust;
   });
 
@@ -163,12 +152,9 @@ export async function registerRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const beacon = db.getBeacon(request.params.id);
       const trust = db.getBeaconTrust(request.params.id);
-
       if (!beacon && !trust) {
         return reply.code(404).send({ error: 'Beacon not found' });
       }
-
-      // Return merged beacon/trust info
       return {
         ...beacon,
         beaconId: beacon?.id ?? trust?.beaconId,
@@ -184,18 +170,13 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // === Beacon Trust Routes (New) ===
+  // === Beacon Trust Routes ===
 
-  // Register a new beacon with trust
   app.post<{ Body: RegisterBeaconTrustRequest }>(
     '/beacons/trust',
     async (request, reply) => {
       const trust = db.registerBeaconTrust(request.body);
-
-      // Return status response
-      const response: BeaconStatusResponse = {
-        status: trust.status,
-      };
+      const response: BeaconStatusResponse = { status: trust.status };
       if (trust.approvalToken) {
         response.approvalToken = trust.approvalToken;
       }
@@ -203,7 +184,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Get beacon trust status (for polling)
   app.get<{ Params: { id: string } }>(
     '/beacons/trust/:id',
     async (request, reply) => {
@@ -211,11 +191,7 @@ export async function registerRoutes(app: FastifyInstance) {
       if (!trust) {
         return reply.code(404).send({ error: 'Beacon trust not found' });
       }
-
-      const response: BeaconStatusResponse = {
-        status: trust.status,
-      };
-      // Only include approval token if pending
+      const response: BeaconStatusResponse = { status: trust.status };
       if (trust.status === 'pending' && trust.approvalToken) {
         response.approvalToken = trust.approvalToken;
       }
@@ -223,12 +199,10 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // List all beacon trust entries
   app.get('/beacons/trust', async () => {
     return db.listBeaconTrust();
   });
 
-  // Delete beacon trust
   app.delete<{ Params: { id: string } }>(
     '/beacons/trust/:id',
     async (request, reply) => {
@@ -242,7 +216,6 @@ export async function registerRoutes(app: FastifyInstance) {
 
   // === Approval Routes ===
 
-  // Approve a pending beacon by token
   app.post<{ Body: { approvalToken: string } }>(
     '/beacons/approve',
     async (request, reply) => {
@@ -250,19 +223,16 @@ export async function registerRoutes(app: FastifyInstance) {
       if (!approvalToken) {
         return reply.code(400).send({ error: 'approvalToken required' });
       }
-
       const trust = db.approveBeacon(approvalToken);
       if (!trust) {
         return reply
           .code(404)
           .send({ error: 'Invalid or expired approval token' });
       }
-
       return { success: true, beacon: trust };
     }
   );
 
-  // Reject a beacon
   app.post<{ Params: { id: string } }>(
     '/beacons/trust/:id/reject',
     async (request, reply) => {
@@ -276,7 +246,6 @@ export async function registerRoutes(app: FastifyInstance) {
 
   // === Beacon Session Routes ===
 
-  // Register a new agent session
   app.post<{ Params: { id: string }; Body: CreateSessionRequest }>(
     '/beacons/:id/sessions',
     async (request, reply) => {
@@ -289,7 +258,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // List all sessions for a beacon
   app.get<{ Params: { id: string } }>(
     '/beacons/:id/sessions',
     async (request, reply) => {
@@ -301,7 +269,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Get specific session for a beacon
   app.get<{ Params: { id: string; agentId: string } }>(
     '/beacons/:id/sessions/:agentId',
     async (request, reply) => {
@@ -316,7 +283,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // End a session (mark as disconnected)
   app.delete<{
     Params: { id: string; agentId: string };
     Body: EndSessionRequest;
@@ -336,7 +302,6 @@ export async function registerRoutes(app: FastifyInstance) {
 
   // === Knowledge Routes ===
 
-  // Create knowledge entry
   app.post<{ Body: CreateKnowledgeRequest }>(
     '/knowledge',
     async (request, reply) => {
@@ -345,12 +310,10 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // List knowledge (with optional type filter)
   app.get<{ Querystring: { type?: string } }>('/knowledge', async request => {
     return db.listKnowledge(request.query.type);
   });
 
-  // Get single knowledge entry
   app.get<{ Params: { id: string } }>(
     '/knowledge/:id',
     async (request, reply) => {
@@ -362,7 +325,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Update knowledge entry
   app.put<{ Params: { id: string }; Body: UpdateKnowledgeRequest }>(
     '/knowledge/:id',
     async (request, reply) => {
@@ -374,7 +336,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Delete knowledge entry
   app.delete<{ Params: { id: string } }>(
     '/knowledge/:id',
     async (request, reply) => {
@@ -386,7 +347,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Search knowledge
   app.get<{ Querystring: { q?: string; type?: string } }>(
     '/knowledge/search',
     async request => {
@@ -398,7 +358,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Upsert knowledge (sync endpoint - create or update by type+key)
   app.post<{ Body: CreateKnowledgeRequest }>(
     '/sync/knowledge/push',
     async (request, reply) => {
@@ -407,7 +366,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Pull knowledge (sync endpoint - get all knowledge, optionally since timestamp)
   app.get<{ Querystring: { since?: number; type?: string } }>(
     '/sync/knowledge/pull',
     async request => {
@@ -422,20 +380,24 @@ export async function registerRoutes(app: FastifyInstance) {
 
   // === Insight Routes ===
 
-  // Create an insight
-  app.post<{ Body: { targetType: string; targetId: string; insight: string; scope?: string } }>(
-    '/insights',
-    async (request, reply) => {
-      const { targetType, targetId, insight, scope } = request.body;
-      if (!targetType || !targetId || !insight) {
-        return reply.code(400).send({ error: 'targetType, targetId, and insight are required' });
-      }
-      const row = db.createInsight(targetType, targetId, insight, scope);
-      return reply.code(201).send(row);
+  app.post<{
+    Body: {
+      targetType: string;
+      targetId: string;
+      insight: string;
+      scope?: string;
+    };
+  }>('/insights', async (request, reply) => {
+    const { targetType, targetId, insight, scope } = request.body;
+    if (!targetType || !targetId || !insight) {
+      return reply
+        .code(400)
+        .send({ error: 'targetType, targetId, and insight are required' });
     }
-  );
+    const row = db.createInsight(targetType, targetId, insight, scope);
+    return reply.code(201).send(row);
+  });
 
-  // List insights (with optional targetType and targetId filters)
   app.get<{ Querystring: { targetType?: string; targetId?: string } }>(
     '/insights',
     async request => {
@@ -443,7 +405,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Get a single insight
   app.get<{ Params: { id: string } }>(
     '/insights/:id',
     async (request, reply) => {
@@ -455,7 +416,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Delete an insight
   app.delete<{ Params: { id: string } }>(
     '/insights/:id',
     async (request, reply) => {
@@ -469,28 +429,41 @@ export async function registerRoutes(app: FastifyInstance) {
 
   // === Principle Routes ===
 
-  // Create a principle
-  app.post<{ Body: { targetType: string; targetId: string; principle: string; source?: string; scope?: string } }>(
-    '/principles',
-    async (request, reply) => {
-      const { targetType, targetId, principle, source, scope } = request.body;
-      if (!targetType || !targetId || !principle) {
-        return reply.code(400).send({ error: 'targetType, targetId, and principle are required' });
-      }
-      const row = db.createPrinciple(targetType, targetId, principle, source, scope);
-      return reply.code(201).send(row);
+  app.post<{
+    Body: {
+      targetType: string;
+      targetId: string;
+      principle: string;
+      source?: string;
+      scope?: string;
+    };
+  }>('/principles', async (request, reply) => {
+    const { targetType, targetId, principle, source, scope } = request.body;
+    if (!targetType || !targetId || !principle) {
+      return reply
+        .code(400)
+        .send({ error: 'targetType, targetId, and principle are required' });
     }
-  );
+    const row = db.createPrinciple(
+      targetType,
+      targetId,
+      principle,
+      source,
+      scope
+    );
+    return reply.code(201).send(row);
+  });
 
-  // List principles (with optional targetType and targetId filters)
   app.get<{ Querystring: { targetType?: string; targetId?: string } }>(
     '/principles',
     async request => {
-      return db.listPrinciples(request.query.targetType, request.query.targetId);
+      return db.listPrinciples(
+        request.query.targetType,
+        request.query.targetId
+      );
     }
   );
 
-  // Get a single principle
   app.get<{ Params: { id: string } }>(
     '/principles/:id',
     async (request, reply) => {
@@ -502,7 +475,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Delete a principle
   app.delete<{ Params: { id: string } }>(
     '/principles/:id',
     async (request, reply) => {
@@ -514,8 +486,82 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
+  // === Wiki Routes ===
+
+  app.get('/wiki', async () => {
+    const { listPages } = await import('./wiki-storage.js');
+    return listPages();
+  });
+
+  app.get<{ Params: { pageId: string } }>(
+    '/wiki/:pageId',
+    async (request, reply) => {
+      const { readPage } = await import('./wiki-storage.js');
+      const page = await readPage(request.params.pageId);
+      if (!page) {
+        return reply.code(404).send({ error: 'Wiki page not found' });
+      }
+      return page;
+    }
+  );
+
+  app.put<{
+    Params: { pageId: string };
+    Body: {
+      title: string;
+      content: string;
+      scope?: string;
+      tags?: string[];
+      sources?: string[];
+    };
+  }>('/wiki/:pageId', async (request, reply) => {
+    const { writePage } = await import('./wiki-storage.js');
+    const { pageId } = request.params;
+    const { title, content, scope, tags, sources } = request.body;
+    if (!title || !content) {
+      return reply.code(400).send({ error: 'title and content are required' });
+    }
+    try {
+      const page = await writePage(
+        pageId,
+        title,
+        (scope as 'beacon' | 'coordinator') || 'coordinator',
+        content,
+        tags ?? [],
+        sources ?? []
+      );
+      return reply.code(200).send(page);
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  });
+
+  app.delete<{ Params: { pageId: string } }>(
+    '/wiki/:pageId',
+    async (request, reply) => {
+      const { deletePage } = await import('./wiki-storage.js');
+      const deleted = await deletePage(request.params.pageId);
+      if (!deleted) {
+        return reply.code(404).send({ error: 'Wiki page not found' });
+      }
+      return { success: true };
+    }
+  );
+
+  app.get<{ Querystring: { q: string } }>('/wiki/search', async request => {
+    const { searchPages } = await import('./wiki-storage.js');
+    const { q } = request.query;
+    if (!q) return [];
+    return searchPages(q);
+  });
+
+  app.post('/wiki/lint', async () => {
+    const { lintPages } = await import('./wiki-storage.js');
+    return lintPages();
+  });
+
   // === Swarm Session Routes ===
-  // Register a new swarm session
+
   app.post<{ Body: { id: string; personaId?: string; beaconId: string } }>(
     '/sync/sessions/register',
     async (request, reply) => {
@@ -528,7 +574,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Push events to a swarm session
   app.post<{
     Body: {
       events: Array<{
@@ -546,18 +591,14 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!events || !Array.isArray(events) || events.length === 0) {
       return reply.code(400).send({ error: 'events array is required' });
     }
-
     const created: db.SwarmEvent[] = [];
     for (const evt of events) {
       let payload = evt.payload ?? null;
       let metadata = evt.metadata ?? null;
-
-      // Check if payload exceeds 10KB threshold
       if (payload && isLargePayload(payload)) {
         const ref = storeLargePayload(evt.sessionId, evt.id, payload);
         payload = ref;
       }
-
       const event = db.createSwarmEvent({
         id: evt.id,
         sessionId: evt.sessionId,
@@ -569,11 +610,9 @@ export async function registerRoutes(app: FastifyInstance) {
       });
       created.push(event);
     }
-
     return reply.code(201).send({ count: created.length, events: created });
   });
 
-  // Get events for a session
   app.get<{
     Params: { id: string };
     Querystring: { correlationId?: string; limit?: number; offset?: number };
@@ -582,15 +621,13 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!session) {
       return reply.code(404).send({ error: 'Session not found' });
     }
-    const events = db.getSwarmEvents(request.params.id, {
+    return db.getSwarmEvents(request.params.id, {
       correlationId: request.query.correlationId,
       limit: request.query.limit ? Number(request.query.limit) : undefined,
       offset: request.query.offset ? Number(request.query.offset) : undefined,
     });
-    return events;
   });
 
-  // Get latest events for a session
   app.get<{ Params: { id: string }; Querystring: { limit?: number } }>(
     '/sessions/:id/events/latest',
     async (request, reply) => {
@@ -603,7 +640,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Search events via FTS
   app.get<{ Querystring: { q: string } }>(
     '/events/search',
     async (request, reply) => {
@@ -617,7 +653,6 @@ export async function registerRoutes(app: FastifyInstance) {
 
   // === Agent Location Routes ===
 
-  // Register agent location
   app.post<{ Body: { agentId: string; beaconId: string; personaId?: string } }>(
     '/agents/location',
     async (request, reply) => {
@@ -636,7 +671,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Get agent location
   app.get<{ Params: { agentId: string } }>(
     '/agents/location/:agentId',
     async (request, reply) => {
@@ -653,7 +687,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Update agent heartbeat
   app.post<{ Params: { agentId: string } }>(
     '/agents/location/:agentId/heartbeat',
     async (request, reply) => {
@@ -665,7 +698,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // Unregister agent location
   app.delete<{ Params: { agentId: string } }>(
     '/agents/location/:agentId',
     async (request, reply) => {
@@ -677,7 +709,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
-  // List agents by beacon
   app.get<{ Querystring: { beaconId?: string } }>(
     '/agents/location',
     async request => {
@@ -691,7 +722,6 @@ export async function registerRoutes(app: FastifyInstance) {
 
   // === Message Relay Routes ===
 
-  // Relay message to agent on (possibly) different beacon
   app.post<{
     Body: {
       fromBeaconId: string;
@@ -701,7 +731,6 @@ export async function registerRoutes(app: FastifyInstance) {
     };
   }>('/messages/relay', async (request, reply) => {
     const { fromBeaconId, fromAgentId, toAgentId, body } = request.body;
-
     if (!fromBeaconId || !fromAgentId || !toAgentId || !body) {
       return reply
         .code(400)
@@ -709,34 +738,25 @@ export async function registerRoutes(app: FastifyInstance) {
           error: 'fromBeaconId, fromAgentId, toAgentId, and body are required',
         });
     }
-
     const location = db.getAgentLocation(toAgentId);
     if (!location) {
       return reply
         .code(404)
         .send({ error: 'Target agent not found', code: 'AGENT_NOT_FOUND' });
     }
-
     const beacon = db.getBeacon(location.beaconId);
     if (!beacon) {
       return reply
         .code(503)
         .send({ error: 'Target beacon not found', code: 'BEACON_NOT_FOUND' });
     }
-
     try {
       const targetUrl = `http://${beacon.host}:${beacon.port}`;
       const response = await fetch(`${targetUrl}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fromAgentId,
-          fromBeaconId,
-          toAgentId,
-          body,
-        }),
+        body: JSON.stringify({ fromAgentId, fromBeaconId, toAgentId, body }),
       });
-
       if (!response.ok) {
         const errorText = await response.text();
         return reply
@@ -746,7 +766,6 @@ export async function registerRoutes(app: FastifyInstance) {
             details: errorText,
           });
       }
-
       const messageData = (await response.json()) as { id: string };
       return { success: true, messageId: messageData.id, delivered: true };
     } catch (err) {
@@ -758,42 +777,30 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   });
 
-  // Broadcast to channel across all beacons
   app.post<{ Body: { fromAgentId: string; channel: string; body: string } }>(
     '/messages/broadcast',
     async (request, reply) => {
       const { fromAgentId, channel, body } = request.body;
-
       if (!fromAgentId || !channel || !body) {
         return reply
           .code(400)
           .send({ error: 'fromAgentId, channel, and body are required' });
       }
-
       const beacons = db.listBeacons();
       let deliveredCount = 0;
-
       for (const beacon of beacons) {
         try {
           const targetUrl = `http://${beacon.host}:${beacon.port}`;
           const response = await fetch(`${targetUrl}/messages`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              fromAgentId,
-              toChannel: channel,
-              body,
-            }),
+            body: JSON.stringify({ fromAgentId, toChannel: channel, body }),
           });
-
-          if (response.ok) {
-            deliveredCount++;
-          }
+          if (response.ok) deliveredCount++;
         } catch {
-          // Skip unreachable beacons
+          /* skip unreachable beacons */
         }
       }
-
       return { success: true, deliveredCount, totalBeacons: beacons.length };
     }
   );

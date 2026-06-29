@@ -1268,7 +1268,14 @@ export function createInsight(
 ): InsightRow {
   const id = randomUUID();
   const timestamp = new Date().toISOString();
-  const row: InsightRow = { id, targetType, targetId, insight, timestamp, scope };
+  const row: InsightRow = {
+    id,
+    targetType,
+    targetId,
+    insight,
+    timestamp,
+    scope,
+  };
 
   const stmt = getDatabase().prepare(`
     INSERT INTO insights (id, targetType, targetId, insight, timestamp, scope)
@@ -1334,8 +1341,13 @@ export function createPrinciple(
   const id = randomUUID();
   const createdAt = new Date().toISOString();
   const row: PrincipleRow = {
-    id, targetType, targetId, principle,
-    source: source ?? null, createdAt, scope
+    id,
+    targetType,
+    targetId,
+    principle,
+    source: source ?? null,
+    createdAt,
+    scope,
   };
 
   const stmt = getDatabase().prepare(`
@@ -1365,7 +1377,9 @@ export function listPrinciples(
 
   sql += ' ORDER BY createdAt DESC';
   const stmt = getDatabase().prepare(sql);
-  return (params.length > 0 ? stmt.all(...params) : stmt.all()) as PrincipleRow[];
+  return (
+    params.length > 0 ? stmt.all(...params) : stmt.all()
+  ) as PrincipleRow[];
 }
 
 export function getPrinciple(id: string): PrincipleRow | undefined {

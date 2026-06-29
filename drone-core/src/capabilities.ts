@@ -147,7 +147,12 @@ export type DroneInsightStorageEngine = {
     targetType: string,
     targetId?: string
   ) => Promise<
-    Array<{ targetType: string; targetId: string; entryCount: number; lastTimestamp?: string }>
+    Array<{
+      targetType: string;
+      targetId: string;
+      entryCount: number;
+      lastTimestamp?: string;
+    }>
   >;
   /** Read all insights for a specific target. */
   readInsights: (

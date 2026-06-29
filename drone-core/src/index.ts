@@ -16,6 +16,7 @@
 //   - utils.ts            : Utility functions
 //   - token-estimate.ts   : Token estimation functions
 //   - config-schema.ts     : Config schema and parsing
+//   - wiki-types.ts       : Wiki page types for swarm knowledge base
 //
 // -----------------------------------------------------------------------
 
@@ -150,6 +151,14 @@ export type {
   DronePrincipleStorageEngine,
   DroneSelfImprovementCapability,
 } from './capabilities.js';
+
+// ── Wiki types ────────────────────────────────────────────────────────
+
+export type {
+  DroneWikiPageMeta,
+  DroneWikiPage,
+  DroneWikiSearchResult,
+} from './wiki-types.js';
 
 // ── Plugin system types ──────────────────────────────────────────────
 

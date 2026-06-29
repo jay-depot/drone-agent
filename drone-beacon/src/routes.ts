@@ -777,51 +777,65 @@ export async function registerRoutes(app: FastifyInstance) {
   };
 
   // Create an insight (local or coordinator)
-  app.post<{ Body: { targetType: string; targetId: string; insight: string; scope?: string } }>(
-    '/insights',
-    async (request, reply) => {
-      const { targetType, targetId, insight, scope } = request.body;
-      if (!targetType || !targetId || !insight) {
-        return reply.code(400).send({ error: 'targetType, targetId, and insight are required' });
-      }
-
-      if (scope === 'coordinator') {
-        const result = await proxyToCoordinator('POST', '/insights', request.body);
-        if (!result) {
-          return reply.code(502).send({ error: 'Failed to proxy to coordinator' });
-        }
-        return reply.code(201).send(result);
-      }
-
-      const row = db.createInsight(targetType, targetId, insight, scope);
-      return reply.code(201).send(row);
+  app.post<{
+    Body: {
+      targetType: string;
+      targetId: string;
+      insight: string;
+      scope?: string;
+    };
+  }>('/insights', async (request, reply) => {
+    const { targetType, targetId, insight, scope } = request.body;
+    if (!targetType || !targetId || !insight) {
+      return reply
+        .code(400)
+        .send({ error: 'targetType, targetId, and insight are required' });
     }
-  );
+
+    if (scope === 'coordinator') {
+      const result = await proxyToCoordinator(
+        'POST',
+        '/insights',
+        request.body
+      );
+      if (!result) {
+        return reply
+          .code(502)
+          .send({ error: 'Failed to proxy to coordinator' });
+      }
+      return reply.code(201).send(result);
+    }
+
+    const row = db.createInsight(targetType, targetId, insight, scope);
+    return reply.code(201).send(row);
+  });
 
   // List insights (with optional targetType, targetId, and scope filters)
-  app.get<{ Querystring: { targetType?: string; targetId?: string; scope?: string } }>(
-    '/insights',
-    async request => {
-      const { targetType, targetId, scope } = request.query;
+  app.get<{
+    Querystring: { targetType?: string; targetId?: string; scope?: string };
+  }>('/insights', async request => {
+    const { targetType, targetId, scope } = request.query;
 
-      if (scope === 'coordinator') {
-        const result = await proxyToCoordinator(
-          'GET',
-          `/insights?targetType=${targetType ?? ''}&targetId=${targetId ?? ''}`
-        );
-        return result ?? [];
-      }
-
-      return db.listInsights(targetType, targetId);
+    if (scope === 'coordinator') {
+      const result = await proxyToCoordinator(
+        'GET',
+        `/insights?targetType=${targetType ?? ''}&targetId=${targetId ?? ''}`
+      );
+      return result ?? [];
     }
-  );
+
+    return db.listInsights(targetType, targetId);
+  });
 
   // Get a single insight
   app.get<{ Params: { id: string }; Querystring: { scope?: string } }>(
     '/insights/:id',
     async (request, reply) => {
       if (request.query.scope === 'coordinator') {
-        const result = await proxyToCoordinator('GET', `/insights/${request.params.id}`);
+        const result = await proxyToCoordinator(
+          'GET',
+          `/insights/${request.params.id}`
+        );
         if (!result) {
           return reply.code(404).send({ error: 'Insight not found' });
         }
@@ -841,7 +855,10 @@ export async function registerRoutes(app: FastifyInstance) {
     '/insights/:id',
     async (request, reply) => {
       if (request.query.scope === 'coordinator') {
-        const result = await proxyToCoordinator('DELETE', `/insights/${request.params.id}`);
+        const result = await proxyToCoordinator(
+          'DELETE',
+          `/insights/${request.params.id}`
+        );
         if (!result) {
           return reply.code(404).send({ error: 'Insight not found' });
         }
@@ -859,51 +876,72 @@ export async function registerRoutes(app: FastifyInstance) {
   // === Principle Routes ===
 
   // Create a principle (local or coordinator)
-  app.post<{ Body: { targetType: string; targetId: string; principle: string; source?: string; scope?: string } }>(
-    '/principles',
-    async (request, reply) => {
-      const { targetType, targetId, principle, source, scope } = request.body;
-      if (!targetType || !targetId || !principle) {
-        return reply.code(400).send({ error: 'targetType, targetId, and principle are required' });
-      }
-
-      if (scope === 'coordinator') {
-        const result = await proxyToCoordinator('POST', '/principles', request.body);
-        if (!result) {
-          return reply.code(502).send({ error: 'Failed to proxy to coordinator' });
-        }
-        return reply.code(201).send(result);
-      }
-
-      const row = db.createPrinciple(targetType, targetId, principle, source, scope);
-      return reply.code(201).send(row);
+  app.post<{
+    Body: {
+      targetType: string;
+      targetId: string;
+      principle: string;
+      source?: string;
+      scope?: string;
+    };
+  }>('/principles', async (request, reply) => {
+    const { targetType, targetId, principle, source, scope } = request.body;
+    if (!targetType || !targetId || !principle) {
+      return reply
+        .code(400)
+        .send({ error: 'targetType, targetId, and principle are required' });
     }
-  );
+
+    if (scope === 'coordinator') {
+      const result = await proxyToCoordinator(
+        'POST',
+        '/principles',
+        request.body
+      );
+      if (!result) {
+        return reply
+          .code(502)
+          .send({ error: 'Failed to proxy to coordinator' });
+      }
+      return reply.code(201).send(result);
+    }
+
+    const row = db.createPrinciple(
+      targetType,
+      targetId,
+      principle,
+      source,
+      scope
+    );
+    return reply.code(201).send(row);
+  });
 
   // List principles (with optional targetType, targetId, and scope filters)
-  app.get<{ Querystring: { targetType?: string; targetId?: string; scope?: string } }>(
-    '/principles',
-    async request => {
-      const { targetType, targetId, scope } = request.query;
+  app.get<{
+    Querystring: { targetType?: string; targetId?: string; scope?: string };
+  }>('/principles', async request => {
+    const { targetType, targetId, scope } = request.query;
 
-      if (scope === 'coordinator') {
-        const result = await proxyToCoordinator(
-          'GET',
-          `/principles?targetType=${targetType ?? ''}&targetId=${targetId ?? ''}`
-        );
-        return result ?? [];
-      }
-
-      return db.listPrinciples(targetType, targetId);
+    if (scope === 'coordinator') {
+      const result = await proxyToCoordinator(
+        'GET',
+        `/principles?targetType=${targetType ?? ''}&targetId=${targetId ?? ''}`
+      );
+      return result ?? [];
     }
-  );
+
+    return db.listPrinciples(targetType, targetId);
+  });
 
   // Get a single principle
   app.get<{ Params: { id: string }; Querystring: { scope?: string } }>(
     '/principles/:id',
     async (request, reply) => {
       if (request.query.scope === 'coordinator') {
-        const result = await proxyToCoordinator('GET', `/principles/${request.params.id}`);
+        const result = await proxyToCoordinator(
+          'GET',
+          `/principles/${request.params.id}`
+        );
         if (!result) {
           return reply.code(404).send({ error: 'Principle not found' });
         }
@@ -923,7 +961,10 @@ export async function registerRoutes(app: FastifyInstance) {
     '/principles/:id',
     async (request, reply) => {
       if (request.query.scope === 'coordinator') {
-        const result = await proxyToCoordinator('DELETE', `/principles/${request.params.id}`);
+        const result = await proxyToCoordinator(
+          'DELETE',
+          `/principles/${request.params.id}`
+        );
         if (!result) {
           return reply.code(404).send({ error: 'Principle not found' });
         }
@@ -937,4 +978,154 @@ export async function registerRoutes(app: FastifyInstance) {
       return { success: true };
     }
   );
+
+  // === Wiki Routes ===
+
+  // Helper to proxy wiki requests to coordinator
+  const proxyWikiToCoordinator = async (
+    method: string,
+    path: string,
+    body?: unknown
+  ) => {
+    const client = getCoordinatorClient();
+    if (!client) {
+      return null;
+    }
+    const url = `${client.getBaseUrl()}${path}`;
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) return null;
+    return res.json();
+  };
+
+  // List all wiki pages (beacon + coordinator)
+  app.get('/wiki', async () => {
+    const { listPages } = await import('./wiki-storage.js');
+    const localPages = await listPages();
+    const coordinatorPages = await proxyWikiToCoordinator('GET', '/wiki');
+    if (coordinatorPages && Array.isArray(coordinatorPages)) {
+      return [...localPages, ...coordinatorPages];
+    }
+    return localPages;
+  });
+
+  // Get a single wiki page (local or coordinator)
+  app.get<{ Params: { pageId: string }; Querystring: { scope?: string } }>(
+    '/wiki/:pageId',
+    async (request, reply) => {
+      if (request.query.scope === 'coordinator') {
+        const result = await proxyWikiToCoordinator(
+          'GET',
+          `/wiki/${request.params.pageId}`
+        );
+        if (!result) {
+          return reply.code(404).send({ error: 'Wiki page not found' });
+        }
+        return result;
+      }
+
+      const { readPage } = await import('./wiki-storage.js');
+      const page = await readPage(request.params.pageId);
+      if (!page) {
+        return reply.code(404).send({ error: 'Wiki page not found' });
+      }
+      return page;
+    }
+  );
+
+  // Create or update a wiki page (local or coordinator)
+  app.put<{
+    Params: { pageId: string };
+    Body: {
+      title: string;
+      content: string;
+      scope?: string;
+      tags?: string[];
+      sources?: string[];
+    };
+  }>('/wiki/:pageId', async (request, reply) => {
+    const { pageId } = request.params;
+    const { title, content, scope, tags, sources } = request.body;
+    if (!title || !content) {
+      return reply.code(400).send({ error: 'title and content are required' });
+    }
+
+    if (scope === 'coordinator') {
+      const result = await proxyWikiToCoordinator(
+        'PUT',
+        `/wiki/${pageId}`,
+        request.body
+      );
+      if (!result) {
+        return reply
+          .code(502)
+          .send({ error: 'Failed to proxy to coordinator' });
+      }
+      return reply.code(200).send(result);
+    }
+
+    const { writePage } = await import('./wiki-storage.js');
+    try {
+      const page = await writePage(
+        pageId,
+        title,
+        (scope as 'beacon' | 'coordinator') || 'beacon',
+        content,
+        tags ?? [],
+        sources ?? []
+      );
+      return reply.code(200).send(page);
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  });
+
+  // Delete a wiki page (local or coordinator)
+  app.delete<{ Params: { pageId: string }; Querystring: { scope?: string } }>(
+    '/wiki/:pageId',
+    async (request, reply) => {
+      if (request.query.scope === 'coordinator') {
+        const result = await proxyWikiToCoordinator(
+          'DELETE',
+          `/wiki/${request.params.pageId}`
+        );
+        if (!result) {
+          return reply.code(404).send({ error: 'Wiki page not found' });
+        }
+        return result;
+      }
+
+      const { deletePage } = await import('./wiki-storage.js');
+      const deleted = await deletePage(request.params.pageId);
+      if (!deleted) {
+        return reply.code(404).send({ error: 'Wiki page not found' });
+      }
+      return { success: true };
+    }
+  );
+
+  // Search wiki pages (beacon + coordinator)
+  app.get<{ Querystring: { q: string } }>('/wiki/search', async request => {
+    const { searchPages } = await import('./wiki-storage.js');
+    const { q } = request.query;
+    if (!q) return [];
+    const localResults = await searchPages(q);
+    const coordinatorResults = await proxyWikiToCoordinator(
+      'GET',
+      `/wiki/search?q=${encodeURIComponent(q)}`
+    );
+    if (coordinatorResults && Array.isArray(coordinatorResults)) {
+      return [...localResults, ...coordinatorResults];
+    }
+    return localResults;
+  });
+
+  // Lint the local wiki
+  app.post('/wiki/lint', async () => {
+    const { lintPages } = await import('./wiki-storage.js');
+    return lintPages();
+  });
 }

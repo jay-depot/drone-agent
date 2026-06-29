@@ -35,6 +35,7 @@ The self-improvement plugin becomes a broker, mirroring the existing persona/ski
 Beacon and coordinator each gain **separate** `insights` and `principles` tables (NOT the knowledge table — clean scope separation):
 
 **insights table:**
+
 - `id` (TEXT PK)
 - `targetType` (TEXT — persona, skill, project)
 - `targetId` (TEXT — the persona/skill/project ID)
@@ -43,6 +44,7 @@ Beacon and coordinator each gain **separate** `insights` and `principles` tables
 - `scope` (TEXT — 'beacon' or 'coordinator')
 
 **principles table:**
+
 - `id` (TEXT PK)
 - `targetType` (TEXT)
 - `targetId` (TEXT)
@@ -54,6 +56,7 @@ Beacon and coordinator each gain **separate** `insights` and `principles` tables
 ### New Endpoints
 
 **Beacon** (serves local + proxies coordinator):
+
 - `POST /insights` — create insight
 - `GET /insights?targetType=...&targetId=...` — list insights for target
 - `GET /insights/:id` — get insight
@@ -78,22 +81,26 @@ The self-improvement plugin's prompt fragment (footer phase) reads principles fr
 ### ✅ Completed
 
 #### drone-core
+
 - Added `DroneInsightEntry`, `DroneInsightStorageEngine`, `DronePrincipleStorageEngine`, `DroneSelfImprovementCapability` types to `capabilities.ts`
 - Exported all new types from `index.ts`
 
 #### drone-coordinator
+
 - Added `insights` and `principles` tables to `initDatabase()` schema
 - Added CRUD functions: `createInsight`, `listInsights`, `getInsight`, `deleteInsight`, `createPrinciple`, `listPrinciples`, `getPrinciple`, `deletePrinciple`
 - Added `/insights` and `/principles` REST endpoints (POST, GET list, GET by id, DELETE)
 - Fixed missing `randomUUID` import
 
 #### drone-beacon
+
 - Added `insights` and `principles` tables to `initDatabase()` schema
 - Added CRUD functions matching coordinator
 - Added `/insights` and `/principles` endpoints with `?scope=coordinator` proxy support
 - Added `getBaseUrl()` method to `CoordinatorClient` interface and implementation (for proxying)
 
 #### drone-agent
+
 - Refactored `self-improvement` plugin from file-only to broker pattern:
   - Maintains in-memory registries for insight and principle storage engines
   - Default file-based engines for local-scoped targets (project/user)
@@ -107,28 +114,34 @@ The self-improvement plugin's prompt fragment (footer phase) reads principles fr
   - Added `self-improvement` as optional dependency in swarm plugin metadata
 
 #### Test Fixtures
+
 - Fixed all `.js` extension issues in test fixture imports (4 files)
 
 ### Validation
+
 - `pnpm typecheck` passes for all 4 packages + test config
 - `pnpm lint` passes
 
 ## Files Modified
 
 ### drone-core
+
 - `src/capabilities.ts` — added new types
 - `src/index.ts` — exported new types
 
 ### drone-coordinator
+
 - `src/db.ts` — added tables + CRUD, fixed missing import
 - `src/routes.ts` — added endpoints
 
 ### drone-beacon
+
 - `src/db.ts` — added tables + CRUD
 - `src/routes.ts` — added endpoints + coordinator proxy
 - `src/coordinator-client.ts` — added `getBaseUrl()`
 
 ### drone-agent
+
 - `src/plugins/self-improvement/index.ts` — refactored to broker pattern
 - `src/plugins/swarm/index.ts` — added HTTP storage engine registration, optional dependency
 - `test/fixtures/index.ts` — added .js extensions

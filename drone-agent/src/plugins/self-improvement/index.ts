@@ -433,8 +433,7 @@ function createFilePrincipleEngine(
               pid,
               PRINCIPLES_SUBDIR
             );
-            const files =
-              await scanJsonDir<DronePrincipleEntry>(principlesDir);
+            const files = await scanJsonDir<DronePrincipleEntry>(principlesDir);
             for (const f of files) {
               results.push({
                 targetType: 'persona',
@@ -607,9 +606,7 @@ export const selfImprovementPlugin: DronePlugin = {
       },
       unregisterInsightEngine: (providerId: string) => {
         insightEngines.delete(providerId);
-        registration.logger.info(
-          `Unregistered insight engine: ${providerId}`
-        );
+        registration.logger.info(`Unregistered insight engine: ${providerId}`);
       },
       registerPrincipleEngine: (engine: DronePrincipleStorageEngine) => {
         principleEngines.set(engine.providerId, engine);
@@ -1078,10 +1075,7 @@ export const selfImprovementPlugin: DronePlugin = {
 
           // ── Persona Principles ────────────────────────────────────────
           if (havePersona) {
-            const engine = resolvePrincipleEngine(
-              'persona',
-              activePersona.id
-            );
+            const engine = resolvePrincipleEngine('persona', activePersona.id);
             const principles = await engine.readPrinciples(
               'persona',
               activePersona.id

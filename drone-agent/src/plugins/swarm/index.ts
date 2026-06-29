@@ -98,7 +98,11 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       description:
         'Connects to a drone-beacon for swarm-wide personas and skills.',
       defaultEnabled: false,
-      dependencies: [{ id: 'persona' }, { id: 'skills', optional: true }, { id: 'self-improvement', optional: true }],
+      dependencies: [
+        { id: 'persona' },
+        { id: 'skills', optional: true },
+        { id: 'self-improvement', optional: true },
+      ],
     },
     register: async registration => {
       registration.logger.info(
@@ -311,7 +315,9 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
 
         // Register HTTP storage engines for swarm-scoped insights and principles
         const selfImprovementCap =
-          registration.request<DroneSelfImprovementCapability>('self-improvement');
+          registration.request<DroneSelfImprovementCapability>(
+            'self-improvement'
+          );
         if (selfImprovementCap) {
           const beaconInsightEngine: DroneInsightStorageEngine = {
             providerId: 'swarm-insight-beacon',
@@ -319,9 +325,15 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
               const res = await fetch(`${baseUrl}/insights`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ targetType, targetId, insight, scope: 'local' }),
+                body: JSON.stringify({
+                  targetType,
+                  targetId,
+                  insight,
+                  scope: 'local',
+                }),
               });
-              if (!res.ok) throw new Error(`Failed to record insight: ${res.status}`);
+              if (!res.ok)
+                throw new Error(`Failed to record insight: ${res.status}`);
               return { ok: true, entryCount: 1 };
             },
             listInsights: async (targetType, targetId) => {
@@ -330,7 +342,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
               if (targetId) params.set('targetId', targetId);
               const res = await fetch(`${baseUrl}/insights?${params}`);
               if (!res.ok) return [];
-              const data = await res.json() as any[];
+              const data = (await res.json()) as any[];
               return data.map((d: any) => ({
                 targetType: d.targetType,
                 targetId: d.targetId,
@@ -342,8 +354,11 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
               const params = new URLSearchParams({ targetType, targetId });
               const res = await fetch(`${baseUrl}/insights?${params}`);
               if (!res.ok) return [];
-              const data = await res.json() as any[];
-              return data.map((d: any) => ({ timestamp: d.timestamp, insight: d.insight }));
+              const data = (await res.json()) as any[];
+              return data.map((d: any) => ({
+                timestamp: d.timestamp,
+                insight: d.insight,
+              }));
             },
           };
 
@@ -353,9 +368,16 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
               const res = await fetch(`${baseUrl}/principles`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ targetType, targetId, principle, source, scope: 'local' }),
+                body: JSON.stringify({
+                  targetType,
+                  targetId,
+                  principle,
+                  source,
+                  scope: 'local',
+                }),
               });
-              if (!res.ok) throw new Error(`Failed to store principle: ${res.status}`);
+              if (!res.ok)
+                throw new Error(`Failed to store principle: ${res.status}`);
               return { ok: true, principleCount: 1 };
             },
             listPrinciples: async (targetType, targetId) => {
@@ -364,7 +386,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
               if (targetId) params.set('targetId', targetId);
               const res = await fetch(`${baseUrl}/principles?${params}`);
               if (!res.ok) return [];
-              const data = await res.json() as any[];
+              const data = (await res.json()) as any[];
               return data.map((d: any) => ({
                 targetType: d.targetType,
                 targetId: d.targetId,
@@ -375,7 +397,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
               const params = new URLSearchParams({ targetType, targetId });
               const res = await fetch(`${baseUrl}/principles?${params}`);
               if (!res.ok) return [];
-              const data = await res.json() as any[];
+              const data = (await res.json()) as any[];
               return data.map((d: any) => ({
                 principle: d.principle,
                 source: d.source,
@@ -385,23 +407,31 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
             deletePrinciple: async (targetType, targetId, index) => {
               const params = new URLSearchParams({ targetType, targetId });
               const res = await fetch(`${baseUrl}/principles?${params}`);
-              if (!res.ok) throw new Error(`Failed to list principles: ${res.status}`);
-              const data = await res.json() as any[];
+              if (!res.ok)
+                throw new Error(`Failed to list principles: ${res.status}`);
+              const data = (await res.json()) as any[];
               if (index >= data.length) {
                 throw new Error(`Index ${index} is out of bounds.`);
               }
               const target = data[index];
-              const delRes = await fetch(`${baseUrl}/principles/${target.id}`, { method: 'DELETE' });
-              if (!delRes.ok) throw new Error(`Failed to delete principle: ${delRes.status}`);
+              const delRes = await fetch(`${baseUrl}/principles/${target.id}`, {
+                method: 'DELETE',
+              });
+              if (!delRes.ok)
+                throw new Error(`Failed to delete principle: ${delRes.status}`);
               return { ok: true, remainingCount: data.length - 1 };
             },
           };
 
           selfImprovementCap.registerInsightEngine(beaconInsightEngine);
           selfImprovementCap.registerPrincipleEngine(beaconPrincipleEngine);
-          registration.logger.info('Registered beacon HTTP storage engines for insights and principles');
+          registration.logger.info(
+            'Registered beacon HTTP storage engines for insights and principles'
+          );
         } else {
-          registration.logger.warn('self-improvement capability not available; swarm insight/principle storage will not be registered');
+          registration.logger.warn(
+            'self-improvement capability not available; swarm insight/principle storage will not be registered'
+          );
         }
       });
 
@@ -624,6 +654,251 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       };
 
       registration.registerTool(swarmMessageTool);
+
+      // ── Wiki tools ───────────────────────────────────────────────────────
+
+      const wikiReadTool: DroneToolDefinition = {
+        name: 'wiki_read',
+        description: 'Read a wiki page from the swarm knowledge base by ID.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: {
+              type: 'string',
+              description: 'The page ID to read',
+            },
+            scope: {
+              type: 'string',
+              enum: ['beacon', 'coordinator'],
+              description: 'Optional scope filter (beacon or coordinator)',
+            },
+          },
+          required: ['pageId'],
+        },
+        execute: async params => {
+          const pageId = params.pageId as string;
+          const scope = params.scope as string | undefined;
+          let url = `${baseUrl}/wiki/${encodeURIComponent(pageId)}`;
+          if (scope) url += `?scope=${scope}`;
+          try {
+            const res = await fetch(url);
+            if (!res.ok) {
+              return JSON.stringify({
+                success: false,
+                error: `Wiki page not found: ${pageId}`,
+              });
+            }
+            return JSON.stringify({ success: true, page: await res.json() });
+          } catch (err) {
+            return JSON.stringify({
+              success: false,
+              error: `Failed to read wiki page: ${err}`,
+            });
+          }
+        },
+      };
+
+      const wikiWriteTool: DroneToolDefinition = {
+        name: 'wiki_write',
+        description:
+          'Create or update a wiki page in the swarm knowledge base.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: {
+              type: 'string',
+              description: 'The page ID (filesystem-safe slug)',
+            },
+            title: {
+              type: 'string',
+              description: 'Human-readable title',
+            },
+            content: {
+              type: 'string',
+              description: 'Markdown body content',
+            },
+            scope: {
+              type: 'string',
+              enum: ['beacon', 'coordinator'],
+              description: 'Scope (beacon or coordinator). Default: beacon',
+            },
+            tags: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Optional tags for categorization',
+            },
+            sources: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'Optional session log IDs that contributed to this page',
+            },
+          },
+          required: ['pageId', 'title', 'content'],
+        },
+        execute: async params => {
+          const { pageId, title, content, scope, tags, sources } = params;
+          try {
+            const res = await fetch(
+              `${baseUrl}/wiki/${encodeURIComponent(pageId as string)}`,
+              {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  title,
+                  content,
+                  scope: scope || 'beacon',
+                  tags: tags || [],
+                  sources: sources || [],
+                }),
+              }
+            );
+            if (!res.ok) {
+              const err = await res.json();
+              return JSON.stringify({
+                success: false,
+                error: err.error || 'Failed to write wiki page',
+              });
+            }
+            return JSON.stringify({ success: true, page: await res.json() });
+          } catch (err) {
+            return JSON.stringify({
+              success: false,
+              error: `Failed to write wiki page: ${err}`,
+            });
+          }
+        },
+      };
+
+      const wikiSearchTool: DroneToolDefinition = {
+        name: 'wiki_search',
+        description: 'Search wiki pages in the swarm knowledge base.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Search query string',
+            },
+          },
+          required: ['query'],
+        },
+        execute: async params => {
+          const query = params.query as string;
+          try {
+            const res = await fetch(
+              `${baseUrl}/wiki/search?q=${encodeURIComponent(query)}`
+            );
+            if (!res.ok) {
+              return JSON.stringify({ success: false, error: 'Search failed' });
+            }
+            return JSON.stringify({ success: true, results: await res.json() });
+          } catch (err) {
+            return JSON.stringify({
+              success: false,
+              error: `Failed to search wiki: ${err}`,
+            });
+          }
+        },
+      };
+
+      const wikiListTool: DroneToolDefinition = {
+        name: 'wiki_list',
+        description: 'List all wiki pages in the swarm knowledge base.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+        execute: async () => {
+          try {
+            const res = await fetch(`${baseUrl}/wiki`);
+            if (!res.ok) {
+              return JSON.stringify({
+                success: false,
+                error: 'Failed to list wiki pages',
+              });
+            }
+            return JSON.stringify({ success: true, pages: await res.json() });
+          } catch (err) {
+            return JSON.stringify({
+              success: false,
+              error: `Failed to list wiki pages: ${err}`,
+            });
+          }
+        },
+      };
+
+      const wikiDeleteTool: DroneToolDefinition = {
+        name: 'wiki_delete',
+        description: 'Delete a wiki page from the swarm knowledge base.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: {
+              type: 'string',
+              description: 'The page ID to delete',
+            },
+            scope: {
+              type: 'string',
+              enum: ['beacon', 'coordinator'],
+              description: 'Optional scope filter (beacon or coordinator)',
+            },
+          },
+          required: ['pageId'],
+        },
+        execute: async params => {
+          const pageId = params.pageId as string;
+          const scope = params.scope as string | undefined;
+          let url = `${baseUrl}/wiki/${encodeURIComponent(pageId)}`;
+          if (scope) url += `?scope=${scope}`;
+          try {
+            const res = await fetch(url, { method: 'DELETE' });
+            if (!res.ok) {
+              return JSON.stringify({
+                success: false,
+                error: 'Failed to delete wiki page',
+              });
+            }
+            return JSON.stringify({ success: true, result: await res.json() });
+          } catch (err) {
+            return JSON.stringify({
+              success: false,
+              error: `Failed to delete wiki page: ${err}`,
+            });
+          }
+        },
+      };
+
+      const wikiLintTool: DroneToolDefinition = {
+        name: 'wiki_lint',
+        description:
+          'Run a lint pass on the local wiki to check for broken links, downward links, and orphan pages.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+        execute: async () => {
+          try {
+            const res = await fetch(`${baseUrl}/wiki/lint`, { method: 'POST' });
+            if (!res.ok) {
+              return JSON.stringify({ success: false, error: 'Lint failed' });
+            }
+            return JSON.stringify({ success: true, issues: await res.json() });
+          } catch (err) {
+            return JSON.stringify({
+              success: false,
+              error: `Failed to lint wiki: ${err}`,
+            });
+          }
+        },
+      };
+
+      registration.registerTool(wikiReadTool);
+      registration.registerTool(wikiWriteTool);
+      registration.registerTool(wikiSearchTool);
+      registration.registerTool(wikiListTool);
+      registration.registerTool(wikiDeleteTool);
+      registration.registerTool(wikiLintTool);
 
       // ── Heartbeat ───────────────────────────────────────────────────────
       const heartbeat = async () => {

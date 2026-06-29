@@ -155,6 +155,17 @@ export function initDatabase(dataPath: string): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_principles_target ON principles(targetType, targetId);
+    CREATE TABLE IF NOT EXISTS wiki_pages (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'beacon',
+      tags TEXT NOT NULL DEFAULT '[]',
+      sources TEXT NOT NULL DEFAULT '[]',
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_wiki_pages_scope ON wiki_pages(scope);
   `);
 
   logger.info('Beacon database initialized successfully');
@@ -1153,7 +1164,14 @@ export function createInsight(
 ): InsightRow {
   const id = randomUUID();
   const timestamp = new Date().toISOString();
-  const row: InsightRow = { id, targetType, targetId, insight, timestamp, scope };
+  const row: InsightRow = {
+    id,
+    targetType,
+    targetId,
+    insight,
+    timestamp,
+    scope,
+  };
 
   const stmt = getDatabase().prepare(`
     INSERT INTO insights (id, targetType, targetId, insight, timestamp, scope)
@@ -1219,8 +1237,13 @@ export function createPrinciple(
   const id = randomUUID();
   const createdAt = new Date().toISOString();
   const row: PrincipleRow = {
-    id, targetType, targetId, principle,
-    source: source ?? null, createdAt, scope
+    id,
+    targetType,
+    targetId,
+    principle,
+    source: source ?? null,
+    createdAt,
+    scope,
   };
 
   const stmt = getDatabase().prepare(`
@@ -1250,7 +1273,9 @@ export function listPrinciples(
 
   sql += ' ORDER BY createdAt DESC';
   const stmt = getDatabase().prepare(sql);
-  return (params.length > 0 ? stmt.all(...params) : stmt.all()) as PrincipleRow[];
+  return (
+    params.length > 0 ? stmt.all(...params) : stmt.all()
+  ) as PrincipleRow[];
 }
 
 export function getPrinciple(id: string): PrincipleRow | undefined {
