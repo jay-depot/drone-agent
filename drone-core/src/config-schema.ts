@@ -98,6 +98,13 @@ const McpServerConfigSchema = Type.Union([
 export const PartialDroneAgentConfigSchema = Type.Partial(
   Type.Object({
     enabledPlugins: Type.Array(Type.String()),
+    externalPlugins: Type.Optional(Type.Array(Type.String())),
+    trustedPlugins: Type.Optional(
+      Type.Record(
+        Type.String(),
+        Type.Union([Type.Literal('trusted'), Type.Literal('untrusted')])
+      )
+    ),
     systemPrompt: Type.String(),
     activePersona: Type.Union([Type.String(), Type.Null()]),
     ollama: Type.Object({

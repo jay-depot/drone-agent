@@ -88,6 +88,8 @@ function getInjectors(): import('drone-core').DroneConfigInjector[] {
 const KNOWN_CONFIG_KEYS: string[] = [
   // Top-level
   'enabledPlugins',
+  'externalPlugins',
+  'trustedPlugins',
   'systemPrompt',
   'activePersona',
   'ollama',

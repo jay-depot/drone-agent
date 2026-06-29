@@ -50,6 +50,17 @@ export type DronePluginEngine = {
    * `onSessionStart` hooks so it catches up with the session lifecycle.
    */
   enablePlugin: (pluginId: string) => Promise<boolean>;
+  /**
+   * Add an external plugin to the engine after construction.
+   *
+   * The plugin is added to the internal registry, registered (tools, hooks,
+   * capabilities, etc.), and catch-up lifecycle hooks (onPluginsLoaded,
+   * onSessionStart) are run so it catches up with the session lifecycle.
+   *
+   * Returns `false` if a plugin with the same ID is already registered
+   * (built-in or previously added). Returns `true` on success.
+   */
+  addExternalPlugin: (plugin: DronePlugin) => Promise<boolean>;
   runHooks: (hookName: StandardHookName) => Promise<void>;
   runSessionSafetyTrimWillRunHooks: (
     payload: DroneSessionSafetyTrimPayload
@@ -292,6 +303,28 @@ export function createDronePluginEngine({
     return true;
   }
 
+  async function doAddExternalPlugin(plugin: DronePlugin): Promise<boolean> {
+    const pluginId = plugin.metadata.id;
+    // Check if already registered (built-in or previously added).
+    if (pluginMap.has(pluginId)) {
+      return false;
+    }
+    // Add to registry and enable.
+    pluginMap.set(pluginId, plugin);
+    enabledPluginIds.add(pluginId);
+    // Register it.
+    registeredPlugins.push(await registerPlugin(plugin));
+    logger.info(`added external plugin: ${pluginId}`);
+    // Run catch-up lifecycle hooks.
+    for (const callback of hookBuckets.onPluginsLoaded) {
+      await callback();
+    }
+    for (const callback of hookBuckets.onSessionStart) {
+      await callback();
+    }
+    return true;
+  }
+
   async function runWorkflow(
     canonicalName: string,
     args: Record<string, unknown>
@@ -477,6 +510,7 @@ export function createDronePluginEngine({
       return registeredPlugins;
     },
     enablePlugin: doEnablePlugin,
+    addExternalPlugin: doAddExternalPlugin,
     runHooks: async hookName => {
       for (const callback of hookBuckets[hookName]) {
         await callback();

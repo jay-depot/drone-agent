@@ -210,6 +210,13 @@ export type DroneMcpConfig = {
 
 export type DroneAgentConfig = {
   enabledPlugins: string[];
+  /** Plugin IDs loaded from external directories (for tracking). */
+  externalPlugins: string[];
+  /**
+   * User-scoped trust map: absolute plugin directory path → 'trusted' | 'untrusted'.
+   * Project-level plugins are checked against this before loading.
+   */
+  trustedPlugins: Record<string, 'trusted' | 'untrusted'>;
   systemPrompt: string;
   activePersona: string | null;
   llm: DroneLlmConfig;
@@ -227,6 +234,8 @@ export type DroneAgentConfig = {
 
 export type PartialDroneAgentConfig = Partial<{
   enabledPlugins: string[];
+  externalPlugins: string[];
+  trustedPlugins: Record<string, 'trusted' | 'untrusted'>;
   systemPrompt: string;
   activePersona: string | null;
   llm: Partial<DroneLlmConfig>;
@@ -267,6 +276,8 @@ export type DroneSessionPhase =
 export function createDefaultAgentConfig(): DroneAgentConfig {
   return {
     enabledPlugins: [],
+    externalPlugins: [],
+    trustedPlugins: {},
     systemPrompt:
       '`drone agent` harness initialized. Use available tools to answer questions and perform tasks exactly as instructed. If a question or request is ambiguous, ask for clarification. If a question is unanswerable, respond with "I don\'t know." If a task is impossible, respond with "I cannot, because..."',
     activePersona: null,
@@ -347,6 +358,10 @@ export function applyAgentConfigLayer(
 ): DroneAgentConfig {
   return {
     enabledPlugins: layer.enabledPlugins ?? baseConfig.enabledPlugins,
+    externalPlugins: layer.externalPlugins ?? baseConfig.externalPlugins,
+    trustedPlugins: layer.trustedPlugins
+      ? { ...baseConfig.trustedPlugins, ...layer.trustedPlugins }
+      : baseConfig.trustedPlugins,
     systemPrompt: layer.systemPrompt ?? baseConfig.systemPrompt,
     activePersona:
       layer.activePersona !== undefined

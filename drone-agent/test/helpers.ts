@@ -177,6 +177,7 @@ export function createFakeEngine(
   return {
     initialize: async () => [],
     enablePlugin: async (_pluginId: string) => false,
+    addExternalPlugin: async (_plugin: DronePlugin) => false,
     runHooks: async () => {},
     runSessionSafetyTrimWillRunHooks: async () => {},
     runSessionSafetyTrimAppliedHooks: async () => {},

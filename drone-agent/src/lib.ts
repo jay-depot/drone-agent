@@ -32,6 +32,18 @@ export { createConversationService } from './runtime/conversation-service.js';
 export type { ConversationService } from './runtime/conversation-service.js';
 
 // ---------------------------------------------------------------------------
+// External plugin loader
+// ---------------------------------------------------------------------------
+export {
+  discoverExternalPlugins,
+  loadPluginFromDirectory,
+  loadTrustedPlugins,
+  saveTrustedPlugin,
+  promptForPluginTrust,
+} from './plugins/external-loader.js';
+export type { DiscoveredExternalPlugins } from './plugins/external-loader.js';
+
+// ---------------------------------------------------------------------------
 // Built-in plugins
 // ---------------------------------------------------------------------------
 export {

@@ -1,6 +1,10 @@
 import { createConsoleLogger, type DroneLlmCapability } from 'drone-core';
 import { stdout as output } from 'node:process';
 import { createBuiltInPlugins } from './plugins/index.js';
+import {
+  discoverExternalPlugins,
+  promptForPluginTrust,
+} from './plugins/external-loader.js';
 import { createTui } from './tui/index.js';
 import { createConversationService } from './runtime/conversation-service.js';
 import { createContextBudgetService } from './runtime/context-budget-service.js';
@@ -66,7 +70,7 @@ async function main(): Promise<void> {
       return llm.getModel();
     },
   });
-  const plugins = createBuiltInPlugins({
+  const builtInPlugins = createBuiltInPlugins({
     budgetService,
     sessionManager,
     getModel: () => {
@@ -85,6 +89,38 @@ async function main(): Promise<void> {
     },
   });
 
+  // ── External plugin discovery ───────────────────────────────────────
+  // Discover plugins from user and project scope directories.
+  // User plugins are loaded silently. Project plugins are checked against
+  // the trust file; trusted ones are loaded, untrusted ones are skipped,
+  // and unknown ones are deferred for prompting after elicitation is set up.
+  const { userPlugins, projectPlugins, deferredProjectPlugins } =
+    await discoverExternalPlugins(
+      process.cwd(),
+      invocation.options.configDir
+    );
+
+  if (userPlugins.length > 0) {
+    logger.info(`discovered ${userPlugins.length} user external plugin(s)`);
+  }
+  if (projectPlugins.length > 0) {
+    logger.info(
+      `discovered ${projectPlugins.length} trusted project external plugin(s)`
+    );
+  }
+  if (deferredProjectPlugins.length > 0) {
+    logger.info(
+      `discovered ${deferredProjectPlugins.length} project external plugin(s) requiring trust`
+    );
+  }
+
+  // Combine all plugins: built-in + user external + trusted project external
+  const allPlugins = [
+    ...builtInPlugins,
+    ...userPlugins,
+    ...projectPlugins,
+  ];
+
   // ── Plugin overrides from --plugin flag ─────────────────────────────
   // Merge --plugin overrides into the config's enabledPlugins so that
   // plugins specified on the CLI are enabled for this session. If
@@ -94,7 +130,7 @@ async function main(): Promise<void> {
   if (invocation.options.pluginOverrides.length > 0) {
     if (resolvedConfig.config.enabledPlugins.length === 0) {
       // Compute the default set: all required or defaultEnabled plugins.
-      const defaultIds = plugins
+      const defaultIds = allPlugins
         .filter(p => p.metadata.required || p.metadata.defaultEnabled)
         .map(p => p.metadata.id);
       resolvedConfig.config.enabledPlugins = [
@@ -110,7 +146,7 @@ async function main(): Promise<void> {
     }
   }
   const engine = createDronePluginEngine({
-    plugins,
+    plugins: allPlugins,
     config: resolvedConfig.config,
     logger,
     runtimeOptions: {
@@ -185,6 +221,39 @@ async function main(): Promise<void> {
 
   await engine.runHooks('onPluginsLoaded');
   await engine.runHooks('onSessionStart');
+
+  // ── Deferred project plugin trust prompting ──────────────────────────
+  // After elicitation is set up, prompt the user for any project-scope
+  // plugins that have no trust decision yet. In non-interactive modes
+  // (--once, --output-json), deferred plugins are silently skipped.
+  if (deferredProjectPlugins.length > 0) {
+    const elicit = engine.getElicitation();
+    if (elicit) {
+      for (const { plugin, dirPath } of deferredProjectPlugins) {
+        const result = await promptForPluginTrust(
+          plugin,
+          dirPath,
+          process.cwd(),
+          elicit
+        );
+        if (result === 'trusted') {
+          await engine.addExternalPlugin(plugin);
+          logger.info(`trusted and loaded project plugin: ${plugin.metadata.id}`);
+        } else if (result === 'untrusted') {
+          logger.info(`project plugin marked untrusted: ${plugin.metadata.id}`);
+        } else {
+          logger.info(`project plugin skipped: ${plugin.metadata.id}`);
+        }
+      }
+    } else {
+      // Non-interactive mode — skip deferred plugins silently.
+      for (const { plugin } of deferredProjectPlugins) {
+        logger.info(
+          `skipping deferred project plugin (non-interactive): ${plugin.metadata.id}`
+        );
+      }
+    }
+  }
 
   // ── First-run setup ──────────────────────────────────────────────────
   // If no user-level config exists, probe for available providers and ask
