@@ -14,11 +14,9 @@ export default function messageRoutes(app: FastifyInstance) {
   }>('/messages/relay', async (request, reply) => {
     const { fromBeaconId, fromAgentId, toAgentId, body } = request.body;
     if (!fromBeaconId || !fromAgentId || !toAgentId || !body) {
-      return reply
-        .code(400)
-        .send({
-          error: 'fromBeaconId, fromAgentId, toAgentId, and body are required',
-        });
+      return reply.code(400).send({
+        error: 'fromBeaconId, fromAgentId, toAgentId, and body are required',
+      });
     }
     const location = db.getAgentLocation(toAgentId);
     if (!location) {
@@ -41,12 +39,10 @@ export default function messageRoutes(app: FastifyInstance) {
       });
       if (!response.ok) {
         const errorText = await response.text();
-        return reply
-          .code(502)
-          .send({
-            error: 'Failed to deliver message to target beacon',
-            details: errorText,
-          });
+        return reply.code(502).send({
+          error: 'Failed to deliver message to target beacon',
+          details: errorText,
+        });
       }
       const messageData = (await response.json()) as { id: string };
       return { success: true, messageId: messageData.id, delivered: true };

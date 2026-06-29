@@ -1,5 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import type { CreateKnowledgeRequest, UpdateKnowledgeRequest } from '../types.js';
+import type {
+  CreateKnowledgeRequest,
+  UpdateKnowledgeRequest,
+} from '../types.js';
 import * as db from '../db.js';
 
 export default function knowledgeRoutes(app: FastifyInstance) {
