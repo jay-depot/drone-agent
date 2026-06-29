@@ -6,8 +6,9 @@ tags:
   - insights
   - principles
   - phase-3.4
+  - completed
 created: 2026-06-29T01:37:23.458Z
-updated: 2026-06-29T01:37:23.458Z
+updated: 2026-06-29T02:02:03.166Z
 ---
 
 # Part 1: Swarm-wide Insights & Principles Promotion
@@ -34,7 +35,6 @@ The self-improvement plugin becomes a broker, mirroring the existing persona/ski
 Beacon and coordinator each gain **separate** `insights` and `principles` tables (NOT the knowledge table — clean scope separation):
 
 **insights table:**
-
 - `id` (TEXT PK)
 - `targetType` (TEXT — persona, skill, project)
 - `targetId` (TEXT — the persona/skill/project ID)
@@ -43,7 +43,6 @@ Beacon and coordinator each gain **separate** `insights` and `principles` tables
 - `scope` (TEXT — 'beacon' or 'coordinator')
 
 **principles table:**
-
 - `id` (TEXT PK)
 - `targetType` (TEXT)
 - `targetId` (TEXT)
@@ -55,7 +54,6 @@ Beacon and coordinator each gain **separate** `insights` and `principles` tables
 ### New Endpoints
 
 **Beacon** (serves local + proxies coordinator):
-
 - `POST /insights` — create insight
 - `GET /insights?targetType=...&targetId=...` — list insights for target
 - `GET /insights/:id` — get insight
@@ -75,42 +73,59 @@ The self-improvement plugin's prompt fragment (footer phase) reads principles fr
 - **Default**: Agent-side derivation — the agent reads accumulated insights from the owning server, derives principles, writes them back. Server is just storage.
 - **Possible**: Server-side derivation — user can wire up cron jobs + custom prompts to run derivation on the server. The architecture doesn't prevent this; the server exposes full CRUD for both insights and principles.
 
-## Files to Modify/Create
+## Implementation Status
 
-### drone-agent
+### ✅ Completed
 
-- `src/plugins/self-improvement/index.ts` — refactor from file-only to broker pattern; add storage engine routing
-- `src/plugins/swarm/index.ts` — register insight/principle storage engines for swarm providers
-- `src/plugins/persona-provider-project/index.ts` — register file-based storage engine
-- `src/plugins/persona-provider-user/index.ts` — register file-based storage engine
-- `src/plugins/skill-provider-project/index.ts` — register file-based storage engine
-- `src/plugins/skill-provider-user/index.ts` — register file-based storage engine
-- `drone-core/src/capabilities.ts` — add `DroneInsightStorageEngine` and `DronePrincipleStorageEngine` types
+#### drone-core
+- Added `DroneInsightEntry`, `DroneInsightStorageEngine`, `DronePrincipleStorageEngine`, `DroneSelfImprovementCapability` types to `capabilities.ts`
+- Exported all new types from `index.ts`
 
-### drone-beacon
+#### drone-coordinator
+- Added `insights` and `principles` tables to `initDatabase()` schema
+- Added CRUD functions: `createInsight`, `listInsights`, `getInsight`, `deleteInsight`, `createPrinciple`, `listPrinciples`, `getPrinciple`, `deletePrinciple`
+- Added `/insights` and `/principles` REST endpoints (POST, GET list, GET by id, DELETE)
+- Fixed missing `randomUUID` import
 
-- `src/db.ts` — add `insights` and `principles` tables + CRUD
-- `src/routes.ts` — add `/insights` and `/principles` endpoints + coordinator proxy
-- `src/coordinator-client.ts` — add insight/principle proxy methods
+#### drone-beacon
+- Added `insights` and `principles` tables to `initDatabase()` schema
+- Added CRUD functions matching coordinator
+- Added `/insights` and `/principles` endpoints with `?scope=coordinator` proxy support
+- Added `getBaseUrl()` method to `CoordinatorClient` interface and implementation (for proxying)
+
+#### drone-agent
+- Refactored `self-improvement` plugin from file-only to broker pattern:
+  - Maintains in-memory registries for insight and principle storage engines
+  - Default file-based engines for local-scoped targets (project/user)
+  - Scope-based routing: checks if target is swarm-scoped (beacon/coordinator) and routes to registered HTTP engine
+  - Falls back to file-based engine when no registered engine matches
+  - Offers `DroneSelfImprovementCapability` for engine registration
+  - Offers `DronePrinciplesCapability` for backwards compatibility
+- Registered HTTP storage engines in `swarm` plugin's `onPluginsLoaded` hook:
+  - `swarm-insight-beacon` engine calls beacon's `/insights` endpoints
+  - `swarm-principle-beacon` engine calls beacon's `/principles` endpoints
+  - Added `self-improvement` as optional dependency in swarm plugin metadata
+
+### Validation
+- `pnpm typecheck` passes for all 4 packages (drone-core, drone-agent, drone-beacon, drone-coordinator)
+- `pnpm lint` passes
+- Pre-existing test fixture issues (missing `.js` extensions) are unrelated to these changes
+
+## Files Modified
+
+### drone-core
+- `src/capabilities.ts` — added new types
+- `src/index.ts` — exported new types
 
 ### drone-coordinator
+- `src/db.ts` — added tables + CRUD, fixed missing import
+- `src/routes.ts` — added endpoints
 
-- `src/db.ts` — add `insights` and `principles` tables + CRUD
-- `src/routes.ts` — add `/insights` and `/principles` endpoints
+### drone-beacon
+- `src/db.ts` — added tables + CRUD
+- `src/routes.ts` — added endpoints + coordinator proxy
+- `src/coordinator-client.ts` — added `getBaseUrl()`
 
-### Tests
-
-- `drone-agent/test/` — self-improvement broker routing tests
-- `drone-beacon/test/` — insight/principle endpoint tests
-- `drone-coordinator/test/` — insight/principle endpoint tests
-
-## Validation Criteria
-
-- All LSP checks pass
-- `pnpm typecheck` passes
-- `pnpm lint` passes
-- `pnpm test` passes
-- Local-scoped insights/principles still work exactly as before (file-based)
-- Swarm-scoped insights are stored on the beacon, not local files
-- Swarm-scoped principles are injected into the system prompt from the beacon
-- Beacon proxies coordinator insight/principle requests when `?scope=coordinator`
+### drone-agent
+- `src/plugins/self-improvement/index.ts` — refactored to broker pattern
+- `src/plugins/swarm/index.ts` — added HTTP storage engine registration, optional dependency

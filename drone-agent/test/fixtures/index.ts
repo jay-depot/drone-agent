@@ -6,10 +6,10 @@
  */
 
 // Re-export all utilities
-export * from './docker';
-export * from './http';
-export * from './swarm';
-export * from './assertions';
+export * from './docker.js';
+export * from './http.js';
+export * from './swarm.js';
+export * from './assertions.js';
 
 // Common types
 export interface TestEnvironment {

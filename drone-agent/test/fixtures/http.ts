@@ -4,7 +4,7 @@
  * Simple HTTP client for integration testing.
  */
 
-import type { RequestOptions } from './index';
+import type { RequestOptions } from './index.js';
 
 /**
  * Make an HTTP request

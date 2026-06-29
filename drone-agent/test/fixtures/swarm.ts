@@ -5,14 +5,14 @@
  * (coordinator, beacon, agent) during integration testing.
  */
 
-import { request } from './http';
+import { request } from './http.js';
 import type {
   Agent,
   CreatePersonaRequest,
   Message,
   Persona,
   RequestOptions,
-} from './index';
+} from './index.js';
 
 /**
  * Wait for a service to be available

@@ -4,7 +4,7 @@
  * Provides assertion utilities for verifying swarm state.
  */
 
-import type { Agent, Message, Persona } from './index';
+import type { Agent, Message, Persona } from './index.js';
 
 /**
  * AssertionError with detailed context
