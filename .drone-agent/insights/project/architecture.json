@@ -86,5 +86,9 @@
   {
     "timestamp": "2026-06-29T03:47:20.892Z",
     "insight": "The beacon's routes were refactored from a single `routes.ts` into separate files in `routes/` directory. This is a good pattern but the `context.ts` module's `proxyToCoordinator` and `proxyWikiToCoordinator` functions are nearly identical — they could be consolidated into a single generic proxy function."
+  },
+  {
+    "timestamp": "2026-06-29T05:23:54.248Z",
+    "insight": "The plugin engine currently has no mechanism to add plugins after construction. The external plugin feature will need a new `addExternalPlugin()` method on the engine that adds a DronePlugin to the internal registry, registers it, and runs catch-up lifecycle hooks."
   }
 ]
