@@ -94,5 +94,9 @@
   {
     "timestamp": "2026-06-29T05:47:57.059Z",
     "insight": "The external plugin loading feature required adding an `addExternalPlugin()` method to the engine because the existing `enablePlugin()` only works for plugins already in the registry. The new method adds the plugin to the registry map, registers it, and runs catch-up lifecycle hooks. This pattern could be useful for other dynamic plugin scenarios."
+  },
+  {
+    "timestamp": "2026-06-29T19:28:12.218Z",
+    "insight": "The migration service uses raw fetch() calls to the beacon HTTP API rather than going through the existing coordinator-client.ts. This is intentional for the standalone CLI tool (no engine needed), but means the migration service duplicates some HTTP logic. A future refactor could extract a shared HTTP client library."
   }
 ]

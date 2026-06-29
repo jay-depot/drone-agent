@@ -22,5 +22,9 @@
   {
     "timestamp": "2026-06-29T03:47:20.915Z",
     "insight": "The wiki storage uses `./knowledge-base/` as default directory (relative to CWD). When the beacon is started from the project root, wiki pages end up in the project tree. The `setKnowledgeBaseDir()` function exists but is never called from the CLI args — there's no `--knowledge-base-dir` flag. This could cause confusion if the beacon is run from unexpected directories."
+  },
+  {
+    "timestamp": "2026-06-29T19:28:12.223Z",
+    "insight": "The migrate subcommand is detected before the main CLI parser's `--` option check, which required restructuring parseCliArgs to check for 'migrate' as the first positional arg before entering the option-parsing loop. This is a clean pattern for future subcommands."
   }
 ]

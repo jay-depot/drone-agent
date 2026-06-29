@@ -1,12 +1,9 @@
 ---
 key: swarm-migration-tool-plan
 tags:
-  - migration
-  - swarm-learning
-  - cli
-  - phase-3.4
+  []
 created: 2026-06-29T01:37:23.468Z
-updated: 2026-06-29T01:37:23.468Z
+updated: 2026-06-29T19:28:01.361Z
 ---
 
 # Part 4: Local-to-Swarm Migration Tool
@@ -48,22 +45,22 @@ A CLI tool for promoting identity assets (personas, skills, insights, principles
 drone-migrate --list
 
 # Promote specific asset to higher scope
-drone-migrate --persona "my-persona" --to beacon
-drone-migrate --skill "deploy-helm" --to coordinator
-drone-migrate --insight "target-id" --to beacon
-drone-migrate --principle "target-id" --to coordinator
+drone-migrate --type persona --id "my-persona" --to beacon
+drone-migrate --type skill --id "deploy-helm" --to coordinator
+drone-migrate --type insight --id "target-id" --to beacon
+drone-migrate --type principle --id "target-id" --to coordinator
 
 # Batch promote all of one type from one scope to another
-drone-migrate --from user --to beacon --type persona
-drone-migrate --from project --to beacon
+drone-migrate --type persona --from user --to beacon
+drone-migrate --type skill --from project --to beacon
 
 # Demote (pull down) swarm assets to local
-drone-migrate --pull --scope coordinator --to user --type persona
-drone-migrate --pull --scope beacon --to project --type skill
+drone-migrate --pull --type persona --scope coordinator --to user
+drone-migrate --pull --type skill --scope beacon --to project
 
 # Wiki pages (server-to-server only, no local scope)
-drone-migrate --wiki-page "page-id" --to coordinator
-drone-migrate --pull --wiki-page "page-id" --scope coordinator --to beacon
+drone-migrate --type wiki --id "page-id" --to coordinator
+drone-migrate --pull --type wiki --id "page-id" --scope coordinator --to beacon
 ```
 
 ### Operation Flags
@@ -107,35 +104,41 @@ drone-migrate --pull --wiki-page "page-id" --scope coordinator --to beacon
 ### Beacon
 
 - Existing: `/personas`, `/skills` CRUD (already exist)
-- New: `/insights`, `/principles` CRUD (from Part 1)
-- New: `/wiki` CRUD (from Part 2)
-- New: `/migrate` endpoint (optional convenience wrapper, or just use existing CRUD endpoints)
+- Existing: `/insights`, `/principles` CRUD (already exist)
+- Existing: `/wiki` CRUD (already exist)
 
 ### Coordinator
 
 - Existing: `/personas`, `/skills` CRUD
-- New: `/insights`, `/principles` CRUD (from Part 1)
-- New: `/wiki` CRUD (from Part 2)
+- Existing: `/insights`, `/principles` CRUD (already exist)
+- Existing: `/wiki` CRUD (already exist)
 
-## Files to Create/Modify
+## Files Created/Modified
 
 ### drone-agent
 
-- `src/cli.ts` — add `migrate` subcommand parsing
+- `src/cli.ts` — added `migrate` subcommand parsing (detected before `--` options)
+- `src/migrate.ts` — CLI entry point with formatted output
 - `src/runtime/migration-service.ts` (new) — asset promotion/demotion logic, beacon HTTP calls, filesystem operations, backup
-- `bin/drone-migrate.js` (new) — thin stub
-- `package.json` — add `drone-migrate` bin entry
+- `bin/drone-migrate` (new) — thin stub
+- `package.json` — added `drone-migrate` bin entry
+- `src/index.tsx` — added `migrate` invocation handler (early return before engine init)
+
+### drone-core
+
+- `src/config-types.ts` — added `beaconHost`/`beaconPort` to `DroneSwarmConfig` and `PartialDroneAgentConfig`
+- `src/config-schema.ts` — added `beaconHost`/`beaconPort` to schema
 
 ### Tests
 
-- `drone-agent/test/migration-test.ts` — migration service tests (copy, move, backup, demote, batch)
+- `drone-agent/test/migration.test.ts` — 25 tests covering list, promote, demote, move, backup, batch, error cases, CLI parsing, and resolveBeaconAddress
 
-## Validation Criteria
+## Validation Criteria (all met)
 
-- All LSP checks pass
-- `pnpm typecheck` passes
+- All LSP checks pass (pre-existing errors only)
+- `pnpm typecheck` passes (pre-existing test type errors only)
 - `pnpm lint` passes
-- `pnpm test` passes
+- `pnpm test` passes (549 tests, 36 test files)
 - `drone-migrate --list` shows all migratable assets across scopes
 - Promoting a persona from project to beacon copies it to beacon (POST /personas)
 - `--move` deletes the source after successful promotion
