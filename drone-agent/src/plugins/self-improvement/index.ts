@@ -7,7 +7,6 @@ import type {
   DronePersonaCapability,
   DronePlugin,
   DronePrincipleEntry,
-  DronePrinciplesCapability,
   DronePrincipleStorageEngine,
   DronePromptFragment,
   DroneSelfImprovementCapability,
@@ -1016,14 +1015,6 @@ export const selfImprovementPlugin: DronePlugin = {
       },
     });
 
-    // ── Offer DronePrinciplesCapability (backwards compat) ──────────────
-    const principlesCapability: DronePrinciplesCapability = {
-      getPrinciples: async (targetType: string, targetId: string) => {
-        return selfImprovementCapability.getPrinciples(targetType, targetId);
-      },
-    };
-
-    registration.offer(principlesCapability);
 
     // ── Combined principles prompt fragment (project + persona) ────
     registration.registerPromptFragment({

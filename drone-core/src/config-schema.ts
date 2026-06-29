@@ -176,6 +176,8 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       ),
       beaconHost: Type.Optional(Type.String()),
       beaconPort: Type.Optional(PositiveInteger),
+      beaconUseHttps: Type.Optional(Type.Boolean()),
+      sessionId: Type.Optional(Type.String()),
     }),
   })
 );

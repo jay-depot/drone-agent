@@ -103,18 +103,22 @@ export type DronePromptFileConfig = {
 };
 
 export type DroneKnowledgeSyncConfig = {
-  enabled: boolean;
-  pushInsights: boolean;
-  pullOnStartup: boolean;
-  pullIntervalMinutes: number;
+  enabled?: boolean;
+  pushInsights?: boolean;
+  pullOnStartup?: boolean;
+  pullIntervalMinutes?: number;
 };
 
 export type DroneSwarmConfig = {
-  knowledgeSync: DroneKnowledgeSyncConfig;
+  knowledgeSync?: DroneKnowledgeSyncConfig;
   /** Hostname of the drone-beacon instance for swarm operations. */
   beaconHost?: string;
   /** Port of the drone-beacon instance for swarm operations. */
   beaconPort?: number;
+  /** Whether to use HTTPS when connecting to the beacon. */
+  beaconUseHttps?: boolean;
+  /** Optional session ID override for this agent. */
+  sessionId?: string;
 };
 
 export type DroneLspSpawnServerConfig = {
@@ -252,7 +256,7 @@ export type PartialDroneAgentConfig = Partial<{
   memory: Partial<DroneMemoryConfig>;
   log: Partial<DroneLogConfig>;
   promptFile: Partial<DronePromptFileConfig>;
-  swarm: { knowledgeSync?: Partial<DroneKnowledgeSyncConfig>; beaconHost?: string; beaconPort?: number };
+  swarm: Partial<DroneSwarmConfig>;
 }>;
 
 export type DroneConfigScope = 'default' | 'user' | 'project';

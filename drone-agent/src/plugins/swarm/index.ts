@@ -86,13 +86,6 @@ export interface SwarmConfig {
  * all conversation events to the coordinator via the beacon.
  */
 export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
-  const beaconHost = config.beaconHost ?? DEFAULT_BEACON_HOST;
-  const beaconPort = config.beaconPort ?? DEFAULT_BEACON_PORT;
-  const beaconUseHttps = config.beaconUseHttps ?? true;
-  const protocol = beaconUseHttps ? 'https' : 'http';
-  const baseUrl = `${protocol}://${beaconHost}:${beaconPort}`;
-  const sessionId = config.sessionId ?? `agent-${Date.now()}`;
-
   return {
     metadata: {
       id: 'swarm',
@@ -103,11 +96,21 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       defaultEnabled: false,
       dependencies: [
         { id: 'persona' },
+        { id: 'config' },
         { id: 'skills', optional: true },
         { id: 'self-improvement', optional: true },
       ],
     },
     register: async registration => {
+      // Read user configuration from config.json
+      const userSwarmConfig = registration.getConfig().swarm ?? {};
+      const beaconHost = userSwarmConfig.beaconHost ?? config.beaconHost ?? DEFAULT_BEACON_HOST;
+      const beaconPort = userSwarmConfig.beaconPort ?? config.beaconPort ?? DEFAULT_BEACON_PORT;
+      const beaconUseHttps = userSwarmConfig.beaconUseHttps ?? config.beaconUseHttps ?? true;
+      const sessionId = userSwarmConfig.sessionId ?? config.sessionId ?? `agent-${Date.now()}`;
+      const protocol = beaconUseHttps ? 'https' : 'http';
+      const baseUrl = `${protocol}://${beaconHost}:${beaconPort}`;
+
       registration.logger.info(
         `Connecting to beacon at ${baseUrl} (session: ${sessionId})`
       );
