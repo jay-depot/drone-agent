@@ -6,5 +6,13 @@
   {
     "timestamp": "2026-06-27T19:39:59.971Z",
     "insight": "When implementing database schema changes or complex code, avoid sed for multi-line insertions - it breaks easily and produces syntax errors. Write complete files or use proper tooling instead."
+  },
+  {
+    "timestamp": "2026-06-29T00:24:14.754Z",
+    "insight": "The `file.apply_diff` tool has issues with multi-line hunks containing special characters. It failed multiple times during the slash command refactor. Using `file.write` to write complete files was more reliable for complex changes."
+  },
+  {
+    "timestamp": "2026-06-29T00:24:14.759Z",
+    "insight": "The `sed` command is fragile for multi-line code insertions in TypeScript files. It's better to use `file.write` with the complete file content or use targeted `file.apply_diff` with simple hunks. The macros test file got accidentally truncated by a bad sed command and had to be restored from git."
   }
 ]

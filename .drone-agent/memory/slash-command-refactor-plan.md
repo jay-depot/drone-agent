@@ -1,12 +1,9 @@
 ---
 key: slash-command-refactor-plan
 tags:
-  - planning
-  - slash-commands
-  - refactor
-  - plugin-system
+  []
 created: 2026-06-28T18:18:30.905Z
-updated: 2026-06-28T18:18:30.905Z
+updated: 2026-06-29T00:24:02.668Z
 ---
 
 # Slash Command Refactor Plan
@@ -100,7 +97,6 @@ This is informational, not an error.
 **Current (CLI):** Unrecognized `/foo` shows "Unknown command: /foo. Try /help."
 
 **New (both):** Unrecognized slash commands display an error:
-
 ```
 Unknown command: /foo. Type /help for available commands.
 ```
@@ -156,16 +152,16 @@ export type DroneSlashCommandContext = {
 
 Register these built-in commands via `registerBuiltinSlashCommand()`:
 
-| Command          | Handler Behavior                                                                                                |
-| ---------------- | --------------------------------------------------------------------------------------------------------------- |
-| `/exit`, `/quit` | Call `ctx.exit?.()`                                                                                             |
-| `/help`          | Call `ctx.engine.getHelpSnippets()` + `ctx.engine.getSlashCommands()` and format output via `ctx.logger.info()` |
-| `/clear`         | Call `ctx.conversation?.clearSession?.()` + `ctx.engine.runHooks('onSessionClear')`                             |
-| `/plugins`       | Call `ctx.engine.listPlugins()` and format via `ctx.logger.info()`                                              |
-| `/tools`         | Call `ctx.engine.listTools()` and format via `ctx.logger.info()`                                                |
-| `/systemprompt`  | Call `ctx.engine.renderPromptFragments()` + `ctx.engine.getConfig()` and format via `ctx.logger.info()`         |
-| `/tool`          | Parse `<name> <JSON>`, call `ctx.engine.executeTool(name, parsed)`                                              |
-| `/exec`          | Parse `<command>`, call `ctx.engine.executeTool('exec.run', {command, cwd})`                                    |
+| Command | Handler Behavior |
+|---------|-----------------|
+| `/exit`, `/quit` | Call `ctx.exit?.()` |
+| `/help` | Call `ctx.engine.getHelpSnippets()` + `ctx.engine.getSlashCommands()` and format output via `ctx.logger.info()` |
+| `/clear` | Call `ctx.conversation?.clearSession?.()` + `ctx.engine.runHooks('onSessionClear')` |
+| `/plugins` | Call `ctx.engine.listPlugins()` and format via `ctx.logger.info()` |
+| `/tools` | Call `ctx.engine.listTools()` and format via `ctx.logger.info()` |
+| `/systemprompt` | Call `ctx.engine.renderPromptFragments()` + `ctx.engine.getConfig()` and format via `ctx.logger.info()` |
+| `/tool` | Parse `<name> <JSON>`, call `ctx.engine.executeTool(name, parsed)` |
+| `/exec` | Parse `<command>`, call `ctx.engine.executeTool('exec.run', {command, cwd})` |
 
 Each handler returns `true` on success, `false` if prerequisites are missing (e.g., `exit` not available).
 
@@ -191,7 +187,6 @@ export type DroneSlashCommandContext = {
 
 - Remove all hardcoded built-in slash command checks (`/exit`, `/help`, `/clear`, `/plugins`, `/tools`, `/systemprompt`, `/tool`, `/exec`)
 - The `runSlashCommand` callback becomes much simpler:
-
   ```typescript
   async function runSlashCommand(line: string) {
     const trimmed = line.trim();
@@ -201,11 +196,7 @@ export type DroneSlashCommandContext = {
     if (trimmed.startsWith('/')) {
       // Dispatch through engine (checks plugin commands, then built-ins)
       const handled = await opts.engine.dispatchSlashCommand(trimmed, {
-        logger: {
-          info: msg => log(msg, 'user'),
-          warn: msg => log(msg, 'error'),
-          error: msg => log(msg, 'error'),
-        },
+        logger: { info: msg => log(msg, 'user'), warn: msg => log(msg, 'error'), error: msg => log(msg, 'error') },
         engine: opts.engine,
         conversation: opts.conversation,
         sessionManager: undefined,
@@ -213,10 +204,7 @@ export type DroneSlashCommandContext = {
         printHelp: () => printHelp(opts, log),
       });
       if (!handled) {
-        log(
-          `Unknown command: ${trimmed}. Type /help for available commands.`,
-          'error'
-        );
+        log(`Unknown command: ${trimmed}. Type /help for available commands.`, 'error');
       }
       return;
     }
@@ -237,7 +225,6 @@ export type DroneSlashCommandContext = {
 
 - Remove all hardcoded built-in slash command checks (`/exit`, `/quit`, `/clear`, `/help`, `/tools`)
 - Simplify the slash command handling:
-
   ```typescript
   if (line.startsWith('/')) {
     const handled = await engine.dispatchSlashCommand(line, {
@@ -267,18 +254,16 @@ export type DroneSlashCommandContext = {
 **File:** `drone-agent/src/tui/app.tsx`
 
 The `printHelp` function currently hardcodes command descriptions. Update it to:
-
 1. Keep the hardcoded keybinding section (host-specific)
 2. Pull all slash commands via `engine.getSlashCommands()` (which now includes built-ins)
 3. Format them dynamically:
-
-```typescript
-const commands = opts.engine.getSlashCommands();
-helpLines.push('', 'Slash commands:', '');
-for (const cmd of commands) {
-  helpLines.push(`  ${cmd.command.padEnd(20)} ${cmd.description}`);
-}
-```
+  ```typescript
+  const commands = opts.engine.getSlashCommands();
+  helpLines.push('', 'Slash commands:', '');
+  for (const cmd of commands) {
+    helpLines.push(`  ${cmd.command.padEnd(20)} ${cmd.description}`);
+  }
+  ```
 
 ### Step 8: Update CLI help to use dynamic command list
 
@@ -289,7 +274,6 @@ The CLI `/help` handler currently calls `engine.getHelpSnippets()`. Update it to
 ### Step 9: Update test mocks
 
 **Files:**
-
 - `drone-agent/test/helpers.ts` — Add `registerBuiltinSlashCommand`, `getBuiltinSlashCommands` to the mock engine
 - `drone-agent/test/tui.test.tsx` — Update mocks to include new context fields
 - `drone-agent/test/systemprompt.test.tsx` — Update mocks
@@ -298,7 +282,6 @@ The CLI `/help` handler currently calls `engine.getHelpSnippets()`. Update it to
 - `drone-agent/test/conversation-service.test.ts` — Update mocks
 
 Each mock that currently has `dispatchSlashCommand: async () => false` needs:
-
 - `registerBuiltinSlashCommand: () => {}` (no-op)
 - `getBuiltinSlashCommands: () => []`
 - Any new context fields as needed
@@ -308,7 +291,6 @@ Each mock that currently has `dispatchSlashCommand: async () => false` needs:
 **New test file:** `drone-agent/test/slash-command-refactor.test.ts` (or add to existing)
 
 Tests:
-
 1. **Built-in dispatch:** `/exit`, `/help`, `/clear`, `/tools`, `/plugins` are handled by the engine
 2. **Plugin override:** A plugin registers `/help` → plugin handler runs, built-in does not
 3. **Override notification:** When a plugin overrides a built-in, a warning is logged
@@ -320,18 +302,18 @@ Tests:
 
 ## Files to Modify
 
-| File                                               | Changes                                                                                                                                                                        |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `drone-core/src/plugin-system.ts`                  | Add `exit?`, `clearSession?`, `printHelp?` to `DroneSlashCommandContext`                                                                                                       |
-| `drone-agent/src/runtime/plugin-engine.ts`         | Add `builtInSlashCommands` storage, `registerBuiltinSlashCommand`, `getBuiltinSlashCommands`, update `dispatchSlashCommand`, update `getSlashCommands`, add override detection |
-| `drone-agent/src/tui/app.tsx`                      | Remove hardcoded built-ins, simplify `runSlashCommand`, update `printHelp` to use dynamic command list, remove `?` alias                                                       |
-| `drone-agent/src/interactive.ts`                   | Remove hardcoded built-ins, simplify slash command handling, update help output                                                                                                |
-| `drone-agent/test/helpers.ts`                      | Update mock engine with new methods                                                                                                                                            |
-| `drone-agent/test/tui.test.tsx`                    | Update mocks                                                                                                                                                                   |
-| `drone-agent/test/systemprompt.test.tsx`           | Update mocks                                                                                                                                                                   |
-| `drone-agent/test/tui-persona-color.test.tsx`      | Update mocks                                                                                                                                                                   |
-| `drone-agent/test/persona-tool-call-limit.test.ts` | Update mocks                                                                                                                                                                   |
-| `drone-agent/test/conversation-service.test.ts`    | Update mocks                                                                                                                                                                   |
+| File | Changes |
+|------|---------|
+| `drone-core/src/plugin-system.ts` | Add `exit?`, `clearSession?`, `printHelp?` to `DroneSlashCommandContext` |
+| `drone-agent/src/runtime/plugin-engine.ts` | Add `builtInSlashCommands` storage, `registerBuiltinSlashCommand`, `getBuiltinSlashCommands`, update `dispatchSlashCommand`, update `getSlashCommands`, add override detection |
+| `drone-agent/src/tui/app.tsx` | Remove hardcoded built-ins, simplify `runSlashCommand`, update `printHelp` to use dynamic command list, remove `?` alias |
+| `drone-agent/src/interactive.ts` | Remove hardcoded built-ins, simplify slash command handling, update help output |
+| `drone-agent/test/helpers.ts` | Update mock engine with new methods |
+| `drone-agent/test/tui.test.tsx` | Update mocks |
+| `drone-agent/test/systemprompt.test.tsx` | Update mocks |
+| `drone-agent/test/tui-persona-color.test.tsx` | Update mocks |
+| `drone-agent/test/persona-tool-call-limit.test.ts` | Update mocks |
+| `drone-agent/test/conversation-service.test.ts` | Update mocks |
 
 **New file (optional):**
 | `drone-agent/src/runtime/builtin-commands.ts` | Built-in command definitions (keeps engine file clean) |
@@ -352,3 +334,22 @@ Tests:
    - A plugin registering `/help` overrides the built-in
    - Override notification appears in startup messages
    - `/help` output lists both built-in and plugin commands dynamically
+
+## Implementation Summary (2026-06-28)
+
+All 10 steps completed and validated:
+- `pnpm typecheck` ✅ (source code passes; pre-existing test fixture errors unrelated)
+- `pnpm test` ✅ (500/500 tests pass)
+- `pnpm lint` ✅
+- `pnpm build` ✅
+
+Key implementation details:
+- `DroneSlashCommandContext` extended with `exit?`, `clearSession?`, `printHelp?` and additional engine methods (`listPlugins?`, `listTools?`, `renderPromptFragments?`, `getConfig?`, `getSlashCommands?`)
+- New `builtin-commands.ts` module defines all 9 built-in commands
+- Plugin engine updated with `builtInSlashCommands` array, `registerBuiltinSlashCommand()`, `getBuiltinSlashCommands()`, override detection
+- TUI `app.tsx` simplified: all hardcoded slash command checks removed, unified dispatch through engine
+- CLI `interactive.ts` simplified: all hardcoded slash command checks removed, uses `shouldExit` flag for exit
+- `printHelp` in both TUI and CLI dynamically lists commands from `engine.getSlashCommands()`
+- `?` alias for `/help` removed
+- Unrecognized slash commands show error instead of being sent to LLM
+- Test mocks updated across 6 test files

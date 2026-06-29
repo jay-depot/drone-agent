@@ -874,7 +874,7 @@ export function createServerManager(
         item => item.severity === 'error' || item.severity === 'warning'
       );
       if (diagnostics.length === 0) {
-        return false;
+        return '# LSP Diagnostics\n\nClean. No errors or warnings detected.';
       }
 
       const budget = Math.max(1, lspConfig.diagnosticTokenBudget);
