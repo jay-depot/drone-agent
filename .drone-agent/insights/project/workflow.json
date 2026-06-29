@@ -14,5 +14,9 @@
   {
     "timestamp": "2026-06-29T00:24:14.759Z",
     "insight": "The `sed` command is fragile for multi-line code insertions in TypeScript files. It's better to use `file.write` with the complete file content or use targeted `file.apply_diff` with simple hunks. The macros test file got accidentally truncated by a bad sed command and had to be restored from git."
+  },
+  {
+    "timestamp": "2026-06-29T02:35:51.619Z",
+    "insight": "The beacon routes.ts had a syntax error in the principles delete handler (missing closing braces) that caused the wiki routes to be placed outside the registerRoutes function. This was a pre-existing bug that needed fixing alongside the wiki implementation. Always check for syntax errors in files you're modifying."
   }
 ]

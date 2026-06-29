@@ -74,5 +74,13 @@
   {
     "timestamp": "2026-06-29T02:02:15.643Z",
     "insight": "The self-improvement plugin refactoring to a broker pattern was more complex than expected because persona/skill definitions don't carry a `providerId` field. The routing approach had to be simplified to scope-based routing (check if target is beacon/coordinator-scoped, then look up the first registered engine) rather than provider-ID-based routing. This works but means only one swarm engine can be registered at a time. A future improvement could add a `providerId` field to persona/skill definitions for precise routing."
+  },
+  {
+    "timestamp": "2026-06-29T02:35:51.623Z",
+    "insight": "The coordinator-client.ts already had getBaseUrl() which was sufficient for the wiki proxy pattern in routes.ts. The wiki proxy uses a generic fetch-based approach via proxyWikiToCoordinator, so no additional client methods were needed."
+  },
+  {
+    "timestamp": "2026-06-29T02:43:18.700Z",
+    "insight": "The routes.ts files in beacon (1132 lines) and coordinator (808 lines) are overdue for splitting. Both follow the same pattern of domain-grouped route handlers. The beacon has additional complexity with shared state (coordinatorClient, proxy helpers) that needs to be extracted into a shared context module. The coordinator is simpler — no shared state, just direct db calls."
   }
 ]
