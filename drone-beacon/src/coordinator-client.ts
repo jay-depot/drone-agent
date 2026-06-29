@@ -62,6 +62,9 @@ export interface CoordinatorClient {
       createdAt: number;
     }>
   ): Promise<void>;
+
+  // Get the base URL of the coordinator (for proxying)
+  getBaseUrl(): string;
 }
 
 export interface SessionInfo {
@@ -84,6 +87,10 @@ export function createCoordinatorClient(
   const baseUrl = `${protocol}://${config.host}:${config.port}`;
 
   return {
+    getBaseUrl(): string {
+      return baseUrl;
+    },
+
     async registerBeacon(
       identity: BeaconIdentity,
       tlsFingerprint: string

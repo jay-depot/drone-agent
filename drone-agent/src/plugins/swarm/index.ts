@@ -1,8 +1,11 @@
 import type {
+  DroneInsightStorageEngine,
   DronePlugin,
   DronePersonaCapability,
   DronePersonaDefinition,
   DronePersonaProvider,
+  DronePrincipleStorageEngine,
+  DroneSelfImprovementCapability,
   DroneSkillDefinition,
   DroneSkillProvider,
   DroneSkillsCapability,
@@ -95,7 +98,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       description:
         'Connects to a drone-beacon for swarm-wide personas and skills.',
       defaultEnabled: false,
-      dependencies: [{ id: 'persona' }, { id: 'skills', optional: true }],
+      dependencies: [{ id: 'persona' }, { id: 'skills', optional: true }, { id: 'self-improvement', optional: true }],
     },
     register: async registration => {
       registration.logger.info(
@@ -124,11 +127,8 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       let coordinatorSkills = new Map<string, DroneSkillDefinition>();
 
       // ── Push-through session storage state ──────────────────────────────
-      // Tracks the current correlationId for the active user turn.
       let currentCorrelationId: string | null = null;
-      // Tracks how many events we've already pushed so we only push new ones.
       let pushedEventCount = 0;
-      // Buffer of events to push on the next onAfterToolCall.
       const eventBuffer: Array<{
         id: string;
         sessionId: string;
@@ -139,7 +139,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         createdAt: number;
       }> = [];
 
-      // Helper to push buffered events to the coordinator via the beacon.
       const flushEventBuffer = async () => {
         if (eventBuffer.length === 0) return;
         const batch = eventBuffer.splice(0);
@@ -163,7 +162,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         }
       };
 
-      // Helper to register a swarm session with the coordinator via the beacon.
       const registerSwarmSession = async () => {
         try {
           const res = await fetch(`${baseUrl}/sync/sessions/register`, {
@@ -187,10 +185,8 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         }
       };
 
-      // Helper to reload all data from beacon
       const reloadFromBeacon = async () => {
         try {
-          // Fetch personas
           const personasResp = await fetch(`${baseUrl}/personas`);
           if (!personasResp.ok) {
             throw new Error(`Failed to fetch personas: ${personasResp.status}`);
@@ -208,7 +204,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
             }
           }
 
-          // Fetch skills
           const skillsResp = await fetch(`${baseUrl}/skills`);
           if (!skillsResp.ok) {
             throw new Error(`Failed to fetch skills: ${skillsResp.status}`);
@@ -237,7 +232,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         }
       };
 
-      // ── Beacon-level persona provider ─────────────────────────────────
+      // ── Persona and skill providers ─────────────────────────────────────
       const beaconPersonaProvider: DronePersonaProvider = {
         id: 'swarm-persona-beacon',
         precedence: PRECEDENCE_SWARM,
@@ -246,7 +241,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         reloadPersonas: reloadFromBeacon,
       };
 
-      // ── Coordinator-level persona provider ─────────────────────────────
       const coordinatorPersonaProvider: DronePersonaProvider = {
         id: 'swarm-persona-coordinator',
         precedence: PRECEDENCE_COORDINATOR,
@@ -255,7 +249,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         reloadPersonas: reloadFromBeacon,
       };
 
-      // ── Beacon-level skill provider ────────────────────────────────────
       const beaconSkillProvider: DroneSkillProvider = {
         id: 'swarm-skill-beacon',
         precedence: PRECEDENCE_SWARM,
@@ -264,7 +257,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         reloadSkills: reloadFromBeacon,
       };
 
-      // ── Coordinator-level skill provider ───────────────────────────────
       const coordinatorSkillProvider: DroneSkillProvider = {
         id: 'swarm-skill-coordinator',
         precedence: PRECEDENCE_COORDINATOR,
@@ -273,7 +265,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         reloadSkills: reloadFromBeacon,
       };
 
-      // Register with persona broker
       const personaCap =
         registration.request<DronePersonaCapability>('persona');
       if (personaCap) {
@@ -285,7 +276,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         );
       }
 
-      // Register with skills broker
       const skillsCap = registration.request<DroneSkillsCapability>('skills');
       if (skillsCap) {
         skillsCap.registerProvider(beaconSkillProvider);
@@ -296,7 +286,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         );
       }
 
-      // ── Config injector for beacon config underlay ─────────────────────
+      // ── Config injector ─────────────────────────────────────────────────
       let beaconConfigInjector: BeaconConfigInjector | null = null;
       const configCap =
         registration.request<import('drone-core').DroneConfigCapability>(
@@ -314,32 +304,123 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
 
       // ── Lifecycle hooks ────────────────────────────────────────────────
 
-      // onPluginsLoaded: initial data load, register swarm session, connect WebSocket
       registration.hooks.onPluginsLoaded(async () => {
         await reloadFromBeacon();
         await registerSwarmSession();
         connectWebSocket();
+
+        // Register HTTP storage engines for swarm-scoped insights and principles
+        const selfImprovementCap =
+          registration.request<DroneSelfImprovementCapability>('self-improvement');
+        if (selfImprovementCap) {
+          const beaconInsightEngine: DroneInsightStorageEngine = {
+            providerId: 'swarm-insight-beacon',
+            recordInsight: async (targetType, targetId, insight) => {
+              const res = await fetch(`${baseUrl}/insights`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetType, targetId, insight, scope: 'local' }),
+              });
+              if (!res.ok) throw new Error(`Failed to record insight: ${res.status}`);
+              return { ok: true, entryCount: 1 };
+            },
+            listInsights: async (targetType, targetId) => {
+              const params = new URLSearchParams();
+              if (targetType) params.set('targetType', targetType);
+              if (targetId) params.set('targetId', targetId);
+              const res = await fetch(`${baseUrl}/insights?${params}`);
+              if (!res.ok) return [];
+              const data = await res.json() as any[];
+              return data.map((d: any) => ({
+                targetType: d.targetType,
+                targetId: d.targetId,
+                entryCount: 1,
+                lastTimestamp: d.timestamp,
+              }));
+            },
+            readInsights: async (targetType, targetId) => {
+              const params = new URLSearchParams({ targetType, targetId });
+              const res = await fetch(`${baseUrl}/insights?${params}`);
+              if (!res.ok) return [];
+              const data = await res.json() as any[];
+              return data.map((d: any) => ({ timestamp: d.timestamp, insight: d.insight }));
+            },
+          };
+
+          const beaconPrincipleEngine: DronePrincipleStorageEngine = {
+            providerId: 'swarm-principle-beacon',
+            storePrinciple: async (targetType, targetId, principle, source) => {
+              const res = await fetch(`${baseUrl}/principles`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetType, targetId, principle, source, scope: 'local' }),
+              });
+              if (!res.ok) throw new Error(`Failed to store principle: ${res.status}`);
+              return { ok: true, principleCount: 1 };
+            },
+            listPrinciples: async (targetType, targetId) => {
+              const params = new URLSearchParams();
+              if (targetType) params.set('targetType', targetType);
+              if (targetId) params.set('targetId', targetId);
+              const res = await fetch(`${baseUrl}/principles?${params}`);
+              if (!res.ok) return [];
+              const data = await res.json() as any[];
+              return data.map((d: any) => ({
+                targetType: d.targetType,
+                targetId: d.targetId,
+                principleCount: 1,
+              }));
+            },
+            readPrinciples: async (targetType, targetId) => {
+              const params = new URLSearchParams({ targetType, targetId });
+              const res = await fetch(`${baseUrl}/principles?${params}`);
+              if (!res.ok) return [];
+              const data = await res.json() as any[];
+              return data.map((d: any) => ({
+                principle: d.principle,
+                source: d.source,
+                createdAt: d.createdAt,
+              }));
+            },
+            deletePrinciple: async (targetType, targetId, index) => {
+              const params = new URLSearchParams({ targetType, targetId });
+              const res = await fetch(`${baseUrl}/principles?${params}`);
+              if (!res.ok) throw new Error(`Failed to list principles: ${res.status}`);
+              const data = await res.json() as any[];
+              if (index >= data.length) {
+                throw new Error(`Index ${index} is out of bounds.`);
+              }
+              const target = data[index];
+              const delRes = await fetch(`${baseUrl}/principles/${target.id}`, { method: 'DELETE' });
+              if (!delRes.ok) throw new Error(`Failed to delete principle: ${delRes.status}`);
+              return { ok: true, remainingCount: data.length - 1 };
+            },
+          };
+
+          selfImprovementCap.registerInsightEngine(beaconInsightEngine);
+          selfImprovementCap.registerPrincipleEngine(beaconPrincipleEngine);
+          registration.logger.info('Registered beacon HTTP storage engines for insights and principles');
+        } else {
+          registration.logger.warn('self-improvement capability not available; swarm insight/principle storage will not be registered');
+        }
       });
 
-      // onBeforePrompt: generate a new correlationId for each user turn
       registration.hooks.onBeforePrompt(async () => {
         currentCorrelationId = generateUuid();
         registration.logger.info(`New correlationId: ${currentCorrelationId}`);
       });
 
-      // onAfterToolCall: push any buffered events to the coordinator
       registration.hooks.onAfterToolCall(async () => {
         await flushEventBuffer();
       });
 
-      // onSessionClear: reset correlation tracking
       registration.hooks.onSessionClear(async () => {
         currentCorrelationId = null;
         pushedEventCount = 0;
         eventBuffer.length = 0;
       });
 
-      // ── WebSocket client for real-time messaging ────────────────────────
+      // ── WebSocket client ────────────────────────────────────────────────
       const wsUrl = `wss://${beaconHost}:${beaconPort}/ws?agentId=${sessionId}`;
       let ws: WebSocket | null = null;
       let wsReconnectAttempts = 0;
@@ -350,7 +431,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         body: string;
       }> = [];
 
-      // Queue incoming messages for the agent
       const pendingMessages: Array<{
         id: string;
         fromAgentId: string;
@@ -359,7 +439,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         receivedAt: number;
       }> = [];
 
-      // Connect to WebSocket
       const connectWebSocket = () => {
         try {
           ws = new WebSocket(wsUrl);
@@ -367,7 +446,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
           ws.onopen = () => {
             registration.logger.info('WebSocket connected to beacon');
             wsReconnectAttempts = 0;
-            // Send any queued messages
             while (messageQueue.length > 0) {
               const msg = messageQueue.shift();
               if (ws && ws.readyState === WebSocket.OPEN) {
@@ -380,7 +458,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
             try {
               const wsMsg = JSON.parse(event.data);
               if (wsMsg.type === 'message') {
-                // Queue message for agent
                 pendingMessages.push(wsMsg.payload);
                 registration.logger.info(
                   `Received message from ${wsMsg.payload.fromAgentId}`
@@ -408,7 +485,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
               `WebSocket closed: ${event.code} ${event.reason}`
             );
             ws = null;
-            // Attempt reconnect
             if (wsReconnectAttempts < maxReconnectAttempts) {
               wsReconnectAttempts++;
               const delay = Math.min(
@@ -427,7 +503,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         }
       };
 
-      // Send a message via WebSocket or queue it
       const sendMessage = (
         toAgentId: string | undefined,
         toChannel: string | undefined,
@@ -441,14 +516,12 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         }
       };
 
-      // Subscribe to a channel
       const subscribeToChannel = (channel: string) => {
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'subscribe', payload: { channel } }));
         }
       };
 
-      // Unsubscribe from a channel
       const unsubscribeFromChannel = (channel: string) => {
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(
@@ -457,7 +530,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         }
       };
 
-      // Get pending messages (for the agent to consume)
       const getPendingMessages = () => {
         const messages = [...pendingMessages];
         pendingMessages.length = 0;
@@ -551,7 +623,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         },
       };
 
-      // Register the messaging tool
       registration.registerTool(swarmMessageTool);
 
       // ── Heartbeat ───────────────────────────────────────────────────────
@@ -565,16 +636,12 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         }
       };
 
-      // Heartbeat every 30 seconds
       const heartbeatInterval = setInterval(heartbeat, 30000);
 
-      // Cleanup on shutdown
       registration.hooks.onShutdown(async () => {
         clearInterval(heartbeatInterval);
         if (ws) ws.close();
-        // Flush any remaining events
         await flushEventBuffer();
-        // Unregister config injector
         if (beaconConfigInjector && configCap) {
           configCap.unregisterInjector(beaconConfigInjector.id);
         }

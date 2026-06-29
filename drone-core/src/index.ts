@@ -145,6 +145,10 @@ export type {
   DroneLlmCapability,
   DronePrincipleEntry,
   DronePrinciplesCapability,
+  DroneInsightEntry,
+  DroneInsightStorageEngine,
+  DronePrincipleStorageEngine,
+  DroneSelfImprovementCapability,
 } from './capabilities.js';
 
 // ── Plugin system types ──────────────────────────────────────────────

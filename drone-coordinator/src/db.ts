@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { randomUUID } from 'node:crypto';
 import type {
   Persona,
   Skill,
@@ -134,6 +135,29 @@ export function initDatabase(dataPath: string): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_agent_locations_beacon ON agent_locations(beacon_id);
+
+    CREATE TABLE IF NOT EXISTS insights (
+      id TEXT PRIMARY KEY,
+      targetType TEXT NOT NULL,
+      targetId TEXT NOT NULL,
+      insight TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'coordinator'
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_insights_target ON insights(targetType, targetId);
+
+    CREATE TABLE IF NOT EXISTS principles (
+      id TEXT PRIMARY KEY,
+      targetType TEXT NOT NULL,
+      targetId TEXT NOT NULL,
+      principle TEXT NOT NULL,
+      source TEXT,
+      createdAt TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'coordinator'
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_principles_target ON principles(targetType, targetId);
   `);
 
   logger.info('Database initialized successfully');
@@ -1223,4 +1247,135 @@ export function listAllAgentLocations(): AgentLocation[] {
     connectedAt: row.connected_at,
     lastHeartbeat: row.last_heartbeat,
   }));
+}
+
+// === Insight Operations ====
+
+export interface InsightRow {
+  id: string;
+  targetType: string;
+  targetId: string;
+  insight: string;
+  timestamp: string;
+  scope: string;
+}
+
+export function createInsight(
+  targetType: string,
+  targetId: string,
+  insight: string,
+  scope: string = 'coordinator'
+): InsightRow {
+  const id = randomUUID();
+  const timestamp = new Date().toISOString();
+  const row: InsightRow = { id, targetType, targetId, insight, timestamp, scope };
+
+  const stmt = getDatabase().prepare(`
+    INSERT INTO insights (id, targetType, targetId, insight, timestamp, scope)
+    VALUES (@id, @targetType, @targetId, @insight, @timestamp, @scope)
+  `);
+  stmt.run(row);
+  logger.info(`Created insight for ${targetType} "${targetId}"`);
+  return row;
+}
+
+export function listInsights(
+  targetType?: string,
+  targetId?: string
+): InsightRow[] {
+  let sql = 'SELECT * FROM insights WHERE 1=1';
+  const params: string[] = [];
+
+  if (targetType) {
+    sql += ' AND targetType = ?';
+    params.push(targetType);
+  }
+  if (targetId) {
+    sql += ' AND targetId = ?';
+    params.push(targetId);
+  }
+
+  sql += ' ORDER BY timestamp DESC';
+  const stmt = getDatabase().prepare(sql);
+  return (params.length > 0 ? stmt.all(...params) : stmt.all()) as InsightRow[];
+}
+
+export function getInsight(id: string): InsightRow | undefined {
+  const stmt = getDatabase().prepare('SELECT * FROM insights WHERE id = ?');
+  return stmt.get(id) as InsightRow | undefined;
+}
+
+export function deleteInsight(id: string): boolean {
+  const stmt = getDatabase().prepare('DELETE FROM insights WHERE id = ?');
+  const result = stmt.run(id);
+  logger.info(`Deleted insight: ${id}`);
+  return result.changes > 0;
+}
+
+// === Principle Operations ====
+
+export interface PrincipleRow {
+  id: string;
+  targetType: string;
+  targetId: string;
+  principle: string;
+  source: string | null;
+  createdAt: string;
+  scope: string;
+}
+
+export function createPrinciple(
+  targetType: string,
+  targetId: string,
+  principle: string,
+  source?: string,
+  scope: string = 'coordinator'
+): PrincipleRow {
+  const id = randomUUID();
+  const createdAt = new Date().toISOString();
+  const row: PrincipleRow = {
+    id, targetType, targetId, principle,
+    source: source ?? null, createdAt, scope
+  };
+
+  const stmt = getDatabase().prepare(`
+    INSERT INTO principles (id, targetType, targetId, principle, source, createdAt, scope)
+    VALUES (@id, @targetType, @targetId, @principle, @source, @createdAt, @scope)
+  `);
+  stmt.run(row);
+  logger.info(`Created principle for ${targetType} "${targetId}"`);
+  return row;
+}
+
+export function listPrinciples(
+  targetType?: string,
+  targetId?: string
+): PrincipleRow[] {
+  let sql = 'SELECT * FROM principles WHERE 1=1';
+  const params: string[] = [];
+
+  if (targetType) {
+    sql += ' AND targetType = ?';
+    params.push(targetType);
+  }
+  if (targetId) {
+    sql += ' AND targetId = ?';
+    params.push(targetId);
+  }
+
+  sql += ' ORDER BY createdAt DESC';
+  const stmt = getDatabase().prepare(sql);
+  return (params.length > 0 ? stmt.all(...params) : stmt.all()) as PrincipleRow[];
+}
+
+export function getPrinciple(id: string): PrincipleRow | undefined {
+  const stmt = getDatabase().prepare('SELECT * FROM principles WHERE id = ?');
+  return stmt.get(id) as PrincipleRow | undefined;
+}
+
+export function deletePrinciple(id: string): boolean {
+  const stmt = getDatabase().prepare('DELETE FROM principles WHERE id = ?');
+  const result = stmt.run(id);
+  logger.info(`Deleted principle: ${id}`);
+  return result.changes > 0;
 }

@@ -115,3 +115,96 @@ export type DronePrinciplesCapability = {
     targetId: string
   ) => Promise<DronePrincipleEntry[]>;
 };
+
+// ── Insight/Principle storage engine types ────────────────────────────
+
+/**
+ * A single insight entry stored in an insights file or table.
+ */
+export type DroneInsightEntry = {
+  /** ISO-8601 timestamp of when this insight was recorded. */
+  timestamp: string;
+  /** The insight text (1-3 sentence observation). */
+  insight: string;
+};
+
+/**
+ * Storage engine for insights, registered by identity asset providers.
+ * File-based providers (project/user) read/write local JSON files.
+ * HTTP providers (swarm) proxy to beacon/coordinator endpoints.
+ */
+export type DroneInsightStorageEngine = {
+  /** Provider ID that owns this storage engine (e.g. 'persona-provider-project'). */
+  providerId: string;
+  /** Record an insight for a target. */
+  recordInsight: (
+    targetType: string,
+    targetId: string,
+    insight: string
+  ) => Promise<{ ok: boolean; entryCount: number }>;
+  /** List all insight files/entries for a target type, optionally filtered by targetId. */
+  listInsights: (
+    targetType: string,
+    targetId?: string
+  ) => Promise<
+    Array<{ targetType: string; targetId: string; entryCount: number; lastTimestamp?: string }>
+  >;
+  /** Read all insights for a specific target. */
+  readInsights: (
+    targetType: string,
+    targetId: string
+  ) => Promise<DroneInsightEntry[]>;
+};
+
+/**
+ * Storage engine for principles, registered by identity asset providers.
+ */
+export type DronePrincipleStorageEngine = {
+  /** Provider ID that owns this storage engine. */
+  providerId: string;
+  /** Store a principle for a target. */
+  storePrinciple: (
+    targetType: string,
+    targetId: string,
+    principle: string,
+    source?: string
+  ) => Promise<{ ok: boolean; principleCount: number }>;
+  /** List all principle files/entries for a target type, optionally filtered by targetId. */
+  listPrinciples: (
+    targetType: string,
+    targetId?: string
+  ) => Promise<
+    Array<{ targetType: string; targetId: string; principleCount: number }>
+  >;
+  /** Read all principles for a specific target. */
+  readPrinciples: (
+    targetType: string,
+    targetId: string
+  ) => Promise<DronePrincipleEntry[]>;
+  /** Delete a principle by index for a target. */
+  deletePrinciple: (
+    targetType: string,
+    targetId: string,
+    index: number
+  ) => Promise<{ ok: boolean; remainingCount: number }>;
+};
+
+/**
+ * Capability offered by the self-improvement broker plugin.
+ * Lets other plugins register storage engines and query principles.
+ */
+export type DroneSelfImprovementCapability = {
+  /** Register a storage engine for insights. */
+  registerInsightEngine: (engine: DroneInsightStorageEngine) => void;
+  /** Unregister a storage engine by provider ID. */
+  unregisterInsightEngine: (providerId: string) => void;
+  /** Register a storage engine for principles. */
+  registerPrincipleEngine: (engine: DronePrincipleStorageEngine) => void;
+  /** Unregister a principle storage engine by provider ID. */
+  unregisterPrincipleEngine: (providerId: string) => void;
+  /** Get all principles for a given target type and id (aggregated from all engines). */
+  getPrinciples: (
+    targetType: string,
+    targetId: string
+  ) => Promise<DronePrincipleEntry[]>;
+};

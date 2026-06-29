@@ -2,11 +2,15 @@ import { mkdir, readFile, readdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import type {
+  DroneInsightEntry,
+  DroneInsightStorageEngine,
   DronePersonaCapability,
   DronePlugin,
   DronePrincipleEntry,
   DronePrinciplesCapability,
+  DronePrincipleStorageEngine,
   DronePromptFragment,
+  DroneSelfImprovementCapability,
   DroneSkillsCapability,
 } from 'drone-core';
 
@@ -14,17 +18,16 @@ const CONFIG_DIR = '.drone-agent';
 const INSIGHTS_SUBDIR = 'insights';
 const PRINCIPLES_SUBDIR = 'principles';
 
-type InsightEntry = {
-  timestamp: string;
-  insight: string;
-};
-
-type InsightFile = InsightEntry[];
-
+type InsightFile = DroneInsightEntry[];
 type PrinciplesFile = DronePrincipleEntry[];
 
 /** In-memory counter for insights recorded this session. */
 let insightCount = 0;
+
+// ── Storage engine registry ─────────────────────────────────────────────
+
+const insightEngines = new Map<string, DroneInsightStorageEngine>();
+const principleEngines = new Map<string, DronePrincipleStorageEngine>();
 
 // ── Shared helpers ─────────────────────────────────────────────────────
 
@@ -37,8 +40,6 @@ function isValidTargetType(t: string): t is TargetType {
 
 /**
  * Validate a target type and id. Throws on invalid input.
- * When the persona or skills plugin is loaded, also validates that the
- * target exists.
  */
 function validateTarget(
   targetType: string,
@@ -84,8 +85,31 @@ function validateTarget(
 }
 
 /**
+ * Determine the scope of a target (project, user, beacon, coordinator).
+ * Returns undefined for project targets (always local).
+ */
+function resolveTargetScope(
+  targetType: string,
+  targetId: string,
+  personaCap?: DronePersonaCapability,
+  skillsCap?: DroneSkillsCapability
+): string | undefined {
+  if (targetType === 'persona') {
+    if (personaCap) {
+      const persona = personaCap.getPersonas().find(p => p.id === targetId);
+      return persona?.scope;
+    }
+  } else if (targetType === 'skill') {
+    if (skillsCap) {
+      const skill = skillsCap.getSkill(targetId);
+      return (skill as any)?.scope;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Determine the base directory for a target, considering scope.
- * User-scope personas/skills use the home directory; project-scope uses projectDir.
  */
 function resolveBaseDir(
   targetType: string,
@@ -132,7 +156,6 @@ function resolveInsightPaths(
   if (targetType === 'skill') {
     const skill = skillsCap?.getSkill(targetId);
     if (skill?.personaId) {
-      // Persona-owned skill insights live in <personaDir>/<id>/insights/<skill-id>.json
       const personaDir = path.join(
         baseDir,
         CONFIG_DIR,
@@ -146,7 +169,6 @@ function resolveInsightPaths(
     }
   }
 
-  // Standalone skill or project insights
   return {
     insightsDir: path.join(baseDir, CONFIG_DIR, INSIGHTS_SUBDIR, targetType),
     filePath: path.join(
@@ -179,7 +201,6 @@ function resolvePrinciplePaths(
   if (targetType === 'skill') {
     const skill = skillsCap?.getSkill(targetId);
     if (skill?.personaId) {
-      // Persona-owned skill principles live in <personaDir>/<id>/principles/<skill-id>.json
       const personaDir = path.join(
         baseDir,
         CONFIG_DIR,
@@ -193,7 +214,6 @@ function resolvePrinciplePaths(
     }
   }
 
-  // Standalone skill or project principles
   return {
     principlesDir: path.join(
       baseDir,
@@ -227,7 +247,6 @@ async function readJsonArray<T>(filePath: string): Promise<T[]> {
 
 /**
  * Scan a directory for JSON files and return a summary of each.
- * Each file is expected to be a JSON array; we read the first entry for metadata.
  */
 async function scanJsonDir<T>(
   dir: string
@@ -242,7 +261,7 @@ async function scanJsonDir<T>(
 
     for (const entry of entries) {
       if (!entry.endsWith('.json')) continue;
-      const id = entry.slice(0, -5); // strip .json
+      const id = entry.slice(0, -5);
       const filePath = path.join(dir, entry);
       const data = await readJsonArray<T>(filePath);
       const lastEntry = data.length > 0 ? data[data.length - 1] : undefined;
@@ -259,6 +278,243 @@ async function scanJsonDir<T>(
   } catch {
     return [];
   }
+}
+
+// ── Default file-based storage engine ────────────────────────────────────
+
+/**
+ * Create a file-based insight storage engine. This is the default for
+ * local-scoped targets (project/user). It reads/writes JSON files in
+ * .drone-agent/insights/ and .drone-agent/principles/.
+ */
+function createFileInsightEngine(
+  providerId: string,
+  projectDir: string,
+  personaCap: () => DronePersonaCapability | undefined,
+  skillsCap: () => DroneSkillsCapability | undefined
+): DroneInsightStorageEngine {
+  return {
+    providerId,
+    recordInsight: async (targetType, targetId, insight) => {
+      const baseDir = resolveBaseDir(
+        targetType,
+        targetId,
+        projectDir,
+        personaCap(),
+        skillsCap()
+      );
+      const { insightsDir, filePath } = resolveInsightPaths(
+        targetType,
+        targetId,
+        baseDir,
+        skillsCap()
+      );
+      await mkdir(insightsDir, { recursive: true });
+      const entries = await readJsonArray<DroneInsightEntry>(filePath);
+      entries.push({ timestamp: new Date().toISOString(), insight });
+      await writeFile(filePath, JSON.stringify(entries, null, 2), 'utf-8');
+      return { ok: true, entryCount: entries.length };
+    },
+    listInsights: async (targetType, targetId) => {
+      const results: Array<{
+        targetType: string;
+        targetId: string;
+        entryCount: number;
+        lastTimestamp?: string;
+      }> = [];
+
+      if (targetType === 'persona') {
+        const personasDir = path.join(projectDir, CONFIG_DIR, 'personas');
+        try {
+          const personaDirs = await readdir(personasDir);
+          for (const pid of personaDirs) {
+            if (targetId && pid !== targetId) continue;
+            const insightsDir = path.join(personasDir, pid, INSIGHTS_SUBDIR);
+            const files = await scanJsonDir<DroneInsightEntry>(insightsDir);
+            for (const f of files) {
+              results.push({
+                targetType: 'persona',
+                targetId: f.id === 'insights' ? pid : `${pid}/${f.id}`,
+                entryCount: f.entryCount,
+                lastTimestamp: f.lastTimestamp,
+              });
+            }
+          }
+        } catch {
+          // No personas directory
+        }
+      } else {
+        const dir = path.join(
+          projectDir,
+          CONFIG_DIR,
+          INSIGHTS_SUBDIR,
+          targetType
+        );
+        const files = await scanJsonDir<DroneInsightEntry>(dir);
+        for (const f of files) {
+          if (targetId && f.id !== targetId) continue;
+          results.push({
+            targetType,
+            targetId: f.id,
+            entryCount: f.entryCount,
+            lastTimestamp: f.lastTimestamp,
+          });
+        }
+      }
+
+      return results;
+    },
+    readInsights: async (targetType, targetId) => {
+      const baseDir = resolveBaseDir(
+        targetType,
+        targetId,
+        projectDir,
+        personaCap(),
+        skillsCap()
+      );
+      const { filePath } = resolveInsightPaths(
+        targetType,
+        targetId,
+        baseDir,
+        skillsCap()
+      );
+      return readJsonArray<DroneInsightEntry>(filePath);
+    },
+  };
+}
+
+function createFilePrincipleEngine(
+  providerId: string,
+  projectDir: string,
+  personaCap: () => DronePersonaCapability | undefined,
+  skillsCap: () => DroneSkillsCapability | undefined
+): DronePrincipleStorageEngine {
+  return {
+    providerId,
+    storePrinciple: async (targetType, targetId, principle, source) => {
+      const baseDir = resolveBaseDir(
+        targetType,
+        targetId,
+        projectDir,
+        personaCap(),
+        skillsCap()
+      );
+      const { principlesDir, filePath } = resolvePrinciplePaths(
+        targetType,
+        targetId,
+        baseDir,
+        skillsCap()
+      );
+      await mkdir(principlesDir, { recursive: true });
+      const entries = await readJsonArray<DronePrincipleEntry>(filePath);
+      entries.push({
+        principle,
+        source,
+        createdAt: new Date().toISOString(),
+      });
+      await writeFile(filePath, JSON.stringify(entries, null, 2), 'utf-8');
+      return { ok: true, principleCount: entries.length };
+    },
+    listPrinciples: async (targetType, targetId) => {
+      const results: Array<{
+        targetType: string;
+        targetId: string;
+        principleCount: number;
+      }> = [];
+
+      if (targetType === 'persona') {
+        const personasDir = path.join(projectDir, CONFIG_DIR, 'personas');
+        try {
+          const personaDirs = await readdir(personasDir);
+          for (const pid of personaDirs) {
+            if (targetId && pid !== targetId) continue;
+            const principlesDir = path.join(
+              personasDir,
+              pid,
+              PRINCIPLES_SUBDIR
+            );
+            const files =
+              await scanJsonDir<DronePrincipleEntry>(principlesDir);
+            for (const f of files) {
+              results.push({
+                targetType: 'persona',
+                targetId: f.id === 'principles' ? pid : `${pid}/${f.id}`,
+                principleCount: f.entryCount,
+              });
+            }
+          }
+        } catch {
+          // No personas directory
+        }
+      } else {
+        const dir = path.join(
+          projectDir,
+          CONFIG_DIR,
+          PRINCIPLES_SUBDIR,
+          targetType
+        );
+        const files = await scanJsonDir<DronePrincipleEntry>(dir);
+        for (const f of files) {
+          if (targetId && f.id !== targetId) continue;
+          results.push({
+            targetType,
+            targetId: f.id,
+            principleCount: f.entryCount,
+          });
+        }
+      }
+
+      return results;
+    },
+    readPrinciples: async (targetType, targetId) => {
+      const baseDir = resolveBaseDir(
+        targetType,
+        targetId,
+        projectDir,
+        personaCap(),
+        skillsCap()
+      );
+      const { filePath } = resolvePrinciplePaths(
+        targetType,
+        targetId,
+        baseDir,
+        skillsCap()
+      );
+      return readJsonArray<DronePrincipleEntry>(filePath);
+    },
+    deletePrinciple: async (targetType, targetId, index) => {
+      const baseDir = resolveBaseDir(
+        targetType,
+        targetId,
+        projectDir,
+        personaCap(),
+        skillsCap()
+      );
+      const { principlesDir, filePath } = resolvePrinciplePaths(
+        targetType,
+        targetId,
+        baseDir,
+        skillsCap()
+      );
+      const entries = await readJsonArray<DronePrincipleEntry>(filePath);
+      if (index >= entries.length) {
+        throw new Error(
+          `Index ${index} is out of bounds. The principles list has ${entries.length} entries.`
+        );
+      }
+      entries.splice(index, 1);
+      if (entries.length === 0) {
+        try {
+          await rm(filePath, { force: true });
+        } catch {
+          // Ignore
+        }
+      } else {
+        await writeFile(filePath, JSON.stringify(entries, null, 2), 'utf-8');
+      }
+      return { ok: true, remainingCount: entries.length };
+    },
+  };
 }
 
 // ── Plugin ──────────────────────────────────────────────────────────────
@@ -279,19 +535,108 @@ export const selfImprovementPlugin: DronePlugin = {
   },
   register: async registration => {
     const projectDir = process.cwd();
-    // Resolve capabilities once for reuse
     const personaCap = () =>
       registration.request<DronePersonaCapability>('persona');
     const skillsCap = () =>
       registration.request<DroneSkillsCapability>('skills');
 
-    // ── Prompt fragment: show current active persona and available tools ──
-    const insightFragment: DronePromptFragment = {
+    // Default file-based engines for local-scoped targets
+    const defaultInsightEngine = createFileInsightEngine(
+      'self-improvement-default',
+      projectDir,
+      personaCap,
+      skillsCap
+    );
+    const defaultPrincipleEngine = createFilePrincipleEngine(
+      'self-improvement-default',
+      projectDir,
+      personaCap,
+      skillsCap
+    );
+
+    /**
+     * Resolve the appropriate storage engine for a target.
+     * For swarm-scoped targets (beacon/coordinator), looks up the
+     * registered engine by provider ID. For local-scoped targets
+     * (project/user), returns the default file-based engine.
+     */
+    function resolveInsightEngine(
+      targetType: string,
+      targetId: string
+    ): DroneInsightStorageEngine {
+      const scope = resolveTargetScope(
+        targetType,
+        targetId,
+        personaCap(),
+        skillsCap()
+      );
+      if (scope === 'beacon' || scope === 'coordinator') {
+        // Look for a registered swarm engine
+        for (const engine of insightEngines.values()) {
+          return engine;
+        }
+      }
+      return defaultInsightEngine;
+    }
+
+    function resolvePrincipleEngine(
+      targetType: string,
+      targetId: string
+    ): DronePrincipleStorageEngine {
+      const scope = resolveTargetScope(
+        targetType,
+        targetId,
+        personaCap(),
+        skillsCap()
+      );
+      if (scope === 'beacon' || scope === 'coordinator') {
+        for (const engine of principleEngines.values()) {
+          return engine;
+        }
+      }
+      return defaultPrincipleEngine;
+    }
+
+    // ── Offer DroneSelfImprovementCapability ──────────────────────────
+    const selfImprovementCapability: DroneSelfImprovementCapability = {
+      registerInsightEngine: (engine: DroneInsightStorageEngine) => {
+        insightEngines.set(engine.providerId, engine);
+        registration.logger.info(
+          `Registered insight engine: ${engine.providerId}`
+        );
+      },
+      unregisterInsightEngine: (providerId: string) => {
+        insightEngines.delete(providerId);
+        registration.logger.info(
+          `Unregistered insight engine: ${providerId}`
+        );
+      },
+      registerPrincipleEngine: (engine: DronePrincipleStorageEngine) => {
+        principleEngines.set(engine.providerId, engine);
+        registration.logger.info(
+          `Registered principle engine: ${engine.providerId}`
+        );
+      },
+      unregisterPrincipleEngine: (providerId: string) => {
+        principleEngines.delete(providerId);
+        registration.logger.info(
+          `Unregistered principle engine: ${providerId}`
+        );
+      },
+      getPrinciples: async (targetType: string, targetId: string) => {
+        const engine = resolvePrincipleEngine(targetType, targetId);
+        return engine.readPrinciples(targetType, targetId);
+      },
+    };
+
+    registration.offer(selfImprovementCapability);
+
+    // ── Prompt fragment ──────────────────────────────────────────────
+    registration.registerPromptFragment({
       key: 'insight-targets',
       phase: 'header',
       render: async () => {
         const lines: string[] = ['# Self-Improvement', ''];
-
         const pCap = personaCap();
         const activePersona = pCap?.getActivePersona();
         if (activePersona) {
@@ -302,7 +647,6 @@ export const selfImprovementPlugin: DronePlugin = {
               'Use `self-improvement.insight` with `targetType: "persona"` to record insights about it.'
           );
         }
-
         lines.push(
           'Use `persona.list` to see all available personas and `skills.list` to see available skills.'
         );
@@ -312,12 +656,9 @@ export const selfImprovementPlugin: DronePlugin = {
         lines.push(
           'Principle tools: `self-improvement.principles-store` (create), `self-improvement.principles-list` (browse), `self-improvement.principles-recall` (read), `self-improvement.principles-delete` (remove).'
         );
-
         return lines.join('\n');
       },
-    };
-
-    registration.registerPromptFragment(insightFragment);
+    });
 
     // ── self-improvement.insight ─────────────────────────────────────
     registration.registerTool({
@@ -368,32 +709,12 @@ export const selfImprovementPlugin: DronePlugin = {
 
         validateTarget(targetType, targetId, personaCap(), skillsCap());
 
-        const baseDir = resolveBaseDir(
+        const engine = resolveInsightEngine(targetType, targetId);
+        const result = await engine.recordInsight(
           targetType,
           targetId,
-          projectDir,
-          personaCap(),
-          skillsCap()
+          insight
         );
-
-        const { insightsDir, filePath } = resolveInsightPaths(
-          targetType,
-          targetId,
-          baseDir,
-          skillsCap()
-        );
-
-        await mkdir(insightsDir, { recursive: true });
-
-        const entries = await readJsonArray<InsightEntry>(filePath);
-
-        const newEntry: InsightEntry = {
-          timestamp: new Date().toISOString(),
-          insight,
-        };
-        entries.push(newEntry);
-
-        await writeFile(filePath, JSON.stringify(entries, null, 2), 'utf-8');
         insightCount += 1;
 
         return JSON.stringify(
@@ -401,8 +722,8 @@ export const selfImprovementPlugin: DronePlugin = {
             ok: true,
             targetType,
             targetId,
-            entryCount: entries.length,
-            message: `Insight recorded for ${targetType} "${targetId}".`,
+            entryCount: result.entryCount,
+            message: `Insight recorded for ${targetType} "${targetId}" via ${engine.providerId}.`,
           },
           null,
           2
@@ -430,7 +751,6 @@ export const selfImprovementPlugin: DronePlugin = {
       },
       execute: async input => {
         const filterType = input.targetType as string | undefined;
-
         const results: Array<{
           targetType: string;
           targetId: string;
@@ -444,44 +764,14 @@ export const selfImprovementPlugin: DronePlugin = {
             : [...VALID_TARGET_TYPES];
 
         for (const tt of typesToScan) {
-          if (tt === 'persona') {
-            // Scan persona insight dirs: .drone-agent/personas/<id>/insights/
-            const personasDir = path.join(projectDir, CONFIG_DIR, 'personas');
-            try {
-              const personaDirs = await readdir(personasDir);
-              for (const personaId of personaDirs) {
-                const insightsDir = path.join(
-                  personasDir,
-                  personaId,
-                  INSIGHTS_SUBDIR
-                );
-                const files = await scanJsonDir<InsightEntry>(insightsDir);
-                for (const f of files) {
-                  results.push({
-                    targetType: 'persona',
-                    targetId:
-                      f.id === 'insights' ? personaId : `${personaId}/${f.id}`,
-                    entryCount: f.entryCount,
-                    lastTimestamp: f.lastTimestamp,
-                  });
-                }
-              }
-            } catch {
-              // No personas directory — skip
-            }
-          } else {
-            // skill or project: scan .drone-agent/insights/<type>/
-            const dir = path.join(projectDir, CONFIG_DIR, INSIGHTS_SUBDIR, tt);
-            const files = await scanJsonDir<InsightEntry>(dir);
-            for (const f of files) {
-              results.push({
-                targetType: tt,
-                targetId: f.id,
-                entryCount: f.entryCount,
-                lastTimestamp: f.lastTimestamp,
-              });
-            }
+          // Collect from all registered insight engines
+          for (const engine of insightEngines.values()) {
+            const engineResults = await engine.listInsights(tt);
+            results.push(...engineResults);
           }
+          // Also collect from the default file-based engine
+          const defaultResults = await defaultInsightEngine.listInsights(tt);
+          results.push(...defaultResults);
         }
 
         return JSON.stringify({ insights: results }, null, 2);
@@ -512,35 +802,11 @@ export const selfImprovementPlugin: DronePlugin = {
       execute: async input => {
         const targetType = input.targetType as string;
         const targetId = (input.targetId as string).trim().toLowerCase();
-
         validateTarget(targetType, targetId, personaCap(), skillsCap());
 
-        const baseDir = resolveBaseDir(
-          targetType,
-          targetId,
-          projectDir,
-          personaCap(),
-          skillsCap()
-        );
-
-        const { filePath } = resolveInsightPaths(
-          targetType,
-          targetId,
-          baseDir,
-          skillsCap()
-        );
-
-        const entries = await readJsonArray<InsightEntry>(filePath);
-
-        return JSON.stringify(
-          {
-            targetType,
-            targetId,
-            entries,
-          },
-          null,
-          2
-        );
+        const engine = resolveInsightEngine(targetType, targetId);
+        const entries = await engine.readInsights(targetType, targetId);
+        return JSON.stringify({ targetType, targetId, entries }, null, 2);
       },
     });
 
@@ -593,41 +859,21 @@ export const selfImprovementPlugin: DronePlugin = {
 
         validateTarget(targetType, targetId, personaCap(), skillsCap());
 
-        const baseDir = resolveBaseDir(
+        const engine = resolvePrincipleEngine(targetType, targetId);
+        const result = await engine.storePrinciple(
           targetType,
           targetId,
-          projectDir,
-          personaCap(),
-          skillsCap()
-        );
-
-        const { principlesDir, filePath } = resolvePrinciplePaths(
-          targetType,
-          targetId,
-          baseDir,
-          skillsCap()
-        );
-
-        await mkdir(principlesDir, { recursive: true });
-
-        const entries = await readJsonArray<DronePrincipleEntry>(filePath);
-
-        const newEntry: DronePrincipleEntry = {
           principle,
-          source,
-          createdAt: new Date().toISOString(),
-        };
-        entries.push(newEntry);
-
-        await writeFile(filePath, JSON.stringify(entries, null, 2), 'utf-8');
+          source
+        );
 
         return JSON.stringify(
           {
             ok: true,
             targetType,
             targetId,
-            principleCount: entries.length,
-            message: `Principle stored for ${targetType} "${targetId}".`,
+            principleCount: result.principleCount,
+            message: `Principle stored for ${targetType} "${targetId}" via ${engine.providerId}.`,
           },
           null,
           2
@@ -655,7 +901,6 @@ export const selfImprovementPlugin: DronePlugin = {
       },
       execute: async input => {
         const filterType = input.targetType as string | undefined;
-
         const results: Array<{
           targetType: string;
           targetId: string;
@@ -668,50 +913,13 @@ export const selfImprovementPlugin: DronePlugin = {
             : [...VALID_TARGET_TYPES];
 
         for (const tt of typesToScan) {
-          if (tt === 'persona') {
-            // Scan persona principle dirs: .drone-agent/personas/<id>/principles/
-            const personasDir = path.join(projectDir, CONFIG_DIR, 'personas');
-            try {
-              const personaDirs = await readdir(personasDir);
-              for (const personaId of personaDirs) {
-                const principlesDir = path.join(
-                  personasDir,
-                  personaId,
-                  PRINCIPLES_SUBDIR
-                );
-                const files =
-                  await scanJsonDir<DronePrincipleEntry>(principlesDir);
-                for (const f of files) {
-                  results.push({
-                    targetType: 'persona',
-                    targetId:
-                      f.id === 'principles'
-                        ? personaId
-                        : `${personaId}/${f.id}`,
-                    principleCount: f.entryCount,
-                  });
-                }
-              }
-            } catch {
-              // No personas directory — skip
-            }
-          } else {
-            // skill or project: scan .drone-agent/principles/<type>/
-            const dir = path.join(
-              projectDir,
-              CONFIG_DIR,
-              PRINCIPLES_SUBDIR,
-              tt
-            );
-            const files = await scanJsonDir<DronePrincipleEntry>(dir);
-            for (const f of files) {
-              results.push({
-                targetType: tt,
-                targetId: f.id,
-                principleCount: f.entryCount,
-              });
-            }
+          for (const engine of principleEngines.values()) {
+            const engineResults = await engine.listPrinciples(tt);
+            results.push(...engineResults);
           }
+          const defaultResults =
+            await defaultPrincipleEngine.listPrinciples(tt);
+          results.push(...defaultResults);
         }
 
         return JSON.stringify({ principles: results }, null, 2);
@@ -742,35 +950,11 @@ export const selfImprovementPlugin: DronePlugin = {
       execute: async input => {
         const targetType = input.targetType as string;
         const targetId = (input.targetId as string).trim().toLowerCase();
-
         validateTarget(targetType, targetId, personaCap(), skillsCap());
 
-        const baseDir = resolveBaseDir(
-          targetType,
-          targetId,
-          projectDir,
-          personaCap(),
-          skillsCap()
-        );
-
-        const { filePath } = resolvePrinciplePaths(
-          targetType,
-          targetId,
-          baseDir,
-          skillsCap()
-        );
-
-        const principles = await readJsonArray<DronePrincipleEntry>(filePath);
-
-        return JSON.stringify(
-          {
-            targetType,
-            targetId,
-            principles,
-          },
-          null,
-          2
-        );
+        const engine = resolvePrincipleEngine(targetType, targetId);
+        const principles = await engine.readPrinciples(targetType, targetId);
+        return JSON.stringify({ targetType, targetId, principles }, null, 2);
       },
     });
 
@@ -814,49 +998,20 @@ export const selfImprovementPlugin: DronePlugin = {
 
         validateTarget(targetType, targetId, personaCap(), skillsCap());
 
-        const baseDir = resolveBaseDir(
+        const engine = resolvePrincipleEngine(targetType, targetId);
+        const result = await engine.deletePrinciple(
           targetType,
           targetId,
-          projectDir,
-          personaCap(),
-          skillsCap()
+          index
         );
-
-        const { principlesDir, filePath } = resolvePrinciplePaths(
-          targetType,
-          targetId,
-          baseDir,
-          skillsCap()
-        );
-
-        const entries = await readJsonArray<DronePrincipleEntry>(filePath);
-
-        if (index >= entries.length) {
-          throw new Error(
-            `Index ${index} is out of bounds. The principles list has ${entries.length} entries.`
-          );
-        }
-
-        entries.splice(index, 1);
-
-        if (entries.length === 0) {
-          // Remove the file if empty
-          try {
-            await rm(filePath, { force: true });
-          } catch {
-            // Ignore if file doesn't exist
-          }
-        } else {
-          await writeFile(filePath, JSON.stringify(entries, null, 2), 'utf-8');
-        }
 
         return JSON.stringify(
           {
             ok: true,
             targetType,
             targetId,
-            remainingCount: entries.length,
-            message: `Principle deleted from ${targetType} "${targetId}".`,
+            remainingCount: result.remainingCount,
+            message: `Principle deleted from ${targetType} "${targetId}" via ${engine.providerId}.`,
           },
           null,
           2
@@ -864,30 +1019,17 @@ export const selfImprovementPlugin: DronePlugin = {
       },
     });
 
-    // ── Offer DronePrinciplesCapability ──────────────────────────────
+    // ── Offer DronePrinciplesCapability (backwards compat) ──────────────
     const principlesCapability: DronePrinciplesCapability = {
       getPrinciples: async (targetType: string, targetId: string) => {
-        const baseDir = resolveBaseDir(
-          targetType,
-          targetId,
-          projectDir,
-          personaCap(),
-          skillsCap()
-        );
-        const { filePath } = resolvePrinciplePaths(
-          targetType,
-          targetId,
-          baseDir,
-          skillsCap()
-        );
-        return readJsonArray<DronePrincipleEntry>(filePath);
+        return selfImprovementCapability.getPrinciples(targetType, targetId);
       },
     };
 
     registration.offer(principlesCapability);
 
     // ── Combined principles prompt fragment (project + persona) ────
-    const principlesFragment: DronePromptFragment = {
+    registration.registerPromptFragment({
       key: 'principles',
       phase: 'footer',
       render: async () => {
@@ -923,7 +1065,6 @@ export const selfImprovementPlugin: DronePlugin = {
               const principles =
                 await readJsonArray<DronePrincipleEntry>(filePath);
               if (principles.length > 0) {
-                // Subheading = filename (category)
                 projectLines.push(`### ${file.id}`);
                 for (const p of principles) {
                   projectLines.push(`- ${p.principle}`);
@@ -937,21 +1078,14 @@ export const selfImprovementPlugin: DronePlugin = {
 
           // ── Persona Principles ────────────────────────────────────────
           if (havePersona) {
-            const baseDir = resolveBaseDir(
+            const engine = resolvePrincipleEngine(
               'persona',
-              activePersona.id,
-              projectDir,
-              personaCap(),
-              skillsCap()
+              activePersona.id
             );
-            const { filePath } = resolvePrinciplePaths(
+            const principles = await engine.readPrinciples(
               'persona',
-              activePersona.id,
-              baseDir,
-              skillsCap()
+              activePersona.id
             );
-            const principles =
-              await readJsonArray<DronePrincipleEntry>(filePath);
 
             if (principles.length > 0) {
               const personaLines = ['## Current Persona'];
@@ -966,17 +1100,14 @@ export const selfImprovementPlugin: DronePlugin = {
 
         return sections.length > 0 ? sections.join('\n\n') : false;
       },
-    };
-
-    registration.registerPromptFragment(principlesFragment);
+    });
 
     // ── onPluginsLoaded: register recall enhancer + log status ──────
     registration.hooks.onPluginsLoaded(async () => {
-      // Register recall enhancer to inject principles into skill recall results
       const sCap = skillsCap();
       if (sCap?.onRecall) {
         sCap.onRecall(async (id, body) => {
-          const principles = await principlesCapability.getPrinciples(
+          const principles = await selfImprovementCapability.getPrinciples(
             'skill',
             id
           );
@@ -990,11 +1121,9 @@ export const selfImprovementPlugin: DronePlugin = {
       }
 
       registration.logger.info(
-        'self-improvement plugin ready (persona insights/principles stored in .drone-agent/personas/<id>/insights/ and .../principles/; ' +
-          'skill/project insights/principles stored in .drone-agent/insights/ and .drone-agent/principles/)'
+        'self-improvement plugin ready (broker mode: routes to provider-registered storage engines; ' +
+          'defaults to file-based storage in .drone-agent/insights/ and .drone-agent/principles/)'
       );
     });
-
-    // Offer mid-panel widget showing the in-session insight count.
   },
 };

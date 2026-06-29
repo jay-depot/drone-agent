@@ -20,6 +20,7 @@ The beacon is a full first-class implementation of swarm learning capabilities, 
 This is not a separate feature — it is the beacon's implementation of the same capabilities defined in Parts 1 and 2:
 
 ### From Part 1 (Insights & Principles)
+
 - Beacon has its own `insights` and `principles` tables (separate from coordinator's)
 - Beacon's `/insights` and `/principles` endpoints serve beacon-scoped assets
 - When a coordinator is connected, `?scope=coordinator` proxies to coordinator
@@ -27,6 +28,7 @@ This is not a separate feature — it is the beacon's implementation of the same
 - Beacon-scoped identity assets' self-improvement loops stay on the beacon — insights are recorded to beacon, principles are derived (agent-side by default) and stored on beacon
 
 ### From Part 2 (Knowledge Base)
+
 - Beacon has its own wiki directory on the beacon host filesystem
 - Beacon's `/wiki` endpoints serve beacon-scoped wiki pages
 - When coordinator is connected, beacon also serves coordinator-scoped pages (proxied)
@@ -37,6 +39,7 @@ This is not a separate feature — it is the beacon's implementation of the same
 ### No Coordinator Dependency
 
 Everything works without a coordinator:
+
 - Insight/principle storage: beacon tables
 - Wiki: beacon filesystem
 - Self-improvement loop: agent-side derivation, stored on beacon
@@ -45,6 +48,7 @@ Everything works without a coordinator:
 ## What This Means for Implementation
 
 Parts 1 and 2 already build the beacon endpoints and tables. Part 3 is the **guarantee** that:
+
 1. The beacon implementation is complete, not stubbed
 2. No endpoint requires a coordinator connection to function (coordinator proxying is additive)
 3. The beacon's self-improvement data (insights, principles, wiki) is permanent, not a sync cache
@@ -55,6 +59,7 @@ Parts 1 and 2 already build the beacon endpoints and tables. Part 3 is the **gua
 No additional files beyond what Parts 1 and 2 define. Part 3 is a design constraint on Parts 1 and 2, not a separate codebase effort. The key validation is that all beacon endpoints work correctly with no coordinator configured.
 
 ## Validation Criteria
+
 - All LSP checks pass
 - `pnpm typecheck` passes
 - `pnpm lint` passes

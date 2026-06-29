@@ -420,6 +420,100 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   );
 
+  // === Insight Routes ===
+
+  // Create an insight
+  app.post<{ Body: { targetType: string; targetId: string; insight: string; scope?: string } }>(
+    '/insights',
+    async (request, reply) => {
+      const { targetType, targetId, insight, scope } = request.body;
+      if (!targetType || !targetId || !insight) {
+        return reply.code(400).send({ error: 'targetType, targetId, and insight are required' });
+      }
+      const row = db.createInsight(targetType, targetId, insight, scope);
+      return reply.code(201).send(row);
+    }
+  );
+
+  // List insights (with optional targetType and targetId filters)
+  app.get<{ Querystring: { targetType?: string; targetId?: string } }>(
+    '/insights',
+    async request => {
+      return db.listInsights(request.query.targetType, request.query.targetId);
+    }
+  );
+
+  // Get a single insight
+  app.get<{ Params: { id: string } }>(
+    '/insights/:id',
+    async (request, reply) => {
+      const row = db.getInsight(request.params.id);
+      if (!row) {
+        return reply.code(404).send({ error: 'Insight not found' });
+      }
+      return row;
+    }
+  );
+
+  // Delete an insight
+  app.delete<{ Params: { id: string } }>(
+    '/insights/:id',
+    async (request, reply) => {
+      const deleted = db.deleteInsight(request.params.id);
+      if (!deleted) {
+        return reply.code(404).send({ error: 'Insight not found' });
+      }
+      return { success: true };
+    }
+  );
+
+  // === Principle Routes ===
+
+  // Create a principle
+  app.post<{ Body: { targetType: string; targetId: string; principle: string; source?: string; scope?: string } }>(
+    '/principles',
+    async (request, reply) => {
+      const { targetType, targetId, principle, source, scope } = request.body;
+      if (!targetType || !targetId || !principle) {
+        return reply.code(400).send({ error: 'targetType, targetId, and principle are required' });
+      }
+      const row = db.createPrinciple(targetType, targetId, principle, source, scope);
+      return reply.code(201).send(row);
+    }
+  );
+
+  // List principles (with optional targetType and targetId filters)
+  app.get<{ Querystring: { targetType?: string; targetId?: string } }>(
+    '/principles',
+    async request => {
+      return db.listPrinciples(request.query.targetType, request.query.targetId);
+    }
+  );
+
+  // Get a single principle
+  app.get<{ Params: { id: string } }>(
+    '/principles/:id',
+    async (request, reply) => {
+      const row = db.getPrinciple(request.params.id);
+      if (!row) {
+        return reply.code(404).send({ error: 'Principle not found' });
+      }
+      return row;
+    }
+  );
+
+  // Delete a principle
+  app.delete<{ Params: { id: string } }>(
+    '/principles/:id',
+    async (request, reply) => {
+      const deleted = db.deletePrinciple(request.params.id);
+      if (!deleted) {
+        return reply.code(404).send({ error: 'Principle not found' });
+      }
+      return { success: true };
+    }
+  );
+
   // === Swarm Session Routes ===
   // Register a new swarm session
   app.post<{ Body: { id: string; personaId?: string; beaconId: string } }>(

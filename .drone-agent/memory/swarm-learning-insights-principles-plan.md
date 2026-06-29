@@ -34,6 +34,7 @@ The self-improvement plugin becomes a broker, mirroring the existing persona/ski
 Beacon and coordinator each gain **separate** `insights` and `principles` tables (NOT the knowledge table — clean scope separation):
 
 **insights table:**
+
 - `id` (TEXT PK)
 - `targetType` (TEXT — persona, skill, project)
 - `targetId` (TEXT — the persona/skill/project ID)
@@ -42,6 +43,7 @@ Beacon and coordinator each gain **separate** `insights` and `principles` tables
 - `scope` (TEXT — 'beacon' or 'coordinator')
 
 **principles table:**
+
 - `id` (TEXT PK)
 - `targetType` (TEXT)
 - `targetId` (TEXT)
@@ -53,6 +55,7 @@ Beacon and coordinator each gain **separate** `insights` and `principles` tables
 ### New Endpoints
 
 **Beacon** (serves local + proxies coordinator):
+
 - `POST /insights` — create insight
 - `GET /insights?targetType=...&targetId=...` — list insights for target
 - `GET /insights/:id` — get insight
@@ -75,6 +78,7 @@ The self-improvement plugin's prompt fragment (footer phase) reads principles fr
 ## Files to Modify/Create
 
 ### drone-agent
+
 - `src/plugins/self-improvement/index.ts` — refactor from file-only to broker pattern; add storage engine routing
 - `src/plugins/swarm/index.ts` — register insight/principle storage engines for swarm providers
 - `src/plugins/persona-provider-project/index.ts` — register file-based storage engine
@@ -84,20 +88,24 @@ The self-improvement plugin's prompt fragment (footer phase) reads principles fr
 - `drone-core/src/capabilities.ts` — add `DroneInsightStorageEngine` and `DronePrincipleStorageEngine` types
 
 ### drone-beacon
+
 - `src/db.ts` — add `insights` and `principles` tables + CRUD
 - `src/routes.ts` — add `/insights` and `/principles` endpoints + coordinator proxy
 - `src/coordinator-client.ts` — add insight/principle proxy methods
 
 ### drone-coordinator
+
 - `src/db.ts` — add `insights` and `principles` tables + CRUD
 - `src/routes.ts` — add `/insights` and `/principles` endpoints
 
 ### Tests
+
 - `drone-agent/test/` — self-improvement broker routing tests
 - `drone-beacon/test/` — insight/principle endpoint tests
 - `drone-coordinator/test/` — insight/principle endpoint tests
 
 ## Validation Criteria
+
 - All LSP checks pass
 - `pnpm typecheck` passes
 - `pnpm lint` passes

@@ -19,14 +19,14 @@ Implement an LLM Wiki-style knowledge base for the swarm. Session logs (swarm_ev
 
 ### LLM Wiki Pattern (adapted)
 
-| LLM Wiki Layer | Drone Equivalent |
-|---|---|
-| **Raw sources** (immutable) | Session logs (swarm_events on coordinator, event_log on beacon) |
-| **The wiki** (maintained) | Swarm knowledge base — markdown pages on beacon/coordinator filesystem |
-| **The schema** (maintenance contract) | A skill or persona defining ingest/query/lint workflows |
-| **Ingest** | Process session logs → extract knowledge → update existing wiki pages, note contradictions, maintain cross-references |
-| **Query** | Agent reads wiki pages during work → good answers filed back as new pages |
-| **Lint** | Periodic health-check: stale claims, contradictions, orphan pages, missing cross-references, downward links |
+| LLM Wiki Layer                        | Drone Equivalent                                                                                                      |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Raw sources** (immutable)           | Session logs (swarm_events on coordinator, event_log on beacon)                                                       |
+| **The wiki** (maintained)             | Swarm knowledge base — markdown pages on beacon/coordinator filesystem                                                |
+| **The schema** (maintenance contract) | A skill or persona defining ingest/query/lint workflows                                                               |
+| **Ingest**                            | Process session logs → extract knowledge → update existing wiki pages, note contradictions, maintain cross-references |
+| **Query**                             | Agent reads wiki pages during work → good answers filed back as new pages                                             |
+| **Lint**                              | Periodic health-check: stale claims, contradictions, orphan pages, missing cross-references, downward links           |
 
 ### Storage
 
@@ -41,6 +41,7 @@ Implement an LLM Wiki-style knowledge base for the swarm. Session logs (swarm_ev
 All wiki access is through beacon HTTP endpoints. Coordinator requests are always proxied through the beacon (agent never talks to coordinator directly).
 
 **Beacon endpoints:**
+
 - `GET /wiki` — list all wiki pages (beacon + coordinator, scope-tagged)
 - `GET /wiki/:pageId` — get a specific wiki page (markdown content + frontmatter)
 - `PUT /wiki/:pageId` — create or update a wiki page (body is markdown)
@@ -50,6 +51,7 @@ All wiki access is through beacon HTTP endpoints. Coordinator requests are alway
 - `POST /wiki/lint` — trigger a lint pass (health-check the wiki)
 
 **Coordinator endpoints** (same shape, beacon proxies to these):
+
 - `GET /wiki`, `GET /wiki/:pageId`, `PUT /wiki/:pageId`, `DELETE /wiki/:pageId`
 - `GET /wiki/search?q=...`
 - `POST /wiki/ingest`, `POST /wiki/lint`
@@ -62,12 +64,14 @@ Wiki pages from beacon and coordinator are in a common pool (merged list, scope-
 - **Beacon-scoped page** → can link to coordinator-scoped pages (shared across all beacons) and other beacon-scoped pages
 
 **Enforcement (hard + soft):**
+
 - **Hard enforcement on write**: When `PUT /wiki/:pageId` is called and both the source page and linked target page exist with known scopes, the server rejects writes that create downward links (coordinator page linking to beacon page).
 - **Soft enforcement via lint**: The lint operation flags downward links that the server can't catch at write time (links to non-existent pages, stale references after page renames, etc.)
 
 ### Agent Tools
 
 The swarm plugin registers wiki tools (or a new wiki provider plugin) that call the beacon endpoints:
+
 - `wiki.read` — read a page
 - `wiki.write` — create/update a page
 - `wiki.search` — search the wiki
@@ -78,26 +82,31 @@ The swarm plugin registers wiki tools (or a new wiki provider plugin) that call 
 ## Files to Modify/Create
 
 ### drone-beacon
+
 - `src/db.ts` — add wiki page metadata table (for search/listing; actual content is files on disk)
 - `src/routes.ts` — add `/wiki` endpoints + coordinator proxy
 - `src/wiki-storage.ts` (new) — filesystem management for wiki pages, scope enforcement
 - `src/coordinator-client.ts` — add wiki proxy methods
 
 ### drone-coordinator
+
 - `src/db.ts` — add wiki page metadata table
 - `src/routes.ts` — add `/wiki` endpoints
 - `src/wiki-storage.ts` (new) — filesystem management for wiki pages, scope enforcement
 
 ### drone-agent
+
 - `src/plugins/swarm/index.ts` — register wiki tools (or new `src/plugins/swarm-wiki/` plugin)
 - `drone-core/src/` — wiki types if needed
 
 ### Tests
+
 - `drone-beacon/test/` — wiki endpoint tests, scope enforcement tests
 - `drone-coordinator/test/` — wiki endpoint tests, scope enforcement tests
 - `drone-agent/test/` — wiki tool tests
 
 ## Validation Criteria
+
 - All LSP checks pass
 - `pnpm typecheck` passes
 - `pnpm lint` passes
