@@ -421,7 +421,6 @@ export async function registerRoutes(app: FastifyInstance) {
   );
 
   // === Swarm Session Routes ===
-
   // Register a new swarm session
   app.post<{ Body: { id: string; personaId?: string; beaconId: string } }>(
     '/sync/sessions/register',
@@ -519,6 +518,164 @@ export async function registerRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: 'q query parameter is required' });
       }
       return db.searchSwarmEvents(q);
+    }
+  );
+
+  // === Agent Location Routes ===
+
+  // Register agent location
+  app.post<{ Body: { agentId: string; beaconId: string; personaId?: string } }>(
+    '/agents/location',
+    async (request, reply) => {
+      const { agentId, beaconId, personaId } = request.body;
+      if (!agentId || !beaconId) {
+        return reply.code(400).send({ error: 'agentId and beaconId are required' });
+      }
+      const location = db.registerAgentLocation(agentId, beaconId, personaId ?? null);
+      return reply.code(201).send(location);
+    }
+  );
+
+  // Get agent location
+  app.get<{ Params: { agentId: string } }>(
+    '/agents/location/:agentId',
+    async (request, reply) => {
+      const location = db.getAgentLocation(request.params.agentId);
+      if (!location) {
+        return reply.code(404).send({ error: 'Agent location not found' });
+      }
+      const beacon = db.getBeacon(location.beaconId);
+      return {
+        ...location,
+        beaconHost: beacon?.host,
+        beaconPort: beacon?.port,
+      };
+    }
+  );
+
+  // Update agent heartbeat
+  app.post<{ Params: { agentId: string } }>(
+    '/agents/location/:agentId/heartbeat',
+    async (request, reply) => {
+      const location = db.updateAgentLocationHeartbeat(request.params.agentId);
+      if (!location) {
+        return reply.code(404).send({ error: 'Agent location not found' });
+      }
+      return { success: true };
+    }
+  );
+
+  // Unregister agent location
+  app.delete<{ Params: { agentId: string } }>(
+    '/agents/location/:agentId',
+    async (request, reply) => {
+      const deleted = db.unregisterAgentLocation(request.params.agentId);
+      if (!deleted) {
+        return reply.code(404).send({ error: 'Agent location not found' });
+      }
+      return { success: true };
+    }
+  );
+
+  // List agents by beacon
+  app.get<{ Querystring: { beaconId?: string } }>(
+    '/agents/location',
+    async (request) => {
+      const { beaconId } = request.query;
+      if (beaconId) {
+        return db.listAgentLocationsByBeacon(beaconId);
+      }
+      return db.listAllAgentLocations();
+    }
+  );
+
+  // === Message Relay Routes ===
+
+  // Relay message to agent on (possibly) different beacon
+  app.post<{ Body: { fromBeaconId: string; fromAgentId: string; toAgentId: string; body: string } }>(
+    '/messages/relay',
+    async (request, reply) => {
+      const { fromBeaconId, fromAgentId, toAgentId, body } = request.body;
+
+      if (!fromBeaconId || !fromAgentId || !toAgentId || !body) {
+        return reply.code(400).send({ error: 'fromBeaconId, fromAgentId, toAgentId, and body are required' });
+      }
+
+      const location = db.getAgentLocation(toAgentId);
+      if (!location) {
+        return reply.code(404).send({ error: 'Target agent not found', code: 'AGENT_NOT_FOUND' });
+      }
+
+      const beacon = db.getBeacon(location.beaconId);
+      if (!beacon) {
+        return reply.code(503).send({ error: 'Target beacon not found', code: 'BEACON_NOT_FOUND' });
+      }
+
+      try {
+        const targetUrl = `http://${beacon.host}:${beacon.port}`;
+        const response = await fetch(`${targetUrl}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fromAgentId,
+            fromBeaconId,
+            toAgentId,
+            body,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          return reply.code(502).send({ error: 'Failed to deliver message to target beacon', details: errorText });
+        }
+
+        const messageData = await response.json() as { id: string };
+        return { success: true, messageId: messageData.id, delivered: true };
+      } catch (err) {
+        return reply.code(503).send({ 
+          error: 'Target beacon unavailable', 
+          details: err instanceof Error ? err.message : 'Unknown error',
+          code: 'BEACON_UNAVAILABLE'
+        });
+      }
+    }
+  );
+
+  // Broadcast to channel across all beacons
+  app.post<{ Body: { fromAgentId: string; channel: string; body: string } }>(
+    '/messages/broadcast',
+    async (request, reply) => {
+      const { fromAgentId, channel, body } = request.body;
+
+      if (!fromAgentId || !channel || !body) {
+        return reply.code(400).send({ error: 'fromAgentId, channel, and body are required' });
+      }
+
+      const beacons = db.listBeacons();
+      let deliveredCount = 0;
+
+      for (const beacon of beacons) {
+        try {
+          const targetUrl = `http://${beacon.host}:${beacon.port}`;
+          const response = await fetch(`${targetUrl}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fromAgentId,
+              toChannel: channel,
+              body,
+            }),
+          });
+
+          if (response.ok) {
+            deliveredCount++;
+          }
+        } catch {
+          // Skip unreachable beacons
+        }
+      }
+
+      return { success: true, deliveredCount, totalBeacons: beacons.length };
     }
   );
 }

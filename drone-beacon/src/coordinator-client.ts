@@ -25,6 +25,12 @@ export interface CoordinatorClient {
   registerSession(agentId: string, personaId: string | null): Promise<void>;
   endSession(agentId: string, connectedAt: number): Promise<void>;
 
+  // Agent location (for cross-beacon messaging)
+  registerAgentLocation(agentId: string, personaId?: string): Promise<void>;
+  updateAgentLocationHeartbeat(agentId: string): Promise<void>;
+  unregisterAgentLocation(agentId: string): Promise<void>;
+  relayMessage(toAgentId: string, fromAgentId: string, body: string): Promise<{ success: boolean; messageId?: string }>;
+
   // Knowledge sync (push)
   pushPersona(persona: Persona): Promise<void>;
   pushSkill(skill: Skill): Promise<void>;
@@ -218,6 +224,85 @@ export function createCoordinatorClient(
         }
       } catch (err) {
         logger.warn(`Failed to end session: ${err}`);
+      }
+    },
+
+    // Agent location (for cross-beacon messaging)
+    async registerAgentLocation(agentId: string, personaId?: string): Promise<void> {
+      try {
+        const res = await fetch(`${baseUrl}/agents/location`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agentId,
+            beaconId: config.beaconId,
+            personaId: personaId ?? undefined,
+          }),
+        });
+        if (!res.ok) {
+          logger.warn(`Failed to register agent location: ${res.status}`);
+        } else {
+          logger.info(`Registered agent location: ${agentId}`);
+        }
+      } catch (err) {
+        logger.warn(`Failed to register agent location: ${err}`);
+      }
+    },
+
+    async updateAgentLocationHeartbeat(agentId: string): Promise<void> {
+      try {
+        const res = await fetch(`${baseUrl}/agents/location/${agentId}/heartbeat`, {
+          method: 'POST',
+        });
+        if (!res.ok) {
+          logger.warn(`Failed to update agent location heartbeat: ${res.status}`);
+        }
+      } catch (err) {
+        logger.warn(`Failed to update agent location heartbeat: ${err}`);
+      }
+    },
+
+    async unregisterAgentLocation(agentId: string): Promise<void> {
+      try {
+        const res = await fetch(`${baseUrl}/agents/location/${agentId}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) {
+          logger.warn(`Failed to unregister agent location: ${res.status}`);
+        } else {
+          logger.info(`Unregistered agent location: ${agentId}`);
+        }
+      } catch (err) {
+        logger.warn(`Failed to unregister agent location: ${err}`);
+      }
+    },
+
+    async relayMessage(
+      toAgentId: string,
+      fromAgentId: string,
+      body: string
+    ): Promise<{ success: boolean; messageId?: string }> {
+      try {
+        const res = await fetch(`${baseUrl}/messages/relay`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fromBeaconId: config.beaconId,
+            fromAgentId,
+            toAgentId,
+            body,
+          }),
+        });
+        if (!res.ok) {
+          const error = await res.json();
+          logger.warn(`Failed to relay message: ${res.status} - ${(error as any).error}`);
+          return { success: false };
+        }
+        const data = await res.json() as { messageId: string };
+        return { success: true, messageId: data.messageId };
+      } catch (err) {
+        logger.warn(`Failed to relay message: ${err}`);
+        return { success: false };
       }
     },
 

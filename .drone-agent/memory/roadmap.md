@@ -6,7 +6,7 @@ tags:
   - drone-agent
   - planning
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-06-27T21:47:23.217Z
+updated: 2026-06-28T02:01:49.533Z
 ---
 
 # Swarm Roadmap
@@ -316,11 +316,12 @@ Local coordination layer for YOUR swarm on one machine.
   - `/sync` - Sync YOUR personas/skills from coordinator
 - Coordinator client for registering beacon and fetching YOUR assets
 - CLI arguments: `--port`, `--host`, `--db`, `--coordinator-host`, `--coordinator-port`, `--id`, `--name`
-- **Inter-agent messaging** - REST (`/messages`) + WebSocket (`ws-server.ts`)
+- **Inter-agent messaging** - REST (`/messages`) + WebSocket (`/ws`)
 - **Agent spawn execution** - `/spawn` endpoint with `spawner.ts`
 - **Memory store** - `/memory` endpoint for beacon-scoped shared memory
 - **Event log** - `/events` endpoint for tracking agent activity
 - **Beacon config override** - `/config` endpoint for runtime config
+- **Cross-beacon messaging** - Accepts `fromBeaconId` for relayed messages
 
 **Self-Improvement Integration:**
 
@@ -348,7 +349,7 @@ Local coordination layer for YOUR swarm on one machine.
 
 ### 🚧 PHASE 3: drone-coordinator
 
-**Status:** In Progress (Secure Foundation & Global Knowledge Complete)
+**Status:** In Progress (Secure Foundation & Shared Session Storage Complete)
 
 Personal control plane for YOUR swarm across machines.
 
@@ -382,6 +383,9 @@ Personal control plane for YOUR swarm across machines.
 | **Security**     | Local-only WSS Enforcement                 | ✅ Complete    |
 | **Security**     | HTTPS Server Configuration (Fastify TLS)   | ✅ Complete    |
 | **Data**         | Global Memory & Skills (Phase 3.3)         | ✅ Complete    |
+| **Data**         | Shared Session Storage (Phase 3.2)        | ✅ Complete    |
+| **Data**         | Agent Location Registry (Phase 3.2)        | ✅ Complete    |
+| **Coordination** | Cross-beacon messaging                   | ✅ Complete    |
 | **UI**           | Web Dashboard for Swarm Monitoring         | ❌ Not Started |
 | **Coordination** | Inter-beacon task routing & spawning       | ❌ Not Started |
 | **DX**           | Make `--https` default for servers         | ⏳ Pending     |
@@ -391,10 +395,15 @@ Personal control plane for YOUR swarm across machines.
 | Phase   | Feature                    | Description                                                  |
 | :------ | :------------------------- | :----------------------------------------------------------- |
 | **3.1** | **Secure Foundation**      | Identity, TLS, and Beacon Approval flow ✅                   |
-| **3.2** | **Shared Session Storage** | `swarm_sessions`, `swarm_messages` tables with FTS5          |
+| **3.2** | **Shared Session Storage** | `swarm_sessions`, `swarm_events`, `agent_locations` tables with FTS5 ✅ |
 | **3.3** | **Global Memory & Skills** | `knowledge` table (your skill, pattern, preference, fact) ✅ |
 | **3.4** | **Swarm Learning Tasks**   | Periodic swarm review on YOUR patterns                       |
 | **3.5** | **Global Search & UI**     | Web UI and search across all YOUR agents' sessions           |
+
+**Note on Messaging:**
+
+- **Local messaging (Phase 2):** Inter-agent messaging via beacon's REST (`/messages`) and WebSocket (`/ws`) endpoints. Works for agents on the same host/LAN.
+- **Cross-beacon messaging (NEW):** Coordinator relays messages between beacons via `/messages/relay` endpoint. Beacons track agent locations in `agent_locations` table.
 
 ---
 
@@ -481,11 +490,11 @@ Phase 5 (Advanced)
 | Command           | Purpose                      |
 | ----------------- | ---------------------------- |
 | `pnpm build`      | Compile all packages         |
-| `pnpm typecheck`  | Type-check all packages      |
+| `pnpm typecheck` | Type-check all packages      |
 | `pnpm test`       | Run all tests (vitest)       |
 | `pnpm test:watch` | Watch mode                   |
 | `pnpm lint`       | ESLint + Prettier            |
-| `pnpm clean`      | Remove all dist/ directories |
+| `pnpm clean`      | Remove all dist/ directories  |
 
 ---
 
@@ -525,4 +534,4 @@ Phase 5 (Advanced)
 
 ---
 
-_Last updated: 2026-06-27_
+_Last updated: 2026-06-28_

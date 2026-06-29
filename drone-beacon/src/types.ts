@@ -65,6 +65,8 @@ export interface AgentMessage {
 }
 
 export interface CreateMessageRequest {
+  fromAgentId: string;
+  fromBeaconId?: string; // For cross-beacon messages (relayed from coordinator)
   toAgentId?: string;
   toChannel?: string;
   body: string; // JSON string

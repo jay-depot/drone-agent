@@ -112,7 +112,6 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   // === Persona Routes ===
-
   // Create a local persona (beacon-scoped)
   app.post<{ Body: CreatePersonaRequest }>(
     '/personas',
@@ -372,7 +371,6 @@ export async function registerRoutes(app: FastifyInstance) {
         agentId: request.params.id,
         metadata: { connectedAt, durationMs: Date.now() - connectedAt },
       });
-
       return { success: true };
     }
   );
@@ -454,12 +452,28 @@ export async function registerRoutes(app: FastifyInstance) {
   );
 
   // === Message Routes ===
-
   // Send a message (REST fallback for non-WS clients)
-  app.post<{ Body: CreateMessageRequest & { fromAgentId: string } }>(
+  // Updated to support cross-beacon messages via coordinator relay
+  app.post<{ Body: CreateMessageRequest }>(
     '/messages',
     async (request, reply) => {
-      const { fromAgentId, toAgentId, toChannel, body } = request.body;
+      const { fromAgentId, fromBeaconId, toAgentId, toChannel, body } = request.body;
+
+      // Validate sender - either local agent or cross-beacon relay
+      if (!fromAgentId) {
+        return reply.code(400).send({ error: 'fromAgentId is required' });
+      }
+
+      // If fromBeaconId is present, this is a cross-beacon message
+      // We don't require the sender to be a local agent
+      const isLocalSender = !fromBeaconId;
+      if (isLocalSender) {
+        // Verify sender is registered locally
+        const sender = db.getAgent(fromAgentId);
+        if (!sender) {
+          return reply.code(403).send({ error: 'Sender agent not registered locally' });
+        }
+      }
 
       if (!toAgentId && !toChannel) {
         return reply
@@ -481,6 +495,7 @@ export async function registerRoutes(app: FastifyInstance) {
           payload: {
             id: message.id,
             fromAgentId,
+            fromBeaconId: fromBeaconId ?? null,
             body: JSON.parse(body),
             receivedAt: message.createdAt,
           },
@@ -584,7 +599,6 @@ export async function registerRoutes(app: FastifyInstance) {
         config ?? null
       );
       db.updateSpawnStatus(finalSpawnId, 'failed', null, message);
-
       return reply.code(202).send({
         spawnId: finalSpawnId,
         agentId: agentId,
@@ -651,7 +665,6 @@ export async function registerRoutes(app: FastifyInstance) {
   );
 
   // === Coordinator Sync Routes ===
-
   // Trigger a sync from coordinator (manual endpoint)
   app.post('/sync', async (request, reply) => {
     const result = await triggerCoordinatorSync();
@@ -717,7 +730,6 @@ export async function registerRoutes(app: FastifyInstance) {
   );
 
   // === Event Log Routes ===
-
   // List event logs with optional filters
   app.get<{ Querystring: EventQuery }>('/events', async (request, reply) => {
     const agentId = request.query.agentId;
