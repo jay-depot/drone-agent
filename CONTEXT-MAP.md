@@ -2,6 +2,7 @@
 
 ## Contexts
 
+- [drone swarm](./CONTEXT.md) — Shared cross-cutting vocabulary (identity assets, scopes, promotion)
 - [drone-agent](./drone-agent/CONTEXT.md) — CLI worker that embodies personas and executes tasks
 - [drone-beacon](./drone-beacon/CONTEXT.md) — Local sync hub for agents on same host or LAN
 - [drone-coordinator](./drone-coordinator/CONTEXT.md) — Central hub connecting beacons for swarm-wide coordination

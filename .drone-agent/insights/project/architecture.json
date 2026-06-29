@@ -66,5 +66,9 @@
   {
     "timestamp": "2026-06-27T23:09:41.457Z",
     "insight": "The persona-principles fragment exists in the code but was not rendering because: (1) it only reads from persona-specific principles files, ignoring project-level principles entirely, and (2) the rendering logic was scoped too narrowly. The combined fragment approach fixes this by scanning both project and persona principles directories."
+  },
+  {
+    "timestamp": "2026-06-29T01:37:42.807Z",
+    "insight": "The swarm learning feature (Phase 3.4) decomposes into four distinct parts: (1) swarm-wide insights/principles promotion via a storage broker pattern, (2) LLM Wiki-style knowledge base on beacon/coordinator servers, (3) beacon-only as an intentional scope boundary (not degradation), (4) migration tool for asset promotion/demotion. The clean separation between local scope (project/user, file-based) and swarm scope (beacon/coordinator, server-based) is the key architectural decision."
   }
 ]
