@@ -23,12 +23,21 @@ export default function beaconRoutes(app: FastifyInstance) {
           publicKey: request.body.publicKey,
           tlsFingerprint: request.body.tlsFingerprint,
         };
-        const trust = db.registerBeaconTrust(trustReq);
-        const response: BeaconStatusResponse = { status: trust.status };
-        if (trust.approvalToken) {
-          response.approvalToken = trust.approvalToken;
+        try {
+          const trust = db.registerBeaconTrust(trustReq);
+          const response: BeaconStatusResponse = { status: trust.status };
+          if (trust.approvalToken) {
+            response.approvalToken = trust.approvalToken;
+          }
+          return reply.code(201).send(response);
+        } catch (err) {
+          if (err instanceof Error && err.message.includes('Public key mismatch')) {
+            return reply.code(403).send({
+              error: err.message,
+            });
+          }
+          throw err;
         }
-        return reply.code(201).send(response);
       }
       const beacon = db.registerBeacon(request.body);
       return reply.code(201).send(beacon);
@@ -77,12 +86,21 @@ export default function beaconRoutes(app: FastifyInstance) {
   app.post<{ Body: RegisterBeaconTrustRequest }>(
     '/beacons/trust',
     async (request, reply) => {
-      const trust = db.registerBeaconTrust(request.body);
-      const response: BeaconStatusResponse = { status: trust.status };
-      if (trust.approvalToken) {
-        response.approvalToken = trust.approvalToken;
+      try {
+        const trust = db.registerBeaconTrust(request.body);
+        const response: BeaconStatusResponse = { status: trust.status };
+        if (trust.approvalToken) {
+          response.approvalToken = trust.approvalToken;
+        }
+        return reply.code(201).send(response);
+      } catch (err) {
+        if (err instanceof Error && err.message.includes('Public key mismatch')) {
+          return reply.code(403).send({
+            error: err.message,
+          });
+        }
+        throw err;
       }
-      return reply.code(201).send(response);
     }
   );
 

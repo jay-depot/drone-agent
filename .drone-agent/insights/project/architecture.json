@@ -102,5 +102,9 @@
   {
     "timestamp": "2026-06-29T23:14:43.447Z",
     "insight": "Fastify 5.x type overloads are sensitive to the presence of the `https` property in the options object. Passing `https: undefined` still triggers the Http2SecureServer overload, causing type mismatches downstream. The fix is to use spread syntax (`...(cond ? { https: ... } : {})`) to conditionally include the property only when HTTPS is actually enabled."
+  },
+  {
+    "timestamp": "2026-06-29T23:25:40.986Z",
+    "insight": "The beacon-to-coordinator HTTPS connection fails because the coordinator uses a self-signed TLS cert and Node.js's built-in fetch() rejects it. The fix was to replace fetch() with a custom wrapper using http/https.request with rejectUnauthorized: false. A better long-term solution might be to have the beacon trust the coordinator's cert by fingerprint, or to use a shared CA."
   }
 ]

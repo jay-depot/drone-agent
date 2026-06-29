@@ -379,6 +379,48 @@ export function registerBeaconTrust(
   req: RegisterBeaconTrustRequest
 ): BeaconTrust {
   const now = Date.now();
+
+  // Check if this beacon already has a trust record
+  const existing = getBeaconTrust(req.id);
+  if (existing) {
+    // Verify the public key matches — this is the identity anchor
+    if (existing.publicKey !== req.publicKey) {
+      throw new Error(
+        `Public key mismatch for beacon "${req.id}": ` +
+          `stored key differs from the one presented. ` +
+          `This could indicate a spoofing attempt. ` +
+          `To accept the new key, delete the existing trust record first.`
+      );
+    }
+
+    // Update connection info but preserve status and public key
+    const stmt = getDatabase().prepare(`
+      UPDATE beacon_trust 
+      SET host = @host, port = @port, tls_fingerprint = @tlsFingerprint, updated_at = @updatedAt
+      WHERE beacon_id = @beaconId
+    `);
+
+    stmt.run({
+      beaconId: existing.beaconId,
+      host: req.host,
+      port: req.port,
+      tlsFingerprint: req.tlsFingerprint ?? null,
+      updatedAt: now,
+    });
+
+    logger.info(
+      `Re-registered beacon: ${existing.beaconId} (status: ${existing.status}, key verified)`
+    );
+
+    return {
+      ...existing,
+      host: req.host,
+      port: req.port,
+      tlsFingerprint: req.tlsFingerprint ?? null,
+      updatedAt: now,
+    };
+  }
+
   const isLocal = req.host === 'localhost' || req.host === '127.0.0.1';
 
   // Auto-approve local beacons
@@ -400,7 +442,7 @@ export function registerBeaconTrust(
   };
 
   const stmt = getDatabase().prepare(`
-    INSERT OR REPLACE INTO beacon_trust 
+    INSERT INTO beacon_trust 
     (beacon_id, name, public_key, host, port, status, approval_token, approved_at, tls_fingerprint, created_at, updated_at)
     VALUES (@beaconId, @name, @publicKey, @host, @port, @status, @approvalToken, @approvedAt, @tlsFingerprint, @createdAt, @updatedAt)
   `);
