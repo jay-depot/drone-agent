@@ -8,7 +8,7 @@ tags:
   - phase-3.4
   - completed
 created: 2026-06-29T01:37:23.458Z
-updated: 2026-06-29T02:02:03.166Z
+updated: 2026-06-29T02:04:39.721Z
 ---
 
 # Part 1: Swarm-wide Insights & Principles Promotion
@@ -106,10 +106,12 @@ The self-improvement plugin's prompt fragment (footer phase) reads principles fr
   - `swarm-principle-beacon` engine calls beacon's `/principles` endpoints
   - Added `self-improvement` as optional dependency in swarm plugin metadata
 
+#### Test Fixtures
+- Fixed all `.js` extension issues in test fixture imports (4 files)
+
 ### Validation
-- `pnpm typecheck` passes for all 4 packages (drone-core, drone-agent, drone-beacon, drone-coordinator)
+- `pnpm typecheck` passes for all 4 packages + test config
 - `pnpm lint` passes
-- Pre-existing test fixture issues (missing `.js` extensions) are unrelated to these changes
 
 ## Files Modified
 
@@ -129,3 +131,7 @@ The self-improvement plugin's prompt fragment (footer phase) reads principles fr
 ### drone-agent
 - `src/plugins/self-improvement/index.ts` — refactored to broker pattern
 - `src/plugins/swarm/index.ts` — added HTTP storage engine registration, optional dependency
+- `test/fixtures/index.ts` — added .js extensions
+- `test/fixtures/assertions.ts` — added .js extension
+- `test/fixtures/http.ts` — added .js extension
+- `test/fixtures/swarm.ts` — added .js extensions
