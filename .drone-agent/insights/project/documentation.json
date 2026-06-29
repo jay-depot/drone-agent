@@ -1,0 +1,14 @@
+[
+  {
+    "timestamp": "2026-06-29T04:31:52.020Z",
+    "insight": "Initial project wiki created with 31 pages covering architecture, modules, concepts, entities, flows, and decisions. The wiki was built from the git history (171 commits, June 18-28 2026), AGENTS.md, README.md, design-draft.md, CONTEXT.md files, and the GitHub repository. The wiki lives in the Obsidian vault at /home/unleet/Obsidian/drone-agent-project/ and uses Obsidian-style [[wikilinks]] for cross-references."
+  },
+  {
+    "timestamp": "2026-06-29T04:36:30.651Z",
+    "insight": "Ingested 19 completed plans from project memory into the project wiki as ADR pages (007-017), then deleted them from memory. 6 memories remain: swarm-migration-tool-plan (not yet implemented), roadmap (living doc), review-state (code review), prompt-file-deduplicate-fix (not implemented), drone-swarm-plugin-for-alice (hypothetical), self-improving-swarm-architecture (architecture reference)."
+  },
+  {
+    "timestamp": "2026-06-29T05:05:36.181Z",
+    "insight": "Merged docs/CONTEXT.md into root CONTEXT.md. No conflicts found — the docs/CONTEXT.md terms (SwarmSession, SessionEvent, Turn, Knowledge Distillation, Principle) are at a different abstraction level than the root CONTEXT.md terms (Identity Asset, Scope, Promotion, Demotion). The merged file now cross-references drone-agent/CONTEXT.md for the agent-local definitions of Session, Message, and Turn. The docs/CONTEXT.md file should be deleted since it's now superseded."
+  }
+]

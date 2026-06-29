@@ -55,6 +55,7 @@ drone-agent/          ← The CLI + TUI coding agent (Ink-based)
       git.ts         ← Git status/diff/commit/log tools
     runtime/          ← Plugin engine, config loader, conversation service, session manager
       plugin-engine.ts
+      builtin-commands.ts  ← Built-in slash command definitions
       config.ts
       conversation-service.ts
       session-manager.ts
@@ -87,31 +88,61 @@ drone-core/           ← Shared types, contracts, config defaults, token estima
     domain-types.ts   ← Domain types for beacon/coordinator
     lsp-types.ts      ← LSP server types
     mcp-types.ts      ← MCP server types
+    wiki-types.ts     ← Wiki page types
     token-estimate.ts ← Token estimation functions
     utils.ts          ← Utility functions
   test/
 drone-beacon/         ← Local hub for drone swarm (Fastify + SQLite + WebSocket)
   src/
     index.ts          ← Server entry point, CLI arg parsing
-    routes.ts         ← REST API routes
+    routes/           ← Domain-specific route files
+      index.ts        ← Route registration assembly
+      context.ts      ← Shared state, setters, proxy helpers
+      health.ts       ← GET /health
+      personas.ts     ← Persona CRUD
+      skills.ts       ← Skill CRUD
+      agents.ts       ← Agent session management
+      memory.ts       ← Memory CRUD
+      messages.ts     ← Inter-agent messaging
+      spawn.ts        ← Agent spawn management
+      config.ts       ← Config override CRUD
+      events.ts       ← Event log
+      insights.ts     ← Insight CRUD (with coordinator proxy)
+      principles.ts   ← Principle CRUD (with coordinator proxy)
+      wiki.ts         ← Wiki page CRUD (with coordinator proxy)
+      sync.ts         ← Coordinator sync trigger
     ws-server.ts      ← WebSocket server for agent messaging
     db.ts             ← SQLite database layer
     coordinator-client.ts ← HTTP client to drone-coordinator
     spawner.ts        ← Agent process spawning
     identity.ts       ← Ed25519 keypair identity
     tls.ts            ← TLS certificate management
+    wiki-storage.ts   ← Wiki filesystem management
     types.ts          ← Internal types
     logger.ts         ← Pino logger
-  test/
+  test/               ← (no test directory yet)
 drone-coordinator/    ← Global hub for swarm coordination (Fastify + SQLite)
   src/
     index.ts          ← Server entry point, CLI arg parsing
-    routes.ts         ← REST API routes
+    routes/           ← Domain-specific route files
+      index.ts        ← Route registration assembly
+      health.ts       ← GET /health
+      personas.ts     ← Persona CRUD
+      skills.ts       ← Skill CRUD
+      beacons.ts      ← Beacon registration, trust, approval, sessions
+      knowledge.ts    ← Knowledge CRUD + search + sync
+      insights.ts     ← Insight CRUD
+      principles.ts   ← Principle CRUD
+      wiki.ts         ← Wiki page CRUD
+      swarm.ts        ← Swarm sessions, events, agent locations
+      messages.ts     ← Cross-beacon message relay and broadcast
     db.ts             ← SQLite database layer
+    storage.ts        ← Storage layer
     tls.ts            ← TLS certificate management
+    wiki-storage.ts   ← Wiki filesystem management
     types.ts          ← Internal types
     logger.ts         ← Pino logger
-  test/
+  test/               ← Vitest tests
 skill-library/        ← Reusable skill .md files (not a workspace package)
 ```
 
@@ -179,7 +210,7 @@ Providers are sorted by precedence (lower number = higher priority). Duplicate I
 
 ### Config System
 
-Config cascades: **Project > User > Default** (last-write-wins per key, except `enabledPlugins` which is additive at the project level).
+Config cascades: **Default → User → Project** (last-write-wins per key, except `enabledPlugins` which is additive at the project level). When the swarm plugin is active, beacon and coordinator config values are injected as additional underlays via the `DroneConfigInjector` capability, not through the file-based config loader. Config injectors are priority-ordered: System Defaults (0) → Coordinator (50) → Beacon (75) → Agent Local (100).
 
 Config files live in `.drone-agent/config.json` at each scope. The config loader (`runtime/config.ts`) walks up the directory tree looking for `.drone-agent/` directories.
 
@@ -197,7 +228,9 @@ Project-level memory is stored as JSON files in `.drone-agent/memory/`. Tools: `
 
 ### Insight System
 
-The `self-improvement` plugin records insights about personas, skills, or the project. Insights are stored in `.drone-agent/insights/` (for project/skill) or `.drone-agent/personas/<id>/insights/` (for persona). Use `self-improvement.insight` to log observations during development.
+The `self-improvement` plugin records insights about personas, skills, or the project. Insights are stored in `.drone-agent/insights/` (for project/skill) or `.drone-agent/personas/<id>/insights/` (for persona). For swarm-scoped assets, insights are stored on the owning server (beacon/coordinator) via HTTP storage engines registered by the swarm plugin. Principles are derived from insights and injected into the system prompt via a combined prompt fragment.
+
+Use `self-improvement.insight` to log observations during development.
 
 ### Workflow System
 
@@ -221,7 +254,11 @@ Custom slash commands defined in `.macro` files. The `macros` plugin loads them 
 
 ### Swarm Plugin
 
-The `swarm` plugin connects to a `drone-beacon` instance to provide swarm-wide personas, skills, and config injection. It registers persona and skill providers at both the beacon and coordinator precedence levels, and provides a WebSocket-based messaging channel for inter-agent communication. The swarm plugin is not enabled by default.
+The `swarm` plugin connects to a `drone-beacon` instance to provide swarm-wide personas, skills, and config injection. It registers persona and skill providers at both the beacon and coordinator precedence levels, provides a WebSocket-based messaging channel for inter-agent communication, registers HTTP storage engines for swarm-scoped insights and principles, registers wiki tools (`wiki_read`, `wiki_write`, `wiki_search`, `wiki_list`, `wiki_delete`, `wiki_lint`), and pushes conversation events to the coordinator. The swarm plugin is not enabled by default.
+
+### Slash Commands
+
+All slash commands (built-in and plugin-registered) are dispatched through the engine's unified registry. Built-in commands (`/exit`, `/quit`, `/help`, `/clear`, `/plugins`, `/tools`, `/systemprompt`, `/tool`, `/exec`) have lower precedence than plugin commands, allowing plugins to override them. Unrecognized slash commands display an error instead of being sent to the LLM. The `?` alias for `/help` has been removed.
 
 ## Working on the Project
 
@@ -232,6 +269,8 @@ The `swarm` plugin connects to a `drone-beacon` instance to provide swarm-wide p
 3. If it needs dependencies from the engine (like `sessionManager`), add it to `createBuiltInPlugins()` instead
 4. Register tools, prompt fragments, workflows, and capabilities in the `register()` function
 5. Add tests in `test/`
+
+Plugins can declare optional dependencies via the `optional` field in their metadata (e.g., `{ id: 'self-improvement', optional: true }`). The engine will not throw if an optional dependency is not enabled.
 
 ### Adding a new tool
 
@@ -249,7 +288,7 @@ Call `registration.registerWorkflow({ name, description, inputSchema, run })`. T
 
 ### Adding a new slash command
 
-Call `registration.registerSlashCommand({ command, description, handler })`. The handler receives a `DroneSlashCommandContext` with the raw line, args, engine, conversation, session manager, and logger.
+Call `registration.registerSlashCommand({ command, description, handler })`. The handler receives a `DroneSlashCommandContext` with the raw line, args, engine, conversation, session manager, logger, and optional fields `exit?`, `clearSession?`, and `printHelp?`.
 
 ### Modifying shared types
 
@@ -278,6 +317,7 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-agent/src/first-run.tsx`                       | First-run setup wizard (LLM provider probing)         |
 | `drone-agent/src/lib.ts`                              | Public library exports for embedding drone-agent      |
 | `drone-agent/src/runtime/plugin-engine.ts`            | Plugin lifecycle, tool dispatch, workflow execution   |
+| `drone-agent/src/runtime/builtin-commands.ts`         | Built-in slash command definitions                   |
 | `drone-agent/src/runtime/config.ts`                   | Config loading, merging, environment interpolation    |
 | `drone-agent/src/runtime/conversation-service.ts`     | LLM conversation loop, tool iteration                 |
 | `drone-agent/src/runtime/session-manager.ts`          | Session state, turn tracking                          |
@@ -292,12 +332,39 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-agent/src/plugins/self-improvement/index.ts`   | Insight and principle system                          |
 | `drone-agent/src/plugins/startup.ts`                  | Startup banner and status tool                        |
 | `drone-agent/src/plugins/focus.ts`                    | Session focus management                              |
+| `drone-agent/src/plugins/lightpanda/index.ts`         | Lightpanda browser automation MCP integration         |
+| `drone-agent/src/plugins/ollama.ts`                   | Ollama LLM provider                                   |
+| `drone-agent/src/plugins/openrouter/index.ts`         | OpenRouter LLM provider                               |
+| `drone-agent/src/plugins/echo/index.ts`              | Mock LLM provider for deterministic testing           |
+| `drone-agent/src/plugins/exec.ts`                     | Shell command execution                               |
+| `drone-agent/src/plugins/fetch.ts`                    | HTTP fetch tool                                       |
+| `drone-agent/src/plugins/file.ts`                     | File read/write/glob/diff tools                       |
+| `drone-agent/src/plugins/git.ts`                      | Git status/diff/commit/log tools                     |
+| `drone-agent/src/plugins/search.ts`                   | Text search (ripgrep/grep)                            |
+| `drone-agent/src/plugins/todo.ts`                     | TODO list management                                  |
+| `drone-agent/src/plugins/utils.ts`                    | Utility tools (arithmetic, counting, spelling)        |
+| `drone-agent/src/plugins/prompt-file/index.ts`        | Prompt file injection                                 |
+| `drone-agent/src/plugins/compaction/index.ts`          | Context compaction (summary-drop strategy)            |
+| `drone-agent/src/plugins/config/index.ts`             | Config capability (injectors, rebuild)               |
+| `drone-agent/src/plugins/log/index.ts`                | Session logging to JSON files                         |
+| `drone-agent/src/plugins/memory/index.ts`             | Project-level memory (JSON files)                     |
+| `drone-agent/src/plugins/persona/index.ts`            | Persona broker plugin                                 |
+| `drone-agent/src/plugins/skills/index.ts`              | Skills broker plugin                                  |
+| `drone-agent/src/plugins/llm/index.ts`                | LLM provider broker                                   |
+| `drone-agent/src/plugins/mcp/index.ts`                 | MCP client (stdio and streamable HTTP)                |
+| `drone-agent/src/plugins/lsp/plugin.ts`               | LSP server connections                                |
 | `drone-core/src/index.ts`                             | All shared types and config defaults                  |
 | `drone-core/src/config-types.ts`                      | DroneAgentConfig, PartialDroneAgentConfig, defaults   |
 | `drone-core/src/config-schema.ts`                     | JSON schema parsing and validation                    |
 | `drone-core/src/plugin-system.ts`                     | DronePlugin, DronePluginRegistration, workflows       |
 | `drone-core/src/capabilities.ts`                      | Capability registry types                             |
 | `drone-core/src/session-types.ts`                     | Session, message, tool, and token types               |
+| `drone-core/src/wiki-types.ts`                        | Wiki page types                                       |
+| `drone-beacon/src/routes/index.ts`                    | Beacon route registration assembly                    |
+| `drone-beacon/src/wiki-storage.ts`                    | Wiki filesystem management                            |
+| `drone-coordinator/src/routes/index.ts`               | Coordinator route registration assembly               |
+| `drone-coordinator/src/wiki-storage.ts`               | Wiki filesystem management                            |
+| `drone-coordinator/src/storage.ts`                    | Coordinator storage layer                             |
 
 ## Design Principles
 

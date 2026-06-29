@@ -12,6 +12,8 @@ Drone Beacon is the host-local coordination layer for drone-agent when the swarm
 - **Memory with TTL** - Key-value store with optional time-to-live for inter-agent communication
 - **WebSocket Support** - Real-time communication with connected agents
 - **Message Passing** - Agent-to-agent and channel-based messaging
+- **Self-Improvement** - Beacon-scoped insights and principles tables
+- **Knowledge Base** - LLM Wiki-style markdown pages on the beacon filesystem
 
 ## Quick Start
 
@@ -36,6 +38,9 @@ pnpm start
 | `--db`                    | config/drone-beacon.db | Path to SQLite database                          |
 | `--coordinator-host`      | -                      | Coordinator host to connect to                   |
 | `--coordinator-port`      | 3456                   | Coordinator port                                 |
+| `--coordinator-https`     | false                  | Use HTTPS for coordinator connection             |
+| `--https`                 | false                  | Enable HTTPS server                              |
+| `--no-https`              | -                      | Disable HTTPS server (default)                  |
 | `--id`                    | auto-generated         | Beacon ID                                        |
 | `--name`                  | default-beacon         | Beacon name                                      |
 | `--spawn-agent-path`      | drone-agent            | Path to drone-agent binary                       |
@@ -113,6 +118,29 @@ pnpm start
 
 - `GET /events` - List event logs (query: agentId, eventType, since, limit)
 - `GET /events/:id` - Get specific event log
+
+### Insights
+
+- `POST /insights` - Create insight (query: ?scope=coordinator to proxy to coordinator)
+- `GET /insights` - List insights (query: targetType, targetId, scope)
+- `GET /insights/:id` - Get insight
+- `DELETE /insights/:id` - Delete insight
+
+### Principles
+
+- `POST /principles` - Create principle (query: ?scope=coordinator to proxy to coordinator)
+- `GET /principles` - List principles (query: targetType, targetId, scope)
+- `GET /principles/:id` - Get principle
+- `DELETE /principles/:id` - Delete principle
+
+### Wiki
+
+- `GET /wiki` - List all wiki pages (beacon + coordinator, scope-tagged)
+- `GET /wiki/:pageId` - Get a specific wiki page (markdown + frontmatter)
+- `PUT /wiki/:pageId` - Create or update a wiki page (query: ?scope=coordinator to proxy)
+- `DELETE /wiki/:pageId` - Delete a wiki page (query: ?scope=coordinator to proxy)
+- `GET /wiki/search?q=...` - Search wiki pages
+- `POST /wiki/lint` - Trigger a lint pass (health-check the wiki)
 
 ### WebSocket
 

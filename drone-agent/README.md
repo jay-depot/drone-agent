@@ -29,6 +29,7 @@ The following built-in plugins are available. Most are opt-in and must be enable
 - `exec` - Shell execution
 - `fetch` - HTTP requests
 - `file` - File operations
+- `focus` - Session focus management
 - `git` - Git operations
 - `llm` - Generic LLM provider interface
 - `lsp` - Language server protocol support
@@ -69,7 +70,7 @@ To start `drone-agent`, simply run:
 drone-agent
 ```
 
-The first time you run `drone-agent`, it will ask you how to connect to an Ollama instance. Accept the default (local) if you have Ollama running locally, or enter the URL of your Ollama instance if it's running elsewhere.
+The first time you run `drone-agent`, it will probe for available LLM providers (Ollama, OpenRouter) and ask you how to connect. Accept the default (local) if you have Ollama running locally, or enter the URL of your Ollama instance if it's running elsewhere.
 
 After that, `drone-agent` will introduce itself and ask if you want it to help you set it up.
 
