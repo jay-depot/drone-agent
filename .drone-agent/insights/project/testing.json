@@ -2,5 +2,9 @@
   {
     "timestamp": "2026-06-29T03:47:20.903Z",
     "insight": "The beacon's coordinator-independent operation was verified via live endpoint testing (starting the beacon with no coordinator and hitting all endpoints with curl). This is effective but manual — adding automated integration tests that start the beacon and test endpoints without a coordinator would prevent regressions."
+  },
+  {
+    "timestamp": "2026-06-29T05:47:57.067Z",
+    "insight": "The external loader tests revealed that `os.homedir()` reads from the OS user database, not `process.env.HOME`. Tests that need to override the home directory for user-scoped paths must set `process.env.HOME` before calling functions that use `os.homedir()`. This is a subtle gotcha that could trip up future test authors."
   }
 ]

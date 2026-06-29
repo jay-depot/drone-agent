@@ -90,5 +90,9 @@
   {
     "timestamp": "2026-06-29T05:23:54.248Z",
     "insight": "The plugin engine currently has no mechanism to add plugins after construction. The external plugin feature will need a new `addExternalPlugin()` method on the engine that adds a DronePlugin to the internal registry, registers it, and runs catch-up lifecycle hooks."
+  },
+  {
+    "timestamp": "2026-06-29T05:47:57.059Z",
+    "insight": "The external plugin loading feature required adding an `addExternalPlugin()` method to the engine because the existing `enablePlugin()` only works for plugins already in the registry. The new method adds the plugin to the registry map, registers it, and runs catch-up lifecycle hooks. This pattern could be useful for other dynamic plugin scenarios."
   }
 ]
