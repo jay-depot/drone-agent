@@ -26,5 +26,21 @@
   {
     "timestamp": "2026-06-29T19:28:12.223Z",
     "insight": "The migrate subcommand is detected before the main CLI parser's `--` option check, which required restructuring parseCliArgs to check for 'migrate' as the first positional arg before entering the option-parsing loop. This is a clean pattern for future subcommands."
+  },
+  {
+    "timestamp": "2026-06-29T20:43:48.203Z",
+    "insight": "Both drone-beacon and drone-coordinator bin scripts imported ./index.js (relative to bin/) instead of ../dist/index.js, causing ERR_MODULE_NOT_FOUND at runtime. The drone-agent bin script had it right. This suggests the other two were never tested as CLI binaries after the build output was moved to dist/."
+  },
+  {
+    "timestamp": "2026-06-29T20:43:48.208Z",
+    "insight": "better-sqlite3 throws if the directory for the database file doesn't exist. Neither drone-beacon nor drone-coordinator created the config directory before calling initDatabase(). Fixed by adding fs.mkdirSync inside initDatabase() in both db.ts files so all callers (serve, approve, list-beacons) benefit."
+  },
+  {
+    "timestamp": "2026-06-29T21:32:14.756Z",
+    "insight": "The swarm plugin hardcodes https:// for the beacon URL, but the beacon generates self-signed certs by default. Node.js fetch() rejects self-signed certs, so the agent can't connect to a local HTTPS beacon without either disabling TLS verification or switching to HTTP. Added beaconUseHttps config option as a workaround."
+  },
+  {
+    "timestamp": "2026-06-29T21:32:14.760Z",
+    "insight": "The beacon's coordinator registration failure is non-fatal (graceful degradation to offline mode), but the periodic sync retries every 5 minutes and logs the timeout error each time. This is noisy when the coordinator isn't running yet. Could suppress repeated failures after the first."
   }
 ]

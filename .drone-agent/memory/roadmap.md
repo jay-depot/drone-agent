@@ -6,7 +6,7 @@ tags:
   - drone-agent
   - planning
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-06-28T02:01:49.533Z
+updated: 2026-06-29T20:19:46.800Z
 ---
 
 # Swarm Roadmap
@@ -48,7 +48,7 @@ A **swarm** is a personal AI workforce - multiple agents working in concert for 
 │                   drone-gateway                      │
 │  (Chat APIs: Matrix, Discord, Slack, relaying       │
 │   messages into swarm, launching agents on demand)  │
-│  *Single-user: messages routed to YOUR agents       │
+│  *Single-user: messages routed to YOUR agents        │
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────┴──────────────────────────────┐
@@ -158,88 +158,6 @@ swarm: {
 
 ---
 
-## Swarm Migration Tool
-
-A CLI tool for moving your assets between scopes within your personal swarm.
-
-### Purpose
-
-As you build up valuable personas, skills, and memories locally, you can promote them to higher scopes for broader access:
-
-- **Project → User**: Move project-specific assets to your user scope
-- **User → Beacon**: Make your assets available to all agents on this host
-- **Beacon → Coordinator**: Make assets available across all your beacons
-
-### Scope Progression (All Yours)
-
-```
-┌─────────────────────────────────────────────────────┐
-│              COORDINATOR (Your Swarm-wide)         │
-│  Your personas, skills, memory on ALL your beacons│
-└─────────────────────────┬───────────────────────────┘
-                          │ promote
-                          ▼
-┌─────────────────────────────────────────────────────┐
-│              BEACON (Your Host-wide)                │
-│  Your personas, skills, memory on this host       │
-└─────────────────────────┬───────────────────────────┘
-                          │ promote
-                          ▼
-┌─────────────────────────────────────────────────────┐
-│              USER (Your User-level)                 │
-│  Your default personas, skills, memories           │
-└─────────────────────────┬───────────────────────────┘
-                          │ promote
-                          ▼
-┌─────────────────────────────────────────────────────┐
-│              PROJECT (Your Project-specific)        │
-│  Your project-scoped personas, skills, memories    │
-└─────────────────────────────────────────────────────┘
-```
-
-### Commands
-
-```bash
-# List your migrate-able assets
-drone-migrate --list
-
-# Promote specific asset to higher scope
-drone-migrate --persona "my-persona" --to beacon
-drone-migrate --skill "deploy-helm" --to coordinator
-drone-migrate --memory "project-context" --to beacon
-
-# Batch promote all from one scope to another
-drone-migrate --from user --to beacon
-
-# Pull down (demote) swarm assets to local
-drone-migrate --pull --scope coordinator --to user
-```
-
-### Implementation
-
-**Scope Flags:**
-
-- `project` - Only visible in current project
-- `user` - Visible to all your projects on this user account
-- `local` / `beacon` - Visible to all YOUR agents connected to this beacon
-- `coordinator` / `swarm` - Visible to your entire swarm
-
-**No Multi-User Complications:**
-
-- No permissions to manage
-- No approval queues for sharing
-- No conflict resolution with other users
-- Simple overwrite/merge for conflicts (your choice)
-
-**Key Files:**
-
-- `drone-agent/src/cli/migrate.ts` - CLI commands
-- `drone-agent/src/runtime/migration-service.ts` - Asset promotion logic
-- `drone-beacon/src/routes.ts` - `/migrate` endpoints
-- `drone-coordinator/src/routes.ts` - `/swarm/migrate` endpoints
-
----
-
 ## Phase Roadmap
 
 ### ✅ PHASE 1: drone-agent (COMPLETE)
@@ -265,19 +183,6 @@ The standalone coding agent - your AI assistant, whether solo or as part of your
 - Self-improvement/insights system
 - **Swarm plugin** for connecting to beacon
 
-**Self-Improvement Integration:**
-
-- Background review fork for per-turn learning
-- Skill creation/management tools
-- Memory read/write for local knowledge
-- Insights system (principles, patterns)
-
-**Migration Tool Integration:**
-
-- CLI commands for migration (`drone migrate`)
-- Scope field on all assets (project/user/local/coordinator)
-- Local migration service
-
 **Key Files:**
 
 - `drone-agent/src/index.tsx` - CLI entry point
@@ -286,12 +191,6 @@ The standalone coding agent - your AI assistant, whether solo or as part of your
 - `drone-agent/src/plugins/index.ts` - Built-in plugins
 - `drone-agent/src/plugins/swarm/index.ts` - Swarm plugin (connects to beacon)
 - `drone-core/src/index.ts` - Shared types
-
-**Future: Swarm Setup Workflow**
-
-- The bootstrap plugin will be updated to add a guided workflow for setting up a swarm
-- Interactive prompts to configure beacon, coordinator, and gateway
-- Simplifies the "getting started" experience for new swarm users
 
 ---
 
@@ -304,24 +203,14 @@ Local coordination layer for YOUR swarm on one machine.
 **What's Built:**
 
 - Fastify HTTP server (port 3457 by default)
-- SQLite database (better-sqlite3) with tables:
-  - `personas` (id, name, description, systemPrompt, scope, createdAt, updatedAt)
-  - `skills` (id, name, description, trigger, body, scope, createdAt, updatedAt)
-  - `agent_sessions` (id, personaId, connectedAt, lastActivity)
-- REST API endpoints:
-  - `/health` - Health check
-  - `/personas` - CRUD for your personas
-  - `/skills` - CRUD for your skills
-  - `/agents` - YOUR agent session management (register, heartbeat, unregister)
-  - `/sync` - Sync YOUR personas/skills from coordinator
-- Coordinator client for registering beacon and fetching YOUR assets
-- CLI arguments: `--port`, `--host`, `--db`, `--coordinator-host`, `--coordinator-port`, `--id`, `--name`
-- **Inter-agent messaging** - REST (`/messages`) + WebSocket (`/ws`)
-- **Agent spawn execution** - `/spawn` endpoint with `spawner.ts`
-- **Memory store** - `/memory` endpoint for beacon-scoped shared memory
-- **Event log** - `/events` endpoint for tracking agent activity
-- **Beacon config override** - `/config` endpoint for runtime config
-- **Cross-beacon messaging** - Accepts `fromBeaconId` for relayed messages
+- SQLite database (better-sqlite3) with tables for personas, skills, agent sessions, memory, events, wiki, insights, principles
+- REST API endpoints for all CRUD operations
+- WebSocket server for inter-agent messaging
+- Agent spawn execution (`/spawn` endpoint with `spawner.ts`)
+- Coordinator client for registering beacon and syncing assets
+- TLS support with auto-generated certificates
+- Ed25519 keypair identity management
+- Event logging and config overrides
 
 **Self-Improvement Integration:**
 
@@ -329,11 +218,6 @@ Local coordination layer for YOUR swarm on one machine.
 - Your local memory (your preferences)
 - Push to coordinator on session end
 - Sync knowledge from coordinator
-
-**Migration Tool Integration:**
-
-- `/migrate` API endpoints for pushing YOUR assets upward
-- Scope-aware CRUD (filter by scope)
 
 **How It Works:**
 
@@ -343,67 +227,105 @@ Local coordination layer for YOUR swarm on one machine.
 4. Heartbeat every 30 seconds to keep session alive
 5. On shutdown, agent unregisters via DELETE `/agents/:id`
 
-**Phase 2 is complete.** Auto-download of beacon binary is handled by the bootstrap plugin workflow.
-
 ---
 
-### 🚧 PHASE 3: drone-coordinator
+### ✅ PHASE 3: drone-coordinator (SUBSTANTIALLY COMPLETE)
 
-**Status:** In Progress (Secure Foundation & Shared Session Storage Complete)
+**Status:** Substantially Complete — core infrastructure, security, session storage, knowledge management, wiki, insights/principles, and migration tool are all implemented. A few small items remain.
 
 Personal control plane for YOUR swarm across machines.
 
-**Goals:**
+#### 3.1 Secure Foundation ✅
 
-- Web UI for monitoring YOUR agents in the swarm
-- Task management and inter-beacon agent spawning
-- YOUR swarm-wide personas, skills, and memory store
-- YOUR session registry (aggregated from YOUR beacons)
-- Coordinator management persona
-- SQLite or Postgres persistence (your choice)
-- Must have a beacon on same host (for self-maintenance)
+- Ed25519 Keypair Management (`identity.ts`)
+- TLS Certificate Generation (`tls.ts`) — auto-generates self-signed certs via openssl
+- Beacon Approval Flow & Trust Tables
+- Local-only WSS Enforcement
+- HTTPS Server Configuration (Fastify TLS)
 
-**Security Architecture (Complete):**
+#### 3.2 Shared Session Storage ✅
 
-- **Agent ↔ Beacon:** Local-only connection enforcement via WSS encryption.
-- **Beacon ↔ Coordinator:**
-  - **Identity:** Beacons use Ed25519 keypairs.
-  - **Authentication:** HTTPS connection with public key exchange.
-  - **Trust Model:** Beacons must be approved via token (`drone-coordinator --approve <token>`), with auto-approval for localhost.
-  - **Connectivity:** TLS certificate management.
+- `swarm_sessions`, `swarm_events`, `agent_locations` tables with FTS5
+- Session registration and event push from beacons
+- Full-text search on event payloads
+- Agent location tracking for cross-beacon routing
 
-**Implementation Progress:**
+#### 3.3 Global Memory & Skills ✅
 
-| Component        | Feature                                    | Status         |
-| :--------------- | :----------------------------------------- | :------------- |
-| **Core**         | Basic Fastify/SQLite infrastructure        | ✅ Complete    |
-| **Security**     | Ed25519 Keypair Management (`identity.ts`) | ✅ Complete    |
-| **Security**     | TLS Certificate Generation (`tls.ts`)      | ✅ Complete    |
-| **Security**     | Beacon Approval Flow & Trust Tables        | ✅ Complete    |
-| **Security**     | Local-only WSS Enforcement                 | ✅ Complete    |
-| **Security**     | HTTPS Server Configuration (Fastify TLS)   | ✅ Complete    |
-| **Data**         | Global Memory & Skills (Phase 3.3)         | ✅ Complete    |
-| **Data**         | Shared Session Storage (Phase 3.2)         | ✅ Complete    |
-| **Data**         | Agent Location Registry (Phase 3.2)        | ✅ Complete    |
-| **Coordination** | Cross-beacon messaging                     | ✅ Complete    |
-| **UI**           | Web Dashboard for Swarm Monitoring         | ❌ Not Started |
-| **Coordination** | Inter-beacon task routing & spawning       | ❌ Not Started |
-| **DX**           | Make `--https` default for servers         | ⏳ Pending     |
+- `knowledge` table with CRUD + search + sync (push/pull)
+- Confidence-based conflict resolution
+- Beacon-side knowledge cache with periodic sync
 
-**Implementation Phases:**
+#### 3.4 Swarm Knowledge Base (LLM Wiki) ✅
 
-| Phase   | Feature                    | Description                                                             |
-| :------ | :------------------------- | :---------------------------------------------------------------------- |
-| **3.1** | **Secure Foundation**      | Identity, TLS, and Beacon Approval flow ✅                              |
-| **3.2** | **Shared Session Storage** | `swarm_sessions`, `swarm_events`, `agent_locations` tables with FTS5 ✅ |
-| **3.3** | **Global Memory & Skills** | `knowledge` table (your skill, pattern, preference, fact) ✅            |
-| **3.4** | **Swarm Learning Tasks**   | Periodic swarm review on YOUR patterns                                  |
-| **3.5** | **Global Search & UI**     | Web UI and search across all YOUR agents' sessions                      |
+- Wiki pages stored as `.md` files on server filesystem with YAML frontmatter
+- REST endpoints on both beacon and coordinator
+- Beacon proxies coordinator-scoped requests
+- Scope enforcement (no downward links)
+- Agent tools: `wiki_read`, `wiki_write`, `wiki_search`, `wiki_list`, `wiki_delete`, `wiki_lint`
 
-**Note on Messaging:**
+#### 3.5 Swarm-Wide Insights & Principles ✅
 
-- **Local messaging (Phase 2):** Inter-agent messaging via beacon's REST (`/messages`) and WebSocket (`/ws`) endpoints. Works for agents on the same host/LAN.
-- **Cross-beacon messaging (NEW):** Coordinator relays messages between beacons via `/messages/relay` endpoint. Beacons track agent locations in `agent_locations` table.
+- Self-improvement plugin refactored to broker pattern with storage engine registration
+- Beacon and coordinator each have insights and principles tables
+- REST endpoints: CRUD for both, with `?scope=coordinator` proxy on beacon
+- Swarm plugin registers HTTP storage engines for beacon/coordinator
+- Combined principles prompt fragment reads from all relevant providers
+
+#### 3.6 Migration Tool ✅
+
+A CLI tool (`drone-migrate` or `drone-agent migrate`) for promoting/demoting assets between local and swarm scopes.
+
+**Supported asset types:** persona, skill, insight, principle, wiki
+
+**Operations:**
+
+- Promote (local → swarm): project → user → beacon → coordinator
+- Demote/pull (swarm → local): coordinator → beacon → user → project
+- Batch migration of all assets of a type
+- Backup before migration
+
+**Key Files:**
+
+- `drone-agent/bin/drone-migrate` — CLI binary
+- `drone-agent/src/migrate.ts` — CLI entry point
+- `drone-agent/src/runtime/migration-service.ts` — Core migration logic (827 lines)
+- `drone-agent/test/migration.test.ts` — Tests (612 lines)
+
+#### ⏳ 3.7 Make `--https` Default
+
+**Status:** Pending
+
+Certificate auto-generation already exists on both beacon and coordinator. The change is to flip the default from `false` to `true`:
+
+- Coordinator: `process.env.COORDINATOR_HTTPS === 'true'` → `process.env.COORDINATOR_HTTPS !== 'false'`
+- Beacon: Same pattern for `BEACON_HTTPS` and `COORDINATOR_HTTPS`
+
+**Nice-to-have:** Add a pure Node.js certificate generation fallback (using `crypto`) for environments without `openssl` CLI.
+
+#### ⏳ 3.8 Inter-Beacon Spawn Routing
+
+**Status:** Not started
+
+The beacon already has a local spawn API (`POST /spawn`). The coordinator tracks agent locations. What's needed:
+
+1. New `POST /spawn` route on coordinator that accepts `{ targetBeaconId, personaId?, task?, config? }`
+2. Logic to look up the target beacon's host:port and forward the request (mirrors the existing message relay pattern in `messages.ts`)
+3. Optionally, a `beaconSelector: 'any'` mode that picks the least-loaded beacon
+
+The beacon's existing `/spawn` endpoint is ready to accept forwarded requests — no changes needed on the beacon side.
+
+#### ⏳ 3.9 Bootstrap Swarm Workflow
+
+**Status:** Not started
+
+A guided workflow (`bootstrap.swarm`) to set up beacon/coordinator connection, configure swarm mode, and register with a beacon. Currently the bootstrap plugin only has `bootstrap.project` and `bootstrap.user`.
+
+#### ⏳ 3.10 Coordinator Test Coverage
+
+**Status:** Minimal (1 test file: `knowledge.test.ts`)
+
+The coordinator needs test coverage for its routes and database layer.
 
 ---
 
@@ -434,32 +356,30 @@ Chat API integration layer - YOUR agents receive messages from chat platforms.
 
 Advanced swarm capabilities for YOU, built on phases 1-4.
 
-**Swarm Memory Architecture:**
+#### 5.1 Conversation Log Migration
 
-- Event log (append-only) - most flexible
-- KV store with TTL - structured data
-- Vector store with agent-scoped namespaces - most powerful
-- Default: Event log + vector store; periodic agent promotes facts
+The migration tool already has a placeholder comment: _"Conversation log import is a phase 5 concern."_ This would add `conversation`/`session`/`log` as a supported asset type, enabling promotion of session logs from local to swarm scopes.
 
-**Inter-Beacon Agent Spawning:**
+#### 5.2 Automated Learning Loop
 
-- Beacon A asks coordinator to tell Beacon B to spawn an agent
-- Vector Search for global session/memory retrieval (Promoted from Phase 3)
-- Distributed task routing within YOUR swarm
-- Route to node with best model for task
+The following features are aspirational and not yet implemented:
 
-**Model Provider Plugin System:**
+- **Background review fork**: A per-turn learning mechanism that runs in the background after each agent turn, extracting insights and patterns from the conversation.
+- **Swarm review task**: A periodic task on the coordinator that identifies patterns across all beacons' sessions and derives shared principles or knowledge.
+- **Automatic insight → principle derivation**: Rather than requiring manual `principles-store` calls, the system would automatically detect patterns across insights and suggest or create principles.
+- **Cross-beacon session search tool**: An agent-facing tool to search across all sessions in the swarm, building on the existing FTS5 infrastructure.
+
+#### 5.3 Model Provider Plugin System
 
 - v1: Hardcoded Ollama
 - v2: Model providers become plugins
 - Different hosts may have different models
 
-**Swarm Intelligence:**
+#### 5.4 Distributed Memory & Task Routing
 
-- What one of YOUR beacons learns, all YOUR beacons know
-- Your multiple beacons learn simultaneously
-- Patterns from your beacon A help your beacon B
-- Coordinator identifies patterns across YOUR entire swarm
+- Vector search for global session/memory retrieval
+- Distributed task routing within YOUR swarm
+- Route to node with best model for task
 
 ---
 
@@ -514,9 +434,9 @@ Phase 5 (Advanced)
 
 1. **Phase 1:** Agent can bootstrap itself and work on its own codebase ✅
 2. **Phase 2:** Your multiple agents on same host share YOUR skills/personas/memory via beacon ✅
-3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; web UI shows YOUR swarm status
+3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; migration tool moves assets between scopes ✅
 4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses
-5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support
+5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support, automated learning
 
 ---
 
@@ -534,4 +454,4 @@ Phase 5 (Advanced)
 
 ---
 
-_Last updated: 2026-06-28_
+_Last updated: 2026-06-29_

@@ -1,4 +1,6 @@
 import Database from 'better-sqlite3';
+import path from 'path';
+import fs from 'fs';
 import { randomUUID } from 'node:crypto';
 import type {
   Persona,
@@ -21,6 +23,7 @@ let db: Database.Database | null = null;
 
 export function initDatabase(dataPath: string): Database.Database {
   logger.info(`Initializing database at: ${dataPath}`);
+  fs.mkdirSync(path.dirname(dataPath), { recursive: true });
   db = new Database(dataPath);
 
   db.exec(`

@@ -75,6 +75,7 @@ const DEFAULT_BEACON_PORT = 3457;
 export interface SwarmConfig {
   beaconHost?: string;
   beaconPort?: number;
+  beaconUseHttps?: boolean;
   sessionId?: string;
 }
 
@@ -87,7 +88,9 @@ export interface SwarmConfig {
 export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
   const beaconHost = config.beaconHost ?? DEFAULT_BEACON_HOST;
   const beaconPort = config.beaconPort ?? DEFAULT_BEACON_PORT;
-  const baseUrl = `https://${beaconHost}:${beaconPort}`;
+  const beaconUseHttps = config.beaconUseHttps ?? true;
+  const protocol = beaconUseHttps ? 'https' : 'http';
+  const baseUrl = `${protocol}://${beaconHost}:${beaconPort}`;
   const sessionId = config.sessionId ?? `agent-${Date.now()}`;
 
   return {
