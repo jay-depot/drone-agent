@@ -1,0 +1,5 @@
+#!/usr/bin/env node
+
+// Thin stub for the drone-migrate CLI tool.
+// Calls the migrate entry point from the compiled dist.
+import '../dist/migrate.js';

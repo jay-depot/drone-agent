@@ -36,12 +36,50 @@ export type CliInvocation =
   | {
       kind: 'default';
       options: CliOptions;
+    }
+  | {
+      kind: 'migrate';
+      migrateOptions: MigrateCliOptions;
+      options: CliOptions;
     };
+
+/**
+ * CLI options for the `migrate` subcommand.
+ */
+export type MigrateCliOptions = {
+  /** List all migratable assets. */
+  list?: boolean;
+  /** Asset type to migrate. */
+  type?: string;
+  /** Specific asset id to migrate. */
+  id?: string;
+  /** Source scope (for batch or demote). */
+  from?: string;
+  /** Target scope. */
+  to?: string;
+  /** When true, delete source after successful copy. */
+  move?: boolean;
+  /** Backup path — write raw asset file before migrating. */
+  backupTo?: string;
+  /** When true, pull from swarm to local (demote). */
+  pull?: boolean;
+  /** Source scope for pull operations. */
+  scope?: string;
+  /** Beacon host override. */
+  beaconHost?: string;
+  /** Beacon port override. */
+  beaconPort?: number;
+};
 
 /**
  * Parse command-line arguments into a structured CliInvocation.
  */
 export function parseCliArgs(argv: string[]): CliInvocation {
+  // Check for `migrate` subcommand first (before processing -- options)
+  if (argv.length > 0 && argv[0] === 'migrate') {
+    return parseMigrateSubcommand(argv.slice(1));
+  }
+
   const options: CliOptions = {
     once: false,
     outputPlain: false,
@@ -164,4 +202,59 @@ export function parseCliArgs(argv: string[]): CliInvocation {
   options.persona ??= process.env.DRONE_PERSONA;
 
   return { kind: 'default', options };
+}
+
+/**
+ * Parse arguments for the `migrate` subcommand.
+ */
+function parseMigrateSubcommand(
+  args: string[]
+): CliInvocation {
+  const migrateOptions: MigrateCliOptions = {};
+  const options: CliOptions = {
+    once: false,
+    outputPlain: false,
+    outputJson: false,
+    pluginOverrides: [],
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+
+    if (arg === '--list') {
+      migrateOptions.list = true;
+    } else if (arg === '--type' && i + 1 < args.length) {
+      migrateOptions.type = args[++i];
+    } else if (arg === '--id' && i + 1 < args.length) {
+      migrateOptions.id = args[++i];
+    } else if (arg === '--from' && i + 1 < args.length) {
+      migrateOptions.from = args[++i];
+    } else if (arg === '--to' && i + 1 < args.length) {
+      migrateOptions.to = args[++i];
+    } else if (arg === '--move') {
+      migrateOptions.move = true;
+    } else if (arg === '--backup-to' && i + 1 < args.length) {
+      migrateOptions.backupTo = args[++i];
+    } else if (arg === '--pull') {
+      migrateOptions.pull = true;
+    } else if (arg === '--scope' && i + 1 < args.length) {
+      migrateOptions.scope = args[++i];
+    } else if (arg === '--beacon-host' && i + 1 < args.length) {
+      migrateOptions.beaconHost = args[++i];
+    } else if (arg === '--beacon-port' && i + 1 < args.length) {
+      migrateOptions.beaconPort = Number(args[++i]);
+    } else if (arg === '--config-dir' && i + 1 < args.length) {
+      options.configDir = args[++i];
+    } else if (arg.startsWith('--')) {
+      throw new Error(`Unknown migrate option: ${arg}`);
+    } else {
+      throw new Error(`Unexpected argument: ${arg}`);
+    }
+  }
+
+  return {
+    kind: 'migrate',
+    migrateOptions,
+    options,
+  };
 }

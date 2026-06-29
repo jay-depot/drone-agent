@@ -21,6 +21,7 @@ import {
   runJsonMode,
   getLlmCapability,
 } from './interactive.js';
+import { runMigrate } from './migrate.js';
 
 async function main(): Promise<void> {
   const logger = createConsoleLogger('drone-agent');
@@ -29,6 +30,12 @@ async function main(): Promise<void> {
   const resolvedConfig = await loadAgentConfig(process.cwd(), {
     configDir: invocation.options.configDir,
   });
+
+  // Handle migrate subcommand early (no engine needed)
+  if (invocation.kind === 'migrate') {
+    await runMigrate(invocation.migrateOptions, invocation.options.configDir);
+    return;
+  }
 
   const model =
     invocation.options.modelOverride ?? resolvedConfig.config.ollama.model;

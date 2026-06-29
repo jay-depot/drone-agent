@@ -174,6 +174,8 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
           pullIntervalMinutes: Type.Optional(PositiveInteger),
         })
       ),
+      beaconHost: Type.Optional(Type.String()),
+      beaconPort: Type.Optional(PositiveInteger),
     }),
   })
 );

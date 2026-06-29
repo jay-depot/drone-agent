@@ -111,6 +111,10 @@ export type DroneKnowledgeSyncConfig = {
 
 export type DroneSwarmConfig = {
   knowledgeSync: DroneKnowledgeSyncConfig;
+  /** Hostname of the drone-beacon instance for swarm operations. */
+  beaconHost?: string;
+  /** Port of the drone-beacon instance for swarm operations. */
+  beaconPort?: number;
 };
 
 export type DroneLspSpawnServerConfig = {
@@ -248,7 +252,7 @@ export type PartialDroneAgentConfig = Partial<{
   memory: Partial<DroneMemoryConfig>;
   log: Partial<DroneLogConfig>;
   promptFile: Partial<DronePromptFileConfig>;
-  swarm: { knowledgeSync?: Partial<DroneKnowledgeSyncConfig> };
+  swarm: { knowledgeSync?: Partial<DroneKnowledgeSyncConfig>; beaconHost?: string; beaconPort?: number };
 }>;
 
 export type DroneConfigScope = 'default' | 'user' | 'project';
