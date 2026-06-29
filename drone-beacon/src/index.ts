@@ -7,7 +7,7 @@ import {
   setCoordinatorClient,
   setBeaconAddress,
   triggerCoordinatorSync,
-} from './routes.js';
+} from './routes/index.js';
 import {
   createCoordinatorClient,
   type CoordinatorClient,

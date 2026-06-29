@@ -7,7 +7,7 @@ import {
   listBeaconTrust,
 } from './db.js';
 import { initStorage } from './storage.js';
-import { registerRoutes } from './routes.js';
+import { registerRoutes } from './routes/index.js';
 import { logger } from './logger.js';
 import { loadOrCreateTlsIdentity, getTlsOptions } from './tls.js';
 

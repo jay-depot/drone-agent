@@ -20,6 +20,7 @@ The `routes.ts` files in both `drone-beacon` (1132 lines) and `drone-coordinator
 ### Beacon: `drone-beacon/src/routes/` directory
 
 **`context.ts`** — Shared state, setters, and proxy helpers (extracted from current module-level code)
+
 - Module-level mutable state: `coordinatorClient`, `beaconHost`, `beaconPort`
 - Exported setters: `setCoordinatorClient()`, `setBeaconAddress()`
 - Internal helpers: `getCoordinatorClient()`, `getBeaconUrl()`
@@ -64,12 +65,14 @@ The `routes.ts` files in both `drone-beacon` (1132 lines) and `drone-coordinator
 **`skills.ts`** — POST/GET /skills, GET/PUT/DELETE /skills/:id
 
 **`beacons.ts`** — Beacon registration (legacy + trust), approval, beacon sessions
+
 - POST/GET /beacons, GET /beacons/:id
 - POST/GET /beacons/trust, GET/DELETE /beacons/trust/:id
 - POST /beacons/approve, POST /beacons/trust/:id/reject
 - POST/GET /beacons/:id/sessions, GET/DELETE /beacons/:id/sessions/:agentId
 
 **`knowledge.ts`** — Knowledge CRUD + search + sync
+
 - POST/GET /knowledge, GET/PUT/DELETE /knowledge/:id, GET /knowledge/search
 - POST /sync/knowledge/push, GET /sync/knowledge/pull
 
@@ -80,6 +83,7 @@ The `routes.ts` files in both `drone-beacon` (1132 lines) and `drone-coordinator
 **`wiki.ts`** — GET /wiki, GET /wiki/:pageId, PUT /wiki/:pageId, DELETE /wiki/:pageId, GET /wiki/search, POST /wiki/lint
 
 **`swarm.ts`** — Swarm sessions, events, agent locations
+
 - POST /sync/sessions/register, POST /sync/events/push
 - GET /sessions/:id/events, GET /sessions/:id/events/latest, GET /events/search
 - POST/GET /agents/location, GET/POST/DELETE /agents/location/:agentId
@@ -99,10 +103,13 @@ import * as db from '../db.js';
 import { getCoordinatorClient } from './context.js';
 import { logger } from '../logger.js';
 
-export default function(app: FastifyInstance) {
-  app.post<{ Body: CreatePersonaRequest }>('/personas', async (request, reply) => {
-    // ... handler
-  });
+export default function (app: FastifyInstance) {
+  app.post<{ Body: CreatePersonaRequest }>(
+    '/personas',
+    async (request, reply) => {
+      // ... handler
+    }
+  );
   // ... other persona routes
 }
 ```
@@ -128,39 +135,47 @@ export async function registerRoutes(app: FastifyInstance) {
 ## Steps
 
 ### Step 1: Create beacon `routes/` directory and `context.ts`
+
 - Create `drone-beacon/src/routes/` directory
 - Extract module-level state, setters, helpers, proxy functions, and `triggerCoordinatorSync` into `context.ts`
 - Extract `MemoryQuery`, `SpawnQuery`, `EventQuery` interfaces into `context.ts`
 
 ### Step 2: Create beacon route files (one per domain)
+
 - Create each file listed above, extracting the relevant route handlers from `routes.ts`
 - Each file imports from `./context.js` and `../db.js` as needed
 
 ### Step 3: Create beacon `routes/index.ts`
+
 - Import all domain files
 - Export `registerRoutes` that calls each one
 
 ### Step 4: Update beacon `index.ts` import
+
 - Change `from './routes.js'` to `from './routes/index.js'`
 - Keep the same named exports: `registerRoutes`, `setCoordinatorClient`, `setBeaconAddress`, `triggerCoordinatorSync`
 
 ### Step 5: Delete old beacon `routes.ts`
 
 ### Step 6: Create coordinator `routes/` directory and route files
+
 - Create `drone-coordinator/src/routes/` directory
 - Create each file listed above, extracting the relevant route handlers from `routes.ts`
 - Each file imports from `../db.js` and `../storage.js` as needed
 
 ### Step 7: Create coordinator `routes/index.ts`
+
 - Import all domain files
 - Export `registerRoutes` that calls each one
 
 ### Step 8: Update coordinator `index.ts` import
+
 - Change `from './routes.js'` to `from './routes/index.js'`
 
 ### Step 9: Delete old coordinator `routes.ts`
 
 ### Step 10: Run validation
+
 - `pnpm typecheck`
 - `pnpm lint`
 - `pnpm test`
@@ -168,6 +183,7 @@ export async function registerRoutes(app: FastifyInstance) {
 ### Step 11: Commit
 
 ## Validation Criteria
+
 - `pnpm typecheck` passes
 - `pnpm lint` passes
 - `pnpm test` passes (all 500+ tests)
