@@ -219,6 +219,7 @@ async function main() {
     logger: {
       level: process.env.LOG_LEVEL || 'info',
     },
+    ...(config.useHttps ? { https: { allowHTTP1: true } } : {}),
   });
 
   // Register routes
