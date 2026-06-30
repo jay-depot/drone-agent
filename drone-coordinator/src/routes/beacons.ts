@@ -25,6 +25,13 @@ export default function beaconRoutes(app: FastifyInstance) {
         };
         try {
           const trust = db.registerBeaconTrust(trustReq);
+          // Also register in the beacons table so GET /beacons returns it
+          db.registerBeacon({
+            id: request.body.id,
+            name: request.body.name,
+            host: request.body.host,
+            port: request.body.port,
+          });
           const response: BeaconStatusResponse = { status: trust.status };
           if (trust.approvalToken) {
             response.approvalToken = trust.approvalToken;
