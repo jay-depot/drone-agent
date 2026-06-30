@@ -536,6 +536,14 @@ export function listBeaconTrust(): BeaconTrust[] {
 
 export function approveBeacon(approvalToken: string): BeaconTrust | null {
   const now = Date.now();
+
+  // First, find the beacon_id for this token before updating
+  const findStmt = getDatabase().prepare(
+    'SELECT beacon_id FROM beacon_trust WHERE approval_token = ? AND status = ?'
+  );
+  const found = findStmt.get(approvalToken, 'pending') as { beacon_id: string } | undefined;
+  if (!found) return null;
+
   const stmt = getDatabase().prepare(`
     UPDATE beacon_trust 
     SET status = 'approved', approval_token = NULL, approved_at = ?, updated_at = ?
@@ -547,11 +555,11 @@ export function approveBeacon(approvalToken: string): BeaconTrust | null {
     return null;
   }
 
-  // Fetch and return the updated trust
+  // Fetch the updated trust by beacon_id
   const stmt2 = getDatabase().prepare(
-    'SELECT * FROM beacon_trust WHERE approval_token = ?'
+    'SELECT * FROM beacon_trust WHERE beacon_id = ?'
   );
-  const row = stmt2.get(approvalToken) as
+  const row = stmt2.get(found.beacon_id) as
     | {
         beacon_id: string;
         name: string;
@@ -1164,7 +1172,7 @@ export function getLatestSwarmEvents(
 export function searchSwarmEvents(query: string): SwarmEvent[] {
   const stmt = getDatabase().prepare(`
     SELECT se.* FROM swarm_events se
-    JOIN swarm_events_fts fts ON se.id = fts.id
+    JOIN swarm_events_fts fts ON se.id = fts.rowid
     WHERE swarm_events_fts MATCH ?
     ORDER BY se.createdAt ASC
   `);

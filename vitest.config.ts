@@ -22,6 +22,8 @@ export default defineConfig({
       'drone-core/test/**/*.test.ts',
       'drone-agent/test/**/*.test.ts',
       'drone-agent/test/**/*.test.tsx',
+      'drone-beacon/test/**/*.test.ts',
+      'drone-coordinator/test/**/*.test.ts',
     ],
     // Exclude integration tests that require external services:
     // - Docker: e2e-swarm, coordinator-sync, spawn, inter-agent, agent-beacon
@@ -47,7 +49,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],
-      include: ['drone-core/src/**/*.ts', 'drone-agent/src/**/*.ts'],
+      include: [
+        'drone-core/src/**/*.ts',
+        'drone-agent/src/**/*.ts',
+        'drone-beacon/src/**/*.ts',
+        'drone-coordinator/src/**/*.ts',
+      ],
       exclude: [
         'drone-agent/src/tui/**',
         'drone-agent/src/index.ts',
