@@ -126,5 +126,9 @@
   {
     "timestamp": "2026-06-30T01:17:51.305Z",
     "insight": "The coordinator's FTS5 search query had a wrong column reference: `fts.id` should be `fts.rowid` for FTS5 virtual tables. This was a pre-existing bug in the source code that the new tests exposed."
+  },
+  {
+    "timestamp": "2026-06-30T02:23:41.820Z",
+    "insight": "The shadcn/ui \"base-nova\" style uses @base-ui/react instead of Radix, which means asChild prop is not supported on components like CollapsibleTrigger. Need to use plain elements instead of wrapping Button components."
   }
 ]

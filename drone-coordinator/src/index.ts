@@ -1,5 +1,5 @@
 import fastify from 'fastify';
-import fastifyWebsocket from '@fastify/websocket';
+import '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
 import fastifyCors from '@fastify/cors';
 import path from 'path';
@@ -77,9 +77,7 @@ function parseArgs(): Config {
     } else if (arg === 'list-beacons') {
       config.command = 'list-beacons';
     } else if (arg === '--help' || arg === '-h') {
-      console.log(
-        `\ndrone-coordinator [options]\n\nCommands:\n  serve              Start the coordinator server (default)\n  approve <token>   Approve a pending beacon by token\n  list-beacons       List all registered beacons and their trust status\n\nOptions:\n  --port <n>         Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>         Host to bind to (default: ${DEFAULT_HOST})\n  --config-dir <dir> Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>       Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https            Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https         Disable HTTPS\n  --help             Show this help message\n      `
-      );
+      console.log(`\ndrone-coordinator [options]\n\nCommands:\n  serve              Start the coordinator server (default)\n  approve <token>   Approve a pending beacon by token\n  list-beacons       List all registered beacons and their trust status\n\nOptions:\n  --port <n>         Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>         Host to bind to (default: ${DEFAULT_HOST})\n  --config-dir <dir> Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>       Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https            Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https         Disable HTTPS\n  --help             Show this help message\n      `);
       process.exit(0);
     }
   }
@@ -218,10 +216,65 @@ async function main() {
     origin: process.env.NODE_ENV === 'development' ? true : false,
   });
 
-  // Register WebSocket support
-  await app.register(fastifyWebsocket);
+  // WebSocket endpoint for real-time events
+  // IMPORTANT: Must be registered BEFORE @fastify/static to ensure
+  // WebSocket upgrade requests are not intercepted by the static file handler
+  app.get('/ws', { websocket: true }, (socket, req) => {
+    const sub = addSubscriber(socket);
 
-  // Serve the UI static files
+    // Send initial state snapshot
+    try {
+      const beacons = listBeacons();
+      const agentLocations = listAllAgentLocations();
+      const sessions = beacons.flatMap((b) => {
+        const beaconSessions = listBeaconSessions(b.id);
+        return beaconSessions.map((s) => ({
+          ...s,
+          beaconName: b.name,
+          beaconHost: b.host,
+          beaconPort: b.port,
+        }));
+      });
+
+      publishInitialState(socket, {
+        beacons,
+        agentLocations,
+        sessions,
+      });
+    } catch (err) {
+      logger.warn(`Failed to build initial state: ${err}`);
+    }
+
+    // Handle incoming messages from the client
+    socket.on('message', (raw: Buffer) => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (msg.type === 'subscribe' && msg.sessionId) {
+          subscribeToSession(sub, msg.sessionId);
+        } else if (msg.type === 'unsubscribe' && msg.sessionId) {
+          unsubscribeFromSession(sub, msg.sessionId);
+        }
+      } catch {
+        // Ignore malformed messages
+      }
+    });
+
+    // Keep-alive ping
+    const interval = setInterval(() => {
+      try {
+        socket.send(JSON.stringify({ type: 'ping' }));
+      } catch {
+        clearInterval(interval);
+      }
+    }, 30000);
+
+    socket.on('close', () => {
+      clearInterval(interval);
+      removeSubscriber(sub);
+    });
+  });
+
+  // Serve the UI static files (must be registered AFTER WebSocket routes)
   const uiDistPath = resolveUiDistPath();
   logger.info(`Serving UI from: ${uiDistPath}`);
 
@@ -229,64 +282,6 @@ async function main() {
     root: uiDistPath,
     prefix: '/',
     wildcard: false,
-  });
-
-  // WebSocket endpoint for real-time events
-  app.register(async function (fastify) {
-    fastify.get('/ws', { websocket: true }, (socket, req) => {
-      const sub = addSubscriber(socket);
-
-      // Send initial state snapshot
-      try {
-        const beacons = listBeacons();
-        const agentLocations = listAllAgentLocations();
-        const sessions = beacons.flatMap(b => {
-          const beaconSessions = listBeaconSessions(b.id);
-          return beaconSessions.map(s => ({
-            ...s,
-            beaconName: b.name,
-            beaconHost: b.host,
-            beaconPort: b.port,
-          }));
-        });
-
-        publishInitialState(socket, {
-          beacons,
-          agentLocations,
-          sessions,
-        });
-      } catch (err) {
-        logger.warn(`Failed to build initial state: ${err}`);
-      }
-
-      // Handle incoming messages from the client
-      socket.on('message', (raw: Buffer) => {
-        try {
-          const msg = JSON.parse(raw.toString());
-          if (msg.type === 'subscribe' && msg.sessionId) {
-            subscribeToSession(sub, msg.sessionId);
-          } else if (msg.type === 'unsubscribe' && msg.sessionId) {
-            unsubscribeFromSession(sub, msg.sessionId);
-          }
-        } catch {
-          // Ignore malformed messages
-        }
-      });
-
-      // Keep-alive ping
-      const interval = setInterval(() => {
-        try {
-          socket.send(JSON.stringify({ type: 'ping' }));
-        } catch {
-          clearInterval(interval);
-        }
-      }, 30000);
-
-      socket.on('close', () => {
-        clearInterval(interval);
-        removeSubscriber(sub);
-      });
-    });
   });
 
   // Register API routes
