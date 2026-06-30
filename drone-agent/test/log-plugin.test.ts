@@ -337,6 +337,8 @@ async function getCapability(
       memory: { enabled: false },
       log: { enabled: false },
       promptFile: { enabled: false, files: [] },
+      externalPlugins: [],
+      trustedPlugins: {},
       swarm: {
         knowledgeSync: {
           enabled: true,

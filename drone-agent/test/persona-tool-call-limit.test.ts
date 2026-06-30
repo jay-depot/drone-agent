@@ -158,6 +158,7 @@ function makeEngine(options: EngineOptions): DronePluginEngine & {
     registerBuiltinSlashCommand: () => {},
     getBuiltinSlashCommands: () => [],
     enablePlugin: async (_pluginId: string) => false,
+    addExternalPlugin: async (_plugin: any) => false,
     __executeMock: executeMock,
   };
 }

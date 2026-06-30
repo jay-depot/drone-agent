@@ -311,6 +311,8 @@ describe('promptFilePlugin', () => {
         memory: { enabled: false },
         log: { enabled: false },
         promptFile: { enabled: true, files: [] },
+        externalPlugins: [],
+        trustedPlugins: {},
         swarm: {
           knowledgeSync: {
             enabled: true,
@@ -445,6 +447,8 @@ describe('promptFilePlugin', () => {
       getConfig: () => ({
         ...makeRegistration().registration.getConfig(),
         promptFile: { enabled: true, files: [] },
+        externalPlugins: [],
+        trustedPlugins: {},
         swarm: {
           knowledgeSync: {
             enabled: true,
