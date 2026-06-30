@@ -118,5 +118,13 @@
   {
     "timestamp": "2026-06-30T00:52:49.068Z",
     "insight": "The beacon and coordinator packages share significant code duplication (wiki-storage.ts, tls.ts, logger.ts are nearly identical). The test plan should test both copies independently, but a future refactoring opportunity exists to extract shared code into drone-core."
+  },
+  {
+    "timestamp": "2026-06-30T01:17:51.297Z",
+    "insight": "The coordinator's approveBeacon() function had a bug: after UPDATE set approval_token to NULL, the subsequent SELECT by approval_token would always fail. Fixed by querying beacon_id first, then looking up by beacon_id. This was caught by the new test suite."
+  },
+  {
+    "timestamp": "2026-06-30T01:17:51.305Z",
+    "insight": "The coordinator's FTS5 search query had a wrong column reference: `fts.id` should be `fts.rowid` for FTS5 virtual tables. This was a pre-existing bug in the source code that the new tests exposed."
   }
 ]

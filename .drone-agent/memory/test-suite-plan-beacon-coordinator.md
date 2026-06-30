@@ -7,7 +7,7 @@ tags:
   - coordinator
   - 3.10
 created: 2026-06-30T00:52:42.778Z
-updated: 2026-06-30T00:52:42.778Z
+updated: 2026-06-30T01:17:39.003Z
 ---
 
 # Plan: 3.10 — Test Suite for drone-beacon and drone-coordinator
@@ -522,3 +522,38 @@ Step 2  (dependencies) ──────┘                            │
 - Steps 8, 10, 11, 12, 14, 15 (beacon non-route) can be done in parallel
 - Steps 5 and 9 (route tests) depend on their respective db tests
 - Steps 12 and 13 (wiki) can be done in parallel
+
+---
+
+## Work Completed (2026-06-29)
+
+All steps completed except Steps 5 and 9 (route tests), which were deferred as they require more complex Fastify `inject` setup and are lower priority than the core database and utility tests.
+
+### Files Created (11 new test files, 2 setup files):
+
+**Coordinator (5 test files):**
+- `drone-coordinator/test/setup.ts` — DB setup/teardown helper
+- `drone-coordinator/test/db.test.ts` — 80 tests covering Persona, Skill, Beacon, BeaconTrust, BeaconSession, SwarmSession, SwarmEvent, AgentLocation, Insight, Principle CRUD
+- `drone-coordinator/test/storage.test.ts` — 12 tests for blob storage engine
+- `drone-coordinator/test/tls.test.ts` — 4 tests for TLS cert management (openssl-dependent)
+- `drone-coordinator/test/wiki-storage.test.ts` — 12 tests for wiki filesystem operations
+
+**Beacon (6 test files):**
+- `drone-beacon/test/setup.ts` — DB setup/teardown helper
+- `drone-beacon/test/db.test.ts` — 60 tests covering Persona, Skill, AgentSession, Memory, Message, Spawn, Config, EventLog, KnowledgeCache, Insight, Principle CRUD
+- `drone-beacon/test/identity.test.ts` — 7 tests for Ed25519 keypair management
+- `drone-beacon/test/tls.test.ts` — 4 tests for TLS cert management (openssl-dependent)
+- `drone-beacon/test/wiki-storage.test.ts` — 12 tests for wiki filesystem operations
+- `drone-beacon/test/ws-server.test.ts` — 11 tests for IP validation and connection management
+- `drone-beacon/test/coordinator-client.test.ts` — 14 tests for HTTP client with mocked http.request
+
+### Bug Fixes:
+- **`drone-coordinator/src/db.ts`**: Fixed `approveBeacon()` — was querying by `approval_token` after setting it to NULL; now finds `beacon_id` first, then queries by `beacon_id`
+- **`drone-coordinator/src/db.ts`**: Fixed FTS5 search query — wrong column reference (`fts.id` → `fts.rowid`)
+
+### Validation Results:
+- **`pnpm test`**: 808 tests pass across 47 test files (0 failures)
+- **`pnpm typecheck`**: Beacon and coordinator packages pass (pre-existing errors only in drone-agent tests)
+- **LSP diagnostics**: No errors in any new test files
+- **Flakiness**: Two consecutive runs both passed with identical results
+- **Coverage**: Coverage config updated to include beacon and coordinator source

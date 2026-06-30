@@ -46,5 +46,13 @@
   {
     "timestamp": "2026-06-30T00:52:49.074Z",
     "insight": "The vitest config currently only includes drone-core and drone-agent test directories. Adding beacon and coordinator tests requires updating the root vitest.config.ts. The coordinator already has a test/ directory with one test file, but the beacon has no test/ directory at all."
+  },
+  {
+    "timestamp": "2026-06-30T01:17:51.310Z",
+    "insight": "The coordinator-client uses Node.js http/https modules internally, not the global fetch API. Mocking requires vi.spyOn on http.request, not globalThis.fetch. This is different from the migration.test.ts pattern which uses fetch."
+  },
+  {
+    "timestamp": "2026-06-30T01:17:51.314Z",
+    "insight": "vi.spyOn on 'node:child_process' execSync fails because the module is already loaded and the property is non-configurable. For mocking openssl-dependent code, it's better to skip tests when openssl isn't available (itIfOpenssl pattern) rather than trying to mock execSync."
   }
 ]
