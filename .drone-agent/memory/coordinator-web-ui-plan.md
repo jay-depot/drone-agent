@@ -1,7 +1,6 @@
 ---
 key: coordinator-web-ui-plan
-tags:
-  []
+tags: []
 created: 2026-06-30T02:05:30.457Z
 updated: 2026-06-30T02:23:33.854Z
 ---
@@ -73,11 +72,13 @@ Added `drone-coordinator-ui` to `pnpm-workspace.yaml`.
 **Agent:** coder
 
 **Files modified:**
-- `drone-coordinator/package.json` — added `@fastify/websocket`, `@fastify/static`, `@fastify/cors`, and `drone-coordinator-ui` (workspace:*) dependencies
+
+- `drone-coordinator/package.json` — added `@fastify/websocket`, `@fastify/static`, `@fastify/cors`, and `drone-coordinator-ui` (workspace:\*) dependencies
 - `drone-coordinator/src/index.ts` — registered all three plugins, added WebSocket endpoint, SPA fallback, and UI static file serving
 - `drone-coordinator/src/ws-pubsub.ts` — new file: in-memory pub/sub for pushing events to connected WebSocket clients
 
 **Key features:**
+
 - WebSocket endpoint at `/ws` with per-session event subscription
 - Initial state snapshot on connect (beacons, agent locations, sessions)
 - Keep-alive ping every 30 seconds
@@ -89,6 +90,7 @@ Added `drone-coordinator-ui` to `pnpm-workspace.yaml`.
 **Agent:** coder
 
 Created `src/hooks/use-websocket.ts`:
+
 - Connects to `ws://<host>/ws` (or `wss://` for HTTPS)
 - Auto-reconnects with exponential backoff (1s → 30s max)
 - Event subscription system: `subscribe(type, handler)` returns unsubscribe function
@@ -100,6 +102,7 @@ Created `src/hooks/use-websocket.ts`:
 **Agent:** coder
 
 **File:** `src/pages/topology.tsx`
+
 - Fetches `GET /beacons` and `GET /agents/location` on mount
 - Subscribes to WebSocket for initial state
 - Displays a card grid, one per beacon
@@ -112,6 +115,7 @@ Created `src/hooks/use-websocket.ts`:
 **Agent:** coder
 
 **File:** `src/pages/sessions.tsx`
+
 - Fetches active sessions by iterating beacons and their sessions
 - Displays a table: Beacon Name | Agent ID | Persona | Duration | Connected | Actions
 - "Peek" button navigates to `/sessions/:sessionId`
@@ -122,6 +126,7 @@ Created `src/hooks/use-websocket.ts`:
 **Agent:** coder
 
 **File:** `src/pages/session-detail.tsx`
+
 - Fetches `GET /sessions/:id/events` on mount
 - Subscribes to WebSocket for new events for this session
 - Displays events in reverse-chronological order
@@ -138,6 +143,7 @@ Created `src/hooks/use-websocket.ts`:
 **Files:** `src/pages/personas.tsx`, `src/pages/skills.tsx`, `src/pages/wiki.tsx`
 
 Each page:
+
 - Fetches the corresponding list endpoint on mount
 - Displays a card grid
 - Personas: name, description, scope badge, ID, updated date
@@ -151,6 +157,7 @@ Each page:
 **Agent:** coder
 
 **File:** `src/App.tsx`
+
 - BrowserRouter with Routes for all pages
 - Left sidebar with nav links (Topology, Sessions, Personas, Skills, Wiki)
 - Active nav link highlighting
@@ -162,6 +169,7 @@ Each page:
 **Agent:** coder
 
 Implemented in `ws-pubsub.ts`:
+
 - In-memory pub/sub with subscriber tracking
 - Per-session subscription: client sends `{ type: 'subscribe', sessionId }`
 - Unsubscribe: client sends `{ type: 'unsubscribe', sessionId }`

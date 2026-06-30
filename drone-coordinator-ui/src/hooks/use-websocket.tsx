@@ -47,7 +47,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       reconnectDelayRef.current = 1000;
     };
 
-    ws.onmessage = (event) => {
+    ws.onmessage = event => {
       try {
         const message = JSON.parse(event.data);
         const { type } = message;

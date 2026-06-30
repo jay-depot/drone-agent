@@ -76,7 +76,9 @@ function parseArgs(): Config {
     } else if (arg === 'list-beacons') {
       config.command = 'list-beacons';
     } else if (arg === '--help' || arg === '-h') {
-      console.log(`\ndrone-coordinator [options]\n\nCommands:\n  serve              Start the coordinator server (default)\n  approve <token>   Approve a pending beacon by token\n  list-beacons       List all registered beacons and their trust status\n\nOptions:\n  --port <n>         Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>         Host to bind to (default: ${DEFAULT_HOST})\n  --config-dir <dir> Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>       Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https            Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https         Disable HTTPS\n  --help             Show this help message\n      `);
+      console.log(
+        `\ndrone-coordinator [options]\n\nCommands:\n  serve              Start the coordinator server (default)\n  approve <token>   Approve a pending beacon by token\n  list-beacons       List all registered beacons and their trust status\n\nOptions:\n  --port <n>         Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>         Host to bind to (default: ${DEFAULT_HOST})\n  --config-dir <dir> Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>       Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https            Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https         Disable HTTPS\n  --help             Show this help message\n      `
+      );
       process.exit(0);
     }
   }
@@ -121,7 +123,7 @@ async function handleListBeacons(config: Config) {
 
   // Merge: trust entries first, then beacons without trust records
   const allBeacons = [
-    ...trustList.map((t) => ({
+    ...trustList.map(t => ({
       name: t.name,
       beaconId: t.beaconId,
       host: t.host,
@@ -131,8 +133,8 @@ async function handleListBeacons(config: Config) {
       approvedAt: t.approvedAt,
     })),
     ...beaconList
-      .filter((b) => !trustList.some((t) => t.beaconId === b.id))
-      .map((b) => ({
+      .filter(b => !trustList.some(t => t.beaconId === b.id))
+      .map(b => ({
         name: b.name,
         beaconId: b.id,
         host: b.host,
@@ -236,8 +238,8 @@ async function main() {
       const beacons = listBeacons();
       const agentLocations = listAllAgentLocations();
       const swarmSessions = listSwarmSessions('active');
-      const sessions = swarmSessions.map((s) => {
-        const beacon = beacons.find((b) => b.id === s.beaconId);
+      const sessions = swarmSessions.map(s => {
+        const beacon = beacons.find(b => b.id === s.beaconId);
         return {
           id: s.id,
           beaconId: s.beaconId,

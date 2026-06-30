@@ -30,7 +30,7 @@ export default function App() {
               </p>
             </div>
             <nav className="flex-1 p-2 space-y-1">
-              {navItems.map((item) => (
+              {navItems.map(item => (
                 <NavLink
                   key={item.to}
                   to={item.to}
