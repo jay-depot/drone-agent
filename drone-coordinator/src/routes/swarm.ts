@@ -17,6 +17,17 @@ export default function swarmRoutes(app: FastifyInstance) {
     }
   );
 
+  app.delete<{ Params: { id: string } }>(
+    '/sync/sessions/:id',
+    async (request, reply) => {
+      const session = db.updateSwarmSessionStatus(request.params.id, 'ended');
+      if (!session) {
+        return reply.code(404).send({ error: 'Swarm session not found' });
+      }
+      return session;
+    }
+  );
+
   app.post<{
     Body: {
       events: Array<{

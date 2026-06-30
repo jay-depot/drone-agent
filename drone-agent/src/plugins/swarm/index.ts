@@ -957,6 +957,14 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         if (beaconConfigInjector && configCap) {
           configCap.unregisterInjector(beaconConfigInjector.id);
         }
+        // End swarm session on coordinator
+        try {
+          await fetch(`${baseUrl}/sync/sessions/${sessionId}`, {
+            method: 'DELETE',
+          });
+        } catch {
+          // Silently ignore cleanup failures
+        }
         try {
           await fetch(`${baseUrl}/agents/${sessionId}`, {
             method: 'DELETE',

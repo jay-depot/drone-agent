@@ -53,6 +53,7 @@ export interface CoordinatorClient {
     sessionId: string,
     personaId: string | null
   ): Promise<void>;
+  endSwarmSession(sessionId: string): Promise<void>;
   pushEvents(
     events: Array<{
       id: string;
@@ -535,6 +536,21 @@ export function createCoordinatorClient(
         }
       } catch (err) {
         logger.warn(`Failed to register swarm session: ${err}`);
+      }
+    },
+
+    async endSwarmSession(sessionId: string): Promise<void> {
+      try {
+        const res = await cfetch(`${baseUrl}/sync/sessions/${sessionId}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) {
+          logger.warn(`Failed to end swarm session: ${res.status}`);
+        } else {
+          logger.info(`Ended swarm session ${sessionId}`);
+        }
+      } catch (err) {
+        logger.warn(`Failed to end swarm session: ${err}`);
       }
     },
 
