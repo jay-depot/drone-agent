@@ -219,8 +219,6 @@ async function main() {
   await app.register(import('@fastify/websocket'));
 
   // WebSocket endpoint for real-time events
-  // IMPORTANT: Must be registered BEFORE @fastify/static to ensure
-  // WebSocket upgrade requests are not intercepted by the static file handler
   app.get('/ws', { websocket: true }, (socket, req) => {
     const sub = addSubscriber(socket);
 
@@ -276,7 +274,10 @@ async function main() {
     });
   });
 
-  // Serve the UI static files (must be registered AFTER WebSocket routes)
+  // Register API routes (must be registered BEFORE @fastify/static)
+  await registerRoutes(app);
+
+  // Serve the UI static files (must be registered AFTER WebSocket and API routes)
   const uiDistPath = resolveUiDistPath();
   logger.info(`Serving UI from: ${uiDistPath}`);
 
@@ -285,9 +286,6 @@ async function main() {
     prefix: '/',
     wildcard: false,
   });
-
-  // Register API routes
-  await registerRoutes(app);
 
   // SPA fallback: serve index.html for all non-API, non-WS routes
   app.setNotFoundHandler(async (request, reply) => {
