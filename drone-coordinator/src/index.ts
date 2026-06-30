@@ -277,17 +277,22 @@ async function main() {
   // Register API routes (must be registered BEFORE @fastify/static)
   await registerRoutes(app);
 
-  // Serve the UI static files (must be registered AFTER WebSocket and API routes)
+  // Serve the UI static files — only under /assets/ to avoid intercepting API routes
   const uiDistPath = resolveUiDistPath();
   logger.info(`Serving UI from: ${uiDistPath}`);
 
   await app.register(fastifyStatic, {
-    root: uiDistPath,
-    prefix: '/',
+    root: path.join(uiDistPath, 'assets'),
+    prefix: '/assets/',
     wildcard: false,
   });
 
-  // SPA fallback: serve index.html for all non-API, non-WS routes
+  // Serve the root index.html
+  app.get('/', async (request, reply) => {
+    return reply.sendFile('index.html', path.resolve(uiDistPath));
+  });
+
+  // SPA fallback: serve index.html for all non-API, non-WS, non-asset routes
   app.setNotFoundHandler(async (request, reply) => {
     if (
       request.url.startsWith('/api') ||
@@ -296,7 +301,7 @@ async function main() {
     ) {
       return reply.code(404).send({ error: 'Not found' });
     }
-    return reply.sendFile('index.html');
+    return reply.sendFile('index.html', path.resolve(uiDistPath));
   });
 
   // Graceful shutdown
