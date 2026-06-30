@@ -106,5 +106,9 @@
   {
     "timestamp": "2026-06-29T23:25:40.986Z",
     "insight": "The beacon-to-coordinator HTTPS connection fails because the coordinator uses a self-signed TLS cert and Node.js's built-in fetch() rejects it. The fix was to replace fetch() with a custom wrapper using http/https.request with rejectUnauthorized: false. A better long-term solution might be to have the beacon trust the coordinator's cert by fingerprint, or to use a shared CA."
+  },
+  {
+    "timestamp": "2026-06-29T23:51:52.943Z",
+    "insight": "When using Fastify with `https: { allowHTTP1: true }`, the server becomes an HTTP/2 secure server. For HTTP/2 secure servers, the TLS cert/key must be passed in the constructor's `https` property — NOT in `app.listen()`. Passing cert/key to `app.listen()` is silently ignored for HTTP/2 servers, causing the server to listen without a certificate and resulting in \"SSL alert handshake failure\" on the client side. The fix is to load the TLS identity before creating the Fastify instance and spread the cert/key into the `https` option in the constructor."
   }
 ]

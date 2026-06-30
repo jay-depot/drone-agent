@@ -20,7 +20,8 @@ export function isLocalConnection(socket: { remoteAddress?: string }): boolean {
     ip === '::ffff:127.0.0.1' ||
     ip.startsWith('192.168.') || // Local network
     ip.startsWith('10.') || // Local network
-    ip.startsWith('172.16.') // Local network
+    ip.startsWith('172.16.') || // Private network
+    ip.startsWith('169.254.') // Link-local
   );
 }
 

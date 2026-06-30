@@ -457,7 +457,8 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       });
 
       // ── WebSocket client ────────────────────────────────────────────────
-      const wsUrl = `wss://${beaconHost}:${beaconPort}/ws?agentId=${sessionId}`;
+      const wsProtocol = beaconUseHttps ? 'wss' : 'ws';
+      const wsUrl = `${wsProtocol}://${beaconHost}:${beaconPort}/ws?agentId=${sessionId}`;
       let ws: WebSocket | null = null;
       let wsReconnectAttempts = 0;
       const maxReconnectAttempts = 5;
@@ -532,7 +533,8 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
           };
 
           ws.onerror = error => {
-            registration.logger.error(`WebSocket error: ${error}`);
+            const message = (error as ErrorEvent).message || String(error);
+            registration.logger.error(`WebSocket error: ${message}`);
           };
         } catch (err) {
           registration.logger.error(`Failed to connect WebSocket: ${err}`);
