@@ -3,7 +3,7 @@ key: swarm-event-push-404-fix-plan
 tags:
   []
 created: 2026-06-30T05:46:11.704Z
-updated: 2026-06-30T05:46:11.704Z
+updated: 2026-06-30T05:49:25.745Z
 ---
 
 # Plan: Fix Conversation Event Push 404 and Add Swarm Session Cleanup
@@ -211,9 +211,22 @@ registration.hooks.onShutdown(async () => {
 
 ### Validation Criteria
 
-- [ ] `pnpm build` passes with no errors
-- [ ] `pnpm lint` passes with no new errors
-- [ ] `pnpm test` passes (all existing tests)
-- [ ] LSP diagnostics are clean across all modified files
+- [x] `pnpm build` passes with no errors
+- [x] `pnpm lint` passes with no new errors
+- [x] `pnpm test` passes (all existing tests)
+- [x] LSP diagnostics are clean across all modified files
 - [ ] The `[swarm] Failed to push N events: 404` message no longer appears during normal operation
 - [ ] Swarm sessions are marked as `ended` on the coordinator when the agent shuts down
+
+---
+
+## Implementation Summary (completed 2026-06-30)
+
+All 6 implementation steps completed. Changes across 4 files:
+
+1. **`drone-beacon/src/routes/sync.ts`** — Rewrote with 3 new routes: `POST /sync/events/push`, `POST /sync/sessions/register`, `DELETE /sync/sessions/:id`
+2. **`drone-beacon/src/coordinator-client.ts`** — Added `endSwarmSession()` to both the `CoordinatorClient` interface and the implementation object
+3. **`drone-coordinator/src/routes/swarm.ts`** — Added `DELETE /sync/sessions/:id` endpoint that marks sessions as `ended`
+4. **`drone-agent/src/plugins/swarm/index.ts`** — Added swarm session cleanup call in `onShutdown` hook
+
+Build, lint, and all 808 tests pass. Commit: `0ae961a`

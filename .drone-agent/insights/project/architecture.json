@@ -138,5 +138,9 @@
   {
     "timestamp": "2026-06-30T05:27:22.005Z",
     "insight": "The conversation event push-through was successfully wired up. The onConversationEvent hook pattern (new hook type in DronePluginHooks with a dedicated engine method) worked cleanly — the conversation service doesn't need to know about the swarm plugin, and the swarm plugin doesn't need access to the session manager. The fire-and-forget pattern with .catch() in the emit function prevents hook failures from blocking the conversation loop."
+  },
+  {
+    "timestamp": "2026-06-30T05:49:31.640Z",
+    "insight": "The beacon's sync.ts was missing proxy routes for /sync/events/push and /sync/sessions/register, causing 404 errors when the swarm plugin tried to push conversation events. The coordinator had the endpoints and the beacon's coordinator-client had the methods, but the beacon routes were never wired up. This is a pattern to watch for: when adding new swarm features, always check that the beacon proxy routes are created alongside the coordinator endpoints."
   }
 ]
