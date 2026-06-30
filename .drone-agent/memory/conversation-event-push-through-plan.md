@@ -5,8 +5,9 @@ tags:
   - swarm
   - conversation-events
   - coordinator
+  - completed
 created: 2026-06-30T05:02:14.469Z
-updated: 2026-06-30T05:02:14.469Z
+updated: 2026-06-30T05:27:07.342Z
 ---
 
 # Plan: Wire Up Conversation Event Push-Through to Coordinator
@@ -58,9 +59,7 @@ Add the new hook to the `DronePluginHooks` interface:
 export type DronePluginHooks = {
   // ... existing hooks ...
   onConversationEvent: (
-    callback: (
-      event: import('./session-types.js').DroneConversationEvent
-    ) => Promise<void>
+    callback: (event: import('./session-types.js').DroneConversationEvent) => Promise<void>
   ) => void;
 };
 ```
@@ -99,12 +98,8 @@ This hook carries a payload (the event), so it follows the same pattern as `onSe
 In the `sendUserMessage` function:
 
 1. After `sessionManager.appendUserMessage(prompt)`, fire a user message event:
-
    ```ts
-   await engine.runConversationEventHooks({
-     kind: 'userMessage',
-     content: prompt,
-   });
+   await engine.runConversationEventHooks({ kind: 'userMessage', content: prompt });
    ```
 
 2. In the `emit` function, also fire the engine hook for each event (fire-and-forget with `.catch()` so a slow or failing hook doesn't block the conversation loop):
@@ -128,7 +123,7 @@ In the `sendUserMessage` function:
 In the `register` function, add a new hook registration that pushes events into the `eventBuffer`:
 
 ```ts
-registration.hooks.onConversationEvent(async event => {
+registration.hooks.onConversationEvent(async (event) => {
   const now = Date.now();
   const evt = {
     id: generateUuid(),
@@ -183,3 +178,14 @@ pnpm typecheck
    sqlite3 ./config/drone-coordinator.db "SELECT type, substr(payload, 1, 80) FROM swarm_events ORDER BY createdAt DESC LIMIT 20;"
    ```
    Expected: rows with types like `userMessage`, `reasoning`, `assistantMessage`, `toolCall`, `toolResult`
+
+## Completed
+
+Implemented 2026-06-30. All validation criteria pass:
+- `pnpm build` ✓
+- `pnpm typecheck` ✓
+- `pnpm test` (808 tests, 47 files) ✓
+- `pnpm lint` ✓
+- LSP diagnostics clean ✓
+
+Commit: 94f8572

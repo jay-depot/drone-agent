@@ -134,5 +134,9 @@
   {
     "timestamp": "2026-06-30T05:02:20.613Z",
     "insight": "The swarm plugin's event push-through mechanism was half-built: eventBuffer and flushEventBuffer exist, but nothing ever pushes events into the buffer. The onConversationEvent hook approach (new hook type in DronePluginHooks, dedicated engine method) is the cleanest way to wire it up — follows existing patterns like onSessionSafetyTrimWillRun."
+  },
+  {
+    "timestamp": "2026-06-30T05:27:22.005Z",
+    "insight": "The conversation event push-through was successfully wired up. The onConversationEvent hook pattern (new hook type in DronePluginHooks with a dedicated engine method) worked cleanly — the conversation service doesn't need to know about the swarm plugin, and the swarm plugin doesn't need access to the session manager. The fire-and-forget pattern with .catch() in the emit function prevents hook failures from blocking the conversation loop."
   }
 ]
