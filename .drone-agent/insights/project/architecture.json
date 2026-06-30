@@ -130,5 +130,9 @@
   {
     "timestamp": "2026-06-30T02:23:41.820Z",
     "insight": "The shadcn/ui \"base-nova\" style uses @base-ui/react instead of Radix, which means asChild prop is not supported on components like CollapsibleTrigger. Need to use plain elements instead of wrapping Button components."
+  },
+  {
+    "timestamp": "2026-06-30T05:02:20.613Z",
+    "insight": "The swarm plugin's event push-through mechanism was half-built: eventBuffer and flushEventBuffer exist, but nothing ever pushes events into the buffer. The onConversationEvent hook approach (new hook type in DronePluginHooks, dedicated engine method) is the cleanest way to wire it up — follows existing patterns like onSessionSafetyTrimWillRun."
   }
 ]
