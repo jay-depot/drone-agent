@@ -31,7 +31,7 @@ export const personaPlugin: DronePlugin = {
       (persona: DronePersonaDefinition | null) => void
     > = [];
 
-    // ── Provider management ──────────────────────────────────────────
+    // ── Provider management ───────────────────────────────────────────────
     function insertProviderSorted(provider: DronePersonaProvider): void {
       const idx = providers.findIndex(p => p.precedence > provider.precedence);
       if (idx === -1) {
@@ -48,7 +48,7 @@ export const personaPlugin: DronePlugin = {
       }
     }
 
-    // ── Merge helpers ───────────────────────────────────────────────
+    // ── Merge helpers ─────────────────────────────────────────────────────
     function getAllPersonas(): DronePersonaDefinition[] {
       const seen = new Set<string>();
       const result: DronePersonaDefinition[] = [];
@@ -73,7 +73,7 @@ export const personaPlugin: DronePlugin = {
       return undefined;
     }
 
-    // ── Filtering helpers ───────────────────────────────────────────
+    // ── Filtering helpers ───────────────────────────────────────────────
     function getFilteredTools(
       allTools: DroneToolDescriptor[]
     ): DroneToolDescriptor[] {
@@ -227,7 +227,7 @@ export const personaPlugin: DronePlugin = {
     registration.offer(capability);
 
     // -----------------------------------------------------------------------
-    // onPluginsLoaded — load personas and activate configured persona
+    // onPluginsLoaded — load personas and activate configured/runtime persona
     // -----------------------------------------------------------------------
     registration.hooks.onPluginsLoaded(async () => {
       await capability.reloadPersonas();
@@ -244,16 +244,31 @@ export const personaPlugin: DronePlugin = {
         `loaded ${all.length} persona(s): ${all.map(p => p.id).join(', ')}`
       );
 
-      // Activate configured persona if set
-      if (config.activePersona) {
-        const activated = await activatePersona(config.activePersona);
+      // Determine which persona to activate: runtime option (--persona CLI flag)
+      // takes precedence over config.activePersona
+      let personaToActivate: string | null = null;
+
+      // First check runtime options (from --persona CLI flag)
+      const runtime = registration.request<{ persona?: string }>('runtime');
+      if (runtime?.persona) {
+        personaToActivate = runtime.persona;
+      }
+
+      // Fall back to config.activePersona if no runtime persona was specified
+      if (!personaToActivate && config.activePersona) {
+        personaToActivate = config.activePersona;
+      }
+
+      // Activate the determined persona
+      if (personaToActivate) {
+        const activated = await activatePersona(personaToActivate);
         if (activated) {
           registration.logger.info(
             `active persona: ${activated.name} (${activated.id})`
           );
         } else {
           registration.logger.warn(
-            `configured activePersona "${config.activePersona}" not found`
+            `persona "${personaToActivate}" not found`
           );
         }
       }

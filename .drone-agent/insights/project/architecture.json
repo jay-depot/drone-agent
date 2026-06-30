@@ -142,5 +142,9 @@
   {
     "timestamp": "2026-06-30T05:49:31.640Z",
     "insight": "The beacon's sync.ts was missing proxy routes for /sync/events/push and /sync/sessions/register, causing 404 errors when the swarm plugin tried to push conversation events. The coordinator had the endpoints and the beacon's coordinator-client had the methods, but the beacon routes were never wired up. This is a pattern to watch for: when adding new swarm features, always check that the beacon proxy routes are created alongside the coordinator endpoints."
+  },
+  {
+    "timestamp": "2026-06-30T23:12:26.809Z",
+    "insight": "The coordinator's single-port architecture creates tension between API security (self-signed TLS) and browser usability (browsers reject self-signed certs). The dual-port approach (TLS for API, HTTP for UI) is a pragmatic solution, but the auth middleware only applies to /api/* and /ws — static files are always served without auth so the login page can load. This means the SPA JavaScript bundle is publicly accessible on the web port, which is fine since it contains no secrets."
   }
 ]
