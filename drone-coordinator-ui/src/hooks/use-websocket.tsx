@@ -1,19 +1,30 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useCallback,
+  useState,
+  createContext,
+  useContext,
+  type ReactNode,
+} from 'react';
 
 type MessageHandler = (data: unknown) => void;
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
-interface UseWebSocketReturn {
+interface WebSocketContextValue {
   status: ConnectionStatus;
   subscribe: (type: string, handler: MessageHandler) => () => void;
+  send: (data: unknown) => void;
 }
 
+const WebSocketContext = createContext<WebSocketContextValue | null>(null);
+
 /**
- * WebSocket connection hook for the coordinator's real-time event stream.
- * Auto-reconnects with exponential backoff.
+ * Provider that manages a single WebSocket connection to the coordinator.
+ * Wrap your app (or the relevant subtree) with this.
  */
-export function useWebSocket(): UseWebSocketReturn {
+export function WebSocketProvider({ children }: { children: ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null);
   const handlersRef = useRef<Map<string, Set<MessageHandler>>>(new Map());
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -33,15 +44,14 @@ export function useWebSocket(): UseWebSocketReturn {
 
     ws.onopen = () => {
       setStatus('connected');
-      reconnectDelayRef.current = 1000; // Reset backoff
+      reconnectDelayRef.current = 1000;
     };
 
-    ws.onmessage = event => {
+    ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
         const { type } = message;
 
-        // Dispatch to registered handlers
         const typeHandlers = handlersRef.current.get(type);
         if (typeHandlers) {
           for (const handler of typeHandlers) {
@@ -49,7 +59,6 @@ export function useWebSocket(): UseWebSocketReturn {
           }
         }
 
-        // Also dispatch to wildcard handlers
         const wildcardHandlers = handlersRef.current.get('*');
         if (wildcardHandlers) {
           for (const handler of wildcardHandlers) {
@@ -65,14 +74,13 @@ export function useWebSocket(): UseWebSocketReturn {
       setStatus('disconnected');
       wsRef.current = null;
 
-      // Schedule reconnect with exponential backoff
       const delay = reconnectDelayRef.current;
       reconnectDelayRef.current = Math.min(delay * 2, 30000);
       reconnectTimeoutRef.current = setTimeout(connect, delay);
     };
 
     ws.onerror = () => {
-      // onclose will fire after onerror, so reconnect is handled there
+      // onclose will fire after onerror
     };
 
     wsRef.current = ws;
@@ -85,12 +93,10 @@ export function useWebSocket(): UseWebSocketReturn {
       }
       handlersRef.current.get(type)!.add(handler);
 
-      // Ensure connection is active
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
         connect();
       }
 
-      // Return unsubscribe function
       return () => {
         const typeHandlers = handlersRef.current.get(type);
         if (typeHandlers) {
@@ -100,6 +106,33 @@ export function useWebSocket(): UseWebSocketReturn {
           }
         }
       };
+    },
+    [connect]
+  );
+
+  const send = useCallback(
+    (data: unknown) => {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(data));
+      } else {
+        // Queue until connected
+        const onOpen = () => {
+          ws!.send(JSON.stringify(data));
+          ws!.removeEventListener('open', onOpen);
+        };
+        if (ws) {
+          ws.addEventListener('open', onOpen);
+        } else {
+          connect();
+          // Try again after a short delay
+          setTimeout(() => {
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify(data));
+            }
+          }, 500);
+        }
+      }
     },
     [connect]
   );
@@ -118,5 +151,21 @@ export function useWebSocket(): UseWebSocketReturn {
     };
   }, [connect]);
 
-  return { status, subscribe };
+  return (
+    <WebSocketContext.Provider value={{ status, subscribe, send }}>
+      {children}
+    </WebSocketContext.Provider>
+  );
+}
+
+/**
+ * Hook to access the shared WebSocket connection.
+ * Must be used within a <WebSocketProvider>.
+ */
+export function useWebSocket(): WebSocketContextValue {
+  const ctx = useContext(WebSocketContext);
+  if (!ctx) {
+    throw new Error('useWebSocket must be used within a WebSocketProvider');
+  }
+  return ctx;
 }

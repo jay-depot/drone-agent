@@ -1099,6 +1099,33 @@ export function getSwarmSession(id: string): SwarmSession | undefined {
   };
 }
 
+export function listSwarmSessions(status?: string): SwarmSession[] {
+  let query = 'SELECT * FROM swarm_sessions';
+  const params: string[] = [];
+  if (status) {
+    query += ' WHERE status = ?';
+    params.push(status);
+  }
+  query += ' ORDER BY createdAt DESC';
+  const stmt = getDatabase().prepare(query);
+  const rows = (params.length > 0 ? stmt.all(...params) : stmt.all()) as Array<{
+    id: string;
+    persona_id: string | null;
+    beacon_id: string;
+    createdAt: number;
+    updatedAt: number;
+    status: string;
+  }>;
+  return rows.map(row => ({
+    id: row.id,
+    personaId: row.persona_id,
+    beaconId: row.beacon_id,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    status: row.status,
+  }));
+}
+
 export function updateSwarmSessionStatus(
   id: string,
   status: string

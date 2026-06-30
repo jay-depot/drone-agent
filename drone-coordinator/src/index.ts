@@ -11,7 +11,7 @@ import {
   listBeaconTrust,
   listBeacons,
   listAllAgentLocations,
-  listBeaconSessions,
+  listSwarmSessions,
 } from './db.js';
 import { initStorage } from './storage.js';
 import { registerRoutes } from './routes/index.js';
@@ -136,13 +136,7 @@ async function handleListBeacons(config: Config) {
   process.exit(0);
 }
 
-/**
- * Resolve the path to the UI's built static files.
- * In the monorepo, it's at ../../drone-coordinator-ui/dist relative to this file's dist/.
- * When published to npm, it's in node_modules/drone-coordinator-ui/dist.
- */
 function resolveUiDistPath(): string {
-  // Try monorepo layout first
   const monorepoPath = path.resolve(
     __dirname,
     '../../drone-coordinator-ui/dist'
@@ -150,7 +144,6 @@ function resolveUiDistPath(): string {
   if (existsSync(monorepoPath)) {
     return monorepoPath;
   }
-  // Fall back to node_modules
   const nodeModulesPath = path.resolve(
     __dirname,
     '../node_modules/drone-coordinator-ui/dist'
@@ -158,12 +151,10 @@ function resolveUiDistPath(): string {
   if (existsSync(nodeModulesPath)) {
     return nodeModulesPath;
   }
-  // Allow override via env var
   const envPath = process.env.UI_DIST_PATH;
   if (envPath && existsSync(envPath)) {
     return envPath;
   }
-  // Default to monorepo path (will be created by build)
   return monorepoPath;
 }
 
@@ -186,13 +177,9 @@ async function main() {
   logger.info(`Database path: ${config.dbPath}`);
   logger.info(`Protocol: ${protocol.toUpperCase()}`);
 
-  // Initialize database
   initDatabase(config.dbPath);
-
-  // Initialize storage engine for large payloads
   initStorage(config.configDir);
 
-  // Load TLS identity if HTTPS is enabled
   let tlsOptions: { cert: Buffer; key: Buffer } | undefined;
   if (config.useHttps) {
     const tlsIdentity = loadOrCreateTlsIdentity(config.configDir);
@@ -200,7 +187,6 @@ async function main() {
     logger.info(`TLS certificate fingerprint: ${tlsIdentity.fingerprint}`);
   }
 
-  // Create Fastify instance
   const app = fastify({
     logger: {
       level: process.env.LOG_LEVEL || 'info',
@@ -210,30 +196,36 @@ async function main() {
       : {}),
   });
 
-  // Register CORS for development
   await app.register(fastifyCors, {
     origin: process.env.NODE_ENV === 'development' ? true : false,
   });
 
-  // Register WebSocket plugin (must be done before defining WS routes)
   await app.register(import('@fastify/websocket'));
 
   // WebSocket endpoint for real-time events
   app.get('/ws', { websocket: true }, (socket, req) => {
     const sub = addSubscriber(socket);
 
-    // Send initial state snapshot
     try {
       const beacons = listBeacons();
       const agentLocations = listAllAgentLocations();
-      const sessions = beacons.flatMap((b) => {
-        const beaconSessions = listBeaconSessions(b.id);
-        return beaconSessions.map((s) => ({
-          ...s,
-          beaconName: b.name,
-          beaconHost: b.host,
-          beaconPort: b.port,
-        }));
+      const swarmSessions = listSwarmSessions('active');
+      const sessions = swarmSessions.map((s) => {
+        const beacon = beacons.find((b) => b.id === s.beaconId);
+        return {
+          id: s.id,
+          beaconId: s.beaconId,
+          agentId: s.id,
+          personaId: s.personaId,
+          connectedAt: s.createdAt,
+          disconnectedAt: null,
+          durationMs: null,
+          createdAt: s.createdAt,
+          updatedAt: s.updatedAt,
+          beaconName: beacon?.name ?? s.beaconId,
+          beaconHost: beacon?.host,
+          beaconPort: beacon?.port,
+        };
       });
 
       publishInitialState(socket, {
@@ -245,7 +237,6 @@ async function main() {
       logger.warn(`Failed to build initial state: ${err}`);
     }
 
-    // Handle incoming messages from the client
     socket.on('message', (raw: Buffer) => {
       try {
         const msg = JSON.parse(raw.toString());
@@ -259,7 +250,6 @@ async function main() {
       }
     });
 
-    // Keep-alive ping
     const interval = setInterval(() => {
       try {
         socket.send(JSON.stringify({ type: 'ping' }));
@@ -277,7 +267,7 @@ async function main() {
   // Register API routes (must be registered BEFORE @fastify/static)
   await registerRoutes(app);
 
-  // Serve the UI static files — only under /assets/ to avoid intercepting API routes
+  // Serve the UI static files — only under /assets/
   const uiDistPath = resolveUiDistPath();
   logger.info(`Serving UI from: ${uiDistPath}`);
 
@@ -292,7 +282,7 @@ async function main() {
     return reply.sendFile('index.html', path.resolve(uiDistPath));
   });
 
-  // SPA fallback: serve index.html for all non-API, non-WS, non-asset routes
+  // SPA fallback
   app.setNotFoundHandler(async (request, reply) => {
     if (
       request.url.startsWith('/api') ||
@@ -304,7 +294,6 @@ async function main() {
     return reply.sendFile('index.html', path.resolve(uiDistPath));
   });
 
-  // Graceful shutdown
   const shutdown = async () => {
     logger.info('Shutting down...');
     await app.close();
@@ -315,7 +304,6 @@ async function main() {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  // Start server
   try {
     await app.listen({
       port: config.port,

@@ -15,7 +15,7 @@ import { Separator } from '@/components/ui/separator';
 export default function SessionDetailPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { subscribe } = useWebSocket();
+  const { subscribe, send } = useWebSocket();
   const [events, setEvents] = useState<SwarmEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const eventsEndRef = useRef<HTMLDivElement>(null);
@@ -65,22 +65,14 @@ export default function SessionDetailPage() {
       }
     });
 
-    // Subscribe to this session on the WS
-    const ws = new WebSocket(
-      `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
-    );
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'subscribe', sessionId }));
-    };
+    // Subscribe to this session using the shared WebSocket
+    send({ type: 'subscribe', sessionId });
 
     return () => {
       unsub();
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'unsubscribe', sessionId }));
-        ws.close();
-      }
+      send({ type: 'unsubscribe', sessionId });
     };
-  }, [sessionId, subscribe]);
+  }, [sessionId, subscribe, send]);
 
   // Auto-scroll to latest events
   useEffect(() => {
