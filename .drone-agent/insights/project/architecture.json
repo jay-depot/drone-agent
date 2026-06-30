@@ -110,5 +110,13 @@
   {
     "timestamp": "2026-06-29T23:51:52.943Z",
     "insight": "When using Fastify with `https: { allowHTTP1: true }`, the server becomes an HTTP/2 secure server. For HTTP/2 secure servers, the TLS cert/key must be passed in the constructor's `https` property — NOT in `app.listen()`. Passing cert/key to `app.listen()` is silently ignored for HTTP/2 servers, causing the server to listen without a certificate and resulting in \"SSL alert handshake failure\" on the client side. The fix is to load the TLS identity before creating the Fastify instance and spread the cert/key into the `https` option in the constructor."
+  },
+  {
+    "timestamp": "2026-06-30T00:11:08.021Z",
+    "insight": "The @fastify/websocket WebSocket object (from the `ws` library) does not have a `remoteAddress` property — unlike raw Node.js sockets. The remote IP must be read from the Fastify `request` object (`request.ip` or `request.socket.remoteAddress`). The ws-server.ts was reading `socket.remoteAddress` which was always `undefined`, causing all WebSocket connections to be rejected as non-local."
+  },
+  {
+    "timestamp": "2026-06-30T00:52:49.068Z",
+    "insight": "The beacon and coordinator packages share significant code duplication (wiki-storage.ts, tls.ts, logger.ts are nearly identical). The test plan should test both copies independently, but a future refactoring opportunity exists to extract shared code into drone-core."
   }
 ]

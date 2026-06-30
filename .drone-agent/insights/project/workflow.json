@@ -42,5 +42,9 @@
   {
     "timestamp": "2026-06-29T21:32:14.760Z",
     "insight": "The beacon's coordinator registration failure is non-fatal (graceful degradation to offline mode), but the periodic sync retries every 5 minutes and logs the timeout error each time. This is noisy when the coordinator isn't running yet. Could suppress repeated failures after the first."
+  },
+  {
+    "timestamp": "2026-06-30T00:52:49.074Z",
+    "insight": "The vitest config currently only includes drone-core and drone-agent test directories. Adding beacon and coordinator tests requires updating the root vitest.config.ts. The coordinator already has a test/ directory with one test file, but the beacon has no test/ directory at all."
   }
 ]
