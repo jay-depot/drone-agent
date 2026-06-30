@@ -1,12 +1,9 @@
 ---
 key: roadmap
 tags:
-  - swarm
-  - roadmap
-  - drone-agent
-  - planning
+  []
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-06-29T20:19:46.800Z
+updated: 2026-06-30T02:08:32.499Z
 ---
 
 # Swarm Roadmap
@@ -327,6 +324,49 @@ A guided workflow (`bootstrap.swarm`) to set up beacon/coordinator connection, c
 
 The coordinator needs test coverage for its routes and database layer.
 
+#### ⏳ 3.11 Coordinator Web UI
+
+**Status:** Planned
+
+A monitoring dashboard web UI for the coordinator — React SPA with shadcn/ui, tweakcn themes, and WebSocket-based real-time updates. Served by the coordinator itself via `@fastify/static`.
+
+**Pages (v1 — monitoring only):**
+
+- **Swarm Topology** — beacons with online/offline status and active agent counts
+- **Sessions** — list of open sessions with real-time peek into session event logs
+- **Session Detail** — dedicated page showing all recent events with collapsible payloads
+- **Personas** — read-only list
+- **Skills** — read-only list
+- **Wiki** — read-only list
+
+**Architecture:**
+
+- New `drone-coordinator-ui` package in the monorepo (Vite + React + shadcn/ui)
+- Declared as `"drone-coordinator-ui": "workspace:*"` dependency of `drone-coordinator`
+- Coordinator serves built static files and provides WebSocket endpoint at `/ws`
+- In-memory pub/sub for pushing new swarm events to connected clients
+- CORS enabled in development mode
+
+**Key Files (to be created):**
+
+- `drone-coordinator-ui/package.json` — Vite/React project config
+- `drone-coordinator-ui/src/App.tsx` — Router + layout
+- `drone-coordinator-ui/src/pages/topology.tsx` — Beacon topology view
+- `drone-coordinator-ui/src/pages/sessions.tsx` — Session list
+- `drone-coordinator-ui/src/pages/session-detail.tsx` — Session event log
+- `drone-coordinator-ui/src/pages/personas.tsx` — Persona list
+- `drone-coordinator-ui/src/pages/skills.tsx` — Skill list
+- `drone-coordinator-ui/src/pages/wiki.tsx` — Wiki page list
+- `drone-coordinator-ui/src/hooks/use-websocket.ts` — WebSocket connection hook
+
+**Coordinator changes:**
+
+- Add `@fastify/websocket`, `@fastify/static`, `@fastify/cors` dependencies
+- Register WebSocket endpoint at `/ws` with per-session event subscription
+- Serve UI static files and add SPA fallback handler
+
+**Dependencies:** 3.2 (session storage), 3.4 (wiki)
+
 ---
 
 ### 🔜 PHASE 4: drone-gateway
@@ -380,6 +420,25 @@ The following features are aspirational and not yet implemented:
 - Vector search for global session/memory retrieval
 - Distributed task routing within YOUR swarm
 - Route to node with best model for task
+
+#### 5.5 Web UI Management Console
+
+**Status:** Not started
+
+Extend the coordinator web UI (built in 3.11) from monitoring-only to a full management console. Adds create/edit/delete forms for all resource types.
+
+**Planned features:**
+
+- **Persona management** — create, edit, and delete swarm personas via the UI
+- **Skill management** — create, edit, and delete swarm skills
+- **Wiki management** — create, edit, and delete wiki pages with a markdown editor
+- **Knowledge management** — browse, edit, and delete knowledge entries
+- **Beacon management** — approve/reject pending beacons, view trust details
+- **Insights & Principles management** — browse and delete insights/principles
+- **Session management** — force-close stale sessions
+- **Wiki browsing** — full wiki reader with search, navigation, and wiki-link traversal
+
+**Dependencies:** 3.11 (web UI foundation)
 
 ---
 
@@ -454,4 +513,4 @@ Phase 5 (Advanced)
 
 ---
 
-_Last updated: 2026-06-29_
+_Last updated: 2026-06-30_
