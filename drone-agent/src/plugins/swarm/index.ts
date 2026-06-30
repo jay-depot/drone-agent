@@ -464,6 +464,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       const wsProtocol = beaconUseHttps ? 'wss' : 'ws';
       const wsUrl = `${wsProtocol}://${beaconHost}:${beaconPort}/ws?agentId=${sessionId}`;
       let ws: WebSocket | null = null;
+      let shuttingDown = false;
       let wsReconnectAttempts = 0;
       const maxReconnectAttempts = 5;
       const messageQueue: Array<{
@@ -526,6 +527,12 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
               `WebSocket closed: ${event.code} ${event.reason}`
             );
             ws = null;
+            if (shuttingDown) {
+              registration.logger.info(
+                'WebSocket closed during shutdown; skipping reconnect'
+              );
+              return;
+            }
             if (wsReconnectAttempts < maxReconnectAttempts) {
               wsReconnectAttempts++;
               const delay = Math.min(
@@ -926,6 +933,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       const heartbeatInterval = setInterval(heartbeat, 30000);
 
       registration.hooks.onShutdown(async () => {
+        shuttingDown = true;
         clearInterval(heartbeatInterval);
         if (ws) ws.close();
         await flushEventBuffer();

@@ -40,6 +40,7 @@ Add a `shuttingDown` flag that is set to `true` in the `onShutdown` hook **befor
 **Location:** Near line 460, alongside the other WebSocket state variables (`ws`, `wsReconnectAttempts`, `maxReconnectAttempts`, `messageQueue`, `pendingMessages`).
 
 **Change:** Add a new variable:
+
 ```typescript
 let shuttingDown = false;
 ```
@@ -51,22 +52,20 @@ let shuttingDown = false;
 **Location:** The `ws.onclose` handler, around line 423.
 
 **Change:** Add a guard at the top of the `onclose` handler:
+
 ```typescript
 ws.onclose = event => {
-  registration.logger.warn(
-    `WebSocket closed: ${event.code} ${event.reason}`
-  );
+  registration.logger.warn(`WebSocket closed: ${event.code} ${event.reason}`);
   ws = null;
   if (shuttingDown) {
-    registration.logger.info('WebSocket closed during shutdown; skipping reconnect');
+    registration.logger.info(
+      'WebSocket closed during shutdown; skipping reconnect'
+    );
     return;
   }
   if (wsReconnectAttempts < maxReconnectAttempts) {
     wsReconnectAttempts++;
-    const delay = Math.min(
-      1000 * Math.pow(2, wsReconnectAttempts),
-      30000
-    );
+    const delay = Math.min(1000 * Math.pow(2, wsReconnectAttempts), 30000);
     setTimeout(connectWebSocket, delay);
   }
 };
@@ -79,6 +78,7 @@ ws.onclose = event => {
 **Location:** The `onShutdown` hook, around line 908.
 
 **Change:** Set the flag before calling `ws.close()`:
+
 ```typescript
 registration.hooks.onShutdown(async () => {
   shuttingDown = true;
@@ -101,6 +101,7 @@ registration.hooks.onShutdown(async () => {
 ### Step 4: Verify the fix
 
 **Validation criteria:**
+
 1. `pnpm build` passes (no TypeScript errors)
 2. `pnpm lint` passes (no lint errors)
 3. `pnpm test` passes (all existing tests)

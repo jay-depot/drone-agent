@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-06-30T04:14:29.231Z",
+    "insight": "The swarm plugin's WebSocket reconnection logic has no shutdown-awareness flag, causing an infinite reconnect loop on /exit. The onclose handler schedules reconnects even during deliberate shutdown, and onopen resets the attempt counter, so the maxReconnectAttempts limit is never reached. Fix: add a shuttingDown flag set in onShutdown before ws.close()."
+  }
+]
