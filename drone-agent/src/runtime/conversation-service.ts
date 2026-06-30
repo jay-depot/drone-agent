@@ -1,6 +1,7 @@
 import type {
   DroneAgentConfig,
   DroneChatMessage,
+  DroneConversationEvent,
   DroneLlmCapability,
   DroneLogger,
   DroneSessionSafetyTrimPayload,
@@ -10,19 +11,9 @@ import type { DronePluginEngine } from './plugin-engine.js';
 import type { DroneSessionManager } from './session-manager.js';
 import type { ContextBudgetService } from './context-budget-service.js';
 
-export type ConversationEvent =
-  | { kind: 'reasoning'; content: string }
-  | { kind: 'assistantMessage'; content: string }
-  | { kind: 'toolCall'; name: string; arguments: Record<string, unknown> }
-  | {
-      kind: 'toolResult';
-      name: string;
-      content: string;
-      arguments: Record<string, unknown>;
-    }
-  | { kind: 'error'; message: string };
-
-export type ConversationEventHandler = (event: ConversationEvent) => void;
+export type ConversationEventHandler = (event: DroneConversationEvent) => void;
+// Re-export for convenience — used by interactive.ts and tui/types.ts
+export type { DroneConversationEvent as ConversationEvent } from 'drone-core';
 
 export type ConversationService = {
   sendUserMessage: (
@@ -225,6 +216,16 @@ export function createConversationService({
       hasWarnedAboutSafetyTrim = false;
       sessionManager.appendUserMessage(prompt);
 
+      // Fire the user message event through the engine hook
+      engine
+        .runConversationEventHooks({
+          kind: 'userMessage',
+          content: prompt,
+        })
+        .catch(err => {
+          logger.warn(`Conversation event hook threw: ${err}`);
+        });
+
       const llm = getLlmCapability();
       const provider = llm.getActiveProvider();
       const tools = getLlmTools();
@@ -236,7 +237,7 @@ export function createConversationService({
       let stuckSignature: { name: string; code: string | null } | null = null;
       let stuckCount = 0;
 
-      const emit = (event: ConversationEvent): void => {
+      const emit = (event: DroneConversationEvent): void => {
         if (onEvent) {
           try {
             onEvent(event);
@@ -245,6 +246,11 @@ export function createConversationService({
             logger.warn(`Conversation event handler threw: ${message}`);
           }
         }
+        // Fire the engine hook (fire-and-forget so a slow/failing hook
+        // doesn't block the conversation loop).
+        engine.runConversationEventHooks(event).catch(err => {
+          logger.warn(`Conversation event hook threw: ${err}`);
+        });
       };
 
       while (true) {

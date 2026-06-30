@@ -2,6 +2,7 @@ import {
   createConsoleLogger,
   getCanonicalToolName,
   type DroneAgentConfig,
+  type DroneConversationEvent,
   type DroneElicitation,
   type DroneLogger,
   type DronePlugin,
@@ -68,6 +69,7 @@ export type DronePluginEngine = {
   runSessionSafetyTrimAppliedHooks: (
     payload: DroneSessionSafetyTrimPayload
   ) => Promise<void>;
+  runConversationEventHooks: (event: DroneConversationEvent) => Promise<void>;
   renderPromptFragments: () => Promise<string[]>;
   getTool: (canonicalName: string) => DroneToolDefinition | undefined;
   executeTool: (
@@ -266,6 +268,9 @@ export function createDronePluginEngine({
   const sessionSafetyTrimAppliedHooks: Array<
     (payload: DroneSessionSafetyTrimPayload) => Promise<void>
   > = [];
+  const conversationEventHooks: Array<
+    (event: DroneConversationEvent) => Promise<void>
+  > = [];
   let elicitationCapability: DroneElicitation | undefined;
 
   // --- Local functions (declared before the return object so they can ---)
@@ -421,6 +426,7 @@ export function createDronePluginEngine({
         onSessionStart: callback => hookBuckets.onSessionStart.push(callback),
         onBeforePrompt: callback => hookBuckets.onBeforePrompt.push(callback),
         onAfterToolCall: callback => hookBuckets.onAfterToolCall.push(callback),
+        onConversationEvent: callback => conversationEventHooks.push(callback),
         onSessionClear: callback => hookBuckets.onSessionClear.push(callback),
         onShutdown: callback => hookBuckets.onShutdown.push(callback),
         onSessionSafetyTrimWillRun: callback =>
@@ -524,6 +530,11 @@ export function createDronePluginEngine({
     runSessionSafetyTrimAppliedHooks: async payload => {
       for (const callback of sessionSafetyTrimAppliedHooks) {
         await callback(payload);
+      }
+    },
+    runConversationEventHooks: async (event: DroneConversationEvent) => {
+      for (const callback of conversationEventHooks) {
+        await callback(event);
       }
     },
     renderPromptFragments: async () => {

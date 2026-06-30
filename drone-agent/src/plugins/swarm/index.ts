@@ -450,6 +450,23 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         registration.logger.info(`New correlationId: ${currentCorrelationId}`);
       });
 
+      registration.hooks.onConversationEvent(async event => {
+        const now = Date.now();
+        const evt = {
+          id: generateUuid(),
+          sessionId,
+          correlationId: currentCorrelationId ?? undefined,
+          type: event.kind,
+          payload: JSON.stringify(event),
+          metadata: JSON.stringify({
+            kind: event.kind,
+            ...('name' in event ? { name: event.name } : {}),
+          }),
+          createdAt: now,
+        };
+        eventBuffer.push(evt);
+      });
+
       registration.hooks.onAfterToolCall(async () => {
         await flushEventBuffer();
       });

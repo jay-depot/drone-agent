@@ -28,6 +28,11 @@ export type DronePluginHooks = {
   onSessionStart: (callback: () => Promise<void>) => void;
   onBeforePrompt: (callback: () => Promise<void>) => void;
   onAfterToolCall: (callback: () => Promise<void>) => void;
+  onConversationEvent: (
+    callback: (
+      event: import('./session-types.js').DroneConversationEvent
+    ) => Promise<void>
+  ) => void;
   onShutdown: (callback: () => Promise<void>) => void;
   onSessionClear: (callback: () => Promise<void>) => void;
   onSessionSafetyTrimWillRun: (
@@ -49,7 +54,9 @@ export type DronePluginHooks = {
  */
 export type DroneStandardHookName = Exclude<
   keyof DronePluginHooks,
-  'onSessionSafetyTrimWillRun' | 'onSessionSafetyTrimApplied'
+  | 'onSessionSafetyTrimWillRun'
+  | 'onSessionSafetyTrimApplied'
+  | 'onConversationEvent'
 >;
 
 export type DronePluginRegistration = {

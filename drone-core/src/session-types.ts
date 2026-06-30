@@ -89,3 +89,16 @@ export type DroneSessionSafetyTrimPayload = {
   droppedTurns?: DroneSessionTurn[];
   warningMessage?: string;
 };
+
+export type DroneConversationEvent =
+  | { kind: 'userMessage'; content: string }
+  | { kind: 'reasoning'; content: string }
+  | { kind: 'assistantMessage'; content: string }
+  | { kind: 'toolCall'; name: string; arguments: Record<string, unknown> }
+  | {
+      kind: 'toolResult';
+      name: string;
+      content: string;
+      arguments: Record<string, unknown>;
+    }
+  | { kind: 'error'; message: string };

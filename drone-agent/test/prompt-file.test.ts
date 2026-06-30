@@ -334,6 +334,7 @@ describe('promptFilePlugin', () => {
         onSessionStart: () => {},
         onBeforePrompt: () => {},
         onAfterToolCall: () => {},
+        onConversationEvent: () => {},
         onSessionClear: () => {},
         onShutdown: () => {},
         onSessionSafetyTrimWillRun: () => {},

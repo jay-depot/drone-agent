@@ -42,6 +42,7 @@ function makeEngine(options: EngineOptions): DronePluginEngine & {
     runHooks: async () => {},
     runSessionSafetyTrimWillRunHooks: async () => {},
     runSessionSafetyTrimAppliedHooks: async () => {},
+    runConversationEventHooks: async () => {},
     renderPromptFragments: async () => options.promptFragments ?? [],
     getTool: () => undefined,
     executeTool: executeMock as unknown as DronePluginEngine['executeTool'],

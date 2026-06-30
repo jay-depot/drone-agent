@@ -358,6 +358,7 @@ async function getCapability(
       onSessionStart: () => {},
       onBeforePrompt: () => {},
       onAfterToolCall: () => {},
+      onConversationEvent: () => {},
       onSessionClear: (cb: () => Promise<void>) => {
         onSessionClear = cb;
       },

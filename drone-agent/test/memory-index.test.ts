@@ -54,6 +54,7 @@ function createMockRegistration(): {
       onSessionStart: [] as Function[],
       onBeforePrompt: [] as Function[],
       onAfterToolCall: [] as Function[],
+      onConversationEvent: [] as Function[],
       onSessionClear: [] as Function[],
       onShutdown: [] as Function[],
       onSessionSafetyTrimWillRun: [] as Function[],
@@ -82,6 +83,7 @@ function createMockRegistration(): {
       onSessionStart: cb => captured.hooks.onSessionStart.push(cb),
       onBeforePrompt: cb => captured.hooks.onBeforePrompt.push(cb),
       onAfterToolCall: cb => captured.hooks.onAfterToolCall.push(cb),
+      onConversationEvent: cb => captured.hooks.onConversationEvent.push(cb),
       onSessionClear: cb => captured.hooks.onSessionClear.push(cb),
       onShutdown: cb => captured.hooks.onShutdown.push(cb),
       onSessionSafetyTrimWillRun: cb =>

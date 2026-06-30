@@ -1,5 +1,6 @@
 import {
   createConsoleLogger,
+  type DroneConversationEvent,
   type DroneElicitation,
   type DroneLogger,
   type DronePlugin,
@@ -36,6 +37,7 @@ export type TestPluginHookOptions = {
   onSessionStart?: () => Promise<void> | void;
   onBeforePrompt?: () => Promise<void> | void;
   onAfterToolCall?: () => Promise<void> | void;
+  onConversationEvent?: (event: DroneConversationEvent) => Promise<void> | void;
   onSessionClear?: () => Promise<void> | void;
   onShutdown?: () => Promise<void> | void;
   onSessionSafetyTrimWillRun?: (
@@ -122,6 +124,12 @@ export function createTestPlugin(options: TestPluginOptions): DronePlugin {
           await cb();
         });
       }
+      if (hooks?.onConversationEvent) {
+        const cb = hooks.onConversationEvent;
+        registration.hooks.onConversationEvent(async event => {
+          await cb(event);
+        });
+      }
       if (hooks?.onSessionClear) {
         const cb = hooks.onSessionClear;
         registration.hooks.onSessionClear(async () => {
@@ -181,6 +189,7 @@ export function createFakeEngine(
     runHooks: async () => {},
     runSessionSafetyTrimWillRunHooks: async () => {},
     runSessionSafetyTrimAppliedHooks: async () => {},
+    runConversationEventHooks: async () => {},
     renderPromptFragments: async () => options.promptFragments ?? [],
     getTool: () => undefined,
     executeTool: async () => '',

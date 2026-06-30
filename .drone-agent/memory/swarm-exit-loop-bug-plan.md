@@ -101,6 +101,7 @@ registration.hooks.onShutdown(async () => {
 ### Step 4: Verify the fix
 
 **Validation criteria:**
+
 1. `pnpm build` passes (no TypeScript errors)
 2. `pnpm lint` passes (no lint errors)
 3. `pnpm test` passes (all existing tests)
@@ -120,6 +121,7 @@ registration.hooks.onShutdown(async () => {
 **Commit:** c06e7d9
 
 All three code changes were applied to `drone-agent/src/plugins/swarm/index.ts`:
+
 1. Added `let shuttingDown = false;` alongside other WebSocket state variables
 2. Added a `shuttingDown` guard in the `ws.onclose` handler that logs and returns early
 3. Set `shuttingDown = true` at the top of the `onShutdown` hook, before `ws.close()`

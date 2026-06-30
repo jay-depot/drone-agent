@@ -30,6 +30,7 @@ function captureRegistration(): {
       onSessionStart: () => {},
       onBeforePrompt: () => {},
       onAfterToolCall: () => {},
+      onConversationEvent: () => {},
       onSessionClear: () => {},
       onShutdown: () => {},
       onSessionSafetyTrimWillRun: () => {},
