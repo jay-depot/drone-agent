@@ -63,7 +63,12 @@ import {
   getPrinciple,
   deletePrinciple,
 } from '../src/db.js';
-import type { CreatePersonaRequest, CreateSkillRequest, CreateMemoryRequest, Knowledge } from '../src/types.js';
+import type {
+  CreatePersonaRequest,
+  CreateSkillRequest,
+  CreateMemoryRequest,
+  Knowledge,
+} from '../src/types.js';
 
 describe('Beacon Persona CRUD', () => {
   beforeEach(async () => {
@@ -88,7 +93,10 @@ describe('Beacon Persona CRUD', () => {
   });
 
   it('should get a persona by id', () => {
-    createPersona({ id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1' }, 'local');
+    createPersona(
+      { id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1' },
+      'local'
+    );
     expect(getPersona('p1')).toBeDefined();
   });
 
@@ -97,21 +105,41 @@ describe('Beacon Persona CRUD', () => {
   });
 
   it('should list all personas', () => {
-    createPersona({ id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1' }, 'local');
-    createPersona({ id: 'p2', name: 'P2', description: 'd2', systemPrompt: 'sp2' }, 'local');
+    createPersona(
+      { id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1' },
+      'local'
+    );
+    createPersona(
+      { id: 'p2', name: 'P2', description: 'd2', systemPrompt: 'sp2' },
+      'local'
+    );
     expect(listPersonas()).toHaveLength(2);
   });
 
   it('should list only local personas', () => {
-    createPersona({ id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1' }, 'local');
-    upsertPersonaFromCoordinator({ id: 'p2', name: 'P2', description: 'd2', systemPrompt: 'sp2', scope: 'coordinator', createdAt: 1, updatedAt: 1 });
+    createPersona(
+      { id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1' },
+      'local'
+    );
+    upsertPersonaFromCoordinator({
+      id: 'p2',
+      name: 'P2',
+      description: 'd2',
+      systemPrompt: 'sp2',
+      scope: 'coordinator',
+      createdAt: 1,
+      updatedAt: 1,
+    });
     const local = listLocalPersonas();
     expect(local).toHaveLength(1);
     expect(local[0].id).toBe('p1');
   });
 
   it('should update a persona', () => {
-    createPersona({ id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1' }, 'local');
+    createPersona(
+      { id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1' },
+      'local'
+    );
     const updated = updatePersona('p1', { name: 'Updated' });
     expect(updated).toBeDefined();
     expect(updated!.name).toBe('Updated');
@@ -122,14 +150,23 @@ describe('Beacon Persona CRUD', () => {
   });
 
   it('should delete a persona', () => {
-    createPersona({ id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1' }, 'local');
+    createPersona(
+      { id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1' },
+      'local'
+    );
     expect(deletePersona('p1')).toBe(true);
     expect(getPersona('p1')).toBeUndefined();
   });
 
   it('should upsert a persona from coordinator', () => {
     upsertPersonaFromCoordinator({
-      id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1', scope: 'coordinator', createdAt: 100, updatedAt: 100,
+      id: 'p1',
+      name: 'P1',
+      description: 'd1',
+      systemPrompt: 'sp1',
+      scope: 'coordinator',
+      createdAt: 100,
+      updatedAt: 100,
     });
     const p = getPersona('p1');
     expect(p).toBeDefined();
@@ -148,7 +185,11 @@ describe('Beacon Skill CRUD', () => {
 
   it('should create a local skill', () => {
     const req: CreateSkillRequest = {
-      id: 'test-skill', name: 'Test Skill', description: 'd1', trigger: 't1', body: '# Body',
+      id: 'test-skill',
+      name: 'Test Skill',
+      description: 'd1',
+      trigger: 't1',
+      body: '# Body',
     };
     const skill = createSkill(req, 'local');
     expect(skill.id).toBe('test-skill');
@@ -156,37 +197,71 @@ describe('Beacon Skill CRUD', () => {
   });
 
   it('should get a skill by id', () => {
-    createSkill({ id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' }, 'local');
+    createSkill(
+      { id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' },
+      'local'
+    );
     expect(getSkill('s1')).toBeDefined();
   });
 
   it('should list all skills', () => {
-    createSkill({ id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' }, 'local');
-    createSkill({ id: 's2', name: 'S2', description: 'd2', trigger: 't2', body: 'b2' }, 'local');
+    createSkill(
+      { id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' },
+      'local'
+    );
+    createSkill(
+      { id: 's2', name: 'S2', description: 'd2', trigger: 't2', body: 'b2' },
+      'local'
+    );
     expect(listSkills()).toHaveLength(2);
   });
 
   it('should list only local skills', () => {
-    createSkill({ id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' }, 'local');
-    upsertSkillFromCoordinator({ id: 's2', name: 'S2', description: 'd2', trigger: 't2', body: 'b2', scope: 'coordinator', createdAt: 1, updatedAt: 1 });
+    createSkill(
+      { id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' },
+      'local'
+    );
+    upsertSkillFromCoordinator({
+      id: 's2',
+      name: 'S2',
+      description: 'd2',
+      trigger: 't2',
+      body: 'b2',
+      scope: 'coordinator',
+      createdAt: 1,
+      updatedAt: 1,
+    });
     expect(listLocalSkills()).toHaveLength(1);
   });
 
   it('should update a skill', () => {
-    createSkill({ id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' }, 'local');
+    createSkill(
+      { id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' },
+      'local'
+    );
     const updated = updateSkill('s1', { name: 'Updated' });
     expect(updated).toBeDefined();
     expect(updated!.name).toBe('Updated');
   });
 
   it('should delete a skill', () => {
-    createSkill({ id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' }, 'local');
+    createSkill(
+      { id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' },
+      'local'
+    );
     expect(deleteSkill('s1')).toBe(true);
   });
 
   it('should upsert a skill from coordinator', () => {
     upsertSkillFromCoordinator({
-      id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1', scope: 'coordinator', createdAt: 100, updatedAt: 100,
+      id: 's1',
+      name: 'S1',
+      description: 'd1',
+      trigger: 't1',
+      body: 'b1',
+      scope: 'coordinator',
+      createdAt: 100,
+      updatedAt: 100,
     });
     expect(getSkill('s1')).toBeDefined();
   });
@@ -251,7 +326,11 @@ describe('Beacon Memory CRUD', () => {
   });
 
   it('should create a memory with TTL', () => {
-    const mem = createMemory({ key: 'ttl-key', value: 'ttl-value', ttlSeconds: 3600 });
+    const mem = createMemory({
+      key: 'ttl-key',
+      value: 'ttl-value',
+      ttlSeconds: 3600,
+    });
     expect(mem.ttl).not.toBeNull();
     expect(mem.ttl!).toBeGreaterThan(Date.now());
   });
@@ -480,14 +559,21 @@ describe('Beacon Config CRUD', () => {
   });
 
   it('should create a config entry', () => {
-    const entry = createBeaconConfig({ key: 'test-key', value: '{"enabled":true}' });
+    const entry = createBeaconConfig({
+      key: 'test-key',
+      value: '{"enabled":true}',
+    });
     expect(entry.key).toBe('test-key');
     expect(entry.value).toBe('{"enabled":true}');
     expect(entry.scope).toBe('local');
   });
 
   it('should create a config entry with swarm scope', () => {
-    const entry = createBeaconConfig({ key: 'swarm-key', value: '{}', scope: 'swarm' });
+    const entry = createBeaconConfig({
+      key: 'swarm-key',
+      value: '{}',
+      scope: 'swarm',
+    });
     expect(entry.scope).toBe('swarm');
   });
 
@@ -536,7 +622,10 @@ describe('Beacon Event Log CRUD', () => {
   });
 
   it('should create an event log', () => {
-    const event = createEventLog({ eventType: 'agent.connected', agentId: 'agent-1' });
+    const event = createEventLog({
+      eventType: 'agent.connected',
+      agentId: 'agent-1',
+    });
     expect(event.eventType).toBe('agent.connected');
     expect(event.agentId).toBe('agent-1');
     expect(event.timestamp).toBeGreaterThan(0);
@@ -595,8 +684,15 @@ describe('Beacon Knowledge Cache', () => {
   });
 
   const sampleKnowledge: Knowledge = {
-    id: 'k1', type: 'fact', key: 'test-fact', value: '{"data":1}',
-    sourceBeaconId: null, sourceAgentId: null, confidence: 1.0, createdAt: 100, updatedAt: 100,
+    id: 'k1',
+    type: 'fact',
+    key: 'test-fact',
+    value: '{"data":1}',
+    sourceBeaconId: null,
+    sourceAgentId: null,
+    confidence: 1.0,
+    createdAt: 100,
+    updatedAt: 100,
   };
 
   it('should cache knowledge', () => {
@@ -620,7 +716,12 @@ describe('Beacon Knowledge Cache', () => {
 
   it('should list cached knowledge filtered by type', () => {
     cacheKnowledge(sampleKnowledge);
-    cacheKnowledge({ ...sampleKnowledge, id: 'k2', key: 'pref-1', type: 'preference' });
+    cacheKnowledge({
+      ...sampleKnowledge,
+      id: 'k2',
+      key: 'pref-1',
+      type: 'preference',
+    });
     const facts = listCachedKnowledge('fact');
     expect(facts).toHaveLength(1);
   });
@@ -695,7 +796,12 @@ describe('Beacon Principle CRUD', () => {
   });
 
   it('should create a principle', () => {
-    const row = createPrinciple('persona', 'test-p', 'Test principle', 'source');
+    const row = createPrinciple(
+      'persona',
+      'test-p',
+      'Test principle',
+      'source'
+    );
     expect(row.targetType).toBe('persona');
     expect(row.principle).toBe('Test principle');
     expect(row.scope).toBe('local');

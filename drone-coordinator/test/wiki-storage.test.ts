@@ -18,7 +18,12 @@ describe('Coordinator Wiki Storage', () => {
 
   it('should write and read a wiki page', async () => {
     const { writePage, readPage } = await import('../src/wiki-storage.js');
-    const page = await writePage('test-page', 'Test Page', 'coordinator', '# Hello World');
+    const page = await writePage(
+      'test-page',
+      'Test Page',
+      'coordinator',
+      '# Hello World'
+    );
     expect(page.id).toBe('test-page');
     expect(page.title).toBe('Test Page');
     expect(page.scope).toBe('coordinator');
@@ -36,7 +41,8 @@ describe('Coordinator Wiki Storage', () => {
   });
 
   it('should delete a wiki page', async () => {
-    const { writePage, deletePage, readPage } = await import('../src/wiki-storage.js');
+    const { writePage, deletePage, readPage } =
+      await import('../src/wiki-storage.js');
     await writePage('test-page', 'Test', 'coordinator', 'content');
     expect(await deletePage('test-page')).toBe(true);
     expect(await readPage('test-page')).toBeNull();
@@ -68,14 +74,21 @@ describe('Coordinator Wiki Storage', () => {
 
   it('should search pages by content', async () => {
     const { writePage, searchPages } = await import('../src/wiki-storage.js');
-    await writePage('arch', 'Architecture', 'coordinator', 'Uses microservices pattern');
+    await writePage(
+      'arch',
+      'Architecture',
+      'coordinator',
+      'Uses microservices pattern'
+    );
     const results = await searchPages('microservices');
     expect(results).toHaveLength(1);
   });
 
   it('should search pages by tag', async () => {
     const { writePage, searchPages } = await import('../src/wiki-storage.js');
-    await writePage('arch', 'Architecture', 'coordinator', 'content', ['system-design']);
+    await writePage('arch', 'Architecture', 'coordinator', 'content', [
+      'system-design',
+    ]);
     const results = await searchPages('system-design');
     expect(results).toHaveLength(1);
   });
@@ -103,14 +116,24 @@ describe('Coordinator Wiki Storage', () => {
     const { writePage } = await import('../src/wiki-storage.js');
     await writePage('beacon-page', 'Beacon Page', 'beacon', 'beacon content');
     await expect(
-      writePage('coord-page', 'Coord Page', 'coordinator', 'See [[beacon-page]]')
+      writePage(
+        'coord-page',
+        'Coord Page',
+        'coordinator',
+        'See [[beacon-page]]'
+      )
     ).rejects.toThrow('Cannot link');
   });
 
   it('should allow upward links from beacon to coordinator', async () => {
     const { writePage } = await import('../src/wiki-storage.js');
     await writePage('coord-page', 'Coord Page', 'coordinator', 'coord content');
-    const page = await writePage('beacon-page', 'Beacon Page', 'beacon', 'See [[coord-page]]');
+    const page = await writePage(
+      'beacon-page',
+      'Beacon Page',
+      'beacon',
+      'See [[coord-page]]'
+    );
     expect(page.id).toBe('beacon-page');
   });
 

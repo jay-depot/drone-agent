@@ -31,22 +31,22 @@ pnpm start
 
 ## Command-Line Options
 
-| Option         | Default                     | Description             |
-| -------------- | --------------------------- | ----------------------- |
-| `--port`       | 3456                        | Port to listen on       |
-| `--host`       | 0.0.0.0                     | Host to bind to         |
-| `--config-dir` | ./config                    | Configuration directory |
-| `--db`         | config/drone-coordinator.db | Path to SQLite database |
-| `--https`      | false (or `COORDINATOR_HTTPS` env) | Enable HTTPS server |
-| `--no-https`   | -                           | Disable HTTPS server    |
+| Option         | Default                            | Description             |
+| -------------- | ---------------------------------- | ----------------------- |
+| `--port`       | 3456                               | Port to listen on       |
+| `--host`       | 0.0.0.0                            | Host to bind to         |
+| `--config-dir` | ./config                           | Configuration directory |
+| `--db`         | config/drone-coordinator.db        | Path to SQLite database |
+| `--https`      | false (or `COORDINATOR_HTTPS` env) | Enable HTTPS server     |
+| `--no-https`   | -                                  | Disable HTTPS server    |
 
 ### Commands
 
-| Command                          | Description                              |
-| -------------------------------- | ---------------------------------------- |
-| `drone-coordinator serve`        | Start the coordinator server (default)   |
-| `drone-coordinator --approve <token>` | Approve a pending beacon by token   |
-| `drone-coordinator list-beacons` | List all registered beacons and trust status |
+| Command                               | Description                                  |
+| ------------------------------------- | -------------------------------------------- |
+| `drone-coordinator serve`             | Start the coordinator server (default)       |
+| `drone-coordinator --approve <token>` | Approve a pending beacon by token            |
+| `drone-coordinator list-beacons`      | List all registered beacons and trust status |
 
 ## API Endpoints
 

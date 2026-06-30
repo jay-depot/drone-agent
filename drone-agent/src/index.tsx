@@ -102,10 +102,7 @@ async function main(): Promise<void> {
   // the trust file; trusted ones are loaded, untrusted ones are skipped,
   // and unknown ones are deferred for prompting after elicitation is set up.
   const { userPlugins, projectPlugins, deferredProjectPlugins } =
-    await discoverExternalPlugins(
-      process.cwd(),
-      invocation.options.configDir
-    );
+    await discoverExternalPlugins(process.cwd(), invocation.options.configDir);
 
   if (userPlugins.length > 0) {
     logger.info(`discovered ${userPlugins.length} user external plugin(s)`);
@@ -122,11 +119,7 @@ async function main(): Promise<void> {
   }
 
   // Combine all plugins: built-in + user external + trusted project external
-  const allPlugins = [
-    ...builtInPlugins,
-    ...userPlugins,
-    ...projectPlugins,
-  ];
+  const allPlugins = [...builtInPlugins, ...userPlugins, ...projectPlugins];
 
   // ── Plugin overrides from --plugin flag ─────────────────────────────
   // Merge --plugin overrides into the config's enabledPlugins so that
@@ -245,7 +238,9 @@ async function main(): Promise<void> {
         );
         if (result === 'trusted') {
           await engine.addExternalPlugin(plugin);
-          logger.info(`trusted and loaded project plugin: ${plugin.metadata.id}`);
+          logger.info(
+            `trusted and loaded project plugin: ${plugin.metadata.id}`
+          );
         } else if (result === 'untrusted') {
           logger.info(`project plugin marked untrusted: ${plugin.metadata.id}`);
         } else {

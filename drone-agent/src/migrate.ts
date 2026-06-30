@@ -18,7 +18,15 @@ import {
   type MigrateScope,
 } from './runtime/migration-service.js';
 
-function formatAssetList(assets: Array<{ type: string; id: string; scope: string; name: string; description: string }>): string {
+function formatAssetList(
+  assets: Array<{
+    type: string;
+    id: string;
+    scope: string;
+    name: string;
+    description: string;
+  }>
+): string {
   if (assets.length === 0) {
     return 'No migratable assets found.';
   }
@@ -31,13 +39,24 @@ function formatAssetList(assets: Array<{ type: string; id: string; scope: string
       currentType = asset.type;
       lines.push(`\n${currentType.toUpperCase()}:`);
     }
-    lines.push(`  [${asset.scope}] ${asset.id} — ${asset.name}: ${asset.description}`);
+    lines.push(
+      `  [${asset.scope}] ${asset.id} — ${asset.name}: ${asset.description}`
+    );
   }
 
   return lines.join('\n');
 }
 
-function formatResults(results: Array<{ success: boolean; assetType: string; assetId: string; fromScope: string; toScope: string; error?: string }>): string {
+function formatResults(
+  results: Array<{
+    success: boolean;
+    assetType: string;
+    assetId: string;
+    fromScope: string;
+    toScope: string;
+    error?: string;
+  }>
+): string {
   const lines: string[] = [];
   let successCount = 0;
   let failCount = 0;
@@ -45,10 +64,14 @@ function formatResults(results: Array<{ success: boolean; assetType: string; ass
   for (const r of results) {
     if (r.success) {
       successCount++;
-      lines.push(`✓ ${r.assetType} "${r.assetId}": ${r.fromScope} → ${r.toScope}`);
+      lines.push(
+        `✓ ${r.assetType} "${r.assetId}": ${r.fromScope} → ${r.toScope}`
+      );
     } else {
       failCount++;
-      lines.push(`✗ ${r.assetType} "${r.assetId}": ${r.fromScope} → ${r.toScope} — ${r.error}`);
+      lines.push(
+        `✗ ${r.assetType} "${r.assetId}": ${r.fromScope} → ${r.toScope} — ${r.error}`
+      );
     }
   }
 
@@ -73,10 +96,7 @@ export async function runMigrate(
 
   // --list: show all migratable assets
   if (migrateOptions.list) {
-    const assets = await listAllAssets(
-      beaconAddr?.host,
-      beaconAddr?.port
-    );
+    const assets = await listAllAssets(beaconAddr?.host, beaconAddr?.port);
     console.log(formatAssetList(assets));
     return;
   }
@@ -85,8 +105,8 @@ export async function runMigrate(
   if (!beaconAddr && !migrateOptions.list) {
     console.error(
       'Error: No beacon configuration found.\n' +
-      'Set swarm.beaconHost and swarm.beaconPort in your .drone-agent/config.json,\n' +
-      'or pass --beacon-host and --beacon-port flags.'
+        'Set swarm.beaconHost and swarm.beaconPort in your .drone-agent/config.json,\n' +
+        'or pass --beacon-host and --beacon-port flags.'
     );
     process.exitCode = 1;
     return;
@@ -128,25 +148,25 @@ export async function runMigrate(
   // No valid operation specified
   console.error(
     'Usage: drone-migrate <options>\n\n' +
-    'Options:\n' +
-    '  --list                          List all migratable assets\n' +
-    '  --type <type>                   Asset type (persona|skill|insight|principle|wiki)\n' +
-    '  --id <id>                       Specific asset id to migrate\n' +
-    '  --from <scope>                  Source scope (project|user|beacon|coordinator)\n' +
-    '  --to <scope>                    Target scope (beacon|coordinator|project|user)\n' +
-    '  --move                          Delete source after successful copy\n' +
-    '  --backup-to <path>              Backup asset file before migrating\n' +
-    '  --pull                          Pull from swarm to local (demote)\n' +
-    '  --scope <scope>                 Source scope for pull operations\n' +
-    '  --beacon-host <host>            Beacon host override\n' +
-    '  --beacon-port <port>            Beacon port override\n\n' +
-    'Examples:\n' +
-    '  drone-migrate --list\n' +
-    '  drone-migrate --type persona --id my-persona --to beacon\n' +
-    '  drone-migrate --type skill --id deploy-helm --to coordinator\n' +
-    '  drone-migrate --type persona --from user --to beacon\n' +
-    '  drone-migrate --pull --type persona --scope coordinator --to user\n' +
-    '  drone-migrate --type wiki --id my-page --to coordinator\n'
+      'Options:\n' +
+      '  --list                          List all migratable assets\n' +
+      '  --type <type>                   Asset type (persona|skill|insight|principle|wiki)\n' +
+      '  --id <id>                       Specific asset id to migrate\n' +
+      '  --from <scope>                  Source scope (project|user|beacon|coordinator)\n' +
+      '  --to <scope>                    Target scope (beacon|coordinator|project|user)\n' +
+      '  --move                          Delete source after successful copy\n' +
+      '  --backup-to <path>              Backup asset file before migrating\n' +
+      '  --pull                          Pull from swarm to local (demote)\n' +
+      '  --scope <scope>                 Source scope for pull operations\n' +
+      '  --beacon-host <host>            Beacon host override\n' +
+      '  --beacon-port <port>            Beacon port override\n\n' +
+      'Examples:\n' +
+      '  drone-migrate --list\n' +
+      '  drone-migrate --type persona --id my-persona --to beacon\n' +
+      '  drone-migrate --type skill --id deploy-helm --to coordinator\n' +
+      '  drone-migrate --type persona --from user --to beacon\n' +
+      '  drone-migrate --pull --type persona --scope coordinator --to user\n' +
+      '  drone-migrate --type wiki --id my-page --to coordinator\n'
   );
   process.exitCode = 1;
 }

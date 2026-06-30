@@ -18,7 +18,12 @@ describe('Beacon Wiki Storage', () => {
 
   it('should write and read a wiki page', async () => {
     const { writePage, readPage } = await import('../src/wiki-storage.js');
-    const page = await writePage('test-page', 'Test Page', 'beacon', '# Hello World');
+    const page = await writePage(
+      'test-page',
+      'Test Page',
+      'beacon',
+      '# Hello World'
+    );
     expect(page.id).toBe('test-page');
     expect(page.title).toBe('Test Page');
     expect(page.scope).toBe('beacon');
@@ -37,7 +42,8 @@ describe('Beacon Wiki Storage', () => {
   });
 
   it('should delete a wiki page', async () => {
-    const { writePage, deletePage, readPage } = await import('../src/wiki-storage.js');
+    const { writePage, deletePage, readPage } =
+      await import('../src/wiki-storage.js');
     await writePage('test-page', 'Test', 'beacon', 'content');
     const deleted = await deletePage('test-page');
     expect(deleted).toBe(true);
@@ -69,8 +75,18 @@ describe('Beacon Wiki Storage', () => {
 
   it('should search pages by title', async () => {
     const { writePage, searchPages } = await import('../src/wiki-storage.js');
-    await writePage('architecture', 'Architecture Overview', 'beacon', 'System architecture docs');
-    await writePage('deployment', 'Deployment Guide', 'beacon', 'How to deploy');
+    await writePage(
+      'architecture',
+      'Architecture Overview',
+      'beacon',
+      'System architecture docs'
+    );
+    await writePage(
+      'deployment',
+      'Deployment Guide',
+      'beacon',
+      'How to deploy'
+    );
     const results = await searchPages('architecture');
     expect(results).toHaveLength(1);
     expect(results[0].page.id).toBe('architecture');
@@ -79,7 +95,12 @@ describe('Beacon Wiki Storage', () => {
 
   it('should search pages by content', async () => {
     const { writePage, searchPages } = await import('../src/wiki-storage.js');
-    await writePage('arch', 'Architecture', 'beacon', 'The system uses microservices');
+    await writePage(
+      'arch',
+      'Architecture',
+      'beacon',
+      'The system uses microservices'
+    );
     await writePage('deploy', 'Deployment', 'beacon', 'Deploy with Docker');
     const results = await searchPages('microservices');
     expect(results).toHaveLength(1);
@@ -88,7 +109,9 @@ describe('Beacon Wiki Storage', () => {
 
   it('should search pages by tag', async () => {
     const { writePage, searchPages } = await import('../src/wiki-storage.js');
-    await writePage('arch', 'Architecture', 'beacon', 'content', ['system-design']);
+    await writePage('arch', 'Architecture', 'beacon', 'content', [
+      'system-design',
+    ]);
     await writePage('deploy', 'Deployment', 'beacon', 'content', ['ops']);
     const results = await searchPages('system-design');
     expect(results).toHaveLength(1);
@@ -110,7 +133,12 @@ describe('Beacon Wiki Storage', () => {
 
   it('should lint pages and find broken links', async () => {
     const { writePage, lintPages } = await import('../src/wiki-storage.js');
-    await writePage('page-1', 'Page 1', 'beacon', 'See [[nonexistent-page]] for details');
+    await writePage(
+      'page-1',
+      'Page 1',
+      'beacon',
+      'See [[nonexistent-page]] for details'
+    );
     const result = await lintPages();
     expect(result.issues.some(i => i.type === 'broken-link')).toBe(true);
   });
@@ -121,7 +149,12 @@ describe('Beacon Wiki Storage', () => {
     await writePage('beacon-page', 'Beacon Page', 'beacon', 'beacon content');
     // Try to link to it from a coordinator-scoped page
     await expect(
-      writePage('coord-page', 'Coord Page', 'coordinator', 'See [[beacon-page]]')
+      writePage(
+        'coord-page',
+        'Coord Page',
+        'coordinator',
+        'See [[beacon-page]]'
+      )
     ).rejects.toThrow('Cannot link');
   });
 
@@ -130,7 +163,12 @@ describe('Beacon Wiki Storage', () => {
     // Create a coordinator-scoped page first
     await writePage('coord-page', 'Coord Page', 'coordinator', 'coord content');
     // Link to it from a beacon-scoped page (should be allowed)
-    const page = await writePage('beacon-page', 'Beacon Page', 'beacon', 'See [[coord-page]]');
+    const page = await writePage(
+      'beacon-page',
+      'Beacon Page',
+      'beacon',
+      'See [[coord-page]]'
+    );
     expect(page.id).toBe('beacon-page');
   });
 

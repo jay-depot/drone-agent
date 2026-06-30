@@ -26,7 +26,12 @@ async function createTempDir(): Promise<string> {
   return dir;
 }
 
-async function createPersonaFile(baseDir: string, id: string, name?: string, description?: string): Promise<string> {
+async function createPersonaFile(
+  baseDir: string,
+  id: string,
+  name?: string,
+  description?: string
+): Promise<string> {
   const personaDir = path.join(baseDir, '.drone-agent', 'personas', id);
   await mkdir(personaDir, { recursive: true });
   const content = `---
@@ -40,7 +45,12 @@ This is the system prompt for ${id}.`;
   return filePath;
 }
 
-async function createSkillFile(baseDir: string, id: string, name?: string, description?: string): Promise<string> {
+async function createSkillFile(
+  baseDir: string,
+  id: string,
+  name?: string,
+  description?: string
+): Promise<string> {
   const skillsDir = path.join(baseDir, '.drone-agent', 'skills');
   await mkdir(skillsDir, { recursive: true });
   const content = `---
@@ -58,8 +68,17 @@ This is the body of skill ${id}.`;
   return filePath;
 }
 
-async function createInsightFile(baseDir: string, targetType: string, targetId: string): Promise<string> {
-  const insightsDir = path.join(baseDir, '.drone-agent', 'insights', targetType);
+async function createInsightFile(
+  baseDir: string,
+  targetType: string,
+  targetId: string
+): Promise<string> {
+  const insightsDir = path.join(
+    baseDir,
+    '.drone-agent',
+    'insights',
+    targetType
+  );
   await mkdir(insightsDir, { recursive: true });
   const insights = [
     { targetType, targetId, insight: 'Test insight 1' },
@@ -70,8 +89,17 @@ async function createInsightFile(baseDir: string, targetType: string, targetId: 
   return filePath;
 }
 
-async function createPrincipleFile(baseDir: string, targetType: string, targetId: string): Promise<string> {
-  const principlesDir = path.join(baseDir, '.drone-agent', 'principles', targetType);
+async function createPrincipleFile(
+  baseDir: string,
+  targetType: string,
+  targetId: string
+): Promise<string> {
+  const principlesDir = path.join(
+    baseDir,
+    '.drone-agent',
+    'principles',
+    targetType
+  );
   await mkdir(principlesDir, { recursive: true });
   const principles = [
     { targetType, targetId, principle: 'Test principle 1', source: 'test' },
@@ -89,78 +117,100 @@ const mockServerData = new Map<string, Record<string, unknown>[]>();
 function setupMockFetch() {
   mockServerData.clear();
 
-  globalThis.fetch = vi.fn(async (url: string | URL | Request, options?: RequestInit) => {
-    const urlStr = typeof url === 'string' ? url : String(url);
-    const method = options?.method ?? 'GET';
+  globalThis.fetch = vi.fn(
+    async (url: string | URL | Request, options?: RequestInit) => {
+      const urlStr = typeof url === 'string' ? url : String(url);
+      const method = options?.method ?? 'GET';
 
-    // Parse URL
-    const parsedUrl = new URL(urlStr);
-    const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+      // Parse URL
+      const parsedUrl = new URL(urlStr);
+      const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
 
-    // GET /personas, /skills, /insights, /principles, /wiki
-    if (method === 'GET' && pathParts.length === 1) {
-      const type = pathParts[0];
-      const data = mockServerData.get(type) ?? [];
-      return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    }
-
-    // GET /:type/:id
-    if (method === 'GET' && pathParts.length === 2) {
-      const type = pathParts[0];
-      const id = pathParts[1];
-      const data = mockServerData.get(type) ?? [];
-      const item = data.find(d => d.id === id);
-      if (item) {
-        return new Response(JSON.stringify(item), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      // GET /personas, /skills, /insights, /principles, /wiki
+      if (method === 'GET' && pathParts.length === 1) {
+        const type = pathParts[0];
+        const data = mockServerData.get(type) ?? [];
+        return new Response(JSON.stringify(data), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
-      return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
-    }
 
-    // POST /:type
-    if (method === 'POST' && pathParts.length === 1) {
-      const type = pathParts[0];
-      const body = options?.body ? JSON.parse(options.body as string) : {};
-      if (!mockServerData.has(type)) {
-        mockServerData.set(type, []);
+      // GET /:type/:id
+      if (method === 'GET' && pathParts.length === 2) {
+        const type = pathParts[0];
+        const id = pathParts[1];
+        const data = mockServerData.get(type) ?? [];
+        const item = data.find(d => d.id === id);
+        if (item) {
+          return new Response(JSON.stringify(item), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response(JSON.stringify({ error: 'Not found' }), {
+          status: 404,
+        });
       }
-      const data = mockServerData.get(type)!;
-      data.push({ ...body, id: body.id ?? randomUUID() });
-      return new Response(JSON.stringify(body), { status: 201, headers: { 'Content-Type': 'application/json' } });
-    }
 
-    // DELETE /:type/:id
-    if (method === 'DELETE' && pathParts.length === 2) {
-      const type = pathParts[0];
-      const id = pathParts[1];
-      const data = mockServerData.get(type) ?? [];
-      const idx = data.findIndex(d => d.id === id);
-      if (idx >= 0) {
-        data.splice(idx, 1);
-        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      // POST /:type
+      if (method === 'POST' && pathParts.length === 1) {
+        const type = pathParts[0];
+        const body = options?.body ? JSON.parse(options.body as string) : {};
+        if (!mockServerData.has(type)) {
+          mockServerData.set(type, []);
+        }
+        const data = mockServerData.get(type)!;
+        data.push({ ...body, id: body.id ?? randomUUID() });
+        return new Response(JSON.stringify(body), {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
-      return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
-    }
 
-    // PUT /wiki/:id
-    if (method === 'PUT' && pathParts.length === 2) {
-      const type = pathParts[0];
-      const id = pathParts[1];
-      const body = options?.body ? JSON.parse(options.body as string) : {};
-      if (!mockServerData.has(type)) {
-        mockServerData.set(type, []);
+      // DELETE /:type/:id
+      if (method === 'DELETE' && pathParts.length === 2) {
+        const type = pathParts[0];
+        const id = pathParts[1];
+        const data = mockServerData.get(type) ?? [];
+        const idx = data.findIndex(d => d.id === id);
+        if (idx >= 0) {
+          data.splice(idx, 1);
+          return new Response(JSON.stringify({ success: true }), {
+            status: 200,
+          });
+        }
+        return new Response(JSON.stringify({ error: 'Not found' }), {
+          status: 404,
+        });
       }
-      const data = mockServerData.get(type)!;
-      const idx = data.findIndex(d => d.id === id);
-      if (idx >= 0) {
-        data[idx] = { ...data[idx], ...body };
-      } else {
-        data.push({ ...body, id });
-      }
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    }
 
-    return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
-  });
+      // PUT /wiki/:id
+      if (method === 'PUT' && pathParts.length === 2) {
+        const type = pathParts[0];
+        const id = pathParts[1];
+        const body = options?.body ? JSON.parse(options.body as string) : {};
+        if (!mockServerData.has(type)) {
+          mockServerData.set(type, []);
+        }
+        const data = mockServerData.get(type)!;
+        const idx = data.findIndex(d => d.id === id);
+        if (idx >= 0) {
+          data[idx] = { ...data[idx], ...body };
+        } else {
+          data.push({ ...body, id });
+        }
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ error: 'Not found' }), {
+        status: 404,
+      });
+    }
+  );
 }
 
 function teardownMockFetch() {
@@ -196,7 +246,12 @@ describe('Migration Service', () => {
 
   it('should list local personas and skills', async () => {
     await createPersonaFile(projectDir, 'coder', 'Coder', 'A coding persona');
-    await createSkillFile(projectDir, 'deploy-helm', 'Deploy Helm', 'Deploy with Helm');
+    await createSkillFile(
+      projectDir,
+      'deploy-helm',
+      'Deploy Helm',
+      'Deploy with Helm'
+    );
 
     const assets = await listAllAssets('localhost', 9999); // beacon unreachable, only local
 
@@ -231,10 +286,20 @@ describe('Migration Service', () => {
   it('should list beacon assets when reachable', async () => {
     // Seed mock server
     mockServerData.set('personas', [
-      { id: 'swarm-persona', name: 'Swarm Persona', description: 'From swarm', scope: 'beacon' },
+      {
+        id: 'swarm-persona',
+        name: 'Swarm Persona',
+        description: 'From swarm',
+        scope: 'beacon',
+      },
     ]);
     mockServerData.set('skills', [
-      { id: 'swarm-skill', name: 'Swarm Skill', description: 'From swarm', scope: 'coordinator' },
+      {
+        id: 'swarm-skill',
+        name: 'Swarm Skill',
+        description: 'From swarm',
+        scope: 'coordinator',
+      },
     ]);
 
     const assets = await listAllAssets('localhost', 9999);
@@ -249,7 +314,12 @@ describe('Migration Service', () => {
   // ── promoteAsset ───────────────────────────────────────────────────
 
   it('should promote a persona from project to beacon', async () => {
-    await createPersonaFile(projectDir, 'test-persona', 'Test Persona', 'A test persona');
+    await createPersonaFile(
+      projectDir,
+      'test-persona',
+      'Test Persona',
+      'A test persona'
+    );
 
     const result = await migrateAsset({
       type: 'persona',
@@ -290,7 +360,12 @@ describe('Migration Service', () => {
   });
 
   it('should promote a persona to coordinator scope', async () => {
-    await createPersonaFile(projectDir, 'coord-persona', 'Coord Persona', 'For coordinator');
+    await createPersonaFile(
+      projectDir,
+      'coord-persona',
+      'Coord Persona',
+      'For coordinator'
+    );
 
     const result = await migrateAsset({
       type: 'persona',
@@ -308,7 +383,12 @@ describe('Migration Service', () => {
   // ── --move ─────────────────────────────────────────────────────────
 
   it('should delete source when --move is set', async () => {
-    const filePath = await createPersonaFile(projectDir, 'move-test', 'Move Test', 'Will be moved');
+    const filePath = await createPersonaFile(
+      projectDir,
+      'move-test',
+      'Move Test',
+      'Will be moved'
+    );
 
     const result = await migrateAsset({
       type: 'persona',
@@ -327,7 +407,12 @@ describe('Migration Service', () => {
   });
 
   it('should keep source when --move is not set', async () => {
-    const filePath = await createPersonaFile(projectDir, 'copy-test', 'Copy Test', 'Will be copied');
+    const filePath = await createPersonaFile(
+      projectDir,
+      'copy-test',
+      'Copy Test',
+      'Will be copied'
+    );
 
     const result = await migrateAsset({
       type: 'persona',
@@ -348,7 +433,12 @@ describe('Migration Service', () => {
   // ── --backup-to ────────────────────────────────────────────────────
 
   it('should backup asset when --backup-to is set', async () => {
-    await createPersonaFile(projectDir, 'backup-test', 'Backup Test', 'Will be backed up');
+    await createPersonaFile(
+      projectDir,
+      'backup-test',
+      'Backup Test',
+      'Will be backed up'
+    );
     const backupPath = path.join(projectDir, 'backups', 'backup-test.md');
 
     const result = await migrateAsset({
@@ -373,7 +463,13 @@ describe('Migration Service', () => {
   it('should pull a persona from beacon to local project', async () => {
     // Seed mock server with a persona
     mockServerData.set('personas', [
-      { id: 'swarm-persona', name: 'Swarm Persona', description: 'From swarm', systemPrompt: 'Swarm system prompt', scope: 'beacon' },
+      {
+        id: 'swarm-persona',
+        name: 'Swarm Persona',
+        description: 'From swarm',
+        systemPrompt: 'Swarm system prompt',
+        scope: 'beacon',
+      },
     ]);
 
     const result = await migrateAsset({
@@ -391,7 +487,13 @@ describe('Migration Service', () => {
     expect(result.toScope).toBe('project');
 
     // Verify it was written locally
-    const personaFile = path.join(projectDir, '.drone-agent', 'personas', 'swarm-persona', 'persona.md');
+    const personaFile = path.join(
+      projectDir,
+      '.drone-agent',
+      'personas',
+      'swarm-persona',
+      'persona.md'
+    );
     const content = await readFile(personaFile, 'utf-8');
     expect(content).toContain('Swarm Persona');
     expect(content).toContain('Swarm system prompt');
@@ -399,7 +501,13 @@ describe('Migration Service', () => {
 
   it('should pull a skill from coordinator to local user', async () => {
     mockServerData.set('skills', [
-      { id: 'coord-skill', name: 'Coord Skill', description: 'From coordinator', body: 'Skill body', scope: 'coordinator' },
+      {
+        id: 'coord-skill',
+        name: 'Coord Skill',
+        description: 'From coordinator',
+        body: 'Skill body',
+        scope: 'coordinator',
+      },
     ]);
 
     const result = await migrateAsset({
@@ -414,7 +522,12 @@ describe('Migration Service', () => {
 
     expect(result.success).toBe(true);
 
-    const skillFile = path.join(userDir, '.drone-agent', 'skills', 'coord-skill.md');
+    const skillFile = path.join(
+      userDir,
+      '.drone-agent',
+      'skills',
+      'coord-skill.md'
+    );
     const content = await readFile(skillFile, 'utf-8');
     expect(content).toContain('Coord Skill');
     expect(content).toContain('Skill body');
@@ -508,7 +621,12 @@ describe('Migration Service', () => {
   it('should resolve beacon address from config', () => {
     const config = {
       swarm: {
-        knowledgeSync: { enabled: true, pushInsights: true, pullOnStartup: true, pullIntervalMinutes: 60 },
+        knowledgeSync: {
+          enabled: true,
+          pushInsights: true,
+          pullOnStartup: true,
+          pullIntervalMinutes: 60,
+        },
         beaconHost: 'my-beacon',
         beaconPort: 3457,
       },
@@ -521,7 +639,12 @@ describe('Migration Service', () => {
   it('should prefer CLI overrides over config', () => {
     const config = {
       swarm: {
-        knowledgeSync: { enabled: true, pushInsights: true, pullOnStartup: true, pullIntervalMinutes: 60 },
+        knowledgeSync: {
+          enabled: true,
+          pushInsights: true,
+          pullOnStartup: true,
+          pullIntervalMinutes: 60,
+        },
         beaconHost: 'config-host',
         beaconPort: 3457,
       },
@@ -534,7 +657,12 @@ describe('Migration Service', () => {
   it('should return null when no beacon config', () => {
     const config = {
       swarm: {
-        knowledgeSync: { enabled: true, pushInsights: true, pullOnStartup: true, pullIntervalMinutes: 60 },
+        knowledgeSync: {
+          enabled: true,
+          pushInsights: true,
+          pullOnStartup: true,
+          pullIntervalMinutes: 60,
+        },
       },
     } as any;
 
@@ -557,7 +685,15 @@ describe('Migrate CLI parsing', () => {
 
   it('should parse migrate subcommand with type and id', async () => {
     const { parseCliArgs } = await import('../src/cli.js');
-    const result = parseCliArgs(['migrate', '--type', 'persona', '--id', 'my-persona', '--to', 'beacon']);
+    const result = parseCliArgs([
+      'migrate',
+      '--type',
+      'persona',
+      '--id',
+      'my-persona',
+      '--to',
+      'beacon',
+    ]);
     expect(result.kind).toBe('migrate');
     if (result.kind === 'migrate') {
       expect(result.migrateOptions.type).toBe('persona');
@@ -568,7 +704,16 @@ describe('Migrate CLI parsing', () => {
 
   it('should parse migrate subcommand with --pull and --scope', async () => {
     const { parseCliArgs } = await import('../src/cli.js');
-    const result = parseCliArgs(['migrate', '--pull', '--type', 'skill', '--scope', 'coordinator', '--to', 'user']);
+    const result = parseCliArgs([
+      'migrate',
+      '--pull',
+      '--type',
+      'skill',
+      '--scope',
+      'coordinator',
+      '--to',
+      'user',
+    ]);
     expect(result.kind).toBe('migrate');
     if (result.kind === 'migrate') {
       expect(result.migrateOptions.pull).toBe(true);
@@ -580,7 +725,18 @@ describe('Migrate CLI parsing', () => {
 
   it('should parse migrate subcommand with --move and --backup-to', async () => {
     const { parseCliArgs } = await import('../src/cli.js');
-    const result = parseCliArgs(['migrate', '--type', 'persona', '--id', 'p1', '--to', 'beacon', '--move', '--backup-to', '/tmp/backup.md']);
+    const result = parseCliArgs([
+      'migrate',
+      '--type',
+      'persona',
+      '--id',
+      'p1',
+      '--to',
+      'beacon',
+      '--move',
+      '--backup-to',
+      '/tmp/backup.md',
+    ]);
     expect(result.kind).toBe('migrate');
     if (result.kind === 'migrate') {
       expect(result.migrateOptions.move).toBe(true);
@@ -590,7 +746,14 @@ describe('Migrate CLI parsing', () => {
 
   it('should parse migrate subcommand with --beacon-host and --beacon-port', async () => {
     const { parseCliArgs } = await import('../src/cli.js');
-    const result = parseCliArgs(['migrate', '--list', '--beacon-host', '10.0.0.1', '--beacon-port', '8080']);
+    const result = parseCliArgs([
+      'migrate',
+      '--list',
+      '--beacon-host',
+      '10.0.0.1',
+      '--beacon-port',
+      '8080',
+    ]);
     expect(result.kind).toBe('migrate');
     if (result.kind === 'migrate') {
       expect(result.migrateOptions.beaconHost).toBe('10.0.0.1');
@@ -600,7 +763,15 @@ describe('Migrate CLI parsing', () => {
 
   it('should parse batch migrate with --from', async () => {
     const { parseCliArgs } = await import('../src/cli.js');
-    const result = parseCliArgs(['migrate', '--type', 'persona', '--from', 'user', '--to', 'beacon']);
+    const result = parseCliArgs([
+      'migrate',
+      '--type',
+      'persona',
+      '--from',
+      'user',
+      '--to',
+      'beacon',
+    ]);
     expect(result.kind).toBe('migrate');
     if (result.kind === 'migrate') {
       expect(result.migrateOptions.type).toBe('persona');

@@ -3,6 +3,7 @@ packages:
   - drone-core
   - drone-beacon
   - drone-coordinator
+  - drone-coordinator-ui
 allowBuilds:
   better-sqlite3: true
   esbuild: true

@@ -12,7 +12,14 @@
  * Conversation log import is a phase 5 concern.
  */
 
-import { readFile, writeFile, unlink, readdir, access, mkdir } from 'node:fs/promises';
+import {
+  readFile,
+  writeFile,
+  unlink,
+  readdir,
+  access,
+  mkdir,
+} from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -157,7 +164,8 @@ async function listLocalPersonas(scope: LocalScope): Promise<AssetInfo[]> {
     }
     const content = await readFile(personaFile, 'utf-8');
     const name = extractFrontmatterField(content, 'name') ?? entry;
-    const description = extractFrontmatterField(content, 'description') ?? `Persona: ${entry}`;
+    const description =
+      extractFrontmatterField(content, 'description') ?? `Persona: ${entry}`;
     assets.push({
       type: 'persona',
       id: entry,
@@ -189,7 +197,8 @@ async function listLocalSkills(scope: LocalScope): Promise<AssetInfo[]> {
     const filePath = path.join(dir, entry);
     const content = await readFile(filePath, 'utf-8');
     const name = extractFrontmatterField(content, 'name') ?? id;
-    const description = extractFrontmatterField(content, 'description') ?? `Skill: ${id}`;
+    const description =
+      extractFrontmatterField(content, 'description') ?? `Skill: ${id}`;
     assets.push({
       type: 'skill',
       id,
@@ -297,7 +306,9 @@ async function listBeaconAssets(
     return data.map((item: Record<string, unknown>) => ({
       type,
       id: String(item.id ?? ''),
-      scope: (String(item.scope ?? 'beacon') === 'coordinator' ? 'coordinator' : 'beacon') as SwarmScope,
+      scope: (String(item.scope ?? 'beacon') === 'coordinator'
+        ? 'coordinator'
+        : 'beacon') as SwarmScope,
       name: String(item.name ?? item.id ?? ''),
       description: String(item.description ?? ''),
     }));
@@ -310,11 +321,16 @@ async function listBeaconAssets(
 
 function getBeaconEndpoint(type: AssetType): string {
   switch (type) {
-    case 'persona': return '/personas';
-    case 'skill': return '/skills';
-    case 'insight': return '/insights';
-    case 'principle': return '/principles';
-    case 'wiki': return '/wiki';
+    case 'persona':
+      return '/personas';
+    case 'skill':
+      return '/skills';
+    case 'insight':
+      return '/insights';
+    case 'principle':
+      return '/principles';
+    case 'wiki':
+      return '/wiki';
   }
 }
 
@@ -423,18 +439,27 @@ async function deleteBeaconAsset(
 /**
  * Extract a simple YAML frontmatter field value from a .md file.
  */
-function extractFrontmatterField(content: string, field: string): string | undefined {
+function extractFrontmatterField(
+  content: string,
+  field: string
+): string | undefined {
   const match = content.match(/^---\n([\s\S]*?)\n---/);
   if (!match) return undefined;
   const frontmatter = match[1];
   const lineMatch = frontmatter.match(new RegExp(`^${field}:\\s*(.+)$`, 'm'));
   if (!lineMatch) return undefined;
-  return lineMatch[1].trim().replace(/^'(.*)'$/, '$1').replace(/^"(.*)"$/, '$1');
+  return lineMatch[1]
+    .trim()
+    .replace(/^'(.*)'$/, '$1')
+    .replace(/^"(.*)"$/, '$1');
 }
 
 // ── Backup ─────────────────────────────────────────────────────────────
 
-async function backupAsset(filePath: string, backupPath: string): Promise<void> {
+async function backupAsset(
+  filePath: string,
+  backupPath: string
+): Promise<void> {
   const content = await readFile(filePath, 'utf-8');
   const dir = path.dirname(backupPath);
   await mkdir(dir, { recursive: true });
@@ -467,13 +492,27 @@ async function promoteAsset(
     } else if (type === 'principle') {
       filePath = path.join(getPrinciplesDir(fromScope), id);
     } else {
-      return { success: false, assetType: type, assetId: id, fromScope, toScope, error: `Unsupported asset type for promotion: ${type}` };
+      return {
+        success: false,
+        assetType: type,
+        assetId: id,
+        fromScope,
+        toScope,
+        error: `Unsupported asset type for promotion: ${type}`,
+      };
     }
 
     try {
       content = await readFile(filePath, 'utf-8');
     } catch {
-      return { success: false, assetType: type, assetId: id, fromScope, toScope, error: `Local asset not found: ${filePath}` };
+      return {
+        success: false,
+        assetType: type,
+        assetId: id,
+        fromScope,
+        toScope,
+        error: `Local asset not found: ${filePath}`,
+      };
     }
 
     // Backup if requested
@@ -485,27 +524,49 @@ async function promoteAsset(
     let payload: Record<string, unknown> = {};
     if (type === 'persona') {
       const name = extractFrontmatterField(content, 'name') ?? id;
-      const description = extractFrontmatterField(content, 'description') ?? `Persona: ${id}`;
+      const description =
+        extractFrontmatterField(content, 'description') ?? `Persona: ${id}`;
       payload = { id, name, description, systemPrompt: content };
     } else if (type === 'skill') {
       const name = extractFrontmatterField(content, 'name') ?? id;
-      const description = extractFrontmatterField(content, 'description') ?? `Skill: ${id}`;
+      const description =
+        extractFrontmatterField(content, 'description') ?? `Skill: ${id}`;
       const trigger = extractFrontmatterField(content, 'recall') ?? '';
       payload = { id, name, description, trigger, body: content };
     } else if (type === 'insight') {
       // Insights are JSON arrays — read and post each entry
       const insights = JSON.parse(content);
       if (!Array.isArray(insights)) {
-        return { success: false, assetType: type, assetId: id, fromScope, toScope, error: 'Insight file must be a JSON array' };
+        return {
+          success: false,
+          assetType: type,
+          assetId: id,
+          fromScope,
+          toScope,
+          error: 'Insight file must be a JSON array',
+        };
       }
       for (const insight of insights) {
-        const ok = await postBeaconAsset(type, {
-          targetType: insight.targetType ?? 'project',
-          targetId: insight.targetId ?? id,
-          insight: insight.insight,
-        }, toScope, options.beaconHost, options.beaconPort);
+        const ok = await postBeaconAsset(
+          type,
+          {
+            targetType: insight.targetType ?? 'project',
+            targetId: insight.targetId ?? id,
+            insight: insight.insight,
+          },
+          toScope,
+          options.beaconHost,
+          options.beaconPort
+        );
         if (!ok) {
-          return { success: false, assetType: type, assetId: id, fromScope, toScope, error: `Failed to post insight to ${toScope}` };
+          return {
+            success: false,
+            assetType: type,
+            assetId: id,
+            fromScope,
+            toScope,
+            error: `Failed to post insight to ${toScope}`,
+          };
         }
       }
       // Move/backup handled below
@@ -513,26 +574,59 @@ async function promoteAsset(
       // Principles are JSON arrays — read and post each entry
       const principles = JSON.parse(content);
       if (!Array.isArray(principles)) {
-        return { success: false, assetType: type, assetId: id, fromScope, toScope, error: 'Principle file must be a JSON array' };
+        return {
+          success: false,
+          assetType: type,
+          assetId: id,
+          fromScope,
+          toScope,
+          error: 'Principle file must be a JSON array',
+        };
       }
       for (const principle of principles) {
-        const ok = await postBeaconAsset(type, {
-          targetType: principle.targetType ?? 'project',
-          targetId: principle.targetId ?? id,
-          principle: principle.principle,
-          source: principle.source,
-        }, toScope, options.beaconHost, options.beaconPort);
+        const ok = await postBeaconAsset(
+          type,
+          {
+            targetType: principle.targetType ?? 'project',
+            targetId: principle.targetId ?? id,
+            principle: principle.principle,
+            source: principle.source,
+          },
+          toScope,
+          options.beaconHost,
+          options.beaconPort
+        );
         if (!ok) {
-          return { success: false, assetType: type, assetId: id, fromScope, toScope, error: `Failed to post principle to ${toScope}` };
+          return {
+            success: false,
+            assetType: type,
+            assetId: id,
+            fromScope,
+            toScope,
+            error: `Failed to post principle to ${toScope}`,
+          };
         }
       }
     }
 
     // For persona/skill, POST to beacon
     if (type === 'persona' || type === 'skill') {
-      const ok = await postBeaconAsset(type, payload, toScope, options.beaconHost, options.beaconPort);
+      const ok = await postBeaconAsset(
+        type,
+        payload,
+        toScope,
+        options.beaconHost,
+        options.beaconPort
+      );
       if (!ok) {
-        return { success: false, assetType: type, assetId: id, fromScope, toScope, error: `Failed to post ${type} to ${toScope}` };
+        return {
+          success: false,
+          assetType: type,
+          assetId: id,
+          fromScope,
+          toScope,
+          error: `Failed to post ${type} to ${toScope}`,
+        };
       }
     }
 
@@ -541,13 +635,27 @@ async function promoteAsset(
       try {
         await unlink(filePath);
       } catch (err) {
-        return { success: false, assetType: type, assetId: id, fromScope, toScope, error: `Failed to delete source: ${err}` };
+        return {
+          success: false,
+          assetType: type,
+          assetId: id,
+          fromScope,
+          toScope,
+          error: `Failed to delete source: ${err}`,
+        };
       }
     }
 
     return { success: true, assetType: type, assetId: id, fromScope, toScope };
   } catch (err) {
-    return { success: false, assetType: type, assetId: id, fromScope, toScope, error: String(err) };
+    return {
+      success: false,
+      assetType: type,
+      assetId: id,
+      fromScope,
+      toScope,
+      error: String(err),
+    };
   }
 }
 
@@ -563,9 +671,22 @@ async function demoteAsset(
 ): Promise<MigrateResult> {
   try {
     // Fetch from beacon
-    const data = await fetchBeaconAsset(type, id, fromScope, options.beaconHost, options.beaconPort);
+    const data = await fetchBeaconAsset(
+      type,
+      id,
+      fromScope,
+      options.beaconHost,
+      options.beaconPort
+    );
     if (!data) {
-      return { success: false, assetType: type, assetId: id, fromScope, toScope, error: `Asset not found on ${fromScope}` };
+      return {
+        success: false,
+        assetType: type,
+        assetId: id,
+        fromScope,
+        toScope,
+        error: `Asset not found on ${fromScope}`,
+      };
     }
 
     // Build local file content
@@ -592,7 +713,14 @@ async function demoteAsset(
       filePath = path.join(getPrinciplesDir(toScope), `${id}.json`);
       content = JSON.stringify(data, null, 2);
     } else {
-      return { success: false, assetType: type, assetId: id, fromScope, toScope, error: `Unsupported asset type for demotion: ${type}` };
+      return {
+        success: false,
+        assetType: type,
+        assetId: id,
+        fromScope,
+        toScope,
+        error: `Unsupported asset type for demotion: ${type}`,
+      };
     }
 
     // Backup if requested
@@ -609,15 +737,35 @@ async function demoteAsset(
 
     // Move: delete from server
     if (options.move) {
-      const ok = await deleteBeaconAsset(type, id, fromScope, options.beaconHost, options.beaconPort);
+      const ok = await deleteBeaconAsset(
+        type,
+        id,
+        fromScope,
+        options.beaconHost,
+        options.beaconPort
+      );
       if (!ok) {
-        return { success: false, assetType: type, assetId: id, fromScope, toScope, error: `Failed to delete from ${fromScope}` };
+        return {
+          success: false,
+          assetType: type,
+          assetId: id,
+          fromScope,
+          toScope,
+          error: `Failed to delete from ${fromScope}`,
+        };
       }
     }
 
     return { success: true, assetType: type, assetId: id, fromScope, toScope };
   } catch (err) {
-    return { success: false, assetType: type, assetId: id, fromScope, toScope, error: String(err) };
+    return {
+      success: false,
+      assetType: type,
+      assetId: id,
+      fromScope,
+      toScope,
+      error: String(err),
+    };
   }
 }
 
@@ -632,9 +780,22 @@ async function migrateWikiPage(
 ): Promise<MigrateResult> {
   try {
     // Fetch from source
-    const data = await fetchBeaconAsset('wiki', id, fromScope, options.beaconHost, options.beaconPort);
+    const data = await fetchBeaconAsset(
+      'wiki',
+      id,
+      fromScope,
+      options.beaconHost,
+      options.beaconPort
+    );
     if (!data) {
-      return { success: false, assetType: 'wiki', assetId: id, fromScope, toScope, error: `Wiki page not found on ${fromScope}` };
+      return {
+        success: false,
+        assetType: 'wiki',
+        assetId: id,
+        fromScope,
+        toScope,
+        error: `Wiki page not found on ${fromScope}`,
+      };
     }
 
     // Backup if requested
@@ -645,28 +806,68 @@ async function migrateWikiPage(
     }
 
     // PUT to target
-    const ok = await putBeaconAsset('wiki', id, {
-      title: data.title,
-      content: data.content,
-      tags: data.tags,
-      sources: data.sources,
-    }, toScope, options.beaconHost, options.beaconPort);
+    const ok = await putBeaconAsset(
+      'wiki',
+      id,
+      {
+        title: data.title,
+        content: data.content,
+        tags: data.tags,
+        sources: data.sources,
+      },
+      toScope,
+      options.beaconHost,
+      options.beaconPort
+    );
 
     if (!ok) {
-      return { success: false, assetType: 'wiki', assetId: id, fromScope, toScope, error: `Failed to write wiki page to ${toScope}` };
+      return {
+        success: false,
+        assetType: 'wiki',
+        assetId: id,
+        fromScope,
+        toScope,
+        error: `Failed to write wiki page to ${toScope}`,
+      };
     }
 
     // Move: delete from source
     if (options.move) {
-      const deleted = await deleteBeaconAsset('wiki', id, fromScope, options.beaconHost, options.beaconPort);
+      const deleted = await deleteBeaconAsset(
+        'wiki',
+        id,
+        fromScope,
+        options.beaconHost,
+        options.beaconPort
+      );
       if (!deleted) {
-        return { success: false, assetType: 'wiki', assetId: id, fromScope, toScope, error: `Failed to delete wiki page from ${fromScope}` };
+        return {
+          success: false,
+          assetType: 'wiki',
+          assetId: id,
+          fromScope,
+          toScope,
+          error: `Failed to delete wiki page from ${fromScope}`,
+        };
       }
     }
 
-    return { success: true, assetType: 'wiki', assetId: id, fromScope, toScope };
+    return {
+      success: true,
+      assetType: 'wiki',
+      assetId: id,
+      fromScope,
+      toScope,
+    };
   } catch (err) {
-    return { success: false, assetType: 'wiki', assetId: id, fromScope, toScope, error: String(err) };
+    return {
+      success: false,
+      assetType: 'wiki',
+      assetId: id,
+      fromScope,
+      toScope,
+      error: String(err),
+    };
   }
 }
 
@@ -683,15 +884,21 @@ export async function listAllAssets(
 
   // Local scopes
   for (const scope of ['project', 'user'] as LocalScope[]) {
-    all.push(...await listLocalPersonas(scope));
-    all.push(...await listLocalSkills(scope));
-    all.push(...await listLocalInsights(scope));
-    all.push(...await listLocalPrinciples(scope));
+    all.push(...(await listLocalPersonas(scope)));
+    all.push(...(await listLocalSkills(scope)));
+    all.push(...(await listLocalInsights(scope)));
+    all.push(...(await listLocalPrinciples(scope)));
   }
 
   // Swarm scopes (if beacon is reachable)
-  for (const type of ['persona', 'skill', 'insight', 'principle', 'wiki'] as AssetType[]) {
-    all.push(...await listBeaconAssets(type, beaconHost, beaconPort));
+  for (const type of [
+    'persona',
+    'skill',
+    'insight',
+    'principle',
+    'wiki',
+  ] as AssetType[]) {
+    all.push(...(await listBeaconAssets(type, beaconHost, beaconPort)));
   }
 
   return all;
@@ -700,23 +907,51 @@ export async function listAllAssets(
 /**
  * Execute a single asset migration.
  */
-export async function migrateAsset(options: MigrateOptions): Promise<MigrateResult> {
+export async function migrateAsset(
+  options: MigrateOptions
+): Promise<MigrateResult> {
   const { type, id, from, to, pull, scope } = options;
 
   if (!type) {
-    return { success: false, assetType: 'persona', assetId: '', fromScope: 'project', toScope: 'beacon', error: 'Asset type is required' };
+    return {
+      success: false,
+      assetType: 'persona',
+      assetId: '',
+      fromScope: 'project',
+      toScope: 'beacon',
+      error: 'Asset type is required',
+    };
   }
 
   if (!id) {
-    return { success: false, assetType: type, assetId: '', fromScope: 'project', toScope: 'beacon', error: 'Asset id is required' };
+    return {
+      success: false,
+      assetType: type,
+      assetId: '',
+      fromScope: 'project',
+      toScope: 'beacon',
+      error: 'Asset id is required',
+    };
   }
 
   // Wiki pages are server-to-server only
   if (type === 'wiki') {
     const fromScope = (scope ?? from ?? 'beacon') as SwarmScope;
     const toScope = to as SwarmScope;
-    if ((fromScope as string) === 'project' || (fromScope as string) === 'user' || (toScope as string) === 'project' || (toScope as string) === 'user') {
-      return { success: false, assetType: type, assetId: id, fromScope, toScope, error: 'Wiki pages are server-to-server only (beacon ↔ coordinator)' };
+    if (
+      (fromScope as string) === 'project' ||
+      (fromScope as string) === 'user' ||
+      (toScope as string) === 'project' ||
+      (toScope as string) === 'user'
+    ) {
+      return {
+        success: false,
+        assetType: type,
+        assetId: id,
+        fromScope,
+        toScope,
+        error: 'Wiki pages are server-to-server only (beacon ↔ coordinator)',
+      };
     }
     return migrateWikiPage(id, fromScope, toScope, options);
   }
@@ -726,7 +961,14 @@ export async function migrateAsset(options: MigrateOptions): Promise<MigrateResu
     const fromScope = (scope ?? 'beacon') as SwarmScope;
     const toScope = to as LocalScope;
     if (toScope !== 'project' && toScope !== 'user') {
-      return { success: false, assetType: type, assetId: id, fromScope, toScope, error: 'Pull target must be project or user' };
+      return {
+        success: false,
+        assetType: type,
+        assetId: id,
+        fromScope,
+        toScope,
+        error: 'Pull target must be project or user',
+      };
     }
     return demoteAsset(type, id, fromScope, toScope, options);
   }
@@ -735,10 +977,24 @@ export async function migrateAsset(options: MigrateOptions): Promise<MigrateResu
   const fromScope = (from ?? 'project') as LocalScope;
   const toScope = to as SwarmScope;
   if (fromScope !== 'project' && fromScope !== 'user') {
-    return { success: false, assetType: type, assetId: id, fromScope, toScope, error: 'Promote source must be project or user' };
+    return {
+      success: false,
+      assetType: type,
+      assetId: id,
+      fromScope,
+      toScope,
+      error: 'Promote source must be project or user',
+    };
   }
   if (toScope !== 'beacon' && toScope !== 'coordinator') {
-    return { success: false, assetType: type, assetId: id, fromScope, toScope, error: 'Promote target must be beacon or coordinator' };
+    return {
+      success: false,
+      assetType: type,
+      assetId: id,
+      fromScope,
+      toScope,
+      error: 'Promote target must be beacon or coordinator',
+    };
   }
   return promoteAsset(type, id, fromScope, toScope, options);
 }
@@ -746,11 +1002,22 @@ export async function migrateAsset(options: MigrateOptions): Promise<MigrateResu
 /**
  * Batch migrate all assets of a given type from one scope to another.
  */
-export async function batchMigrate(options: MigrateOptions): Promise<MigrateResult[]> {
+export async function batchMigrate(
+  options: MigrateOptions
+): Promise<MigrateResult[]> {
   const { type, from, to, pull, scope } = options;
 
   if (!type) {
-    return [{ success: false, assetType: 'persona', assetId: '', fromScope: 'project', toScope: 'beacon', error: 'Asset type is required for batch' }];
+    return [
+      {
+        success: false,
+        assetType: 'persona',
+        assetId: '',
+        fromScope: 'project',
+        toScope: 'beacon',
+        error: 'Asset type is required for batch',
+      },
+    ];
   }
 
   const results: MigrateResult[] = [];
@@ -760,13 +1027,32 @@ export async function batchMigrate(options: MigrateOptions): Promise<MigrateResu
     const fromScope = (scope ?? 'beacon') as SwarmScope;
     const toScope = to as LocalScope;
     if (toScope !== 'project' && toScope !== 'user') {
-      return [{ success: false, assetType: type, assetId: '', fromScope, toScope, error: 'Pull target must be project or user' }];
+      return [
+        {
+          success: false,
+          assetType: type,
+          assetId: '',
+          fromScope,
+          toScope,
+          error: 'Pull target must be project or user',
+        },
+      ];
     }
 
-    const assets = await listBeaconAssets(type, options.beaconHost, options.beaconPort);
+    const assets = await listBeaconAssets(
+      type,
+      options.beaconHost,
+      options.beaconPort
+    );
     for (const asset of assets) {
       if (asset.scope !== fromScope) continue;
-      const result = await demoteAsset(type, asset.id, fromScope, toScope, options);
+      const result = await demoteAsset(
+        type,
+        asset.id,
+        fromScope,
+        toScope,
+        options
+      );
       results.push(result);
     }
   } else {
@@ -774,10 +1060,28 @@ export async function batchMigrate(options: MigrateOptions): Promise<MigrateResu
     const fromScope = (from ?? 'project') as LocalScope;
     const toScope = to as SwarmScope;
     if (fromScope !== 'project' && fromScope !== 'user') {
-      return [{ success: false, assetType: type, assetId: '', fromScope, toScope, error: 'Promote source must be project or user' }];
+      return [
+        {
+          success: false,
+          assetType: type,
+          assetId: '',
+          fromScope,
+          toScope,
+          error: 'Promote source must be project or user',
+        },
+      ];
     }
     if (toScope !== 'beacon' && toScope !== 'coordinator') {
-      return [{ success: false, assetType: type, assetId: '', fromScope, toScope, error: 'Promote target must be beacon or coordinator' }];
+      return [
+        {
+          success: false,
+          assetType: type,
+          assetId: '',
+          fromScope,
+          toScope,
+          error: 'Promote target must be beacon or coordinator',
+        },
+      ];
     }
 
     let localAssets: AssetInfo[];
@@ -795,11 +1099,26 @@ export async function batchMigrate(options: MigrateOptions): Promise<MigrateResu
         localAssets = await listLocalPrinciples(fromScope);
         break;
       default:
-        return [{ success: false, assetType: type, assetId: '', fromScope, toScope, error: `Unsupported batch type: ${type}` }];
+        return [
+          {
+            success: false,
+            assetType: type,
+            assetId: '',
+            fromScope,
+            toScope,
+            error: `Unsupported batch type: ${type}`,
+          },
+        ];
     }
 
     for (const asset of localAssets) {
-      const result = await promoteAsset(type, asset.id, fromScope, toScope, options);
+      const result = await promoteAsset(
+        type,
+        asset.id,
+        fromScope,
+        toScope,
+        options
+      );
       results.push(result);
     }
   }

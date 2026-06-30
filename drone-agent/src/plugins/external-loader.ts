@@ -177,11 +177,7 @@ export async function saveTrustedPlugin(
   const existing = await loadTrustedPlugins();
   existing[dirPath] = status;
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(
-    filePath,
-    JSON.stringify(existing, null, 2) + '\n',
-    'utf-8'
-  );
+  await writeFile(filePath, JSON.stringify(existing, null, 2) + '\n', 'utf-8');
 }
 
 // ── Main discovery ─────────────────────────────────────────────────

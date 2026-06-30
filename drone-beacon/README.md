@@ -40,7 +40,7 @@ pnpm start
 | `--coordinator-port`      | 3456                   | Coordinator port                                 |
 | `--coordinator-https`     | false                  | Use HTTPS for coordinator connection             |
 | `--https`                 | false                  | Enable HTTPS server                              |
-| `--no-https`              | -                      | Disable HTTPS server (default)                  |
+| `--no-https`              | -                      | Disable HTTPS server (default)                   |
 | `--id`                    | auto-generated         | Beacon ID                                        |
 | `--name`                  | default-beacon         | Beacon name                                      |
 | `--spawn-agent-path`      | drone-agent            | Path to drone-agent binary                       |

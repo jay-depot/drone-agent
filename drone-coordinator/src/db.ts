@@ -541,7 +541,9 @@ export function approveBeacon(approvalToken: string): BeaconTrust | null {
   const findStmt = getDatabase().prepare(
     'SELECT beacon_id FROM beacon_trust WHERE approval_token = ? AND status = ?'
   );
-  const found = findStmt.get(approvalToken, 'pending') as { beacon_id: string } | undefined;
+  const found = findStmt.get(approvalToken, 'pending') as
+    | { beacon_id: string }
+    | undefined;
   if (!found) return null;
 
   const stmt = getDatabase().prepare(`

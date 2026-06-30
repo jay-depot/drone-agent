@@ -117,7 +117,7 @@ export function createCoordinatorFetch(baseUrl: string): typeof fetch {
         (options as https.RequestOptions).rejectUnauthorized = false;
       }
 
-      const req = (isHttps ? https : http).request(options, (res) => {
+      const req = (isHttps ? https : http).request(options, res => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk: Buffer) => chunks.push(chunk));
         res.on('end', () => {
@@ -132,7 +132,7 @@ export function createCoordinatorFetch(baseUrl: string): typeof fetch {
         });
       });
 
-      req.on('error', (err) => {
+      req.on('error', err => {
         reject(err);
       });
 

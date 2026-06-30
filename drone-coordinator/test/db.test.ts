@@ -77,7 +77,10 @@ describe('Persona CRUD', () => {
 
   it('should get a persona by id', () => {
     createPersona({
-      id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1',
+      id: 'p1',
+      name: 'P1',
+      description: 'd1',
+      systemPrompt: 'sp1',
     });
     const p = getPersona('p1');
     expect(p).toBeDefined();
@@ -89,14 +92,29 @@ describe('Persona CRUD', () => {
   });
 
   it('should list all personas', () => {
-    createPersona({ id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1' });
-    createPersona({ id: 'p2', name: 'P2', description: 'd2', systemPrompt: 'sp2' });
+    createPersona({
+      id: 'p1',
+      name: 'P1',
+      description: 'd1',
+      systemPrompt: 'sp1',
+    });
+    createPersona({
+      id: 'p2',
+      name: 'P2',
+      description: 'd2',
+      systemPrompt: 'sp2',
+    });
     const list = listPersonas();
     expect(list).toHaveLength(2);
   });
 
   it('should update a persona', () => {
-    createPersona({ id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1' });
+    createPersona({
+      id: 'p1',
+      name: 'P1',
+      description: 'd1',
+      systemPrompt: 'sp1',
+    });
     const updated = updatePersona('p1', { name: 'Updated' });
     expect(updated).toBeDefined();
     expect(updated!.name).toBe('Updated');
@@ -108,7 +126,12 @@ describe('Persona CRUD', () => {
   });
 
   it('should delete a persona', () => {
-    createPersona({ id: 'p1', name: 'P1', description: 'd1', systemPrompt: 'sp1' });
+    createPersona({
+      id: 'p1',
+      name: 'P1',
+      description: 'd1',
+      systemPrompt: 'sp1',
+    });
     expect(deletePersona('p1')).toBe(true);
     expect(getPersona('p1')).toBeUndefined();
   });
@@ -142,7 +165,13 @@ describe('Skill CRUD', () => {
   });
 
   it('should get a skill by id', () => {
-    createSkill({ id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' });
+    createSkill({
+      id: 's1',
+      name: 'S1',
+      description: 'd1',
+      trigger: 't1',
+      body: 'b1',
+    });
     const s = getSkill('s1');
     expect(s).toBeDefined();
     expect(s!.id).toBe('s1');
@@ -153,13 +182,31 @@ describe('Skill CRUD', () => {
   });
 
   it('should list all skills', () => {
-    createSkill({ id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' });
-    createSkill({ id: 's2', name: 'S2', description: 'd2', trigger: 't2', body: 'b2' });
+    createSkill({
+      id: 's1',
+      name: 'S1',
+      description: 'd1',
+      trigger: 't1',
+      body: 'b1',
+    });
+    createSkill({
+      id: 's2',
+      name: 'S2',
+      description: 'd2',
+      trigger: 't2',
+      body: 'b2',
+    });
     expect(listSkills()).toHaveLength(2);
   });
 
   it('should update a skill', () => {
-    createSkill({ id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' });
+    createSkill({
+      id: 's1',
+      name: 'S1',
+      description: 'd1',
+      trigger: 't1',
+      body: 'b1',
+    });
     const updated = updateSkill('s1', { name: 'Updated' });
     expect(updated).toBeDefined();
     expect(updated!.name).toBe('Updated');
@@ -170,7 +217,13 @@ describe('Skill CRUD', () => {
   });
 
   it('should delete a skill', () => {
-    createSkill({ id: 's1', name: 'S1', description: 'd1', trigger: 't1', body: 'b1' });
+    createSkill({
+      id: 's1',
+      name: 'S1',
+      description: 'd1',
+      trigger: 't1',
+      body: 'b1',
+    });
     expect(deleteSkill('s1')).toBe(true);
     expect(getSkill('s1')).toBeUndefined();
   });
@@ -190,7 +243,12 @@ describe('Beacon CRUD', () => {
   });
 
   it('should register a beacon', () => {
-    const beacon = registerBeacon({ id: 'b1', name: 'Beacon 1', host: 'localhost', port: 3457 });
+    const beacon = registerBeacon({
+      id: 'b1',
+      name: 'Beacon 1',
+      host: 'localhost',
+      port: 3457,
+    });
     expect(beacon.id).toBe('b1');
     expect(beacon.name).toBe('Beacon 1');
     expect(beacon.connectedAt).toBeGreaterThan(0);
@@ -247,7 +305,11 @@ describe('Beacon Trust', () => {
 
   it('should auto-approve localhost beacons', () => {
     const trust = registerBeaconTrust({
-      id: 'b1', name: 'B1', host: 'localhost', port: 3457, publicKey: 'key1',
+      id: 'b1',
+      name: 'B1',
+      host: 'localhost',
+      port: 3457,
+      publicKey: 'key1',
     });
     expect(trust.status).toBe('approved');
     expect(trust.approvalToken).toBeNull();
@@ -256,14 +318,22 @@ describe('Beacon Trust', () => {
 
   it('should auto-approve 127.0.0.1 beacons', () => {
     const trust = registerBeaconTrust({
-      id: 'b1', name: 'B1', host: '127.0.0.1', port: 3457, publicKey: 'key1',
+      id: 'b1',
+      name: 'B1',
+      host: '127.0.0.1',
+      port: 3457,
+      publicKey: 'key1',
     });
     expect(trust.status).toBe('approved');
   });
 
   it('should create pending trust with token for remote beacons', () => {
     const trust = registerBeaconTrust({
-      id: 'b1', name: 'B1', host: '10.0.0.1', port: 3457, publicKey: 'key1',
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'key1',
     });
     expect(trust.status).toBe('pending');
     expect(trust.approvalToken).toBeTruthy();
@@ -271,10 +341,18 @@ describe('Beacon Trust', () => {
 
   it('should re-register with matching public key and update connection info', () => {
     registerBeaconTrust({
-      id: 'b1', name: 'B1', host: 'localhost', port: 3457, publicKey: 'key1',
+      id: 'b1',
+      name: 'B1',
+      host: 'localhost',
+      port: 3457,
+      publicKey: 'key1',
     });
     const updated = registerBeaconTrust({
-      id: 'b1', name: 'B1', host: '10.0.0.2', port: 3458, publicKey: 'key1',
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.2',
+      port: 3458,
+      publicKey: 'key1',
     });
     expect(updated.host).toBe('10.0.0.2');
     expect(updated.port).toBe(3458);
@@ -283,18 +361,30 @@ describe('Beacon Trust', () => {
 
   it('should throw on public key mismatch', () => {
     registerBeaconTrust({
-      id: 'b1', name: 'B1', host: 'localhost', port: 3457, publicKey: 'key1',
+      id: 'b1',
+      name: 'B1',
+      host: 'localhost',
+      port: 3457,
+      publicKey: 'key1',
     });
     expect(() => {
       registerBeaconTrust({
-        id: 'b1', name: 'B1', host: 'localhost', port: 3457, publicKey: 'key2',
+        id: 'b1',
+        name: 'B1',
+        host: 'localhost',
+        port: 3457,
+        publicKey: 'key2',
       });
     }).toThrow('Public key mismatch');
   });
 
   it('should get beacon trust by id', () => {
     registerBeaconTrust({
-      id: 'b1', name: 'B1', host: 'localhost', port: 3457, publicKey: 'key1',
+      id: 'b1',
+      name: 'B1',
+      host: 'localhost',
+      port: 3457,
+      publicKey: 'key1',
     });
     const trust = getBeaconTrust('b1');
     expect(trust).toBeDefined();
@@ -306,14 +396,30 @@ describe('Beacon Trust', () => {
   });
 
   it('should list all beacon trust records', () => {
-    registerBeaconTrust({ id: 'b1', name: 'B1', host: 'localhost', port: 3457, publicKey: 'k1' });
-    registerBeaconTrust({ id: 'b2', name: 'B2', host: '10.0.0.1', port: 3457, publicKey: 'k2' });
+    registerBeaconTrust({
+      id: 'b1',
+      name: 'B1',
+      host: 'localhost',
+      port: 3457,
+      publicKey: 'k1',
+    });
+    registerBeaconTrust({
+      id: 'b2',
+      name: 'B2',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'k2',
+    });
     expect(listBeaconTrust()).toHaveLength(2);
   });
 
   it('should approve a pending beacon by token', () => {
     const trust = registerBeaconTrust({
-      id: 'b1', name: 'B1', host: '10.0.0.1', port: 3457, publicKey: 'key1',
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'key1',
     });
     const approved = approveBeacon(trust.approvalToken!);
     expect(approved).not.toBeNull();
@@ -326,7 +432,11 @@ describe('Beacon Trust', () => {
 
   it('should reject a beacon', () => {
     registerBeaconTrust({
-      id: 'b1', name: 'B1', host: '10.0.0.1', port: 3457, publicKey: 'key1',
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'key1',
     });
     expect(rejectBeacon('b1')).toBe(true);
     const trust = getBeaconTrust('b1');
@@ -339,7 +449,11 @@ describe('Beacon Trust', () => {
 
   it('should delete beacon trust', () => {
     registerBeaconTrust({
-      id: 'b1', name: 'B1', host: 'localhost', port: 3457, publicKey: 'key1',
+      id: 'b1',
+      name: 'B1',
+      host: 'localhost',
+      port: 3457,
+      publicKey: 'key1',
     });
     expect(deleteBeaconTrust('b1')).toBe(true);
     expect(getBeaconTrust('b1')).toBeUndefined();
@@ -435,7 +549,9 @@ describe('Swarm Session & Events', () => {
   });
 
   it('should return undefined when updating non-existent session', () => {
-    expect(updateSwarmSessionStatus('nonexistent', 'completed')).toBeUndefined();
+    expect(
+      updateSwarmSessionStatus('nonexistent', 'completed')
+    ).toBeUndefined();
   });
 
   it('should create a swarm event', () => {
@@ -455,16 +571,48 @@ describe('Swarm Session & Events', () => {
 
   it('should get swarm events for a session', () => {
     createSwarmSession('ss1', null, 'b1');
-    createSwarmEvent({ id: 'e1', sessionId: 'ss1', correlationId: null, type: 'msg', payload: null, metadata: null, createdAt: 1 });
-    createSwarmEvent({ id: 'e2', sessionId: 'ss1', correlationId: null, type: 'msg', payload: null, metadata: null, createdAt: 2 });
+    createSwarmEvent({
+      id: 'e1',
+      sessionId: 'ss1',
+      correlationId: null,
+      type: 'msg',
+      payload: null,
+      metadata: null,
+      createdAt: 1,
+    });
+    createSwarmEvent({
+      id: 'e2',
+      sessionId: 'ss1',
+      correlationId: null,
+      type: 'msg',
+      payload: null,
+      metadata: null,
+      createdAt: 2,
+    });
     const events = getSwarmEvents('ss1');
     expect(events).toHaveLength(2);
   });
 
   it('should get latest swarm events', () => {
     createSwarmSession('ss1', null, 'b1');
-    createSwarmEvent({ id: 'e1', sessionId: 'ss1', correlationId: null, type: 'msg', payload: null, metadata: null, createdAt: 1 });
-    createSwarmEvent({ id: 'e2', sessionId: 'ss1', correlationId: null, type: 'msg', payload: null, metadata: null, createdAt: 2 });
+    createSwarmEvent({
+      id: 'e1',
+      sessionId: 'ss1',
+      correlationId: null,
+      type: 'msg',
+      payload: null,
+      metadata: null,
+      createdAt: 1,
+    });
+    createSwarmEvent({
+      id: 'e2',
+      sessionId: 'ss1',
+      correlationId: null,
+      type: 'msg',
+      payload: null,
+      metadata: null,
+      createdAt: 2,
+    });
     const latest = getLatestSwarmEvents('ss1', 1);
     expect(latest).toHaveLength(1);
     expect(latest[0].id).toBe('e2');
@@ -472,7 +620,15 @@ describe('Swarm Session & Events', () => {
 
   it('should search swarm events', () => {
     createSwarmSession('ss1', null, 'b1');
-    createSwarmEvent({ id: 'e1', sessionId: 'ss1', correlationId: null, type: 'msg', payload: 'hello world', metadata: null, createdAt: 1 });
+    createSwarmEvent({
+      id: 'e1',
+      sessionId: 'ss1',
+      correlationId: null,
+      type: 'msg',
+      payload: 'hello world',
+      metadata: null,
+      createdAt: 1,
+    });
     // FTS5 may not work in test context, but the function should not throw
     expect(() => searchSwarmEvents('hello')).not.toThrow();
   });
@@ -605,7 +761,12 @@ describe('Principle CRUD', () => {
   });
 
   it('should create a principle', () => {
-    const row = createPrinciple('persona', 'test-persona', 'Test principle', 'test-source');
+    const row = createPrinciple(
+      'persona',
+      'test-persona',
+      'Test principle',
+      'test-source'
+    );
     expect(row.targetType).toBe('persona');
     expect(row.targetId).toBe('test-persona');
     expect(row.principle).toBe('Test principle');

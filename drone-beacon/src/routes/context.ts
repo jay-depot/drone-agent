@@ -1,5 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { type CoordinatorClient, createCoordinatorFetch } from '../coordinator-client.js';
+import {
+  type CoordinatorClient,
+  createCoordinatorFetch,
+} from '../coordinator-client.js';
 import { logger } from '../logger.js';
 import * as db from '../db.js';
 

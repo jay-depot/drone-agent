@@ -134,29 +134,41 @@ describe('loadPluginFromDirectory', () => {
   });
 
   it('returns null for a plugin with invalid exports', async () => {
-    const pluginDir = await writePluginFile(tmpDir, 'bad-plugin', `
+    const pluginDir = await writePluginFile(
+      tmpDir,
+      'bad-plugin',
+      `
 export const notAPlugin = { foo: 'bar' };
-`);
+`
+    );
     const plugin = await loadPluginFromDirectory(pluginDir);
     expect(plugin).toBeNull();
   });
 
   it('returns null for a plugin missing register function', async () => {
-    const pluginDir = await writePluginFile(tmpDir, 'no-register', `
+    const pluginDir = await writePluginFile(
+      tmpDir,
+      'no-register',
+      `
 export const plugin = {
   metadata: { id: 'no-register', name: 'No Register', version: '1.0.0', description: '' },
 };
-`);
+`
+    );
     const plugin = await loadPluginFromDirectory(pluginDir);
     expect(plugin).toBeNull();
   });
 
   it('returns null for a plugin missing metadata', async () => {
-    const pluginDir = await writePluginFile(tmpDir, 'no-meta', `
+    const pluginDir = await writePluginFile(
+      tmpDir,
+      'no-meta',
+      `
 export const plugin = {
   register: async () => {},
 };
-`);
+`
+    );
     const plugin = await loadPluginFromDirectory(pluginDir);
     expect(plugin).toBeNull();
   });
@@ -368,7 +380,11 @@ describe('discoverExternalPlugins', () => {
 
   it('uses configDir override for user plugins', async () => {
     const customConfigDir = path.join(tmpDir, 'custom-config');
-    const userPluginsDir = path.join(customConfigDir, '.drone-agent', 'plugins');
+    const userPluginsDir = path.join(
+      customConfigDir,
+      '.drone-agent',
+      'plugins'
+    );
     await writePluginFile(
       userPluginsDir,
       'custom-user-plugin',

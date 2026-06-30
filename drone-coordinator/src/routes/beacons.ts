@@ -31,7 +31,10 @@ export default function beaconRoutes(app: FastifyInstance) {
           }
           return reply.code(201).send(response);
         } catch (err) {
-          if (err instanceof Error && err.message.includes('Public key mismatch')) {
+          if (
+            err instanceof Error &&
+            err.message.includes('Public key mismatch')
+          ) {
             return reply.code(403).send({
               error: err.message,
             });
@@ -94,7 +97,10 @@ export default function beaconRoutes(app: FastifyInstance) {
         }
         return reply.code(201).send(response);
       } catch (err) {
-        if (err instanceof Error && err.message.includes('Public key mismatch')) {
+        if (
+          err instanceof Error &&
+          err.message.includes('Public key mismatch')
+        ) {
           return reply.code(403).send({
             error: err.message,
           });

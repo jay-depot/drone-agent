@@ -207,9 +207,7 @@ export function parseCliArgs(argv: string[]): CliInvocation {
 /**
  * Parse arguments for the `migrate` subcommand.
  */
-function parseMigrateSubcommand(
-  args: string[]
-): CliInvocation {
+function parseMigrateSubcommand(args: string[]): CliInvocation {
   const migrateOptions: MigrateCliOptions = {};
   const options: CliOptions = {
     once: false,

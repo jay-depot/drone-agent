@@ -1,7 +1,6 @@
 ---
 key: coordinator-web-ui-plan
-tags:
-  []
+tags: []
 created: 2026-06-30T02:05:30.457Z
 updated: 2026-06-30T02:05:30.457Z
 ---
@@ -59,6 +58,7 @@ drone-coordinator-ui/
 ```
 
 **package.json** key fields:
+
 ```json
 {
   "name": "drone-coordinator-ui",
@@ -112,6 +112,7 @@ Add `drone-coordinator-ui` to `pnpm-workspace.yaml`.
 **Agent:** coder
 
 **Files to modify:**
+
 - `drone-coordinator/package.json` — add `@fastify/websocket` and `@fastify/static` dependencies
 - `drone-coordinator/src/index.ts` — register the plugins and serve the UI
 
@@ -147,16 +148,18 @@ app.setNotFoundHandler(async (request, reply) => {
 app.register(async function (fastify) {
   fastify.get('/ws', { websocket: true }, (socket, req) => {
     // Send initial state snapshot
-    socket.send(JSON.stringify({
-      type: 'initial',
-      data: { beacons: db.listBeacons(), /* ... */ }
-    }));
-    
+    socket.send(
+      JSON.stringify({
+        type: 'initial',
+        data: { beacons: db.listBeacons() /* ... */ },
+      })
+    );
+
     // Keep-alive
     const interval = setInterval(() => {
       socket.send(JSON.stringify({ type: 'ping' }));
     }, 30000);
-    
+
     socket.on('close', () => clearInterval(interval));
   });
 });
@@ -178,6 +181,7 @@ Create `src/hooks/use-websocket.ts`:
 ```
 
 The hook should:
+
 - Connect to `ws://${window.location.host}/ws` (or `wss://` for HTTPS)
 - Auto-reconnect with exponential backoff
 - Allow components to subscribe to specific event types
@@ -227,6 +231,7 @@ The hook should:
 **Files:** `src/pages/personas.tsx`, `src/pages/skills.tsx`, `src/pages/wiki.tsx`
 
 Each page:
+
 - Fetches the corresponding list endpoint on mount
 - Displays a table or card list
 - Personas: name, description, scope, created/updated dates
@@ -248,6 +253,7 @@ import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 ```
 
 Layout structure:
+
 - Left sidebar with nav links (Topology, Sessions, Personas, Skills, Wiki)
 - Main content area
 - Status bar showing WebSocket connection status
@@ -274,7 +280,9 @@ const subscribers = new Map<string, Set<WebSocket>>();
 const subs = subscribers.get(event.sessionId);
 if (subs) {
   for (const ws of subs) {
-    ws.send(JSON.stringify({ type: 'event', sessionId: event.sessionId, event }));
+    ws.send(
+      JSON.stringify({ type: 'event', sessionId: event.sessionId, event })
+    );
   }
 }
 ```

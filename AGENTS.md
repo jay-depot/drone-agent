@@ -271,6 +271,7 @@ are persisted to `~/.drone-agent/trusted-plugins.json` (user-scoped, so a projec
 cannot push its own trust).
 
 The trust prompt offers three options:
+
 - **Yes, trust it** — loads the plugin now and on future starts
 - **No, skip this time** — skips the plugin for this session only
 - **No, and don't ask again** — marks the plugin as untrusted, skipped forever
@@ -279,6 +280,7 @@ If the config directory is overridden via `--config-dir`, the user plugins
 directory follows (e.g., `--config-dir /custom/path` → `/custom/path/.drone-agent/plugins/`).
 
 **Key files:**
+
 - `drone-agent/src/plugins/external-loader.ts` — discovery, loading, trust management
 - `drone-agent/src/runtime/plugin-engine.ts` — `addExternalPlugin()` method
 - `drone-core/src/config-types.ts` — `externalPlugins`, `trustedPlugins` config fields
@@ -353,7 +355,7 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-agent/src/first-run.tsx`                       | First-run setup wizard (LLM provider probing)         |
 | `drone-agent/src/lib.ts`                              | Public library exports for embedding drone-agent      |
 | `drone-agent/src/runtime/plugin-engine.ts`            | Plugin lifecycle, tool dispatch, workflow execution   |
-| `drone-agent/src/runtime/builtin-commands.ts`         | Built-in slash command definitions                   |
+| `drone-agent/src/runtime/builtin-commands.ts`         | Built-in slash command definitions                    |
 | `drone-agent/src/runtime/config.ts`                   | Config loading, merging, environment interpolation    |
 | `drone-agent/src/runtime/conversation-service.ts`     | LLM conversation loop, tool iteration                 |
 | `drone-agent/src/runtime/session-manager.ts`          | Session state, turn tracking                          |
@@ -371,24 +373,24 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-agent/src/plugins/lightpanda/index.ts`         | Lightpanda browser automation MCP integration         |
 | `drone-agent/src/plugins/ollama.ts`                   | Ollama LLM provider                                   |
 | `drone-agent/src/plugins/openrouter/index.ts`         | OpenRouter LLM provider                               |
-| `drone-agent/src/plugins/echo/index.ts`              | Mock LLM provider for deterministic testing           |
+| `drone-agent/src/plugins/echo/index.ts`               | Mock LLM provider for deterministic testing           |
 | `drone-agent/src/plugins/exec.ts`                     | Shell command execution                               |
-| `drone-agent/src/plugins/external-loader.ts`          | External plugin discovery, loading, trust management |
+| `drone-agent/src/plugins/external-loader.ts`          | External plugin discovery, loading, trust management  |
 | `drone-agent/src/plugins/fetch.ts`                    | HTTP fetch tool                                       |
 | `drone-agent/src/plugins/file.ts`                     | File read/write/glob/diff tools                       |
-| `drone-agent/src/plugins/git.ts`                      | Git status/diff/commit/log tools                     |
+| `drone-agent/src/plugins/git.ts`                      | Git status/diff/commit/log tools                      |
 | `drone-agent/src/plugins/search.ts`                   | Text search (ripgrep/grep)                            |
 | `drone-agent/src/plugins/todo.ts`                     | TODO list management                                  |
 | `drone-agent/src/plugins/utils.ts`                    | Utility tools (arithmetic, counting, spelling)        |
 | `drone-agent/src/plugins/prompt-file/index.ts`        | Prompt file injection                                 |
-| `drone-agent/src/plugins/compaction/index.ts`          | Context compaction (summary-drop strategy)            |
-| `drone-agent/src/plugins/config/index.ts`             | Config capability (injectors, rebuild)               |
+| `drone-agent/src/plugins/compaction/index.ts`         | Context compaction (summary-drop strategy)            |
+| `drone-agent/src/plugins/config/index.ts`             | Config capability (injectors, rebuild)                |
 | `drone-agent/src/plugins/log/index.ts`                | Session logging to JSON files                         |
 | `drone-agent/src/plugins/memory/index.ts`             | Project-level memory (JSON files)                     |
 | `drone-agent/src/plugins/persona/index.ts`            | Persona broker plugin                                 |
-| `drone-agent/src/plugins/skills/index.ts`              | Skills broker plugin                                  |
+| `drone-agent/src/plugins/skills/index.ts`             | Skills broker plugin                                  |
 | `drone-agent/src/plugins/llm/index.ts`                | LLM provider broker                                   |
-| `drone-agent/src/plugins/mcp/index.ts`                 | MCP client (stdio and streamable HTTP)                |
+| `drone-agent/src/plugins/mcp/index.ts`                | MCP client (stdio and streamable HTTP)                |
 | `drone-agent/src/plugins/lsp/plugin.ts`               | LSP server connections                                |
 | `drone-core/src/index.ts`                             | All shared types and config defaults                  |
 | `drone-core/src/config-types.ts`                      | DroneAgentConfig, PartialDroneAgentConfig, defaults   |

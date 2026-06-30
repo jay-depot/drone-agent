@@ -245,9 +245,7 @@ export async function registerWebSocketServer(
     // Check for local-only connection
     const ip = request.ip || request.socket?.remoteAddress;
     if (options.enforceLocalOnly !== false && !isLocalConnection(ip)) {
-      logger.warn(
-        `Rejected non-local WebSocket connection from ${ip}`
-      );
+      logger.warn(`Rejected non-local WebSocket connection from ${ip}`);
       socket.close(
         ERROR_NON_LOCAL_CONNECTION,
         'Non-local connections not allowed'

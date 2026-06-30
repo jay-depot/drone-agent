@@ -1015,7 +1015,6 @@ export const selfImprovementPlugin: DronePlugin = {
       },
     });
 
-
     // ── Combined principles prompt fragment (project + persona) ────
     registration.registerPromptFragment({
       key: 'principles',

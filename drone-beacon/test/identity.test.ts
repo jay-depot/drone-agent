@@ -58,7 +58,8 @@ describe('Beacon Identity', () => {
   });
 
   it('should return a valid signing key', async () => {
-    const { generateIdentity, getSigningKey } = await import('../src/identity.js');
+    const { generateIdentity, getSigningKey } =
+      await import('../src/identity.js');
     const identity = generateIdentity('test-beacon');
     const key = getSigningKey(identity);
     expect(key.type).toBe('public');

@@ -1,20 +1,37 @@
 import fastify from 'fastify';
+import fastifyWebsocket from '@fastify/websocket';
+import fastifyStatic from '@fastify/static';
+import fastifyCors from '@fastify/cors';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 import {
   initDatabase,
   closeDatabase,
   approveBeacon,
   listBeaconTrust,
+  listBeacons,
+  listAllAgentLocations,
+  listBeaconSessions,
 } from './db.js';
 import { initStorage } from './storage.js';
 import { registerRoutes } from './routes/index.js';
 import { logger } from './logger.js';
 import { loadOrCreateTlsIdentity, getTlsOptions } from './tls.js';
+import {
+  addSubscriber,
+  removeSubscriber,
+  subscribeToSession,
+  unsubscribeFromSession,
+  publishInitialState,
+} from './ws-pubsub.js';
 
 const DEFAULT_PORT = 3456;
 const DEFAULT_HOST = '0.0.0.0';
 const DEFAULT_CONFIG_DIR = './config';
 const DEFAULT_DB_FILENAME = 'drone-coordinator.db';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 interface Config {
   port: number;
@@ -60,23 +77,9 @@ function parseArgs(): Config {
     } else if (arg === 'list-beacons') {
       config.command = 'list-beacons';
     } else if (arg === '--help' || arg === '-h') {
-      console.log(`
-drone-coordinator [options]
-
-Commands:
-  serve              Start the coordinator server (default)
-  approve <token>   Approve a pending beacon by token
-  list-beacons       List all registered beacons and their trust status
-
-Options:
-  --port <n>         Port to listen on (default: ${DEFAULT_PORT})
-  --host <h>         Host to bind to (default: ${DEFAULT_HOST})
-  --config-dir <dir> Configuration directory (default: ${DEFAULT_CONFIG_DIR})
-  --db <path>       Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})
-  --https            Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)
-  --no-https         Disable HTTPS
-  --help             Show this help message
-      `);
+      console.log(
+        `\ndrone-coordinator [options]\n\nCommands:\n  serve              Start the coordinator server (default)\n  approve <token>   Approve a pending beacon by token\n  list-beacons       List all registered beacons and their trust status\n\nOptions:\n  --port <n>         Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>         Host to bind to (default: ${DEFAULT_HOST})\n  --config-dir <dir> Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>       Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https            Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https         Disable HTTPS\n  --help             Show this help message\n      `
+      );
       process.exit(0);
     }
   }
@@ -136,6 +139,37 @@ async function handleListBeacons(config: Config) {
   process.exit(0);
 }
 
+/**
+ * Resolve the path to the UI's built static files.
+ * In the monorepo, it's at ../../drone-coordinator-ui/dist relative to this file's dist/.
+ * When published to npm, it's in node_modules/drone-coordinator-ui/dist.
+ */
+function resolveUiDistPath(): string {
+  // Try monorepo layout first
+  const monorepoPath = path.resolve(
+    __dirname,
+    '../../drone-coordinator-ui/dist'
+  );
+  if (existsSync(monorepoPath)) {
+    return monorepoPath;
+  }
+  // Fall back to node_modules
+  const nodeModulesPath = path.resolve(
+    __dirname,
+    '../node_modules/drone-coordinator-ui/dist'
+  );
+  if (existsSync(nodeModulesPath)) {
+    return nodeModulesPath;
+  }
+  // Allow override via env var
+  const envPath = process.env.UI_DIST_PATH;
+  if (envPath && existsSync(envPath)) {
+    return envPath;
+  }
+  // Default to monorepo path (will be created by build)
+  return monorepoPath;
+}
+
 async function main() {
   const config = parseArgs();
 
@@ -170,9 +204,6 @@ async function main() {
   }
 
   // Create Fastify instance
-  // For HTTPS, pass the cert/key in the constructor's https property.
-  // Fastify's https option creates an HTTP/2 secure server when allowHTTP1
-  // is set, and the TLS options must be provided here (not in listen()).
   const app = fastify({
     logger: {
       level: process.env.LOG_LEVEL || 'info',
@@ -182,8 +213,96 @@ async function main() {
       : {}),
   });
 
-  // Register routes
+  // Register CORS for development
+  await app.register(fastifyCors, {
+    origin: process.env.NODE_ENV === 'development' ? true : false,
+  });
+
+  // Register WebSocket support
+  await app.register(fastifyWebsocket);
+
+  // Serve the UI static files
+  const uiDistPath = resolveUiDistPath();
+  logger.info(`Serving UI from: ${uiDistPath}`);
+
+  await app.register(fastifyStatic, {
+    root: uiDistPath,
+    prefix: '/',
+    wildcard: false,
+  });
+
+  // WebSocket endpoint for real-time events
+  app.register(async function (fastify) {
+    fastify.get('/ws', { websocket: true }, (socket, req) => {
+      const sub = addSubscriber(socket);
+
+      // Send initial state snapshot
+      try {
+        const beacons = listBeacons();
+        const agentLocations = listAllAgentLocations();
+        const sessions = beacons.flatMap(b => {
+          const beaconSessions = listBeaconSessions(b.id);
+          return beaconSessions.map(s => ({
+            ...s,
+            beaconName: b.name,
+            beaconHost: b.host,
+            beaconPort: b.port,
+          }));
+        });
+
+        publishInitialState(socket, {
+          beacons,
+          agentLocations,
+          sessions,
+        });
+      } catch (err) {
+        logger.warn(`Failed to build initial state: ${err}`);
+      }
+
+      // Handle incoming messages from the client
+      socket.on('message', (raw: Buffer) => {
+        try {
+          const msg = JSON.parse(raw.toString());
+          if (msg.type === 'subscribe' && msg.sessionId) {
+            subscribeToSession(sub, msg.sessionId);
+          } else if (msg.type === 'unsubscribe' && msg.sessionId) {
+            unsubscribeFromSession(sub, msg.sessionId);
+          }
+        } catch {
+          // Ignore malformed messages
+        }
+      });
+
+      // Keep-alive ping
+      const interval = setInterval(() => {
+        try {
+          socket.send(JSON.stringify({ type: 'ping' }));
+        } catch {
+          clearInterval(interval);
+        }
+      }, 30000);
+
+      socket.on('close', () => {
+        clearInterval(interval);
+        removeSubscriber(sub);
+      });
+    });
+  });
+
+  // Register API routes
   await registerRoutes(app);
+
+  // SPA fallback: serve index.html for all non-API, non-WS routes
+  app.setNotFoundHandler(async (request, reply) => {
+    if (
+      request.url.startsWith('/api') ||
+      request.url.startsWith('/ws') ||
+      request.url.startsWith('/health')
+    ) {
+      return reply.code(404).send({ error: 'Not found' });
+    }
+    return reply.sendFile('index.html');
+  });
 
   // Graceful shutdown
   const shutdown = async () => {

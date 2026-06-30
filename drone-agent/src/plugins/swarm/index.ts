@@ -104,10 +104,14 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
     register: async registration => {
       // Read user configuration from config.json
       const userSwarmConfig = registration.getConfig().swarm ?? {};
-      const beaconHost = userSwarmConfig.beaconHost ?? config.beaconHost ?? DEFAULT_BEACON_HOST;
-      const beaconPort = userSwarmConfig.beaconPort ?? config.beaconPort ?? DEFAULT_BEACON_PORT;
-      const beaconUseHttps = userSwarmConfig.beaconUseHttps ?? config.beaconUseHttps ?? true;
-      const sessionId = userSwarmConfig.sessionId ?? config.sessionId ?? `agent-${Date.now()}`;
+      const beaconHost =
+        userSwarmConfig.beaconHost ?? config.beaconHost ?? DEFAULT_BEACON_HOST;
+      const beaconPort =
+        userSwarmConfig.beaconPort ?? config.beaconPort ?? DEFAULT_BEACON_PORT;
+      const beaconUseHttps =
+        userSwarmConfig.beaconUseHttps ?? config.beaconUseHttps ?? true;
+      const sessionId =
+        userSwarmConfig.sessionId ?? config.sessionId ?? `agent-${Date.now()}`;
       const protocol = beaconUseHttps ? 'https' : 'http';
       const baseUrl = `${protocol}://${beaconHost}:${beaconPort}`;
 

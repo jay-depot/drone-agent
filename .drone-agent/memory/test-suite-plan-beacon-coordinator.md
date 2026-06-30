@@ -98,6 +98,7 @@ Same pattern for coordinator with `drone-coordinator-test-` prefix.
 Covers all database functions not yet tested:
 
 ### 4a. Persona CRUD
+
 - `createPersona` — creates with correct fields, scope='coordinator'
 - `getPersona` — returns persona by id, returns undefined for missing
 - `listPersonas` — returns all personas
@@ -105,9 +106,11 @@ Covers all database functions not yet tested:
 - `deletePersona` — deletes and returns true, returns false for missing
 
 ### 4b. Skill CRUD
+
 - Same pattern as personas (create, get, list, update, delete)
 
 ### 4c. Beacon CRUD
+
 - `registerBeacon` — creates beacon record
 - `getBeacon` — returns by id, undefined for missing
 - `listBeacons` — returns all
@@ -115,6 +118,7 @@ Covers all database functions not yet tested:
 - `deleteBeacon` — deletes and returns boolean
 
 ### 4d. Beacon Trust
+
 - `registerBeaconTrust` — creates trust record, auto-approves localhost, generates token for remote
 - `registerBeaconTrust` — re-register with matching public key updates connection info
 - `registerBeaconTrust` — re-register with mismatched public key throws error
@@ -125,6 +129,7 @@ Covers all database functions not yet tested:
 - `deleteBeaconTrust` — deletes
 
 ### 4e. Beacon Session CRUD
+
 - `createBeaconSession` — creates session linked to beacon
 - `getBeaconSession` — returns active session by beacon+agent
 - `listBeaconSessions` — lists sessions for a beacon
@@ -132,6 +137,7 @@ Covers all database functions not yet tested:
 - `deleteBeaconSession` — deletes
 
 ### 4f. Swarm Session & Events
+
 - `createSwarmSession` — creates with status 'active'
 - `getSwarmSession` — returns by id
 - `updateSwarmSessionStatus` — updates status
@@ -141,6 +147,7 @@ Covers all database functions not yet tested:
 - `searchSwarmEvents` — FTS5 search on payload
 
 ### 4g. Agent Location
+
 - `registerAgentLocation` — registers agent on beacon
 - `getAgentLocation` — returns by agentId
 - `updateAgentLocationHeartbeat` — updates timestamp
@@ -149,6 +156,7 @@ Covers all database functions not yet tested:
 - `listAllAgentLocations` — lists all
 
 ### 4h. Insight & Principle CRUD
+
 - `createInsight` / `listInsights` / `getInsight` / `deleteInsight`
 - `createPrinciple` / `listPrinciples` / `getPrinciple` / `deletePrinciple`
 
@@ -164,9 +172,11 @@ Covers all database functions not yet tested:
 Test Fastify route handlers using `inject` method.
 
 ### 5a. Health Route
+
 - `GET /health` returns `{ status: 'ok', timestamp: number }`
 
 ### 5b. Persona Routes
+
 - `POST /personas` — creates persona, returns 201
 - `GET /personas` — lists personas
 - `GET /personas/:id` — returns persona or 404
@@ -174,9 +184,11 @@ Test Fastify route handlers using `inject` method.
 - `DELETE /personas/:id` — deletes or 404
 
 ### 5c. Skill Routes
+
 - Same pattern as personas
 
 ### 5d. Beacon Routes
+
 - `POST /beacons` — registers beacon (with and without publicKey)
 - `GET /beacons` — lists beacons with trust status
 - `GET /beacons/:id` — returns beacon+trust or 404
@@ -192,6 +204,7 @@ Test Fastify route handlers using `inject` method.
 - `DELETE /beacons/:id/sessions/:agentId` — ends session
 
 ### 5e. Knowledge Routes
+
 - `POST /knowledge` — creates knowledge
 - `GET /knowledge` — lists (with optional type filter)
 - `GET /knowledge/:id` — gets or 404
@@ -202,6 +215,7 @@ Test Fastify route handlers using `inject` method.
 - `GET /sync/knowledge/pull` — pulls knowledge (with optional since/type)
 
 ### 5f. Swarm Routes
+
 - `POST /sync/sessions/register` — registers session
 - `POST /sync/events/push` — pushes events (including large payload test)
 - `GET /sessions/:id/events` — gets events
@@ -214,13 +228,16 @@ Test Fastify route handlers using `inject` method.
 - `GET /agents/location` — lists (with optional beaconId filter)
 
 ### 5g. Message Routes
+
 - `POST /messages/relay` — relays message (test with mock fetch for target beacon)
 - `POST /messages/broadcast` — broadcasts to all beacons
 
 ### 5h. Insight & Principle Routes
+
 - CRUD for both, including validation (400 on missing required fields)
 
 ### 5i. Wiki Routes
+
 - CRUD for wiki pages (uses filesystem, needs temp dir for knowledge-base)
 - `GET /wiki/search` — search
 - `POST /wiki/lint` — lint
@@ -269,21 +286,25 @@ Test Fastify route handlers using `inject` method.
 **File:** `drone-beacon/test/db.test.ts`
 
 ### 8a. Persona CRUD (with scope)
+
 - `createPersona` — creates with 'local' scope
 - `getPersona` / `listPersonas` / `listLocalPersonas`
 - `updatePersona` / `deletePersona`
 - `upsertPersonaFromCoordinator` — upserts with 'coordinator' scope
 
 ### 8b. Skill CRUD (with scope)
+
 - Same pattern as personas, plus `upsertSkillFromCoordinator`
 
 ### 8c. Agent Session CRUD
+
 - `registerAgent` — creates session
 - `getAgent` / `listAgents`
 - `updateAgentActivity` — updates lastActivity
 - `unregisterAgent` — deletes
 
 ### 8d. Memory CRUD
+
 - `createMemory` — creates with TTL support
 - `getMemory` / `getMemoryByKey` / `listMemories` (with namespace/expired filters)
 - `updateMemory` / `deleteMemory`
@@ -291,30 +312,36 @@ Test Fastify route handlers using `inject` method.
 - `isMemoryExpired` — checks TTL
 
 ### 8e. Message CRUD
+
 - `createMessage` — creates with from/to/channel
 - `getMessage` / `listMessagesForAgent` / `listMessagesByChannel`
 - `markMessageDelivered` / `cleanupOldMessages`
 
 ### 8f. Spawn CRUD
+
 - `createSpawn` — creates spawn record
 - `getSpawn` / `listSpawns` (with status filter)
 - `updateSpawnStatus` — updates with various status transitions
 - `deleteSpawn` / `getSpawnByAgentId`
 
 ### 8g. Beacon Config CRUD
+
 - `createBeaconConfig` / `getBeaconConfig` / `listBeaconConfig`
 - `updateBeaconConfig` / `deleteBeaconConfig`
 
 ### 8h. Event Log CRUD
+
 - `createEventLog` — creates with event type
 - `getEventLog` / `listEventLogs` (with agentId/eventType/since/limit filters)
 - `cleanupOldEventLogs`
 
 ### 8i. Knowledge Cache
+
 - `cacheKnowledge` / `getCachedKnowledge` / `listCachedKnowledge`
 - `clearKnowledgeCache` / `replaceKnowledgeCache`
 
 ### 8j. Insight & Principle CRUD
+
 - Same pattern as coordinator
 
 **Dependencies:** Step 3
@@ -327,49 +354,61 @@ Test Fastify route handlers using `inject` method.
 **File:** `drone-beacon/test/routes.test.ts`
 
 ### 9a. Health Route
+
 - `GET /health`
 
 ### 9b. Persona Routes
+
 - CRUD with coordinator sync (mock the coordinator client)
 
 ### 9c. Skill Routes
+
 - CRUD with coordinator sync
 
 ### 9d. Agent Routes
+
 - `POST /agents` — registers agent, updates spawn record if exists
 - `GET /agents` / `GET /agents/:id`
 - `POST /agents/:id/heartbeat`
 - `DELETE /agents/:id` — unregisters, syncs session end
 
 ### 9e. Memory Routes
+
 - CRUD with namespace/expired filters
 - `GET /memory/key/:key` — by key with JSON parsing
 
 ### 9f. Message Routes
+
 - `POST /messages` — send (with validation for sender/recipient)
 - `GET /messages` — list for agent
 - `GET /messages/:id` / `POST /messages/:id/read`
 - `GET /messages/channel/:channel`
 
 ### 9g. Spawn Routes
+
 - `POST /spawn` — spawn agent (mock spawner)
 - `GET /spawn` / `GET /spawn/:spawnId`
 - `DELETE /spawn/:spawnId` — terminate
 
 ### 9h. Config Routes
+
 - CRUD for beacon config overrides
 
 ### 9i. Event Routes
+
 - `GET /events` / `GET /events/:id`
 
 ### 9j. Insight & Principle Routes
+
 - CRUD with coordinator proxy (mock the proxy)
 
 ### 9k. Wiki Routes
+
 - CRUD with coordinator proxy
 - `GET /wiki/search` / `POST /wiki/lint`
 
 ### 9l. Sync Route
+
 - `POST /sync` — triggers coordinator sync
 
 **Dependencies:** Step 3, Step 8
@@ -467,6 +506,7 @@ Use `vi.fn()` to mock `globalThis.fetch` or the internal HTTP module.
 ## Step 16: Run Tests and Fix Issues
 
 Run `pnpm test` from the root and fix any failures:
+
 - TypeScript compilation issues
 - Import path resolution
 - Test logic errors
@@ -480,6 +520,7 @@ Run `pnpm test` from the root and fix any failures:
 ## Step 17: Validation Criteria
 
 Before marking complete, verify:
+
 1. **All LSP checks pass** — no TypeScript errors in any test files
 2. **`pnpm test` passes** — all existing tests + new tests pass
 3. **`pnpm typecheck` passes** — no type errors in beacon or coordinator packages
@@ -518,6 +559,7 @@ Step 2  (dependencies) ──────┘                            │
 ```
 
 **Parallelizable groups:**
+
 - Steps 4, 6, 7 (coordinator non-route) can be done in parallel
 - Steps 8, 10, 11, 12, 14, 15 (beacon non-route) can be done in parallel
 - Steps 5 and 9 (route tests) depend on their respective db tests
@@ -532,6 +574,7 @@ All steps completed except Steps 5 and 9 (route tests), which were deferred as t
 ### Files Created (11 new test files, 2 setup files):
 
 **Coordinator (5 test files):**
+
 - `drone-coordinator/test/setup.ts` — DB setup/teardown helper
 - `drone-coordinator/test/db.test.ts` — 80 tests covering Persona, Skill, Beacon, BeaconTrust, BeaconSession, SwarmSession, SwarmEvent, AgentLocation, Insight, Principle CRUD
 - `drone-coordinator/test/storage.test.ts` — 12 tests for blob storage engine
@@ -539,6 +582,7 @@ All steps completed except Steps 5 and 9 (route tests), which were deferred as t
 - `drone-coordinator/test/wiki-storage.test.ts` — 12 tests for wiki filesystem operations
 
 **Beacon (6 test files):**
+
 - `drone-beacon/test/setup.ts` — DB setup/teardown helper
 - `drone-beacon/test/db.test.ts` — 60 tests covering Persona, Skill, AgentSession, Memory, Message, Spawn, Config, EventLog, KnowledgeCache, Insight, Principle CRUD
 - `drone-beacon/test/identity.test.ts` — 7 tests for Ed25519 keypair management
@@ -548,10 +592,12 @@ All steps completed except Steps 5 and 9 (route tests), which were deferred as t
 - `drone-beacon/test/coordinator-client.test.ts` — 14 tests for HTTP client with mocked http.request
 
 ### Bug Fixes:
+
 - **`drone-coordinator/src/db.ts`**: Fixed `approveBeacon()` — was querying by `approval_token` after setting it to NULL; now finds `beacon_id` first, then queries by `beacon_id`
 - **`drone-coordinator/src/db.ts`**: Fixed FTS5 search query — wrong column reference (`fts.id` → `fts.rowid`)
 
 ### Validation Results:
+
 - **`pnpm test`**: 808 tests pass across 47 test files (0 failures)
 - **`pnpm typecheck`**: Beacon and coordinator packages pass (pre-existing errors only in drone-agent tests)
 - **LSP diagnostics**: No errors in any new test files
