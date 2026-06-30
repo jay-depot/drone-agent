@@ -5,7 +5,7 @@ tags:
   - swarm
   - bugfix
 created: 2026-06-30T04:13:01.174Z
-updated: 2026-06-30T04:13:01.174Z
+updated: 2026-06-30T04:18:30.000Z
 ---
 
 # Plan: Fix Infinite WebSocket Reconnection Loop on `/exit` in Swarm Mode
@@ -101,7 +101,6 @@ registration.hooks.onShutdown(async () => {
 ### Step 4: Verify the fix
 
 **Validation criteria:**
-
 1. `pnpm build` passes (no TypeScript errors)
 2. `pnpm lint` passes (no lint errors)
 3. `pnpm test` passes (all existing tests)
@@ -109,8 +108,20 @@ registration.hooks.onShutdown(async () => {
 
 ## Validation Criteria
 
-- [ ] `pnpm build` succeeds
-- [ ] `pnpm lint` passes
-- [ ] `pnpm test` passes
-- [ ] LSP diagnostics show no errors or warnings
+- [x] `pnpm build` succeeds
+- [x] `pnpm lint` passes
+- [x] `pnpm test` passes (808/808)
+- [x] LSP diagnostics show no errors or warnings (only pre-existing hint about `pushedEventCount`)
 - [ ] Manual test: `/exit` in swarm mode exits cleanly without infinite reconnection loop
+
+## Implementation Summary
+
+**Completed:** 2026-06-30T04:18:30.000Z
+**Commit:** c06e7d9
+
+All three code changes were applied to `drone-agent/src/plugins/swarm/index.ts`:
+1. Added `let shuttingDown = false;` alongside other WebSocket state variables
+2. Added a `shuttingDown` guard in the `ws.onclose` handler that logs and returns early
+3. Set `shuttingDown = true` at the top of the `onShutdown` hook, before `ws.close()`
+
+Build, lint, and all 808 tests pass. LSP diagnostics are clean (only a pre-existing hint about `pushedEventCount`).
