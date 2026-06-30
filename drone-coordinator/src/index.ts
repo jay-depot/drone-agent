@@ -110,16 +110,42 @@ async function handleApprove(config: Config) {
 async function handleListBeacons(config: Config) {
   initDatabase(config.dbPath);
 
-  const beacons = listBeaconTrust();
-  if (beacons.length === 0) {
+  const trustList = listBeaconTrust();
+  const beaconList = listBeacons();
+
+  if (trustList.length === 0 && beaconList.length === 0) {
     console.log('No beacons registered');
     closeDatabase();
     process.exit(0);
   }
 
+  // Merge: trust entries first, then beacons without trust records
+  const allBeacons = [
+    ...trustList.map((t) => ({
+      name: t.name,
+      beaconId: t.beaconId,
+      host: t.host,
+      port: t.port,
+      status: t.status,
+      approvalToken: t.approvalToken,
+      approvedAt: t.approvedAt,
+    })),
+    ...beaconList
+      .filter((b) => !trustList.some((t) => t.beaconId === b.id))
+      .map((b) => ({
+        name: b.name,
+        beaconId: b.id,
+        host: b.host,
+        port: b.port,
+        status: 'unknown' as const,
+        approvalToken: null,
+        approvedAt: null,
+      })),
+  ];
+
   console.log('Registered beacons:');
   console.log('------------------');
-  for (const beacon of beacons) {
+  for (const beacon of allBeacons) {
     console.log(`${beacon.name} (${beacon.beaconId})`);
     console.log(`  Host: ${beacon.host}:${beacon.port}`);
     console.log(`  Status: ${beacon.status}`);
