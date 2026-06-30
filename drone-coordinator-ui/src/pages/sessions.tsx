@@ -136,7 +136,7 @@ export default function SessionsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => navigate(`/sessions/${session.id}`)}
+                      onClick={() => navigate(`/sessions/${session.agentId}`)}
                     >
                       Peek
                     </Button>
