@@ -1,5 +1,4 @@
 import fastify from 'fastify';
-import '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
 import fastifyCors from '@fastify/cors';
 import path from 'path';
@@ -215,6 +214,9 @@ async function main() {
   await app.register(fastifyCors, {
     origin: process.env.NODE_ENV === 'development' ? true : false,
   });
+
+  // Register WebSocket plugin (must be done before defining WS routes)
+  await app.register(import('@fastify/websocket'));
 
   // WebSocket endpoint for real-time events
   // IMPORTANT: Must be registered BEFORE @fastify/static to ensure
