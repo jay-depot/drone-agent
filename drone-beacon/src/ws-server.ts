@@ -11,8 +11,7 @@ export const ERROR_NON_LOCAL_CONNECTION = 4003;
 /**
  * Check if a connection is from a local address.
  */
-export function isLocalConnection(socket: { remoteAddress?: string }): boolean {
-  const ip = socket.remoteAddress;
+export function isLocalConnection(ip: string | undefined): boolean {
   if (!ip) return false;
   return (
     ip === '127.0.0.1' ||
@@ -244,9 +243,10 @@ export async function registerWebSocketServer(
   // WebSocket upgrade handler
   app.get('/ws', { websocket: true }, (socket, request) => {
     // Check for local-only connection
-    if (options.enforceLocalOnly !== false && !isLocalConnection(socket)) {
+    const ip = request.ip || request.socket?.remoteAddress;
+    if (options.enforceLocalOnly !== false && !isLocalConnection(ip)) {
       logger.warn(
-        `Rejected non-local WebSocket connection from ${socket.remoteAddress}`
+        `Rejected non-local WebSocket connection from ${ip}`
       );
       socket.close(
         ERROR_NON_LOCAL_CONNECTION,
