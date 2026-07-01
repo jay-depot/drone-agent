@@ -267,9 +267,7 @@ export const personaPlugin: DronePlugin = {
             `active persona: ${activated.name} (${activated.id})`
           );
         } else {
-          registration.logger.warn(
-            `persona "${personaToActivate}" not found`
-          );
+          registration.logger.warn(`persona "${personaToActivate}" not found`);
         }
       }
     });

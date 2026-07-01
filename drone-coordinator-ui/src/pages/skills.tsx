@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
+import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import type { Skill } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 export default function SkillsPage() {
+  const authFetch = useAuthenticatedFetch();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchSkills() {
       try {
-        const res = await fetch('/skills');
+        const res = await authFetch('/skills');
         if (res.ok) {
           setSkills(await res.json());
         }
@@ -21,7 +23,7 @@ export default function SkillsPage() {
       }
     }
     fetchSkills();
-  }, []);
+  }, [authFetch]);
 
   if (loading) {
     return (

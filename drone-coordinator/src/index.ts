@@ -1,6 +1,7 @@
-import fastify from 'fastify';
+import fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyCors from '@fastify/cors';
+import '@fastify/websocket';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
@@ -12,6 +13,9 @@ import {
   listBeacons,
   listAllAgentLocations,
   listSwarmSessions,
+  getWebToken,
+  generateWebToken,
+  initWebToken,
 } from './db.js';
 import { initStorage } from './storage.js';
 import { registerRoutes } from './routes/index.js';
@@ -24,9 +28,12 @@ import {
   unsubscribeFromSession,
   publishInitialState,
 } from './ws-pubsub.js';
+import { createWebAuthMiddleware } from './web-auth.js';
 
 const DEFAULT_PORT = 3456;
 const DEFAULT_HOST = '0.0.0.0';
+const DEFAULT_WEB_PORT = 8080;
+const DEFAULT_WEB_HOST = '127.0.0.1';
 const DEFAULT_CONFIG_DIR = './config';
 const DEFAULT_DB_FILENAME = 'drone-coordinator.db';
 
@@ -35,10 +42,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 interface Config {
   port: number;
   host: string;
+  webPort: number;
+  webHost: string;
   configDir: string;
   dbPath: string;
   useHttps: boolean;
-  command: 'serve' | 'approve' | 'list-beacons';
+  command:
+    | 'serve'
+    | 'approve'
+    | 'list-beacons'
+    | 'show-web-token'
+    | 'generate-web-token';
   approvalToken?: string;
 }
 
@@ -47,6 +61,8 @@ function parseArgs(): Config {
   const config: Config = {
     port: DEFAULT_PORT,
     host: DEFAULT_HOST,
+    webPort: DEFAULT_WEB_PORT,
+    webHost: DEFAULT_WEB_HOST,
     configDir: DEFAULT_CONFIG_DIR,
     dbPath: path.join(DEFAULT_CONFIG_DIR, DEFAULT_DB_FILENAME),
     useHttps: process.env.COORDINATOR_HTTPS === 'true',
@@ -59,6 +75,10 @@ function parseArgs(): Config {
       config.port = parseInt(args[++i], 10);
     } else if (arg === '--host' && i + 1 < args.length) {
       config.host = args[++i];
+    } else if (arg === '--web-port' && i + 1 < args.length) {
+      config.webPort = parseInt(args[++i], 10);
+    } else if (arg === '--web-host' && i + 1 < args.length) {
+      config.webHost = args[++i];
     } else if (arg === '--db' && i + 1 < args.length) {
       config.dbPath = args[++i];
     } else if (arg === '--config-dir' && i + 1 < args.length) {
@@ -75,9 +95,13 @@ function parseArgs(): Config {
       config.command = 'approve';
     } else if (arg === 'list-beacons') {
       config.command = 'list-beacons';
+    } else if (arg === '--show-web-token') {
+      config.command = 'show-web-token';
+    } else if (arg === '--generate-web-token') {
+      config.command = 'generate-web-token';
     } else if (arg === '--help' || arg === '-h') {
       console.log(
-        `\ndrone-coordinator [options]\n\nCommands:\n  serve              Start the coordinator server (default)\n  approve <token>   Approve a pending beacon by token\n  list-beacons       List all registered beacons and their trust status\n\nOptions:\n  --port <n>         Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>         Host to bind to (default: ${DEFAULT_HOST})\n  --config-dir <dir> Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>       Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https            Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https         Disable HTTPS\n  --help             Show this help message\n      `
+        `\ndrone-coordinator [options]\n\nCommands:\n  serve              Start the coordinator server (default)\n  approve <token>   Approve a pending beacon by token\n  list-beacons       List all registered beacons and their trust status\n  --show-web-token   Print the current web UI access token\n  --generate-web-token Generate a new web UI access token\n\nOptions:\n  --port <n>         Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>         Host to bind to (default: ${DEFAULT_HOST})\n  --web-port <n>     HTTP port for web UI (default: ${DEFAULT_WEB_PORT})\n  --web-host <h>     Host for web UI port (default: ${DEFAULT_WEB_HOST})\n  --config-dir <dir> Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>       Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https            Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https         Disable HTTPS\n  --help             Show this help message\n      `
       );
       process.exit(0);
     }
@@ -164,6 +188,28 @@ async function handleListBeacons(config: Config) {
   process.exit(0);
 }
 
+async function handleShowWebToken(config: Config) {
+  initDatabase(config.dbPath);
+  const token = getWebToken();
+  if (!token) {
+    console.log('No web token found. Generating one...');
+    const newToken = generateWebToken();
+    console.log(newToken);
+  } else {
+    console.log(token);
+  }
+  closeDatabase();
+  process.exit(0);
+}
+
+async function handleGenerateWebToken(config: Config) {
+  initDatabase(config.dbPath);
+  const token = generateWebToken();
+  console.log(token);
+  closeDatabase();
+  process.exit(0);
+}
+
 function resolveUiDistPath(): string {
   const monorepoPath = path.resolve(
     __dirname,
@@ -186,52 +232,50 @@ function resolveUiDistPath(): string {
   return monorepoPath;
 }
 
-async function main() {
-  const config = parseArgs();
-
-  if (config.command === 'approve') {
-    await handleApprove(config);
-    return;
-  }
-
-  if (config.command === 'list-beacons') {
-    await handleListBeacons(config);
-    return;
-  }
-
-  const protocol = config.useHttps ? 'https' : 'http';
-  logger.info(`Starting drone-coordinator on ${config.host}:${config.port}`);
-  logger.info(`Configuration directory: ${config.configDir}`);
-  logger.info(`Database path: ${config.dbPath}`);
-  logger.info(`Protocol: ${protocol.toUpperCase()}`);
-
-  initDatabase(config.dbPath);
-  initStorage(config.configDir);
-
-  let tlsOptions: { cert: Buffer; key: Buffer } | undefined;
-  if (config.useHttps) {
-    const tlsIdentity = loadOrCreateTlsIdentity(config.configDir);
-    tlsOptions = getTlsOptions(tlsIdentity);
-    logger.info(`TLS certificate fingerprint: ${tlsIdentity.fingerprint}`);
-  }
-
-  const app = fastify({
-    logger: {
-      level: process.env.LOG_LEVEL || 'info',
-    },
-    ...(config.useHttps && tlsOptions
-      ? { https: { allowHTTP1: true, ...tlsOptions } }
-      : {}),
-  });
-
+/**
+ * Set up a Fastify instance with all routes, WebSocket, static files, and SPA fallback.
+ * Optionally registers auth middleware if a token provider is given.
+ */
+async function setupServer(
+  app: FastifyInstance,
+  uiDistPath: string,
+  opts?: { getToken?: () => string | null }
+) {
   await app.register(fastifyCors, {
     origin: process.env.NODE_ENV === 'development' ? true : false,
   });
+
+  // Register auth middleware for the web port
+  if (opts?.getToken) {
+    app.addHook('onRequest', createWebAuthMiddleware(opts.getToken));
+  }
 
   await app.register(import('@fastify/websocket'));
 
   // WebSocket endpoint for real-time events
   app.get('/ws', { websocket: true }, (socket, req) => {
+    // For web port: also check token from query parameter
+    // (WebSocket upgrade requests can't easily set custom headers from browser)
+    if (opts?.getToken) {
+      const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+      const queryToken = url.searchParams.get('token');
+      const token = opts.getToken();
+      if (token && queryToken !== token) {
+        // Token required but not provided or invalid via query param.
+        // The onRequest hook already checked the Authorization header,
+        // so if we got here without a valid header, check query param.
+        // If neither is valid, close the connection.
+        const authHeader = req.headers.authorization;
+        const headerToken = authHeader?.startsWith('Bearer ')
+          ? authHeader.slice(7)
+          : null;
+        if (headerToken !== token && queryToken !== token) {
+          socket.close(4001, 'Unauthorized');
+          return;
+        }
+      }
+    }
+
     const sub = addSubscriber(socket);
 
     try {
@@ -296,9 +340,6 @@ async function main() {
   await registerRoutes(app);
 
   // Serve the UI static files — only under /assets/
-  const uiDistPath = resolveUiDistPath();
-  logger.info(`Serving UI from: ${uiDistPath}`);
-
   await app.register(fastifyStatic, {
     root: path.join(uiDistPath, 'assets'),
     prefix: '/assets/',
@@ -321,10 +362,78 @@ async function main() {
     }
     return reply.sendFile('index.html', path.resolve(uiDistPath));
   });
+}
+
+async function main() {
+  const config = parseArgs();
+
+  if (config.command === 'approve') {
+    await handleApprove(config);
+    return;
+  }
+
+  if (config.command === 'list-beacons') {
+    await handleListBeacons(config);
+    return;
+  }
+
+  if (config.command === 'show-web-token') {
+    await handleShowWebToken(config);
+    return;
+  }
+
+  if (config.command === 'generate-web-token') {
+    await handleGenerateWebToken(config);
+    return;
+  }
+
+  const protocol = config.useHttps ? 'https' : 'http';
+  logger.info(`Starting drone-coordinator on ${config.host}:${config.port}`);
+  logger.info(`Web UI on ${config.webHost}:${config.webPort} (HTTP)`);
+  logger.info(`Configuration directory: ${config.configDir}`);
+  logger.info(`Database path: ${config.dbPath}`);
+  logger.info(`Protocol: ${protocol.toUpperCase()}`);
+
+  initDatabase(config.dbPath);
+  initStorage(config.configDir);
+
+  // Initialize web token (auto-generates on first startup)
+  initWebToken();
+
+  let tlsOptions: { cert: Buffer; key: Buffer } | undefined;
+  if (config.useHttps) {
+    const tlsIdentity = loadOrCreateTlsIdentity(config.configDir);
+    tlsOptions = getTlsOptions(tlsIdentity);
+    logger.info(`TLS certificate fingerprint: ${tlsIdentity.fingerprint}`);
+  }
+
+  const uiDistPath = resolveUiDistPath();
+  logger.info(`Serving UI from: ${uiDistPath}`);
+
+  // Primary server (with TLS if configured)
+  const app = fastify({
+    logger: {
+      level: process.env.LOG_LEVEL || 'info',
+    },
+    ...(config.useHttps && tlsOptions
+      ? { https: { allowHTTP1: true, ...tlsOptions } }
+      : {}),
+  });
+
+  await setupServer(app, uiDistPath);
+
+  // Web server (HTTP only, no TLS, with auth for non-local connections)
+  const webApp = fastify({
+    logger: {
+      level: process.env.LOG_LEVEL || 'info',
+    },
+  });
+
+  await setupServer(webApp, uiDistPath, { getToken: () => getWebToken() });
 
   const shutdown = async () => {
     logger.info('Shutting down...');
-    await app.close();
+    await Promise.all([app.close(), webApp.close()]);
     closeDatabase();
     process.exit(0);
   };
@@ -333,12 +442,21 @@ async function main() {
   process.on('SIGTERM', shutdown);
 
   try {
-    await app.listen({
-      port: config.port,
-      host: config.host,
-    });
+    await Promise.all([
+      app.listen({
+        port: config.port,
+        host: config.host,
+      }),
+      webApp.listen({
+        port: config.webPort,
+        host: config.webHost,
+      }),
+    ]);
     logger.info(
       `Coordinator listening on ${protocol}://${config.host}:${config.port}`
+    );
+    logger.info(
+      `Web UI listening on http://${config.webHost}:${config.webPort}`
     );
   } catch (err) {
     logger.error(err);

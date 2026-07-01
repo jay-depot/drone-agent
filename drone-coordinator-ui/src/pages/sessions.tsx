@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWebSocket } from '@/hooks/use-websocket';
+import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import type { BeaconSession, WsInitialMessage } from '@/lib/types';
 import {
   Table,
@@ -16,6 +17,7 @@ import { Button } from '@/components/ui/button';
 export default function SessionsPage() {
   const navigate = useNavigate();
   const { status, subscribe } = useWebSocket();
+  const authFetch = useAuthenticatedFetch();
   const [sessions, setSessions] = useState<BeaconSession[]>([]);
 
   useEffect(() => {
@@ -33,13 +35,13 @@ export default function SessionsPage() {
   useEffect(() => {
     async function fetchSessions() {
       try {
-        const beaconsRes = await fetch('/beacons');
+        const beaconsRes = await authFetch('/beacons');
         if (!beaconsRes.ok) return;
         const beacons = await beaconsRes.json();
 
         const allSessions: BeaconSession[] = [];
         for (const beacon of beacons) {
-          const sessionsRes = await fetch(`/beacons/${beacon.id}/sessions`);
+          const sessionsRes = await authFetch(`/beacons/${beacon.id}/sessions`);
           if (sessionsRes.ok) {
             const beaconSessions = await sessionsRes.json();
             allSessions.push(
@@ -58,7 +60,7 @@ export default function SessionsPage() {
       }
     }
     fetchSessions();
-  }, []);
+  }, [authFetch]);
 
   const formatDuration = (connectedAt: number): string => {
     const ms = Date.now() - connectedAt;

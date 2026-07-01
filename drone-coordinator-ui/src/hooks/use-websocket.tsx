@@ -7,6 +7,7 @@ import {
   useContext,
   type ReactNode,
 } from 'react';
+import { useAuth } from './use-auth';
 
 type MessageHandler = (data: unknown) => void;
 
@@ -25,6 +26,7 @@ const WebSocketContext = createContext<WebSocketContextValue | null>(null);
  * Wrap your app (or the relevant subtree) with this.
  */
 export function WebSocketProvider({ children }: { children: ReactNode }) {
+  const { token } = useAuth();
   const wsRef = useRef<WebSocket | null>(null);
   const handlersRef = useRef<Map<string, Set<MessageHandler>>>(new Map());
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -39,7 +41,13 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     setStatus('connecting');
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    let wsUrl = `${protocol}//${window.location.host}/ws`;
+
+    // Include auth token as query parameter for WebSocket auth
+    if (token) {
+      wsUrl += `?token=${encodeURIComponent(token)}`;
+    }
+
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
@@ -84,7 +92,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     };
 
     wsRef.current = ws;
-  }, []);
+  }, [token]);
 
   const subscribe = useCallback(
     (type: string, handler: MessageHandler): (() => void) => {

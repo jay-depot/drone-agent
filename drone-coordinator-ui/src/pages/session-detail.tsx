@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWebSocket } from '@/hooks/use-websocket';
+import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import type { SwarmEvent, WsEventMessage } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +17,7 @@ export default function SessionDetailPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const { subscribe, send } = useWebSocket();
+  const authFetch = useAuthenticatedFetch();
   const [events, setEvents] = useState<SwarmEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const eventsEndRef = useRef<HTMLDivElement>(null);
@@ -26,7 +28,7 @@ export default function SessionDetailPage() {
 
     async function fetchEvents() {
       try {
-        const res = await fetch(`/sessions/${sessionId}/events`);
+        const res = await authFetch(`/sessions/${sessionId}/events`);
         if (res.ok) {
           const data = await res.json();
           setEvents(data);
@@ -38,7 +40,7 @@ export default function SessionDetailPage() {
       }
     }
     fetchEvents();
-  }, [sessionId]);
+  }, [sessionId, authFetch]);
 
   // Subscribe to new events via WebSocket
   useEffect(() => {

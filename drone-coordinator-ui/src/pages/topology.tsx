@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useWebSocket } from '@/hooks/use-websocket';
+import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import type { Beacon, AgentLocation, WsInitialMessage } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 export default function TopologyPage() {
   const { status, subscribe } = useWebSocket();
+  const authFetch = useAuthenticatedFetch();
   const [beacons, setBeacons] = useState<Beacon[]>([]);
   const [agentLocations, setAgentLocations] = useState<AgentLocation[]>([]);
 
@@ -27,8 +29,8 @@ export default function TopologyPage() {
     async function fetchData() {
       try {
         const [beaconsRes, agentsRes] = await Promise.all([
-          fetch('/beacons'),
-          fetch('/agents/location'),
+          authFetch('/beacons'),
+          authFetch('/agents/location'),
         ]);
         if (beaconsRes.ok) {
           const beaconsData = await beaconsRes.json();
@@ -43,7 +45,7 @@ export default function TopologyPage() {
       }
     }
     fetchData();
-  }, []);
+  }, [authFetch]);
 
   const getAgentCountForBeacon = (beaconId: string): number => {
     return agentLocations.filter(a => a.beaconId === beaconId).length;

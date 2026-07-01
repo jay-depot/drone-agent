@@ -19,6 +19,7 @@ Add a second, unencrypted HTTP port to the coordinator (default 8080, default ho
 ## Implementation Steps
 
 ### Step 1: Add web token to SQLite database
+
 **Agent:** coder
 **File:** `drone-coordinator/src/db.ts`
 
@@ -26,6 +27,7 @@ Add a second, unencrypted HTTP port to the coordinator (default 8080, default ho
 - Add functions: `getWebToken()`, `generateWebToken()`, `initWebToken()` (auto-generates on first startup)
 
 ### Step 2: Add CLI flags and commands
+
 **Agent:** coder
 **File:** `drone-coordinator/src/index.ts`
 
@@ -35,25 +37,29 @@ Add a second, unencrypted HTTP port to the coordinator (default 8080, default ho
 - Add handler functions and update help text
 
 ### Step 3: Extract shared server setup into a factory function
+
 **Agent:** coder
 **File:** `drone-coordinator/src/index.ts` (refactor)
 
 Extract route registration, WebSocket setup, static file serving, and SPA fallback into a reusable `setupServer(app, uiDistPath)` function.
 
 ### Step 4: Create auth middleware for the web port
+
 **Agent:** coder
 **New file:** `drone-coordinator/src/web-auth.ts`
 
 - `isLocalRequest(req)`: checks 127.0.0.1, ::1, machine's own LAN IPs, tailscale 100.64.0.0/10
-- `createWebAuthMiddleware(getToken)`: Fastify onRequest hook, applies to /api/* and /ws, returns 401 for non-local requests without valid Bearer token
+- `createWebAuthMiddleware(getToken)`: Fastify onRequest hook, applies to /api/\* and /ws, returns 401 for non-local requests without valid Bearer token
 
 ### Step 5: Create second Fastify instance for web port
+
 **Agent:** coder
 **File:** `drone-coordinator/src/index.ts`
 
 Create `webApp` (HTTP only, no TLS), register auth middleware, call `setupServer(webApp, uiDistPath)`, listen on `config.webPort` / `config.webHost`.
 
 ### Step 6: Update SPA with login page and token management
+
 **Agent:** coder
 **Files:** `drone-coordinator-ui/src/`
 
@@ -63,19 +69,23 @@ Create `webApp` (HTTP only, no TLS), register auth middleware, call `setupServer
 - Update: `src/hooks/use-websocket.ts` — include token as query param
 
 ### Step 7: Update WebSocket endpoint to accept token via query parameter
+
 **Agent:** coder
 **File:** `drone-coordinator/src/index.ts`
 
 Extract token from WebSocket upgrade request query string, validate for non-local connections.
 
 ### Step 8: Update help text
+
 **Agent:** coder
 **File:** `drone-coordinator/src/index.ts`
 
 ### Step 9: Verify the build
+
 **Agent:** tester
 
 ### Step 10: Check the work against validation criteria
+
 **Agent:** reviewer
 
 ## Validation Criteria

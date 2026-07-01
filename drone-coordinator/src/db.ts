@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
 import type {
   Persona,
   Skill,
@@ -161,6 +161,12 @@ export function initDatabase(dataPath: string): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_principles_target ON principles(targetType, targetId);
+
+    CREATE TABLE IF NOT EXISTS web_token (
+      id INTEGER PRIMARY KEY,
+      token TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
   `);
 
   logger.info('Database initialized successfully');
@@ -1474,4 +1480,38 @@ export function deletePrinciple(id: string): boolean {
   const result = stmt.run(id);
   logger.info(`Deleted principle: ${id}`);
   return result.changes > 0;
+}
+
+// === Web Token operations ===
+
+function generateWebTokenValue(): string {
+  return randomBytes(16).toString('hex');
+}
+
+export function getWebToken(): string | null {
+  const stmt = getDatabase().prepare(
+    'SELECT token FROM web_token ORDER BY id DESC LIMIT 1'
+  );
+  const row = stmt.get() as { token: string } | undefined;
+  return row?.token ?? null;
+}
+
+export function generateWebToken(): string {
+  const token = generateWebTokenValue();
+  const now = Date.now();
+
+  // Replace any existing token
+  const stmt = getDatabase().prepare(
+    'INSERT INTO web_token (token, created_at) VALUES (@token, @createdAt)'
+  );
+  stmt.run({ token, createdAt: now });
+
+  logger.info('Generated new web token');
+  return token;
+}
+
+export function initWebToken(): string {
+  const existing = getWebToken();
+  if (existing) return existing;
+  return generateWebToken();
 }

@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
+import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import type { WikiPageMeta } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 export default function WikiPage() {
+  const authFetch = useAuthenticatedFetch();
   const [pages, setPages] = useState<WikiPageMeta[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchWiki() {
       try {
-        const res = await fetch('/wiki');
+        const res = await authFetch('/wiki');
         if (res.ok) {
           setPages(await res.json());
         }
@@ -21,7 +23,7 @@ export default function WikiPage() {
       }
     }
     fetchWiki();
-  }, []);
+  }, [authFetch]);
 
   if (loading) {
     return (

@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
+import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import type { Persona } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 export default function PersonasPage() {
+  const authFetch = useAuthenticatedFetch();
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchPersonas() {
       try {
-        const res = await fetch('/personas');
+        const res = await authFetch('/personas');
         if (res.ok) {
           setPersonas(await res.json());
         }
@@ -21,7 +23,7 @@ export default function PersonasPage() {
       }
     }
     fetchPersonas();
-  }, []);
+  }, [authFetch]);
 
   if (loading) {
     return (

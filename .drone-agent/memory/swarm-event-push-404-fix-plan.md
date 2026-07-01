@@ -1,7 +1,6 @@
 ---
 key: swarm-event-push-404-fix-plan
-tags:
-  []
+tags: []
 created: 2026-06-30T05:46:11.704Z
 updated: 2026-06-30T05:49:25.745Z
 ---
@@ -69,7 +68,9 @@ app.post<{
   const client = getCoordinatorClient();
   if (client) {
     client.registerSwarmSession(id, personaId ?? null).catch(err => {
-      logger.warn(`Failed to proxy session registration to coordinator: ${err}`);
+      logger.warn(
+        `Failed to proxy session registration to coordinator: ${err}`
+      );
     });
   }
   return reply.code(201).send({ id, status: 'active' });
