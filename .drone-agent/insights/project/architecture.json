@@ -166,5 +166,9 @@
   {
     "timestamp": "2026-07-01T02:43:43.855Z",
     "insight": "The broker+provider pattern with separate writer registration worked well for decoupling creation workflows from storage backends. The `exists` method on writers was a necessary addition to support the wizard's overwrite-check flow — it wasn't in the original plan but was required for correctness."
+  },
+  {
+    "timestamp": "2026-07-01T03:06:56.342Z",
+    "insight": "The `drone-migrate` bin stub was a dead import — it imported the module but never called any function. The `migrate.ts` module is designed as a library (exports only, no side effects), so the bin stub needs to explicitly wire args to `runMigrate()`. The `parseCliArgs` function requires a `'migrate'` prefix in argv to route to the migrate subcommand parser, which the standalone bin doesn't have naturally — it must prepend it."
   }
 ]
