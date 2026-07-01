@@ -1,3 +1,4 @@
+import type React from 'react';
 /**
  * A text input component that supports multi-line input via
  * Ctrl+J.
@@ -35,7 +36,7 @@ export function MultilineTextInput({
   onChange: (next: string) => void;
   onSubmit?: (value: string) => void;
   focus?: boolean;
-}): JSX.Element {
+}): React.JSX.Element {
   const [cursorOffset, setCursorOffset] = useState(value.length);
 
   useInput(

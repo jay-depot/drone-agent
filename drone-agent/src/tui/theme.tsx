@@ -119,6 +119,6 @@ export function ColorTag({
 }: {
   color: string;
   children: ReactNode;
-}): JSX.Element {
+}): React.JSX.Element {
   return <Text color={color}>{children}</Text>;
 }

@@ -1,3 +1,4 @@
+import type React from 'react';
 /**
  * Inline UI for an active elicitation question.
  *
@@ -21,7 +22,7 @@ export function ElicitationPrompt({
   pickerIndex: number;
   scheme: DroneColorScheme;
   onSubmit: (answer: string) => void;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <Box
       borderStyle="single"
@@ -75,7 +76,7 @@ function FreeformPrompt({
   defaultValue?: string;
   onSubmit: (answer: string) => void;
   scheme: DroneColorScheme;
-}): JSX.Element {
+}): React.JSX.Element {
   const [value, setValue] = useState<string>(defaultValue ?? '');
   return (
     <Box flexDirection="column">
@@ -110,7 +111,7 @@ function FreeformInput({
   value: string;
   onChange: (next: string) => void;
   onSubmit: (answer: string) => void;
-}): JSX.Element {
+}): React.JSX.Element {
   useInput((inputChar, key) => {
     // Enter alone → submit
     if (key.return && !key.shift) {

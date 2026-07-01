@@ -25,7 +25,7 @@ export function ChatLog({
   /** Optional in-flight line that should be rendered above the static area. */
   tail?: ReactNode;
   scheme: DroneColorScheme;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <Box flexDirection="column" flexGrow={1} overflowY="hidden">
       {tail}
@@ -40,7 +40,7 @@ export function ChatLog({
   );
 }
 
-function renderEntry(entry: ChatEntry, scheme: DroneColorScheme): JSX.Element {
+function renderEntry(entry: ChatEntry, scheme: DroneColorScheme): React.JSX.Element {
   switch (entry.kind) {
     case 'user':
       return (

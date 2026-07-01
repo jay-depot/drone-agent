@@ -1,3 +1,4 @@
+import type React from 'react';
 /**
  * Hand-rolled first-run model picker.
  *
@@ -27,7 +28,7 @@ export function ModelPicker({
   /** Called with the chosen model id, or with the existing first item if the user just presses Enter. */
   onSelect: (model: string) => void;
   headerText?: string;
-}): JSX.Element {
+}): React.JSX.Element {
   const initialIndex =
     current !== undefined ? Math.max(0, models.indexOf(current)) : 0;
   const [highlight, setHighlight] = useState<number>(initialIndex);

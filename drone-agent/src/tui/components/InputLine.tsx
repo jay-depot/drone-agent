@@ -1,3 +1,4 @@
+import type React from 'react';
 /**
  * The bottom input line.
  *
@@ -48,7 +49,7 @@ export function InputLine({
    * Used when an elicitation question is active.
    */
   disabled?: boolean;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <Box
       borderStyle="single"

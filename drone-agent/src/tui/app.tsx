@@ -1,3 +1,4 @@
+import type React from 'react';
 /**
  * Root TUI component for drone-agent.
  *
@@ -35,6 +36,7 @@ import { MidPanel } from './components/MidPanel.js';
 import { StatusBar } from './components/StatusBar.js';
 import { useChatLog } from './hooks/useChatLog.js';
 import { useColorOverrides } from './hooks/useColorOverrides.js';
+import { useDebouncedWindowSize } from './hooks/useDebouncedWindowSize.js';
 import { useElicitation } from './hooks/useElicitation.js';
 import { useLlmIndicator } from './hooks/useLlmIndicator.js';
 import { useStatusBar } from './hooks/useStatusBar.js';
@@ -191,7 +193,7 @@ function formatExecResult(
   return lines.join('\n');
 }
 
-export function App(opts: DroneTuiOptions): JSX.Element {
+export function App(opts: DroneTuiOptions): React.JSX.Element {
   const { exit } = useApp();
 
   // ── Hooks ────────────────────────────────────────────────────────────
@@ -209,6 +211,8 @@ export function App(opts: DroneTuiOptions): JSX.Element {
     opts.conversation.getEstimatedContextUsagePercent,
     entries.length
   );
+  // Debounce resize events to reduce flicker during window-drag gestures.
+  const _debounced = useDebouncedWindowSize(120);
 
   // ── Mid-panel widget state ────────────────────────────────────────────
   const midPanelWidgetsRef = useRef<MidPanelWidget[]>([]);

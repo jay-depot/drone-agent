@@ -1,3 +1,4 @@
+import type React from 'react';
 /**
  * Bottom-of-screen status bar.
  *
@@ -25,7 +26,7 @@ export function StatusBar({
   left: string;
   cwd: string;
   scheme: DroneColorScheme;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <Box flexDirection="row" width="100%">
       <Text backgroundColor={scheme.statusBg} color={scheme.statusFg}>

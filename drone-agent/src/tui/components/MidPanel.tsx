@@ -1,3 +1,4 @@
+import type React from 'react';
 /**
  * Mid panel for the TUI.
  *
@@ -17,7 +18,7 @@ export function MidPanel({
 }: {
   widgets: MidPanelWidget[];
   scheme: DroneColorScheme;
-}): JSX.Element | null {
+}): React.JSX.Element | null {
   // Collect non-empty widget sections
   const sections: { label: string; content: string[] }[] = [];
   for (const widget of widgets) {

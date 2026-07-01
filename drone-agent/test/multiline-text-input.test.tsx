@@ -1,3 +1,4 @@
+import type React from 'react';
 /**
  * Regression tests for MultilineTextInput.
  *
@@ -40,7 +41,7 @@ function InputLineShell({
   onChange: (next: string) => void;
   onSubmit?: (value: string) => void;
   focus?: boolean;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <Box borderStyle="single" paddingX={1} flexDirection="row" width={30}>
       <Text>{'drone> '}</Text>
