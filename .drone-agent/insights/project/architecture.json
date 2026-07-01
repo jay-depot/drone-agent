@@ -186,5 +186,9 @@
   {
     "timestamp": "2026-07-01T21:59:51.606Z",
     "insight": "The fix for swarm persona contents used parsePersonaMd() from the persona loader plugin, which is a cross-plugin import (swarm importing from persona). This works because both are built-in plugins in the same package, but it creates a coupling between plugins. A cleaner long-term solution would be to expose a parsePersonaMd capability through the persona broker's capability interface, so any plugin can parse persona .md content without a direct import."
+  },
+  {
+    "timestamp": "2026-07-01T22:19:54.665Z",
+    "insight": "The `tryMatchContext` function needed to try two edit positions (at the anchor and after it) to handle both cases where the anchor IS the line being replaced and where the anchor is context above the edit. This was a subtle design issue that only showed up in edge case tests (single-line file)."
   }
 ]
