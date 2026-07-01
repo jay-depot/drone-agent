@@ -333,7 +333,7 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
     compaction: {
       enabled: true,
       strategy: 'summary-drop',
-      softThresholdPercent: 75,
+      softThresholdPercent: 50,
       slicePercent: 25,
       minTurnsToCompact: 4,
       summaryMaxTokens: 800,

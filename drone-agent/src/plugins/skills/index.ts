@@ -112,7 +112,7 @@ export const skillsPlugin: DronePlugin = {
           lines.push(`- id: ${skill.id}`);
           lines.push(`- description: ${skill.description}`);
           lines.push('- recall when:');
-          for (const condition of skill.recall) {
+          for (const condition of skill.recall ?? []) {
             lines.push(`  - ${condition}`);
           }
         }
