@@ -190,5 +190,9 @@
   {
     "timestamp": "2026-07-01T22:19:54.665Z",
     "insight": "The `tryMatchContext` function needed to try two edit positions (at the anchor and after it) to handle both cases where the anchor IS the line being replaced and where the anchor is context above the edit. This was a subtle design issue that only showed up in edge case tests (single-line file)."
+  },
+  {
+    "timestamp": "2026-07-01T23:25:09.703Z",
+    "insight": "The file__apply_diff V2 tool has a critical bug in narrowByAnchors cascade: after exact-match narrowing (level 0) fails, the empty candidates array is passed to fuzzy fallback calls (level 1 and 100), making them no-ops. The first-anchor search correctly searches from scratch for each level, but the anchor chain narrowing does not preserve the initial candidates."
   }
 ]

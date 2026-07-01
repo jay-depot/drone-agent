@@ -86,5 +86,9 @@
   {
     "timestamp": "2026-07-01T23:02:13.437Z",
     "insight": "When researching Ink resize artifacts, found that the Ink 5→6 upgrade requires a React 18→19 jump because Ink 6.x requires React >=19. The ink-text-input@6.0.0 and ink-testing-library@4.0.0 are already compatible with both versions, so no cascade of dependency changes is needed beyond react + @types/react."
+  },
+  {
+    "timestamp": "2026-07-01T23:12:06.545Z",
+    "insight": "When using getCapability() for the persona capability in the TUI, use optional chaining on the method (e.g., personaCap?.getFilteredTools) rather than just checking the cap object is truthy. Mock persona caps in tests (e.g., tui-persona-color.test.tsx) may exist but not include all methods, causing runtime crashes."
   }
 ]

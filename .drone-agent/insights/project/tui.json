@@ -14,5 +14,9 @@
   {
     "timestamp": "2026-06-23T01:13:40.303Z",
     "insight": "ink-text-input (the original library that was replaced by MultilineTextInput) uses chalk.inverse() to render the cursor within a single text string, not nested <Text> elements. This is the correct pattern — a single text node with ANSI escape codes for styling avoids the yoga layout/measure bugs that nested <Text> causes during re-render."
+  },
+  {
+    "timestamp": "2026-07-01T23:25:09.695Z",
+    "insight": "The TUI's formatDiffResult checks for obj.written === true but file__apply_diff returns obj.patched === true. Additionally, formatDiffOutput classifies lines by their first character (+/-/@@/---), but when the tool returns colored output, lines start with ANSI escape codes instead, breaking classification. The tool should return plain text and let the TUI handle coloring."
   }
 ]

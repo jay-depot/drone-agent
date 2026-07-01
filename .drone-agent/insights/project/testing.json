@@ -6,5 +6,9 @@
   {
     "timestamp": "2026-06-29T05:47:57.067Z",
     "insight": "The external loader tests revealed that `os.homedir()` reads from the OS user database, not `process.env.HOME`. Tests that need to override the home directory for user-scoped paths must set `process.env.HOME` before calling functions that use `os.homedir()`. This is a subtle gotcha that could trip up future test authors."
+  },
+  {
+    "timestamp": "2026-07-01T23:25:09.699Z",
+    "insight": "The file.test.ts has 28 tests for applyPatch in isolation but zero integration tests for the full file__apply_diff tool execution path (schema parsing → applyPatch → JSON response → TUI rendering). This allowed bugs in the glue code (patched vs written field name, ANSI codes in LLM context) to go undetected."
   }
 ]
