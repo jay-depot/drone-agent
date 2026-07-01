@@ -162,5 +162,9 @@
   {
     "timestamp": "2026-07-01T02:04:04.388Z",
     "insight": "The dot-separated tool name format (`plugin.tool`) causes degenerate behavior with Kimi K2 family models because their internal parser treats the dot as a structural separator in the `functions.{name}:{idx}` tool call ID format. This is a documented issue in the vLLM debugging blog and the Kimi K2 paper (Appendix B). The fix is to use a separator that only contains `[a-zA-Z0-9_-]` characters, like `__`."
+  },
+  {
+    "timestamp": "2026-07-01T02:43:43.855Z",
+    "insight": "The broker+provider pattern with separate writer registration worked well for decoupling creation workflows from storage backends. The `exists` method on writers was a necessary addition to support the wizard's overwrite-check flow — it wasn't in the original plan but was required for correctness."
   }
 ]
