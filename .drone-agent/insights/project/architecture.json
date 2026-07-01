@@ -194,5 +194,9 @@
   {
     "timestamp": "2026-07-01T23:25:09.703Z",
     "insight": "The file__apply_diff V2 tool has a critical bug in narrowByAnchors cascade: after exact-match narrowing (level 0) fails, the empty candidates array is passed to fuzzy fallback calls (level 1 and 100), making them no-ops. The first-anchor search correctly searches from scratch for each level, but the anchor chain narrowing does not preserve the initial candidates."
+  },
+  {
+    "timestamp": "2026-07-01T23:36:12.348Z",
+    "insight": "file__apply_diff v2 had a subtle cascade bug in narrowByAnchors: the candidates array was destructively reassigned on each fuzz level attempt. Fix was to snapshot firstAnchorCandidates before narrowing, so fuzzy fallbacks retry from the original state. This pattern (save state before cascade) should be used whenever implementing progressive-matching fallbacks."
   }
 ]

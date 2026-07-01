@@ -90,5 +90,9 @@
   {
     "timestamp": "2026-07-01T23:12:06.545Z",
     "insight": "When using getCapability() for the persona capability in the TUI, use optional chaining on the method (e.g., personaCap?.getFilteredTools) rather than just checking the cap object is truthy. Mock persona caps in tests (e.g., tui-persona-color.test.tsx) may exist but not include all methods, causing runtime crashes."
+  },
+  {
+    "timestamp": "2026-07-01T23:36:12.341Z",
+    "insight": "The file__apply_diff tool's own context matching struggled when applied to files with minimal or unique content around the edit point, as seen when trying to patch app.tsx. For small precise edits, file__write with complete-file replacement was more reliable despite being more verbose. This is an ironical bootstrapping issue worth documenting."
   }
 ]
