@@ -167,7 +167,22 @@ export function initDatabase(dataPath: string): Database.Database {
       token TEXT NOT NULL,
       created_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS tool_definitions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      defaultHidden INTEGER NOT NULL DEFAULT 0,
+      source TEXT NOT NULL,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tool_definitions_name ON tool_definitions(name);
   `);
+
+  // Seed built-in tool definitions
+  seedBuiltinToolDefinitions();
 
   logger.info('Database initialized successfully');
   return db;
@@ -1514,4 +1529,84 @@ export function initWebToken(): string {
   const existing = getWebToken();
   if (existing) return existing;
   return generateWebToken();
+}
+
+// ── Tool Definition operations ──────────────────────────────────────
+
+export interface ToolDefinition {
+  id: string;
+  name: string;
+  description: string;
+  defaultHidden: number;
+  source: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export function upsertToolDefinition(
+  name: string,
+  description: string,
+  defaultHidden: boolean,
+  source: string
+): ToolDefinition {
+  const now = Date.now();
+  const id = name;
+  const stmt = getDatabase().prepare(`
+    INSERT OR REPLACE INTO tool_definitions (id, name, description, defaultHidden, source, createdAt, updatedAt)
+    VALUES (@id, @name, @description, @defaultHidden, @source, @createdAt, @updatedAt)
+  `);
+  stmt.run({
+    id,
+    name,
+    description,
+    defaultHidden: defaultHidden ? 1 : 0,
+    source,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { id, name, description, defaultHidden: defaultHidden ? 1 : 0, source, createdAt: now, updatedAt: now };
+}
+
+export function getToolDefinitions(): ToolDefinition[] {
+  const stmt = getDatabase().prepare('SELECT * FROM tool_definitions ORDER BY name');
+  return stmt.all() as ToolDefinition[];
+}
+
+export function getDefaultHiddenTools(): ToolDefinition[] {
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM tool_definitions WHERE defaultHidden = 1 ORDER BY name'
+  );
+  return stmt.all() as ToolDefinition[];
+}
+
+// ── Built-in tool definition seeding ────────────────────────────────
+
+const BUILTIN_HIDDEN_TOOLS: Array<{
+  name: string;
+  description: string;
+}> = [
+  { name: 'swarm__wiki_write', description: 'Create or update a wiki page in the swarm knowledge base' },
+  { name: 'swarm__wiki_delete', description: 'Delete a wiki page from the swarm knowledge base' },
+  { name: 'self-improvement__insight', description: 'Record a self-improvement insight' },
+  { name: 'self-improvement__principles-store', description: 'Store a principle' },
+  { name: 'self-improvement__principles-delete', description: 'Delete a principle' },
+  { name: 'memory__store', description: 'Store a value in project-level memory' },
+  { name: 'memory__delete', description: 'Delete a memory entry' },
+];
+
+/**
+ * Seed built-in tool definitions that should be hidden by default.
+ * Only inserts tools that don't already exist, so user customizations
+ * and agent-pushed definitions are preserved.
+ */
+export function seedBuiltinToolDefinitions(): void {
+  const existing = getToolDefinitions();
+  const existingNames = new Set(existing.map(t => t.name));
+
+  for (const tool of BUILTIN_HIDDEN_TOOLS) {
+    if (!existingNames.has(tool.name)) {
+      upsertToolDefinition(tool.name, tool.description, true, 'builtin');
+      logger.info(`Seeded built-in hidden tool: ${tool.name}`);
+    }
+  }
 }

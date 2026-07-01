@@ -558,6 +558,7 @@ export function createDronePluginEngine({
         name: canonicalName,
         description: tool.description,
         inputSchema: tool.inputSchema,
+        defaultHidden: tool.defaultHidden,
       })),
     getCapability: <T>(pluginId: string) =>
       capabilities.get(pluginId) as T | undefined,

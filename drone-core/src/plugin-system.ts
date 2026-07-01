@@ -14,6 +14,13 @@ export type DroneToolDefinition = {
   name: string;
   description: string;
   inputSchema?: DroneToolJsonSchema;
+  /**
+   * If true, this tool is hidden from the LLM by default unless the active
+   * persona explicitly includes it via `allowedTools`. Useful for powerful
+   * or swarm-scoped tools (wiki write, principles store, etc.) that should
+   * be opt-in rather than always available.
+   */
+  defaultHidden?: boolean;
   execute: (input: Record<string, unknown>) => Promise<string>;
 };
 

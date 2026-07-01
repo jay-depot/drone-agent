@@ -1,5 +1,20 @@
 // ── Session types ────────────────────────────────────────────────────
 
+/**
+ * Session lifecycle statuses for the swarm session processing pipeline.
+ * Used by the coordinator to track the state of each swarm session.
+ */
+export const SESSION_STATUSES = {
+  ACTIVE: 'active',
+  STALE: 'stale',
+  FINISHED: 'finished',
+  PROCESSING: 'processing',
+  PROCESSED: 'processed',
+} as const;
+
+/** Union type of all session status values. */
+export type SessionStatus = (typeof SESSION_STATUSES)[keyof typeof SESSION_STATUSES];
+
 export type DroneLogger = {
   info: (message: string) => void;
   warn: (message: string) => void;
@@ -54,6 +69,12 @@ export type DroneToolDescriptor = {
   name: string;
   description: string;
   inputSchema?: DroneToolJsonSchema;
+  /**
+   * If true, this tool is hidden from the LLM by default unless the active
+   * persona explicitly includes it via `allowedTools`. Propagated from
+   * `DroneToolDefinition.defaultHidden` through the plugin engine.
+   */
+  defaultHidden?: boolean;
 };
 
 export type DroneChatResponse = {

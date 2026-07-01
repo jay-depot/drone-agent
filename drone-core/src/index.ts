@@ -85,7 +85,10 @@ export type {
   DroneTokenEstimate,
   DroneSessionSafetyTrimPayload,
   DroneConversationEvent,
+  SessionStatus,
 } from './session-types.js';
+
+export { SESSION_STATUSES } from './session-types.js';
 
 // ── Skill types ────────────────────────────────────────────────────
 
