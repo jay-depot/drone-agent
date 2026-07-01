@@ -62,5 +62,9 @@
   {
     "timestamp": "2026-07-01T00:52:44.690Z",
     "insight": "Using sed for multi-line code changes in TypeScript is error-prone. Python scripts or writing complete files are more reliable for complex transformations."
+  },
+  {
+    "timestamp": "2026-07-01T01:13:21.408Z",
+    "insight": "The ambitious-refactoring-wiki-storage-deduplication memory was a good high-level proposal but needed significant clarification before it could become an actionable plan. The original proposal had 4 phases but the user wanted to scope down to just Phase 1 (wiki-storage + TLS) and defer the DB extraction. The plan now has 10 concrete steps with exact file paths, code samples, and validation criteria."
   }
 ]
