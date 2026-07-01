@@ -7,6 +7,7 @@ import {
   type DronePluginRegistration,
 } from 'drone-core';
 import { filePlugin, __testing } from '../src/plugins/file.js';
+import { applyPatch, type PatchHunk } from '../src/shared/patch-applier.js';
 import { silentLogger } from './helpers.js';
 
 const { enhanceFsError } = __testing;
@@ -218,5 +219,396 @@ describe('file plugin — read/write round trip', () => {
         // ignore
       }
     }
+  });
+});
+
+// ── patch-applier unit tests ──────────────────────────────────────────
+
+describe('applyPatch — basic operations', () => {
+  it('replaces lines with anchor + context', () => {
+    const lines = [
+      'def greet():',
+      '    """Say hello"""',
+      '    print("hello")',
+      '',
+      'def farewell():',
+      '    print("goodbye")',
+    ];
+
+    const hunks: PatchHunk[] = [
+      {
+        anchors: ['def greet():'],
+        contextBefore: ['def greet():'],
+        oldLines: ['    """Say hello"""', '    print("hello")'],
+        newLines: ['    """Say hello"""', '    print("hi there")'],
+        contextAfter: ['', 'def farewell():'],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    expect(result.appliedHunks).toHaveLength(1);
+    expect(result.appliedHunks[0].fuzz).toBe(0);
+  });
+
+  it('pure insertion (empty oldLines)', () => {
+    const lines = [
+      'def add(a, b):',
+      '    return a + b',
+      '',
+      'def subtract(a, b):',
+      '    return a - b',
+    ];
+
+    const hunks: PatchHunk[] = [
+      {
+        anchors: ['def add(a, b):'],
+        contextBefore: ['def add(a, b):'],
+        oldLines: [],
+        newLines: ['    """Add two numbers"""'],
+        contextAfter: ['    return a + b', ''],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    expect(result.appliedHunks).toHaveLength(1);
+  });
+
+  it('pure deletion (empty newLines)', () => {
+    const lines = [
+      'def old_func():',
+      '    # deprecated',
+      '    pass',
+      '',
+      'def new_func():',
+      '    pass',
+    ];
+
+    const hunks: PatchHunk[] = [
+      {
+        anchors: ['def old_func():'],
+        contextBefore: ['def old_func():'],
+        oldLines: ['    # deprecated', '    pass'],
+        newLines: [],
+        contextAfter: ['', 'def new_func():'],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    expect(result.appliedHunks).toHaveLength(1);
+  });
+
+  it('multiple anchors for hierarchical disambiguation', () => {
+    const lines = [
+      'class MathUtils:',
+      '    def add(self, a, b):',
+      '        return a + b',
+      '',
+      '    def multiply(self, a, b):',
+      '        return a * b',
+      '',
+      'class StringUtils:',
+      '    def add(self, a, b):',
+      '        return a + b',
+    ];
+
+    const hunks: PatchHunk[] = [
+      {
+        anchors: ['class MathUtils:', '    def add(self, a, b):'],
+        contextBefore: ['    def add(self, a, b):'],
+        oldLines: ['        return a + b'],
+        newLines: ['        """Add two numbers"""', '        return a + b'],
+        contextAfter: ['', '    def multiply(self, a, b):'],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    expect(result.appliedHunks).toHaveLength(1);
+  });
+
+  it('no anchors — context-only search', () => {
+    const lines = [
+      'line1',
+      'line2',
+      'target_before',
+      'target_old',
+      'target_after',
+      'line6',
+    ];
+
+    const hunks: PatchHunk[] = [
+      {
+        anchors: [],
+        contextBefore: ['target_before'],
+        oldLines: ['target_old'],
+        newLines: ['target_new'],
+        contextAfter: ['target_after'],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    expect(result.appliedHunks).toHaveLength(1);
+  });
+});
+
+describe('applyPatch — fuzzy matching', () => {
+  it('fuzz level 1: trailing whitespace differences', () => {
+    const lines = [
+      'def foo():  ',
+      '    pass  ',
+      '',
+    ];
+
+    const hunks: PatchHunk[] = [
+      {
+        anchors: ['def foo():'],
+        contextBefore: ['def foo():'],
+        oldLines: ['    pass'],
+        newLines: ['    return 42'],
+        contextAfter: [''],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(true);
+    expect(result.appliedHunks[0].fuzz).toBe(1);
+  });
+
+  it('fuzz level 100: all whitespace differences', () => {
+    const lines = [
+      'def  foo ( ) :',
+      '    pass',
+      '',
+    ];
+
+    const hunks: PatchHunk[] = [
+      {
+        anchors: ['def foo():'],
+        contextBefore: ['def foo():'],
+        oldLines: ['    pass'],
+        newLines: ['    return 42'],
+        contextAfter: [''],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(true);
+    expect(result.appliedHunks[0].fuzz).toBe(100);
+  });
+});
+
+describe('applyPatch — error handling', () => {
+  it('reports anchor not found', () => {
+    const lines = ['def foo():', '    pass'];
+
+    const hunks: PatchHunk[] = [
+      {
+        anchors: ['def nonexistent():'],
+        contextBefore: [],
+        oldLines: ['    pass'],
+        newLines: ['    return 42'],
+        contextAfter: [],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(false);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toContain('Anchor not found');
+  });
+
+  it('reports context mismatch with details', () => {
+    const lines = ['def foo():', '    print("hello")', ''];
+
+    const hunks: PatchHunk[] = [
+      {
+        anchors: ['def foo():'],
+        contextBefore: ['def foo():'],
+        oldLines: ['    print("world")'],
+        newLines: ['    print("universe")'],
+        contextAfter: [''],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(false);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toContain('Context does not match');
+    expect(result.errors[0].foundOldLines).toBeDefined();
+  });
+
+  it('reports context not found anywhere when no anchors', () => {
+    const lines = ['line1', 'line2', 'line3'];
+
+    const hunks: PatchHunk[] = [
+      {
+        anchors: [],
+        contextBefore: ['nonexistent_before'],
+        oldLines: ['nonexistent_old'],
+        newLines: ['new_line'],
+        contextAfter: ['nonexistent_after'],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(false);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toContain('Context not found anywhere');
+  });
+
+  it('reports anchor chain not found', () => {
+    const lines = [
+      'class A:',
+      '    def method(self):',
+      '        pass',
+      '',
+      'class B:',
+      '    def method(self):',
+      '        pass',
+    ];
+
+    const hunks: PatchHunk[] = [
+      {
+        anchors: ['class A:', '    def method(self):', '    def nonexistent():'],
+        contextBefore: [],
+        oldLines: ['        pass'],
+        newLines: ['        return 42'],
+        contextAfter: [],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(false);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toContain('Anchor chain not found');
+  });
+});
+
+describe('applyPatch — multiple hunks', () => {
+  it('applies multiple hunks bottom-up', () => {
+    const lines = [
+      'def first():',
+      '    pass',
+      '',
+      'def second():',
+      '    pass',
+      '',
+      'def third():',
+      '    pass',
+    ];
+
+    const hunks: PatchHunk[] = [
+      {
+        anchors: ['def first():'],
+        contextBefore: ['def first():'],
+        oldLines: ['    pass'],
+        newLines: ['    return 1'],
+        contextAfter: ['', 'def second():'],
+      },
+      {
+        anchors: ['def third():'],
+        contextBefore: ['def third():'],
+        oldLines: ['    pass'],
+        newLines: ['    return 3'],
+        contextAfter: [],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(true);
+    expect(result.appliedHunks).toHaveLength(2);
+  });
+
+  it('reports partial success with some errors', () => {
+    const lines = [
+      'def good():',
+      '    pass',
+      '',
+      'def bad():',
+      '    pass',
+    ];
+
+    const hunks: PatchHunk[] = [
+      {
+        anchors: ['def good():'],
+        contextBefore: ['def good():'],
+        oldLines: ['    pass'],
+        newLines: ['    return 1'],
+        contextAfter: ['', 'def bad():'],
+      },
+      {
+        anchors: ['def nonexistent():'],
+        contextBefore: [],
+        oldLines: ['    pass'],
+        newLines: ['    return 2'],
+        contextAfter: [],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(false);
+    expect(result.appliedHunks).toHaveLength(1);
+    expect(result.errors).toHaveLength(1);
+  });
+});
+
+describe('applyPatch — edge cases', () => {
+  it('handles empty file', () => {
+    const lines: string[] = [];
+    const hunks: PatchHunk[] = [
+      {
+        anchors: [],
+        contextBefore: [],
+        oldLines: [],
+        newLines: ['first line'],
+        contextAfter: [],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    // Empty file with no anchors and no context — can't match anything
+    expect(result.success).toBe(false);
+  });
+
+  it('handles single-line file — replacing the only line', () => {
+    const lines = ['the only line'];
+    const hunks: PatchHunk[] = [
+      {
+        anchors: ['the only line'],
+        contextBefore: [],
+        oldLines: ['the only line'],
+        newLines: ['replacement line'],
+        contextAfter: [],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(true);
+    expect(result.appliedHunks).toHaveLength(1);
+  });
+
+  it('handles file with trailing newline (empty last line)', () => {
+    const lines = ['line1', 'line2', ''];
+    const hunks: PatchHunk[] = [
+      {
+        anchors: ['line2'],
+        contextBefore: ['line1'],
+        oldLines: ['line2', ''],
+        newLines: ['line2', 'line3', ''],
+        contextAfter: [],
+      },
+    ];
+
+    const result = applyPatch(lines, hunks);
+    expect(result.success).toBe(true);
   });
 });

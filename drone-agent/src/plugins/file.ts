@@ -3,7 +3,8 @@ import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import fg from 'fast-glob';
 import type { DronePlugin } from 'drone-core';
-import { renderDiff, supportsColor } from '../shared/diff-renderer.js';
+import { renderDiffV2, supportsColor } from '../shared/diff-renderer.js';
+import { applyPatch, type PatchHunk } from '../shared/patch-applier.js';
 
 /**
  * Wraps a raw Node.js fs error (ENOENT, EACCES, EISDIR, ...) into a clearer
@@ -49,7 +50,7 @@ export const filePlugin: DronePlugin = {
   metadata: {
     id: 'file',
     name: 'File',
-    version: '0.1.0',
+    version: '0.2.0',
     description: 'Read, write, list, and patch files in the workspace.',
     defaultEnabled: false,
   },
@@ -208,7 +209,36 @@ export const filePlugin: DronePlugin = {
     registration.registerTool({
       name: 'apply_diff',
       description:
-        'Apply hunks to a file. Each hunk has startLine, optional oldLines (for verification), and newLines (to insert).',
+        'Apply a patch to a file using content-anchored hunks. ' +
+        'Each hunk is located by matching context lines in the file, not by line numbers. ' +
+        'This makes patches robust to file evolution.\n\n' +
+        'Each hunk has:\n' +
+        '  - anchors: Optional code lines that uniquely identify the location ' +
+        '(e.g., ["class Foo:", "    def bar():"]). Use multiple anchors for ' +
+        'disambiguation in nested scopes.\n' +
+        '  - contextBefore: 2-3 lines of code immediately above the edit point.\n' +
+        '  - oldLines: The exact lines to remove (can be empty for pure insertion).\n' +
+        '  - newLines: The lines to insert (can be empty for pure deletion).\n' +
+        '  - contextAfter: 2-3 lines of code immediately below the edit point.\n\n' +
+        'Matching is progressive: exact match first, then trailing whitespace ' +
+        'normalization, then full whitespace normalization. The fuzz level is ' +
+        'reported so you can see how cleanly the patch applied.\n\n' +
+        'Example — replacing a function body:\n' +
+        '  {\n' +
+        '    "anchors": ["def example():"],\n' +
+        '    "contextBefore": ["", "def example():", "    \"\"\"Docstring\"\"\""],\n' +
+        '    "oldLines": ["    pass"],\n' +
+        '    "newLines": ["    return 42"],\n' +
+        '    "contextAfter": ["", "", ""]\n' +
+        '  }\n\n' +
+        'Example — adding a new method to a class:\n' +
+        '  {\n' +
+        '    "anchors": ["class Calculator:"],\n' +
+        '    "contextBefore": ["    def subtract(self, a, b):", "        return a - b", ""],\n' +
+        '    "oldLines": [],\n' +
+        '    "newLines": ["    def multiply(self, a, b):", "        return a * b", ""],\n' +
+        '    "contextAfter": ["    def divide(self, a, b):", "        return a / b"]\n' +
+        '  }',
       inputSchema: {
         type: 'object',
         properties: {
@@ -218,23 +248,47 @@ export const filePlugin: DronePlugin = {
             items: {
               type: 'object',
               properties: {
-                startLine: {
-                  type: 'number',
-                  description: '1-based line number.',
+                anchors: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'Optional content anchor lines to locate the edit site. ' +
+                    'Use multiple anchors for hierarchical disambiguation ' +
+                    '(e.g., ["class Foo:", "    def bar():"]). ' +
+                    'If omitted, the tool searches the whole file for the context.',
+                },
+                contextBefore: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'Lines of code immediately above the edit point. ' +
+                    'These are matched (with fuzzy fallback) to verify location. ' +
+                    'Provide 2-3 lines for reliable anchoring.',
                 },
                 oldLines: {
                   type: 'array',
                   items: { type: 'string' },
                   description:
-                    'Lines expected at this location (verified, then removed).',
+                    'The exact lines to remove at this location. ' +
+                    'Empty array means pure insertion (no deletion).',
                 },
                 newLines: {
                   type: 'array',
                   items: { type: 'string' },
-                  description: 'Lines to insert.',
+                  description:
+                    'The lines to insert at this location. ' +
+                    'Empty array means pure deletion (no insertion).',
+                },
+                contextAfter: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description:
+                    'Lines of code immediately below the edit point. ' +
+                    'These are matched (with fuzzy fallback) to verify location. ' +
+                    'Provide 2-3 lines for reliable anchoring.',
                 },
               },
-              required: ['startLine', 'newLines'],
+              required: ['newLines'],
               additionalProperties: false,
             },
           },
@@ -264,54 +318,72 @@ export const filePlugin: DronePlugin = {
         }
         const lines = content.split('\n');
 
-        // Sort hunks descending by startLine so we apply bottom-up and avoid
-        // line-number invalidation.
-        const hunks = [...input.hunks]
+        // Parse hunks into PatchHunk format
+        const patchHunks: PatchHunk[] = input.hunks
           .filter(isRecord)
           .map(hunk => ({
-            startLine:
-              typeof hunk.startLine === 'number'
-                ? Math.floor(hunk.startLine)
-                : 1,
+            anchors: Array.isArray(hunk.anchors)
+              ? (hunk.anchors as string[])
+              : [],
+            contextBefore: Array.isArray(hunk.contextBefore)
+              ? (hunk.contextBefore as string[])
+              : [],
             oldLines: Array.isArray(hunk.oldLines)
               ? (hunk.oldLines as string[])
               : [],
             newLines: Array.isArray(hunk.newLines)
               ? (hunk.newLines as string[])
               : [],
-          }))
-          .sort((a, b) => b.startLine - a.startLine);
+            contextAfter: Array.isArray(hunk.contextAfter)
+              ? (hunk.contextAfter as string[])
+              : [],
+          }));
 
-        for (const hunk of hunks) {
-          const idx = hunk.startLine - 1;
-          if (idx < 0 || idx > lines.length) {
-            throw new Error(
-              `Hunk startLine ${hunk.startLine} is out of range (file has ${lines.length} lines).`
-            );
-          }
+        // Apply the patch (works on a copy internally)
+        const result = applyPatch(lines, patchHunks);
 
-          // Verify oldLines match if provided
-          if (hunk.oldLines.length > 0) {
-            const actual = lines.slice(idx, idx + hunk.oldLines.length);
-            if (actual.join('\n') !== hunk.oldLines.join('\n')) {
-              throw new Error(
-                `Hunk at line ${hunk.startLine} does not match file content. Expected:\n${hunk.oldLines.join('\n')}\n\nActual:\n${actual.join('\n')}`
-              );
-            }
-            lines.splice(idx, hunk.oldLines.length, ...hunk.newLines);
-          } else {
-            // No oldLines means pure insertion
-            lines.splice(idx, 0, ...hunk.newLines);
-          }
+        if (!result.success) {
+          // Build a detailed error message from all errors
+          const errorMessages = result.errors
+            .map(
+              e =>
+                `Hunk ${e.hunkIndex}: ${e.message}\n  Detail: ${e.detail}`
+            )
+            .join('\n\n');
+          throw new Error(
+            `file__apply_diff: ${result.errors.length} hunk(s) failed to apply.\n\n${errorMessages}`
+          );
         }
+
+        // Build DiffHunkV2 array for rendering
+        const diffHunks = patchHunks.map((hunk, i) => ({
+          anchors: hunk.anchors,
+          contextBefore: hunk.contextBefore,
+          oldLines: hunk.oldLines,
+          newLines: hunk.newLines,
+          contextAfter: hunk.contextAfter,
+          fuzz: result.appliedHunks[i]?.fuzz,
+        }));
 
         // Determine whether to use colors
         const useColor = input.color !== false && supportsColor();
-        const diffResult = renderDiff(filePath, hunks, useColor);
+        const diffResult = renderDiffV2(filePath, diffHunks, useColor);
         const diffOutput = useColor ? diffResult.colored : diffResult.plain;
 
+        // Reconstruct the final content by applying hunks bottom-up
+        // using the positions from the successful applyPatch call.
+        const workingLines = [...lines];
+        const sortedHunks = result.appliedHunks
+          .map((ah, i) => ({ ah, hunk: patchHunks[i] }))
+          .sort((a, b) => b.ah.appliedAtLine - a.ah.appliedAtLine);
+
+        for (const { ah, hunk } of sortedHunks) {
+          const idx = ah.appliedAtLine - 1; // Convert to 0-based
+          workingLines.splice(idx, hunk.oldLines.length, ...hunk.newLines);
+        }
+
         try {
-          await writeFile(filePath, lines.join('\n'), 'utf-8');
+          await writeFile(filePath, workingLines.join('\n'), 'utf-8');
         } catch (err) {
           throw enhanceFsError('file__apply_diff', filePath, err);
         }
