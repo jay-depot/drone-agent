@@ -38,6 +38,13 @@ export const llmPlugin: DronePlugin = {
       }
     }
 
+    function getAvailableProviders(): Array<{ id: string; precedence: number }> {
+      return providers.map(provider => ({
+        id: provider.id,
+        precedence: provider.precedence,
+      }));
+    }
+
     function getActiveProviderRegistration():
       | DroneLlmProviderRegistration
       | undefined {
@@ -68,6 +75,10 @@ export const llmPlugin: DronePlugin = {
         return reg.getProvider();
       },
       getActiveProviderId: () => activeProviderId,
+      getAvailableProviders,
+      activateProvider: (providerId: string) => {
+        activateProvider(providerId);
+      },
       getModel: () => currentModel,
       setModel: (model: string) => {
         currentModel = model;
@@ -149,22 +160,25 @@ export const llmPlugin: DronePlugin = {
 
         // Check for --provider flag
         const providerIdx = args.indexOf('--provider');
+        let modelTokens = args;
         if (providerIdx !== -1 && providerIdx + 1 < args.length) {
+          const providerId = args[providerIdx + 1];
+          modelTokens = args.filter((_, idx) => idx !== providerIdx && idx !== providerIdx + 1);
           try {
-            // We need to activate the new provider. Since the capability
-            // doesn't expose activation directly, we use the engine to
-            // re-resolve. For now, we just log and suggest.
+            llm.activateProvider(providerId);
+            const defaultModel = llm.getModel();
+            ctx.conversation.setModel(defaultModel);
             ctx.logger.info(
-              `Provider switching is handled by the llm broker. Use /model to see available models.`
+              `Switched provider: ${providerId} (default model: ${defaultModel})`
             );
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             ctx.logger.warn(`Failed to switch provider: ${msg}`);
+            return true;
           }
-          return true;
         }
 
-        const rest = args.join(' ');
+        const rest = modelTokens.join(' ');
 
         // No argument: list models
         if (rest.length === 0) {
@@ -172,11 +186,15 @@ export const llmPlugin: DronePlugin = {
             const models = await llm.listModels();
             const current = llm.getModel();
             const providerId = llm.getActiveProviderId();
+            const providers = llm
+              .getAvailableProviders()
+              .map(provider => provider.id)
+              .join(', ');
             const lines = models.map(m =>
               m === current ? `  * ${m} (current)` : `    ${m}`
             );
             ctx.logger.info(
-              `Provider: ${providerId}\nAvailable models:\n${lines.join('\n')}`
+              `Provider: ${providerId}\nRegistered providers: ${providers}\nAvailable models:\n${lines.join('\n')}`
             );
             ctx.logger.info(`\nUse /model <name> to switch.`);
           } catch (err) {
@@ -189,6 +207,12 @@ export const llmPlugin: DronePlugin = {
         // Has argument: switch model
         const modelName = rest;
         try {
+          const available = await llm.listModels();
+          if (!available.includes(modelName)) {
+            throw new Error(
+              `Model "${modelName}" is not available on provider "${llm.getActiveProviderId()}". Available: ${available.join(', ')}`
+            );
+          }
           llm.setModel(modelName);
           ctx.conversation.setModel(modelName);
           ctx.logger.info(`Switched to model: ${modelName}`);
@@ -203,6 +227,9 @@ export const llmPlugin: DronePlugin = {
     // ── Help snippets ─────────────────────────────────────────────────
     registration.registerHelp(
       '/model [name]         List models or switch model'
+    );
+    registration.registerHelp(
+      '/model --provider <id> [name]  Switch provider, optionally set model'
     );
   },
 };

@@ -112,6 +112,8 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
   return {
     getActiveProvider: () => provider,
     getActiveProviderId: () => 'test-provider',
+    getAvailableProviders: () => [{ id: 'test-provider', precedence: 1000 }],
+    activateProvider: () => {},
     getModel: () => 'fake',
     setModel: () => {},
     listModels: async () => ['fake'],
@@ -119,6 +121,89 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
     unregisterProvider: () => {},
   };
 }
+
+it('uses the newly active provider on the next loop iteration', async () => {
+  const engine = makeEngine({
+    tools: [
+      {
+        name: 'switch.provider',
+        description: 'switch active provider',
+        inputSchema: { type: 'object', properties: {} },
+      },
+    ],
+    executeToolImpl: async () => {
+      llm.activateProvider('provider-b');
+      return 'switched';
+    },
+  });
+
+  const providerA = makeProvider([
+    {
+      toolCalls: [
+        {
+          id: 'call-1',
+          name: 'switch.provider',
+          arguments: {},
+        },
+      ],
+    },
+    { message: 'provider-a-final' },
+  ]);
+  const providerB = makeProvider([{ message: 'provider-b-final' }]);
+
+  const providers: Record<string, DroneLlmProvider> = {
+    'provider-a': providerA,
+    'provider-b': providerB,
+  };
+  let activeProviderId = 'provider-a';
+  let model = 'fake-a';
+
+  const llm: DroneLlmCapability = {
+    getActiveProvider: () => providers[activeProviderId],
+    getActiveProviderId: () => activeProviderId,
+    getAvailableProviders: () => [
+      { id: 'provider-a', precedence: 1000 },
+      { id: 'provider-b', precedence: 1000 },
+    ],
+    activateProvider: providerId => {
+      activeProviderId = providerId;
+      model = providerId === 'provider-a' ? 'fake-a' : 'fake-b';
+    },
+    getModel: () => model,
+    setModel: nextModel => {
+      model = nextModel;
+    },
+    listModels: async () =>
+      activeProviderId === 'provider-a' ? ['fake-a'] : ['fake-b'],
+    registerProvider: () => {},
+    unregisterProvider: () => {},
+  };
+
+  const config = createDefaultAgentConfig();
+  const sessionManager = createSessionManager();
+  const budgetService = createContextBudgetService({
+    config,
+    renderPromptFragments: async () => [],
+    getProvider: () => llm.getActiveProvider(),
+    getModel: () => llm.getModel(),
+  });
+  const conversation = createConversationService({
+    engine: engine as unknown as DronePluginEngine,
+    config,
+    logger: silentLogger(),
+    sessionManager,
+    budgetService,
+  });
+
+  (engine as { getCapability: (id: string) => unknown }).getCapability = (
+    id: string
+  ) => (id === 'llm' ? llm : undefined);
+
+  const finalMessage = await conversation.sendUserMessage('switch providers');
+  expect(finalMessage).toBe('provider-b-final');
+  expect(providerA.__chatMock).toHaveBeenCalledTimes(1);
+  expect(providerB.__chatMock).toHaveBeenCalledTimes(1);
+});
 
 describe('createConversationService — tool error handling', () => {
   it('returns a successful tool result to the model when the tool succeeds', async () => {

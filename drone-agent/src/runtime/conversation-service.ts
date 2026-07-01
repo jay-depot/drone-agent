@@ -227,9 +227,9 @@ export function createConversationService({
         });
 
       const llm = getLlmCapability();
-      const provider = llm.getActiveProvider();
       const tools = getLlmTools();
       let iterationCount = 0;
+      let lastBudgetKey: string | undefined;
       // Tracks the most recent failing tool signature and how many times
       // we've seen it in a row. Reset to null on any success or on a new
       // tool/error. If it reaches stuckErrorThreshold we abort the loop
@@ -254,10 +254,18 @@ export function createConversationService({
       };
 
       while (true) {
+        const activeProviderId = llm.getActiveProviderId();
+        const currentModel = llm.getModel();
+        const budgetKey = `${activeProviderId}:${currentModel}`;
+        if (budgetKey !== lastBudgetKey) {
+          budgetService.resetContextWindowCache();
+          lastBudgetKey = budgetKey;
+        }
+
         const systemMessages = await budgetService.buildSystemMessages();
         await ensureSafeBudget(systemMessages, tools);
 
-        const currentModel = llm.getModel();
+        const provider = llm.getActiveProvider();
 
         const response = await provider.chat({
           model: currentModel,

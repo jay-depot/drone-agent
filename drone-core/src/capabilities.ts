@@ -77,6 +77,10 @@ export type DroneLlmCapability = {
   getActiveProvider: () => DroneLlmProvider;
   /** Get the id of the active provider (e.g. 'ollama', 'openrouter'). */
   getActiveProviderId: () => string;
+  /** List all registered provider ids in precedence order. */
+  getAvailableProviders: () => Array<{ id: string; precedence: number }>;
+  /** Activate a provider by id and switch to its default model. */
+  activateProvider: (providerId: string) => void;
   /** Get the currently selected model name. */
   getModel: () => string;
   /** Set the currently selected model name. */

@@ -54,5 +54,9 @@
   {
     "timestamp": "2026-06-30T01:17:51.314Z",
     "insight": "vi.spyOn on 'node:child_process' execSync fails because the module is already loaded and the property is non-configurable. For mocking openssl-dependent code, it's better to skip tests when openssl isn't available (itIfOpenssl pattern) rather than trying to mock execSync."
+  },
+  {
+    "timestamp": "2026-07-01T00:06:23.702Z",
+    "insight": "The use-auth.ts file was initially created as .ts but contained JSX (AuthProvider component), causing TypeScript errors. It needed to be renamed to .tsx. This is a common gotcha — any file with JSX must use the .tsx extension, even if it's primarily a hook/context file."
   }
 ]

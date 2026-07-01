@@ -204,6 +204,8 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
   return {
     getActiveProvider: () => provider,
     getActiveProviderId: () => 'test-provider',
+    getAvailableProviders: () => [{ id: 'test-provider', precedence: 1000 }],
+    activateProvider: () => {},
     getModel: () => 'fake',
     setModel: () => {},
     listModels: async () => ['fake'],
