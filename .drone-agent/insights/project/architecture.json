@@ -178,5 +178,9 @@
   {
     "timestamp": "2026-07-01T20:29:15.771Z",
     "insight": "The coordinator's WebSocket auth check in index.ts doesn't mirror the onRequest hook's local-IP bypass logic in web-auth.ts. The onRequest hook trusts Tailscale IPs (100.64.0.0/10) as local, but the WebSocket handler's token check doesn't skip for those IPs. This causes immediate disconnect for Tailscale-connected clients. The fix is to reuse isLocalRequest in the WebSocket handler."
+  },
+  {
+    "timestamp": "2026-07-01T21:55:47.654Z",
+    "insight": "The swarm persona system has a fundamental type mismatch between persistence (Persona.systemPrompt) and runtime (DronePersonaDefinition.systemPromptOverride). The raw type cast in swarm/index.ts silently drops all rich frontmatter fields. This pattern (raw type cast between different types with overlapping but differently-named fields) is fragile and should be avoided — always map explicitly between persistence and runtime types."
   }
 ]
