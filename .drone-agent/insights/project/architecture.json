@@ -154,5 +154,9 @@
   {
     "timestamp": "2026-07-01T00:52:44.683Z",
     "insight": "Persona activation in onPluginsLoaded was too early for swarm-provided personas. The hook ordering guarantee (onPluginsLoaded fires in plugin registration order, onSessionStart fires after all onPluginsLoaded hooks) means cross-plugin coordination should use onSessionStart, not onPluginsLoaded."
+  },
+  {
+    "timestamp": "2026-07-01T01:46:42.660Z",
+    "insight": "When extracting shared code into a new workspace package, vitest's resolve aliases for sub-path imports (e.g., `drone-swarm-common/tls`) don't work reliably in tests that import from other packages. Tests in the consuming package had to use relative import paths instead. Consider adding `vite-tsconfig-paths` plugin or using a single root alias that re-exports everything."
   }
 ]
