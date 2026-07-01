@@ -3,7 +3,7 @@ key: swarm-features-plan-default-personas-session-pipeline-tool-gating
 tags:
   []
 created: 2026-07-01T18:03:48.714Z
-updated: 2026-07-01T18:03:48.714Z
+updated: 2026-07-01T18:09:30.989Z
 ---
 
 # Swarm Features Plan: Default Personas, Session Pipeline & Tool Gating
@@ -1098,3 +1098,19 @@ Phase 5 (Coordinator Client)
 **Recommended execution order:** Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5
 
 Within each phase, steps can be parallelized where they have no inter-dependencies (e.g., 1.1 and 1.2 can be done together; 4.1, 4.2, 4.3 can be done in parallel).
+
+---
+
+## Session Summary (2026-07-01)
+
+This plan was developed through a collaborative planning session. The user described three related concerns:
+1. Wanting default personas and skills loaded into every coordinator
+2. Wanting a session processing pipeline for automated wiki ingestion
+3. Wanting to solve the problem of wiki/principles tools being available to the LLM by default
+
+Through iterative clarification, the following design emerged:
+- **Default assets**: Seed on coordinator startup, only if they don't already exist
+- **Session pipeline**: Expand `swarm_sessions.status` to support the full lifecycle, add endpoints for listing/retrieving/processing sessions, with stale detection as a background job
+- **Tool gating**: A `defaultHidden` flag on tool definitions. Persona filtering respects it (hides hidden tools when no persona active). Persona creation wizard auto-adds exclusion patterns. Agents push their tool definitions to the coordinator on connect, which aggregates them alongside pre-seeded built-in definitions.
+
+The plan is organized into 5 phases with 20 steps, with clear dependency ordering and validation criteria.

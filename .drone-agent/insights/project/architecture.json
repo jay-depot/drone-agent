@@ -170,5 +170,9 @@
   {
     "timestamp": "2026-07-01T03:06:56.342Z",
     "insight": "The `drone-migrate` bin stub was a dead import — it imported the module but never called any function. The `migrate.ts` module is designed as a library (exports only, no side effects), so the bin stub needs to explicitly wire args to `runMigrate()`. The `parseCliArgs` function requires a `'migrate'` prefix in argv to route to the migrate subcommand parser, which the standalone bin doesn't have naturally — it must prepend it."
+  },
+  {
+    "timestamp": "2026-07-01T18:09:40.695Z",
+    "insight": "The coordinator's FTS5 virtual table on swarm_events has a bug: it uses content_rowid='id' but id is a TEXT PRIMARY KEY, not an integer rowid. FTS5 requires an integer rowid for content tables. This should be fixed as part of the session pipeline work since we'll be querying events more heavily."
   }
 ]
