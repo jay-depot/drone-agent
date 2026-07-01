@@ -99,20 +99,22 @@ export const personaPlugin: DronePlugin = {
       }
       return undefined;
     }
-
-    // ── Filtering helpers ───────────────────────────────────────────────
     function getFilteredTools(
       allTools: DroneToolDescriptor[]
     ): DroneToolDescriptor[] {
       if (!activePersona || !activePersona.allowedTools) {
-        return allTools;
+        // No active persona, or persona without explicit allowedTools:
+        // hide defaultHidden tools from the LLM.
+        return allTools.filter(t => !t.defaultHidden);
       }
+      // Persona has explicit allowedTools: apply glob filtering.
+      // The persona's patterns take full control - they can re-include
+      // defaultHidden tools by explicitly naming them.
       const names = allTools.map(t => t.name);
       const filtered = filterByGlobPatterns(names, activePersona.allowedTools);
       const filteredSet = new Set(filtered);
       return allTools.filter(t => filteredSet.has(t.name));
     }
-
     function getFilteredSkills(
       allSkills: DroneSkillDefinition[]
     ): DroneSkillDefinition[] {

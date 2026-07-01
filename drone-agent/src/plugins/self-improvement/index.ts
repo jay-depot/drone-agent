@@ -659,6 +659,7 @@ export const selfImprovementPlugin: DronePlugin = {
     // ── self-improvement__insight ─────────────────────────────────────
     registration.registerTool({
       name: 'insight',
+      defaultHidden: true,
       description:
         'Record a self-improvement insight about a persona, skill, or the project. ' +
         'Whenever you encounter an issue, gap, or opportunity related ' +
@@ -809,6 +810,7 @@ export const selfImprovementPlugin: DronePlugin = {
     // ── self-improvement__principles-store ─────────────────────────────
     registration.registerTool({
       name: 'principles-store',
+      defaultHidden: true,
       description:
         'Store a principle for a persona, skill, or project. ' +
         'Principles are derived from patterns found in insights and are ' +
@@ -953,9 +955,8 @@ export const selfImprovementPlugin: DronePlugin = {
         return JSON.stringify({ targetType, targetId, principles }, null, 2);
       },
     });
-
-    // ── self-improvement__principles-delete ────────────────────────────
     registration.registerTool({
+      defaultHidden: true,
       name: 'principles-delete',
       description:
         'Delete a principle by its index in the principles list for a target.',

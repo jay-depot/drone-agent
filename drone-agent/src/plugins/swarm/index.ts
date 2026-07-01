@@ -858,6 +858,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
 
       const wikiWriteTool: DroneToolDefinition = {
         name: 'wiki_write',
+        defaultHidden: true,
         description:
           'Create or update a wiki page in the swarm knowledge base.',
         inputSchema: {
@@ -988,6 +989,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
 
       const wikiDeleteTool: DroneToolDefinition = {
         name: 'wiki_delete',
+        defaultHidden: true,
         description: 'Delete a wiki page from the swarm knowledge base.',
         inputSchema: {
           type: 'object',
