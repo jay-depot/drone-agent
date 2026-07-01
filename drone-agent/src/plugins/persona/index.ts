@@ -227,7 +227,7 @@ export const personaPlugin: DronePlugin = {
     registration.offer(capability);
 
     // -----------------------------------------------------------------------
-    // onPluginsLoaded — load personas and activate configured/runtime persona
+    // onPluginsLoaded — load personas (activation moved to onSessionStart)
     // -----------------------------------------------------------------------
     registration.hooks.onPluginsLoaded(async () => {
       await capability.reloadPersonas();
@@ -243,7 +243,12 @@ export const personaPlugin: DronePlugin = {
       registration.logger.info(
         `loaded ${all.length} persona(s): ${all.map(p => p.id).join(', ')}`
       );
+    });
 
+    // -----------------------------------------------------------------------
+    // onSessionStart — activate configured/runtime persona
+    // -----------------------------------------------------------------------
+    registration.hooks.onSessionStart(async () => {
       // Determine which persona to activate: runtime option (--persona CLI flag)
       // takes precedence over config.activePersona
       let personaToActivate: string | null = null;

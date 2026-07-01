@@ -436,15 +436,6 @@ export function createDronePluginEngine({
       },
       offer: capability => {
         capabilities.set(plugin.metadata.id, capability);
-        // Also expose runtime options as a special 'runtime' capability
-        // that any plugin can request
-        if (plugin.metadata.id === 'subagent') {
-          capabilities.set('_runtime', {
-            subagentId: runtimeOptions?.subagentId,
-            persona: runtimeOptions?.persona,
-            isSubagent: !!runtimeOptions?.subagentId,
-          });
-        }
       },
       request: <T>(pluginId: string) => {
         // Special case: allow requesting 'runtime' without declaration
@@ -509,6 +500,14 @@ export function createDronePluginEngine({
       for (const plugin of sortedPlugins) {
         registeredPlugins.push(await registerPlugin(plugin));
       }
+
+      // Expose runtime options as a special '_runtime' capability
+      // that any plugin can request via 'runtime'
+      capabilities.set('_runtime', {
+        subagentId: runtimeOptions?.subagentId,
+        persona: runtimeOptions?.persona,
+        isSubagent: !!runtimeOptions?.subagentId,
+      });
 
       // Log override warnings after all plugins are loaded.
       logOverrideWarnings();

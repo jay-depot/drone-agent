@@ -19,6 +19,7 @@ Add a second, unencrypted HTTP port to the coordinator (default 8080, default ho
 ## Implementation Steps
 
 ### Step 1: Add web token to SQLite database ✅
+
 **Agent:** coder
 **File:** `drone-coordinator/src/db.ts`
 
@@ -26,6 +27,7 @@ Add a second, unencrypted HTTP port to the coordinator (default 8080, default ho
 - Added functions: `getWebToken()`, `generateWebToken()`, `initWebToken()` (auto-generates on first startup)
 
 ### Step 2: Add CLI flags and commands ✅
+
 **Agent:** coder
 **File:** `drone-coordinator/src/index.ts`
 
@@ -35,12 +37,14 @@ Add a second, unencrypted HTTP port to the coordinator (default 8080, default ho
 - Added handler functions and updated help text
 
 ### Step 3: Extract shared server setup into a factory function ✅
+
 **Agent:** coder
 **File:** `drone-coordinator/src/index.ts` (refactor)
 
 Extracted route registration, WebSocket setup, static file serving, and SPA fallback into a reusable `setupServer(app, uiDistPath, opts?)` function.
 
 ### Step 4: Create auth middleware for the web port ✅
+
 **Agent:** coder
 **New file:** `drone-coordinator/src/web-auth.ts`
 
@@ -48,12 +52,14 @@ Extracted route registration, WebSocket setup, static file serving, and SPA fall
 - `createWebAuthMiddleware(getToken)`: Fastify onRequest hook, applies to all API routes and /ws, returns 401 for non-local requests without valid Bearer token
 
 ### Step 5: Create second Fastify instance for web port ✅
+
 **Agent:** coder
 **File:** `drone-coordinator/src/index.ts`
 
 Created `webApp` (HTTP only, no TLS), registered auth middleware, called `setupServer(webApp, uiDistPath, { getToken })`, listens on `config.webPort` / `config.webHost`.
 
 ### Step 6: Update SPA with login page and token management ✅
+
 **Agent:** coder
 **Files:** `drone-coordinator-ui/src/`
 
@@ -64,16 +70,19 @@ Created `webApp` (HTTP only, no TLS), registered auth middleware, called `setupS
 - Update: All pages use `useAuthenticatedFetch` instead of raw `fetch`
 
 ### Step 7: Update WebSocket endpoint to accept token via query parameter ✅
+
 **Agent:** coder
 **File:** `drone-coordinator/src/index.ts`
 
 WebSocket handler checks token from query string for non-local connections.
 
 ### Step 8: Update help text ✅
+
 **Agent:** coder
 **File:** `drone-coordinator/src/index.ts`
 
 ### Step 9: Verify the build ✅
+
 **Agent:** tester
 
 - `pnpm build` — all 5 packages compile successfully
@@ -81,6 +90,7 @@ WebSocket handler checks token from query string for non-local connections.
 - `pnpm lint` — passes (ESLint + Prettier)
 
 ### Step 10: Check the work against validation criteria ✅
+
 **Agent:** reviewer
 
 - [x] `pnpm build` succeeds across all packages

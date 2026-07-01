@@ -71,8 +71,10 @@ async function captureLlmPlugin(): Promise<Capture> {
       onConversationEvent: cb => hooks.onConversationEvent.push(cb),
       onSessionClear: cb => hooks.onSessionClear.push(cb),
       onShutdown: cb => hooks.onShutdown.push(cb),
-      onSessionSafetyTrimWillRun: cb => hooks.onSessionSafetyTrimWillRun.push(cb),
-      onSessionSafetyTrimApplied: cb => hooks.onSessionSafetyTrimApplied.push(cb),
+      onSessionSafetyTrimWillRun: cb =>
+        hooks.onSessionSafetyTrimWillRun.push(cb),
+      onSessionSafetyTrimApplied: cb =>
+        hooks.onSessionSafetyTrimApplied.push(cb),
     },
     offer: cap => {
       offeredCapability = cap as DroneLlmCapability;
@@ -116,7 +118,9 @@ function makeProviderRegistration(options: {
   };
 }
 
-function makeCommandContext(capability: DroneLlmCapability): DroneSlashCommandContext {
+function makeCommandContext(
+  capability: DroneLlmCapability
+): DroneSlashCommandContext {
   return {
     line: '/model',
     args: [],
@@ -204,7 +208,9 @@ describe('llm plugin provider switching', () => {
     );
 
     const ctx = makeCommandContext(capability);
-    const conversationSetModel = vi.fn((model: string) => capability.setModel(model));
+    const conversationSetModel = vi.fn((model: string) =>
+      capability.setModel(model)
+    );
     ctx.conversation = {
       ...ctx.conversation,
       setModel: conversationSetModel,
@@ -232,7 +238,9 @@ describe('llm plugin provider switching', () => {
     );
 
     const ctx = makeCommandContext(capability);
-    const conversationSetModel = vi.fn((model: string) => capability.setModel(model));
+    const conversationSetModel = vi.fn((model: string) =>
+      capability.setModel(model)
+    );
     ctx.conversation = {
       ...ctx.conversation,
       setModel: conversationSetModel,
@@ -267,7 +275,9 @@ describe('llm plugin provider switching', () => {
     );
 
     const ctx = makeCommandContext(capability);
-    const conversationSetModel = vi.fn((model: string) => capability.setModel(model));
+    const conversationSetModel = vi.fn((model: string) =>
+      capability.setModel(model)
+    );
     ctx.conversation = {
       ...ctx.conversation,
       setModel: conversationSetModel,

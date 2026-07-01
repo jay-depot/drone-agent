@@ -38,7 +38,10 @@ export const llmPlugin: DronePlugin = {
       }
     }
 
-    function getAvailableProviders(): Array<{ id: string; precedence: number }> {
+    function getAvailableProviders(): Array<{
+      id: string;
+      precedence: number;
+    }> {
       return providers.map(provider => ({
         id: provider.id,
         precedence: provider.precedence,
@@ -163,7 +166,9 @@ export const llmPlugin: DronePlugin = {
         let modelTokens = args;
         if (providerIdx !== -1 && providerIdx + 1 < args.length) {
           const providerId = args[providerIdx + 1];
-          modelTokens = args.filter((_, idx) => idx !== providerIdx && idx !== providerIdx + 1);
+          modelTokens = args.filter(
+            (_, idx) => idx !== providerIdx && idx !== providerIdx + 1
+          );
           try {
             llm.activateProvider(providerId);
             const defaultModel = llm.getModel();
