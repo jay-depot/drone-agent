@@ -304,7 +304,7 @@ async function main(): Promise<void> {
       engine.setElicitation(createReadlineElicitation());
     }
     const { pluginId, workflowName, args } = invocation.options.workflow;
-    const canonicalName = `${pluginId}.${workflowName}`;
+    const canonicalName = `${pluginId}__${workflowName}`;
     await engine.runHooks('onBeforePrompt');
     const result = await engine.runWorkflow(canonicalName, args);
     if (result.toolResult) {
