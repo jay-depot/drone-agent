@@ -3,7 +3,7 @@ import http from 'http';
 import { logger } from './logger.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
-import type { TlsIdentity } from './tls.js';
+import type { TlsIdentity } from 'drone-swarm-common/tls';
 
 export interface BeaconStatusResponse {
   status: 'pending' | 'approved' | 'rejected' | 'rejected';

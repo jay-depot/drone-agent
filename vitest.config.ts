@@ -15,6 +15,9 @@ export default defineConfig({
       // Tests import the workspace package by name. Resolve to source so we
       // don't need a pre-build step before running tests.
       'drone-core': path.join(rootDir, 'drone-core/src/index.ts'),
+      'drone-swarm-common': path.join(rootDir, 'drone-swarm-common/src/index.ts'),
+      'drone-swarm-common/tls': path.join(rootDir, 'drone-swarm-common/src/tls.ts'),
+      'drone-swarm-common/wiki-storage': path.join(rootDir, 'drone-swarm-common/src/wiki-storage.ts'),
     },
   },
   test: {
@@ -24,6 +27,7 @@ export default defineConfig({
       'drone-agent/test/**/*.test.tsx',
       'drone-beacon/test/**/*.test.ts',
       'drone-coordinator/test/**/*.test.ts',
+      'drone-swarm-common/test/**/*.test.ts',
     ],
     // Exclude integration tests that require external services:
     // - Docker: e2e-swarm, coordinator-sync, spawn, inter-agent, agent-beacon
@@ -54,6 +58,7 @@ export default defineConfig({
         'drone-agent/src/**/*.ts',
         'drone-beacon/src/**/*.ts',
         'drone-coordinator/src/**/*.ts',
+        'drone-swarm-common/src/**/*.ts',
       ],
       exclude: [
         'drone-agent/src/tui/**',

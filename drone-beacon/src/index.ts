@@ -22,7 +22,7 @@ import {
 import * as wsServer from './ws-server.js';
 import { logger } from './logger.js';
 import { loadOrCreateIdentity, type BeaconIdentity } from './identity.js';
-import { loadOrCreateTlsIdentity, getTlsOptions } from './tls.js';
+import { loadOrCreateTlsIdentity, getTlsOptions, setTlsLogger } from 'drone-swarm-common/tls';
 
 const DEFAULT_PORT = 3457;
 const DEFAULT_HOST = '0.0.0.0';
@@ -138,6 +138,9 @@ async function main() {
   logger.info(
     `Beacon identity loaded (public key: ${identity.publicKeyHex.slice(0, 16)}...)`
   );
+
+  // Set TLS logger
+  setTlsLogger(logger);
 
   // Load or create TLS certificate
   const tlsIdentity = loadOrCreateTlsIdentity(config.configDir);

@@ -4,7 +4,7 @@ import { proxyWikiToCoordinator } from './context.js';
 export default function wikiRoutes(app: FastifyInstance) {
   // List all wiki pages (beacon + coordinator)
   app.get('/wiki', async () => {
-    const { listPages } = await import('../wiki-storage.js');
+    const { listPages } = await import('drone-swarm-common/wiki-storage');
     const localPages = await listPages();
     const coordinatorPages = await proxyWikiToCoordinator('GET', '/wiki');
     if (coordinatorPages && Array.isArray(coordinatorPages)) {
@@ -28,7 +28,7 @@ export default function wikiRoutes(app: FastifyInstance) {
         return result;
       }
 
-      const { readPage } = await import('../wiki-storage.js');
+      const { readPage } = await import('drone-swarm-common/wiki-storage');
       const page = await readPage(request.params.pageId);
       if (!page) {
         return reply.code(404).send({ error: 'Wiki page not found' });
@@ -68,7 +68,7 @@ export default function wikiRoutes(app: FastifyInstance) {
       return reply.code(200).send(result);
     }
 
-    const { writePage } = await import('../wiki-storage.js');
+    const { writePage } = await import('drone-swarm-common/wiki-storage');
     try {
       const page = await writePage(
         pageId,
@@ -99,7 +99,7 @@ export default function wikiRoutes(app: FastifyInstance) {
         return result;
       }
 
-      const { deletePage } = await import('../wiki-storage.js');
+      const { deletePage } = await import('drone-swarm-common/wiki-storage');
       const deleted = await deletePage(request.params.pageId);
       if (!deleted) {
         return reply.code(404).send({ error: 'Wiki page not found' });
@@ -110,7 +110,7 @@ export default function wikiRoutes(app: FastifyInstance) {
 
   // Search wiki pages (beacon + coordinator)
   app.get<{ Querystring: { q: string } }>('/wiki/search', async request => {
-    const { searchPages } = await import('../wiki-storage.js');
+    const { searchPages } = await import('drone-swarm-common/wiki-storage');
     const { q } = request.query;
     if (!q) return [];
     const localResults = await searchPages(q);
@@ -126,7 +126,7 @@ export default function wikiRoutes(app: FastifyInstance) {
 
   // Lint the local wiki
   app.post('/wiki/lint', async () => {
-    const { lintPages } = await import('../wiki-storage.js');
+    const { lintPages } = await import('drone-swarm-common/wiki-storage');
     return lintPages();
   });
 }

@@ -2,7 +2,13 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { logger } from './logger.js';
+import pino from 'pino';
+
+let logger: pino.Logger = pino({ name: 'drone-swarm-common', level: 'silent' });
+
+export function setTlsLogger(l: pino.Logger): void {
+  logger = l;
+}
 
 export interface TlsIdentity {
   certPath: string;
@@ -30,7 +36,7 @@ function generateTlsCertificateWithOpenssl(
   const tempDir = configDir;
 
   try {
-    // Generate certificate using openssl (use -subj with just CN to avoid + being interpreted as RDN separator)
+    // Use -subj with just CN (no O= to avoid + being interpreted as RDN separator)
     execSync(
       `openssl req -x509 -newkey rsa:2048 -keyout "${tempDir}/temp-key.pem" -out "${tempDir}/temp-cert.pem" -days 365 -nodes -subj "/CN=${commonName}" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>/dev/null`,
       { stdio: 'pipe' }
@@ -39,13 +45,11 @@ function generateTlsCertificateWithOpenssl(
     const certPem = fs.readFileSync(`${tempDir}/temp-cert.pem`, 'utf-8');
     const keyPem = fs.readFileSync(`${tempDir}/temp-key.pem`, 'utf-8');
 
-    // Clean up temp files
     fs.unlinkSync(`${tempDir}/temp-cert.pem`);
     fs.unlinkSync(`${tempDir}/temp-key.pem`);
 
     return { certPem, keyPem };
   } catch (err) {
-    // Clean up on error
     try {
       if (fs.existsSync(`${tempDir}/temp-cert.pem`))
         fs.unlinkSync(`${tempDir}/temp-cert.pem`);
@@ -61,10 +65,11 @@ function generateTlsCertificateWithOpenssl(
  */
 export function loadOrCreateTlsIdentity(
   configDir: string,
+  serviceName: string = 'beacon',
   commonName: string = 'localhost'
 ): TlsIdentity {
-  const certPath = path.join(configDir, 'coordinator-cert.pem');
-  const keyPath = path.join(configDir, 'coordinator-key.pem');
+  const certPath = path.join(configDir, `${serviceName}-cert.pem`);
+  const keyPath = path.join(configDir, `${serviceName}-key.pem`);
 
   if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
     try {
@@ -81,12 +86,10 @@ export function loadOrCreateTlsIdentity(
     }
   }
 
-  // Ensure config directory exists
   if (!fs.existsSync(configDir)) {
     fs.mkdirSync(configDir, { recursive: true });
   }
 
-  // Generate new certificate using openssl
   let certPem: string;
   let keyPem: string;
 

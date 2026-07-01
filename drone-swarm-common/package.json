@@ -1,0 +1,36 @@
+{
+  "name": "drone-swarm-common",
+  "version": "1.0.0",
+  "description": "Shared utilities for drone swarm packages (beacon, coordinator)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./wiki-storage": {
+      "types": "./dist/wiki-storage.d.ts",
+      "import": "./dist/wiki-storage.js"
+    },
+    "./tls": {
+      "types": "./dist/tls.d.ts",
+      "import": "./dist/tls.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "drone-core": "workspace:*",
+    "pino": "^9.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.10"
+  }
+}

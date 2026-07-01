@@ -25,6 +25,7 @@
     "better-sqlite3": "^11.8.1",
     "drone-core": "workspace:*",
     "drone-coordinator-ui": "workspace:*",
+    "drone-swarm-common": "workspace:*",
     "fastify": "^5.2.1",
     "pino": "^9.6.0"
   },

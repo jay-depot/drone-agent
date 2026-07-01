@@ -20,7 +20,7 @@ import {
 import { initStorage } from './storage.js';
 import { registerRoutes } from './routes/index.js';
 import { logger } from './logger.js';
-import { loadOrCreateTlsIdentity, getTlsOptions } from './tls.js';
+import { loadOrCreateTlsIdentity, getTlsOptions, setTlsLogger } from 'drone-swarm-common/tls';
 import {
   addSubscriber,
   removeSubscriber,
@@ -400,9 +400,12 @@ async function main() {
   // Initialize web token (auto-generates on first startup)
   initWebToken();
 
+  // Set TLS logger
+  setTlsLogger(logger);
+
   let tlsOptions: { cert: Buffer; key: Buffer } | undefined;
   if (config.useHttps) {
-    const tlsIdentity = loadOrCreateTlsIdentity(config.configDir);
+    const tlsIdentity = loadOrCreateTlsIdentity(config.configDir, 'coordinator');
     tlsOptions = getTlsOptions(tlsIdentity);
     logger.info(`TLS certificate fingerprint: ${tlsIdentity.fingerprint}`);
   }

@@ -1,15 +1,13 @@
 import { mkdir, readFile, readdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
 import type {
   DroneWikiPage,
   DroneWikiPageMeta,
   DroneWikiSearchResult,
 } from 'drone-core';
-import { logger } from './logger.js';
 
 /**
- * Default directory for the swarm knowledge base on the coordinator host.
+ * Default directory for the swarm knowledge base on the beacon host.
  */
 const DEFAULT_KB_DIR = './knowledge-base';
 
@@ -276,7 +274,6 @@ export async function searchPages(
 
     let score = 0;
     let snippet = '';
-
     // Title match (highest score)
     if (titleLower.includes(q)) {
       score = 1.0;
