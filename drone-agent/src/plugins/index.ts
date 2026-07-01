@@ -15,6 +15,7 @@ import { llmPlugin } from './llm/index.js';
 import { lspPlugin } from './lsp/plugin.js';
 import { mcpPlugin } from './mcp/index.js';
 import { memoryPlugin } from './memory/index.js';
+import { notepadPlugin } from './notepad.js';
 import { ollamaPlugin } from './ollama.js';
 import { openrouterPlugin } from './openrouter/index.js';
 import { personaPlugin } from './persona/index.js';
@@ -41,6 +42,7 @@ import { focusPlugin } from './focus.js';
 // createBuiltInPlugins() to assemble the full list with the compaction plugin
 // wired in.
 const staticBuiltInPlugins: DronePlugin[] = [
+  notepadPlugin,
   subagentPlugin, // NEW
   startupPlugin,
   configPlugin,
