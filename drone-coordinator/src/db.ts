@@ -1120,16 +1120,36 @@ export function getSwarmSession(id: string): SwarmSession | undefined {
   };
 }
 
-export function listSwarmSessions(status?: string): SwarmSession[] {
-  let query = 'SELECT * FROM swarm_sessions';
-  const params: string[] = [];
-  if (status) {
-    query += ' WHERE status = ?';
-    params.push(status);
+export function listSwarmSessions(options?: {
+  status?: string;
+  sortBy?: string;
+  sortDirection?: string;
+  limit?: number;
+  offset?: number;
+}): SwarmSession[] {
+  let query = 'SELECT * FROM swarm_sessions WHERE 1=1';
+  const params: unknown[] = [];
+
+  if (options?.status) {
+    query += ' AND status = ?';
+    params.push(options.status);
   }
-  query += ' ORDER BY createdAt DESC';
+
+  const sortCol = options?.sortBy === 'updatedAt' ? 'updatedAt' : 'createdAt';
+  const sortDir = options?.sortDirection === 'ASC' ? 'ASC' : 'DESC';
+  query += ` ORDER BY ${sortCol} ${sortDir}`;
+
+  if (options?.limit) {
+    query += ' LIMIT ?';
+    params.push(options.limit);
+  }
+  if (options?.offset) {
+    query += ' OFFSET ?';
+    params.push(options.offset);
+  }
+
   const stmt = getDatabase().prepare(query);
-  const rows = (params.length > 0 ? stmt.all(...params) : stmt.all()) as Array<{
+  const rows = stmt.all(...params) as Array<{
     id: string;
     persona_id: string | null;
     beacon_id: string;
@@ -1161,6 +1181,53 @@ export function updateSwarmSessionStatus(
   stmt.run({ id, status, updatedAt: now });
 
   return { ...existing, status, updatedAt: now };
+}
+
+export function transitionSessionStatus(
+  id: string,
+  fromStatus: string | string[],
+  toStatus: string
+): SwarmSession | { error: string } {
+  const session = getSwarmSession(id);
+  if (!session) return { error: 'Session not found' };
+
+  const allowedFrom = Array.isArray(fromStatus) ? fromStatus : [fromStatus];
+  if (!allowedFrom.includes(session.status)) {
+    return {
+      error: `Cannot transition from '${session.status}' to '${toStatus}'`,
+    };
+  }
+
+  const now = Date.now();
+  const stmt = getDatabase().prepare(
+    'UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt WHERE id = @id'
+  );
+  stmt.run({ id, status: toStatus, updatedAt: now });
+
+  return { ...session, status: toStatus, updatedAt: now };
+}
+
+export function getStaleSessions(thresholdMs: number): SwarmSession[] {
+  const cutoff = Date.now() - thresholdMs;
+  const stmt = getDatabase().prepare(
+    "SELECT * FROM swarm_sessions WHERE status = 'active' AND updatedAt < ?"
+  );
+  const rows = stmt.all(cutoff) as Array<{
+    id: string;
+    persona_id: string | null;
+    beacon_id: string;
+    createdAt: number;
+    updatedAt: number;
+    status: string;
+  }>;
+  return rows.map(row => ({
+    id: row.id,
+    personaId: row.persona_id,
+    beaconId: row.beacon_id,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    status: row.status,
+  }));
 }
 
 export function createSwarmEvent(event: SwarmEvent): SwarmEvent {

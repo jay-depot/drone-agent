@@ -281,7 +281,7 @@ async function setupServer(
     try {
       const beacons = listBeacons();
       const agentLocations = listAllAgentLocations();
-      const swarmSessions = listSwarmSessions('active');
+      const swarmSessions = listSwarmSessions({ status: 'active' });
       const sessions = swarmSessions.map(s => {
         const beacon = beacons.find(b => b.id === s.beaconId);
         return {
