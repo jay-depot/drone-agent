@@ -14,6 +14,7 @@ import type {
   DroneToolDefinition,
 } from 'drone-core';
 import { PRECEDENCE_COORDINATOR, PRECEDENCE_SWARM } from 'drone-core';
+import { parsePersonaMd } from '../persona/loader.js';
 
 /**
  * Generate a UUID v4 string.
@@ -207,16 +208,27 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
           if (!personasResp.ok) {
             throw new Error(`Failed to fetch personas: ${personasResp.status}`);
           }
-          const personasData =
-            (await personasResp.json()) as DronePersonaDefinition[];
+          const rawPersonas = (await personasResp.json()) as Array<{
+            id: string;
+            name: string;
+            description: string;
+            systemPrompt: string;
+            scope: string;
+          }>;
           beaconPersonas = new Map();
           coordinatorPersonas = new Map();
 
-          for (const p of personasData) {
-            if ((p as any).scope === 'coordinator') {
-              coordinatorPersonas.set(p.id, p);
+          for (const p of rawPersonas) {
+            // Parse the .md content to extract all rich fields
+            const definition = parsePersonaMd(p.id, p.systemPrompt);
+            // Preserve the scope from the DB, not from the .md frontmatter
+            definition.scope =
+              p.scope === 'coordinator' ? 'coordinator' : 'beacon';
+
+            if (p.scope === 'coordinator') {
+              coordinatorPersonas.set(p.id, definition);
             } else {
-              beaconPersonas.set(p.id, p);
+              beaconPersonas.set(p.id, definition);
             }
           }
 
@@ -295,7 +307,9 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
             try {
               const res = await fetch(`${baseUrl}/personas/${id}`);
               return res.ok;
-            } catch { return false; }
+            } catch {
+              return false;
+            }
           },
           writePersona: async (id: string, content: string) => {
             const res = await fetch(`${baseUrl}/personas`, {
@@ -309,7 +323,9 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
               }),
             });
             if (!res.ok) {
-              throw new Error(`Failed to write persona to beacon: ${res.status}`);
+              throw new Error(
+                `Failed to write persona to beacon: ${res.status}`
+              );
             }
             return { filePath: `${baseUrl}/personas/${id}` };
           },
@@ -324,7 +340,9 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
             try {
               const res = await fetch(`${baseUrl}/personas/${id}`);
               return res.ok;
-            } catch { return false; }
+            } catch {
+              return false;
+            }
           },
           writePersona: async (id: string, content: string) => {
             const res = await fetch(`${baseUrl}/personas`, {
@@ -339,7 +357,9 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
               }),
             });
             if (!res.ok) {
-              throw new Error(`Failed to write persona to coordinator: ${res.status}`);
+              throw new Error(
+                `Failed to write persona to coordinator: ${res.status}`
+              );
             }
             return { filePath: `${baseUrl}/personas/${id}` };
           },
@@ -364,7 +384,9 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
             try {
               const res = await fetch(`${baseUrl}/skills/${id}`);
               return res.ok;
-            } catch { return false; }
+            } catch {
+              return false;
+            }
           },
           writeSkill: async (id: string, content: string) => {
             const res = await fetch(`${baseUrl}/skills`, {
@@ -394,7 +416,9 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
             try {
               const res = await fetch(`${baseUrl}/skills/${id}`);
               return res.ok;
-            } catch { return false; }
+            } catch {
+              return false;
+            }
           },
           writeSkill: async (id: string, content: string) => {
             const res = await fetch(`${baseUrl}/skills`, {
@@ -410,7 +434,9 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
               }),
             });
             if (!res.ok) {
-              throw new Error(`Failed to write skill to coordinator: ${res.status}`);
+              throw new Error(
+                `Failed to write skill to coordinator: ${res.status}`
+              );
             }
             return { filePath: `${baseUrl}/skills/${id}` };
           },

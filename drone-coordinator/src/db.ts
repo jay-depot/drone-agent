@@ -1631,11 +1631,21 @@ export function upsertToolDefinition(
     createdAt: now,
     updatedAt: now,
   });
-  return { id, name, description, defaultHidden: defaultHidden ? 1 : 0, source, createdAt: now, updatedAt: now };
+  return {
+    id,
+    name,
+    description,
+    defaultHidden: defaultHidden ? 1 : 0,
+    source,
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 export function getToolDefinitions(): ToolDefinition[] {
-  const stmt = getDatabase().prepare('SELECT * FROM tool_definitions ORDER BY name');
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM tool_definitions ORDER BY name'
+  );
   return stmt.all() as ToolDefinition[];
 }
 
@@ -1652,12 +1662,31 @@ const BUILTIN_HIDDEN_TOOLS: Array<{
   name: string;
   description: string;
 }> = [
-  { name: 'swarm__wiki_write', description: 'Create or update a wiki page in the swarm knowledge base' },
-  { name: 'swarm__wiki_delete', description: 'Delete a wiki page from the swarm knowledge base' },
-  { name: 'self-improvement__insights-list', description: 'List all insight files with their entry counts and last timestamps' },
-  { name: 'self-improvement__insights-recall', description: 'Read all insights for a specific target' },
-  { name: 'self-improvement__principles-store', description: 'Store a principle' },
-  { name: 'self-improvement__principles-delete', description: 'Delete a principle' },
+  {
+    name: 'swarm__wiki_write',
+    description: 'Create or update a wiki page in the swarm knowledge base',
+  },
+  {
+    name: 'swarm__wiki_delete',
+    description: 'Delete a wiki page from the swarm knowledge base',
+  },
+  {
+    name: 'self-improvement__insights-list',
+    description:
+      'List all insight files with their entry counts and last timestamps',
+  },
+  {
+    name: 'self-improvement__insights-recall',
+    description: 'Read all insights for a specific target',
+  },
+  {
+    name: 'self-improvement__principles-store',
+    description: 'Store a principle',
+  },
+  {
+    name: 'self-improvement__principles-delete',
+    description: 'Delete a principle',
+  },
 ];
 
 /**

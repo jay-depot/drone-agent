@@ -13,7 +13,8 @@ export const SESSION_STATUSES = {
 } as const;
 
 /** Union type of all session status values. */
-export type SessionStatus = (typeof SESSION_STATUSES)[keyof typeof SESSION_STATUSES];
+export type SessionStatus =
+  (typeof SESSION_STATUSES)[keyof typeof SESSION_STATUSES];
 
 export type DroneLogger = {
   info: (message: string) => void;

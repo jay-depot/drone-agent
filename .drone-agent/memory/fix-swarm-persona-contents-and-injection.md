@@ -1,7 +1,6 @@
 ---
 key: fix-swarm-persona-contents-and-injection
-tags:
-  []
+tags: []
 created: 2026-07-01T21:55:38.061Z
 updated: 2026-07-01T21:55:38.061Z
 ---
@@ -15,6 +14,7 @@ Two bugs in the swarm persona system, both stemming from a type mismatch between
 ## Root Cause
 
 The swarm plugin's `reloadFromBeacon()` does a raw type cast:
+
 ```typescript
 const personasData = (await personasResp.json()) as DronePersonaDefinition[];
 ```
@@ -56,7 +56,7 @@ for (const p of rawPersonas) {
   const definition = parsePersonaMd(p.id, p.systemPrompt);
   // Preserve the scope from the DB (not from the .md frontmatter)
   definition.scope = p.scope === 'coordinator' ? 'coordinator' : 'beacon';
-  
+
   if (p.scope === 'coordinator') {
     coordinatorPersonas.set(p.id, definition);
   } else {
@@ -82,7 +82,8 @@ for (const p of rawPersonas) {
 const persona = db.createPersona(request.body, 'local');
 
 // After:
-const scope = (request.body as any).scope === 'coordinator' ? 'coordinator' : 'local';
+const scope =
+  (request.body as any).scope === 'coordinator' ? 'coordinator' : 'local';
 const persona = db.createPersona(request.body, scope);
 ```
 
@@ -111,6 +112,7 @@ export type CreatePersonaRequest = {
 **What:** Run the project's typecheck and lint to ensure no regressions.
 
 **Commands:**
+
 ```bash
 pnpm typecheck
 pnpm lint
@@ -119,6 +121,7 @@ pnpm lint
 ### Step 5: Manual validation
 
 **What:** Run the persona creation workflow targeting the coordinator scope and verify:
+
 1. The persona appears in `persona__list` with correct `hasOverride`, `fragmentCount`, and `uiColor`
 2. After selecting the persona with `/persona select <id>`, the `/systemprompt` command shows the persona's content
 3. The persona's `systemPromptOverride` and `promptFragments` are injected into the system prompt

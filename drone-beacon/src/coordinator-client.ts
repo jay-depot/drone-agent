@@ -617,7 +617,9 @@ export function createCoordinatorClient(
         if (!res.ok) {
           logger.warn(`Failed to push tool definitions: ${res.status}`);
         } else {
-          logger.debug(`Pushed ${tools.length} tool definitions to coordinator`);
+          logger.debug(
+            `Pushed ${tools.length} tool definitions to coordinator`
+          );
         }
       } catch (err) {
         logger.warn(`Failed to push tool definitions: ${err}`);

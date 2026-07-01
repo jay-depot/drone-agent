@@ -56,15 +56,21 @@ async function withProjectDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   }
 }
 
-function makeWriters(
-  projectDir: string
-): { project: DroneSkillWriter; user: DroneSkillWriter } {
+function makeWriters(projectDir: string): {
+  project: DroneSkillWriter;
+  user: DroneSkillWriter;
+} {
   const projectWriter: DroneSkillWriter = {
     id: 'skill-provider-project',
     scope: 'project',
     label: 'Project (./.drone-agent/skills/)',
     exists: async (id: string) => {
-      const filePath = path.join(projectDir, '.drone-agent', 'skills', `${id}.md`);
+      const filePath = path.join(
+        projectDir,
+        '.drone-agent',
+        'skills',
+        `${id}.md`
+      );
       try {
         await readFile(filePath, 'utf-8');
         return true;

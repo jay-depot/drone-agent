@@ -86,7 +86,7 @@ describe('TLS', () => {
     async () => {
       const { loadOrCreateTlsIdentity } = await import('../src/tls.js');
       const identity = loadOrCreateTlsIdentity(configDir, 'coordinator');
-      
+
       const certExists = await readFile(identity.certPath, 'utf-8')
         .then(() => true)
         .catch(() => false);
@@ -98,17 +98,14 @@ describe('TLS', () => {
     }
   );
 
-  itIfOpenssl(
-    'should work with different service names',
-    async () => {
-      const { loadOrCreateTlsIdentity } = await import('../src/tls.js');
-      const beaconIdentity = loadOrCreateTlsIdentity(configDir, 'beacon');
-      const coordIdentity = loadOrCreateTlsIdentity(configDir, 'coordinator');
-      
-      // They should be different files
-      expect(beaconIdentity.certPath).not.toBe(coordIdentity.certPath);
-      expect(beaconIdentity.keyPath).not.toBe(coordIdentity.keyPath);
-      expect(beaconIdentity.fingerprint).not.toBe(coordIdentity.fingerprint);
-    }
-  );
+  itIfOpenssl('should work with different service names', async () => {
+    const { loadOrCreateTlsIdentity } = await import('../src/tls.js');
+    const beaconIdentity = loadOrCreateTlsIdentity(configDir, 'beacon');
+    const coordIdentity = loadOrCreateTlsIdentity(configDir, 'coordinator');
+
+    // They should be different files
+    expect(beaconIdentity.certPath).not.toBe(coordIdentity.certPath);
+    expect(beaconIdentity.keyPath).not.toBe(coordIdentity.keyPath);
+    expect(beaconIdentity.fingerprint).not.toBe(coordIdentity.fingerprint);
+  });
 });

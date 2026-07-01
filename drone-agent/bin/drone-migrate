@@ -14,7 +14,7 @@ if (invocation.kind === 'migrate') {
 } else {
   console.error(
     'Usage: drone-migrate <options>\n\n' +
-    'Run `drone-migrate --help` for details.\n'
+      'Run `drone-migrate --help` for details.\n'
   );
   process.exitCode = 1;
 }

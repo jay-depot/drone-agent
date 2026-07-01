@@ -255,9 +255,7 @@ export const personaPlugin: DronePlugin = {
       },
       unregisterWriter: (writerId: string) => {
         removeWriter(writerId);
-        registration.logger.info(
-          `persona writer "${writerId}" unregistered`
-        );
+        registration.logger.info(`persona writer "${writerId}" unregistered`);
       },
       getWriters: () => [...writers],
       getFilteredTools: (allTools: DroneToolDescriptor[]) =>

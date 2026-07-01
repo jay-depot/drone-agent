@@ -49,8 +49,12 @@ export const skillProviderUserPlugin: DronePlugin = {
       label: 'User (~/.drone-agent/skills/)',
       exists: async (id: string) => {
         const filePath = path.join(skillsDir, `${id}.md`);
-        try { await access(filePath, fsConstants.F_OK); return true; }
-        catch { return false; }
+        try {
+          await access(filePath, fsConstants.F_OK);
+          return true;
+        } catch {
+          return false;
+        }
       },
       writeSkill: async (id: string, content: string) => {
         const filePath = path.join(skillsDir, `${id}.md`);

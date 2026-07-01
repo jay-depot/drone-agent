@@ -105,8 +105,12 @@ export const personaProviderUserPlugin: DronePlugin = {
       label: 'User (~/.drone-agent/personas/<name>/persona.md)',
       exists: async (id: string) => {
         const filePath = path.join(personaDir, id, 'persona.md');
-        try { await access(filePath, fsConstants.F_OK); return true; }
-        catch { return false; }
+        try {
+          await access(filePath, fsConstants.F_OK);
+          return true;
+        } catch {
+          return false;
+        }
       },
       writePersona: async (id: string, content: string) => {
         const targetDir = path.join(personaDir, id);

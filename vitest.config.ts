@@ -15,9 +15,18 @@ export default defineConfig({
       // Tests import the workspace package by name. Resolve to source so we
       // don't need a pre-build step before running tests.
       'drone-core': path.join(rootDir, 'drone-core/src/index.ts'),
-      'drone-swarm-common': path.join(rootDir, 'drone-swarm-common/src/index.ts'),
-      'drone-swarm-common/tls': path.join(rootDir, 'drone-swarm-common/src/tls.ts'),
-      'drone-swarm-common/wiki-storage': path.join(rootDir, 'drone-swarm-common/src/wiki-storage.ts'),
+      'drone-swarm-common': path.join(
+        rootDir,
+        'drone-swarm-common/src/index.ts'
+      ),
+      'drone-swarm-common/tls': path.join(
+        rootDir,
+        'drone-swarm-common/src/tls.ts'
+      ),
+      'drone-swarm-common/wiki-storage': path.join(
+        rootDir,
+        'drone-swarm-common/src/wiki-storage.ts'
+      ),
     },
   },
   test: {

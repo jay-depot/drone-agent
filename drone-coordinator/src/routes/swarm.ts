@@ -1,5 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import { isLargePayload, storeLargePayload, retrieveLargePayload } from '../storage.js';
+import {
+  isLargePayload,
+  storeLargePayload,
+  retrieveLargePayload,
+} from '../storage.js';
 import * as db from '../db.js';
 
 export default function swarmRoutes(app: FastifyInstance) {
@@ -105,7 +109,6 @@ export default function swarmRoutes(app: FastifyInstance) {
     }
   );
 
-
   // === Session Pipeline Routes ===
 
   app.get<{
@@ -128,56 +131,66 @@ export default function swarmRoutes(app: FastifyInstance) {
     return reply.send({ sessions, count: sessions.length });
   });
 
-  app.get<{ Params: { id: string } }>('/sessions/:id/log', async (request, reply) => {
-    const session = db.getSwarmSession(request.params.id);
-    if (!session) {
-      return reply.code(404).send({ error: 'Session not found' });
-    }
-    const events = db.getSwarmEvents(request.params.id);
-    const resolvedEvents = events.map(evt => {
-      let payload = evt.payload;
-      if (payload && payload.startsWith('blob:')) {
-        try {
-          payload = retrieveLargePayload(payload);
-        } catch {
-          payload = null;
+  app.get<{ Params: { id: string } }>(
+    '/sessions/:id/log',
+    async (request, reply) => {
+      const session = db.getSwarmSession(request.params.id);
+      if (!session) {
+        return reply.code(404).send({ error: 'Session not found' });
+      }
+      const events = db.getSwarmEvents(request.params.id);
+      const resolvedEvents = events.map(evt => {
+        let payload = evt.payload;
+        if (payload && payload.startsWith('blob:')) {
+          try {
+            payload = retrieveLargePayload(payload);
+          } catch {
+            payload = null;
+          }
         }
-      }
-      return { ...evt, payload };
-    });
-    return reply.send({
-      session: {
-        id: session.id,
-        personaId: session.personaId,
-        beaconId: session.beaconId,
-        status: session.status,
-        createdAt: session.createdAt,
-        updatedAt: session.updatedAt,
-      },
-      events: resolvedEvents,
-    });
-  });
-
-  app.post<{ Params: { id: string } }>('/sessions/:id/process', async (request, reply) => {
-    const result = db.transitionSessionStatus(
-      request.params.id,
-      ['active', 'stale', 'finished'],
-      'processing'
-    );
-    if ('error' in result) {
-      const statusCode = result.error === 'Session not found' ? 404 : 409;
-      return reply.code(statusCode).send(result);
+        return { ...evt, payload };
+      });
+      return reply.send({
+        session: {
+          id: session.id,
+          personaId: session.personaId,
+          beaconId: session.beaconId,
+          status: session.status,
+          createdAt: session.createdAt,
+          updatedAt: session.updatedAt,
+        },
+        events: resolvedEvents,
+      });
     }
-    const events = db.getSwarmEvents(request.params.id);
-    const resolvedEvents = events.map(evt => {
-      let payload = evt.payload;
-      if (payload && payload.startsWith('blob:')) {
-        try { payload = retrieveLargePayload(payload); } catch { payload = null; }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/sessions/:id/process',
+    async (request, reply) => {
+      const result = db.transitionSessionStatus(
+        request.params.id,
+        ['active', 'stale', 'finished'],
+        'processing'
+      );
+      if ('error' in result) {
+        const statusCode = result.error === 'Session not found' ? 404 : 409;
+        return reply.code(statusCode).send(result);
       }
-      return { ...evt, payload };
-    });
-    return reply.send({ session: result, events: resolvedEvents });
-  });
+      const events = db.getSwarmEvents(request.params.id);
+      const resolvedEvents = events.map(evt => {
+        let payload = evt.payload;
+        if (payload && payload.startsWith('blob:')) {
+          try {
+            payload = retrieveLargePayload(payload);
+          } catch {
+            payload = null;
+          }
+        }
+        return { ...evt, payload };
+      });
+      return reply.send({ session: result, events: resolvedEvents });
+    }
+  );
 
   app.post<{
     Params: { id: string };
@@ -211,7 +224,12 @@ export default function swarmRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'tools array is required' });
     }
     for (const tool of tools) {
-      db.upsertToolDefinition(tool.name, tool.description, tool.defaultHidden, 'agent:push');
+      db.upsertToolDefinition(
+        tool.name,
+        tool.description,
+        tool.defaultHidden,
+        'agent:push'
+      );
     }
     return reply.code(201).send({ count: tools.length });
   });

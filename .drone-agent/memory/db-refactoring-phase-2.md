@@ -20,13 +20,13 @@ This is a follow-up to the `drone-swarm-common` package extraction (Phase 1: wik
 
 Both `drone-beacon/src/db.ts` (1,295 lines) and `drone-coordinator/src/db.ts` (1,518 lines) contain nearly identical code for these tables:
 
-| Table | Beacon Schema | Coordinator Schema | CRUD Similarity |
-|-------|---------------|-------------------|-----------------|
-| `personas` | ✅ | ✅ | ~95% (beacon has `scope` param, `listLocalPersonas`, `upsertPersonaFromCoordinator`) |
-| `skills` | ✅ | ✅ | ~95% (beacon has `scope` param, `listLocalSkills`, `upsertSkillFromCoordinator`) |
-| `insights` | ✅ | ✅ | ~100% identical |
-| `principles` | ✅ | ✅ | ~100% identical |
-| `wiki_pages` | ✅ | ✅ | ~100% identical (beacon has this in db.ts, coordinator does too) |
+| Table        | Beacon Schema | Coordinator Schema | CRUD Similarity                                                                      |
+| ------------ | ------------- | ------------------ | ------------------------------------------------------------------------------------ |
+| `personas`   | ✅            | ✅                 | ~95% (beacon has `scope` param, `listLocalPersonas`, `upsertPersonaFromCoordinator`) |
+| `skills`     | ✅            | ✅                 | ~95% (beacon has `scope` param, `listLocalSkills`, `upsertSkillFromCoordinator`)     |
+| `insights`   | ✅            | ✅                 | ~100% identical                                                                      |
+| `principles` | ✅            | ✅                 | ~100% identical                                                                      |
+| `wiki_pages` | ✅            | ✅                 | ~100% identical (beacon has this in db.ts, coordinator does too)                     |
 
 ## Unique Tables (NOT to extract)
 

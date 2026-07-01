@@ -64,7 +64,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);
@@ -108,7 +109,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);
@@ -136,7 +138,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);
@@ -173,7 +176,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);
@@ -207,7 +211,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);
@@ -234,7 +239,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);
@@ -272,7 +278,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);
@@ -311,7 +318,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);
@@ -341,7 +349,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);
@@ -381,7 +390,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);
@@ -419,7 +429,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);
@@ -456,7 +467,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);
@@ -492,7 +504,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);
@@ -531,7 +544,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);
@@ -558,7 +572,8 @@ describe('Coordinator Client', () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');
       const { loadOrCreateIdentity } = await import('../src/identity.js');
-      const { loadOrCreateTlsIdentity } = await import('../../drone-swarm-common/src/tls.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = loadOrCreateTlsIdentity(configDir);

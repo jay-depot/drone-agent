@@ -85,9 +85,10 @@ async function withProjectDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   }
 }
 
-function makeWriters(
-  projectDir: string
-): { project: DronePersonaWriter; user: DronePersonaWriter } {
+function makeWriters(projectDir: string): {
+  project: DronePersonaWriter;
+  user: DronePersonaWriter;
+} {
   const projectWriter: DronePersonaWriter = {
     id: 'persona-provider-project',
     scope: 'project',

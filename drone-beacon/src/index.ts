@@ -22,7 +22,11 @@ import {
 import * as wsServer from './ws-server.js';
 import { logger } from './logger.js';
 import { loadOrCreateIdentity, type BeaconIdentity } from './identity.js';
-import { loadOrCreateTlsIdentity, getTlsOptions, setTlsLogger } from 'drone-swarm-common/tls';
+import {
+  loadOrCreateTlsIdentity,
+  getTlsOptions,
+  setTlsLogger,
+} from 'drone-swarm-common/tls';
 
 const DEFAULT_PORT = 3457;
 const DEFAULT_HOST = '0.0.0.0';

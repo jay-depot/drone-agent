@@ -24,7 +24,11 @@ import {
 import { initStorage } from './storage.js';
 import { registerRoutes } from './routes/index.js';
 import { logger } from './logger.js';
-import { loadOrCreateTlsIdentity, getTlsOptions, setTlsLogger } from 'drone-swarm-common/tls';
+import {
+  loadOrCreateTlsIdentity,
+  getTlsOptions,
+  setTlsLogger,
+} from 'drone-swarm-common/tls';
 import {
   addSubscriber,
   removeSubscriber,
@@ -263,7 +267,10 @@ async function setupServer(
     if (opts?.getToken) {
       // Skip token check for local/Tailscale connections (consistent with onRequest hook)
       if (!isLocalRequest(req)) {
-        const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+        const url = new URL(
+          req.url,
+          `http://${req.headers.host || 'localhost'}`
+        );
         const queryToken = url.searchParams.get('token');
         const token = opts.getToken();
         if (token && queryToken !== token) {
@@ -413,7 +420,10 @@ async function main() {
 
   let tlsOptions: { cert: Buffer; key: Buffer } | undefined;
   if (config.useHttps) {
-    const tlsIdentity = loadOrCreateTlsIdentity(config.configDir, 'coordinator');
+    const tlsIdentity = loadOrCreateTlsIdentity(
+      config.configDir,
+      'coordinator'
+    );
     tlsOptions = getTlsOptions(tlsIdentity);
     logger.info(`TLS certificate fingerprint: ${tlsIdentity.fingerprint}`);
   }
@@ -487,7 +497,8 @@ function seedDefaults(): void {
     createPersona({
       id: 'coordinator-wiki-librarian',
       name: 'Coordinator Wiki Librarian',
-      description: 'Suggested persona for scheduled and manual memory wiki maintenance sessions',
+      description:
+        'Suggested persona for scheduled and manual memory wiki maintenance sessions',
       systemPrompt: `---
 name: coordinator-wiki-librarian
 description: Suggested persona for scheduled and manual memory wiki maintenance sessions
@@ -554,7 +565,8 @@ When asked to process a session:
     createPersona({
       id: 'coordinator-admin',
       name: 'Coordinator Admin',
-      description: 'Persona with an overview of the drone framework internals preloaded. Use for setup/maintenance questions and tasks.',
+      description:
+        'Persona with an overview of the drone framework internals preloaded. Use for setup/maintenance questions and tasks.',
       systemPrompt: `---
 name: coordinator-admin
 description: Persona with an overview of the drone framework internals preloaded. Use for setup/maintenance questions and tasks.
@@ -637,8 +649,10 @@ You have read-only access to most systems plus the ability to run the migration 
     createSkill({
       id: 'memory-wiki',
       name: 'Memory Wiki',
-      description: 'A description of the memory wiki structure, exploration, and ingestion workflow',
-      trigger: 'the user wants to understand the wiki structure, ingest a session into the wiki, explore the wiki, or know the difference between wiki and project memory',
+      description:
+        'A description of the memory wiki structure, exploration, and ingestion workflow',
+      trigger:
+        'the user wants to understand the wiki structure, ingest a session into the wiki, explore the wiki, or know the difference between wiki and project memory',
       body: `# Memory Wiki
 
 ## Structure

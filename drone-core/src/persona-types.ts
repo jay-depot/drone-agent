@@ -2,7 +2,10 @@
 
 import type { DroneSkillDefinition } from './skill-types.js';
 import type { DroneToolDescriptor } from './session-types.js';
-import type { DronePersonaProvider, DronePersonaWriter } from './provider-types.js';
+import type {
+  DronePersonaProvider,
+  DronePersonaWriter,
+} from './provider-types.js';
 
 export type DronePersonaDefinition = {
   id: string;

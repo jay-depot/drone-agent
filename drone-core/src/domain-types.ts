@@ -35,6 +35,7 @@ export type CreatePersonaRequest = {
   name: string;
   description: string;
   systemPrompt: string;
+  scope?: 'local' | 'coordinator';
 };
 
 /** Request to create a new Skill. */

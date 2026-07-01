@@ -9,7 +9,9 @@ export default function personaRoutes(app: FastifyInstance) {
   app.post<{ Body: CreatePersonaRequest }>(
     '/personas',
     async (request, reply) => {
-      const persona = db.createPersona(request.body, 'local');
+      const scope =
+        request.body.scope === 'coordinator' ? 'coordinator' : 'local';
+      const persona = db.createPersona(request.body, scope);
 
       // Sync to coordinator
       const client = getCoordinatorClient();

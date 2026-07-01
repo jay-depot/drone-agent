@@ -82,7 +82,9 @@ function parseManageInput(input: Record<string, unknown>): TodoManageInput {
 
   if (action === 'replace_list') {
     if (!Array.isArray(input.items)) {
-      throw new Error('todo__manage_list replace_list requires an items array.');
+      throw new Error(
+        'todo__manage_list replace_list requires an items array.'
+      );
     }
 
     for (const item of input.items) {
