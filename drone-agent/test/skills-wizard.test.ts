@@ -11,6 +11,7 @@ import {
   type DroneElicitation,
   type DroneElicitationAnswers,
   type DroneElicitationQuestion,
+  type DroneSkillWriter,
   type DroneWorkflowResult,
 } from 'drone-core';
 import {
@@ -55,6 +56,57 @@ async function withProjectDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   }
 }
 
+function makeWriters(
+  projectDir: string
+): { project: DroneSkillWriter; user: DroneSkillWriter } {
+  const projectWriter: DroneSkillWriter = {
+    id: 'skill-provider-project',
+    scope: 'project',
+    label: 'Project (./.drone-agent/skills/)',
+    exists: async (id: string) => {
+      const filePath = path.join(projectDir, '.drone-agent', 'skills', `${id}.md`);
+      try {
+        await readFile(filePath, 'utf-8');
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    writeSkill: async (id: string, content: string) => {
+      const skillsDir = path.join(projectDir, '.drone-agent', 'skills');
+      const filePath = path.join(skillsDir, `${id}.md`);
+      await mkdir(skillsDir, { recursive: true });
+      await writeFile(filePath, content, 'utf-8');
+      return { filePath };
+    },
+  };
+
+  const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+  const userWriter: DroneSkillWriter = {
+    id: 'skill-provider-user',
+    scope: 'user',
+    label: 'User (~/.drone-agent/skills/)',
+    exists: async (id: string) => {
+      const filePath = path.join(homeDir, '.drone-agent', 'skills', `${id}.md`);
+      try {
+        await readFile(filePath, 'utf-8');
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    writeSkill: async (id: string, content: string) => {
+      const skillsDir = path.join(homeDir, '.drone-agent', 'skills');
+      const filePath = path.join(skillsDir, `${id}.md`);
+      await mkdir(skillsDir, { recursive: true });
+      await writeFile(filePath, content, 'utf-8');
+      return { filePath };
+    },
+  };
+
+  return { project: projectWriter, user: userWriter };
+}
+
 function makeContext(input: {
   projectDir: string;
   elicit: DroneElicitation;
@@ -62,6 +114,14 @@ function makeContext(input: {
 }): DroneWorkflowContext {
   const config = createDefaultAgentConfig();
   const caps = input.capabilities ?? new Map<string, unknown>();
+  // Add skills capability with writers if not already set
+  if (!caps.has('skills')) {
+    const writers = makeWriters(input.projectDir);
+    caps.set('skills', {
+      getWriters: () => [writers.project, writers.user],
+      reloadSkills: async () => {},
+    });
+  }
   return {
     elicit: input.elicit,
     projectDir: input.projectDir,
@@ -350,10 +410,12 @@ describe('skillsCreateWorkflow — reload capability', () => {
   it('calls reloadSkills when the skills capability is offered', async () => {
     await withProjectDir(async projectDir => {
       let reloaded = 0;
+      const writers = makeWriters(projectDir);
       const capabilities = new Map<string, unknown>([
         [
           'skills',
           {
+            getWriters: () => [writers.project, writers.user],
             reloadSkills: async () => {
               reloaded += 1;
             },
@@ -382,19 +444,27 @@ describe('skillsCreateWorkflow — reload capability', () => {
 
   it('does not throw when the skills capability is missing', async () => {
     await withProjectDir(async projectDir => {
-      const result = await runWizard(
-        {
-          scope: 'project',
-          id: 'webapp-testing',
-          description: 'Test web applications using Playwright.',
-          recall: 'The user mentions testing',
-        },
-        makeContext({
-          projectDir,
-          elicit: scriptedElicit([]),
-        })
-      );
-      expect(result.toolResult).toBeDefined();
+      const config = createDefaultAgentConfig();
+      const caps = new Map<string, unknown>();
+      // No 'skills' key
+      await expect(
+        runWizard(
+          {
+            scope: 'project',
+            id: 'webapp-testing',
+            description: 'Test web applications using Playwright.',
+            recall: 'The user mentions testing',
+          },
+          {
+            elicit: scriptedElicit([]),
+            projectDir,
+            config,
+            requestCapability: <T>(id: string): T | undefined =>
+              caps.get(id) as T | undefined,
+            enablePlugin: async (_pluginId: string) => false,
+          }
+        )
+      ).rejects.toThrow(/requires the skills broker plugin/);
     });
   });
 });

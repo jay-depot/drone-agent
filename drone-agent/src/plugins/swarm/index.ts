@@ -4,10 +4,12 @@ import type {
   DronePersonaCapability,
   DronePersonaDefinition,
   DronePersonaProvider,
+  DronePersonaWriter,
   DronePrincipleStorageEngine,
   DroneSelfImprovementCapability,
   DroneSkillDefinition,
   DroneSkillProvider,
+  DroneSkillWriter,
   DroneSkillsCapability,
   DroneToolDefinition,
 } from 'drone-core';
@@ -284,6 +286,65 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       if (personaCap) {
         personaCap.registerProvider(beaconPersonaProvider);
         personaCap.registerProvider(coordinatorPersonaProvider);
+        // ── Persona writers ────────────────────────────────────────────
+        const beaconPersonaWriter: DronePersonaWriter = {
+          id: 'swarm-persona-beacon',
+          scope: 'beacon',
+          label: 'Beacon (swarm-wide, local hub)',
+          exists: async (id: string) => {
+            try {
+              const res = await fetch(`${baseUrl}/personas/${id}`);
+              return res.ok;
+            } catch { return false; }
+          },
+          writePersona: async (id: string, content: string) => {
+            const res = await fetch(`${baseUrl}/personas`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id,
+                name: id,
+                description: '',
+                systemPrompt: content,
+              }),
+            });
+            if (!res.ok) {
+              throw new Error(`Failed to write persona to beacon: ${res.status}`);
+            }
+            return { filePath: `${baseUrl}/personas/${id}` };
+          },
+        };
+        personaCap.registerWriter(beaconPersonaWriter);
+
+        const coordinatorPersonaWriter: DronePersonaWriter = {
+          id: 'swarm-persona-coordinator',
+          scope: 'coordinator',
+          label: 'Coordinator (global swarm hub)',
+          exists: async (id: string) => {
+            try {
+              const res = await fetch(`${baseUrl}/personas/${id}`);
+              return res.ok;
+            } catch { return false; }
+          },
+          writePersona: async (id: string, content: string) => {
+            const res = await fetch(`${baseUrl}/personas`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id,
+                name: id,
+                description: '',
+                systemPrompt: content,
+                scope: 'coordinator',
+              }),
+            });
+            if (!res.ok) {
+              throw new Error(`Failed to write persona to coordinator: ${res.status}`);
+            }
+            return { filePath: `${baseUrl}/personas/${id}` };
+          },
+        };
+        personaCap.registerWriter(coordinatorPersonaWriter);
       } else {
         registration.logger.warn(
           'persona broker not available; swarm personas will not be loaded'
@@ -294,6 +355,67 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       if (skillsCap) {
         skillsCap.registerProvider(beaconSkillProvider);
         skillsCap.registerProvider(coordinatorSkillProvider);
+        // ── Skill writers ─────────────────────────────────────────────
+        const beaconSkillWriter: DroneSkillWriter = {
+          id: 'swarm-skill-beacon',
+          scope: 'beacon',
+          label: 'Beacon (swarm-wide, local hub)',
+          exists: async (id: string) => {
+            try {
+              const res = await fetch(`${baseUrl}/skills/${id}`);
+              return res.ok;
+            } catch { return false; }
+          },
+          writeSkill: async (id: string, content: string) => {
+            const res = await fetch(`${baseUrl}/skills`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id,
+                name: id,
+                description: '',
+                trigger: '',
+                body: content,
+              }),
+            });
+            if (!res.ok) {
+              throw new Error(`Failed to write skill to beacon: ${res.status}`);
+            }
+            return { filePath: `${baseUrl}/skills/${id}` };
+          },
+        };
+        skillsCap.registerWriter(beaconSkillWriter);
+
+        const coordinatorSkillWriter: DroneSkillWriter = {
+          id: 'swarm-skill-coordinator',
+          scope: 'coordinator',
+          label: 'Coordinator (global swarm hub)',
+          exists: async (id: string) => {
+            try {
+              const res = await fetch(`${baseUrl}/skills/${id}`);
+              return res.ok;
+            } catch { return false; }
+          },
+          writeSkill: async (id: string, content: string) => {
+            const res = await fetch(`${baseUrl}/skills`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id,
+                name: id,
+                description: '',
+                trigger: '',
+                body: content,
+                scope: 'coordinator',
+              }),
+            });
+            if (!res.ok) {
+              throw new Error(`Failed to write skill to coordinator: ${res.status}`);
+            }
+            return { filePath: `${baseUrl}/skills/${id}` };
+          },
+        };
+        skillsCap.registerWriter(coordinatorSkillWriter);
       } else {
         registration.logger.warn(
           'skills broker not available; swarm skills will not be loaded'

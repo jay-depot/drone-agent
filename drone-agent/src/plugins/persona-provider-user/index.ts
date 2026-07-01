@@ -4,6 +4,7 @@ import type {
   DronePersonaCapability,
   DronePersonaDefinition,
   DronePersonaProvider,
+  DronePersonaWriter,
   DronePlugin,
   DroneSkillDefinition,
   DroneSkillProvider,
@@ -12,6 +13,8 @@ import type {
 import { PRECEDENCE_PERSONA_USER, PRECEDENCE_USER } from 'drone-core';
 import { loadPersonasFromDir } from '../persona/loader.js';
 import { loadSkillsFromDir } from '../skills/loader.js';
+import { access, mkdir, writeFile } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
 
 const CONFIG_DIR = '.drone-agent';
 const PERSONA_DIR = 'personas';
@@ -95,10 +98,30 @@ export const personaProviderUserPlugin: DronePlugin = {
       },
     };
 
+    // ── Persona writer ───────────────────────────────────────────────
+    const writer: DronePersonaWriter = {
+      id: 'persona-provider-user',
+      scope: 'user',
+      label: 'User (~/.drone-agent/personas/<name>/persona.md)',
+      exists: async (id: string) => {
+        const filePath = path.join(personaDir, id, 'persona.md');
+        try { await access(filePath, fsConstants.F_OK); return true; }
+        catch { return false; }
+      },
+      writePersona: async (id: string, content: string) => {
+        const targetDir = path.join(personaDir, id);
+        const filePath = path.join(targetDir, 'persona.md');
+        await mkdir(targetDir, { recursive: true });
+        await writeFile(filePath, content, 'utf-8');
+        return { filePath };
+      },
+    };
+
     // Register with the persona broker
     const personaCap = registration.request<DronePersonaCapability>('persona');
     if (personaCap) {
       personaCap.registerProvider(provider);
+      personaCap.registerWriter(writer);
     } else {
       registration.logger.warn(
         'persona broker not available; user personas will not be loaded'

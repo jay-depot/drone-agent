@@ -3,7 +3,8 @@
  *
  * Triggers an interactive multi-step dialog with the user, asks an LLM
  * to author a persona .md file based on their description, validates
- * the output, and writes it to disk.
+ * the output, and writes it to the selected scope via the persona
+ * broker's registered writers.
  *
  * Three entry points share this single implementation:
  *   1. LLM tool call: `persona.create` (delegates to `engine.runWorkflow`)
@@ -11,15 +12,16 @@
  *   3. CLI flag: `--workflow persona.create` (with optional `--workflow-arg key=value`)
  *
  * The wizard asks up to four questions in this order:
- *   1. Scope (project | user) — skipped if `input.scope` supplied.
+ *   1. Scope (project | user | beacon | coordinator) — dynamically built
+ *      from registered writers. Skipped if `input.scope` supplied.
  *   2. Id (freeform) — slugified client-side. Skipped if `input.id` supplied.
  *   3. Description (freeform) — skipped if `input.description` supplied.
  *
  * Plus two conditional overwrite prompts:
- *   - `overwriteAtName`: fires if the target file already exists when
+ *   - `overwriteAtName`: fires if the target already exists when
  *     the user supplies the id. Records an `overwriteApproved` flag.
- *   - `overwriteFinal`: fires only if the file still exists at final
- *     write time AND `overwriteApproved` is false (e.g. the file
+ *   - `overwriteFinal`: fires only if the target still exists at final
+ *     write time AND `overwriteApproved` is false (e.g. the asset
  *     appeared between naming and writing).
  *
  * After writing, the wizard reloads the persona map via the persona
@@ -27,21 +29,19 @@
  * so the chat assistant can summarise the result for the user.
  */
 
-import { access, mkdir, writeFile } from 'node:fs/promises';
-import { constants as fsConstants } from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import type {
   DroneElicitation,
   DroneLlmProvider,
   DroneLogger,
+  DronePersonaCapability,
   DronePersonaDefinition,
+  DronePersonaWriter,
   DroneWorkflow,
 } from 'drone-core';
 import { parsePersonaMd } from './loader.js';
 
 type PersonaCreateInput = {
-  scope?: 'project' | 'user';
+  scope?: string;
   id?: string;
   description?: string;
 };
@@ -55,15 +55,6 @@ export function slugifyPersonaId(raw: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 64);
-}
-
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await access(filePath, fsConstants.F_OK);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function buildPersonaSystemPrompt(): string {
@@ -204,52 +195,30 @@ async function askDescription(
 
 async function askScope(
   elicit: DroneElicitation,
-  inputScope: 'project' | 'user' | undefined
-): Promise<'project' | 'user'> {
-  if (inputScope === 'project' || inputScope === 'user') return inputScope;
+  inputScope: string | undefined,
+  writers: DronePersonaWriter[]
+): Promise<DronePersonaWriter> {
+  if (inputScope) {
+    const match = writers.find(w => w.scope === inputScope);
+    if (match) return match;
+    // If input scope doesn't match any writer, fall through to prompt
+  }
   const answers = await elicit.ask([
     {
       id: 'scope',
       prompt: 'Where should this persona live?',
-      choices: [
-        {
-          value: 'project',
-          label: 'Project (./.drone-agent/personas/<name>/persona.md)',
-        },
-        {
-          value: 'user',
-          label: 'User (~/.drone-agent/personas/<name>/persona.md)',
-        },
-      ],
-      defaultValue: 'project',
+      choices: writers.map(w => ({
+        value: w.scope,
+        label: w.label,
+      })),
+      defaultValue: writers[0]?.scope ?? 'project',
     },
   ]);
-  return answers.scope === 'user' ? 'user' : 'project';
-}
-
-/**
- * Resolve the persona plugin capability so we can reload the
- * persona map after writing. Returns `undefined` if the persona
- * plugin isn't available (which would be a wiring bug — the wizard
- * is part of the persona plugin — but we handle it gracefully).
- */
-function resolvePersonaCapability(
-  ctx: WizardContext
-): { reloadPersonas: () => Promise<void> } | undefined {
-  const cap = ctx.requestCapability<{
-    reloadPersonas?: () => Promise<void>;
-  }>('persona');
-  if (!cap || typeof cap.reloadPersonas !== 'function') return undefined;
-  return { reloadPersonas: cap.reloadPersonas };
+  const selected = writers.find(w => w.scope === answers.scope);
+  return selected ?? writers[0];
 }
 
 function resolveLogger(): DroneLogger {
-  // We don't have direct access to the logger from the workflow
-  // context, so we create a console logger scoped to the wizard.
-  // This is the same approach the rest of the plugin uses via
-  // `registration.logger`. Surfacing through the context would
-  // require widening DroneWorkflowContext; not worth it for one
-  // warning path.
   return {
     info: () => {},
     warn: message => process.stderr.write(`[persona.wizard] ${message}\n`),
@@ -260,15 +229,15 @@ function resolveLogger(): DroneLogger {
 async function askOverwrite(
   elicit: DroneElicitation,
   logger: DroneLogger,
-  filePath: string,
   id: string,
+  scope: string,
   promptSuffix: string
 ): Promise<boolean> {
-  logger.warn(`A persona file already exists at ${filePath}.`);
+  logger.warn(`A persona named "${id}" already exists at scope "${scope}".`);
   const answers = await elicit.ask([
     {
       id: 'overwrite',
-      prompt: `A persona named "${id}" already exists at ${filePath}. Overwrite it? (${promptSuffix})`,
+      prompt: `A persona named "${id}" already exists at scope "${scope}". Overwrite it? (${promptSuffix})`,
       choices: [
         { value: 'yes', label: 'Yes, overwrite' },
         { value: 'no', label: 'No, cancel' },
@@ -282,13 +251,14 @@ async function askOverwrite(
 export const personaCreateWorkflow: DroneWorkflow = {
   name: 'create',
   description:
-    'Interactive wizard to author a new persona .md file. Asks for scope, id, and description; has the LLM write the persona; validates and writes it to disk.',
+    'Interactive wizard to author a new persona .md file. Asks for scope, id, and description; has the LLM write the persona; validates and writes it to the selected scope.',
   inputSchema: {
     type: 'object',
     properties: {
       scope: {
         type: 'string',
-        description: 'Optional — skip the first prompt. "project" or "user".',
+        description:
+          'Optional — skip the first prompt. One of: project, user, beacon, coordinator.',
       },
       id: {
         type: 'string',
@@ -306,28 +276,39 @@ export const personaCreateWorkflow: DroneWorkflow = {
     const input = (rawInput ?? {}) as PersonaCreateInput;
     const logger = resolveLogger();
 
-    // 1. Scope
-    const scope = await askScope(ctx.elicit, input.scope);
+    // Resolve the persona capability to get registered writers
+    const personaCap = ctx.requestCapability<DronePersonaCapability>('persona');
+    if (!personaCap) {
+      throw new Error(
+        'persona.create workflow requires the persona broker plugin to be enabled.'
+      );
+    }
+    const writers = personaCap.getWriters();
+    if (writers.length === 0) {
+      throw new Error(
+        'No persona writers are registered. Enable at least one persona provider plugin (e.g. persona-provider-project).'
+      );
+    }
+
+    // 1. Scope — pick a writer
+    const writer = await askScope(ctx.elicit, input.scope, writers);
 
     // 2. Id (slugified)
     const id = await askId(ctx.elicit, input.id, logger);
 
     // 3. Existence check #1
-    const targetRoot = scope === 'user' ? os.homedir() : ctx.projectDir;
-    const targetDir = path.join(targetRoot, '.drone-agent', 'personas', id);
-    const filePath = path.join(targetDir, 'persona.md');
     let overwriteApproved = false;
-    if (await fileExists(filePath)) {
+    if (await writer.exists(id)) {
       overwriteApproved = await askOverwrite(
         ctx.elicit,
         logger,
-        filePath,
         id,
-        'existing file'
+        writer.scope,
+        'existing asset'
       );
       if (!overwriteApproved) {
         throw new Error(
-          `Refusing to overwrite existing persona at ${filePath}. Pick a different id, or delete the file first.`
+          `Refusing to overwrite existing persona "${id}" at scope "${writer.scope}". Pick a different id, or delete the file first.`
         );
       }
     }
@@ -371,44 +352,32 @@ export const personaCreateWorkflow: DroneWorkflow = {
     const definition = validatePersonaOutput(id, candidateText, logger);
 
     // 7. Existence check #2 (race condition)
-    if (!overwriteApproved && (await fileExists(filePath))) {
+    if (!overwriteApproved && (await writer.exists(id))) {
       const reApproved = await askOverwrite(
         ctx.elicit,
         logger,
-        filePath,
         id,
-        'file appeared during this wizard'
+        writer.scope,
+        'asset appeared during this wizard'
       );
       if (!reApproved) {
         throw new Error(
-          `Refusing to overwrite persona at ${filePath}; the file appeared during the wizard.`
+          `Refusing to overwrite persona "${id}" at scope "${writer.scope}"; the asset appeared during the wizard.`
         );
       }
     }
 
-    // 8. Write
-    await mkdir(targetDir, { recursive: true });
-    await writeFile(filePath, candidateText, 'utf-8');
+    // 8. Write via the selected writer
+    const { filePath } = await writer.writePersona(id, candidateText);
 
     // 9. Reload
-    const personaCap = resolvePersonaCapability(ctx);
-    if (personaCap) {
-      try {
-        await personaCap.reloadPersonas();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.warn(`reloadPersonas after write failed: ${msg}`);
-      }
+    try {
+      await personaCap.reloadPersonas();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn(`reloadPersonas after write failed: ${msg}`);
     }
 
-    // The kick message is fed back into the chat as a synthetic user
-    // turn so the assistant can summarize the outcome. We deliberately
-    // do NOT instruct the assistant to activate the persona: that is
-    // a deliberate user action. Instead we report state (file written,
-    // active persona unchanged, uiColor set or unset) and ask for a
-    // one-line summary. This prevents the agent from "helpfully"
-    // switching personas on the user's behalf or running follow-up
-    // commands that aren't wanted.
     const colorNote = definition.uiColor
       ? `A UI color (${definition.uiColor}) is set; the TUI theme will tint when this persona is active.`
       : `No UI color is set; the user can edit the frontmatter to add one (e.g. \`color: cyan\`).`;
@@ -422,7 +391,7 @@ export const personaCreateWorkflow: DroneWorkflow = {
       {
         id,
         name: definition.name,
-        scope,
+        scope: writer.scope,
         filePath,
         description,
         hasOverride: Boolean(definition.systemPromptOverride),

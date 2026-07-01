@@ -13,16 +13,17 @@
  *   3. CLI flag: `--workflow skills.create` (with optional `--workflow-arg key=value`)
  *
  * The wizard asks up to four questions in this order:
- *   1. Scope (project | user) — skipped if `input.scope` supplied.
+ *   1. Scope (project | user | beacon | coordinator) — dynamically built
+ *      from registered writers. Skipped if `input.scope` supplied.
  *   2. Id (freeform) — slugified client-side. Skipped if `input.id` supplied.
  *   3. Description (freeform) — skipped if `input.description` supplied.
  *   4. Recall conditions (freeform) — skipped if `input.recall` supplied.
  *
  * Plus two conditional overwrite prompts:
- *   - `overwriteAtName`: fires if the target file already exists when
+ *   - `overwriteAtName`: fires if the target already exists when
  *     the user supplies the id. Records an `overwriteApproved` flag.
- *   - `overwriteFinal`: fires only if the file still exists at final
- *     write time AND `overwriteApproved` is false (e.g. the file
+ *   - `overwriteFinal`: fires only if the target still exists at final
+ *     write time AND `overwriteApproved` is false (e.g. the asset
  *     appeared between naming and writing).
  *
  * After writing, the wizard reloads the skill map via the skills
@@ -31,14 +32,16 @@
  * codebase.
  */
 
-import { access, mkdir, writeFile } from 'node:fs/promises';
-import { constants as fsConstants } from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import type { DroneElicitation, DroneLogger, DroneWorkflow } from 'drone-core';
+import type {
+  DroneElicitation,
+  DroneLogger,
+  DroneSkillWriter,
+  DroneSkillsCapability,
+  DroneWorkflow,
+} from 'drone-core';
 
 type SkillsCreateInput = {
-  scope?: 'project' | 'user';
+  scope?: string;
   id?: string;
   description?: string;
   recall?: string;
@@ -55,15 +58,6 @@ export function slugifySkillId(raw: string): string {
     .slice(0, 64);
 }
 
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await access(filePath, fsConstants.F_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function resolveLogger(): DroneLogger {
   return {
     info: () => {},
@@ -74,21 +68,26 @@ function resolveLogger(): DroneLogger {
 
 async function askScope(
   elicit: DroneElicitation,
-  inputScope: 'project' | 'user' | undefined
-): Promise<'project' | 'user'> {
-  if (inputScope === 'project' || inputScope === 'user') return inputScope;
+  inputScope: string | undefined,
+  writers: DroneSkillWriter[]
+): Promise<DroneSkillWriter> {
+  if (inputScope) {
+    const match = writers.find(w => w.scope === inputScope);
+    if (match) return match;
+  }
   const answers = await elicit.ask([
     {
       id: 'scope',
       prompt: 'Where should this skill live?',
-      choices: [
-        { value: 'project', label: 'Project (./.drone-agent/skills/)' },
-        { value: 'user', label: 'User (~/.drone-agent/skills/)' },
-      ],
-      defaultValue: 'project',
+      choices: writers.map(w => ({
+        value: w.scope,
+        label: w.label,
+      })),
+      defaultValue: writers[0]?.scope ?? 'project',
     },
   ]);
-  return answers.scope === 'user' ? 'user' : 'project';
+  const selected = writers.find(w => w.scope === answers.scope);
+  return selected ?? writers[0];
 }
 
 async function askId(
@@ -192,15 +191,15 @@ async function askRecall(
 async function askOverwrite(
   elicit: DroneElicitation,
   logger: DroneLogger,
-  filePath: string,
   id: string,
+  scope: string,
   promptSuffix: string
 ): Promise<boolean> {
-  logger.warn(`A skill file already exists at ${filePath}.`);
+  logger.warn(`A skill named "${id}" already exists at scope "${scope}".`);
   const answers = await elicit.ask([
     {
       id: 'overwrite',
-      prompt: `A skill named "${id}" already exists at ${filePath}. Overwrite it? (${promptSuffix})`,
+      prompt: `A skill named "${id}" already exists at scope "${scope}". Overwrite it? (${promptSuffix})`,
       choices: [
         { value: 'yes', label: 'Yes, overwrite' },
         { value: 'no', label: 'No, cancel' },
@@ -209,22 +208,6 @@ async function askOverwrite(
     },
   ]);
   return answers.overwrite === 'yes';
-}
-
-/**
- * Resolve the skills plugin capability so we can reload the
- * skill map after writing. Returns `undefined` if the skills
- * plugin isn't available (which would be a wiring bug — the wizard
- * is part of the skills plugin — but we handle it gracefully).
- */
-function resolveSkillsCapability(
-  ctx: WizardContext
-): { reloadSkills: () => Promise<void> } | undefined {
-  const cap = ctx.requestCapability<{
-    reloadSkills?: () => Promise<void>;
-  }>('skills');
-  if (!cap || typeof cap.reloadSkills !== 'function') return undefined;
-  return { reloadSkills: cap.reloadSkills };
 }
 
 function buildSkeletonMd(
@@ -273,7 +256,8 @@ export const skillsCreateWorkflow: DroneWorkflow = {
     properties: {
       scope: {
         type: 'string',
-        description: 'Optional — skip the first prompt. "project" or "user".',
+        description:
+          'Optional — skip the first prompt. One of: project, user, beacon, coordinator.',
       },
       id: {
         type: 'string',
@@ -296,28 +280,39 @@ export const skillsCreateWorkflow: DroneWorkflow = {
     const input = (rawInput ?? {}) as SkillsCreateInput;
     const logger = resolveLogger();
 
-    // 1. Scope
-    const scope = await askScope(ctx.elicit, input.scope);
+    // Resolve the skills capability to get registered writers
+    const skillsCap = ctx.requestCapability<DroneSkillsCapability>('skills');
+    if (!skillsCap) {
+      throw new Error(
+        'skills.create workflow requires the skills broker plugin to be enabled.'
+      );
+    }
+    const writers = skillsCap.getWriters();
+    if (writers.length === 0) {
+      throw new Error(
+        'No skill writers are registered. Enable at least one skill provider plugin (e.g. skill-provider-project).'
+      );
+    }
+
+    // 1. Scope — pick a writer
+    const writer = await askScope(ctx.elicit, input.scope, writers);
 
     // 2. Id (slugified)
     const id = await askId(ctx.elicit, input.id, logger);
 
     // 3. Existence check #1
-    const targetRoot = scope === 'user' ? os.homedir() : ctx.projectDir;
-    const targetDir = path.join(targetRoot, '.drone-agent', 'skills');
-    const filePath = path.join(targetDir, `${id}.md`);
     let overwriteApproved = false;
-    if (await fileExists(filePath)) {
+    if (await writer.exists(id)) {
       overwriteApproved = await askOverwrite(
         ctx.elicit,
         logger,
-        filePath,
         id,
-        'existing file'
+        writer.scope,
+        'existing asset'
       );
       if (!overwriteApproved) {
         throw new Error(
-          `Refusing to overwrite existing skill at ${filePath}. Pick a different id, or delete the file first.`
+          `Refusing to overwrite existing skill "${id}" at scope "${writer.scope}". Pick a different id, or delete the file first.`
         );
       }
     }
@@ -336,39 +331,32 @@ export const skillsCreateWorkflow: DroneWorkflow = {
     const skeleton = buildSkeletonMd(id, description, recall);
 
     // 7. Existence check #2 (race condition)
-    if (!overwriteApproved && (await fileExists(filePath))) {
+    if (!overwriteApproved && (await writer.exists(id))) {
       const reApproved = await askOverwrite(
         ctx.elicit,
         logger,
-        filePath,
         id,
-        'file appeared during this wizard'
+        writer.scope,
+        'asset appeared during this wizard'
       );
       if (!reApproved) {
         throw new Error(
-          `Refusing to overwrite skill at ${filePath}; the file appeared during the wizard.`
+          `Refusing to overwrite skill "${id}" at scope "${writer.scope}"; the asset appeared during the wizard.`
         );
       }
     }
 
-    // 8. Write
-    await mkdir(targetDir, { recursive: true });
-    await writeFile(filePath, skeleton, 'utf-8');
+    // 8. Write via the selected writer
+    const { filePath } = await writer.writeSkill(id, skeleton);
 
     // 9. Reload
-    const skillsCap = resolveSkillsCapability(ctx);
-    if (skillsCap) {
-      try {
-        await skillsCap.reloadSkills();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.warn(`reloadSkills after write failed: ${msg}`);
-      }
+    try {
+      await skillsCap.reloadSkills();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn(`reloadSkills after write failed: ${msg}`);
     }
 
-    // The kick message instructs the assistant to fill in the skill body
-    // by exploring the codebase. The assistant should NOT run any other
-    // tools or take further action beyond writing the skill body.
     const recallNote =
       recall.length > 0
         ? `The skill will be suggested when the user mentions: ${recall.join('; ')}.`
@@ -386,7 +374,7 @@ export const skillsCreateWorkflow: DroneWorkflow = {
     const toolResult = JSON.stringify(
       {
         id,
-        scope,
+        scope: writer.scope,
         filePath,
         description,
         recallCount: recall.length,

@@ -2,7 +2,7 @@
 
 import type { DroneSkillDefinition } from './skill-types.js';
 import type { DroneToolDescriptor } from './session-types.js';
-import type { DronePersonaProvider } from './provider-types.js';
+import type { DronePersonaProvider, DronePersonaWriter } from './provider-types.js';
 
 export type DronePersonaDefinition = {
   id: string;
@@ -78,6 +78,12 @@ export type DronePersonaCapability = {
   registerProvider: (provider: DronePersonaProvider) => void;
   /** Unregister a persona provider by id. */
   unregisterProvider: (providerId: string) => void;
+  /** Register a persona writer. Writers are sorted by precedence (ascending). */
+  registerWriter: (writer: DronePersonaWriter) => void;
+  /** Unregister a persona writer by id. */
+  unregisterWriter: (writerId: string) => void;
+  /** Get all registered persona writers, sorted by precedence. */
+  getWriters: () => DronePersonaWriter[];
   /**
    * Filter a list of tool descriptors based on the active persona's
    * `allowedTools` patterns. Returns all tools when no persona is active

@@ -12,6 +12,7 @@ import {
   type DroneElicitationAnswers,
   type DroneElicitationQuestion,
   type DroneLlmProvider,
+  type DronePersonaWriter,
   type DroneWorkflowResult,
 } from 'drone-core';
 import {
@@ -22,9 +23,6 @@ import { loadPersonas } from '../src/plugins/persona/loader.js';
 import type { DroneWorkflowContext } from 'drone-core';
 
 const PERSONA_MD = (id: string, name?: string) => {
-  // Default the display name to the id (slug) so the wizard's
-  // validation passes; tests that exercise the "wrong id" path
-  // override `name` to a value that slugifies differently.
   const display = name ?? id;
   return `---
 name: ${display}
@@ -87,6 +85,69 @@ async function withProjectDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   }
 }
 
+function makeWriters(
+  projectDir: string
+): { project: DronePersonaWriter; user: DronePersonaWriter } {
+  const projectWriter: DronePersonaWriter = {
+    id: 'persona-provider-project',
+    scope: 'project',
+    label: 'Project (./.drone-agent/personas/<name>/persona.md)',
+    exists: async (id: string) => {
+      const filePath = path.join(
+        projectDir,
+        '.drone-agent',
+        'personas',
+        id,
+        'persona.md'
+      );
+      try {
+        await readFile(filePath, 'utf-8');
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    writePersona: async (id: string, content: string) => {
+      const targetDir = path.join(projectDir, '.drone-agent', 'personas', id);
+      const filePath = path.join(targetDir, 'persona.md');
+      await mkdir(targetDir, { recursive: true });
+      await writeFile(filePath, content, 'utf-8');
+      return { filePath };
+    },
+  };
+
+  const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+  const userWriter: DronePersonaWriter = {
+    id: 'persona-provider-user',
+    scope: 'user',
+    label: 'User (~/.drone-agent/personas/<name>/persona.md)',
+    exists: async (id: string) => {
+      const filePath = path.join(
+        homeDir,
+        '.drone-agent',
+        'personas',
+        id,
+        'persona.md'
+      );
+      try {
+        await readFile(filePath, 'utf-8');
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    writePersona: async (id: string, content: string) => {
+      const targetDir = path.join(homeDir, '.drone-agent', 'personas', id);
+      const filePath = path.join(targetDir, 'persona.md');
+      await mkdir(targetDir, { recursive: true });
+      await writeFile(filePath, content, 'utf-8');
+      return { filePath };
+    },
+  };
+
+  return { project: projectWriter, user: userWriter };
+}
+
 function makeContext(input: {
   projectDir: string;
   elicit: DroneElicitation;
@@ -97,6 +158,14 @@ function makeContext(input: {
   const caps = input.capabilities ?? new Map<string, unknown>();
   if (!caps.has('ollama')) {
     caps.set('ollama', { provider: input.provider });
+  }
+  // Add persona capability with writers if not already set
+  if (!caps.has('persona')) {
+    const writers = makeWriters(input.projectDir);
+    caps.set('persona', {
+      getWriters: () => [writers.project, writers.user],
+      reloadPersonas: async () => {},
+    });
   }
   return {
     elicit: input.elicit,
@@ -110,9 +179,6 @@ function makeContext(input: {
 
 /**
  * Run the wizard and assert the return value is a DroneWorkflowResult.
- * The wizard's run signature returns the broader `DroneWorkflowRunReturn`
- * union; in practice it always returns an object. Narrowing here keeps
- * the test bodies uncluttered.
  */
 async function runWizard(
   args: Record<string, unknown>,
@@ -467,10 +533,46 @@ describe('personaCreateWorkflow — overwrite prompts', () => {
 });
 
 describe('personaCreateWorkflow — missing prerequisites', () => {
+  it('throws when the persona capability is unavailable', async () => {
+    await withProjectDir(async projectDir => {
+      const config = createDefaultAgentConfig();
+      const caps = new Map<string, unknown>();
+      caps.set('ollama', {
+        provider: makeProvider(PERSONA_MD('reviewer')).provider,
+      });
+      // No 'persona' key
+      await expect(
+        runWizard(
+          { scope: 'project', id: 'reviewer', description: 'reviews code' },
+          {
+            elicit: scriptedElicit([]),
+            projectDir,
+            config,
+            requestCapability: <T>(id: string): T | undefined =>
+              caps.get(id) as T | undefined,
+            enablePlugin: async (_pluginId: string) => false,
+          }
+        )
+      ).rejects.toThrow(/requires the persona broker plugin/);
+    });
+  });
+
   it('throws when the ollama capability is unavailable', async () => {
     await withProjectDir(async projectDir => {
       const config = createDefaultAgentConfig();
-      const caps = new Map<string, unknown>(); // no 'ollama' key
+      const caps = new Map<string, unknown>();
+      caps.set('persona', {
+        getWriters: () => [
+          {
+            id: 'test',
+            scope: 'project',
+            label: 'Test',
+            exists: async () => false,
+            writePersona: async () => ({ filePath: '/tmp/test.md' }),
+          },
+        ],
+        reloadPersonas: async () => {},
+      });
       await expect(
         runWizard(
           { scope: 'project', id: 'reviewer', description: 'reviews code' },
@@ -491,10 +593,12 @@ describe('personaCreateWorkflow — missing prerequisites', () => {
     await withProjectDir(async projectDir => {
       const provider = makeProvider(PERSONA_MD('reviewer'));
       let reloaded = 0;
+      const writers = makeWriters(projectDir);
       const capabilities = new Map<string, unknown>([
         [
           'persona',
           {
+            getWriters: () => [writers.project, writers.user],
             reloadPersonas: async () => {
               reloaded += 1;
             },
@@ -521,9 +625,19 @@ describe('personaCreateWorkflow — missing prerequisites', () => {
     });
   });
 
-  it('does not throw when the persona capability is missing', async () => {
+  it('does not throw when the persona capability is missing reloadPersonas', async () => {
     await withProjectDir(async projectDir => {
       const provider = makeProvider(PERSONA_MD('reviewer'));
+      const writers = makeWriters(projectDir);
+      const capabilities = new Map<string, unknown>([
+        [
+          'persona',
+          {
+            getWriters: () => [writers.project, writers.user],
+            // No reloadPersonas — should be handled gracefully
+          },
+        ],
+      ]);
       const result = await runWizard(
         {
           scope: 'project',
@@ -534,6 +648,7 @@ describe('personaCreateWorkflow — missing prerequisites', () => {
           projectDir,
           elicit: scriptedElicit([]),
           provider: provider.provider,
+          capabilities,
         })
       );
       expect(result.toolResult).toBeDefined();

@@ -134,6 +134,8 @@ export type {
   DroneSkillProvider,
   DroneRecallEnhancer,
   DronePersonaProvider,
+  DronePersonaWriter,
+  DroneSkillWriter,
   DroneLlmProvider,
   DroneLlmProviderRegistration,
 } from './provider-types.js';

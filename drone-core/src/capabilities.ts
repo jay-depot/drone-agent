@@ -8,6 +8,7 @@ import type { DroneSkillDefinition } from './skill-types.js';
 import type {
   DroneSkillProvider,
   DroneRecallEnhancer,
+  DroneSkillWriter,
   DroneLlmProvider,
   DroneLlmProviderRegistration,
 } from './provider-types.js';
@@ -62,6 +63,12 @@ export type DroneSkillsCapability = {
   reloadSkills: () => Promise<void>;
   registerProvider: (provider: DroneSkillProvider) => void;
   unregisterProvider: (providerId: string) => void;
+  /** Register a skill writer. Writers are sorted by precedence (ascending). */
+  registerWriter: (writer: DroneSkillWriter) => void;
+  /** Unregister a skill writer by id. */
+  unregisterWriter: (writerId: string) => void;
+  /** Get all registered skill writers, sorted by precedence. */
+  getWriters: () => DroneSkillWriter[];
   /** Register a callback that can enhance skill recall results. */
   onRecall: (enhancer: DroneRecallEnhancer) => void;
 };

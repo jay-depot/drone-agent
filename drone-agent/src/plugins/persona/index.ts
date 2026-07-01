@@ -2,6 +2,7 @@ import type {
   DronePersonaCapability,
   DronePersonaDefinition,
   DronePersonaProvider,
+  DronePersonaWriter,
   DronePlugin,
   DronePromptFragment,
   DroneSkillDefinition,
@@ -26,6 +27,7 @@ export const personaPlugin: DronePlugin = {
     const config = registration.getConfig();
 
     const providers: DronePersonaProvider[] = [];
+    const writers: DronePersonaWriter[] = [];
     let activePersona: DronePersonaDefinition | null = null;
     const changeCallbacks: Array<
       (persona: DronePersonaDefinition | null) => void
@@ -45,6 +47,31 @@ export const personaPlugin: DronePlugin = {
       const idx = providers.findIndex(p => p.id === providerId);
       if (idx !== -1) {
         providers.splice(idx, 1);
+      }
+    }
+
+    // ── Writer management ─────────────────────────────────────────────────
+    function insertWriterSorted(writer: DronePersonaWriter): void {
+      // Writers are sorted by scope order: project, user, beacon, coordinator
+      const scopeOrder: Record<string, number> = {
+        project: 0,
+        user: 1,
+        beacon: 2,
+        coordinator: 3,
+      };
+      const order = scopeOrder[writer.scope] ?? 99;
+      const idx = writers.findIndex(w => (scopeOrder[w.scope] ?? 99) > order);
+      if (idx === -1) {
+        writers.push(writer);
+      } else {
+        writers.splice(idx, 0, writer);
+      }
+    }
+
+    function removeWriter(writerId: string): void {
+      const idx = writers.findIndex(w => w.id === writerId);
+      if (idx !== -1) {
+        writers.splice(idx, 1);
       }
     }
 
@@ -218,6 +245,19 @@ export const personaPlugin: DronePlugin = {
           `persona provider "${providerId}" unregistered`
         );
       },
+      registerWriter: (writer: DronePersonaWriter) => {
+        insertWriterSorted(writer);
+        registration.logger.info(
+          `persona writer "${writer.id}" registered (scope: ${writer.scope})`
+        );
+      },
+      unregisterWriter: (writerId: string) => {
+        removeWriter(writerId);
+        registration.logger.info(
+          `persona writer "${writerId}" unregistered`
+        );
+      },
+      getWriters: () => [...writers],
       getFilteredTools: (allTools: DroneToolDescriptor[]) =>
         getFilteredTools(allTools),
       getFilteredSkills: (allSkills: DroneSkillDefinition[]) =>

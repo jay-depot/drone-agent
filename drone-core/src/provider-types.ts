@@ -1,5 +1,39 @@
 // ── Provider types for skill/persona/llm broker architecture ───────
 
+/**
+ * A writer for personas, registered by persona provider plugins.
+ * The persona broker aggregates these and exposes them via its capability.
+ */
+export type DronePersonaWriter = {
+  /** Unique id for this writer (e.g. 'persona-provider-project'). */
+  id: string;
+  /** The scope this writer targets (project, user, beacon, coordinator). */
+  scope: 'project' | 'user' | 'beacon' | 'coordinator';
+  /** Human-readable label for UI choices (e.g. 'Project (./.drone-agent/personas/)'). */
+  label: string;
+  /** Check if a persona with this id already exists at the target location. */
+  exists: (id: string) => Promise<boolean>;
+  /** Write a persona .md file to the target location. Returns the file path. */
+  writePersona: (id: string, content: string) => Promise<{ filePath: string }>;
+};
+
+/**
+ * A writer for skills, registered by skill provider plugins.
+ * The skills broker aggregates these and exposes them via its capability.
+ */
+export type DroneSkillWriter = {
+  /** Unique id for this writer (e.g. 'skill-provider-project'). */
+  id: string;
+  /** The scope this writer targets (project, user, beacon, coordinator). */
+  scope: 'project' | 'user' | 'beacon' | 'coordinator';
+  /** Human-readable label for UI choices (e.g. 'Project (./.drone-agent/skills/)'). */
+  label: string;
+  /** Check if a skill with this id already exists at the target location. */
+  exists: (id: string) => Promise<boolean>;
+  /** Write a skill .md file to the target location. Returns the file path. */
+  writeSkill: (id: string, content: string) => Promise<{ filePath: string }>;
+};
+
 import type { DroneSkillDefinition } from './skill-types.js';
 import type { DronePersonaDefinition } from './persona-types.js';
 import type {

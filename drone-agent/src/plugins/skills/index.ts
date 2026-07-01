@@ -4,6 +4,7 @@ import type {
   DroneRecallEnhancer,
   DroneSkillDefinition,
   DroneSkillProvider,
+  DroneSkillWriter,
   DroneSkillsCapability,
 } from 'drone-core';
 import { skillsCreateWorkflow } from './wizard.js';
@@ -23,6 +24,7 @@ export const skillsPlugin: DronePlugin = {
   },
   register: async registration => {
     const providers: DroneSkillProvider[] = [];
+    const writers: DroneSkillWriter[] = [];
     const recallEnhancers: DroneRecallEnhancer[] = [];
 
     function insertProviderSorted(provider: DroneSkillProvider): void {
@@ -38,6 +40,30 @@ export const skillsPlugin: DronePlugin = {
       const idx = providers.findIndex(p => p.id === providerId);
       if (idx !== -1) {
         providers.splice(idx, 1);
+      }
+    }
+
+    // ── Writer management ─────────────────────────────────────────────────
+    function insertWriterSorted(writer: DroneSkillWriter): void {
+      const scopeOrder: Record<string, number> = {
+        project: 0,
+        user: 1,
+        beacon: 2,
+        coordinator: 3,
+      };
+      const order = scopeOrder[writer.scope] ?? 99;
+      const idx = writers.findIndex(w => (scopeOrder[w.scope] ?? 99) > order);
+      if (idx === -1) {
+        writers.push(writer);
+      } else {
+        writers.splice(idx, 0, writer);
+      }
+    }
+
+    function removeWriter(writerId: string): void {
+      const idx = writers.findIndex(w => w.id === writerId);
+      if (idx !== -1) {
+        writers.splice(idx, 1);
       }
     }
 
@@ -132,6 +158,23 @@ export const skillsPlugin: DronePlugin = {
           'skill provider "' + providerId + '" unregistered'
         );
       },
+      registerWriter: (writer: DroneSkillWriter) => {
+        insertWriterSorted(writer);
+        registration.logger.info(
+          'skill writer "' +
+            writer.id +
+            '" registered (scope: ' +
+            writer.scope +
+            ')'
+        );
+      },
+      unregisterWriter: (writerId: string) => {
+        removeWriter(writerId);
+        registration.logger.info(
+          'skill writer "' + writerId + '" unregistered'
+        );
+      },
+      getWriters: () => [...writers],
       onRecall: (enhancer: DroneRecallEnhancer) => {
         recallEnhancers.push(enhancer);
       },
