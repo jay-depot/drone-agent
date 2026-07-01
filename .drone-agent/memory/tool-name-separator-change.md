@@ -4,8 +4,9 @@ tags:
   - plan
   - tool-names
   - kimi-compatibility
+  - completed
 created: 2026-07-01T02:03:36.606Z
-updated: 2026-07-01T02:03:36.606Z
+updated: 2026-07-01T02:14:41.394Z
 ---
 
 # Plan: Change Tool Name Separator from `.` to `__`
@@ -14,56 +15,38 @@ updated: 2026-07-01T02:03:36.606Z
 
 Kimi 2.7 Code (and the entire Kimi K2 family) has a documented sensitivity to dots in tool names. The model was trained on tool names using only `[a-zA-Z0-9_-]`, and its internal tool-call ID format (`functions.{name}:{idx}`) uses the dot as a structural separator — so a tool named `exec.run` gets parsed incorrectly, causing the model to hallucinate `"run"` as a tool name. This change replaces the canonical tool name separator from `.` to `__` (double underscore) to fix compatibility.
 
-## Files to Modify
+## Files Modified
 
 | # | File | Change |
 |---|------|--------|
-| 1 | `drone-core/src/utils.ts:83` | Change `getCanonicalToolName` to return `` `${pluginId}__${toolName}` `` |
-| 2 | `drone-core/test/index.test.ts` | Update all hardcoded dot-separated names to `__` |
-| 3 | `drone-agent/src/plugins/file.ts` | Update hardcoded `'file.read'`, `'file.list'`, `'file.write'`, `'file.apply_diff'`, `'file.glob'` in error messages |
-| 4 | `drone-agent/src/plugins/exec.ts` | Update hardcoded `'exec.run'` in error messages |
-| 5 | `drone-agent/src/plugins/git.ts` | Update hardcoded `'git.commit'` in error message |
-| 6 | `drone-agent/src/plugins/todo.ts` | Update hardcoded `'todo.manage_list'` in error messages AND in `engine.executeTool()` calls |
-| 7 | `drone-agent/src/plugins/search.ts` | Update hardcoded `'search.text'` in error message |
-| 8 | `drone-agent/src/plugins/skills/index.ts` | Update hardcoded `'skills.recall'`, `'skills.list'`, `'skills.reload'` in `engine.executeTool()` calls |
-| 9 | `drone-agent/src/plugins/config/index.ts` | Update hardcoded `'config.get'`, `'config.set'` in error messages |
-| 10 | `drone-agent/src/plugins/mcp/index.ts` | Update MCP tool mounting to use `__` separator |
-| 11 | `drone-agent/test/bootstrap.test.ts` | Update `'git.status'` references |
-| 12 | `drone-agent/test/cli-workflow.test.ts` | Update `'file.list'` references |
-| 13 | `drone-agent/test/config-plugin.test.ts` | Update `'config.list_layers'` references |
-| 14 | `drone-agent/test/file.test.ts` | Update hardcoded `'file.read'`, `'file.list'`, `'file.write'`, `'file.glob'` in test assertions |
-| 15 | `drone-agent/test/persona-loader.test.ts` | Update `allowedTools` patterns from `'exec.*'` to `'exec*'` |
-| 16 | `drone-agent/README.md` | Update documented tool names |
-| 17 | `drone-agent/AGENTS.md` | Update any tool name references |
+| 1 | `drone-core/src/utils.ts` | `getCanonicalToolName` returns `` `${pluginId}__${toolName}` `` |
+| 2 | `drone-core/test/index.test.ts` | All test assertions updated to `__` format |
+| 3 | `drone-agent/src/plugins/file.ts` | Error messages: `file__read`, `file__list`, etc. |
+| 4 | `drone-agent/src/plugins/exec.ts` | Error messages: `exec__run` |
+| 5 | `drone-agent/src/plugins/git.ts` | Error messages: `git__commit` |
+| 6 | `drone-agent/src/plugins/todo.ts` | Error messages + dispatch: `todo__manage_list` |
+| 7 | `drone-agent/src/plugins/search.ts` | Error messages: `search__text` |
+| 8 | `drone-agent/src/plugins/skills/index.ts` | Dispatch: `skills__recall`, `skills__list`, etc. |
+| 9 | `drone-agent/src/plugins/persona/index.ts` | Dispatch: `persona__list`, `persona__select`, etc. |
+| 10 | `drone-agent/src/plugins/lsp/tools.ts` | Dispatch: `lsp__hover`, `lsp__completion`, etc. |
+| 11 | `drone-agent/src/plugins/subagent/plugin.ts` | Tool name: `subagent__dispatch` |
+| 12 | `drone-agent/src/plugins/mcp/index.ts` | MCP tool mounting: `serverId__toolName` |
+| 13 | `drone-agent/src/plugins/self-improvement/index.ts` | Prompt fragments + tool names updated |
+| 14 | `drone-agent/src/cli.ts` | Workflow parser: expects `__` separator |
+| 15 | `drone-agent/src/runtime/builtin-commands.ts` | Dispatch: `exec__run` |
+| 16 | `drone-agent/src/tui/app.tsx` | Event names: `exec__run`, `file__apply_diff`, `git__diff` |
+| 17 | `drone-agent/src/index.tsx` | Tool name: `startup__status` |
+| 18 | Multiple test files (15 files) | All hardcoded tool names updated |
+| 19 | `drone-agent/README.md` | LSP and MCP tool naming docs updated |
+| 20 | `drone-agent/AGENTS.md` | Workflow and tool name references updated |
 
-## Step-by-Step Implementation
+## Validation
 
-**Step 1 — Change the separator function** in `drone-core/src/utils.ts`
+- `pnpm build` — passes
+- `pnpm typecheck` — passes (2 pre-existing errors in drone-swarm-common/src/tls.ts, unrelated)
+- `pnpm test` — 806 tests pass across 47 test files
+- `pnpm lint` — 2 pre-existing errors in drone-swarm-common/src/tls.ts, unrelated
 
-**Step 2 — Update `drone-core/test/index.test.ts`** — all `getCanonicalToolName`, `matchGlob`, `filterByGlobPatterns` tests
+## Commit
 
-**Step 3 — Update hardcoded error message strings** in `file.ts`, `exec.ts`, `git.ts`, `todo.ts`, `search.ts`
-
-**Step 4 — Update hardcoded canonical names used for dispatch** in `todo.ts`, `skills/index.ts`
-
-**Step 5 — Update MCP tool mounting** in `mcp/index.ts`
-
-**Step 6 — Update test files** — `bootstrap.test.ts`, `cli-workflow.test.ts`, `config-plugin.test.ts`, `file.test.ts`, `persona-loader.test.ts`
-
-**Step 7 — Update documentation** — `README.md`, `AGENTS.md`
-
-**Step 8 — Build and verify** — `pnpm build && pnpm typecheck && pnpm test && pnpm lint`
-
-## Validation Criteria
-
-1. `pnpm build` compiles all packages without errors
-2. `pnpm typecheck` passes with zero type errors
-3. `pnpm test` passes all tests
-4. `pnpm lint` passes (ESLint + Prettier)
-5. LSP diagnostics show zero errors across the workspace
-6. All hardcoded `'plugin.tool'` strings in source code have been updated to `'plugin__tool'`
-7. No remaining references to the old dot-separated canonical name format in source or test files (excluding `node_modules` and `dist/`)
-
-## Dependencies
-
-All steps are sequential — each depends on the previous. The order is: core function → tests → plugin error messages → plugin dispatch calls → MCP mounting → test files → docs → build verification.
+`9efbdf0` — "feat: change tool name separator from dot to double underscore"
