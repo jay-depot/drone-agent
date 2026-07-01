@@ -1,5 +1,20 @@
 #!/usr/bin/env node
 
-// Thin stub for the drone-migrate CLI tool.
-// Calls the migrate entry point from the compiled dist.
-import '../dist/migrate.js';
+// Standalone entry point for the drone-migrate CLI tool.
+// Parses CLI args and calls the migration service.
+// We prepend 'migrate' so parseCliArgs routes to parseMigrateSubcommand.
+
+import { parseCliArgs } from '../dist/cli.js';
+import { runMigrate } from '../dist/migrate.js';
+
+const invocation = parseCliArgs(['migrate', ...process.argv.slice(2)]);
+
+if (invocation.kind === 'migrate') {
+  await runMigrate(invocation.migrateOptions, invocation.options.configDir);
+} else {
+  console.error(
+    'Usage: drone-migrate <options>\n\n' +
+    'Run `drone-migrate --help` for details.\n'
+  );
+  process.exitCode = 1;
+}
