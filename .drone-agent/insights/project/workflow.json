@@ -94,5 +94,13 @@
   {
     "timestamp": "2026-07-01T23:36:12.341Z",
     "insight": "The file__apply_diff tool's own context matching struggled when applied to files with minimal or unique content around the edit point, as seen when trying to patch app.tsx. For small precise edits, file__write with complete-file replacement was more reliable despite being more verbose. This is an ironical bootstrapping issue worth documenting."
+  },
+  {
+    "timestamp": "2026-07-01T23:48:06.299Z",
+    "insight": "When planning Ink/dependency upgrades, always verify actual exported API surface of the target version by inspecting the installed package's .d.ts files rather than relying on documentation assumptions. The `useWindowSize` hook mentioned in the plan doesn't exist in Ink 6.8.0 — had to use `useStdout` + `stdout.on('resize')` instead."
+  },
+  {
+    "timestamp": "2026-07-01T23:48:17.959Z",
+    "insight": "After upgrading react/ink to React 19, the `JSX.Element` → `React.JSX.Element` rename is a predictable mechanical change across all TUI files. Using `sed` across all affected files is much faster than editing each file individually."
   }
 ]
