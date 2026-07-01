@@ -6,8 +6,9 @@ tags:
   - websocket
   - tailscale
   - coordinator
+  - completed
 created: 2026-07-01T20:28:49.158Z
-updated: 2026-07-01T20:28:49.158Z
+updated: 2026-07-01T20:33:24.470Z
 ---
 
 # Fix: WebSocket Disconnect Loop on Tailscale Connections
@@ -75,3 +76,13 @@ Restart the coordinator process. Connect from the laptop browser via Tailscale. 
 3. **WebSocket still requires auth from non-local, non-Tailscale IPs** — a connection from a truly external IP without a valid token is still rejected with code 4001
 4. **Local connections still work** — browser on the coordinator host connecting to `http://127.0.0.1:8080/ws` works without a token
 5. **`pnpm lint` passes** — no linting errors in the changed files
+
+## Implementation Completed (2026-07-01)
+
+All code changes implemented and committed (278a40a):
+
+- `drone-coordinator/src/web-auth.ts`: Added `export` to `isLocalRequest` function
+- `drone-coordinator/src/index.ts`: Added `isLocalRequest` to import from `./web-auth.js`
+- `drone-coordinator/src/index.ts`: Wrapped WebSocket token check in `if (!isLocalRequest(req))` guard
+- `pnpm build` passed with zero errors across all packages
+- Ready for Step 5: restart coordinator and test from laptop browser
