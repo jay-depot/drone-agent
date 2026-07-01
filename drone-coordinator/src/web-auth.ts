@@ -48,7 +48,7 @@ function isTailscaleIp(ip: string): boolean {
  * - The machine's own network interfaces
  * - Tailscale CGNAT range (100.64.0.0/10)
  */
-function isLocalRequest(req: FastifyRequest): boolean {
+export function isLocalRequest(req: FastifyRequest): boolean {
   const ip = req.ip;
 
   // Loopback

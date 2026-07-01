@@ -174,5 +174,9 @@
   {
     "timestamp": "2026-07-01T18:09:40.695Z",
     "insight": "The coordinator's FTS5 virtual table on swarm_events has a bug: it uses content_rowid='id' but id is a TEXT PRIMARY KEY, not an integer rowid. FTS5 requires an integer rowid for content tables. This should be fixed as part of the session pipeline work since we'll be querying events more heavily."
+  },
+  {
+    "timestamp": "2026-07-01T20:29:15.771Z",
+    "insight": "The coordinator's WebSocket auth check in index.ts doesn't mirror the onRequest hook's local-IP bypass logic in web-auth.ts. The onRequest hook trusts Tailscale IPs (100.64.0.0/10) as local, but the WebSocket handler's token check doesn't skip for those IPs. This causes immediate disconnect for Tailscale-connected clients. The fix is to reuse isLocalRequest in the WebSocket handler."
   }
 ]

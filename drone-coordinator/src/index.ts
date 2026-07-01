@@ -32,7 +32,7 @@ import {
   unsubscribeFromSession,
   publishInitialState,
 } from './ws-pubsub.js';
-import { createWebAuthMiddleware } from './web-auth.js';
+import { createWebAuthMiddleware, isLocalRequest } from './web-auth.js';
 
 const DEFAULT_PORT = 3456;
 const DEFAULT_HOST = '0.0.0.0';
@@ -261,21 +261,24 @@ async function setupServer(
     // For web port: also check token from query parameter
     // (WebSocket upgrade requests can't easily set custom headers from browser)
     if (opts?.getToken) {
-      const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-      const queryToken = url.searchParams.get('token');
-      const token = opts.getToken();
-      if (token && queryToken !== token) {
-        // Token required but not provided or invalid via query param.
-        // The onRequest hook already checked the Authorization header,
-        // so if we got here without a valid header, check query param.
-        // If neither is valid, close the connection.
-        const authHeader = req.headers.authorization;
-        const headerToken = authHeader?.startsWith('Bearer ')
-          ? authHeader.slice(7)
-          : null;
-        if (headerToken !== token && queryToken !== token) {
-          socket.close(4001, 'Unauthorized');
-          return;
+      // Skip token check for local/Tailscale connections (consistent with onRequest hook)
+      if (!isLocalRequest(req)) {
+        const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+        const queryToken = url.searchParams.get('token');
+        const token = opts.getToken();
+        if (token && queryToken !== token) {
+          // Token required but not provided or invalid via query param.
+          // The onRequest hook already checked the Authorization header,
+          // so if we got here without a valid header, check query param.
+          // If neither is valid, close the connection.
+          const authHeader = req.headers.authorization;
+          const headerToken = authHeader?.startsWith('Bearer ')
+            ? authHeader.slice(7)
+            : null;
+          if (headerToken !== token && queryToken !== token) {
+            socket.close(4001, 'Unauthorized');
+            return;
+          }
         }
       }
     }
