@@ -62,6 +62,8 @@ export interface PatchResult {
   appliedHunks: AppliedHunk[];
   /** Hunks that failed to apply */
   errors: PatchError[];
+  /** The resulting lines after all successful hunks are applied */
+  patchedLines: string[];
 }
 
 // ── Matching helpers ──────────────────────────────────────────────────
@@ -270,7 +272,7 @@ function findContextAnywhere(
  *
  * @param lines - The file content as an array of lines (no trailing newline)
  * @param hunks - The hunks to apply
- * @returns PatchResult with applied hunks and errors
+ * @returns PatchResult with applied hunks, errors, and patchedLines
  */
 export function applyPatch(
   lines: string[],
@@ -321,13 +323,15 @@ export function applyPatch(
 
       // Narrow by subsequent anchors
       if (anchors.length > 1) {
-        candidates = narrowByAnchors(workingLines, anchors, 0, candidates);
+        // Save first-anchor candidates so fuzzy fallback can retry from scratch
+        const firstAnchorCandidates = [...candidates];
+        candidates = narrowByAnchors(workingLines, anchors, 0, firstAnchorCandidates);
         if (candidates.length === 0) {
-          // Try fuzzy narrowing
-          candidates = narrowByAnchors(workingLines, anchors, 1, candidates);
+          // Try fuzzy narrowing from the original first-anchor matches
+          candidates = narrowByAnchors(workingLines, anchors, 1, firstAnchorCandidates);
         }
         if (candidates.length === 0) {
-          candidates = narrowByAnchors(workingLines, anchors, 100, candidates);
+          candidates = narrowByAnchors(workingLines, anchors, 100, firstAnchorCandidates);
         }
       }
 
@@ -442,5 +446,6 @@ export function applyPatch(
     success: errors.length === 0,
     appliedHunks,
     errors,
+    patchedLines: workingLines,
   };
 }

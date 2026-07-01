@@ -3,7 +3,7 @@ import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import fg from 'fast-glob';
 import type { DronePlugin } from 'drone-core';
-import { renderDiffV2, supportsColor } from '../shared/diff-renderer.js';
+import { renderDiffV2 } from '../shared/diff-renderer.js';
 import { applyPatch, type PatchHunk } from '../shared/patch-applier.js';
 
 /**
@@ -226,7 +226,7 @@ export const filePlugin: DronePlugin = {
         'Example — replacing a function body:\n' +
         '  {\n' +
         '    "anchors": ["def example():"],\n' +
-        '    "contextBefore": ["", "def example():", "    \"\"\"Docstring\"\"\""],\n' +
+        '    "contextBefore": ["", "def example():", "    \\""\\""\\"Docstring\\""\\""\\""],\n' +
         '    "oldLines": ["    pass"],\n' +
         '    "newLines": ["    return 42"],\n' +
         '    "contextAfter": ["", "", ""]\n' +
@@ -339,7 +339,7 @@ export const filePlugin: DronePlugin = {
               : [],
           }));
 
-        // Apply the patch (works on a copy internally)
+        // Apply the patch (applies to a copy internally, returns patchedLines)
         const result = applyPatch(lines, patchHunks);
 
         if (!result.success) {
@@ -365,25 +365,16 @@ export const filePlugin: DronePlugin = {
           fuzz: result.appliedHunks[i]?.fuzz,
         }));
 
-        // Determine whether to use colors
-        const useColor = input.color !== false && supportsColor();
-        const diffResult = renderDiffV2(filePath, diffHunks, useColor);
-        const diffOutput = useColor ? diffResult.colored : diffResult.plain;
+        // Always use plain text — the diff result goes to both the LLM (which
+        // shouldn't see ANSI codes) and the TUI (which does its own coloring
+        // in formatDiffOutput). The `color` input parameter is kept for schema
+        // backward-compatibility but is effectively ignored.
+        const diffResult = renderDiffV2(filePath, diffHunks, false);
+        const diffOutput = diffResult.plain;
 
-        // Reconstruct the final content by applying hunks bottom-up
-        // using the positions from the successful applyPatch call.
-        const workingLines = [...lines];
-        const sortedHunks = result.appliedHunks
-          .map((ah, i) => ({ ah, hunk: patchHunks[i] }))
-          .sort((a, b) => b.ah.appliedAtLine - a.ah.appliedAtLine);
-
-        for (const { ah, hunk } of sortedHunks) {
-          const idx = ah.appliedAtLine - 1; // Convert to 0-based
-          workingLines.splice(idx, hunk.oldLines.length, ...hunk.newLines);
-        }
-
+        // Write the patched content from applyPatch's internal working copy
         try {
-          await writeFile(filePath, workingLines.join('\n'), 'utf-8');
+          await writeFile(filePath, result.patchedLines.join('\n'), 'utf-8');
         } catch (err) {
           throw enhanceFsError('file__apply_diff', filePath, err);
         }

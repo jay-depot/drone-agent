@@ -612,3 +612,63 @@ describe('applyPatch — edge cases', () => {
     expect(result.success).toBe(true);
   });
 });
+
+// ── Round-trip integration tests ──────────────────────────────────────
+
+describe('file__apply_diff — round-trip integration', () => {
+  it('produces correct JSON response with plain-text diff', async () => {
+    const { registration, tools } = captureRegistration();
+    await filePlugin.register(registration);
+    const applyDiff = tools.get('apply_diff');
+    expect(applyDiff).toBeDefined();
+
+    const target = path.join(tmpdir(), `drone-agent-diff-${Date.now()}.txt`);
+    await writeFile(target, 'line1\nline2\nline3\n', 'utf-8');
+    try {
+      const result = JSON.parse(await applyDiff!({
+        path: target,
+        hunks: [{
+          anchors: ['line2'],
+          contextBefore: ['line1'],
+          oldLines: ['line2'],
+          newLines: ['line2_modified'],
+          contextAfter: ['line3'],
+        }],
+      }));
+      expect(result.path).toBe(target);
+      expect(result.patched).toBe(true);
+      expect(result.summary).toBeDefined();
+      expect(result.diff).toBeDefined();
+      // Verify diff is plain text (no ANSI codes)
+      expect(result.diff).not.toContain('\x1b[');
+      // Verify the file was actually written
+      const content = await readFile(target, 'utf-8');
+      expect(content).toContain('line2_modified');
+    } finally {
+      const { unlink } = await import('node:fs/promises');
+      await unlink(target).catch(() => {});
+    }
+  });
+
+  it('TUI formatDiffResult recognizes patched field', async () => {
+    const { formatDiffResult } = (await import('../src/tui/app.js')).__testing;
+    const result = formatDiffResult(JSON.stringify({
+      path: '/tmp/test.txt',
+      patched: true,
+      summary: { hunks: 1, additions: 1, deletions: 1 },
+      diff: '@@ -1 +1 @@\n-old\n+new',
+    }));
+    expect(result).toContain('Applied diff to');
+    expect(result).toContain('/tmp/test.txt');
+  });
+
+  it('TUI formatDiffResult still works with written field', async () => {
+    const { formatDiffResult } = (await import('../src/tui/app.js')).__testing;
+    const result = formatDiffResult(JSON.stringify({
+      path: '/tmp/test.txt',
+      written: true,
+    }));
+    expect(result).toContain('Applied diff to');
+    expect(result).toContain('/tmp/test.txt');
+  });
+});

@@ -105,7 +105,7 @@ function formatDiffResult(content: string): string {
   if (parsed && typeof parsed === 'object') {
     // Check if it's a file.apply_diff result
     const obj = parsed as Record<string, unknown>;
-    if (obj.path !== undefined && obj.written === true) {
+    if (obj.path !== undefined && (obj.written === true || obj.patched === true)) {
       return `✓ Applied diff to ${obj.path}`;
     }
     // If it's a git diff result, it might have a 'diff' field
@@ -511,3 +511,9 @@ function printHelp(
   log('Help', 'info');
   log(helpLines.join('\n'));
 }
+/**
+ * @internal Exposed for unit tests. Not part of the public API.
+ */
+export const __testing = {
+  formatDiffResult,
+};
