@@ -128,7 +128,6 @@ export const memoryPlugin: DronePlugin = {
     // memory.store
     registration.registerTool({
       name: 'store',
-      defaultHidden: true,
       description:
         'Store a value under a given key in project-level memory. Overwrites any existing entry with the same key.',
       inputSchema: {
@@ -277,11 +276,8 @@ export const memoryPlugin: DronePlugin = {
         );
       },
     });
-
-    // memory.delete
     registration.registerTool({
       name: 'delete',
-      defaultHidden: true,
       description:
         'Delete a single memory entry by key. Returns whether the entry was removed.',
       inputSchema: {

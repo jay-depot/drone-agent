@@ -659,7 +659,6 @@ export const selfImprovementPlugin: DronePlugin = {
     // ── self-improvement__insight ─────────────────────────────────────
     registration.registerTool({
       name: 'insight',
-      defaultHidden: true,
       description:
         'Record a self-improvement insight about a persona, skill, or the project. ' +
         'Whenever you encounter an issue, gap, or opportunity related ' +
@@ -731,6 +730,7 @@ export const selfImprovementPlugin: DronePlugin = {
     // ── self-improvement__insights-list ─────────────────────────────────
     registration.registerTool({
       name: 'insights-list',
+      defaultHidden: true,
       description:
         'List all insight files with their entry counts and last timestamps. ' +
         'Optionally filter by targetType (persona, skill, or project).',
@@ -778,6 +778,7 @@ export const selfImprovementPlugin: DronePlugin = {
     // ── self-improvement__insights-recall ──────────────────────────────
     registration.registerTool({
       name: 'insights-recall',
+      defaultHidden: true,
       description:
         'Read all insights for a specific target (persona, skill, or project).',
       inputSchema: {

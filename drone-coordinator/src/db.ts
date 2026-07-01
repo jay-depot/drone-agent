@@ -1654,11 +1654,10 @@ const BUILTIN_HIDDEN_TOOLS: Array<{
 }> = [
   { name: 'swarm__wiki_write', description: 'Create or update a wiki page in the swarm knowledge base' },
   { name: 'swarm__wiki_delete', description: 'Delete a wiki page from the swarm knowledge base' },
-  { name: 'self-improvement__insight', description: 'Record a self-improvement insight' },
+  { name: 'self-improvement__insights-list', description: 'List all insight files with their entry counts and last timestamps' },
+  { name: 'self-improvement__insights-recall', description: 'Read all insights for a specific target' },
   { name: 'self-improvement__principles-store', description: 'Store a principle' },
   { name: 'self-improvement__principles-delete', description: 'Delete a principle' },
-  { name: 'memory__store', description: 'Store a value in project-level memory' },
-  { name: 'memory__delete', description: 'Delete a memory entry' },
 ];
 
 /**
