@@ -70,5 +70,9 @@
   {
     "timestamp": "2026-07-01T02:14:52.150Z",
     "insight": "The tool name separator change (dot to double underscore) had a much larger blast radius than initially estimated. Beyond the core function and its tests, it required updates to: CLI workflow parser, plugin error messages (6 files), internal dispatch calls (8 files), MCP mounting, TUI event handlers, prompt fragments, and 15 test files. The initial plan missed the CLI parser, self-improvement plugin prompt fragments, and several test files. For future cross-cutting changes, a comprehensive grep-based sweep should be done before declaring the plan complete."
+  },
+  {
+    "timestamp": "2026-07-01T18:38:19.772Z",
+    "insight": "Using sed for multi-line code insertions is extremely error-prone. The sed 'c' command with embedded newlines and special characters (quotes, backslashes) frequently mangles files. For database schema changes or complex multi-line code insertions, it's much more reliable to write complete files or use proper tooling. This session had several sed-related file corruptions that required manual cleanup."
   }
 ]
