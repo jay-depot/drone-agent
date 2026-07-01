@@ -82,5 +82,9 @@
   {
     "timestamp": "2026-07-01T22:19:54.661Z",
     "insight": "The `file__edit` tool is not available in drone-agent's tool set — I had to use `file__write` to rewrite entire files instead. This is fine for small files but would be painful for large ones. The new `file__apply_diff` with content anchors should make targeted edits much easier."
+  },
+  {
+    "timestamp": "2026-07-01T23:02:13.437Z",
+    "insight": "When researching Ink resize artifacts, found that the Ink 5→6 upgrade requires a React 18→19 jump because Ink 6.x requires React >=19. The ink-text-input@6.0.0 and ink-testing-library@4.0.0 are already compatible with both versions, so no cascade of dependency changes is needed beyond react + @types/react."
   }
 ]
