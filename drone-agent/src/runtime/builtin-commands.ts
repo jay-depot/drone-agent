@@ -9,6 +9,7 @@
 import {
   type DroneSlashCommand,
   type DroneSlashCommandContext,
+  type DroneToolDescriptor,
 } from 'drone-core';
 
 // ── /exit, /quit ─────────────────────────────────────────────────────
@@ -102,10 +103,26 @@ const pluginsCommand: DroneSlashCommand = {
 
 const toolsCommand: DroneSlashCommand = {
   command: '/tools',
-  description: 'List registered tools',
+  description: 'List registered tools (/tools --all for full list)',
   handler: async (ctx: DroneSlashCommandContext) => {
-    const tools = ctx.engine.listTools?.() ?? [];
-    const lines = ['Registered tools:'];
+    const allTools = ctx.engine.listTools?.() ?? [];
+    const showAll = ctx.args.includes('--all');
+
+    let tools: DroneToolDescriptor[];
+    if (showAll) {
+      tools = allTools;
+    } else {
+      const personaCap = ctx.engine.getCapability<{
+        getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
+      }>('persona');
+      tools = personaCap
+        ? personaCap.getFilteredTools(allTools)
+        : allTools.filter(t => !t.defaultHidden);
+    }
+
+    const lines = showAll
+      ? [`All registered tools (${tools.length}):`]
+      : [`Available tools (${tools.length}/${allTools.length}):`];
     for (const tool of tools) {
       lines.push(`  ${tool.name}`);
       lines.push(`    ${tool.description}`);

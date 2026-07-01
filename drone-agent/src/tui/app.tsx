@@ -39,6 +39,7 @@ import { useElicitation } from './hooks/useElicitation.js';
 import { useLlmIndicator } from './hooks/useLlmIndicator.js';
 import { useStatusBar } from './hooks/useStatusBar.js';
 import type { DroneTuiOptions, MidPanelWidget } from './types.js';
+import type { DroneToolDescriptor } from 'drone-core';
 
 /** Maximum chars rendered in a tool argument or result preview. */
 const PREVIEW_MAX = 200;
@@ -387,7 +388,14 @@ export function App(opts: DroneTuiOptions): JSX.Element {
   // ── Status bar content ─────────────────────────────────────────────
   const model = opts.conversation.getModel();
   const pluginCount = opts.engine.getRegisteredPluginCount();
-  const toolCount = opts.engine.getRegisteredToolCount();
+  const totalTools = opts.engine.getRegisteredToolCount();
+  const allToolsDescs = opts.engine.listTools();
+  const personaCapForTools = opts.engine.getCapability<{
+    getFilteredTools?: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
+  }>('persona');
+  const availableTools = personaCapForTools?.getFilteredTools
+    ? personaCapForTools.getFilteredTools(allToolsDescs).length
+    : allToolsDescs.filter(t => !t.defaultHidden).length;
   const personaLabel = useMemo(() => {
     const persona = opts.engine
       .getCapability<{
@@ -396,7 +404,7 @@ export function App(opts: DroneTuiOptions): JSX.Element {
       ?.getActivePersona();
     return persona ? ` persona:${persona.name}` : '';
   }, [opts.engine]);
-  const statusLeft = ` model:${model} │ plugins:${pluginCount} │ tools:${toolCount} │ ctx:${
+  const statusLeft = ` model:${model} │ plugins:${pluginCount} │ tools:${availableTools}/${totalTools} │ ctx:${
     ctxPct ?? '?'
   }%${personaLabel} `;
 

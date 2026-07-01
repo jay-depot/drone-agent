@@ -33,7 +33,11 @@ function makeOptions(
     model,
     logger: silentLogger(),
     engine: {
-      listTools: () => [],
+      listTools: () => [
+        { name: 'tool-a', description: 'Tool A' },
+        { name: 'tool-b', description: 'Tool B' },
+        { name: 'tool-c', description: 'Tool C' },
+      ],
       listPlugins: () => [
         {
           id: 'core',
@@ -90,7 +94,7 @@ function makeOptions(
         },
         {
           command: '/tools',
-          description: 'List tools',
+          description: 'List registered tools (/tools --all for full list)',
           handler: async () => true,
         },
         {
@@ -142,7 +146,7 @@ describe('App', () => {
     const frame = instance.lastFrame() ?? '';
     expect(frame).toContain('model:llama3.1:latest');
     expect(frame).toContain('plugins:2');
-    expect(frame).toContain('tools:3');
+    expect(frame).toContain('tools:3/3');
   });
 
   it('mentions terminal-native text selection in the rendered output', async () => {
@@ -183,7 +187,11 @@ describe('App', () => {
     };
     const opts = makeOptions({
       engine: {
-        listTools: () => [],
+        listTools: () => [
+          { name: 'tool-a', description: 'Tool A' },
+          { name: 'tool-b', description: 'Tool B' },
+          { name: 'tool-c', description: 'Tool C' },
+        ],
         listPlugins: () => [
           {
             id: 'core',
@@ -244,7 +252,7 @@ describe('App', () => {
           },
           {
             command: '/tools',
-            description: 'List tools',
+            description: 'List registered tools (/tools --all for full list)',
             handler: async () => true,
           },
           {
