@@ -74,5 +74,9 @@
   {
     "timestamp": "2026-07-01T18:38:19.772Z",
     "insight": "Using sed for multi-line code insertions is extremely error-prone. The sed 'c' command with embedded newlines and special characters (quotes, backslashes) frequently mangles files. For database schema changes or complex multi-line code insertions, it's much more reliable to write complete files or use proper tooling. This session had several sed-related file corruptions that required manual cleanup."
+  },
+  {
+    "timestamp": "2026-07-01T20:58:32.807Z",
+    "insight": "The notepad plugin was created as a standalone .ts file but not wired into the plugin registry. The pattern for adding a new built-in plugin is: (1) create the plugin file exporting a DronePlugin, (2) add an import in plugins/index.ts, (3) add it to the staticBuiltInPlugins array. The plugin uses defaultEnabled: false so it won't activate unless the user enables it in config or via --plugin notepad."
   }
 ]
