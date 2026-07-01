@@ -35,7 +35,7 @@ async function createEngineWithTodo(): Promise<{
   return {
     engine,
     executeTool: async (name, input) =>
-      engine.executeTool(`todo.${name}`, input),
+      engine.executeTool(`todo__${name}`, input),
   };
 }
 

@@ -113,7 +113,7 @@ export const gitPlugin: DronePlugin = {
     });
 
     // -----------------------------------------------------------------------
-    // git.commit
+    // git__commit
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'commit',
@@ -135,7 +135,7 @@ export const gitPlugin: DronePlugin = {
           typeof input.message !== 'string' ||
           input.message.trim().length === 0
         ) {
-          throw new Error('git.commit requires a non-empty message string.');
+          throw new Error('git__commit requires a non-empty message string.');
         }
         const cwd =
           typeof input.cwd === 'string' && input.cwd.trim().length > 0

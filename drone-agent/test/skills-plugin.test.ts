@@ -48,7 +48,7 @@ describe('skills.reload tool', () => {
         await engine.initialize();
 
         // Initially no skills
-        const before = await engine.executeTool('skills.list', {});
+        const before = await engine.executeTool('skills__list', {});
         const beforeParsed = JSON.parse(before);
         expect(beforeParsed.count).toBe(0);
 
@@ -62,13 +62,13 @@ describe('skills.reload tool', () => {
         );
 
         // Reload
-        const reloadResult = await engine.executeTool('skills.reload', {});
+        const reloadResult = await engine.executeTool('skills__reload', {});
         const reloadParsed = JSON.parse(reloadResult);
         expect(reloadParsed.count).toBe(1);
         expect(reloadParsed.skills).toContain('test-skill');
 
         // Verify via list
-        const after = await engine.executeTool('skills.list', {});
+        const after = await engine.executeTool('skills__list', {});
         const afterParsed = JSON.parse(after);
         expect(afterParsed.count).toBe(1);
         expect(afterParsed.skills[0].id).toBe('test-skill');
@@ -91,7 +91,7 @@ describe('skills.reload tool', () => {
         });
         await engine.initialize();
 
-        const result = await engine.executeTool('skills.reload', {});
+        const result = await engine.executeTool('skills__reload', {});
         const parsed = JSON.parse(result);
         expect(parsed.count).toBe(0);
         expect(parsed.skills).toEqual([]);
@@ -124,8 +124,8 @@ describe('skills.reload tool', () => {
         );
 
         // Reload — should see skill-a
-        await engine.executeTool('skills.reload', {});
-        let list = await engine.executeTool('skills.list', {});
+        await engine.executeTool('skills__reload', {});
+        let list = await engine.executeTool('skills__list', {});
         expect(JSON.parse(list).count).toBe(1);
 
         // Write second skill
@@ -136,8 +136,8 @@ describe('skills.reload tool', () => {
         );
 
         // Reload — should see both
-        await engine.executeTool('skills.reload', {});
-        list = await engine.executeTool('skills.list', {});
+        await engine.executeTool('skills__reload', {});
+        list = await engine.executeTool('skills__list', {});
         const parsed = JSON.parse(list);
         expect(parsed.count).toBe(2);
         const ids = parsed.skills.map((s: { id: string }) => s.id);
@@ -170,8 +170,8 @@ describe('skills.reload tool', () => {
           'utf-8'
         );
 
-        await engine.executeTool('skills.reload', {});
-        let list = await engine.executeTool('skills.list', {});
+        await engine.executeTool('skills__reload', {});
+        let list = await engine.executeTool('skills__list', {});
         expect(JSON.parse(list).skills[0].description).toBe('A test skill.');
 
         // Edit the file
@@ -181,8 +181,8 @@ describe('skills.reload tool', () => {
         );
         await writeFile(path.join(skillsDir, 'editable.md'), edited, 'utf-8');
 
-        await engine.executeTool('skills.reload', {});
-        list = await engine.executeTool('skills.list', {});
+        await engine.executeTool('skills__reload', {});
+        list = await engine.executeTool('skills__list', {});
         expect(JSON.parse(list).skills[0].description).toBe('An edited skill.');
       } finally {
         process.cwd = originalCwd;

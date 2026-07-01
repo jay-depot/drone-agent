@@ -28,7 +28,7 @@ export const searchPlugin: DronePlugin = {
   },
   register: async registration => {
     // -----------------------------------------------------------------------
-    // search.text
+    // search__text
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'text',
@@ -63,7 +63,7 @@ export const searchPlugin: DronePlugin = {
           typeof input.pattern !== 'string' ||
           input.pattern.trim().length === 0
         ) {
-          throw new Error('search.text requires a non-empty pattern string.');
+          throw new Error('search__text requires a non-empty pattern string.');
         }
 
         const searchPath =
@@ -139,7 +139,7 @@ export const searchPlugin: DronePlugin = {
             return '';
           })();
           throw new Error(
-            `search.text: command failed${exitCode !== null ? ` (exit ${exitCode})` : ''} for ${searchPath}: ${stderr || (err instanceof Error ? err.message : String(err))}`
+            `search__text: command failed${exitCode !== null ? ` (exit ${exitCode})` : ''} for ${searchPath}: ${stderr || (err instanceof Error ? err.message : String(err))}`
           );
         }
 
@@ -180,7 +180,7 @@ export const searchPlugin: DronePlugin = {
     registration.registerTool({
       name: 'semantic',
       description:
-        'Placeholder for semantic search. Use search.text with regex.',
+        'Placeholder for semantic search. Use search__text with regex.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -192,7 +192,7 @@ export const searchPlugin: DronePlugin = {
       execute: async () => {
         return JSON.stringify(
           {
-            note: 'Semantic search is not yet implemented. Use search.text with regex patterns instead.',
+            note: 'Semantic search is not yet implemented. Use search__text with regex patterns instead.',
           },
           null,
           2

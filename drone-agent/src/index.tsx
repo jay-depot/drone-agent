@@ -333,7 +333,7 @@ async function main(): Promise<void> {
       await runJsonMode(conversation, engine);
     } else {
       // --once without --output-json: run a single tool
-      const selectedTool = engine.getTool('startup.status');
+      const selectedTool = engine.getTool('startup__status');
       if (!selectedTool) {
         throw new Error('Startup status tool is unavailable.');
       }
@@ -362,7 +362,7 @@ async function main(): Promise<void> {
     const selectedTool =
       invocation.kind === 'tool'
         ? engine.getTool(invocation.toolName)
-        : engine.getTool('startup.status');
+        : engine.getTool('startup__status');
     if (!selectedTool) {
       throw new Error(
         invocation.kind === 'tool'

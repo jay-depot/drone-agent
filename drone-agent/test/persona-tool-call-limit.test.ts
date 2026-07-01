@@ -249,7 +249,7 @@ describe('createConversationService — persona toolCallLimit', () => {
     return makeEngine({
       tools: [
         {
-          name: 'file.list',
+          name: 'file__list',
           description: 'list',
           inputSchema: { type: 'object', properties: {} },
         },
@@ -270,7 +270,7 @@ describe('createConversationService — persona toolCallLimit', () => {
     // than the config default (50), so the persona limit is what trips.
     const responses: DroneChatResponse[] = Array.from({ length: 7 }, () => ({
       toolCalls: [
-        { id: 'c', name: 'file.list', arguments: { path: '/missing' } },
+        { id: 'c', name: 'file__list', arguments: { path: '/missing' } },
       ],
     }));
     const provider = makeProvider(responses);
@@ -305,7 +305,7 @@ describe('createConversationService — persona toolCallLimit', () => {
     const engine = makeErrnoEngine(personaCap);
     const responses: DroneChatResponse[] = Array.from({ length: 5 }, () => ({
       toolCalls: [
-        { id: 'c', name: 'file.list', arguments: { path: '/missing' } },
+        { id: 'c', name: 'file__list', arguments: { path: '/missing' } },
       ],
     }));
     const provider = makeProvider(responses);
@@ -340,7 +340,7 @@ describe('createConversationService — persona toolCallLimit', () => {
     const engine = makeErrnoEngine(personaCap);
     const responses: DroneChatResponse[] = Array.from({ length: 5 }, () => ({
       toolCalls: [
-        { id: 'c', name: 'file.list', arguments: { path: '/missing' } },
+        { id: 'c', name: 'file__list', arguments: { path: '/missing' } },
       ],
     }));
     const provider = makeProvider(responses);
@@ -375,7 +375,7 @@ describe('createConversationService — persona toolCallLimit', () => {
     const engine = makeErrnoEngine(undefined);
     const responses: DroneChatResponse[] = Array.from({ length: 5 }, () => ({
       toolCalls: [
-        { id: 'c', name: 'file.list', arguments: { path: '/missing' } },
+        { id: 'c', name: 'file__list', arguments: { path: '/missing' } },
       ],
     }));
     const provider = makeProvider(responses);
@@ -410,7 +410,7 @@ describe('createConversationService — persona toolCallLimit', () => {
     const engine = makeErrnoEngine(personaCap);
     const responses: DroneChatResponse[] = Array.from({ length: 10 }, () => ({
       toolCalls: [
-        { id: 'c', name: 'file.list', arguments: { path: '/missing' } },
+        { id: 'c', name: 'file__list', arguments: { path: '/missing' } },
       ],
     }));
     const provider = makeProvider(responses);

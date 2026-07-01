@@ -623,21 +623,21 @@ describe('createCompactionPlugin', () => {
     sessionManager.appendAssistantMessage('working', [
       {
         id: 'call_1',
-        name: 'file.read',
+        name: 'file__read',
         arguments: { path: '/some/file.ts' },
       },
     ]);
-    sessionManager.appendToolResult('file.read', 'x '.repeat(300));
+    sessionManager.appendToolResult('file__read', 'x '.repeat(300));
 
     sessionManager.appendUserMessage('q3');
     sessionManager.appendAssistantMessage('more work', [
       {
         id: 'call_2',
-        name: 'search.text',
+        name: 'search__text',
         arguments: { pattern: 'TODO' },
       },
     ]);
-    sessionManager.appendToolResult('search.text', 'y '.repeat(300));
+    sessionManager.appendToolResult('search__text', 'y '.repeat(300));
 
     // Now the session should exceed the threshold. Running the
     // onAfterToolCall hook (which is what fires mid-loop in the

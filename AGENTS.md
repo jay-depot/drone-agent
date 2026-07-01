@@ -166,7 +166,7 @@ Everything is a plugin. Each plugin implements `DronePlugin` with a `register(re
 
 - **Register tools** via `registration.registerTool(...)` — these become callable by the LLM
 - **Register prompt fragments** via `registration.registerPromptFragment(...)` — injected into the system prompt as header or footer
-- **Register workflows** via `registration.registerWorkflow(...)` — multi-step interactive flows (e.g., `skills.create`, `persona.create`, `bootstrap.project`, `bootstrap.user`)
+- **Register workflows** via `registration.registerWorkflow(...)` — multi-step interactive flows (e.g., `skills__create`, `persona__create`, `bootstrap__project`, `bootstrap__user`)
 - **Register slash commands** via `registration.registerSlashCommand(...)` — interactive `/command` handlers
 - **Offer capabilities** via `registration.offer(...)` — expose an API to other plugins
 - **Request capabilities** via `registration.request<T>(pluginId)` — consume another plugin's API
@@ -225,29 +225,29 @@ The TUI is built with Ink 5.x (React for CLIs). It renders a four-region layout:
 
 ### Memory System
 
-Project-level memory is stored as JSON files in `.drone-agent/memory/`. Tools: `memory.store`, `memory.recall`, `memory.list`, `memory.search`, `memory.delete`. The memory plugin is opt-in (not enabled by default).
+Project-level memory is stored as JSON files in `.drone-agent/memory/`. Tools: `memory__store`, `memory__recall`, `memory__list`, `memory__search`, `memory__delete`. The memory plugin is opt-in (not enabled by default).
 
 ### Insight System
 
 The `self-improvement` plugin records insights about personas, skills, or the project. Insights are stored in `.drone-agent/insights/` (for project/skill) or `.drone-agent/personas/<id>/insights/` (for persona). For swarm-scoped assets, insights are stored on the owning server (beacon/coordinator) via HTTP storage engines registered by the swarm plugin. Principles are derived from insights and injected into the system prompt via a combined prompt fragment.
 
-Use `self-improvement.insight` to log observations during development.
+Use `self-improvement__insight` to log observations during development.
 
 ### Workflow System
 
 Workflows are multi-step interactive flows registered by plugins. They receive a `DroneWorkflowContext` with `elicit` (for asking the user questions), `projectDir`, `config`, `requestCapability`, and `enablePlugin` (for dynamically enabling plugins mid-session). Workflows can return a `toolResult` (JSON for the caller) and/or a `kickMessage` (synthetic user message to re-enter the chat loop).
 
-Existing workflows: `skills.create`, `persona.create`, `bootstrap.project`, `bootstrap.user`.
+Existing workflows: `skills__create`, `persona__create`, `bootstrap__project`, `bootstrap__user`.
 
 ### Bootstrap Plugin
 
 The `bootstrap` plugin provides setup workflows for new projects and users. It is not enabled by default — use `--plugin bootstrap` to enable it.
 
-- **`bootstrap.analyze`** (tool) — Detects project language, framework, build system, and suggests plugins
-- **`bootstrap.project`** (workflow) — Interactive project setup: detects project type, suggests plugins, writes config, enables them immediately via `enablePlugin()`
-- **`bootstrap.user`** (workflow) — Interactive user setup: probes for LLM providers (Ollama, OpenRouter), configures defaults, writes user config
+- **`bootstrap__analyze`** (tool) — Detects project language, framework, build system, and suggests plugins
+- **`bootstrap__project`** (workflow) — Interactive project setup: detects project type, suggests plugins, writes config, enables them immediately via `enablePlugin()`
+- **`bootstrap__user`** (workflow) — Interactive user setup: probes for LLM providers (Ollama, OpenRouter), configures defaults, writes user config
 
-Future workflows (not yet implemented): `bootstrap.standalone-agent`, `bootstrap.swarm`.
+Future workflows (not yet implemented): `bootstrap__standalone-agent`, `bootstrap__swarm`.
 
 ### Macros
 
@@ -312,7 +312,7 @@ Plugins can declare optional dependencies via the `optional` field in their meta
 
 ### Adding a new tool
 
-Call `registration.registerTool({ name, description, inputSchema, execute })` in the plugin's `register()` function. The tool name is scoped to the plugin (e.g., `skills.recall`).
+Call `registration.registerTool({ name, description, inputSchema, execute })` in the plugin's `register()` function. The tool name is scoped to the plugin (e.g., `skills__recall`).
 
 ### Adding a new prompt fragment
 

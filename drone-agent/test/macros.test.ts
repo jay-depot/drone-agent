@@ -680,12 +680,12 @@ describe('macrosPlugin', () => {
               onEvent({ kind: 'reasoning', content: 'Thinking deeply...' });
               onEvent({
                 kind: 'toolCall',
-                name: 'file.read',
+                name: 'file__read',
                 arguments: { path: '/test.txt' },
               });
               onEvent({
                 kind: 'toolResult',
-                name: 'file.read',
+                name: 'file__read',
                 content: 'file contents',
                 arguments: { path: '/test.txt' },
               });
@@ -708,12 +708,12 @@ describe('macrosPlugin', () => {
       );
 
       // Tool call event should be logged
-      expect(infoMessages.some(m => m.includes('→ tool: file.read'))).toBe(
+      expect(infoMessages.some(m => m.includes('→ tool: file__read'))).toBe(
         true
       );
 
       // Tool result event should be logged
-      expect(infoMessages.some(m => m.includes('← file.read:'))).toBe(true);
+      expect(infoMessages.some(m => m.includes('← file__read:'))).toBe(true);
 
       // Assistant message should be logged
       expect(infoMessages.some(m => m.includes('42'))).toBe(true);

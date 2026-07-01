@@ -416,7 +416,7 @@ export const personaPlugin: DronePlugin = {
         additionalProperties: false,
       },
       execute: async input => {
-        const result = await registration.runWorkflow('persona.create', input);
+        const result = await registration.runWorkflow('persona__create', input);
         return (
           result.toolResult ??
           JSON.stringify({ ok: true, message: 'Workflow completed.' }, null, 2)
@@ -453,12 +453,12 @@ export const personaPlugin: DronePlugin = {
         const subcommand = ctx.args[0] ?? '';
 
         if (subcommand === 'list') {
-          ctx.logger.info(await ctx.engine.executeTool('persona.list', {}));
+          ctx.logger.info(await ctx.engine.executeTool('persona__list', {}));
           return true;
         }
 
         if (subcommand === 'current') {
-          ctx.logger.info(await ctx.engine.executeTool('persona.current', {}));
+          ctx.logger.info(await ctx.engine.executeTool('persona__current', {}));
           return true;
         }
 
@@ -469,7 +469,7 @@ export const personaPlugin: DronePlugin = {
             return true;
           }
           ctx.logger.info(
-            await ctx.engine.executeTool('persona.select', { id })
+            await ctx.engine.executeTool('persona__select', { id })
           );
           return true;
         }
@@ -483,7 +483,7 @@ export const personaPlugin: DronePlugin = {
             return true;
           }
           await ctx.engine.runHooks('onBeforePrompt');
-          const result = await ctx.engine.runWorkflow('persona.create', {});
+          const result = await ctx.engine.runWorkflow('persona__create', {});
           if (result.toolResult) {
             ctx.logger.info(result.toolResult);
           }

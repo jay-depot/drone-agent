@@ -426,15 +426,15 @@ describe('engine.addExternalPlugin', () => {
     await engine.initialize();
 
     // Tool not available before adding
-    expect(engine.getTool('external-test.ext-ping')).toBeUndefined();
+    expect(engine.getTool('external-test__ext-ping')).toBeUndefined();
 
     // Add the external plugin
     const result = await engine.addExternalPlugin(externalPlugin);
     expect(result).toBe(true);
 
     // Tool should now be available
-    expect(engine.getTool('external-test.ext-ping')).toBeDefined();
-    const output = await engine.executeTool('external-test.ext-ping', {});
+    expect(engine.getTool('external-test__ext-ping')).toBeDefined();
+    const output = await engine.executeTool('external-test__ext-ping', {});
     expect(output).toBe('ext-pong');
   });
 
@@ -524,7 +524,7 @@ describe('engine.addExternalPlugin', () => {
     await engine.initialize();
 
     // Workflow not available before adding
-    await expect(engine.runWorkflow('ext-wf.setup', {})).rejects.toThrow(
+    await expect(engine.runWorkflow('ext-wf__setup', {})).rejects.toThrow(
       /Unknown workflow/
     );
 
@@ -533,7 +533,7 @@ describe('engine.addExternalPlugin', () => {
 
     // Workflow should now be registered (will throw about missing elicitation, not unknown)
     try {
-      await engine.runWorkflow('ext-wf.setup', {});
+      await engine.runWorkflow('ext-wf__setup', {});
     } catch (err) {
       expect((err as Error).message).not.toMatch(/Unknown workflow/);
     }

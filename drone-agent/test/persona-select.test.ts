@@ -74,7 +74,7 @@ describe('persona.select tool — graceful error handling', () => {
     await reloadCap!.reloadPersonas();
 
     // Try selecting a typo'd persona
-    const result = await engine.executeTool('persona.select', { id: 'plna' });
+    const result = await engine.executeTool('persona__select', { id: 'plna' });
     const parsed = JSON.parse(result);
 
     expect(parsed.error).toBe(true);
@@ -105,7 +105,7 @@ describe('persona.select tool — graceful error handling', () => {
     }>('persona');
     await reloadCap!.reloadPersonas();
 
-    const result = await engine.executeTool('persona.select', { id: 'coder' });
+    const result = await engine.executeTool('persona__select', { id: 'coder' });
     const parsed = JSON.parse(result);
 
     expect(parsed.error).toBeUndefined();
@@ -124,7 +124,7 @@ describe('persona.select tool — graceful error handling', () => {
     await engine.initialize();
 
     // No provider registered — no personas
-    const result = await engine.executeTool('persona.select', {
+    const result = await engine.executeTool('persona__select', {
       id: 'anything',
     });
     const parsed = JSON.parse(result);

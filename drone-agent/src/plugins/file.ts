@@ -29,7 +29,7 @@ function enhanceFsError(
       );
     case 'EISDIR':
       return new Error(
-        `${toolName}: expected a file but ${targetPath} is a directory. Use file.list for directories.`
+        `${toolName}: expected a file but ${targetPath} is a directory. Use file__list for directories.`
       );
     case 'ENOTDIR':
       return new Error(
@@ -55,7 +55,7 @@ export const filePlugin: DronePlugin = {
   },
   register: async registration => {
     // -----------------------------------------------------------------------
-    // file.read
+    // file__read
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'read',
@@ -76,14 +76,14 @@ export const filePlugin: DronePlugin = {
       },
       execute: async input => {
         if (typeof input.path !== 'string' || input.path.trim().length === 0) {
-          throw new Error('file.read requires a non-empty path string.');
+          throw new Error('file__read requires a non-empty path string.');
         }
         const filePath = path.resolve(input.path.trim());
         let content: string;
         try {
           content = await readFile(filePath, 'utf-8');
         } catch (err) {
-          throw enhanceFsError('file.read', filePath, err);
+          throw enhanceFsError('file__read', filePath, err);
         }
         const lines = content.split('\n');
 
@@ -99,7 +99,7 @@ export const filePlugin: DronePlugin = {
 
         if (startLine > endLine) {
           throw new Error(
-            `file.read: startLine (${startLine}) must not exceed endLine (${endLine}).`
+            `file__read: startLine (${startLine}) must not exceed endLine (${endLine}).`
           );
         }
 
@@ -119,7 +119,7 @@ export const filePlugin: DronePlugin = {
     });
 
     // -----------------------------------------------------------------------
-    // file.list
+    // file__list
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'list',
@@ -138,14 +138,14 @@ export const filePlugin: DronePlugin = {
       },
       execute: async input => {
         if (typeof input.path !== 'string' || input.path.trim().length === 0) {
-          throw new Error('file.list requires a non-empty path string.');
+          throw new Error('file__list requires a non-empty path string.');
         }
         const dirPath = path.resolve(input.path.trim());
         let entries: import('node:fs').Dirent[];
         try {
           entries = await readdir(dirPath, { withFileTypes: true });
         } catch (err) {
-          throw enhanceFsError('file.list', dirPath, err);
+          throw enhanceFsError('file__list', dirPath, err);
         }
         const items = await Promise.all(
           entries.map(async entry => {
@@ -170,7 +170,7 @@ export const filePlugin: DronePlugin = {
     });
 
     // -----------------------------------------------------------------------
-    // file.write
+    // file__write
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'write',
@@ -187,23 +187,23 @@ export const filePlugin: DronePlugin = {
       },
       execute: async input => {
         if (typeof input.path !== 'string' || input.path.trim().length === 0) {
-          throw new Error('file.write requires a non-empty path string.');
+          throw new Error('file__write requires a non-empty path string.');
         }
         if (typeof input.content !== 'string') {
-          throw new Error('file.write requires a content string.');
+          throw new Error('file__write requires a content string.');
         }
         const filePath = path.resolve(input.path.trim());
         try {
           await writeFile(filePath, input.content, 'utf-8');
         } catch (err) {
-          throw enhanceFsError('file.write', filePath, err);
+          throw enhanceFsError('file__write', filePath, err);
         }
         return JSON.stringify({ path: filePath, written: true }, null, 2);
       },
     });
 
     // -----------------------------------------------------------------------
-    // file.apply_diff
+    // file__apply_diff
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'apply_diff',
@@ -249,10 +249,10 @@ export const filePlugin: DronePlugin = {
       },
       execute: async input => {
         if (typeof input.path !== 'string' || input.path.trim().length === 0) {
-          throw new Error('file.apply_diff requires a non-empty path string.');
+          throw new Error('file__apply_diff requires a non-empty path string.');
         }
         if (!Array.isArray(input.hunks) || input.hunks.length === 0) {
-          throw new Error('file.apply_diff requires a non-empty hunks array.');
+          throw new Error('file__apply_diff requires a non-empty hunks array.');
         }
 
         const filePath = path.resolve(input.path.trim());
@@ -260,7 +260,7 @@ export const filePlugin: DronePlugin = {
         try {
           content = await readFile(filePath, 'utf-8');
         } catch (err) {
-          throw enhanceFsError('file.apply_diff', filePath, err);
+          throw enhanceFsError('file__apply_diff', filePath, err);
         }
         const lines = content.split('\n');
 
@@ -313,7 +313,7 @@ export const filePlugin: DronePlugin = {
         try {
           await writeFile(filePath, lines.join('\n'), 'utf-8');
         } catch (err) {
-          throw enhanceFsError('file.apply_diff', filePath, err);
+          throw enhanceFsError('file__apply_diff', filePath, err);
         }
 
         return JSON.stringify(
@@ -330,7 +330,7 @@ export const filePlugin: DronePlugin = {
     });
 
     // -----------------------------------------------------------------------
-    // file.glob
+    // file__glob
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'glob',
@@ -353,7 +353,7 @@ export const filePlugin: DronePlugin = {
           typeof input.pattern !== 'string' ||
           input.pattern.trim().length === 0
         ) {
-          throw new Error('file.glob requires a non-empty pattern string.');
+          throw new Error('file__glob requires a non-empty pattern string.');
         }
         const cwd =
           typeof input.cwd === 'string' && input.cwd.trim().length > 0
@@ -363,13 +363,13 @@ export const filePlugin: DronePlugin = {
         try {
           const cwdStat = await stat(cwd);
           if (!cwdStat.isDirectory()) {
-            throw new Error(`file.glob: cwd is not a directory: ${cwd}.`);
+            throw new Error(`file__glob: cwd is not a directory: ${cwd}.`);
           }
         } catch (err) {
-          if (err instanceof Error && err.message.startsWith('file.glob')) {
+          if (err instanceof Error && err.message.startsWith('file__glob')) {
             throw err;
           }
-          throw enhanceFsError('file.glob', cwd, err);
+          throw enhanceFsError('file__glob', cwd, err);
         }
 
         const pattern = input.pattern.trim();

@@ -80,7 +80,7 @@ describe('search plugin — text', () => {
         pattern: 'foo',
         path: '/definitely/not/a/real/path/xyz',
       })
-    ).rejects.toThrow(/search\.text/);
+    ).rejects.toThrow(/search__text/);
   });
 
   it('rejects empty patterns', async () => {

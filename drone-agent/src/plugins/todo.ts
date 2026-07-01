@@ -38,7 +38,7 @@ function isTodoStatus(value: unknown): value is TodoStatus {
 
 function parseManageInput(input: Record<string, unknown>): TodoManageInput {
   if (!isRecord(input)) {
-    throw new Error('todo.manage_list expected an object input.');
+    throw new Error('todo__manage_list expected an object input.');
   }
 
   const { action } = input;
@@ -52,21 +52,21 @@ function parseManageInput(input: Record<string, unknown>): TodoManageInput {
     action !== 'replace_list'
   ) {
     throw new Error(
-      'todo.manage_list action must be one of: add_item, mark_in_progress, mark_completed, remove_item, list_items, clear_completed, replace_list.'
+      'todo__manage_list action must be one of: add_item, mark_in_progress, mark_completed, remove_item, list_items, clear_completed, replace_list.'
     );
   }
 
   if (input.id !== undefined && typeof input.id !== 'string') {
-    throw new Error('todo.manage_list id must be a string when provided.');
+    throw new Error('todo__manage_list id must be a string when provided.');
   }
 
   if (input.title !== undefined && typeof input.title !== 'string') {
-    throw new Error('todo.manage_list title must be a string when provided.');
+    throw new Error('todo__manage_list title must be a string when provided.');
   }
 
   if (action === 'add_item') {
     if (typeof input.title !== 'string' || input.title.trim().length === 0) {
-      throw new Error('todo.manage_list add_item requires a non-empty title.');
+      throw new Error('todo__manage_list add_item requires a non-empty title.');
     }
   }
 
@@ -76,13 +76,13 @@ function parseManageInput(input: Record<string, unknown>): TodoManageInput {
     action === 'remove_item'
   ) {
     if (typeof input.id !== 'string' || input.id.trim().length === 0) {
-      throw new Error(`todo.manage_list ${action} requires a non-empty id.`);
+      throw new Error(`todo__manage_list ${action} requires a non-empty id.`);
     }
   }
 
   if (action === 'replace_list') {
     if (!Array.isArray(input.items)) {
-      throw new Error('todo.manage_list replace_list requires an items array.');
+      throw new Error('todo__manage_list replace_list requires an items array.');
     }
 
     for (const item of input.items) {
@@ -92,12 +92,12 @@ function parseManageInput(input: Record<string, unknown>): TodoManageInput {
         item.title.trim().length === 0
       ) {
         throw new Error(
-          'todo.manage_list replace_list items require a non-empty title.'
+          'todo__manage_list replace_list items require a non-empty title.'
         );
       }
       if (item.status !== undefined && !isTodoStatus(item.status)) {
         throw new Error(
-          'todo.manage_list replace_list item status must be pending, in_progress, or completed.'
+          'todo__manage_list replace_list item status must be pending, in_progress, or completed.'
         );
       }
     }
@@ -219,7 +219,7 @@ export const todoPlugin: DronePlugin = {
           const target = items.find(item => item.id === parsed.id);
           if (!target) {
             throw new Error(
-              `todo.manage_list could not find item with id ${parsed.id}.`
+              `todo__manage_list could not find item with id ${parsed.id}.`
             );
           }
           target.status =
@@ -231,7 +231,7 @@ export const todoPlugin: DronePlugin = {
           const index = items.findIndex(item => item.id === parsed.id);
           if (index === -1) {
             throw new Error(
-              `todo.manage_list could not find item with id ${parsed.id}.`
+              `todo__manage_list could not find item with id ${parsed.id}.`
             );
           }
           items.splice(index, 1);
@@ -325,7 +325,7 @@ export const todoPlugin: DronePlugin = {
             return true;
           }
 
-          await ctx.engine.executeTool('todo.manage_list', {
+          await ctx.engine.executeTool('todo__manage_list', {
             action: 'add_item',
             title,
           });
@@ -346,7 +346,7 @@ export const todoPlugin: DronePlugin = {
               ctx.logger.info('No completed items to clear.');
               return true;
             }
-            await ctx.engine.executeTool('todo.manage_list', {
+            await ctx.engine.executeTool('todo__manage_list', {
               action: 'clear_completed',
             });
             ctx.logger.info(`Cleared ${completedCount} completed item(s).`);
@@ -373,7 +373,7 @@ export const todoPlugin: DronePlugin = {
             );
             return true;
           }
-          await ctx.engine.executeTool('todo.manage_list', {
+          await ctx.engine.executeTool('todo__manage_list', {
             action: 'remove_item',
             id: target,
           });

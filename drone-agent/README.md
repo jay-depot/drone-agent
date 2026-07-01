@@ -88,22 +88,22 @@ The `lsp` plugin is opt-in. It is intended to make `drone-agent` behave more lik
 
 LSP tools available:
 
-- `lsp.get_diagnostics` - Returns current diagnostics for the workspace or a specific file
-- `lsp.hover` - Returns hover information for a symbol
-- `lsp.go_to_definition` - Resolves definition location(s) for a symbol
-- `lsp.find_references` - Finds references for a symbol
-- `lsp.document_symbols` - Lists symbols defined in a file
-- `lsp.workspace_symbol` - Searches for symbols across the workspace
-- `lsp.signature_help` - Returns signature help for function calls
-- `lsp.completion` - Returns completion suggestions
-- `lsp.code_action` - Returns code actions (quick fixes, refactorings)
-- `lsp.rename` - Renames a symbol across the workspace
-- `lsp.implementation` - Returns locations that implement an interface
-- `lsp.type_definition` - Returns type-definition locations
-- `lsp.call_hierarchy_incoming` - Returns callers of a symbol
-- `lsp.call_hierarchy_outgoing` - Returns callees of a symbol
-- `lsp.formatting` - Returns whole-file formatting edits
-- `lsp.server_status` - Shows server connection status
+- `lsp__get_diagnostics` - Returns current diagnostics for the workspace or a specific file
+- `lsp__hover` - Returns hover information for a symbol
+- `lsp__go_to_definition` - Resolves definition location(s) for a symbol
+- `lsp__find_references` - Finds references for a symbol
+- `lsp__document_symbols` - Lists symbols defined in a file
+- `lsp__workspace_symbol` - Searches for symbols across the workspace
+- `lsp__signature_help` - Returns signature help for function calls
+- `lsp__completion` - Returns completion suggestions
+- `lsp__code_action` - Returns code actions (quick fixes, refactorings)
+- `lsp__rename` - Renames a symbol across the workspace
+- `lsp__implementation` - Returns locations that implement an interface
+- `lsp__type_definition` - Returns type-definition locations
+- `lsp__call_hierarchy_incoming` - Returns callers of a symbol
+- `lsp__call_hierarchy_outgoing` - Returns callees of a symbol
+- `lsp__formatting` - Returns whole-file formatting edits
+- `lsp__server_status` - Shows server connection status
 
 Current phase-1 support is TypeScript/JavaScript first. The plugin architecture is generic, but only TypeScript/JavaScript has a built-in auto-spawn path right now.
 
@@ -191,9 +191,9 @@ The `mcp` plugin mounts capabilities from configured MCP servers directly into t
 
 Mounted tool naming:
 
-- MCP tools: `mcp.<serverId>.<toolName>`
-- MCP helpers: `mcp.<serverId>.list_resources`, `mcp.<serverId>.read_resource`, `mcp.<serverId>.list_prompts`, `mcp.<serverId>.get_prompt`
-- Global status: `mcp.server_status`
+- MCP tools: `mcp__<serverId>__<toolName>`
+- MCP helpers: `mcp__<serverId>__list_resources`, `mcp__<serverId>__read_resource`, `mcp__<serverId>__list_prompts`, `mcp__<serverId>__get_prompt`
+- Global status: `mcp__server_status`
 
 MVP transport support:
 

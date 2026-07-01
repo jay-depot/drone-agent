@@ -84,7 +84,7 @@ export const subagentPlugin: DronePlugin = {
       >();
 
       ctx.registerTool({
-        name: 'subagent.dispatch',
+        name: 'subagent__dispatch',
         description: 'Launch a subagent to handle a task in parallel',
         inputSchema: {
           type: 'object',

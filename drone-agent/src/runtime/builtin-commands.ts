@@ -198,7 +198,7 @@ const execCommand: DroneSlashCommand = {
     }
     try {
       await ctx.engine.runHooks('onBeforePrompt');
-      const result = await ctx.engine.executeTool('exec.run', {
+      const result = await ctx.engine.executeTool('exec__run', {
         command,
         cwd: process.cwd(),
       });

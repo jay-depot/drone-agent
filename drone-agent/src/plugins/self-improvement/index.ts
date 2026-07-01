@@ -640,23 +640,23 @@ export const selfImprovementPlugin: DronePlugin = {
             'Current active persona: `' +
               activePersona.id +
               '`. ' +
-              'Use `self-improvement.insight` with `targetType: "persona"` to record insights about it.'
+              'Use `self-improvement__insight` with `targetType: "persona"` to record insights about it.'
           );
         }
         lines.push(
-          'Use `persona.list` to see all available personas and `skills.list` to see available skills.'
+          'Use `persona__list` to see all available personas and `skills__list` to see available skills.'
         );
         lines.push(
-          'Insight tools: `self-improvement.insight` (record), `self-improvement.insights-list` (browse), `self-improvement.insights-recall` (read).'
+          'Insight tools: `self-improvement__insight` (record), `self-improvement__insights-list` (browse), `self-improvement__insights-recall` (read).'
         );
         lines.push(
-          'Principle tools: `self-improvement.principles-store` (create), `self-improvement.principles-list` (browse), `self-improvement.principles-recall` (read), `self-improvement.principles-delete` (remove).'
+          'Principle tools: `self-improvement__principles-store` (create), `self-improvement__principles-list` (browse), `self-improvement__principles-recall` (read), `self-improvement__principles-delete` (remove).'
         );
         return lines.join('\n');
       },
     });
 
-    // ── self-improvement.insight ─────────────────────────────────────
+    // ── self-improvement__insight ─────────────────────────────────────
     registration.registerTool({
       name: 'insight',
       description:
@@ -667,7 +667,7 @@ export const selfImprovementPlugin: DronePlugin = {
         'too many insights. They will be evaluated all together all at once ' +
         'to look for patterns, so more is better! Insights should be ' +
         'short and focused on a single observation or issue. ' +
-        'Use `persona.list` and `skills.list` to discover valid IDs before calling this tool.',
+        'Use `persona__list` and `skills__list` to discover valid IDs before calling this tool.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -681,7 +681,7 @@ export const selfImprovementPlugin: DronePlugin = {
             type: 'string',
             description:
               'The id of the persona or skill this insight applies to. ' +
-              'Use `persona.list` or `skills.list` to discover valid IDs. ' +
+              'Use `persona__list` or `skills__list` to discover valid IDs. ' +
               'For project insights, use a descriptive category like "architecture" or "workflow".',
           },
           insight: {
@@ -727,7 +727,7 @@ export const selfImprovementPlugin: DronePlugin = {
       },
     });
 
-    // ── self-improvement.insights-list ─────────────────────────────────
+    // ── self-improvement__insights-list ─────────────────────────────────
     registration.registerTool({
       name: 'insights-list',
       description:
@@ -774,7 +774,7 @@ export const selfImprovementPlugin: DronePlugin = {
       },
     });
 
-    // ── self-improvement.insights-recall ──────────────────────────────
+    // ── self-improvement__insights-recall ──────────────────────────────
     registration.registerTool({
       name: 'insights-recall',
       description:
@@ -806,7 +806,7 @@ export const selfImprovementPlugin: DronePlugin = {
       },
     });
 
-    // ── self-improvement.principles-store ─────────────────────────────
+    // ── self-improvement__principles-store ─────────────────────────────
     registration.registerTool({
       name: 'principles-store',
       description:
@@ -877,7 +877,7 @@ export const selfImprovementPlugin: DronePlugin = {
       },
     });
 
-    // ── self-improvement.principles-list ──────────────────────────────
+    // ── self-improvement__principles-list ──────────────────────────────
     registration.registerTool({
       name: 'principles-list',
       description:
@@ -922,7 +922,7 @@ export const selfImprovementPlugin: DronePlugin = {
       },
     });
 
-    // ── self-improvement.principles-recall ────────────────────────────
+    // ── self-improvement__principles-recall ────────────────────────────
     registration.registerTool({
       name: 'principles-recall',
       description:
@@ -954,7 +954,7 @@ export const selfImprovementPlugin: DronePlugin = {
       },
     });
 
-    // ── self-improvement.principles-delete ────────────────────────────
+    // ── self-improvement__principles-delete ────────────────────────────
     registration.registerTool({
       name: 'principles-delete',
       description:

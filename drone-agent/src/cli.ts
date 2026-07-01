@@ -128,10 +128,10 @@ export function parseCliArgs(argv: string[]): CliInvocation {
       options.persona = argv[++i];
     } else if (arg === '--workflow' && i + 1 < argv.length) {
       const raw = argv[++i];
-      const parts = raw.split('.');
+      const parts = raw.split('__');
       if (parts.length !== 2 || !parts[0] || !parts[1]) {
         throw new Error(
-          `Invalid workflow format: ${raw}. Expected <plugin>.<workflow>`
+          `Invalid workflow format: ${raw}. Expected <plugin>__<workflow>`
         );
       }
       const workflowArgs: Record<string, string> = {};

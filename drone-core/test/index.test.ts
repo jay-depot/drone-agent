@@ -34,10 +34,10 @@ describe('createConsoleLogger', () => {
 });
 
 describe('getCanonicalToolName', () => {
-  it('joins plugin id and tool name with a dot', () => {
-    expect(getCanonicalToolName('file', 'read')).toBe('file.read');
+  it('joins plugin id and tool name with double underscore', () => {
+    expect(getCanonicalToolName('file', 'read')).toBe('file__read');
     expect(getCanonicalToolName('mcp', 'github.list_prs')).toBe(
-      'mcp.github.list_prs'
+      'mcp__github.list_prs'
     );
   });
 });
@@ -156,48 +156,48 @@ describe('applyAgentConfigLayer', () => {
 
 describe('matchGlob', () => {
   it('matches exact names', () => {
-    expect(matchGlob('exec.run', 'exec.run')).toBe(true);
-    expect(matchGlob('exec.run', 'exec.list')).toBe(false);
+    expect(matchGlob('exec__run', 'exec__run')).toBe(true);
+    expect(matchGlob('exec__run', 'exec__list')).toBe(false);
   });
 
   it('matches wildcard * across a single segment', () => {
-    expect(matchGlob('exec.*', 'exec.run')).toBe(true);
-    expect(matchGlob('exec.*', 'exec.list')).toBe(true);
-    expect(matchGlob('exec.*', 'exec.run.extra')).toBe(true);
+    expect(matchGlob('exec__*', 'exec__run')).toBe(true);
+    expect(matchGlob('exec__*', 'exec__list')).toBe(true);
+    expect(matchGlob('exec__*', 'exec__run__extra')).toBe(true);
   });
 
   it('matches wildcard * across multiple segments', () => {
-    expect(matchGlob('mcp.*', 'mcp.filesystem.read')).toBe(true);
-    expect(matchGlob('mcp.*', 'mcp.filesystem')).toBe(true);
-    // mcp.* requires at least a dot + something after it
-    expect(matchGlob('mcp.*', 'mcp')).toBe(false);
+    expect(matchGlob('mcp__*', 'mcp__filesystem__read')).toBe(true);
+    expect(matchGlob('mcp__*', 'mcp__filesystem')).toBe(true);
+    // mcp__* requires at least a __ + something after it
+    expect(matchGlob('mcp__*', 'mcp')).toBe(false);
   });
 
   it('matches single-character wildcard ?', () => {
-    expect(matchGlob('file.rea?', 'file.read')).toBe(true);
-    expect(matchGlob('file.rea?', 'file.real')).toBe(true);
-    expect(matchGlob('file.rea?', 'file.reads')).toBe(false);
+    expect(matchGlob('file__rea?', 'file__read')).toBe(true);
+    expect(matchGlob('file__rea?', 'file__real')).toBe(true);
+    expect(matchGlob('file__rea?', 'file__reads')).toBe(false);
   });
 
   it('matches the catch-all *', () => {
-    expect(matchGlob('*', 'exec.run')).toBe(true);
-    expect(matchGlob('*', 'anything.here')).toBe(true);
+    expect(matchGlob('*', 'exec__run')).toBe(true);
+    expect(matchGlob('*', 'anything__here')).toBe(true);
   });
 
   it('is case-sensitive', () => {
-    expect(matchGlob('Exec.Run', 'exec.run')).toBe(false);
+    expect(matchGlob('Exec__Run', 'exec__run')).toBe(false);
   });
 });
 
 describe('filterByGlobPatterns', () => {
   const items = [
-    'exec.run',
-    'exec.list',
-    'file.read',
-    'file.write',
-    'mcp.filesystem.read',
-    'mcp.filesystem.write',
-    'search.text',
+    'exec__run',
+    'exec__list',
+    'file__read',
+    'file__write',
+    'mcp__filesystem__read',
+    'mcp__filesystem__write',
+    'search__text',
   ];
 
   it('returns all items when patterns is empty', () => {
@@ -209,51 +209,51 @@ describe('filterByGlobPatterns', () => {
   });
 
   it('filters by inclusion patterns', () => {
-    const result = filterByGlobPatterns(items, ['exec.*']);
-    expect(result).toEqual(['exec.run', 'exec.list']);
+    const result = filterByGlobPatterns(items, ['exec__*']);
+    expect(result).toEqual(['exec__run', 'exec__list']);
   });
 
   it('filters by multiple inclusion patterns', () => {
-    const result = filterByGlobPatterns(items, ['exec.*', 'file.*']);
+    const result = filterByGlobPatterns(items, ['exec__*', 'file__*']);
     expect(result).toEqual([
-      'exec.run',
-      'exec.list',
-      'file.read',
-      'file.write',
+      'exec__run',
+      'exec__list',
+      'file__read',
+      'file__write',
     ]);
   });
 
   it('excludes items matching ! patterns', () => {
-    const result = filterByGlobPatterns(items, ['*', '!exec.run']);
-    expect(result).not.toContain('exec.run');
-    expect(result).toContain('exec.list');
-    expect(result).toContain('file.read');
+    const result = filterByGlobPatterns(items, ['*', '!exec__run']);
+    expect(result).not.toContain('exec__run');
+    expect(result).toContain('exec__list');
+    expect(result).toContain('file__read');
   });
 
   it('combines inclusion and exclusion', () => {
-    const result = filterByGlobPatterns(items, ['exec.*', '!exec.run']);
-    expect(result).toEqual(['exec.list']);
+    const result = filterByGlobPatterns(items, ['exec__*', '!exec__run']);
+    expect(result).toEqual(['exec__list']);
   });
 
   it('exclusion-only patterns include everything except matches', () => {
-    const result = filterByGlobPatterns(items, ['!mcp.*']);
-    expect(result).not.toContain('mcp.filesystem.read');
-    expect(result).not.toContain('mcp.filesystem.write');
-    expect(result).toContain('exec.run');
-    expect(result).toContain('file.read');
+    const result = filterByGlobPatterns(items, ['!mcp__*']);
+    expect(result).not.toContain('mcp__filesystem__read');
+    expect(result).not.toContain('mcp__filesystem__write');
+    expect(result).toContain('exec__run');
+    expect(result).toContain('file__read');
   });
 
   it('handles multiple exclusions', () => {
-    const result = filterByGlobPatterns(items, ['*', '!exec.*', '!file.*']);
+    const result = filterByGlobPatterns(items, ['*', '!exec__*', '!file__*']);
     expect(result).toEqual([
-      'mcp.filesystem.read',
-      'mcp.filesystem.write',
-      'search.text',
+      'mcp__filesystem__read',
+      'mcp__filesystem__write',
+      'search__text',
     ]);
   });
 
   it('returns empty array when nothing matches', () => {
-    const result = filterByGlobPatterns(items, ['nonexistent.*']);
+    const result = filterByGlobPatterns(items, ['nonexistent__*']);
     expect(result).toEqual([]);
   });
 });

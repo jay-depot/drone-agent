@@ -257,7 +257,7 @@ export const skillsPlugin: DronePlugin = {
         additionalProperties: false,
       },
       execute: async input => {
-        const result = await registration.runWorkflow('skills.create', input);
+        const result = await registration.runWorkflow('skills__create', input);
         return (
           result.toolResult ??
           JSON.stringify({ ok: true, message: 'Workflow completed.' }, null, 2)
@@ -285,7 +285,7 @@ export const skillsPlugin: DronePlugin = {
         const subcommand = ctx.args[0] ?? '';
 
         if (subcommand === 'list') {
-          ctx.logger.info(await ctx.engine.executeTool('skills.list', {}));
+          ctx.logger.info(await ctx.engine.executeTool('skills__list', {}));
           return true;
         }
 
@@ -297,11 +297,11 @@ export const skillsPlugin: DronePlugin = {
           }
 
           // Execute the tool to get skill data
-          const result = await ctx.engine.executeTool('skills.recall', { id });
+          const result = await ctx.engine.executeTool('skills__recall', { id });
           const skill = JSON.parse(result);
 
           // Append to conversation context as synthetic tool result
-          ctx.sessionManager?.appendToolResult('skills.recall', result);
+          ctx.sessionManager?.appendToolResult('skills__recall', result);
 
           // Tell the user it worked (not the full body)
           ctx.logger.info(`Loaded skill: ${skill.name} (${skill.source})`);
@@ -309,7 +309,7 @@ export const skillsPlugin: DronePlugin = {
         }
 
         if (subcommand === 'reload') {
-          ctx.logger.info(await ctx.engine.executeTool('skills.reload', {}));
+          ctx.logger.info(await ctx.engine.executeTool('skills__reload', {}));
           return true;
         }
 
@@ -319,7 +319,7 @@ export const skillsPlugin: DronePlugin = {
             return true;
           }
           await ctx.engine.runHooks('onBeforePrompt');
-          const result = await ctx.engine.runWorkflow('skills.create', {});
+          const result = await ctx.engine.runWorkflow('skills__create', {});
           if (result.toolResult) {
             ctx.logger.info(result.toolResult);
           }

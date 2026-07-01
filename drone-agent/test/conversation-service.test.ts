@@ -210,7 +210,7 @@ describe('createConversationService — tool error handling', () => {
     const engine = makeEngine({
       tools: [
         {
-          name: 'file.list',
+          name: 'file__list',
           description: 'list dir',
           inputSchema: { type: 'object', properties: {} },
         },
@@ -223,7 +223,7 @@ describe('createConversationService — tool error handling', () => {
         toolCalls: [
           {
             id: 'call-1',
-            name: 'file.list',
+            name: 'file__list',
             arguments: { path: '/tmp' },
           },
         ],
@@ -255,7 +255,7 @@ describe('createConversationService — tool error handling', () => {
     const toolMessage = messages.find(m => m.role === 'tool');
     expect(toolMessage).toBeDefined();
     expect(toolMessage?.content).toBe('{"items":[]}');
-    expect(toolMessage?.toolName).toBe('file.list');
+    expect(toolMessage?.toolName).toBe('file__list');
   });
 
   it('captures tool exceptions and surfaces them as tool messages — does not throw', async () => {
@@ -270,7 +270,7 @@ describe('createConversationService — tool error handling', () => {
     const engine = makeEngine({
       tools: [
         {
-          name: 'file.list',
+          name: 'file__list',
           description: 'list dir',
           inputSchema: { type: 'object', properties: {} },
         },
@@ -284,7 +284,7 @@ describe('createConversationService — tool error handling', () => {
         toolCalls: [
           {
             id: 'call-1',
-            name: 'file.list',
+            name: 'file__list',
             arguments: { path: '/drone' },
           },
         ],
@@ -314,7 +314,7 @@ describe('createConversationService — tool error handling', () => {
     const toolMessage = messages.find(m => m.role === 'tool');
     expect(toolMessage).toBeDefined();
     // Error must include the tool name, the error code, and a useful message.
-    expect(toolMessage?.content).toContain('file.list');
+    expect(toolMessage?.content).toContain('file__list');
     expect(toolMessage?.content).toContain('ENOENT');
     expect(toolMessage?.content).toContain('/drone');
   });
@@ -326,7 +326,7 @@ describe('createConversationService — tool error handling', () => {
     const engine = makeEngine({
       tools: [
         {
-          name: 'file.read',
+          name: 'file__read',
           description: 'read',
           inputSchema: { type: 'object', properties: {} },
         },
@@ -336,7 +336,7 @@ describe('createConversationService — tool error handling', () => {
       },
     });
     const provider = makeProvider([
-      { toolCalls: [{ id: 'c', name: 'file.read', arguments: {} }] },
+      { toolCalls: [{ id: 'c', name: 'file__read', arguments: {} }] },
       { message: 'recovered' },
     ]);
 
@@ -372,7 +372,7 @@ describe('createConversationService — tool error handling', () => {
     const engine = makeEngine({
       tools: [
         {
-          name: 'file.list',
+          name: 'file__list',
           description: 'list',
           inputSchema: { type: 'object', properties: {} },
         },
@@ -391,13 +391,13 @@ describe('createConversationService — tool error handling', () => {
       // Round 1: try /drone (fails)
       {
         toolCalls: [
-          { id: '1', name: 'file.list', arguments: { path: '/drone' } },
+          { id: '1', name: 'file__list', arguments: { path: '/drone' } },
         ],
       },
       // Round 2: try /home (succeeds)
       {
         toolCalls: [
-          { id: '2', name: 'file.list', arguments: { path: '/home' } },
+          { id: '2', name: 'file__list', arguments: { path: '/home' } },
         ],
       },
       // Round 3: model summarises
@@ -434,7 +434,7 @@ describe('createConversationService — tool error handling', () => {
     const engine = makeEngine({
       tools: [
         {
-          name: 'file.read',
+          name: 'file__read',
           description: 'r',
           inputSchema: { type: 'object', properties: {} },
         },
@@ -444,7 +444,7 @@ describe('createConversationService — tool error handling', () => {
     const provider = makeProvider([
       {
         toolCalls: [
-          { id: 'tc1', name: 'file.read', arguments: { path: '/x' } },
+          { id: 'tc1', name: 'file__read', arguments: { path: '/x' } },
         ],
       },
       { message: 'finished' },
@@ -490,7 +490,7 @@ describe('createConversationService — iteration limits', () => {
     return makeEngine({
       tools: [
         {
-          name: 'file.list',
+          name: 'file__list',
           description: 'list',
           inputSchema: { type: 'object', properties: {} },
         },
@@ -508,7 +508,7 @@ describe('createConversationService — iteration limits', () => {
     // Queue more tool-call responses than the limit so the loop must bail.
     const responses: DroneChatResponse[] = Array.from({ length: 5 }, () => ({
       toolCalls: [
-        { id: 'c', name: 'file.list', arguments: { path: '/missing' } },
+        { id: 'c', name: 'file__list', arguments: { path: '/missing' } },
       ],
     }));
     const provider = makeProvider(responses);
@@ -540,7 +540,7 @@ describe('createConversationService — iteration limits', () => {
     const engine = makeErrnoEngine();
     const responses: DroneChatResponse[] = Array.from({ length: 10 }, () => ({
       toolCalls: [
-        { id: 'c', name: 'file.list', arguments: { path: '/missing' } },
+        { id: 'c', name: 'file__list', arguments: { path: '/missing' } },
       ],
     }));
     const provider = makeProvider(responses);
@@ -572,7 +572,7 @@ describe('createConversationService — iteration limits', () => {
     // Queue enough tool-call responses to exceed the limit multiple times.
     const responses: DroneChatResponse[] = Array.from({ length: 8 }, () => ({
       toolCalls: [
-        { id: 'c', name: 'file.list', arguments: { path: '/missing' } },
+        { id: 'c', name: 'file__list', arguments: { path: '/missing' } },
       ],
     }));
     // After the last tool call, return a plain message so the loop ends.
@@ -612,7 +612,7 @@ describe('createConversationService — iteration limits', () => {
     const engine = makeErrnoEngine();
     const responses: DroneChatResponse[] = Array.from({ length: 5 }, () => ({
       toolCalls: [
-        { id: 'c', name: 'file.list', arguments: { path: '/missing' } },
+        { id: 'c', name: 'file__list', arguments: { path: '/missing' } },
       ],
     }));
     const provider = makeProvider(responses);
@@ -648,7 +648,7 @@ describe('createConversationService — iteration limits', () => {
     const engine = makeErrnoEngine();
     const responses: DroneChatResponse[] = Array.from({ length: 5 }, () => ({
       toolCalls: [
-        { id: 'c', name: 'file.list', arguments: { path: '/missing' } },
+        { id: 'c', name: 'file__list', arguments: { path: '/missing' } },
       ],
     }));
     const provider = makeProvider(responses);
@@ -682,7 +682,7 @@ describe('createConversationService — stuck detection', () => {
     const engine = makeEngine({
       tools: [
         {
-          name: 'file.list',
+          name: 'file__list',
           description: 'list',
           inputSchema: { type: 'object', properties: {} },
         },
@@ -696,7 +696,7 @@ describe('createConversationService — stuck detection', () => {
     // The model "retries" 10 times — the stuck detector should kill it after 3.
     const responses: DroneChatResponse[] = Array.from({ length: 10 }, () => ({
       toolCalls: [
-        { id: 'c', name: 'file.list', arguments: { path: '/workspace' } },
+        { id: 'c', name: 'file__list', arguments: { path: '/workspace' } },
       ],
     }));
     const provider = makeProvider(responses);
@@ -728,7 +728,7 @@ describe('createConversationService — stuck detection', () => {
     const engine = makeEngine({
       tools: [
         {
-          name: 'file.list',
+          name: 'file__list',
           description: 'list',
           inputSchema: { type: 'object', properties: {} },
         },
@@ -746,13 +746,13 @@ describe('createConversationService — stuck detection', () => {
     const provider = makeProvider([
       // Two failing rounds, then a successful round, then a final message.
       {
-        toolCalls: [{ id: 'a', name: 'file.list', arguments: { path: '/a' } }],
+        toolCalls: [{ id: 'a', name: 'file__list', arguments: { path: '/a' } }],
       },
       {
-        toolCalls: [{ id: 'b', name: 'file.list', arguments: { path: '/b' } }],
+        toolCalls: [{ id: 'b', name: 'file__list', arguments: { path: '/b' } }],
       },
       {
-        toolCalls: [{ id: 'c', name: 'file.list', arguments: { path: '/c' } }],
+        toolCalls: [{ id: 'c', name: 'file__list', arguments: { path: '/c' } }],
       },
       { message: 'Found it.' },
     ]);
@@ -779,12 +779,12 @@ describe('createConversationService — stuck detection', () => {
 
   it('treats a different tool signature as a fresh start, not a continuation', async () => {
     const toolImpl = vi.fn(async (name: string): Promise<string> => {
-      if (name === 'file.list') {
+      if (name === 'file__list') {
         const e: NodeJS.ErrnoException = new Error('not found');
         e.code = 'ENOENT';
         throw e;
       }
-      if (name === 'search.text') {
+      if (name === 'search__text') {
         const e: NodeJS.ErrnoException = new Error('not found');
         e.code = 'ENOENT';
         throw e;
@@ -795,12 +795,12 @@ describe('createConversationService — stuck detection', () => {
     const engine = makeEngine({
       tools: [
         {
-          name: 'file.list',
+          name: 'file__list',
           description: 'list',
           inputSchema: { type: 'object', properties: {} },
         },
         {
-          name: 'search.text',
+          name: 'search__text',
           description: 'text',
           inputSchema: { type: 'object', properties: {} },
         },
@@ -815,14 +815,14 @@ describe('createConversationService — stuck detection', () => {
       // pass if the detector resets on a new tool signature.
       {
         toolCalls: [
-          { id: '1', name: 'file.list', arguments: {} },
-          { id: '2', name: 'search.text', arguments: {} },
+          { id: '1', name: 'file__list', arguments: {} },
+          { id: '2', name: 'search__text', arguments: {} },
         ],
       },
       {
         toolCalls: [
-          { id: '3', name: 'file.list', arguments: {} },
-          { id: '4', name: 'search.text', arguments: {} },
+          { id: '3', name: 'file__list', arguments: {} },
+          { id: '4', name: 'search__text', arguments: {} },
         ],
       },
       { message: 'giving up' },

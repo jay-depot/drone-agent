@@ -294,7 +294,7 @@ export function App(opts: DroneTuiOptions): JSX.Element {
                 let resultContent: string;
 
                 // Special handling for exec.run - full output, no truncation
-                if (event.name === 'exec.run') {
+                if (event.name === 'exec__run') {
                   resultContent = formatExecResult(
                     event.arguments,
                     event.content
@@ -303,8 +303,8 @@ export function App(opts: DroneTuiOptions): JSX.Element {
                 }
                 // Special handling for file.apply_diff - formatted diff display
                 else if (
-                  event.name === 'file.apply_diff' ||
-                  event.name === 'git.diff'
+                  event.name === 'file__apply_diff' ||
+                  event.name === 'git__diff'
                 ) {
                   resultContent = formatDiffResult(event.content);
                   log(`← ${event.name}:\n${resultContent}`, 'toolResult');

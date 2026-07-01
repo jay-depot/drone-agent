@@ -26,7 +26,7 @@ describe('plugin-engine workflow registry', () => {
     engine.setElicitation(noopEl);
     await engine.initialize();
 
-    const result = await engine.runWorkflow('wf.hello', {});
+    const result = await engine.runWorkflow('wf__hello', {});
     expect(result.kickMessage).toBe('hi');
     expect(result.toolResult).toBe('{"ok":true}');
   });
@@ -39,7 +39,7 @@ describe('plugin-engine workflow registry', () => {
       workflows: [
         {
           name: 'do',
-          description: 'a.do',
+          description: 'a__do',
           run: async () => ({ toolResult: '"a"' }),
         },
       ],
@@ -49,7 +49,7 @@ describe('plugin-engine workflow registry', () => {
       workflows: [
         {
           name: 'do',
-          description: 'b.do',
+          description: 'b__do',
           run: async () => ({ toolResult: '"b"' }),
         },
       ],
@@ -60,8 +60,8 @@ describe('plugin-engine workflow registry', () => {
     });
     await engine.initialize();
     engine.setElicitation(noopEl);
-    expect((await engine.runWorkflow('a.do', {})).toolResult).toBe('"a"');
-    expect((await engine.runWorkflow('b.do', {})).toolResult).toBe('"b"');
+    expect((await engine.runWorkflow('a__do', {})).toolResult).toBe('"a"');
+    expect((await engine.runWorkflow('b__do', {})).toolResult).toBe('"b"');
   });
 
   it('throws on unknown workflow name', async () => {
@@ -87,7 +87,7 @@ describe('plugin-engine workflow registry', () => {
     });
     await engine.initialize();
     // No setElicitation call.
-    await expect(engine.runWorkflow('wf.x', {})).rejects.toThrow(
+    await expect(engine.runWorkflow('wf__x', {})).rejects.toThrow(
       /did not provide an interactive capability/
     );
   });
@@ -113,7 +113,7 @@ describe('plugin-engine workflow normalization', () => {
     });
     await engine.initialize();
     engine.setElicitation(noopEl);
-    return engine.runWorkflow('wf.x', {});
+    return engine.runWorkflow('wf__x', {});
   }
 
   it('passes through result objects with kickMessage and toolResult', async () => {
@@ -192,7 +192,7 @@ describe('plugin-engine workflow context', () => {
     });
     await engine.initialize();
     engine.setElicitation(noopEl);
-    await engine.runWorkflow('wf.capture', {});
+    await engine.runWorkflow('wf__capture', {});
     expect(captured).toEqual({
       elicit: true,
       projectDir: process.cwd(),
@@ -232,7 +232,7 @@ describe('plugin-engine workflow context', () => {
     });
     await engine.initialize();
     engine.setElicitation(noopEl);
-    await engine.runWorkflow('wf.use-ollama', {});
+    await engine.runWorkflow('wf__use-ollama', {});
     expect(sawProvider).toBe(true);
   });
 
@@ -257,7 +257,7 @@ describe('plugin-engine workflow context', () => {
     });
     await engine.initialize();
     engine.setElicitation(noopEl);
-    await engine.runWorkflow('wf.echo', { scope: 'project', id: 'reviewer' });
+    await engine.runWorkflow('wf__echo', { scope: 'project', id: 'reviewer' });
     expect(receivedArgs).toEqual({ scope: 'project', id: 'reviewer' });
   });
 });
@@ -303,7 +303,7 @@ describe('plugin-engine setElicitation / getElicitation', () => {
     await engine.initialize();
     expect(beforeInit).toBeUndefined();
     engine.setElicitation(noopEl);
-    await engine.runWorkflow('observer.peek', {});
+    await engine.runWorkflow('observer__peek', {});
     expect(observed.viaRegistration).toBe(noopEl);
     expect(observed.viaCtx).toBe(noopEl);
   });

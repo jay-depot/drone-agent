@@ -211,9 +211,9 @@ describe('loadPersonas — tools field', () => {
           '---',
           'name: Restricted',
           'tools:',
-          '  - exec.*',
-          '  - file.*',
-          '  - !exec.run',
+          '  - exec__*',
+          '  - file__*',
+          '  - !exec__run',
           '---',
           '',
         ].join('\n')
@@ -222,7 +222,7 @@ describe('loadPersonas — tools field', () => {
       const personas = await loadPersonas(dir);
       expect(personas.size).toBe(1);
       const p = personas.get('restricted');
-      expect(p?.allowedTools).toEqual(['exec.*', 'file.*', '!exec.run']);
+      expect(p?.allowedTools).toEqual(['exec__*', 'file__*', '!exec__run']);
     });
   });
 

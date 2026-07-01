@@ -110,7 +110,7 @@ describe('bootstrap plugin', () => {
         logger: silentLogger(),
       });
       await engine.initialize();
-      expect(engine.getTool('bootstrap.analyze')).toBeDefined();
+      expect(engine.getTool('bootstrap__analyze')).toBeDefined();
     });
 
     it('registers the project and user workflows', async () => {
@@ -126,7 +126,7 @@ describe('bootstrap plugin', () => {
       // Workflows are registered but can only be run with elicitation,
       // so we verify they exist by trying to run them (they'll fail on missing elicitation)
       expect(engine.listTools()).toContainEqual(
-        expect.objectContaining({ name: 'bootstrap.analyze' })
+        expect.objectContaining({ name: 'bootstrap__analyze' })
       );
     });
   });
@@ -157,7 +157,7 @@ describe('bootstrap plugin', () => {
       expect(engine.listPlugins().find(p => p.id === 'git')?.enabled).toBe(
         false
       );
-      expect(engine.getTool('git.status')).toBeUndefined();
+      expect(engine.getTool('git__status')).toBeUndefined();
 
       // Enable git plugin
       const result = await engine.enablePlugin('git');
@@ -165,7 +165,7 @@ describe('bootstrap plugin', () => {
       expect(engine.listPlugins().find(p => p.id === 'git')?.enabled).toBe(
         true
       );
-      expect(engine.getTool('git.status')).toBeDefined();
+      expect(engine.getTool('git__status')).toBeDefined();
     });
   });
 });

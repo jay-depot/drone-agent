@@ -65,9 +65,9 @@ describe('config plugin', () => {
 
     const tools = engine.listTools();
     const toolNames = tools.map(t => t.name);
-    expect(toolNames).toContain('config.get');
-    expect(toolNames).toContain('config.set');
-    expect(toolNames).toContain('config.list_layers');
+    expect(toolNames).toContain('config__get');
+    expect(toolNames).toContain('config__set');
+    expect(toolNames).toContain('config__list_layers');
   });
 
   it('offers DroneConfigCapability', async () => {
@@ -86,7 +86,7 @@ describe('config plugin', () => {
     expect(typeof cap!.setValue).toBe('function');
   });
 
-  describe('config.get', () => {
+  describe('config__get', () => {
     it('returns the full resolved config with provenance when no key is given', async () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
@@ -99,7 +99,7 @@ describe('config plugin', () => {
 
       await engine.initialize();
 
-      const result = await engine.executeTool('config.get', {});
+      const result = await engine.executeTool('config__get', {});
       const parsed = JSON.parse(result);
 
       expect(parsed.ollama).toBeDefined();
@@ -120,7 +120,7 @@ describe('config plugin', () => {
 
       await engine.initialize();
 
-      const result = await engine.executeTool('config.get', {
+      const result = await engine.executeTool('config__get', {
         key: 'ollama.model',
       });
       const parsed = JSON.parse(result);
@@ -147,7 +147,7 @@ describe('config plugin', () => {
 
       await engine.initialize();
 
-      const result = await engine.executeTool('config.get', {
+      const result = await engine.executeTool('config__get', {
         key: 'ollama.model',
       });
       const parsed = JSON.parse(result);
@@ -157,7 +157,7 @@ describe('config plugin', () => {
     });
   });
 
-  describe('config.set', () => {
+  describe('config__set', () => {
     it('writes a config value to the project scope by default', async () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
@@ -170,7 +170,7 @@ describe('config plugin', () => {
 
       await engine.initialize();
 
-      const result = await engine.executeTool('config.set', {
+      const result = await engine.executeTool('config__set', {
         key: 'ollama.model',
         value: 'llama3.2',
       });
@@ -199,7 +199,7 @@ describe('config plugin', () => {
 
       await engine.initialize();
 
-      const result = await engine.executeTool('config.set', {
+      const result = await engine.executeTool('config__set', {
         scope: 'user',
         key: 'ollama.model',
         value: 'user-model',
@@ -229,7 +229,7 @@ describe('config plugin', () => {
       await engine.initialize();
 
       await expect(
-        engine.executeTool('config.set', {
+        engine.executeTool('config__set', {
           key: 'nonexistent.setting',
           value: 'foo',
         })
@@ -249,7 +249,7 @@ describe('config plugin', () => {
       await engine.initialize();
 
       await expect(
-        engine.executeTool('config.set', {
+        engine.executeTool('config__set', {
           scope: 'invalid',
           key: 'ollama.model',
           value: 'test',
@@ -269,7 +269,7 @@ describe('config plugin', () => {
 
       await engine.initialize();
 
-      const result = await engine.executeTool('config.set', {
+      const result = await engine.executeTool('config__set', {
         key: 'ollama',
         value: { host: 'http://localhost:11435', model: 'nested-model' },
       });
@@ -283,7 +283,7 @@ describe('config plugin', () => {
     });
   });
 
-  describe('config.list_layers', () => {
+  describe('config__list_layers', () => {
     it('lists config layers with scope, path, and keys', async () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);
@@ -301,7 +301,7 @@ describe('config plugin', () => {
 
       await engine.initialize();
 
-      const result = await engine.executeTool('config.list_layers', {});
+      const result = await engine.executeTool('config__list_layers', {});
       const parsed = JSON.parse(result);
 
       expect(parsed.layers).toBeDefined();

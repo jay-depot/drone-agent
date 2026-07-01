@@ -10,15 +10,15 @@ type ExecInput = {
 
 function parseExecInput(input: Record<string, unknown>): ExecInput {
   if (!isRecord(input)) {
-    throw new Error('exec.run expected an object input.');
+    throw new Error('exec__run expected an object input.');
   }
 
   if (typeof input.command !== 'string' || input.command.trim().length === 0) {
-    throw new Error('exec.run requires a non-empty string command.');
+    throw new Error('exec__run requires a non-empty string command.');
   }
 
   if (input.cwd !== undefined && typeof input.cwd !== 'string') {
-    throw new Error('exec.run cwd must be a string when provided.');
+    throw new Error('exec__run cwd must be a string when provided.');
   }
 
   if (
@@ -28,7 +28,7 @@ function parseExecInput(input: Record<string, unknown>): ExecInput {
       input.timeoutMs <= 0)
   ) {
     throw new Error(
-      'exec.run timeoutMs must be a positive number when provided.'
+      'exec__run timeoutMs must be a positive number when provided.'
     );
   }
 

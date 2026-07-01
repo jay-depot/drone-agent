@@ -3,7 +3,7 @@ import { parseCliInvocation } from '../src/index.js';
 
 describe('parseCliInvocation — --workflow flag', () => {
   it('parses --workflow with plugin.name format', () => {
-    const inv = parseCliInvocation(['--workflow', 'persona.create']);
+    const inv = parseCliInvocation(['--workflow', 'persona__create']);
     expect(inv.kind).toBe('workflow');
     if (inv.kind !== 'workflow') return;
     expect(inv.options.workflow).toEqual({
@@ -16,7 +16,7 @@ describe('parseCliInvocation — --workflow flag', () => {
   it('parses repeated --workflow-arg key=value pairs', () => {
     const inv = parseCliInvocation([
       '--workflow',
-      'persona.create',
+      'persona__create',
       '--workflow-arg',
       'scope=user',
       '--workflow-arg',
@@ -33,7 +33,7 @@ describe('parseCliInvocation — --workflow flag', () => {
   it('trims whitespace around keys and preserves values verbatim', () => {
     const inv = parseCliInvocation([
       '--workflow',
-      'a.b',
+      'a__b',
       '--workflow-arg',
       '  scope = project  ',
     ]);
@@ -62,20 +62,20 @@ describe('parseCliInvocation — --workflow flag', () => {
   });
 
   it('rejects --workflow with empty workflow name', () => {
-    expect(() => parseCliInvocation(['--workflow', 'persona.'])).toThrow(
+    expect(() => parseCliInvocation(['--workflow', 'persona__'])).toThrow(
       /Invalid workflow format/
     );
   });
 
   it('rejects --workflow-arg without an = sign', () => {
     expect(() =>
-      parseCliInvocation(['--workflow', 'a.b', '--workflow-arg', 'oops'])
+      parseCliInvocation(['--workflow', 'a__b', '--workflow-arg', 'oops'])
     ).toThrow(/Invalid workflow arg format/);
   });
 
   it('rejects --workflow-arg with empty key', () => {
     expect(() =>
-      parseCliInvocation(['--workflow', 'a.b', '--workflow-arg', '=value'])
+      parseCliInvocation(['--workflow', 'a__b', '--workflow-arg', '=value'])
     ).toThrow(/Invalid workflow arg format/);
   });
 
@@ -87,7 +87,7 @@ describe('parseCliInvocation — --workflow flag', () => {
 
   it('rejects --workflow-arg without a value argument', () => {
     expect(() =>
-      parseCliInvocation(['--workflow', 'a.b', '--workflow-arg'])
+      parseCliInvocation(['--workflow', 'a__b', '--workflow-arg'])
     ).toThrow(/Missing value/);
   });
 
@@ -96,7 +96,7 @@ describe('parseCliInvocation — --workflow flag', () => {
       '--once',
       '--output-plain',
       '--workflow',
-      'persona.create',
+      'persona__create',
       '--workflow-arg',
       'scope=project',
     ]);
@@ -129,7 +129,7 @@ describe('parseCliInvocation — --workflow flag', () => {
       '--plugin',
       'persona',
       '--workflow',
-      'persona.create',
+      'persona__create',
     ]);
     expect(inv.kind).toBe('workflow');
     if (inv.kind !== 'workflow') return;
@@ -185,13 +185,13 @@ describe('parseCliInvocation — non-workflow invocations', () => {
   it('returns kind "tool" for tool command', () => {
     const inv = parseCliInvocation([
       '--tool',
-      'file.list',
+      'file__list',
       '--tool-arg',
       'path=/tmp',
     ]);
     expect(inv.kind).toBe('tool');
     if (inv.kind !== 'tool') return;
-    expect(inv.toolName).toBe('file.list');
+    expect(inv.toolName).toBe('file__list');
     expect(inv.input).toEqual({ path: '/tmp' });
   });
 });

@@ -82,47 +82,47 @@ describe('enhanceFsError', () => {
   }
 
   it('rewrites ENOENT to a clear path-not-found message', () => {
-    const out = enhanceFsError('file.list', '/drone', enoent());
-    expect(out.message).toContain('file.list');
+    const out = enhanceFsError('file__list', '/drone', enoent());
+    expect(out.message).toContain('file__list');
     expect(out.message).toContain('not found');
     expect(out.message).toContain('/drone');
     expect(out.message).not.toContain('scandir');
   });
 
   it('rewrites EACCES to a permission-denied message', () => {
-    const out = enhanceFsError('file.read', '/etc/shadow', eacces());
+    const out = enhanceFsError('file__read', '/etc/shadow', eacces());
     expect(out.message).toContain('permission denied');
     expect(out.message).toContain('/etc/shadow');
   });
 
-  it('hints to use file.list for EISDIR on read', () => {
-    const out = enhanceFsError('file.read', '/home', eisdir());
+  it('hints to use file__list for EISDIR on read', () => {
+    const out = enhanceFsError('file__read', '/home', eisdir());
     expect(out.message).toContain('directory');
-    expect(out.message).toContain('file.list');
+    expect(out.message).toContain('file__list');
   });
 
   it('hints for ENOTDIR on list', () => {
-    const out = enhanceFsError('file.list', '/not/a/real/dir', enotdir());
+    const out = enhanceFsError('file__list', '/not/a/real/dir', enotdir());
     expect(out.message).toContain('not a directory');
   });
 
   it('falls back to a generic message for unknown error codes', () => {
     const e: NodeJS.ErrnoException = new Error('something blew up');
     e.code = 'EWHOKNOWS';
-    const out = enhanceFsError('file.write', '/tmp/x', e);
-    expect(out.message).toContain('file.write');
+    const out = enhanceFsError('file__write', '/tmp/x', e);
+    expect(out.message).toContain('file__write');
     expect(out.message).toContain('something blew up');
   });
 
   it('handles non-Error inputs gracefully', () => {
-    const out = enhanceFsError('file.read', '/x', 'a string error');
-    expect(out.message).toContain('file.read');
+    const out = enhanceFsError('file__read', '/x', 'a string error');
+    expect(out.message).toContain('file__read');
     expect(out.message).toContain('a string error');
   });
 });
 
 describe('file plugin — error surfacing', () => {
-  it('surfaces ENOENT from file.list as a clear tool error', async () => {
+  it('surfaces ENOENT from file__list as a clear tool error', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
     const list = tools.get('list');
@@ -131,18 +131,18 @@ describe('file plugin — error surfacing', () => {
     await expect(
       list!({ path: '/definitely/not/a/real/path' })
     ).rejects.toThrow(
-      /file\.list.*not found.*\/definitely\/not\/a\/real\/path/
+      /file__list.*not found.*\/definitely\/not\/a\/real\/path/
     );
   });
 
-  it('surfaces ENOENT from file.read as a clear tool error', async () => {
+  it('surfaces ENOENT from file__read as a clear tool error', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
     const read = tools.get('read');
     expect(read).toBeDefined();
 
     await expect(read!({ path: '/no/such/file/abcxyz.txt' })).rejects.toThrow(
-      /file\.read.*not found/
+      /file__read.*not found/
     );
   });
 
@@ -163,7 +163,7 @@ describe('file plugin — error surfacing', () => {
     }
   });
 
-  it('surfaces EISDIR from file.read when given a directory', async () => {
+  it('surfaces EISDIR from file__read when given a directory', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
     const read = tools.get('read');
@@ -172,7 +172,7 @@ describe('file plugin — error surfacing', () => {
     await expect(read!({ path: tmpdir() })).rejects.toThrow(/directory/i);
   });
 
-  it('file.glob reports a missing cwd clearly', async () => {
+  it('file__glob reports a missing cwd clearly', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
     const glob = tools.get('glob');
@@ -180,7 +180,7 @@ describe('file plugin — error surfacing', () => {
 
     await expect(
       glob!({ pattern: '**/*.ts', cwd: '/definitely/not/a/real/path' })
-    ).rejects.toThrow(/file\.glob.*not found/);
+    ).rejects.toThrow(/file__glob.*not found/);
   });
 });
 

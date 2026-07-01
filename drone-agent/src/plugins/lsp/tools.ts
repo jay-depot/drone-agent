@@ -133,7 +133,7 @@ export function createHoverTool(server: ServerManager): DroneToolDefinition {
     execute: async input => {
       await server.refreshIfNeeded();
       const { filePath, line, column } = server.parsePositionInput(
-        'lsp.hover',
+        'lsp__hover',
         input
       );
       const runtime = server.findRuntimeForFile(filePath);
@@ -203,7 +203,7 @@ export function createGoToDefinitionTool(
     execute: async input => {
       await server.refreshIfNeeded();
       const { filePath, line, column } = server.parsePositionInput(
-        'lsp.go_to_definition',
+        'lsp__go_to_definition',
         input
       );
       const runtime = server.findRuntimeForFile(filePath);
@@ -292,7 +292,7 @@ export function createFindReferencesTool(
     execute: async input => {
       await server.refreshIfNeeded();
       const { filePath, line, column } = server.parsePositionInput(
-        'lsp.find_references',
+        'lsp__find_references',
         input
       );
       const includeDeclaration =
@@ -535,7 +535,7 @@ export function createSignatureHelpTool(
     },
     execute: async input => {
       const { runtime, document, line, column } =
-        await server.resolveAtPosition('lsp.signature_help', input);
+        await server.resolveAtPosition('lsp__signature_help', input);
       const response = await runtime.client.request<LspSignatureHelpResponse>(
         'textDocument/signatureHelp',
         {
@@ -593,7 +593,7 @@ export function createCompletionTool(
     },
     execute: async input => {
       const { runtime, document, line, column } =
-        await server.resolveAtPosition('lsp.completion', input);
+        await server.resolveAtPosition('lsp__completion', input);
       const limit =
         typeof input.limit === 'number' &&
         Number.isInteger(input.limit) &&
@@ -838,7 +838,7 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
         throw new Error('lsp.rename requires a non-empty newName.');
       }
       const { runtime, document, line, column } =
-        await server.resolveAtPosition('lsp.rename', input);
+        await server.resolveAtPosition('lsp__rename', input);
       const response = await runtime.client.request<LspWorkspaceEdit>(
         'textDocument/rename',
         {
@@ -899,7 +899,7 @@ export function createImplementationTool(
     },
     execute: async input => {
       const { runtime, document, line, column } =
-        await server.resolveAtPosition('lsp.implementation', input);
+        await server.resolveAtPosition('lsp__implementation', input);
       const response = await runtime.client.request<DefinitionResponse>(
         'textDocument/implementation',
         {
@@ -959,7 +959,7 @@ export function createTypeDefinitionTool(
     },
     execute: async input => {
       const { runtime, document, line, column } =
-        await server.resolveAtPosition('lsp.type_definition', input);
+        await server.resolveAtPosition('lsp__type_definition', input);
       const response = await runtime.client.request<DefinitionResponse>(
         'textDocument/typeDefinition',
         {
@@ -1019,7 +1019,7 @@ export function createCallHierarchyIncomingTool(
     },
     execute: async input => {
       const { runtime, document, line, column } =
-        await server.resolveAtPosition('lsp.call_hierarchy_incoming', input);
+        await server.resolveAtPosition('lsp__call_hierarchy_incoming', input);
       const response = await runtime.client.request<LspCallHierarchyItem[]>(
         'textDocument/prepareCallHierarchy',
         {
@@ -1082,7 +1082,7 @@ export function createCallHierarchyOutgoingTool(
     },
     execute: async input => {
       const { runtime, document, line, column } =
-        await server.resolveAtPosition('lsp.call_hierarchy_outgoing', input);
+        await server.resolveAtPosition('lsp__call_hierarchy_outgoing', input);
       const response = await runtime.client.request<LspCallHierarchyItem[]>(
         'textDocument/prepareCallHierarchy',
         {

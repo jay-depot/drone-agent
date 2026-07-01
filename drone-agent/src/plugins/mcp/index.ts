@@ -255,7 +255,7 @@ export const mcpPlugin: DronePlugin = {
       tools: McpToolMeta[]
     ): void {
       for (const tool of tools) {
-        const mountedName = `${serverId}.${sanitizeToolSegment(tool.name)}`;
+        const mountedName = `${serverId}__${sanitizeToolSegment(tool.name)}`;
         registerMountedTool(
           mountedName,
           tool.description ?? `MCP tool ${tool.name} from server ${serverId}.`,

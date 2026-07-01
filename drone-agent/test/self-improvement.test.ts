@@ -149,7 +149,7 @@ describe('self-improvement plugin', () => {
   it('registers the self-improvement.insight tool', async () => {
     const engine = await createEngine();
     const tools = engine.listTools();
-    const insightTool = tools.find(t => t.name === 'self-improvement.insight');
+    const insightTool = tools.find(t => t.name === 'self-improvement__insight');
     expect(insightTool).toBeDefined();
     expect(insightTool!.description).toContain('insight');
     expect(insightTool!.inputSchema).toBeDefined();
@@ -176,7 +176,7 @@ describe('self-improvement plugin', () => {
 
     const engine = await createEngine({ personaCapability: personaCap });
 
-    const result = await engine.executeTool('self-improvement.insight', {
+    const result = await engine.executeTool('self-improvement__insight', {
       targetType: 'persona',
       targetId: 'coder',
       insight:
@@ -219,7 +219,7 @@ describe('self-improvement plugin', () => {
 
       const engine = await createEngine({ personaCapability: personaCap });
 
-      const result = await engine.executeTool('self-improvement.insight', {
+      const result = await engine.executeTool('self-improvement__insight', {
         targetType: 'persona',
         targetId: 'helper',
         insight: 'The helper persona should be more concise.',
@@ -272,7 +272,7 @@ describe('self-improvement plugin', () => {
 
     const engine = await createEngine({ skillsCapability: skillsCap });
 
-    const result = await engine.executeTool('self-improvement.insight', {
+    const result = await engine.executeTool('self-improvement__insight', {
       targetType: 'skill',
       targetId: 'testing',
       insight: 'The testing skill should include Playwright examples.',
@@ -323,7 +323,7 @@ describe('self-improvement plugin', () => {
 
       const engine = await createEngine({ skillsCapability: skillsCap });
 
-      const result = await engine.executeTool('self-improvement.insight', {
+      const result = await engine.executeTool('self-improvement__insight', {
         targetType: 'skill',
         targetId: 'helper-skill',
         insight: 'The helper skill should be more detailed.',
@@ -365,13 +365,13 @@ describe('self-improvement plugin', () => {
 
     const engine = await createEngine({ personaCapability: personaCap });
 
-    await engine.executeTool('self-improvement.insight', {
+    await engine.executeTool('self-improvement__insight', {
       targetType: 'persona',
       targetId: 'reviewer',
       insight: 'First insight.',
     });
 
-    const result = await engine.executeTool('self-improvement.insight', {
+    const result = await engine.executeTool('self-improvement__insight', {
       targetType: 'persona',
       targetId: 'reviewer',
       insight: 'Second insight.',
@@ -392,7 +392,7 @@ describe('self-improvement plugin', () => {
     const engine = await createEngine();
 
     await expect(
-      engine.executeTool('self-improvement.insight', {
+      engine.executeTool('self-improvement__insight', {
         targetType: 'invalid',
         targetId: 'foo',
         insight: 'Some insight.',
@@ -404,7 +404,7 @@ describe('self-improvement plugin', () => {
     const engine = await createEngine();
 
     await expect(
-      engine.executeTool('self-improvement.insight', {
+      engine.executeTool('self-improvement__insight', {
         targetType: 'persona',
         targetId: '',
         insight: 'Some insight.',
@@ -416,7 +416,7 @@ describe('self-improvement plugin', () => {
     const engine = await createEngine();
 
     await expect(
-      engine.executeTool('self-improvement.insight', {
+      engine.executeTool('self-improvement__insight', {
         targetType: 'persona',
         targetId: 'foo',
         insight: '',
@@ -438,7 +438,7 @@ describe('self-improvement plugin', () => {
     const engine = await createEngine({ personaCapability: personaCap });
 
     await expect(
-      engine.executeTool('self-improvement.insight', {
+      engine.executeTool('self-improvement__insight', {
         targetType: 'persona',
         targetId: 'nonexistent',
         insight: 'Some insight.',
@@ -455,7 +455,7 @@ describe('self-improvement plugin', () => {
     const engine = await createEngine({ skillsCapability: skillsCap });
 
     await expect(
-      engine.executeTool('self-improvement.insight', {
+      engine.executeTool('self-improvement__insight', {
         targetType: 'skill',
         targetId: 'nonexistent',
         insight: 'Some insight.',
@@ -466,7 +466,7 @@ describe('self-improvement plugin', () => {
   it('works without persona or skills plugins loaded', async () => {
     const engine = await createEngine();
 
-    const result = await engine.executeTool('self-improvement.insight', {
+    const result = await engine.executeTool('self-improvement__insight', {
       targetType: 'persona',
       targetId: 'any-persona',
       insight: 'Works without validation.',
@@ -488,7 +488,7 @@ describe('self-improvement plugin', () => {
   it('lowercases targetId', async () => {
     const engine = await createEngine();
 
-    const result = await engine.executeTool('self-improvement.insight', {
+    const result = await engine.executeTool('self-improvement__insight', {
       targetType: 'skill',
       targetId: 'My-Skill-Name',
       insight: 'Lowercase test.',
@@ -507,7 +507,7 @@ describe('self-improvement plugin', () => {
     it('writes a project insight to .drone-agent/insights/project/<targetId>.json', async () => {
       const engine = await createEngine();
 
-      const result = await engine.executeTool('self-improvement.insight', {
+      const result = await engine.executeTool('self-improvement__insight', {
         targetType: 'project',
         targetId: 'architecture',
         insight: 'The plugin architecture should use dependency injection.',
@@ -533,13 +533,13 @@ describe('self-improvement plugin', () => {
     it('appends to an existing project insights file', async () => {
       const engine = await createEngine();
 
-      await engine.executeTool('self-improvement.insight', {
+      await engine.executeTool('self-improvement__insight', {
         targetType: 'project',
         targetId: 'workflow',
         insight: 'First insight.',
       });
 
-      const result = await engine.executeTool('self-improvement.insight', {
+      const result = await engine.executeTool('self-improvement__insight', {
         targetType: 'project',
         targetId: 'workflow',
         insight: 'Second insight.',
@@ -560,7 +560,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       await expect(
-        engine.executeTool('self-improvement.insight', {
+        engine.executeTool('self-improvement__insight', {
           targetType: 'project',
           targetId: '',
           insight: 'Some insight.',
@@ -572,7 +572,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       await expect(
-        engine.executeTool('self-improvement.insight', {
+        engine.executeTool('self-improvement__insight', {
           targetType: 'project',
           targetId: 'testing',
           insight: '',
@@ -583,7 +583,7 @@ describe('self-improvement plugin', () => {
     it('works without persona or skills plugins loaded', async () => {
       const engine = await createEngine();
 
-      const result = await engine.executeTool('self-improvement.insight', {
+      const result = await engine.executeTool('self-improvement__insight', {
         targetType: 'project',
         targetId: 'testing',
         insight: 'Works without validation.',
@@ -626,9 +626,9 @@ describe('self-improvement plugin', () => {
       );
       expect(fragment).toBeDefined();
       expect(fragment).toContain('code');
-      expect(fragment).toContain('self-improvement.insight');
-      expect(fragment).toContain('persona.list');
-      expect(fragment).toContain('skills.list');
+      expect(fragment).toContain('self-improvement__insight');
+      expect(fragment).toContain('persona__list');
+      expect(fragment).toContain('skills__list');
     });
 
     it('omits the active persona line when no persona is active', async () => {
@@ -644,20 +644,20 @@ describe('self-improvement plugin', () => {
 
       const engine = await createEngine({ personaCapability: personaCap });
       const fragments = await engine.renderPromptFragments();
-      const fragment = fragments.find(f => f.includes('persona.list'));
+      const fragment = fragments.find(f => f.includes('persona__list'));
       expect(fragment).toBeDefined();
       expect(fragment).not.toContain('Current active persona');
-      expect(fragment).toContain('persona.list');
-      expect(fragment).toContain('skills.list');
+      expect(fragment).toContain('persona__list');
+      expect(fragment).toContain('skills__list');
     });
 
     it('renders the discovery hint when neither persona nor skills plugins are loaded', async () => {
       const engine = await createEngine();
       const fragments = await engine.renderPromptFragments();
-      const fragment = fragments.find(f => f.includes('persona.list'));
+      const fragment = fragments.find(f => f.includes('persona__list'));
       expect(fragment).toBeDefined();
-      expect(fragment).toContain('persona.list');
-      expect(fragment).toContain('skills.list');
+      expect(fragment).toContain('persona__list');
+      expect(fragment).toContain('skills__list');
       expect(fragment).not.toContain('Current active persona');
     });
 
@@ -680,20 +680,20 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
       const toolNames = engine.listTools().map(t => t.name);
 
-      expect(toolNames).toContain('self-improvement.insights-list');
-      expect(toolNames).toContain('self-improvement.insights-recall');
-      expect(toolNames).toContain('self-improvement.principles-store');
-      expect(toolNames).toContain('self-improvement.principles-list');
-      expect(toolNames).toContain('self-improvement.principles-recall');
-      expect(toolNames).toContain('self-improvement.principles-delete');
+      expect(toolNames).toContain('self-improvement__insights-list');
+      expect(toolNames).toContain('self-improvement__insights-recall');
+      expect(toolNames).toContain('self-improvement__principles-store');
+      expect(toolNames).toContain('self-improvement__principles-list');
+      expect(toolNames).toContain('self-improvement__principles-recall');
+      expect(toolNames).toContain('self-improvement__principles-delete');
     });
   });
 
-  describe('self-improvement.insights-list', () => {
+  describe('self-improvement__insights-list', () => {
     it('returns empty list when no insights exist', async () => {
       const engine = await createEngine();
       const result = await engine.executeTool(
-        'self-improvement.insights-list',
+        'self-improvement__insights-list',
         {}
       );
       const parsed = JSON.parse(result);
@@ -703,14 +703,14 @@ describe('self-improvement plugin', () => {
     it('lists project insights', async () => {
       const engine = await createEngine();
 
-      await engine.executeTool('self-improvement.insight', {
+      await engine.executeTool('self-improvement__insight', {
         targetType: 'project',
         targetId: 'architecture',
         insight: 'Architecture insight.',
       });
 
       const result = await engine.executeTool(
-        'self-improvement.insights-list',
+        'self-improvement__insights-list',
         {}
       );
       const parsed = JSON.parse(result);
@@ -724,14 +724,14 @@ describe('self-improvement plugin', () => {
     it('lists skill insights', async () => {
       const engine = await createEngine();
 
-      await engine.executeTool('self-improvement.insight', {
+      await engine.executeTool('self-improvement__insight', {
         targetType: 'skill',
         targetId: 'my-skill',
         insight: 'Skill insight.',
       });
 
       const result = await engine.executeTool(
-        'self-improvement.insights-list',
+        'self-improvement__insights-list',
         {}
       );
       const parsed = JSON.parse(result);
@@ -743,14 +743,14 @@ describe('self-improvement plugin', () => {
     it('lists persona insights', async () => {
       const engine = await createEngine();
 
-      await engine.executeTool('self-improvement.insight', {
+      await engine.executeTool('self-improvement__insight', {
         targetType: 'persona',
         targetId: 'my-persona',
         insight: 'Persona insight.',
       });
 
       const result = await engine.executeTool(
-        'self-improvement.insights-list',
+        'self-improvement__insights-list',
         {}
       );
       const parsed = JSON.parse(result);
@@ -762,19 +762,19 @@ describe('self-improvement plugin', () => {
     it('filters by targetType', async () => {
       const engine = await createEngine();
 
-      await engine.executeTool('self-improvement.insight', {
+      await engine.executeTool('self-improvement__insight', {
         targetType: 'project',
         targetId: 'arch',
         insight: 'Arch insight.',
       });
-      await engine.executeTool('self-improvement.insight', {
+      await engine.executeTool('self-improvement__insight', {
         targetType: 'skill',
         targetId: 'test',
         insight: 'Test insight.',
       });
 
       const result = await engine.executeTool(
-        'self-improvement.insights-list',
+        'self-improvement__insights-list',
         {
           targetType: 'project',
         }
@@ -786,23 +786,23 @@ describe('self-improvement plugin', () => {
     });
   });
 
-  describe('self-improvement.insights-recall', () => {
+  describe('self-improvement__insights-recall', () => {
     it('returns insights for a valid target', async () => {
       const engine = await createEngine();
 
-      await engine.executeTool('self-improvement.insight', {
+      await engine.executeTool('self-improvement__insight', {
         targetType: 'project',
         targetId: 'testing',
         insight: 'Test insight one.',
       });
-      await engine.executeTool('self-improvement.insight', {
+      await engine.executeTool('self-improvement__insight', {
         targetType: 'project',
         targetId: 'testing',
         insight: 'Test insight two.',
       });
 
       const result = await engine.executeTool(
-        'self-improvement.insights-recall',
+        'self-improvement__insights-recall',
         {
           targetType: 'project',
           targetId: 'testing',
@@ -820,7 +820,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       const result = await engine.executeTool(
-        'self-improvement.insights-recall',
+        'self-improvement__insights-recall',
         {
           targetType: 'project',
           targetId: 'nonexistent',
@@ -834,7 +834,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       await expect(
-        engine.executeTool('self-improvement.insights-recall', {
+        engine.executeTool('self-improvement__insights-recall', {
           targetType: 'invalid',
           targetId: 'foo',
         })
@@ -845,7 +845,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       await expect(
-        engine.executeTool('self-improvement.insights-recall', {
+        engine.executeTool('self-improvement__insights-recall', {
           targetType: 'project',
           targetId: '',
         })
@@ -853,12 +853,12 @@ describe('self-improvement plugin', () => {
     });
   });
 
-  describe('self-improvement.principles-store', () => {
+  describe('self-improvement__principles-store', () => {
     it('stores a principle for a project', async () => {
       const engine = await createEngine();
 
       const result = await engine.executeTool(
-        'self-improvement.principles-store',
+        'self-improvement__principles-store',
         {
           targetType: 'project',
           targetId: 'architecture',
@@ -886,7 +886,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       const result = await engine.executeTool(
-        'self-improvement.principles-store',
+        'self-improvement__principles-store',
         {
           targetType: 'persona',
           targetId: 'coder',
@@ -910,7 +910,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       const result = await engine.executeTool(
-        'self-improvement.principles-store',
+        'self-improvement__principles-store',
         {
           targetType: 'skill',
           targetId: 'testing',
@@ -933,14 +933,14 @@ describe('self-improvement plugin', () => {
     it('appends to existing principles', async () => {
       const engine = await createEngine();
 
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'project',
         targetId: 'workflow',
         principle: 'First principle.',
       });
 
       const result = await engine.executeTool(
-        'self-improvement.principles-store',
+        'self-improvement__principles-store',
         {
           targetType: 'project',
           targetId: 'workflow',
@@ -963,7 +963,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       await expect(
-        engine.executeTool('self-improvement.principles-store', {
+        engine.executeTool('self-improvement__principles-store', {
           targetType: 'project',
           targetId: 'test',
           principle: '',
@@ -975,7 +975,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       await expect(
-        engine.executeTool('self-improvement.principles-store', {
+        engine.executeTool('self-improvement__principles-store', {
           targetType: 'invalid',
           targetId: 'test',
           principle: 'A principle.',
@@ -987,7 +987,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       const result = await engine.executeTool(
-        'self-improvement.principles-store',
+        'self-improvement__principles-store',
         {
           targetType: 'project',
           targetId: 'test',
@@ -1005,11 +1005,11 @@ describe('self-improvement plugin', () => {
     });
   });
 
-  describe('self-improvement.principles-list', () => {
+  describe('self-improvement__principles-list', () => {
     it('returns empty list when no principles exist', async () => {
       const engine = await createEngine();
       const result = await engine.executeTool(
-        'self-improvement.principles-list',
+        'self-improvement__principles-list',
         {}
       );
       const parsed = JSON.parse(result);
@@ -1019,19 +1019,19 @@ describe('self-improvement plugin', () => {
     it('lists all principle files', async () => {
       const engine = await createEngine();
 
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'project',
         targetId: 'arch',
         principle: 'Principle one.',
       });
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'skill',
         targetId: 'test',
         principle: 'Principle two.',
       });
 
       const result = await engine.executeTool(
-        'self-improvement.principles-list',
+        'self-improvement__principles-list',
         {}
       );
       const parsed = JSON.parse(result);
@@ -1041,19 +1041,19 @@ describe('self-improvement plugin', () => {
     it('filters by targetType', async () => {
       const engine = await createEngine();
 
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'project',
         targetId: 'arch',
         principle: 'Project principle.',
       });
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'skill',
         targetId: 'test',
         principle: 'Skill principle.',
       });
 
       const result = await engine.executeTool(
-        'self-improvement.principles-list',
+        'self-improvement__principles-list',
         {
           targetType: 'project',
         }
@@ -1064,23 +1064,23 @@ describe('self-improvement plugin', () => {
     });
   });
 
-  describe('self-improvement.principles-recall', () => {
+  describe('self-improvement__principles-recall', () => {
     it('returns principles for a valid target', async () => {
       const engine = await createEngine();
 
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'project',
         targetId: 'testing',
         principle: 'Principle one.',
       });
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'project',
         targetId: 'testing',
         principle: 'Principle two.',
       });
 
       const result = await engine.executeTool(
-        'self-improvement.principles-recall',
+        'self-improvement__principles-recall',
         {
           targetType: 'project',
           targetId: 'testing',
@@ -1098,7 +1098,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       const result = await engine.executeTool(
-        'self-improvement.principles-recall',
+        'self-improvement__principles-recall',
         {
           targetType: 'project',
           targetId: 'nonexistent',
@@ -1112,7 +1112,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       await expect(
-        engine.executeTool('self-improvement.principles-recall', {
+        engine.executeTool('self-improvement__principles-recall', {
           targetType: 'invalid',
           targetId: 'foo',
         })
@@ -1120,23 +1120,23 @@ describe('self-improvement plugin', () => {
     });
   });
 
-  describe('self-improvement.principles-delete', () => {
+  describe('self-improvement__principles-delete', () => {
     it('deletes a principle by index', async () => {
       const engine = await createEngine();
 
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'project',
         targetId: 'test',
         principle: 'Keep me.',
       });
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'project',
         targetId: 'test',
         principle: 'Delete me.',
       });
 
       const result = await engine.executeTool(
-        'self-improvement.principles-delete',
+        'self-improvement__principles-delete',
         {
           targetType: 'project',
           targetId: 'test',
@@ -1149,7 +1149,7 @@ describe('self-improvement plugin', () => {
       expect(parsed.remainingCount).toBe(1);
 
       const recallResult = await engine.executeTool(
-        'self-improvement.principles-recall',
+        'self-improvement__principles-recall',
         {
           targetType: 'project',
           targetId: 'test',
@@ -1163,14 +1163,14 @@ describe('self-improvement plugin', () => {
     it('rejects out-of-bounds index', async () => {
       const engine = await createEngine();
 
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'project',
         targetId: 'test',
         principle: 'Only one.',
       });
 
       await expect(
-        engine.executeTool('self-improvement.principles-delete', {
+        engine.executeTool('self-improvement__principles-delete', {
           targetType: 'project',
           targetId: 'test',
           index: 5,
@@ -1182,7 +1182,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       await expect(
-        engine.executeTool('self-improvement.principles-delete', {
+        engine.executeTool('self-improvement__principles-delete', {
           targetType: 'project',
           targetId: 'test',
           index: -1,
@@ -1193,13 +1193,13 @@ describe('self-improvement plugin', () => {
     it('removes the file when last principle is deleted', async () => {
       const engine = await createEngine();
 
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'project',
         targetId: 'test',
         principle: 'Only one.',
       });
 
-      await engine.executeTool('self-improvement.principles-delete', {
+      await engine.executeTool('self-improvement__principles-delete', {
         targetType: 'project',
         targetId: 'test',
         index: 0,
@@ -1215,7 +1215,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine();
 
       // Store a project principle
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'project',
         targetId: 'architecture',
         principle: 'Use dependency injection.',
@@ -1246,7 +1246,7 @@ describe('self-improvement plugin', () => {
 
       const engine = await createEngine({ personaCapability: personaCap });
 
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'persona',
         targetId: 'coder',
         principle: 'Be concise.',
@@ -1278,14 +1278,14 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine({ personaCapability: personaCap });
 
       // Store project principle
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'project',
         targetId: 'workflow',
         principle: 'Confirm destructive operations.',
       });
 
       // Store persona principle
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'persona',
         targetId: 'coder',
         principle: 'Be concise.',
@@ -1330,7 +1330,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine({ personaCapability: personaCap });
 
       // Store a project principle to test it still renders without active persona
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'project',
         targetId: 'architecture',
         principle: 'Use dependency injection.',
@@ -1439,13 +1439,13 @@ describe('self-improvement plugin', () => {
       // The self-improvement plugin should have registered a recall enhancer
       // via the skills capability's onRecall callback
 
-      await engine.executeTool('self-improvement.principles-store', {
+      await engine.executeTool('self-improvement__principles-store', {
         targetType: 'skill',
         targetId: 'test-skill',
         principle: 'Always test edge cases.',
       });
 
-      const result = await engine.executeTool('skills.recall', {
+      const result = await engine.executeTool('skills__recall', {
         id: 'test-skill',
       });
       const parsed = JSON.parse(result);
@@ -1500,7 +1500,7 @@ describe('self-improvement plugin', () => {
       });
       await engine.initialize();
 
-      const result = await engine.executeTool('skills.recall', {
+      const result = await engine.executeTool('skills__recall', {
         id: 'test-skill',
       });
       const parsed = JSON.parse(result);
@@ -1596,7 +1596,7 @@ describe('self-improvement plugin', () => {
       await engine.initialize();
       await engine.runHooks('onPluginsLoaded');
 
-      const result = await engine.executeTool('skills.recall', {
+      const result = await engine.executeTool('skills__recall', {
         id: 'test-skill',
       });
       const parsed = JSON.parse(result);

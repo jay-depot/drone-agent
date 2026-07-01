@@ -81,5 +81,5 @@ export function getCanonicalToolName(
   pluginId: string,
   toolName: string
 ): string {
-  return `${pluginId}.${toolName}`;
+  return `${pluginId}__${toolName}`;
 }

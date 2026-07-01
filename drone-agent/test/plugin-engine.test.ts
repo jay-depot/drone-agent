@@ -203,11 +203,11 @@ describe('createDronePluginEngine', () => {
 
     const tools = engine.listTools();
     expect(tools).toHaveLength(1);
-    expect(tools[0].name).toBe('echo-plugin.echo');
-    expect(engine.getTool('echo-plugin.echo')).toBeDefined();
+    expect(tools[0].name).toBe('echo-plugin__echo');
+    expect(engine.getTool('echo-plugin__echo')).toBeDefined();
     expect(engine.getTool('missing')).toBeUndefined();
 
-    const output = await engine.executeTool('echo-plugin.echo', {
+    const output = await engine.executeTool('echo-plugin__echo', {
       message: 'hi',
     });
     expect(output).toBe('echo:hi');
@@ -463,7 +463,7 @@ describe('createDronePluginEngine', () => {
       await engine.initialize();
 
       // Not enabled initially
-      expect(engine.getTool('bootstrap.ping')).toBeUndefined();
+      expect(engine.getTool('bootstrap__ping')).toBeUndefined();
       expect(
         engine.listPlugins().find(p => p.id === 'bootstrap')?.enabled
       ).toBe(false);
@@ -471,13 +471,13 @@ describe('createDronePluginEngine', () => {
       // Enable it
       const result = await engine.enablePlugin('bootstrap');
       expect(result).toBe(true);
-      expect(engine.getTool('bootstrap.ping')).toBeDefined();
+      expect(engine.getTool('bootstrap__ping')).toBeDefined();
       expect(
         engine.listPlugins().find(p => p.id === 'bootstrap')?.enabled
       ).toBe(true);
 
       // Tool is callable
-      const output = await engine.executeTool('bootstrap.ping', {});
+      const output = await engine.executeTool('bootstrap__ping', {});
       expect(output).toBe('pong');
     });
 
@@ -611,7 +611,7 @@ describe('createDronePluginEngine', () => {
       await engine.initialize();
 
       // Workflow not available before enabling
-      await expect(engine.runWorkflow('wf.setup', {})).rejects.toThrow(
+      await expect(engine.runWorkflow('wf__setup', {})).rejects.toThrow(
         /Unknown workflow/
       );
 
@@ -620,7 +620,7 @@ describe('createDronePluginEngine', () => {
       // Workflow exists now but needs elicitation; we just confirm it's registered
       // by checking it doesn't throw 'Unknown workflow'
       try {
-        await engine.runWorkflow('wf.setup', {});
+        await engine.runWorkflow('wf__setup', {});
       } catch (err) {
         // It should throw about missing elicitation, not unknown workflow
         expect((err as Error).message).not.toMatch(/Unknown workflow/);
