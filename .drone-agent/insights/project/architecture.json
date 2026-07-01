@@ -146,5 +146,13 @@
   {
     "timestamp": "2026-06-30T23:12:26.809Z",
     "insight": "The coordinator's single-port architecture creates tension between API security (self-signed TLS) and browser usability (browsers reject self-signed certs). The dual-port approach (TLS for API, HTTP for UI) is a pragmatic solution, but the auth middleware only applies to /api/* and /ws — static files are always served without auth so the login page can load. This means the SPA JavaScript bundle is publicly accessible on the web port, which is fine since it contains no secrets."
+  },
+  {
+    "timestamp": "2026-07-01T00:52:44.671Z",
+    "insight": "The _runtime capability was gated behind the subagent plugin's offer() callback, but the subagent plugin never calls offer(). This is a fragile pattern — runtime options should be set unconditionally by the engine, not conditionally by a plugin that may or may not call offer()."
+  },
+  {
+    "timestamp": "2026-07-01T00:52:44.683Z",
+    "insight": "Persona activation in onPluginsLoaded was too early for swarm-provided personas. The hook ordering guarantee (onPluginsLoaded fires in plugin registration order, onSessionStart fires after all onPluginsLoaded hooks) means cross-plugin coordination should use onSessionStart, not onPluginsLoaded."
   }
 ]

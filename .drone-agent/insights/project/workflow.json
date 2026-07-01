@@ -58,5 +58,9 @@
   {
     "timestamp": "2026-07-01T00:06:23.702Z",
     "insight": "The use-auth.ts file was initially created as .ts but contained JSX (AuthProvider component), causing TypeScript errors. It needed to be renamed to .tsx. This is a common gotcha — any file with JSX must use the .tsx extension, even if it's primarily a hook/context file."
+  },
+  {
+    "timestamp": "2026-07-01T00:52:44.690Z",
+    "insight": "Using sed for multi-line code changes in TypeScript is error-prone. Python scripts or writing complete files are more reliable for complex transformations."
   }
 ]
