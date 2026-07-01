@@ -68,6 +68,26 @@ export interface CoordinatorClient {
 
   // Get the base URL of the coordinator (for proxying)
   getBaseUrl(): string;
+  // Tool definition sync
+  pushToolDefinitions(
+    tools: Array<{
+      name: string;
+      description: string;
+      defaultHidden: boolean;
+    }>
+  ): Promise<void>;
+  getDefaultHiddenTools(): Promise<{ tools: string[] }>;
+
+  // Session pipeline
+  getSessions(
+    query: Record<string, string>
+  ): Promise<{ sessions: any[]; count: number }>;
+  getSessionLog(sessionId: string): Promise<any>;
+  processSession(sessionId: string): Promise<any>;
+  completeSessionProcessing(
+    sessionId: string,
+    body: { summary?: string; notes?: string }
+  ): Promise<any>;
 }
 
 export interface SessionInfo {
@@ -578,6 +598,111 @@ export function createCoordinatorClient(
         }
       } catch (err) {
         logger.warn(`Failed to push events: ${err}`);
+      }
+    },
+
+    async pushToolDefinitions(
+      tools: Array<{
+        name: string;
+        description: string;
+        defaultHidden: boolean;
+      }>
+    ): Promise<void> {
+      try {
+        const res = await cfetch(`${baseUrl}/sync/tools/push`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tools }),
+        });
+        if (!res.ok) {
+          logger.warn(`Failed to push tool definitions: ${res.status}`);
+        } else {
+          logger.debug(`Pushed ${tools.length} tool definitions to coordinator`);
+        }
+      } catch (err) {
+        logger.warn(`Failed to push tool definitions: ${err}`);
+      }
+    },
+
+    async getDefaultHiddenTools(): Promise<{ tools: string[] }> {
+      try {
+        const res = await cfetch(`${baseUrl}/tools/default-hidden`);
+        if (!res.ok) {
+          logger.warn(`Failed to get default hidden tools: ${res.status}`);
+          return { tools: [] };
+        }
+        return (await res.json()) as { tools: string[] };
+      } catch (err) {
+        logger.warn(`Failed to get default hidden tools: ${err}`);
+        return { tools: [] };
+      }
+    },
+
+    async getSessions(
+      query: Record<string, string>
+    ): Promise<{ sessions: any[]; count: number }> {
+      try {
+        const params = new URLSearchParams(query).toString();
+        const res = await cfetch(`${baseUrl}/sessions?${params}`);
+        if (!res.ok) {
+          logger.warn(`Failed to get sessions: ${res.status}`);
+          return { sessions: [], count: 0 };
+        }
+        return (await res.json()) as { sessions: any[]; count: number };
+      } catch (err) {
+        logger.warn(`Failed to get sessions: ${err}`);
+        return { sessions: [], count: 0 };
+      }
+    },
+
+    async getSessionLog(sessionId: string): Promise<any> {
+      try {
+        const res = await cfetch(`${baseUrl}/sessions/${sessionId}/log`);
+        if (!res.ok) {
+          logger.warn(`Failed to get session log: ${res.status}`);
+          return null;
+        }
+        return await res.json();
+      } catch (err) {
+        logger.warn(`Failed to get session log: ${err}`);
+        return null;
+      }
+    },
+
+    async processSession(sessionId: string): Promise<any> {
+      try {
+        const res = await cfetch(`${baseUrl}/sessions/${sessionId}/process`, {
+          method: 'POST',
+        });
+        if (!res.ok) {
+          logger.warn(`Failed to process session: ${res.status}`);
+          return null;
+        }
+        return await res.json();
+      } catch (err) {
+        logger.warn(`Failed to process session: ${err}`);
+        return null;
+      }
+    },
+
+    async completeSessionProcessing(
+      sessionId: string,
+      body: { summary?: string; notes?: string }
+    ): Promise<any> {
+      try {
+        const res = await cfetch(`${baseUrl}/sessions/${sessionId}/processed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          logger.warn(`Failed to complete session processing: ${res.status}`);
+          return null;
+        }
+        return await res.json();
+      } catch (err) {
+        logger.warn(`Failed to complete session processing: ${err}`);
+        return null;
       }
     },
   };
