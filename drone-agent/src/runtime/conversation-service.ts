@@ -15,6 +15,12 @@ export type ConversationEventHandler = (event: DroneConversationEvent) => void;
 // Re-export for convenience — used by interactive.ts and tui/types.ts
 export type { DroneConversationEvent as ConversationEvent } from 'drone-core';
 
+/**
+ * Sentinel value returned by `sendUserMessage` when the current request
+ * is cancelled via `cancelCurrentRequest()`.
+ */
+export const CANCEL_SENTINEL = '__CANCELLED__';
+
 export type ConversationService = {
   sendUserMessage: (
     prompt: string,
@@ -25,6 +31,15 @@ export type ConversationService = {
   getEstimatedContextUsagePercent: () => Promise<number>;
   setModel: (newModel: string) => void;
   getModel: () => string;
+  /**
+   * Enqueue a user message to be processed when the current loop iteration
+   * completes. Has no effect unless a `sendUserMessage` call is in flight.
+   * When `sendUserMessage` returns, any remaining queued messages are
+   * preserved and will be drained at the start of the next call.
+   */
+  enqueueUserMessage: (prompt: string) => void;
+  /** Request soft cancellation of the current in-flight `sendUserMessage`. */
+  cancelCurrentRequest: () => void;
 };
 
 type CreateConversationServiceOptions = {
@@ -76,6 +91,10 @@ export function createConversationService({
 }: CreateConversationServiceOptions): ConversationService {
   let hasWarnedAboutSafetyTrim = false;
 
+  // ── Message queue and cancel support ───────────────────────────────────
+  const pendingMessages: string[] = [];
+  let cancelled = false;
+
   function getLlmCapability(): DroneLlmCapability {
     const llm = engine.getCapability<DroneLlmCapability>('llm');
     if (!llm) {
@@ -110,6 +129,26 @@ export function createConversationService({
       getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
     }>('persona');
     return personaCap ? personaCap.getFilteredTools(allTools) : allTools;
+  }
+
+  /**
+   * Drain the pending message queue by appending each queued message as a
+   * user turn in the session. Called at the top of the sendUserMessage loop
+   * and at the start of a fresh sendUserMessage call.
+   */
+  function drainPendingMessages(): void {
+    while (pendingMessages.length > 0) {
+      const queued = pendingMessages.shift()!;
+      sessionManager.appendUserMessage(queued);
+      engine
+        .runConversationEventHooks({
+          kind: 'userMessage',
+          content: queued,
+        })
+        .catch(err => {
+          logger.warn(`Conversation event hook threw: ${err}`);
+        });
+    }
   }
 
   async function ensureSafeBudget(
@@ -214,6 +253,11 @@ export function createConversationService({
   return {
     sendUserMessage: async (prompt, onEvent) => {
       hasWarnedAboutSafetyTrim = false;
+
+      // Drain any messages queued during or before this call
+      // (e.g. from a previous cancelled request — preserve policy).
+      drainPendingMessages();
+
       sessionManager.appendUserMessage(prompt);
 
       // Fire the user message event through the engine hook
@@ -261,6 +305,15 @@ export function createConversationService({
           budgetService.resetContextWindowCache();
           lastBudgetKey = budgetKey;
         }
+
+        // ── Soft cancel check ──
+        if (cancelled) {
+          cancelled = false;
+          return CANCEL_SENTINEL;
+        }
+
+        // ── Drain queued messages ──
+        drainPendingMessages();
 
         const systemMessages = await budgetService.buildSystemMessages();
         await ensureSafeBudget(systemMessages, tools);
@@ -413,6 +466,8 @@ export function createConversationService({
     },
     clearSession: () => {
       hasWarnedAboutSafetyTrim = false;
+      pendingMessages.length = 0;
+      cancelled = false;
       sessionManager.clearSession();
     },
     getMessages: () => sessionManager.getMessages(),
@@ -422,5 +477,11 @@ export function createConversationService({
       budgetService.resetContextWindowCache();
     },
     getModel: () => getLlmCapability().getModel(),
+    enqueueUserMessage: (prompt: string) => {
+      pendingMessages.push(prompt);
+    },
+    cancelCurrentRequest: () => {
+      cancelled = true;
+    },
   };
 }

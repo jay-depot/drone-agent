@@ -42,6 +42,7 @@ import { useLlmIndicator } from './hooks/useLlmIndicator.js';
 import { useStatusBar } from './hooks/useStatusBar.js';
 import type { DroneTuiOptions, MidPanelWidget } from './types.js';
 import type { DroneToolDescriptor } from 'drone-core';
+import { CANCEL_SENTINEL } from '../runtime/conversation-service.js';
 
 /** Maximum chars rendered in a tool argument or result preview. */
 const PREVIEW_MAX = 200;
@@ -336,6 +337,14 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             }
           }
         );
+
+        // Handle cancellation sentinel
+        if (response === CANCEL_SENTINEL) {
+          // Cancelled — hooks already ran after the last tool round.
+          // Don't log anything extra; don't run onAfterToolCall again.
+          return;
+        }
+
         if (!assistantRendered && response.length > 0) {
           log(response, 'plain');
         }
@@ -353,7 +362,12 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   // ── Global keybindings ──────────────────────────────────────────────
   useInput((input, key) => {
     if (key.escape) {
-      exit();
+      // ESC when LLM is active → soft cancel
+      if (isLlmActive) {
+        opts.conversation.cancelCurrentRequest?.();
+        log('Cancelled current request.', 'info');
+      }
+      // ESC when idle is a no-op — Ctrl-C is the only exit route
       return;
     }
     if (key.ctrl && input === 'c') {
@@ -463,6 +477,24 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         onChange={setInput}
         onSubmit={value => {
           setInput('');
+          const trimmed = value.trim();
+          if (trimmed.length === 0) return;
+
+          // When the LLM is active, route differently:
+          //   - /cancel fires immediately
+          //   - all other input is queued for the next loop boundary
+          if (isLlmActive) {
+            if (trimmed === '/cancel') {
+              opts.conversation.cancelCurrentRequest?.();
+              log('Cancelled current request.', 'info');
+              return;
+            }
+            opts.conversation.enqueueUserMessage?.(trimmed);
+            log(`> ${trimmed}`, 'user');
+            return;
+          }
+
+          // Normal path: fire runSlashCommand (when LLM is idle)
           void runSlashCommand(value);
         }}
         scheme={scheme}
@@ -495,7 +527,8 @@ function printHelp(
   const helpLines: string[] = [
     'Keybindings:',
     '',
-    '  Ctrl+C / Escape   Quit',
+    '  Ctrl+C            Quit',
+    '  Escape            Cancel current request (when LLM is active)',
     '  F1 / ?            Show this help',
     '  Ctrl+J            Insert newline in multi-line input',
     '',

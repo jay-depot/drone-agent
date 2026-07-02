@@ -9,7 +9,7 @@ import {
   type DroneToolDescriptor,
 } from 'drone-core';
 import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
-import { createConversationService } from '../src/runtime/conversation-service.js';
+import { createConversationService, CANCEL_SENTINEL } from '../src/runtime/conversation-service.js';
 import { createContextBudgetService } from '../src/runtime/context-budget-service.js';
 import type { ContextBudgetService } from '../src/runtime/context-budget-service.js';
 import { createSessionManager } from '../src/runtime/session-manager.js';
@@ -847,5 +847,197 @@ describe('createConversationService — stuck detection', () => {
     // Should NOT throw — each tool signature only failed twice (< threshold 3).
     const finalMessage = await conversation.sendUserMessage('go');
     expect(finalMessage).toBe('giving up');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Message queue and cancel
+// ---------------------------------------------------------------------------
+
+describe('createConversationService — message queue', () => {
+  it('drains queued messages before the LLM call on the next loop iteration', async () => {
+    const engine = makeEngine({
+      tools: [
+        {
+          name: 'fake_tool',
+          description: 'no-op tool',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+      executeToolImpl: async () => 'ok',
+    });
+    // Provider: first response has tool calls (to trigger a loop iteration),
+    // second response is a plain message (to exit).
+    const provider = makeProvider([
+      {
+        toolCalls: [{ id: 'tc1', name: 'fake_tool', arguments: {} }],
+      },
+      { message: 'done' },
+    ]);
+
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    // Enqueue messages before starting — they'll be drained at the top of
+    // the while(true) loop (after the tool round completes).
+    conversation.enqueueUserMessage('queued-1');
+    conversation.enqueueUserMessage('queued-2');
+
+    const result = await conversation.sendUserMessage('first');
+    expect(result).toBe('done');
+
+    // Both queued messages should appear as user turns in the session.
+    const messages = sessionManager.getMessages();
+    const userMessages = messages.filter(m => m.role === 'user');
+    expect(userMessages.map(m => m.content)).toContain('queued-1');
+    expect(userMessages.map(m => m.content)).toContain('queued-2');
+  });
+
+  it('cancelCurrentRequest causes early return with CANCEL_SENTINEL', async () => {
+    let cancelNow: (() => void) | null = null;
+
+    const engine = makeEngine({
+      tools: [
+        {
+          name: 'fake_tool',
+          description: 'no-op tool',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+      // Cancel synchronously during tool execution so the flag is set
+      // before the loop continuation check.
+      executeToolImpl: async () => {
+        if (cancelNow) cancelNow();
+        return 'ok';
+      },
+    });
+
+    // Provider returns tool calls to enter the loop.
+    const provider = makeProvider([
+      {
+        toolCalls: [{ id: 'tc1', name: 'fake_tool', arguments: {} }],
+      },
+      { message: 'should not be reached' },
+    ]);
+
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    cancelNow = () => conversation.cancelCurrentRequest();
+
+    const result = await conversation.sendUserMessage('go');
+    expect(result).toBe(CANCEL_SENTINEL);
+  });
+
+  it('cancel preserves queued messages for the next sendUserMessage call', async () => {
+    let cancelNow: (() => void) | null = null;
+
+    const engine = makeEngine({
+      tools: [
+        {
+          name: 'fake_tool',
+          description: 'no-op tool',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+      executeToolImpl: async () => {
+        if (cancelNow) cancelNow();
+        return 'ok';
+      },
+    });
+
+    const provider = makeProvider([
+      {
+        toolCalls: [{ id: 'tc1', name: 'fake_tool', arguments: {} }],
+      },
+      { message: 'final' },
+    ]);
+
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    cancelNow = () => conversation.cancelCurrentRequest();
+
+    // Enqueue a message before the first call, then cancel.
+    conversation.enqueueUserMessage('preserve-me');
+    const result1 = await conversation.sendUserMessage('first');
+    expect(result1).toBe(CANCEL_SENTINEL);
+
+    // Now call sendUserMessage again — it should drain the preserved queue.
+    const result2 = await conversation.sendUserMessage('second');
+    expect(result2).toBe('final');
+
+    // The preserved message should appear in the session.
+    const messages = sessionManager.getMessages();
+    const userMessages = messages.filter(m => m.role === 'user');
+    expect(userMessages.map(m => m.content)).toContain('preserve-me');
+  });
+
+  it('clearSession flushes the queue', async () => {
+    const engine = makeEngine({
+      tools: [],
+      executeToolImpl: async () => 'ok',
+    });
+    const provider = makeProvider([{ message: 'hello' }]);
+
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    // Enqueue, then clear, then send a new message.
+    conversation.enqueueUserMessage('should-be-cleared');
+    conversation.clearSession();
+
+    const result = await conversation.sendUserMessage('fresh');
+    expect(result).toBe('hello');
+
+    // Only 'fresh' should appear as a user message.
+    const messages = sessionManager.getMessages();
+    const userMessages = messages.filter(m => m.role === 'user');
+    expect(userMessages).toHaveLength(1);
+    expect(userMessages[0]?.content).toBe('fresh');
   });
 });

@@ -101,6 +101,8 @@ export type DroneTuiOptions = {
     getEstimatedContextUsagePercent: () => Promise<number>;
     setModel: (newModel: string) => void;
     getModel: () => string;
+    enqueueUserMessage?: (prompt: string) => void;
+    cancelCurrentRequest?: () => void;
   };
   model: string;
   logger: {

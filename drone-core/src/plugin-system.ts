@@ -270,6 +270,10 @@ export type DroneSlashCommandContext = {
     ) => Promise<string>;
     /** Clear the session (for /clear). */
     clearSession?: () => void;
+    /** Enqueue a message to be processed at the next loop boundary. */
+    enqueueUserMessage?: (prompt: string) => void;
+    /** Soft-cancel the current in-flight request. */
+    cancelCurrentRequest?: () => void;
   };
   /** Session manager for appending synthetic messages. */
   sessionManager?: {

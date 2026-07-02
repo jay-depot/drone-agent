@@ -124,6 +124,8 @@ function makeOptions(
         model = m;
       },
       getModel: () => model,
+      enqueueUserMessage: () => {},
+      cancelCurrentRequest: () => {},
     },
     ...overrides,
   };

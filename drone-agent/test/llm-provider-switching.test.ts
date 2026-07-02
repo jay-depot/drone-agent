@@ -138,6 +138,8 @@ function makeCommandContext(
       getModel: () => capability.getModel(),
       setModel: (model: string) => capability.setModel(model),
       sendUserMessage: async () => '',
+      enqueueUserMessage: (p: string) => {},
+      cancelCurrentRequest: () => {},
     },
   };
 }
@@ -212,8 +214,11 @@ describe('llm plugin provider switching', () => {
       capability.setModel(model)
     );
     ctx.conversation = {
-      ...ctx.conversation,
+      getModel: () => capability.getModel(),
       setModel: conversationSetModel,
+      sendUserMessage: async () => '',
+      enqueueUserMessage: (p: string) => {},
+      cancelCurrentRequest: () => {},
     };
     ctx.line = '/model --provider openrouter';
     ctx.args = ['--provider', 'openrouter'];
@@ -242,8 +247,11 @@ describe('llm plugin provider switching', () => {
       capability.setModel(model)
     );
     ctx.conversation = {
-      ...ctx.conversation,
+      getModel: () => capability.getModel(),
       setModel: conversationSetModel,
+      sendUserMessage: async () => '',
+      enqueueUserMessage: (p: string) => {},
+      cancelCurrentRequest: () => {},
     };
     ctx.line = '/model not-real';
     ctx.args = ['not-real'];
@@ -279,8 +287,11 @@ describe('llm plugin provider switching', () => {
       capability.setModel(model)
     );
     ctx.conversation = {
-      ...ctx.conversation,
+      getModel: () => capability.getModel(),
       setModel: conversationSetModel,
+      sendUserMessage: async () => '',
+      enqueueUserMessage: (p: string) => {},
+      cancelCurrentRequest: () => {},
     };
     ctx.line = '/model --provider openrouter openai/gpt-4.1';
     ctx.args = ['--provider', 'openrouter', 'openai/gpt-4.1'];

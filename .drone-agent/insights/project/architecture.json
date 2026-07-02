@@ -214,5 +214,9 @@
   {
     "timestamp": "2026-07-02T02:22:48.328Z",
     "insight": "The conversation loop's concurrency gap (fire-and-forget TUI onSubmit vs sequential readline mode) has been documented and a plan for a queue+boundary-drain pattern is in place. The soft-cancel design via /cancel and ESC provides a clean exit without needing AbortController plumbing through LLM providers."
+  },
+  {
+    "timestamp": "2026-07-02T02:40:23.679Z",
+    "insight": "Cancel tests needed synchronous flag-setting inside tool execution, not setTimeout(fn, 0), because the cancel check in the while(true) loop fires before the event loop unwinds. Async scheduling doesn't work for cancel tests — the flag must be set synchronously within the tool execution callback."
   }
 ]

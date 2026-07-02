@@ -28,7 +28,7 @@ export type { DroneSessionManager } from './runtime/session-manager.js';
 // ---------------------------------------------------------------------------
 // Conversation service
 // ---------------------------------------------------------------------------
-export { createConversationService } from './runtime/conversation-service.js';
+export { createConversationService, CANCEL_SENTINEL } from './runtime/conversation-service.js';
 export type { ConversationService } from './runtime/conversation-service.js';
 
 // ---------------------------------------------------------------------------
