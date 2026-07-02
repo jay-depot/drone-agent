@@ -113,7 +113,9 @@ const toolsCommand: DroneSlashCommand = {
       tools = allTools;
     } else {
       const personaCap = ctx.engine.getCapability<{
-        getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
+        getFilteredTools: (
+          tools: DroneToolDescriptor[]
+        ) => DroneToolDescriptor[];
       }>('persona');
       tools = personaCap
         ? personaCap.getFilteredTools(allTools)

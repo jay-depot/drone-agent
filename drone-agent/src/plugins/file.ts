@@ -1,10 +1,14 @@
-import { isRecord } from '../shared/type-guards.js';
 import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import fg from 'fast-glob';
 import type { DronePlugin } from 'drone-core';
 import { renderDiffV2 } from '../shared/diff-renderer.js';
-import { applyPatch, type PatchHunk } from '../shared/patch-applier.js';
+import {
+  applyPatch,
+  type PatchHunk,
+  type PatchError,
+} from '../shared/patch-applier.js';
+import { parseUnifiedDiff } from '../shared/unified-diff-parser.js';
 
 /**
  * Wraps a raw Node.js fs error (ENOENT, EACCES, EISDIR, ...) into a clearer
@@ -46,11 +50,64 @@ function enhanceFsError(
  */
 export const __testing = { enhanceFsError };
 
+/**
+ * Format a PatchError into a concise, LLM-friendly error message that speaks
+ * in unified-diff terms ("- lines", "context lines", "@@ header") rather than
+ * internal data structure names.
+ */
+function formatPatchError(e: PatchError): string {
+  const tag = `Hunk ${e.hunkIndex}:`;
+
+  if (e.message.startsWith('Anchor not found')) {
+    const heading = e.anchors[0] || '(no anchor)';
+    return (
+      `${tag} The @@ section heading "${heading}" was not found in the file.\n` +
+      `  Detail: The heading was not found at any fuzz level. ` +
+      `Try removing the heading from the @@ line, or re-read the file with file__read to find the correct section.`
+    );
+  }
+
+  if (e.message.startsWith('Anchor chain not found')) {
+    return (
+      `${tag} The @@ section heading chain "${e.anchors.join(' > ')}" could not be matched.\n` +
+      `  Detail: The first heading "${e.anchors[0]}" exists, but subsequent headings don't follow it.`
+    );
+  }
+
+  if (e.message.includes('Context does not match')) {
+    const expectedOld = JSON.stringify(e.foundOldLines ?? []);
+    const fileOld = e.foundOldLines
+      ? JSON.stringify(e.anchors?.length ? e.foundOldLines : [])
+      : '(unknown)';
+    const atLine =
+      e.anchors.length > 0
+        ? `near the @@ heading "${e.anchors[0]}"`
+        : 'at the anchor location';
+    return (
+      `${tag} The \`-\` lines didn't match what's in the file ${atLine}.\n` +
+      `  Your patch shows: ${expectedOld}\n` +
+      `  The file has:     ${fileOld}\n` +
+      `  Re-read the file with file__read to confirm the contents, then correct the \`-\` lines.`
+    );
+  }
+
+  if (e.message.includes('Context not found anywhere')) {
+    return (
+      `${tag} The context lines around the change couldn't be matched anywhere in the file.\n` +
+      `  The patch expects these \`-\` lines: ${JSON.stringify(e.foundOldLines ?? [])}\n` +
+      `  Re-read the file with file__read to see the current content, then adjust the context lines in the patch.`
+    );
+  }
+
+  // Fallback
+  return `${tag} ${e.message}\n  Detail: ${e.detail}`;
+}
+
 export const filePlugin: DronePlugin = {
   metadata: {
     id: 'file',
     name: 'File',
-    version: '0.2.0',
+    version: '0.3.0',
     description: 'Read, write, list, and patch files in the workspace.',
     defaultEnabled: false,
   },
@@ -209,105 +266,63 @@ export const filePlugin: DronePlugin = {
     registration.registerTool({
       name: 'apply_diff',
       description:
-        'Apply a patch to a file using content-anchored hunks. ' +
-        'Each hunk is located by matching context lines in the file, not by line numbers. ' +
-        'This makes patches robust to file evolution.\n\n' +
-        'Each hunk has:\n' +
-        '  - anchors: Optional code lines that uniquely identify the location ' +
-        '(e.g., ["class Foo:", "    def bar():"]). Use multiple anchors for ' +
-        'disambiguation in nested scopes.\n' +
-        '  - contextBefore: 2-3 lines of code immediately above the edit point.\n' +
-        '  - oldLines: The exact lines to remove (can be empty for pure insertion).\n' +
-        '  - newLines: The lines to insert (can be empty for pure deletion).\n' +
-        '  - contextAfter: 2-3 lines of code immediately below the edit point.\n\n' +
-        'Matching is progressive: exact match first, then trailing whitespace ' +
-        'normalization, then full whitespace normalization. The fuzz level is ' +
-        'reported so you can see how cleanly the patch applied.\n\n' +
-        'Example — replacing a function body:\n' +
-        '  {\n' +
-        '    "anchors": ["def example():"],\n' +
-        '    "contextBefore": ["", "def example():", "    \\"""\\"""\\"Docstring\\"""\\"""\\""],\n' +
-        '    "oldLines": ["    pass"],\n' +
-        '    "newLines": ["    return 42"],\n' +
-        '    "contextAfter": ["", "", ""]\n' +
-        '  }\n\n' +
-        'Example — adding a new method to a class:\n' +
-        '  {\n' +
-        '    "anchors": ["class Calculator:"],\n' +
-        '    "contextBefore": ["    def subtract(self, a, b):", "        return a - b", ""],\n' +
-        '    "oldLines": [],\n' +
-        '    "newLines": ["    def multiply(self, a, b):", "        return a * b", ""],\n' +
-        '    "contextAfter": ["    def divide(self, a, b):", "        return a / b"]\n' +
-        '  }',
+        'Apply a unified diff patch to a file. ' +
+        'Accepts a patch string in `git diff` format, e.g.:\n\n' +
+        '@@ -5,7 +5,7 @@ function_name():\n' +
+        '     context\n' +
+        '     context\n' +
+        '-    removed line\n' +
+        '+    added line\n' +
+        '     context\n\n' +
+        'Hunks start with @@ -start,count +start,count @@ [section heading].\n' +
+        'Lines with ` ` are context, `-` are removed, `+` are added.\n' +
+        'Multiple hunks (multiple @@ sections) are applied bottom-up.\n\n' +
+        'Line numbers and section headings are soft hints — content-anchored\n' +
+        'matching is used for accuracy. The patch is robust to small file changes.\n\n' +
+        'Tips:\n' +
+        '  - Use `file__read` first to check the current file content.\n' +
+        '  - Include 2-3 lines of context around each change.\n' +
+        '  - Whitespace differences are handled via progressive fuzzy matching.',
       inputSchema: {
         type: 'object',
         properties: {
-          path: { type: 'string', description: 'Absolute path to the file.' },
-          hunks: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                anchors: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  description:
-                    'Optional content anchor lines to locate the edit site. ' +
-                    'Use multiple anchors for hierarchical disambiguation ' +
-                    '(e.g., ["class Foo:", "    def bar():"]). ' +
-                    'If omitted, the tool searches the whole file for the context.',
-                },
-                contextBefore: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  description:
-                    'Lines of code immediately above the edit point. ' +
-                    'These are matched (with fuzzy fallback) to verify location. ' +
-                    'Provide 2-3 lines for reliable anchoring.',
-                },
-                oldLines: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  description:
-                    'The exact lines to remove at this location. ' +
-                    'Empty array means pure insertion (no deletion).',
-                },
-                newLines: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  description:
-                    'The lines to insert at this location. ' +
-                    'Empty array means pure deletion (no insertion).',
-                },
-                contextAfter: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  description:
-                    'Lines of code immediately below the edit point. ' +
-                    'These are matched (with fuzzy fallback) to verify location. ' +
-                    'Provide 2-3 lines for reliable anchoring.',
-                },
-              },
-              required: ['newLines'],
-              additionalProperties: false,
-            },
+          path: {
+            type: 'string',
+            description: 'Absolute path to the file to modify.',
           },
-          color: {
-            type: 'boolean',
+          patch: {
+            type: 'string',
             description:
-              'Enable ANSI color coding in output. Default: auto-detect from environment.',
+              'Unified diff patch string in `git diff` format. ' +
+              'Each hunk starts with @@ -start,count +start,count @@ [section heading].\n' +
+              'Lines prefixed with ` ` are context, `-` are removed, `+` are added.\n' +
+              'Example: @@ -10,4 +10,4 @@ function_name:\n' +
+              '   context\n' +
+              '  -old line\n' +
+              '  +new line\n' +
+              '   context',
           },
         },
-        required: ['path', 'hunks'],
+        required: ['path', 'patch'],
         additionalProperties: false,
       },
       execute: async input => {
         try {
-          if (typeof input.path !== 'string' || input.path.trim().length === 0) {
-            throw new Error('file__apply_diff requires a non-empty path string.');
+          if (
+            typeof input.path !== 'string' ||
+            input.path.trim().length === 0
+          ) {
+            throw new Error(
+              'file__apply_diff requires a non-empty path string.'
+            );
           }
-          if (!Array.isArray(input.hunks) || input.hunks.length === 0) {
-            throw new Error('file__apply_diff requires a non-empty hunks array.');
+          if (
+            typeof input.patch !== 'string' ||
+            input.patch.trim().length === 0
+          ) {
+            throw new Error(
+              'file__apply_diff requires a non-empty patch string in unified diff format.'
+            );
           }
 
           const filePath = path.resolve(input.path.trim());
@@ -319,45 +334,38 @@ export const filePlugin: DronePlugin = {
           }
           const lines = content.split('\n');
 
-          // Parse hunks into PatchHunk format
-          const patchHunks: PatchHunk[] = input.hunks
-            .filter(isRecord)
-            .map(hunk => ({
-              anchors: Array.isArray(hunk.anchors)
-                ? (hunk.anchors as string[])
-                : [],
-              contextBefore: Array.isArray(hunk.contextBefore)
-                ? (hunk.contextBefore as string[])
-                : [],
-              oldLines: Array.isArray(hunk.oldLines)
-                ? (hunk.oldLines as string[])
-                : [],
-              newLines: Array.isArray(hunk.newLines)
-                ? (hunk.newLines as string[])
-                : [],
-              contextAfter: Array.isArray(hunk.contextAfter)
-                ? (hunk.contextAfter as string[])
-                : [],
-            }));
+          // Parse unified diff string into our internal hunk format
+          const hunks = parseUnifiedDiff(input.patch);
+
+          if (hunks.length === 0) {
+            throw new Error(
+              'file__apply_diff: no hunks found in the patch string.\n\n' +
+                'The patch did not contain any @@ ... @@ hunk headers. ' +
+                'Make sure the patch uses unified diff format, e.g.:\n' +
+                '@@ -5,7 +5,7 @@ function_name():\n' +
+                '     context\n' +
+                '-    old line\n' +
+                '+    new line\n\n' +
+                'Re-read the file with file__read to confirm the current contents, then try again.'
+            );
+          }
 
           // Apply the patch (applies to a copy internally, returns patchedLines)
-          const result = applyPatch(lines, patchHunks);
+          const result = applyPatch(lines, hunks);
 
           if (!result.success) {
-            // Build a detailed error message from all errors
+            // Concise error messages in unified-diff language
             const errorMessages = result.errors
-              .map(
-                e =>
-                  `Hunk ${e.hunkIndex}: ${e.message}\n  Detail: ${e.detail}`
-              )
+              .map(formatPatchError)
               .join('\n\n');
             throw new Error(
-              `file__apply_diff: ${result.errors.length} hunk(s) failed to apply.\n\n${errorMessages}`
+              `file__apply_diff: ${result.errors.length} of ${hunks.length} hunk(s) failed to apply.\n\n${errorMessages}\n\n` +
+                `Tip: Re-read the file with file__read to confirm the current contents, then correct the patch and try again. No changes were written.`
             );
           }
 
           // Build DiffHunkV2 array for rendering
-          const diffHunks = patchHunks.map((hunk, i) => ({
+          const diffHunks = hunks.map((hunk, i) => ({
             anchors: hunk.anchors,
             contextBefore: hunk.contextBefore,
             oldLines: hunk.oldLines,
@@ -368,8 +376,7 @@ export const filePlugin: DronePlugin = {
 
           // Always use plain text — the diff result goes to both the LLM (which
           // shouldn't see ANSI codes) and the TUI (which does its own coloring
-          // in formatDiffOutput). The `color` input parameter is kept for schema
-          // backward-compatibility but is effectively ignored.
+          // in formatDiffOutput).
           const diffResult = renderDiffV2(filePath, diffHunks, false);
           const diffOutput = diffResult.plain;
 
@@ -393,8 +400,7 @@ export const filePlugin: DronePlugin = {
         } catch (err) {
           registration.logger.error(
             `file__apply_diff FAILED for path=${JSON.stringify(input.path)} ` +
-            `hunks=${JSON.stringify(input.hunks)} ` +
-            `color=${JSON.stringify(input.color)}`
+              `patch=${JSON.stringify(typeof input.patch === 'string' ? input.patch.slice(0, 200) : '')}`
           );
           throw err;
         }

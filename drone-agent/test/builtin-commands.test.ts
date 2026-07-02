@@ -41,9 +41,7 @@ const allTools: DroneToolDescriptor[] = [
 
 // A persona that only allows file__read and file__write
 function makeFilteringPersonaCap(): {
-  getFilteredTools: (
-    tools: DroneToolDescriptor[]
-  ) => DroneToolDescriptor[];
+  getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
 } {
   return {
     getFilteredTools: (tools: DroneToolDescriptor[]) =>

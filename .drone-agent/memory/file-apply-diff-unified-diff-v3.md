@@ -1,7 +1,6 @@
 ---
 key: file-apply-diff-unified-diff-v3
-tags:
-  []
+tags: []
 created: 2026-07-02T01:29:49.890Z
 updated: 2026-07-02T01:36:14.165Z
 ---
@@ -26,8 +25,8 @@ Converts a unified diff string into `HunkWithHints[]` (extends `PatchHunk`).
 
 ```typescript
 export interface HunkWithHints extends PatchHunk {
-  lineHint?: number;           // 1-based start line from @@ -start,count ...
-  sectionHeading?: string;     // Text after @@ ... @@
+  lineHint?: number; // 1-based start line from @@ -start,count ...
+  sectionHeading?: string; // Text after @@ ... @@
 }
 
 export function parseUnifiedDiff(diff: string): HunkWithHints[];
@@ -52,6 +51,7 @@ export function parseUnifiedDiff(diff: string): HunkWithHints[];
 5. **Build anchors**: If `sectionHeading` is non-empty, push it into `anchors`. Otherwise leave `anchors` empty.
 
 **Edge cases handled:**
+
 - Hunk header without heading: `@@ -10,4 +10,4 @@` → anchors=[], lineHint=10
 - Hunk header without count: `@@ -10 +12 @@` → implied count=1
 - Pure insertion: `@@ -1,0 +1,3 @@` → oldLines=[], newLines=[...]
@@ -62,6 +62,7 @@ export function parseUnifiedDiff(diff: string): HunkWithHints[];
 ### `drone-agent/test/unified-diff-parser.test.ts` (new)
 
 **Tests:**
+
 1. Basic single-hunk diff → correct fields
 2. Multi-hunk (two `@@` sections, applied bottom-up) → both hunks
 3. Section heading: `@@ -5,7 +5,7 @@ def foo():` → sectionHeading = "def foo():"
@@ -78,6 +79,7 @@ export function parseUnifiedDiff(diff: string): HunkWithHints[];
 ### `drone-agent/src/shared/patch-applier.ts`
 
 **Add to `PatchHunk` interface:**
+
 ```typescript
 export interface PatchHunk {
   anchors: string[];
@@ -85,17 +87,19 @@ export interface PatchHunk {
   oldLines: string[];
   newLines: string[];
   contextAfter: string[];
-  lineHint?: number;           // NEW: 1-based line number hint
-  sectionHeading?: string;     // NEW: section heading from @@ header
+  lineHint?: number; // NEW: 1-based line number hint
+  sectionHeading?: string; // NEW: section heading from @@ header
 }
 ```
 
 **Modify `applyPatch()` — hint-based search prioritization:**
 
 In the **anchored strategy** (where `anchors.length > 0`):
+
 - After finding anchor candidates via `findAnchorOccurrences`, if `lineHint` is provided, prefer the candidate nearest to `lineHint - 1` (0-based). Sort candidates by absolute distance to `lineHint` and try them in proximity order.
 
 In the **context-only strategy** (no anchors):
+
 - Before sliding across the full file, try a focused window around `lineHint`: range `[max(0, lineHint-1-15), min(lines.length, lineHint-1+oldLines.length+15)]`. If that returns a match, use it. Only if not, fall through to full-file search.
 - If `sectionHeading` is set and anchors are empty, do a one-shot anchor search with `[sectionHeading]` before going to context-only — treat the heading as a free anchor.
 
@@ -106,6 +110,7 @@ In the **context-only strategy** (no anchors):
 ### `drone-agent/src/plugins/file.ts`
 
 **New `inputSchema`:**
+
 ```typescript
 inputSchema: {
   type: 'object',
@@ -140,6 +145,7 @@ inputSchema: {
 ```
 
 **New `execute` handler:**
+
 ```typescript
 execute: async input => {
   if (typeof input.path !== 'string' || !input.path.trim())
@@ -161,12 +167,12 @@ execute: async input => {
   if (hunks.length === 0) {
     throw new Error(
       'file__apply_diff: no hunks found in patch string.\n\n' +
-      'The patch did not contain any @@ ... @@ hunk headers. ' +
-      'Make sure the patch uses unified diff format, e.g.:\n' +
-      '@@ -5,7 +5,7 @@ function_name():\n' +
-      '     context\n' +
-      '-    old line\n' +
-      '+    new line'
+        'The patch did not contain any @@ ... @@ hunk headers. ' +
+        'Make sure the patch uses unified diff format, e.g.:\n' +
+        '@@ -5,7 +5,7 @@ function_name():\n' +
+        '     context\n' +
+        '-    old line\n' +
+        '+    new line'
     );
   }
 
@@ -180,7 +186,7 @@ execute: async input => {
       .join('\n\n');
     throw new Error(
       `file__apply_diff: ${result.errors.length} of ${hunks.length} hunk(s) failed to apply.\n\n${errorMessages}\n\n` +
-      `Tip: Re-read the file with file__read to confirm the current contents, then correct the patch and try again.`
+        `Tip: Re-read the file with file__read to confirm the current contents, then correct the patch and try again.`
     );
   }
 
@@ -213,10 +219,11 @@ execute: async input => {
     null,
     2
   );
-}
+};
 ```
 
 **Error translation helper (also in `file.ts` or a small utility):**
+
 ```typescript
 function formatParseDiffError(e: PatchError): string {
   const hunkTag = `Hunk ${e.hunkIndex}:`;
@@ -273,15 +280,18 @@ function formatParseDiffError(e: PatchError): string {
 **Removed imports:** `isRecord` from `'../shared/type-guards.js'` (was only used for hunks parsing).
 
 **Imports to add:**
+
 - `import { parseUnifiedDiff } from '../shared/unified-diff-parser.js';`
 - `import type { PatchError } from '../shared/patch-applier.js';` (for the error formatter)
 
 ### `drone-agent/test/file.test.ts`
 
 **Update the round-trip integration test:**
+
 - Replace `applyDiff!({ path: target, hunks: [{...}] })` with `applyDiff!({ path: target, patch: '@@ ... @@\n ...' })`
 
 **New round-trip tests:**
+
 1. Multi-hunk patch (two `@@` sections applied bottom-up) — write three lines, change two, verify both
 2. Pure insertion — `@@ -1,0 +1,3 @@` → lines inserted at top
 3. Pure deletion — `@@ -3,3 +0,0 @@` → lines removed
@@ -291,7 +301,7 @@ function formatParseDiffError(e: PatchError): string {
 
 ### `drone-agent/src/shared/patch-applier.ts` — error message format note
 
-The existing `PatchError` type doesn't need to change — it already has `message`, `detail`, `anchors`, `foundOldLines`, etc. The *formatting* of these errors into text for the LLM moves to `file.ts` (the `formatParseDiffError` helper above). This keeps `patch-applier.ts` as a pure algorithmic module and the user-facing message formatting in the plugin layer.
+The existing `PatchError` type doesn't need to change — it already has `message`, `detail`, `anchors`, `foundOldLines`, etc. The _formatting_ of these errors into text for the LLM moves to `file.ts` (the `formatParseDiffError` helper above). This keeps `patch-applier.ts` as a pure algorithmic module and the user-facing message formatting in the plugin layer.
 
 ## Files Not Changed
 
@@ -301,14 +311,14 @@ The existing `PatchError` type doesn't need to change — it already has `messag
 
 ## Step-by-Step Implementation Order
 
-| Step | Files | Description | Dependencies |
-|------|-------|-------------|--------------|
-| **Step 1** | `src/shared/unified-diff-parser.ts` + `test/unified-diff-parser.test.ts` | Create the parser and its unit tests | None |
-| **Step 2** | `src/shared/patch-applier.ts` | Add `lineHint`/`sectionHeading` fields to `PatchHunk`; add hint-based search prioritization to `applyPatch()` | None |
-| **Step 3** | `src/plugins/file.ts` | Rewrite tool registration — new `{ path, patch }` schema, new description, new execute handler calling `parseUnifiedDiff` + `applyPatch`, error formatting in unified-diff language | Step 1, Step 2 |
-| **Step 4** | `test/file.test.ts` | Update round-trip tests; add new tests for multi-hunk, insertion/deletion, fuzzy-match via patch string | Steps 1-3 |
-| **Step 5** | All | Run `pnpm typecheck && pnpm lint && pnpm test`; fix any issues | Steps 1-4 |
-| **Step 6** | All | Read through all changed files; verify correctness; run final test suite | Step 5 |
+| Step       | Files                                                                    | Description                                                                                                                                                                         | Dependencies   |
+| ---------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **Step 1** | `src/shared/unified-diff-parser.ts` + `test/unified-diff-parser.test.ts` | Create the parser and its unit tests                                                                                                                                                | None           |
+| **Step 2** | `src/shared/patch-applier.ts`                                            | Add `lineHint`/`sectionHeading` fields to `PatchHunk`; add hint-based search prioritization to `applyPatch()`                                                                       | None           |
+| **Step 3** | `src/plugins/file.ts`                                                    | Rewrite tool registration — new `{ path, patch }` schema, new description, new execute handler calling `parseUnifiedDiff` + `applyPatch`, error formatting in unified-diff language | Step 1, Step 2 |
+| **Step 4** | `test/file.test.ts`                                                      | Update round-trip tests; add new tests for multi-hunk, insertion/deletion, fuzzy-match via patch string                                                                             | Steps 1-3      |
+| **Step 5** | All                                                                      | Run `pnpm typecheck && pnpm lint && pnpm test`; fix any issues                                                                                                                      | Steps 1-4      |
+| **Step 6** | All                                                                      | Read through all changed files; verify correctness; run final test suite                                                                                                            | Step 5         |
 
 ## Validation Criteria
 
@@ -322,4 +332,4 @@ The existing `PatchError` type doesn't need to change — it already has `messag
 8. ✅ Line hints from `@@ -start,...` headers are used for search prioritization but don't prevent successful matching if incorrect
 9. ✅ Section headings from `@@ ... @@ heading` are used as soft anchor hints but don't prevent matching if absent or wrong
 10. ✅ Error messages speak in unified-diff terms (`-` lines, context lines, `@@` headers) — not internal `anchors`/`contextBefore` terms
-11. ✅ Every error message ends with or contains the "re-read the file" / "use file__read to confirm" nudge
+11. ✅ Every error message ends with or contains the "re-read the file" / "use file\_\_read to confirm" nudge

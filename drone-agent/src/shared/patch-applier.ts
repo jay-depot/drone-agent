@@ -8,9 +8,20 @@
  *   Level 100: Strip ALL whitespace from all lines
  *
  * Inspired by OpenAI's V4A diff format approach.
+ *
+ * Supports two optional search hints:
+ *   - lineHint (1-based line number): search near this line first
+ *   - sectionHeading: use as a soft anchor before falling back to context-only
+ * Both hints fall through to full-file context matching if they don't match,
+ * so incorrect hints never prevent a correct patch from applying.
  */
 
 import type { FuzzLevel } from './diff-renderer.js';
+
+// ── Constants ───────────────────────────────────────────────────────────
+
+/** Size of the search window (in lines) around lineHint. */
+const LINE_HINT_WINDOW = 15;
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -26,6 +37,13 @@ export interface PatchHunk {
   newLines: string[];
   /** Lines expected after the edit point (context) */
   contextAfter: string[];
+
+  // ── Optional search hints (populated by unified-diff-parser) ─────────
+
+  /** 1-based line number hint from @@ -start,count header — soft hint */
+  lineHint?: number;
+  /** Section heading from @@ ... @@ heading — soft anchor */
+  sectionHeading?: string;
 }
 
 /** Result of applying a single hunk */
@@ -194,7 +212,8 @@ function tryMatchContext(
 
     // Check bounds
     if (contextBeforeStart < 0) continue;
-    if (editStart + oldLines.length + contextAfter.length > lines.length) continue;
+    if (editStart + oldLines.length + contextAfter.length > lines.length)
+      continue;
 
     for (const level of levels) {
       const beforeSlice = lines.slice(contextBeforeStart, editStart);
@@ -219,6 +238,56 @@ function tryMatchContext(
 
 /**
  * Try to match a full context block (contextBefore + oldLines + contextAfter)
+ * within a specific window of lines.
+ * Returns the edit index and fuzz level, or null if no match found.
+ */
+function findContextInWindow(
+  lines: string[],
+  contextBefore: string[],
+  oldLines: string[],
+  contextAfter: string[],
+  windowStart: number,
+  windowEnd: number
+): ContextMatchResult | null {
+  const totalLen = contextBefore.length + oldLines.length + contextAfter.length;
+  if (totalLen === 0) return null;
+
+  const levels: FuzzLevel[] = [0, 1, 100];
+  const searchEnd = Math.min(windowEnd, lines.length - totalLen + 1);
+
+  for (const level of levels) {
+    for (let i = windowStart; i < searchEnd; i++) {
+      // Quick bounds check
+      if (i + totalLen > lines.length) break;
+
+      const beforeSlice = lines.slice(i, i + contextBefore.length);
+      const oldSlice = lines.slice(
+        i + contextBefore.length,
+        i + contextBefore.length + oldLines.length
+      );
+      const afterSlice = lines.slice(
+        i + contextBefore.length + oldLines.length,
+        i + contextBefore.length + oldLines.length + contextAfter.length
+      );
+
+      if (
+        linesMatch(contextBefore, beforeSlice, level) &&
+        linesMatch(oldLines, oldSlice, level) &&
+        linesMatch(contextAfter, afterSlice, level)
+      ) {
+        return {
+          editIndex: i + contextBefore.length,
+          fuzz: level,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Try to match a full context block (contextBefore + oldLines + contextAfter)
  * anywhere in the file (no anchors). Returns the 0-based index of the edit
  * point and the fuzz level, or null if no match found.
  */
@@ -226,12 +295,29 @@ function findContextAnywhere(
   lines: string[],
   contextBefore: string[],
   oldLines: string[],
-  contextAfter: string[]
+  contextAfter: string[],
+  lineHint?: number
 ): ContextMatchResult | null {
-  const totalLen =
-    contextBefore.length + oldLines.length + contextAfter.length;
+  const totalLen = contextBefore.length + oldLines.length + contextAfter.length;
   if (totalLen === 0) return null;
 
+  // If we have a line hint, try a focused window first
+  if (lineHint !== undefined) {
+    const hintIndex = lineHint - 1; // convert to 0-based
+    const windowStart = Math.max(0, hintIndex - LINE_HINT_WINDOW);
+    const windowEnd = Math.min(lines.length, hintIndex + LINE_HINT_WINDOW);
+    const windowed = findContextInWindow(
+      lines,
+      contextBefore,
+      oldLines,
+      contextAfter,
+      windowStart,
+      windowEnd
+    );
+    if (windowed !== null) return windowed;
+  }
+
+  // Fall through to full-file search
   const levels: FuzzLevel[] = [0, 1, 100];
 
   for (const level of levels) {
@@ -262,6 +348,21 @@ function findContextAnywhere(
   return null;
 }
 
+/**
+ * Sort anchor candidate indices by proximity to a line hint.
+ * Candidates closer to lineHint come first.
+ */
+function sortByLineHint(
+  candidates: number[],
+  lineHint: number | undefined
+): number[] {
+  if (lineHint === undefined || candidates.length <= 1) return candidates;
+  const hintIndex = lineHint - 1; // 0-based
+  return [...candidates].sort(
+    (a, b) => Math.abs(a - hintIndex) - Math.abs(b - hintIndex)
+  );
+}
+
 // ── Main apply function ───────────────────────────────────────────────
 
 /**
@@ -274,10 +375,7 @@ function findContextAnywhere(
  * @param hunks - The hunks to apply
  * @returns PatchResult with applied hunks, errors, and patchedLines
  */
-export function applyPatch(
-  lines: string[],
-  hunks: PatchHunk[]
-): PatchResult {
+export function applyPatch(lines: string[], hunks: PatchHunk[]): PatchResult {
   const appliedHunks: AppliedHunk[] = [];
   const errors: PatchError[] = [];
 
@@ -293,7 +391,15 @@ export function applyPatch(
   // So we process from bottom to top
   for (let hi = indexedHunks.length - 1; hi >= 0; hi--) {
     const { hunk, originalIndex } = indexedHunks[hi];
-    const { anchors, contextBefore, oldLines, newLines, contextAfter } = hunk;
+    const {
+      anchors,
+      contextBefore,
+      oldLines,
+      newLines,
+      contextAfter,
+      lineHint,
+      sectionHeading,
+    } = hunk;
 
     let editIndex: number | null = null;
     let fuzz: FuzzLevel = 0;
@@ -325,13 +431,28 @@ export function applyPatch(
       if (anchors.length > 1) {
         // Save first-anchor candidates so fuzzy fallback can retry from scratch
         const firstAnchorCandidates = [...candidates];
-        candidates = narrowByAnchors(workingLines, anchors, 0, firstAnchorCandidates);
+        candidates = narrowByAnchors(
+          workingLines,
+          anchors,
+          0,
+          firstAnchorCandidates
+        );
         if (candidates.length === 0) {
           // Try fuzzy narrowing from the original first-anchor matches
-          candidates = narrowByAnchors(workingLines, anchors, 1, firstAnchorCandidates);
+          candidates = narrowByAnchors(
+            workingLines,
+            anchors,
+            1,
+            firstAnchorCandidates
+          );
         }
         if (candidates.length === 0) {
-          candidates = narrowByAnchors(workingLines, anchors, 100, firstAnchorCandidates);
+          candidates = narrowByAnchors(
+            workingLines,
+            anchors,
+            100,
+            firstAnchorCandidates
+          );
         }
       }
 
@@ -344,6 +465,9 @@ export function applyPatch(
         });
         continue;
       }
+
+      // Sort candidates by proximity to lineHint (closest first)
+      candidates = sortByLineHint(candidates, lineHint);
 
       // Try to match context at each candidate anchor position
       let matched = false;
@@ -389,7 +513,8 @@ export function applyPatch(
         errors.push({
           hunkIndex: originalIndex,
           message: `Context does not match at anchor location`,
-          detail: `Found ${candidates.length} anchor match(es) but context didn't match at any. At the first anchor occurrence:\n` +
+          detail:
+            `Found ${candidates.length} anchor match(es) but context didn't match at any. At the first anchor occurrence:\n` +
             `  Expected contextBefore: ${JSON.stringify(contextBefore)}\n` +
             `  Found contextBefore:    ${JSON.stringify(foundBefore)}\n` +
             `  Expected oldLines:      ${JSON.stringify(oldLines)}\n` +
@@ -404,29 +529,81 @@ export function applyPatch(
         continue;
       }
     } else {
-      // Strategy 2: No anchors — search the whole file for the context
-      const result = findContextAnywhere(
-        workingLines,
-        contextBefore,
-        oldLines,
-        contextAfter
-      );
+      // Strategy 2: No anchors — either use sectionHeading as a soft anchor,
+      // or go straight to context-only search
 
-      if (result === null) {
-        errors.push({
-          hunkIndex: originalIndex,
-          message: `Context not found anywhere in file`,
-          detail:
-            `No anchors provided and the full context block ` +
-            `(contextBefore + oldLines + contextAfter) could not be matched ` +
-            `anywhere in the file. Try adding anchors to narrow the search.`,
-          anchors,
-        });
-        continue;
+      let matched = false;
+
+      // 2a: If we have a sectionHeading, try it as an anchor first
+      if (sectionHeading) {
+        let headingCandidates = findAnchorOccurrences(
+          workingLines,
+          sectionHeading,
+          0
+        );
+        if (headingCandidates.length === 0) {
+          headingCandidates = findAnchorOccurrences(
+            workingLines,
+            sectionHeading,
+            1
+          );
+        }
+        if (headingCandidates.length === 0) {
+          headingCandidates = findAnchorOccurrences(
+            workingLines,
+            sectionHeading,
+            100
+          );
+        }
+
+        if (headingCandidates.length > 0) {
+          // Sort by lineHint proximity
+          headingCandidates = sortByLineHint(headingCandidates, lineHint);
+
+          for (const candidate of headingCandidates) {
+            const result = tryMatchContext(
+              workingLines,
+              contextBefore,
+              oldLines,
+              contextAfter,
+              candidate
+            );
+            if (result !== null) {
+              editIndex = result.editIndex;
+              fuzz = result.fuzz;
+              matched = true;
+              break;
+            }
+          }
+        }
       }
 
-      editIndex = result.editIndex;
-      fuzz = result.fuzz;
+      // 2b: Fall through to context-only search (with lineHint window)
+      if (!matched) {
+        const result = findContextAnywhere(
+          workingLines,
+          contextBefore,
+          oldLines,
+          contextAfter,
+          lineHint
+        );
+
+        if (result === null) {
+          errors.push({
+            hunkIndex: originalIndex,
+            message: `Context not found anywhere in file`,
+            detail:
+              `No anchors provided and the full context block ` +
+              `(contextBefore + oldLines + contextAfter) could not be matched ` +
+              `anywhere in the file. Try adding anchors to narrow the search.`,
+            anchors,
+          });
+          continue;
+        }
+
+        editIndex = result.editIndex;
+        fuzz = result.fuzz;
+      }
     }
 
     // Apply the hunk

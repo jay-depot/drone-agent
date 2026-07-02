@@ -362,11 +362,7 @@ describe('applyPatch — basic operations', () => {
 
 describe('applyPatch — fuzzy matching', () => {
   it('fuzz level 1: trailing whitespace differences', () => {
-    const lines = [
-      'def foo():  ',
-      '    pass  ',
-      '',
-    ];
+    const lines = ['def foo():  ', '    pass  ', ''];
 
     const hunks: PatchHunk[] = [
       {
@@ -384,11 +380,7 @@ describe('applyPatch — fuzzy matching', () => {
   });
 
   it('fuzz level 100: all whitespace differences', () => {
-    const lines = [
-      'def  foo ( ) :',
-      '    pass',
-      '',
-    ];
+    const lines = ['def  foo ( ) :', '    pass', ''];
 
     const hunks: PatchHunk[] = [
       {
@@ -478,7 +470,11 @@ describe('applyPatch — error handling', () => {
 
     const hunks: PatchHunk[] = [
       {
-        anchors: ['class A:', '    def method(self):', '    def nonexistent():'],
+        anchors: [
+          'class A:',
+          '    def method(self):',
+          '    def nonexistent():',
+        ],
         contextBefore: [],
         oldLines: ['        pass'],
         newLines: ['        return 42'],
@@ -529,13 +525,7 @@ describe('applyPatch — multiple hunks', () => {
   });
 
   it('reports partial success with some errors', () => {
-    const lines = [
-      'def good():',
-      '    pass',
-      '',
-      'def bad():',
-      '    pass',
-    ];
+    const lines = ['def good():', '    pass', '', 'def bad():', '    pass'];
 
     const hunks: PatchHunk[] = [
       {
@@ -625,16 +615,21 @@ describe('file__apply_diff — round-trip integration', () => {
     const target = path.join(tmpdir(), `drone-agent-diff-${Date.now()}.txt`);
     await writeFile(target, 'line1\nline2\nline3\n', 'utf-8');
     try {
-      const result = JSON.parse(await applyDiff!({
-        path: target,
-        hunks: [{
-          anchors: ['line2'],
-          contextBefore: ['line1'],
-          oldLines: ['line2'],
-          newLines: ['line2_modified'],
-          contextAfter: ['line3'],
-        }],
-      }));
+      // Unified diff: change line2 -> line2_modified
+      const patch = [
+        '@@ -1,3 +1,3 @@',
+        ' line1',
+        '-line2',
+        '+line2_modified',
+        ' line3',
+      ].join('\n');
+
+      const result = JSON.parse(
+        await applyDiff!({
+          path: target,
+          patch,
+        })
+      );
       expect(result.path).toBe(target);
       expect(result.patched).toBe(true);
       expect(result.summary).toBeDefined();
@@ -650,24 +645,200 @@ describe('file__apply_diff — round-trip integration', () => {
     }
   });
 
+  it('applies a multi-hunk patch', async () => {
+    const { registration, tools } = captureRegistration();
+    await filePlugin.register(registration);
+    const applyDiff = tools.get('apply_diff');
+    expect(applyDiff).toBeDefined();
+
+    const target = path.join(tmpdir(), `drone-agent-multi-${Date.now()}.txt`);
+    await writeFile(
+      target,
+      [
+        'def func_a():',
+        '    pass',
+        '',
+        'def func_b():',
+        '    pass',
+        '',
+        'def func_c():',
+        '    pass',
+      ].join('\n'),
+      'utf-8'
+    );
+    try {
+      // Two hunks: change func_a and func_c, leaving func_b untouched
+      const patch = [
+        '@@ -1,2 +1,2 @@ def func_a():',
+        ' def func_a():',
+        '-    pass',
+        '+    return 1',
+        '',
+        '@@ -7,2 +7,2 @@ def func_c():',
+        ' def func_c():',
+        '-    pass',
+        '+    return 3',
+      ].join('\n');
+
+      const result = JSON.parse(
+        await applyDiff!({
+          path: target,
+          patch,
+        })
+      );
+      expect(result.patched).toBe(true);
+      expect(result.summary.hunks).toBe(2);
+      // Verify both changes applied
+      const content = await readFile(target, 'utf-8');
+      expect(content).toContain('return 1');
+      expect(content).toContain('return 3');
+      // func_b() was not touched
+      expect(content).toContain('def func_b():');
+      // func_a and func_c no longer have pass
+      expect(content).toContain('    pass'); // func_b's pass still there
+    } finally {
+      const { unlink } = await import('node:fs/promises');
+      await unlink(target).catch(() => {});
+    }
+  });
+
+  it('handles insertion patch with context', async () => {
+    const { registration, tools } = captureRegistration();
+    await filePlugin.register(registration);
+    const applyDiff = tools.get('apply_diff');
+    expect(applyDiff).toBeDefined();
+
+    const target = path.join(tmpdir(), `drone-agent-insert-${Date.now()}.txt`);
+    await writeFile(target, 'line1\nline2\n', 'utf-8');
+    try {
+      // Insertion after line1: use context lines to anchor
+      const patch = [
+        '@@ -1,2 +1,4 @@',
+        ' line1',
+        '+new line A',
+        '+new line B',
+        ' line2',
+      ].join('\n');
+
+      const result = JSON.parse(
+        await applyDiff!({
+          path: target,
+          patch,
+        })
+      );
+      expect(result.patched).toBe(true);
+
+      const content = await readFile(target, 'utf-8');
+      expect(content).toContain('new line A');
+      expect(content).toContain('new line B');
+      expect(content).toContain('line1');
+      expect(content).toContain('line2');
+    } finally {
+      const { unlink } = await import('node:fs/promises');
+      await unlink(target).catch(() => {});
+    }
+  });
+
+  it('handles pure deletion patch', async () => {
+    const { registration, tools } = captureRegistration();
+    await filePlugin.register(registration);
+    const applyDiff = tools.get('apply_diff');
+    expect(applyDiff).toBeDefined();
+
+    const target = path.join(tmpdir(), `drone-agent-delete-${Date.now()}.txt`);
+    await writeFile(
+      target,
+      ['keep1', 'discard1', 'discard2', 'keep2'].join('\n'),
+      'utf-8'
+    );
+    try {
+      // Pure deletion with context
+      const patch = [
+        '@@ -1,4 +1,2 @@',
+        ' keep1',
+        '-discard1',
+        '-discard2',
+        ' keep2',
+      ].join('\n');
+
+      const result = JSON.parse(
+        await applyDiff!({
+          path: target,
+          patch,
+        })
+      );
+      expect(result.patched).toBe(true);
+
+      const content = await readFile(target, 'utf-8');
+      expect(content).not.toContain('discard1');
+      expect(content).not.toContain('discard2');
+      expect(content).toContain('keep1');
+      expect(content).toContain('keep2');
+    } finally {
+      const { unlink } = await import('node:fs/promises');
+      await unlink(target).catch(() => {});
+    }
+  });
+
+  it('rejects empty patch with a clear error', async () => {
+    const { registration, tools } = captureRegistration();
+    await filePlugin.register(registration);
+    const applyDiff = tools.get('apply_diff');
+    expect(applyDiff).toBeDefined();
+
+    // Empty patch should fail validation before reading the file
+    await expect(
+      applyDiff!({
+        path: '/tmp/some-file.txt',
+        patch: '',
+      })
+    ).rejects.toThrow(/patch string/);
+  });
+
+  it('rejects patch with no @@ headers with a clear error', async () => {
+    const { registration, tools } = captureRegistration();
+    await filePlugin.register(registration);
+    const applyDiff = tools.get('apply_diff');
+    expect(applyDiff).toBeDefined();
+
+    // Writes a real file so we reach the parser check
+    const target = path.join(tmpdir(), `drone-agent-nohunks-${Date.now()}.txt`);
+    await writeFile(target, 'some content\n', 'utf-8');
+    try {
+      await expect(
+        applyDiff!({
+          path: target,
+          patch: 'just some text without hunk headers',
+        })
+      ).rejects.toThrow(/no hunks/);
+    } finally {
+      const { unlink } = await import('node:fs/promises');
+      await unlink(target).catch(() => {});
+    }
+  });
+
   it('TUI formatDiffResult recognizes patched field', async () => {
     const { formatDiffResult } = (await import('../src/tui/app.js')).__testing;
-    const result = formatDiffResult(JSON.stringify({
-      path: '/tmp/test.txt',
-      patched: true,
-      summary: { hunks: 1, additions: 1, deletions: 1 },
-      diff: '@@ -1 +1 @@\n-old\n+new',
-    }));
+    const result = formatDiffResult(
+      JSON.stringify({
+        path: '/tmp/test.txt',
+        patched: true,
+        summary: { hunks: 1, additions: 1, deletions: 1 },
+        diff: '@@ -1 +1 @@\n-old\n+new',
+      })
+    );
     expect(result).toContain('Applied diff to');
     expect(result).toContain('/tmp/test.txt');
   });
 
   it('TUI formatDiffResult still works with written field', async () => {
     const { formatDiffResult } = (await import('../src/tui/app.js')).__testing;
-    const result = formatDiffResult(JSON.stringify({
-      path: '/tmp/test.txt',
-      written: true,
-    }));
+    const result = formatDiffResult(
+      JSON.stringify({
+        path: '/tmp/test.txt',
+        written: true,
+      })
+    );
     expect(result).toContain('Applied diff to');
     expect(result).toContain('/tmp/test.txt');
   });

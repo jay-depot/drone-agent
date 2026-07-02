@@ -40,7 +40,10 @@ export function ChatLog({
   );
 }
 
-function renderEntry(entry: ChatEntry, scheme: DroneColorScheme): React.JSX.Element {
+function renderEntry(
+  entry: ChatEntry,
+  scheme: DroneColorScheme
+): React.JSX.Element {
   switch (entry.kind) {
     case 'user':
       return (

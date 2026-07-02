@@ -39,8 +39,8 @@ function getTerminalSize(stdout: NodeJS.WriteStream): WindowSize {
  */
 export function useDebouncedWindowSize(debounceMs = 120): WindowSize {
   const { stdout } = useStdout();
-  const [debounced, setDebounced] = useState<WindowSize>(
-    () => getTerminalSize(stdout)
+  const [debounced, setDebounced] = useState<WindowSize>(() =>
+    getTerminalSize(stdout)
   );
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
