@@ -2,7 +2,7 @@
 key: roadmap
 tags: []
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-06-30T02:08:32.499Z
+updated: 2026-07-02T01:04:43.370Z
 ---
 
 # Swarm Roadmap
@@ -227,7 +227,7 @@ Local coordination layer for YOUR swarm on one machine.
 
 ### ✅ PHASE 3: drone-coordinator (SUBSTANTIALLY COMPLETE)
 
-**Status:** Substantially Complete — core infrastructure, security, session storage, knowledge management, wiki, insights/principles, and migration tool are all implemented. A few small items remain.
+**Status:** Substantially Complete — core infrastructure, security, session storage, knowledge management, wiki, insights/principles, migration tool, and monitoring web UI are all implemented. A few small items remain.
 
 Personal control plane for YOUR swarm across machines.
 
@@ -288,44 +288,9 @@ A CLI tool (`drone-migrate` or `drone-agent migrate`) for promoting/demoting ass
 - `drone-agent/src/runtime/migration-service.ts` — Core migration logic (827 lines)
 - `drone-agent/test/migration.test.ts` — Tests (612 lines)
 
-#### ⏳ 3.7 Make `--https` Default
+#### ✅ 3.7 Web UI (Monitoring Dashboard)
 
-**Status:** Pending
-
-Certificate auto-generation already exists on both beacon and coordinator. The change is to flip the default from `false` to `true`:
-
-- Coordinator: `process.env.COORDINATOR_HTTPS === 'true'` → `process.env.COORDINATOR_HTTPS !== 'false'`
-- Beacon: Same pattern for `BEACON_HTTPS` and `COORDINATOR_HTTPS`
-
-**Nice-to-have:** Add a pure Node.js certificate generation fallback (using `crypto`) for environments without `openssl` CLI.
-
-#### ⏳ 3.8 Inter-Beacon Spawn Routing
-
-**Status:** Not started
-
-The beacon already has a local spawn API (`POST /spawn`). The coordinator tracks agent locations. What's needed:
-
-1. New `POST /spawn` route on coordinator that accepts `{ targetBeaconId, personaId?, task?, config? }`
-2. Logic to look up the target beacon's host:port and forward the request (mirrors the existing message relay pattern in `messages.ts`)
-3. Optionally, a `beaconSelector: 'any'` mode that picks the least-loaded beacon
-
-The beacon's existing `/spawn` endpoint is ready to accept forwarded requests — no changes needed on the beacon side.
-
-#### ⏳ 3.9 Bootstrap Swarm Workflow
-
-**Status:** Not started
-
-A guided workflow (`bootstrap.swarm`) to set up beacon/coordinator connection, configure swarm mode, and register with a beacon. Currently the bootstrap plugin only has `bootstrap.project` and `bootstrap.user`.
-
-#### ⏳ 3.10 Coordinator Test Coverage
-
-**Status:** Minimal (1 test file: `knowledge.test.ts`)
-
-The coordinator needs test coverage for its routes and database layer.
-
-#### ⏳ 3.11 Coordinator Web UI
-
-**Status:** Planned
+**Status:** Complete
 
 A monitoring dashboard web UI for the coordinator — React SPA with shadcn/ui, tweakcn themes, and WebSocket-based real-time updates. Served by the coordinator itself via `@fastify/static`.
 
@@ -346,7 +311,7 @@ A monitoring dashboard web UI for the coordinator — React SPA with shadcn/ui, 
 - In-memory pub/sub for pushing new swarm events to connected clients
 - CORS enabled in development mode
 
-**Key Files (to be created):**
+**Key Files:**
 
 - `drone-coordinator-ui/package.json` — Vite/React project config
 - `drone-coordinator-ui/src/App.tsx` — Router + layout
@@ -365,6 +330,35 @@ A monitoring dashboard web UI for the coordinator — React SPA with shadcn/ui, 
 - Serve UI static files and add SPA fallback handler
 
 **Dependencies:** 3.2 (session storage), 3.4 (wiki)
+
+#### ⏳ 3.8 Make `--https` Default
+
+**Status:** Pending
+
+Certificate auto-generation already exists on both beacon and coordinator. The change is to flip the default from `false` to `true`:
+
+- Coordinator: `process.env.COORDINATOR_HTTPS === 'true'` → `process.env.COORDINATOR_HTTPS !== 'false'`
+- Beacon: Same pattern for `BEACON_HTTPS` and `COORDINATOR_HTTPS`
+
+**Nice-to-have:** Add a pure Node.js certificate generation fallback (using `crypto`) for environments without `openssl` CLI.
+
+#### ⏳ 3.9 Inter-Beacon Spawn Routing
+
+**Status:** Not started
+
+The beacon already has a local spawn API (`POST /spawn`). The coordinator tracks agent locations. What's needed:
+
+1. New `POST /spawn` route on coordinator that accepts `{ targetBeaconId, personaId?, task?, config? }`
+2. Logic to look up the target beacon's host:port and forward the request (mirrors the existing message relay pattern in `messages.ts`)
+3. Optionally, a `beaconSelector: 'any'` mode that picks the least-loaded beacon
+
+The beacon's existing `/spawn` endpoint is ready to accept forwarded requests — no changes needed on the beacon side.
+
+#### ⏳ 3.10 Coordinator Test Coverage
+
+**Status:** Minimal (1 test file: `knowledge.test.ts`)
+
+The coordinator needs test coverage for its routes and database layer.
 
 ---
 
@@ -424,7 +418,7 @@ The following features are aspirational and not yet implemented:
 
 **Status:** Not started
 
-Extend the coordinator web UI (built in 3.11) from monitoring-only to a full management console. Adds create/edit/delete forms for all resource types.
+Extend the coordinator web UI (built in 3.7) from monitoring-only to a full management console. Adds create/edit/delete forms for all resource types.
 
 **Planned features:**
 
@@ -437,7 +431,13 @@ Extend the coordinator web UI (built in 3.11) from monitoring-only to a full man
 - **Session management** — force-close stale sessions
 - **Wiki browsing** — full wiki reader with search, navigation, and wiki-link traversal
 
-**Dependencies:** 3.11 (web UI foundation)
+**Dependencies:** 3.7 (web UI foundation)
+
+#### 5.6 Bootstrap Swarm Workflow
+
+**Status:** Not started
+
+A guided workflow (`bootstrap.swarm`) to set up beacon/coordinator connection, configure swarm mode, and register with a beacon. Currently the bootstrap plugin only has `bootstrap.project` and `bootstrap.user`.
 
 ---
 
@@ -492,7 +492,7 @@ Phase 5 (Advanced)
 
 1. **Phase 1:** Agent can bootstrap itself and work on its own codebase ✅
 2. **Phase 2:** Your multiple agents on same host share YOUR skills/personas/memory via beacon ✅
-3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; migration tool moves assets between scopes ✅
+3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; migration tool moves assets between scopes; monitoring web UI for viewing swarm state ✅
 4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses
 5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support, automated learning
 
@@ -512,4 +512,4 @@ Phase 5 (Advanced)
 
 ---
 
-_Last updated: 2026-06-30_
+_Last updated: 2026-07-02_
