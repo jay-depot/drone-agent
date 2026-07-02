@@ -26,6 +26,16 @@ const OpenRouterModelConfigSchema = Type.Object({
   contextWindow: PositiveNumber,
 });
 
+const OpenAiModelConfigSchema = Type.Object({
+  id: NonEmptyString,
+  contextWindow: PositiveNumber,
+});
+
+const AnthropicModelConfigSchema = Type.Object({
+  id: NonEmptyString,
+  contextWindow: PositiveNumber,
+});
+
 // ── LSP server configs ──────────────────────────────────────────────
 
 const LspSpawnServerConfigSchema = Type.Object({
@@ -119,6 +129,20 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       defaultModel: Type.Optional(Type.String()),
       baseUrl: Type.Optional(Type.String()),
       models: Type.Optional(Type.Array(OpenRouterModelConfigSchema)),
+    }),
+    openai: Type.Object({
+      apiKey: Type.Optional(Type.String()),
+      defaultModel: Type.Optional(Type.String()),
+      baseUrl: Type.Optional(Type.String()),
+      orgId: Type.Optional(Type.String()),
+      models: Type.Optional(Type.Array(OpenAiModelConfigSchema)),
+    }),
+    anthropic: Type.Object({
+      apiKey: Type.Optional(Type.String()),
+      defaultModel: Type.Optional(Type.String()),
+      baseUrl: Type.Optional(Type.String()),
+      apiVersion: Type.Optional(Type.String()),
+      models: Type.Optional(Type.Array(AnthropicModelConfigSchema)),
     }),
     session: Type.Object({
       contextWindowTokens: Type.Optional(PositiveNumber),

@@ -18,6 +18,8 @@ import { mcpPlugin } from './mcp/index.js';
 import { memoryPlugin } from './memory/index.js';
 import { notepadPlugin } from './notepad.js';
 import { ollamaPlugin } from './ollama.js';
+import { anthropicPlugin } from './anthropic/index.js';
+import { openaiPlugin } from './openai/index.js';
 import { openrouterPlugin } from './openrouter/index.js';
 import { personaPlugin } from './persona/index.js';
 import { personaProviderProjectPlugin } from './persona-provider-project/index.js';
@@ -60,6 +62,8 @@ const staticBuiltInPlugins: DronePlugin[] = [
   lspPlugin,
   mcpPlugin,
   ollamaPlugin,
+  anthropicPlugin,
+  openaiPlugin,
   openrouterPlugin,
   filePlugin,
   searchPlugin,

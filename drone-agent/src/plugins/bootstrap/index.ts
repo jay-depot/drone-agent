@@ -259,6 +259,16 @@ export const bootstrapPlugin: DronePlugin = {
         }
 
         availableProviders.push({
+          id: 'openai',
+          label: 'OpenAI (cloud)',
+        });
+
+        availableProviders.push({
+          id: 'anthropic',
+          label: 'Anthropic (cloud)',
+        });
+
+        availableProviders.push({
           id: 'openrouter',
           label: 'OpenRouter (cloud)',
         });
@@ -269,7 +279,7 @@ export const bootstrapPlugin: DronePlugin = {
               {
                 ok: false,
                 message:
-                  'No LLM providers available. Install Ollama or configure OpenRouter.',
+                  'No LLM providers available. Install Ollama or configure OpenAI/Anthropic/OpenRouter.',
               },
               null,
               2
@@ -347,6 +357,127 @@ export const bootstrapPlugin: DronePlugin = {
               2
             ),
             kickMessage: `User configuration set up with Ollama (model: ${selectedModel}).\nConfig written to ${userConfigPath}.`,
+          };
+        }
+
+        // OpenAI flow
+        if (chosenProvider === 'openai') {
+          const keyAnswer = await ctx.elicit.ask([
+            {
+              id: 'apiKey',
+              prompt:
+                'Enter your OpenAI API key (it will be stored with env var interpolation):',
+              freeform: true,
+              placeholder: 'sk-...',
+              inputLabel: 'API key',
+            },
+          ]);
+
+          const apiKey = (keyAnswer.apiKey as string).trim();
+          if (!apiKey) {
+            return {
+              toolResult: JSON.stringify(
+                { ok: false, message: 'API key is required for OpenAI.' },
+                null,
+                2
+              ),
+            };
+          }
+
+          const modelAnswer = await ctx.elicit.ask([
+            {
+              id: 'model',
+              prompt: 'Which model would you like as default?',
+              choices: [
+                { value: 'gpt-4o', label: 'GPT-4o' },
+                { value: 'gpt-4.1', label: 'GPT-4.1' },
+                { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
+              ],
+              defaultValue: 'gpt-4o',
+            },
+          ]);
+
+          const selectedModel = modelAnswer.model as string;
+          await writeUserConfig(userConfigPath, {
+            llm: { provider: 'openai' },
+            openai: {
+              apiKey: '${OPENAI_API_KEY}',
+              defaultModel: selectedModel,
+              baseUrl: 'https://api.openai.com/v1',
+            },
+          });
+
+          process.env['OPENAI_API_KEY'] = apiKey;
+
+          await ctx.enablePlugin('openai');
+          return {
+            toolResult: JSON.stringify(
+              { ok: true, provider: 'openai', model: selectedModel },
+              null,
+              2
+            ),
+            kickMessage: `User configuration set up with OpenAI (model: ${selectedModel}).\nConfig written to ${userConfigPath}.\nSet OPENAI_API_KEY in your environment.`,
+          };
+        }
+
+        // Anthropic flow
+        if (chosenProvider === 'anthropic') {
+          const keyAnswer = await ctx.elicit.ask([
+            {
+              id: 'apiKey',
+              prompt:
+                'Enter your Anthropic API key (it will be stored with env var interpolation):',
+              freeform: true,
+              placeholder: 'sk-ant-...',
+              inputLabel: 'API key',
+            },
+          ]);
+
+          const apiKey = (keyAnswer.apiKey as string).trim();
+          if (!apiKey) {
+            return {
+              toolResult: JSON.stringify(
+                { ok: false, message: 'API key is required for Anthropic.' },
+                null,
+                2
+              ),
+            };
+          }
+
+          const modelAnswer = await ctx.elicit.ask([
+            {
+              id: 'model',
+              prompt: 'Which model would you like as default?',
+              choices: [
+                { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+                { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+                { value: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
+              ],
+              defaultValue: 'claude-sonnet-4-6',
+            },
+          ]);
+
+          const selectedModel = modelAnswer.model as string;
+          await writeUserConfig(userConfigPath, {
+            llm: { provider: 'anthropic' },
+            anthropic: {
+              apiKey: '${ANTHROPIC_API_KEY}',
+              defaultModel: selectedModel,
+              baseUrl: 'https://api.anthropic.com',
+              apiVersion: '2023-06-01',
+            },
+          });
+
+          process.env['ANTHROPIC_API_KEY'] = apiKey;
+
+          await ctx.enablePlugin('anthropic');
+          return {
+            toolResult: JSON.stringify(
+              { ok: true, provider: 'anthropic', model: selectedModel },
+              null,
+              2
+            ),
+            kickMessage: `User configuration set up with Anthropic (model: ${selectedModel}).\nConfig written to ${userConfigPath}.\nSet ANTHROPIC_API_KEY in your environment.`,
           };
         }
 

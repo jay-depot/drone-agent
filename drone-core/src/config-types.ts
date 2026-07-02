@@ -55,6 +55,32 @@ export type DroneOpenRouterConfig = {
   models: DroneOpenRouterModelConfig[];
 };
 
+export type DroneOpenAiModelConfig = {
+  id: string;
+  contextWindow: number;
+};
+
+export type DroneOpenAiConfig = {
+  apiKey: string;
+  defaultModel: string;
+  baseUrl: string;
+  orgId?: string;
+  models: DroneOpenAiModelConfig[];
+};
+
+export type DroneAnthropicModelConfig = {
+  id: string;
+  contextWindow: number;
+};
+
+export type DroneAnthropicConfig = {
+  apiKey: string;
+  defaultModel: string;
+  baseUrl: string;
+  apiVersion: string;
+  models: DroneAnthropicModelConfig[];
+};
+
 export type DroneSessionConfig = {
   contextWindowTokens: number;
   responseReserveTokens: number;
@@ -237,6 +263,8 @@ export type DroneAgentConfig = {
   activePersona: string | null;
   llm: DroneLlmConfig;
   ollama: DroneOllamaConfig;
+  openai: DroneOpenAiConfig;
+  anthropic: DroneAnthropicConfig;
   openrouter: DroneOpenRouterConfig;
   session: DroneSessionConfig;
   lsp: DroneLspConfig;
@@ -257,6 +285,8 @@ export type PartialDroneAgentConfig = Partial<{
   activePersona: string | null;
   llm: Partial<DroneLlmConfig>;
   ollama: Partial<DroneOllamaConfig>;
+  openai: Partial<DroneOpenAiConfig>;
+  anthropic: Partial<DroneAnthropicConfig>;
   openrouter: Partial<DroneOpenRouterConfig>;
   session: Partial<DroneSessionConfig>;
   lsp: Partial<DroneLspConfig>;
@@ -305,6 +335,27 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
     ollama: {
       host: 'http://127.0.0.1:11434',
       model: 'llama3.1',
+    },
+    openai: {
+      apiKey: '',
+      defaultModel: 'gpt-4o',
+      baseUrl: 'https://api.openai.com/v1',
+      models: [
+        { id: 'gpt-4o', contextWindow: 128000 },
+        { id: 'gpt-4.1', contextWindow: 1047576 },
+        { id: 'gpt-4.1-mini', contextWindow: 1047576 },
+      ],
+    },
+    anthropic: {
+      apiKey: '',
+      defaultModel: 'claude-sonnet-4-6',
+      baseUrl: 'https://api.anthropic.com',
+      apiVersion: '2023-06-01',
+      models: [
+        { id: 'claude-haiku-4-5', contextWindow: 200000 },
+        { id: 'claude-sonnet-4-6', contextWindow: 1000000 },
+        { id: 'claude-opus-4-8', contextWindow: 1000000 },
+      ],
     },
     openrouter: {
       apiKey: '',
@@ -404,6 +455,20 @@ export function applyAgentConfigLayer(
           ...layer.ollama,
         }
       : baseConfig.ollama,
+    openai: layer.openai
+      ? {
+          ...baseConfig.openai,
+          ...layer.openai,
+          models: layer.openai.models ?? baseConfig.openai.models,
+        }
+      : baseConfig.openai,
+    anthropic: layer.anthropic
+      ? {
+          ...baseConfig.anthropic,
+          ...layer.anthropic,
+          models: layer.anthropic.models ?? baseConfig.anthropic.models,
+        }
+      : baseConfig.anthropic,
     openrouter: layer.openrouter
       ? {
           ...baseConfig.openrouter,

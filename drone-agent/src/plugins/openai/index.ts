@@ -14,15 +14,12 @@ import {
   type OpenAiChatResponse,
 } from '../../shared/openai-compatible.js';
 
-// ── Plugin ──────────────────────────────────────────────────────────
-
-export const openrouterPlugin: DronePlugin = {
+export const openaiPlugin: DronePlugin = {
   metadata: {
-    id: 'openrouter',
-    name: 'OpenRouter',
+    id: 'openai',
+    name: 'OpenAI',
     version: '0.1.0',
-    description:
-      'Provides cloud chat completion through OpenRouter (OpenAI-compatible API).',
+    description: 'Provides cloud chat completion through OpenAI API.',
     defaultEnabled: false,
     dependencies: [{ id: 'llm' }],
   },
@@ -32,7 +29,7 @@ export const openrouterPlugin: DronePlugin = {
         model,
       }): Promise<DroneContextWindowInfo | null> => {
         const config = registration.getConfig();
-        const modelEntry = config.openrouter.models.find(m => m.id === model);
+        const modelEntry = config.openai.models.find(m => m.id === model);
         if (modelEntry) {
           return {
             model,
@@ -40,7 +37,6 @@ export const openrouterPlugin: DronePlugin = {
             source: 'config',
           };
         }
-        // Fall back to session config
         return {
           model,
           contextWindowTokens: config.session.contextWindowTokens,
@@ -49,11 +45,11 @@ export const openrouterPlugin: DronePlugin = {
       },
       chat: async ({ model, messages, tools }) => {
         const config = registration.getConfig();
-        const apiKey = config.openrouter.apiKey;
+        const apiKey = config.openai.apiKey;
 
         if (!apiKey) {
           throw new Error(
-            'OpenRouter API key is not configured. Set openrouter.apiKey in your config or use ${OPENROUTER_API_KEY} environment variable.'
+            'OpenAI API key is not configured. Set openai.apiKey in your config or use ${OPENAI_API_KEY} environment variable.'
           );
         }
 
@@ -66,28 +62,27 @@ export const openrouterPlugin: DronePlugin = {
           body.tools = toOpenAiTools(tools);
         }
 
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        };
+        if (config.openai.orgId) {
+          headers['OpenAI-Organization'] = config.openai.orgId;
+        }
+
         let response: Response;
         try {
-          response = await fetch(
-            config.openrouter.baseUrl + '/chat/completions',
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${apiKey}`,
-                'HTTP-Referer': 'https://drone-agent.dev',
-                'X-Title': 'drone-agent',
-              },
-              body: JSON.stringify(body),
-            }
-          );
+          response = await fetch(config.openai.baseUrl + '/chat/completions', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+          });
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
-          throw new Error(
-            `OpenRouter request failed for model ${model}: ${message}`,
-            { cause: error }
-          );
+          throw new Error(`OpenAI request failed for model ${model}: ${message}`, {
+            cause: error,
+          });
         }
 
         if (!response.ok) {
@@ -97,9 +92,7 @@ export const openrouterPlugin: DronePlugin = {
           } catch {
             errorBody = '(could not read response body)';
           }
-          throw new Error(
-            `OpenRouter API error (${response.status}): ${errorBody}`
-          );
+          throw new Error(`OpenAI API error (${response.status}): ${errorBody}`);
         }
 
         let data: OpenAiChatResponse;
@@ -108,35 +101,34 @@ export const openrouterPlugin: DronePlugin = {
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
-          throw new Error(`OpenRouter returned invalid JSON: ${message}`);
+          throw new Error(`OpenAI returned invalid JSON: ${message}`);
         }
 
         return fromOpenAiResponse(data);
       },
     };
 
-    // Register with the LLM broker
     const llmCap = registration.request<DroneLlmCapability>('llm');
     if (llmCap) {
       const llmRegistration: DroneLlmProviderRegistration = {
-        id: 'openrouter',
+        id: 'openai',
         precedence: PRECEDENCE_LLM_PROVIDER,
         getProvider: () => provider,
         listModels: async () => {
           const config = registration.getConfig();
-          return config.openrouter.models.map(m => m.id);
+          return config.openai.models.map(m => m.id);
         },
-        getDefaultModel: () => registration.getConfig().openrouter.defaultModel,
+        getDefaultModel: () => registration.getConfig().openai.defaultModel,
       };
       llmCap.registerProvider(llmRegistration);
     } else {
       registration.logger.warn(
-        'LLM broker not available; openrouter will not be registered as a provider'
+        'LLM broker not available; openai will not be registered as a provider'
       );
     }
 
     registration.hooks.onPluginsLoaded(async () => {
-      registration.logger.info('openrouter provider ready');
+      registration.logger.info('openai provider ready');
     });
   },
 };

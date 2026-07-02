@@ -75,12 +75,14 @@ export async function runFirstRunSetup(
     }
   }
 
-  // OpenRouter is always an option (user provides the key)
+  // OpenAI, Anthropic, and OpenRouter are always options (user provides the key)
+  availableProviders.push({ id: 'openai', label: 'OpenAI (cloud)' });
+  availableProviders.push({ id: 'anthropic', label: 'Anthropic (cloud)' });
   availableProviders.push({ id: 'openrouter', label: 'OpenRouter (cloud)' });
 
   if (availableProviders.length === 0) {
     logger.warn(
-      'No LLM providers available. Install Ollama (https://ollama.ai) or configure OpenRouter manually.'
+      'No LLM providers available. Install Ollama (https://ollama.ai) or configure OpenAI/Anthropic/OpenRouter manually.'
     );
     return;
   }
@@ -219,6 +221,143 @@ export async function runFirstRunSetup(
       );
       logger.info(
         'Set OPENROUTER_API_KEY in your environment or edit the config file directly.'
+      );
+      conversation.setModel(selectedModel);
+      return;
+    }
+
+    if (chosenProvider === 'openai') {
+      const keyAnswers = await elicit.ask([
+        {
+          id: 'apiKey',
+          prompt:
+            'Enter your OpenAI API key (it will be stored in config with env var interpolation):',
+          freeform: true,
+          placeholder: 'sk-...',
+          inputLabel: 'API key',
+        },
+      ]);
+
+      const apiKey = keyAnswers.apiKey.trim();
+      if (!apiKey) {
+        logger.warn('API key is required for OpenAI.');
+        continue;
+      }
+
+      const defaultModels = [
+        { id: 'gpt-4o', contextWindow: 128000 },
+        { id: 'gpt-4.1', contextWindow: 1047576 },
+        { id: 'gpt-4.1-mini', contextWindow: 1047576 },
+      ];
+
+      const modelAnswers = await elicit.ask([
+        {
+          id: 'model',
+          prompt: 'Which model would you like to use as default?',
+          choices: defaultModels.map(m => ({
+            value: m.id,
+            label: m.id,
+          })),
+          defaultValue: defaultModels[0].id,
+        },
+      ]);
+
+      const selectedModel = modelAnswers.model;
+
+      await mkdir(userConfigDir, { recursive: true });
+      await writeFile(
+        userConfigFile,
+        JSON.stringify(
+          {
+            llm: { provider: 'openai' },
+            openai: {
+              apiKey: '${OPENAI_API_KEY}',
+              defaultModel: selectedModel,
+              baseUrl: 'https://api.openai.com/v1',
+              models: defaultModels,
+            },
+          },
+          null,
+          2
+        ) + '\n'
+      );
+
+      process.env['OPENAI_API_KEY'] = apiKey;
+
+      logger.info(
+        `Wrote ${userConfigFile} with OpenAI model "${selectedModel}".`
+      );
+      logger.info(
+        'Set OPENAI_API_KEY in your environment or edit the config file directly.'
+      );
+      conversation.setModel(selectedModel);
+      return;
+    }
+
+    if (chosenProvider === 'anthropic') {
+      const keyAnswers = await elicit.ask([
+        {
+          id: 'apiKey',
+          prompt:
+            'Enter your Anthropic API key (it will be stored in config with env var interpolation):',
+          freeform: true,
+          placeholder: 'sk-ant-...',
+          inputLabel: 'API key',
+        },
+      ]);
+
+      const apiKey = keyAnswers.apiKey.trim();
+      if (!apiKey) {
+        logger.warn('API key is required for Anthropic.');
+        continue;
+      }
+
+      const defaultModels = [
+        { id: 'claude-haiku-4-5', contextWindow: 200000 },
+        { id: 'claude-sonnet-4-6', contextWindow: 1000000 },
+        { id: 'claude-opus-4-8', contextWindow: 1000000 },
+      ];
+
+      const modelAnswers = await elicit.ask([
+        {
+          id: 'model',
+          prompt: 'Which model would you like to use as default?',
+          choices: defaultModels.map(m => ({
+            value: m.id,
+            label: m.id,
+          })),
+          defaultValue: defaultModels[1].id,
+        },
+      ]);
+
+      const selectedModel = modelAnswers.model;
+
+      await mkdir(userConfigDir, { recursive: true });
+      await writeFile(
+        userConfigFile,
+        JSON.stringify(
+          {
+            llm: { provider: 'anthropic' },
+            anthropic: {
+              apiKey: '${ANTHROPIC_API_KEY}',
+              defaultModel: selectedModel,
+              baseUrl: 'https://api.anthropic.com',
+              apiVersion: '2023-06-01',
+              models: defaultModels,
+            },
+          },
+          null,
+          2
+        ) + '\n'
+      );
+
+      process.env['ANTHROPIC_API_KEY'] = apiKey;
+
+      logger.info(
+        `Wrote ${userConfigFile} with Anthropic model "${selectedModel}".`
+      );
+      logger.info(
+        'Set ANTHROPIC_API_KEY in your environment or edit the config file directly.'
       );
       conversation.setModel(selectedModel);
       return;
