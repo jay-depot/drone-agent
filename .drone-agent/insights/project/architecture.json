@@ -206,5 +206,9 @@
   {
     "timestamp": "2026-07-02T01:29:24.360Z",
     "insight": "The file__apply_diff tool's nested JSON hunk format (array of objects with arrays of strings) is confusing the LLM. Switching to a flat unified diff string format should improve LLM reliability, but revisits ADR #033's decision about JSON schema vs freeform text — the pragmatic observation is that LLMs produce valid unified diff strings more reliably than valid nested JSON structures."
+  },
+  {
+    "timestamp": "2026-07-02T01:50:28.509Z",
+    "insight": "The unified diff format for file__apply_diff turned out well. Key lesson: ADR #033's argument that \"JSON schema is better because we can constrain the output format\" was technically correct but pragmatically wrong — LLMs produce valid unified diff strings far more reliably than valid nested JSON arrays-of-objects. The learning is: prefer flat, well-known text formats (like git diff) over custom nested JSON schemas for LLM tool inputs, even when parsing is slightly harder on the backend."
   }
 ]
