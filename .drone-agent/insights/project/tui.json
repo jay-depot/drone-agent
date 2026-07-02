@@ -18,5 +18,9 @@
   {
     "timestamp": "2026-07-01T23:25:09.695Z",
     "insight": "The TUI's formatDiffResult checks for obj.written === true but file__apply_diff returns obj.patched === true. Additionally, formatDiffOutput classifies lines by their first character (+/-/@@/---), but when the tool returns colored output, lines start with ANSI escape codes instead, breaking classification. The tool should return plain text and let the TUI handle coloring."
+  },
+  {
+    "timestamp": "2026-07-02T00:29:21.574Z",
+    "insight": "Ink 6.8.0's `incrementalRendering` mode has a bug with bordered `<Box>` components — the line-by-line diffing mispositions content when text inside a bordered box changes. The `useDebouncedWindowSize` hook already mitigates resize flicker, so incremental rendering is unnecessary. Standard full-redraw mode works correctly with Ink 6."
   }
 ]

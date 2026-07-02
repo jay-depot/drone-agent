@@ -5,8 +5,9 @@ tags:
   - ink
   - incremental-rendering
   - bug
+  - completed
 created: 2026-07-02T00:25:34.331Z
-updated: 2026-07-02T00:25:34.331Z
+updated: 2026-07-02T00:29:15.174Z
 ---
 
 # Plan: Fix Ink 6 Incremental Rendering Bug (Text Appears Below Input Box)
@@ -32,3 +33,16 @@ The trailing `\n` behavior (when not in fullscreen mode) compounds this: the `ou
 **Remove `incrementalRendering: true`** from `createTui()` in `src/tui/index.tsx`, reverting to Ink's standard full-redraw mode. This is the mode that Ink 5 used and that worked correctly. The `incrementalRendering` feature in Ink 6.8.0 is an opt-in optimization that is not yet stable with bordered box layouts.
 
 ## Plan Steps
+
+## Work Completed (2026-07-01)
+
+**Implementation:**
+- Removed `incrementalRendering: true` from the `render()` options in `src/tui/index.tsx`
+- Removed the JSDoc comment mentioning incremental rendering from `createTui()`
+
+**Validation:**
+- `pnpm typecheck` — all packages pass (only pre-existing errors in `llm-provider-switching.test.ts`)
+- `pnpm build` — all packages compile cleanly
+- The TS2353 type error ("incrementalRendering does not exist in type") is resolved
+
+**Commit:** `5c12996` — "fix(tui): remove incrementalRendering to fix bordered input box visual glitch"
