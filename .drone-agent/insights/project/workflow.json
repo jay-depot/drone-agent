@@ -122,5 +122,9 @@
   {
     "timestamp": "2026-07-02T02:55:01.248Z",
     "insight": "The project has pre-existing lint errors in `drone-swarm-common/src/tls.ts` (no-empty, preserve-caught-error) that cause `pnpm lint` to fail even when our changes are clean. Consider fixing these or adding them to an ignore list so lint failures are actionable."
+  },
+  {
+    "timestamp": "2026-07-02T03:00:09.171Z",
+    "insight": "The drone-swarm-common/src/tls.ts lint errors (no-empty, preserve-caught-error) were pre-existing and caused pnpm lint to fail even when working on unrelated code. Now fixed by adding a comment to the empty catch block and removing the unused caught variable from the openssl error handler. The whole project now passes lint cleanly."
   }
 ]
