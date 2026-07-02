@@ -55,7 +55,9 @@ function generateTlsCertificateWithOpenssl(
         fs.unlinkSync(`${tempDir}/temp-cert.pem`);
       if (fs.existsSync(`${tempDir}/temp-key.pem`))
         fs.unlinkSync(`${tempDir}/temp-key.pem`);
-    } catch {}
+    } catch {
+      // Cleanup is best-effort — ignore failures
+    }
     throw err;
   }
 }
@@ -97,8 +99,7 @@ export function loadOrCreateTlsIdentity(
     const result = generateTlsCertificateWithOpenssl(configDir, commonName);
     certPem = result.certPem;
     keyPem = result.keyPem;
-  } catch (err) {
-    logger.error(`Failed to generate certificate with openssl: ${err}`);
+  } catch {
     throw new Error(
       'Certificate generation failed. Install openssl or provide certificates manually.'
     );

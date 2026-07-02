@@ -48,6 +48,7 @@ sendUserMessage(prompt):
 ```
 
 The drain point is the **top of the while(true) loop** — after the budget key cache check, but before building system messages. This means:
+
 - Messages queued during a tool chain appear as new user turns in the LLM's view of conversation
 - They're appended at a consistent moment: after the previous LLM round's tool results are in the session and all `onAfterToolCall` hooks have run
 - The LLM sees the full context (completed tool results + new user message) on the next call
@@ -56,7 +57,7 @@ The drain point is the **top of the while(true) loop** — after the budget key 
 
 - **ESC no longer exits.** It cancels the current request if the LLM is active, otherwise it's a no-op. `Ctrl-C` (and `Ctrl-C` twice for emergencies) remains the only keyboard exit.
 - **Cancel preserves the queue.** Messages queued before a `/cancel` survive and are drained on the next `sendUserMessage` call.
-- **Slash commands that touch session/LLM state** (like `/clear`, `/exec`, `/tool`) and `/cancel` are *not* enqueued — `/cancel` fires immediately, and others are blocked by the TUI's routing logic (they can only be submitted when `isLlmActive` is false). Read-only slash commands (`/help`, `/plugins`, `/tools`, `/systemprompt`) could in theory be allowed while active, but for simplicity the first pass treats *all* slash commands as "must wait for LLM" (since `/cancel` is the only one that makes sense during activity).
+- **Slash commands that touch session/LLM state** (like `/clear`, `/exec`, `/tool`) and `/cancel` are _not_ enqueued — `/cancel` fires immediately, and others are blocked by the TUI's routing logic (they can only be submitted when `isLlmActive` is false). Read-only slash commands (`/help`, `/plugins`, `/tools`, `/systemprompt`) could in theory be allowed while active, but for simplicity the first pass treats _all_ slash commands as "must wait for LLM" (since `/cancel` is the only one that makes sense during activity).
 
 ## Completion Summary
 

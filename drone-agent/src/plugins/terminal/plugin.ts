@@ -2,10 +2,7 @@ import type { DronePlugin } from 'drone-core';
 import type { DroneToolJsonSchema } from 'drone-core';
 import { TerminalSessionManager } from './session-manager.js';
 import { encodeKeys } from './key-codec.js';
-import {
-  DEFAULT_TERMINAL_COLS,
-  DEFAULT_TERMINAL_ROWS,
-} from './constants.js';
+import { DEFAULT_TERMINAL_COLS, DEFAULT_TERMINAL_ROWS } from './constants.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -22,10 +19,11 @@ function safeParseInt(value: unknown, fallback: number): number {
   return fallback;
 }
 
-function ensureSessionId(
-  input: Record<string, unknown>
-): string {
-  if (typeof input.sessionId !== 'string' || input.sessionId.trim().length === 0) {
+function ensureSessionId(input: Record<string, unknown>): string {
+  if (
+    typeof input.sessionId !== 'string' ||
+    input.sessionId.trim().length === 0
+  ) {
     throw new Error('sessionId must be a non-empty string.');
   }
   return input.sessionId.trim();
@@ -54,13 +52,11 @@ const CREATE_INPUT_SCHEMA: DroneToolJsonSchema = {
     },
     cols: {
       type: 'number',
-      description:
-        'Terminal columns (width). Defaults to 80.',
+      description: 'Terminal columns (width). Defaults to 80.',
     },
     rows: {
       type: 'number',
-      description:
-        'Terminal rows (height). Defaults to 24.',
+      description: 'Terminal rows (height). Defaults to 24.',
     },
   },
   additionalProperties: false,
@@ -218,8 +214,7 @@ export const terminalPlugin: DronePlugin = {
       execute: async input => {
         try {
           const sessionId = ensureSessionId(input);
-          const rawInput =
-            typeof input.input === 'string' ? input.input : '';
+          const rawInput = typeof input.input === 'string' ? input.input : '';
 
           if (rawInput.length === 0) {
             return JSON.stringify({

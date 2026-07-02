@@ -90,12 +90,7 @@ export class TerminalSessionManager {
    * @returns The session ID string.
    * @throws Error if at capacity.
    */
-  create(
-    command: string,
-    cwd: string,
-    cols: number,
-    rows: number
-  ): string {
+  create(command: string, cwd: string, cols: number, rows: number): string {
     if (this.isFull) {
       throw new Error(
         `Maximum terminal sessions reached (${this.maxSessions}). ` +

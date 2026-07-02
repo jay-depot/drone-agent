@@ -219,25 +219,25 @@ describe('TerminalSessionManager', () => {
   describe('write and read', () => {
     it('writes data and reads output', async () => {
       const id = manager.create('/bin/sh', '/tmp', 80, 24);
-      
+
       // Write a command
       manager.write(id, 'echo hello\n');
-      
+
       // Wait for output to accumulate
       await new Promise(resolve => setTimeout(resolve, 300));
-      
+
       const output = manager.read(id);
       expect(output).toContain('hello');
     });
 
     it('read() drains pending output', async () => {
       const id = manager.create('/bin/sh', '/tmp', 80, 24);
-      
+
       manager.write(id, 'echo first\n');
       await new Promise(resolve => setTimeout(resolve, 300));
       const first = manager.read(id);
       expect(first).toContain('first');
-      
+
       // After read, pending should be empty
       const second = manager.read(id);
       expect(second).toBe('');
@@ -247,14 +247,14 @@ describe('TerminalSessionManager', () => {
   describe('screenshot', () => {
     it('returns full accumulated output', async () => {
       const id = manager.create('/bin/sh', '/tmp', 80, 24);
-      
+
       manager.write(id, 'echo alpha\n');
       await new Promise(resolve => setTimeout(resolve, 300));
       manager.read(id); // drain
-      
+
       manager.write(id, 'echo beta\n');
       await new Promise(resolve => setTimeout(resolve, 300));
-      
+
       const screen = manager.screenshot(id);
       // screenshot should have ALL output, including what was already read
       expect(screen).toContain('alpha');
@@ -433,10 +433,7 @@ describe('terminalPlugin', () => {
           expect(tool.defaultHidden).toBe(true);
         }
       },
-      registerPromptFragment: (frag: {
-        key: string;
-        phase: string;
-      }) => {
+      registerPromptFragment: (frag: { key: string; phase: string }) => {
         registeredFragments.push(frag);
       },
       registerHelp: () => {},
