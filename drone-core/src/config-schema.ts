@@ -161,6 +161,13 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
     log: Type.Object({
       enabled: Type.Optional(Type.Boolean()),
     }),
+    terminal: Type.Object({
+      enabled: Type.Optional(Type.Boolean()),
+      maxActiveSessions: Type.Optional(PositiveInteger),
+      defaultShell: Type.Optional(Type.String()),
+      defaultCols: Type.Optional(PositiveInteger),
+      defaultRows: Type.Optional(PositiveInteger),
+    }),
     promptFile: Type.Object({
       enabled: Type.Optional(Type.Boolean()),
       files: Type.Optional(Type.Array(Type.String())),

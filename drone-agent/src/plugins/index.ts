@@ -8,6 +8,7 @@ import {
 import { createLogPlugin } from './log/index.js';
 import { execPlugin } from './exec.js';
 import { echoPlugin } from './echo/index.js';
+import { terminalPlugin } from './terminal/index.js';
 import { fetchPlugin } from './fetch.js';
 import { filePlugin } from './file.js';
 import { gitPlugin } from './git.js';
@@ -45,6 +46,7 @@ const staticBuiltInPlugins: DronePlugin[] = [
   notepadPlugin,
   subagentPlugin, // NEW
   startupPlugin,
+  terminalPlugin,
   configPlugin,
   execPlugin,
   echoPlugin,

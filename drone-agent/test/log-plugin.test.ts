@@ -336,6 +336,13 @@ async function getCapability(
       },
       memory: { enabled: false },
       log: { enabled: false },
+      terminal: {
+        enabled: false,
+        maxActiveSessions: 5,
+        defaultShell: '',
+        defaultCols: 80,
+        defaultRows: 24,
+      },
       promptFile: { enabled: false, files: [] },
       externalPlugins: [],
       trustedPlugins: {},

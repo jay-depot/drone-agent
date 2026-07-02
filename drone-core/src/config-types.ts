@@ -97,6 +97,14 @@ export type DroneLogConfig = {
   enabled: boolean;
 };
 
+export type DroneTerminalConfig = {
+  enabled: boolean;
+  maxActiveSessions: number;
+  defaultShell: string;
+  defaultCols: number;
+  defaultRows: number;
+};
+
 export type DronePromptFileConfig = {
   enabled: boolean;
   files: string[];
@@ -236,6 +244,7 @@ export type DroneAgentConfig = {
   compaction: DroneCompactionConfig;
   memory: DroneMemoryConfig;
   log: DroneLogConfig;
+  terminal: DroneTerminalConfig;
   promptFile: DronePromptFileConfig;
   swarm: DroneSwarmConfig;
 };
@@ -256,6 +265,7 @@ export type PartialDroneAgentConfig = Partial<{
   memory: Partial<DroneMemoryConfig>;
   log: Partial<DroneLogConfig>;
   promptFile: Partial<DronePromptFileConfig>;
+  terminal: Partial<DroneTerminalConfig>;
   swarm: Partial<DroneSwarmConfig>;
 }>;
 
@@ -345,6 +355,13 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
     log: {
       enabled: true,
     },
+    terminal: {
+      enabled: false,
+      maxActiveSessions: 5,
+      defaultShell: '',
+      defaultCols: 80,
+      defaultRows: 24,
+    },
     promptFile: {
       enabled: false,
       files: [],
@@ -432,6 +449,12 @@ export function applyAgentConfigLayer(
           ...layer.log,
         }
       : baseConfig.log,
+    terminal: layer.terminal
+      ? {
+          ...baseConfig.terminal,
+          ...layer.terminal,
+        }
+      : baseConfig.terminal,
     promptFile: layer.promptFile
       ? {
           ...baseConfig.promptFile,

@@ -44,6 +44,7 @@ export type {
   DroneCompactionConfig,
   DroneMemoryConfig,
   DroneLogConfig,
+  DroneTerminalConfig,
   DronePromptFileConfig,
   DroneKnowledgeSyncConfig,
   DroneSwarmConfig,

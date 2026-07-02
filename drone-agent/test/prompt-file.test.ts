@@ -310,6 +310,13 @@ describe('promptFilePlugin', () => {
         },
         memory: { enabled: false },
         log: { enabled: false },
+        terminal: {
+          enabled: false,
+          maxActiveSessions: 5,
+          defaultShell: '',
+          defaultCols: 80,
+          defaultRows: 24,
+        },
         promptFile: { enabled: true, files: [] },
         externalPlugins: [],
         trustedPlugins: {},
