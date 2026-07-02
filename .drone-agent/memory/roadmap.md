@@ -41,33 +41,33 @@ A **swarm** is a personal AI workforce - multiple agents working in concert for 
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   drone-gateway                      │
+│                   drone-gateway                     │
 │  (Chat APIs: Matrix, Discord, Slack, relaying       │
 │   messages into swarm, launching agents on demand)  │
-│  *Single-user: messages routed to YOUR agents        │
+│  *Single-user: messages routed to YOUR agents       │
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────┴──────────────────────────────┐
-│                 drone-coordinator                    │
+│                 drone-coordinator                   │
 │  (Personal control plane: web UI, task management,  │
-│   your skills, personas, memory, identities)       │
-│  *Single-user: manages YOUR agents only            │
+│   your skills, personas, memory, identities)        │
+│  *Single-user: manages YOUR agents only             │
 │  *must* have a beacon on the same host              │
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────┴──────────────────────────────┐
 │                  drone-beacon                       │
-│  (Local coordination: YOUR system-wide skills,    │
-│   memories, inter-agent communication)            │
-│  *Single-user: serves YOUR agents on this host     │
-│  runs on same host or on LAN                       │
+│  (Local coordination: YOUR system-wide skills,      │
+│   memories, inter-agent communication)              │
+│  *Single-user: serves YOUR agents on this host      │
+│  runs on same host or on LAN                        │
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────┴──────────────────────────────┐
 │                   drone-agent                       │
-│  (CLI/TUI: LLM, tools, MCP client, plugins)        │
-│  *YOUR agent - works standalone or in swarm        │
-│  runs anywhere, works standalone                   │
+│  (CLI/TUI: LLM, tools, MCP client, plugins)         │
+│  *YOUR agent - works standalone or in swarm         │
+│  runs anywhere, works standalone                    │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -107,12 +107,12 @@ The drone-agent swarm includes a **self-improving architecture** that enables co
 Your Agent Turn Ends
     │
     ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│ Local Review │───▶│ Save Local  │───▶│ Update      │
-│ (optional)   │    │ Session     │    │ Memory      │
-└──────────────┘    └──────────────┘    └──────────────┘
-         │                                │
-         │         ┌─────────────────────┘
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│ Local Review │───▶│ Save Local   │───▶│ Update       │
+│ (optional)   │     │ Session      │     │ Memory       │
+└──────────────┘     └──────────────┘     └──────────────┘
+         │                                   │
+         │         ┌─────────────────────────┘
          │         ▼
          │  ┌────────────────────────┐
          │  │ Push to Coordinator    │
@@ -121,16 +121,16 @@ Your Agent Turn Ends
          │         │
          ▼         ▼
 ┌─────────────────────────────────────────┐
-│ COORDINATOR (YOUR swarm hub)             │
-│ - Store Sessions                         │
+│ COORDINATOR (YOUR swarm hub)            │
+│ - Store Sessions                        │
 │ - Index FTS (searchable)                │
-│ - Swarm Review (identify patterns)       │
-│ - Broadcast Knowledge                    │
+│ - Swarm Review (identify patterns)      │
+│ - Broadcast Knowledge                   │
 └─────────────────────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────────────┐
-│ ALL YOUR BEACONS SYNC                    │
+│ ALL YOUR BEACONS SYNC                   │
 │ - Updated skills                        │
 │ - Shared patterns                       │
 │ - Aggregated preferences                │
