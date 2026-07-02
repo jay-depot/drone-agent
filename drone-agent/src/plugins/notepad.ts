@@ -1,4 +1,4 @@
-import type { DronePlugin, DroneSlashCommandContext } from 'drone-core';
+import type { DronePlugin } from 'drone-core';
 
 type NotepadState = {
   currentNotepad: string | null;
@@ -25,7 +25,10 @@ export const notepadPlugin: DronePlugin = {
         if (!state.currentNotepad) {
           return '';
         }
-        return `# Your Notepad\n\n${state.currentNotepad}\n\n===\n\nUse notepad__* tools to manage your notepad.`;
+        return `# Your Session Notepad\n\n===\n\n${state.currentNotepad}\n\n===\n\nUse notepad__* ` +
+          `tools to manage your notepad. Your notepad persists for the duration of this ` +
+          `session. It is useful for keeping track of complex tasks, instructions or other ` +
+          `information you want to temporarily elevate above conversational "noise".\n`;
       },
     });
 
