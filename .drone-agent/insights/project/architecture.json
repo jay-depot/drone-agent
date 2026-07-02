@@ -202,5 +202,9 @@
   {
     "timestamp": "2026-07-01T23:48:06.303Z",
     "insight": "React 19 types removed the global `JSX` namespace. All `JSX.Element` return type annotations must be changed to `React.JSX.Element` (with a `import type React from 'react'` if React isn't already imported as a value). This affects ~14 files in the TUI layer and any .tsx test files."
+  },
+  {
+    "timestamp": "2026-07-02T01:29:24.360Z",
+    "insight": "The file__apply_diff tool's nested JSON hunk format (array of objects with arrays of strings) is confusing the LLM. Switching to a flat unified diff string format should improve LLM reliability, but revisits ADR #033's decision about JSON schema vs freeform text — the pragmatic observation is that LLMs produce valid unified diff strings more reliably than valid nested JSON structures."
   }
 ]

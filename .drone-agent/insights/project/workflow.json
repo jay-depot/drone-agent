@@ -102,5 +102,9 @@
   {
     "timestamp": "2026-07-01T23:48:17.959Z",
     "insight": "After upgrading react/ink to React 19, the `JSX.Element` → `React.JSX.Element` rename is a predictable mechanical change across all TUI files. Using `sed` across all affected files is much faster than editing each file individually."
+  },
+  {
+    "timestamp": "2026-07-02T01:12:36.879Z",
+    "insight": "Added debug logging to file__apply_diff that dumps the full input parameters (path, hunks, color) via registration.logger.error on failure. This pattern of wrapping tool execute handlers in a try-catch with verbose param logging on failure could be extended to other tools for easier debugging."
   }
 ]
