@@ -10,13 +10,6 @@
  * Uses Ink's `useStdout` hook and listens for the `resize` event on
  * the stdout stream. Falls back to columns=80, rows=24 if the stream
  * is not a TTY.
- *
- * On the trailing edge of a resizing gesture, writes the ANSI
- * eraseScreen escape (\u001B[2J) to stdout to sweep away any
- * stamped characters left behind by partial layout redraws (Ink's
- * eraseLines can't reach characters above the new viewport when
- * the terminal shrinks). The re-render triggered by the debounced
- * state update repaints immediately, so there is no visible flash.
  */
 
 import { useStdout } from 'ink';
@@ -57,11 +50,6 @@ export function useDebouncedWindowSize(debounceMs = 120): WindowSize {
         clearTimeout(timerRef.current);
       }
       timerRef.current = setTimeout(() => {
-        // Clear any stamped characters left by partial layout redraws
-        // during the resize drag. Ink's eraseLines can't reach above
-        // the new viewport when the terminal shrinks. \u001B[2J clears
-        // the visible area without touching scrollback or cursor.
-        stdout.write('\u001B[2J');
         setDebounced(getTerminalSize(stdout));
       }, debounceMs);
     };
