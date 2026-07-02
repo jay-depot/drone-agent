@@ -36,10 +36,6 @@ import type { DroneTuiOptions } from './types.js';
  * Mount the chat TUI. Returns the underlying Ink Instance so callers
  * can `await instance.waitUntilExit()` if they need to align teardown
  * with hook ordering.
- *
- * Incremental rendering is enabled to reduce flicker during terminal
- * resize — Ink 6 only redraws changed lines instead of the entire
- * output.
  */
 export function createTui(opts: DroneTuiOptions): Instance {
   // We deliberately do NOT pass `alternateScreen: true`. Default Ink
@@ -50,6 +46,5 @@ export function createTui(opts: DroneTuiOptions): Instance {
   // Alt-screen mode would break both of these.
   return render(<App {...opts} />, {
     exitOnCtrlC: true,
-    incrementalRendering: true,
   });
 }
