@@ -226,7 +226,7 @@ export const filePlugin: DronePlugin = {
         'Example — replacing a function body:\n' +
         '  {\n' +
         '    "anchors": ["def example():"],\n' +
-        '    "contextBefore": ["", "def example():", "    \\""\\""\\"Docstring\\""\\""\\""],\n' +
+        '    "contextBefore": ["", "def example():", "    \\"""\\"""\\"Docstring\\"""\\"""\\""],\n' +
         '    "oldLines": ["    pass"],\n' +
         '    "newLines": ["    return 42"],\n' +
         '    "contextAfter": ["", "", ""]\n' +
@@ -302,93 +302,102 @@ export const filePlugin: DronePlugin = {
         additionalProperties: false,
       },
       execute: async input => {
-        if (typeof input.path !== 'string' || input.path.trim().length === 0) {
-          throw new Error('file__apply_diff requires a non-empty path string.');
-        }
-        if (!Array.isArray(input.hunks) || input.hunks.length === 0) {
-          throw new Error('file__apply_diff requires a non-empty hunks array.');
-        }
-
-        const filePath = path.resolve(input.path.trim());
-        let content: string;
         try {
-          content = await readFile(filePath, 'utf-8');
-        } catch (err) {
-          throw enhanceFsError('file__apply_diff', filePath, err);
-        }
-        const lines = content.split('\n');
+          if (typeof input.path !== 'string' || input.path.trim().length === 0) {
+            throw new Error('file__apply_diff requires a non-empty path string.');
+          }
+          if (!Array.isArray(input.hunks) || input.hunks.length === 0) {
+            throw new Error('file__apply_diff requires a non-empty hunks array.');
+          }
 
-        // Parse hunks into PatchHunk format
-        const patchHunks: PatchHunk[] = input.hunks
-          .filter(isRecord)
-          .map(hunk => ({
-            anchors: Array.isArray(hunk.anchors)
-              ? (hunk.anchors as string[])
-              : [],
-            contextBefore: Array.isArray(hunk.contextBefore)
-              ? (hunk.contextBefore as string[])
-              : [],
-            oldLines: Array.isArray(hunk.oldLines)
-              ? (hunk.oldLines as string[])
-              : [],
-            newLines: Array.isArray(hunk.newLines)
-              ? (hunk.newLines as string[])
-              : [],
-            contextAfter: Array.isArray(hunk.contextAfter)
-              ? (hunk.contextAfter as string[])
-              : [],
+          const filePath = path.resolve(input.path.trim());
+          let content: string;
+          try {
+            content = await readFile(filePath, 'utf-8');
+          } catch (err) {
+            throw enhanceFsError('file__apply_diff', filePath, err);
+          }
+          const lines = content.split('\n');
+
+          // Parse hunks into PatchHunk format
+          const patchHunks: PatchHunk[] = input.hunks
+            .filter(isRecord)
+            .map(hunk => ({
+              anchors: Array.isArray(hunk.anchors)
+                ? (hunk.anchors as string[])
+                : [],
+              contextBefore: Array.isArray(hunk.contextBefore)
+                ? (hunk.contextBefore as string[])
+                : [],
+              oldLines: Array.isArray(hunk.oldLines)
+                ? (hunk.oldLines as string[])
+                : [],
+              newLines: Array.isArray(hunk.newLines)
+                ? (hunk.newLines as string[])
+                : [],
+              contextAfter: Array.isArray(hunk.contextAfter)
+                ? (hunk.contextAfter as string[])
+                : [],
+            }));
+
+          // Apply the patch (applies to a copy internally, returns patchedLines)
+          const result = applyPatch(lines, patchHunks);
+
+          if (!result.success) {
+            // Build a detailed error message from all errors
+            const errorMessages = result.errors
+              .map(
+                e =>
+                  `Hunk ${e.hunkIndex}: ${e.message}\n  Detail: ${e.detail}`
+              )
+              .join('\n\n');
+            throw new Error(
+              `file__apply_diff: ${result.errors.length} hunk(s) failed to apply.\n\n${errorMessages}`
+            );
+          }
+
+          // Build DiffHunkV2 array for rendering
+          const diffHunks = patchHunks.map((hunk, i) => ({
+            anchors: hunk.anchors,
+            contextBefore: hunk.contextBefore,
+            oldLines: hunk.oldLines,
+            newLines: hunk.newLines,
+            contextAfter: hunk.contextAfter,
+            fuzz: result.appliedHunks[i]?.fuzz,
           }));
 
-        // Apply the patch (applies to a copy internally, returns patchedLines)
-        const result = applyPatch(lines, patchHunks);
+          // Always use plain text — the diff result goes to both the LLM (which
+          // shouldn't see ANSI codes) and the TUI (which does its own coloring
+          // in formatDiffOutput). The `color` input parameter is kept for schema
+          // backward-compatibility but is effectively ignored.
+          const diffResult = renderDiffV2(filePath, diffHunks, false);
+          const diffOutput = diffResult.plain;
 
-        if (!result.success) {
-          // Build a detailed error message from all errors
-          const errorMessages = result.errors
-            .map(
-              e =>
-                `Hunk ${e.hunkIndex}: ${e.message}\n  Detail: ${e.detail}`
-            )
-            .join('\n\n');
-          throw new Error(
-            `file__apply_diff: ${result.errors.length} hunk(s) failed to apply.\n\n${errorMessages}`
+          // Write the patched content from applyPatch's internal working copy
+          try {
+            await writeFile(filePath, result.patchedLines.join('\n'), 'utf-8');
+          } catch (err) {
+            throw enhanceFsError('file__apply_diff', filePath, err);
+          }
+
+          return JSON.stringify(
+            {
+              path: filePath,
+              patched: true,
+              summary: diffResult.summary,
+              diff: diffOutput,
+            },
+            null,
+            2
           );
-        }
-
-        // Build DiffHunkV2 array for rendering
-        const diffHunks = patchHunks.map((hunk, i) => ({
-          anchors: hunk.anchors,
-          contextBefore: hunk.contextBefore,
-          oldLines: hunk.oldLines,
-          newLines: hunk.newLines,
-          contextAfter: hunk.contextAfter,
-          fuzz: result.appliedHunks[i]?.fuzz,
-        }));
-
-        // Always use plain text — the diff result goes to both the LLM (which
-        // shouldn't see ANSI codes) and the TUI (which does its own coloring
-        // in formatDiffOutput). The `color` input parameter is kept for schema
-        // backward-compatibility but is effectively ignored.
-        const diffResult = renderDiffV2(filePath, diffHunks, false);
-        const diffOutput = diffResult.plain;
-
-        // Write the patched content from applyPatch's internal working copy
-        try {
-          await writeFile(filePath, result.patchedLines.join('\n'), 'utf-8');
         } catch (err) {
-          throw enhanceFsError('file__apply_diff', filePath, err);
+          registration.logger.error(
+            `file__apply_diff FAILED for path=${JSON.stringify(input.path)} ` +
+            `hunks=${JSON.stringify(input.hunks)} ` +
+            `color=${JSON.stringify(input.color)}`
+          );
+          throw err;
         }
-
-        return JSON.stringify(
-          {
-            path: filePath,
-            patched: true,
-            summary: diffResult.summary,
-            diff: diffOutput,
-          },
-          null,
-          2
-        );
       },
     });
 
