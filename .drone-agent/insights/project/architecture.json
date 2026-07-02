@@ -210,5 +210,9 @@
   {
     "timestamp": "2026-07-02T01:50:28.509Z",
     "insight": "The unified diff format for file__apply_diff turned out well. Key lesson: ADR #033's argument that \"JSON schema is better because we can constrain the output format\" was technically correct but pragmatically wrong — LLMs produce valid unified diff strings far more reliably than valid nested JSON arrays-of-objects. The learning is: prefer flat, well-known text formats (like git diff) over custom nested JSON schemas for LLM tool inputs, even when parsing is slightly harder on the backend."
+  },
+  {
+    "timestamp": "2026-07-02T02:22:48.328Z",
+    "insight": "The conversation loop's concurrency gap (fire-and-forget TUI onSubmit vs sequential readline mode) has been documented and a plan for a queue+boundary-drain pattern is in place. The soft-cancel design via /cancel and ESC provides a clean exit without needing AbortController plumbing through LLM providers."
   }
 ]
