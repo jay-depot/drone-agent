@@ -114,5 +114,13 @@
   {
     "timestamp": "2026-07-02T02:42:44.545Z",
     "insight": "The terminal plugin plan is the first feature plan that required adding a native dependency (node-pty). The compile step for node-pty on different architectures may surface issues — should consider documenting build prerequisites or adding a fallback mode that doesn't require it. Also, the plan followed a clean pattern of examining existing stateful subprocess plugins (LSP, MCP, subagent) for architectural precedent before designing the new one."
+  },
+  {
+    "timestamp": "2026-07-02T02:54:53.774Z",
+    "insight": "When implementing the terminal key-codec, the test looped over Ctrl-A through Ctrl-Z and found that Ctrl-I (Tab/0x09), Ctrl-J (linefeed/0x0a), and Ctrl-M (carriage return/0x0d) were missing from the named sequences. The lesson: when building a mapping table from a spec like \"all control characters\", always cross-reference against a complete list (e.g., ASCII control characters 0x00-0x1f) rather than cherry-picking, and write exhaustive tests that catch gaps."
+  },
+  {
+    "timestamp": "2026-07-02T02:55:01.248Z",
+    "insight": "The project has pre-existing lint errors in `drone-swarm-common/src/tls.ts` (no-empty, preserve-caught-error) that cause `pnpm lint` to fail even when our changes are clean. Consider fixing these or adding them to an ignore list so lint failures are actionable."
   }
 ]
