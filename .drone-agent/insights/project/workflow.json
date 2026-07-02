@@ -110,5 +110,9 @@
   {
     "timestamp": "2026-07-02T02:40:23.672Z",
     "insight": "The diff-based file patching in drone-agent is fragile — it keeps failing on context matching for simple insertions. Using sed for single-line insertions or writing complete files via file__write is more reliable for code changes in this project."
+  },
+  {
+    "timestamp": "2026-07-02T02:42:44.545Z",
+    "insight": "The terminal plugin plan is the first feature plan that required adding a native dependency (node-pty). The compile step for node-pty on different architectures may surface issues — should consider documenting build prerequisites or adding a fallback mode that doesn't require it. Also, the plan followed a clean pattern of examining existing stateful subprocess plugins (LSP, MCP, subagent) for architectural precedent before designing the new one."
   }
 ]
