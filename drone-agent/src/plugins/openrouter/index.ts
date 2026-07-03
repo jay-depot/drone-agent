@@ -73,7 +73,7 @@ export const openrouterPlugin: DronePlugin = {
 
         if (!apiKey) {
           throw new Error(
-            'OpenRouter API key is not configured. Set openrouter.apiKey in your config or use ${OPENROUTER_API_KEY} environment variable.'
+            'OpenRouter API key is not configured. Set openrouter.apiKey in your config or use the OPENROUTER_API_KEY environment variable.'
           );
         }
 
