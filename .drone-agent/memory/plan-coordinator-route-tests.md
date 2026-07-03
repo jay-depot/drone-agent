@@ -27,15 +27,18 @@ updated: 2026-07-03T01:14:47.947Z
 - **Harness:** tests build the real assembled API app via `buildApp()` and drive it with `app.inject()` (no ports bound; consistent with the single-fork vitest pool). Fully-assembled route layer incl. CORS; auth tested where relevant.
 - **`messages.ts` fetch:** stub `global.fetch` with `vi.fn()`; assert **observable behavior only** (status codes, `delivered`/`deliveredCount`), NOT `fetch` call internals — those routes are slated to drop raw `fetch` later, and behavior-focused tests survive that refactor.
 - **wiki tests:** set a per-test temp `knowledge-base` dir via `setKnowledgeBaseDir()` (module-level state in `drone-swarm-common/wiki-storage`), cleaned up in `afterEach`.
-- **Bug policy:** write tests against the *intended* contract. If a test exposes a small, clearly-correct route bug (e.g. route ordering, wrong status code), fix it in-scope and note it. Anything ambiguous or larger → log a `self-improvement__insight` and leave code unchanged.
+- **Bug policy:** write tests against the _intended_ contract. If a test exposes a small, clearly-correct route bug (e.g. route ordering, wrong status code), fix it in-scope and note it. Anything ambiguous or larger → log a `self-improvement__insight` and leave code unchanged.
 
 ---
 
 ## Shared Harness
 
 ### Step 0 — [coder] Add a shared route-test helper
+
 File: `drone-coordinator/test/helpers/server.ts` (new)
+
 - Export a factory that returns a ready, injectable app bound to a fresh temp DB + storage + wiki dir:
+
   ```ts
   import { mkdtemp, rm } from 'node:fs/promises';
   import os from 'node:os';
@@ -46,11 +49,14 @@ File: `drone-coordinator/test/helpers/server.ts` (new)
   import { setKnowledgeBaseDir } from 'drone-swarm-common/wiki-storage';
   import { buildApp } from '../../src/index.js';
 
-  export interface TestCtx { app: FastifyInstance; dir: string; }
+  export interface TestCtx {
+    app: FastifyInstance;
+    dir: string;
+  }
 
-  export async function makeApp(
-    opts?: { getToken?: () => string | null }
-  ): Promise<TestCtx> {
+  export async function makeApp(opts?: {
+    getToken?: () => string | null;
+  }): Promise<TestCtx> {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'drone-coord-routes-'));
     initDatabase(path.join(dir, 'test.db'));
     initStorage(dir);
@@ -66,17 +72,20 @@ File: `drone-coordinator/test/helpers/server.ts` (new)
     await rm(ctx.dir, { recursive: true, force: true });
   }
   ```
+
 - NOTE: because vitest uses a single fork and `db.ts`/`storage.ts`/`wiki-storage` hold module-level singletons, tests must NOT run in parallel against different DBs within one file's lifetime — use `beforeEach`/`afterEach` (make + teardown) per test, matching the existing `db.test.ts` pattern.
-Dependencies: Plan A (buildApp export).
+  Dependencies: Plan A (buildApp export).
 
 ---
 
 ## Per-Route Test Files (all use the harness; `app.inject()` for requests)
 
 ### Step 1 — [coder] `test/routes/health.test.ts`
+
 - `GET /health` → 200, body `{ status: 'ok', timestamp: <number> }`.
 
 ### Step 2 — [coder] `test/routes/personas.test.ts`
+
 - `POST /personas` → 201 + created persona.
 - `GET /personas` → array incl. created.
 - `GET /personas/:id` → 200 hit; 404 miss.
@@ -84,9 +93,11 @@ Dependencies: Plan A (buildApp export).
 - `DELETE /personas/:id` → `{ success: true }`; 404 miss.
 
 ### Step 3 — [coder] `test/routes/skills.test.ts`
+
 - Mirror personas: POST 201, GET list, GET one (200/404), PUT (200/404), DELETE (success/404).
 
 ### Step 4 — [coder] `test/routes/beacons.test.ts` (largest)
+
 - `POST /beacons` **without** publicKey → 201 registers plain beacon.
 - `POST /beacons` **with** publicKey → 201, body `{ status, approvalToken? }`; also registers in beacons table (verify via `GET /beacons`).
 - `POST /beacons` public-key mismatch on re-register → 403 (register once, re-register same id with different key).
@@ -101,19 +112,23 @@ Dependencies: Plan A (buildApp export).
 - Beacon sessions: `POST /beacons/:id/sessions` (201 when beacon exists; 404 when not), `GET /beacons/:id/sessions` (list; 404 no beacon), `GET /beacons/:id/sessions/:agentId` (200/404), `DELETE .../:agentId` (200/404).
 
 ### Step 5 — [coder] `test/routes/knowledge.test.ts` (route-level; complements existing db-level knowledge.test.ts)
+
 - POST 201; GET list (with `?type` filter); GET one (200/404); PUT (200/404); DELETE (success/404).
 - `GET /knowledge/search?q=` (hits) and without `q` (falls back to list); with `?type`.
 - `POST /sync/knowledge/push` → 200 upsert; `GET /sync/knowledge/pull?since=&type=` filtering.
 - NOTE confirm route registration order doesn't let `/knowledge/:id` shadow `/knowledge/search` — pin with a test.
 
 ### Step 6 — [coder] `test/routes/insights.test.ts`
+
 - `POST /insights` → 400 when missing any of targetType/targetId/insight; 201 on valid.
 - `GET /insights` (+ `?targetType&targetId` filters); `GET /insights/:id` (200/404); `DELETE /insights/:id` (success/404).
 
 ### Step 7 — [coder] `test/routes/principles.test.ts`
+
 - Mirror insights: POST 400/201, GET list+filters, GET one 200/404, DELETE success/404.
 
 ### Step 8 — [coder] `test/routes/wiki.test.ts`
+
 - Uses the harness temp `knowledge-base`.
 - `PUT /wiki/:pageId` → 400 when missing title/content; 200 on valid write (assert returned page).
 - `GET /wiki` → list incl. written page.
@@ -124,6 +139,7 @@ Dependencies: Plan A (buildApp export).
 - **Route-ordering check:** explicitly assert `GET /wiki/search` is NOT shadowed by `GET /wiki/:pageId` (write a page named e.g. `search`? No — instead assert `/wiki/search?q=foo` returns search results, not a 404 page-lookup). If shadowed, apply the bug policy (reorder route registration in `wiki.ts`).
 
 ### Step 9 — [coder] `test/routes/swarm.test.ts` (largest route file)
+
 - Swarm sessions: `POST /sync/sessions/register` (400 missing id/beaconId; 201 valid); `DELETE /sync/sessions/:id` (200 ended; 404 miss).
 - Events push: `POST /sync/events/push` (400 empty/omitted array; 201 with count); include one **large payload** event to exercise the `isLargePayload` → blob storage branch (assert it still returns 201 and later resolves).
 - `GET /sessions/:id/events` (404 no session; 200 list; `?correlationId/limit/offset`).
@@ -134,6 +150,7 @@ Dependencies: Plan A (buildApp export).
 - Agent locations: `POST /agents/location` (400 missing; 201), `GET /agents/location/:agentId` (404/200 with beaconHost/Port), `POST /agents/location/:agentId/heartbeat` (404/success), `DELETE /agents/location/:agentId` (404/success), `GET /agents/location` (all; `?beaconId` filter).
 
 ### Step 10 — [coder] `test/routes/messages.test.ts` (stub `global.fetch`)
+
 - Setup: `const realFetch = global.fetch; afterEach(() => { global.fetch = realFetch; vi.restoreAllMocks(); });`
 - `POST /messages/relay`:
   - missing any field → 400 (no fetch needed).
@@ -148,15 +165,18 @@ Dependencies: Plan A (buildApp export).
 - Assert only on response bodies/status (behavior), not on how `fetch` was called (future-proof against the planned `fetch` removal).
 
 ### Step 11 — [coder] `test/routes/auth.test.ts` (auth middleware path)
+
 - Build app WITH a token: `makeApp({ getToken: () => 'secret' })`.
 - Local request (default inject IP is 127.0.0.1 → `isLocalRequest` true) to a protected route → passes (no 401).
 - Simulate a **non-local** request: `app.inject({ method: 'GET', url: '/personas', remoteAddress: '8.8.8.8' })` (verify `remoteAddress` maps to `req.ip`; if inject doesn't set `req.ip` from `remoteAddress`, use a `headers: { 'x-forwarded-for' }` approach only if `trustProxy` is enabled — otherwise document that non-local simulation requires `remoteAddress` support and adjust). Expected: no token header → 401; correct `Authorization: Bearer secret` → passes.
 - NOTE: if reliably forcing a non-local `req.ip` via inject proves impractical, fall back to a focused unit test of `createWebAuthMiddleware`/`isLocalRequest` in `web-auth.ts` instead, and log an insight about inject IP limitations.
 
 ### Step 12 — [coder] Update roadmap memory
+
 - Edit the `roadmap` project memory item 3.10 to reflect: DB/storage coverage already substantial (100 tests); this effort adds full route/integration coverage via `buildApp()` + `inject()`. Mark 3.10 complete (or near-complete) once tests land.
 
 ### Step 13 — [tester] Run validation criteria (final step)
+
 Run the full validation suite and confirm green.
 
 ---
