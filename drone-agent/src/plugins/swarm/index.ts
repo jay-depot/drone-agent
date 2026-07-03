@@ -112,7 +112,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       const beaconPort =
         userSwarmConfig.beaconPort ?? config.beaconPort ?? DEFAULT_BEACON_PORT;
       const beaconUseHttps =
-        userSwarmConfig.beaconUseHttps ?? config.beaconUseHttps ?? true;
+        userSwarmConfig.beaconUseHttps ?? config.beaconUseHttps ?? false;
       const sessionId =
         userSwarmConfig.sessionId ?? config.sessionId ?? `agent-${Date.now()}`;
       const protocol = beaconUseHttps ? 'https' : 'http';

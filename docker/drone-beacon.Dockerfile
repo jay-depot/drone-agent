@@ -4,6 +4,9 @@
 # Stage 1: Build all packages
 FROM node:22-alpine AS builder
 
+# Install build dependencies for native Node.js modules (node-pty, better-sqlite3)
+RUN apk add --no-cache python3 make g++
+
 WORKDIR /app
 
 # Copy package files
@@ -11,6 +14,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 
 # Copy all package sources
 COPY drone-core ./drone-core
+COPY drone-swarm-common ./drone-swarm-common
+COPY drone-coordinator-ui ./drone-coordinator-ui
 COPY drone-coordinator ./drone-coordinator
 COPY drone-beacon ./drone-beacon
 COPY drone-agent ./drone-agent
@@ -31,6 +36,7 @@ COPY --from=builder /app/drone-beacon ./drone-beacon
 COPY --from=builder /app/drone-coordinator ./drone-coordinator
 COPY --from=builder /app/drone-agent ./drone-agent
 COPY --from=builder /app/drone-core ./drone-core
+COPY --from=builder /app/drone-swarm-common ./drone-swarm-common
 COPY --from=builder /app/node_modules ./node_modules
 
 # Create config directory and set ownership
