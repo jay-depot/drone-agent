@@ -100,7 +100,8 @@ function toAnthropicMessage(message: DroneChatMessage): AnthropicMessage {
         {
           type: 'tool_result',
           tool_use_id:
-            message.toolCallId ?? `call_${Math.random().toString(36).slice(2, 10)}`,
+            message.toolCallId ??
+            `call_${Math.random().toString(36).slice(2, 10)}`,
           content: message.content,
         },
       ],

@@ -87,7 +87,9 @@ export const anthropicPlugin: DronePlugin = {
           } catch {
             errorBody = '(could not read response body)';
           }
-          throw new Error(`Anthropic API error (${response.status}): ${errorBody}`);
+          throw new Error(
+            `Anthropic API error (${response.status}): ${errorBody}`
+          );
         }
 
         let data: AnthropicChatResponse;

@@ -80,9 +80,12 @@ export const openaiPlugin: DronePlugin = {
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
-          throw new Error(`OpenAI request failed for model ${model}: ${message}`, {
-            cause: error,
-          });
+          throw new Error(
+            `OpenAI request failed for model ${model}: ${message}`,
+            {
+              cause: error,
+            }
+          );
         }
 
         if (!response.ok) {
@@ -92,7 +95,9 @@ export const openaiPlugin: DronePlugin = {
           } catch {
             errorBody = '(could not read response body)';
           }
-          throw new Error(`OpenAI API error (${response.status}): ${errorBody}`);
+          throw new Error(
+            `OpenAI API error (${response.status}): ${errorBody}`
+          );
         }
 
         let data: OpenAiChatResponse;
