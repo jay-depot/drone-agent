@@ -5,7 +5,10 @@ import {
   type DroneSessionSafetyTrimPayload,
   type DroneToolDefinition,
 } from 'drone-core';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
+import {
+  createDronePluginEngine,
+  getDefaultEnabledPluginIds,
+} from '../src/runtime/plugin-engine.js';
 import { createTestPlugin, silentLogger } from './helpers.js';
 
 describe('createDronePluginEngine', () => {
@@ -107,6 +110,19 @@ describe('createDronePluginEngine', () => {
     const statuses = engine.listPlugins();
     expect(statuses.find(p => p.id === 'on-by-default')?.enabled).toBe(true);
     expect(statuses.find(p => p.id === 'opt-in')?.enabled).toBe(false);
+  });
+
+  it('computes default-enabled plugin ids from metadata', () => {
+    const plugins: DronePlugin[] = [
+      createTestPlugin({ id: 'required', required: true, defaultEnabled: false }),
+      createTestPlugin({ id: 'default-on', defaultEnabled: true }),
+      createTestPlugin({ id: 'opt-in', defaultEnabled: false }),
+    ];
+
+    expect(getDefaultEnabledPluginIds(plugins)).toEqual([
+      'required',
+      'default-on',
+    ]);
   });
 
   it('throws on duplicate plugin ids', () => {

@@ -9,7 +9,10 @@ import { createTui } from './tui/index.js';
 import { createConversationService } from './runtime/conversation-service.js';
 import { createContextBudgetService } from './runtime/context-budget-service.js';
 import { loadAgentConfig } from './runtime/config.js';
-import { createDronePluginEngine } from './runtime/plugin-engine.js';
+import {
+  createDronePluginEngine,
+  getDefaultEnabledPluginIds,
+} from './runtime/plugin-engine.js';
 import { createSessionManager } from './runtime/session-manager.js';
 
 import { parseCliArgs } from './cli.js';
@@ -130,9 +133,7 @@ async function main(): Promise<void> {
   if (invocation.options.pluginOverrides.length > 0) {
     if (resolvedConfig.config.enabledPlugins.length === 0) {
       // Compute the default set: all required or defaultEnabled plugins.
-      const defaultIds = allPlugins
-        .filter(p => p.metadata.required || p.metadata.defaultEnabled)
-        .map(p => p.metadata.id);
+      const defaultIds = getDefaultEnabledPluginIds(allPlugins);
       resolvedConfig.config.enabledPlugins = [
         ...defaultIds,
         ...invocation.options.pluginOverrides,
@@ -268,7 +269,8 @@ async function main(): Promise<void> {
         engine,
         conversation,
         logger,
-        resolvedConfig.config
+        resolvedConfig.config,
+        getDefaultEnabledPluginIds(allPlugins)
       );
     }
   }

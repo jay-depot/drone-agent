@@ -52,7 +52,8 @@ export async function runFirstRunSetup(
   engine: CreateDronePluginEngine,
   conversation: CreateConversationService,
   logger: CreateConsoleLogger,
-  config: DroneAgentConfig
+  config: DroneAgentConfig,
+  defaultEnabledPlugins: string[]
 ): Promise<void> {
   const userConfigDir = path.join(os.homedir(), '.drone-agent');
   const userConfigFile = path.join(userConfigDir, 'config.json');
@@ -89,6 +90,13 @@ export async function runFirstRunSetup(
 
   // Use the readline elicitation to ask the user
   const elicit = createReadlineElicitation();
+
+  const withProviderEnabled = (providerId: string): string[] => {
+    if (defaultEnabledPlugins.includes(providerId)) {
+      return [...defaultEnabledPlugins];
+    }
+    return [...defaultEnabledPlugins, providerId];
+  };
 
   while (true) {
     const answers = await elicit.ask([
@@ -133,6 +141,7 @@ export async function runFirstRunSetup(
           userConfigFile,
           JSON.stringify(
             {
+              enabledPlugins: withProviderEnabled('ollama'),
               llm: { provider: 'ollama' },
               ollama: { model: selectedModel },
             },
@@ -200,6 +209,7 @@ export async function runFirstRunSetup(
         userConfigFile,
         JSON.stringify(
           {
+            enabledPlugins: withProviderEnabled('openrouter'),
             llm: { provider: 'openrouter' },
             openrouter: {
               apiKey: '${OPENROUTER_API_KEY}',
@@ -269,6 +279,7 @@ export async function runFirstRunSetup(
         userConfigFile,
         JSON.stringify(
           {
+            enabledPlugins: withProviderEnabled('openai'),
             llm: { provider: 'openai' },
             openai: {
               apiKey: '${OPENAI_API_KEY}',
@@ -337,6 +348,7 @@ export async function runFirstRunSetup(
         userConfigFile,
         JSON.stringify(
           {
+            enabledPlugins: withProviderEnabled('anthropic'),
             llm: { provider: 'anthropic' },
             anthropic: {
               apiKey: '${ANTHROPIC_API_KEY}',

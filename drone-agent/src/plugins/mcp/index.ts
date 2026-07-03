@@ -164,7 +164,7 @@ export const mcpPlugin: DronePlugin = {
       connection: McpClientConnection
     ): void {
       registerMountedTool(
-        `${serverId}.list_resources`,
+        `${serverId}__list_resources`,
         `List MCP resources for server ${serverId}.`,
         { type: 'object', additionalProperties: false },
         async () => {
@@ -174,7 +174,7 @@ export const mcpPlugin: DronePlugin = {
       );
 
       registerMountedTool(
-        `${serverId}.read_resource`,
+        `${serverId}__read_resource`,
         `Read an MCP resource by URI from server ${serverId}.`,
         {
           type: 'object',
@@ -190,7 +190,7 @@ export const mcpPlugin: DronePlugin = {
         async input => {
           if (typeof input.uri !== 'string' || input.uri.trim().length === 0) {
             throw new Error(
-              `mcp.${serverId}.read_resource requires a non-empty uri string.`
+              `mcp__${serverId}__read_resource requires a non-empty uri string.`
             );
           }
           const result = await connection.readResource(input.uri);
@@ -199,7 +199,7 @@ export const mcpPlugin: DronePlugin = {
       );
 
       registerMountedTool(
-        `${serverId}.list_prompts`,
+        `${serverId}__list_prompts`,
         `List MCP prompts for server ${serverId}.`,
         { type: 'object', additionalProperties: false },
         async () => {
@@ -209,7 +209,7 @@ export const mcpPlugin: DronePlugin = {
       );
 
       registerMountedTool(
-        `${serverId}.get_prompt`,
+        `${serverId}__get_prompt`,
         `Get an MCP prompt from server ${serverId}.`,
         {
           type: 'object',
@@ -233,7 +233,7 @@ export const mcpPlugin: DronePlugin = {
             input.name.trim().length === 0
           ) {
             throw new Error(
-              `mcp.${serverId}.get_prompt requires a non-empty name string.`
+              `mcp__${serverId}__get_prompt requires a non-empty name string.`
             );
           }
           const args = isRecord(input.arguments)

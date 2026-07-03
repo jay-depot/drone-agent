@@ -7,7 +7,7 @@ import type {
   DroneSessionSafetyTrimPayload,
 } from 'drone-core';
 import { createDefaultAgentConfig } from 'drone-core';
-import { openaiPlugin } from '../src/plugins/openai/index.js';
+import { openrouterPlugin } from '../src/plugins/openrouter/index.js';
 import { silentLogger } from './helpers.js';
 
 type HookBucket = {
@@ -50,10 +50,10 @@ function createRegistrationCapture() {
       chat: async () => ({ message: 'ok' }),
       getContextWindowInfo: async () => null,
     }),
-    getActiveProviderId: () => 'openai',
-    getAvailableProviders: () => [{ id: 'openai', precedence: 1000 }],
+    getActiveProviderId: () => 'openrouter',
+    getAvailableProviders: () => [{ id: 'openrouter', precedence: 1000 }],
     activateProvider: () => {},
-    getModel: () => 'gpt-4o',
+    getModel: () => 'openai/gpt-4o',
     setModel: () => {},
     listModels: async () => {
       const provider = registeredProvider;
@@ -99,89 +99,66 @@ function createRegistrationCapture() {
   };
 }
 
-describe('openai plugin', () => {
+describe('openrouter plugin', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
-  it('registers with llm broker and exposes configured models', async () => {
+  it('retries once with provider hints on tool-routing 404', async () => {
     const capture = createRegistrationCapture();
-    capture.config.openai.models = [
-      { id: 'gpt-4o', contextWindow: 128000 },
-      { id: 'gpt-4.1', contextWindow: 1047576 },
-    ];
-    capture.config.openai.defaultModel = 'gpt-4o';
+    capture.config.openrouter.apiKey = 'test-openrouter-key';
+    capture.config.openrouter.baseUrl = 'https://openrouter.ai/api/v1';
 
-    await openaiPlugin.register(capture.registration);
-
-    const providerReg = capture.getRegisteredProvider();
-    expect(providerReg).toBeDefined();
-    expect(providerReg?.id).toBe('openai');
-    await expect(providerReg?.listModels()).resolves.toEqual([
-      'gpt-4o',
-      'gpt-4.1',
-    ]);
-    expect(providerReg?.getDefaultModel()).toBe('gpt-4o');
-  });
-
-  it('errors clearly when api key is missing', async () => {
-    const capture = createRegistrationCapture();
-    capture.config.openai.apiKey = '';
-
-    await openaiPlugin.register(capture.registration);
-    const providerReg = capture.getRegisteredProvider();
-    expect(providerReg).toBeDefined();
-
-    const provider = providerReg!.getProvider();
-    await expect(
-      provider.chat({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: 'hello' }],
-      })
-    ).rejects.toThrow('OpenAI API key is not configured');
-  });
-
-  it('maps tool calls from OpenAI response and sends org header when configured', async () => {
-    const capture = createRegistrationCapture();
-    capture.config.openai.apiKey = 'test-key';
-    capture.config.openai.orgId = 'org-test';
-    capture.config.openai.baseUrl = 'https://api.openai.com/v1';
-
-    const fetchMock = vi.fn(async () => {
-      return new Response(
-        JSON.stringify({
-          id: 'chatcmpl_1',
-          choices: [
-            {
-              finish_reason: 'tool_calls',
-              message: {
-                role: 'assistant',
-                content: '',
-                tool_calls: [
-                  {
-                    id: 'call_abc123',
-                    type: 'function',
-                    function: {
-                      name: 'file__read',
-                      arguments: '{"path":"README.md"}',
-                    },
-                  },
-                ],
-              },
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              message:
+                'No endpoints found that support tool use. Try disabling "notepad__notepad__set".',
+              code: 404,
             },
-          ],
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } }
+          }),
+          { status: 404, headers: { 'content-type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'chatcmpl_1',
+            choices: [
+              {
+                finish_reason: 'tool_calls',
+                message: {
+                  role: 'assistant',
+                  content: '',
+                  tool_calls: [
+                    {
+                      id: 'call_abc123',
+                      type: 'function',
+                      function: {
+                        name: 'file__read',
+                        arguments: '{"path":"README.md"}',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
       );
-    });
+
     vi.stubGlobal('fetch', fetchMock);
 
-    await openaiPlugin.register(capture.registration);
+    await openrouterPlugin.register(capture.registration);
     const provider = capture.getRegisteredProvider()!.getProvider();
 
     const response = await provider.chat({
-      model: 'gpt-4o',
+      model: 'openai/gpt-4o',
       messages: [{ role: 'user', content: 'Read file' }],
       tools: [
         {
@@ -200,14 +177,23 @@ describe('openai plugin', () => {
       ],
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0] as [
-      string,
-      RequestInit & { headers?: Record<string, string> }
-    ];
-    expect(url).toBe('https://api.openai.com/v1/chat/completions');
-    expect(init.headers?.Authorization).toBe('Bearer test-key');
-    expect(init.headers?.['OpenAI-Organization']).toBe('org-test');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const firstInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const firstBody = JSON.parse(firstInit.body as string) as {
+      provider?: Record<string, unknown>;
+      tools?: unknown[];
+    };
+    expect(firstBody.tools?.length).toBe(1);
+    expect(firstBody.provider).toBeUndefined();
+
+    const secondInit = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    const secondBody = JSON.parse(secondInit.body as string) as {
+      provider?: { require_parameters?: boolean };
+      tools?: unknown[];
+    };
+    expect(secondBody.tools?.length).toBe(1);
+    expect(secondBody.provider?.require_parameters).toBe(true);
 
     expect(response.toolCalls).toEqual([
       {
@@ -218,13 +204,59 @@ describe('openai plugin', () => {
     ]);
   });
 
+  it('does not retry for non-routing errors', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.openrouter.apiKey = 'test-openrouter-key';
+    capture.config.openrouter.baseUrl = 'https://openrouter.ai/api/v1';
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            message: 'rate limit exceeded',
+            code: 429,
+          },
+        }),
+        { status: 429, headers: { 'content-type': 'application/json' } }
+      )
+    );
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    await openrouterPlugin.register(capture.registration);
+    const provider = capture.getRegisteredProvider()!.getProvider();
+
+    await expect(
+      provider.chat({
+        model: 'openai/gpt-4o',
+        messages: [{ role: 'user', content: 'Hello' }],
+        tools: [
+          {
+            name: 'file__read',
+            description: 'Read file',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                path: { type: 'string' },
+              },
+              required: ['path'],
+            },
+            execute: async () => 'ok',
+          },
+        ],
+      })
+    ).rejects.toThrow('OpenRouter API error (429)');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('passes canonical mcp tool names through unchanged', async () => {
     const capture = createRegistrationCapture();
-    capture.config.openai.apiKey = 'test-key';
-    capture.config.openai.baseUrl = 'https://api.openai.com/v1';
+    capture.config.openrouter.apiKey = 'test-openrouter-key';
+    capture.config.openrouter.baseUrl = 'https://openrouter.ai/api/v1';
 
-    const fetchMock = vi.fn(async () => {
-      return new Response(
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
         JSON.stringify({
           id: 'chatcmpl_2',
           choices: [
@@ -248,16 +280,17 @@ describe('openai plugin', () => {
           ],
         }),
         { status: 200, headers: { 'content-type': 'application/json' } }
-      );
-    });
+      )
+    );
+
     vi.stubGlobal('fetch', fetchMock);
 
-    await openaiPlugin.register(capture.registration);
+    await openrouterPlugin.register(capture.registration);
     const provider = capture.getRegisteredProvider()!.getProvider();
 
     const response = await provider.chat({
-      model: 'gpt-4o',
-      messages: [{ role: 'user', content: 'List resources' }],
+      model: 'openai/gpt-4o',
+      messages: [{ role: 'user', content: 'List MCP resources' }],
       tools: [
         {
           name: 'mcp__github__list_resources',
@@ -271,11 +304,9 @@ describe('openai plugin', () => {
       ],
     });
 
-    const [, init] = fetchMock.mock.calls[0] as [
-      string,
-      RequestInit & { body?: string }
-    ];
-    const body = JSON.parse(init.body ?? '{}') as {
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const body = JSON.parse(init.body as string) as {
       tools: Array<{ function: { name: string } }>;
     };
     expect(body.tools[0]?.function.name).toBe('mcp__github__list_resources');

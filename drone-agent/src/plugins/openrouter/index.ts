@@ -14,6 +14,18 @@ import {
   type OpenAiChatResponse,
 } from '../../shared/openai-compatible.js';
 
+type OpenRouterProviderPreferences = {
+  require_parameters?: boolean;
+};
+
+function isToolRoutingCapabilityError(status: number, errorBody: string): boolean {
+  if (status !== 404) {
+    return false;
+  }
+
+  return /No endpoints found that support tool use/i.test(errorBody);
+}
+
 // ── Plugin ──────────────────────────────────────────────────────────
 
 export const openrouterPlugin: DronePlugin = {
@@ -57,20 +69,20 @@ export const openrouterPlugin: DronePlugin = {
           );
         }
 
-        const body: OpenAiChatRequest = {
+        const baseBody: OpenAiChatRequest = {
           model,
           messages: messages.map(toOpenAiMessage),
         };
 
         if (tools && tools.length > 0) {
-          body.tools = toOpenAiTools(tools);
+          baseBody.tools = toOpenAiTools(tools);
         }
 
-        let response: Response;
-        try {
-          response = await fetch(
-            config.openrouter.baseUrl + '/chat/completions',
-            {
+        const requestChatCompletion = async (
+          body: OpenAiChatRequest & { provider?: OpenRouterProviderPreferences }
+        ): Promise<Response> => {
+          try {
+            return await fetch(config.openrouter.baseUrl + '/chat/completions', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -79,16 +91,18 @@ export const openrouterPlugin: DronePlugin = {
                 'X-Title': 'drone-agent',
               },
               body: JSON.stringify(body),
-            }
-          );
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          throw new Error(
-            `OpenRouter request failed for model ${model}: ${message}`,
-            { cause: error }
-          );
-        }
+            });
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            throw new Error(
+              `OpenRouter request failed for model ${model}: ${message}`,
+              { cause: error }
+            );
+          }
+        };
+
+        let response = await requestChatCompletion(baseBody);
 
         if (!response.ok) {
           let errorBody = '';
@@ -97,6 +111,50 @@ export const openrouterPlugin: DronePlugin = {
           } catch {
             errorBody = '(could not read response body)';
           }
+
+          const canRetryWithToolRoutingHints =
+            tools &&
+            tools.length > 0 &&
+            isToolRoutingCapabilityError(response.status, errorBody);
+
+          if (canRetryWithToolRoutingHints) {
+            registration.logger.warn(
+              `OpenRouter routing retry for model ${model}: original request had no tool-capable endpoint` +
+                ' (adding provider.require_parameters=true)'
+            );
+
+            response = await requestChatCompletion({
+              ...baseBody,
+              provider: {
+                require_parameters: true,
+              },
+            });
+
+            if (response.ok) {
+              let retriedData: OpenAiChatResponse;
+              try {
+                retriedData = (await response.json()) as OpenAiChatResponse;
+              } catch (error) {
+                const message =
+                  error instanceof Error ? error.message : String(error);
+                throw new Error(`OpenRouter returned invalid JSON: ${message}`);
+              }
+              return fromOpenAiResponse(retriedData);
+            }
+
+            let retryErrorBody = '';
+            try {
+              retryErrorBody = await response.text();
+            } catch {
+              retryErrorBody = '(could not read response body)';
+            }
+
+            throw new Error(
+              `OpenRouter API error (${response.status}) after retry with provider hints: ${retryErrorBody}` +
+                ` (initial error: ${errorBody})`
+            );
+          }
+
           throw new Error(
             `OpenRouter API error (${response.status}): ${errorBody}`
           );

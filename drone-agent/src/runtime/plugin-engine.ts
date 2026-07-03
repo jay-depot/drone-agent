@@ -145,6 +145,12 @@ function createHookBuckets(): HookBuckets {
   };
 }
 
+export function getDefaultEnabledPluginIds(plugins: DronePlugin[]): string[] {
+  return plugins
+    .filter(plugin => plugin.metadata.required || plugin.metadata.defaultEnabled)
+    .map(plugin => plugin.metadata.id);
+}
+
 function resolveEnabledPluginIds(
   plugins: DronePlugin[],
   config: DroneAgentConfig
@@ -159,13 +165,7 @@ function resolveEnabledPluginIds(
     return enabledPluginIds;
   }
 
-  return new Set(
-    plugins
-      .filter(
-        plugin => plugin.metadata.required || plugin.metadata.defaultEnabled
-      )
-      .map(plugin => plugin.metadata.id)
-  );
+  return new Set(getDefaultEnabledPluginIds(plugins));
 }
 
 function validatePluginRegistry(

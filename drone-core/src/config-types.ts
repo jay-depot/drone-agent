@@ -326,8 +326,11 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
     enabledPlugins: [],
     externalPlugins: [],
     trustedPlugins: {},
-    systemPrompt:
-      '`drone agent` harness initialized. Use available tools to answer questions and perform tasks exactly as instructed. If a question or request is ambiguous, ask for clarification. If a question is unanswerable, respond with "I don\'t know." If a task is impossible, respond with "I cannot, because..."',
+    systemPrompt: '`drone agent` harness initialized. Use available tools to answer ' +
+      'questions and perform tasks. Always proceed exactly as instructed. If a ' +
+      'question or request is ambiguous, ask for clarification. If a question is ' +
+      'unanswerable, respond with "I don\'t know." If a task is impossible, respond ' +
+      'with "I cannot, because..."',
     activePersona: null,
     llm: {
       provider: 'ollama',
@@ -338,12 +341,12 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
     },
     openai: {
       apiKey: '',
-      defaultModel: 'gpt-4o',
+      defaultModel: 'gpt-5.3-codex',
       baseUrl: 'https://api.openai.com/v1',
       models: [
-        { id: 'gpt-4o', contextWindow: 128000 },
-        { id: 'gpt-4.1', contextWindow: 1047576 },
-        { id: 'gpt-4.1-mini', contextWindow: 1047576 },
+        { id: 'gpt-5.4-pro', contextWindow: 1000000 },
+        { id: 'gpt-5.3-codex', contextWindow: 400000 },
+        { id: 'gpt-5.4-mini', contextWindow: 400000 },
       ],
     },
     anthropic: {
@@ -359,11 +362,11 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
     },
     openrouter: {
       apiKey: '',
-      defaultModel: 'openai/gpt-4o',
+      defaultModel: 'openai/gpt-5.3-codex',
       baseUrl: 'https://openrouter.ai/api/v1',
       models: [
-        { id: 'openai/gpt-4o', contextWindow: 128000 },
-        { id: 'anthropic/claude-3.5-sonnet', contextWindow: 200000 },
+        { id: 'openai/gpt-5.3-codex', contextWindow: 400000 },
+        { id: 'anthropic/claude-opus-4.8', contextWindow: 1000000 },
         { id: 'google/gemini-2.0-flash-001', contextWindow: 1000000 },
       ],
     },

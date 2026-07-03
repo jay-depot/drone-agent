@@ -80,6 +80,8 @@ After that, query tools:
 
 This would make drone the first coding agent treating LSP as a first-class capability, not an afterthought. Most coding agents (Claude Code, Cursor) treat "reading code" as file I/O. drone would do what an IDE LSP client does — maintain language server connections and query semantic information.
 
+Of course, it's not really the first. My openclaw hallucinated that detail. OpenCode has had robust LSP integration for a while, and it's where I got the idea.
+
 #### Auto-install (shipped)
 
 When a language server isn't on `PATH`, the LSP plugin downloads a pinned copy from npm into a per-user cache (`$XDG_CACHE_HOME/drone-agent/lsp/` on Linux) and invokes it via the running Node interpreter. The integrity digest is hardcoded in the plugin source — the same `dist.integrity` field `npm install` would verify — so the security posture matches a manual install. The user can disable auto-install globally (`lsp.autoInstall: false`) or per-server, in which case the plugin falls back to today's behavior (status: `error`, lastError explaining the missing binary).

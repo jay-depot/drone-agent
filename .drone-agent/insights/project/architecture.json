@@ -218,5 +218,17 @@
   {
     "timestamp": "2026-07-02T02:40:23.679Z",
     "insight": "Cancel tests needed synchronous flag-setting inside tool execution, not setTimeout(fn, 0), because the cancel check in the while(true) loop fires before the event loop unwinds. Async scheduling doesn't work for cancel tests — the flag must be set synchronously within the tool execution callback."
+  },
+  {
+    "timestamp": "2026-07-03T01:05:11.621Z",
+    "insight": "The coordinator's messages.ts relay/broadcast routes use raw global fetch() to reach beacons. The user indicated fetch won't remain there much longer. Route tests should assert on observable behavior (status codes, delivered counts) rather than fetch call internals, to survive the eventual refactor."
+  },
+  {
+    "timestamp": "2026-07-03T01:15:01.891Z",
+    "insight": "Neither drone-coordinator nor drone-beacon calls setKnowledgeBaseDir(), so both default to wiki-storage's hardcoded './knowledge-base' relative to cwd. Since a coordinator host must co-locate a beacon, running both from one directory makes them overwrite each other's wiki. Plans A/B anchor the wiki under each service's config dir and change default config dirs to ~/.drone-coordinator and ~/.drone-beacon."
+  },
+  {
+    "timestamp": "2026-07-03T01:15:01.897Z",
+    "insight": "drone-coordinator/src/index.ts runs main() at import time and keeps setupServer private, blocking any fastify.inject() route testing. bin/drone-coordinator imports dist/index.js (not run-as-argv[1]), so a naive import.meta/argv entry guard would silently prevent the server from starting — the bin wrapper must call an exported main() explicitly. This entry/harness pattern likely applies to drone-beacon too (also has no route tests)."
   }
 ]
