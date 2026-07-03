@@ -36,6 +36,7 @@ COPY --from=builder /app/drone-coordinator ./drone-coordinator
 COPY --from=builder /app/drone-beacon ./drone-beacon
 COPY --from=builder /app/drone-agent ./drone-agent
 COPY --from=builder /app/drone-core ./drone-core
+COPY --from=builder /app/drone-swarm-common ./drone-swarm-common
 COPY --from=builder /app/node_modules ./node_modules
 
 # Create config directory and set ownership
