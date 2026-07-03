@@ -1,5 +1,6 @@
 import fastify from 'fastify';
 import '@fastify/websocket';
+import os from 'node:os';
 import path from 'path';
 import fs from 'fs';
 import { initDatabase, closeDatabase, cleanupExpiredMemories } from './db.js';
@@ -27,10 +28,11 @@ import {
   getTlsOptions,
   setTlsLogger,
 } from 'drone-swarm-common/tls';
+import { setKnowledgeBaseDir } from 'drone-swarm-common/wiki-storage';
 
 const DEFAULT_PORT = 3457;
 const DEFAULT_HOST = '0.0.0.0';
-const DEFAULT_CONFIG_DIR = './config';
+const DEFAULT_CONFIG_DIR = path.join(os.homedir(), '.drone-beacon');
 const DEFAULT_DB_FILENAME = 'drone-beacon.db';
 const DEFAULT_SPAWN_AGENT_PATH = 'drone-agent';
 const DEFAULT_SPAWN_TIMEOUT_MS = 30000;
@@ -136,6 +138,9 @@ async function main() {
 
   // Initialize database
   initDatabase(config.dbPath);
+
+  // Initialize wiki storage under config dir
+  setKnowledgeBaseDir(path.join(config.configDir, 'knowledge-base'));
 
   // Load or create beacon identity (Ed25519 keypair)
   const identity = loadOrCreateIdentity(config.beaconId, config.configDir);

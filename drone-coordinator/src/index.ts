@@ -2,8 +2,10 @@ import fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyCors from '@fastify/cors';
 import '@fastify/websocket';
+import os from 'node:os';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { pathToFileURL } from 'url';
 import { existsSync } from 'fs';
 import {
   initDatabase,
@@ -29,6 +31,7 @@ import {
   getTlsOptions,
   setTlsLogger,
 } from 'drone-swarm-common/tls';
+import { setKnowledgeBaseDir } from 'drone-swarm-common/wiki-storage';
 import {
   addSubscriber,
   removeSubscriber,
@@ -42,7 +45,7 @@ const DEFAULT_PORT = 3456;
 const DEFAULT_HOST = '0.0.0.0';
 const DEFAULT_WEB_PORT = 8080;
 const DEFAULT_WEB_HOST = '127.0.0.1';
-const DEFAULT_CONFIG_DIR = './config';
+const DEFAULT_CONFIG_DIR = path.join(os.homedir(), '.drone-coordinator');
 const DEFAULT_DB_FILENAME = 'drone-coordinator.db';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -241,14 +244,20 @@ function resolveUiDistPath(): string {
 }
 
 /**
- * Set up a Fastify instance with all routes, WebSocket, static files, and SPA fallback.
- * Optionally registers auth middleware if a token provider is given.
+ * Build a Fastify app instance with CORS, optional auth middleware, and API routes.
+ * This is the testable core of the server, without UI-serving glue.
  */
-async function setupServer(
-  app: FastifyInstance,
-  uiDistPath: string,
-  opts?: { getToken?: () => string | null }
-) {
+export async function buildApp(
+  opts?: {
+    getToken?: () => string | null;
+    https?: { cert: Buffer; key: Buffer };
+  }
+): Promise<FastifyInstance> {
+  const app = fastify({
+    logger: { level: process.env.LOG_LEVEL || 'info' },
+    ...(opts?.https ? { https: { allowHTTP1: true, ...opts.https } } : {}),
+  });
+
   await app.register(fastifyCors, {
     origin: process.env.NODE_ENV === 'development' ? true : false,
   });
@@ -258,6 +267,20 @@ async function setupServer(
     app.addHook('onRequest', createWebAuthMiddleware(opts.getToken));
   }
 
+  // Register API routes
+  await registerRoutes(app);
+
+  return app;
+}
+
+/**
+ * Attach UI-serving routes to a Fastify app: WebSocket, static files, and SPA fallback.
+ */
+async function attachUi(
+  app: FastifyInstance,
+  uiDistPath: string,
+  opts?: { getToken?: () => string | null }
+): Promise<void> {
   await app.register(import('@fastify/websocket'));
 
   // WebSocket endpoint for real-time events
@@ -350,9 +373,6 @@ async function setupServer(
     });
   });
 
-  // Register API routes (must be registered BEFORE @fastify/static)
-  await registerRoutes(app);
-
   // Serve the UI static files — only under /assets/
   await app.register(fastifyStatic, {
     root: path.join(uiDistPath, 'assets'),
@@ -378,7 +398,7 @@ async function setupServer(
   });
 }
 
-async function main() {
+export async function main() {
   const config = parseArgs();
 
   if (config.command === 'approve') {
@@ -412,6 +432,9 @@ async function main() {
   seedDefaults();
   initStorage(config.configDir);
 
+  // Initialize wiki storage under config dir
+  setKnowledgeBaseDir(path.join(config.configDir, 'knowledge-base'));
+
   // Initialize web token (auto-generates on first startup)
   initWebToken();
 
@@ -432,25 +455,14 @@ async function main() {
   logger.info(`Serving UI from: ${uiDistPath}`);
 
   // Primary server (with TLS if configured)
-  const app = fastify({
-    logger: {
-      level: process.env.LOG_LEVEL || 'info',
-    },
-    ...(config.useHttps && tlsOptions
-      ? { https: { allowHTTP1: true, ...tlsOptions } }
-      : {}),
-  });
-
-  await setupServer(app, uiDistPath);
+  const app = await buildApp(
+    tlsOptions ? { https: tlsOptions } : undefined
+  );
+  await attachUi(app, uiDistPath);
 
   // Web server (HTTP only, no TLS, with auth for non-local connections)
-  const webApp = fastify({
-    logger: {
-      level: process.env.LOG_LEVEL || 'info',
-    },
-  });
-
-  await setupServer(webApp, uiDistPath, { getToken: () => getWebToken() });
+  const webApp = await buildApp({ getToken: () => getWebToken() });
+  await attachUi(webApp, uiDistPath, { getToken: () => getWebToken() });
 
   const shutdown = async () => {
     logger.info('Shutting down...');
@@ -698,4 +710,9 @@ Pages support [[wiki links]] for cross-references. The wiki enforces a "no downw
   }
 }
 
-main();
+// Entry guard: only run main() if invoked directly
+const invokedDirectly =
+  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invokedDirectly) {
+  void main();
+}
