@@ -3,32 +3,35 @@
  *
  * Renders the committed log entries (anything that's "done" — past
  * reasoning, tool calls, tool results, assistant messages, system
- * messages) using `<Static>` so previous lines never reflow. Anything
- * currently in-flight (the last partial assistant message) goes in a
- * separate `tail` slot so it can update without re-rendering the rest.
+ * messages) using `<Static>` so previous lines never reflow.
+ *
+ * Above the static area, a tail region renders live-updating items
+ * (in-flight reasoning, tool calls, assistant messages) that are
+ * committed to <Static> when they complete.
  */
 
 import { Box, Static, Text } from 'ink';
 import type { ReactNode } from 'react';
 import { ColorTag, type DroneColorScheme } from '../theme.js';
-import type { ChatEntry } from '../types.js';
+import type { ChatEntry, TailItem } from '../types.js';
 import { Markdown } from './Markdown.js';
+import { TailRegion } from './TailRegion.js';
 
 export type { ChatEntry };
 
 export function ChatLog({
   entries,
-  tail,
+  tailItems,
   scheme,
 }: {
   entries: ChatEntry[];
-  /** Optional in-flight line that should be rendered above the static area. */
-  tail?: ReactNode;
+  /** Live-updating items rendered above the static area. */
+  tailItems: TailItem[];
   scheme: DroneColorScheme;
 }): React.JSX.Element {
   return (
     <Box flexDirection="column" flexGrow={1} overflowY="hidden">
-      {tail}
+      <TailRegion items={tailItems} />
       <Static items={entries} style={{ width: '100%' }}>
         {entry => (
           <Box key={entry.id} flexDirection="column">
@@ -96,3 +99,6 @@ function renderEntry(
       return <Text>{entry.text}</Text>;
   }
 }
+
+/** @internal Exposed for use by App to format diff output. */
+export type { ReactNode };

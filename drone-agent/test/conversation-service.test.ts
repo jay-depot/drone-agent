@@ -361,14 +361,16 @@ describe('createConversationService — tool error handling', () => {
     const events: string[] = [];
     await conversation.sendUserMessage('read x', evt => {
       if (evt.kind === 'error') events.push('error');
-      if (evt.kind === 'toolCall') events.push('toolCall');
+      if (evt.kind === 'toolCallBatch') events.push('toolCallBatch');
       if (evt.kind === 'toolResult') events.push('toolResult');
+      if (evt.kind === 'toolResultBatch') events.push('toolResultBatch');
     });
 
     expect(events).toContain('error');
-    expect(events).toContain('toolCall');
-    // We should NOT emit a toolResult for a failed call (it's an error).
+    expect(events).toContain('toolCallBatch');
+    // toolResultBatch IS emitted (contains error content), but individual toolResult is not.
     expect(events).not.toContain('toolResult');
+    expect(events).toContain('toolResultBatch');
   });
 
   it('continues the conversation loop after a tool error and lets the model retry', async () => {

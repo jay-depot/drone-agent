@@ -115,12 +115,26 @@ export type DroneSessionSafetyTrimPayload = {
 export type DroneConversationEvent =
   | { kind: 'userMessage'; content: string }
   | { kind: 'reasoning'; content: string }
+  | { kind: 'reasoningComplete' }
   | { kind: 'assistantMessage'; content: string }
+  | { kind: 'assistantMessageComplete' }
   | { kind: 'toolCall'; name: string; arguments: Record<string, unknown> }
+  | {
+      kind: 'toolCallBatch';
+      toolCalls: Array<{ name: string; arguments: Record<string, unknown> }>;
+    }
   | {
       kind: 'toolResult';
       name: string;
       content: string;
       arguments: Record<string, unknown>;
+    }
+  | {
+      kind: 'toolResultBatch';
+      results: Array<{
+        name: string;
+        content: string;
+        arguments: Record<string, unknown>;
+      }>;
     }
   | { kind: 'error'; message: string };

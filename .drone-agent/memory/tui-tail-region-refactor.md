@@ -28,9 +28,18 @@ In `conversation-service.ts` (lines ~310-340), tool calls are executed in a seri
 
 ```ts
 for (const toolCall of response.toolCalls) {
-  emit({ kind: 'toolCall', name: toolCall.name, arguments: toolCall.arguments });
+  emit({
+    kind: 'toolCall',
+    name: toolCall.name,
+    arguments: toolCall.arguments,
+  });
   const toolResult = await executeToolSafely(toolCall.name, toolCall.arguments);
-  emit({ kind: 'toolResult', name: toolCall.name, content: toolResult.content, arguments: toolCall.arguments });
+  emit({
+    kind: 'toolResult',
+    name: toolCall.name,
+    content: toolResult.content,
+    arguments: toolCall.arguments,
+  });
   // ... append to session ...
 }
 ```
@@ -112,13 +121,28 @@ Add new event kinds to the `DroneConversationEvent` discriminated union:
 export type DroneConversationEvent =
   | { kind: 'userMessage'; content: string }
   | { kind: 'reasoning'; content: string }
-  | { kind: 'reasoningComplete' }  // NEW: signals end of a reasoning block
+  | { kind: 'reasoningComplete' } // NEW: signals end of a reasoning block
   | { kind: 'assistantMessage'; content: string }
-  | { kind: 'assistantMessageComplete' }  // NEW: signals message is done
-  | { kind: 'toolCallBatch'; toolCalls: Array<{ name: string; arguments: Record<string, unknown> }> }  // NEW: batch start
+  | { kind: 'assistantMessageComplete' } // NEW: signals message is done
+  | {
+      kind: 'toolCallBatch';
+      toolCalls: Array<{ name: string; arguments: Record<string, unknown> }>;
+    } // NEW: batch start
   | { kind: 'toolCall'; name: string; arguments: Record<string, unknown> }
-  | { kind: 'toolResult'; name: string; content: string; arguments: Record<string, unknown> }
-  | { kind: 'toolResultBatch'; results: Array<{ name: string; content: string; arguments: Record<string, unknown> }> }  // NEW: batch complete
+  | {
+      kind: 'toolResult';
+      name: string;
+      content: string;
+      arguments: Record<string, unknown>;
+    }
+  | {
+      kind: 'toolResultBatch';
+      results: Array<{
+        name: string;
+        content: string;
+        arguments: Record<string, unknown>;
+      }>;
+    } // NEW: batch complete
   | { kind: 'error'; message: string };
 ```
 
@@ -133,7 +157,11 @@ Replace the serial `for` loop with parallel execution:
 ```ts
 // Before (serial):
 for (const toolCall of response.toolCalls) {
-  emit({ kind: 'toolCall', name: toolCall.name, arguments: toolCall.arguments });
+  emit({
+    kind: 'toolCall',
+    name: toolCall.name,
+    arguments: toolCall.arguments,
+  });
   const toolResult = await executeToolSafely(toolCall.name, toolCall.arguments);
   // ... emit toolResult, append to session ...
 }
@@ -141,28 +169,48 @@ for (const toolCall of response.toolCalls) {
 // After (parallel):
 emit({
   kind: 'toolCallBatch',
-  toolCalls: response.toolCalls.map(tc => ({ name: tc.name, arguments: tc.arguments })),
+  toolCalls: response.toolCalls.map(tc => ({
+    name: tc.name,
+    arguments: tc.arguments,
+  })),
 });
 
 const results = await Promise.all(
   response.toolCalls.map(async toolCall => {
-    const toolResult = await executeToolSafely(toolCall.name, toolCall.arguments);
-    return { name: toolCall.name, content: toolResult.content, arguments: toolCall.arguments, toolCallId: toolCall.id };
+    const toolResult = await executeToolSafely(
+      toolCall.name,
+      toolCall.arguments
+    );
+    return {
+      name: toolCall.name,
+      content: toolResult.content,
+      arguments: toolCall.arguments,
+      toolCallId: toolCall.id,
+    };
   })
 );
 
 emit({
   kind: 'toolResultBatch',
-  results: results.map(r => ({ name: r.name, content: r.content, arguments: r.arguments })),
+  results: results.map(r => ({
+    name: r.name,
+    content: r.content,
+    arguments: r.arguments,
+  })),
 });
 
 // Append all results to session (still in order for session consistency)
 for (const result of results) {
-  sessionManager.appendToolResult(result.name, result.content, result.toolCallId);
+  sessionManager.appendToolResult(
+    result.name,
+    result.content,
+    result.toolCallId
+  );
 }
 ```
 
 **Key design decisions:**
+
 - The `toolCallBatch` event fires once with all tool call metadata, so the TUI can create one TailItem per tool call
 - The `toolResultBatch` event fires once with all results, so the TUI can commit them atomically
 - Session appends remain in order (the `results` array preserves the original tool call order)
@@ -241,9 +289,12 @@ export function ToolCallProgress({
   status: 'running' | 'done' | 'error';
   scheme: DroneColorScheme;
 }): React.JSX.Element {
-  const color = status === 'error' ? scheme.error
-    : status === 'done' ? scheme.toolResult
-    : scheme.toolCall;
+  const color =
+    status === 'error'
+      ? scheme.error
+      : status === 'done'
+        ? scheme.toolResult
+        : scheme.toolCall;
 
   const spinner = status === 'running' ? '…' : status === 'error' ? '✗' : '✓';
   const argsPreview = preview(JSON.stringify(args), 200);
@@ -299,7 +350,10 @@ export function ReasoningBlock({
 export function useTailRegion(): {
   items: TailItem[];
   addItem: (item: Omit<TailItem, 'id'> & { id?: string }) => string;
-  updateItem: (id: string, update: Partial<Pick<TailItem, 'component' | 'toEntry'>>) => void;
+  updateItem: (
+    id: string,
+    update: Partial<Pick<TailItem, 'component' | 'toEntry'>>
+  ) => void;
   commitItem: (id: string) => ChatEntry;
   commitAll: () => ChatEntry[];
   clear: () => void;
@@ -317,7 +371,7 @@ The `tail` prop already exists. Update the component to accept `TailItem[]` inst
 ```tsx
 export function ChatLog({
   entries,
-  tailItems,  // was: tail?: ReactNode
+  tailItems, // was: tail?: ReactNode
   scheme,
 }: {
   entries: ChatEntry[];

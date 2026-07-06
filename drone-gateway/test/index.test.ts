@@ -42,9 +42,8 @@ vi.mock('../src/engine.js', () => ({
   })),
 }));
 
-const { parseArgs, loadConfig, createSpawnBackend, main } = await import(
-  '../src/index.js'
-);
+const { parseArgs, loadConfig, createSpawnBackend, main } =
+  await import('../src/index.js');
 
 describe('parseArgs', () => {
   const originalArgv = process.argv;
@@ -61,7 +60,12 @@ describe('parseArgs', () => {
   });
 
   it('uses --config value when provided', () => {
-    process.argv = ['node', 'drone-gateway', '--config', '/custom/path/config.json'];
+    process.argv = [
+      'node',
+      'drone-gateway',
+      '--config',
+      '/custom/path/config.json',
+    ];
     const result = parseArgs();
     expect(result.configPath).toBe('/custom/path/config.json');
   });
@@ -92,10 +96,12 @@ describe('loadConfig', () => {
 
   it('loads and parses a valid JSON config file', () => {
     mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(JSON.stringify({
-      coordinatorUrl: 'http://localhost:8080',
-      serviceAdapters: [],
-    }));
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        coordinatorUrl: 'http://localhost:8080',
+        serviceAdapters: [],
+      })
+    );
 
     const config = loadConfig('/path/to/config.json');
     expect(config.coordinatorUrl).toBe('http://localhost:8080');
@@ -116,9 +122,11 @@ describe('loadConfig', () => {
 
   it('exits with error if coordinatorUrl is missing', () => {
     mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(JSON.stringify({
-      serviceAdapters: [],
-    }));
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        serviceAdapters: [],
+      })
+    );
 
     loadConfig('/path/to/config.json');
     expect(mockExit).toHaveBeenCalledWith(1);
@@ -126,9 +134,11 @@ describe('loadConfig', () => {
 
   it('exits with error if serviceAdapters is missing', () => {
     mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(JSON.stringify({
-      coordinatorUrl: 'http://localhost:8080',
-    }));
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        coordinatorUrl: 'http://localhost:8080',
+      })
+    );
 
     loadConfig('/path/to/config.json');
     expect(mockExit).toHaveBeenCalledWith(1);
@@ -136,10 +146,12 @@ describe('loadConfig', () => {
 
   it('applies default spawnBackend when not set', () => {
     mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(JSON.stringify({
-      coordinatorUrl: 'http://localhost:8080',
-      serviceAdapters: [],
-    }));
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        coordinatorUrl: 'http://localhost:8080',
+        serviceAdapters: [],
+      })
+    );
 
     const config = loadConfig('/path/to/config.json');
     expect(config.spawnBackend).toBe('local');
@@ -147,11 +159,13 @@ describe('loadConfig', () => {
 
   it('preserves spawnBackend when set', () => {
     mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(JSON.stringify({
-      coordinatorUrl: 'http://localhost:8080',
-      serviceAdapters: [],
-      spawnBackend: 'coordinator',
-    }));
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        coordinatorUrl: 'http://localhost:8080',
+        serviceAdapters: [],
+        spawnBackend: 'coordinator',
+      })
+    );
 
     const config = loadConfig('/path/to/config.json');
     expect(config.spawnBackend).toBe('coordinator');
@@ -201,10 +215,12 @@ describe('main', () => {
     vi.clearAllMocks();
     process.argv = ['node', 'drone-gateway'];
     mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(JSON.stringify({
-      coordinatorUrl: 'http://localhost:8080',
-      serviceAdapters: [],
-    }));
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        coordinatorUrl: 'http://localhost:8080',
+        serviceAdapters: [],
+      })
+    );
   });
 
   afterEach(() => {

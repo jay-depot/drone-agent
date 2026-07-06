@@ -14,9 +14,8 @@ vi.mock('../src/coordinator-client.js', () => ({
   })),
 }));
 
-const { CoordinatorSpawnBackend } = await import(
-  '../src/coordinator-spawn-backend.js'
-);
+const { CoordinatorSpawnBackend } =
+  await import('../src/coordinator-spawn-backend.js');
 
 describe('CoordinatorSpawnBackend', () => {
   let backend: CoordinatorSpawnBackend;
@@ -105,10 +104,7 @@ describe('CoordinatorSpawnBackend', () => {
       const session = await backend.spawnSession('conv-1', 'coder');
       await backend.terminateSession(session);
 
-      expect(mockTerminateSpawn).toHaveBeenCalledWith(
-        'beacon-1',
-        'agent-xyz'
-      );
+      expect(mockTerminateSpawn).toHaveBeenCalledWith('beacon-1', 'agent-xyz');
     });
 
     it('warns on failure but does not throw', async () => {
@@ -122,9 +118,7 @@ describe('CoordinatorSpawnBackend', () => {
       const session = await backend.spawnSession('conv-1', 'coder');
 
       // Should not throw
-      await expect(
-        backend.terminateSession(session)
-      ).resolves.toBeUndefined();
+      await expect(backend.terminateSession(session)).resolves.toBeUndefined();
     });
   });
 });

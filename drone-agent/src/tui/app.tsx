@@ -8,6 +8,8 @@ import type React from 'react';
  *   │ Chat log (scrollable via <Static>)   │
  *   │                                      │
  *   ├──────────────────────────────────────┤
+ *   │ Tail region (live-updating items)    │
+ *   ├──────────────────────────────────────┤
  *   │ Mid panel (widgets)                  │
  *   ├──────────────────────────────────────┤
  *   │ Input line                           │
@@ -17,30 +19,35 @@ import type React from 'react';
  *
  * The TUI manages a stack of color overrides (one per plugin) and
  * cycles through them on a 5s timer. Pushed overrides are not
- * auto-cleaned up — plugins pop when they're done (see
- * `DroneTuiCapability.popColorOverride`).
+ * auto-cleaned up — plugins pop when they're done.
  *
- * The default base scheme is grayscale; only the three accent slots
- * (border, primary, userInput) get swapped out by an active override,
- * keeping the rest legible regardless of the tint.
+ * Tail region: all in-flight content (reasoning, tool calls, assistant
+ * messages) is rendered as live React components in the tail. When the
+ * content completes, it is atomically committed to the <Static> scrollback.
+ * This enables parallel tool execution and fixes the soft-wrap color bug.
  */
 
 import { Box, useApp, useInput } from 'ink';
 import os from 'node:os';
 import path from 'node:path';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AssistantMessageBlock } from './components/AssistantMessageBlock.js';
 import { ChatLog } from './components/ChatLog.js';
 import { ElicitationPrompt } from './components/ElicitationPrompt.js';
 import { InputLine } from './components/InputLine.js';
 import { MidPanel } from './components/MidPanel.js';
+import { ReasoningBlock } from './components/ReasoningBlock.js';
 import { StatusBar } from './components/StatusBar.js';
+import { ToolCallProgress } from './components/ToolCallProgress.js';
 import { useChatLog } from './hooks/useChatLog.js';
 import { useColorOverrides } from './hooks/useColorOverrides.js';
 import { useDebouncedWindowSize } from './hooks/useDebouncedWindowSize.js';
 import { useElicitation } from './hooks/useElicitation.js';
 import { useLlmIndicator } from './hooks/useLlmIndicator.js';
 import { useStatusBar } from './hooks/useStatusBar.js';
+import { useTailRegion } from './hooks/useTailRegion.js';
 import type { DroneTuiOptions, MidPanelWidget } from './types.js';
+import type { DroneColorScheme } from './theme.js';
 import type { DroneToolDescriptor } from 'drone-core';
 import { CANCEL_SENTINEL } from '../runtime/conversation-service.js';
 
@@ -99,14 +106,10 @@ function tryParseJson(raw: string): Record<string, unknown> | undefined {
 
 /**
  * Format a diff result for display with colored +/- indicators and line numbers.
- * Expected format: JSON with { path, written } or similar success marker,
- * or the raw diff content from git diff.
  */
 function formatDiffResult(content: string): string {
-  // Try to parse as JSON first to detect apply_diff results
   const parsed = tryParseJson(content);
   if (parsed && typeof parsed === 'object') {
-    // Check if it's a file.apply_diff result
     const obj = parsed as Record<string, unknown>;
     if (
       obj.path !== undefined &&
@@ -114,24 +117,20 @@ function formatDiffResult(content: string): string {
     ) {
       return `✓ Applied diff to ${obj.path}`;
     }
-    // If it's a git diff result, it might have a 'diff' field
     if (obj.diff && typeof obj.diff === 'string') {
       return formatDiffOutput(obj.diff);
     }
   }
 
-  // If content looks like a diff, format it
   if (content.includes('---') || content.includes('@@')) {
     return formatDiffOutput(content);
   }
 
-  // Fall back to showing raw content
   return content;
 }
 
 /**
  * Format diff output with colored +/- prefixes and line numbers.
- * Uses ANSI escape codes for red (deletions) and green (additions).
  */
 function formatDiffOutput(diff: string): string {
   const lines = diff.split('\n');
@@ -141,17 +140,14 @@ function formatDiffOutput(diff: string): string {
   for (const line of lines) {
     lineNum++;
     if (line.startsWith('+')) {
-      // Green for additions
       output.push(
         `${ANSI.green}+${ANSI.reset}${String(lineNum).padStart(4)} │ ${ANSI.green}${line}${ANSI.reset}`
       );
     } else if (line.startsWith('-')) {
-      // Red for deletions
       output.push(
         `${ANSI.red}-${ANSI.reset}${String(lineNum).padStart(4)} │ ${ANSI.red}${line}${ANSI.reset}`
       );
     } else if (line.startsWith('@@')) {
-      // Hunk header - keep as is with line number
       output.push(` ${String(lineNum).padStart(4)} │ ${line}`);
     } else if (
       line.startsWith('diff ') ||
@@ -159,10 +155,8 @@ function formatDiffOutput(diff: string): string {
       line.startsWith('---') ||
       line.startsWith('+++')
     ) {
-      // Metadata lines - neutral
       output.push(` ${String(lineNum).padStart(4)} │ ${line}`);
     } else {
-      // Context lines
       output.push(` ${String(lineNum).padStart(4)} │ ${line}`);
     }
   }
@@ -180,7 +174,6 @@ function formatExecResult(
   const command = arguments_.command as string | undefined;
   const cwd = arguments_.cwd as string | undefined;
 
-  // Build output with full command
   const lines: string[] = [];
 
   if (cwd) {
@@ -191,10 +184,27 @@ function formatExecResult(
 
   lines.push('');
 
-  // Add full output without truncation
   lines.push(content);
 
   return lines.join('\n');
+}
+
+/**
+ * Format a tool result for display, applying special handling for
+ * exec.run (full output) and diff tools (formatted diff).
+ */
+function formatToolResult(
+  name: string,
+  content: string,
+  arguments_: Record<string, unknown>
+): string {
+  if (name === 'exec__run') {
+    return formatExecResult(arguments_, content);
+  }
+  if (name === 'file__apply_diff' || name === 'git__diff') {
+    return formatDiffResult(content);
+  }
+  return preview(content, PREVIEW_MAX);
 }
 
 export function App(opts: DroneTuiOptions): React.JSX.Element {
@@ -203,7 +213,14 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   // ── Hooks ────────────────────────────────────────────────────────────
   const { scheme, pushColorOverride, popColorOverride } = useColorOverrides();
   const { isLlmActive, llmFrame, setIsLlmActive } = useLlmIndicator();
-  const { entries, log } = useChatLog();
+  const { entries, appendEntry, log } = useChatLog();
+  const {
+    items: tailItems,
+    addItem,
+    updateItem,
+    commitItem,
+    clear: clearTail,
+  } = useTailRegion();
   const {
     activeQuestion,
     pickerIndex,
@@ -217,6 +234,10 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   );
   // Debounce resize events to reduce flicker during window-drag gestures.
   const _debounced = useDebouncedWindowSize(120);
+
+  // ── Scheme ref for event listener (avoids stale closure) ────────────
+  const schemeRef = useRef<DroneColorScheme>(scheme);
+  schemeRef.current = scheme;
 
   // ── Mid-panel widget state ────────────────────────────────────────────
   const midPanelWidgetsRef = useRef<MidPanelWidget[]>([]);
@@ -244,66 +265,183 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   const inputValueRef = useRef<string>('');
   inputValueRef.current = input;
 
+  // ── Tail item tracking refs (for event listener) ────────────────────
+  const currentReasoningId = useRef<string | null>(null);
+  const currentReasoningText = useRef<string>('');
+  const currentToolCallIds = useRef<string[]>([]);
+  const currentMessageId = useRef<string | null>(null);
+  const currentMessageText = useRef<string>('');
+
   // ── Conversation event listener ─────────────────────────────────────
-  // Register a single listener that logs all conversation events with
-  // proper ChatEntry kinds. This handles events from any source (regular
-  // messages, macro chatPrompt steps, etc.) with correct color-coding.
+  // Uses the tail region to buffer all in-flight content as live components,
+  // then commits them atomically when the content completes.
   useEffect(() => {
     const unregister = opts.engine.onConversationEvent?.(event => {
+      const s = schemeRef.current;
+
       switch (event.kind) {
         case 'reasoning': {
           const trimmed = event.content.trim();
-          if (trimmed.length > 0) {
-            log(`💭 ${trimmed}`, 'reasoning');
-          }
-          break;
-        }
-        case 'toolCall': {
-          const argsPreview = preview(
-            JSON.stringify(event.arguments),
-            PREVIEW_MAX
-          );
-          log(`→ tool: ${event.name} ${argsPreview}`, 'toolCall');
-          break;
-        }
-        case 'toolResult': {
-          let resultContent: string;
-
-          // Special handling for exec.run - full output, no truncation
-          if (event.name === 'exec__run') {
-            resultContent = formatExecResult(
-              event.arguments,
-              event.content
+          if (trimmed.length === 0) break;
+          currentReasoningText.current = trimmed;
+          if (!currentReasoningId.current) {
+            const id = addItem(
+              'reasoning',
+              <ReasoningBlock content={trimmed} scheme={s} />,
+              () => ({
+                text: `💭 ${currentReasoningText.current}`,
+                kind: 'reasoning',
+              })
             );
-            log(`← ${event.name}:\n${resultContent}`, 'toolResult');
+            currentReasoningId.current = id;
+          } else {
+            updateItem(
+              currentReasoningId.current,
+              <ReasoningBlock content={trimmed} scheme={s} />,
+              () => ({
+                text: `💭 ${currentReasoningText.current}`,
+                kind: 'reasoning',
+              })
+            );
           }
-          // Special handling for file.apply_diff - formatted diff display
-          else if (
-            event.name === 'file__apply_diff' ||
-            event.name === 'git__diff'
-          ) {
-            resultContent = formatDiffResult(event.content);
-            log(`← ${event.name}:\n${resultContent}`, 'toolResult');
+          break;
+        }
+        case 'reasoningComplete': {
+          if (currentReasoningId.current) {
+            const entry = commitItem(currentReasoningId.current);
+            appendEntry(entry);
+            currentReasoningId.current = null;
+            currentReasoningText.current = '';
           }
-          // Default: truncated preview
-          else {
-            resultContent = preview(event.content, PREVIEW_MAX);
-            log(`← ${event.name}: ${resultContent}`, 'toolResult');
+          break;
+        }
+        case 'toolCallBatch': {
+          currentToolCallIds.current = event.toolCalls.map(tc => {
+            return addItem(
+              'toolCall',
+              <ToolCallProgress
+                name={tc.name}
+                args={tc.arguments}
+                status="running"
+                scheme={s}
+              />,
+              () => ({
+                text: `→ ${tc.name}(${preview(JSON.stringify(tc.arguments), PREVIEW_MAX)})`,
+                kind: 'toolCall',
+              })
+            );
+          });
+          break;
+        }
+        case 'toolResultBatch': {
+          const ids = currentToolCallIds.current;
+          // Update each tool call with its result
+          for (let i = 0; i < event.results.length; i++) {
+            const result = event.results[i];
+            const id = ids[i];
+            if (id) {
+              const formatted = formatToolResult(
+                result.name,
+                result.content,
+                result.arguments
+              );
+              const isError = result.content.startsWith(
+                result.name + ' failed'
+              );
+              updateItem(
+                id,
+                <ToolCallProgress
+                  name={result.name}
+                  args={result.arguments}
+                  result={result.content}
+                  status={isError ? 'error' : 'done'}
+                  scheme={s}
+                />,
+                () => ({
+                  text: isError
+                    ? `✗ ${result.name}: ${result.content}`
+                    : `← ${result.name}: ${formatted}`,
+                  kind: isError ? 'error' : 'toolResult',
+                })
+              );
+            }
           }
+          // Commit all tool calls in order
+          for (const id of ids) {
+            try {
+              const entry = commitItem(id);
+              appendEntry(entry);
+            } catch {
+              // Item may have been already committed; skip
+            }
+          }
+          currentToolCallIds.current = [];
           break;
         }
         case 'assistantMessage': {
-          log(event.content, 'plain');
+          currentMessageText.current = event.content;
+          if (!currentMessageId.current) {
+            const id = addItem(
+              'assistantMessage',
+              <AssistantMessageBlock content={event.content} />,
+              () => ({
+                text: currentMessageText.current,
+                kind: 'plain',
+              })
+            );
+            currentMessageId.current = id;
+          } else {
+            updateItem(
+              currentMessageId.current,
+              <AssistantMessageBlock content={event.content} />,
+              () => ({
+                text: currentMessageText.current,
+                kind: 'plain',
+              })
+            );
+          }
+          break;
+        }
+        case 'assistantMessageComplete': {
+          if (currentMessageId.current) {
+            const entry = commitItem(currentMessageId.current);
+            appendEntry(entry);
+            currentMessageId.current = null;
+            currentMessageText.current = '';
+          }
           break;
         }
         case 'error': {
+          // Clear any in-flight tail items on error
+          if (currentReasoningId.current) {
+            clearTail();
+            currentReasoningId.current = null;
+            currentReasoningText.current = '';
+          }
+          if (currentToolCallIds.current.length > 0) {
+            clearTail();
+            currentToolCallIds.current = [];
+          }
+          if (currentMessageId.current) {
+            clearTail();
+            currentMessageId.current = null;
+            currentMessageText.current = '';
+          }
           log(`Error: ${event.message}`, 'error');
           break;
         }
       }
     });
     return () => unregister?.();
-  }, [opts.engine, log]);
+  }, [
+    opts.engine,
+    log,
+    appendEntry,
+    addItem,
+    updateItem,
+    commitItem,
+    clearTail,
+  ]);
 
   // ── Slash command handlers ──────────────────────────────────────────
   const runSlashCommand = useCallback(
@@ -314,9 +452,6 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
       log(`> ${trimmed}`, 'user');
 
       if (trimmed.startsWith('/')) {
-        // Dispatch through engine (checks plugin commands, then built-ins).
-        // Wrap in setIsLlmActive so the thinking indicator activates during
-        // macro execution and other slash commands that call sendUserMessage.
         setIsLlmActive(true);
         try {
           const handled = await opts.engine.dispatchSlashCommand(trimmed, {
@@ -332,7 +467,6 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             printHelp: () => printHelp(opts, log),
           });
           if (handled) return;
-          // Unrecognized slash command.
           log(
             `Unknown command: ${trimmed}. Type /help for available commands.`,
             'error'
@@ -347,14 +481,9 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
       setIsLlmActive(true);
       try {
         await opts.engine.runHooks('onBeforePrompt');
-        // No onEvent callback needed — the conversation event listener
-        // registered above handles all event types with proper color-coding.
         const response = await opts.conversation.sendUserMessage(trimmed);
 
-        // Handle cancellation sentinel
         if (response === CANCEL_SENTINEL) {
-          // Cancelled — hooks already ran after the last tool round.
-          // Don't log anything extra; don't run onAfterToolCall again.
           return;
         }
 
@@ -375,12 +504,10 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   // ── Global keybindings ──────────────────────────────────────────────
   useInput((input, key) => {
     if (key.escape) {
-      // ESC when LLM is active → soft cancel
       if (isLlmActive) {
         opts.conversation.cancelCurrentRequest?.();
         log('Cancelled current request.', 'info');
       }
-      // ESC when idle is a no-op — Ctrl-C is the only exit route
       return;
     }
     if (key.ctrl && input === 'c') {
@@ -483,7 +610,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   // ── Render ─────────────────────────────────────────────────────────
   return (
     <Box flexDirection="column" width="100%" height="100%">
-      <ChatLog entries={entries} scheme={scheme} />
+      <ChatLog entries={entries} tailItems={tailItems} scheme={scheme} />
       <MidPanel widgets={midPanelWidgetsRef.current} scheme={scheme} />
       <InputLine
         value={input}
@@ -493,9 +620,6 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           const trimmed = value.trim();
           if (trimmed.length === 0) return;
 
-          // When the LLM is active, route differently:
-          //   - /cancel fires immediately
-          //   - all other input is queued for the next loop boundary
           if (isLlmActive) {
             if (trimmed === '/cancel') {
               opts.conversation.cancelCurrentRequest?.();
@@ -507,7 +631,6 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             return;
           }
 
-          // Normal path: fire runSlashCommand (when LLM is idle)
           void runSlashCommand(value);
         }}
         scheme={scheme}
@@ -555,7 +678,6 @@ function printHelp(
     '',
   ];
 
-  // Dynamically list all slash commands from the engine (built-in + plugin).
   const commands = opts.engine.getSlashCommands();
   for (const cmd of commands) {
     helpLines.push(`  ${cmd.command.padEnd(20)} ${cmd.description}`);

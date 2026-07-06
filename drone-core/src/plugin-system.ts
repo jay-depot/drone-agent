@@ -244,7 +244,9 @@ export type DroneSlashCommandContext = {
      * Optional — register a listener for conversation events.
      */
     onConversationEvent?: (
-      callback: (event: import('./session-types.js').DroneConversationEvent) => void
+      callback: (
+        event: import('./session-types.js').DroneConversationEvent
+      ) => void
     ) => () => void;
     /** List all plugins (for /plugins). */
     listPlugins?: () => {

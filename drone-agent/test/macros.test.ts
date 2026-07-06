@@ -658,7 +658,11 @@ describe('macrosPlugin', () => {
       await engine.runHooks('onPluginsLoaded');
 
       // Register a conversation event listener to capture events
-      const capturedEvents: Array<{ kind: string; content?: string; name?: string }> = [];
+      const capturedEvents: Array<{
+        kind: string;
+        content?: string;
+        name?: string;
+      }> = [];
       engine.onConversationEvent(event => {
         capturedEvents.push({
           kind: event.kind,

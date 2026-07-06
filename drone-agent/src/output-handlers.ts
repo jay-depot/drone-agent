@@ -17,6 +17,10 @@ export type OutputEvent =
  * Builds a plain-text event handler for `sendUserMessage` that mirrors what
  * the TUI does, so `--plain-output` mode (and `chat` invocations) show tool
  * calls and errors as they happen instead of just the final assistant reply.
+ *
+ * Handles the new batch event kinds (toolCallBatch, toolResultBatch,
+ * reasoningComplete, assistantMessageComplete) by silently ignoring the
+ * complete markers and flattening batches into individual events.
  */
 export function makePlainOutputEventHandler() {
   return (event: {
@@ -24,24 +28,50 @@ export function makePlainOutputEventHandler() {
     content?: string;
     name?: string;
     message?: string;
+    toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>;
+    results?: Array<{ name: string; content: string }>;
   }): void => {
     switch (event.kind) {
       case 'reasoning':
         output.write(`\x1b[90m${event.content}\x1b[0m\n`);
+        break;
+      case 'reasoningComplete':
+        // No-op — the reasoning block is already flushed
         break;
       case 'toolCall':
         output.write(
           `\x1b[33m⚡ ${event.name}(${JSON.stringify(event.content ?? {})})\x1b[0m\n`
         );
         break;
+      case 'toolCallBatch':
+        // Flatten: emit individual tool call entries for each one
+        if (event.toolCalls) {
+          for (const tc of event.toolCalls) {
+            output.write(
+              `\x1b[33m⚡ ${tc.name}(${JSON.stringify(tc.arguments)})\x1b[0m\n`
+            );
+          }
+        }
+        break;
       case 'toolResult':
         output.write(`\x1b[32m✓ ${event.name}\x1b[0m\n`);
+        break;
+      case 'toolResultBatch':
+        // Flatten: emit individual tool result entries for each one
+        if (event.results) {
+          for (const result of event.results) {
+            output.write(`\x1b[32m✓ ${result.name}\x1b[0m\n`);
+          }
+        }
         break;
       case 'error':
         output.write(`\x1b[31m✗ ${event.message}\x1b[0m\n`);
         break;
       case 'assistantMessage':
         // Suppress — the final reply is printed by the caller.
+        break;
+      case 'assistantMessageComplete':
+        // No-op
         break;
     }
   };
@@ -75,6 +105,9 @@ export function makeJsonOutputEventHandler() {
  *
  * Each event is stringified and written on its own line, allowing
  * parent processes to parse structured output line-by-line.
+ *
+ * Handles batch events by flattening them into individual tool call/result
+ * entries for backward compatibility with the NDJSON protocol.
  */
 export function makeNdjsonOutputEventHandler() {
   return (event: OutputEvent): void => {

@@ -328,6 +328,7 @@ export function createConversationService({
 
         if (response.reasoning && response.reasoning.length > 0) {
           emit({ kind: 'reasoning', content: response.reasoning });
+          emit({ kind: 'reasoningComplete' });
         }
 
         if (response.toolCalls && response.toolCalls.length > 0) {
@@ -355,74 +356,111 @@ export function createConversationService({
             response.toolCalls
           );
 
-          // Collect tool results without appending to the session yet, so
-          // that onAfterToolCall hooks observe a consistent session snapshot.
-          // Results are flushed in order once the hooks have returned.
+          // Capture toolCalls in a local so TypeScript can narrow it.
+          const toolCalls = response.toolCalls;
+
+          // Emit the batch start so the TUI can create one TailItem per tool call.
+          emit({
+            kind: 'toolCallBatch',
+            toolCalls: toolCalls.map(tc => ({
+              name: tc.name,
+              arguments: tc.arguments,
+            })),
+          });
+
+          // Execute all tool calls in parallel.
+          const rawResults = await Promise.all(
+            toolCalls.map(toolCall =>
+              executeToolSafely(toolCall.name, toolCall.arguments).then(
+                toolResult => ({
+                  name: toolCall.name,
+                  toolResult,
+                  toolCallId: toolCall.id,
+                })
+              )
+            )
+          );
+
+          // Collect results in order (the map preserves the array order).
           const bufferedResults: Array<{
             name: string;
             content: string;
             toolCallId: string | undefined;
           }> = [];
 
-          for (const toolCall of response.toolCalls) {
-            emit({
-              kind: 'toolCall',
-              name: toolCall.name,
-              arguments: toolCall.arguments,
-            });
-            const toolResult = await executeToolSafely(
-              toolCall.name,
-              toolCall.arguments
+          // Stuck detector: check all results. If all errors with the same
+          // signature, increment stuckCount; otherwise reset.
+          const allErrors = rawResults.every(
+            r => r.toolResult.kind === 'error'
+          );
+          const firstErrorSignature =
+            allErrors && rawResults.length > 0
+              ? {
+                  name: rawResults[0].name,
+                  code:
+                    rawResults[0].toolResult.kind === 'error'
+                      ? rawResults[0].toolResult.code
+                      : null,
+                }
+              : null;
+          const allSameSignature =
+            allErrors &&
+            firstErrorSignature !== null &&
+            rawResults.every(
+              r =>
+                r.toolResult.kind === 'error' &&
+                r.name === firstErrorSignature.name &&
+                r.toolResult.code === firstErrorSignature.code
             );
-            if (toolResult.kind === 'error') {
-              emit({ kind: 'error', message: toolResult.content });
-              // Update the stuck detector: only count this round's tool calls
-              // if all of them fail with the SAME signature; otherwise reset.
-              const signature = { name: toolCall.name, code: toolResult.code };
-              if (
-                stuckSignature &&
-                stuckSignature.name === signature.name &&
-                stuckSignature.code === signature.code
-              ) {
-                stuckCount += 1;
-              } else {
-                stuckSignature = signature;
-                stuckCount = 1;
-              }
-            } else {
-              emit({
-                kind: 'toolResult',
-                name: toolCall.name,
-                content: toolResult.content,
-                arguments: toolCall.arguments,
-              });
-              // Any successful tool call resets the stuck detector.
-              stuckSignature = null;
-              stuckCount = 0;
-            }
+
+          if (allSameSignature) {
+            stuckCount += 1;
+          } else {
+            // Any successful tool call or mixed errors resets the stuck detector.
+            stuckSignature = null;
+            stuckCount = 0;
+          }
+
+          for (const result of rawResults) {
             bufferedResults.push({
-              name: toolCall.name,
-              content: toolResult.content,
-              toolCallId: toolCall.id,
+              name: result.name,
+              content: result.toolResult.content,
+              toolCallId: result.toolCallId,
             });
           }
 
+          // Emit the batch result so the TUI can commit all TailItems at once.
+          emit({
+            kind: 'toolResultBatch',
+            results: rawResults.map(r => ({
+              name: r.name,
+              content: r.toolResult.content,
+              arguments:
+                toolCalls.find(tc => tc.id === r.toolCallId)?.arguments ?? {},
+            })),
+          });
+
+          // Emit individual error events for any failed tool calls (for
+          // non-TUI consumers that pattern-match on individual events).
+          for (const result of rawResults) {
+            if (result.toolResult.kind === 'error') {
+              emit({ kind: 'error', message: result.toolResult.content });
+            }
+          }
+
           if (
-            stuckSignature &&
+            firstErrorSignature &&
+            allSameSignature &&
             stuckCount >= stuckErrorThreshold &&
-            // All tool calls in this round must have been errors; otherwise
-            // the model is making progress even if some calls failed.
-            bufferedResults.every(r =>
-              r.content.startsWith(`${stuckSignature!.name} failed`)
-            )
+            allErrors
           ) {
-            const codeSuffix = stuckSignature.code
-              ? ` (${stuckSignature.code})`
+            const codeSuffix = firstErrorSignature.code
+              ? ` (${firstErrorSignature.code})`
               : '';
             if (onStuckErrorThresholdReached) {
               const shouldContinue = await onStuckErrorThresholdReached(
-                stuckSignature.name,
-                stuckSignature.code,
+                firstErrorSignature.name,
+                firstErrorSignature.code,
                 stuckCount
               );
               if (shouldContinue) {
@@ -433,7 +471,7 @@ export function createConversationService({
               }
             }
             throw new Error(
-              `Model appears stuck on ${stuckSignature.name}${codeSuffix}: ` +
+              `Model appears stuck on ${firstErrorSignature.name}${codeSuffix}: ` +
                 `failed ${stuckCount} times in a row. Aborting. ` +
                 'Use /clear to reset the session, or refine the prompt to give the model more context (e.g. the correct path or arguments).'
             );
@@ -460,6 +498,7 @@ export function createConversationService({
         sessionManager.appendAssistantMessage(assistantMessage);
         if (assistantMessage.length > 0) {
           emit({ kind: 'assistantMessage', content: assistantMessage });
+          emit({ kind: 'assistantMessageComplete' });
         }
         return assistantMessage;
       }

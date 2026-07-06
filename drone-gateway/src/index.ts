@@ -28,7 +28,9 @@ export function parseArgs(): CliConfig {
     if (arg === '--config' && i + 1 < args.length) {
       cliConfig.configPath = args[++i];
     } else if (arg === '--help' || arg === '-h') {
-      console.log(`\ndrone-gateway [options]\n\nOptions:\n  --config <path>  Path to config file (default: ~/.drone-gateway/config.json)\n  --help           Show this help message\n      `);
+      console.log(
+        `\ndrone-gateway [options]\n\nOptions:\n  --config <path>  Path to config file (default: ~/.drone-gateway/config.json)\n  --help           Show this help message\n      `
+      );
       process.exit(0);
     }
   }

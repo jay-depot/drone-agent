@@ -28,23 +28,42 @@ describe('CoordinatorClient', () => {
 
   describe('spawnAgent', () => {
     it('sends POST to /spawn with correct body', async () => {
-      fetchMock.mockResolvedValue(mockFetchResponse(200, { spawnId: 'abc', agentId: 'agent-1', status: 'running' }));
+      fetchMock.mockResolvedValue(
+        mockFetchResponse(200, {
+          spawnId: 'abc',
+          agentId: 'agent-1',
+          status: 'running',
+        })
+      );
 
-      const result = await client.spawnAgent('beacon-1', { personaId: 'coder', spawnId: 'my-spawn' });
+      const result = await client.spawnAgent('beacon-1', {
+        personaId: 'coder',
+        spawnId: 'my-spawn',
+      });
 
       expect(fetchMock).toHaveBeenCalledWith(
         'http://localhost:8080/spawn',
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ targetBeaconId: 'beacon-1', personaId: 'coder', spawnId: 'my-spawn' }),
+          body: JSON.stringify({
+            targetBeaconId: 'beacon-1',
+            personaId: 'coder',
+            spawnId: 'my-spawn',
+          }),
         })
       );
-      expect(result).toEqual({ spawnId: 'abc', agentId: 'agent-1', status: 'running' });
+      expect(result).toEqual({
+        spawnId: 'abc',
+        agentId: 'agent-1',
+        status: 'running',
+      });
     });
 
     it('throws on non-OK response', async () => {
-      fetchMock.mockResolvedValue(mockFetchResponse(400, { error: 'bad request' }));
+      fetchMock.mockResolvedValue(
+        mockFetchResponse(400, { error: 'bad request' })
+      );
 
       await expect(client.spawnAgent('beacon-1')).rejects.toThrow(
         'Spawn failed (400): {"error":"bad request"}'
@@ -68,7 +87,9 @@ describe('CoordinatorClient', () => {
     it('throws on non-OK response', async () => {
       fetchMock.mockResolvedValue(mockFetchResponse(500, {}));
 
-      await expect(client.listBeacons()).rejects.toThrow('List beacons failed (500)');
+      await expect(client.listBeacons()).rejects.toThrow(
+        'List beacons failed (500)'
+      );
     });
   });
 
@@ -98,13 +119,17 @@ describe('CoordinatorClient', () => {
     it('throws on non-OK response', async () => {
       fetchMock.mockResolvedValue(mockFetchResponse(403, {}));
 
-      await expect(client.listAgents()).rejects.toThrow('List agents failed (403)');
+      await expect(client.listAgents()).rejects.toThrow(
+        'List agents failed (403)'
+      );
     });
   });
 
   describe('getSpawn', () => {
     it('sends GET to /spawn/:beaconId/:spawnId', async () => {
-      fetchMock.mockResolvedValue(mockFetchResponse(200, { status: 'running' }));
+      fetchMock.mockResolvedValue(
+        mockFetchResponse(200, { status: 'running' })
+      );
 
       const result = await client.getSpawn('beacon-1', 'spawn-1');
 
@@ -118,7 +143,9 @@ describe('CoordinatorClient', () => {
     it('throws on non-OK response', async () => {
       fetchMock.mockResolvedValue(mockFetchResponse(404, {}));
 
-      await expect(client.getSpawn('b', 's')).rejects.toThrow('Get spawn failed (404)');
+      await expect(client.getSpawn('b', 's')).rejects.toThrow(
+        'Get spawn failed (404)'
+      );
     });
   });
 
@@ -148,13 +175,17 @@ describe('CoordinatorClient', () => {
     it('throws on non-OK response', async () => {
       fetchMock.mockResolvedValue(mockFetchResponse(500, {}));
 
-      await expect(client.listSpawns('b')).rejects.toThrow('List spawns failed (500)');
+      await expect(client.listSpawns('b')).rejects.toThrow(
+        'List spawns failed (500)'
+      );
     });
   });
 
   describe('terminateSpawn', () => {
     it('sends DELETE to /spawn/:beaconId/:spawnId', async () => {
-      fetchMock.mockResolvedValue(mockFetchResponse(200, { status: 'terminated' }));
+      fetchMock.mockResolvedValue(
+        mockFetchResponse(200, { status: 'terminated' })
+      );
 
       const result = await client.terminateSpawn('beacon-1', 'spawn-1');
 
@@ -168,7 +199,9 @@ describe('CoordinatorClient', () => {
     it('throws on non-OK response', async () => {
       fetchMock.mockResolvedValue(mockFetchResponse(404, {}));
 
-      await expect(client.terminateSpawn('b', 's')).rejects.toThrow('Terminate spawn failed (404)');
+      await expect(client.terminateSpawn('b', 's')).rejects.toThrow(
+        'Terminate spawn failed (404)'
+      );
     });
   });
 
@@ -203,7 +236,10 @@ describe('CoordinatorClient', () => {
 
   describe('auth header', () => {
     it('includes Bearer token when provided', async () => {
-      const authedClient = new CoordinatorClient('http://localhost:8080', 'my-token');
+      const authedClient = new CoordinatorClient(
+        'http://localhost:8080',
+        'my-token'
+      );
       fetchMock.mockResolvedValue(mockFetchResponse(200, []));
 
       await authedClient.listBeacons();
@@ -213,7 +249,7 @@ describe('CoordinatorClient', () => {
         expect.objectContaining({
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer my-token',
+            Authorization: 'Bearer my-token',
           },
         })
       );

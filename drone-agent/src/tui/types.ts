@@ -71,6 +71,26 @@ export type ChatEntry = {
   text: string;
 };
 
+/**
+ * A single item in the tail region — a live-updating component that
+ * will later be committed to the <Static> scrollback.
+ *
+ * `id` is a stable React key. `kind` categorises the item for
+ * rendering. `component` is the live React element that re-renders
+ * as state changes. `toEntry()` returns the ChatEntry to append
+ * to <Static> when this item is committed.
+ *
+ * Color wrap fix: each tail component wraps its entire content in a
+ * single `<Text color={...} wrap="wrap">` element, so Ink applies
+ * the color across all soft-wrapped continuation lines.
+ */
+export type TailItem = {
+  id: string;
+  kind: 'reasoning' | 'toolCall' | 'assistantMessage';
+  component: React.ReactNode;
+  toEntry: () => Omit<ChatEntry, 'id'>;
+};
+
 /** Options for creating the TUI. */
 export type DroneTuiOptions = {
   engine: Pick<

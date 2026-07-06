@@ -128,6 +128,10 @@ export async function runJsonMode(
       case 'reasoning':
         ndjsonHandler({ kind: 'reasoning', content: event.content });
         break;
+      case 'reasoningComplete':
+      case 'assistantMessageComplete':
+        // No-op — these markers are only meaningful for the TUI tail region
+        break;
       case 'toolCall':
         ndjsonHandler({
           kind: 'toolCall',
@@ -135,12 +139,36 @@ export async function runJsonMode(
           input: event.arguments,
         });
         break;
+      case 'toolCallBatch':
+        // Flatten batch into individual events for NDJSON consumers
+        if (event.toolCalls) {
+          for (const tc of event.toolCalls) {
+            ndjsonHandler({
+              kind: 'toolCall',
+              name: tc.name,
+              input: tc.arguments,
+            });
+          }
+        }
+        break;
       case 'toolResult':
         ndjsonHandler({
           kind: 'toolResult',
           name: event.name,
           result: event.content,
         });
+        break;
+      case 'toolResultBatch':
+        // Flatten batch into individual events for NDJSON consumers
+        if (event.results) {
+          for (const result of event.results) {
+            ndjsonHandler({
+              kind: 'toolResult',
+              name: result.name,
+              result: result.content,
+            });
+          }
+        }
         break;
       case 'error':
         ndjsonHandler({ kind: 'error', message: event.message });
@@ -235,6 +263,10 @@ export async function runJsonListenMode(
           case 'reasoning':
             ndjsonHandler({ kind: 'reasoning', content: convEvent.content });
             break;
+          case 'reasoningComplete':
+          case 'assistantMessageComplete':
+            // No-op — these markers are only meaningful for the TUI tail region
+            break;
           case 'toolCall':
             ndjsonHandler({
               kind: 'toolCall',
@@ -242,12 +274,36 @@ export async function runJsonListenMode(
               input: convEvent.arguments,
             });
             break;
+          case 'toolCallBatch':
+            // Flatten batch into individual events for NDJSON consumers
+            if (convEvent.toolCalls) {
+              for (const tc of convEvent.toolCalls) {
+                ndjsonHandler({
+                  kind: 'toolCall',
+                  name: tc.name,
+                  input: tc.arguments,
+                });
+              }
+            }
+            break;
           case 'toolResult':
             ndjsonHandler({
               kind: 'toolResult',
               name: convEvent.name,
               result: convEvent.content,
             });
+            break;
+          case 'toolResultBatch':
+            // Flatten batch into individual events for NDJSON consumers
+            if (convEvent.results) {
+              for (const result of convEvent.results) {
+                ndjsonHandler({
+                  kind: 'toolResult',
+                  name: result.name,
+                  result: result.content,
+                });
+              }
+            }
             break;
           case 'error':
             ndjsonHandler({ kind: 'error', message: convEvent.message });
