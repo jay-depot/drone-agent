@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { CreatePersonaRequest } from '../types.js';
-import * as db from '../db.js';
+import * as db from '../db/index.js';
 
 export default function personaRoutes(app: FastifyInstance) {
   app.post<{ Body: CreatePersonaRequest }>(

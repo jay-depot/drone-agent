@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import * as db from '../db.js';
+import * as db from '../db/index.js';
 import type { SpawnRequest } from '../types.js';
 
 export default function spawnRoutes(app: FastifyInstance) {

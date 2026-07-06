@@ -48,7 +48,7 @@ import {
   listPrinciples,
   getPrinciple,
   deletePrinciple,
-} from '../src/db.js';
+} from '../src/db/index.js';
 import type { CreatePersonaRequest, CreateSkillRequest } from '../src/types.js';
 
 describe('Persona CRUD', () => {

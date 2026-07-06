@@ -8,7 +8,7 @@ import {
   sendToAgent,
   sendToChannel,
 } from '../src/ws-server.js';
-import { registerAgent } from '../src/db.js';
+import { registerAgent } from '../src/db/index.js';
 
 describe('WebSocket Server - IP Validation', () => {
   it('should identify localhost IPv4', () => {

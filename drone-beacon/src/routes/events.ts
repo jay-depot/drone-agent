@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { type EventQuery } from './context.js';
-import * as db from '../db.js';
+import * as db from '../db/index.js';
 
 export default function eventRoutes(app: FastifyInstance) {
   // List event logs with optional filters

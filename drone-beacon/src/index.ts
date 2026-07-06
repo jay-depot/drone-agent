@@ -3,7 +3,7 @@ import '@fastify/websocket';
 import os from 'node:os';
 import path from 'path';
 import fs from 'fs';
-import { initDatabase, closeDatabase, cleanupExpiredMemories } from './db.js';
+import { initDatabase, closeDatabase, cleanupExpiredMemories } from './db/index.js';
 import {
   registerRoutes,
   setCoordinatorClient,

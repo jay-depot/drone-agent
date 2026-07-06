@@ -16,7 +16,7 @@ import {
   type ManagedProcess,
   type SpawnDb,
 } from 'drone-swarm-common';
-import * as db from './db.js';
+import * as db from './db/index.js';
 import type { SpawnConfig, SpawnRecord } from './types.js';
 
 // === SpawnDb adapter: bridges the shared spawner to beacon's SQLite db ===

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { SpawnRequest } from '../types.js';
 import { getBeaconUrl } from './context.js';
-import * as db from '../db.js';
+import * as db from '../db/index.js';
 import * as spawner from '../spawner.js';
 
 export default function spawnRoutes(app: FastifyInstance) {

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
-import * as db from './db.js';
+import * as db from './db/index.js';
 import { logger } from './logger.js';
 
 // Error codes

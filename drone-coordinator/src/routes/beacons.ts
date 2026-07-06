@@ -6,7 +6,7 @@ import type {
   EndSessionRequest,
   BeaconStatusResponse,
 } from '../types.js';
-import * as db from '../db.js';
+import * as db from '../db/index.js';
 
 export default function beaconRoutes(app: FastifyInstance) {
   // === Beacon Routes (Legacy - for backwards compatibility) ===

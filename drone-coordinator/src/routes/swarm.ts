@@ -4,7 +4,7 @@ import {
   storeLargePayload,
   retrieveLargePayload,
 } from '../storage.js';
-import * as db from '../db.js';
+import * as db from '../db/index.js';
 
 export default function swarmRoutes(app: FastifyInstance) {
   // === Swarm Session Routes ===

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { CreateMessageRequest } from '../types.js';
-import * as db from '../db.js';
+import * as db from '../db/index.js';
 import * as wsServer from '../ws-server.js';
 
 export default function messageRoutes(app: FastifyInstance) {

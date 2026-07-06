@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { initDatabase, closeDatabase } from '../src/db.js';
+import { initDatabase, closeDatabase } from '../src/db/index.js';
 import { initStorage } from '../src/storage.js';
 
 let dbPath = '';

@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
-import { initDatabase, closeDatabase } from '../../src/db.js';
+import { initDatabase, closeDatabase } from '../../src/db/index.js';
 import { initStorage } from '../../src/storage.js';
 import { buildApp } from '../../src/index.js';
 

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { RegisterAgentRequest } from '../types.js';
 import { getCoordinatorClient } from './context.js';
-import * as db from '../db.js';
+import * as db from '../db/index.js';
 
 import { logger } from '../logger.js';
 

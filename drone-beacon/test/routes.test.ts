@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { setupDb, teardownDb } from './setup.js';
 import { buildTestApp } from './app-helper.js';
 import type { FastifyInstance } from 'fastify';
-import * as db from '../src/db.js';
+import * as db from '../src/db/index.js';
 
 // Mock ws-server to avoid WebSocket dependency
 vi.mock('../src/ws-server.js', () => ({

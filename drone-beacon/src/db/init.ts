@@ -1,0 +1,172 @@
+import Database from 'better-sqlite3';
+import path from 'path';
+import fs from 'fs';
+import { logger } from '../logger.js';
+
+let db: Database.Database | null = null;
+
+export function initDatabase(dataPath: string): Database.Database {
+  logger.info(`Initializing database at: ${dataPath}`);
+  fs.mkdirSync(path.dirname(dataPath), { recursive: true });
+  db = new Database(dataPath);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS personas (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      systemPrompt TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'local',
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS skills (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      trigger TEXT NOT NULL,
+      body TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'local',
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS agent_sessions (
+      id TEXT PRIMARY KEY,
+      personaId TEXT,
+      connectedAt INTEGER NOT NULL,
+      lastActivity INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS memory (
+      id TEXT PRIMARY KEY,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      namespace TEXT NOT NULL DEFAULT 'default',
+      ttl INTEGER,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      from_agent_id TEXT NOT NULL,
+      to_agent_id TEXT,
+      channel TEXT,
+      body TEXT NOT NULL,
+      delivered INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS spawns (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT,
+      persona_id TEXT,
+      task TEXT,
+      config_json TEXT,
+      status TEXT NOT NULL DEFAULT 'spawning',
+      error TEXT,
+      created_at INTEGER NOT NULL,
+      started_at INTEGER,
+      terminated_at INTEGER,
+      exit_code INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_memory_namespace ON memory(namespace);
+    CREATE INDEX IF NOT EXISTS idx_memory_ttl ON memory(ttl);
+    CREATE INDEX IF NOT EXISTS idx_messages_to ON messages(to_agent_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages(channel);
+    CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
+    CREATE INDEX IF NOT EXISTS idx_spawns_status ON spawns(status);
+    CREATE INDEX IF NOT EXISTS idx_spawns_agent_id ON spawns(agent_id);
+    CREATE TABLE IF NOT EXISTS beacon_config (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,  -- JSON string
+      scope TEXT NOT NULL DEFAULT 'local',  -- 'local' or 'swarm' (synced to coordinator)
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS event_log (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      agent_id TEXT,
+      target_id TEXT,
+      target_type TEXT,
+      metadata TEXT,  -- JSON string
+      timestamp INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_event_log_timestamp ON event_log(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_event_log_agent ON event_log(agent_id);
+    CREATE INDEX IF NOT EXISTS idx_event_log_type ON event_log(event_type);
+
+    CREATE TABLE IF NOT EXISTS knowledge_cache (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      source_beacon_id TEXT,
+      source_agent_id TEXT,
+      confidence REAL DEFAULT 1.0,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_knowledge_cache_type ON knowledge_cache(type);
+    CREATE INDEX IF NOT EXISTS idx_knowledge_cache_key ON knowledge_cache(key);
+
+    CREATE TABLE IF NOT EXISTS insights (
+      id TEXT PRIMARY KEY,
+      targetType TEXT NOT NULL,
+      targetId TEXT NOT NULL,
+      insight TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'local'
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_insights_target ON insights(targetType, targetId);
+
+    CREATE TABLE IF NOT EXISTS principles (
+      id TEXT PRIMARY KEY,
+      targetType TEXT NOT NULL,
+      targetId TEXT NOT NULL,
+      principle TEXT NOT NULL,
+      source TEXT,
+      createdAt TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'local'
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_principles_target ON principles(targetType, targetId);
+    CREATE TABLE IF NOT EXISTS wiki_pages (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      scope TEXT NOT NULL DEFAULT 'beacon',
+      tags TEXT NOT NULL DEFAULT '[]',
+      sources TEXT NOT NULL DEFAULT '[]',
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_wiki_pages_scope ON wiki_pages(scope);
+  `);
+
+  logger.info('Beacon database initialized successfully');
+  return db;
+}
+
+export function getDatabase(): Database.Database {
+  if (!db) {
+    throw new Error('Database not initialized. Call initDatabase() first.');
+  }
+  return db;
+}
+
+export function closeDatabase(): void {
+  if (db) {
+    db.close();
+    db = null;
+    logger.info('Beacon database closed');
+  }
+}

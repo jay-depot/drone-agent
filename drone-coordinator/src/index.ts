@@ -22,7 +22,7 @@ import {
   createSkill,
   listPersonas,
   listSkills,
-} from './db.js';
+} from './db/index.js';
 import { initStorage } from './storage.js';
 import { registerRoutes } from './routes/index.js';
 import { logger } from './logger.js';

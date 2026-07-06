@@ -3,7 +3,7 @@ import type {
   CreateKnowledgeRequest,
   UpdateKnowledgeRequest,
 } from '../types.js';
-import * as db from '../db.js';
+import * as db from '../db/index.js';
 
 export default function knowledgeRoutes(app: FastifyInstance) {
   app.post<{ Body: CreateKnowledgeRequest }>(

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import * as db from '../db.js';
+import * as db from '../db/index.js';
 
 export default function messageRoutes(app: FastifyInstance) {
   // === Message Relay Routes ===

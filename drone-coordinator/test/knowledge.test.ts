@@ -12,7 +12,7 @@ import {
   deleteKnowledge,
   searchKnowledge,
   upsertKnowledge,
-} from '../src/db.js';
+} from '../src/db/index.js';
 
 let dbPath = '';
 

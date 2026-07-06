@@ -3,7 +3,7 @@ import {
   createCoordinatorFetch,
 } from '../coordinator-client.js';
 import { logger } from '../logger.js';
-import * as db from '../db.js';
+import * as db from '../db/index.js';
 
 // Lazy-initialized fetch wrapper that accepts the coordinator's self-signed TLS cert
 let _coordinatorFetch: typeof fetch | undefined;
