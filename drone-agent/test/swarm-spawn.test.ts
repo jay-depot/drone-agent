@@ -52,6 +52,8 @@ function createRegistrationCapture(
     },
     offer: () => {},
     request: () => undefined,
+    runWorkflow: async () => ({ toolResult: undefined }),
+    requestElicitation: () => undefined,
   };
 
   return { registration, registeredTools };

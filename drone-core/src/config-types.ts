@@ -323,8 +323,10 @@ export type DroneSessionPhase =
 
 // ── Config helper functions ─────────────────────────────────────────
 
-export function createDefaultAgentConfig(): DroneAgentConfig {
-  return {
+export function createDefaultAgentConfig(
+  overrides?: Partial<DroneAgentConfig>
+): DroneAgentConfig {
+  const base: DroneAgentConfig = {
     enabledPlugins: [],
     externalPlugins: [],
     trustedPlugins: {},
@@ -432,6 +434,7 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
       },
     },
   };
+  return { ...base, ...overrides };
 }
 
 export function applyAgentConfigLayer(

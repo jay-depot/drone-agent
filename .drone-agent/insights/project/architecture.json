@@ -254,5 +254,13 @@
   {
     "timestamp": "2026-07-06T19:49:12.429Z",
     "insight": "The TUI tail region refactor plan identifies a subtle closure issue: the conversation event listener in app.tsx captures `scheme` from the render cycle, but scheme changes when color overrides cycle. The tail components need to read the current scheme from a ref or context, not from the closure, to avoid stale color references in live-updating components."
+  },
+  {
+    "timestamp": "2026-07-06T20:17:45.903Z",
+    "insight": "The tail region refactor revealed a subtle closure issue with `scheme` (color scheme) in the conversation event listener. Since `scheme` changes when color overrides cycle on a timer, capturing it in the useEffect closure would cause stale color references. Fixed by using a `useRef` for the scheme that gets updated on every render (`schemeRef.current = scheme`), and having the listener read from the ref."
+  },
+  {
+    "timestamp": "2026-07-06T20:17:54.163Z",
+    "insight": "The `toEntry()` function on TailItem was initially typed to return `ChatEntry` (with `id`), but this conflicted with `useChatLog`'s `log()` and `appendEntry()` which expect `Omit<ChatEntry, 'id'>` and generate the id internally. Changed `toEntry()` to return `Omit<ChatEntry, 'id'>` to match the existing pattern and avoid duplicate id generation."
   }
 ]

@@ -109,10 +109,9 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
     activateProvider: () => {},
     getModel: () => 'fake',
     setModel: () => {},
-    setActiveProvider: () => {},
-    addProvider: () => {},
-    removeProvider: () => {},
-    onProviderChange: () => () => {},
+    listModels: async () => ['fake'],
+    registerProvider: () => {},
+    unregisterProvider: () => {},
   };
 }
 
