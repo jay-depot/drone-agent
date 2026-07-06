@@ -242,5 +242,9 @@
   {
     "timestamp": "2026-07-06T03:07:56.359Z",
     "insight": "Expanded the gateway-core-plan to include standalone mode (no beacon/coordinator), persistent agent sessions via --output-json without --once, a turnComplete NDJSON event, a shared spawner in drone-swarm-common, and a pluggable SpawnBackend interface. The plan now covers both standalone and swarm modes for the gateway."
+  },
+  {
+    "timestamp": "2026-07-06T16:44:31.710Z",
+    "insight": "The vitest alias resolution doesn't handle subpath exports (e.g., `drone-swarm-common/spawner`) the same way as the main entry. The beacon's spawner wrapper had to import from `drone-swarm-common` (main entry) instead of `drone-swarm-common/spawner` (subpath export) for tests to work, even though the subpath export is defined in package.json for production builds. The vitest config alias was also needed."
   }
 ]

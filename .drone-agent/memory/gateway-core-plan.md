@@ -1,8 +1,9 @@
 ---
 key: gateway-core-plan
-tags: []
+tags:
+  []
 created: 2026-07-06T02:31:56.640Z
-updated: 2026-07-06T03:07:51.665Z
+updated: 2026-07-06T16:44:17.345Z
 ---
 
 # Phase 4: drone-gateway — Expanded Plan (Standalone + Swarm Modes)
@@ -64,95 +65,77 @@ Create the `drone-gateway` package — a standalone service that connects chat p
 
 ### Package Scaffold (already created)
 
-| File                                      | Purpose                                                  |
-| ----------------------------------------- | -------------------------------------------------------- |
-| `drone-gateway/package.json`              | ESM package, depends on drone-core, pino                 |
-| `drone-gateway/tsconfig.json`             | TypeScript config, references drone-core                 |
-| `drone-gateway/bin/drone-gateway`         | CLI entry point (shebang)                                |
-| `drone-gateway/src/index.ts`              | Main entry, CLI arg parsing, startup                     |
-| `drone-gateway/src/types.ts`              | DroneServiceAdapter, DroneControlSurface, config types   |
-| `drone-gateway/src/engine.ts`             | Gateway engine: load config, init adapters, message loop |
-| `drone-gateway/src/coordinator-client.ts` | HTTP client for coordinator web port                     |
-| `drone-gateway/src/logger.ts`             | Pino logger                                              |
-| `drone-gateway/CONTEXT.md`                | Domain glossary                                          |
-| `drone-gateway/docs/adr/`                 | Empty directory for future ADRs                          |
+| File | Purpose |
+|------|---------|
+| `drone-gateway/package.json` | ESM package, depends on drone-core, pino |
+| `drone-gateway/tsconfig.json` | TypeScript config, references drone-core |
+| `drone-gateway/bin/drone-gateway` | CLI entry point (shebang) |
+| `drone-gateway/src/index.ts` | Main entry, CLI arg parsing, startup |
+| `drone-gateway/src/types.ts` | DroneServiceAdapter, DroneControlSurface, config types |
+| `drone-gateway/src/engine.ts` | Gateway engine: load config, init adapters, message loop |
+| `drone-gateway/src/coordinator-client.ts` | HTTP client for coordinator web port |
+| `drone-gateway/src/logger.ts` | Pino logger |
+| `drone-gateway/CONTEXT.md` | Domain glossary |
+| `drone-gateway/docs/adr/` | Empty directory for future ADRs |
 
 ### 1. drone-swarm-common: Extract spawner
 
 **New file:** `drone-swarm-common/src/spawner.ts`
-
 - Extract the core spawn logic from `drone-beacon/src/spawner.ts` (process spawning, tracking, termination, cleanup)
 - Make it database-agnostic (no dependency on beacon's db.ts)
-- Export: `SpawnerConfig`, `ManagedProcess`, `initSpawner`, `spawnAgent`, `terminateAgent`, `getActiveSpawns`, `cleanupAllSpawns`
+- Export: `SpawnerConfig`, `ManagedProcess`, `SpawnDb`, `initSpawner`, `spawnAgent`, `terminateAgent`, `getActiveSpawns`, `cleanupAllSpawns`
+
+**New file:** `drone-swarm-common/src/logger.ts`
+- Pino logger for drone-swarm-common
 
 **Modified:** `drone-swarm-common/package.json` — add `"./spawner"` export entry
 **Modified:** `drone-swarm-common/src/index.ts` — re-export spawner types
-**Modified:** `drone-beacon/src/spawner.ts` — delegate to `drone-swarm-common/spawner` (thin wrapper)
+**Modified:** `drone-beacon/src/spawner.ts` — delegate to `drone-swarm-common` (thin wrapper)
 
 ### 2. drone-agent: Add `turnComplete` event + persistent JSON mode
 
 **Modified:** `drone-agent/src/output-handlers.ts`
-
 - Add `turnComplete` to the `OutputEvent` union type
 
 **Modified:** `drone-agent/src/interactive.ts`
-
 - Add a `runJsonListenMode()` function that loops:
   1. Read a `chat` event from stdin
   2. Process it via `conversation.sendUserMessage()`
   3. Write NDJSON events to stdout
   4. Write a `turnComplete` event to stdout
   5. Loop back to step 1
-- The `InputEvent` type gets a `chat` variant (already exists)
 
 **Modified:** `drone-agent/src/index.tsx`
-
-- When `--output-json` is set WITHOUT `--once`, call `runJsonListenMode()` instead of `runJsonMode()`
+- When `--output-json` is set WITHOUT `--once`, call `runJsonListenMode()` instead of `runInteractiveLoop()`
 
 ### 3. drone-gateway: Spawn backend interface + local implementation
 
 **Modified:** `drone-gateway/src/types.ts`
-
 - Add `SpawnBackend` interface
 - Add `SpawnBackendType` union: `"local" | "coordinator"`
 - Add `agentPath` to `GatewayConfig`
 - Add `SpawnSession` type (tracks persistent agent process per conversation)
 
 **New file:** `drone-gateway/src/spawn-backend.ts`
-
-- `SpawnBackend` interface:
-  ```typescript
-  interface SpawnBackend {
-    type: SpawnBackendType;
-    spawnSession(
-      conversationId: string,
-      personaId: string
-    ): Promise<SpawnSession>;
-    sendMessage(session: SpawnSession, message: string): Promise<string>;
-    terminateSession(session: SpawnSession): Promise<void>;
-  }
-  ```
+- `SpawnBackend` interface with `spawnSession`, `sendMessage`, `terminateSession`
 
 **New file:** `drone-gateway/src/local-spawn-backend.ts`
-
 - `LocalSpawnBackend` class implementing `SpawnBackend`
-- Uses the shared spawner from `drone-swarm-common/spawner`
 - Manages persistent agent processes: one per conversation
 - Sends NDJSON `chat` events to agent's stdin
 - Reads NDJSON events from agent's stdout
-- Waits for `turnComplete` event before sending next message
-- Handles agent crash/recovery
+- Waits for `turnComplete` event before returning
 
 **New file:** `drone-gateway/src/coordinator-spawn-backend.ts`
-
 - `CoordinatorSpawnBackend` class implementing `SpawnBackend`
 - Delegates to the existing `CoordinatorClient`
-- For persistent sessions, uses coordinator's session tracking
+
+**New file:** `drone-gateway/src/which.ts`
+- Utility to resolve binary names in PATH
 
 ### 4. drone-gateway: Update engine for spawn backends
 
 **Modified:** `drone-gateway/src/engine.ts`
-
 - Accept a `SpawnBackend` in constructor
 - `persona-assignment` control surface uses the spawn backend
 - Config determines which backend to use (local vs coordinator)
@@ -161,6 +144,11 @@ Create the `drone-gateway` package — a standalone service that connects chat p
 
 **Modified:** `drone-gateway/src/types.ts` — add spawn backend config
 **Modified:** `drone-gateway/src/index.ts` — instantiate the appropriate spawn backend based on config
+**Modified:** `drone-gateway/src/coordinator-client.ts` — add `sendMessage` method
+
+### 6. vitest.config.ts
+
+**Modified:** `vitest.config.ts` — add `drone-swarm-common/spawner` alias for test resolution
 
 ## Config File (example)
 
@@ -205,7 +193,13 @@ Create the `drone-gateway` package — a standalone service that connects chat p
 2. **`pnpm build` passes** — All packages compile
 3. **`pnpm test` passes** — All existing tests continue to pass (1151 tests)
 4. **`pnpm lint` passes** — ESLint + Prettier checks pass
-5. **Manual verification**:
+5. **Manual verification**: 
    - `drone-agent --output-json` without `--once` stays alive and processes multiple `chat` events
    - Gateway config with `spawnBackend: "local"` and `agentPath` works
    - Gateway config without `agentPath` falls back to `$PATH` lookup
+
+## Implementation Notes
+
+- The beacon's spawner wrapper imports from `drone-swarm-common` (main entry) rather than `drone-swarm-common/spawner` (subpath export) because vitest's alias resolution handles the main entry but not subpath exports. The subpath export is still defined in package.json for production builds.
+- The `SpawnDb` interface makes the shared spawner database-agnostic, accepting any storage backend that implements `createSpawn`, `updateSpawnStatus`, and `getSpawn`.
+- The `runJsonListenMode` function in drone-agent reads `chat` events from stdin in a loop, processes each via the conversation service, writes NDJSON events to stdout, and emits a `turnComplete` event after each turn. This enables a parent process (like drone-gateway) to maintain a persistent agent session across multiple turns.
