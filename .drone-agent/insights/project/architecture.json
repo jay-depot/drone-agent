@@ -250,5 +250,9 @@
   {
     "timestamp": "2026-07-06T19:28:23.237Z",
     "insight": "When adding event streaming for conversation events, always route through the engine's conversation event hooks rather than through the DroneLogger interface. The logger only has info/warn/error levels, which loses color differentiation in the TUI. The engine hooks preserve event kind information and work for all sources (regular messages, macro chatPrompt steps, etc.) through a single listener."
+  },
+  {
+    "timestamp": "2026-07-06T19:49:12.429Z",
+    "insight": "The TUI tail region refactor plan identifies a subtle closure issue: the conversation event listener in app.tsx captures `scheme` from the render cycle, but scheme changes when color overrides cycle. The tail components need to read the current scheme from a ref or context, not from the closure, to avoid stale color references in live-updating components."
   }
 ]
