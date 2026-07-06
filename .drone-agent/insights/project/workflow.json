@@ -142,5 +142,9 @@
   {
     "timestamp": "2026-07-06T21:28:09.952Z",
     "insight": "The plugin-customizable-tool-render plan revealed a subtlety: the `toEntry()` functions on TailItems produce text for the static scrollback, which is separate from the live tail component rendering. For git diff, we need both a colored Ink component (for the tail) and ANSI-colored text (for the scrollback). The shared diff-format.ts utility serves both consumers."
+  },
+  {
+    "timestamp": "2026-07-06T21:43:30.948Z",
+    "insight": "When extracting formatDiffResult from app.tsx into a shared utility, I also needed to update the test that referenced `App.__testing.formatDiffResult`. The test uses dynamic `await import(...)` so the import path change was straightforward. Always check for `__testing` exports when moving internal code."
   }
 ]

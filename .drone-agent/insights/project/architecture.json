@@ -270,5 +270,9 @@
   {
     "timestamp": "2026-07-06T21:25:02.509Z",
     "insight": "The TUI app.tsx event listener hardcodes special-case formatting for specific tools (exec__run, file__apply_diff, git__diff) via formatExecResult/formatDiffResult/formatToolResult. This is brittle — every new tool with custom display needs a new special case. The planned renderComponent pattern on DroneToolDefinition eliminates this by letting plugins own their rendering."
+  },
+  {
+    "timestamp": "2026-07-06T21:43:30.948Z",
+    "insight": "The renderComponent pattern requires engine.getTool() to be available in the TUI's event listener. This was already implemented in the engine for other purposes but wasn't exposed through DroneTuiOptions. Needed to add it to the Pick<> type. Always check if a dependency already exists at a lower layer before creating a new path."
   }
 ]
