@@ -38,5 +38,9 @@
   {
     "timestamp": "2026-07-06T00:43:08.983Z",
     "insight": "The DroneAgentConfig type requires 'openai' and 'anthropic' fields (not optional), but several test files were constructing partial config objects without them. The fix was to add minimal openai/anthropic config stubs. This suggests the config type might benefit from a PartialDroneAgentConfig-based helper or a test fixture factory."
+  },
+  {
+    "timestamp": "2026-07-06T01:41:26.489Z",
+    "insight": "The swarm plugin's register() function returns early if beacon registration fails, which means tools registered after that point never get added. This required a registration-capture pattern for testing (calling plugin.register() with a mock registration that records tools) rather than using createDronePluginEngine with vi.stubGlobal('fetch'), since vi.stubGlobal doesn't propagate through vitest's fork pool."
   }
 ]
