@@ -57,6 +57,7 @@ function makeOptions(
       getRegisteredPluginCount: () => 2,
       getRegisteredToolCount: () => 3,
       getCapability: () => undefined,
+      getTool: () => undefined,
       runHooks: async () => {},
       executeTool: async () => 'ok',
       renderPromptFragments: async () => [],
@@ -219,6 +220,7 @@ describe('App', () => {
           }
           return undefined;
         }) as <T>(pluginId: string) => T | undefined,
+        getTool: () => undefined,
         runHooks: async () => {},
         executeTool: async () => 'ok',
         renderPromptFragments: async () => [],

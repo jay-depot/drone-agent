@@ -146,5 +146,9 @@
   {
     "timestamp": "2026-07-06T21:43:30.948Z",
     "insight": "When extracting formatDiffResult from app.tsx into a shared utility, I also needed to update the test that referenced `App.__testing.formatDiffResult`. The test uses dynamic `await import(...)` so the import path change was straightforward. Always check for `__testing` exports when moving internal code."
+  },
+  {
+    "timestamp": "2026-07-06T22:03:50.225Z",
+    "insight": "The getTool() method was added to DronePluginEngine but 4 test files (systemprompt.test.tsx, tui-persona-color.test.tsx, tui.test.tsx) still use mock objects that don't include it. This is a pattern failure: when adding a new method to a core interface, the test mocks need to be updated in the same commit. These 5 TS errors have been present for at least 10 days."
   }
 ]

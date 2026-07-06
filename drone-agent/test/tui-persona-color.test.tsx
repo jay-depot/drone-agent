@@ -40,6 +40,7 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
     >(
       pluginId: string
     ) => T | undefined,
+    getTool: (): undefined => undefined,
     runHooks: async (): Promise<void> => {},
     executeTool: async (): Promise<string> => 'ok',
     getHelpSnippets: (): string[] => [],
