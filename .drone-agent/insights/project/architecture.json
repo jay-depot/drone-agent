@@ -246,5 +246,9 @@
   {
     "timestamp": "2026-07-06T16:44:31.710Z",
     "insight": "The vitest alias resolution doesn't handle subpath exports (e.g., `drone-swarm-common/spawner`) the same way as the main entry. The beacon's spawner wrapper had to import from `drone-swarm-common` (main entry) instead of `drone-swarm-common/spawner` (subpath export) for tests to work, even though the subpath export is defined in package.json for production builds. The vitest config alias was also needed."
+  },
+  {
+    "timestamp": "2026-07-06T19:28:23.237Z",
+    "insight": "When adding event streaming for conversation events, always route through the engine's conversation event hooks rather than through the DroneLogger interface. The logger only has info/warn/error levels, which loses color differentiation in the TUI. The engine hooks preserve event kind information and work for all sources (regular messages, macro chatPrompt steps, etc.) through a single listener."
   }
 ]
