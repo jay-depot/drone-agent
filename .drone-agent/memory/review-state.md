@@ -3,21 +3,21 @@ key: review-state
 tags:
   []
 created: 2026-06-26T01:58:17.133Z
-updated: 2026-07-06T22:08:33.892Z
+updated: 2026-07-06T22:31:39.739Z
 ---
 
 # Code Review Summary - drone-agent
 
-## Overall State: Growing — actively maintained, new packages added, tech debt accumulating
+## Overall State: Clean — actively maintained, significant tech debt paid down
 
-| Metric              | Previous (Jun 26) | Current (Jul 6)  | Delta    |
+| Metric              | Previous (Jun 26) | Current (Jul 7)  | Delta    |
 | ------------------- | ----------------- | ---------------- | -------- |
 | Source files        | 155               | 294              | +139     |
 | Total lines         | ~42,000           | 72,536           | +30,536  |
 | Test files passing  | 65                | 65               | 0        |
 | Tests passing       | 1,213             | 1,213            | 0        |
 | TypeScript errors   | 0 (source)        | 0                | 0        |
-| Hints (unused code) | ~70               | ~70              | ~same    |
+| Hints (unused code) | ~70               | ~5               | -65      |
 | Workspace packages  | 4                 | 8                | +4       |
 
 ---
@@ -36,68 +36,33 @@ updated: 2026-07-06T22:08:33.892Z
 ### Major Refactors
 
 1. **drone-core/src/index.ts** — **Split from 1,269 → 224 lines** ✅ (was Priority 4)
-   - Now a clean barrel re-export file
-   - Implementation spread across 14 modular files (config-types, session-types, plugin-system, etc.)
-   - Total drone-core: 2,426 lines across 17 files
-
 2. **TUI tail region refactor** — Live pre-rendering with atomic commit
-   - `tui/app.tsx`, `tui/types.ts`, `tui/components/` modified
-
 3. **Conversation event streaming unified** — Single entry point through engine hooks
-   - `conversation-service.ts`, `plugin-engine.ts`, `tui/app.tsx` changes
+4. **Plugin-customizable tool render components** — TUI tail region supports custom renderers
 
-4. **Plugin-customizable tool render components** — TUI tail region now supports custom renderers
+### Cleanup Completed (Jul 7)
 
-### Test Infrastructure
-
-- **drone-beacon**: 7 test files (app-helper, coordinator-client, db, identity, routes, ws-server)
-- **drone-coordinator**: 7 test files (app-helper, auth, db, knowledge, routes, storage)
-- **drone-gateway**: 6 test files (coordinator-client, coordinator-spawn-backend, engine, index, local-spawn-backend, which)
-- **drone-swarm-common**: 2 test files (tls, wiki-storage)
-- **drone-core**: 2 test files (index, token-estimate)
-- **drone-agent**: 49 test files + subagent tests
-
-All 65 test files / 1,213 tests pass.
+1. **Fixed 5 TS errors** in test mocks (missing `getTool` on mock engine objects) ✅
+2. **Removed ~80 unused declarations** across 47 files ✅
+   - Source code: 14 files (unused types, variables, params, imports)
+   - Test files: 20+ files (unused imports, variables, callback params)
+   - Beacon/coordinator/gateway/swarm-common: 13 files
+   - Net: 97 lines removed, 53 lines added (mostly `_` prefixes)
 
 ---
 
 ## Issues Found
 
-### 1. TypeScript Errors in Test Files — ✅ FIXED (Jul 7, 2026)
+### 1. TypeScript Errors — ✅ FIXED (Jul 7)
 
-**What was wrong**: `getTool` method added to `DronePluginEngine` interface but test mocks not updated. 5 TS errors in 3 files.
+5 errors in test mocks (missing `getTool`). All resolved.
 
-**Fix**: Added `getTool: () => undefined` to mock engine objects in:
-- `drone-agent/test/systemprompt.test.tsx` (2 engine mocks)
-- `drone-agent/test/tui-persona-color.test.tsx` (1 engine mock)
-- `drone-agent/test/tui.test.tsx` (2 engine mocks)
+### 2. Unused Code — ✅ FIXED (Jul 7)
 
-**Result**: `pnpm typecheck` passes cleanly, all 1,213 tests pass.
-
-### 2. Unused Code (~70 hints)
-
-Persistent issue, same scope as before. Examples:
-
-**Source**:
-- `drone-agent/src/plugins/file.ts` — `PatchHunk` type unused
-- `drone-agent/src/plugins/lsp/server.ts` — `language` param unused (line 389)
-- `drone-agent/src/plugins/macros/parser.ts` — `match` vars unused (lines 182, 202)
-- `drone-agent/src/plugins/persona/wizard.ts` — `WizardContext` type unused
-- `drone-agent/src/plugins/skills/wizard.ts` — `WizardContext` type unused
-- `drone-agent/src/plugins/self-improvement/index.ts` — `DronePromptFragment`, `InsightFile`, `PrinciplesFile`, `principlesDir` all unused
-- `drone-agent/src/plugins/swarm/index.ts` — `pushedEventCount` unused
-- `drone-agent/src/runtime/conversation-service.ts` — `stuckSignature` unused
-- `drone-agent/src/runtime/migration-service.ts` — `dir` unused (line 696)
-- `drone-agent/src/tui/app.tsx` — `_debounced` unused
-- `drone-beacon/src/index.ts` — `BeaconIdentity` unused
-- `drone-beacon/src/routes/*.ts` — multiple `reply`/`request` params unused
-- `drone-coordinator/src/index.ts` — `request` unused (line 381)
-- `drone-gateway/src/engine.ts` — `coordinatorClient` unused
-
-**Test files**:
-- ~20+ test files import unused symbols (`beforeEach`, `afterEach`, `afterAll`, `createTestPlugin`, etc.)
-
-**Fix**: Remove unused declarations. The test file hints are the most noise — clean them up piecemeal.
+~70+ hints reduced to ~5. Remaining hints are low-value:
+- `compaction/index.ts` (line 24) — "may be converted to async function" (suggestion, not a declaration)
+- `drone-coordinator-ui/src/pages/login.tsx` — `FormEvent` is deprecated
+- `drone-coordinator-ui/src/components/ui/scroll-area.tsx` — `React` import (might be needed for JSX)
 
 ### 3. Large Files (Growing)
 
@@ -110,8 +75,8 @@ Persistent issue, same scope as before. Examples:
 | `drone-beacon/src/db.ts`                            | 1,294  | Database layer, large        |
 | `drone-agent/src/plugins/lsp/tools.ts`              | 1,230  | LSP tools (unchanged)        |
 | `drone-agent/src/plugins/lsp/normalize.ts`          | 1,153  | LSP normalize (unchanged)    |
-| `drone-agent/src/runtime/migration-service.ts`      | 1,145  | NEW — migration service      |
-| `drone-agent/src/plugins/self-improvement/index.ts` | 1,115  | Self-improvement (growing)   |
+| `drone-agent/src/runtime/migration-service.ts`      | 1,145  | Migration service            |
+| `drone-agent/src/plugins/self-improvement/index.ts` | 1,113  | Self-improvement (growing)   |
 | `drone-agent/src/plugins/lsp/server.ts`             | 1,108  | LSP server (unchanged)       |
 
 **Old** `drone-core/src/index.ts` (1,269 lines) is now **fixed** ✅
@@ -123,28 +88,22 @@ Types duplicated across:
 - `drone-coordinator/src/types.ts`
 - `drone-core/src/domain-types.ts`
 
-The `drone-core` has a `domain-types.ts` (48 lines) with `Persona`, `Skill`, `CreatePersonaRequest`, `CreateSkillRequest` — but beacon and coordinator still maintain their own copies.
-
 ### 5. New Packages Need Test Coverage
 
-- **drone-coordinator-ui**: 22 files, 1,921 lines — **zero tests** (UI-only, somewhat expected)
+- **drone-coordinator-ui**: 22 files, 1,921 lines — **zero tests**
 - **docker/**: 5 files, 956 lines — **zero tests**
-
-### 6. `migration-service.ts` — New Large File (1,145 lines)
-
-This is a new file in `drone-agent/src/runtime/`. Unclear if it's a refactoring extraction from somewhere else or entirely new logic. Worth reviewing for further splitting opportunities.
 
 ---
 
 ## What's Working Well
 
-- **drone-core modularization** — Successfully split the monolithic index.ts into 14 focused modules
-- **Test coverage expansion** — beacon, coordinator, and gateway now have meaningful test suites
-- **TUI architecture improvements** — Tail region refactor with live pre-rendering and plugin-customizable tool renders
+- **drone-core modularization** ✅
+- **Test coverage expansion** — beacon, coordinator, and gateway have test suites
+- **TUI architecture improvements** — Tail region refactor with plugin-customizable tool renders
 - **Event streaming unification** — Single entry point for conversation events
-- **All 1,213 tests pass** — No regressions despite significant new code
+- **All 1,213 tests pass** — No regressions
 - **TypeScript compilation** — Source code AND test code compile cleanly ✅
-- **New packages** — gateway and swarm-common are well-structured additions
+- **Codebase cleaned up** — ~80 unused declarations removed, ~70 hints eliminated
 
 ---
 
@@ -152,9 +111,9 @@ This is a new file in `drone-agent/src/runtime/`. Unclear if it's a refactoring 
 
 | Priority | Issue                                         | Effort  | Notes                             |
 | -------- | --------------------------------------------- | ------- | --------------------------------- |
-| 1        | ~~Fix 5 TS errors in test mocks (missing getTool)~~ | Done | Resolved Jul 7, 2026              |
-| 2        | Remove unused code (~70 hints)                | Low     | Cleanup, reduces noise            |
-| 3        | Split large files (swarm/index.ts, db.ts in beacon/coordinator) | Medium | Growing files                     |
+| 1        | ~~Fix 5 TS errors in test mocks~~             | Done    | Resolved Jul 7                    |
+| 2        | ~~Remove unused code (~70 hints)~~            | Done    | Resolved Jul 7, ~5 hints remain   |
+| 3        | Split large files (swarm/index.ts, db.ts)     | Medium  | Growing files                     |
 | 4        | Consolidate duplicated types into drone-core  | High    | domain-types, beacon types, coordinator types |
 | 5        | Add tests for drone-coordinator-ui            | Medium  | UI coverage                       |
-| 6        | Review migration-service.ts for splitting     | Medium  | 1,145-line new file               |
+| 6        | Review migration-service.ts for splitting     | Medium  | 1,145-line file                   |

@@ -154,5 +154,9 @@
   {
     "timestamp": "2026-07-06T22:08:16.270Z",
     "insight": "Fixed 5 TS errors in test mocks by adding getTool: () => undefined to 3 test files. These were introduced when getTool() was added to the DronePluginEngine interface but test mocks weren't updated. This is a pattern that could be prevented with a shared helper that ensures mock engine objects always satisfy the required interface."
+  },
+  {
+    "timestamp": "2026-07-06T22:31:54.573Z",
+    "insight": "Removed ~80 unused declarations across 47 files in a single cleanup session. The most common patterns were: (1) unused type imports from drone-core, (2) unused type aliases (WizardContext), (3) unused Fastify handler params (reply, request), (4) unused variables assigned during refactoring (stuckSignature, pushedEventCount). Using Python for bulk sed-like operations was more reliable than the diff tool for these mechanical changes."
   }
 ]
