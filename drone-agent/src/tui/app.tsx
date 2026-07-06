@@ -25,6 +25,11 @@ import type React from 'react';
  * messages) is rendered as live React components in the tail. When the
  * content completes, it is atomically committed to the <Static> scrollback.
  * This enables parallel tool execution and fixes the soft-wrap color bug.
+ *
+ * Tool render components: plugins can optionally register a custom JSX
+ * component for rendering their tool call state via DroneToolDefinition's
+ * `renderComponent` field. When not provided, the default ToolCallProgress
+ * (JSON with arrows) is used as fallback.
  */
 
 import { Box, useApp, useInput } from 'ink';
@@ -49,17 +54,11 @@ import { useTailRegion } from './hooks/useTailRegion.js';
 import type { DroneTuiOptions, MidPanelWidget } from './types.js';
 import type { DroneColorScheme } from './theme.js';
 import type { DroneToolDescriptor } from 'drone-core';
+import { formatDiffResult } from './shared/diff-format.js';
 import { CANCEL_SENTINEL } from '../runtime/conversation-service.js';
 
 /** Maximum chars rendered in a tool argument or result preview. */
 const PREVIEW_MAX = 200;
-
-/** ANSI color codes for diff output */
-const ANSI = {
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  reset: '\x1b[0m',
-};
 
 /** Build a prompt label like `drone> ` or `unix-beard> `. */
 function buildPromptLabel(opts: DroneTuiOptions): string {
@@ -86,125 +85,6 @@ function shortHomePath(cwd: string): string {
 function preview(text: string, max = PREVIEW_MAX): string {
   const flat = text.replace(/\s+/g, ' ').trim();
   return flat.length > max ? `${flat.slice(0, max)}…` : flat;
-}
-
-function tryParseJson(raw: string): Record<string, unknown> | undefined {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      !Array.isArray(parsed)
-    ) {
-      return parsed as Record<string, unknown>;
-    }
-    return undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Format a diff result for display with colored +/- indicators and line numbers.
- */
-function formatDiffResult(content: string): string {
-  const parsed = tryParseJson(content);
-  if (parsed && typeof parsed === 'object') {
-    const obj = parsed as Record<string, unknown>;
-    if (
-      obj.path !== undefined &&
-      (obj.written === true || obj.patched === true)
-    ) {
-      return `✓ Applied diff to ${obj.path}`;
-    }
-    if (obj.diff && typeof obj.diff === 'string') {
-      return formatDiffOutput(obj.diff);
-    }
-  }
-
-  if (content.includes('---') || content.includes('@@')) {
-    return formatDiffOutput(content);
-  }
-
-  return content;
-}
-
-/**
- * Format diff output with colored +/- prefixes and line numbers.
- */
-function formatDiffOutput(diff: string): string {
-  const lines = diff.split('\n');
-  const output: string[] = [];
-  let lineNum = 0;
-
-  for (const line of lines) {
-    lineNum++;
-    if (line.startsWith('+')) {
-      output.push(
-        `${ANSI.green}+${ANSI.reset}${String(lineNum).padStart(4)} │ ${ANSI.green}${line}${ANSI.reset}`
-      );
-    } else if (line.startsWith('-')) {
-      output.push(
-        `${ANSI.red}-${ANSI.reset}${String(lineNum).padStart(4)} │ ${ANSI.red}${line}${ANSI.reset}`
-      );
-    } else if (line.startsWith('@@')) {
-      output.push(` ${String(lineNum).padStart(4)} │ ${line}`);
-    } else if (
-      line.startsWith('diff ') ||
-      line.startsWith('index ') ||
-      line.startsWith('---') ||
-      line.startsWith('+++')
-    ) {
-      output.push(` ${String(lineNum).padStart(4)} │ ${line}`);
-    } else {
-      output.push(` ${String(lineNum).padStart(4)} │ ${line}`);
-    }
-  }
-
-  return output.join('\n');
-}
-
-/**
- * Format an exec.run result to show full command and full output without truncation.
- */
-function formatExecResult(
-  arguments_: Record<string, unknown>,
-  content: string
-): string {
-  const command = arguments_.command as string | undefined;
-  const cwd = arguments_.cwd as string | undefined;
-
-  const lines: string[] = [];
-
-  if (cwd) {
-    lines.push(`$ cd ${cwd} && ${command}`);
-  } else {
-    lines.push(`$ ${command}`);
-  }
-
-  lines.push('');
-
-  lines.push(content);
-
-  return lines.join('\n');
-}
-
-/**
- * Format a tool result for display, applying special handling for
- * exec.run (full output) and diff tools (formatted diff).
- */
-function formatToolResult(
-  name: string,
-  content: string,
-  arguments_: Record<string, unknown>
-): string {
-  if (name === 'exec__run') {
-    return formatExecResult(arguments_, content);
-  }
-  if (name === 'file__apply_diff' || name === 'git__diff') {
-    return formatDiffResult(content);
-  }
-  return preview(content, PREVIEW_MAX);
 }
 
 export function App(opts: DroneTuiOptions): React.JSX.Element {
@@ -317,19 +197,29 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         }
         case 'toolCallBatch': {
           currentToolCallIds.current = event.toolCalls.map(tc => {
-            return addItem(
-              'toolCall',
+            // Look up custom render component if registered
+            const toolDef = opts.engine.getTool(tc.name);
+            const customRender = toolDef?.renderComponent;
+            const component = customRender ? (
+              (customRender({
+                name: tc.name,
+                arguments: tc.arguments,
+                status: 'running' as const,
+                scheme: s as unknown,
+              }) as React.ReactNode)
+            ) : (
               <ToolCallProgress
                 name={tc.name}
                 args={tc.arguments}
                 status="running"
                 scheme={s}
-              />,
-              () => ({
-                text: `→ ${tc.name}(${preview(JSON.stringify(tc.arguments), PREVIEW_MAX)})`,
-                kind: 'toolCall',
-              })
+              />
             );
+
+            return addItem('toolCall', component, () => ({
+              text: `→ ${tc.name}(${preview(JSON.stringify(tc.arguments), PREVIEW_MAX)})`,
+              kind: 'toolCall',
+            }));
           });
           break;
         }
@@ -340,30 +230,48 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             const result = event.results[i];
             const id = ids[i];
             if (id) {
-              const formatted = formatToolResult(
-                result.name,
-                result.content,
-                result.arguments
-              );
               const isError = result.content.startsWith(
                 result.name + ' failed'
               );
-              updateItem(
-                id,
+              const toolDef = opts.engine.getTool(result.name);
+              const customRender = toolDef?.renderComponent;
+
+              // Build the live component (custom or default)
+              const component = customRender ? (
+                (customRender({
+                  name: result.name,
+                  arguments: result.arguments,
+                  result: result.content,
+                  status: isError ? ('error' as const) : ('done' as const),
+                  scheme: s as unknown,
+                }) as React.ReactNode)
+              ) : (
                 <ToolCallProgress
                   name={result.name}
                   args={result.arguments}
                   result={result.content}
                   status={isError ? 'error' : 'done'}
                   scheme={s}
-                />,
-                () => ({
-                  text: isError
-                    ? `✗ ${result.name}: ${result.content}`
-                    : `← ${result.name}: ${formatted}`,
-                  kind: isError ? 'error' : 'toolResult',
-                })
+                />
               );
+
+              // Build the static scrollback text
+              // For git diff, use the ANSI-colored diff output
+              let scrollbackText: string;
+              if (result.name === 'git__diff') {
+                scrollbackText = formatDiffResult(result.content);
+              } else {
+                scrollbackText = isError
+                  ? result.content
+                  : preview(result.content, PREVIEW_MAX);
+              }
+
+              updateItem(id, component, () => ({
+                text: isError
+                  ? `✗ ${result.name}: ${result.content}`
+                  : `← ${result.name}: ${scrollbackText}`,
+                kind: isError ? 'error' : 'toolResult',
+              }));
             }
           }
           // Commit all tool calls in order
@@ -686,9 +594,3 @@ function printHelp(
   log('Help', 'info');
   log(helpLines.join('\n'));
 }
-/**
- * @internal Exposed for unit tests. Not part of the public API.
- */
-export const __testing = {
-  formatDiffResult,
-};

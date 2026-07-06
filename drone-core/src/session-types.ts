@@ -112,6 +112,17 @@ export type DroneSessionSafetyTrimPayload = {
   warningMessage?: string;
 };
 
+/** State passed to a custom tool render component in the TUI tail region. */
+export type ToolRenderState = {
+  name: string;
+  arguments: Record<string, unknown>;
+  /** Present when the tool has completed (success or error). */
+  result?: string;
+  status: 'running' | 'done' | 'error';
+  /** TUI color scheme, cast to unknown to keep drone-core React-free. */
+  scheme: unknown;
+};
+
 export type DroneConversationEvent =
   | { kind: 'userMessage'; content: string }
   | { kind: 'reasoning'; content: string }

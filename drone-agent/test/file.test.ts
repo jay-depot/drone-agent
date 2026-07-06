@@ -818,7 +818,8 @@ describe('file__apply_diff — round-trip integration', () => {
   });
 
   it('TUI formatDiffResult recognizes patched field', async () => {
-    const { formatDiffResult } = (await import('../src/tui/app.js')).__testing;
+    const { formatDiffResult } =
+      await import('../src/tui/shared/diff-format.js');
     const result = formatDiffResult(
       JSON.stringify({
         path: '/tmp/test.txt',
@@ -832,7 +833,8 @@ describe('file__apply_diff — round-trip integration', () => {
   });
 
   it('TUI formatDiffResult still works with written field', async () => {
-    const { formatDiffResult } = (await import('../src/tui/app.js')).__testing;
+    const { formatDiffResult } =
+      await import('../src/tui/shared/diff-format.js');
     const result = formatDiffResult(
       JSON.stringify({
         path: '/tmp/test.txt',

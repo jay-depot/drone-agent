@@ -91,6 +91,7 @@ export type {
   DroneSessionSafetyTrimPayload,
   DroneConversationEvent,
   SessionStatus,
+  ToolRenderState,
 } from './session-types.js';
 
 export { SESSION_STATUSES } from './session-types.js';

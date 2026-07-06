@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { DronePlugin } from 'drone-core';
+import { GitDiffBlock } from '../tui/components/GitDiffBlock.js';
 
 const execFilePromise = promisify(execFile);
 
@@ -95,6 +96,7 @@ export const gitPlugin: DronePlugin = {
         },
         additionalProperties: false,
       },
+      renderComponent: state => GitDiffBlock({ state }),
       execute: async input => {
         const cwd =
           typeof input.cwd === 'string' && input.cwd.trim().length > 0

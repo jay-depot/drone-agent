@@ -21,6 +21,10 @@ export type DroneToolDefinition = {
    * be opt-in rather than always available.
    */
   defaultHidden?: boolean;
+  /** Optional custom React component for rendering in the TUI tail region. */
+  renderComponent?: (
+    state: import('./session-types.js').ToolRenderState
+  ) => unknown;
   execute: (input: Record<string, unknown>) => Promise<string>;
 };
 

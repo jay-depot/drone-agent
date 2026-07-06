@@ -14,6 +14,7 @@ updated: 2026-07-06T21:28:02.983Z
 ## Summary
 
 Allow plugins to optionally register a custom JSX component for rendering their tool call state in the TUI's tail region. When a plugin doesn't provide one, the existing default `ToolCallProgress` fallback is used. This also cleans up:
+
 - The special-case formatting functions in `app.tsx` (`formatDiffResult`, `formatExecResult`, etc.) — removed since git gets its own component
 - The `registration.logger.error(...)` catch block in `file__apply_diff` — removed as unnecessary noise now that errors surface through normal paths
 
@@ -60,7 +61,9 @@ export type DroneToolDefinition = {
   defaultHidden?: boolean;
   execute: (input: Record<string, unknown>) => Promise<string>;
   /** Optional custom React component for rendering in the TUI tail region. */
-  renderComponent?: (state: import('./session-types.js').ToolRenderState) => unknown;
+  renderComponent?: (
+    state: import('./session-types.js').ToolRenderState
+  ) => unknown;
 };
 ```
 
@@ -115,11 +118,12 @@ export function tryParseJson(raw: string): Record<string, unknown> | undefined {
 **File**: `drone-agent/src/tui/components/GitDiffBlock.tsx` (new)
 
 A custom Ink component that receives `ToolRenderState` (with `scheme` cast to `DroneColorScheme`) and:
+
 - Parses the JSON result to extract the `diff` field
 - Renders each line with Ink's `<Text color={...}>`: green for `+`, red for `-`, neutral for headers/hunks/context
 - Uses `wrap="wrap"` for proper soft-wrap color behavior
 
-## Step 6: Register renderComponent on git__diff
+## Step 6: Register renderComponent on git\_\_diff
 
 **File**: `drone-agent/src/plugins/git.ts`
 
@@ -142,6 +146,7 @@ Since `renderComponent` returns `unknown` and JSX compiles to `React.createEleme
 **File**: `drone-agent/src/tui/app.tsx`
 
 Changes:
+
 1. In `toolCallBatch` handler: look up `opts.engine.getTool(tc.name)` and check `toolDef?.renderComponent`. If present, call it with `{ name, arguments, status: 'running', scheme: s as unknown }` and cast to `ReactNode`. Otherwise fall back to `<ToolCallProgress ... />`.
 2. In `toolResultBatch` handler: same lookup for the result state `{ name, arguments, result, status: 'done'|'error', scheme }`.
 3. Remove from `app.tsx`:
@@ -149,18 +154,19 @@ Changes:
    - `formatDiffResult` function (moved to `diff-format.ts`)
    - `formatDiffOutput` function (moved to `diff-format.ts`)
    - `tryParseJson` function (moved to `diff-format.ts`)
-   - `formatExecResult` function (removed entirely — exec__run gets default preview)
+   - `formatExecResult` function (removed entirely — exec\_\_run gets default preview)
    - `formatToolResult` function (removed entirely — no more special-casing tools)
    - `__testing.formatDiffResult` export (no longer needed)
 4. The `toEntry()` functions for tool calls use `preview()` for non-git tools; for git diff, import `formatDiffResult` from the shared utility.
 
-## Step 8: Remove file__apply_diff extra logging
+## Step 8: Remove file\_\_apply_diff extra logging
 
 **File**: `drone-agent/src/plugins/file.ts`
 
 Remove the `registration.logger.error(...)` call in the catch block of the `file__apply_diff` tool's execute function. The error is already thrown and will surface through the normal error path (tail region shows `✗ file__apply_diff: error message`).
 
 The catch block becomes a bare re-throw:
+
 ```typescript
 } catch (err) {
   throw err;
@@ -178,18 +184,18 @@ Or just remove the try/catch entirely if the catch doesn't do anything else.
 
 ## Files Modified
 
-| File | Change |
-|------|--------|
-| `drone-core/src/session-types.ts` | Add `ToolRenderState` type |
-| `drone-core/src/index.ts` | Re-export `ToolRenderState` |
-| `drone-core/src/plugin-system.ts` | Add `renderComponent` to `DroneToolDefinition` |
-| `drone-agent/src/tui/types.ts` | Add `getTool` to `DroneTuiOptions.engine` pick |
-| `drone-agent/src/tui/shared/diff-format.ts` | **New** — `formatDiffResult`, `formatDiffOutput`, `ANSI`, `tryParseJson` |
-| `drone-agent/src/tui/components/GitDiffBlock.tsx` | **New** — Ink component for git diff rendering |
-| `drone-agent/src/plugins/git.ts` | Register `renderComponent` on `git__diff` |
-| `drone-agent/src/tui/app.tsx` | Rewrite batch handlers, remove special-case functions, remove old imports |
-| `drone-agent/src/plugins/file.ts` | Remove `registration.logger.error(...)` catch block |
-| `drone-agent/test/...` | Update any test referencing `App.__testing.formatDiffResult` |
+| File                                              | Change                                                                    |
+| ------------------------------------------------- | ------------------------------------------------------------------------- |
+| `drone-core/src/session-types.ts`                 | Add `ToolRenderState` type                                                |
+| `drone-core/src/index.ts`                         | Re-export `ToolRenderState`                                               |
+| `drone-core/src/plugin-system.ts`                 | Add `renderComponent` to `DroneToolDefinition`                            |
+| `drone-agent/src/tui/types.ts`                    | Add `getTool` to `DroneTuiOptions.engine` pick                            |
+| `drone-agent/src/tui/shared/diff-format.ts`       | **New** — `formatDiffResult`, `formatDiffOutput`, `ANSI`, `tryParseJson`  |
+| `drone-agent/src/tui/components/GitDiffBlock.tsx` | **New** — Ink component for git diff rendering                            |
+| `drone-agent/src/plugins/git.ts`                  | Register `renderComponent` on `git__diff`                                 |
+| `drone-agent/src/tui/app.tsx`                     | Rewrite batch handlers, remove special-case functions, remove old imports |
+| `drone-agent/src/plugins/file.ts`                 | Remove `registration.logger.error(...)` catch block                       |
+| `drone-agent/test/...`                            | Update any test referencing `App.__testing.formatDiffResult`              |
 
 ## Validation Criteria
 

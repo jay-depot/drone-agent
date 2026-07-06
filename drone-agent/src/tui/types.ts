@@ -110,6 +110,7 @@ export type DroneTuiOptions = {
     | 'onConversationEvent'
     | 'runWorkflow'
     | 'getSlashCommands'
+    | 'getTool'
   >;
   conversation: {
     sendUserMessage: (
