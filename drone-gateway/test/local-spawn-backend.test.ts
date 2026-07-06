@@ -30,17 +30,19 @@ function makeMockProcess(pid: number, stdoutData: string[]): ChildProcess {
     },
   });
   const proc = new EventEmitter() as ChildProcess;
-  proc.pid = pid;
-  proc.stdin = stdin as any;
-  proc.stdout = stdout as any;
-  proc.stderr = stderr as any;
-  proc.kill = vi.fn();
-  proc.killed = false;
-  return proc;
+  Object.assign(proc, {
+    pid,
+    stdin,
+    stdout,
+    stderr,
+    kill: vi.fn(),
+    killed: false,
+  });
+  return proc as ChildProcess;
 }
 
 describe('LocalSpawnBackend', () => {
-  let backend: LocalSpawnBackend;
+  let backend: InstanceType<typeof LocalSpawnBackend>;
 
   beforeEach(() => {
     vi.clearAllMocks();

@@ -34,7 +34,7 @@ function makeMinimalConfig(
 }
 
 describe('GatewayEngine', () => {
-  let engine: GatewayEngine;
+  let engine: InstanceType<typeof GatewayEngine>;
   let mockSpawnBackend: SpawnBackend;
 
   beforeEach(() => {

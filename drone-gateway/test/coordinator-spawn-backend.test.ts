@@ -18,7 +18,7 @@ const { CoordinatorSpawnBackend } =
   await import('../src/coordinator-spawn-backend.js');
 
 describe('CoordinatorSpawnBackend', () => {
-  let backend: CoordinatorSpawnBackend;
+  let backend: InstanceType<typeof CoordinatorSpawnBackend>;
 
   beforeEach(() => {
     vi.clearAllMocks();
