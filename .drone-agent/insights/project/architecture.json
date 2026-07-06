@@ -266,5 +266,9 @@
   {
     "timestamp": "2026-07-06T20:51:41.710Z",
     "insight": "When a class is imported via dynamic `await import(...)`, the destructured binding is a value, not a type. You can't use it directly as a type annotation (`let x: ClassName` errors). The clean fix is `InstanceType<typeof ClassName>` — it reads the instance type from the value without needing a separate `import type` that would conflict with the local binding."
+  },
+  {
+    "timestamp": "2026-07-06T21:25:02.509Z",
+    "insight": "The TUI app.tsx event listener hardcodes special-case formatting for specific tools (exec__run, file__apply_diff, git__diff) via formatExecResult/formatDiffResult/formatToolResult. This is brittle — every new tool with custom display needs a new special case. The planned renderComponent pattern on DroneToolDefinition eliminates this by letting plugins own their rendering."
   }
 ]

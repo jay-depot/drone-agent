@@ -138,5 +138,9 @@
   {
     "timestamp": "2026-07-06T17:22:33.615Z",
     "insight": "The `@vitest/coverage-v8` package is not installed in the project, so coverage reports don't work. The coverage config changes are correct but can't be verified until the dependency is added."
+  },
+  {
+    "timestamp": "2026-07-06T21:28:09.952Z",
+    "insight": "The plugin-customizable-tool-render plan revealed a subtlety: the `toEntry()` functions on TailItems produce text for the static scrollback, which is separate from the live tail component rendering. For git diff, we need both a colored Ink component (for the tail) and ANSI-colored text (for the scrollback). The shared diff-format.ts utility serves both consumers."
   }
 ]
