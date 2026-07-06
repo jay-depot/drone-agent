@@ -1774,3 +1774,141 @@ describe('Message Routes (detailed)', () => {
     expect(body.totalBeacons).toBe(2);
   });
 });
+
+// ── Spawn Route ─────────────────────────────────────────────────────
+
+describe('Spawn Route', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('POST /spawn forwards request to beacon and returns result', async () => {
+    // Register a beacon
+    await app.inject({
+      method: 'POST',
+      url: '/beacons',
+      payload: {
+        id: 'b-target',
+        name: 'Target',
+        host: 'localhost',
+        port: 3457,
+      },
+    });
+
+    // Stub fetch to return a successful spawn response
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        spawnId: 'spawn-123',
+        agentId: 'agent-abc',
+        status: 'spawning',
+        beaconUrl: 'http://localhost:3457',
+        message: 'Agent spawned, waiting for connection',
+      }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/spawn',
+      payload: {
+        targetBeaconId: 'b-target',
+        personaId: 'test-persona',
+        task: 'do something',
+        spawnId: 'my-spawn-id',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.spawnId).toBe('spawn-123');
+    expect(body.agentId).toBe('agent-abc');
+    expect(body.status).toBe('spawning');
+    expect(body.targetBeaconId).toBe('b-target');
+
+    // Verify fetch was called with the right URL and body
+    expect(mockFetch).toHaveBeenCalledWith(
+      'http://localhost:3457/spawn',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: expect.stringContaining('"personaId":"test-persona"'),
+      })
+    );
+  });
+
+  it('POST /spawn returns 400 when targetBeaconId is missing', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/spawn',
+      payload: { personaId: 'test' },
+    });
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.body);
+    expect(body.error).toContain('targetBeaconId');
+  });
+
+  it('POST /spawn returns 404 when beacon not found', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/spawn',
+      payload: { targetBeaconId: 'nonexistent' },
+    });
+    expect(res.statusCode).toBe(404);
+    const body = JSON.parse(res.body);
+    expect(body.code).toBe('BEACON_NOT_FOUND');
+  });
+
+  it('POST /spawn returns 502 when beacon returns error', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/beacons',
+      payload: { id: 'b-error', name: 'Error', host: 'localhost', port: 3457 },
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        text: async () => 'Persona not found: bad-persona',
+      })
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/spawn',
+      payload: { targetBeaconId: 'b-error' },
+    });
+    expect(res.statusCode).toBe(502);
+    const body = JSON.parse(res.body);
+    expect(body.error).toContain('Failed to spawn agent');
+    expect(body.details).toBe('Persona not found: bad-persona');
+  });
+
+  it('POST /spawn returns 503 when beacon is unreachable', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/beacons',
+      payload: { id: 'b-down', name: 'Down', host: 'localhost', port: 3457 },
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new Error('Connection refused'))
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/spawn',
+      payload: { targetBeaconId: 'b-down' },
+    });
+    expect(res.statusCode).toBe(503);
+    const body = JSON.parse(res.body);
+    expect(body.code).toBe('BEACON_UNAVAILABLE');
+    expect(body.details).toBe('Connection refused');
+  });
+});

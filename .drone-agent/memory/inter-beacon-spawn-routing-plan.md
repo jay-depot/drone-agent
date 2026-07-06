@@ -1,7 +1,6 @@
 ---
 key: inter-beacon-spawn-routing-plan
-tags:
-  []
+tags: []
 created: 2026-07-06T01:06:32.898Z
 updated: 2026-07-06T01:06:32.898Z
 ---
@@ -113,6 +112,7 @@ export default function spawnRoutes(app: FastifyInstance) {
 ```
 
 **Key design points:**
+
 - `targetBeaconId` is required — returns 400 if missing
 - Validates beacon exists in DB — returns 404 with `BEACON_NOT_FOUND` if not
 - Forwards the spawn body (minus `targetBeaconId`) to `POST /spawn` on the beacon
@@ -141,7 +141,7 @@ export async function registerRoutes(app: FastifyInstance) {
   wiki(app);
   swarm(app);
   messages(app);
-  spawn(app);  // ← add this line
+  spawn(app); // ← add this line
 }
 ```
 
@@ -180,7 +180,12 @@ describe('Spawn Route', () => {
     await app.inject({
       method: 'POST',
       url: '/beacons',
-      payload: { id: 'b-target', name: 'Target', host: 'localhost', port: 3457 },
+      payload: {
+        id: 'b-target',
+        name: 'Target',
+        host: 'localhost',
+        port: 3457,
+      },
     });
 
     // Stub fetch to return a successful spawn response
@@ -254,10 +259,13 @@ describe('Spawn Route', () => {
       payload: { id: 'b-error', name: 'Error', host: 'localhost', port: 3457 },
     });
 
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: false,
-      text: async () => 'Persona not found: bad-persona',
-    }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        text: async () => 'Persona not found: bad-persona',
+      })
+    );
 
     const res = await app.inject({
       method: 'POST',
@@ -277,7 +285,10 @@ describe('Spawn Route', () => {
       payload: { id: 'b-down', name: 'Down', host: 'localhost', port: 3457 },
     });
 
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Connection refused')));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new Error('Connection refused'))
+    );
 
     const res = await app.inject({
       method: 'POST',

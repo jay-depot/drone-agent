@@ -9,6 +9,7 @@ import principles from './principles.js';
 import wiki from './wiki.js';
 import swarm from './swarm.js';
 import messages from './messages.js';
+import spawn from './spawn.js';
 
 export async function registerRoutes(app: FastifyInstance) {
   health(app);
@@ -21,4 +22,5 @@ export async function registerRoutes(app: FastifyInstance) {
   wiki(app);
   swarm(app);
   messages(app);
+  spawn(app);
 }

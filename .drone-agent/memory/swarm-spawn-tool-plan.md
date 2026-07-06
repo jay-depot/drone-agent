@@ -1,7 +1,6 @@
 ---
 key: swarm-spawn-tool-plan
-tags:
-  []
+tags: []
 created: 2026-07-06T01:11:20.670Z
 updated: 2026-07-06T01:15:14.300Z
 ---
@@ -18,24 +17,27 @@ These new routes on the coordinator forward spawn-related requests to the target
 
 ### Files to Modify
 
-| File | Action |
-|------|--------|
+| File                                    | Action                                                                                          |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `drone-coordinator/src/routes/spawn.ts` | Add `GET /spawn/:beaconId`, `GET /spawn/:beaconId/:spawnId`, `DELETE /spawn/:beaconId/:spawnId` |
 
 ### Routes
 
 **`GET /spawn/:beaconId`** — List spawns on a beacon
+
 - Looks up beacon via `db.getBeacon(beaconId)` → 404 `BEACON_NOT_FOUND` if missing
 - Forwards `GET /spawn?status=...` to the beacon
 - Returns the beacon's response (array of spawn records)
 - Error handling: 502 on beacon error, 503 on network error
 
 **`GET /spawn/:beaconId/:spawnId`** — Get spawn status
+
 - Same beacon lookup + forward pattern
 - Forwards `GET /spawn/:spawnId` to the beacon
 - Returns the beacon's response (spawn record with status, agentId, exitCode, error, timestamps)
 
 **`DELETE /spawn/:beaconId/:spawnId`** — Terminate a spawned agent
+
 - Same beacon lookup + forward pattern
 - Forwards `DELETE /spawn/:spawnId` to the beacon
 - Returns the beacon's response
@@ -48,17 +50,27 @@ app.get<{ Params: { beaconId: string }; Querystring: { status?: string } }>(
   async (request, reply) => {
     const beacon = db.getBeacon(request.params.beaconId);
     if (!beacon) {
-      return reply.code(404).send({ error: 'Beacon not found', code: 'BEACON_NOT_FOUND' });
+      return reply
+        .code(404)
+        .send({ error: 'Beacon not found', code: 'BEACON_NOT_FOUND' });
     }
     try {
-      const query = request.query.status ? `?status=${request.query.status}` : '';
-      const response = await fetch(`http://${beacon.host}:${beacon.port}/spawn${query}`);
+      const query = request.query.status
+        ? `?status=${request.query.status}`
+        : '';
+      const response = await fetch(
+        `http://${beacon.host}:${beacon.port}/spawn${query}`
+      );
       if (!response.ok) {
-        return reply.code(502).send({ error: 'Beacon error', details: await response.text() });
+        return reply
+          .code(502)
+          .send({ error: 'Beacon error', details: await response.text() });
       }
       return response.json();
     } catch (err) {
-      return reply.code(503).send({ error: 'Beacon unavailable', code: 'BEACON_UNAVAILABLE' });
+      return reply
+        .code(503)
+        .send({ error: 'Beacon unavailable', code: 'BEACON_UNAVAILABLE' });
     }
   }
 );
@@ -68,8 +80,8 @@ app.get<{ Params: { beaconId: string }; Querystring: { status?: string } }>(
 
 ### Files to Modify
 
-| File | Action |
-|------|--------|
+| File                                     | Action                                                            |
+| ---------------------------------------- | ----------------------------------------------------------------- |
 | `drone-agent/src/plugins/swarm/index.ts` | Add `coordinatorUrl` to `SwarmConfig`, add 6 new tool definitions |
 
 ### Config Change
@@ -89,8 +101,7 @@ export interface SwarmConfig {
 Read it from user config in `register()`:
 
 ```typescript
-const coordinatorUrl =
-  userSwarmConfig.coordinatorUrl ?? config.coordinatorUrl;
+const coordinatorUrl = userSwarmConfig.coordinatorUrl ?? config.coordinatorUrl;
 ```
 
 ### Tool: `swarm__list_beacons`

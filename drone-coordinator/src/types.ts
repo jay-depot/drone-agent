@@ -122,3 +122,20 @@ export interface SearchKnowledgeQuery {
   q?: string; // Search query
   type?: KnowledgeType; // Filter by type
 }
+
+// === Spawn Types ===
+
+export interface SpawnConfig {
+  model?: string;
+  preamble?: string;
+  workingDir?: string;
+  env?: Record<string, string>;
+}
+
+export interface SpawnRequest {
+  targetBeaconId: string;
+  personaId?: string;
+  task?: string;
+  config?: SpawnConfig;
+  spawnId?: string;
+}

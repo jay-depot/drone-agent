@@ -195,7 +195,7 @@ describe('anthropic plugin', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [
       string,
-      RequestInit & { headers?: Record<string, string> }
+      RequestInit & { headers?: Record<string, string> },
     ];
     expect(url).toBe('https://api.anthropic.com/v1/messages');
     expect(init.headers?.['x-api-key']).toBe('test-anthropic-key');
