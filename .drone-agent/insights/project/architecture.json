@@ -262,5 +262,9 @@
   {
     "timestamp": "2026-07-06T20:17:54.163Z",
     "insight": "The `toEntry()` function on TailItem was initially typed to return `ChatEntry` (with `id`), but this conflicted with `useChatLog`'s `log()` and `appendEntry()` which expect `Omit<ChatEntry, 'id'>` and generate the id internally. Changed `toEntry()` to return `Omit<ChatEntry, 'id'>` to match the existing pattern and avoid duplicate id generation."
+  },
+  {
+    "timestamp": "2026-07-06T20:51:41.710Z",
+    "insight": "When a class is imported via dynamic `await import(...)`, the destructured binding is a value, not a type. You can't use it directly as a type annotation (`let x: ClassName` errors). The clean fix is `InstanceType<typeof ClassName>` — it reads the instance type from the value without needing a separate `import type` that would conflict with the local binding."
   }
 ]
