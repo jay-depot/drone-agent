@@ -30,5 +30,13 @@
   {
     "timestamp": "2026-07-06T00:36:44.784Z",
     "insight": "Wiki route tests were deferred because the route files use dynamic import('drone-swarm-common/wiki-storage') which goes through vitest's alias, but dynamic imports from test files don't go through the alias. This means setKnowledgeBaseDir() called from a test file uses a different module instance than the route files. The wiki storage is tested separately in wiki-storage.test.ts."
+  },
+  {
+    "timestamp": "2026-07-06T00:43:08.979Z",
+    "insight": "The DroneToolDescriptor type (used by LLM provider chat() methods) does not have an 'execute' property — that's on DroneToolDefinition (used by the plugin engine). Several test files were passing 'execute' in tool objects to chat(), which caused TS errors. The fix was to remove the 'execute' property since it's not needed by the LLM provider."
+  },
+  {
+    "timestamp": "2026-07-06T00:43:08.983Z",
+    "insight": "The DroneAgentConfig type requires 'openai' and 'anthropic' fields (not optional), but several test files were constructing partial config objects without them. The fix was to add minimal openai/anthropic config stubs. This suggests the config type might benefit from a PartialDroneAgentConfig-based helper or a test fixture factory."
   }
 ]
