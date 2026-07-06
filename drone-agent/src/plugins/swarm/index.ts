@@ -79,6 +79,7 @@ export interface SwarmConfig {
   beaconHost?: string;
   beaconPort?: number;
   beaconUseHttps?: boolean;
+  coordinatorUrl?: string;
   sessionId?: string;
 }
 
@@ -116,6 +117,8 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       const sessionId =
         userSwarmConfig.sessionId ?? config.sessionId ?? `agent-${Date.now()}`;
       const protocol = beaconUseHttps ? 'https' : 'http';
+      const coordinatorUrl =
+        userSwarmConfig.coordinatorUrl ?? config.coordinatorUrl;
       const baseUrl = `${protocol}://${beaconHost}:${beaconPort}`;
 
       registration.logger.info(
@@ -1085,6 +1088,258 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       registration.registerTool(wikiListTool);
       registration.registerTool(wikiDeleteTool);
       registration.registerTool(wikiLintTool);
+
+      // ── Coordinator spawn & info tools ──────────────────────────────────
+
+      const coordinatorFetch = async (path: string, options?: RequestInit) => {
+        if (!coordinatorUrl) {
+          return {
+            ok: false,
+            json: async () => ({
+              success: false,
+              error:
+                'coordinatorUrl not configured. Set swarm.coordinatorUrl in your config.',
+            }),
+          } as Response;
+        }
+        return fetch(`${coordinatorUrl}${path}`, {
+          headers: { 'Content-Type': 'application/json' },
+          ...options,
+        });
+      };
+
+      const handleCoordinatorResponse = async (response: Response) => {
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({
+            error: response.statusText,
+          }));
+          return JSON.stringify({
+            success: false,
+            error: `Coordinator returned ${response.status}`,
+            details: body,
+          });
+        }
+        const data = await response.json();
+        return JSON.stringify({ success: true, ...data });
+      };
+
+      const handleCoordinatorError = (err: unknown) =>
+        JSON.stringify({
+          success: false,
+          error: 'Failed to reach coordinator',
+          details: err instanceof Error ? err.message : 'Unknown error',
+        });
+
+      const swarmListBeaconsTool: DroneToolDefinition = {
+        name: 'swarm_list_beacons',
+        description: 'List all beacons registered with the coordinator.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+        execute: async () => {
+          try {
+            const response = await coordinatorFetch('/beacons');
+            return handleCoordinatorResponse(response);
+          } catch (err) {
+            return handleCoordinatorError(err);
+          }
+        },
+      };
+
+      const swarmListAgentsTool: DroneToolDefinition = {
+        name: 'swarm_list_agents',
+        description:
+          'List agent locations across the swarm. Optionally filter by beacon ID.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            beaconId: {
+              type: 'string',
+              description:
+                'Optional beacon ID to filter agents on a specific beacon',
+            },
+          },
+        },
+        execute: async params => {
+          try {
+            const query = params.beaconId
+              ? `?beaconId=${encodeURIComponent(params.beaconId as string)}`
+              : '';
+            const response = await coordinatorFetch(`/agents/location${query}`);
+            return handleCoordinatorResponse(response);
+          } catch (err) {
+            return handleCoordinatorError(err);
+          }
+        },
+      };
+
+      const swarmSpawnTool: DroneToolDefinition = {
+        name: 'swarm_spawn',
+        description:
+          'Spawn a new agent on a remote beacon via the coordinator.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            targetBeaconId: {
+              type: 'string',
+              description: 'The ID of the beacon to spawn the agent on',
+            },
+            personaId: {
+              type: 'string',
+              description: 'Optional persona ID to assign to the spawned agent',
+            },
+            task: {
+              type: 'string',
+              description: 'Optional task description for the spawned agent',
+            },
+            config: {
+              type: 'object',
+              description: 'Optional spawn configuration overrides',
+              properties: {
+                model: {
+                  type: 'string',
+                  description: 'LLM model override',
+                },
+                preamble: {
+                  type: 'string',
+                  description: 'System prompt override',
+                },
+                workingDir: {
+                  type: 'string',
+                  description: 'Working directory',
+                },
+                env: {
+                  type: 'object',
+                  description: 'Extra environment variables',
+                },
+              },
+            },
+            spawnId: {
+              type: 'string',
+              description: 'Optional caller-supplied spawn ID for idempotency',
+            },
+          },
+          required: ['targetBeaconId'],
+        },
+        execute: async params => {
+          try {
+            const response = await coordinatorFetch('/spawn', {
+              method: 'POST',
+              body: JSON.stringify({
+                targetBeaconId: params.targetBeaconId,
+                personaId: params.personaId || undefined,
+                task: params.task || undefined,
+                config: params.config || undefined,
+                spawnId: params.spawnId || undefined,
+              }),
+            });
+            return handleCoordinatorResponse(response);
+          } catch (err) {
+            return handleCoordinatorError(err);
+          }
+        },
+      };
+
+      const swarmGetSpawnTool: DroneToolDefinition = {
+        name: 'swarm_get_spawn',
+        description: 'Get the status of a spawned agent on a specific beacon.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            beaconId: {
+              type: 'string',
+              description: 'The ID of the beacon where the agent was spawned',
+            },
+            spawnId: {
+              type: 'string',
+              description: 'The spawn ID returned by swarm_spawn',
+            },
+          },
+          required: ['beaconId', 'spawnId'],
+        },
+        execute: async params => {
+          try {
+            const response = await coordinatorFetch(
+              `/spawn/${encodeURIComponent(params.beaconId as string)}/${encodeURIComponent(params.spawnId as string)}`
+            );
+            return handleCoordinatorResponse(response);
+          } catch (err) {
+            return handleCoordinatorError(err);
+          }
+        },
+      };
+
+      const swarmListSpawnsTool: DroneToolDefinition = {
+        name: 'swarm_list_spawns',
+        description:
+          'List all spawns on a specific beacon, optionally filtered by status.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            beaconId: {
+              type: 'string',
+              description: 'The ID of the beacon to list spawns from',
+            },
+            status: {
+              type: 'string',
+              description:
+                'Optional status filter: spawning, running, failed, terminated',
+            },
+          },
+          required: ['beaconId'],
+        },
+        execute: async params => {
+          try {
+            const query = params.status
+              ? `?status=${encodeURIComponent(params.status as string)}`
+              : '';
+            const response = await coordinatorFetch(
+              `/spawn/${encodeURIComponent(params.beaconId as string)}${query}`
+            );
+            return handleCoordinatorResponse(response);
+          } catch (err) {
+            return handleCoordinatorError(err);
+          }
+        },
+      };
+
+      const swarmTerminateSpawnTool: DroneToolDefinition = {
+        name: 'swarm_terminate_spawn',
+        description: 'Terminate a spawned agent on a specific beacon.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            beaconId: {
+              type: 'string',
+              description: 'The ID of the beacon where the agent is running',
+            },
+            spawnId: {
+              type: 'string',
+              description: 'The spawn ID of the agent to terminate',
+            },
+          },
+          required: ['beaconId', 'spawnId'],
+        },
+        execute: async params => {
+          try {
+            const response = await coordinatorFetch(
+              `/spawn/${encodeURIComponent(params.beaconId as string)}/${encodeURIComponent(params.spawnId as string)}`,
+              { method: 'DELETE' }
+            );
+            return handleCoordinatorResponse(response);
+          } catch (err) {
+            return handleCoordinatorError(err);
+          }
+        },
+      };
+
+      registration.registerTool(swarmListBeaconsTool);
+      registration.registerTool(swarmListAgentsTool);
+      registration.registerTool(swarmSpawnTool);
+      registration.registerTool(swarmGetSpawnTool);
+      registration.registerTool(swarmListSpawnsTool);
+      registration.registerTool(swarmTerminateSpawnTool);
 
       // ── Heartbeat ───────────────────────────────────────────────────────
       const heartbeat = async () => {

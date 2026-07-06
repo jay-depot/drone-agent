@@ -2,7 +2,7 @@
 key: inter-beacon-spawn-routing-plan
 tags: []
 created: 2026-07-06T01:06:32.898Z
-updated: 2026-07-06T01:06:32.898Z
+updated: 2026-07-06T01:20:13.841Z
 ---
 
 # 3.9 Inter-Beacon Spawn Routing — Implementation Plan
@@ -95,7 +95,7 @@ export default function spawnRoutes(app: FastifyInstance) {
         });
       }
 
-      const spawnData = await response.json();
+      const spawnData = (await response.json()) as Record<string, unknown>;
       return {
         ...spawnData,
         targetBeaconId,
@@ -161,148 +161,6 @@ Add a new `describe('Spawn Route')` block following the same pattern as the mess
 
 5. **Beacon unavailable** — Stub `fetch` to reject, assert 503 with `BEACON_UNAVAILABLE`.
 
-The test structure should mirror the message relay tests:
-
-```typescript
-// ── Spawn Route ─────────────────────────────────────────────────────
-
-describe('Spawn Route', () => {
-  beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn());
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('POST /spawn forwards request to beacon and returns result', async () => {
-    // Register a beacon
-    await app.inject({
-      method: 'POST',
-      url: '/beacons',
-      payload: {
-        id: 'b-target',
-        name: 'Target',
-        host: 'localhost',
-        port: 3457,
-      },
-    });
-
-    // Stub fetch to return a successful spawn response
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        spawnId: 'spawn-123',
-        agentId: 'agent-abc',
-        status: 'spawning',
-        beaconUrl: 'http://localhost:3457',
-        message: 'Agent spawned, waiting for connection',
-      }),
-    });
-    vi.stubGlobal('fetch', mockFetch);
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/spawn',
-      payload: {
-        targetBeaconId: 'b-target',
-        personaId: 'test-persona',
-        task: 'do something',
-        spawnId: 'my-spawn-id',
-      },
-    });
-
-    expect(res.statusCode).toBe(200);
-    const body = JSON.parse(res.body);
-    expect(body.spawnId).toBe('spawn-123');
-    expect(body.agentId).toBe('agent-abc');
-    expect(body.status).toBe('spawning');
-    expect(body.targetBeaconId).toBe('b-target');
-
-    // Verify fetch was called with the right URL and body
-    expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:3457/spawn',
-      expect.objectContaining({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: expect.stringContaining('"personaId":"test-persona"'),
-      })
-    );
-  });
-
-  it('POST /spawn returns 400 when targetBeaconId is missing', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/spawn',
-      payload: { personaId: 'test' },
-    });
-    expect(res.statusCode).toBe(400);
-    const body = JSON.parse(res.body);
-    expect(body.error).toContain('targetBeaconId');
-  });
-
-  it('POST /spawn returns 404 when beacon not found', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/spawn',
-      payload: { targetBeaconId: 'nonexistent' },
-    });
-    expect(res.statusCode).toBe(404);
-    const body = JSON.parse(res.body);
-    expect(body.code).toBe('BEACON_NOT_FOUND');
-  });
-
-  it('POST /spawn returns 502 when beacon returns error', async () => {
-    await app.inject({
-      method: 'POST',
-      url: '/beacons',
-      payload: { id: 'b-error', name: 'Error', host: 'localhost', port: 3457 },
-    });
-
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: false,
-        text: async () => 'Persona not found: bad-persona',
-      })
-    );
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/spawn',
-      payload: { targetBeaconId: 'b-error' },
-    });
-    expect(res.statusCode).toBe(502);
-    const body = JSON.parse(res.body);
-    expect(body.error).toContain('Failed to spawn agent');
-    expect(body.details).toBe('Persona not found: bad-persona');
-  });
-
-  it('POST /spawn returns 503 when beacon is unreachable', async () => {
-    await app.inject({
-      method: 'POST',
-      url: '/beacons',
-      payload: { id: 'b-down', name: 'Down', host: 'localhost', port: 3457 },
-    });
-
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockRejectedValue(new Error('Connection refused'))
-    );
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/spawn',
-      payload: { targetBeaconId: 'b-down' },
-    });
-    expect(res.statusCode).toBe(503);
-    const body = JSON.parse(res.body);
-    expect(body.code).toBe('BEACON_UNAVAILABLE');
-    expect(body.details).toBe('Connection refused');
-  });
-});
-```
-
 ## Validation Criteria
 
 1. **LSP checks pass** — No TypeScript errors in any modified files
@@ -310,3 +168,13 @@ describe('Spawn Route', () => {
 3. **`pnpm test` passes** — All existing tests continue to pass, plus the new spawn route tests pass
 4. **`pnpm lint` passes** — ESLint + Prettier checks pass
 5. **Manual verification**: Start a coordinator and a beacon, register the beacon, POST to `/spawn` on the coordinator with `targetBeaconId` set to the beacon's ID, verify the spawn request is forwarded and the response is returned correctly
+
+## Implementation Complete (2026-07-05)
+
+All steps completed and committed in commit `5f2ca66`:
+
+- Added `SpawnConfig` and `SpawnRequest` types to `drone-coordinator/src/types.ts`
+- Created `drone-coordinator/src/routes/spawn.ts` with `POST /spawn` handler
+- Registered the route in `drone-coordinator/src/routes/index.ts`
+- Added 5 test cases in `drone-coordinator/test/routes.test.ts`
+- All validations pass: build, 1130 tests, lint

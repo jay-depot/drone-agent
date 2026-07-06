@@ -230,5 +230,9 @@
   {
     "timestamp": "2026-07-03T01:15:01.897Z",
     "insight": "drone-coordinator/src/index.ts runs main() at import time and keeps setupServer private, blocking any fastify.inject() route testing. bin/drone-coordinator imports dist/index.js (not run-as-argv[1]), so a naive import.meta/argv entry guard would silently prevent the server from starting — the bin wrapper must call an exported main() explicitly. This entry/harness pattern likely applies to drone-beacon too (also has no route tests)."
+  },
+  {
+    "timestamp": "2026-07-06T01:20:26.341Z",
+    "insight": "The coordinator's spawn route follows the exact same pattern as the message relay route (messages.ts) — two-step lookup (beaconId → host:port), plain fetch() forwarding, and the same error code conventions (BEACON_NOT_FOUND, BEACON_UNAVAILABLE). This consistency makes the codebase easy to extend."
   }
 ]

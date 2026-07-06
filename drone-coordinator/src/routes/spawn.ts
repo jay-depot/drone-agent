@@ -3,6 +3,8 @@ import * as db from '../db.js';
 import type { SpawnRequest } from '../types.js';
 
 export default function spawnRoutes(app: FastifyInstance) {
+  // ── Spawn an agent on a target beacon ──────────────────────────────
+
   app.post<{ Body: SpawnRequest }>('/spawn', async (request, reply) => {
     const { targetBeaconId, personaId, task, config, spawnId } = request.body;
 
@@ -52,4 +54,104 @@ export default function spawnRoutes(app: FastifyInstance) {
       });
     }
   });
+
+  // ── List spawns on a beacon ────────────────────────────────────────
+
+  app.get<{
+    Params: { beaconId: string };
+    Querystring: { status?: string };
+  }>('/spawn/:beaconId', async (request, reply) => {
+    const beacon = db.getBeacon(request.params.beaconId);
+    if (!beacon) {
+      return reply
+        .code(404)
+        .send({ error: 'Beacon not found', code: 'BEACON_NOT_FOUND' });
+    }
+
+    try {
+      const query = request.query.status
+        ? `?status=${encodeURIComponent(request.query.status)}`
+        : '';
+      const response = await fetch(
+        `http://${beacon.host}:${beacon.port}/spawn${query}`
+      );
+      if (!response.ok) {
+        return reply
+          .code(502)
+          .send({ error: 'Beacon error', details: await response.text() });
+      }
+      return response.json();
+    } catch (err) {
+      return reply.code(503).send({
+        error: 'Beacon unavailable',
+        code: 'BEACON_UNAVAILABLE',
+        details: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
+  });
+
+  // ── Get spawn status ───────────────────────────────────────────────
+
+  app.get<{ Params: { beaconId: string; spawnId: string } }>(
+    '/spawn/:beaconId/:spawnId',
+    async (request, reply) => {
+      const beacon = db.getBeacon(request.params.beaconId);
+      if (!beacon) {
+        return reply
+          .code(404)
+          .send({ error: 'Beacon not found', code: 'BEACON_NOT_FOUND' });
+      }
+
+      try {
+        const response = await fetch(
+          `http://${beacon.host}:${beacon.port}/spawn/${request.params.spawnId}`
+        );
+        if (!response.ok) {
+          return reply
+            .code(502)
+            .send({ error: 'Beacon error', details: await response.text() });
+        }
+        return response.json();
+      } catch (err) {
+        return reply.code(503).send({
+          error: 'Beacon unavailable',
+          code: 'BEACON_UNAVAILABLE',
+          details: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+  );
+
+  // ── Terminate a spawned agent ─────────────────────────────────────
+
+  app.delete<{ Params: { beaconId: string; spawnId: string } }>(
+    '/spawn/:beaconId/:spawnId',
+    async (request, reply) => {
+      const beacon = db.getBeacon(request.params.beaconId);
+      if (!beacon) {
+        return reply
+          .code(404)
+          .send({ error: 'Beacon not found', code: 'BEACON_NOT_FOUND' });
+      }
+
+      try {
+        const response = await fetch(
+          `http://${beacon.host}:${beacon.port}/spawn/${request.params.spawnId}`,
+          { method: 'DELETE' }
+        );
+        if (!response.ok) {
+          return reply
+            .code(502)
+            .send({ error: 'Beacon error', details: await response.text() });
+        }
+        return response.json();
+      } catch (err) {
+        return reply.code(503).send({
+          error: 'Beacon unavailable',
+          code: 'BEACON_UNAVAILABLE',
+          details: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    }
+  );
 }
