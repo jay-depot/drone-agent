@@ -16,7 +16,7 @@ import {
   type MigrateOptions,
   type AssetType,
   type MigrateScope,
-} from './runtime/migration-service.js';
+} from './runtime/migration/index.js';
 
 function formatAssetList(
   assets: Array<{

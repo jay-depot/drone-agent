@@ -18,7 +18,7 @@ import {
   createCallHierarchyOutgoingTool,
   createFormattingTool,
   createServerStatusTool,
-} from './tools.js';
+} from './tools/index.js';
 
 export const lspPlugin: DronePlugin = {
   metadata: {

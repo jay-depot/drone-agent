@@ -49,7 +49,7 @@ export default defineConfig({
     exclude: [
       '**/e2e-swarm.test.ts',
       '**/coordinator-sync.test.ts',
-      '**/spawn.test.ts',
+      'drone-agent/test/spawn.test.ts',
       '**/inter-agent.test.ts',
       '**/agent-beacon.test.ts',
       '**/subagent/dispatch.test.ts',

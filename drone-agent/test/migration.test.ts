@@ -10,7 +10,7 @@ import {
   migrateAsset,
   batchMigrate,
   resolveBeaconAddress,
-} from '../src/runtime/migration-service.js';
+} from '../src/runtime/migration/index.js';
 
 // ── Test helpers ────────────────────────────────────────────────────────
 
