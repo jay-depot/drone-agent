@@ -211,6 +211,7 @@ export function createFakeEngine(
     },
     dispatchSlashCommand: async () => false,
     getSlashCommands: () => [],
+    onConversationEvent: () => () => {},
     registerBuiltinSlashCommand: () => {},
     getBuiltinSlashCommands: () => [],
     __elicitation: options.elicit,

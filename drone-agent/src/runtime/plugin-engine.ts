@@ -70,6 +70,15 @@ export type DronePluginEngine = {
     payload: DroneSessionSafetyTrimPayload
   ) => Promise<void>;
   runConversationEventHooks: (event: DroneConversationEvent) => Promise<void>;
+  /**
+   * Register a listener for conversation events (reasoning, toolCall,
+   * toolResult, assistantMessage, error). Returns an unsubscribe function.
+   * Events are also forwarded to plugin hooks registered via
+   * `registration.hooks.onConversationEvent`.
+   */
+  onConversationEvent: (
+    callback: (event: DroneConversationEvent) => void
+  ) => () => void;
   renderPromptFragments: () => Promise<string[]>;
   getTool: (canonicalName: string) => DroneToolDefinition | undefined;
   executeTool: (
@@ -272,6 +281,9 @@ export function createDronePluginEngine({
   > = [];
   const conversationEventHooks: Array<
     (event: DroneConversationEvent) => Promise<void>
+  > = [];
+  const externalConversationEventListeners: Array<
+    (event: DroneConversationEvent) => void
   > = [];
   let elicitationCapability: DroneElicitation | undefined;
 
@@ -537,6 +549,17 @@ export function createDronePluginEngine({
       for (const callback of conversationEventHooks) {
         await callback(event);
       }
+      // Also notify external listeners
+      for (const callback of externalConversationEventListeners) {
+        callback(event);
+      }
+    },
+    onConversationEvent: callback => {
+      externalConversationEventListeners.push(callback);
+      return () => {
+        const idx = externalConversationEventListeners.indexOf(callback);
+        if (idx !== -1) externalConversationEventListeners.splice(idx, 1);
+      };
     },
     renderPromptFragments: async () => {
       const renderedPrompts = await Promise.all(

@@ -48,6 +48,7 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
       throw new Error('getConfig not used in tui-persona-color tests');
     },
     dispatchSlashCommand: async (): Promise<boolean> => false,
+    onConversationEvent: (): (() => void) => () => {},
     setElicitation: (): void => {},
     runWorkflow: async (): Promise<
       import('drone-core').DroneWorkflowResult

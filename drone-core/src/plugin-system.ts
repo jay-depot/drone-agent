@@ -240,6 +240,12 @@ export type DroneSlashCommandContext = {
       line: string,
       ctx: Omit<DroneSlashCommandContext, 'line' | 'args'>
     ) => Promise<boolean>;
+    /**
+     * Optional — register a listener for conversation events.
+     */
+    onConversationEvent?: (
+      callback: (event: import('./session-types.js').DroneConversationEvent) => void
+    ) => () => void;
     /** List all plugins (for /plugins). */
     listPlugins?: () => {
       id: string;

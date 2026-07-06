@@ -306,6 +306,7 @@ export async function runInteractiveLoop(
             getCapability: <T>(id: string) => engine.getCapability<T>(id),
             dispatchSlashCommand: (l, ctx) =>
               engine.dispatchSlashCommand(l, ctx),
+            onConversationEvent: cb => engine.onConversationEvent?.(cb),
           },
           conversation: {
             getModel: () => conversation.getModel(),

@@ -74,6 +74,7 @@ function makeOptions(
         }
         return false;
       },
+      onConversationEvent: () => () => {},
       setElicitation: () => {},
       runWorkflow: async () => ({ toolResult: '{}' }),
       getSlashCommands: () => [
@@ -234,6 +235,7 @@ describe('App', () => {
           }
           return false;
         },
+        onConversationEvent: () => () => {},
         setElicitation: () => {},
         runWorkflow: async () => ({ toolResult: '{}' }),
         getSlashCommands: () => [

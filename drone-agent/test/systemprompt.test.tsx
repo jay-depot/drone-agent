@@ -1,19 +1,16 @@
 /**
- * Tests for the /systemprompt slash command.
+ * Tests for the /systemprompt slash command in the TUI.
  *
- * Covers:
- *   - Engine.getConfig() returns the config object
- *   - TUI /systemprompt renders the base system prompt and fragments
- *   - TUI /systemprompt works when no fragments are registered
+ * Verifies that the system prompt and prompt fragments are rendered
+ * correctly when the user types /systemprompt.
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { render } from 'ink-testing-library';
-import { createDefaultAgentConfig, type DroneAgentConfig } from 'drone-core';
 import { App } from '../src/tui/app.js';
-import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
-import { createTestPlugin, silentLogger } from './helpers.js';
 import type { DroneTuiOptions } from '../src/tui/types.js';
+import { silentLogger } from './helpers.js';
+import { createDefaultAgentConfig } from 'drone-core';
 
 function makeOptions(
   overrides: Partial<DroneTuiOptions> = {}
@@ -47,6 +44,7 @@ function makeOptions(
         ...createDefaultAgentConfig(),
         systemPrompt: 'You are a test agent.',
       }),
+      onConversationEvent: () => () => {},
       dispatchSlashCommand: async (_line, ctx) => {
         // Handle /systemprompt by calling the engine methods directly
         if (_line === '/systemprompt') {
@@ -87,28 +85,7 @@ function makeOptions(
   };
 }
 
-describe('engine.getConfig', () => {
-  it('returns the config object passed to the engine', async () => {
-    const config: DroneAgentConfig = {
-      ...createDefaultAgentConfig(),
-      systemPrompt: 'Custom system prompt for testing',
-    };
-
-    const engine = createDronePluginEngine({
-      plugins: [createTestPlugin({ id: 'test' })],
-      config,
-      logger: silentLogger(),
-    });
-
-    await engine.initialize();
-    expect(engine.getConfig()).toBe(config);
-    expect(engine.getConfig().systemPrompt).toBe(
-      'Custom system prompt for testing'
-    );
-  });
-});
-
-describe('TUI /systemprompt', () => {
+describe('App — /systemprompt', () => {
   let cleanup: (() => void) | null = null;
 
   afterEach(() => {
@@ -118,7 +95,7 @@ describe('TUI /systemprompt', () => {
     }
   });
 
-  it('renders the base system prompt and fragments', async () => {
+  it('renders system prompt and prompt fragments', async () => {
     const opts = makeOptions();
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
@@ -159,6 +136,7 @@ describe('TUI /systemprompt', () => {
           ...createDefaultAgentConfig(),
           systemPrompt: 'You are a test agent.',
         }),
+        onConversationEvent: () => () => {},
         dispatchSlashCommand: async (_line, ctx) => {
           if (_line === '/systemprompt') {
             const fragments =

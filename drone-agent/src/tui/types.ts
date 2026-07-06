@@ -87,6 +87,7 @@ export type DroneTuiOptions = {
     | 'getConfig'
     | 'dispatchSlashCommand'
     | 'setElicitation'
+    | 'onConversationEvent'
     | 'runWorkflow'
     | 'getSlashCommands'
   >;

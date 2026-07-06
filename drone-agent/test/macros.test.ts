@@ -633,7 +633,7 @@ describe('macrosPlugin', () => {
     });
   });
 
-  it('logs chatPrompt text and streams events from sendUserMessage', async () => {
+  it('logs chatPrompt text and streams events through engine hooks', async () => {
     await withTempDir(async dir => {
       vi.spyOn(process, 'cwd').mockReturnValue(dir);
 
@@ -657,40 +657,50 @@ describe('macrosPlugin', () => {
       await engine.initialize();
       await engine.runHooks('onPluginsLoaded');
 
-      // Build a mock conversation that exercises the onEvent callback
+      // Register a conversation event listener to capture events
+      const capturedEvents: Array<{ kind: string; content?: string; name?: string }> = [];
+      engine.onConversationEvent(event => {
+        capturedEvents.push({
+          kind: event.kind,
+          content: 'content' in event ? event.content : undefined,
+          name: 'name' in event ? event.name : undefined,
+        });
+      });
+
       const infoMessages: string[] = [];
-      const warnMessages: string[] = [];
 
       const handled = await engine.dispatchSlashCommand('/ask', {
         logger: {
           info: (msg: string) => infoMessages.push(msg),
-          warn: (msg: string) => warnMessages.push(msg),
+          warn: () => {},
           error: () => {},
         },
         engine,
         conversation: {
           getModel: () => 'test-model',
           setModel: () => {},
-          sendUserMessage: async (
-            _prompt: string,
-            onEvent?: (event: unknown) => void
-          ) => {
+          sendUserMessage: async (_prompt: string) => {
             // Simulate the events that conversation-service emits
-            if (onEvent) {
-              onEvent({ kind: 'reasoning', content: 'Thinking deeply...' });
-              onEvent({
-                kind: 'toolCall',
-                name: 'file__read',
-                arguments: { path: '/test.txt' },
-              });
-              onEvent({
-                kind: 'toolResult',
-                name: 'file__read',
-                content: 'file contents',
-                arguments: { path: '/test.txt' },
-              });
-              onEvent({ kind: 'assistantMessage', content: '42' });
-            }
+            // through engine conversation event hooks
+            await engine.runConversationEventHooks({
+              kind: 'reasoning',
+              content: 'Thinking deeply...',
+            });
+            await engine.runConversationEventHooks({
+              kind: 'toolCall',
+              name: 'file__read',
+              arguments: { path: '/test.txt' },
+            });
+            await engine.runConversationEventHooks({
+              kind: 'toolResult',
+              name: 'file__read',
+              content: 'file contents',
+              arguments: { path: '/test.txt' },
+            });
+            await engine.runConversationEventHooks({
+              kind: 'assistantMessage',
+              content: '42',
+            });
             return '42';
           },
         },
@@ -702,21 +712,20 @@ describe('macrosPlugin', () => {
       // The substituted prompt text should be logged first
       expect(infoMessages[0]).toBe('What is the meaning of life?');
 
-      // Reasoning event should be logged
-      expect(infoMessages.some(m => m.includes('Thinking deeply...'))).toBe(
-        true
-      );
-
-      // Tool call event should be logged
-      expect(infoMessages.some(m => m.includes('→ tool: file__read'))).toBe(
-        true
-      );
-
-      // Tool result event should be logged
-      expect(infoMessages.some(m => m.includes('← file__read:'))).toBe(true);
-
-      // Assistant message should be logged
+      // The reply should be logged
       expect(infoMessages.some(m => m.includes('42'))).toBe(true);
+
+      // Events should be captured through engine conversation event hooks
+      expect(capturedEvents.length).toBe(4);
+      expect(capturedEvents[0].kind).toBe('reasoning');
+      expect(capturedEvents[0].content).toBe('Thinking deeply...');
+      expect(capturedEvents[1].kind).toBe('toolCall');
+      expect(capturedEvents[1].name).toBe('file__read');
+      expect(capturedEvents[2].kind).toBe('toolResult');
+      expect(capturedEvents[2].name).toBe('file__read');
+      expect(capturedEvents[2].content).toBe('file contents');
+      expect(capturedEvents[3].kind).toBe('assistantMessage');
+      expect(capturedEvents[3].content).toBe('42');
     });
   });
 });

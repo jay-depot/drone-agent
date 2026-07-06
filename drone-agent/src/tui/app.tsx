@@ -244,6 +244,67 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   const inputValueRef = useRef<string>('');
   inputValueRef.current = input;
 
+  // ── Conversation event listener ─────────────────────────────────────
+  // Register a single listener that logs all conversation events with
+  // proper ChatEntry kinds. This handles events from any source (regular
+  // messages, macro chatPrompt steps, etc.) with correct color-coding.
+  useEffect(() => {
+    const unregister = opts.engine.onConversationEvent?.(event => {
+      switch (event.kind) {
+        case 'reasoning': {
+          const trimmed = event.content.trim();
+          if (trimmed.length > 0) {
+            log(`💭 ${trimmed}`, 'reasoning');
+          }
+          break;
+        }
+        case 'toolCall': {
+          const argsPreview = preview(
+            JSON.stringify(event.arguments),
+            PREVIEW_MAX
+          );
+          log(`→ tool: ${event.name} ${argsPreview}`, 'toolCall');
+          break;
+        }
+        case 'toolResult': {
+          let resultContent: string;
+
+          // Special handling for exec.run - full output, no truncation
+          if (event.name === 'exec__run') {
+            resultContent = formatExecResult(
+              event.arguments,
+              event.content
+            );
+            log(`← ${event.name}:\n${resultContent}`, 'toolResult');
+          }
+          // Special handling for file.apply_diff - formatted diff display
+          else if (
+            event.name === 'file__apply_diff' ||
+            event.name === 'git__diff'
+          ) {
+            resultContent = formatDiffResult(event.content);
+            log(`← ${event.name}:\n${resultContent}`, 'toolResult');
+          }
+          // Default: truncated preview
+          else {
+            resultContent = preview(event.content, PREVIEW_MAX);
+            log(`← ${event.name}: ${resultContent}`, 'toolResult');
+          }
+          break;
+        }
+        case 'assistantMessage': {
+          log(event.content, 'plain');
+          break;
+        }
+        case 'error': {
+          log(`Error: ${event.message}`, 'error');
+          break;
+        }
+      }
+    });
+    return () => unregister?.();
+  }, [opts.engine, log]);
+
   // ── Slash command handlers ──────────────────────────────────────────
   const runSlashCommand = useCallback(
     async (line: string) => {
@@ -254,89 +315,41 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
 
       if (trimmed.startsWith('/')) {
         // Dispatch through engine (checks plugin commands, then built-ins).
-        const handled = await opts.engine.dispatchSlashCommand(trimmed, {
-          logger: {
-            info: msg => log(msg, 'user'),
-            warn: msg => log(msg, 'error'),
-            error: msg => log(msg, 'error'),
-          },
-          engine: opts.engine,
-          conversation: opts.conversation,
-          sessionManager: undefined,
-          exit: () => exit(),
-          printHelp: () => printHelp(opts, log),
-        });
-        if (handled) return;
-        // Unrecognized slash command.
-        log(
-          `Unknown command: ${trimmed}. Type /help for available commands.`,
-          'error'
-        );
-        return;
+        // Wrap in setIsLlmActive so the thinking indicator activates during
+        // macro execution and other slash commands that call sendUserMessage.
+        setIsLlmActive(true);
+        try {
+          const handled = await opts.engine.dispatchSlashCommand(trimmed, {
+            logger: {
+              info: msg => log(msg, 'user'),
+              warn: msg => log(msg, 'error'),
+              error: msg => log(msg, 'error'),
+            },
+            engine: opts.engine,
+            conversation: opts.conversation,
+            sessionManager: undefined,
+            exit: () => exit(),
+            printHelp: () => printHelp(opts, log),
+          });
+          if (handled) return;
+          // Unrecognized slash command.
+          log(
+            `Unknown command: ${trimmed}. Type /help for available commands.`,
+            'error'
+          );
+          return;
+        } finally {
+          setIsLlmActive(false);
+        }
       }
 
       // Regular chat message
       setIsLlmActive(true);
       try {
         await opts.engine.runHooks('onBeforePrompt');
-        let assistantRendered = false;
-        const response = await opts.conversation.sendUserMessage(
-          trimmed,
-          event => {
-            switch (event.kind) {
-              case 'reasoning': {
-                const trimmedReasoning = event.content.trim();
-                if (trimmedReasoning.length > 0) {
-                  log(`💭 ${trimmedReasoning}`, 'reasoning');
-                }
-                break;
-              }
-              case 'toolCall': {
-                const argsPreview = preview(
-                  JSON.stringify(event.arguments),
-                  PREVIEW_MAX
-                );
-                log(`→ tool: ${event.name} ${argsPreview}`, 'toolCall');
-                break;
-              }
-              case 'toolResult': {
-                let resultContent: string;
-
-                // Special handling for exec.run - full output, no truncation
-                if (event.name === 'exec__run') {
-                  resultContent = formatExecResult(
-                    event.arguments,
-                    event.content
-                  );
-                  log(`← ${event.name}:\n${resultContent}`, 'toolResult');
-                }
-                // Special handling for file.apply_diff - formatted diff display
-                else if (
-                  event.name === 'file__apply_diff' ||
-                  event.name === 'git__diff'
-                ) {
-                  resultContent = formatDiffResult(event.content);
-                  log(`← ${event.name}:\n${resultContent}`, 'toolResult');
-                }
-                // Default: truncated preview
-                else {
-                  resultContent = preview(event.content, PREVIEW_MAX);
-                  log(`← ${event.name}: ${resultContent}`, 'toolResult');
-                }
-                break;
-              }
-              case 'assistantMessage': {
-                assistantRendered = true;
-                log(event.content, 'plain');
-                break;
-              }
-              case 'error': {
-                log(`Error: ${event.message}`, 'error');
-                break;
-              }
-            }
-          }
-        );
+        // No onEvent callback needed — the conversation event listener
+        // registered above handles all event types with proper color-coding.
+        const response = await opts.conversation.sendUserMessage(trimmed);
 
         // Handle cancellation sentinel
         if (response === CANCEL_SENTINEL) {
@@ -345,7 +358,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           return;
         }
 
-        if (!assistantRendered && response.length > 0) {
+        if (response.length > 0) {
           log(response, 'plain');
         }
         await opts.engine.runHooks('onAfterToolCall');
