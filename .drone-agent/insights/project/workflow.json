@@ -126,5 +126,17 @@
   {
     "timestamp": "2026-07-02T03:00:09.171Z",
     "insight": "The drone-swarm-common/src/tls.ts lint errors (no-empty, preserve-caught-error) were pre-existing and caused pnpm lint to fail even when working on unrelated code. Now fixed by adding a comment to the empty catch block and removing the unused caught variable from the openssl error handler. The whole project now passes lint cleanly."
+  },
+  {
+    "timestamp": "2026-07-06T17:22:33.601Z",
+    "insight": "The `file__apply_diff` tool is unreliable for patches that modify function signatures (adding `export` keyword). It failed 3 times on simple `function` → `export function` changes. Writing the complete file with `file__write` is more reliable for this kind of change."
+  },
+  {
+    "timestamp": "2026-07-06T17:22:33.609Z",
+    "insight": "The vitest fork pool (`pool: 'forks'` with `singleFork: true`) does not have `globalThis.fetch` available. Tests that need to mock `fetch` must use `vi.stubGlobal('fetch', mockFn)` instead of `vi.spyOn(globalThis, 'fetch')`."
+  },
+  {
+    "timestamp": "2026-07-06T17:22:33.615Z",
+    "insight": "The `@vitest/coverage-v8` package is not installed in the project, so coverage reports don't work. The coverage config changes are correct but can't be verified until the dependency is added."
   }
 ]

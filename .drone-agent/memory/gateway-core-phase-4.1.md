@@ -1,11 +1,9 @@
 ---
 key: gateway-core-phase-4.1
 tags:
-  - plan
-  - gateway
-  - phase-4.1
+  []
 created: 2026-07-06T17:09:30.041Z
-updated: 2026-07-06T17:09:30.041Z
+updated: 2026-07-06T17:22:54.296Z
 ---
 
 # Plan: Complete drone-gateway Core (Phase 4.1)
@@ -319,3 +317,29 @@ Run the full validation suite:
 
 **Dependencies:** Steps 1-9
 **Assigned to:** reviewer
+
+---
+
+## Completion Summary
+
+All 10 steps completed successfully on 2026-07-06.
+
+**What was built:**
+
+- **vitest config**: Added `drone-gateway/test/**/*.test.ts` to include, `drone-gateway/src/**/*.ts` to coverage
+- **6 test files, 59 tests**:
+  - `test/which.test.ts` (5 tests) — PATH resolution, not-found, empty PATH
+  - `test/coordinator-client.test.ts` (18 tests) — all 7 API methods, error handling, auth header
+  - `test/local-spawn-backend.test.ts` (11 tests) — process spawning, NDJSON parsing, session lifecycle, cleanup
+  - `test/coordinator-spawn-backend.test.ts` (6 tests) — coordinator delegation, idempotency, error handling
+  - `test/engine.test.ts` (5 tests) — constructor, start/stop lifecycle, adapter validation
+  - `test/index.test.ts` (14 tests) — arg parsing, config loading/validation, spawn backend selection, main() error handling
+- **ADR**: `docs/adr/001-gateway-architecture.md` — 5 key architectural decisions documented
+- **Exported functions**: `parseArgs`, `loadConfig`, `createSpawnBackend` exported from `index.ts` for testability
+- **Roadmap**: Phase 4.1 marked as Complete with full summary
+
+**Validation results:**
+- `pnpm build` — ✅ passes
+- `pnpm test` — ✅ 1210 tests pass (64 test files, 0 failures)
+- Coverage config — ✅ `drone-gateway/src/**/*.ts` included (coverage-v8 not installed, but config is correct)
+- Pre-existing typecheck errors in `drone-agent/test/swarm-spawn.test.ts` — unrelated to gateway changes
