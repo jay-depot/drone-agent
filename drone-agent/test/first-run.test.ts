@@ -56,7 +56,7 @@ function makeLogger(): MinimalLogger {
 
 function getWrittenConfig(): Record<string, unknown> {
   expect(writeFileMock).toHaveBeenCalledTimes(1);
-  const payload = writeFileMock.mock.calls[0]?.[1];
+  const payload = (writeFileMock.mock.calls[0] as unknown[])?.[1];
   if (typeof payload !== 'string') {
     throw new Error('Expected first-run writeFile payload to be a string.');
   }

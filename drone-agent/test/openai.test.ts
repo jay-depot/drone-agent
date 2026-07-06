@@ -195,13 +195,12 @@ describe('openai plugin', () => {
             required: ['path'],
             additionalProperties: false,
           },
-          execute: async () => 'ok',
         },
       ],
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0] as [
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
       string,
       RequestInit & { headers?: Record<string, string> },
     ];
@@ -266,12 +265,11 @@ describe('openai plugin', () => {
             type: 'object',
             properties: {},
           },
-          execute: async () => 'ok',
         },
       ],
     });
 
-    const [, init] = fetchMock.mock.calls[0] as [
+    const [, init] = fetchMock.mock.calls[0] as unknown as [
       string,
       RequestInit & { body?: string },
     ];

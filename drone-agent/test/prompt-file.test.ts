@@ -266,6 +266,19 @@ describe('promptFilePlugin', () => {
         activePersona: null,
         llm: { provider: 'ollama' },
         ollama: { host: '', model: '' },
+        openai: {
+          apiKey: '',
+          defaultModel: 'gpt-4o',
+          baseUrl: 'https://api.openai.com/v1',
+          models: [{ id: 'gpt-4o', contextWindow: 128000 }],
+        },
+        anthropic: {
+          apiKey: '',
+          defaultModel: 'claude-sonnet-4-6',
+          baseUrl: 'https://api.anthropic.com',
+          apiVersion: '2023-06-01',
+          models: [{ id: 'claude-sonnet-4-6', contextWindow: 200000 }],
+        },
         openrouter: {
           apiKey: '',
           defaultModel: 'openai/gpt-4o',

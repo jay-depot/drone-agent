@@ -18,5 +18,17 @@
   {
     "timestamp": "2026-07-06T00:25:41.221Z",
     "insight": "The coordinator and beacon index.ts files have top-level imports of TLS, spawner, and WebSocket modules that don't resolve in the test environment. To test routes, we need app-helper.ts files that build a minimal Fastify instance with just route registrations, avoiding the full index.ts import chain."
+  },
+  {
+    "timestamp": "2026-07-06T00:36:44.771Z",
+    "insight": "The plan-coordinator-route-tests plan specified per-route test files (e.g., test/routes/health.test.ts, test/routes/personas.test.ts), but I used a single monolithic file (test/routes.test.ts). The monolithic approach is simpler and avoids duplication of the beforeEach/afterEach setup, but the per-route approach would be better for CI parallelism and readability. For now the monolithic file is fine since vitest uses singleFork anyway."
+  },
+  {
+    "timestamp": "2026-07-06T00:36:44.775Z",
+    "insight": "The plan specified a shared harness (makeApp) that sets up DB+storage+wiki in one call using buildApp() from index.ts. However, buildApp() imports drone-swarm-common/tls which doesn't resolve in the test environment. I created a test-specific app-helper.ts instead. The helpers/server.ts file exists as a reference but can't be used until the TLS import issue is resolved."
+  },
+  {
+    "timestamp": "2026-07-06T00:36:44.784Z",
+    "insight": "Wiki route tests were deferred because the route files use dynamic import('drone-swarm-common/wiki-storage') which goes through vitest's alias, but dynamic imports from test files don't go through the alias. This means setKnowledgeBaseDir() called from a test file uses a different module instance than the route files. The wiki storage is tested separately in wiki-storage.test.ts."
   }
 ]

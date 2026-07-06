@@ -172,7 +172,6 @@ describe('openrouter plugin', () => {
             required: ['path'],
             additionalProperties: false,
           },
-          execute: async () => 'ok',
         },
       ],
     });
@@ -241,7 +240,6 @@ describe('openrouter plugin', () => {
               },
               required: ['path'],
             },
-            execute: async () => 'ok',
           },
         ],
       })
@@ -299,7 +297,6 @@ describe('openrouter plugin', () => {
             type: 'object',
             properties: {},
           },
-          execute: async () => 'ok',
         },
       ],
     });
