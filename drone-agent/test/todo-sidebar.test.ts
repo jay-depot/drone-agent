@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { todoPlugin } from '../src/plugins/todo.js';
 import { createDefaultAgentConfig } from 'drone-core';
-import { silentLogger, createTestPlugin } from './helpers.js';
+import { silentLogger } from './helpers.js';
 
 type MidPanelWidgetShape = {
   id: string;

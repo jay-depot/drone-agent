@@ -46,7 +46,6 @@ type PersonaCreateInput = {
   description?: string;
 };
 
-type WizardContext = Parameters<DroneWorkflow['run']>[1];
 
 /** Slugify a freeform name into a valid persona id. */
 export function slugifyPersonaId(raw: string): string {

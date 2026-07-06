@@ -379,7 +379,7 @@ async function attachUi(
   });
 
   // Serve the root index.html
-  app.get('/', async (request, reply) => {
+  app.get('/', async (_request, reply) => {
     return reply.sendFile('index.html', path.resolve(uiDistPath));
   });
 

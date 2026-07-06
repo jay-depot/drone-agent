@@ -148,7 +148,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
 
       // ── Push-through session storage state ──────────────────────────────
       let currentCorrelationId: string | null = null;
-      let pushedEventCount = 0;
       const eventBuffer: Array<{
         id: string;
         sessionId: string;
@@ -624,7 +623,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
 
       registration.hooks.onSessionClear(async () => {
         currentCorrelationId = null;
-        pushedEventCount = 0;
         eventBuffer.length = 0;
       });
 

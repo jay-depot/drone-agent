@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
+import { readFile, stat, writeFile } from 'node:fs/promises';
 import {
   createDefaultAgentConfig,
   type DronePluginRegistration,

@@ -64,7 +64,7 @@ export default function spawnRoutes(app: FastifyInstance) {
   // List spawns (with optional status filter)
   app.get<{ Querystring: { status?: string } }>(
     '/spawn',
-    async (request, reply) => {
+    async (request, _reply) => {
       const status = request.query.status;
       return db.listSpawns(status);
     }

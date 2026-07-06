@@ -66,7 +66,6 @@ import {
 import type {
   CreatePersonaRequest,
   CreateSkillRequest,
-  CreateMemoryRequest,
   Knowledge,
 } from '../src/types.js';
 

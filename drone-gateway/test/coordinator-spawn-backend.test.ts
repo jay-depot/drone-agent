@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 // Mock CoordinatorClient at module level since CoordinatorSpawnBackend
 // creates its own instance internally

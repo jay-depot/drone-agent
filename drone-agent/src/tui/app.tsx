@@ -113,7 +113,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
     entries.length
   );
   // Debounce resize events to reduce flicker during window-drag gestures.
-  const _debounced = useDebouncedWindowSize(120);
+  useDebouncedWindowSize(120);
 
   // ── Scheme ref for event listener (avoids stale closure) ────────────
   const schemeRef = useRef<DroneColorScheme>(scheme);

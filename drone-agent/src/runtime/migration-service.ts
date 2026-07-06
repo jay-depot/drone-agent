@@ -694,7 +694,6 @@ async function demoteAsset(
     let content: string;
 
     if (type === 'persona') {
-      const dir = getPersonaDir(toScope);
       filePath = getPersonaFilePath(toScope, id);
       const name = String(data.name ?? id);
       const description = String(data.description ?? `Persona: ${id}`);

@@ -14,7 +14,7 @@ import {
   discoverExternalPlugins,
 } from '../src/plugins/external-loader.js';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
-import { createTestPlugin, silentLogger } from './helpers.js';
+import { silentLogger } from './helpers.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { GatewayConfig } from '../src/types.js';
 import type { SpawnBackend } from '../src/spawn-backend.js';
 

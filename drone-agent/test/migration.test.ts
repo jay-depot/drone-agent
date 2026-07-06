@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { mkdir, writeFile, readFile, unlink, rm } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -10,9 +10,6 @@ import {
   migrateAsset,
   batchMigrate,
   resolveBeaconAddress,
-  type MigrateOptions,
-  type AssetType,
-  type MigrateScope,
 } from '../src/runtime/migration-service.js';
 
 // ── Test helpers ────────────────────────────────────────────────────────

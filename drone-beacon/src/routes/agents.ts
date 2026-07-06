@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { RegisterAgentRequest } from '../types.js';
 import { getCoordinatorClient } from './context.js';
 import * as db from '../db.js';
-import * as wsServer from '../ws-server.js';
+
 import { logger } from '../logger.js';
 
 export default function agentRoutes(app: FastifyInstance) {

@@ -3,7 +3,7 @@ key: review-state
 tags:
   []
 created: 2026-06-26T01:58:17.133Z
-updated: 2026-07-06T22:03:45.163Z
+updated: 2026-07-06T22:08:33.892Z
 ---
 
 # Code Review Summary - drone-agent
@@ -16,7 +16,7 @@ updated: 2026-07-06T22:03:45.163Z
 | Total lines         | ~42,000           | 72,536           | +30,536  |
 | Test files passing  | 65                | 65               | 0        |
 | Tests passing       | 1,213             | 1,213            | 0        |
-| TypeScript errors   | 0 (source)        | 5 (test mocks)   | +5       |
+| TypeScript errors   | 0 (source)        | 0                | 0        |
 | Hints (unused code) | ~70               | ~70              | ~same    |
 | Workspace packages  | 4                 | 8                | +4       |
 
@@ -63,16 +63,16 @@ All 65 test files / 1,213 tests pass.
 
 ## Issues Found
 
-### 1. TypeScript Errors in Test Files ⚠️ (5 errors)
+### 1. TypeScript Errors in Test Files — ✅ FIXED (Jul 7, 2026)
 
-**Root cause**: `getTool` method added to `DronePluginEngine` interface but test mocks not updated.
+**What was wrong**: `getTool` method added to `DronePluginEngine` interface but test mocks not updated. 5 TS errors in 3 files.
 
-**Files affected**:
-- `drone-agent/test/systemprompt.test.tsx` — 2 errors (lines 22, 117)
-- `drone-agent/test/tui-persona-color.test.tsx` — 1 error (line 63)
-- `drone-agent/test/tui.test.tsx` — 2 errors (lines 35, 192)
+**Fix**: Added `getTool: () => undefined` to mock engine objects in:
+- `drone-agent/test/systemprompt.test.tsx` (2 engine mocks)
+- `drone-agent/test/tui-persona-color.test.tsx` (1 engine mock)
+- `drone-agent/test/tui.test.tsx` (2 engine mocks)
 
-**Fix**: Add `getTool: () => undefined` (or a noop) to each mock engine object.
+**Result**: `pnpm typecheck` passes cleanly, all 1,213 tests pass.
 
 ### 2. Unused Code (~70 hints)
 
@@ -143,7 +143,7 @@ This is a new file in `drone-agent/src/runtime/`. Unclear if it's a refactoring 
 - **TUI architecture improvements** — Tail region refactor with live pre-rendering and plugin-customizable tool renders
 - **Event streaming unification** — Single entry point for conversation events
 - **All 1,213 tests pass** — No regressions despite significant new code
-- **TypeScript compilation** — Source code compiles cleanly (only test mocks have errors)
+- **TypeScript compilation** — Source code AND test code compile cleanly ✅
 - **New packages** — gateway and swarm-common are well-structured additions
 
 ---
@@ -152,7 +152,7 @@ This is a new file in `drone-agent/src/runtime/`. Unclear if it's a refactoring 
 
 | Priority | Issue                                         | Effort  | Notes                             |
 | -------- | --------------------------------------------- | ------- | --------------------------------- |
-| 1        | Fix 5 TS errors in test mocks (missing getTool) | Low     | Easy win, unblocks CI             |
+| 1        | ~~Fix 5 TS errors in test mocks (missing getTool)~~ | Done | Resolved Jul 7, 2026              |
 | 2        | Remove unused code (~70 hints)                | Low     | Cleanup, reduces noise            |
 | 3        | Split large files (swarm/index.ts, db.ts in beacon/coordinator) | Medium | Growing files                     |
 | 4        | Consolidate duplicated types into drone-core  | High    | domain-types, beacon types, coordinator types |

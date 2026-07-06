@@ -387,7 +387,7 @@ export function createServerManager(
 
   async function resolveServerCommand(
     serverId: string,
-    language: string,
+    _language: string,
     config: DroneLspServerConfig,
     knownSpec: KnownServerSpec | undefined
   ): Promise<ResolvedSpawn | null> {

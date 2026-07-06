@@ -16,11 +16,9 @@ import type { DronePluginRegistration } from 'drone-core';
 describe('resolvePromptFilePath', () => {
   let tmpDir: string;
   let originalCwd: string;
-  let originalHome: string;
 
   beforeEach(async () => {
     originalCwd = process.cwd();
-    originalHome = os.homedir();
     tmpDir = await mkdtemp(path.join(os.tmpdir(), 'prompt-file-test-'));
     process.chdir(tmpDir);
     vi.spyOn(os, 'homedir').mockReturnValue(tmpDir);
@@ -220,7 +218,6 @@ describe('promptFile config parsing', () => {
 describe('promptFilePlugin', () => {
   let tmpDir: string;
   let originalCwd: string;
-  let originalHome: string;
 
   function makeRegistration(overrides?: Partial<DronePluginRegistration>): {
     registration: DronePluginRegistration;
@@ -372,7 +369,6 @@ describe('promptFilePlugin', () => {
 
   beforeEach(async () => {
     originalCwd = process.cwd();
-    originalHome = os.homedir();
     tmpDir = await mkdtemp(path.join(os.tmpdir(), 'prompt-file-plugin-'));
     process.chdir(tmpDir);
     vi.spyOn(os, 'homedir').mockReturnValue(tmpDir);

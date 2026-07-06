@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, mkdir, rm, writeFile, readFile } from 'node:fs/promises';
+import { describe, expect, it, vi } from 'vitest';
+import { mkdtemp, mkdir, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import os from 'node:os';
@@ -8,7 +8,7 @@ import {
   type DroneLogCapability,
 } from '../src/plugins/log/index.js';
 import { createSessionManager } from '../src/runtime/session-manager.js';
-import type { DronePersonaDefinition, DroneSessionTurn } from 'drone-core';
+import type { DroneSessionTurn } from 'drone-core';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -31,7 +31,6 @@ async function withTempHome<T>(
   fn: (homeDir: string) => Promise<T>
 ): Promise<T> {
   const dir = await mkdtemp(path.join(tmpdir(), 'drone-log-test-'));
-  const origHome = os.homedir();
   try {
     vi.spyOn(os, 'homedir').mockReturnValue(dir);
     return await fn(dir);

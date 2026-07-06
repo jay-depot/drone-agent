@@ -180,7 +180,7 @@ export function substituteMacroArgs(
   // Pass 1: Replace positional placeholders ($N, $N?).
   let result = line.replace(
     POSITIONAL_PATTERN,
-    (match, raw: string, isOptional: string | undefined) => {
+    (_match, raw: string, isOptional: string | undefined) => {
       const optional = isOptional === '?';
       const position = Number.parseInt(raw, 10);
       const index = position - 1;
@@ -200,7 +200,7 @@ export function substituteMacroArgs(
   // Pass 2: Replace catch-all ($$ or $$?) with remaining args.
   result = result.replace(
     CATCHALL_PATTERN,
-    (match, isOptional: string | undefined) => {
+    (_match, isOptional: string | undefined) => {
       const optional = isOptional === '?';
       const remaining = args.filter((_, i) => !consumedIndices.has(i));
 

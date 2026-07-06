@@ -1,6 +1,5 @@
-import { spawn, ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
-import { Readable, Writable } from 'node:stream';
 
 export interface SubagentResult {
   /**

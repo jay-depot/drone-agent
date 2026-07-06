@@ -89,9 +89,6 @@ describe('Beacon ↔ Coordinator Sync', () => {
   describe('sync-pull-from-coordinator', () => {
     it('should pull assets from coordinator to beacon', async () => {
       // First, ensure there's data in coordinator
-      const coordinatorPersonas = await getCoordinatorPersonas(COORDINATOR_URL);
-      const coordinatorSkills = await getCoordinatorSkills(COORDINATOR_URL);
-
       // Then verify beacon has access (or can sync)
       const beaconPersonas = await getBeaconPersonas(BEACON_URL);
       const beaconSkills = await getBeaconSkills(BEACON_URL);

@@ -150,5 +150,9 @@
   {
     "timestamp": "2026-07-06T22:03:50.225Z",
     "insight": "The getTool() method was added to DronePluginEngine but 4 test files (systemprompt.test.tsx, tui-persona-color.test.tsx, tui.test.tsx) still use mock objects that don't include it. This is a pattern failure: when adding a new method to a core interface, the test mocks need to be updated in the same commit. These 5 TS errors have been present for at least 10 days."
+  },
+  {
+    "timestamp": "2026-07-06T22:08:16.270Z",
+    "insight": "Fixed 5 TS errors in test mocks by adding getTool: () => undefined to 3 test files. These were introduced when getTool() was added to the DronePluginEngine interface but test mocks weren't updated. This is a pattern that could be prevented with a shared helper that ensures mock engine objects always satisfy the required interface."
   }
 ]

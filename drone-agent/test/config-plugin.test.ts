@@ -2,11 +2,11 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDefaultAgentConfig, type DronePlugin } from 'drone-core';
+import { createDefaultAgentConfig } from 'drone-core';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { configPlugin } from '../src/plugins/config/index.js';
 import type { DroneConfigCapability } from '../src/plugins/config/index.js';
-import { createTestPlugin, silentLogger } from './helpers.js';
+import { silentLogger } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

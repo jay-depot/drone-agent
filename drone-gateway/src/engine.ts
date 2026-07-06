@@ -1,5 +1,4 @@
 import { logger } from './logger.js';
-import { CoordinatorClient } from './coordinator-client.js';
 import type {
   DroneServiceAdapter,
   DroneControlSurface,
@@ -14,17 +13,12 @@ import type { SpawnBackend } from './spawn-backend.js';
 export class GatewayEngine {
   private adapters: Map<string, DroneServiceAdapter> = new Map();
   private controlSurfaces: Map<string, DroneControlSurface[]> = new Map();
-  private coordinatorClient: CoordinatorClient;
   private config: GatewayConfig;
   private spawnBackend: SpawnBackend;
 
   constructor(config: GatewayConfig, spawnBackend: SpawnBackend) {
     this.config = config;
     this.spawnBackend = spawnBackend;
-    this.coordinatorClient = new CoordinatorClient(
-      config.coordinatorUrl,
-      config.coordinatorToken
-    );
   }
 
   async start(): Promise<void> {

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { CreatePersonaRequest } from '../types.js';
-import { getCoordinatorClient, proxyToCoordinator } from './context.js';
+import { getCoordinatorClient } from './context.js';
 import * as db from '../db.js';
 import { logger } from '../logger.js';
 

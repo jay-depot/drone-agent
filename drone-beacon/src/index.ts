@@ -22,7 +22,7 @@ import {
 } from './spawner.js';
 import * as wsServer from './ws-server.js';
 import { logger } from './logger.js';
-import { loadOrCreateIdentity, type BeaconIdentity } from './identity.js';
+import { loadOrCreateIdentity } from './identity.js';
 import {
   loadOrCreateTlsIdentity,
   getTlsOptions,

@@ -8,7 +8,6 @@ import type {
   DronePlugin,
   DronePrincipleEntry,
   DronePrincipleStorageEngine,
-  DronePromptFragment,
   DroneSelfImprovementCapability,
   DroneSkillsCapability,
 } from 'drone-core';
@@ -17,8 +16,6 @@ const CONFIG_DIR = '.drone-agent';
 const INSIGHTS_SUBDIR = 'insights';
 const PRINCIPLES_SUBDIR = 'principles';
 
-type InsightFile = DroneInsightEntry[];
-type PrinciplesFile = DronePrincipleEntry[];
 
 /** In-memory counter for insights recorded this session. */
 let insightCount = 0;
@@ -488,7 +485,7 @@ function createFilePrincipleEngine(
         personaCap(),
         skillsCap()
       );
-      const { principlesDir, filePath } = resolvePrinciplePaths(
+      const { filePath } = resolvePrinciplePaths(
         targetType,
         targetId,
         baseDir,

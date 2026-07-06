@@ -9,7 +9,7 @@
  * - agent-cleanup: Agent shuts down cleanly
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import {
   getBeaconAgents,
   getBeaconAgent,

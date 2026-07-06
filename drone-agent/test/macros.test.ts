@@ -9,11 +9,8 @@ import {
 } from '../src/plugins/macros/parser.js';
 import { loadMacros } from '../src/plugins/macros/loader.js';
 import { macrosPlugin } from '../src/plugins/macros/index.js';
-import { createTestPlugin, silentLogger } from './helpers.js';
-import {
-  createDronePluginEngine,
-  type DronePluginEngine,
-} from '../src/runtime/plugin-engine.js';
+import { silentLogger } from './helpers.js';
+import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { createDefaultAgentConfig } from 'drone-core';
 
 // ---------------------------------------------------------------------------

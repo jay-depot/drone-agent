@@ -11,7 +11,7 @@ export default function memoryRoutes(app: FastifyInstance) {
   });
 
   // List memories (with optional namespace filter)
-  app.get<{ Querystring: MemoryQuery }>('/memory', async (request, reply) => {
+  app.get<{ Querystring: MemoryQuery }>('/memory', async (request, _reply) => {
     const namespace = request.query.namespace;
     const includeExpired = request.query.includeExpired === 'true';
     return db.listMemories(namespace, includeExpired);

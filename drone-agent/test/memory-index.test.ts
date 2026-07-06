@@ -10,7 +10,6 @@ import {
   type DroneWorkflow,
 } from 'drone-core';
 import { memoryPlugin } from '../src/plugins/memory/index.js';
-import { resolveMemoryDir } from '../src/plugins/memory/store.js';
 import type { DroneMemoryCapability } from '../src/plugins/memory/types.js';
 
 /**

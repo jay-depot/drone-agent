@@ -8,7 +8,7 @@
  * - persona-propagation: Create persona, agents see it
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import {
   getBeaconAgents,
   getBeaconPersonas,

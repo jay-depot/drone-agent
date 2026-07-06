@@ -1,12 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   launchSubagent,
   launchParallelSubagents,
   launchTimeoutSubagent,
   launchErrorSubagent,
   cancelAllSubagents,
-  getPendingSubagentCount,
-  type SubagentResult,
 } from '../fixtures/subagent.js';
 
 describe('subagent dispatch', () => {

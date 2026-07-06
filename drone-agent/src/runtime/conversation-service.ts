@@ -274,11 +274,6 @@ export function createConversationService({
       const tools = getLlmTools();
       let iterationCount = 0;
       let lastBudgetKey: string | undefined;
-      // Tracks the most recent failing tool signature and how many times
-      // we've seen it in a row. Reset to null on any success or on a new
-      // tool/error. If it reaches stuckErrorThreshold we abort the loop
-      // with a clear "model is stuck" error rather than burning rounds.
-      let stuckSignature: { name: string; code: string | null } | null = null;
       let stuckCount = 0;
 
       const emit = (event: DroneConversationEvent): void => {
@@ -417,7 +412,6 @@ export function createConversationService({
             stuckCount += 1;
           } else {
             // Any successful tool call or mixed errors resets the stuck detector.
-            stuckSignature = null;
             stuckCount = 0;
           }
 
@@ -465,7 +459,6 @@ export function createConversationService({
               );
               if (shouldContinue) {
                 // Reset the stuck detector and continue.
-                stuckSignature = null;
                 stuckCount = 0;
                 continue;
               }

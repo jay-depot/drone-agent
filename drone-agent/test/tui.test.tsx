@@ -16,7 +16,7 @@
  *     otherwise
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { render } from 'ink-testing-library';
 import { App } from '../src/tui/app.js';
 import { MidPanel } from '../src/tui/components/MidPanel.js';
@@ -321,7 +321,7 @@ describe('MidPanel', () => {
     const instance = render(
       <MidPanel widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
     );
-    const _cleanup = instance.cleanup;
+    instance.cleanup;
     const frame = instance.lastFrame() ?? '';
     expect(frame).toContain('TODO');
     expect(frame).toContain('3 / 5');
@@ -343,7 +343,7 @@ describe('MidPanel', () => {
     const instance = render(
       <MidPanel widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
     );
-    const _cleanup = instance.cleanup;
+    instance.cleanup;
     const frame = instance.lastFrame() ?? '';
     expect(frame).toContain('TODO');
     expect(frame).toContain('Insights');

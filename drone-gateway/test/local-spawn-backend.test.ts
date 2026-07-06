@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { Readable, Writable } from 'node:stream';
 import type { ChildProcess } from 'node:child_process';

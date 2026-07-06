@@ -4,7 +4,7 @@ import * as db from '../db.js';
 
 export default function eventRoutes(app: FastifyInstance) {
   // List event logs with optional filters
-  app.get<{ Querystring: EventQuery }>('/events', async (request, reply) => {
+  app.get<{ Querystring: EventQuery }>('/events', async (request, _reply) => {
     const agentId = request.query.agentId;
     const eventType = request.query
       .eventType as db.ListEventLogsOptions['eventType'];
