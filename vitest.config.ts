@@ -27,6 +27,10 @@ export default defineConfig({
         rootDir,
         'drone-swarm-common/src/wiki-storage.ts'
       ),
+      'drone-swarm-common/spawner': path.join(
+        rootDir,
+        'drone-swarm-common/src/spawner.ts'
+      ),
     },
   },
   test: {

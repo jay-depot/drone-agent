@@ -1,7 +1,6 @@
 ---
 key: gateway-core-plan
-tags:
-  []
+tags: []
 created: 2026-07-06T02:31:56.640Z
 updated: 2026-07-06T03:07:51.665Z
 ---
@@ -65,22 +64,23 @@ Create the `drone-gateway` package — a standalone service that connects chat p
 
 ### Package Scaffold (already created)
 
-| File | Purpose |
-|------|---------|
-| `drone-gateway/package.json` | ESM package, depends on drone-core, pino |
-| `drone-gateway/tsconfig.json` | TypeScript config, references drone-core |
-| `drone-gateway/bin/drone-gateway` | CLI entry point (shebang) |
-| `drone-gateway/src/index.ts` | Main entry, CLI arg parsing, startup |
-| `drone-gateway/src/types.ts` | DroneServiceAdapter, DroneControlSurface, config types |
-| `drone-gateway/src/engine.ts` | Gateway engine: load config, init adapters, message loop |
-| `drone-gateway/src/coordinator-client.ts` | HTTP client for coordinator web port |
-| `drone-gateway/src/logger.ts` | Pino logger |
-| `drone-gateway/CONTEXT.md` | Domain glossary |
-| `drone-gateway/docs/adr/` | Empty directory for future ADRs |
+| File                                      | Purpose                                                  |
+| ----------------------------------------- | -------------------------------------------------------- |
+| `drone-gateway/package.json`              | ESM package, depends on drone-core, pino                 |
+| `drone-gateway/tsconfig.json`             | TypeScript config, references drone-core                 |
+| `drone-gateway/bin/drone-gateway`         | CLI entry point (shebang)                                |
+| `drone-gateway/src/index.ts`              | Main entry, CLI arg parsing, startup                     |
+| `drone-gateway/src/types.ts`              | DroneServiceAdapter, DroneControlSurface, config types   |
+| `drone-gateway/src/engine.ts`             | Gateway engine: load config, init adapters, message loop |
+| `drone-gateway/src/coordinator-client.ts` | HTTP client for coordinator web port                     |
+| `drone-gateway/src/logger.ts`             | Pino logger                                              |
+| `drone-gateway/CONTEXT.md`                | Domain glossary                                          |
+| `drone-gateway/docs/adr/`                 | Empty directory for future ADRs                          |
 
 ### 1. drone-swarm-common: Extract spawner
 
 **New file:** `drone-swarm-common/src/spawner.ts`
+
 - Extract the core spawn logic from `drone-beacon/src/spawner.ts` (process spawning, tracking, termination, cleanup)
 - Make it database-agnostic (no dependency on beacon's db.ts)
 - Export: `SpawnerConfig`, `ManagedProcess`, `initSpawner`, `spawnAgent`, `terminateAgent`, `getActiveSpawns`, `cleanupAllSpawns`
@@ -92,9 +92,11 @@ Create the `drone-gateway` package — a standalone service that connects chat p
 ### 2. drone-agent: Add `turnComplete` event + persistent JSON mode
 
 **Modified:** `drone-agent/src/output-handlers.ts`
+
 - Add `turnComplete` to the `OutputEvent` union type
 
 **Modified:** `drone-agent/src/interactive.ts`
+
 - Add a `runJsonListenMode()` function that loops:
   1. Read a `chat` event from stdin
   2. Process it via `conversation.sendUserMessage()`
@@ -104,28 +106,35 @@ Create the `drone-gateway` package — a standalone service that connects chat p
 - The `InputEvent` type gets a `chat` variant (already exists)
 
 **Modified:** `drone-agent/src/index.tsx`
+
 - When `--output-json` is set WITHOUT `--once`, call `runJsonListenMode()` instead of `runJsonMode()`
 
 ### 3. drone-gateway: Spawn backend interface + local implementation
 
 **Modified:** `drone-gateway/src/types.ts`
+
 - Add `SpawnBackend` interface
 - Add `SpawnBackendType` union: `"local" | "coordinator"`
 - Add `agentPath` to `GatewayConfig`
 - Add `SpawnSession` type (tracks persistent agent process per conversation)
 
 **New file:** `drone-gateway/src/spawn-backend.ts`
+
 - `SpawnBackend` interface:
   ```typescript
   interface SpawnBackend {
     type: SpawnBackendType;
-    spawnSession(conversationId: string, personaId: string): Promise<SpawnSession>;
+    spawnSession(
+      conversationId: string,
+      personaId: string
+    ): Promise<SpawnSession>;
     sendMessage(session: SpawnSession, message: string): Promise<string>;
     terminateSession(session: SpawnSession): Promise<void>;
   }
   ```
 
 **New file:** `drone-gateway/src/local-spawn-backend.ts`
+
 - `LocalSpawnBackend` class implementing `SpawnBackend`
 - Uses the shared spawner from `drone-swarm-common/spawner`
 - Manages persistent agent processes: one per conversation
@@ -135,6 +144,7 @@ Create the `drone-gateway` package — a standalone service that connects chat p
 - Handles agent crash/recovery
 
 **New file:** `drone-gateway/src/coordinator-spawn-backend.ts`
+
 - `CoordinatorSpawnBackend` class implementing `SpawnBackend`
 - Delegates to the existing `CoordinatorClient`
 - For persistent sessions, uses coordinator's session tracking
@@ -142,6 +152,7 @@ Create the `drone-gateway` package — a standalone service that connects chat p
 ### 4. drone-gateway: Update engine for spawn backends
 
 **Modified:** `drone-gateway/src/engine.ts`
+
 - Accept a `SpawnBackend` in constructor
 - `persona-assignment` control surface uses the spawn backend
 - Config determines which backend to use (local vs coordinator)
@@ -194,7 +205,7 @@ Create the `drone-gateway` package — a standalone service that connects chat p
 2. **`pnpm build` passes** — All packages compile
 3. **`pnpm test` passes** — All existing tests continue to pass (1151 tests)
 4. **`pnpm lint` passes** — ESLint + Prettier checks pass
-5. **Manual verification**: 
+5. **Manual verification**:
    - `drone-agent --output-json` without `--once` stays alive and processes multiple `chat` events
    - Gateway config with `spawnBackend: "local"` and `agentPath` works
    - Gateway config without `agentPath` falls back to `$PATH` lookup

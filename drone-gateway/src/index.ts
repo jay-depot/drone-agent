@@ -3,7 +3,10 @@ import path from 'node:path';
 import os from 'node:os';
 import { logger } from './logger.js';
 import { GatewayEngine } from './engine.js';
-import type { GatewayConfig } from './types.js';
+import { LocalSpawnBackend } from './local-spawn-backend.js';
+import { CoordinatorSpawnBackend } from './coordinator-spawn-backend.js';
+import type { GatewayConfig, SpawnBackendType } from './types.js';
+import type { SpawnBackend } from './spawn-backend.js';
 
 const DEFAULT_CONFIG_DIR = path.join(os.homedir(), '.drone-gateway');
 const DEFAULT_CONFIG_FILE = 'config.json';
@@ -64,7 +67,31 @@ function loadConfig(configPath: string): GatewayConfig {
     process.exit(1);
   }
 
+  // Apply defaults
+  if (!config.spawnBackend) {
+    config.spawnBackend = 'local' as SpawnBackendType;
+  }
+
   return config;
+}
+
+function createSpawnBackend(config: GatewayConfig): SpawnBackend {
+  switch (config.spawnBackend) {
+    case 'local':
+      logger.info(
+        `Using local spawn backend (agentPath: ${config.agentPath || 'drone-agent (from PATH)'})`
+      );
+      return new LocalSpawnBackend(config.agentPath);
+    case 'coordinator':
+      logger.info('Using coordinator spawn backend');
+      return new CoordinatorSpawnBackend(
+        config.coordinatorUrl,
+        config.coordinatorToken
+      );
+    default:
+      logger.error(`Unknown spawn backend type: ${config.spawnBackend}`);
+      process.exit(1);
+  }
 }
 
 export async function main(): Promise<void> {
@@ -73,7 +100,8 @@ export async function main(): Promise<void> {
   logger.info(`Loading config from: ${cliConfig.configPath}`);
   const config = loadConfig(cliConfig.configPath);
 
-  const engine = new GatewayEngine(config);
+  const spawnBackend = createSpawnBackend(config);
+  const engine = new GatewayEngine(config, spawnBackend);
 
   const shutdown = async () => {
     logger.info('Shutting down...');

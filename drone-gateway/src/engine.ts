@@ -7,16 +7,20 @@ import type {
   GatewayConfig,
   ServiceAdapterConfig,
   ControlSurfaceConfig,
+  SpawnSession,
 } from './types.js';
+import type { SpawnBackend } from './spawn-backend.js';
 
 export class GatewayEngine {
   private adapters: Map<string, DroneServiceAdapter> = new Map();
   private controlSurfaces: Map<string, DroneControlSurface[]> = new Map();
   private coordinatorClient: CoordinatorClient;
   private config: GatewayConfig;
+  private spawnBackend: SpawnBackend;
 
-  constructor(config: GatewayConfig) {
+  constructor(config: GatewayConfig, spawnBackend: SpawnBackend) {
     this.config = config;
+    this.spawnBackend = spawnBackend;
     this.coordinatorClient = new CoordinatorClient(
       config.coordinatorUrl,
       config.coordinatorToken
@@ -25,18 +29,19 @@ export class GatewayEngine {
 
   async start(): Promise<void> {
     logger.info(
-      `Starting gateway with ${this.config.serviceAdapters.length} adapter(s)`
+      `Starting gateway with ${this.config.serviceAdapters.length} adapter(s) ` +
+        `(spawn backend: ${this.spawnBackend.type})`
     );
 
     for (const adapterConfig of this.config.serviceAdapters) {
       const adapter = this.createAdapter(adapterConfig);
-      adapter.onMessage((msg) => {
+      adapter.onMessage(msg => {
         void this.handleMessage(msg);
       });
       await adapter.start();
       this.adapters.set(adapterConfig.id, adapter);
 
-      const surfaces = adapterConfig.controlSurfaces.map((cs) =>
+      const surfaces = adapterConfig.controlSurfaces.map(cs =>
         this.createControlSurface(cs)
       );
       this.controlSurfaces.set(adapterConfig.id, surfaces);
@@ -91,12 +96,69 @@ export class GatewayEngine {
   private createControlSurface(
     config: ControlSurfaceConfig
   ): DroneControlSurface {
-    // Placeholder — actual control surface implementations will be registered here
-    // by follow-up phases (4.3 Persona Assignment, 4.4 Swarm Console, 4.5 Mention Router).
-    // For now, this throws if any control surface type is configured.
-    throw new Error(
-      `No control surface implementation available for type "${config.type}". ` +
-        `Control surface implementations are not yet built.`
-    );
+    switch (config.type) {
+      case 'persona-assignment': {
+        if (!config.personaId) {
+          throw new Error(
+            'persona-assignment control surface requires personaId'
+          );
+        }
+        return this.createPersonaAssignmentSurface(
+          config.conversationId,
+          config.personaId
+        );
+      }
+      default:
+        // Placeholder — other control surface types will be implemented
+        // by follow-up phases (4.4 Swarm Console, 4.5 Mention Router).
+        throw new Error(
+          `No control surface implementation available for type "${config.type}". ` +
+            `Control surface implementations are not yet built.`
+        );
+    }
+  }
+
+  private createPersonaAssignmentSurface(
+    conversationId: string,
+    personaId: string
+  ): DroneControlSurface {
+    let session: SpawnSession | null = null;
+
+    return {
+      id: `persona-assignment-${conversationId}`,
+      type: 'persona-assignment',
+      handleMessage: async (msg: AdapterMessage) => {
+        if (msg.conversationId !== conversationId) {
+          return { response: null, handled: false };
+        }
+
+        try {
+          // Ensure we have a session for this conversation
+          if (!session) {
+            session = await this.spawnBackend.spawnSession(
+              conversationId,
+              personaId
+            );
+          }
+
+          // Send the message and get the response
+          const response = await this.spawnBackend.sendMessage(
+            session,
+            msg.text
+          );
+
+          return { response, handled: true };
+        } catch (err) {
+          logger.error(
+            { err, conversationId, personaId },
+            'Error handling message via persona-assignment surface'
+          );
+          return {
+            response: `Error: ${err instanceof Error ? err.message : 'Unknown error'}`,
+            handled: true,
+          };
+        }
+      },
+    };
   }
 }

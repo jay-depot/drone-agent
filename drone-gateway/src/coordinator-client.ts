@@ -83,12 +83,24 @@ export class CoordinatorClient {
   }
 
   async terminateSpawn(beaconId: string, spawnId: string): Promise<unknown> {
-    const res = await this.request(
-      'DELETE',
-      `/spawn/${beaconId}/${spawnId}`
-    );
+    const res = await this.request('DELETE', `/spawn/${beaconId}/${spawnId}`);
     if (!res.ok) {
       throw new Error(`Terminate spawn failed (${res.status})`);
+    }
+    return res.json();
+  }
+
+  /**
+   * Send a message to an agent via the coordinator's message relay.
+   */
+  async sendMessage(agentId: string, message: string): Promise<unknown> {
+    const res = await this.request('POST', '/messages', {
+      toAgentId: agentId,
+      body: JSON.stringify({ type: 'chat', text: message }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Send message failed (${res.status}): ${text}`);
     }
     return res.json();
   }

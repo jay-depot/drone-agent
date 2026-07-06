@@ -22,6 +22,7 @@ import { runFirstRunSetup } from './first-run.js';
 import {
   runInteractiveLoop,
   runJsonMode,
+  runJsonListenMode,
   getLlmCapability,
 } from './interactive.js';
 import { runMigrate } from './migrate.js';
@@ -345,7 +346,10 @@ async function main(): Promise<void> {
       await engine.runHooks('onAfterToolCall');
     }
   } else if (invocation.kind === 'default' && !invocation.options.once) {
-    if (invocation.options.outputPlain || invocation.options.outputJson) {
+    if (invocation.options.outputJson) {
+      // JSON listen mode: read chat events from stdin, emit NDJSON events
+      await runJsonListenMode(conversation, engine);
+    } else if (invocation.options.outputPlain) {
       await runInteractiveLoop(conversation, engine, logger, sessionManager);
     } else {
       // TUI mode: defer elicitation wiring to the App (it constructs a

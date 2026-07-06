@@ -10,7 +10,8 @@ export type OutputEvent =
   | { kind: 'toolCall'; name: string; input: Record<string, unknown> }
   | { kind: 'toolResult'; name: string; result: string }
   | { kind: 'error'; message: string }
-  | { kind: 'return'; result: string; error?: string; subagentId?: string };
+  | { kind: 'return'; result: string; error?: string; subagentId?: string }
+  | { kind: 'turnComplete' };
 
 /**
  * Builds a plain-text event handler for `sendUserMessage` that mirrors what

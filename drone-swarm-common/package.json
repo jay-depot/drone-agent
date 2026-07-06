@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./spawner": {
+      "types": "./dist/spawner.d.ts",
+      "import": "./dist/spawner.js"
+    },
     "./wiki-storage": {
       "types": "./dist/wiki-storage.d.ts",
       "import": "./dist/wiki-storage.js"

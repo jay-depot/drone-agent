@@ -173,6 +173,107 @@ export async function runJsonMode(
 }
 
 /**
+ * Run in JSON listen mode (for gateway integration).
+ * Reads `chat` events from stdin in a loop, processes each via the
+ * conversation service, writes NDJSON events to stdout, and emits a
+ * `turnComplete` event after each turn.
+ *
+ * This mode is used when `--output-json` is specified WITHOUT `--once`,
+ * enabling a parent process (like drone-gateway) to maintain a persistent
+ * agent session across multiple turns.
+ */
+export async function runJsonListenMode(
+  conversation: CreateConversationService,
+  engine: CreateDronePluginEngine
+): Promise<void> {
+  const rl = createInterface({ input });
+  const ndjsonHandler = makeNdjsonOutputEventHandler();
+
+  try {
+    for await (const line of rl) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      let event: InputEvent;
+      try {
+        event = JSON.parse(trimmed) as InputEvent;
+      } catch {
+        ndjsonHandler({ kind: 'error', message: `Invalid JSON: ${trimmed}` });
+        continue;
+      }
+
+      if (event.type !== 'chat') {
+        ndjsonHandler({
+          kind: 'error',
+          message: `Expected 'chat' event, got '${event.type}'`,
+        });
+        continue;
+      }
+
+      const message = event.message;
+      if (typeof message !== 'string' || !message.trim()) {
+        ndjsonHandler({
+          kind: 'error',
+          message: 'Invalid chat event: message must be a non-empty string',
+        });
+        continue;
+      }
+
+      // Process the message
+      await engine.runHooks('onBeforePrompt');
+
+      const conversationHandler: ConversationEventHandler = (
+        convEvent: ConversationEvent
+      ) => {
+        switch (convEvent.kind) {
+          case 'assistantMessage':
+            ndjsonHandler({
+              kind: 'assistantMessage',
+              content: convEvent.content,
+            });
+            break;
+          case 'reasoning':
+            ndjsonHandler({ kind: 'reasoning', content: convEvent.content });
+            break;
+          case 'toolCall':
+            ndjsonHandler({
+              kind: 'toolCall',
+              name: convEvent.name,
+              input: convEvent.arguments,
+            });
+            break;
+          case 'toolResult':
+            ndjsonHandler({
+              kind: 'toolResult',
+              name: convEvent.name,
+              result: convEvent.content,
+            });
+            break;
+          case 'error':
+            ndjsonHandler({ kind: 'error', message: convEvent.message });
+            break;
+        }
+      };
+
+      const response = await conversation.sendUserMessage(
+        message,
+        conversationHandler
+      );
+
+      // Output the final assistant message
+      ndjsonHandler({ kind: 'assistantMessage', content: response });
+
+      // Signal that this turn is complete
+      ndjsonHandler({ kind: 'turnComplete' });
+
+      await engine.runHooks('onAfterToolCall');
+    }
+  } finally {
+    rl.close();
+  }
+}
+
+/**
  * Run the interactive chat loop using readline.
  */
 export async function runInteractiveLoop(

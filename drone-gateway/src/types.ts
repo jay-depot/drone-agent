@@ -42,8 +42,25 @@ export interface ControlSurfaceConfig {
   personaId?: string; // for persona-assignment
 }
 
+export type SpawnBackendType = 'local' | 'coordinator';
+
 export interface GatewayConfig {
   coordinatorUrl: string;
   coordinatorToken?: string;
+  spawnBackend: SpawnBackendType;
+  agentPath?: string; // path to drone-agent binary (local mode)
   serviceAdapters: ServiceAdapterConfig[];
+}
+
+// === Spawn Backend Types ===
+
+/**
+ * Represents a persistent agent session managed by a SpawnBackend.
+ * The session tracks the agent process and the conversation it serves.
+ */
+export interface SpawnSession {
+  conversationId: string;
+  personaId: string;
+  processId: string; // opaque identifier for the backend
+  startedAt: number;
 }
