@@ -50,7 +50,7 @@ A **swarm** is a personal AI workforce - multiple agents working in concert for 
                        │
 ┌──────────────────────┴──────────────────────────────┐
 │                 drone-coordinator                   │
-│  (Personal control plane: web UI, task management,   │
+│  (Personal control plane: web UI, task management,  │
 │   your skills, personas, memory, identities)        │
 │  *Single-user: manages YOUR agents only             │
 │  *must* have a beacon on the same host              │
@@ -426,7 +426,7 @@ Chat API integration layer — YOUR agents receive messages from chat platforms 
 - **Control Surface** — a configuration that maps a chat conversation (room, DM, channel) to a behavior. A control surface is attached to a service adapter.
 - **Persona Assignment** — a control surface that routes all messages in a conversation to a specific persona
 - **Swarm Console** — a control surface that exposes coordinator commands (spawn, status, terminate, list beacons, etc.)
-- **Mention Router** — a control surface that watches for `!persona` mentions and routes those messages to the specified persona
+- **Mention Router** — a control surface that watches for `!persona` (and eventually `!persona@gateway`) mentions and routes those messages to the specified persona
 
 **Architecture:**
 
@@ -488,14 +488,14 @@ The core gateway package: engine loop, service adapter interface, control surfac
 
 **Test Coverage (6 test files, 59 tests):**
 
-| Test File | Tests | What's Tested |
-|-----------|-------|---------------|
-| `test/which.test.ts` | 5 | PATH resolution, not-found, empty PATH |
-| `test/coordinator-client.test.ts` | 18 | All 7 API methods, error handling, auth header |
-| `test/local-spawn-backend.test.ts` | 11 | Process spawning, NDJSON parsing, session lifecycle, cleanup |
-| `test/coordinator-spawn-backend.test.ts` | 6 | Coordinator delegation, idempotency, error handling |
-| `test/engine.test.ts` | 5 | Constructor, start/stop lifecycle, adapter validation |
-| `test/index.test.ts` | 14 | Arg parsing, config loading/validation, spawn backend selection, main() error handling |
+| Test File                                | Tests | What's Tested                                                                          |
+| ---------------------------------------- | ----- | -------------------------------------------------------------------------------------- |
+| `test/which.test.ts`                     | 5     | PATH resolution, not-found, empty PATH                                                 |
+| `test/coordinator-client.test.ts`        | 18    | All 7 API methods, error handling, auth header                                         |
+| `test/local-spawn-backend.test.ts`       | 11    | Process spawning, NDJSON parsing, session lifecycle, cleanup                           |
+| `test/coordinator-spawn-backend.test.ts` | 6     | Coordinator delegation, idempotency, error handling                                    |
+| `test/engine.test.ts`                    | 5     | Constructor, start/stop lifecycle, adapter validation                                  |
+| `test/index.test.ts`                     | 14    | Arg parsing, config loading/validation, spawn backend selection, main() error handling |
 
 **Key Files:**
 
@@ -555,11 +555,11 @@ Exposes coordinator commands as chat-accessible commands. Users can type command
 
 **Status:** Not started
 
-Watches for `!persona` mentions in a conversation and routes those messages to the specified persona. E.g., `!coder fix this bug` spawns a coder agent with that task. Optionally also support `!coder@beaconId fix this bug` to route to a specific beacon.
+Watches for `!persona` and `!persona@beaconId` mentions in a conversation and routes those messages to the specified persona. E.g., `!coder fix this bug` spawns a coder agent with that task. Should also support `!coder@beaconId fix this bug` to route to a specific beacon.
 
 **Key considerations:**
 
-- Parses `!personaId rest of message` syntax
+- Parses `!personaId rest of message` and `!personaId@beaconId rest of message` syntax
 - Falls through (unhandled) if no mention is detected, allowing other control surfaces to process the message
 - Can be combined with persona assignment in the same room
 
