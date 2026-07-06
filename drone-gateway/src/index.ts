@@ -16,7 +16,7 @@ interface CliConfig {
   command: 'serve';
 }
 
-function parseArgs(): CliConfig {
+export function parseArgs(): CliConfig {
   const args = process.argv.slice(2);
   const cliConfig: CliConfig = {
     configPath: path.join(DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_FILE),
@@ -28,13 +28,7 @@ function parseArgs(): CliConfig {
     if (arg === '--config' && i + 1 < args.length) {
       cliConfig.configPath = args[++i];
     } else if (arg === '--help' || arg === '-h') {
-      console.log(`
-drone-gateway [options]
-
-Options:
-  --config <path>  Path to config file (default: ~/.drone-gateway/config.json)
-  --help           Show this help message
-      `);
+      console.log(`\ndrone-gateway [options]\n\nOptions:\n  --config <path>  Path to config file (default: ~/.drone-gateway/config.json)\n  --help           Show this help message\n      `);
       process.exit(0);
     }
   }
@@ -42,7 +36,7 @@ Options:
   return cliConfig;
 }
 
-function loadConfig(configPath: string): GatewayConfig {
+export function loadConfig(configPath: string): GatewayConfig {
   if (!existsSync(configPath)) {
     logger.error(`Config file not found: ${configPath}`);
     console.error(
@@ -75,7 +69,7 @@ function loadConfig(configPath: string): GatewayConfig {
   return config;
 }
 
-function createSpawnBackend(config: GatewayConfig): SpawnBackend {
+export function createSpawnBackend(config: GatewayConfig): SpawnBackend {
   switch (config.spawnBackend) {
     case 'local':
       logger.info(

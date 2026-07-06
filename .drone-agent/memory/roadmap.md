@@ -1,8 +1,9 @@
 ---
 key: roadmap
-tags: []
+tags:
+  - roadmap
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-07-06T02:35:04.896Z
+updated: 2026-07-06T17:20:25.609Z
 ---
 
 # Swarm Roadmap
@@ -49,7 +50,7 @@ A **swarm** is a personal AI workforce - multiple agents working in concert for 
                        │
 ┌──────────────────────┴──────────────────────────────┐
 │                 drone-coordinator                   │
-│  (Personal control plane: web UI, task management,  │
+│  (Personal control plane: web UI, task management,   │
 │   your skills, personas, memory, identities)        │
 │  *Single-user: manages YOUR agents only             │
 │  *must* have a beacon on the same host              │
@@ -414,7 +415,7 @@ Comprehensive test coverage for both `drone-coordinator` and `drone-beacon` pack
 
 ### 🔜 PHASE 4: drone-gateway
 
-**Status:** Design phase
+**Status:** Core complete, adapters pending
 
 Chat API integration layer — YOUR agents receive messages from chat platforms and respond back.
 
@@ -463,19 +464,47 @@ Chat API integration layer — YOUR agents receive messages from chat platforms 
 - Recommended deployment: on the coordinator's host (local/Tailnet bypass applies)
 - Control surfaces are per-conversation, configured per adapter
 
-#### ⏳ 4.1 Gateway Core
+#### ✅ 4.1 Gateway Core
 
-**Status:** Not started
+**Status:** Complete
 
-The core gateway package: engine loop, service adapter interface, control surface interface, coordinator client, config loading, CLI entry point.
+The core gateway package: engine loop, service adapter interface, control surface interface, coordinator client, config loading, CLI entry point, spawn backends, comprehensive test coverage, and architecture documentation.
+
+**What's Built:**
+
+- `drone-gateway/package.json` — ESM package scaffold, registered in pnpm workspace
+- `drone-gateway/src/types.ts` — `DroneServiceAdapter`, `DroneControlSurface`, `GatewayConfig`, `SpawnSession`, `AdapterMessage`
+- `drone-gateway/src/spawn-backend.ts` — `SpawnBackend` interface (spawn, send message, terminate)
+- `drone-gateway/src/engine.ts` — `GatewayEngine`: adapter lifecycle, message routing loop, control surface evaluation (first-match wins), persona-assignment surface implementation
+- `drone-gateway/src/coordinator-client.ts` — HTTP client for coordinator web port (spawn, list beacons, list agents, get spawn, list spawns, terminate spawn, send message)
+- `drone-gateway/src/local-spawn-backend.ts` — Spawns `drone-agent` processes with `--output-json`, NDJSON communication over stdin/stdout, turn-complete detection
+- `drone-gateway/src/coordinator-spawn-backend.ts` — Delegates to coordinator's web port via `CoordinatorClient`
+- `drone-gateway/src/index.ts` — CLI entry point, arg parsing (`--config`, `--help`), config loading with validation, spawn backend creation, signal handling
+- `drone-gateway/src/logger.ts` — Pino logger
+- `drone-gateway/src/which.ts` — PATH resolution utility
+- `drone-gateway/bin/drone-gateway` — CLI binary
+- `drone-gateway/CONTEXT.md` — Domain language documentation
+- `drone-gateway/docs/adr/001-gateway-architecture.md` — Architecture decision record
+
+**Test Coverage (6 test files, 59 tests):**
+
+| Test File | Tests | What's Tested |
+|-----------|-------|---------------|
+| `test/which.test.ts` | 5 | PATH resolution, not-found, empty PATH |
+| `test/coordinator-client.test.ts` | 18 | All 7 API methods, error handling, auth header |
+| `test/local-spawn-backend.test.ts` | 11 | Process spawning, NDJSON parsing, session lifecycle, cleanup |
+| `test/coordinator-spawn-backend.test.ts` | 6 | Coordinator delegation, idempotency, error handling |
+| `test/engine.test.ts` | 5 | Constructor, start/stop lifecycle, adapter validation |
+| `test/index.test.ts` | 14 | Arg parsing, config loading/validation, spawn backend selection, main() error handling |
 
 **Key Files:**
 
-- `drone-gateway/package.json` — ESM package scaffold
-- `drone-gateway/src/types.ts` — `DroneServiceAdapter`, `DroneControlSurface`, config types
-- `drone-gateway/src/engine.ts` — Gateway engine: load config, init adapters, message routing loop
-- `drone-gateway/src/coordinator-client.ts` — HTTP client for coordinator web port
-- `drone-gateway/src/index.ts` — CLI entry point, arg parsing, startup
+- `drone-gateway/src/types.ts` — All gateway types
+- `drone-gateway/src/engine.ts` — Gateway engine
+- `drone-gateway/src/coordinator-client.ts` — Coordinator HTTP client
+- `drone-gateway/src/local-spawn-backend.ts` — Local agent spawning
+- `drone-gateway/src/coordinator-spawn-backend.ts` — Coordinator-based spawning
+- `drone-gateway/src/index.ts` — CLI entry point
 
 **Dependencies:** drone-core (shared types)
 
