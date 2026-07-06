@@ -1,0 +1,28 @@
+{
+  "name": "drone-gateway",
+  "version": "1.0.0",
+  "description": "Chat API integration layer for the drone swarm",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "drone-gateway": "./bin/drone-gateway"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "start": "node ./bin/drone-gateway",
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "drone-core": "workspace:*",
+    "pino": "^9.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.10"
+  }
+}

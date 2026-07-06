@@ -234,5 +234,13 @@
   {
     "timestamp": "2026-07-06T01:20:26.341Z",
     "insight": "The coordinator's spawn route follows the exact same pattern as the message relay route (messages.ts) — two-step lookup (beaconId → host:port), plain fetch() forwarding, and the same error code conventions (BEACON_NOT_FOUND, BEACON_UNAVAILABLE). This consistency makes the codebase easy to extend."
+  },
+  {
+    "timestamp": "2026-07-06T02:47:57.071Z",
+    "insight": "Created drone-gateway package scaffold with CONTEXT.md, following the same patterns as drone-coordinator and drone-beacon (ESM, pino logger, tsconfig.base.json, bin/ entry point). The engine.ts has placeholder createAdapter/createControlSurface methods that throw — these will be replaced by actual implementations in follow-up phases (4.2-4.7). The coordinator-client.ts mirrors the spawn/beacon/agent endpoints from the coordinator's web port."
+  },
+  {
+    "timestamp": "2026-07-06T03:07:56.359Z",
+    "insight": "Expanded the gateway-core-plan to include standalone mode (no beacon/coordinator), persistent agent sessions via --output-json without --once, a turnComplete NDJSON event, a shared spawner in drone-swarm-common, and a pluggable SpawnBackend interface. The plan now covers both standalone and swarm modes for the gateway."
   }
 ]

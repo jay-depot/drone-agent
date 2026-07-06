@@ -2,7 +2,7 @@
 key: roadmap
 tags: []
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-07-06T00:34:55.612Z
+updated: 2026-07-06T02:35:04.896Z
 ---
 
 # Swarm Roadmap
@@ -227,7 +227,7 @@ Local coordination layer for YOUR swarm on one machine.
 
 ### ✅ PHASE 3: drone-coordinator (SUBSTANTIALLY COMPLETE)
 
-**Status:** Substantially Complete — core infrastructure, security, session storage, knowledge management, wiki, insights/principles, migration tool, monitoring web UI, and comprehensive test coverage are all implemented. A few small items remain.
+**Status:** Substantially Complete — core infrastructure, security, session storage, knowledge management, wiki, insights/principles, migration tool, monitoring web UI, comprehensive test coverage, and inter-beacon spawn routing are all implemented. A few small items remain.
 
 Personal control plane for YOUR swarm across machines.
 
@@ -342,17 +342,46 @@ Certificate auto-generation already exists on both beacon and coordinator. The c
 
 **Nice-to-have:** Add a pure Node.js certificate generation fallback (using `crypto`) for environments without `openssl` CLI.
 
-#### ⏳ 3.9 Inter-Beacon Spawn Routing
+#### ✅ 3.9 Inter-Beacon Spawn Routing
 
-**Status:** Not started
+**Status:** Complete
 
-The beacon already has a local spawn API (`POST /spawn`). The coordinator tracks agent locations. What's needed:
+The coordinator now has a full set of spawn relay routes that forward requests to target beacons, plus LLM-facing tools in the swarm plugin for remote agent lifecycle management.
 
-1. New `POST /spawn` route on coordinator that accepts `{ targetBeaconId, personaId?, task?, config? }`
-2. Logic to look up the target beacon's host:port and forward the request (mirrors the existing message relay pattern in `messages.ts`)
-3. Optionally, a `beaconSelector: 'any'` mode that picks the least-loaded beacon
+**Coordinator routes** (in `drone-coordinator/src/routes/spawn.ts`):
 
-The beacon's existing `/spawn` endpoint is ready to accept forwarded requests — no changes needed on the beacon side.
+| Route                              | Purpose                                                  |
+| ---------------------------------- | -------------------------------------------------------- |
+| `POST /spawn`                      | Spawn agent on target beacon (requires `targetBeaconId`) |
+| `GET /spawn/:beaconId`             | List spawns on a beacon (optional `?status=` filter)     |
+| `GET /spawn/:beaconId/:spawnId`    | Get spawn status                                         |
+| `DELETE /spawn/:beaconId/:spawnId` | Terminate a spawned agent                                |
+
+All routes follow the same pattern as the message relay: look up beacon via `db.getBeacon()` → 404 if not found → forward via `fetch()` → 502 on beacon error → 503 on network error.
+
+**LLM tools** (in `drone-agent/src/plugins/swarm/index.ts`):
+
+| Tool                    | Calls Coordinator                                   |
+| ----------------------- | --------------------------------------------------- |
+| `swarm_list_beacons`    | `GET /beacons`                                      |
+| `swarm_list_agents`     | `GET /agents/location` (optional `beaconId` filter) |
+| `swarm_spawn`           | `POST /spawn`                                       |
+| `swarm_get_spawn`       | `GET /spawn/:beaconId/:spawnId`                     |
+| `swarm_list_spawns`     | `GET /spawn/:beaconId` (optional `status` filter)   |
+| `swarm_terminate_spawn` | `DELETE /spawn/:beaconId/:spawnId`                  |
+
+**Config:** Added `coordinatorUrl` to both `SwarmConfig` (plugin) and `DroneSwarmConfig` (drone-core types). All tools return a clear error if not configured.
+
+**Key Files:**
+
+- `drone-coordinator/src/routes/spawn.ts` — All 4 spawn relay routes
+- `drone-coordinator/src/types.ts` — `SpawnConfig` and `SpawnRequest` types
+- `drone-agent/src/plugins/swarm/index.ts` — 6 spawn/info tools
+- `drone-core/src/config-types.ts` — `coordinatorUrl` in `DroneSwarmConfig`
+- `drone-coordinator/test/routes.test.ts` — 16 spawn route tests
+- `drone-agent/test/swarm-spawn.test.ts` — 12 swarm plugin tool tests
+
+**Dependencies:** 3.2 (agent location tracking), beacon's existing `/spawn` endpoint
 
 #### ✅ 3.10 Coordinator & Beacon Test Coverage
 
@@ -365,7 +394,7 @@ Comprehensive test coverage for both `drone-coordinator` and `drone-beacon` pack
 - `test/db.test.ts` — 76 tests covering Persona, Skill, Beacon, BeaconTrust, BeaconSession, SwarmSession, SwarmEvent, AgentLocation, Insight, Principle CRUD
 - `test/knowledge.test.ts` — 13 tests for knowledge CRUD
 - `test/storage.test.ts` — 11 tests for blob storage engine
-- `test/routes.test.ts` — 118 tests covering all route files (health, personas, skills, beacons, knowledge, swarm, messages, insights, principles) including knowledge route-ordering, swarm large payload, session pipeline 409 transitions, and detailed message relay/broadcast with fetch stubbing
+- `test/routes.test.ts` — 134 tests covering all route files (health, personas, skills, beacons, knowledge, swarm, messages, insights, principles, spawn) including knowledge route-ordering, swarm large payload, session pipeline 409 transitions, detailed message relay/broadcast with fetch stubbing, and spawn relay routes
 - `test/auth.test.ts` — 11 tests for `isLocalRequest` and `createWebAuthMiddleware`
 - `test/helpers/server.ts` — Shared harness (`makeApp`/`teardownApp`) for route tests
 
@@ -379,28 +408,149 @@ Comprehensive test coverage for both `drone-coordinator` and `drone-beacon` pack
 - `test/coordinator-client.test.ts` — 14 tests for HTTP client with mocked http.request
 - `test/routes.test.ts` — 80 tests covering all beacon route files (health, personas, skills, agents, memory, messages, spawn, config, events, insights, principles, sync)
 
-**Total: 1105 tests across 56 test files (0 failures)**
+**Total: 1151 tests across 57 test files (0 failures)**
 
 ---
 
 ### 🔜 PHASE 4: drone-gateway
 
-**Status:** Not yet designed
+**Status:** Design phase
 
-Chat API integration layer - YOUR agents receive messages from chat platforms.
+Chat API integration layer — YOUR agents receive messages from chat platforms and respond back.
 
-**Goals:**
+**Domain Language:**
 
-- Connect to chat APIs (Matrix, Discord, Slack, etc.)
-- Relay messages into YOUR assigned personas in the swarm
-- Launch new agent instances when needed to handle conversations
-- Bidirectional: respond back to chat platforms
+- **Gateway** — the standalone service itself
+- **Service Adapter** — a platform integration (Matrix, Telegram, Slack). Each adapter knows how to connect to that platform's API, authenticate, and translate between platform-specific message formats and the gateway's internal format.
+- **Control Surface** — a configuration that maps a chat conversation (room, DM, channel) to a behavior. A control surface is attached to a service adapter.
+- **Persona Assignment** — a control surface that routes all messages in a conversation to a specific persona
+- **Swarm Console** — a control surface that exposes coordinator commands (spawn, status, terminate, list beacons, etc.)
+- **Mention Router** — a control surface that watches for `!persona` mentions and routes those messages to the specified persona
 
-**Implementation:**
+**Architecture:**
 
-- Standalone service
-- YOUR authentication for each platform
-- Message parsing and persona routing (YOUR routing)
+```
+┌─────────────────────────────────────────────────────┐
+│                   drone-gateway                      │
+│                                                      │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  │
+│  │ Matrix       │  │ Telegram    │  │ Slack       │  │
+│  │ Adapter      │  │ Adapter     │  │ Adapter     │  │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  │
+│         │                │                │          │
+│         ▼                ▼                ▼          │
+│  ┌─────────────────────────────────────────────────┐ │
+│  │              Gateway Engine                     │ │
+│  │  (routes messages → control surfaces → send)   │ │
+│  └──────────────────────┬──────────────────────────┘ │
+│                         │                             │
+│  ┌──────────────────────┴──────────────────────────┐ │
+│  │           Coordinator Client                    │ │
+│  │  (HTTP to coordinator:8080, bearer token auth)  │ │
+│  └─────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────┘
+                         │
+                         ▼
+              drone-coordinator:8080
+              (web port, bearer token auth)
+```
+
+**Key design decisions:**
+
+- New `drone-gateway` package in the monorepo (ESM, TypeScript, pnpm workspace)
+- JSON config format
+- Coordinator client talks to the web UI port (8080) with optional Bearer token auth
+- Recommended deployment: on the coordinator's host (local/Tailnet bypass applies)
+- Control surfaces are per-conversation, configured per adapter
+
+#### ⏳ 4.1 Gateway Core
+
+**Status:** Not started
+
+The core gateway package: engine loop, service adapter interface, control surface interface, coordinator client, config loading, CLI entry point.
+
+**Key Files:**
+
+- `drone-gateway/package.json` — ESM package scaffold
+- `drone-gateway/src/types.ts` — `DroneServiceAdapter`, `DroneControlSurface`, config types
+- `drone-gateway/src/engine.ts` — Gateway engine: load config, init adapters, message routing loop
+- `drone-gateway/src/coordinator-client.ts` — HTTP client for coordinator web port
+- `drone-gateway/src/index.ts` — CLI entry point, arg parsing, startup
+
+**Dependencies:** drone-core (shared types)
+
+#### ⏳ 4.2 Matrix Service Adapter
+
+**Status:** Not started
+
+Matrix chat platform integration. Connects to a Matrix homeserver, listens for messages in rooms and DMs, sends responses back.
+
+**Key considerations:**
+
+- Matrix client-server API (or appservice for bridge mode)
+- Authentication via access token
+- Room ID → conversation ID mapping
+- Support for both rooms and direct messages
+
+**Dependencies:** 4.1 (gateway core)
+
+#### ⏳ 4.3 Persona Assignment Control Surface
+
+**Status:** Not started
+
+Routes all messages in a conversation to a specific persona. The gateway spawns an agent with that persona on the configured beacon, sends the message as a task, and returns the response.
+
+**Key considerations:**
+
+- Maps `conversationId → personaId`
+- Uses coordinator's `POST /spawn` to launch agents
+- May need session management to reuse agents across multiple messages in the same conversation
+
+**Dependencies:** 4.1 (gateway core), 3.9 (spawn routing)
+
+#### ⏳ 4.4 Swarm Console Control Surface
+
+**Status:** Not started
+
+Exposes coordinator commands as chat-accessible commands. Users can type commands like `!spawn`, `!status`, `!beacons`, `!terminate` to manage the swarm from chat.
+
+**Key considerations:**
+
+- Command parsing and dispatch
+- Maps to coordinator client methods (spawn, list beacons, list agents, get spawn, list spawns, terminate)
+- Response formatting for chat readability
+
+**Dependencies:** 4.1 (gateway core), 3.9 (spawn routing)
+
+#### ⏳ 4.5 Mention Router Control Surface
+
+**Status:** Not started
+
+Watches for `!persona` mentions in a conversation and routes those messages to the specified persona. E.g., `!coder fix this bug` spawns a coder agent with that task. Optionally also support `!coder@beaconId fix this bug` to route to a specific beacon.
+
+**Key considerations:**
+
+- Parses `!personaId rest of message` syntax
+- Falls through (unhandled) if no mention is detected, allowing other control surfaces to process the message
+- Can be combined with persona assignment in the same room
+
+**Dependencies:** 4.1 (gateway core), 3.9 (spawn routing)
+
+#### ⏳ 4.6 Telegram Service Adapter
+
+**Status:** Not started
+
+Telegram bot integration. Connects via the Bot API, listens for messages in groups and DMs, sends responses back.
+
+**Dependencies:** 4.1 (gateway core)
+
+#### ⏳ 4.7 Slack Service Adapter
+
+**Status:** Not started
+
+Slack bot/app integration. Connects via Slack Events API or Socket Mode, listens for messages in channels and DMs, sends responses back.
+
+**Dependencies:** 4.1 (gateway core)
 
 ---
 
@@ -513,7 +663,7 @@ Phase 5 (Advanced)
 
 1. **Phase 1:** Agent can bootstrap itself and work on its own codebase ✅
 2. **Phase 2:** Your multiple agents on same host share YOUR skills/personas/memory via beacon ✅
-3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; migration tool moves assets between scopes; monitoring web UI for viewing swarm state; comprehensive test coverage ✅
+3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; migration tool moves assets between scopes; monitoring web UI for viewing swarm state; comprehensive test coverage; inter-beacon spawn routing ✅
 4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses
 5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support, automated learning
 
@@ -533,4 +683,4 @@ Phase 5 (Advanced)
 
 ---
 
-_Last updated: 2026-07-05_
+_Last updated: 2026-07-06_
