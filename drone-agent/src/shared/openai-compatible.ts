@@ -95,7 +95,9 @@ export function toOpenAiTools(tools: DroneToolDescriptor[]): OpenAiTool[] {
   }));
 }
 
-export function fromOpenAiResponse(openAi: OpenAiChatResponse): DroneChatResponse {
+export function fromOpenAiResponse(
+  openAi: OpenAiChatResponse
+): DroneChatResponse {
   const choice = openAi.choices?.[0];
   if (!choice) {
     return { message: '' };

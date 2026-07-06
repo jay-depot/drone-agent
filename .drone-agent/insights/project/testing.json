@@ -10,5 +10,13 @@
   {
     "timestamp": "2026-07-01T23:25:09.699Z",
     "insight": "The file.test.ts has 28 tests for applyPatch in isolation but zero integration tests for the full file__apply_diff tool execution path (schema parsing → applyPatch → JSON response → TUI rendering). This allowed bugs in the glue code (patched vs written field name, ANSI codes in LLM context) to go undetected."
+  },
+  {
+    "timestamp": "2026-07-06T00:25:41.214Z",
+    "insight": "The vitest alias configuration in vitest.config.ts resolves 'drone-swarm-common/wiki-storage' and 'drone-swarm-common/tls' to source files, but these aliases don't work for dynamic import() calls from test files. This means route tests that use dynamic imports (like the wiki routes) can't easily set up the wiki directory before the routes are registered. A workaround is to use the dist file path directly, but that creates a different module instance than the route files use."
+  },
+  {
+    "timestamp": "2026-07-06T00:25:41.221Z",
+    "insight": "The coordinator and beacon index.ts files have top-level imports of TLS, spawner, and WebSocket modules that don't resolve in the test environment. To test routes, we need app-helper.ts files that build a minimal Fastify instance with just route registrations, avoiding the full index.ts import chain."
   }
 ]

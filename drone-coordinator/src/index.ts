@@ -247,12 +247,10 @@ function resolveUiDistPath(): string {
  * Build a Fastify app instance with CORS, optional auth middleware, and API routes.
  * This is the testable core of the server, without UI-serving glue.
  */
-export async function buildApp(
-  opts?: {
-    getToken?: () => string | null;
-    https?: { cert: Buffer; key: Buffer };
-  }
-): Promise<FastifyInstance> {
+export async function buildApp(opts?: {
+  getToken?: () => string | null;
+  https?: { cert: Buffer; key: Buffer };
+}): Promise<FastifyInstance> {
   const app = fastify({
     logger: { level: process.env.LOG_LEVEL || 'info' },
     ...(opts?.https ? { https: { allowHTTP1: true, ...opts.https } } : {}),
@@ -455,9 +453,7 @@ export async function main() {
   logger.info(`Serving UI from: ${uiDistPath}`);
 
   // Primary server (with TLS if configured)
-  const app = await buildApp(
-    tlsOptions ? { https: tlsOptions } : undefined
-  );
+  const app = await buildApp(tlsOptions ? { https: tlsOptions } : undefined);
   await attachUi(app, uiDistPath);
 
   // Web server (HTTP only, no TLS, with auth for non-local connections)

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { setupDb, teardownDb } from './setup.js';
 import { buildTestApp } from './app-helper.js';
 import type { FastifyInstance } from 'fastify';
@@ -299,7 +299,10 @@ describe('Beacon Routes', () => {
   });
 
   it('GET /beacons/:id returns 404 for missing beacon', async () => {
-    const res = await app.inject({ method: 'GET', url: '/beacons/nonexistent' });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/beacons/nonexistent',
+    });
     expect(res.statusCode).toBe(404);
   });
 
@@ -1498,5 +1501,276 @@ describe('Principle Routes', () => {
       url: '/principles/nonexistent',
     });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+// ── Knowledge Route Ordering ─────────────────────────────────────────
+
+describe('Knowledge Route Ordering', () => {
+  it('GET /knowledge/search is not shadowed by /knowledge/:id', async () => {
+    // Create a knowledge entry with id 'search' to test the shadowing scenario
+    await app.inject({
+      method: 'POST',
+      url: '/knowledge',
+      payload: { id: 'search', type: 'fact', key: 'test', value: 'test-value' },
+    });
+    // GET /knowledge/search?q=test should return search results, not the 'search' entry
+    const res = await app.inject({
+      method: 'GET',
+      url: '/knowledge/search?q=test',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    // Should be an array of search results, not a single object
+    expect(Array.isArray(body)).toBe(true);
+  });
+});
+
+// ── Swarm Large Payload ──────────────────────────────────────────────
+
+describe('Swarm Large Payload', () => {
+  it('POST /sync/events/push handles large payloads via blob storage', async () => {
+    // Create a session first
+    await app.inject({
+      method: 'POST',
+      url: '/sync/sessions/register',
+      payload: { id: 'ss-large', beaconId: 'b1' },
+    });
+    // Push an event with a payload > 10KB to exercise blob storage
+    const largePayload = 'x'.repeat(11 * 1024);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sync/events/push',
+      payload: {
+        events: [
+          {
+            id: 'e-large',
+            sessionId: 'ss-large',
+            type: 'msg',
+            payload: largePayload,
+            createdAt: Date.now(),
+          },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = JSON.parse(res.body);
+    expect(body.count).toBe(1);
+    // The payload should have been stored as a blob reference
+    expect(body.events[0].payload).toMatch(/^blob:/);
+  });
+});
+
+// ── Session Pipeline 409 Tests ───────────────────────────────────────
+
+describe('Session Pipeline Status Transitions', () => {
+  it('POST /sessions/:id/process returns 409 for wrong state', async () => {
+    // Create a session
+    await app.inject({
+      method: 'POST',
+      url: '/sync/sessions/register',
+      payload: { id: 'ss-409', beaconId: 'b1' },
+    });
+    // Process it
+    await app.inject({ method: 'POST', url: '/sessions/ss-409/process' });
+    // Try to process again — should fail because status is now 'processing'
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sessions/ss-409/process',
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('POST /sessions/:id/processed returns 409 for wrong state', async () => {
+    // Try to mark as processed without going through 'processing' first
+    await app.inject({
+      method: 'POST',
+      url: '/sync/sessions/register',
+      payload: { id: 'ss-409b', beaconId: 'b1' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sessions/ss-409b/processed',
+    });
+    expect(res.statusCode).toBe(409);
+  });
+});
+
+// ── Message Routes (detailed) ───────────────────────────────────────
+
+describe('Message Routes (detailed)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('POST /messages/relay returns 503 when target beacon unavailable', async () => {
+    // Register an agent location with a beacon that has no beacon row
+    await app.inject({
+      method: 'POST',
+      url: '/agents/location',
+      payload: { agentId: 'agent-1', beaconId: 'b1' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/messages/relay',
+      payload: {
+        fromBeaconId: 'b-from',
+        fromAgentId: 'agent-from',
+        toAgentId: 'agent-1',
+        body: 'hello',
+      },
+    });
+    expect(res.statusCode).toBe(503);
+    expect(JSON.parse(res.body).code).toBe('BEACON_NOT_FOUND');
+  });
+
+  it('POST /messages/relay happy path with fetch stub', async () => {
+    // Register a beacon and agent location
+    await app.inject({
+      method: 'POST',
+      url: '/beacons',
+      payload: {
+        id: 'b-target',
+        name: 'Target',
+        host: 'localhost',
+        port: 3457,
+      },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/agents/location',
+      payload: { agentId: 'agent-target', beaconId: 'b-target' },
+    });
+    // Stub fetch to return success
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'm1' }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/messages/relay',
+      payload: {
+        fromBeaconId: 'b-from',
+        fromAgentId: 'agent-from',
+        toAgentId: 'agent-target',
+        body: 'hello',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.success).toBe(true);
+    expect(body.messageId).toBe('m1');
+    expect(body.delivered).toBe(true);
+  });
+
+  it('POST /messages/relay returns 502 when target beacon returns error', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/beacons',
+      payload: {
+        id: 'b-target',
+        name: 'Target',
+        host: 'localhost',
+        port: 3457,
+      },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/agents/location',
+      payload: { agentId: 'agent-target', beaconId: 'b-target' },
+    });
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      text: async () => 'error details',
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/messages/relay',
+      payload: {
+        fromBeaconId: 'b-from',
+        fromAgentId: 'agent-from',
+        toAgentId: 'agent-target',
+        body: 'hello',
+      },
+    });
+    expect(res.statusCode).toBe(502);
+  });
+
+  it('POST /messages/relay returns 503 when fetch throws', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/beacons',
+      payload: {
+        id: 'b-target',
+        name: 'Target',
+        host: 'localhost',
+        port: 3457,
+      },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/agents/location',
+      payload: { agentId: 'agent-target', beaconId: 'b-target' },
+    });
+    const mockFetch = vi
+      .fn()
+      .mockRejectedValue(new Error('Connection refused'));
+    vi.stubGlobal('fetch', mockFetch);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/messages/relay',
+      payload: {
+        fromBeaconId: 'b-from',
+        fromAgentId: 'agent-from',
+        toAgentId: 'agent-target',
+        body: 'hello',
+      },
+    });
+    expect(res.statusCode).toBe(503);
+    expect(JSON.parse(res.body).code).toBe('BEACON_UNAVAILABLE');
+  });
+
+  it('POST /messages/broadcast with mixed fetch results', async () => {
+    // Register two beacons
+    await app.inject({
+      method: 'POST',
+      url: '/beacons',
+      payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/beacons',
+      payload: { id: 'b2', name: 'B2', host: '10.0.0.1', port: 3457 },
+    });
+    // Stub fetch: first call succeeds, second throws
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true })
+      .mockRejectedValueOnce(new Error('unreachable'));
+    vi.stubGlobal('fetch', mockFetch);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/messages/broadcast',
+      payload: {
+        fromAgentId: 'agent-1',
+        channel: 'general',
+        body: 'hello',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.success).toBe(true);
+    expect(body.deliveredCount).toBe(1);
+    expect(body.totalBeacons).toBe(2);
   });
 });

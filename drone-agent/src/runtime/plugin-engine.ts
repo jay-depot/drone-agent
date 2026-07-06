@@ -147,7 +147,9 @@ function createHookBuckets(): HookBuckets {
 
 export function getDefaultEnabledPluginIds(plugins: DronePlugin[]): string[] {
   return plugins
-    .filter(plugin => plugin.metadata.required || plugin.metadata.defaultEnabled)
+    .filter(
+      plugin => plugin.metadata.required || plugin.metadata.defaultEnabled
+    )
     .map(plugin => plugin.metadata.id);
 }
 

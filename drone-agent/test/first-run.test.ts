@@ -5,9 +5,10 @@ import { runFirstRunSetup } from '../src/first-run.js';
 const { mkdirMock, writeFileMock, askMock } = vi.hoisted(() => ({
   mkdirMock: vi.fn(async () => undefined),
   writeFileMock: vi.fn(async () => undefined),
-  askMock: vi.fn<
-    (questions: Array<{ id: string }>) => Promise<Record<string, string>>
-  >(),
+  askMock:
+    vi.fn<
+      (questions: Array<{ id: string }>) => Promise<Record<string, string>>
+    >(),
 }));
 
 vi.mock('node:fs/promises', () => ({
@@ -135,9 +136,9 @@ describe('runFirstRunSetup', () => {
       'llm',
       'openrouter',
     ]);
-    expect(
-      (openRouterConfig['llm'] as { provider: string }).provider
-    ).toBe('openrouter');
+    expect((openRouterConfig['llm'] as { provider: string }).provider).toBe(
+      'openrouter'
+    );
 
     vi.clearAllMocks();
     askMock.mockResolvedValueOnce({ provider: 'anthropic' });

@@ -203,7 +203,7 @@ describe('openai plugin', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as [
       string,
-      RequestInit & { headers?: Record<string, string> }
+      RequestInit & { headers?: Record<string, string> },
     ];
     expect(url).toBe('https://api.openai.com/v1/chat/completions');
     expect(init.headers?.Authorization).toBe('Bearer test-key');
@@ -273,7 +273,7 @@ describe('openai plugin', () => {
 
     const [, init] = fetchMock.mock.calls[0] as [
       string,
-      RequestInit & { body?: string }
+      RequestInit & { body?: string },
     ];
     const body = JSON.parse(init.body ?? '{}') as {
       tools: Array<{ function: { name: string } }>;

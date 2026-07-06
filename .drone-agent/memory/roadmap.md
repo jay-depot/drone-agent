@@ -2,7 +2,7 @@
 key: roadmap
 tags: []
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-07-02T01:04:43.370Z
+updated: 2026-07-06T00:34:55.612Z
 ---
 
 # Swarm Roadmap
@@ -227,7 +227,7 @@ Local coordination layer for YOUR swarm on one machine.
 
 ### ✅ PHASE 3: drone-coordinator (SUBSTANTIALLY COMPLETE)
 
-**Status:** Substantially Complete — core infrastructure, security, session storage, knowledge management, wiki, insights/principles, migration tool, and monitoring web UI are all implemented. A few small items remain.
+**Status:** Substantially Complete — core infrastructure, security, session storage, knowledge management, wiki, insights/principles, migration tool, monitoring web UI, and comprehensive test coverage are all implemented. A few small items remain.
 
 Personal control plane for YOUR swarm across machines.
 
@@ -354,11 +354,32 @@ The beacon already has a local spawn API (`POST /spawn`). The coordinator tracks
 
 The beacon's existing `/spawn` endpoint is ready to accept forwarded requests — no changes needed on the beacon side.
 
-#### ⏳ 3.10 Coordinator Test Coverage
+#### ✅ 3.10 Coordinator & Beacon Test Coverage
 
-**Status:** Minimal (1 test file: `knowledge.test.ts`)
+**Status:** Complete
 
-The coordinator needs test coverage for its routes and database layer.
+Comprehensive test coverage for both `drone-coordinator` and `drone-beacon` packages.
+
+**Coordinator tests (5 test files, ~200 tests):**
+
+- `test/db.test.ts` — 76 tests covering Persona, Skill, Beacon, BeaconTrust, BeaconSession, SwarmSession, SwarmEvent, AgentLocation, Insight, Principle CRUD
+- `test/knowledge.test.ts` — 13 tests for knowledge CRUD
+- `test/storage.test.ts` — 11 tests for blob storage engine
+- `test/routes.test.ts` — 118 tests covering all route files (health, personas, skills, beacons, knowledge, swarm, messages, insights, principles) including knowledge route-ordering, swarm large payload, session pipeline 409 transitions, and detailed message relay/broadcast with fetch stubbing
+- `test/auth.test.ts` — 11 tests for `isLocalRequest` and `createWebAuthMiddleware`
+- `test/helpers/server.ts` — Shared harness (`makeApp`/`teardownApp`) for route tests
+
+**Beacon tests (8 test files, ~160 tests):**
+
+- `test/db.test.ts` — 60 tests covering Persona, Skill, AgentSession, Memory, Message, Spawn, Config, EventLog, KnowledgeCache, Insight, Principle CRUD
+- `test/identity.test.ts` — 7 tests for Ed25519 keypair management
+- `test/tls.test.ts` — 4 tests for TLS cert management
+- `test/wiki-storage.test.ts` — 12 tests for wiki filesystem operations
+- `test/ws-server.test.ts` — 11 tests for IP validation and connection management
+- `test/coordinator-client.test.ts` — 14 tests for HTTP client with mocked http.request
+- `test/routes.test.ts` — 80 tests covering all beacon route files (health, personas, skills, agents, memory, messages, spawn, config, events, insights, principles, sync)
+
+**Total: 1105 tests across 56 test files (0 failures)**
 
 ---
 
@@ -492,7 +513,7 @@ Phase 5 (Advanced)
 
 1. **Phase 1:** Agent can bootstrap itself and work on its own codebase ✅
 2. **Phase 2:** Your multiple agents on same host share YOUR skills/personas/memory via beacon ✅
-3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; migration tool moves assets between scopes; monitoring web UI for viewing swarm state ✅
+3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; migration tool moves assets between scopes; monitoring web UI for viewing swarm state; comprehensive test coverage ✅
 4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses
 5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support, automated learning
 
@@ -512,4 +533,4 @@ Phase 5 (Advanced)
 
 ---
 
-_Last updated: 2026-07-02_
+_Last updated: 2026-07-05_

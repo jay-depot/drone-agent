@@ -326,7 +326,8 @@ export function createDefaultAgentConfig(): DroneAgentConfig {
     enabledPlugins: [],
     externalPlugins: [],
     trustedPlugins: {},
-    systemPrompt: '`drone agent` harness initialized. Use available tools to answer ' +
+    systemPrompt:
+      '`drone agent` harness initialized. Use available tools to answer ' +
       'questions and perform tasks. Always proceed exactly as instructed. If a ' +
       'question or request is ambiguous, ask for clarification. If a question is ' +
       'unanswerable, respond with "I don\'t know." If a task is impossible, respond ' +

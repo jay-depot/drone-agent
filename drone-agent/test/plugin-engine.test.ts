@@ -114,7 +114,11 @@ describe('createDronePluginEngine', () => {
 
   it('computes default-enabled plugin ids from metadata', () => {
     const plugins: DronePlugin[] = [
-      createTestPlugin({ id: 'required', required: true, defaultEnabled: false }),
+      createTestPlugin({
+        id: 'required',
+        required: true,
+        defaultEnabled: false,
+      }),
       createTestPlugin({ id: 'default-on', defaultEnabled: true }),
       createTestPlugin({ id: 'opt-in', defaultEnabled: false }),
     ];

@@ -20,6 +20,7 @@ updated: 2026-07-03T01:28:31.630Z
 **What:** Refactor `drone-coordinator/src/index.ts` so the API server is assembled by an exported, side-effect-free `buildApp()` function (separated from UI-serving glue and from `main()`), change the default config directories for both the coordinator and beacon to per-service home-dir paths, and anchor each service's wiki (\"knowledge-base\") directory under its own config dir.
 
 **Why:**
+
 1. **Testability (primary driver):** `index.ts` currently runs `main()` at import time and keeps `setupServer` private, so route handlers cannot be exercised via `fastify.inject()`. Extracting `buildApp()` unblocks Plan B (coordinator route test coverage, roadmap item 3.10) and makes the assembled API app — including auth middleware — directly testable.
 2. **Wiki collision fix:** A coordinator host must run a co-located beacon. Neither service currently calls `setKnowledgeBaseDir()`, so both default to `wiki-storage`'s hardcoded `./knowledge-base` (relative to cwd). Run from the same directory, they write their wikis over each other. Anchoring the wiki under each service's config dir — combined with distinct default config dirs — resolves this.
 3. **Sensible defaults:** `./config` (cwd-relative) is a poor default for long-running services. `~/.drone-coordinator` and `~/.drone-beacon` mirror the `~/.drone-agent` convention.
