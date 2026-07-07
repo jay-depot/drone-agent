@@ -6,11 +6,24 @@
 
 import type { DroneAgentConfig } from 'drone-core';
 import { getConfigBeaconHost, getConfigBeaconPort } from './helpers.js';
-import { listLocalPersonas, listLocalSkills, listLocalInsights, listLocalPrinciples, listBeaconAssets } from './listing.js';
+import {
+  listLocalPersonas,
+  listLocalSkills,
+  listLocalInsights,
+  listLocalPrinciples,
+  listBeaconAssets,
+} from './listing.js';
 import { promoteAsset } from './promote.js';
 import { demoteAsset } from './demote.js';
 import { migrateWikiPage } from './wiki.js';
-import type { AssetType, LocalScope, SwarmScope, AssetInfo, MigrateOptions, MigrateResult } from './types.js';
+import type {
+  AssetType,
+  LocalScope,
+  SwarmScope,
+  AssetInfo,
+  MigrateOptions,
+  MigrateResult,
+} from './types.js';
 
 /**
  * List all migratable assets across all scopes.

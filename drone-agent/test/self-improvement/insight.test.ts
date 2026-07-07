@@ -2,7 +2,12 @@ import { mkdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { insightFilePath, userInsightFilePath, withTempHome, createEngine } from './setup.js';
+import {
+  insightFilePath,
+  userInsightFilePath,
+  withTempHome,
+  createEngine,
+} from './setup.js';
 
 describe('self-improvement plugin', () => {
   let tmpDir: string;

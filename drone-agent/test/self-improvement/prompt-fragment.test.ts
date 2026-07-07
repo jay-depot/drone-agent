@@ -35,9 +35,7 @@ describe('insight-targets prompt fragment', () => {
 
     const engine = await createEngine({ personaCapability: personaCap });
     const fragments = await engine.renderPromptFragments();
-    const fragment = fragments.find(f =>
-      f.includes('Current active persona')
-    );
+    const fragment = fragments.find(f => f.includes('Current active persona'));
     expect(fragment).toBeDefined();
     expect(fragment).toContain('code');
     expect(fragment).toContain('self-improvement__insight');

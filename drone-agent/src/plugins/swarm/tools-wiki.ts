@@ -55,8 +55,7 @@ function createWikiWriteTool(ctx: SwarmContext): DroneToolDefinition {
   return {
     name: 'wiki_write',
     defaultHidden: true,
-    description:
-      'Create or update a wiki page in the swarm knowledge base.',
+    description: 'Create or update a wiki page in the swarm knowledge base.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -85,8 +84,7 @@ function createWikiWriteTool(ctx: SwarmContext): DroneToolDefinition {
         sources: {
           type: 'array',
           items: { type: 'string' },
-          description:
-            'Optional session log IDs that contributed to this page',
+          description: 'Optional session log IDs that contributed to this page',
         },
       },
       required: ['pageId', 'title', 'content'],
@@ -261,9 +259,7 @@ function createWikiLintTool(ctx: SwarmContext): DroneToolDefinition {
 /**
  * Create all wiki tool definitions.
  */
-export function createWikiTools(
-  ctx: SwarmContext
-): DroneToolDefinition[] {
+export function createWikiTools(ctx: SwarmContext): DroneToolDefinition[] {
   return [
     createWikiReadTool(ctx),
     createWikiWriteTool(ctx),

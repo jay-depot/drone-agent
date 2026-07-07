@@ -26,7 +26,11 @@ interface Database {
 /**
  * Get a single row by ID from any table.
  */
-export function getRow<T>(db: () => Database, table: string, id: string): T | undefined {
+export function getRow<T>(
+  db: () => Database,
+  table: string,
+  id: string
+): T | undefined {
   const stmt = db().prepare(`SELECT * FROM ${table} WHERE id = ?`);
   return stmt.get(id) as T | undefined;
 }
@@ -54,7 +58,11 @@ export function listRows<T>(
 /**
  * Delete a row by ID. Returns true if a row was deleted.
  */
-export function deleteRow(db: () => Database, table: string, id: string): boolean {
+export function deleteRow(
+  db: () => Database,
+  table: string,
+  id: string
+): boolean {
   const stmt = db().prepare(`DELETE FROM ${table} WHERE id = ?`);
   const result = stmt.run(id);
   return result.changes > 0;
@@ -70,8 +78,12 @@ export function createRow<T extends Record<string, unknown>>(
   data: T
 ): T {
   const columns = Object.keys(data).join(', ');
-  const values = Object.keys(data).map(k => `@${k}`).join(', ');
-  const stmt = db().prepare(`INSERT INTO ${table} (${columns}) VALUES (${values})`);
+  const values = Object.keys(data)
+    .map(k => `@${k}`)
+    .join(', ');
+  const stmt = db().prepare(
+    `INSERT INTO ${table} (${columns}) VALUES (${values})`
+  );
   stmt.run(data);
   return data;
 }

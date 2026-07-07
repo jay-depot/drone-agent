@@ -1,8 +1,5 @@
 import os from 'node:os';
-import type {
-  DronePersonaCapability,
-  DroneSkillsCapability,
-} from 'drone-core';
+import type { DronePersonaCapability, DroneSkillsCapability } from 'drone-core';
 
 export const VALID_TARGET_TYPES = ['persona', 'skill', 'project'] as const;
 export type TargetType = (typeof VALID_TARGET_TYPES)[number];

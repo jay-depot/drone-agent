@@ -3,10 +3,7 @@ import path from 'node:path';
 import fg from 'fast-glob';
 import type { DronePlugin } from 'drone-core';
 import { renderDiffV2 } from '../shared/diff-renderer.js';
-import {
-  applyPatch,
-  type PatchError,
-} from '../shared/patch-applier.js';
+import { applyPatch, type PatchError } from '../shared/patch-applier.js';
 import { parseUnifiedDiff } from '../shared/unified-diff-parser.js';
 
 /**

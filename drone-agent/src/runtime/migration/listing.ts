@@ -5,7 +5,12 @@
 import { readFile, readdir, access } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import path from 'node:path';
-import { getPersonaDir, getSkillsDir, getInsightsDir, getPrinciplesDir } from './paths.js';
+import {
+  getPersonaDir,
+  getSkillsDir,
+  getInsightsDir,
+  getPrinciplesDir,
+} from './paths.js';
 import { getBeaconUrl } from './helpers.js';
 import { getBeaconEndpoint } from './beacon-client.js';
 import { extractFrontmatterField } from './frontmatter.js';
@@ -14,7 +19,9 @@ import type { AssetType, LocalScope, SwarmScope, AssetInfo } from './types.js';
 /**
  * List all local personas in a given scope.
  */
-export async function listLocalPersonas(scope: LocalScope): Promise<AssetInfo[]> {
+export async function listLocalPersonas(
+  scope: LocalScope
+): Promise<AssetInfo[]> {
   const dir = getPersonaDir(scope);
   let entries: string[];
   try {
@@ -84,7 +91,9 @@ export async function listLocalSkills(scope: LocalScope): Promise<AssetInfo[]> {
  * List all local insights for a given scope.
  * Insights are stored as JSON files in .drone-agent/insights/<targetType>/<targetId>.json
  */
-export async function listLocalInsights(scope: LocalScope): Promise<AssetInfo[]> {
+export async function listLocalInsights(
+  scope: LocalScope
+): Promise<AssetInfo[]> {
   const dir = getInsightsDir(scope);
   let entries: string[];
   try {
@@ -123,7 +132,9 @@ export async function listLocalInsights(scope: LocalScope): Promise<AssetInfo[]>
  * List all local principles for a given scope.
  * Principles are stored as JSON files in .drone-agent/principles/<targetType>/<targetId>.json
  */
-export async function listLocalPrinciples(scope: LocalScope): Promise<AssetInfo[]> {
+export async function listLocalPrinciples(
+  scope: LocalScope
+): Promise<AssetInfo[]> {
   const dir = getPrinciplesDir(scope);
   let entries: string[];
   try {

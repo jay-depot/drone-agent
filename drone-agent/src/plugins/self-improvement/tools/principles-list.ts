@@ -2,7 +2,11 @@ import type {
   DronePrincipleStorageEngine,
   DroneToolDefinition,
 } from 'drone-core';
-import { VALID_TARGET_TYPES, isValidTargetType, type TargetType } from '../validation.js';
+import {
+  VALID_TARGET_TYPES,
+  isValidTargetType,
+  type TargetType,
+} from '../validation.js';
 import { principleEngines } from '../state.js';
 
 export function createPrinciplesListTool(

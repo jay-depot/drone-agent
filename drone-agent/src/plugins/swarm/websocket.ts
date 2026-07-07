@@ -46,9 +46,7 @@ export function connectWebSocket(ctx: SwarmContext): void {
           );
         }
       } catch (err) {
-        registration.logger.error(
-          `Failed to parse WebSocket message: ${err}`
-        );
+        registration.logger.error(`Failed to parse WebSocket message: ${err}`);
       }
     };
 
@@ -111,11 +109,12 @@ export function subscribeToChannel(ctx: SwarmContext, channel: string): void {
 /**
  * Unsubscribe from a channel.
  */
-export function unsubscribeFromChannel(ctx: SwarmContext, channel: string): void {
+export function unsubscribeFromChannel(
+  ctx: SwarmContext,
+  channel: string
+): void {
   if (ctx.ws && ctx.ws.readyState === WebSocket.OPEN) {
-    ctx.ws.send(
-      JSON.stringify({ type: 'unsubscribe', payload: { channel } })
-    );
+    ctx.ws.send(JSON.stringify({ type: 'unsubscribe', payload: { channel } }));
   }
 }
 

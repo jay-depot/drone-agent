@@ -26,7 +26,8 @@ export async function renderPrinciplesFragment(
     PRINCIPLES_SUBDIR,
     'project'
   );
-  const projectFiles = await scanJsonDir<DronePrincipleEntry>(projectPrinciplesDir);
+  const projectFiles =
+    await scanJsonDir<DronePrincipleEntry>(projectPrinciplesDir);
 
   const haveProject = projectFiles.length > 0;
   const activePersona = personaCap?.getActivePersona();
@@ -63,7 +64,10 @@ export async function renderPrinciplesFragment(
         defaultPrincipleEngine,
         personaCap
       );
-      const principles = await engine.readPrinciples('persona', activePersona.id);
+      const principles = await engine.readPrinciples(
+        'persona',
+        activePersona.id
+      );
 
       if (principles.length > 0) {
         const personaLines = ['## Current Persona'];

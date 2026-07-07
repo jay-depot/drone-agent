@@ -4,11 +4,22 @@
 
 import { readFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
-import { getPersonaFilePath, getSkillFilePath, getInsightsDir, getPrinciplesDir } from './paths.js';
+import {
+  getPersonaFilePath,
+  getSkillFilePath,
+  getInsightsDir,
+  getPrinciplesDir,
+} from './paths.js';
 import { extractFrontmatterField } from './frontmatter.js';
 import { postBeaconAsset } from './beacon-client.js';
 import { backupAsset } from './backup.js';
-import type { AssetType, LocalScope, SwarmScope, MigrateOptions, MigrateResult } from './types.js';
+import type {
+  AssetType,
+  LocalScope,
+  SwarmScope,
+  MigrateOptions,
+  MigrateResult,
+} from './types.js';
 
 /**
  * Promote a local asset to a swarm scope.

@@ -115,8 +115,7 @@ function createSwarmSpawnTool(
 ): DroneToolDefinition {
   return {
     name: 'swarm_spawn',
-    description:
-      'Spawn a new agent on a remote beacon via the coordinator.',
+    description: 'Spawn a new agent on a remote beacon via the coordinator.',
     inputSchema: {
       type: 'object',
       properties: {

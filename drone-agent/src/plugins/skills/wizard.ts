@@ -47,7 +47,6 @@ type SkillsCreateInput = {
   recall?: string;
 };
 
-
 /** Slugify a freeform name into a valid skill id. */
 export function slugifySkillId(raw: string): string {
   return raw

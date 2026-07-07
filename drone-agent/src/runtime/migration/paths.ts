@@ -15,7 +15,10 @@ export function getPersonaDir(scope: 'project' | 'user'): string {
   return path.join(getLocalBaseDir(scope), CONFIG_DIR, PERSONA_DIR);
 }
 
-export function getPersonaFilePath(scope: 'project' | 'user', id: string): string {
+export function getPersonaFilePath(
+  scope: 'project' | 'user',
+  id: string
+): string {
   return path.join(getPersonaDir(scope), id, 'persona.md');
 }
 
@@ -23,7 +26,10 @@ export function getSkillsDir(scope: 'project' | 'user'): string {
   return path.join(getLocalBaseDir(scope), CONFIG_DIR, SKILLS_DIR);
 }
 
-export function getSkillFilePath(scope: 'project' | 'user', id: string): string {
+export function getSkillFilePath(
+  scope: 'project' | 'user',
+  id: string
+): string {
   return path.join(getSkillsDir(scope), `${id}.md`);
 }
 

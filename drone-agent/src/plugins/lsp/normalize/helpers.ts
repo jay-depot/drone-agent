@@ -207,7 +207,9 @@ export function truncateWorkspaceEdit(
   };
 }
 
-export function describeWorkspaceEdit(edit: import('./types.js').NormalizedWorkspaceEdit): {
+export function describeWorkspaceEdit(
+  edit: import('./types.js').NormalizedWorkspaceEdit
+): {
   filesTouched: number;
   editCount: number;
   editsByFile: Record<string, number>;

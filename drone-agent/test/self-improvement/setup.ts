@@ -55,7 +55,10 @@ export function principleFilePath(
   );
 }
 
-export function userInsightFilePath(targetType: string, targetId: string): string {
+export function userInsightFilePath(
+  targetType: string,
+  targetId: string
+): string {
   if (targetType === 'persona') {
     return path.join(
       os.homedir(),

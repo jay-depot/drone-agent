@@ -5,11 +5,22 @@
  * This is the barrel file that wires together all sub-modules.
  */
 
-import type { DronePlugin, DronePersonaCapability, DroneSkillsCapability } from 'drone-core';
+import type {
+  DronePlugin,
+  DronePersonaCapability,
+  DroneSkillsCapability,
+} from 'drone-core';
 import type { SwarmConfig } from './config.js';
-import { DEFAULT_BEACON_HOST, DEFAULT_BEACON_PORT, BeaconConfigInjector } from './config.js';
+import {
+  DEFAULT_BEACON_HOST,
+  DEFAULT_BEACON_PORT,
+  BeaconConfigInjector,
+} from './config.js';
 import { createSwarmContext } from './context.js';
-import { registerPersonaProviders, registerSkillProviders } from './providers.js';
+import {
+  registerPersonaProviders,
+  registerSkillProviders,
+} from './providers.js';
 import { createSwarmMessageTool } from './tools-message.js';
 import { createWikiTools } from './tools-wiki.js';
 import { createCoordinatorTools } from './tools-coordinator.js';

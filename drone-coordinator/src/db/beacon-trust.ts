@@ -1,7 +1,11 @@
 import crypto from 'node:crypto';
 import { getDatabase } from './init.js';
 import { logger } from '../logger.js';
-import type { BeaconTrust, BeaconTrustStatus, RegisterBeaconTrustRequest } from '../types.js';
+import type {
+  BeaconTrust,
+  BeaconTrustStatus,
+  RegisterBeaconTrustRequest,
+} from '../types.js';
 
 function generateApprovalToken(): string {
   const array = new Uint8Array(32);

@@ -43,8 +43,7 @@ export async function reloadFromBeacon(ctx: SwarmContext): Promise<void> {
       // Parse the .md content to extract all rich fields
       const definition = parsePersonaMd(p.id, p.systemPrompt);
       // Preserve the scope from the DB, not from the .md frontmatter
-      definition.scope =
-        p.scope === 'coordinator' ? 'coordinator' : 'beacon';
+      definition.scope = p.scope === 'coordinator' ? 'coordinator' : 'beacon';
 
       if (p.scope === 'coordinator') {
         ctx.coordinatorPersonas.set(p.id, definition);
@@ -57,8 +56,7 @@ export async function reloadFromBeacon(ctx: SwarmContext): Promise<void> {
     if (!skillsResp.ok) {
       throw new Error(`Failed to fetch skills: ${skillsResp.status}`);
     }
-    const skillsData =
-      (await skillsResp.json()) as DroneSkillDefinition[];
+    const skillsData = (await skillsResp.json()) as DroneSkillDefinition[];
     ctx.beaconSkills = new Map();
     ctx.coordinatorSkills = new Map();
 
@@ -134,9 +132,7 @@ export function registerPersonaProviders(
         }),
       });
       if (!res.ok) {
-        throw new Error(
-          `Failed to write persona to beacon: ${res.status}`
-        );
+        throw new Error(`Failed to write persona to beacon: ${res.status}`);
       }
       return { filePath: `${ctx.baseUrl}/personas/${id}` };
     },
@@ -265,9 +261,7 @@ export function registerSkillProviders(
         }),
       });
       if (!res.ok) {
-        throw new Error(
-          `Failed to write skill to coordinator: ${res.status}`
-        );
+        throw new Error(`Failed to write skill to coordinator: ${res.status}`);
       }
       return { filePath: `${ctx.baseUrl}/skills/${id}` };
     },

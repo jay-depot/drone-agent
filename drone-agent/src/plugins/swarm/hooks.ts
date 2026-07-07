@@ -13,7 +13,11 @@ import type {
   DroneSelfImprovementCapability,
 } from 'drone-core';
 import type { SwarmContext } from './context.js';
-import { reloadFromBeacon, registerPersonaProviders, registerSkillProviders } from './providers.js';
+import {
+  reloadFromBeacon,
+  registerPersonaProviders,
+  registerSkillProviders,
+} from './providers.js';
 import { connectWebSocket } from './websocket.js';
 import { BeaconConfigInjector } from './config.js';
 
@@ -105,8 +109,7 @@ function registerStorageEngines(
           scope: 'local',
         }),
       });
-      if (!res.ok)
-        throw new Error(`Failed to record insight: ${res.status}`);
+      if (!res.ok) throw new Error(`Failed to record insight: ${res.status}`);
       return { ok: true, entryCount: 1 };
     },
     listInsights: async (targetType, targetId) => {
@@ -149,8 +152,7 @@ function registerStorageEngines(
           scope: 'local',
         }),
       });
-      if (!res.ok)
-        throw new Error(`Failed to store principle: ${res.status}`);
+      if (!res.ok) throw new Error(`Failed to store principle: ${res.status}`);
       return { ok: true, principleCount: 1 };
     },
     listPrinciples: async (targetType, targetId) => {
@@ -180,8 +182,7 @@ function registerStorageEngines(
     deletePrinciple: async (targetType, targetId, index) => {
       const params = new URLSearchParams({ targetType, targetId });
       const res = await fetch(`${baseUrl}/principles?${params}`);
-      if (!res.ok)
-        throw new Error(`Failed to list principles: ${res.status}`);
+      if (!res.ok) throw new Error(`Failed to list principles: ${res.status}`);
       const data = (await res.json()) as any[];
       if (index >= data.length) {
         throw new Error(`Index ${index} is out of bounds.`);
@@ -220,9 +221,7 @@ export function registerHooks(
 
     // Register HTTP storage engines for swarm-scoped insights and principles
     const selfImprovementCap =
-      registration.request<DroneSelfImprovementCapability>(
-        'self-improvement'
-      );
+      registration.request<DroneSelfImprovementCapability>('self-improvement');
     if (selfImprovementCap) {
       registerStorageEngines(ctx, selfImprovementCap);
     } else {

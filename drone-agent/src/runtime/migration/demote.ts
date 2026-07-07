@@ -4,9 +4,20 @@
 
 import { writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { getPersonaFilePath, getSkillFilePath, getInsightsDir, getPrinciplesDir } from './paths.js';
+import {
+  getPersonaFilePath,
+  getSkillFilePath,
+  getInsightsDir,
+  getPrinciplesDir,
+} from './paths.js';
 import { fetchBeaconAsset, deleteBeaconAsset } from './beacon-client.js';
-import type { AssetType, LocalScope, SwarmScope, MigrateOptions, MigrateResult } from './types.js';
+import type {
+  AssetType,
+  LocalScope,
+  SwarmScope,
+  MigrateOptions,
+  MigrateResult,
+} from './types.js';
 
 /**
  * Demote a swarm asset to a local scope.

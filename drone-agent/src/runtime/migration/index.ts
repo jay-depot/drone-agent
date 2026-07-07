@@ -5,7 +5,12 @@
  * resolveBeaconAddress, and all types.
  */
 
-export { listAllAssets, migrateAsset, batchMigrate, resolveBeaconAddress } from './public-api.js';
+export {
+  listAllAssets,
+  migrateAsset,
+  batchMigrate,
+  resolveBeaconAddress,
+} from './public-api.js';
 export type {
   AssetType,
   LocalScope,

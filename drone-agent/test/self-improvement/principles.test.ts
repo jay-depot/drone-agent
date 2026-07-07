@@ -513,8 +513,7 @@ describe('combined principles prompt fragment', () => {
 
     const fragments = await engine.renderPromptFragments();
     const fragment = fragments.find(
-      f =>
-        f.includes('## Current Project') && f.includes('## Current Persona')
+      f => f.includes('## Current Project') && f.includes('## Current Persona')
     );
     expect(fragment).toBeDefined();
     expect(fragment).toContain('## Current Project');
@@ -530,8 +529,7 @@ describe('combined principles prompt fragment', () => {
 
     const fragments = await engine.renderPromptFragments();
     const fragment = fragments.find(
-      f =>
-        f.includes('## Current Project') || f.includes('## Current Persona')
+      f => f.includes('## Current Project') || f.includes('## Current Persona')
     );
     expect(fragment).toBeUndefined();
   });
@@ -601,9 +599,7 @@ describe('skill principles injection', () => {
           },
           execute: async input => {
             const id =
-              typeof input.id === 'string'
-                ? input.id.trim().toLowerCase()
-                : '';
+              typeof input.id === 'string' ? input.id.trim().toLowerCase() : '';
             let body = 'Original body.';
             for (const enhancer of recallEnhancers) {
               body = await enhancer(id, body);
@@ -704,9 +700,7 @@ describe('skill principles injection', () => {
           },
           execute: async input => {
             const id =
-              typeof input.id === 'string'
-                ? input.id.trim().toLowerCase()
-                : '';
+              typeof input.id === 'string' ? input.id.trim().toLowerCase() : '';
             return JSON.stringify(
               {
                 id,
@@ -762,9 +756,7 @@ describe('skill principles injection', () => {
           },
           execute: async input => {
             const id =
-              typeof input.id === 'string'
-                ? input.id.trim().toLowerCase()
-                : '';
+              typeof input.id === 'string' ? input.id.trim().toLowerCase() : '';
             let body = 'Original body.';
             for (const enhancer of recallEnhancers) {
               body = await enhancer(id, body);

@@ -17,9 +17,7 @@ import {
 /**
  * Create the swarm_message tool.
  */
-export function createSwarmMessageTool(
-  ctx: SwarmContext
-): DroneToolDefinition {
+export function createSwarmMessageTool(ctx: SwarmContext): DroneToolDefinition {
   return {
     name: 'swarm_message',
     description:
@@ -38,8 +36,7 @@ export function createSwarmMessageTool(
         },
         toChannel: {
           type: 'string',
-          description:
-            'Channel name (for subscribe/unsubscribe/send actions)',
+          description: 'Channel name (for subscribe/unsubscribe/send actions)',
         },
         body: {
           type: 'string',

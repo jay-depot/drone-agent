@@ -101,12 +101,9 @@ describe('self-improvement__insights-list', () => {
       insight: 'Test insight.',
     });
 
-    const result = await engine.executeTool(
-      'self-improvement__insights-list',
-      {
-        targetType: 'project',
-      }
-    );
+    const result = await engine.executeTool('self-improvement__insights-list', {
+      targetType: 'project',
+    });
     const parsed = JSON.parse(result);
     expect(parsed.insights).toHaveLength(1);
     expect(parsed.insights[0].targetType).toBe('project');

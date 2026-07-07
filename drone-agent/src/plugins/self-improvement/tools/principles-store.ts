@@ -52,8 +52,7 @@ export function createPrinciplesStoreTool(
       const targetType = input.targetType as string;
       const targetId = (input.targetId as string).trim().toLowerCase();
       const principle = (input.principle as string).trim();
-      const source =
-        (input.source as string | undefined)?.trim() || undefined;
+      const source = (input.source as string | undefined)?.trim() || undefined;
 
       if (!principle) {
         throw new Error('principle must be a non-empty string.');

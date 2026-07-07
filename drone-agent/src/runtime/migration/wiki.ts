@@ -4,7 +4,11 @@
 
 import { writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { fetchBeaconAsset, putBeaconAsset, deleteBeaconAsset } from './beacon-client.js';
+import {
+  fetchBeaconAsset,
+  putBeaconAsset,
+  deleteBeaconAsset,
+} from './beacon-client.js';
 import type { SwarmScope, MigrateOptions, MigrateResult } from './types.js';
 
 /**

@@ -42,11 +42,7 @@ export function createPrinciplesDeleteTool(
       const targetId = (input.targetId as string).trim().toLowerCase();
       const index = input.index as number;
 
-      if (
-        typeof index !== 'number' ||
-        !Number.isInteger(index) ||
-        index < 0
-      ) {
+      if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) {
         throw new Error('index must be a non-negative integer.');
       }
 

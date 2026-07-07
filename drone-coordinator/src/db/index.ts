@@ -87,8 +87,4 @@ export {
   deletePrinciple,
 } from './principles.js';
 export type { PrincipleRow } from './principles.js';
-export {
-  getWebToken,
-  generateWebToken,
-  initWebToken,
-} from './web-token.js';
+export { getWebToken, generateWebToken, initWebToken } from './web-token.js';

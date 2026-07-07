@@ -3,7 +3,10 @@ import type {
   DronePlugin,
   DroneSkillsCapability,
 } from 'drone-core';
-import { createFileInsightEngine, createFilePrincipleEngine } from './file-engine.js';
+import {
+  createFileInsightEngine,
+  createFilePrincipleEngine,
+} from './file-engine.js';
 import { createSelfImprovementCapability } from './capability.js';
 import { renderInsightTargetsFragment } from './prompt-fragment.js';
 import { renderPrinciplesFragment } from './principles-fragment.js';
@@ -72,18 +75,14 @@ export const selfImprovementPlugin: DronePlugin = {
     registration.registerTool(
       createInsightTool(personaCap, skillsCap, defaultInsightEngine)
     );
-    registration.registerTool(
-      createInsightsListTool(defaultInsightEngine)
-    );
+    registration.registerTool(createInsightsListTool(defaultInsightEngine));
     registration.registerTool(
       createInsightsRecallTool(personaCap, skillsCap, defaultInsightEngine)
     );
     registration.registerTool(
       createPrinciplesStoreTool(personaCap, skillsCap, defaultPrincipleEngine)
     );
-    registration.registerTool(
-      createPrinciplesListTool(defaultPrincipleEngine)
-    );
+    registration.registerTool(createPrinciplesListTool(defaultPrincipleEngine));
     registration.registerTool(
       createPrinciplesRecallTool(personaCap, skillsCap, defaultPrincipleEngine)
     );

@@ -1,4 +1,8 @@
-import type { LspRangeResponse, LspLocationResponse, LspLocationLinkResponse } from './types.js';
+import type {
+  LspRangeResponse,
+  LspLocationResponse,
+  LspLocationLinkResponse,
+} from './types.js';
 import { fromFileUri } from './uri.js';
 
 export function normalizeLspRange(range: LspRangeResponse | undefined): {

@@ -2,7 +2,11 @@ import type {
   DroneInsightStorageEngine,
   DroneToolDefinition,
 } from 'drone-core';
-import { VALID_TARGET_TYPES, isValidTargetType, type TargetType } from '../validation.js';
+import {
+  VALID_TARGET_TYPES,
+  isValidTargetType,
+  type TargetType,
+} from '../validation.js';
 import { insightEngines } from '../state.js';
 
 export function createInsightsListTool(

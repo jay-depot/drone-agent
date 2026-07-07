@@ -274,5 +274,9 @@
   {
     "timestamp": "2026-07-06T21:43:30.948Z",
     "insight": "The renderComponent pattern requires engine.getTool() to be available in the TUI's event listener. This was already implemented in the engine for other purposes but wasn't exposed through DroneTuiOptions. Needed to add it to the Pick<> type. Always check if a dependency already exists at a lower layer before creating a new path."
+  },
+  {
+    "timestamp": "2026-07-07T14:57:23.859Z",
+    "insight": "db-helpers.ts in drone-swarm-common used `any` for the better-sqlite3 Database type to avoid adding it as a dependency. Replaced with minimal local structural interfaces (Database, Statement) that match only the subset of the API we use — clean pattern for shared packages that wrap a dependency of their consumers."
   }
 ]

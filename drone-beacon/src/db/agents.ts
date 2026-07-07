@@ -1,9 +1,6 @@
 import { getDatabase } from './init.js';
 import { logger } from '../logger.js';
-import type {
-  AgentSession,
-  RegisterAgentRequest,
-} from '../types.js';
+import type { AgentSession, RegisterAgentRequest } from '../types.js';
 import { getRow } from 'drone-swarm-common';
 
 export function registerAgent(req: RegisterAgentRequest): AgentSession {
