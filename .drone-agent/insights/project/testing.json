@@ -42,5 +42,9 @@
   {
     "timestamp": "2026-07-06T01:41:26.489Z",
     "insight": "The swarm plugin's register() function returns early if beacon registration fails, which means tools registered after that point never get added. This required a registration-capture pattern for testing (calling plugin.register() with a mock registration that records tools) rather than using createDronePluginEngine with vi.stubGlobal('fetch'), since vi.stubGlobal doesn't propagate through vitest's fork pool."
+  },
+  {
+    "timestamp": "2026-07-07T16:58:51.012Z",
+    "insight": "The TUI's conversation-event render path (assistantMessage/assistantMessageComplete -> tail -> Static scrollback) is not exercised by any test. tui.test.tsx mocks onConversationEvent as a no-op and only asserts status bar / mid-panel / help. This gap let a double-render bug (redundant log(response,'plain') in runSlashCommand) ship undetected. Recommend a regression test that emits assistantMessage+assistantMessageComplete via a real onConversationEvent mock and asserts the reply appears exactly once in the frame."
   }
 ]
