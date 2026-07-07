@@ -11,7 +11,13 @@
  * drone-swarm-common itself.
  */
 
-/** Minimal statement interface matching the better-sqlite3 subset we use. */
+/**
+ * Minimal statement interface matching the better-sqlite3 subset we use.
+ *
+ * Return types are intentionally `unknown` to stay structurally compatible
+ * with better-sqlite3's generic Statement signatures across versions.
+ * Callers cast to concrete row/result types at helper boundaries.
+ */
 interface Statement {
   get(...params: unknown[]): unknown;
   all(...params: unknown[]): unknown[];
