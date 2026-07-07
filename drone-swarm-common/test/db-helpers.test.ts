@@ -17,12 +17,16 @@ describe('db-helpers', () => {
 
   it('listRows supports filter params', () => {
     const rows = [{ id: 'a1' }, { id: 'a2' }];
+    let preparedSql = '';
     const db = () => ({
-      prepare: (_sql: string) => ({
-        all: (..._params: unknown[]) => rows,
-        get: () => undefined,
-        run: () => ({ changes: 0 }),
-      }),
+      prepare: (sql: string) => {
+        preparedSql = sql;
+        return {
+          all: (..._params: unknown[]) => rows,
+          get: () => undefined,
+          run: () => ({ changes: 0 }),
+        };
+      },
     });
 
     expect(
@@ -31,12 +35,25 @@ describe('db-helpers', () => {
         params: ['x'],
       })
     ).toEqual(rows);
+    expect(preparedSql).toContain('WHERE type = ?');
   });
 
   it('deleteRow returns false when changes is missing', () => {
     const db = () => ({
       prepare: (_sql: string) => ({
         run: (_id: string) => ({}),
+        get: () => undefined,
+        all: () => [],
+      }),
+    });
+
+    expect(deleteRow(db, 'items', 'a1')).toBe(false);
+  });
+
+  it('deleteRow returns false when run result is undefined', () => {
+    const db = () => ({
+      prepare: (_sql: string) => ({
+        run: () => undefined,
         get: () => undefined,
         all: () => [],
       }),
