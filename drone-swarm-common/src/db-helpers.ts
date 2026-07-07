@@ -13,9 +13,9 @@
 
 /** Minimal statement interface matching the better-sqlite3 subset we use. */
 interface Statement {
-  get<T>(...params: unknown[]): T | undefined;
-  all<T>(...params: unknown[]): T[];
-  run(...params: unknown[]): { changes: number };
+  get(...params: unknown[]): unknown;
+  all(...params: unknown[]): unknown[];
+  run(...params: unknown[]): unknown;
 }
 
 /** Minimal database interface matching the better-sqlite3 subset we use. */
@@ -64,8 +64,8 @@ export function deleteRow(
   id: string
 ): boolean {
   const stmt = db().prepare(`DELETE FROM ${table} WHERE id = ?`);
-  const result = stmt.run(id);
-  return result.changes > 0;
+  const result = stmt.run(id) as { changes?: number } | undefined;
+  return (result?.changes ?? 0) > 0;
 }
 
 /**
