@@ -177,6 +177,27 @@ export const personaPlugin: DronePlugin = {
 
     registration.registerPromptFragment(personaFragment);
 
+    const availablePersonasFragment: DronePromptFragment = {
+      key: 'personas-available',
+      phase: 'header',
+      render: async () => {
+        const all = getAllPersonas();
+        if (all.length === 0) return false;
+        const parts: string[] = [];
+        parts.push('# Available personas:');
+        all.forEach(p => {
+          parts.push(
+            `- **${p.name} (${p.id})**${
+              p.description ? `: ${p.description}` : ''
+            }`
+          );
+        });
+        return parts.join('\n');
+      },
+    };
+
+    registration.registerPromptFragment(availablePersonasFragment);
+
     function notifyChange(): void {
       for (const cb of changeCallbacks) {
         cb(activePersona);
