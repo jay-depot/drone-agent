@@ -263,13 +263,15 @@ export const filePlugin: DronePlugin = {
       name: 'apply_diff',
       description:
         'Apply a unified diff patch to a file. ' +
-        'Accepts a patch string in `git diff` format, e.g.:\n\n' +
+        'Accepts a patch string in `git/unified diff` format, e.g.:\n\n' +
+        '```diff\n' +
         '@@ -5,7 +5,7 @@ function_name():\n' +
         '     context\n' +
         '     context\n' +
         '-    removed line\n' +
         '+    added line\n' +
         '     context\n\n' +
+        '```\n' +
         'Hunks start with @@ -start,count +start,count @@ [section heading].\n' +
         'Lines with ` ` are context, `-` are removed, `+` are added.\n' +
         'Multiple hunks (multiple @@ sections) are applied bottom-up.\n\n' +
@@ -292,11 +294,14 @@ export const filePlugin: DronePlugin = {
               'Unified diff patch string in `git diff` format. ' +
               'Each hunk starts with @@ -start,count +start,count @@ [section heading].\n' +
               'Lines prefixed with ` ` are context, `-` are removed, `+` are added.\n' +
-              'Example: @@ -10,4 +10,4 @@ function_name:\n' +
+              'Example:\n' +
+              '```diff\n' +
+              '@@ -10,4 +10,4 @@ function_name:\n' +
               '   context\n' +
               '  -old line\n' +
               '  +new line\n' +
-              '   context',
+              '   context\n' +
+              '```',
           },
         },
         required: ['path', 'patch'],
