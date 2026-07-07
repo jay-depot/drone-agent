@@ -21,7 +21,7 @@
 interface Statement {
   get(...params: unknown[]): unknown;
   all(...params: unknown[]): unknown[];
-  run(...params: unknown[]): unknown;
+  run(...params: unknown[]): unknown | undefined;
 }
 
 /** Minimal database interface matching the better-sqlite3 subset we use. */
