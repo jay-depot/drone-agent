@@ -3,7 +3,7 @@ key: roadmap
 tags:
   - roadmap
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-07-06T17:20:25.609Z
+updated: 2026-07-07T16:39:39.917Z
 ---
 
 # Swarm Roadmap
@@ -286,8 +286,8 @@ A CLI tool (`drone-migrate` or `drone-agent migrate`) for promoting/demoting ass
 
 - `drone-agent/bin/drone-migrate` — CLI binary
 - `drone-agent/src/migrate.ts` — CLI entry point
-- `drone-agent/src/runtime/migration-service.ts` — Core migration logic (827 lines)
-- `drone-agent/test/migration.test.ts` — Tests (612 lines)
+- `drone-agent/src/runtime/migration/` — Migration logic (modular, ~12 files)
+- `drone-agent/test/migration.test.ts` — Tests
 
 #### ✅ 3.7 Web UI (Monitoring Dashboard)
 
@@ -340,6 +340,8 @@ Certificate auto-generation already exists on both beacon and coordinator. The c
 
 - Coordinator: `process.env.COORDINATOR_HTTPS === 'true'` → `process.env.COORDINATOR_HTTPS !== 'false'`
 - Beacon: Same pattern for `BEACON_HTTPS` and `COORDINATOR_HTTPS`
+
+**Note (verified 2026-07-07):** Both beacon (`drone-beacon/src/index.ts` lines 82-83) and coordinator (`drone-coordinator/src/index.ts` line 80) still use `=== 'true'` (opt-in, default off). This item remains unimplemented.
 
 **Nice-to-have:** Add a pure Node.js certificate generation fallback (using `crypto`) for environments without `openssl` CLI.
 
@@ -415,7 +417,7 @@ Comprehensive test coverage for both `drone-coordinator` and `drone-beacon` pack
 
 ### 🔜 PHASE 4: drone-gateway
 
-**Status:** Core complete, adapters pending
+**Status:** Core complete; persona-assignment control surface done; adapters and remaining control surfaces pending
 
 Chat API integration layer — YOUR agents receive messages from chat platforms and respond back.
 
@@ -523,17 +525,22 @@ Matrix chat platform integration. Connects to a Matrix homeserver, listens for m
 
 **Dependencies:** 4.1 (gateway core)
 
-#### ⏳ 4.3 Persona Assignment Control Surface
+#### ✅ 4.3 Persona Assignment Control Surface
 
-**Status:** Not started
+**Status:** Complete (verified 2026-07-07)
 
-Routes all messages in a conversation to a specific persona. The gateway spawns an agent with that persona on the configured beacon, sends the message as a task, and returns the response.
+Routes all messages in a conversation to a specific persona. Implemented in `drone-gateway/src/engine.ts` via `createPersonaAssignmentSurface()` (dispatched by `createControlSurface()` for control-surface type `'persona-assignment'`).
 
-**Key considerations:**
+**What's Built:**
 
-- Maps `conversationId → personaId`
-- Uses coordinator's `POST /spawn` to launch agents
-- May need session management to reuse agents across multiple messages in the same conversation
+- `conversationId → personaId` mapping via control surface config
+- Uses the configured spawn backend (coordinator `POST /spawn` or local spawn) to launch agents
+- Session reuse across multiple messages in the same conversation
+- First-match-wins control surface evaluation in the engine loop
+
+**Key Files:**
+
+- `drone-gateway/src/engine.ts` — `createPersonaAssignmentSurface()` + `createControlSurface()`
 
 **Dependencies:** 4.1 (gateway core), 3.9 (spawn routing)
 
@@ -585,13 +592,15 @@ Slack bot/app integration. Connects via Slack Events API or Socket Mode, listens
 
 ### 🔜 PHASE 5: Advanced Features
 
-**Status:** Design phase
+**Status:** Design phase (portions implemented — see 5.3)
 
 Advanced swarm capabilities for YOU, built on phases 1-4.
 
 #### 5.1 Conversation Log Migration
 
-The migration tool already has a placeholder comment: _"Conversation log import is a phase 5 concern."_ This would add `conversation`/`session`/`log` as a supported asset type, enabling promotion of session logs from local to swarm scopes.
+Adds `conversation`/`session`/`log` as a supported asset type in the migration tool, enabling promotion of session logs from local to swarm scopes.
+
+**Note (verified 2026-07-07):** The `AssetType` union in `drone-agent/src/runtime/migration/types.ts` is still `'persona' | 'skill' | 'insight' | 'principle' | 'wiki'`. No `conversation`/`session`/`log` type exists, and the earlier "phase 5 placeholder comment" is no longer present in the codebase. This item remains unimplemented.
 
 #### 5.2 Automated Learning Loop
 
@@ -599,20 +608,36 @@ The following features are aspirational and not yet implemented:
 
 - **Background review fork**: A per-turn learning mechanism that runs in the background after each agent turn, extracting insights and patterns from the conversation.
 - **Swarm review task**: A periodic task on the coordinator that identifies patterns across all beacons' sessions and derives shared principles or knowledge.
-- **Automatic insight → principle derivation**: Rather than requiring manual `principles-store` calls, the system would automatically detect patterns across insights and suggest or create principles.
+- **Automatic insight → principle derivation**: Rather than requiring manual `principles-store` calls, the system would automatically detect patterns across insights and suggest or create principles. (Currently manual only.)
 - **Cross-beacon session search tool**: An agent-facing tool to search across all sessions in the swarm, building on the existing FTS5 infrastructure.
 
-#### 5.3 Model Provider Plugin System
+#### ✅ 5.3 Model Provider Plugin System
 
-- v1: Hardcoded Ollama
-- v2: Model providers become plugins
-- Different hosts may have different models
+**Status:** Complete (verified 2026-07-07)
+
+Model providers are implemented as plugins registered through the `llm` broker's `registerProvider()` capability — the "v2: Model providers become plugins" design goal is met.
+
+**What's Built:**
+
+- `llm` broker plugin (`drone-agent/src/plugins/llm/index.ts`) exposes a `DroneLlmCapability` with `registerProvider()` / `unregisterProvider()`
+- Five provider plugins register through it: `ollama` (default-enabled), `openai`, `anthropic`, `openrouter`, `echo`
+- The provider set is **not closed** — any plugin (including external disk-loaded plugins) can call `llmCap.registerProvider()` to add a new provider at runtime
+- Broker sorts providers by precedence and auto-activates based on `config.llm.provider`; `/model --provider <id>` switches at runtime
+
+**Key Files:**
+
+- `drone-agent/src/plugins/llm/index.ts` — LLM broker + capability
+- `drone-agent/src/plugins/ollama.ts`, `openai/index.ts`, `anthropic/index.ts`, `openrouter/index.ts`, `echo/index.ts` — provider plugins
+
+**Caveat:** All five providers are still compiled into the `staticBuiltInPlugins` array in `drone-agent/src/plugins/index.ts`; they are not hot-loaded from disk, but the registration API is fully dynamic.
 
 #### 5.4 Distributed Memory & Task Routing
 
 - Vector search for global session/memory retrieval
 - Distributed task routing within YOUR swarm
 - Route to node with best model for task
+
+**Note (verified 2026-07-07):** `search__semantic` in `drone-agent/src/plugins/search.ts` is still a placeholder stub; no vector/embedding search exists. Unimplemented.
 
 #### 5.5 Web UI Management Console
 
@@ -638,6 +663,8 @@ Extend the coordinator web UI (built in 3.7) from monitoring-only to a full mana
 **Status:** Not started
 
 A guided workflow (`bootstrap.swarm`) to set up beacon/coordinator connection, configure swarm mode, and register with a beacon. Currently the bootstrap plugin only has `bootstrap.project` and `bootstrap.user`.
+
+**Note (verified 2026-07-07):** No `bootstrap.swarm` workflow exists; only `bootstrap.analyze`, `bootstrap.project`, and `bootstrap.user` are present in `drone-agent/src/plugins/bootstrap/index.ts`. Unimplemented.
 
 ---
 
@@ -693,8 +720,8 @@ Phase 5 (Advanced)
 1. **Phase 1:** Agent can bootstrap itself and work on its own codebase ✅
 2. **Phase 2:** Your multiple agents on same host share YOUR skills/personas/memory via beacon ✅
 3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; migration tool moves assets between scopes; monitoring web UI for viewing swarm state; comprehensive test coverage; inter-beacon spawn routing ✅
-4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses
-5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support, automated learning
+4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses (partial — gateway core + persona-assignment control surface done; chat adapters pending)
+5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support (multi-model ✅ via 5.3), automated learning (pending)
 
 ---
 
@@ -712,4 +739,4 @@ Phase 5 (Advanced)
 
 ---
 
-_Last updated: 2026-07-06_
+_Last updated: 2026-07-07_
