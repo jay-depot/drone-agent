@@ -2,19 +2,31 @@
  * Generic CRUD helpers for SQLite database operations.
  *
  * These helpers reduce boilerplate in entity-specific database modules.
- * The `db` parameter is a thunk (() => Database.Database) so that
- * callers can pass `getDatabase` without worrying about initialization order.
+ * The `db` parameter is a thunk (() => Database) so that callers can pass
+ * `getDatabase` without worrying about initialization order.
  *
- * The `Database.Database` type comes from `better-sqlite3` which is a
- * dependency of the consuming packages (drone-beacon, drone-coordinator),
- * not of drone-swarm-common itself. We use `any` for the db parameter
- * to avoid requiring the type in this package.
+ * The `Database` and `Statement` interfaces defined here are minimal
+ * structural types matching the subset of better-sqlite3's API that we
+ * actually use. This avoids requiring better-sqlite3 as a dependency of
+ * drone-swarm-common itself.
  */
+
+/** Minimal statement interface matching the better-sqlite3 subset we use. */
+interface Statement {
+  get<T>(...params: unknown[]): T | undefined;
+  all<T>(...params: unknown[]): T[];
+  run(...params: unknown[]): { changes: number };
+}
+
+/** Minimal database interface matching the better-sqlite3 subset we use. */
+interface Database {
+  prepare(sql: string): Statement;
+}
 
 /**
  * Get a single row by ID from any table.
  */
-export function getRow<T>(db: () => any, table: string, id: string): T | undefined {
+export function getRow<T>(db: () => Database, table: string, id: string): T | undefined {
   const stmt = db().prepare(`SELECT * FROM ${table} WHERE id = ?`);
   return stmt.get(id) as T | undefined;
 }
@@ -23,7 +35,7 @@ export function getRow<T>(db: () => any, table: string, id: string): T | undefin
  * List rows from a table with optional filter, params, and orderBy.
  */
 export function listRows<T>(
-  db: () => any,
+  db: () => Database,
   table: string,
   options?: {
     filter?: string;
@@ -42,7 +54,7 @@ export function listRows<T>(
 /**
  * Delete a row by ID. Returns true if a row was deleted.
  */
-export function deleteRow(db: () => any, table: string, id: string): boolean {
+export function deleteRow(db: () => Database, table: string, id: string): boolean {
   const stmt = db().prepare(`DELETE FROM ${table} WHERE id = ?`);
   const result = stmt.run(id);
   return result.changes > 0;
@@ -53,7 +65,7 @@ export function deleteRow(db: () => any, table: string, id: string): boolean {
  * Returns the data object back.
  */
 export function createRow<T extends Record<string, unknown>>(
-  db: () => any,
+  db: () => Database,
   table: string,
   data: T
 ): T {
@@ -69,7 +81,7 @@ export function createRow<T extends Record<string, unknown>>(
  * Returns the updated object or undefined if not found.
  */
 export function updateRow<T extends Record<string, unknown>>(
-  db: () => any,
+  db: () => Database,
   table: string,
   id: string,
   data: Partial<T>,
