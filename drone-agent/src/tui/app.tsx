@@ -391,13 +391,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         await opts.engine.runHooks('onBeforePrompt');
         const response = await opts.conversation.sendUserMessage(trimmed);
 
-        if (response === CANCEL_SENTINEL) {
-          return;
-        }
-
-        if (response.length > 0) {
-          log(response, 'plain');
-        }
+        if (response === CANCEL_SENTINEL) return;
         await opts.engine.runHooks('onAfterToolCall');
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
