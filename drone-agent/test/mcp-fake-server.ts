@@ -18,7 +18,8 @@
  *
  * Both layers speak JSON-RPC 2.0 and implement the subset of methods the client
  * uses: `initialize`, `tools/list`, `tools/call`, `resources/list`,
- * `resources/read`, `prompts/list`, `prompts/get`, and optionally `shutdown`.
+ * `resources/read`, `resources/templates/list`, `prompts/list`, `prompts/get`, and
+ * optionally `shutdown`.
  *
  * IMPORTANT (Phase 1): these doubles encode the CLIENT's CURRENT behavior, not
  * the spec-ideal behavior. The HTTP fake only emits an `Mcp-Session-Id` header
@@ -70,6 +71,17 @@ export type MockFetchOptions = {
   resources?: Array<{ uri: string; name?: string; description?: string }>;
   /** Extra prompt entries. */
   prompts?: Array<{ name: string; description?: string }>;
+  /** Extra resource template entries. */
+  resourceTemplates?: Array<{
+    uriTemplate: string;
+    name?: string;
+    description?: string;
+    arguments?: Array<{
+      name: string;
+      required?: boolean;
+      description?: string;
+    }>;
+  }>;
   /** Whether `shutdown` is implemented (returns -32601 if false). */
   implementsShutdown?: boolean;
   /**
@@ -105,6 +117,23 @@ const DEFAULT_TOOLS = [
 const DEFAULT_RESOURCES = [
   { uri: 'file:///a.txt', name: 'a', description: 'Resource A' },
   { uri: 'file:///b.txt', name: 'b', description: 'Resource B' },
+];
+
+const DEFAULT_RESOURCE_TEMPLATES = [
+  {
+    uriTemplate: 'file:///{path}',
+    name: 'file',
+    description: 'A file addressed by path',
+    arguments: [
+      { name: 'path', required: true, description: 'Filesystem path' },
+    ],
+  },
+  {
+    uriTemplate: 'db://users/{userId}',
+    name: 'user',
+    description: 'A user row addressed by id',
+    arguments: [{ name: 'userId', required: true }],
+  },
 ];
 
 const DEFAULT_PROMPTS = [
@@ -236,6 +265,8 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
   const tools = options.tools ?? DEFAULT_TOOLS;
   const resources = options.resources ?? DEFAULT_RESOURCES;
   const prompts = options.prompts ?? DEFAULT_PROMPTS;
+  const resourceTemplates =
+    options.resourceTemplates ?? DEFAULT_RESOURCE_TEMPLATES;
   const implementsShutdown = options.implementsShutdown ?? true;
   const httpErrors = options.httpErrors ?? {};
   // Raw (non-enveloped) HTTP bodies keyed by method.
@@ -293,6 +324,20 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
       const p = (params ?? {}) as { uri?: string };
       return {
         contents: [{ uri: p.uri, text: `contents of ${p.uri}` }],
+      };
+    },
+    'resources/templates/list': (params: unknown) => {
+      const cursor =
+        params && typeof params === 'object' && 'cursor' in (params as object)
+          ? (params as { cursor: string }).cursor
+          : undefined;
+      const start = cursor ? Number(cursor) : 0;
+      const slice = resourceTemplates.slice(start, start + pageSize);
+      const next = start + pageSize;
+      const hasMore = next < resourceTemplates.length;
+      return {
+        resourceTemplates: slice,
+        nextCursor: hasMore ? String(next) : undefined,
       };
     },
     'prompts/list': (params: unknown) => {

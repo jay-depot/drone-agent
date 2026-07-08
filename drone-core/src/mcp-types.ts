@@ -11,6 +11,7 @@ export type DroneMcpServerState = {
   filteredToolCount: number;
   toolsListTruncated?: boolean;
   resourcesListTruncated?: boolean;
+  resourceTemplatesListTruncated?: boolean;
   promptsListTruncated?: boolean;
   compatibilityMode?: 'strict' | 'permissive';
   retryCount: number;
@@ -51,6 +52,14 @@ export type DroneMcpResourceMeta = {
   name?: string;
   description?: string;
   mimeType?: string;
+};
+
+export type DroneMcpResourceTemplateMeta = {
+  uriTemplate: string;
+  name?: string;
+  description?: string;
+  mimeType?: string;
+  arguments?: DroneMcpPromptArgument[];
 };
 
 export type DroneMcpError = {

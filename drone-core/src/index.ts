@@ -135,6 +135,7 @@ export type {
   DroneMcpPromptArgument,
   DroneMcpPromptMeta,
   DroneMcpResourceMeta,
+  DroneMcpResourceTemplateMeta,
   DroneMcpError,
 } from './mcp-types.js';
 

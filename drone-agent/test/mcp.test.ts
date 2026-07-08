@@ -142,6 +142,7 @@ describe('mcp plugin integration (stdio child)', () => {
     expect(names).toContain('mcp__demo__read_resource');
     expect(names).toContain('mcp__demo__list_prompts');
     expect(names).toContain('mcp__demo__get_prompt');
+    expect(names).toContain('mcp__demo__list_resource_templates');
     expect(names).toContain('mcp__server_status');
 
     const demo = await statusOf(engine, 'demo');
@@ -157,6 +158,30 @@ describe('mcp plugin integration (stdio child)', () => {
 
     const result = JSON.parse(await engine.executeTool('mcp__demo__echo', {}));
     expect(result.tool).toBe('echo');
+  });
+
+  it('lists resource templates and reads a filled-in template URI', async () => {
+    const server = startFakeMcpServer({ toolNames: ['echo', 'add'] });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    const listed = JSON.parse(
+      await engine.executeTool('mcp__demo__list_resource_templates', {})
+    );
+    expect(Array.isArray(listed.templates)).toBe(true);
+    expect(
+      listed.templates.map((t: { uriTemplate: string }) => t.uriTemplate)
+    ).toContain('file:///{path}');
+
+    // A URI formed by substituting the template variable must be readable via
+    // the shared read_resource tool (the spec has no resources/templates/read).
+    const read = JSON.parse(
+      await engine.executeTool('mcp__demo__read_resource', {
+        uri: 'file:///etc/hostname',
+      })
+    );
+    expect(read.uri).toBe('file:///etc/hostname');
   });
 
   it('honors allowedTools allowlist and sets filteredToolCount', async () => {

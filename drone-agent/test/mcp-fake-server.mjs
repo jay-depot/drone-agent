@@ -5,7 +5,8 @@
  * format the MCP client uses for `transport: 'stdio'`). It implements the
  * subset of JSON-RPC methods the drone-agent MCP client exercises:
  *   initialize, tools/list, tools/call, resources/list, resources/read,
- *   prompts/list, prompts/get, shutdown, notifications/initialized
+ *   resources/templates/list, prompts/list, prompts/get, shutdown,
+ *   notifications/initialized
  *
  * Configuration comes from environment variables (set by `startFakeMcpServer`
  * in `mcp-fake-server.ts`):
@@ -43,6 +44,15 @@ const RESOURCES = [
 const PROMPTS = [
   { name: 'greeting', description: 'A greeting prompt.' },
   { name: 'summarize', description: 'A summarize prompt.' },
+];
+
+const RESOURCE_TEMPLATES = [
+  {
+    uriTemplate: 'file:///{path}',
+    name: 'file',
+    description: 'A file addressed by path',
+    arguments: [{ name: 'path', required: true }],
+  },
 ];
 
 function send(message) {
@@ -96,6 +106,9 @@ function handleRequest(method, id, params) {
       respond(id, { contents: [{ uri, text: `contents of ${uri}` }] });
       return;
     }
+    case 'resources/templates/list':
+      respond(id, { resourceTemplates: RESOURCE_TEMPLATES });
+      return;
     case 'prompts/list':
       respond(id, { prompts: PROMPTS });
       return;

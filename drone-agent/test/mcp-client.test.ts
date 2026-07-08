@@ -334,6 +334,42 @@ describe('resources and prompts normalization', () => {
     expect(mock.callCount('prompts/get')).toBe(1);
     expect(result.messages[0].content.text).toContain('greeting');
   });
+
+  it('lists and normalizes resource templates via resources/templates/list', async () => {
+    const mock = currentMock!;
+    const conn = await makeConnection(mock);
+    const templates = await conn.listResourceTemplates();
+    expect(mock.callCount('resources/templates/list')).toBe(1);
+    expect(templates.length).toBeGreaterThan(0);
+    for (const t of templates) {
+      expect(typeof t.uriTemplate).toBe('string');
+    }
+    expect(templates.map(t => t.uriTemplate)).toContain('file:///{path}');
+  });
+
+  it('carries template arguments through normalization', async () => {
+    const mock = currentMock!;
+    const conn = await makeConnection(mock);
+    const templates = await conn.listResourceTemplates();
+    const fileTemplate = templates.find(
+      t => t.uriTemplate === 'file:///{path}'
+    );
+    expect(fileTemplate).toBeDefined();
+    expect(fileTemplate!.arguments).toBeDefined();
+    expect(fileTemplate!.arguments!.length).toBeGreaterThan(0);
+    const pathArg = fileTemplate!.arguments!.find(a => a.name === 'path');
+    expect(pathArg).toBeDefined();
+    expect(pathArg!.required).toBe(true);
+  });
+
+  it('records resourceTemplatesListTruncated on pagination overflow', async () => {
+    const mock = createMockFetch({ pageSize: 1 });
+    installFetch(mock);
+    const conn = await makeConnection(mock, {}, { maxListPages: 1 });
+    const templates = await conn.listResourceTemplates();
+    expect(templates.length).toBe(1);
+    expect(conn.state.resourceTemplatesListTruncated).toBe(true);
+  });
 });
 
 describe('retry semantics', () => {

@@ -2,6 +2,8 @@ import { isRecord } from '../../shared/type-guards.js';
 import type {
   DroneLogger,
   DroneMcpResourceMeta,
+  DroneMcpResourceTemplateMeta,
+  DroneMcpPromptArgument,
   DroneMcpServerConfig,
   DroneMcpServerState,
   DroneMcpPromptMeta,
@@ -57,6 +59,7 @@ export type McpClientConnection = {
   listResources: () => Promise<DroneMcpResourceMeta[]>;
   readResource: (uri: string) => Promise<unknown>;
   listPrompts: () => Promise<DroneMcpPromptMeta[]>;
+  listResourceTemplates: () => Promise<DroneMcpResourceTemplateMeta[]>;
   getPrompt: (name: string, args?: Record<string, unknown>) => Promise<unknown>;
   disconnect: () => Promise<void>;
 };
@@ -748,6 +751,55 @@ function normalizeResources(result: unknown): DroneMcpResourceMeta[] {
   return resources;
 }
 
+function normalizeResourceTemplateArguments(
+  value: unknown
+): DroneMcpPromptArgument[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const args: DroneMcpPromptArgument[] = [];
+  for (const arg of value) {
+    if (!isRecord(arg) || typeof arg.name !== 'string') {
+      continue;
+    }
+    args.push({
+      name: arg.name,
+      required: typeof arg.required === 'boolean' ? arg.required : undefined,
+      description:
+        typeof arg.description === 'string' ? arg.description : undefined,
+    });
+  }
+  return args.length > 0 ? args : undefined;
+}
+
+function normalizeResourceTemplates(
+  result: unknown
+): DroneMcpResourceTemplateMeta[] {
+  if (!isRecord(result)) {
+    return [];
+  }
+
+  const templates: DroneMcpResourceTemplateMeta[] = [];
+  for (const template of asArray(result.resourceTemplates)) {
+    if (!isRecord(template) || typeof template.uriTemplate !== 'string') {
+      continue;
+    }
+    templates.push({
+      uriTemplate: template.uriTemplate,
+      name: typeof template.name === 'string' ? template.name : undefined,
+      description:
+        typeof template.description === 'string'
+          ? template.description
+          : undefined,
+      mimeType:
+        typeof template.mimeType === 'string' ? template.mimeType : undefined,
+      arguments: normalizeResourceTemplateArguments(template.arguments),
+    });
+  }
+
+  return templates;
+}
+
 function normalizePrompts(result: unknown): DroneMcpPromptMeta[] {
   if (!isRecord(result)) {
     return [];
@@ -1032,6 +1084,14 @@ export async function createMcpClientConnection(options: {
       );
       state.promptsListTruncated = promptsResult.truncated;
       return promptsResult.items;
+    },
+    listResourceTemplates: async () => {
+      const templatesResult = await paginateList(
+        'resources/templates/list',
+        normalizeResourceTemplates
+      );
+      state.resourceTemplatesListTruncated = templatesResult.truncated;
+      return templatesResult.items;
     },
     getPrompt: async (name, args) => {
       return requestWithRetry<unknown>(

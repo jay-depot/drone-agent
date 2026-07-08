@@ -175,7 +175,7 @@ export const mcpPlugin: DronePlugin = {
 
       registerMountedTool(
         `${serverId}__read_resource`,
-        `Read an MCP resource by URI from server ${serverId}.`,
+        `Read an MCP resource by URI from server ${serverId}. Accepts both concrete resource URIs and URIs produced by substituting variables into a resource template from ${serverId}__list_resource_templates.`,
         {
           type: 'object',
           properties: {
@@ -195,6 +195,16 @@ export const mcpPlugin: DronePlugin = {
           }
           const result = await connection.readResource(input.uri);
           return JSON.stringify({ serverId, uri: input.uri, result }, null, 2);
+        }
+      );
+
+      registerMountedTool(
+        `${serverId}__list_resource_templates`,
+        `List MCP resource templates for server ${serverId}. Each template has a uriTemplate (RFC 6570) with variables to substitute, then read with ${serverId}__read_resource.`,
+        { type: 'object', additionalProperties: false },
+        async () => {
+          const templates = await connection.listResourceTemplates();
+          return JSON.stringify({ serverId, templates }, null, 2);
         }
       );
 
