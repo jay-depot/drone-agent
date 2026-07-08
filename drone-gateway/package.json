@@ -20,7 +20,7 @@
   "license": "MIT",
   "dependencies": {
     "drone-core": "workspace:*",
-    "matrix-js-sdk": "^34.0.0",
+    "matrix-js-sdk": "^38.2.0",
     "pino": "^9.6.0",
     "better-sqlite3": "^11.8.1",
     "@types/better-sqlite3": "^7.6.13"
