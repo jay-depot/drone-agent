@@ -182,5 +182,13 @@
   {
     "timestamp": "2026-07-08T19:41:00.586Z",
     "insight": "In the drone-gateway Matrix adapter (4.2), `dataPath` holds the sync store + Rust crypto store (`@matrix-org/matrix-sdk-crypto-nodejs`). \"Crypto cleanup\" must NOT mean deletion — deleting it breaks E2EE decryption (loses Megolm inbound keys) and forces full re-sync. The only runtime cleanup is a graceful store close (flush + release handles) in `stop()`. Deletion is only for intentional decommission after `client.logout()`. Plan wording should say \"graceful close\", never \"clean/wipe dataPath\"."
+  },
+  {
+    "timestamp": "2026-07-08T20:14:08.713Z",
+    "insight": "When mocking `matrix-js-sdk/lib/store/indexeddb` in vitest, the mock must export a class that can be constructed (not throw), because `getStoreClass()` catches import errors but not construction errors. The mock should provide a working stub constructor, not throw."
+  }
+]taining({ getId: expect.any(Function) })`."
+  }
+]type declarations resolvable by TypeScript's NodeNext resolution. Use `@ts-expect-error` + `as any` for store imports, and use string literal `'Room.timeline'` for the event name."
   }
 ]

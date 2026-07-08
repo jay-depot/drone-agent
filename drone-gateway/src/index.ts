@@ -6,6 +6,7 @@ import { GatewayEngine } from './engine.js';
 import { LocalSpawnBackend } from './local-spawn-backend.js';
 import { CoordinatorSpawnBackend } from './coordinator-spawn-backend.js';
 import { loadGatewayConfig } from './config/load.js';
+import { cleanupAdapter } from './cleanup.js';
 import type { GatewayConfig, SpawnBackendType } from './types.js';
 import type { SpawnBackend } from './spawn-backend.js';
 
@@ -14,7 +15,8 @@ const DEFAULT_CONFIG_FILE = 'config.json';
 
 interface CliConfig {
   configPath: string;
-  command: 'serve';
+  command: 'serve' | 'cleanup';
+  cleanupAdapterId?: string;
 }
 
 export function parseArgs(): CliConfig {
@@ -26,13 +28,25 @@ export function parseArgs(): CliConfig {
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
+
     if (arg === '--config' && i + 1 < args.length) {
       cliConfig.configPath = args[++i];
     } else if (arg === '--help' || arg === '-h') {
       console.log(
-        `\ndrone-gateway [options]\n\nOptions:\n  --config <path>  Path to config file (default: ~/.drone-gateway/config.json)\n  --help           Show this help message\n      `
+        `\ndrone-gateway [command] [options]\n\n` +
+          `Commands:\n` +
+          `  serve                          Start the gateway (default)\n` +
+          `  cleanup --adapter <id>         Decommission an adapter (logout + delete dataPath)\n\n` +
+          `Options:\n` +
+          `  --config <path>  Path to config file (default: ~/.drone-gateway/config.json)\n` +
+          `  --adapter <id>   Adapter ID to clean up (for cleanup command)\n` +
+          `  --help           Show this help message\n`
       );
       process.exit(0);
+    } else if (arg === 'cleanup') {
+      cliConfig.command = 'cleanup';
+    } else if (arg === '--adapter' && i + 1 < args.length) {
+      cliConfig.cleanupAdapterId = args[++i];
     }
   }
 
@@ -86,6 +100,21 @@ export function createSpawnBackend(config: GatewayConfig): SpawnBackend {
 export async function main(): Promise<void> {
   const cliConfig = parseArgs();
 
+  if (cliConfig.command === 'cleanup') {
+    if (!cliConfig.cleanupAdapterId) {
+      console.error(
+        'Error: cleanup command requires --adapter <id>\n' +
+          'Usage: drone-gateway cleanup --adapter <adapter-id>'
+      );
+      process.exit(1);
+    }
+
+    const configDir = path.dirname(cliConfig.configPath);
+    await cleanupAdapter(configDir, cliConfig.cleanupAdapterId);
+    return;
+  }
+
+  // Default: serve command
   logger.info(`Loading config from: ${cliConfig.configPath}`);
   const config = await loadConfig(cliConfig.configPath);
 

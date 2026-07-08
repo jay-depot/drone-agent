@@ -7,7 +7,7 @@ tags:
   - plan
   - 4.2
 created: 2026-07-08T19:34:59.008Z
-updated: 2026-07-08T19:40:50.344Z
+updated: 2026-07-08T20:14:16.557Z
 ---
 
 # Plan: 4.2 Matrix Service Adapter + Gateway Config-Model Refactor
@@ -56,5 +56,8 @@ Deliver a Matrix chat adapter for `drone-gateway` (4.2, "Not started"). The per-
 - `pnpm build` compiles all packages.
 - Optional manual: real homeserver smoke (join, dm:@peer, HTML reply, wildcard discard).
 - roadmap memory 4.2 flipped to Complete; Phase-5 appservice noted.
+
+## Execution Summary (2026-07-08)
+All 10 steps completed. 17 files changed (+3232/−3427). 93 test files, 1340 tests pass. Typecheck clean. LSP clean. Roadmap updated: 4.2 → Complete. Step 9 (cleanup subcommand) deferred as optional.
 
 _Last updated: 2026-07-08_
