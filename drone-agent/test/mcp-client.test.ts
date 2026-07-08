@@ -55,7 +55,11 @@ async function makeConnection(
     maxListPages: number;
     maxListItems: number;
     compatibilityMode: 'strict' | 'permissive';
-  }> = {}
+  }> = {},
+  callbacks: {
+    onNotification?: (method: string, params: unknown) => void;
+    onStreamError?: (message: string) => void;
+  } = {}
 ) {
   const conn = await createMcpClientConnection({
     serverId: 'demo',
@@ -66,6 +70,8 @@ async function makeConnection(
     defaultMaxListPages: defaults.maxListPages ?? 25,
     defaultMaxListItems: defaults.maxListItems ?? 500,
     defaultCompatibilityMode: defaults.compatibilityMode ?? 'strict',
+    onNotification: callbacks.onNotification ?? (() => {}),
+    onStreamError: callbacks.onStreamError ?? (() => {}),
     logger: silentLogger,
   });
   return conn;
@@ -456,5 +462,131 @@ describe('compatibilityMode envelope handling', () => {
     await expect(conn.callTool('echo', {})).rejects.toThrow(
       /Invalid JSON-RPC envelope/
     );
+  });
+});
+
+describe('streamable-HTTP GET SSE stream + DELETE termination (point 8)', () => {
+  it('opens a GET SSE stream with text/event-stream accept + session id', async () => {
+    const mock = createMockFetch({ sessionId: 'sess-xyz' });
+    installFetch(mock);
+    await makeConnection(mock);
+    const get = mock.requests.find(r => r.method === 'GET');
+    expect(get).toBeDefined();
+    expect(get!.headers['accept']).toBe('text/event-stream');
+    expect(get!.headers['mcp-session-id']).toBe('sess-xyz');
+  });
+
+  it('dispatches received SSE notifications to onNotification (incl. tools/list_changed)', async () => {
+    const received: string[] = [];
+    const mock = createMockFetch({
+      sessionId: 'sess-xyz',
+      sseEvents: [
+        { method: 'notifications/tools/list_changed' },
+        { method: 'notifications/message', params: { level: 'info' } },
+      ],
+    });
+    installFetch(mock);
+    await makeConnection(
+      mock,
+      {},
+      {},
+      {
+        onNotification: (method: string) => {
+          received.push(method);
+        },
+      }
+    );
+    // Give the fire-and-forget GET reader a tick to consume the stream.
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(received).toContain('notifications/tools/list_changed');
+    expect(received).toContain('notifications/message');
+    expect(received.length).toBe(2);
+  });
+
+  it('dispatches each SSE event individually to onNotification', async () => {
+    const received: string[] = [];
+    const mock = createMockFetch({
+      sseEvents: [{ method: 'notifications/a' }, { method: 'notifications/b' }],
+    });
+    installFetch(mock);
+    await makeConnection(
+      mock,
+      {},
+      {},
+      {
+        onNotification: (method: string) => {
+          received.push(method);
+        },
+      }
+    );
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(received).toEqual(['notifications/a', 'notifications/b']);
+  });
+
+  it('records a stream error (log-and-stop) without flipping status to error', async () => {
+    const errors: string[] = [];
+    const mock = createMockFetch({ sseError: true });
+    installFetch(mock);
+    // Holder so the callback can reach `conn` even if the GET reader errors
+    // during makeConnection (before the local is assigned). Mirrors index.ts,
+    // where the connection is declared ahead of the per-server loop.
+    let captured: Awaited<ReturnType<typeof makeConnection>> | undefined;
+    captured = await makeConnection(
+      mock,
+      {},
+      {},
+      {
+        onStreamError: (message: string) => {
+          errors.push(message);
+          // Mirror index.ts wiring: record the drop on server state.
+          if (captured) {
+            captured.state.streaming = false;
+            captured.state.lastStreamError = message;
+          }
+        },
+      }
+    );
+    const conn = captured;
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(errors.length).toBeGreaterThan(0);
+    expect(conn.state.streaming).toBe(false);
+    expect(conn.state.lastStreamError).toBeDefined();
+    // Status must remain 'connected' — a stream drop is not a fatal error.
+    expect(conn.state.status).toBe('connected');
+  });
+
+  it('sends a DELETE with the session id on disconnect', async () => {
+    const mock = createMockFetch({ sessionId: 'sess-xyz' });
+    installFetch(mock);
+    const conn = await makeConnection(mock);
+    conn.state.status = 'connected';
+    await conn.disconnect();
+    const del = mock.requests.find(r => r.method === 'DELETE');
+    expect(del).toBeDefined();
+    expect(del!.headers['mcp-session-id']).toBe('sess-xyz');
+    expect(conn.state.status).toBe('disconnected');
+  });
+
+  it('best-effort DELETE failure does not throw and keeps status disconnected', async () => {
+    const errors: string[] = [];
+    const mock = createMockFetch({
+      sessionId: 'sess-xyz',
+      httpErrors: { DELETE: 500 },
+    });
+    installFetch(mock);
+    const conn = await makeConnection(
+      mock,
+      {},
+      {},
+      {
+        onStreamError: (message: string) => {
+          errors.push(message);
+        },
+      }
+    );
+    // Should not throw despite the 500 from DELETE.
+    await expect(conn.disconnect()).resolves.toBeUndefined();
+    expect(conn.state.status).toBe('disconnected');
+    expect(errors.some(e => e.includes('DELETE failed'))).toBe(true);
   });
 });

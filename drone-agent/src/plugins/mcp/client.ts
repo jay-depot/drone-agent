@@ -27,6 +27,7 @@ type JsonRpcClient = {
   request: <T>(method: string, params?: unknown) => Promise<T>;
   notify: (method: string, params?: unknown) => void;
   disconnect: () => void;
+  startNotifications?: () => void;
 };
 
 type RpcTransport = {
@@ -503,11 +504,75 @@ function createStreamableHttpJsonRpcClient(options: {
   headers: Record<string, string>;
   requestTimeoutMs: number;
   compatibilityMode: 'strict' | 'permissive';
+  onNotification: (method: string, params: unknown) => void;
+  onStreamError: (message: string) => void;
 }): JsonRpcClient {
   let nextId = 1;
   let closed = false;
 
   let sessionId: string | undefined;
+  const streamAbort = new AbortController();
+
+  async function openGetStream(): Promise<void> {
+    if (closed) {
+      return;
+    }
+    try {
+      const response = await fetch(options.url, {
+        method: 'GET',
+        headers: {
+          accept: 'text/event-stream',
+          ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
+          ...options.headers,
+        },
+        signal: streamAbort.signal,
+      });
+      if (!response.ok || !response.body) {
+        options.onStreamError(`GET stream returned ${response.status}`);
+        return;
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        let separator: number;
+        while ((separator = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, separator);
+          buffer = buffer.slice(separator + 2);
+          const dataLine = rawEvent
+            .split('\n')
+            .find(line => line.startsWith('data:'));
+          if (!dataLine) {
+            continue;
+          }
+          const data = dataLine.slice('data:'.length).trim();
+          if (data.length === 0) {
+            continue;
+          }
+          try {
+            const message = JSON.parse(data) as JsonRpcMessage;
+            if (typeof message.method === 'string') {
+              options.onNotification(message.method, message.params);
+            }
+          } catch {
+            // Ignore malformed SSE payloads.
+          }
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return;
+      }
+      options.onStreamError(
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }
 
   return {
     request: async <T>(method: string, params?: unknown): Promise<T> => {
@@ -586,8 +651,38 @@ function createStreamableHttpJsonRpcClient(options: {
     notify: () => {
       // Streamable HTTP uses request-response calls in this runtime.
     },
+    startNotifications: () => {
+      // Fire-and-forget: open the server->client SSE channel.
+      void openGetStream();
+    },
     disconnect: () => {
       closed = true;
+      // Stop the GET reader first (no-op if it was never opened).
+      streamAbort.abort();
+      // Best-effort DELETE to terminate the session server-side. Non-blocking
+      // so disconnect() keeps its synchronous signature; failures are logged
+      // via onStreamError but never throw.
+      void fetch(options.url, {
+        method: 'DELETE',
+        headers: {
+          ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
+          ...options.headers,
+        },
+      })
+        .then(response => {
+          if (!response.ok) {
+            options.onStreamError(
+              `DELETE failed: ${response.status} ${response.statusText}`
+            );
+          }
+        })
+        .catch(error => {
+          options.onStreamError(
+            `DELETE failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        });
     },
   };
 }
@@ -702,6 +797,8 @@ export async function createMcpClientConnection(options: {
   defaultMaxListPages: number;
   defaultMaxListItems: number;
   defaultCompatibilityMode: 'strict' | 'permissive';
+  onNotification: (method: string, params: unknown) => void;
+  onStreamError: (message: string) => void;
   logger: DroneLogger;
 }): Promise<McpClientConnection> {
   const effectiveRequestTimeoutMs =
@@ -757,6 +854,8 @@ export async function createMcpClientConnection(options: {
       headers: options.config.headers ?? {},
       requestTimeoutMs: effectiveRequestTimeoutMs,
       compatibilityMode: effectiveCompatibilityMode,
+      onNotification: options.onNotification,
+      onStreamError: options.onStreamError,
     });
   } else {
     childProcess = spawn(options.config.command, options.config.args ?? [], {
@@ -873,6 +972,10 @@ export async function createMcpClientConnection(options: {
     state.status = 'connected';
     state.lastError = undefined;
     state.lastErrorCategory = undefined;
+    if (options.config.transport === 'streamable_http') {
+      rpc.startNotifications?.();
+      state.streaming = true;
+    }
   } catch (error) {
     state.status = 'error';
     state.lastError = error instanceof Error ? error.message : String(error);

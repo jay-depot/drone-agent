@@ -22,6 +22,10 @@ export type DroneMcpServerState = {
     | 'payload'
     | 'unknown';
   lastError?: string;
+  /** True while the streamable-HTTP GET SSE channel is open. */
+  streaming?: boolean;
+  /** Last error observed on the GET SSE stream (e.g. a transient drop). */
+  lastStreamError?: string;
 };
 
 export type DroneMcpMountedToolMeta = {

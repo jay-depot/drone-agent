@@ -307,8 +307,26 @@ export const mcpPlugin: DronePlugin = {
       }
 
       for (const [serverId, serverConfig] of configuredServers) {
+        let connection: McpClientConnection | undefined;
+        const onNotification = (method: string): void => {
+          registration.logger.info(
+            `mcp server ${serverId} notification: ${method}`
+          );
+          // Item-6 hook point: e.g. `notifications/tools/list_changed`
+          // would re-list + re-mount tools here. Deliberately not wired yet.
+        };
+        const onStreamError = (message: string): void => {
+          registration.logger.warn(
+            `mcp server ${serverId} stream error: ${message}`
+          );
+          if (connection) {
+            connection.state.streaming = false;
+            connection.state.lastStreamError = message;
+            setServerState(connection.state);
+          }
+        };
         try {
-          const connection = await createMcpClientConnection({
+          connection = await createMcpClientConnection({
             serverId,
             config: serverConfig,
             defaultRequestTimeoutMs: mcpConfig.requestTimeoutMs,
@@ -317,6 +335,8 @@ export const mcpPlugin: DronePlugin = {
             defaultMaxListPages: mcpConfig.maxListPages,
             defaultMaxListItems: mcpConfig.maxListItems,
             defaultCompatibilityMode: mcpConfig.compatibilityMode,
+            onNotification,
+            onStreamError,
             logger: registration.logger,
           });
           connections.set(serverId, connection);

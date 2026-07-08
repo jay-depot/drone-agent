@@ -79,6 +79,18 @@ export type MockFetchOptions = {
    * requests.
    */
   sessionId?: string;
+  /**
+   * Server->client SSE notifications to emit on a GET to the streamable-HTTP
+   * endpoint. Each is serialized as a JSON-RPC notification frame
+   * (`{ jsonrpc:'2.0', method, params }`) inside an SSE `data:` block. Used to
+   * exercise the client's GET-reader + onNotification dispatch.
+   */
+  sseEvents?: Array<{ method: string; params?: unknown }>;
+  /**
+   * When true, the GET stream's first `read()` throws (simulating a transient
+   * stream drop) instead of delivering the queued `sseEvents`.
+   */
+  sseError?: boolean;
 };
 
 const DEFAULT_TOOLS = [
@@ -171,6 +183,54 @@ function errorResponse(status: number): Response {
  * `{ jsonrpc: '2.0', id, result }`) or a full JSON-RPC message (used to test the
  * array-envelope / permissive normalization paths).
  */
+function sseResponse(
+  events: Array<{ method: string; params?: unknown }>,
+  shouldError: boolean
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      if (shouldError) {
+        // Defer the error to a macrotask so the client has returned from
+        // createMcpClientConnection (and the caller assigned its connection
+        // handle) before the SSE reader reports the drop. Keeps the
+        // stream-error unit test deterministic (no fire-and-forget race).
+        setTimeout(() => {
+          controller.error(new Error('stream dropped'));
+        }, 0);
+        return;
+      }
+      for (const ev of events) {
+        const frame = {
+          jsonrpc: '2.0',
+          method: ev.method,
+          params: ev.params,
+        };
+        controller.enqueue(
+          encoder.encode(`event: message\ndata: ${JSON.stringify(frame)}\n\n`)
+        );
+      }
+      controller.close();
+    },
+  });
+  return {
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    headers: new Headers({ 'content-type': 'text/event-stream' }),
+    body: stream,
+    async text() {
+      return '';
+    },
+    redirected: false,
+    type: 'basic',
+    url: '',
+    clone() {
+      return this;
+    },
+  } as unknown as Response;
+}
+
 export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
   const pageSize = options.pageSize ?? 1000;
   const tools = options.tools ?? DEFAULT_TOOLS;
@@ -314,7 +374,12 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
     const url = typeof input === 'string' ? input : input.toString();
     const body = init?.body ? String(init?.body) : '';
     const parsed = body ? JSON.parse(body) : {};
-    const method = parsed.method as string;
+    // For POST the JSON-RPC method lives in the body; for GET/DELETE there is
+    // no body, so record the HTTP verb instead.
+    const httpMethod = init?.method ?? 'POST';
+    const method = (
+      httpMethod === 'POST' ? parsed.method : httpMethod
+    ) as string;
     const id = parsed.id as number;
     const headers: Record<string, string> = {};
     if (init?.headers) {
@@ -322,6 +387,34 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
       for (const [k, v] of Object.entries(h)) headers[k.toLowerCase()] = v;
     }
     requests.push({ method, params: parsed.params, url, headers });
+
+    // GET -> open the server->client SSE stream (point-8 transport).
+    if (init?.method === 'GET') {
+      const events = options.sseEvents ?? [];
+      return sseResponse(events, options.sseError ?? false);
+    }
+
+    // DELETE -> best-effort session termination.
+    if (init?.method === 'DELETE') {
+      if (httpErrors['DELETE']) {
+        return errorResponse(httpErrors['DELETE']);
+      }
+      return {
+        ok: true,
+        status: 204,
+        statusText: 'No Content',
+        async text() {
+          return '';
+        },
+        headers: new Headers(),
+        redirected: false,
+        type: 'basic',
+        url: '',
+        clone() {
+          return this;
+        },
+      } as unknown as Response;
+    }
 
     if (options.forceHttpError) {
       return errorResponse(options.forceHttpError);
