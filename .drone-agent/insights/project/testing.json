@@ -50,5 +50,9 @@
   {
     "timestamp": "2026-07-07T17:35:17.050Z",
     "insight": "`test/lsp-fake-server.ts` imports `SERVER_SCRIPT = path.join(__dirname, 'lsp-fake-server.mjs')` but no such `.mjs` exists in the repo (glob `**/lsp-fake-server*.mjs` returns nothing). The LSP tests using it may be silently broken or relying on a missing artifact — verify before modeling the new `mcp-fake-server.mjs` on it, and consider auditing/strengthening the LSP fake-server harness."
+  },
+  {
+    "timestamp": "2026-07-07T18:29:50.308Z",
+    "insight": "When writing an integration test for the MCP plugin, do NOT spawn the fake server yourself and assert on that process. `createMcpClientConnection` spawns its OWN child from the server config inside the client; a test-spawned child is never used by the client. Instead, return a `serverConfig` descriptor (with `command`/`args`/`env`) and let the client spawn it, then observe the client-owned child via a `vi.mock('node:child_process')` spawn spy. Also: tools mount under the canonical name `mcp__<serverId>__<toolName>` (plugin-id prefix), not `<serverId>__<tool>`."
   }
 ]

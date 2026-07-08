@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-07-07T18:29:50.307Z",
+    "insight": "The MCP plugin's mounting hook (`hooks.onPluginsLoaded`) is NOT auto-run by `engine.initialize()`; plugin tests that boot a real engine must call `engine.runHooks('onPluginsLoaded')` explicitly to trigger tool mounting. The `server_status` tool is registered in `register()` (always present), but per-server `mcp__<serverId>__*` tools only appear after the hook runs."
+  }
+]
