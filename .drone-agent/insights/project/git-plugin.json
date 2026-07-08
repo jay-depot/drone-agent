@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-07-08T17:49:27.864Z",
+    "insight": "Confirmed bug in git__status: runGit() does `stdout.trim()`, which strips the leading space column of `git status --porcelain` output. For a modified-unstaged file, porcelain is \" M file\" — trim() turns it into \"M file\", so the parser reads line[0]='M' (actually the unstaged flag) and misclassifies it as STAGED. Reproduced live: raw porcelain \" M AGENTS.md\" was reported by git__status as staged \"M AGENTS.md\". Fix: parse porcelain from the raw, untrimmed lines (or trim only per-field, never the whole record). Affects every modified/untracked classification. No existing git plugin test file."
+  }
+]
