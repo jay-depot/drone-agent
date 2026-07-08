@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-07-08T21:32:22.545Z",
+    "insight": "User wants a graceful degradation chain for gateway config validation later (e.g., coordinatorUrl required-ness should degrade: local mode = not needed, coordinator mode = required, future backends = their own rules). The current fix (warn-but-keep-error-when-coordinator) is a stopgap. Architect a per-backend-required-config contract rather than a global required-field check in config/load.ts."
+  }
+]
