@@ -46,10 +46,7 @@ export function FetchPullBlock({
     // Show the real git output (e.g. "remote: Counting objects…") on both
     // success and failure — it was captured and must not be discarded.
     out.push(
-      <Text
-        color={success ? scheme.toolResult : scheme.error}
-        wrap="wrap"
-      >
+      <Text color={success ? scheme.toolResult : scheme.error} wrap="wrap">
         {parsed.explanation}
       </Text>
     );

@@ -6,92 +6,74 @@ tags:
   - sqlite
   - plan
   - e2ee
+  - executed
 created: 2026-07-08T21:33:38.139Z
-updated: 2026-07-08T21:33:38.139Z
+updated: 2026-07-08T22:00:06.013Z
 ---
 
 # Plan: Gateway SQLite-backed Matrix stores + coordinatorUrl warning
 
-## Why
+## Status: EXECUTED 2026-07-08 (commit cbe9fb6)
 
-The gateway's Matrix adapter cannot persist data on a headless Pi:
+## Summary of work completed
 
-- E2EE keys: `createClient` is never given a `cryptoStore`, so `initCrypto()` (legacy libolm path,
-  client.js:1042) would throw "Cannot enable encryption: no cryptoStore provided"; keys are in-memory →
-  can't decrypt messages after restart.
-- Sync store: `dataPath` feeds `IndexedDBStore` (matrix.ts:312-344) which needs a browser `indexedDB`
-  global → throws on Node → silently falls back to volatile `MemoryStore` → full resync every restart.
-  SDK ships only Memory/LocalStorage/IndexedDB stores; no Node SQLite store. Rust crypto (`initRustCrypto`)
-  keeps its store inside a WASM blob → no JS hook to back with SQLite. So the ONLY way to get persistence on
-  Node is to implement the legacy `CryptoStore` (~40 methods, crypto/store/base.d.ts) and the sync `Store`
-  (~38 methods, store/index.d.ts) over `better-sqlite3`, mirroring beacon/coordinator's `initDatabase()`.
+### S0 Deps+scaffold
+- Added `better-sqlite3 ^11.8.1` + `@types/better-sqlite3 ^7.6.13` to drone-gateway/package.json
+- Created `src/store/db.ts` with `openGatewayDb()` + `initGatewaySchema()` — all crypto+sync tables
+- Deleted `src/matrix-store.d.ts` (dead ambient decls for removed IndexedDB/Memory subpaths)
 
-## Scope (agreed)
+### S1 SqliteCryptoStore
+- `src/store/sqlite-crypto-store.ts` — implements the full `CryptoStore` interface (~40 methods)
+- Tables: crypto_meta, crypto_account, cross_signing_keys, secret_store_private_keys,
+  outgoing_room_key_requests, end_to_end_sessions, session_problems, inbound_group_sessions,
+  device_data, e2e_rooms, shared_history, parked_shared_history
+- Callback-style methods ignore `_txn` (SQLite handles transactions natively)
+- `doTxn` passes null as txn handle
+- Batch methods use LIMIT 50 (SESSION_BATCH_SIZE)
+- `containsData` checks all tables
 
-- A: implement BOTH `SqliteCryptoStore` and `SqliteSyncStore`, one .sqlite file per adapter (dataPath = file path).
-- coordinatorUrl: warn when missing in local mode; still THROW when spawnBackend==='coordinator' (stopgap;
-  user wants a graceful degradation chain later — captured as insight `gateway-config`).
+### S2 SqliteSyncStore
+- `src/store/sqlite-sync-store.ts` — extends `MemoryStore` (same as IndexedDBStore)
+- Persists: saved sync (ISyncResponse → ISavedSync with next_batch→nextBatch transform),
+  presence events, OOB members, pending events, to-device batches, client options
+- `syncTs` initialized to `Date.now()` so `wantsSave()` returns false initially
+- `startup()` replays presence events into MemoryStore
 
-## Steps (ordered)
+### S3 Wire into adapter
+- `src/adapters/matrix.ts` — removed `getStore()` IndexedDB/Memory hack
+- When `dataPath` is set: `openGatewayDb` → `SqliteSyncStore` + `SqliteCryptoStore` → pass to `createClient`
+- `stop()` closes the SQLite database after `client.stopClient()`; never deletes dataPath
+- Import `ICreateClientOpts` for proper typing
 
-S0 Deps+scaffold (coder):
+### S4 coordinatorUrl warning
+- `src/config/load.ts` — moved spawnBackend resolution above coordinatorUrl check
+- Missing coordinatorUrl: warn in local mode, throw when spawnBackend==='coordinator'
+- Defaults to empty string when missing
 
-- package.json: add better-sqlite3 ^11.8.1 + @types/better-sqlite3 ^7.6.13 (mirror beacon). pnpm install.
-- src/store/db.ts: openGatewayDb(dataPath) + initGatewaySchema(db) creating all crypto+sync tables
-  (mkdir dirname, new Database, db.exec CREATE TABLE IF NOT EXISTS — match db/init.ts style).
-- Delete src/matrix-store.d.ts (dead ambient decls for removed IndexedDB/Memory subpaths).
+### S5 Docs
+- `CONTEXT.md` — updated config layout (coordinatorUrl optional for local, dataPath = SQLite)
+- Wiki `modules/drone-gateway.md` — added store files, updated Matrix Adapter section
+- `matrix-gateway-raspberry-pi-gaps` — marked Gap #1 as CLOSED, Gap #3 as CLOSED
 
-S1 SqliteCryptoStore (coder): src/store/sqlite-crypto-store.ts implements CryptoStore.
-Tables: meta, crypto_account, cross_signing_keys, secret_store_private_keys,
-outgoing_room_key_requests, end_to_end_sessions (PK deviceKey,sessionId), session_problems,
-inbound_group_sessions (PK senderKey,sessionId; needsBackup col), device_data, e2e_rooms,
-shared_history, parked_shared_history.
+### S6 Tests
+- `test/sqlite-crypto-store.test.ts` — 30+ tests covering lifecycle, migration, account,
+  cross-signing keys, outgoing requests, Olm sessions, inbound group sessions, E2EE rooms,
+  device data, shared history, doTxn
+- `test/sqlite-sync-store.test.ts` — 15+ tests covering lifecycle, saved sync, OOB members,
+  client options, pending events, to-device batches, deleteAllData, save/wantsSave
+- `test/config-load.test.ts` — added 4 coordinatorUrl validation tests
+- `test/matrix-adapter.test.ts` — updated mocks (SQLite stores instead of IndexedDB/Memory),
+  added dataPath wiring tests (opens db, passes stores, closes on stop)
 
-- callback-style (txn,func)=>void methods: ignore txn, call func(value).
-- doTxn<T>(mode,stores,func,log): return Promise.resolve(func(null)).
-- batch methods: LIMIT 50 (SESSION_BATCH_SIZE).
-- containsData(): any rows; startup(): resolve(this); deleteAllData(): DELETE all.
+### S7 Validation
+- `pnpm -C drone-gateway typecheck` — clean
+- `pnpm lint` — clean for drone-gateway (pre-existing JSON syntax error in git-plugin insight)
+- `npx vitest run drone-gateway/test/` — 160 tests, 12 files, all passing
+- ESLint config updated: `argsIgnorePattern: '^_'` and `varsIgnorePattern: '^_'` for unused params
 
-S2 SqliteSyncStore (coder): src/store/sqlite-sync-store.ts implements Store.
-Tables: sync_meta, rooms, users, room_events (PK roomId,eventId), room_summaries, account_data,
-filters, filter_names, saved_sync, oob_members, to_device_batches (autoincrement id), pending_events.
-
-- Serialize Room/User/MatrixEvent via .toJSON(); reconstruct via Room.fromJSON / MatrixEvent /
-  User constructors (verify exact reconstruction API during impl).
-- save()/wantsSave(): no-op durable flush. startup/destroy: resolve/no-op. ~38 methods.
-
-S3 Wire into adapter (coder): src/adapters/matrix.ts
-
-- Remove getStore() IndexedDB/Memory hack.
-- start(): if dataPath → openGatewayDb + new SqliteCryptoStore(db) + new SqliteSyncStore(db), pass both
-  to createClient({..., store, cryptoStore}); else omit (legacy in-memory preserved).
-- Keep initCrypto() try/catch warn (message: E2EE now persists on Node via SQLite; if olm missing, degrade
-  to plaintext).
-- stop(): close db after client.stopClient(); NEVER delete dataPath.
-
-S4 coordinatorUrl warning (coder): src/config/load.ts
-
-- Move spawnBackend resolution above the coordinatorUrl check.
-- Missing/non-string coordinatorUrl: if spawnBackend==='coordinator' throw (clarify msg); else logger.warn.
-
-S5 Docs (coder): update CONTEXT.md dataPath note (sqlite file), wiki modules/drone-gateway.md Matrix Adapter
-section (E2EE now persists on Node), update memory matrix-gateway-raspberry-pi-gaps Gap#1.
-
-S6 Tests (tester): sqlite-crypto-store.test.ts, sqlite-sync-store.test.ts (round-trips, tmp db);
-config-load.test.ts (missing coordinatorUrl + local = no throw; + coordinator = throws);
-matrix-adapter.test.ts (add dataPath case asserting store+cryptoStore passed, tmp .sqlite created/closed).
-
-S7 Validate: pnpm typecheck clean; pnpm lint clean; pnpm -C drone-gateway test green; (optional smoke:
-build, run with matrix adapter dataPath, restart, confirm decryption).
-
-## Agent assignment
-
-coder: S0–S5. tester: S6. reviewer: review S1/S2 interface conformance + S3 wiring. All: S7 criteria.
-
-## Validation criteria
-
-- pnpm typecheck (all packages) clean.
-- LSP diagnostics clean for drone-gateway.
-- pnpm lint clean.
-- vitest (drone-gateway) green.
-- (manual) gateway starts, .sqlite created at dataPath, survives restart with E2EE working.
+## Key deviation from plan
+- S2 originally planned to serialize Room/User via .toJSON()/fromJSON(). This is impossible
+  in matrix-js-sdk v34 (no Room.fromJSON). Instead, SqliteSyncStore extends MemoryStore and
+  persists the same things IndexedDBStore does: saved sync blob, presence events, OOB members,
+  pending events, to-device batches, client options. On startup the client replays the saved
+  sync to rebuild live objects in memory.

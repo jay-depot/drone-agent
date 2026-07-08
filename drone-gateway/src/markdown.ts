@@ -37,9 +37,7 @@ export class BasicMarkdownRenderer implements MarkdownRenderer {
       // Push the fenced code block as-is (escaped, wrapped in pre>code)
       const lang = match[1];
       const code = this.escapeHtml(match[2].replace(/\n$/, '')); // trim trailing newline
-      const langAttr = lang
-        ? ` class="language-${this.escapeHtml(lang)}"`
-        : '';
+      const langAttr = lang ? ` class="language-${this.escapeHtml(lang)}"` : '';
       parts.push(`<pre><code${langAttr}>${code}</code></pre>`);
       lastIndex = match.index + match[0].length;
     }
@@ -62,10 +60,7 @@ export class BasicMarkdownRenderer implements MarkdownRenderer {
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
     // Links: [text](url) → <a href="url">text</a>
-    html = html.replace(
-      /\[([^\]]+)\]\(([^)]+)\)/g,
-      '<a href="$2">$1</a>'
-    );
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
 
     // Bold: **text** → <strong>text</strong>
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');

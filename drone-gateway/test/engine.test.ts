@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import type { GatewayConfig, ResolvedServiceAdapter, ControlSurfaceSpec } from '../src/types.js';
+import type {
+  GatewayConfig,
+  ResolvedServiceAdapter,
+  ControlSurfaceSpec,
+} from '../src/types.js';
 import type { SpawnBackend } from '../src/spawn-backend.js';
 
 // Mock CoordinatorClient since GatewayEngine creates one internally

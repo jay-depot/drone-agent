@@ -68,7 +68,10 @@ export function filenameToConvId(filename: string): string | null {
   // Reconstruct by replacing _CODE_ patterns
   let result = filename;
   for (const [code, char] of Object.entries(REVERSE_MAP)) {
-    result = result.replace(new RegExp(`${SAFE_SEPARATOR}${code}${SAFE_SEPARATOR}`, 'g'), char);
+    result = result.replace(
+      new RegExp(`${SAFE_SEPARATOR}${code}${SAFE_SEPARATOR}`, 'g'),
+      char
+    );
   }
   return result;
 }

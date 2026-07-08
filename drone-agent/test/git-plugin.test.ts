@@ -251,20 +251,27 @@ describe('git plugin integration', () => {
     // into a space-splitting parser, yielding empty paths. Assert real paths.
     const paths = addOut.files.map((f: { path: string }) => f.path).sort();
     expect(paths).toEqual(['add-paths-a.txt', 'add-paths-b.txt']);
-    expect(
-      addOut.files.every((f: { path: string }) => f.path.length > 0)
-    ).toBe(true);
+    expect(addOut.files.every((f: { path: string }) => f.path.length > 0)).toBe(
+      true
+    );
 
     // Unstage so the working-tree removal below doesn't leave phantom
     // deletions in the index for subsequent tests.
-    await gitInRepo(['restore', '--staged', 'add-paths-a.txt', 'add-paths-b.txt']);
+    await gitInRepo([
+      'restore',
+      '--staged',
+      'add-paths-a.txt',
+      'add-paths-b.txt',
+    ]);
     await rm(a, { force: true });
     await rm(b, { force: true });
   });
 
   it('add with no paths and no all:true throws (no silent staging)', async () => {
     const tools = captureGitTools();
-    await expect(tools.get('add')!({ cwd: repoDir })).rejects.toThrow(/paths|all/);
+    await expect(tools.get('add')!({ cwd: repoDir })).rejects.toThrow(
+      /paths|all/
+    );
     await expect(
       tools.get('add')!({ cwd: repoDir, all: false })
     ).rejects.toThrow(/paths|all/);
@@ -295,9 +302,9 @@ describe('git plugin integration', () => {
         (f: { path: string }) => f.path === 'untracked-restore.txt'
       )
     ).toBe(false);
-    expect(
-      out.files.every((f: { path: string }) => f.path.length > 0)
-    ).toBe(true);
+    expect(out.files.every((f: { path: string }) => f.path.length > 0)).toBe(
+      true
+    );
 
     await gitInRepo(['checkout', '--', SEED]);
     await rm(untracked, { force: true });

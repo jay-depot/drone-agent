@@ -14,7 +14,8 @@ export function createAddTool(): DroneToolDefinition {
         paths: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Specific file paths to stage (required unless all:true).',
+          description:
+            'Specific file paths to stage (required unless all:true).',
         },
         all: {
           type: 'boolean',

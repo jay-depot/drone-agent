@@ -39,7 +39,10 @@ export function nameStatusToItems(raw: string): ListItem[] {
     if (tabIdx < 0) continue; // malformed / empty — skip
     const code = line.slice(0, tabIdx).trim();
     const rest = line.slice(tabIdx + 1);
-    const parts = rest.split('\t').map(p => p.trim()).filter(Boolean);
+    const parts = rest
+      .split('\t')
+      .map(p => p.trim())
+      .filter(Boolean);
 
     let kind: ListItem['kind'];
     if (code.startsWith('D')) {

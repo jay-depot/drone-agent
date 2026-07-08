@@ -548,11 +548,11 @@ Matrix chat platform integration. Connects to a Matrix homeserver via `matrix-js
 
 **Test Coverage (3 new test files, ~28 new tests):**
 
-| Test File                                | Tests | What's Tested                                                                          |
-| ---------------------------------------- | ----- | -------------------------------------------------------------------------------------- |
-| `test/markdown.test.ts`                  | 12    | Code fences, inline code, bold, italic, links, lists, paragraphs, HTML escaping        |
-| `test/config-load.test.ts`               | 8     | convId↔filename round-trips, validation, wildcard encoding                             |
-| `test/matrix-adapter.test.ts`            | 16    | Client creation, crypto init, DM/room routing, allowlist, own-msg skip, backlog skip, sendMessage with HTML+receipt+typing, stop lifecycle, dataPath persistence |
+| Test File                     | Tests | What's Tested                                                                                                                                                    |
+| ----------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test/markdown.test.ts`       | 12    | Code fences, inline code, bold, italic, links, lists, paragraphs, HTML escaping                                                                                  |
+| `test/config-load.test.ts`    | 8     | convId↔filename round-trips, validation, wildcard encoding                                                                                                       |
+| `test/matrix-adapter.test.ts` | 16    | Client creation, crypto init, DM/room routing, allowlist, own-msg skip, backlog skip, sendMessage with HTML+receipt+typing, stop lifecycle, dataPath persistence |
 
 **Key Files:**
 

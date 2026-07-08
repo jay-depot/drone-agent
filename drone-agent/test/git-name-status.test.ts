@@ -5,7 +5,9 @@ import { nameStatusToItems } from '../src/plugins/git/types.js';
 // NOT `git status --porcelain` (space-separated). These tests lock that in.
 describe('nameStatusToItems', () => {
   it('parses tab-separated M/A/D lines with real paths', () => {
-    const out = nameStatusToItems('M\tsrc/a.ts\nA\tsrc/new.ts\nD\tsrc/old.ts\n');
+    const out = nameStatusToItems(
+      'M\tsrc/a.ts\nA\tsrc/new.ts\nD\tsrc/old.ts\n'
+    );
     expect(out).toEqual([
       { kind: 'modified', path: 'src/a.ts' },
       { kind: 'added', path: 'src/new.ts' },

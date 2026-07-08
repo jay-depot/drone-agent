@@ -54,7 +54,7 @@
 
 ## Decision 3: Adapter Owns Conversation Routing
 
-**Decision:** The service adapter is the *only* component that knows whether an incoming message came from a room, a DM, or the wildcard. It translates platform events into `AdapterMessage { adapterId, conversationId, text, senderId?, senderName? }` using its own conversation ID scheme.
+**Decision:** The service adapter is the _only_ component that knows whether an incoming message came from a room, a DM, or the wildcard. It translates platform events into `AdapterMessage { adapterId, conversationId, text, senderId?, senderName? }` using its own conversation ID scheme.
 
 **Rationale:**
 
