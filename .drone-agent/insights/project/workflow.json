@@ -170,5 +170,9 @@
   {
     "timestamp": "2026-07-08T02:42:14.741Z",
     "insight": "The reasoning-level planning session revealed that the provider interface (DroneLlmProvider.chat) needs a new optional parameter threaded through the conversation service. This is a pattern worth noting: any future provider-level feature (e.g., structured outputs, response format) will need the same three-layer touch: (1) provider-types.ts interface, (2) conversation-service.ts call site, (3) each provider's chat() handler. Consider whether a generic \"options bag\" on the chat input would reduce future churn."
+  },
+  {
+    "timestamp": "2026-07-08T02:59:16.001Z",
+    "insight": "The reasoning-level implementation required touching 11+ files across drone-core and drone-agent packages. The pattern of threading a new parameter through the provider interface (provider-types.ts → conversation-service.ts → each provider's chat handler) is now well-documented. A future improvement could be to add a generic `options` bag on the chat input to reduce churn for future provider-level features."
   }
 ]
