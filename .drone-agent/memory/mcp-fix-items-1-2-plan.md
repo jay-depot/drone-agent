@@ -186,3 +186,20 @@ Run from workspace root:
 - No config-schema change (session id is not pre-seedable — was an optional path, user chose runtime-only).
 - No GET/SSE or DELETE session-termination work (those are gap items 8, out of scope).
 - `discoveredToolCount` (item 9) and protocol-version negotiation (item 4) are NOT addressed here.
+
+
+## Completion Summary (executed 2026-07-07 by code persona)
+
+All 5 steps completed and committed (18884d2). Items 1 & 2 are DONE.
+
+- **Step 1:** `createStreamableHttpJsonRpcClient` now holds a closure `sessionId`, merges it into outgoing fetch headers BEFORE `...options.headers` (server-issued id is authoritative), and captures it from `mcp-session-id` response headers only after the `response.ok` guard. Strictly HTTP-only; stdio path untouched.
+- **Step 2:** `callTool` now throws `MCP tool '<name>' failed[: <content>]` when the `tools/call` result has `isError === true` (guarded by `isRecord`). `executeToolSafely` already maps the throw to a real `{kind:'error'}` result. Added module-local `extractToolErrorText` helper.
+- **Step 3:** `mcp-fake-server.ts` gained a `sessionId?: string` option that emits the `mcp-session-id` header on `initialize` only. `mcp-client.test.ts` replaced the buggy-behavior test with `rejects when tools/call returns isError: true` and `still returns the raw result when isError is false`, and ADDED a `Mcp-Session-Id` describe with `captures Mcp-Session-Id ...` and a negative control. PHASE 1 RULE header note updated.
+- **Step 4:** Reviewer pass confirmed all 6 criteria (a-f).
+- **Step 5 — Validation ALL PASS:**
+  1. `pnpm typecheck` exit 0.
+  2. `pnpm lint` exit 0.
+  3. `pnpm exec vitest run drone-agent/test/mcp-client.test.ts` → 26 passed (new `rejects on isError` + `captures Mcp-Session-Id` pass; no test asserts old buggy behavior).
+  4. `pnpm exec vitest run --config vitest.integration.config.ts drone-agent/test/mcp.test.ts` → 6 passed (no regression).
+  5. LSP diagnostics clean for client.ts.
+  6. No `drone-core` changes (item 1 runtime-only, as decided).
