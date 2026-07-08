@@ -10,10 +10,10 @@
  * (createMcpClientConnection calls `spawn` for stdio). Those framing tests live
  * in the SLOW integration suite (`mcp.test.ts` + `mcp-fake-server.mjs`).
  *
- * PHASE 1 RULE: these tests encode CURRENT client behavior. Where the current
- * behavior is known-defective (e.g. HTTP `Mcp-Session-Id` is neither read nor
- * echoed; `tools/call` `isError` is ignored), the tests assert that current
- * behavior so they pass today. They are the regression net for later fix-phases.
+ * These tests assert CURRENT client behavior. The two known-defective behaviors
+ * from the earlier Phase 1 baseline (`Mcp-Session-Id` not read/echoed, and
+ * `tools/call` `isError` ignored) were fixed; the tests below now assert the
+ * corrected behavior. They remain the regression net for later fix-phases.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -230,20 +230,56 @@ describe('callTool current behavior', () => {
     expect(result.content[0].text).toContain('called echo');
   });
 
-  it('does NOT surface isError to the caller (current behavior)', async () => {
-    // The fake marks the result as isError:true; current client ignores it and
-    // returns the result normally. This documents the defect for later fix-phase.
+  it('still returns the raw result when isError is false', async () => {
+    // isError:false must behave exactly like the absent flag — success.
     const mock = currentMock!;
     mock.onRequest('tools/call', (params: unknown) => {
       const p = (params ?? {}) as { name?: string; arguments?: unknown };
+      return {
+        content: [{ type: 'text', text: `ok ${p.name}` }],
+        isError: false,
+      };
+    });
+    const conn = await makeConnection(mock);
+    const result = (await conn.callTool('echo', {})) as {
+      content: Array<{ text: string }>;
+    };
+    expect(result.content[0].text).toContain('ok echo');
+  });
+
+  it('rejects when tools/call returns isError: true', async () => {
+    const mock = currentMock!;
+    mock.onRequest('tools/call', params => {
+      const p = (params ?? {}) as { name?: string };
       return {
         content: [{ type: 'text', text: `failed ${p.name}` }],
         isError: true,
       };
     });
     const conn = await makeConnection(mock);
-    const result = await conn.callTool('echo', {});
-    expect(result).toBeDefined();
+    await expect(conn.callTool('echo', {})).rejects.toThrow(
+      /MCP tool 'echo' failed/
+    );
+  });
+});
+
+describe('Mcp-Session-Id', () => {
+  it('captures Mcp-Session-Id from initialize and echoes it on subsequent requests', async () => {
+    const mock = createMockFetch({ sessionId: 'sess-xyz' });
+    installFetch(mock);
+    const conn = await makeConnection(mock);
+    await conn.callTool('echo', {}); // a post-initialize request
+    const call = mock.lastRequest('tools/call')!;
+    expect(call.headers['mcp-session-id']).toBe('sess-xyz');
+  });
+
+  it('does not echo a session id when the server never issues one', async () => {
+    const mock = createMockFetch();
+    installFetch(mock);
+    const conn = await makeConnection(mock);
+    await conn.callTool('echo', {});
+    const call = mock.lastRequest('tools/call')!;
+    expect(call.headers['mcp-session-id']).toBeUndefined();
   });
 });
 

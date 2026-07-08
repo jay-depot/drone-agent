@@ -15,6 +15,7 @@ Source files: `drone-agent/src/plugins/mcp/index.ts`, `client.ts`; `drone-core/s
 Tests now EXIST: `drone-agent/test/mcp-client.test.ts` (fast, in-process `fetch` mock via `mcp-fake-server.ts`) and `mcp.test.ts` + `mcp-fake-server.mjs` (slow stdio integration). The fast suite deliberately encodes CURRENT (partly-defective) behavior under a "PHASE 1 RULE" so it passes today and acts as the regression net for fix-phases. The `isError` no-op is locked by `mcp-client.test.ts:233` ("does NOT surface isError to the caller (current behavior)").
 
 ## Fix plan status
+
 - **Items 1 & 2** have a detailed implementation plan (persisted to project memory). Bug 1 = runtime-only `Mcp-Session-Id` capture/echo in `createStreamableHttpJsonRpcClient` (`client.ts:489-552`). Bug 2 = `callTool` (`client.ts:877-884`) throws on `isError: true`, surfaced by `executeToolSafely` as a real `{kind:'error'}` tool result.
 
 ## Critical (correctness / spec compliance)

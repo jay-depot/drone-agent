@@ -21,11 +21,11 @@
  * `resources/read`, `prompts/list`, `prompts/get`, and optionally `shutdown`.
  *
  * IMPORTANT (Phase 1): these doubles encode the CLIENT's CURRENT behavior, not
- * the spec-ideal behavior. For example the HTTP fake does not emit an
- * `Mcp-Session-Id` header because the current client never reads/echos it. This
- * is intentional — the tests are the regression net that later fix-phases will
- * update. Do not "fix" the fake to be spec-compliant in a way that diverges from
- * what the current client expects.
+ * the spec-ideal behavior. The HTTP fake only emits an `Mcp-Session-Id` header
+ * when `sessionId` is passed, because the current client only captures/echos the
+ * id when the server issues one. This is intentional — the tests are the
+ * regression net that later fix-phases will update. Do not "fix" the fake to be
+ * spec-compliant in a way that diverges from what the current client expects.
  */
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -72,6 +72,13 @@ export type MockFetchOptions = {
   prompts?: Array<{ name: string; description?: string }>;
   /** Whether `shutdown` is implemented (returns -32601 if false). */
   implementsShutdown?: boolean;
+  /**
+   * When set, the fake emits an `mcp-session-id` response header on the
+   * `initialize` reply, and keeps subsequent responses header-less. This lets
+   * the client unit tests verify it captures the id and echoes it on later
+   * requests.
+   */
+  sessionId?: string;
 };
 
 const DEFAULT_TOOLS = [
@@ -328,7 +335,11 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
       return okResponse(rawBodies.get(method));
     }
 
-    return okResponse(handle(id, method, parsed.params));
+    const resp = okResponse(handle(id, method, parsed.params));
+    if (method === 'initialize' && options.sessionId) {
+      resp.headers.set('mcp-session-id', options.sessionId);
+    }
+    return resp;
   }) as unknown as typeof fetch;
 
   return {

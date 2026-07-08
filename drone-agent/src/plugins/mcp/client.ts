@@ -64,6 +64,17 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+function extractToolErrorText(result: unknown): string {
+  if (!isRecord(result) || !Array.isArray(result.content)) {
+    return '';
+  }
+  return result.content
+    .filter(isRecord)
+    .map(c => (typeof c.text === 'string' ? c.text : ''))
+    .join('\n')
+    .trim();
+}
+
 function sleep(milliseconds: number): Promise<void> {
   if (milliseconds <= 0) {
     return Promise.resolve();
@@ -496,6 +507,8 @@ function createStreamableHttpJsonRpcClient(options: {
   let nextId = 1;
   let closed = false;
 
+  let sessionId: string | undefined;
+
   return {
     request: async <T>(method: string, params?: unknown): Promise<T> => {
       if (closed) {
@@ -516,6 +529,7 @@ function createStreamableHttpJsonRpcClient(options: {
           headers: {
             'content-type': 'application/json',
             accept: 'application/json',
+            ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
             ...options.headers,
           },
           body: JSON.stringify({
@@ -531,6 +545,11 @@ function createStreamableHttpJsonRpcClient(options: {
           throw new Error(
             `MCP HTTP ${options.serverId} returned ${response.status} ${response.statusText}`
           );
+        }
+
+        const serverSessionId = response.headers.get('mcp-session-id');
+        if (serverSessionId) {
+          sessionId = serverSessionId;
         }
 
         const rawBody = await response.text();
@@ -875,14 +894,16 @@ export async function createMcpClientConnection(options: {
       return toolsResult.items;
     },
     callTool: async (name, args) => {
-      return requestWithRetry<unknown>(
+      const result = await requestWithRetry<unknown>(
         'tools/call',
-        {
-          name,
-          arguments: args,
-        },
+        { name, arguments: args },
         false
       );
+      if (isRecord(result) && result.isError === true) {
+        const text = extractToolErrorText(result);
+        throw new Error(`MCP tool '${name}' failed${text ? `: ${text}` : ''}`);
+      }
+      return result;
     },
     listResources: async () => {
       const resourcesResult = await paginateList(
