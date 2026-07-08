@@ -19,8 +19,9 @@ describe('applyTint', () => {
     expect(tinted.success).toBe(DEFAULT_GRAYSCALE_SCHEME.success);
     expect(tinted.error).toBe(DEFAULT_GRAYSCALE_SCHEME.error);
     expect(tinted.warning).toBe(DEFAULT_GRAYSCALE_SCHEME.warning);
-    // toolCall is now part of the persona tint, toolResult stays grayscale
-    expect(tinted.toolResult).toBe(DEFAULT_GRAYSCALE_SCHEME.toolResult);
+    // toolCall AND toolResult are part of the persona tint so a tool's
+    // color identity survives the in-flight → committed (Static) handoff.
+    expect(tinted.toolResult).toBe('red');
   });
 
   it('replaces the primary accent slots with the tint color', () => {
@@ -29,6 +30,7 @@ describe('applyTint', () => {
     expect(tinted.border).toBe('cyan');
     expect(tinted.userInput).toBe('cyan');
     expect(tinted.toolCall).toBe('cyan');
+    expect(tinted.toolResult).toBe('cyan');
   });
 
   it('accepts hex colors as well as named colors', () => {

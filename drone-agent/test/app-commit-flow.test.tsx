@@ -23,6 +23,28 @@ type ConvEvent = ConversationEvent;
 
 const tick = (ms = 10) => new Promise(r => setTimeout(r, ms));
 
+/**
+ * Poll until `lastFrame()` satisfies `predicate` or `timeoutMs` elapses.
+ *
+ * Ink renders asynchronously; a fixed `setTimeout(0)` is NOT a reliable
+ * barrier and flakes on slower CI runners (lastFrame() returns the empty
+ * pre-render frame). We instead wait for the specific content to actually
+ * appear in the output.
+ */
+async function waitUntilFrame(
+  inst: ReturnType<typeof render>,
+  predicate: (frame: string) => boolean,
+  timeoutMs = 1000
+): Promise<string> {
+  const start = Date.now();
+  let frame = inst.lastFrame() ?? '';
+  while (!predicate(frame) && Date.now() - start < timeoutMs) {
+    await new Promise(r => setTimeout(r, 10));
+    frame = inst.lastFrame() ?? '';
+  }
+  return frame;
+}
+
 describe('App commit flow', () => {
   let instance: ReturnType<typeof render> | null = null;
   let fire: ((e: ConvEvent) => void) | null = null;
@@ -89,7 +111,7 @@ describe('App commit flow', () => {
     fire!({ kind: 'reasoningComplete' });
     await tick();
 
-    let frame = instance!.lastFrame() ?? '';
+    let frame = await waitUntilFrame(instance!, f => f.includes('thinking...'));
     expect(frame).toContain('thinking...');
 
     // Tool call + result
@@ -106,7 +128,10 @@ describe('App commit flow', () => {
     });
     await tick();
 
-    frame = instance!.lastFrame() ?? '';
+    frame = await waitUntilFrame(
+      instance!,
+      f => f.includes('tool-a') && f.includes('find me')
+    );
     // ToolCallProgress node renders the tool name + args preview.
     expect(frame).toContain('tool-a');
     expect(frame).toContain('find me');
@@ -117,7 +142,7 @@ describe('App commit flow', () => {
     fire!({ kind: 'assistantMessageComplete' });
     await tick();
 
-    frame = instance!.lastFrame() ?? '';
+    frame = await waitUntilFrame(instance!, f => f.includes('Found'));
     // The markdown content is present in the committed scrollback.
     expect(frame).toContain('Found');
   });
@@ -129,7 +154,10 @@ describe('App commit flow', () => {
     fire!({ kind: 'assistantMessageComplete' });
     await tick();
 
-    const frame = instance!.lastFrame() ?? '';
+    const frame = await waitUntilFrame(
+      instance!,
+      f => f.includes('Title') && f.includes('body text')
+    );
     expect(frame).toContain('Title');
     expect(frame).toContain('body text');
   });
@@ -141,7 +169,9 @@ describe('App commit flow', () => {
     fire!({ kind: 'error', message: 'boom' });
     await tick();
 
-    const frame = instance!.lastFrame() ?? '';
+    const frame = await waitUntilFrame(instance!, f =>
+      f.includes('Error: boom')
+    );
     expect(frame).toContain('Error: boom');
     // The in-flight reasoning should not linger in the tail.
     expect(frame).not.toContain('half done');

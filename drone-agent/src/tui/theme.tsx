@@ -103,6 +103,10 @@ export function applyTint(
     primary: tint,
     userInput: tint,
     toolCall: tint,
+    // Keep the tool's color identity through the in-flight → committed
+    // (Static) handoff: a running call is tinted via `toolCall`, so the
+    // committed result must be tinted too or it visibly de-colors at commit.
+    toolResult: tint,
   };
 }
 

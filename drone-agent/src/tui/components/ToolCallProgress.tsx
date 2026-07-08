@@ -40,11 +40,15 @@ export function ToolCallProgress({
 
   const text = `${indicator} ${name}(${argsPreview})`;
   const resultText = result ? `\n${preview(result, 500)}` : '';
+  // Trailing newline so consecutive tool calls (and the entry that
+  // follows) are visually separated in the scrollback.
+  const trailing = '\n';
 
   return (
     <Text color={color} wrap="wrap">
       {text}
       {resultText}
+      {trailing}
     </Text>
   );
 }

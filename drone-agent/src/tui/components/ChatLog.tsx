@@ -24,6 +24,10 @@ import { TailRegion } from './TailRegion.js';
 
 export type { ChatEntry };
 
+/** Separator rule placed under every user message, mirroring the top/bottom
+ * padding around assistant responses for visual symmetry. */
+const USER_SEPARATOR = '\n\n---\n\n';
+
 export function ChatLog({
   entries,
   tailItems,
@@ -58,6 +62,7 @@ function renderEntry(
         <Text>
           <ColorTag color={scheme.userInput}>{'> '}</ColorTag>
           {entry.text}
+          {USER_SEPARATOR}
         </Text>
       );
     case 'reasoning':

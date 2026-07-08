@@ -12,6 +12,28 @@ import type { DroneTuiOptions } from '../src/tui/types.js';
 import { silentLogger } from './helpers.js';
 import { createDefaultAgentConfig } from 'drone-core';
 
+/**
+ * Poll until `lastFrame()` satisfies `predicate` or `timeoutMs` elapses.
+ *
+ * Ink renders asynchronously; a fixed `setTimeout` is NOT a reliable
+ * barrier and flakes on slower CI runners (lastFrame() returns the empty
+ * pre-render frame). We instead wait for the specific content to actually
+ * appear in the output.
+ */
+async function waitUntilFrame(
+  inst: ReturnType<typeof render>,
+  predicate: (frame: string) => boolean,
+  timeoutMs = 1000
+): Promise<string> {
+  const start = Date.now();
+  let frame = inst.lastFrame() ?? '';
+  while (!predicate(frame) && Date.now() - start < timeoutMs) {
+    await new Promise(r => setTimeout(r, 10));
+    frame = inst.lastFrame() ?? '';
+  }
+  return frame;
+}
+
 function makeOptions(
   overrides: Partial<DroneTuiOptions> = {}
 ): DroneTuiOptions {
@@ -108,8 +130,13 @@ describe('App — /systemprompt', () => {
       await new Promise(r => setTimeout(r, 20));
     }
     instance.stdin.write('\r');
-    await new Promise(r => setTimeout(r, 100));
-    const frame = instance.lastFrame() ?? '';
+    const frame = await waitUntilFrame(
+      instance,
+      f =>
+        f.includes('You are a test agent.') &&
+        f.includes('Fragment header content') &&
+        f.includes('Fragment footer content')
+    );
     expect(frame).toContain('You are a test agent.');
     expect(frame).toContain('Fragment header content');
     expect(frame).toContain('Fragment footer content');
@@ -177,8 +204,9 @@ describe('App — /systemprompt', () => {
       await new Promise(r => setTimeout(r, 20));
     }
     instance.stdin.write('\r');
-    await new Promise(r => setTimeout(r, 100));
-    const frame = instance.lastFrame() ?? '';
+    const frame = await waitUntilFrame(instance, f =>
+      f.includes('You are a test agent.')
+    );
     expect(frame).toContain('You are a test agent.');
   });
 });

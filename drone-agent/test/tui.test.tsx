@@ -25,6 +25,31 @@ import { DEFAULT_GRAYSCALE_SCHEME } from '../src/tui/theme.js';
 import type { DroneTuiOptions, MidPanelWidget } from '../src/tui/types.js';
 import { silentLogger } from './helpers.js';
 
+/**
+ * Poll until `lastFrame()` satisfies `predicate` or `timeoutMs` elapses.
+ *
+ * Ink renders asynchronously; a fixed `setTimeout` is NOT a reliable
+ * barrier and flakes on slower CI runners (lastFrame() returns the empty
+ * pre-render frame). We instead wait for the specific content to actually
+ * appear in the output.
+ */
+async function waitUntilFrame(
+  inst: ReturnType<typeof render>,
+  predicate: (frame: string) => boolean,
+  timeoutMs = 1000,
+): Promise<string> {
+  const start = Date.now();
+  let frame = inst.lastFrame() ?? '';
+  while (!predicate(frame) && Date.now() - start < timeoutMs) {
+    await new Promise(r => setTimeout(r, 10));
+    frame = inst.lastFrame() ?? '';
+  }
+  return frame;
+}
+
+/** Wait one macrotask so Ink's (asynchronous) render has flushed. */
+const tick = () => new Promise(r => setTimeout(r, 10));
+
 function makeOptions(
   overrides: Partial<DroneTuiOptions> = {}
 ): DroneTuiOptions {
@@ -145,10 +170,11 @@ describe('App', () => {
     }
   });
 
-  it('renders the status bar with model and stats', () => {
+  it('renders the status bar with model and stats', async () => {
     const opts = makeOptions();
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
+    await tick();
     const frame = instance.lastFrame() ?? '';
     expect(frame).toContain('model:llama3.1:latest');
     expect(frame).toContain('plugins:2');
@@ -165,22 +191,26 @@ describe('App', () => {
       await new Promise(r => setTimeout(r, 20));
     }
     instance.stdin.write('\r');
-    await new Promise(r => setTimeout(r, 100));
-    const frame = instance.lastFrame() ?? '';
+    const frame = await waitUntilFrame(
+      instance,
+      f => /native selection|Shift-drag|native/i.test(f)
+    );
     expect(frame).toMatch(/native selection|Shift-drag|native/i);
   });
 
-  it('mounts and renders without throwing', () => {
+  it('mounts and renders without throwing', async () => {
     const opts = makeOptions();
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
+    await tick();
     expect(instance.lastFrame()).toBeDefined();
   });
 
-  it('does not render mid panel when no plugin offers widget content', () => {
+  it('does not render mid panel when no plugin offers widget content', async () => {
     const opts = makeOptions();
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
+    await tick();
     const frame = instance.lastFrame() ?? '';
     expect(frame).not.toContain('TODO');
   });
@@ -285,34 +315,38 @@ describe('App', () => {
     });
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
-    await new Promise(r => setTimeout(r, 100));
-    const frame = instance.lastFrame() ?? '';
+    const frame = await waitUntilFrame(
+      instance,
+      f => f.includes('TODO') && f.includes('3 / 5')
+    );
     expect(frame).toContain('TODO');
     expect(frame).toContain('3 / 5');
   });
 });
 
 describe('MidPanel', () => {
-  it('returns nothing when widgets array is empty', () => {
+  it('returns nothing when widgets array is empty', async () => {
     const instance = render(
       <MidPanel widgets={[]} scheme={DEFAULT_GRAYSCALE_SCHEME} />
     );
+    await tick();
     const frame = instance.lastFrame() ?? '';
     expect(frame).toBe('');
   });
 
-  it('returns nothing when all widgets have empty content', () => {
+  it('returns nothing when all widgets have empty content', async () => {
     const widgets: MidPanelWidget[] = [
       { id: 'todo', label: 'TODO', getContent: () => [] },
     ];
     const instance = render(
       <MidPanel widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
     );
+    await tick();
     const frame = instance.lastFrame() ?? '';
     expect(frame).toBe('');
   });
 
-  it('renders widget header and content inline', () => {
+  it('renders widget header and content inline', async () => {
     const widgets: MidPanelWidget[] = [
       {
         id: 'todo',
@@ -323,13 +357,13 @@ describe('MidPanel', () => {
     const instance = render(
       <MidPanel widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
     );
-    instance.cleanup;
+    await tick();
     const frame = instance.lastFrame() ?? '';
     expect(frame).toContain('TODO');
     expect(frame).toContain('3 / 5');
   });
 
-  it('renders multiple widgets with separator', () => {
+  it('renders multiple widgets with separator', async () => {
     const widgets: MidPanelWidget[] = [
       {
         id: 'todo',
@@ -345,7 +379,7 @@ describe('MidPanel', () => {
     const instance = render(
       <MidPanel widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
     );
-    instance.cleanup;
+    await tick();
     const frame = instance.lastFrame() ?? '';
     expect(frame).toContain('TODO');
     expect(frame).toContain('Insights');
@@ -365,7 +399,7 @@ describe('ModelPicker', () => {
     }
   });
 
-  it('renders one line per model', () => {
+  it('renders one line per model', async () => {
     const onSelect = (): void => {};
     const instance = render(
       <ModelPicker
@@ -375,13 +409,14 @@ describe('ModelPicker', () => {
       />
     );
     cleanup = instance.cleanup;
+    await tick();
     const frame = instance.lastFrame() ?? '';
     expect(frame).toContain('llama3.1:latest');
     expect(frame).toContain('mistral:7b');
     expect(frame).toContain('phi3:mini');
   });
 
-  it('highlights the currently selected model', () => {
+  it('highlights the currently selected model', async () => {
     const onSelect = (): void => {};
     const instance = render(
       <ModelPicker
@@ -391,6 +426,7 @@ describe('ModelPicker', () => {
       />
     );
     cleanup = instance.cleanup;
+    await tick();
     const frame = instance.lastFrame() ?? '';
     expect(frame).toContain('mistral:7b (current)');
   });

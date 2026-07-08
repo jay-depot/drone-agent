@@ -62,5 +62,9 @@
   {
     "timestamp": "2026-07-08T05:44:45.437Z",
     "insight": "When mocking `fetch` for non-POST verbs in tests, record the HTTP method (init.method) for GET/DELETE separately from the JSON-RPC `method` (which lives in the POST body). Also, client code that issues a best-effort fetch must check `response.ok` (not just `.catch`) because a mocked failure returns a non-ok *resolved* Response rather than rejecting."
+  },
+  {
+    "timestamp": "2026-07-08T17:05:01.855Z",
+    "insight": "TUI tests across drone-agent/test rely on `const tick = () => new Promise(r => setTimeout(r, 0))` as a render-flush barrier before reading `lastFrame()`. This is racy and flakes in CI (Node 22 cold VM): `lastFrame()` returns the empty pre-render frame ('\\n') and content assertions fail. ChatLog.test.tsx was fixed with a `waitUntilFrame` poll-until-content-appears helper. The same `tick()` anti-pattern exists in many other *.test.tsx files (app-commit-flow, systemprompt via bare setTimeout, multiline-text-input, etc.) and should be migrated to content-aware polling or ink-testing-library frame subscription."
   }
 ]

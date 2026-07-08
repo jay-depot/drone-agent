@@ -42,5 +42,9 @@
   {
     "timestamp": "2026-07-08T04:50:37.905Z",
     "insight": "Pre-existing bug surfaced during the tail→scrollback refactor: Markdown.tsx called `marked.parse(children)` which returns a STRING in marked v18, but renderToken expects a token array, so `tokens.map is not a function` crashed. Fix: `marked.lexer(children)`. The `markdown` ChatEntry kind + Markdown component were dead code precisely because they never worked — when wiring assistant messages through Markdown, fix this first or the TUI crashes at runtime. Also: file__apply_diff was unreliable on several files here (block-comment/comment-adjacent hunks failed to match even when exact); sed / full file__write were far more reliable for those edits."
+  },
+  {
+    "timestamp": "2026-07-08T17:24:15.779Z",
+    "insight": "Tool calls lost their color at the Tail→Static handoff whenever a color override (persona/plugin tint) was active. Root cause: applyTint() in theme.tsx tinted `toolCall` but NOT `toolResult`. A running call rendered with the tint (scheme.toolCall=tint), but the committed done-result rendered white (scheme.toolResult=untinted) — visible magenta→white de-coloring at commit. Fixed by adding `toolResult: tint` to applyTint so a tool's color identity survives the handoff. ADR 055 was correct that node carries formatting; the gap was purely a scheme/tint scoping bug."
   }
 ]

@@ -27,6 +27,13 @@ import { Box, Text } from 'ink';
 import { MultilineTextInput } from '../src/tui/components/MultilineTextInput.js';
 
 /**
+ * Wait one macrotask so Ink's (asynchronous) render has flushed into the
+ * captured frame. Reading lastFrame() synchronously can catch the empty
+ * pre-render frame; a short tick makes the read deterministic.
+ */
+const tick = () => new Promise(r => setTimeout(r, 10));
+
+/**
  * Wraps MultilineTextInput in a bordered Box that mimics the
  * InputLine layout. This is the context where the cursor-on-border
  * bug was visible.
@@ -69,10 +76,11 @@ describe('MultilineTextInput', () => {
   // the border line. The bottom border line (└───┘) should contain
   // no ANSI inverse codes.
 
-  it('renders cursor on the content line, not the border line (empty input)', () => {
+  it('renders cursor on the content line, not the border line (empty input)', async () => {
     const { lastFrame, cleanup } = render(
       <InputLineShell value="" onChange={() => {}} />
     );
+    await tick();
     const frame = lastFrame() ?? '';
 
     // The bottom border line should NOT contain the inverse escape
@@ -88,10 +96,11 @@ describe('MultilineTextInput', () => {
     cleanup();
   });
 
-  it('renders cursor on the content line, not the border line (one char typed)', () => {
+  it('renders cursor on the content line, not the border line (one char typed)', async () => {
     const { lastFrame, cleanup } = render(
       <InputLineShell value="a" onChange={() => {}} />
     );
+    await tick();
     const frame = lastFrame() ?? '';
 
     const lines = frame.split('\n');
@@ -104,7 +113,7 @@ describe('MultilineTextInput', () => {
     cleanup();
   });
 
-  it('renders cursor on the content line after re-render (simulating typing)', () => {
+  it('renders cursor on the content line after re-render (simulating typing)', async () => {
     // Render with empty value, then re-render with "a" to simulate
     // the state transition that happens when a user types a character.
     const { rerender, lastFrame, cleanup } = render(
@@ -112,6 +121,7 @@ describe('MultilineTextInput', () => {
     );
 
     rerender(<InputLineShell value="a" onChange={() => {}} />);
+    await tick();
 
     const frame = lastFrame() ?? '';
     const lines = frame.split('\n');
@@ -128,12 +138,13 @@ describe('MultilineTextInput', () => {
   // Long text wraps to multiple lines within the box, allowing users
   // to see more of their input. No ellipsis is shown.
 
-  it('soft-wraps long input text to multiple lines', () => {
+  it('soft-wraps long input text to multiple lines', async () => {
     // A very long string that would wrap in a 30-char-wide box
     const longText = 'this is a very long line of text that would wrap';
     const { lastFrame, cleanup } = render(
       <InputLineShell value={longText} onChange={() => {}} />
     );
+    await tick();
     const frame = lastFrame() ?? '';
 
     // The content should NOT contain an ellipsis (no truncation)
@@ -157,11 +168,12 @@ describe('MultilineTextInput', () => {
     cleanup();
   });
 
-  it('wraps long text across multiple content lines', () => {
+  it('wraps long text across multiple content lines', async () => {
     const longText = 'x'.repeat(200);
     const { lastFrame, cleanup } = render(
       <InputLineShell value={longText} onChange={() => {}} />
     );
+    await tick();
     const frame = lastFrame() ?? '';
 
     // No ellipsis should appear
@@ -186,10 +198,11 @@ describe('MultilineTextInput', () => {
   // When focus=false, the cursor should not be rendered (no ANSI
   // inverse escapes).
 
-  it('renders plain text without ANSI cursor escapes when unfocused', () => {
+  it('renders plain text without ANSI cursor escapes when unfocused', async () => {
     const { lastFrame, cleanup } = render(
       <InputLineShell value="hello" onChange={() => {}} focus={false} />
     );
+    await tick();
     const frame = lastFrame() ?? '';
 
     // No inverse escape codes should appear anywhere
@@ -201,10 +214,11 @@ describe('MultilineTextInput', () => {
     cleanup();
   });
 
-  it('renders a space placeholder when unfocused and empty', () => {
+  it('renders a space placeholder when unfocused and empty', async () => {
     const { lastFrame, cleanup } = render(
       <InputLineShell value="" onChange={() => {}} focus={false} />
     );
+    await tick();
     const frame = lastFrame() ?? '';
 
     // No inverse escape codes
@@ -217,11 +231,12 @@ describe('MultilineTextInput', () => {
   // Even though automatic word-wrap is enabled, explicit newlines
   // inserted via Ctrl+J should still render correctly.
 
-  it('renders explicit newlines (Ctrl+J) in the text', () => {
+  it('renders explicit newlines (Ctrl+J) in the text', async () => {
     const multiLine = 'line1\nline2\nline3';
     const { lastFrame, cleanup } = render(
       <InputLineShell value={multiLine} onChange={() => {}} />
     );
+    await tick();
     const frame = lastFrame() ?? '';
 
     // The text should contain the newline-separated content
@@ -235,10 +250,11 @@ describe('MultilineTextInput', () => {
   // ── Cursor at end of text ─────────────────────────────────────
   // Verify the cursor renders as an inverse space after the text.
 
-  it('renders cursor as inverse space at end of text', () => {
+  it('renders cursor as inverse space at end of text', async () => {
     const { lastFrame, cleanup } = render(
       <InputLineShell value="hello" onChange={() => {}} />
     );
+    await tick();
     const frame = lastFrame() ?? '';
 
     // The cursor (inverse escape) should be present on the content line
