@@ -38,5 +38,9 @@
   {
     "timestamp": "2026-07-08T04:15:55.718Z",
     "insight": "TUI code (drone-agent/src/tui/**) has ZERO direct test coverage and is excluded from the vitest coverage config (vitest.config.ts coverage.exclude). Planning the tail→scrollback refactor required building tests for useTailRegion/useChatLog/ChatLog/App commit-flow entirely from scratch because the only harness precedent is InputLineShell. Consider removing tui from the coverage exclusion so future regressions in the TUI are caught."
+  },
+  {
+    "timestamp": "2026-07-08T04:50:37.905Z",
+    "insight": "Pre-existing bug surfaced during the tail→scrollback refactor: Markdown.tsx called `marked.parse(children)` which returns a STRING in marked v18, but renderToken expects a token array, so `tokens.map is not a function` crashed. Fix: `marked.lexer(children)`. The `markdown` ChatEntry kind + Markdown component were dead code precisely because they never worked — when wiring assistant messages through Markdown, fix this first or the TUI crashes at runtime. Also: file__apply_diff was unreliable on several files here (block-comment/comment-adjacent hunks failed to match even when exact); sed / full file__write were far more reliable for those edits."
   }
 ]

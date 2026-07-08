@@ -72,7 +72,7 @@ export function Markdown({
     <Box flexDirection="column">
       {tokens.map((token: any, index: number) => (
         <React.Fragment key={index}>
-          {renderToken(token, color, codeBackground)}
+          {renderToken(token, color, codeBackground, `root-${index}`)}
         </React.Fragment>
       ))}
     </Box>
@@ -86,26 +86,31 @@ function renderToken(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   token: any,
   color: string,
-  codeBackground: string
+  codeBackground: string,
+  keyPrefix: string
 ): ReactNode {
   const textColor = token.type === 'paragraph' ? color : undefined;
 
   switch (token.type) {
     case 'heading':
-      return renderHeading(token, textColor ?? color);
+      return renderHeading(token, textColor ?? color, keyPrefix);
 
     case 'paragraph':
       return (
         <Text color={textColor}>
-          {token.tokens?.map((t: any) => renderInlineToken(t, color)).flat()}
+          {token.tokens
+            ?.map((t: any, i: number) =>
+              renderInlineToken(t, color, `${keyPrefix}-p-${i}`)
+            )
+            .flat()}
         </Text>
       );
 
     case 'blockquote':
-      return renderBlockquote(token, textColor ?? color);
+      return renderBlockquote(token, textColor ?? color, keyPrefix);
 
     case 'list':
-      return renderList(token, textColor ?? color);
+      return renderList(token, textColor ?? color, keyPrefix);
 
     case 'code':
       return renderCodeBlock(token, codeBackground);
@@ -132,38 +137,43 @@ function renderToken(
 function renderInlineToken(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   token: any,
-  defaultColor: string
+  defaultColor: string,
+  keyPrefix: string
 ): ReactNode[] {
+  const key = `${keyPrefix}-${token.type ?? 'inline'}`;
+
   switch (token.type) {
     case 'strong':
       return [
-        <Text bold key={token.raw}>
-          {token.tokens?.flatMap((t: any) =>
-            renderInlineToken(t, defaultColor)
+        <Text bold key={key}>
+          {token.tokens?.flatMap((t: any, i: number) =>
+            renderInlineToken(t, defaultColor, `${keyPrefix}-strong-${i}`)
           )}
         </Text>,
       ];
 
     case 'emphasis':
       return [
-        <Text italic key={token.raw}>
-          {token.tokens?.flatMap((t: any) =>
-            renderInlineToken(t, defaultColor)
+        <Text italic key={key}>
+          {token.tokens?.flatMap((t: any, i: number) =>
+            renderInlineToken(t, defaultColor, `${keyPrefix}-em-${i}`)
           )}
         </Text>,
       ];
 
     case 'codespan':
       return [
-        <Text key={token.raw} backgroundColor="gray" color="black">
+        <Text key={key} backgroundColor="gray" color="black">
           {token.text}
         </Text>,
       ];
 
     case 'link':
       return [
-        <Text key={token.raw} color="cyan" underline>
-          {token.tokens?.flatMap((t: any) => renderInlineToken(t, 'cyan'))}
+        <Text key={key} color="cyan" underline>
+          {token.tokens?.flatMap((t: any, i: number) =>
+            renderInlineToken(t, 'cyan', `${keyPrefix}-link-${i}`)
+          )}
           {token.href && <Text color="gray"> ({token.href})</Text>}
         </Text>,
       ];
@@ -176,9 +186,9 @@ function renderInlineToken(
 
     case 'del':
       return [
-        <Text strikethrough key={token.raw}>
-          {token.tokens?.flatMap((t: any) =>
-            renderInlineToken(t, defaultColor)
+        <Text strikethrough key={key}>
+          {token.tokens?.flatMap((t: any, i: number) =>
+            renderInlineToken(t, defaultColor, `${keyPrefix}-del-${i}`)
           )}
         </Text>,
       ];
@@ -194,14 +204,17 @@ function renderInlineToken(
 function renderHeading(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   token: any,
-  color: string
+  color: string,
+  keyPrefix: string
 ): ReactNode {
   const depth = token.depth ?? 1;
 
   return (
     <Text bold color={color} wrap="wrap">
       <Text bold>{'#'.repeat(depth)} </Text>
-      {token.tokens?.flatMap((t: any) => renderInlineToken(t, color))}
+      {token.tokens?.flatMap((t: any, i: number) =>
+        renderInlineToken(t, color, `${keyPrefix}-h-${i}`)
+      )}
     </Text>
   );
 }
@@ -212,11 +225,16 @@ function renderHeading(
 function renderBlockquote(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   token: any,
-  color: string
+  color: string,
+  keyPrefix: string
 ): ReactNode {
   const content =
     token.text ||
-    token.tokens?.flatMap((t: any) => renderInlineToken(t, color)).join('') ||
+    token.tokens
+      ?.flatMap((t: any, i: number) =>
+        renderInlineToken(t, color, `${keyPrefix}-bq-${i}`)
+      )
+      .join('') ||
     '';
 
   return (
@@ -237,7 +255,8 @@ function renderBlockquote(
 function renderList(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   token: any,
-  color: string
+  color: string,
+  keyPrefix: string
 ): ReactNode {
   const isOrdered = token.ordered ?? false;
   const items = token.items ?? [];
@@ -245,13 +264,38 @@ function renderList(
   return (
     <Box flexDirection="column">
       {items.map((item: any, index: number) => (
-        <Text key={index} color={color}>
+        <Text key={`${keyPrefix}-li-${index}`} color={color}>
           {isOrdered ? `${index + 1}. ` : '• '}
-          {item.flatMap((t: any) => renderInlineToken(t, color))}
+          {renderListItemContent(item, color, `${keyPrefix}-li-${index}`)}
         </Text>
       ))}
     </Box>
   );
+}
+
+/**
+ * Marked list items are objects (e.g. { text, tokens }) rather than arrays.
+ * Handle both the standard object form and any legacy/edge array form safely.
+ */
+function renderListItemContent(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  item: any,
+  color: string,
+  keyPrefix: string
+): ReactNode {
+  if (Array.isArray(item)) {
+    return item.flatMap((t: any, i: number) =>
+      renderInlineToken(t, color, `${keyPrefix}-arr-${i}`)
+    );
+  }
+
+  if (item?.tokens) {
+    return item.tokens.flatMap((t: any, i: number) =>
+      renderInlineToken(t, color, `${keyPrefix}-tok-${i}`)
+    );
+  }
+
+  return item?.text ?? '';
 }
 
 /**

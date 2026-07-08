@@ -75,4 +75,24 @@ describe('ChatLog', () => {
     // Markdown heading text survives (rendering is component-driven).
     expect(frame).toContain('Heading');
   });
+
+  it('renders markdown lists without crashing on marked list-item objects', async () => {
+    const entries: ChatEntry[] = [
+      {
+        id: '1',
+        kind: 'markdown',
+        text: ['- alpha', '- beta', '', '1. first', '2. second'].join('\n'),
+      },
+    ];
+
+    const inst = renderChatLog(entries);
+    instance = inst;
+    await tick();
+    const frame = inst.lastFrame() ?? '';
+
+    expect(frame).toContain('alpha');
+    expect(frame).toContain('beta');
+    expect(frame).toContain('first');
+    expect(frame).toContain('second');
+  });
 });
