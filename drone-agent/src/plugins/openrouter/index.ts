@@ -1,3 +1,4 @@
+import type { DroneReasoningLevel } from 'drone-core';
 import type {
   DroneContextWindowInfo,
   DroneLlmCapability,
@@ -38,6 +39,29 @@ function isToolRoutingError(
   );
 }
 
+/**
+ * Map a normalized reasoning level to the OpenAI-compatible `reasoning.effort` value.
+ * - `undefined` → omit (use provider default)
+ * - `off` → `"none"`
+ * - `low` → `"low"`
+ * - `medium` → `"medium"`
+ * - `high` → `"high"`
+ * - `max` → `"max"` (OpenRouter/OpenAI uses "max" for the highest level)
+ * - Any other string (raw pass-through) → pass as-is
+ */
+function mapReasoningLevel(
+  level: DroneReasoningLevel | undefined
+): string | undefined {
+  if (level === undefined) return undefined;
+  if (level === 'off') return 'none';
+  if (level === 'low') return 'low';
+  if (level === 'medium') return 'medium';
+  if (level === 'high') return 'high';
+  if (level === 'max') return 'max';
+  // Raw pass-through: any non-standard string value
+  return level;
+}
+
 export const openrouterPlugin: DronePlugin = {
   metadata: {
     id: 'openrouter',
@@ -67,7 +91,7 @@ export const openrouterPlugin: DronePlugin = {
           source: 'config',
         };
       },
-      chat: async ({ model, messages, tools }) => {
+      chat: async ({ model, messages, tools, reasoningLevel }) => {
         const config = registration.getConfig();
         const apiKey = config.openrouter.apiKey;
 
@@ -86,10 +110,15 @@ export const openrouterPlugin: DronePlugin = {
         const buildBody = (providerHints?: {
           require_parameters: boolean;
         }): OpenRouterChatRequest => {
+          const reasoningEffort = mapReasoningLevel(reasoningLevel);
           const body: OpenRouterChatRequest = {
             model,
             messages: messages.map(toOpenAiMessage),
           };
+
+          if (reasoningEffort) {
+            body.reasoning = { effort: reasoningEffort };
+          }
 
           if (tools && tools.length > 0) {
             body.tools = toOpenAiTools(tools);

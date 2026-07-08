@@ -35,6 +35,7 @@ export {
 export type {
   DronePluginDependency,
   DronePluginMetadata,
+  DroneReasoningLevel,
   DroneOllamaConfig,
   DroneLlmConfig,
   DroneOpenAiModelConfig,

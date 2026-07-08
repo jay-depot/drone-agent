@@ -33,14 +33,18 @@ export type DronePluginMetadata = {
   dependencies?: DronePluginDependency[];
 };
 
+export type DroneReasoningLevel = 'off' | 'low' | 'medium' | 'high' | 'max';
+
 export type DroneOllamaConfig = {
   host: string;
   model: string;
+  reasoningLevel?: DroneReasoningLevel;
 };
 
 export type DroneLlmConfig = {
   /** The id of the active LLM provider plugin (e.g. 'ollama', 'openrouter'). */
   provider: string;
+  reasoningLevel?: DroneReasoningLevel;
 };
 
 export type DroneOpenRouterModelConfig = {
@@ -51,6 +55,7 @@ export type DroneOpenRouterModelConfig = {
 export type DroneOpenRouterConfig = {
   apiKey: string;
   defaultModel: string;
+  reasoningLevel?: DroneReasoningLevel;
   baseUrl: string;
   models: DroneOpenRouterModelConfig[];
 };

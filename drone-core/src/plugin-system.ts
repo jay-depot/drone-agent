@@ -1,5 +1,6 @@
 // ── Plugin system types ────────────────────────────────────────────
 
+import type { DroneReasoningLevel } from './config-types.js';
 import type { DroneToolJsonSchema } from './session-types.js';
 import type { DroneAgentConfig } from './config-types.js';
 
@@ -276,6 +277,8 @@ export type DroneSlashCommandContext = {
   conversation?: {
     getModel: () => string;
     setModel: (model: string) => void;
+    getReasoningLevel: () => DroneReasoningLevel | undefined;
+    setReasoningLevel: (level: DroneReasoningLevel | undefined) => void;
     sendUserMessage: (
       prompt: string,
       onEvent?: (event: unknown) => void

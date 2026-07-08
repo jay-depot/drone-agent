@@ -1,5 +1,7 @@
 // ── Provider types for skill/persona/llm broker architecture ───────
 
+import type { DroneReasoningLevel } from './config-types.js';
+
 /**
  * A writer for personas, registered by persona provider plugins.
  * The persona broker aggregates these and exposes them via its capability.
@@ -88,6 +90,7 @@ export type DroneLlmProvider = {
     model: string;
     messages: DroneChatMessage[];
     tools?: DroneToolDescriptor[];
+    reasoningLevel?: DroneReasoningLevel;
   }) => Promise<DroneChatResponse>;
   getContextWindowInfo?: (input: {
     model: string;

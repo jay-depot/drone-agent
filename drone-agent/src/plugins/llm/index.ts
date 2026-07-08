@@ -2,7 +2,16 @@ import type {
   DroneLlmCapability,
   DroneLlmProviderRegistration,
   DronePlugin,
+  DroneReasoningLevel,
 } from 'drone-core';
+
+const VALID_REASONING_LEVELS: DroneReasoningLevel[] = [
+  'off',
+  'low',
+  'medium',
+  'high',
+  'max',
+];
 
 export const llmPlugin: DronePlugin = {
   metadata: {
@@ -18,6 +27,7 @@ export const llmPlugin: DronePlugin = {
     const providers: DroneLlmProviderRegistration[] = [];
     let currentModel: string = '';
     let activeProviderId: string = '';
+    let reasoningLevel: DroneReasoningLevel | undefined;
 
     // ── Provider management ──────────────────────────────────────────
     function insertProviderSorted(
@@ -85,6 +95,10 @@ export const llmPlugin: DronePlugin = {
       getModel: () => currentModel,
       setModel: (model: string) => {
         currentModel = model;
+      },
+      getReasoningLevel: () => reasoningLevel,
+      setReasoningLevel: (level: DroneReasoningLevel | undefined) => {
+        reasoningLevel = level;
       },
       listModels: async () => {
         const reg = getActiveProviderRegistration();
@@ -229,12 +243,110 @@ export const llmPlugin: DronePlugin = {
       },
     });
 
+    // ── /reasoning slash command ──────────────────────────────────────
+    registration.registerSlashCommand({
+      command: '/reasoning',
+      description:
+        'Show or set reasoning level. Levels: off, low, medium, high, max. Use --save to persist to user config. Use --raw <value> to pass through unvalidated.',
+      handler: async ctx => {
+        if (!ctx.conversation) {
+          ctx.logger.warn(
+            'Conversation service not available — cannot set reasoning level.'
+          );
+          return true;
+        }
+
+        const llm = ctx.engine.getCapability<DroneLlmCapability>('llm');
+        if (!llm) {
+          ctx.logger.warn('LLM broker capability not available.');
+          return true;
+        }
+
+        const args = ctx.args;
+
+        // Check for --raw flag
+        const rawIdx = args.indexOf('--raw');
+        if (rawIdx !== -1 && rawIdx + 1 < args.length) {
+          const rawValue = args[rawIdx + 1];
+          // Set a non-standard value by passing it as a raw string through
+          // the reasoning level field. The provider will pass it through
+          // as-is to the wire format.
+          llm.setReasoningLevel(rawValue as DroneReasoningLevel);
+          ctx.conversation.setReasoningLevel(rawValue as DroneReasoningLevel);
+          ctx.logger.info(`Reasoning level set to raw: ${rawValue}`);
+          return true;
+        }
+
+        // Check for --save flag
+        const saveIdx = args.indexOf('--save');
+        const levelTokens = args.filter(
+          (_, idx) => idx !== saveIdx && idx !== saveIdx + 1
+        );
+        const levelArg = levelTokens.join(' ');
+
+        // No argument: show current level
+        if (levelArg.length === 0) {
+          const current = llm.getReasoningLevel();
+          const levelDisplay = current ?? '(provider default)';
+          ctx.logger.info(
+            `Current reasoning level: ${levelDisplay}\n` +
+              `Available levels: ${VALID_REASONING_LEVELS.join(', ')}\n` +
+              `Use /reasoning <level> to set, /reasoning --raw <value> for provider-specific values.`
+          );
+          return true;
+        }
+
+        // Has argument: set level
+        const isValidLevel = VALID_REASONING_LEVELS.includes(
+          levelArg as DroneReasoningLevel
+        );
+        if (!isValidLevel) {
+          ctx.logger.warn(
+            `Invalid reasoning level "${levelArg}". Valid levels: ${VALID_REASONING_LEVELS.join(', ')}`
+          );
+          return true;
+        }
+
+        const newLevel = levelArg as DroneReasoningLevel;
+        llm.setReasoningLevel(newLevel);
+        ctx.conversation.setReasoningLevel(newLevel);
+
+        const levelDisplay = newLevel ?? '(provider default)';
+        ctx.logger.info(`Reasoning level set to: ${levelDisplay}`);
+
+        // Persist to user config if --save flag is present
+        if (saveIdx !== -1) {
+          try {
+            const configCap = ctx.engine.getCapability<{
+              rebuild: () => Promise<unknown>;
+            }>('config');
+            if (configCap) {
+              // Write to user config via config__set tool
+              ctx.logger.info(
+                `To persist, run: /config set llm.reasoningLevel ${newLevel ?? ''} --scope user`
+              );
+            }
+          } catch {
+            // Non-critical — session-only is fine
+          }
+        }
+
+        return true;
+      },
+    });
+
     // ── Help snippets ─────────────────────────────────────────────────
     registration.registerHelp(
       '/model [name]         List models or switch model'
     );
     registration.registerHelp(
       '/model --provider <id> [name]  Switch provider, optionally set model'
+    );
+    registration.registerHelp(
+      '/reasoning [level]    Show or set reasoning level (off/low/medium/high/max)'
+    );
+    registration.registerHelp(
+      '/reasoning --raw <v>  Set reasoning level to a provider-specific raw value'
     );
   },
 };

@@ -34,6 +34,7 @@ export type OpenAiTool = {
 export type OpenAiChatRequest = {
   model: string;
   messages: OpenAiMessage[];
+  reasoning?: { effort: string };
   tools?: OpenAiTool[];
 };
 

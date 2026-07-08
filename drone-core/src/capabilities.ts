@@ -1,5 +1,6 @@
 // ── Capability types ───────────────────────────────────────────────
 
+import type { DroneReasoningLevel } from './config-types.js';
 import type {
   DroneAgentConfig,
   PartialDroneAgentConfig,
@@ -92,6 +93,10 @@ export type DroneLlmCapability = {
   getModel: () => string;
   /** Set the currently selected model name. */
   setModel: (model: string) => void;
+  /** Get the current reasoning level, or undefined for provider default. */
+  getReasoningLevel: () => DroneReasoningLevel | undefined;
+  /** Set the reasoning level for the current session. */
+  setReasoningLevel: (level: DroneReasoningLevel | undefined) => void;
   /** List available models from the active provider. */
   listModels: () => Promise<string[]>;
   /** Register a provider. Providers are sorted by precedence (ascending). */

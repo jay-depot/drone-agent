@@ -367,6 +367,8 @@ export async function runInteractiveLoop(
           conversation: {
             getModel: () => conversation.getModel(),
             setModel: m => conversation.setModel(m),
+            getReasoningLevel: () => conversation.getReasoningLevel(),
+            setReasoningLevel: l => conversation.setReasoningLevel(l),
             sendUserMessage: (p, onEvent) =>
               conversation.sendUserMessage(p, onEvent),
             clearSession: () => conversation.clearSession(),

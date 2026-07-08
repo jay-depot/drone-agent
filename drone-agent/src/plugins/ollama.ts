@@ -1,3 +1,4 @@
+import type { DroneReasoningLevel } from 'drone-core';
 import { Ollama, type ShowResponse, type ToolCall } from 'ollama';
 import type {
   DroneChatMessage,
@@ -128,6 +129,26 @@ function toOllamaTools(tools: DroneToolDescriptor[]) {
 }
 
 /**
+ * Map a normalized reasoning level to the Ollama `think` parameter.
+ * - `undefined` → omit (use provider default)
+ * - `off` → `false` (disable thinking)
+ * - `low`/`medium`/`high`/`max` → string level
+ * - Any other string (raw pass-through) → pass as-is
+ */
+function mapReasoningLevel(
+  level: DroneReasoningLevel | undefined
+): boolean | string | undefined {
+  if (level === undefined) return undefined;
+  if (level === 'off') return false;
+  if (level === 'low') return 'low';
+  if (level === 'medium') return 'medium';
+  if (level === 'high') return 'high';
+  if (level === 'max') return 'max';
+  // Raw pass-through: any non-standard string value
+  return level;
+}
+
+/**
  * @internal Exposed for unit tests. Not part of the public API.
  */
 export const __testing = { extractContextWindowTokens };
@@ -167,7 +188,7 @@ export const ollamaPlugin: DronePlugin = {
           source: 'config',
         };
       },
-      chat: async ({ model, messages, tools }) => {
+      chat: async ({ model, messages, tools, reasoningLevel }) => {
         const agentConfig = registration.getConfig();
         const client = new Ollama({ host: agentConfig.ollama.host });
         let response;
@@ -176,6 +197,7 @@ export const ollamaPlugin: DronePlugin = {
             model,
             messages: messages.map(toOllamaMessage),
             tools: tools && tools.length > 0 ? toOllamaTools(tools) : undefined,
+            think: mapReasoningLevel(reasoningLevel) as boolean | 'low' | 'medium' | 'high' | undefined,
           });
         } catch (error) {
           const message =

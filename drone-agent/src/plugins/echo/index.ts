@@ -91,7 +91,7 @@ export const echoPlugin: DronePlugin = {
 
     const provider: DroneLlmProvider = {
       async chat(params) {
-        const { messages } = params;
+        const { messages, reasoningLevel } = params;
 
         const body: EchoChatRequest = {
           model,

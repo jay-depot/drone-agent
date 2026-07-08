@@ -1,3 +1,4 @@
+import type { DroneReasoningLevel } from 'drone-core';
 import type {
   DroneAgentConfig,
   DroneChatMessage,
@@ -31,6 +32,8 @@ export type ConversationService = {
   getEstimatedContextUsagePercent: () => Promise<number>;
   setModel: (newModel: string) => void;
   getModel: () => string;
+  getReasoningLevel: () => DroneReasoningLevel | undefined;
+  setReasoningLevel: (level: DroneReasoningLevel | undefined) => void;
   /**
    * Enqueue a user message to be processed when the current loop iteration
    * completes. Has no effect unless a `sendUserMessage` call is in flight.
@@ -90,6 +93,7 @@ export function createConversationService({
   onStuckErrorThresholdReached,
 }: CreateConversationServiceOptions): ConversationService {
   let hasWarnedAboutSafetyTrim = false;
+  let reasoningLevel: DroneReasoningLevel | undefined;
 
   // ── Message queue and cancel support ───────────────────────────────────
   const pendingMessages: string[] = [];
@@ -315,10 +319,18 @@ export function createConversationService({
 
         const provider = llm.getActiveProvider();
 
+        // Resolve reasoning level: session override → config → undefined
+        const effectiveReasoningLevel =
+          reasoningLevel ??
+          config.llm.reasoningLevel ??
+          config.ollama.reasoningLevel ??
+          config.openrouter.reasoningLevel;
+
         const response = await provider.chat({
           model: currentModel,
           messages: [...systemMessages, ...sessionManager.getMessages()],
           tools,
+          reasoningLevel: effectiveReasoningLevel,
         });
 
         if (response.reasoning && response.reasoning.length > 0) {
@@ -509,6 +521,10 @@ export function createConversationService({
       budgetService.resetContextWindowCache();
     },
     getModel: () => getLlmCapability().getModel(),
+    getReasoningLevel: () => reasoningLevel,
+    setReasoningLevel: (level: DroneReasoningLevel | undefined) => {
+      reasoningLevel = level;
+    },
     enqueueUserMessage: (prompt: string) => {
       pendingMessages.push(prompt);
     },

@@ -1,3 +1,4 @@
+import type { DroneReasoningLevel } from 'drone-core';
 /**
  * Shared types for the Ink-based TUI.
  */
@@ -123,6 +124,8 @@ export type DroneTuiOptions = {
     getEstimatedContextUsagePercent: () => Promise<number>;
     setModel: (newModel: string) => void;
     getModel: () => string;
+    getReasoningLevel: () => DroneReasoningLevel | undefined;
+    setReasoningLevel: (level: DroneReasoningLevel | undefined) => void;
     enqueueUserMessage?: (prompt: string) => void;
     cancelCurrentRequest?: () => void;
   };
