@@ -197,7 +197,12 @@ export const ollamaPlugin: DronePlugin = {
             model,
             messages: messages.map(toOllamaMessage),
             tools: tools && tools.length > 0 ? toOllamaTools(tools) : undefined,
-            think: mapReasoningLevel(reasoningLevel) as boolean | 'low' | 'medium' | 'high' | undefined,
+            think: mapReasoningLevel(reasoningLevel) as
+              | boolean
+              | 'low'
+              | 'medium'
+              | 'high'
+              | undefined,
           });
         } catch (error) {
           const message =

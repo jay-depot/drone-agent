@@ -651,10 +651,12 @@ describe('createCompactionPlugin', () => {
     );
   });
 
-  it('resets compactionInFlight after the empty-turns early return', async () => {
+  it('resets compactionInFlight after the empty-turns early return on the same instance', async () => {
     // Verifies that compactionInFlight is correctly reset when maybeCompact
     // hits the turns.length === 0 early return, allowing subsequent hook
-    // calls to proceed normally.
+    // calls on the SAME instance to proceed normally. This guards the bug
+    // where the latch was set true on the empty-session early return and
+    // never released, permanently disabling compaction for the session.
     const sessionManager = createSessionManager();
     const config = makeConfig({
       softThresholdPercent: 5,
@@ -664,10 +666,11 @@ describe('createCompactionPlugin', () => {
       summaryBudgetPercent: 50,
     });
 
-    // Use a large context window so the empty session doesn't need to
-    // probe the provider for context info (which would consume the
-    // chat response).
-    const provider = makeProvider({ contextWindow: 4096 });
+    // A single provider with a small context window and a summary response.
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'Summary after adding turns.' }],
+    });
     const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
       budgetService,
@@ -678,38 +681,74 @@ describe('createCompactionPlugin', () => {
 
     const capture = await captureRegistration(plugin, config);
 
-    // First call: no turns -> early return. compactionInFlight must be reset.
+    // First call on an empty session: early return with the latch latched.
     await runBeforePrompt(capture);
     expect(provider.__chatMock).not.toHaveBeenCalled();
 
-    // Add turns and verify compaction can run on the next hook call.
-    // (If compactionInFlight were stuck true, this would be a no-op.)
+    // Add turns to the SAME session manager, then call the SAME capture
+    // again. If compactionInFlight were stuck true, this would be a no-op.
     for (let i = 0; i < 6; i++) {
       sessionManager.appendUserMessage(`u${i} `.repeat(300));
       sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
     }
 
-    // Use a provider with a small context window and a summary response.
-    const smallProvider = makeProvider({
+    await runBeforePrompt(capture);
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    expect(sessionManager.getSummaryTurns()).toHaveLength(1);
+  });
+
+  it('releases the latch after the empty-turns early return in the real runtime sequence', async () => {
+    // Drives the real runtime ordering on ONE instance: onBeforePrompt fires
+    // before the user message is appended (empty session -> latch latches,
+    // early return), then tool results are appended and onAfterToolCall fires.
+    // Mirrors conversation-service ordering where tool results are appended
+    // before onAfterToolCall. If the latch were never released, the
+    // onAfterToolCall compaction would be skipped entirely.
+    const sessionManager = createSessionManager();
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 50,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
       contextWindow: 200,
-      chatResponses: [{ message: 'Summary after adding turns.' }],
+      chatResponses: [{ message: 'Summary after tool results.' }],
     });
-    const smallBudgetService = makeBudgetService({
-      provider: smallProvider,
-      config,
-      promptFragments: [],
-    });
-    const smallPlugin = createCompactionPlugin({
-      budgetService: smallBudgetService,
+    const budgetService = makeBudgetService({ provider, config });
+    const plugin = createCompactionPlugin({
+      budgetService,
       sessionManager,
       getModel: () => 'fake',
-      getProvider: () => smallProvider,
+      getProvider: () => provider,
     });
-    const smallCapture = await captureRegistration(smallPlugin, config);
 
-    // This should trigger compaction because usage is now above threshold.
-    await runBeforePrompt(smallCapture);
-    expect(smallProvider.__chatMock).toHaveBeenCalledTimes(1);
+    const capture = await captureRegistration(plugin, config);
+
+    // First prompt of the session: empty session, latch latches + early return.
+    await runBeforePrompt(capture);
+    expect(provider.__chatMock).not.toHaveBeenCalled();
+
+    // Append tool results to the SAME session (mirrors conversation-service
+    // appending tool results before onAfterToolCall fires).
+    for (let i = 0; i < 6; i++) {
+      sessionManager.appendUserMessage(`q${i}`);
+      sessionManager.appendAssistantMessage(`working ${i}`, [
+        {
+          id: `call_${i}`,
+          name: 'file__read',
+          arguments: { path: `/some/file_${i}.ts` },
+        },
+      ]);
+      sessionManager.appendToolResult('file__read', `x ${i} `.repeat(300));
+    }
+
+    // onAfterToolCall should now fire compaction because the latch was
+    // released and usage is above the threshold.
+    await runAfterToolCall(capture);
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
     expect(sessionManager.getSummaryTurns()).toHaveLength(1);
   });
 });

@@ -239,6 +239,23 @@ async function maybeCompact(input: {
   input.context.compactionInFlight.value = false;
 }
 
+async function runCompaction(
+  context: RegistrationContext,
+  budgetService: ContextBudgetService,
+  systemPrompt: string
+): Promise<void> {
+  const systemMessages = await budgetService.buildSystemMessages();
+  const baseSystemMessages: DroneChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+  ];
+  const fragmentMessages = systemMessages.slice(1); // Everything after the base system prompt
+  await maybeCompact({
+    context,
+    baseSystemMessages,
+    fragmentMessages,
+  });
+}
+
 export type CompactionCapability = {
   forceEvaluate: () => Promise<void>;
 };
@@ -298,17 +315,15 @@ export function createCompactionPlugin(
         }
         context.compactionInFlight.value = true;
 
-        const systemMessages = await budgetService.buildSystemMessages();
-        const baseSystemMessages: DroneChatMessage[] = [
-          { role: 'system', content: registration.getConfig().systemPrompt },
-        ];
-        const fragmentMessages = systemMessages.slice(1); // Everything after the base system prompt
-
-        await maybeCompact({
-          context,
-          baseSystemMessages,
-          fragmentMessages,
-        });
+        try {
+          await runCompaction(
+            context,
+            budgetService,
+            registration.getConfig().systemPrompt
+          );
+        } finally {
+          context.compactionInFlight.value = false;
+        }
       };
 
       registration.hooks.onBeforePrompt(hookBody);
@@ -320,16 +335,15 @@ export function createCompactionPlugin(
             return;
           }
           context.compactionInFlight.value = true;
-          const systemMessages = await budgetService.buildSystemMessages();
-          const baseSystemMessages: DroneChatMessage[] = [
-            { role: 'system', content: registration.getConfig().systemPrompt },
-          ];
-          const fragmentMessages = systemMessages.slice(1);
-          await maybeCompact({
-            context,
-            baseSystemMessages,
-            fragmentMessages,
-          });
+          try {
+            await runCompaction(
+              context,
+              budgetService,
+              registration.getConfig().systemPrompt
+            );
+          } finally {
+            context.compactionInFlight.value = false;
+          }
         },
       };
       registration.offer(capability);
