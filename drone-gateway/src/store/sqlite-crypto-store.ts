@@ -21,6 +21,7 @@ import type {
   IRoomKeyRequestRecipient,
 } from 'matrix-js-sdk/lib/crypto/index.js';
 import type { Mode } from 'matrix-js-sdk/lib/crypto/store/base.js';
+import type { Logger } from 'matrix-js-sdk/lib/logger.js';
 
 const SESSION_BATCH_SIZE = 50;
 

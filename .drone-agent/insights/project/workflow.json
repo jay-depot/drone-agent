@@ -190,5 +190,9 @@
   {
     "timestamp": "2026-07-08T20:41:53.286Z",
     "insight": "The cleanup subcommand (step 9) uses `process.exit()` for early termination on errors/cancellation. In tests, `process.exit` is mocked to not actually exit, so the function continues executing past the intended exit point. Adding `return` after each `process.exit()` call prevents this. The `confirmFn` injection pattern (optional parameter) is cleaner than mocking `readline` for testing confirmation prompts."
+  },
+  {
+    "timestamp": "2026-07-08T23:41:58.472Z",
+    "insight": "The todo plugin's custom TUI render component (TodoBlock) follows the same pattern as the git plugin's render components. This pattern works well — plugins define a React component that receives ToolRenderState and returns JSX, wired via the renderComponent field on DroneToolDefinition. The TUI's app.tsx automatically picks it up in the conversation event listener. This is a clean, extensible pattern for any plugin that wants rich TUI output."
   }
 ]

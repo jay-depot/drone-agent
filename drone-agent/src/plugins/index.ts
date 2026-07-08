@@ -36,7 +36,7 @@ import { startupPlugin } from './startup.js';
 // NEW:
 import { subagentPlugin } from './subagent/index.js';
 import { swarmPlugin } from './swarm/index.js';
-import { todoPlugin } from './todo.js';
+import { todoPlugin } from './todo/index.js';
 import { utilsPlugin } from './utils.js';
 import { focusPlugin } from './focus.js';
 

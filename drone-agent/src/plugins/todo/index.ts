@@ -1,4 +1,5 @@
-import { isRecord } from '../shared/type-guards.js';
+import { isRecord } from '../../shared/type-guards.js';
+import { TodoBlock } from './TodoBlock.js';
 import type { DronePlugin, DroneSlashCommandContext } from 'drone-core';
 
 type TodoStatus = 'pending' | 'in_progress' | 'completed';
@@ -186,6 +187,7 @@ export const todoPlugin: DronePlugin = {
         required: ['action'],
         additionalProperties: false,
       },
+      renderComponent: state => TodoBlock({ state }),
       execute: async input => {
         const parsed = parseManageInput(input);
         const now = new Date().toISOString();

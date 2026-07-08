@@ -1,6 +1,7 @@
 import { logger } from '../logger.js';
 import { BasicMarkdownRenderer } from '../markdown.js';
 import type { ICreateClientOpts } from 'matrix-js-sdk/lib/client.js';
+import { RoomEvent } from 'matrix-js-sdk';
 import { openGatewayDb } from '../store/db.js';
 import { SqliteCryptoStore } from '../store/sqlite-crypto-store.js';
 import { SqliteSyncStore } from '../store/sqlite-sync-store.js';
@@ -141,7 +142,7 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
 
     // Listen for timeline events
     this.client.on(
-      'Room.timeline' as never,
+      RoomEvent.Timeline,
       (
         event: MatrixEvent,
         room: Room | undefined,
