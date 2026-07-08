@@ -137,6 +137,8 @@ function makeCommandContext(
     conversation: {
       getModel: () => capability.getModel(),
       setModel: (model: string) => capability.setModel(model),
+      getReasoningLevel: () => undefined,
+      setReasoningLevel: (_level: any) => {},
       sendUserMessage: async () => '',
       enqueueUserMessage: (p: string) => {},
       cancelCurrentRequest: () => {},
@@ -216,6 +218,8 @@ describe('llm plugin provider switching', () => {
     ctx.conversation = {
       getModel: () => capability.getModel(),
       setModel: conversationSetModel,
+      getReasoningLevel: () => undefined,
+      setReasoningLevel: (_level: any) => {},
       sendUserMessage: async () => '',
       enqueueUserMessage: (p: string) => {},
       cancelCurrentRequest: () => {},
@@ -249,6 +253,8 @@ describe('llm plugin provider switching', () => {
     ctx.conversation = {
       getModel: () => capability.getModel(),
       setModel: conversationSetModel,
+      getReasoningLevel: () => undefined,
+      setReasoningLevel: (_level: any) => {},
       sendUserMessage: async () => '',
       enqueueUserMessage: (p: string) => {},
       cancelCurrentRequest: () => {},
@@ -289,6 +295,8 @@ describe('llm plugin provider switching', () => {
     ctx.conversation = {
       getModel: () => capability.getModel(),
       setModel: conversationSetModel,
+      getReasoningLevel: () => undefined,
+      setReasoningLevel: (_level: any) => {},
       sendUserMessage: async () => '',
       enqueueUserMessage: (p: string) => {},
       cancelCurrentRequest: () => {},

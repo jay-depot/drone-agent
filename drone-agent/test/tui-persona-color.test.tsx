@@ -70,6 +70,8 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
         model = m;
       },
       getModel: (): string => model,
+      getReasoningLevel: () => undefined,
+      setReasoningLevel: (_level: any) => {},
     },
   };
 }

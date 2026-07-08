@@ -81,6 +81,8 @@ function makeOptions(
         model = m;
       },
       getModel: () => model,
+      getReasoningLevel: () => undefined,
+      setReasoningLevel: (_level: any) => {},
     },
     ...overrides,
   };

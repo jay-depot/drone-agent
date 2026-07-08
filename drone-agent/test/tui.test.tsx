@@ -126,6 +126,8 @@ function makeOptions(
         model = m;
       },
       getModel: () => model,
+      getReasoningLevel: () => undefined,
+      setReasoningLevel: (_level: any) => {},
       enqueueUserMessage: () => {},
       cancelCurrentRequest: () => {},
     },

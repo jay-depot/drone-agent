@@ -55,6 +55,8 @@ function createRegistrationCapture() {
     activateProvider: () => {},
     getModel: () => 'claude-sonnet-4-6',
     setModel: () => {},
+    getReasoningLevel: () => undefined,
+    setReasoningLevel: (_level: any) => {},
     listModels: async () => {
       const provider = registeredProvider;
       if (!provider) {

@@ -109,6 +109,8 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
     activateProvider: () => {},
     getModel: () => 'fake',
     setModel: () => {},
+    getReasoningLevel: () => undefined,
+    setReasoningLevel: (_level: any) => {},
     listModels: async () => ['fake'],
     registerProvider: () => {},
     unregisterProvider: () => {},
