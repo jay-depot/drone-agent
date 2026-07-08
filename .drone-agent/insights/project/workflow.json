@@ -174,5 +174,9 @@
   {
     "timestamp": "2026-07-08T02:59:16.001Z",
     "insight": "The reasoning-level implementation required touching 11+ files across drone-core and drone-agent packages. The pattern of threading a new parameter through the provider interface (provider-types.ts → conversation-service.ts → each provider's chat handler) is now well-documented. A future improvement could be to add a generic `options` bag on the chat input to reduce churn for future provider-level features."
+  },
+  {
+    "timestamp": "2026-07-08T16:33:04.078Z",
+    "insight": "When upgrading vitest from v2 to v3, dynamic import() of files outside the project root (e.g. /tmp/...) fails because vite-node intercepts import() and cannot resolve external paths. The fix is to read the file content and use a data URL (data:text/javascript,...) to bypass vite-node's resolver. This affected the external-loader plugin's loadPluginFromDirectory function."
   }
 ]
