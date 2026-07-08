@@ -42,9 +42,14 @@ export function FetchPullBlock({
   const success = parsed?.success ?? false;
   const heading = `## git ${command}: ${success ? 'success' : 'fail'}`;
   const out: ReactNode[] = [renderHeading(heading, scheme)];
-  if (!success && parsed?.explanation) {
+  if (parsed?.explanation) {
+    // Show the real git output (e.g. "remote: Counting objects…") on both
+    // success and failure — it was captured and must not be discarded.
     out.push(
-      <Text color={scheme.error} wrap="wrap">
+      <Text
+        color={success ? scheme.toolResult : scheme.error}
+        wrap="wrap"
+      >
         {parsed.explanation}
       </Text>
     );

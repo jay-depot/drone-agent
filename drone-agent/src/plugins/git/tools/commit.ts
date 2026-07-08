@@ -1,16 +1,6 @@
 import type { DroneToolDefinition } from 'drone-core';
-import { runGit, requireString, resolveCwd } from '../run-git.js';
+import { runGit, requireString, resolveCwd, asPaths } from '../run-git.js';
 import { CommitBlock } from '../components/CommitBlock.js';
-
-function asPaths(input: Record<string, unknown>): string[] | undefined {
-  if (Array.isArray(input.paths) && input.paths.length > 0) {
-    return input.paths.map(p => String(p).trim()).filter(Boolean);
-  }
-  if (typeof input.path === 'string' && input.path.trim().length > 0) {
-    return [input.path.trim()];
-  }
-  return undefined;
-}
 
 export function createCommitTool(): DroneToolDefinition {
   return {

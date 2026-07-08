@@ -1,23 +1,13 @@
 import type { DroneToolDefinition } from 'drone-core';
-import { runGit, resolveCwd } from '../run-git.js';
+import { runGit, resolveCwd, asPaths } from '../run-git.js';
 import { nameStatusToItems } from '../types.js';
 import { RestoreBlock } from '../components/RestoreBlock.js';
-
-function asPaths(input: Record<string, unknown>): string[] | undefined {
-  if (Array.isArray(input.paths) && input.paths.length > 0) {
-    return input.paths.map(p => String(p).trim()).filter(Boolean);
-  }
-  if (typeof input.path === 'string' && input.path.trim().length > 0) {
-    return [input.path.trim()];
-  }
-  return undefined;
-}
 
 export function createRestoreTool(): DroneToolDefinition {
   return {
     name: 'restore',
     description:
-      'Undo changes. Set staged:true to unstage files (git restore --staged). Set discard:true (requires paths) to discard worktree edits (git restore) — this is irreversible, so discard must be explicitly true. discard:true without paths is rejected.',
+      'Undo changes. Set staged:true to unstage files (git restore --staged). Set discard:true (requires paths) to discard worktree edits (git restore) — this is irreversible, so discard must be explicitly true. discard:true without paths is rejected. staged:true and discard:true cannot be combined (rejected).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -55,18 +45,17 @@ export function createRestoreTool(): DroneToolDefinition {
           'restore with discard:true requires paths (irreversible otherwise).'
         );
       }
+      // staged + discard is contradictory: --staged restores the index, while
+      // discard reverts the worktree. Reject rather than silently guessing.
+      if (staged && discard) {
+        throw new Error(
+          'restore with both staged:true and discard:true is contradictory (cannot unstage and discard simultaneously).'
+        );
+      }
 
       const args: string[] = ['restore'];
       if (staged) {
         args.push('--staged');
-      }
-      if (discard) {
-        // Discard worktree changes: no --staged, operate on given paths.
-        if (staged) {
-          // staged + discard is contradictory; prefer unstaging.
-          args.length = 1;
-          args.push('--staged');
-        }
       }
       if (paths) {
         args.push('--', ...paths);
@@ -78,8 +67,10 @@ export function createRestoreTool(): DroneToolDefinition {
 
       await runGit(args, cwd);
 
-      // Report what changed, colored by actual FS change.
-      const status = await runGit(['status', '--porcelain=v1'], cwd);
+      // Report what changed, colored by actual FS change. `git diff
+      // --name-status` is the format nameStatusToItems expects (tab-separated
+      // status codes), so do NOT pass `git status --porcelain` here.
+      const status = await runGit(['diff', '--name-status'], cwd);
       const files = nameStatusToItems(status);
       return JSON.stringify({ staged, files }, null, 2);
     },

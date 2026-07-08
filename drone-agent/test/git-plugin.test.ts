@@ -235,6 +235,86 @@ describe('git plugin integration', () => {
     await rm(r, { force: true });
   });
 
+  it('add returns non-empty file paths (tab-parsing bug regression)', async () => {
+    const tools = captureGitTools();
+    const a = path.join(repoDir, 'add-paths-a.txt');
+    const b = path.join(repoDir, 'add-paths-b.txt');
+    await writeFile(a, 'a\n');
+    await writeFile(b, 'b\n');
+    const addOut = JSON.parse(
+      await tools.get('add')!({
+        paths: ['add-paths-a.txt', 'add-paths-b.txt'],
+        cwd: repoDir,
+      })
+    );
+    // The previous bug fed tab-separated `git diff --cached --name-status`
+    // into a space-splitting parser, yielding empty paths. Assert real paths.
+    const paths = addOut.files.map((f: { path: string }) => f.path).sort();
+    expect(paths).toEqual(['add-paths-a.txt', 'add-paths-b.txt']);
+    expect(
+      addOut.files.every((f: { path: string }) => f.path.length > 0)
+    ).toBe(true);
+
+    // Unstage so the working-tree removal below doesn't leave phantom
+    // deletions in the index for subsequent tests.
+    await gitInRepo(['restore', '--staged', 'add-paths-a.txt', 'add-paths-b.txt']);
+    await rm(a, { force: true });
+    await rm(b, { force: true });
+  });
+
+  it('add with no paths and no all:true throws (no silent staging)', async () => {
+    const tools = captureGitTools();
+    await expect(tools.get('add')!({ cwd: repoDir })).rejects.toThrow(/paths|all/);
+    await expect(
+      tools.get('add')!({ cwd: repoDir, all: false })
+    ).rejects.toThrow(/paths|all/);
+  });
+
+  it('restore --staged reports via name-status and does NOT mislabel untracked', async () => {
+    const tools = captureGitTools();
+    const untracked = path.join(repoDir, 'untracked-restore.txt');
+    // A tracked, staged modification (so unstaging leaves an unstaged diff).
+    await writeFile(path.join(repoDir, SEED), '# test\nrestore-name-status\n');
+    await gitInRepo(['add', SEED]);
+    // An untracked file: porcelain would show "?? untracked-restore.txt".
+    await writeFile(untracked, 'new\n');
+
+    const out = JSON.parse(
+      await tools.get('restore')!({
+        staged: true,
+        paths: [SEED],
+        cwd: repoDir,
+      })
+    );
+    // The staged SEED is unstaged, so `git diff --name-status` shows it as modified.
+    expect(out.files).toContainEqual({ kind: 'modified', path: SEED });
+    // The untracked file must NOT leak in as a (mislabeled) "modified" entry —
+    // that was the restore.ts porcelain bug. Verify via path + kind.
+    expect(
+      out.files.some(
+        (f: { path: string }) => f.path === 'untracked-restore.txt'
+      )
+    ).toBe(false);
+    expect(
+      out.files.every((f: { path: string }) => f.path.length > 0)
+    ).toBe(true);
+
+    await gitInRepo(['checkout', '--', SEED]);
+    await rm(untracked, { force: true });
+  });
+
+  it('restore with staged:true + discard:true throws (contradictory combo)', async () => {
+    const tools = captureGitTools();
+    await expect(
+      tools.get('restore')!({
+        staged: true,
+        discard: true,
+        paths: [SEED],
+        cwd: repoDir,
+      })
+    ).rejects.toThrow(/contradictory/);
+  });
+
   it('restore with discard:true but no paths throws', async () => {
     const tools = captureGitTools();
     await expect(

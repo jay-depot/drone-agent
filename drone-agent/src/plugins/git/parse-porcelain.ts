@@ -8,7 +8,8 @@
  *
  * IMPORTANT: callers must pass the RAW, untrimmed output. Trimming the whole
  * record strips the leading space column, which corrupts the staged/unstaged
- * distinction (the bug this plugin was overhauled to fix).
+ * distinction (the bug this plugin was overhauled to fix). The branch is NOT
+ * part of porcelain output — it is resolved separately via `rev-parse`.
  */
 
 export type PorcelainEntry = {
@@ -25,7 +26,6 @@ export type PorcelainEntry = {
 };
 
 export type ParsedStatus = {
-  branch: string;
   staged: string[];
   unstaged: string[];
   untracked: string[];
@@ -91,17 +91,5 @@ export function parsePorcelain(raw: string): ParsedStatus {
     });
   }
 
-  return { branch: '', staged, unstaged, untracked, entries };
-}
-
-/**
- * Split raw porcelain output into lines, preserving each line's leading
- * whitespace (critical: column 0 is the staged flag, which may be a space).
- * Only trailing whitespace is trimmed.
- */
-export function porcelainLines(raw: string): string[] {
-  return raw
-    .split('\n')
-    .map(l => l.replace(/\s+$/, '')) // trim trailing whitespace only
-    .filter(l => l.length > 0);
+  return { staged, unstaged, untracked, entries };
 }

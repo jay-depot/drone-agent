@@ -60,3 +60,18 @@ export function requireString(
   }
   return raw.trim();
 }
+
+/**
+ * Extract an optional array of paths from `paths` (array) or `path` (single
+ * string) input. Returns undefined when neither is a non-empty value, so
+ * callers can distinguish "specific files" from "stage/all everything".
+ */
+export function asPaths(input: Record<string, unknown>): string[] | undefined {
+  if (Array.isArray(input.paths) && input.paths.length > 0) {
+    return input.paths.map(p => String(p).trim()).filter(Boolean);
+  }
+  if (typeof input.path === 'string' && input.path.trim().length > 0) {
+    return [input.path.trim()];
+  }
+  return undefined;
+}

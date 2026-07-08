@@ -1,5 +1,5 @@
 import type { DroneToolDefinition } from 'drone-core';
-import { runGit, resolveCwd } from '../run-git.js';
+import { runGit, resolveCwd, asPaths } from '../run-git.js';
 import { nameStatusToItems } from '../types.js';
 import { AddBlock } from '../components/AddBlock.js';
 
@@ -7,19 +7,19 @@ export function createAddTool(): DroneToolDefinition {
   return {
     name: 'add',
     description:
-      'Stage changes. Pass paths (array) to stage specific files, or all:true to stage all tracked+modified (git add -u), or all:true with includeUntracked:true to also stage new files (git add -A).',
+      'Stage changes. Pass paths (array) to stage specific files, or all:true to stage all tracked+modified (git add -u), or all:true with includeUntracked:true to also stage new files (git add -A). One of paths or all:true is required (no silent staging of the whole tree).',
     inputSchema: {
       type: 'object',
       properties: {
         paths: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Specific file paths to stage (optional).',
+          description: 'Specific file paths to stage (required unless all:true).',
         },
         all: {
           type: 'boolean',
           description:
-            'Stage all tracked modifications (git add -u). Default false.',
+            'Stage all tracked modifications (git add -u). Required if paths is omitted.',
         },
         includeUntracked: {
           type: 'boolean',
@@ -38,8 +38,9 @@ export function createAddTool(): DroneToolDefinition {
       const cwd = resolveCwd(input);
 
       const args: string[] = ['add'];
-      if (Array.isArray(input.paths) && input.paths.length > 0) {
-        args.push(...input.paths.map(p => String(p).trim()).filter(Boolean));
+      const paths = asPaths(input);
+      if (paths) {
+        args.push(...paths);
       } else if (input.all === true) {
         if (input.includeUntracked === true) {
           args.push('-A');
@@ -47,13 +48,18 @@ export function createAddTool(): DroneToolDefinition {
           args.push('-u');
         }
       } else {
-        // Default when nothing specified: stage all tracked updates.
-        args.push('-u');
+        // Require explicit intent: either specific paths or all:true. Never
+        // silently stage the entire tree.
+        throw new Error(
+          'git add requires either paths (array) or all:true to stage changes.'
+        );
       }
 
       await runGit(args, cwd);
 
-      // Report what was staged, colored by actual FS change.
+      // Report what was staged, colored by actual FS change. `git diff
+      // --cached --name-status` is tab-separated (the format nameStatusToItems
+      // expects), so paths resolve correctly.
       const status = await runGit(['diff', '--cached', '--name-status'], cwd);
       const files = nameStatusToItems(status);
       return JSON.stringify({ files }, null, 2);

@@ -36,6 +36,11 @@ export function StatusBlock({ state }: { state: ToolRenderState }): ReactNode {
     return <Text wrap="wrap">{result}</Text>;
   }
 
+  // Defensive: a malformed result could be missing these arrays.
+  const staged = Array.isArray(parsed.staged) ? parsed.staged : [];
+  const unstaged = Array.isArray(parsed.unstaged) ? parsed.unstaged : [];
+  const untracked = Array.isArray(parsed.untracked) ? parsed.untracked : [];
+
   const out: ReactNode[] = [];
   out.push(renderHeading('## git status', scheme));
   if (parsed.branch) {
@@ -45,13 +50,13 @@ export function StatusBlock({ state }: { state: ToolRenderState }): ReactNode {
       </Text>
     );
   }
-  if (parsed.staged.length > 0) {
+  if (staged.length > 0) {
     out.push(
       <Text key="staged-h" color={scheme.info} bold wrap="wrap">
         {'Staged:'}
       </Text>
     );
-    for (const f of parsed.staged) {
+    for (const f of staged) {
       out.push(
         <Text key={`s-${f}`} color={scheme.info} wrap="wrap">
           {`  + ${f}`}
@@ -59,13 +64,13 @@ export function StatusBlock({ state }: { state: ToolRenderState }): ReactNode {
       );
     }
   }
-  if (parsed.unstaged.length > 0) {
+  if (unstaged.length > 0) {
     out.push(
       <Text key="unstaged-h" color={scheme.warning} bold wrap="wrap">
         {'Unstaged:'}
       </Text>
     );
-    for (const f of parsed.unstaged) {
+    for (const f of unstaged) {
       out.push(
         <Text key={`u-${f}`} color={scheme.warning} wrap="wrap">
           {`  ~ ${f}`}
@@ -73,13 +78,13 @@ export function StatusBlock({ state }: { state: ToolRenderState }): ReactNode {
       );
     }
   }
-  if (parsed.untracked.length > 0) {
+  if (untracked.length > 0) {
     out.push(
       <Text key="untracked-h" color={scheme.error} bold wrap="wrap">
         {'Untracked:'}
       </Text>
     );
-    for (const f of parsed.untracked) {
+    for (const f of untracked) {
       out.push(
         <Text key={`t-${f}`} color={scheme.error} wrap="wrap">
           {`  ? ${f}`}
@@ -87,11 +92,7 @@ export function StatusBlock({ state }: { state: ToolRenderState }): ReactNode {
       );
     }
   }
-  if (
-    parsed.staged.length === 0 &&
-    parsed.unstaged.length === 0 &&
-    parsed.untracked.length === 0
-  ) {
+  if (staged.length === 0 && unstaged.length === 0 && untracked.length === 0) {
     out.push(
       <Text color={scheme.success} wrap="wrap">
         {'Working tree clean'}
