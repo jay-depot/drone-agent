@@ -54,5 +54,9 @@
   {
     "timestamp": "2026-07-07T18:29:50.308Z",
     "insight": "When writing an integration test for the MCP plugin, do NOT spawn the fake server yourself and assert on that process. `createMcpClientConnection` spawns its OWN child from the server config inside the client; a test-spawned child is never used by the client. Instead, return a `serverConfig` descriptor (with `command`/`args`/`env`) and let the client spawn it, then observe the client-owned child via a `vi.mock('node:child_process')` spawn spy. Also: tools mount under the canonical name `mcp__<serverId>__<toolName>` (plugin-id prefix), not `<serverId>__<tool>`."
+  },
+  {
+    "timestamp": "2026-07-08T03:24:20.704Z",
+    "insight": "Bogus tests that build a fresh plugin/capture instance for the second call of a two-phase scenario can silently mask cross-call state bugs (locks, re-entrancy guards, accumulators). The compaction `compactionInFlight` latch bug survived because the \"resets compactionInFlight after the empty-turns early return\" test reused a brand-new instance for the follow-up call. When testing state that must persist across hook calls, reuse the SAME instance, and prefer driving the realistic runtime sequence (e.g. onBeforePrompt empty -> append turns -> onAfterToolCall). Add a planning-check step: when a reported test \"covers\" a bug but the bug is live, verify the test actually exercises the persistent state, not a fresh one."
   }
 ]
