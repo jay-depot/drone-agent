@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-07-08T18:36:33.413Z",
+    "insight": "When a `.ts` file imports a sibling `.tsx` component, import it with the `.js` extension, NOT `.jsx`. `tsc` emits `.js` files for `.tsx` sources and does NOT rewrite a `.jsx` import specifier, so the runtime build fails with ERR_MODULE_NOT_FOUND on `X.jsx`. The codebase's existing pattern (e.g. importing `tui/components/GitDiffBlock.tsx` as `.js`) confirms this. Hit this during the git-plugin overhaul: 10 tool files imported their components as `.jsx` and the dist build was broken until switched to `.js`."
+  }
+]
