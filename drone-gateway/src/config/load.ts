@@ -1,8 +1,8 @@
 import { readFileSync, existsSync } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { logger } from '../logger.js';
-import { convIdToFilename, validateConversationId } from './files.js';
+import { validateConversationId } from './files.js';
 import type {
   GatewayConfig,
   ResolvedServiceAdapter,
@@ -26,7 +26,9 @@ import type {
  * The `configPath` argument points to the gateway config.json file.
  * The adapters/ directory is expected alongside it.
  */
-export async function loadGatewayConfig(configPath: string): Promise<GatewayConfig> {
+export async function loadGatewayConfig(
+  configPath: string
+): Promise<GatewayConfig> {
   const configDir = path.dirname(configPath);
 
   if (!existsSync(configPath)) {
@@ -44,21 +46,31 @@ export async function loadGatewayConfig(configPath: string): Promise<GatewayConf
   try {
     gatewayConfig = JSON.parse(raw);
   } catch (err) {
-    throw new Error(`Invalid JSON in config file: ${err}`);
+    throw new Error(`Invalid JSON in config file: ${err}`, { cause: err });
   }
 
-  // Validate required fields
-  if (!gatewayConfig.coordinatorUrl || typeof gatewayConfig.coordinatorUrl !== 'string') {
-    throw new Error('Config missing required field: coordinatorUrl');
-  }
-
-  // Apply defaults
+  // Apply defaults (must be before coordinatorUrl check)
   const spawnBackend: SpawnBackendType =
     (gatewayConfig.spawnBackend as SpawnBackendType) || 'local';
 
+  // Validate coordinatorUrl: required for coordinator mode, optional for local
+  const coordinatorUrl = gatewayConfig.coordinatorUrl as string | undefined;
+  if (!coordinatorUrl || typeof coordinatorUrl !== 'string') {
+    if (spawnBackend === 'coordinator') {
+      throw new Error(
+        'Config missing required field: coordinatorUrl. ' +
+          'This field is required when spawnBackend is "coordinator".'
+      );
+    }
+    logger.warn(
+      'Config missing coordinatorUrl — this is fine for local spawn backend, ' +
+        'but required if you switch to coordinator mode.'
+    );
+  }
+
   // Build the base config
   const config: GatewayConfig = {
-    coordinatorUrl: gatewayConfig.coordinatorUrl as string,
+    coordinatorUrl: coordinatorUrl ?? '',
     coordinatorToken: gatewayConfig.coordinatorToken as string | undefined,
     spawnBackend,
     agentPath: gatewayConfig.agentPath as string | undefined,
@@ -113,7 +125,10 @@ async function loadAdapter(
 
   const type = adapterData.type as string | undefined;
   if (!type || typeof type !== 'string') {
-    logger.error({ adapterId }, `Adapter "${adapterId}" missing required field: type`);
+    logger.error(
+      { adapterId },
+      `Adapter "${adapterId}" missing required field: type`
+    );
     return null;
   }
 

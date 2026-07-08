@@ -1,5 +1,10 @@
 import { logger } from '../logger.js';
 import { BasicMarkdownRenderer } from '../markdown.js';
+import type { ICreateClientOpts } from 'matrix-js-sdk/lib/client.js';
+import { openGatewayDb } from '../store/db.js';
+import { SqliteCryptoStore } from '../store/sqlite-crypto-store.js';
+import { SqliteSyncStore } from '../store/sqlite-sync-store.js';
+import type { GatewayDatabase } from '../store/db.js';
 import type {
   DroneServiceAdapter,
   AdapterMessage,
@@ -21,7 +26,18 @@ export interface MatrixAdapterConfig {
   deviceId?: string;
   /** Optional allowlist of room IDs to listen in. DMs are always included. */
   rooms?: string[];
-  /** Optional path for persistent sync/crypto store. */
+  /**
+   * Optional path for persistent sync/crypto store.
+   *
+   * When set, a SQLite database is created at this path (parent directories
+   * are created as needed). Both the sync store (room timelines, sync
+   * token) and the crypto store (E2EE keys, Olm sessions) are persisted
+   * here, so the bot survives restarts without re-syncing or losing the
+   * ability to decrypt messages in encrypted rooms.
+   *
+   * When unset, the SDK uses in-memory stores (everything is lost on
+   * restart).
+   */
   dataPath?: string;
 }
 
@@ -45,15 +61,14 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
   private client: MatrixClient | null = null;
   private msgHandler: ((msg: AdapterMessage) => void) | null = null;
   private started = false;
+  private db: GatewayDatabase | null = null;
 
   /**
    * Track the last event per conversation for read receipts.
    * Map<conversationId, { roomId: string; event: MatrixEvent }>
    */
-  private lastEvent: Map<
-    string,
-    { roomId: string; event: MatrixEvent }
-  > = new Map();
+  private lastEvent: Map<string, { roomId: string; event: MatrixEvent }> =
+    new Map();
 
   constructor(
     id: string,
@@ -88,23 +103,34 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
       'Starting Matrix adapter'
     );
 
-    // Create the Matrix client
-    this.client = createClient({
+    // Build client options
+    const clientOpts: ICreateClientOpts = {
       baseUrl: homeserverUrl,
       accessToken,
       userId,
       deviceId: deviceId || 'drone-gateway',
-      // If dataPath is provided, we use a persistent store.
-      // Without it, the SDK uses an in-memory store (re-syncs on restart).
-      ...(dataPath
-        ? { store: (await getStore(dataPath)) as any }
-        : {}),
-    });
+    };
+
+    // If dataPath is provided, use SQLite-backed stores for persistence
+    if (dataPath) {
+      logger.info(
+        { adapterId: this.id, dataPath },
+        'Opening SQLite database for persistent sync/crypto store'
+      );
+      this.db = openGatewayDb(dataPath);
+      clientOpts.store = new SqliteSyncStore(this.db);
+      clientOpts.cryptoStore = new SqliteCryptoStore(this.db);
+    }
+
+    // Create the Matrix client
+    this.client = createClient(clientOpts);
 
     // Best-effort crypto initialization for E2EE rooms
     try {
       await this.client.initCrypto();
-      logger.info('Matrix crypto initialized (E2EE rooms supported)');
+      logger.info(
+        'Matrix crypto initialized (E2EE rooms supported; keys persisted via SQLite)'
+      );
     } catch (cryptoErr) {
       logger.warn(
         { err: cryptoErr },
@@ -115,7 +141,7 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
 
     // Listen for timeline events
     this.client.on(
-      'Room.timeline' as any,
+      'Room.timeline' as never,
       (
         event: MatrixEvent,
         room: Room | undefined,
@@ -129,10 +155,7 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
     await this.client.startClient({ initialSyncLimit: 10 });
     this.started = true;
 
-    logger.info(
-      { adapterId: this.id },
-      'Matrix adapter started and syncing'
-    );
+    logger.info({ adapterId: this.id }, 'Matrix adapter started and syncing');
   }
 
   private onTimelineEvent(
@@ -231,7 +254,7 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
       } else {
         await this.client.sendMessage(roomId, {
           body: rendered.body,
-          msgtype: 'm.text' as any,
+          msgtype: 'm.text' as never,
         });
       }
     } finally {
@@ -257,6 +280,20 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
       logger.warn({ adapterId: this.id, err }, 'Error stopping Matrix client');
     }
 
+    // Close the SQLite database
+    if (this.db) {
+      try {
+        this.db.close();
+        logger.info({ adapterId: this.id }, 'SQLite database closed');
+      } catch (err) {
+        logger.warn(
+          { adapterId: this.id, err },
+          'Error closing SQLite database'
+        );
+      }
+      this.db = null;
+    }
+
     this.client = null;
     this.started = false;
     this.lastEvent.clear();
@@ -267,9 +304,7 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
    * For room conversations, the conversationId is the roomId.
    * For DM conversations (dm:@peer:server), we look up or create a DM room.
    */
-  private resolveTarget(
-    conversationId: string
-  ): { roomId: string } | null {
+  private resolveTarget(conversationId: string): { roomId: string } | null {
     if (!this.client) return null;
 
     // If it's a room ID (starts with !), use it directly
@@ -320,24 +355,5 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
       'No existing DM room found. Ensure the bot user has been invited to the DM.'
     );
     return null;
-  }
-}
-
-/**
- * Get a store instance for persistent sync storage.
- * Uses matrix-js-sdk's IndexedDBStore or MemoryStore as fallback.
- */
-async function getStore(dataPath: string): Promise<unknown> {
-  try {
-    const { IndexedDBStore } = await import(
-      'matrix-js-sdk/lib/store/indexeddb'
-    );
-    return new IndexedDBStore(dataPath);
-  } catch {
-    // Fallback: use a simple in-memory store
-    const { MemoryStore } = await import(
-      'matrix-js-sdk/lib/store/memory'
-    );
-    return new MemoryStore();
   }
 }

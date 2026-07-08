@@ -22,18 +22,22 @@ vi.mock('matrix-js-sdk', () => ({
   },
 }));
 
-// Mock the store modules
-vi.mock('matrix-js-sdk/lib/store/memory', () => ({
-  MemoryStore: vi.fn().mockImplementation(() => ({
-    // MemoryStore stub
-  })),
+// Mock SQLite store modules
+const mockOpenGatewayDb = vi.fn();
+const mockSqliteSyncStore = vi.fn();
+const mockSqliteCryptoStore = vi.fn();
+const mockDbClose = vi.fn();
+
+vi.mock('../src/store/db.js', () => ({
+  openGatewayDb: mockOpenGatewayDb,
 }));
 
-// Mock IndexedDBStore with a working stub (no real indexedDB needed for tests)
-vi.mock('matrix-js-sdk/lib/store/indexeddb', () => ({
-  IndexedDBStore: vi.fn().mockImplementation(() => ({
-    // IndexedDBStore stub — no-op for tests
-  })),
+vi.mock('../src/store/sqlite-sync-store.js', () => ({
+  SqliteSyncStore: mockSqliteSyncStore,
+}));
+
+vi.mock('../src/store/sqlite-crypto-store.js', () => ({
+  SqliteCryptoStore: mockSqliteCryptoStore,
 }));
 
 const { MatrixServiceAdapter } = await import('../src/adapters/matrix.js');
@@ -91,6 +95,9 @@ describe('MatrixServiceAdapter', () => {
     mockSendHtmlMessage.mockResolvedValue(undefined);
     mockSendMessage.mockResolvedValue(undefined);
     mockGetRooms.mockReturnValue([]);
+    mockOpenGatewayDb.mockReturnValue({ close: mockDbClose });
+    mockSqliteSyncStore.mockImplementation(() => ({}));
+    mockSqliteCryptoStore.mockImplementation(() => ({}));
   });
 
   describe('constructor', () => {
@@ -174,6 +181,49 @@ describe('MatrixServiceAdapter', () => {
 
       // createClient should only be called once
       expect(mockCreateClient).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens SQLite database and passes stores when dataPath is set', async () => {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+        dataPath: '/tmp/test-gateway.sqlite',
+      });
+
+      await adapter.start();
+
+      // Should open the database
+      expect(mockOpenGatewayDb).toHaveBeenCalledWith(
+        '/tmp/test-gateway.sqlite'
+      );
+
+      // Should create store instances
+      expect(mockSqliteSyncStore).toHaveBeenCalled();
+      expect(mockSqliteCryptoStore).toHaveBeenCalled();
+
+      // Should pass both stores to createClient
+      expect(mockCreateClient).toHaveBeenCalledWith(
+        expect.objectContaining({
+          store: expect.any(Object),
+          cryptoStore: expect.any(Object),
+        })
+      );
+    });
+
+    it('does not open SQLite database when dataPath is not set', async () => {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+      });
+
+      await adapter.start();
+
+      expect(mockOpenGatewayDb).not.toHaveBeenCalled();
+      expect(mockCreateClient).toHaveBeenCalledWith(
+        expect.not.objectContaining({ store: expect.any(Object) })
+      );
     });
   });
 
@@ -378,11 +428,7 @@ describe('MatrixServiceAdapter', () => {
       );
 
       // Should send typing off
-      expect(mockSendTyping).toHaveBeenCalledWith(
-        '!test:matrix.org',
-        false,
-        0
-      );
+      expect(mockSendTyping).toHaveBeenCalledWith('!test:matrix.org', false, 0);
     });
 
     it('sends plain text when formattedBody is null', async () => {
@@ -444,6 +490,21 @@ describe('MatrixServiceAdapter', () => {
       // stop() should not attempt to delete dataPath
       expect(mockStopClient).toHaveBeenCalled();
       // No fs.rm or fs.unlink should be called
+    });
+
+    it('closes the SQLite database when dataPath was set', async () => {
+      adapter = new MatrixServiceAdapter('matrix-1', {
+        homeserverUrl: 'https://matrix.org',
+        accessToken: 'syt_token',
+        userId: '@bot:matrix.org',
+        dataPath: '/tmp/test-gateway.sqlite',
+      });
+
+      await adapter.start();
+      await adapter.stop();
+
+      // Should close the database
+      expect(mockDbClose).toHaveBeenCalled();
     });
   });
 });

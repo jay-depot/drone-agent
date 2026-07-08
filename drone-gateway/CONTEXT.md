@@ -53,7 +53,7 @@ _Avoid_: Coordinator API, coordinator proxy, coordinator connector
 ```
 ~/.drone-gateway/
   config.json                         # Gateway-level settings
-    coordinatorUrl: string            # Required
+    coordinatorUrl: string            # Required for coordinator mode; optional for local
     coordinatorToken?: string
     spawnBackend: "local"|"coordinator"
     agentPath?: string                # For local spawn backend
@@ -67,7 +67,8 @@ _Avoid_: Coordinator API, coordinator proxy, coordinator connector
         userId: string
         deviceId?: string
         rooms?: string[]             # Allowlist; DMs always included
-        dataPath?: string            # Persistent sync/crypto store
+        dataPath?: string            # Path to SQLite database for persistent
+                                     # sync/crypto store (E2EE keys survive restart)
       conversations/
         <conv-id>.json              # One file per conversation
           conversationId: string     # Canonical ID (not derived from filename)

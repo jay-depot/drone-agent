@@ -1,5 +1,13 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { convIdToFilename, filenameToConvId, validateConversationId } from '../src/config/files.js';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {
+  convIdToFilename,
+  filenameToConvId,
+  validateConversationId,
+} from '../src/config/files.js';
 
 describe('convIdToFilename', () => {
   it('converts a room ID to a safe filename', () => {
@@ -65,24 +73,62 @@ describe('validateConversationId', () => {
   });
 });
 
-describe('loadGatewayConfig (integration with mocked fs)', () => {
-  // These tests verify the config loader logic using a real temp directory
-  // to test the folder walking behavior.
+describe('loadGatewayConfig coordinatorUrl validation', () => {
+  let tmpDir: string;
 
-  it('convIdToFilename and filenameToConvId are lossless round-trips', () => {
-    const testCases = [
-      '!abc:matrix.org',
-      'dm:@alice:matrix.org',
-      'dm:@bob:chat.server.com',
-      '#general:matrix.org',
-      'simple-id',
-      '*',
-    ];
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), 'gateway-test-'));
+  });
 
-    for (const convId of testCases) {
-      const filename = convIdToFilename(convId);
-      const decoded = filenameToConvId(filename);
-      expect(decoded).toBe(convId);
-    }
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  async function writeConfig(config: Record<string, unknown>): Promise<string> {
+    const configPath = path.join(tmpDir, 'config.json');
+    writeFileSync(configPath, JSON.stringify(config));
+    return configPath;
+  }
+
+  it('throws when coordinatorUrl is missing and spawnBackend is coordinator', async () => {
+    const configPath = await writeConfig({
+      spawnBackend: 'coordinator',
+    });
+
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    await expect(loadGatewayConfig(configPath)).rejects.toThrow(
+      'coordinatorUrl'
+    );
+  });
+
+  it('does not throw when coordinatorUrl is missing and spawnBackend is local', async () => {
+    const configPath = await writeConfig({
+      spawnBackend: 'local',
+    });
+
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    const config = await loadGatewayConfig(configPath);
+    expect(config.coordinatorUrl).toBe('');
+    expect(config.spawnBackend).toBe('local');
+  });
+
+  it('does not throw when coordinatorUrl is missing and spawnBackend defaults to local', async () => {
+    const configPath = await writeConfig({});
+
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    const config = await loadGatewayConfig(configPath);
+    expect(config.coordinatorUrl).toBe('');
+    expect(config.spawnBackend).toBe('local');
+  });
+
+  it('accepts coordinatorUrl when present', async () => {
+    const configPath = await writeConfig({
+      coordinatorUrl: 'http://coordinator:8080',
+      spawnBackend: 'coordinator',
+    });
+
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    const config = await loadGatewayConfig(configPath);
+    expect(config.coordinatorUrl).toBe('http://coordinator:8080');
   });
 });

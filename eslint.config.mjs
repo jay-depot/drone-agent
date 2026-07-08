@@ -44,6 +44,14 @@ export default defineConfig([
       parser: tsParser,
     },
 
-    rules: {},
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+        },
+      ],
+    },
   },
 ]);
