@@ -11,7 +11,7 @@ import { echoPlugin } from './echo/index.js';
 import { terminalPlugin } from './terminal/index.js';
 import { fetchPlugin } from './fetch.js';
 import { filePlugin } from './file.js';
-import { gitPlugin } from './git.js';
+import { gitPlugin } from './git/index.js';
 import { llmPlugin } from './llm/index.js';
 import { lspPlugin } from './lsp/plugin.js';
 import { mcpPlugin } from './mcp/index.js';

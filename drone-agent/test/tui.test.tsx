@@ -36,7 +36,7 @@ import { silentLogger } from './helpers.js';
 async function waitUntilFrame(
   inst: ReturnType<typeof render>,
   predicate: (frame: string) => boolean,
-  timeoutMs = 1000,
+  timeoutMs = 1000
 ): Promise<string> {
   const start = Date.now();
   let frame = inst.lastFrame() ?? '';
@@ -191,9 +191,8 @@ describe('App', () => {
       await new Promise(r => setTimeout(r, 20));
     }
     instance.stdin.write('\r');
-    const frame = await waitUntilFrame(
-      instance,
-      f => /native selection|Shift-drag|native/i.test(f)
+    const frame = await waitUntilFrame(instance, f =>
+      /native selection|Shift-drag|native/i.test(f)
     );
     expect(frame).toMatch(/native selection|Shift-drag|native/i);
   });

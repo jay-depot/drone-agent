@@ -1,7 +1,6 @@
 ---
 key: git-plugin-overhaul
-tags:
-  []
+tags: []
 created: 2026-07-08T18:17:39.489Z
 updated: 2026-07-08T18:17:39.489Z
 ---
@@ -45,6 +44,7 @@ All 11 tools get a render component. `execute` still returns a JSON blob (consum
 ## Files to create / modify
 
 **New folder `drone-agent/src/plugins/git/`:**
+
 - `index.ts` — `gitPlugin` metadata + `register()` that imports per-tool spec functions and registers each with `registration.registerTool(...)`. Re-exports `gitPlugin`.
 - `run-git.ts` — shared `runGit(args, cwd?)` helper returning trimmed stdout for normal commands (NOT used for porcelain-status parsing, which gets raw lines via a dedicated `statusPorcelain(ts, cwd)` helper).
 - `parse-porcelain.ts` — PURE function `parsePorcelain(raw: string): { branch, staged, unstaged, untracked }` used by `status` and tests. Handles `v1` XY codes, renames, untracked.
@@ -52,10 +52,12 @@ All 11 tools get a render component. `execute` still returns a JSON blob (consum
 - `components/StatusBlock.tsx`, `AddBlock.tsx`, `ShowBlock.tsx` (thin wrapper over `GitDiffBlock` + `tryParseJson`), `RestoreBlock.tsx` (shares AddBlock styling), `FetchPullBlock.tsx`, `BranchBlock.tsx`, `StashBlock.tsx`, `CommitBlock.tsx`, `LogBlock.tsx`.
 
 **Modify:**
+
 - `drone-agent/src/plugins/index.ts` — change `import { gitPlugin } from './git.js'` → `from './git/index.js'`.
 - Delete old `drone-agent/src/plugins/git.ts` (replaced by folder).
 
 **Tests (new):**
+
 - `drone-agent/test/git-parse-porcelain.test.ts` — unit tests for `parsePorcelain`: staged `M `, unstaged ` M`, untracked `??`, renamed `R  a -> b`, unmerged `UU`, mixed.
 - `drone-agent/test/git-plugin.test.ts` — integration: temp repo (`fs.mkdtemp` + `git init`), round-trips for `add`/`commit`(no auto-stage)/`branch`/`stash`/`restore`/`status`. Assert the misclassification regression is fixed (unstaged file reported in `unstaged`, not `staged`).
 
