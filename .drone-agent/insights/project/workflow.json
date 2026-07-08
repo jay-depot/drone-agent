@@ -174,5 +174,13 @@
   {
     "timestamp": "2026-07-08T02:59:16.001Z",
     "insight": "The reasoning-level implementation required touching 11+ files across drone-core and drone-agent packages. The pattern of threading a new parameter through the provider interface (provider-types.ts → conversation-service.ts → each provider's chat handler) is now well-documented. A future improvement could be to add a generic `options` bag on the chat input to reduce churn for future provider-level features."
+  },
+  {
+    "timestamp": "2026-07-08T19:02:08.195Z",
+    "insight": "file__apply_diff frequently fails to apply hunks when the `-` context lines are empty or whitespace-only (it errors with \"The `-` lines didn't match\" / \"no hunks found\"). When editing TS/TSX files with newlines-in-strings or pure-no-op context, prefer rewriting the whole file with file__write rather than fighting the diff tool — it cost several retries this session. Also, vitest path-filter args like `npx vitest run drone-agent/test/x.test.ts` from the repo root work fine; the `--project`/`--dir` variations did not resolve the test files."
+  },
+  {
+    "timestamp": "2026-07-08T19:41:00.586Z",
+    "insight": "In the drone-gateway Matrix adapter (4.2), `dataPath` holds the sync store + Rust crypto store (`@matrix-org/matrix-sdk-crypto-nodejs`). \"Crypto cleanup\" must NOT mean deletion — deleting it breaks E2EE decryption (loses Megolm inbound keys) and forces full re-sync. The only runtime cleanup is a graceful store close (flush + release handles) in `stop()`. Deletion is only for intentional decommission after `client.logout()`. Plan wording should say \"graceful close\", never \"clean/wipe dataPath\"."
   }
 ]
