@@ -279,9 +279,9 @@ export const llmPlugin: DronePlugin = {
 
         // Check for --save flag
         const saveIdx = args.indexOf('--save');
-        const levelTokens = args.filter(
-          (_, idx) => idx !== saveIdx && idx !== saveIdx + 1
-        );
+        const levelTokens = saveIdx !== -1
+          ? args.filter((_, idx) => idx !== saveIdx && idx !== saveIdx + 1)
+          : args;
         const levelArg = levelTokens.join(' ');
 
         // No argument: show current level
