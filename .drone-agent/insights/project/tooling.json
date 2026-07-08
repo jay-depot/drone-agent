@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-07-08T16:07:26.075Z",
+    "insight": "The `file__apply_diff` tool frequently fails on this project's TypeScript files (observed on drone-core/src/index.ts and drone-agent/.../client.ts) with \"The `-` lines didn't match... near the @@ heading\" even when the patch context looks correct — especially failing on blank-line-only context hunks. Reliable workaround: use `exec` with an inline Python script doing exact-string `src.replace(anchor, addition, 1)` with a unique multi-line anchor. Verified effective for inserting types, imports, and function bodies."
+  }
+]

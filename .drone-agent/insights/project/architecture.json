@@ -286,5 +286,9 @@
   {
     "timestamp": "2026-07-08T05:44:45.437Z",
     "insight": "In the MCP streamable-HTTP client, the fire-and-forget GET SSE reader (void openGetStream()) can report a stream error before the caller has assigned its connection handle. The index.ts wiring uses a `let connection` declared before the loop with an `if (connection)` guard, and unit tests must mirror this with a holder. Any future code that reacts to onStreamError during connect must account for the connection handle possibly not existing yet."
+  },
+  {
+    "timestamp": "2026-07-08T16:07:26.076Z",
+    "insight": "When validating a plan's \"pnpm build green\" gate, check the GLOBAL build baseline, not just your own diff. On 2026-07-08 the repo's `pnpm build` was already RED at session start (pre-existing, untouched files: drone-core/src/index.ts omitted the `DroneElicitation` re-export, causing TS2305/TS7006 in elicitation.ts, external-loader.ts, persona/wizard.ts, skills/wizard.ts, runtime/plugin-engine.ts, tui/elicitation.ts). These matched the session's initial LSP diagnostics exactly. Fixing the one-line re-export was necessary and safe; it also resolves the downstream `implicitly any` errors. Confirm pre-existing breakage by stashing only your own changed files and rebuilding."
   }
 ]
