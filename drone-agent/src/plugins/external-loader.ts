@@ -84,10 +84,12 @@ export async function loadPluginFromDirectory(
     const entryPath = path.join(dirPath, name);
     if (await pathExists(entryPath)) {
       try {
-        // Dynamic import — the plugin is expected to be a compiled JS module.
-        // Use file:// URL for cross-platform compatibility.
-        const fileUrl = new URL(`file://${entryPath}`).href;
-        const mod = await import(fileUrl);
+        // Read the file content and use a data URL to bypass vite-node's
+        // resolver (vitest v3 intercepts dynamic import() and cannot resolve
+        // files outside the project root).
+        const content = await readFile(entryPath, 'utf-8');
+        const dataUrl = `data:text/javascript,${encodeURIComponent(content)}`;
+        const mod = await import(dataUrl);
         const plugin: DronePlugin | undefined = mod.default ?? mod.plugin;
         if (
           !plugin ||
