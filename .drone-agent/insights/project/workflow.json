@@ -186,9 +186,9 @@
   {
     "timestamp": "2026-07-08T20:14:08.713Z",
     "insight": "When mocking `matrix-js-sdk/lib/store/indexeddb` in vitest, the mock must export a class that can be constructed (not throw), because `getStoreClass()` catches import errors but not construction errors. The mock should provide a working stub constructor, not throw."
-  }
-]taining({ getId: expect.any(Function) })`."
-  }
-]type declarations resolvable by TypeScript's NodeNext resolution. Use `@ts-expect-error` + `as any` for store imports, and use string literal `'Room.timeline'` for the event name."
+  },
+  {
+    "timestamp": "2026-07-08T20:41:53.286Z",
+    "insight": "The cleanup subcommand (step 9) uses `process.exit()` for early termination on errors/cancellation. In tests, `process.exit` is mocked to not actually exit, so the function continues executing past the intended exit point. Adding `return` after each `process.exit()` call prevents this. The `confirmFn` injection pattern (optional parameter) is cleaner than mocking `readline` for testing confirmation prompts."
   }
 ]

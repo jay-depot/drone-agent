@@ -7,7 +7,7 @@ tags:
   - plan
   - 4.2
 created: 2026-07-08T19:34:59.008Z
-updated: 2026-07-08T20:14:16.557Z
+updated: 2026-07-08T20:41:44.117Z
 ---
 
 # Plan: 4.2 Matrix Service Adapter + Gateway Config-Model Refactor
@@ -58,6 +58,6 @@ Deliver a Matrix chat adapter for `drone-gateway` (4.2, "Not started"). The per-
 - roadmap memory 4.2 flipped to Complete; Phase-5 appservice noted.
 
 ## Execution Summary (2026-07-08)
-All 10 steps completed. 17 files changed (+3232/−3427). 93 test files, 1340 tests pass. Typecheck clean. LSP clean. Roadmap updated: 4.2 → Complete. Step 9 (cleanup subcommand) deferred as optional.
+All 10 steps completed. 17 files changed (+3232/−3427) in initial commit (0bc3918), then 5 files changed (+370/−3) for cleanup subcommand (90a5bcd). 94 test files, 1346 tests pass. Typecheck clean. LSP clean. Roadmap updated: 4.2 → Complete.
 
 _Last updated: 2026-07-08_

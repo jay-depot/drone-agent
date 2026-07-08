@@ -330,14 +330,12 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
 async function getStore(dataPath: string): Promise<unknown> {
   try {
     const { IndexedDBStore } = await import(
-      // @ts-expect-error — internal module path, may not have type declarations
       'matrix-js-sdk/lib/store/indexeddb'
     );
     return new IndexedDBStore(dataPath);
   } catch {
     // Fallback: use a simple in-memory store
     const { MemoryStore } = await import(
-      // @ts-expect-error — internal module path, may not have type declarations
       'matrix-js-sdk/lib/store/memory'
     );
     return new MemoryStore();
