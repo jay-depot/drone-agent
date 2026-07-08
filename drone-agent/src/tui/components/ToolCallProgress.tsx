@@ -9,17 +9,11 @@
  * wrapped continuation line, not just the first line.
  */
 
+import { PREVIEW_MAX, preview } from '../shared/format.js';
+
 import { Text } from 'ink';
 import type { ReactNode } from 'react';
 import type { DroneColorScheme } from '../theme.js';
-
-/** Maximum chars rendered in a tool argument or result preview. */
-const PREVIEW_MAX = 200;
-
-function preview(text: string, max = PREVIEW_MAX): string {
-  const flat = text.replace(/\s+/g, ' ').trim();
-  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
-}
 
 export function ToolCallProgress({
   name,

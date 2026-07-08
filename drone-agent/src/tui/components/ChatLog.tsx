@@ -8,6 +8,11 @@
  * Above the static area, a tail region renders live-updating items
  * (in-flight reasoning, tool calls, assistant messages) that are
  * committed to <Static> when they complete.
+ *
+ * When a committed entry carries a pre-rendered `node`, that node is
+ * rendered inside <Static> (preserving the live component's formatting).
+ * Otherwise the plain `text`/`kind` is rendered via renderEntry() — this
+ * is the path used by plain log() lines that have no rich component.
  */
 
 import { Box, Static, Text } from 'ink';
@@ -35,7 +40,7 @@ export function ChatLog({
       <Static items={entries} style={{ width: '100%' }}>
         {entry => (
           <Box key={entry.id} flexDirection="column">
-            {renderEntry(entry, scheme)}
+            {entry.node ?? renderEntry(entry, scheme)}
           </Box>
         )}
       </Static>

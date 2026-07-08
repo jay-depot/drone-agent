@@ -816,32 +816,4 @@ describe('file__apply_diff — round-trip integration', () => {
       await unlink(target).catch(() => {});
     }
   });
-
-  it('TUI formatDiffResult recognizes patched field', async () => {
-    const { formatDiffResult } =
-      await import('../src/tui/shared/diff-format.js');
-    const result = formatDiffResult(
-      JSON.stringify({
-        path: '/tmp/test.txt',
-        patched: true,
-        summary: { hunks: 1, additions: 1, deletions: 1 },
-        diff: '@@ -1 +1 @@\n-old\n+new',
-      })
-    );
-    expect(result).toContain('Applied diff to');
-    expect(result).toContain('/tmp/test.txt');
-  });
-
-  it('TUI formatDiffResult still works with written field', async () => {
-    const { formatDiffResult } =
-      await import('../src/tui/shared/diff-format.js');
-    const result = formatDiffResult(
-      JSON.stringify({
-        path: '/tmp/test.txt',
-        written: true,
-      })
-    );
-    expect(result).toContain('Applied diff to');
-    expect(result).toContain('/tmp/test.txt');
-  });
 });

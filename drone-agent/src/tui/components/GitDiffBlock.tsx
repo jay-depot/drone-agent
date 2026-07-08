@@ -9,26 +9,12 @@
  * The component receives a ToolRenderState with scheme cast to DroneColorScheme.
  */
 
+import { tryParseJson } from '../shared/format.js';
+
 import { Text } from 'ink';
 import type { ReactNode } from 'react';
 import type { DroneColorScheme } from '../theme.js';
 import type { ToolRenderState } from 'drone-core';
-
-function tryParseJson(raw: string): Record<string, unknown> | undefined {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      !Array.isArray(parsed)
-    ) {
-      return parsed as Record<string, unknown>;
-    }
-    return undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 function renderDiffLines(diff: string, scheme: DroneColorScheme): ReactNode[] {
   const lines = diff.split('\n');

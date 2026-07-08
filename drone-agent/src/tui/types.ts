@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { DroneReasoningLevel } from 'drone-core';
 /**
  * Shared types for the Ink-based TUI.
@@ -70,6 +71,12 @@ export type ChatEntry = {
     | 'markdown';
   /** Primary text. Multi-line strings render with hard newlines. */
   text: string;
+  /**
+   * Pre-rendered node for the <Static> scrollback. When present, ChatLog
+   * renders this instead of renderEntry(text), preserving the live
+   * component's formatting (color, structure) in history.
+   */
+  node?: ReactNode;
 };
 
 /**

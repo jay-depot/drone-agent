@@ -54,11 +54,8 @@ import { useTailRegion } from './hooks/useTailRegion.js';
 import type { DroneTuiOptions, MidPanelWidget } from './types.js';
 import type { DroneColorScheme } from './theme.js';
 import type { DroneToolDescriptor } from 'drone-core';
-import { formatDiffResult } from './shared/diff-format.js';
 import { CANCEL_SENTINEL } from '../runtime/conversation-service.js';
-
-/** Maximum chars rendered in a tool argument or result preview. */
-const PREVIEW_MAX = 200;
+import { preview, PREVIEW_MAX } from './shared/format.js';
 
 /** Build a prompt label like `drone> ` or `unix-beard> `. */
 function buildPromptLabel(opts: DroneTuiOptions): string {
@@ -80,11 +77,6 @@ function shortHomePath(cwd: string): string {
     return '~' + cwd.slice(home.length);
   }
   return cwd;
-}
-
-function preview(text: string, max = PREVIEW_MAX): string {
-  const flat = text.replace(/\s+/g, ' ').trim();
-  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
 }
 
 export function App(opts: DroneTuiOptions): React.JSX.Element {
@@ -154,7 +146,9 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
 
   // ── Conversation event listener ─────────────────────────────────────
   // Uses the tail region to buffer all in-flight content as live components,
-  // then commits them atomically when the content completes.
+  // then commits them atomically when the content completes. The live
+  // component is carried into the <Static> scrollback (as ChatEntry.node),
+  // preserving its formatting; toEntry() only supplies a plain-text fallback.
   useEffect(() => {
     const unregister = opts.engine.onConversationEvent?.(event => {
       const s = schemeRef.current;
@@ -255,16 +249,11 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
                 />
               );
 
-              // Build the static scrollback text
-              // For git diff, use the ANSI-colored diff output
-              let scrollbackText: string;
-              if (result.name === 'git__diff') {
-                scrollbackText = formatDiffResult(result.content);
-              } else {
-                scrollbackText = isError
-                  ? result.content
-                  : preview(result.content, PREVIEW_MAX);
-              }
+              // Build a plain-text fallback for the entry (used only if the
+              // node fails to render). Truncation is preserved for scrollback.
+              const scrollbackText = isError
+                ? result.content
+                : preview(result.content, PREVIEW_MAX);
 
               updateItem(id, component, () => ({
                 text: isError
@@ -291,20 +280,20 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           if (!currentMessageId.current) {
             const id = addItem(
               'assistantMessage',
-              <AssistantMessageBlock content={event.content} />,
+              <AssistantMessageBlock content={event.content} scheme={s} />,
               () => ({
                 text: currentMessageText.current,
-                kind: 'plain',
+                kind: 'markdown',
               })
             );
             currentMessageId.current = id;
           } else {
             updateItem(
               currentMessageId.current,
-              <AssistantMessageBlock content={event.content} />,
+              <AssistantMessageBlock content={event.content} scheme={s} />,
               () => ({
                 text: currentMessageText.current,
-                kind: 'plain',
+                kind: 'markdown',
               })
             );
           }
@@ -321,20 +310,12 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         }
         case 'error': {
           // Clear any in-flight tail items on error
-          if (currentReasoningId.current) {
-            clearTail();
-            currentReasoningId.current = null;
-            currentReasoningText.current = '';
-          }
-          if (currentToolCallIds.current.length > 0) {
-            clearTail();
-            currentToolCallIds.current = [];
-          }
-          if (currentMessageId.current) {
-            clearTail();
-            currentMessageId.current = null;
-            currentMessageText.current = '';
-          }
+          clearTail();
+          currentReasoningId.current = null;
+          currentReasoningText.current = '';
+          currentToolCallIds.current = [];
+          currentMessageId.current = null;
+          currentMessageText.current = '';
           log(`Error: ${event.message}`, 'error');
           break;
         }

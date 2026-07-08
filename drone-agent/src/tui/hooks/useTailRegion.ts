@@ -14,6 +14,8 @@
  * Each item has a stable id that serves as its React key. When committed,
  * the item is removed from the tail and its `toEntry()` is called to produce
  * the chat entry data (without id — the caller assigns the id via log/appendEntry).
+ * The live `component` is attached as `entry.node` so ChatLog can render it
+ * inside <Static>, preserving the component's formatting in scrollback.
  */
 
 import { useCallback, useRef, useState } from 'react';
@@ -76,7 +78,7 @@ export function useTailRegion(): {
     if (!item) {
       throw new Error(`Cannot commit unknown tail item: ${id}`);
     }
-    const entry = item.toEntry();
+    const entry = { ...item.toEntry(), node: item.component };
     itemsRef.current.delete(id);
     setItems(prev => prev.filter(i => i.id !== id));
     return entry;

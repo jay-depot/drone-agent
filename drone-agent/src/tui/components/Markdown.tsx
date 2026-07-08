@@ -67,7 +67,7 @@ export function Markdown({
   codeBackground = 'gray',
 }: MarkdownProps): React.JSX.Element {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tokens = marked.parse(children) as unknown as any[];
+  const tokens = marked.lexer(children) as unknown as any[];
   return (
     <Box flexDirection="column">
       {tokens.map((token: any, index: number) => (
