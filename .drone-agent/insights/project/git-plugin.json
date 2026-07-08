@@ -2,5 +2,11 @@
   {
     "timestamp": "2026-07-08T17:49:27.864Z",
     "insight": "Confirmed bug in git__status: runGit() does `stdout.trim()`, which strips the leading space column of `git status --porcelain` output. For a modified-unstaged file, porcelain is \" M file\" — trim() turns it into \"M file\", so the parser reads line[0]='M' (actually the unstaged flag) and misclassifies it as STAGED. Reproduced live: raw porcelain \" M AGENTS.md\" was reported by git__status as staged \"M AGENTS.md\". Fix: parse porcelain from the raw, untrimmed lines (or trim only per-field, never the whole record). Affects every modified/untracked classification. No existing git plugin test file."
+  },
+  {
+    "timestamp": "2026-07-08T18:49:23.364Z",
+    "insight": "git plugin: add tool silently runs `git add -u` (stages all tracked modifications) when called with no paths/all args (add.ts:38-41), contradicting the \"never silent git add -A\" philosophy applied to commit. Description doesn't mention the default → a model calling add with no args stages the whole tree. Also restore.ts:55-64 silently resolves a contradictory staged:true+discard:true to \"unstage only\" and drops the user's discard intent with no error — for an irreversible op this should be rejected, not silently reinterpreted."
+  }
+]status`/`--cached --name-status` (stash.ts:73 already does this correctly). No test asserts the returned `files` arrays, only re-checks `git status`, so the bugs passed CI."
   }
 ]
