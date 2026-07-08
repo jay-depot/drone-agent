@@ -15,6 +15,8 @@ Drone Coordinator is the cross-host control plane for managing beacons in a dron
 - **Swarm Sessions & Events** - FTS5-indexed session event storage
 - **Agent Location Registry** - Tracks which beacon each agent is on
 - **Central Authority** - Single source of truth for persona/skill definitions
+- **Web UI** - Serves the drone-coordinator-ui React app for monitoring and management
+- **WebSocket Pub/Sub** - Live updates for connected web UI clients
 
 ## Quick Start
 
@@ -35,10 +37,13 @@ pnpm start
 | -------------- | ---------------------------------- | ----------------------- |
 | `--port`       | 3456                               | Port to listen on       |
 | `--host`       | 0.0.0.0                            | Host to bind to         |
-| `--config-dir` | ./config                           | Configuration directory |
-| `--db`         | config/drone-coordinator.db        | Path to SQLite database |
+| `--web-port`   | 8080                               | HTTP port for web UI   |
+| `--web-host`   | 127.0.0.1                          | Host for web UI port    |
+| `--config-dir` | ~/.drone-coordinator               | Configuration directory |
+| `--db`         | <config-dir>/drone-coordinator.db  | Path to SQLite database |
 | `--https`      | false (or `COORDINATOR_HTTPS` env) | Enable HTTPS server     |
 | `--no-https`   | -                                  | Disable HTTPS server    |
+| `--help`       | -                                  | Show help message       |
 
 ### Commands
 
@@ -47,6 +52,8 @@ pnpm start
 | `drone-coordinator serve`             | Start the coordinator server (default)       |
 | `drone-coordinator --approve <token>` | Approve a pending beacon by token            |
 | `drone-coordinator list-beacons`      | List all registered beacons and trust status |
+| `drone-coordinator --show-web-token`  | Print the current web UI access token        |
+| `drone-coordinator --generate-web-token` | Generate a new web UI access token        |
 
 ## API Endpoints
 
@@ -148,6 +155,13 @@ pnpm start
 - `POST /messages/relay` - Relay a message to an agent on another beacon
 - `POST /messages/broadcast` - Broadcast a message to a channel across all beacons
 
+### Spawn Management
+
+- `POST /spawn` - Spawn an agent on a beacon
+- `GET /spawn` - List spawns (query: status)
+- `GET /spawn/:spawnId` - Get spawn status
+- `DELETE /spawn/:spawnId` - Terminate a spawn
+
 ## Architecture
 
 ```
@@ -176,6 +190,10 @@ Agent A (Beacon 1) → POST /messages/relay → Coordinator → Beacon 2 → Age
 ## Dependencies
 
 - **fastify** - HTTP server
+- **@fastify/static** - Static file serving for web UI
+- **@fastify/cors** - CORS support
+- **@fastify/websocket** - WebSocket support
 - **better-sqlite3** - SQLite database
 - **pino** - Logging
 - **drone-core** - Shared core types
+- **drone-swarm-common** - Shared TLS and wiki storage utilities

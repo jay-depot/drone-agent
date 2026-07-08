@@ -19,13 +19,16 @@ The `drone` agent platform aims to be "the Arch of AI agents": minimalist out of
 ## Architecture
 
 - `drone-agent`: The coding agent at the core of the platform. It can be run as a "full-fat" AI coding agent with the obligatory Ink-based TUI, and can also be run in plain text output, or structured JSON output modes for easier use as a background or autonomous process. Out of the box, `drone-agent` comes with almost nothing enabled, but it should be just enough for you to ask it to help you get everything set up, including enabling the built-in plugins you want, possibly helping you code a few custom ones, and write your starting skills and personas (what other platforms call "agents").
+- `drone-core`: Shared types, contracts, config defaults, and token estimation used by all other packages.
 - `drone-beacon`: If `drone-agent` has the built-in "swarm" plugin enabled, it will expect to connect to a `drone-beacon` instance, which will typically be running as a service on the same host. The `drone-beacon` provides beacon-wide skills and personas, as well as a shared memory store, and a communication channel for agents to send messages to each other. The `drone-beacon` can optionally connect to a `drone-coordinator` instance for swarm-wide coordination — it works fully standalone without one.
 - `drone-coordinator`: The `drone-coordinator` manages communication between `drone-beacon` instances, including cross-beacon message relay and broadcast. It also provides a web UI to monitor any running agents in the swarm, and task-manage them as well as interact with a coordinator management persona. The coordinator also provides swarm-wide personas, skills, and memory store.
-- `drone-gateway` (future): A standalone service that can connect to chat APIs (Matrix, Discord, Slack, etc.) and relay messages into assigned personas in the swarm, launching new agent instances when needed to handle conversations. Not yet implemented.
+- `drone-coordinator-ui`: A React + Vite + Tailwind web UI for the coordinator, served by the coordinator server.
+- `drone-swarm-common`: Shared utilities for beacon and coordinator, including TLS certificate management, wiki filesystem storage, and database helpers.
+- `drone-gateway` (in testing): A standalone service that can connect to chat APIs (Matrix, Discord, Slack, etc.) and relay messages into assigned personas in the swarm, launching new agent instances when needed to handle conversations. Currently in testing with Matrix adapter support.
 
 ## Current State
 
-The `drone-agent`, `drone-beacon`, and `drone-coordinator` are all implemented and functional. The swarm mode is operational with agents connecting to beacons, and beacons coordinating through the coordinator. Cross-beacon messaging, shared session storage, swarm-wide insights and principles, and a swarm knowledge base (LLM Wiki) are all implemented. The gateway layer and web UI remain future goals.
+The `drone-agent`, `drone-beacon`, and `drone-coordinator` are all implemented and functional. The swarm mode is operational with agents connecting to beacons, and beacons coordinating through the coordinator. Cross-beacon messaging, shared session storage, swarm-wide insights and principles, and a swarm knowledge base (LLM Wiki) are all implemented. The gateway layer is in testing and the web UI is functional.
 
 ## Design Principles
 

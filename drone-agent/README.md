@@ -31,11 +31,13 @@ The following built-in plugins are available. Most are opt-in and must be enable
 - `file` - File operations
 - `focus` - Session focus management
 - `git` - Git operations
+- `lightpanda` - Browser automation
 - `llm` - Generic LLM provider interface
 - `lsp` - Language server protocol support
 - `macros` - Macro expansion
 - `mcp` - Model Context Protocol client
 - `memory` - Project memory store
+- `notepad` - Session notepad (included in system prompt)
 - `ollama` - Ollama chat provider
 - `anthropic` - Anthropic chat provider
 - `openai` - OpenAI chat provider
@@ -52,9 +54,9 @@ The following built-in plugins are available. Most are opt-in and must be enable
 - `startup` - Runtime initialization
 - `subagent` - Sub-agent execution
 - `swarm` - Swarm coordination (connect to drone-beacon)
+- `terminal` - Terminal emulator
 - `todo` - Todo list management
 - `utils` - Utility tools (arithmetic, text metrics)
-- `lightpanda` - Browser automation
 
 ## Installation
 
@@ -117,7 +119,7 @@ By default, the plugin tries to use a language server from your `PATH` and other
 
 - Linux: `$XDG_CACHE_HOME/drone-agent/lsp/` (defaults to `~/.cache/drone-agent/lsp/`)
 - macOS: `~/Library/Caches/drone-agent/lsp/`
-- Windows: `%LOCALAPPDATA%\drone-agent\lsp\`
+- Windows: `%LOCALAPPDATA%\\drone-agent\\lsp\\`
 
 Override the cache root with `DRONE_AGENT_LSP_CACHE`. Delete that directory to reset.
 

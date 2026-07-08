@@ -1,6 +1,6 @@
 # AGENTS.md — drone-agent
 
-This file describes how to work on the `drone-agent` project itself. The project is a monorepo (pnpm workspace) with four packages: `drone-agent`, `drone-core`, `drone-beacon`, and `drone-coordinator`.
+This file describes how to work on the `drone-agent` project itself. The project is a monorepo (pnpm workspace) with seven packages: `drone-agent`, `drone-core`, `drone-beacon`, `drone-coordinator`, `drone-coordinator-ui`, `drone-swarm-common`, and `drone-gateway`.
 
 **If you encounter any discrepancy between this document and the code, with the exception of aspirational statements, the code is the source of truth, and this document should be updated.**
 
@@ -18,13 +18,16 @@ drone-agent/          ← The CLI + TUI coding agent (Ink-based)
     output-handlers.ts← Plain output event handler
     first-run.tsx     ← First-run setup wizard (LLM provider probing)
     lib.ts            ← Public library exports for embedding drone-agent
+    migrate.ts        ← Migration workflows (promote/demote skills/personas)
     plugins/          ← All built-in plugins
+      anthropic/     ← Anthropic LLM provider
       bootstrap/     ← Bootstrap plugin (project/user setup workflows)
         index.ts      ← Plugin registration, analyze tool, project & user workflows
         project-detect.ts ← Project detection logic (shared by tool and workflow)
       compaction/    ← Context compaction (summary-drop strategy)
       config/        ← Config capability (injectors, rebuild)
       echo/          ← Mock LLM provider for deterministic testing
+      git/           ← Git operations (status, diff, log, commit, branch, etc.)
       lightpanda/    ← Lightpanda browser automation MCP integration
       llm/           ← LLM provider broker
       log/           ← Session logging to JSON files
@@ -32,7 +35,9 @@ drone-agent/          ← The CLI + TUI coding agent (Ink-based)
       macros/        ← Custom slash commands from .macro files
       mcp/           ← MCP client (stdio and streamable HTTP)
       memory/        ← Project-level memory (JSON files)
+      notepad.ts     ← Session notepad (included in system prompt)
       ollama.ts      ← Ollama LLM provider
+      openai/        ← OpenAI LLM provider
       openrouter/    ← OpenRouter LLM provider
       persona/       ← Persona broker plugin
       persona-provider-project/ ← Project-level persona provider
@@ -46,6 +51,7 @@ drone-agent/          ← The CLI + TUI coding agent (Ink-based)
       startup.ts     ← Startup banner and status tool
       subagent/      ← Subagent spawning
       swarm/         ← Swarm plugin (beacon/coordinator integration)
+      terminal/      ← Terminal emulator plugin
       todo.ts        ← TODO list management
       utils.ts       ← Utility tools (arithmetic, counting, spelling)
       exec.ts        ← Shell command execution
@@ -53,7 +59,6 @@ drone-agent/          ← The CLI + TUI coding agent (Ink-based)
       fetch.ts       ← HTTP fetch tool
       file.ts        ← File read/write/glob/diff tools
       focus.ts       ← Session focus management
-      git.ts         ← Git status/diff/commit/log tools
     runtime/          ← Plugin engine, config loader, conversation service, session manager
       plugin-engine.ts
       builtin-commands.ts  ← Built-in slash command definitions
@@ -62,10 +67,14 @@ drone-agent/          ← The CLI + TUI coding agent (Ink-based)
       session-manager.ts
       context-budget-service.ts
       token-estimator.ts
+      migration/     ← Migration helpers (backup, promote, demote, wiki, etc.)
     shared/           ← Shared utilities
       diff-renderer.ts
       exec-async.ts
+      openai-compatible.ts
+      patch-applier.ts
       type-guards.ts
+      unified-diff-parser.ts
     tui/              ← Ink-based TUI (App, ChatLog, InputLine, StatusBar, etc.)
       app.tsx
       index.tsx
@@ -73,7 +82,29 @@ drone-agent/          ← The CLI + TUI coding agent (Ink-based)
       types.ts
       elicitation.ts
       components/
+        AssistantMessageBlock.tsx
+        ChatLog.tsx
+        ElicitationPrompt.tsx
+        GitDiffBlock.tsx
+        InputLine.tsx
+        Markdown.tsx
+        MidPanel.tsx
+        ModelPicker.tsx
+        MultilineTextInput.tsx
+        ReasoningBlock.tsx
+        StatusBar.tsx
+        TailRegion.tsx
+        ToolCallProgress.tsx
       hooks/
+        useChatLog.ts
+        useColorOverrides.ts
+        useDebouncedWindowSize.ts
+        useElicitation.ts
+        useLlmIndicator.ts
+        useStatusBar.ts
+        useTailRegion.ts
+      shared/
+        format.ts
   test/               ← Vitest tests
 drone-core/           ← Shared types, contracts, config defaults, token estimation
   src/
@@ -113,15 +144,26 @@ drone-beacon/         ← Local hub for drone swarm (Fastify + SQLite + WebSocke
       wiki.ts         ← Wiki page CRUD (with coordinator proxy)
       sync.ts         ← Coordinator sync trigger
     ws-server.ts      ← WebSocket server for agent messaging
-    db.ts             ← SQLite database layer
+    db/               ← SQLite database layer (split by domain)
+      index.ts
+      init.ts
+      agents.ts
+      config.ts
+      event-log.ts
+      insights.ts
+      knowledge.ts
+      memory.ts
+      messages.ts
+      personas.ts
+      principles.ts
+      skills.ts
+      spawns.ts
     coordinator-client.ts ← HTTP client to drone-coordinator
     spawner.ts        ← Agent process spawning
     identity.ts       ← Ed25519 keypair identity
-    tls.ts            ← TLS certificate management
-    wiki-storage.ts   ← Wiki filesystem management
     types.ts          ← Internal types
     logger.ts         ← Pino logger
-  test/               ← (no test directory yet)
+  test/               ← Vitest tests
 drone-coordinator/    ← Global hub for swarm coordination (Fastify + SQLite)
   src/
     index.ts          ← Server entry point, CLI arg parsing
@@ -137,26 +179,78 @@ drone-coordinator/    ← Global hub for swarm coordination (Fastify + SQLite)
       wiki.ts         ← Wiki page CRUD
       swarm.ts        ← Swarm sessions, events, agent locations
       messages.ts     ← Cross-beacon message relay and broadcast
-    db.ts             ← SQLite database layer
+      spawn.ts        ← Agent spawn management across beacons
+    db/               ← SQLite database layer (split by domain)
+      index.ts
+      init.ts
+      agent-locations.ts
+      beacon-sessions.ts
+      beacon-trust.ts
+      beacons.ts
+      insights.ts
+      knowledge.ts
+      personas.ts
+      principles.ts
+      skills.ts
+      swarm-sessions.ts
+      web-token.ts
     storage.ts        ← Storage layer
-    tls.ts            ← TLS certificate management
-    wiki-storage.ts   ← Wiki filesystem management
+    web-auth.ts       ← Web UI authentication
+    ws-pubsub.ts      ← WebSocket pub/sub for live updates
     types.ts          ← Internal types
     logger.ts         ← Pino logger
   test/               ← Vitest tests
+drone-coordinator-ui/ ← Web UI for the coordinator (React + Vite + Tailwind)
+  src/
+    main.tsx
+    App.tsx
+    components/
+    hooks/
+    pages/
+    lib/
+drone-swarm-common/   ← Shared utilities for beacon and coordinator
+  src/
+    index.ts
+    db-helpers.ts
+    logger.ts
+    spawner.ts
+    tls.ts
+    wiki-storage.ts
+  test/
+drone-gateway/        ← Chat API gateway (Matrix, Discord, Slack) — in testing
+  src/
+    index.ts
+    engine.ts
+    adapters/
+    store/
+    config/
+    coordinator-client.ts
+    coordinator-spawn-backend.ts
+    local-spawn-backend.ts
+    spawn-backend.ts
+    markdown.ts
+    cleanup.ts
+    types.ts
+    logger.ts
+    which.ts
+  test/
 skill-library/        ← Reusable skill .md files (not a workspace package)
 ```
 
 ## Development Commands
 
-| Command           | Purpose                      |
-| ----------------- | ---------------------------- |
-| `pnpm build`      | Compile all packages         |
-| `pnpm typecheck`  | Type-check all packages      |
-| `pnpm test`       | Run all tests (vitest)       |
-| `pnpm test:watch` | Watch mode                   |
-| `pnpm lint`       | ESLint + Prettier            |
-| `pnpm clean`      | Remove all dist/ directories |
+| Command                       | Purpose                               |
+| ----------------------------- | ------------------------------------- |
+| `pnpm build`                  | Compile all packages                  |
+| `pnpm typecheck`              | Type-check all packages               |
+| `pnpm test`                   | Run all tests (vitest)                |
+| `pnpm test:watch`             | Watch mode                            |
+| `pnpm test:coverage`          | Run tests with coverage               |
+| `pnpm test:integration`       | Run integration tests                 |
+| `pnpm lint`                   | ESLint + Prettier                     |
+| `pnpm clean`                  | Remove all dist/ directories          |
+| `pnpm docker:build`           | Build Docker images for smoke test    |
+| `pnpm docker:smoke-test`      | Run full smoke test suite in Docker   |
 
 ## Architecture Overview
 
@@ -171,7 +265,7 @@ Everything is a plugin. Each plugin implements `DronePlugin` with a `register(re
 - **Offer capabilities** via `registration.offer(...)` — expose an API to other plugins
 - **Request capabilities** via `registration.request<T>(pluginId)` — consume another plugin's API
 - **Register help snippets** via `registration.registerHelp(...)`
-- **Hook into lifecycle events** via `registration.hooks.onPluginsLoaded(...)`, `onSessionStart(...)`, `onBeforePrompt(...)`, `onAfterToolCall(...)`, `onShutdown(...)`, `onSessionClear(...)`, `onSessionSafetyTrimWillRun(...)`, `onSessionSafetyTrimApplied(...)`
+- **Hook into lifecycle events** via `registration.hooks.onPluginsLoaded(...)`, `onSessionStart(...)`, `onBeforePrompt(...)`, `onAfterToolCall(...)`, `onShutdown(...)`, `onSessionClear(...)`, `onSessionSafetyTrimWillRun(...)`, `onSessionSafetyTrimApplied(...)`, `onConversationEvent(...)`
 
 The plugin engine (`runtime/plugin-engine.ts`) manages all of this. The built-in plugins are listed in `plugins/index.ts`.
 
@@ -219,7 +313,7 @@ Key config sections: `enabledPlugins`, `systemPrompt`, `activePersona`, `llm`, `
 
 ### TUI Architecture
 
-The TUI is built with Ink 5.x (React for CLIs). It renders a four-region layout: chat log (scrollable via `<Static>`), mid panel (widgets), input line (custom multiline), and status bar. The TUI deliberately avoids the alternate screen buffer.
+The TUI is built with Ink 5.x (React for CLIs). It renders a five-region layout: chat log (scrollable via `<Static>`), tail region (live-updating in-flight content), mid panel (widgets), input line (custom multiline), optional elicitation prompt, and status bar. The TUI deliberately avoids the alternate screen buffer.
 
 **→ When working on TUI components, recall the `ui-architecture` skill via `skills.recall({"id": "ui-architecture"})` for detailed component tree, theme system, and patterns.**
 
@@ -352,11 +446,13 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-agent/src/cli.ts`                              | CLI argument parsing                                  |
 | `drone-agent/src/elicitation.ts`                      | Readline-based elicitation for plain-output mode      |
 | `drone-agent/src/interactive.ts`                      | Interactive loop and JSON mode for non-TUI sessions   |
+| `drone-agent/src/output-handlers.ts`                  | Plain output event handler                            |
 | `drone-agent/src/first-run.tsx`                       | First-run setup wizard (LLM provider probing)         |
 | `drone-agent/src/lib.ts`                              | Public library exports for embedding drone-agent      |
+| `drone-agent/src/migrate.ts`                          | Migration workflows (promote/demote)                  |
 | `drone-agent/src/runtime/plugin-engine.ts`            | Plugin lifecycle, tool dispatch, workflow execution   |
 | `drone-agent/src/runtime/builtin-commands.ts`         | Built-in slash command definitions                    |
-| `drone-agent/src/runtime/config.ts`                   | Config loading, merging, environment interpolation    |
+| `drone-agent/src/runtime/config.ts`                   | Config loading, merging, environment interpolation     |
 | `drone-agent/src/runtime/conversation-service.ts`     | LLM conversation loop, tool iteration                 |
 | `drone-agent/src/runtime/session-manager.ts`          | Session state, turn tracking                          |
 | `drone-agent/src/runtime/context-budget-service.ts`   | Context window budgeting, compaction triggers         |
@@ -372,20 +468,24 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-agent/src/plugins/focus.ts`                    | Session focus management                              |
 | `drone-agent/src/plugins/lightpanda/index.ts`         | Lightpanda browser automation MCP integration         |
 | `drone-agent/src/plugins/ollama.ts`                   | Ollama LLM provider                                   |
+| `drone-agent/src/plugins/anthropic/index.ts`          | Anthropic LLM provider                                |
+| `drone-agent/src/plugins/openai/index.ts`             | OpenAI LLM provider                                   |
 | `drone-agent/src/plugins/openrouter/index.ts`         | OpenRouter LLM provider                               |
 | `drone-agent/src/plugins/echo/index.ts`               | Mock LLM provider for deterministic testing           |
 | `drone-agent/src/plugins/exec.ts`                     | Shell command execution                               |
 | `drone-agent/src/plugins/external-loader.ts`          | External plugin discovery, loading, trust management  |
 | `drone-agent/src/plugins/fetch.ts`                    | HTTP fetch tool                                       |
 | `drone-agent/src/plugins/file.ts`                     | File read/write/glob/diff tools                       |
-| `drone-agent/src/plugins/git.ts`                      | Git status/diff/commit/log tools                      |
+| `drone-agent/src/plugins/git/index.ts`                | Git status/diff/commit/log tools                      |
 | `drone-agent/src/plugins/search.ts`                   | Text search (ripgrep/grep)                            |
 | `drone-agent/src/plugins/todo.ts`                     | TODO list management                                  |
 | `drone-agent/src/plugins/utils.ts`                    | Utility tools (arithmetic, counting, spelling)        |
+| `drone-agent/src/plugins/notepad.ts`                  | Session notepad                                       |
+| `drone-agent/src/plugins/terminal/index.ts`           | Terminal emulator plugin                               |
 | `drone-agent/src/plugins/prompt-file/index.ts`        | Prompt file injection                                 |
 | `drone-agent/src/plugins/compaction/index.ts`         | Context compaction (summary-drop strategy)            |
 | `drone-agent/src/plugins/config/index.ts`             | Config capability (injectors, rebuild)                |
-| `drone-agent/src/plugins/log/index.ts`                | Session logging to JSON files                         |
+| `drone-agent/src/plugins/log/index.ts`               | Session logging to JSON files                         |
 | `drone-agent/src/plugins/memory/index.ts`             | Project-level memory (JSON files)                     |
 | `drone-agent/src/plugins/persona/index.ts`            | Persona broker plugin                                 |
 | `drone-agent/src/plugins/skills/index.ts`             | Skills broker plugin                                  |
@@ -398,12 +498,24 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-core/src/plugin-system.ts`                     | DronePlugin, DronePluginRegistration, workflows       |
 | `drone-core/src/capabilities.ts`                      | Capability registry types                             |
 | `drone-core/src/session-types.ts`                     | Session, message, tool, and token types               |
+| `drone-core/src/provider-types.ts`                    | Provider types for brokers                            |
+| `drone-core/src/skill-types.ts`                       | Skill definition types                                |
+| `drone-core/src/persona-types.ts`                     | Persona definition and capability types                |
+| `drone-core/src/domain-types.ts`                      | Domain types for beacon/coordinator                   |
+| `drone-core/src/lsp-types.ts`                         | LSP server types                                      |
+| `drone-core/src/mcp-types.ts`                         | MCP server types                                      |
 | `drone-core/src/wiki-types.ts`                        | Wiki page types                                       |
+| `drone-core/src/token-estimate.ts`                    | Token estimation functions                            |
+| `drone-core/src/utils.ts`                             | Utility functions                                     |
 | `drone-beacon/src/routes/index.ts`                    | Beacon route registration assembly                    |
-| `drone-beacon/src/wiki-storage.ts`                    | Wiki filesystem management                            |
+| `drone-beacon/src/db/index.ts`                        | Beacon database layer                                 |
 | `drone-coordinator/src/routes/index.ts`               | Coordinator route registration assembly               |
-| `drone-coordinator/src/wiki-storage.ts`               | Wiki filesystem management                            |
+| `drone-coordinator/src/db/index.ts`                   | Coordinator database layer                            |
 | `drone-coordinator/src/storage.ts`                    | Coordinator storage layer                             |
+| `drone-coordinator/src/web-auth.ts`                   | Web UI authentication                                 |
+| `drone-coordinator/src/ws-pubsub.ts`                  | WebSocket pub/sub for live updates                    |
+| `drone-swarm-common/src/tls.ts`                       | Shared TLS certificate management                     |
+| `drone-swarm-common/src/wiki-storage.ts`              | Shared wiki filesystem management                     |
 
 ## Design Principles
 
