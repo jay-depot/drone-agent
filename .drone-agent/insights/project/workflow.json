@@ -162,5 +162,9 @@
   {
     "timestamp": "2026-07-06T23:31:59.248Z",
     "insight": "The large-file-splitting plan was completed successfully. 10 files totaling ~14,000 lines were split into ~80 focused modules. Key patterns: (1) factory closures with shared state → context object pattern, (2) repetitive CRUD → shared generic helpers, (3) test files → one file per describe block. The vitest exclude pattern '**/spawn.test.ts' was too broad and caught the new coordinator route test — had to narrow it to 'drone-agent/test/spawn.test.ts'."
+  },
+  {
+    "timestamp": "2026-07-08T02:09:20.319Z",
+    "insight": "The `file__apply_diff` tool frequently fails to match hunks in drone-agent TS files (context/whitespace mismatch errors reported even on exact content), making it unreliable for multi-hunk edits. For reliable edits here, fall back to a `python3` script that does exact string `replace` with `assert old in s`. This is faster and avoids the failure loop."
   }
 ]
