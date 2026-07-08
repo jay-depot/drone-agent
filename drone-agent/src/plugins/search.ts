@@ -89,6 +89,7 @@ export const searchPlugin: DronePlugin = {
           if (useRg) {
             const args: string[] = [
               '--no-heading',
+              '--pcre2',
               '--line-number',
               `--max-count=${maxResults}`,
             ];
