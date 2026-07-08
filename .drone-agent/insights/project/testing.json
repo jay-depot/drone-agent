@@ -66,5 +66,9 @@
   {
     "timestamp": "2026-07-08T17:05:01.855Z",
     "insight": "TUI tests across drone-agent/test rely on `const tick = () => new Promise(r => setTimeout(r, 0))` as a render-flush barrier before reading `lastFrame()`. This is racy and flakes in CI (Node 22 cold VM): `lastFrame()` returns the empty pre-render frame ('\\n') and content assertions fail. ChatLog.test.tsx was fixed with a `waitUntilFrame` poll-until-content-appears helper. The same `tick()` anti-pattern exists in many other *.test.tsx files (app-commit-flow, systemprompt via bare setTimeout, multiline-text-input, etc.) and should be migrated to content-aware polling or ink-testing-library frame subscription."
+  },
+  {
+    "timestamp": "2026-07-08T17:42:22.900Z",
+    "insight": "All TUI test files that used racy fixed-tick/setTimeout barriers before lastFrame() have been migrated to content-aware polling (waitUntilFrame) or await-tick. This should eliminate the class of CI-only flaky failures where lastFrame() returns the empty pre-render frame on slower runners. The pattern to follow: waitUntilFrame(inst, f => f.includes('expected content')) with 10ms polling and 1s timeout."
   }
 ]
