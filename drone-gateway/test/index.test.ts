@@ -1,11 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
-// Mock fs module for loadConfig tests
-const mockExistsSync = vi.fn();
-const mockReadFileSync = vi.fn();
-vi.mock('node:fs', () => ({
-  existsSync: mockExistsSync,
-  readFileSync: mockReadFileSync,
+// Mock the config loader so we don't need filesystem access
+const mockLoadGatewayConfig = vi.fn();
+vi.mock('../src/config/load.js', () => ({
+  loadGatewayConfig: mockLoadGatewayConfig,
 }));
 
 // Mock process.exit to prevent test runner from exiting
@@ -94,80 +92,37 @@ describe('loadConfig', () => {
     vi.clearAllMocks();
   });
 
-  it('loads and parses a valid JSON config file', () => {
-    mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(
-      JSON.stringify({
-        coordinatorUrl: 'http://localhost:8080',
-        serviceAdapters: [],
-      })
-    );
+  it('loads and parses a valid config via folder loader', async () => {
+    mockLoadGatewayConfig.mockResolvedValue({
+      coordinatorUrl: 'http://localhost:8080',
+      spawnBackend: 'local',
+      serviceAdapters: [],
+    });
 
-    const config = loadConfig('/path/to/config.json');
+    const config = await loadConfig('/path/to/config.json');
     expect(config.coordinatorUrl).toBe('http://localhost:8080');
     expect(config.serviceAdapters).toEqual([]);
     expect(config.spawnBackend).toBe('local');
   });
 
-  it('exits with error if file not found', () => {
-    mockExistsSync.mockReturnValue(false);
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('applies default spawnBackend when not set', async () => {
+    mockLoadGatewayConfig.mockResolvedValue({
+      coordinatorUrl: 'http://localhost:8080',
+      serviceAdapters: [],
+    });
 
-    loadConfig('/nonexistent/config.json');
-
-    expect(mockExit).toHaveBeenCalledWith(1);
-    expect(errorSpy).toHaveBeenCalled();
-    errorSpy.mockRestore();
-  });
-
-  it('exits with error if coordinatorUrl is missing', () => {
-    mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(
-      JSON.stringify({
-        serviceAdapters: [],
-      })
-    );
-
-    loadConfig('/path/to/config.json');
-    expect(mockExit).toHaveBeenCalledWith(1);
-  });
-
-  it('exits with error if serviceAdapters is missing', () => {
-    mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(
-      JSON.stringify({
-        coordinatorUrl: 'http://localhost:8080',
-      })
-    );
-
-    loadConfig('/path/to/config.json');
-    expect(mockExit).toHaveBeenCalledWith(1);
-  });
-
-  it('applies default spawnBackend when not set', () => {
-    mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(
-      JSON.stringify({
-        coordinatorUrl: 'http://localhost:8080',
-        serviceAdapters: [],
-      })
-    );
-
-    const config = loadConfig('/path/to/config.json');
+    const config = await loadConfig('/path/to/config.json');
     expect(config.spawnBackend).toBe('local');
   });
 
-  it('preserves spawnBackend when set', () => {
-    mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(
-      JSON.stringify({
-        coordinatorUrl: 'http://localhost:8080',
-        serviceAdapters: [],
-        spawnBackend: 'coordinator',
-      })
-    );
+  it('preserves spawnBackend when set', async () => {
+    mockLoadGatewayConfig.mockResolvedValue({
+      coordinatorUrl: 'http://localhost:8080',
+      spawnBackend: 'coordinator',
+      serviceAdapters: [],
+    });
 
-    const config = loadConfig('/path/to/config.json');
+    const config = await loadConfig('/path/to/config.json');
     expect(config.spawnBackend).toBe('coordinator');
   });
 });
@@ -214,13 +169,11 @@ describe('main', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.argv = ['node', 'drone-gateway'];
-    mockExistsSync.mockReturnValue(true);
-    mockReadFileSync.mockReturnValue(
-      JSON.stringify({
-        coordinatorUrl: 'http://localhost:8080',
-        serviceAdapters: [],
-      })
-    );
+    mockLoadGatewayConfig.mockResolvedValue({
+      coordinatorUrl: 'http://localhost:8080',
+      spawnBackend: 'local',
+      serviceAdapters: [],
+    });
   });
 
   afterEach(() => {

@@ -1,10 +1,11 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { logger } from './logger.js';
 import { GatewayEngine } from './engine.js';
 import { LocalSpawnBackend } from './local-spawn-backend.js';
 import { CoordinatorSpawnBackend } from './coordinator-spawn-backend.js';
+import { loadGatewayConfig } from './config/load.js';
 import type { GatewayConfig, SpawnBackendType } from './types.js';
 import type { SpawnBackend } from './spawn-backend.js';
 
@@ -38,7 +39,11 @@ export function parseArgs(): CliConfig {
   return cliConfig;
 }
 
-export function loadConfig(configPath: string): GatewayConfig {
+/**
+ * Load and validate the gateway configuration from the folder hierarchy.
+ * Delegates to the async folder-based loader in config/load.ts.
+ */
+export async function loadConfig(configPath: string): Promise<GatewayConfig> {
   if (!existsSync(configPath)) {
     logger.error(`Config file not found: ${configPath}`);
     console.error(
@@ -49,19 +54,7 @@ export function loadConfig(configPath: string): GatewayConfig {
     process.exit(1);
   }
 
-  const raw = readFileSync(configPath, 'utf-8');
-  const config: GatewayConfig = JSON.parse(raw);
-
-  // Basic validation
-  if (!config.coordinatorUrl) {
-    logger.error('Config missing required field: coordinatorUrl');
-    process.exit(1);
-  }
-
-  if (!Array.isArray(config.serviceAdapters)) {
-    logger.error('Config missing required field: serviceAdapters');
-    process.exit(1);
-  }
+  const config = await loadGatewayConfig(configPath);
 
   // Apply defaults
   if (!config.spawnBackend) {
@@ -94,7 +87,7 @@ export async function main(): Promise<void> {
   const cliConfig = parseArgs();
 
   logger.info(`Loading config from: ${cliConfig.configPath}`);
-  const config = loadConfig(cliConfig.configPath);
+  const config = await loadConfig(cliConfig.configPath);
 
   const spawnBackend = createSpawnBackend(config);
   const engine = new GatewayEngine(config, spawnBackend);

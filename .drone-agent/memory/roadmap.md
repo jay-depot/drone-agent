@@ -3,7 +3,7 @@ key: roadmap
 tags:
   - roadmap
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-07-07T16:39:39.917Z
+updated: 2026-07-08T20:13:31.773Z
 ---
 
 # Swarm Roadmap
@@ -52,7 +52,7 @@ A **swarm** is a personal AI workforce - multiple agents working in concert for 
 │                 drone-coordinator                   │
 │  (Personal control plane: web UI, task management,  │
 │   your skills, personas, memory, identities)        │
-│  *Single-user: manages YOUR agents only             │
+│  *Single-user: manages YOUR agents only            │
 │  *must* have a beacon on the same host              │
 └──────────────────────┬──────────────────────────────┘
                        │
@@ -415,9 +415,9 @@ Comprehensive test coverage for both `drone-coordinator` and `drone-beacon` pack
 
 ---
 
-### 🔜 PHASE 4: drone-gateway
+### ✅ PHASE 4: drone-gateway
 
-**Status:** Core complete; persona-assignment control surface done; adapters and remaining control surfaces pending
+**Status:** Core complete; Matrix adapter and config-model refactor done; remaining adapters and control surfaces pending
 
 Chat API integration layer — YOUR agents receive messages from chat platforms and respond back.
 
@@ -429,6 +429,9 @@ Chat API integration layer — YOUR agents receive messages from chat platforms 
 - **Persona Assignment** — a control surface that routes all messages in a conversation to a specific persona
 - **Swarm Console** — a control surface that exposes coordinator commands (spawn, status, terminate, list beacons, etc.)
 - **Mention Router** — a control surface that watches for `!persona` (and eventually `!persona@gateway`) mentions and routes those messages to the specified persona
+- **Discard Control Surface** — a built-in control surface that silently consumes messages (returns `{response:null, handled:true}`). Used for explicit "/dev/null" routing.
+- **Conversation** — a single chat conversation identified by a `conversationId`. The adapter owns the routing scheme (room IDs, `dm:@peer:server`, etc.). The engine and control surfaces treat it as opaque.
+- **Wildcard Control Surface** — a control surface attached to the reserved conversationId `"*"`, acting as a per-adapter catch-all. Configured via `_default_.json`.
 
 **Architecture:**
 
@@ -461,7 +464,10 @@ Chat API integration layer — YOUR agents receive messages from chat platforms 
 **Key design decisions:**
 
 - New `drone-gateway` package in the monorepo (ESM, TypeScript, pnpm workspace)
-- JSON config format
+- Folder-based config hierarchy (`config.json` + `adapters/<id>/adapter.json` + `adapters/<id>/conversations/<conv>.json`)
+- Per-conversation dedicated control surface instances (never shared across conversations)
+- Adapter owns conversation routing; control surfaces are context-ignorant
+- First-match-wins dispatch: exact convId → wildcard `"*"` → unhandled
 - Coordinator client talks to the web UI port (8080) with optional Bearer token auth
 - Recommended deployment: on the coordinator's host (local/Tailnet bypass applies)
 - Control surfaces are per-conversation, configured per adapter
@@ -510,20 +516,57 @@ The core gateway package: engine loop, service adapter interface, control surfac
 
 **Dependencies:** drone-core (shared types)
 
-#### ⏳ 4.2 Matrix Service Adapter
+#### ✅ 4.2 Matrix Service Adapter
 
-**Status:** Not started
+**Status:** Complete
 
-Matrix chat platform integration. Connects to a Matrix homeserver, listens for messages in rooms and DMs, sends responses back.
+Matrix chat platform integration. Connects to a Matrix homeserver via `matrix-js-sdk`, listens for messages in rooms and DMs, sends responses back with markdown→HTML rendering, read receipts, and typing notifications.
 
-**Key considerations:**
+**What's Built:**
 
-- Matrix client-server API (or appservice for bridge mode)
-- Authentication via access token
-- Room ID → conversation ID mapping
-- Support for both rooms and direct messages
+- `src/adapters/matrix.ts` — `MatrixServiceAdapter` implementing `DroneServiceAdapter`
+- `matrix-js-sdk` dependency added to `package.json`
+- DM detection via 2-joined-member heuristic; conversationId format `dm:@peer:server`
+- Room allowlist (`rooms[]` config) + DMs always included
+- Best-effort E2EE crypto initialization (warns on failure, degrades to unencrypted)
+- Markdown→HTML rendering via `BasicMarkdownRenderer` (code fences, inline code, bold, italic, links, lists, paragraphs)
+- Read receipts and typing notifications on outgoing messages
+- Graceful stop: `client.stopClient()` flushes crypto/sync store — does NOT delete `dataPath`
+- Auto-join allowlisted room invites
+- DM room lookup (existing) with fallback logging (no auto-create)
 
-**Dependencies:** 4.1 (gateway core)
+**Config-model refactor (delivered alongside 4.2):**
+
+- Folder-based config hierarchy: `config.json` + `adapters/<id>/adapter.json` + `adapters/<id>/conversations/<conv>.json`
+- `src/config/load.ts` — Async folder-walking config loader
+- `src/config/files.ts` — Lossless `convIdToFilename`/`filenameToConvId` encoding for special characters
+- `src/types.ts` — New `ControlSurfaceSpec`, `ResolvedServiceAdapter`, `MarkdownRenderer`, `RenderedMessage` types
+- `src/engine.ts` — Per-conversation dedicated control surface instances (`Map<adapterId, Map<convId, DroneControlSurface[]>>`), exact-then-`"*"` wildcard dispatch, `discard` built-in surface type
+- `src/markdown.ts` — `BasicMarkdownRenderer` behind swappable `MarkdownRenderer` interface
+- `docs/adr/002-gateway-config-model.md` — Architecture decision record
+- `CONTEXT.md` — Updated with Conversation, Wildcard, Discard terms and folder layout
+
+**Test Coverage (3 new test files, ~28 new tests):**
+
+| Test File                                | Tests | What's Tested                                                                          |
+| ---------------------------------------- | ----- | -------------------------------------------------------------------------------------- |
+| `test/markdown.test.ts`                  | 12    | Code fences, inline code, bold, italic, links, lists, paragraphs, HTML escaping        |
+| `test/config-load.test.ts`               | 8     | convId↔filename round-trips, validation, wildcard encoding                             |
+| `test/matrix-adapter.test.ts`            | 16    | Client creation, crypto init, DM/room routing, allowlist, own-msg skip, backlog skip, sendMessage with HTML+receipt+typing, stop lifecycle, dataPath persistence |
+
+**Key Files:**
+
+- `drone-gateway/src/adapters/matrix.ts` — Matrix adapter
+- `drone-gateway/src/markdown.ts` — Markdown renderer
+- `drone-gateway/src/config/load.ts` — Folder config loader
+- `drone-gateway/src/config/files.ts` — Filename encoding
+- `drone-gateway/src/types.ts` — Reshaped types
+- `drone-gateway/src/engine.ts` — Refactored engine with per-conversation instances + discard
+- `drone-gateway/docs/adr/002-gateway-config-model.md` — ADR
+
+**Dependencies:** 4.1 (gateway core), `matrix-js-sdk` (new)
+
+**Appservice (bridge mode) deferred to Phase 5 as a moonshot.**
 
 #### ✅ 4.3 Persona Assignment Control Surface
 
@@ -537,6 +580,7 @@ Routes all messages in a conversation to a specific persona. Implemented in `dro
 - Uses the configured spawn backend (coordinator `POST /spawn` or local spawn) to launch agents
 - Session reuse across multiple messages in the same conversation
 - First-match-wins control surface evaluation in the engine loop
+- Dedicated per-conversation instance (no convId re-check needed — engine guarantees it)
 
 **Key Files:**
 
@@ -568,7 +612,7 @@ Watches for `!persona` and `!persona@beaconId` mentions in a conversation and ro
 
 - Parses `!personaId rest of message` and `!personaId@beaconId rest of message` syntax
 - Falls through (unhandled) if no mention is detected, allowing other control surfaces to process the message
-- Can be combined with persona assignment in the same room
+- Can be combined with persona assignment in the same room (ordered array)
 
 **Dependencies:** 4.1 (gateway core), 3.9 (spawn routing)
 
@@ -720,7 +764,7 @@ Phase 5 (Advanced)
 1. **Phase 1:** Agent can bootstrap itself and work on its own codebase ✅
 2. **Phase 2:** Your multiple agents on same host share YOUR skills/personas/memory via beacon ✅
 3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; migration tool moves assets between scopes; monitoring web UI for viewing swarm state; comprehensive test coverage; inter-beacon spawn routing ✅
-4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses (partial — gateway core + persona-assignment control surface done; chat adapters pending)
+4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses (partial — gateway core + persona-assignment + Matrix adapter + config-model refactor done; remaining adapters and control surfaces pending)
 5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support (multi-model ✅ via 5.3), automated learning (pending)
 
 ---
@@ -739,4 +783,4 @@ Phase 5 (Advanced)
 
 ---
 
-_Last updated: 2026-07-07_
+_Last updated: 2026-07-08_

@@ -4,15 +4,23 @@ import type {
   DroneControlSurface,
   AdapterMessage,
   GatewayConfig,
-  ServiceAdapterConfig,
-  ControlSurfaceConfig,
+  ResolvedServiceAdapter,
+  ControlSurfaceSpec,
   SpawnSession,
 } from './types.js';
 import type { SpawnBackend } from './spawn-backend.js';
 
 export class GatewayEngine {
   private adapters: Map<string, DroneServiceAdapter> = new Map();
-  private controlSurfaces: Map<string, DroneControlSurface[]> = new Map();
+  /**
+   * Map<adapterId, Map<conversationId, DroneControlSurface[]>>
+   *
+   * Each conversation gets a dedicated ordered list of control surface
+   * instances, created at start() time. The key "*" is the per-adapter
+   * wildcard catch-all, evaluated last.
+   */
+  private controlSurfaces: Map<string, Map<string, DroneControlSurface[]>> =
+    new Map();
   private config: GatewayConfig;
   private spawnBackend: SpawnBackend;
 
@@ -28,20 +36,26 @@ export class GatewayEngine {
     );
 
     for (const adapterConfig of this.config.serviceAdapters) {
-      const adapter = this.createAdapter(adapterConfig);
+      const adapter = await this.createAdapter(adapterConfig);
       adapter.onMessage(msg => {
         void this.handleMessage(msg);
       });
       await adapter.start();
       this.adapters.set(adapterConfig.id, adapter);
 
-      const surfaces = adapterConfig.controlSurfaces.map(cs =>
-        this.createControlSurface(cs)
-      );
-      this.controlSurfaces.set(adapterConfig.id, surfaces);
+      // Create per-conversation dedicated control surface instances
+      const byConv = new Map<string, DroneControlSurface[]>();
+      for (const [convId, specs] of adapterConfig.conversations) {
+        const instances = specs.map(spec =>
+          this.createControlSurface(spec, convId)
+        );
+        byConv.set(convId, instances);
+      }
+      this.controlSurfaces.set(adapterConfig.id, byConv);
 
       logger.info(
-        `Adapter "${adapterConfig.id}" (${adapterConfig.type}) started with ${surfaces.length} control surface(s)`
+        `Adapter "${adapterConfig.id}" (${adapterConfig.type}) started ` +
+          `with ${adapterConfig.conversations.size} conversation(s)`
       );
     }
   }
@@ -52,8 +66,16 @@ export class GatewayEngine {
       'Handling message'
     );
 
-    const surfaces = this.controlSurfaces.get(msg.adapterId) || [];
-    for (const surface of surfaces) {
+    const byConv = this.controlSurfaces.get(msg.adapterId);
+    if (!byConv) return;
+
+    // Try exact conversation match first, then wildcard
+    const candidates: DroneControlSurface[] = [
+      ...(byConv.get(msg.conversationId) ?? []),
+      ...(byConv.get('*') ?? []),
+    ];
+
+    for (const surface of candidates) {
       const result = await surface.handleMessage(msg);
       if (result.handled) {
         if (result.response) {
@@ -62,9 +84,15 @@ export class GatewayEngine {
             await adapter.sendMessage(msg.conversationId, result.response);
           }
         }
-        break; // first matching surface handles it
+        return; // first matching surface handles it
       }
     }
+
+    // No surface handled the message — log as unhandled
+    logger.debug(
+      { adapterId: msg.adapterId, conversationId: msg.conversationId },
+      'Message unhandled by any control surface'
+    );
   }
 
   async stop(): Promise<void> {
@@ -77,37 +105,47 @@ export class GatewayEngine {
     this.controlSurfaces.clear();
   }
 
-  private createAdapter(config: ServiceAdapterConfig): DroneServiceAdapter {
-    // Placeholder — actual adapter implementations will be registered here
-    // by follow-up phases (4.2 Matrix, 4.6 Telegram, 4.7 Slack).
-    // For now, this throws if any adapter type is configured.
-    throw new Error(
-      `No adapter implementation available for type "${config.type}". ` +
-        `Service adapter implementations are not yet built.`
-    );
+  private async createAdapter(
+    config: ResolvedServiceAdapter
+  ): Promise<DroneServiceAdapter> {
+    switch (config.type) {
+      case 'matrix': {
+        // Dynamic import avoids hard dependency when matrix-js-sdk is not installed.
+        // The adapter module is expected to export MatrixServiceAdapter as a named export.
+        const { MatrixServiceAdapter } = await import('./adapters/matrix.js');
+        return new MatrixServiceAdapter(config.id, config.config);
+      }
+      default:
+        throw new Error(
+          `No adapter implementation available for type "${config.type}". ` +
+            `Supported types: matrix`
+        );
+    }
   }
 
   private createControlSurface(
-    config: ControlSurfaceConfig
+    spec: ControlSurfaceSpec,
+    conversationId: string
   ): DroneControlSurface {
-    switch (config.type) {
+    switch (spec.type) {
       case 'persona-assignment': {
-        if (!config.personaId) {
+        if (!spec.personaId) {
           throw new Error(
             'persona-assignment control surface requires personaId'
           );
         }
         return this.createPersonaAssignmentSurface(
-          config.conversationId,
-          config.personaId
+          conversationId,
+          spec.personaId
         );
       }
+      case 'discard': {
+        return this.createDiscardSurface(conversationId);
+      }
       default:
-        // Placeholder — other control surface types will be implemented
-        // by follow-up phases (4.4 Swarm Console, 4.5 Mention Router).
         throw new Error(
-          `No control surface implementation available for type "${config.type}". ` +
-            `Control surface implementations are not yet built.`
+          `No control surface implementation available for type "${spec.type}". ` +
+            `Supported types: persona-assignment, discard`
         );
     }
   }
@@ -122,10 +160,8 @@ export class GatewayEngine {
       id: `persona-assignment-${conversationId}`,
       type: 'persona-assignment',
       handleMessage: async (msg: AdapterMessage) => {
-        if (msg.conversationId !== conversationId) {
-          return { response: null, handled: false };
-        }
-
+        // The engine guarantees this surface is only invoked for its
+        // own conversation — no conversationId re-check needed.
         try {
           // Ensure we have a session for this conversation
           if (!session) {
@@ -152,6 +188,26 @@ export class GatewayEngine {
             handled: true,
           };
         }
+      },
+    };
+  }
+
+  /**
+   * Creates a discard control surface that silently consumes messages.
+   * Always returns { response: null, handled: true }.
+   * Used for explicit "/dev/null" routing (e.g., wildcard catch-all for
+   * unknown DMs).
+   */
+  private createDiscardSurface(conversationId: string): DroneControlSurface {
+    return {
+      id: `discard-${conversationId}`,
+      type: 'discard',
+      handleMessage: async (_msg: AdapterMessage) => {
+        logger.debug(
+          { conversationId },
+          'Message discarded via discard control surface'
+        );
+        return { response: null, handled: true };
       },
     };
   }
