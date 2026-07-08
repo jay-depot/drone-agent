@@ -166,5 +166,9 @@
   {
     "timestamp": "2026-07-08T02:09:20.319Z",
     "insight": "The `file__apply_diff` tool frequently fails to match hunks in drone-agent TS files (context/whitespace mismatch errors reported even on exact content), making it unreliable for multi-hunk edits. For reliable edits here, fall back to a `python3` script that does exact string `replace` with `assert old in s`. This is faster and avoids the failure loop."
+  },
+  {
+    "timestamp": "2026-07-08T02:42:14.741Z",
+    "insight": "The reasoning-level planning session revealed that the provider interface (DroneLlmProvider.chat) needs a new optional parameter threaded through the conversation service. This is a pattern worth noting: any future provider-level feature (e.g., structured outputs, response format) will need the same three-layer touch: (1) provider-types.ts interface, (2) conversation-service.ts call site, (3) each provider's chat() handler. Consider whether a generic \"options bag\" on the chat input would reduce future churn."
   }
 ]
