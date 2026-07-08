@@ -58,5 +58,9 @@
   {
     "timestamp": "2026-07-08T03:24:20.704Z",
     "insight": "Bogus tests that build a fresh plugin/capture instance for the second call of a two-phase scenario can silently mask cross-call state bugs (locks, re-entrancy guards, accumulators). The compaction `compactionInFlight` latch bug survived because the \"resets compactionInFlight after the empty-turns early return\" test reused a brand-new instance for the follow-up call. When testing state that must persist across hook calls, reuse the SAME instance, and prefer driving the realistic runtime sequence (e.g. onBeforePrompt empty -> append turns -> onAfterToolCall). Add a planning-check step: when a reported test \"covers\" a bug but the bug is live, verify the test actually exercises the persistent state, not a fresh one."
+  },
+  {
+    "timestamp": "2026-07-08T05:44:45.437Z",
+    "insight": "When mocking `fetch` for non-POST verbs in tests, record the HTTP method (init.method) for GET/DELETE separately from the JSON-RPC `method` (which lives in the POST body). Also, client code that issues a best-effort fetch must check `response.ok` (not just `.catch`) because a mocked failure returns a non-ok *resolved* Response rather than rejecting."
   }
 ]
