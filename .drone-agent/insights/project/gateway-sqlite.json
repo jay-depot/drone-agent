@@ -3,6 +3,4 @@
     "timestamp": "2026-07-08T22:00:32.585Z",
     "insight": "The ESLint config (eslint.config.mjs) uses @typescript-eslint/recommended without argsIgnorePattern. Interface-required but unused parameters (like `txn` in CryptoStore methods) must be prefixed with `_` to pass lint. Added the pattern to the config."
   }
-] batches + client options. On restart the client replays the saved sync to rebuild live objects. Our SqliteSyncStore follows the same pattern."
-  }
 ]

@@ -7,6 +7,4 @@
     "timestamp": "2026-07-08T18:49:23.364Z",
     "insight": "git plugin: add tool silently runs `git add -u` (stages all tracked modifications) when called with no paths/all args (add.ts:38-41), contradicting the \"never silent git add -A\" philosophy applied to commit. Description doesn't mention the default → a model calling add with no args stages the whole tree. Also restore.ts:55-64 silently resolves a contradictory staged:true+discard:true to \"unstage only\" and drops the user's discard intent with no error — for an irreversible op this should be rejected, not silently reinterpreted."
   }
-]status`/`--cached --name-status` (stash.ts:73 already does this correctly). No test asserts the returned `files` arrays, only re-checks `git status`, so the bugs passed CI."
-  }
 ]
