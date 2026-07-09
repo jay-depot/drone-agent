@@ -37,7 +37,7 @@ pnpm start
 | -------------- | ---------------------------------- | ----------------------- |
 | `--port`       | 3456                               | Port to listen on       |
 | `--host`       | 0.0.0.0                            | Host to bind to         |
-| `--web-port`   | 8080                               | HTTP port for web UI   |
+| `--web-port`   | 8080                               | HTTP port for web UI    |
 | `--web-host`   | 127.0.0.1                          | Host for web UI port    |
 | `--config-dir` | ~/.drone-coordinator               | Configuration directory |
 | `--db`         | <config-dir>/drone-coordinator.db  | Path to SQLite database |
@@ -47,13 +47,13 @@ pnpm start
 
 ### Commands
 
-| Command                               | Description                                  |
-| ------------------------------------- | -------------------------------------------- |
-| `drone-coordinator serve`             | Start the coordinator server (default)       |
-| `drone-coordinator --approve <token>` | Approve a pending beacon by token            |
-| `drone-coordinator list-beacons`      | List all registered beacons and trust status |
-| `drone-coordinator --show-web-token`  | Print the current web UI access token        |
-| `drone-coordinator --generate-web-token` | Generate a new web UI access token        |
+| Command                                  | Description                                  |
+| ---------------------------------------- | -------------------------------------------- |
+| `drone-coordinator serve`                | Start the coordinator server (default)       |
+| `drone-coordinator --approve <token>`    | Approve a pending beacon by token            |
+| `drone-coordinator list-beacons`         | List all registered beacons and trust status |
+| `drone-coordinator --show-web-token`     | Print the current web UI access token        |
+| `drone-coordinator --generate-web-token` | Generate a new web UI access token           |
 
 ## API Endpoints
 
