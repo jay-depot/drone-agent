@@ -14,6 +14,7 @@ import { silentLogger } from './helpers.js';
 const execFileP = promisify(execFile);
 
 let repoDir: string;
+let defaultBranch: string;
 const SEED = 'README.md'; // committed in beforeAll, used for modification tests
 
 async function gitInRepo(args: string[]): Promise<string> {
@@ -72,6 +73,7 @@ beforeAll(async () => {
   await writeFile(path.join(repoDir, SEED), '# test\n');
   await gitInRepo(['add', SEED]);
   await gitInRepo(['commit', '-q', '-m', 'initial']);
+  defaultBranch = await gitInRepo(['rev-parse', '--abbrev-ref', 'HEAD']);
 });
 
 afterAll(async () => {
@@ -175,7 +177,7 @@ describe('git plugin integration', () => {
 
     await tools.get('branch')!({
       action: 'switch',
-      name: 'main',
+      name: defaultBranch,
       cwd: repoDir,
     });
     const del = JSON.parse(
