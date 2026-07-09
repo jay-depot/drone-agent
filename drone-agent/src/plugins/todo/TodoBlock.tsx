@@ -126,7 +126,12 @@ export function TodoBlock({ state }: { state: ToolRenderState }): ReactNode {
       const color = statusColor(item.status, scheme);
       const strike = item.status === 'completed';
       out.push(
-        <Text key={item.id} color={color} strikethrough={strike} wrap="wrap">
+        <Text
+          key={item.id}
+          color={color}
+          strikethrough={strike}
+          wrap="wrap"
+        >
           {`${item.id}. ${icon} ${item.title}`}
         </Text>
       );

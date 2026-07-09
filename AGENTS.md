@@ -239,18 +239,18 @@ skill-library/        ← Reusable skill .md files (not a workspace package)
 
 ## Development Commands
 
-| Command                  | Purpose                             |
-| ------------------------ | ----------------------------------- |
-| `pnpm build`             | Compile all packages                |
-| `pnpm typecheck`         | Type-check all packages             |
-| `pnpm test`              | Run all tests (vitest)              |
-| `pnpm test:watch`        | Watch mode                          |
-| `pnpm test:coverage`     | Run tests with coverage             |
-| `pnpm test:integration`  | Run integration tests               |
-| `pnpm lint`              | ESLint + Prettier                   |
-| `pnpm clean`             | Remove all dist/ directories        |
-| `pnpm docker:build`      | Build Docker images for smoke test  |
-| `pnpm docker:smoke-test` | Run full smoke test suite in Docker |
+| Command                       | Purpose                               |
+| ----------------------------- | ------------------------------------- |
+| `pnpm build`                  | Compile all packages                  |
+| `pnpm typecheck`              | Type-check all packages               |
+| `pnpm test`                   | Run all tests (vitest)                |
+| `pnpm test:watch`             | Watch mode                            |
+| `pnpm test:coverage`          | Run tests with coverage               |
+| `pnpm test:integration`       | Run integration tests                 |
+| `pnpm lint`                   | ESLint + Prettier                     |
+| `pnpm clean`                  | Remove all dist/ directories          |
+| `pnpm docker:build`           | Build Docker images for smoke test    |
+| `pnpm docker:smoke-test`      | Run full smoke test suite in Docker   |
 
 ## Architecture Overview
 
@@ -452,7 +452,7 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-agent/src/migrate.ts`                          | Migration workflows (promote/demote)                  |
 | `drone-agent/src/runtime/plugin-engine.ts`            | Plugin lifecycle, tool dispatch, workflow execution   |
 | `drone-agent/src/runtime/builtin-commands.ts`         | Built-in slash command definitions                    |
-| `drone-agent/src/runtime/config.ts`                   | Config loading, merging, environment interpolation    |
+| `drone-agent/src/runtime/config.ts`                   | Config loading, merging, environment interpolation     |
 | `drone-agent/src/runtime/conversation-service.ts`     | LLM conversation loop, tool iteration                 |
 | `drone-agent/src/runtime/session-manager.ts`          | Session state, turn tracking                          |
 | `drone-agent/src/runtime/context-budget-service.ts`   | Context window budgeting, compaction triggers         |
@@ -481,11 +481,11 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-agent/src/plugins/todo.ts`                     | TODO list management                                  |
 | `drone-agent/src/plugins/utils.ts`                    | Utility tools (arithmetic, counting, spelling)        |
 | `drone-agent/src/plugins/notepad.ts`                  | Session notepad                                       |
-| `drone-agent/src/plugins/terminal/index.ts`           | Terminal emulator plugin                              |
+| `drone-agent/src/plugins/terminal/index.ts`           | Terminal emulator plugin                               |
 | `drone-agent/src/plugins/prompt-file/index.ts`        | Prompt file injection                                 |
 | `drone-agent/src/plugins/compaction/index.ts`         | Context compaction (summary-drop strategy)            |
 | `drone-agent/src/plugins/config/index.ts`             | Config capability (injectors, rebuild)                |
-| `drone-agent/src/plugins/log/index.ts`                | Session logging to JSON files                         |
+| `drone-agent/src/plugins/log/index.ts`               | Session logging to JSON files                         |
 | `drone-agent/src/plugins/memory/index.ts`             | Project-level memory (JSON files)                     |
 | `drone-agent/src/plugins/persona/index.ts`            | Persona broker plugin                                 |
 | `drone-agent/src/plugins/skills/index.ts`             | Skills broker plugin                                  |
@@ -500,7 +500,7 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-core/src/session-types.ts`                     | Session, message, tool, and token types               |
 | `drone-core/src/provider-types.ts`                    | Provider types for brokers                            |
 | `drone-core/src/skill-types.ts`                       | Skill definition types                                |
-| `drone-core/src/persona-types.ts`                     | Persona definition and capability types               |
+| `drone-core/src/persona-types.ts`                     | Persona definition and capability types                |
 | `drone-core/src/domain-types.ts`                      | Domain types for beacon/coordinator                   |
 | `drone-core/src/lsp-types.ts`                         | LSP server types                                      |
 | `drone-core/src/mcp-types.ts`                         | MCP server types                                      |

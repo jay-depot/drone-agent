@@ -30,24 +30,24 @@ pnpm start
 
 ## Command-Line Options
 
-| Option                    | Default                      | Description                                      |
-| ------------------------- | ---------------------------- | ------------------------------------------------ |
-| `--port`                  | 3457                         | Port to listen on                                |
-| `--host`                  | 0.0.0.0                      | Host to bind to                                  |
-| `--config-dir`            | ~/.drone-beacon              | Configuration directory                          |
-| `--db`                    | <config-dir>/drone-beacon.db | Path to SQLite database                          |
-| `--coordinator-host`      | -                            | Coordinator host to connect to                   |
-| `--coordinator-port`      | 3458                         | Coordinator port (defaults to beacon port + 1)   |
-| `--coordinator-https`     | false                        | Use HTTPS for coordinator connection             |
-| `--https`                 | false                        | Enable HTTPS server (or set BEACON_HTTPS env)    |
-| `--no-https`              | -                            | Disable HTTPS server (default)                   |
-| `--id`                    | auto-generated               | Beacon ID                                        |
-| `--name`                  | default-beacon               | Beacon name                                      |
-| `--spawn-agent-path`      | drone-agent                  | Path to drone-agent binary                       |
-| `--spawn-timeout-ms`      | 30000                        | Agent connection timeout (ms)                    |
-| `--max-concurrent-spawns` | 10                           | Max concurrent spawned agents                    |
-| `--sync-interval-minutes` | 5                            | Interval for periodic coordinator sync (minutes) |
-| `--help`                  | -                            | Show help message                                |
+| Option                    | Default                | Description                                      |
+| ------------------------- | ---------------------- | ------------------------------------------------ |
+| `--port`                  | 3457                   | Port to listen on                                |
+| `--host`                  | 0.0.0.0                | Host to bind to                                  |
+| `--config-dir`            | ~/.drone-beacon        | Configuration directory                          |
+| `--db`                    | <config-dir>/drone-beacon.db | Path to SQLite database                    |
+| `--coordinator-host`      | -                      | Coordinator host to connect to                   |
+| `--coordinator-port`      | 3458                   | Coordinator port (defaults to beacon port + 1)   |
+| `--coordinator-https`     | false                  | Use HTTPS for coordinator connection             |
+| `--https`                 | false                  | Enable HTTPS server (or set BEACON_HTTPS env)   |
+| `--no-https`              | -                      | Disable HTTPS server (default)                   |
+| `--id`                    | auto-generated         | Beacon ID                                        |
+| `--name`                  | default-beacon         | Beacon name                                      |
+| `--spawn-agent-path`      | drone-agent            | Path to drone-agent binary                       |
+| `--spawn-timeout-ms`      | 30000                  | Agent connection timeout (ms)                    |
+| `--max-concurrent-spawns` | 10                     | Max concurrent spawned agents                    |
+| `--sync-interval-minutes` | 5                      | Interval for periodic coordinator sync (minutes) |
+| `--help`                  | -                      | Show help message                                |
 
 ## API Endpoints
 

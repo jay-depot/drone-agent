@@ -239,7 +239,7 @@ Slash commands are dispatched through `opts.engine.dispatchSlashCommand()` — t
 registration.registerSlashCommand({
   command: '/mystats',
   description: 'Show some stats',
-  handler: async ctx => {
+  handler: async (ctx) => {
     ctx.logger.info('Some stats here');
     return true;
   },
