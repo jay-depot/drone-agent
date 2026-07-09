@@ -14,6 +14,7 @@
 import { readdir, access, readFile, writeFile, mkdir } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import type { DronePlugin, DroneElicitation } from 'drone-core';
 
@@ -84,10 +85,11 @@ export async function loadPluginFromDirectory(
     const entryPath = path.join(dirPath, name);
     if (await pathExists(entryPath)) {
       try {
-        // Dynamic import — the plugin is expected to be a compiled JS module.
-        // Use file:// URL for cross-platform compatibility.
-        const fileUrl = new URL(`file://${entryPath}`).href;
-        const mod = await import(fileUrl);
+        // Use createRequire to load the plugin module, bypassing Vite's
+        // module interception (vitest 3.x uses vite-node which intercepts
+        // dynamic import() and fails for files outside the project root).
+        const nodeRequire = createRequire(entryPath);
+        const mod = nodeRequire(entryPath);
         const plugin: DronePlugin | undefined = mod.default ?? mod.plugin;
         if (
           !plugin ||
