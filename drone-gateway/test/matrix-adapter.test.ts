@@ -4,7 +4,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 const mockCreateClient = vi.fn();
 const mockOn = vi.fn();
 const mockStartClient = vi.fn();
-const mockInitCrypto = vi.fn();
+const mockInitRustCrypto = vi.fn();
 const mockStopClient = vi.fn();
 const mockSendTyping = vi.fn();
 const mockSendReadReceipt = vi.fn();
@@ -46,7 +46,7 @@ function makeClientStub() {
   return {
     on: mockOn,
     startClient: mockStartClient,
-    initCrypto: mockInitCrypto,
+    initRustCrypto: mockInitRustCrypto,
     stopClient: mockStopClient,
     sendTyping: mockSendTyping,
     sendReadReceipt: mockSendReadReceipt,
@@ -88,7 +88,7 @@ describe('MatrixServiceAdapter', () => {
     clientStub = makeClientStub();
     mockCreateClient.mockReturnValue(clientStub);
     mockStartClient.mockResolvedValue(undefined);
-    mockInitCrypto.mockResolvedValue(undefined);
+    mockInitRustCrypto.mockResolvedValue(undefined);
     mockStopClient.mockResolvedValue(undefined);
     mockSendTyping.mockResolvedValue(undefined);
     mockSendReadReceipt.mockResolvedValue(undefined);
@@ -142,7 +142,7 @@ describe('MatrixServiceAdapter', () => {
 
       await adapter.start();
 
-      expect(mockInitCrypto).toHaveBeenCalled();
+      expect(mockInitRustCrypto).toHaveBeenCalled();
     });
 
     it('starts the client sync', async () => {
