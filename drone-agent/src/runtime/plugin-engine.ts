@@ -91,6 +91,14 @@ export type DronePluginEngine = {
   getRegisteredPluginCount: () => number;
   getRegisteredToolCount: () => number;
   getHelpSnippets: () => string[];
+  /**
+   * Remove all tools registered by a plugin. Used when re-mounting tools
+   * after a reconnection (e.g. MCP server respawn) or when handling
+   * notifications/tools/list_changed. Clears the plugin's tool list so
+   * subsequent registerTool calls for the same names won't hit the
+   * duplicate check.
+   */
+  unregisterPluginTools: (pluginId: string) => void;
   /** Returns the resolved DroneAgentConfig used by the engine. */
   getConfig: () => DroneAgentConfig;
   /**
@@ -370,6 +378,18 @@ export function createDronePluginEngine({
     return normalizeWorkflowResult(raw);
   }
 
+  function unregisterPluginToolsImpl(pluginId: string): void {
+    const registered = registeredPlugins.find(
+      p => p.plugin.metadata.id === pluginId
+    );
+    if (!registered) return;
+    for (const tool of registered.tools) {
+      const canonicalName = getCanonicalToolName(pluginId, tool.name);
+      tools.delete(canonicalName);
+    }
+    registered.tools = [];
+  }
+
   async function registerPlugin(
     plugin: DronePlugin
   ): Promise<RegisteredPluginState> {
@@ -468,6 +488,9 @@ export function createDronePluginEngine({
       },
       runWorkflow: (canonicalName, args) => runWorkflow(canonicalName, args),
       requestElicitation: () => elicitationCapability,
+      unregisterPluginTools: (pluginId: string) => {
+        unregisterPluginToolsImpl(pluginId);
+      },
     });
 
     return {
@@ -598,6 +621,9 @@ export function createDronePluginEngine({
     getRegisteredPluginCount: () => registeredPlugins.length,
     getRegisteredToolCount: () => tools.size,
     getConfig: () => config,
+    unregisterPluginTools: (pluginId: string) => {
+      unregisterPluginToolsImpl(pluginId);
+    },
     getHelpSnippets: () => {
       const result: string[] = [];
       for (const [pluginId, snippets] of helpSnippets) {

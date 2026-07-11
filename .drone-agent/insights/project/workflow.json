@@ -198,5 +198,9 @@
   {
     "timestamp": "2026-07-09T17:01:44.978Z",
     "insight": "Vitest 3.x (vite-node) intercepts dynamic import() calls and fails for files outside the project root. Any code using import() to load external modules (like external-loader.ts) must use createRequire from node:module instead to bypass Vite's module interception."
+  },
+  {
+    "timestamp": "2026-07-11T17:30:40.990Z",
+    "insight": "When rewriting large functions like createStreamableHttpJsonRpcClient, it's critical to understand the full architecture before making changes. The SSE reconnection implementation accidentally changed the response channel from POST HTTP body to GET SSE stream, which broke all 35 unit tests. Always verify the test suite passes before committing."
   }
 ]

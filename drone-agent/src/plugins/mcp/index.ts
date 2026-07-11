@@ -335,6 +335,32 @@ export const mcpPlugin: DronePlugin = {
             setServerState(connection.state);
           }
         };
+        const onReconnected = async (): Promise<void> => {
+          if (!connection) return;
+          // Clear old tool registrations so re-registration won't hit duplicates.
+          registration.unregisterPluginTools('mcp');
+          mountedToolNames.clear();
+          // Re-list and re-mount tools.
+          const tools = await connection.listTools();
+          const allowlist = serverConfig.allowedTools;
+          const allowedToolSet = allowlist ? new Set(allowlist) : undefined;
+          const mountedTools = allowedToolSet
+            ? tools.filter((tool: McpToolMeta) => allowedToolSet.has(tool.name))
+            : tools;
+
+          connection.state.discoveredToolCount = tools.length;
+          connection.state.filteredToolCount =
+            tools.length - mountedTools.length;
+          connection.state.mountedToolCount = mountedTools.length;
+
+          mountMcpTools(serverId, connection, mountedTools);
+          mountResourcePromptTools(serverId, connection);
+          setServerState(connection.state);
+
+          registration.logger.info(
+            `mcp server reconnected: ${serverId} (mounted ${mountedTools.length}/${tools.length} tool(s))`
+          );
+        };
         try {
           connection = await createMcpClientConnection({
             serverId,
@@ -347,6 +373,7 @@ export const mcpPlugin: DronePlugin = {
             defaultCompatibilityMode: mcpConfig.compatibilityMode,
             onNotification,
             onStreamError,
+            onReconnected,
             logger: registration.logger,
           });
           connections.set(serverId, connection);
