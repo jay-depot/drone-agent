@@ -378,6 +378,18 @@ export function createDronePluginEngine({
     return normalizeWorkflowResult(raw);
   }
 
+  function unregisterPluginToolsImpl(pluginId: string): void {
+    const registered = registeredPlugins.find(
+      p => p.plugin.metadata.id === pluginId
+    );
+    if (!registered) return;
+    for (const tool of registered.tools) {
+      const canonicalName = getCanonicalToolName(pluginId, tool.name);
+      tools.delete(canonicalName);
+    }
+    registered.tools = [];
+  }
+
   async function registerPlugin(
     plugin: DronePlugin
   ): Promise<RegisteredPluginState> {
@@ -477,15 +489,7 @@ export function createDronePluginEngine({
       runWorkflow: (canonicalName, args) => runWorkflow(canonicalName, args),
       requestElicitation: () => elicitationCapability,
       unregisterPluginTools: (pluginId: string) => {
-        const registered = registeredPlugins.find(
-          p => p.plugin.metadata.id === pluginId
-        );
-        if (!registered) return;
-        for (const tool of registered.tools) {
-          const canonicalName = getCanonicalToolName(pluginId, tool.name);
-          tools.delete(canonicalName);
-        }
-        registered.tools = [];
+        unregisterPluginToolsImpl(pluginId);
       },
     });
 
@@ -618,15 +622,7 @@ export function createDronePluginEngine({
     getRegisteredToolCount: () => tools.size,
     getConfig: () => config,
     unregisterPluginTools: (pluginId: string) => {
-      const registered = registeredPlugins.find(
-        p => p.plugin.metadata.id === pluginId
-      );
-      if (!registered) return;
-      for (const tool of registered.tools) {
-        const canonicalName = getCanonicalToolName(pluginId, tool.name);
-        tools.delete(canonicalName);
-      }
-      registered.tools = [];
+      unregisterPluginToolsImpl(pluginId);
     },
     getHelpSnippets: () => {
       const result: string[] = [];
