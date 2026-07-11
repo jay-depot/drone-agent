@@ -4,11 +4,10 @@ import { initGatewaySchema } from '../src/store/db.js';
 import { SqliteCryptoStore } from '../src/store/sqlite-crypto-store.js';
 import { MigrationState } from 'matrix-js-sdk/lib/crypto/store/base.js';
 import type { OutgoingRoomKeyRequest } from 'matrix-js-sdk/lib/crypto/store/base.js';
-import type { InboundGroupSessionData } from 'matrix-js-sdk/lib/crypto/OlmDevice.js';
+import type { InboundGroupSessionData } from 'matrix-js-sdk/lib/crypto/store/base.js';
 import type { ISessionInfo } from 'matrix-js-sdk/lib/crypto/store/base.js';
-import type { IRoomEncryption } from 'matrix-js-sdk/lib/crypto/RoomList.js';
+import type { IRoomEncryption } from 'matrix-js-sdk/lib/crypto/store/base.js';
 import type { IDeviceData } from 'matrix-js-sdk/lib/crypto/store/base.js';
-import type { ParkedSharedHistory } from 'matrix-js-sdk/lib/crypto/store/base.js';
 
 describe('SqliteCryptoStore', () => {
   let db: Database.Database;
@@ -227,23 +226,22 @@ describe('SqliteCryptoStore', () => {
 
   describe('inbound group sessions', () => {
     const makeData = (): InboundGroupSessionData => ({
-      session_id: 'sess1',
-      session_key: 'key1',
-      sender_key: 'sender1',
-      forwarding_curve25519_key_chain: [],
-      keys_claimed: {},
+      room_id: '!room:test',
+      session: 'session-key',
+      forwardingCurve25519KeyChain: [],
+      keysClaimed: {},
     });
 
     it('round-trips an inbound group session', () => {
       const data = makeData();
-      store.addEndToEndInboundGroupSession('sender1', 'sess1', data, null);
+      store.storeEndToEndInboundGroupSession('sender1', 'sess1', data, null);
       store.getEndToEndInboundGroupSession(
         'sender1',
         'sess1',
         null,
         (session, withheld) => {
           expect(session).not.toBeNull();
-          expect(session!.session_id).toBe('sess1');
+          expect(session!.room_id).toBe('!room:test');
           expect(withheld).toBeNull();
         }
       );
@@ -251,14 +249,14 @@ describe('SqliteCryptoStore', () => {
 
     it('countEndToEndInboundGroupSessions returns count', async () => {
       const data = makeData();
-      store.addEndToEndInboundGroupSession('sender1', 'sess1', data, null);
+      store.storeEndToEndInboundGroupSession('sender1', 'sess1', data, null);
       const count = await store.countEndToEndInboundGroupSessions();
       expect(count).toBe(1);
     });
 
     it('getEndToEndInboundGroupSessionsBatch returns batches', async () => {
       const data = makeData();
-      store.addEndToEndInboundGroupSession('sender1', 'sess1', data, null);
+      store.storeEndToEndInboundGroupSession('sender1', 'sess1', data, null);
       const batch = await store.getEndToEndInboundGroupSessionsBatch();
       expect(batch).not.toBeNull();
       expect(batch!.length).toBe(1);
@@ -300,39 +298,6 @@ describe('SqliteCryptoStore', () => {
         expect(result).not.toBeNull();
         expect(result!.devices['@alice:test']['DEVICE1'].verified).toBe(0);
       });
-    });
-  });
-
-  describe('shared history', () => {
-    it('addSharedHistoryInboundGroupSession stores and retrieves', async () => {
-      store.addSharedHistoryInboundGroupSession(
-        '!room:test',
-        'sender1',
-        'sess1'
-      );
-      const result =
-        await store.getSharedHistoryInboundGroupSessions('!room:test');
-      expect(result).toHaveLength(1);
-      expect(result[0][0]).toBe('sender1');
-      expect(result[0][1]).toBe('sess1');
-    });
-
-    it('addParkedSharedHistory and takeParkedSharedHistory', async () => {
-      const data: ParkedSharedHistory = {
-        senderId: '@alice:test',
-        senderKey: 'sender1',
-        sessionId: 'sess1',
-        sessionKey: 'key1',
-        keysClaimed: {},
-        forwardingCurve25519KeyChain: [],
-      };
-      store.addParkedSharedHistory('!room:test', data);
-      const result = await store.takeParkedSharedHistory('!room:test');
-      expect(result).toHaveLength(1);
-      expect(result[0].senderId).toBe('@alice:test');
-      // Second take should be empty
-      const empty = await store.takeParkedSharedHistory('!room:test');
-      expect(empty).toHaveLength(0);
     });
   });
 

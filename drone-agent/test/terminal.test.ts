@@ -452,6 +452,7 @@ describe('terminalPlugin', () => {
       registerHelp: () => {},
       registerWorkflow: () => {},
       registerSlashCommand: () => {},
+      unregisterPluginTools: () => {},
       hooks: {
         onPluginsLoaded: () => {},
         onSessionStart: () => {},

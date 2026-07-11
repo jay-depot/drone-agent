@@ -44,6 +44,7 @@ function captureGitTools(): Map<
     registerHelp: () => {},
     registerSlashCommand: () => {},
     registerWorkflow: () => {},
+    unregisterPluginTools: () => {},
     hooks: {
       onPluginsLoaded: () => {},
       onSessionStart: () => {},

@@ -74,6 +74,7 @@ function createRegistrationCapture() {
     registerHelp: () => {},
     registerWorkflow: () => {},
     registerSlashCommand: () => {},
+    unregisterPluginTools: () => {},
     hooks: {
       onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
       onSessionStart: cb => hooks.onSessionStart.push(cb),

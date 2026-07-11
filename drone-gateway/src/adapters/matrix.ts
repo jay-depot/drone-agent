@@ -128,7 +128,7 @@ export class MatrixServiceAdapter implements DroneServiceAdapter {
 
     // Best-effort crypto initialization for E2EE rooms
     try {
-      await this.client.initCrypto();
+      await this.client.initRustCrypto();
       logger.info(
         'Matrix crypto initialized (E2EE rooms supported; keys persisted via SQLite)'
       );

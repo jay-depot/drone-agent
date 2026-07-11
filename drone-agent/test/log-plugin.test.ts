@@ -372,6 +372,7 @@ async function getCapability(
     registerHelp: () => {},
     registerWorkflow: () => {},
     registerSlashCommand: () => {},
+    unregisterPluginTools: () => {},
     hooks: {
       onPluginsLoaded: () => {},
       onSessionStart: () => {},
