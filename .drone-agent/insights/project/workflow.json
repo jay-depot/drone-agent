@@ -190,5 +190,9 @@
   {
     "timestamp": "2026-07-08T20:41:53.286Z",
     "insight": "The cleanup subcommand (step 9) uses `process.exit()` for early termination on errors/cancellation. In tests, `process.exit` is mocked to not actually exit, so the function continues executing past the intended exit point. Adding `return` after each `process.exit()` call prevents this. The `confirmFn` injection pattern (optional parameter) is cleaner than mocking `readline` for testing confirmation prompts."
+  },
+  {
+    "timestamp": "2026-07-09T17:01:44.978Z",
+    "insight": "Vitest 3.x (vite-node) intercepts dynamic import() calls and fails for files outside the project root. Any code using import() to load external modules (like external-loader.ts) must use createRequire from node:module instead to bypass Vite's module interception."
   }
 ]

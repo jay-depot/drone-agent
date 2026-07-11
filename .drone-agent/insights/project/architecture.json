@@ -290,5 +290,9 @@
   {
     "timestamp": "2026-07-08T16:07:26.076Z",
     "insight": "When validating a plan's \"pnpm build green\" gate, check the GLOBAL build baseline, not just your own diff. On 2026-07-08 the repo's `pnpm build` was already RED at session start (pre-existing, untouched files: drone-core/src/index.ts omitted the `DroneElicitation` re-export, causing TS2305/TS7006 in elicitation.ts, external-loader.ts, persona/wizard.ts, skills/wizard.ts, runtime/plugin-engine.ts, tui/elicitation.ts). These matched the session's initial LSP diagnostics exactly. Fixing the one-line re-export was necessary and safe; it also resolves the downstream `implicitly any` errors. Confirm pre-existing breakage by stashing only your own changed files and rebuilding."
+  },
+  {
+    "timestamp": "2026-07-09T17:01:46.985Z",
+    "insight": "The dependabot PR bundled two unrelated dependency bumps (vitest 2→3 and matrix-js-sdk 34→38) in a single commit, making it harder to isolate and fix the resulting test failures. Dependabot groups should be reviewed more carefully, or the npm_and_yarn group should be split to avoid bundling unrelated major version bumps."
   }
 ]
