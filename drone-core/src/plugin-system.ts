@@ -105,6 +105,14 @@ export type DronePluginRegistration = {
    * Returns `undefined` in non-interactive modes (e.g. `--once`).
    */
   requestElicitation: () => DroneElicitation | undefined;
+  /**
+   * Remove all tools previously registered by the given plugin ID.
+   * Used when re-mounting tools after a reconnection (e.g. MCP server
+   * respawn) or when handling notifications/tools/list_changed.
+   * Clears the plugin's tool list so subsequent registerTool calls
+   * for the same names won't hit the duplicate check.
+   */
+  unregisterPluginTools: (pluginId: string) => void;
 };
 
 // ── Elicitation types ───────────────────────────────────────────────
