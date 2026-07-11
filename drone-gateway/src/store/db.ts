@@ -83,14 +83,6 @@ function createCryptoSchema(db: GatewayDatabase): void {
       PRIMARY KEY (device_key, session_id)
     );
 
-    CREATE TABLE IF NOT EXISTS session_problems (
-      device_key TEXT NOT NULL,
-      type TEXT NOT NULL,
-      fixed INTEGER NOT NULL,
-      time INTEGER NOT NULL,
-      PRIMARY KEY (device_key, type)
-    );
-
     CREATE TABLE IF NOT EXISTS inbound_group_sessions (
       sender_key TEXT NOT NULL,
       session_id TEXT NOT NULL,
@@ -107,18 +99,6 @@ function createCryptoSchema(db: GatewayDatabase): void {
     CREATE TABLE IF NOT EXISTS e2e_rooms (
       room_id TEXT PRIMARY KEY,
       room_info TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS shared_history (
-      room_id TEXT NOT NULL,
-      sender_key TEXT NOT NULL,
-      session_id TEXT NOT NULL,
-      PRIMARY KEY (room_id, sender_key, session_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS parked_shared_history (
-      room_id TEXT NOT NULL,
-      data TEXT NOT NULL
     );
   `);
 }
