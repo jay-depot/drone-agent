@@ -2,31 +2,26 @@ import type { GatewayDatabase } from './db.js';
 import type {
   CryptoStore,
   IDeviceData,
-  IProblem,
   ISession,
   SessionExtended,
   ISessionInfo,
   IWithheld,
   OutgoingRoomKeyRequest,
-  ParkedSharedHistory,
   SecretStorePrivateKeys,
+  InboundGroupSessionData,
+  IRoomEncryption,
+  IRoomKeyRequestBody,
+  IRoomKeyRequestRecipient,
 } from 'matrix-js-sdk/lib/crypto/store/base.js';
 import { MigrationState } from 'matrix-js-sdk/lib/crypto/store/base.js';
 import type { CrossSigningKeyInfo } from 'matrix-js-sdk/lib/crypto-api/index.js';
-import type { IOlmDevice } from 'matrix-js-sdk/lib/crypto/algorithms/megolm.js';
-import type { InboundGroupSessionData } from 'matrix-js-sdk/lib/crypto/OlmDevice.js';
-import type { IRoomEncryption } from 'matrix-js-sdk/lib/crypto/RoomList.js';
-import type {
-  IRoomKeyRequestBody,
-  IRoomKeyRequestRecipient,
-} from 'matrix-js-sdk/lib/crypto/index.js';
 import type { Mode } from 'matrix-js-sdk/lib/crypto/store/base.js';
 import type { Logger } from 'matrix-js-sdk/lib/logger.js';
 
 const SESSION_BATCH_SIZE = 50;
 
 /**
- * SQLite-backed implementation of matrix-js-sdk's legacy CryptoStore.
+ * SQLite-backed implementation of matrix-js-sdk's CryptoStore.
  *
  * Each method maps to a prepared statement on the shared gateway database.
  * Callback-style methods ignore the `_txn` parameter (SQLite transactions
@@ -67,8 +62,7 @@ export class SqliteCryptoStore implements CryptoStore {
         SELECT COUNT(*) FROM device_data
       ) + (
         SELECT COUNT(*) FROM e2e_rooms
-      ) AS cnt`
-      )
+      ) AS cnt`)
       .get() as { cnt: number } | undefined;
     return Promise.resolve((row?.cnt ?? 0) > 0);
   }
@@ -85,12 +79,9 @@ export class SqliteCryptoStore implements CryptoStore {
       DELETE FROM secret_store_private_keys;
       DELETE FROM outgoing_room_key_requests;
       DELETE FROM end_to_end_sessions;
-      DELETE FROM session_problems;
       DELETE FROM inbound_group_sessions;
       DELETE FROM device_data;
       DELETE FROM e2e_rooms;
-      DELETE FROM shared_history;
-      DELETE FROM parked_shared_history;
     `);
     return Promise.resolve();
   }
@@ -360,21 +351,6 @@ export class SqliteCryptoStore implements CryptoStore {
     func(result);
   }
 
-  getAllEndToEndSessions(
-    _txn: unknown,
-    func: (session: ISessionInfo | null) => void
-  ): void {
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM end_to_end_sessions ORDER BY device_key, session_id`
-      )
-      .all() as E2eSessionRow[];
-    for (const r of rows) {
-      func(rowToSessionInfo(r));
-    }
-    func(null);
-  }
-
   storeEndToEndSession(
     deviceKey: string,
     sessionId: string,
@@ -394,46 +370,6 @@ export class SqliteCryptoStore implements CryptoStore {
         sessionInfo.session ?? null,
         sessionInfo.lastReceivedMessageTs ?? null
       );
-  }
-
-  storeEndToEndSessionProblem(
-    deviceKey: string,
-    type: string,
-    fixed: boolean
-  ): Promise<void> {
-    this.db
-      .prepare(
-        `
-      INSERT OR REPLACE INTO session_problems (device_key, type, fixed, time)
-      VALUES (?, ?, ?, ?)
-    `
-      )
-      .run(deviceKey, type, fixed ? 1 : 0, Date.now());
-    return Promise.resolve();
-  }
-
-  getEndToEndSessionProblem(
-    deviceKey: string,
-    timestamp: number
-  ): Promise<IProblem | null> {
-    const row = this.db
-      .prepare(
-        `SELECT * FROM session_problems WHERE device_key = ? AND time <= ? ORDER BY time DESC LIMIT 1`
-      )
-      .get(deviceKey, timestamp) as
-      | { device_key: string; type: string; fixed: number; time: number }
-      | undefined;
-    if (!row) return Promise.resolve(null);
-    return Promise.resolve({
-      type: row.type,
-      fixed: !!row.fixed,
-      time: row.time,
-    });
-  }
-
-  filterOutNotifiedErrorDevices(devices: IOlmDevice[]): Promise<IOlmDevice[]> {
-    // No notification tracking in SQLite — return all devices
-    return Promise.resolve(devices);
   }
 
   getEndToEndSessionsBatch(): Promise<ISessionInfo[] | null> {
@@ -486,41 +422,6 @@ export class SqliteCryptoStore implements CryptoStore {
     func(data, withheld ?? null);
   }
 
-  getAllEndToEndInboundGroupSessions(
-    _txn: unknown,
-    func: (session: ISession | null) => void
-  ): void {
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM inbound_group_sessions ORDER BY sender_key, session_id`
-      )
-      .all() as InboundSessionRow[];
-    for (const r of rows) {
-      func({
-        senderKey: r.sender_key,
-        sessionId: r.session_id,
-        sessionData: JSON.parse(r.session_data),
-      });
-    }
-    func(null);
-  }
-
-  addEndToEndInboundGroupSession(
-    senderCurve25519Key: string,
-    sessionId: string,
-    sessionData: InboundGroupSessionData,
-    _txn: unknown
-  ): void {
-    this.db
-      .prepare(
-        `
-      INSERT OR IGNORE INTO inbound_group_sessions (sender_key, session_id, session_data, needs_backup)
-      VALUES (?, ?, ?, 0)
-    `
-      )
-      .run(senderCurve25519Key, sessionId, JSON.stringify(sessionData));
-  }
-
   storeEndToEndInboundGroupSession(
     senderCurve25519Key: string,
     sessionId: string,
@@ -535,41 +436,6 @@ export class SqliteCryptoStore implements CryptoStore {
     `
       )
       .run(senderCurve25519Key, sessionId, JSON.stringify(sessionData));
-  }
-
-  storeEndToEndInboundGroupSessionWithheld(
-    senderCurve25519Key: string,
-    sessionId: string,
-    sessionData: IWithheld,
-    _txn: unknown
-  ): void {
-    // Store withheld data embedded in the session_data JSON
-    const existing = this.db
-      .prepare(
-        `SELECT session_data FROM inbound_group_sessions WHERE sender_key = ? AND session_id = ?`
-      )
-      .get(senderCurve25519Key, sessionId) as
-      | { session_data: string }
-      | undefined;
-    const data = existing
-      ? (JSON.parse(existing.session_data) as InboundGroupSessionData)
-      : ({} as InboundGroupSessionData);
-    (data as InboundGroupSessionData & { withheld?: IWithheld }).withheld =
-      sessionData;
-    this.db
-      .prepare(
-        `
-      INSERT OR REPLACE INTO inbound_group_sessions (sender_key, session_id, session_data, needs_backup)
-      VALUES (?, ?, ?, COALESCE((SELECT needs_backup FROM inbound_group_sessions WHERE sender_key = ? AND session_id = ?), 0))
-    `
-      )
-      .run(
-        senderCurve25519Key,
-        sessionId,
-        JSON.stringify(data),
-        senderCurve25519Key,
-        sessionId
-      );
   }
 
   countEndToEndInboundGroupSessions(): Promise<number> {
@@ -661,43 +527,6 @@ export class SqliteCryptoStore implements CryptoStore {
 
   // ── Key backup ─────────────────────────────────────────────
 
-  getSessionsNeedingBackup(limit: number): Promise<ISession[]> {
-    const rows = this.db
-      .prepare(
-        `SELECT * FROM inbound_group_sessions WHERE needs_backup = 1 LIMIT ?`
-      )
-      .all(limit) as InboundSessionRow[];
-    return Promise.resolve(
-      rows.map(r => ({
-        senderKey: r.sender_key,
-        sessionId: r.session_id,
-        sessionData: JSON.parse(r.session_data),
-      }))
-    );
-  }
-
-  countSessionsNeedingBackup(_txn?: unknown): Promise<number> {
-    const row = this.db
-      .prepare(
-        `SELECT COUNT(*) AS cnt FROM inbound_group_sessions WHERE needs_backup = 1`
-      )
-      .get() as { cnt: number };
-    return Promise.resolve(row.cnt);
-  }
-
-  unmarkSessionsNeedingBackup(
-    sessions: ISession[],
-    _txn?: unknown
-  ): Promise<void> {
-    const stmt = this.db.prepare(
-      `UPDATE inbound_group_sessions SET needs_backup = 0 WHERE sender_key = ? AND session_id = ?`
-    );
-    for (const s of sessions) {
-      stmt.run(s.senderKey, s.sessionId);
-    }
-    return Promise.resolve();
-  }
-
   markSessionsNeedingBackup(
     sessions: ISession[],
     _txn?: unknown
@@ -709,63 +538,6 @@ export class SqliteCryptoStore implements CryptoStore {
       stmt.run(s.senderKey, s.sessionId);
     }
     return Promise.resolve();
-  }
-
-  // ── Shared history ─────────────────────────────────────────
-
-  addSharedHistoryInboundGroupSession(
-    roomId: string,
-    senderKey: string,
-    sessionId: string,
-    _txn?: unknown
-  ): void {
-    this.db
-      .prepare(
-        `
-      INSERT OR IGNORE INTO shared_history (room_id, sender_key, session_id)
-      VALUES (?, ?, ?)
-    `
-      )
-      .run(roomId, senderKey, sessionId);
-  }
-
-  getSharedHistoryInboundGroupSessions(
-    roomId: string,
-    _txn?: unknown
-  ): Promise<[senderKey: string, sessionId: string][]> {
-    const rows = this.db
-      .prepare(
-        `SELECT sender_key, session_id FROM shared_history WHERE room_id = ?`
-      )
-      .all(roomId) as { sender_key: string; session_id: string }[];
-    return Promise.resolve(rows.map(r => [r.sender_key, r.session_id]));
-  }
-
-  addParkedSharedHistory(
-    roomId: string,
-    data: ParkedSharedHistory,
-    _txn?: unknown
-  ): void {
-    this.db
-      .prepare(
-        `
-      INSERT INTO parked_shared_history (room_id, data) VALUES (?, ?)
-    `
-      )
-      .run(roomId, JSON.stringify(data));
-  }
-
-  takeParkedSharedHistory(
-    roomId: string,
-    _txn?: unknown
-  ): Promise<ParkedSharedHistory[]> {
-    const rows = this.db
-      .prepare(`SELECT data FROM parked_shared_history WHERE room_id = ?`)
-      .all(roomId) as { data: string }[];
-    this.db
-      .prepare(`DELETE FROM parked_shared_history WHERE room_id = ?`)
-      .run(roomId);
-    return Promise.resolve(rows.map(r => JSON.parse(r.data)));
   }
 
   // ── Transaction helper ──────────────────────────────────────
