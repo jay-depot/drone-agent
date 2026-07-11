@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-07-11T18:20:16.432Z",
+    "insight": "The InboundGroupSessionData interface changed between matrix-js-sdk v34 and v38. The old version had `session_id`, `session_key`, `sender_key`, `forwarding_curve25519_key_chain`, and `keys_claimed` fields. The v38 version has `room_id`, `session`, `forwardingCurve25519KeyChain`, `keysClaimed?`, `untrusted?`, and `sharedHistory?` fields. The test data had to be updated to match the new shape."
+  }
+]

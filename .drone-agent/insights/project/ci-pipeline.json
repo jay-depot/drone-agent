@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-07-11T18:10:51.891Z",
+    "insight": "The CI pipeline's unit-tests job runs `pnpm test` (vitest) and `pnpm lint` but NOT `pnpm build` or `pnpm typecheck`. Since vitest uses esbuild (not tsc) to transpile, TypeScript compilation errors in packages like drone-gateway pass through the unit-tests job undetected. The Docker build step in the integration-tests job would catch them, but that's a heavier, slower job. Adding a `pnpm typecheck` step to the unit-tests job would catch these errors cheaply on every PR."
+  }
+]
