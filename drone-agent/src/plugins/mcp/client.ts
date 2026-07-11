@@ -5,6 +5,7 @@ import type {
   DroneMcpResourceTemplateMeta,
   DroneMcpPromptArgument,
   DroneMcpServerConfig,
+  DroneMcpStdioServerConfig,
   DroneMcpServerState,
   DroneMcpPromptMeta,
 } from 'drone-core';
@@ -501,6 +502,15 @@ function normalizeHttpEnvelope(
   throw new Error('Invalid JSON-RPC envelope from streamable HTTP MCP server.');
 }
 
+/**
+ * Streamable HTTP MCP transport.
+ *
+ * Uses POST for all requests (with optional streaming via `?accept` param)
+ * and a long-lived GET SSE stream for server-to-client notifications.
+ *
+ * The GET stream is automatically reconnected on transient drops with
+ * exponential backoff (1s, 2s, 4s, ..., capped at 60s).
+ */
 function createStreamableHttpJsonRpcClient(options: {
   serverId: string;
   url: string;
@@ -509,14 +519,12 @@ function createStreamableHttpJsonRpcClient(options: {
   compatibilityMode: 'strict' | 'permissive';
   onNotification: (method: string, params: unknown) => void;
   onStreamError: (message: string) => void;
-  /** Fires when the GET SSE stream successfully opens after a drop. */
   onStreamReconnected?: () => void;
 }): JsonRpcClient {
   let nextId = 1;
   let closed = false;
-
+  let streaming = false;
   let sessionId: string | undefined;
-  const streamAbort = new AbortController();
 
   async function openGetStream(): Promise<void> {
     let backoffMs = 1000;
@@ -529,27 +537,40 @@ function createStreamableHttpJsonRpcClient(options: {
             ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
             ...options.headers,
           },
-          signal: streamAbort.signal,
+          signal: AbortSignal.timeout(options.requestTimeoutMs),
         });
+
         if (!response.ok || !response.body) {
-          options.onStreamError(`GET stream returned ${response.status}`);
+          options.onStreamError(
+            `GET stream returned ${response.status} ${response.statusText}`
+          );
           if (!closed) {
             await sleep(backoffMs);
             backoffMs = Math.min(backoffMs * 2, 60000);
           }
           continue;
         }
-        // Successfully opened — reset backoff and notify.
+
+        // Successfully opened — reset backoff and mark streaming
         backoffMs = 1000;
+        streaming = true;
         options.onStreamReconnected?.();
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-        while (true) {
-          const { value, done } = await reader.read();
+
+        while (!closed) {
+          const { done, value } = await reader.read();
           if (done) {
+            // Stream ended normally (server closed it)
+            streaming = false;
+            if (!closed) {
+              await sleep(1000); // brief pause before retry
+            }
             break;
           }
+
           buffer += decoder.decode(value, { stream: true });
           let separator: number;
           while ((separator = buffer.indexOf('\n\n')) !== -1) {
@@ -575,14 +596,11 @@ function createStreamableHttpJsonRpcClient(options: {
             }
           }
         }
-        // Stream ended normally (server closed it). Brief pause then retry.
-        if (!closed) {
-          await sleep(1000);
-        }
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
           return;
         }
+        streaming = false;
         options.onStreamError(
           error instanceof Error ? error.message : String(error)
         );
@@ -677,8 +695,7 @@ function createStreamableHttpJsonRpcClient(options: {
     },
     disconnect: () => {
       closed = true;
-      // Stop the GET reader first (no-op if it was never opened).
-      streamAbort.abort();
+      streaming = false;
       // Best-effort DELETE to terminate the session server-side. Non-blocking
       // so disconnect() keeps its synchronous signature; failures are logged
       // via onStreamError but never throw.
@@ -931,11 +948,12 @@ export async function createMcpClientConnection(options: {
       onStreamReconnected: options.onReconnected,
     });
   } else {
-    childProcess = spawn(options.config.command, options.config.args ?? [], {
-      cwd: options.config.cwd,
+    const stdioConfig = options.config as DroneMcpStdioServerConfig;
+    childProcess = spawn(stdioConfig.command, stdioConfig.args ?? [], {
+      cwd: stdioConfig.cwd,
       env: {
         ...process.env,
-        ...(options.config.env ?? {}),
+        ...(stdioConfig.env ?? {}),
       },
       stdio: 'pipe',
     });
@@ -948,7 +966,7 @@ export async function createMcpClientConnection(options: {
         state.lastError = error;
         state.lastErrorCategory = classifyErrorCategory(error);
       },
-      encoding: options.config.encoding,
+      encoding: stdioConfig.encoding,
     });
   }
 
@@ -1024,8 +1042,8 @@ export async function createMcpClientConnection(options: {
     return { items, truncated };
   }
 
-
   function startRespawnMonitor(): void {
+    const stdioConfig = options.config as DroneMcpStdioServerConfig;
     let backoffMs = 1000;
     const monitor = async () => {
       while (!closed) {
@@ -1034,11 +1052,11 @@ export async function createMcpClientConnection(options: {
           continue;
         }
         try {
-          const newChild = spawn(options.config.command, options.config.args ?? [], {
-            cwd: options.config.cwd,
+          const newChild = spawn(stdioConfig.command, stdioConfig.args ?? [], {
+            cwd: stdioConfig.cwd,
             env: {
               ...process.env,
-              ...(options.config.env ?? {}),
+              ...(stdioConfig.env ?? {}),
             },
             stdio: 'pipe',
           });
@@ -1050,7 +1068,7 @@ export async function createMcpClientConnection(options: {
               state.lastError = error;
               state.lastErrorCategory = classifyErrorCategory(error);
             },
-            encoding: options.config.encoding,
+            encoding: stdioConfig.encoding,
           });
           await newRpc.request('initialize', {
             protocolVersion: '2024-11-05',
@@ -1101,10 +1119,9 @@ export async function createMcpClientConnection(options: {
     if (options.config.transport === 'streamable_http') {
       rpc.startNotifications?.();
       state.streaming = true;
+    }
     if (state.ownership === 'spawned') {
       startRespawnMonitor();
-    }
-
     }
     options.onReconnected?.();
   } catch (error) {
@@ -1221,7 +1238,7 @@ export async function createMcpClientConnection(options: {
         const FORCE_KILL_DELAY_MS = 2500;
         const exitPromise = new Promise<void>(resolve => {
           const onExit = () => resolve();
-          childProcess!.once('exit', onExit);
+          childProcess.once('exit', onExit);
           // Also resolve if process is already dead
           if (!childProcess.pid || childProcess.killed) {
             resolve();
