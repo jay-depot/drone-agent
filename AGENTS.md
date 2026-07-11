@@ -239,18 +239,18 @@ skill-library/        ← Reusable skill .md files (not a workspace package)
 
 ## Development Commands
 
-| Command                       | Purpose                               |
-| ----------------------------- | ------------------------------------- |
-| `pnpm build`                  | Compile all packages                  |
-| `pnpm typecheck`              | Type-check all packages               |
-| `pnpm test`                   | Run all tests (vitest)                |
-| `pnpm test:watch`             | Watch mode                            |
-| `pnpm test:coverage`          | Run tests with coverage               |
-| `pnpm test:integration`       | Run integration tests                 |
-| `pnpm lint`                   | ESLint + Prettier                     |
-| `pnpm clean`                  | Remove all dist/ directories          |
-| `pnpm docker:build`           | Build Docker images for smoke test    |
-| `pnpm docker:smoke-test`      | Run full smoke test suite in Docker   |
+| Command                  | Purpose                             |
+| ------------------------ | ----------------------------------- |
+| `pnpm build`             | Compile all packages                |
+| `pnpm typecheck`         | Type-check all packages             |
+| `pnpm test`              | Run all tests (vitest)              |
+| `pnpm test:watch`        | Watch mode                          |
+| `pnpm test:coverage`     | Run tests with coverage             |
+| `pnpm test:integration`  | Run integration tests               |
+| `pnpm lint`              | ESLint + Prettier                   |
+| `pnpm clean`             | Remove all dist/ directories        |
+| `pnpm docker:build`      | Build Docker images for smoke test  |
+| `pnpm docker:smoke-test` | Run full smoke test suite in Docker |
 
 ## Architecture Overview
 
@@ -452,7 +452,7 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-agent/src/migrate.ts`                          | Migration workflows (promote/demote)                  |
 | `drone-agent/src/runtime/plugin-engine.ts`            | Plugin lifecycle, tool dispatch, workflow execution   |
 | `drone-agent/src/runtime/builtin-commands.ts`         | Built-in slash command definitions                    |
-| `drone-agent/src/runtime/config.ts`                   | Config loading, merging, environment interpolation     |
+| `drone-agent/src/runtime/config.ts`                   | Config loading, merging, environment interpolation    |
 | `drone-agent/src/runtime/conversation-service.ts`     | LLM conversation loop, tool iteration                 |
 | `drone-agent/src/runtime/session-manager.ts`          | Session state, turn tracking                          |
 | `drone-agent/src/runtime/context-budget-service.ts`   | Context window budgeting, compaction triggers         |
@@ -481,11 +481,11 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-agent/src/plugins/todo.ts`                     | TODO list management                                  |
 | `drone-agent/src/plugins/utils.ts`                    | Utility tools (arithmetic, counting, spelling)        |
 | `drone-agent/src/plugins/notepad.ts`                  | Session notepad                                       |
-| `drone-agent/src/plugins/terminal/index.ts`           | Terminal emulator plugin                               |
+| `drone-agent/src/plugins/terminal/index.ts`           | Terminal emulator plugin                              |
 | `drone-agent/src/plugins/prompt-file/index.ts`        | Prompt file injection                                 |
 | `drone-agent/src/plugins/compaction/index.ts`         | Context compaction (summary-drop strategy)            |
 | `drone-agent/src/plugins/config/index.ts`             | Config capability (injectors, rebuild)                |
-| `drone-agent/src/plugins/log/index.ts`               | Session logging to JSON files                         |
+| `drone-agent/src/plugins/log/index.ts`                | Session logging to JSON files                         |
 | `drone-agent/src/plugins/memory/index.ts`             | Project-level memory (JSON files)                     |
 | `drone-agent/src/plugins/persona/index.ts`            | Persona broker plugin                                 |
 | `drone-agent/src/plugins/skills/index.ts`             | Skills broker plugin                                  |
@@ -500,7 +500,7 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-core/src/session-types.ts`                     | Session, message, tool, and token types               |
 | `drone-core/src/provider-types.ts`                    | Provider types for brokers                            |
 | `drone-core/src/skill-types.ts`                       | Skill definition types                                |
-| `drone-core/src/persona-types.ts`                     | Persona definition and capability types                |
+| `drone-core/src/persona-types.ts`                     | Persona definition and capability types               |
 | `drone-core/src/domain-types.ts`                      | Domain types for beacon/coordinator                   |
 | `drone-core/src/lsp-types.ts`                         | LSP server types                                      |
 | `drone-core/src/mcp-types.ts`                         | MCP server types                                      |
@@ -524,3 +524,20 @@ When working on the project, proactively log insights using `self-improvement.in
 - **Project-first**: Config cascades top-down. Project-level config overrides user-level.
 - **Self-dogfooding**: The project should be developed using itself. Use the tools to improve the tools.
 - **Single-user swarm**: The swarm is designed to work with a single human, meaning that all agents in the swarm are expected to be working for the same user. If you are trying to set up coordination between multiple users, you would want to set up separate swarms for each user, and then have each set up to connect to an MCP server that is designed for multi-user coordination.
+
+## Standards
+
+**Ensure the following standards are met before you consider a job "done"**
+
+- LSP must pass. No exceptions for tests, no exceptions for code you're not working on.
+- `pnpm -r run lint` and `pnpm -r run build` must pass with zero errors.
+- `pnpm -r run lint` will run prettier by default, whenever eslint succeeds. Keep two things in mind about this:
+  1. **If you run the linter, you will need to re-read all files before attempting to modify them again**, because prettier will reformat them.
+  2. You don't need to worry about matching the formatting rules of the project in your changes. Worry about making LSP, typecheck, eslint, and build pass, then prettier will handle the formatting for you.
+- The "fast" test suite must pass. Check the "slow" test suite at your discretion, or when you are told to do so.
+- All new code must be covered by unit tests. If you are adding a new feature, you must add tests for it. If you are fixing a bug, you must add a test that reproduces the bug and then fixes it.
+- Dead code must be removed. Unused variables must be removed. "Fluff" comments must be removed.
+- If a comment isn't jsdoc, then it needs to be explaining a complex process or algorithm. If it is not explaining a complex process or algorithm either, then the only other kind of comment that is allowed is a TODO/FIXME comment. All other comments must be removed.
+- Single-word comments indicating the "step" in a process should not be used. Name your functions and variables in a way that makes the step clear. When you encounter these comments, remove them.
+- If a file is growing beyond 750 lines, consider splitting it into multiple files. If a file is growing beyond 1000 lines, you must split it into multiple files.
+- Be absolutely ruthless when it comes to duplicated code. If you see a pattern emerging, extract it into a function or class. If you see a pattern that is already implemented elsewhere, extract it and use that. If you see any existing duplicated code, refactor it.
