@@ -294,5 +294,9 @@
   {
     "timestamp": "2026-07-09T17:01:46.985Z",
     "insight": "The dependabot PR bundled two unrelated dependency bumps (vitest 2→3 and matrix-js-sdk 34→38) in a single commit, making it harder to isolate and fix the resulting test failures. Dependabot groups should be reviewed more carefully, or the npm_and_yarn group should be split to avoid bundling unrelated major version bumps."
+  },
+  {
+    "timestamp": "2026-07-11T20:21:17.034Z",
+    "insight": "unregisterPluginToolsImpl in plugin-engine.ts had a subtle bug: it only iterated over the plugin's static tool list (registered during register()), but the MCP plugin registers tools dynamically via registerTool() at runtime. Those dynamic tools were never cleaned up, causing \"Tool already registered\" errors on re-mount. Fixed by iterating the tools map by prefix instead."
   }
 ]
