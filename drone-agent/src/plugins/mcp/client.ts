@@ -1235,12 +1235,13 @@ export async function createMcpClientConnection(options: {
 
       // Forcefully terminate spawned process after timeout if it hasn't exited
       if (state.ownership === 'spawned' && childProcess) {
+        const cp = childProcess;
         const FORCE_KILL_DELAY_MS = 2500;
         const exitPromise = new Promise<void>(resolve => {
           const onExit = () => resolve();
-          childProcess.once('exit', onExit);
+          cp.once('exit', onExit);
           // Also resolve if process is already dead
-          if (!childProcess.pid || childProcess.killed) {
+          if (!cp.pid || cp.killed) {
             resolve();
           }
         });
@@ -1250,7 +1251,7 @@ export async function createMcpClientConnection(options: {
             options.logger.warn(
               `mcp server ${options.serverId} did not exit gracefully, forcing termination`
             );
-            childProcess?.kill();
+            cp.kill();
             resolve();
           }, FORCE_KILL_DELAY_MS);
         });
