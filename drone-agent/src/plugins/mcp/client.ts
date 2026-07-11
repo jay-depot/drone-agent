@@ -1065,6 +1065,7 @@ export async function createMcpClientConnection(options: {
           state.lastErrorCategory = undefined;
           backoffMs = 1000;
           options.onReconnected?.();
+          state.reconnectCount = (state.reconnectCount ?? 0) + 1;
         } catch (error) {
           state.lastError = error instanceof Error ? error.message : String(error);
           state.lastErrorCategory = classifyErrorCategory(error);

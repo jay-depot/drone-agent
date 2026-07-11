@@ -27,6 +27,8 @@ export type DroneMcpServerState = {
   streaming?: boolean;
   /** Last error observed on the GET SSE stream (e.g. a transient drop). */
   lastStreamError?: string;
+  /** Number of times the connection has reconnected (SSE stream or stdio child). */
+  reconnectCount?: number;
 };
 
 export type DroneMcpMountedToolMeta = {
