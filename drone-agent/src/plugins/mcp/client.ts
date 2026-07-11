@@ -509,6 +509,8 @@ function createStreamableHttpJsonRpcClient(options: {
   compatibilityMode: 'strict' | 'permissive';
   onNotification: (method: string, params: unknown) => void;
   onStreamError: (message: string) => void;
+  /** Fires when the GET SSE stream successfully opens after a drop. */
+  onStreamReconnected?: () => void;
 }): JsonRpcClient {
   let nextId = 1;
   let closed = false;
@@ -517,63 +519,78 @@ function createStreamableHttpJsonRpcClient(options: {
   const streamAbort = new AbortController();
 
   async function openGetStream(): Promise<void> {
-    if (closed) {
-      return;
-    }
-    try {
-      const response = await fetch(options.url, {
-        method: 'GET',
-        headers: {
-          accept: 'text/event-stream',
-          ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
-          ...options.headers,
-        },
-        signal: streamAbort.signal,
-      });
-      if (!response.ok || !response.body) {
-        options.onStreamError(`GET stream returned ${response.status}`);
-        return;
-      }
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) {
-          break;
+    let backoffMs = 1000;
+    while (!closed) {
+      try {
+        const response = await fetch(options.url, {
+          method: 'GET',
+          headers: {
+            accept: 'text/event-stream',
+            ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
+            ...options.headers,
+          },
+          signal: streamAbort.signal,
+        });
+        if (!response.ok || !response.body) {
+          options.onStreamError(`GET stream returned ${response.status}`);
+          if (!closed) {
+            await sleep(backoffMs);
+            backoffMs = Math.min(backoffMs * 2, 60000);
+          }
+          continue;
         }
-        buffer += decoder.decode(value, { stream: true });
-        let separator: number;
-        while ((separator = buffer.indexOf('\n\n')) !== -1) {
-          const rawEvent = buffer.slice(0, separator);
-          buffer = buffer.slice(separator + 2);
-          const dataLine = rawEvent
-            .split('\n')
-            .find(line => line.startsWith('data:'));
-          if (!dataLine) {
-            continue;
+        // Successfully opened — reset backoff and notify.
+        backoffMs = 1000;
+        options.onStreamReconnected?.();
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
           }
-          const data = dataLine.slice('data:'.length).trim();
-          if (data.length === 0) {
-            continue;
-          }
-          try {
-            const message = JSON.parse(data) as JsonRpcMessage;
-            if (typeof message.method === 'string') {
-              options.onNotification(message.method, message.params);
+          buffer += decoder.decode(value, { stream: true });
+          let separator: number;
+          while ((separator = buffer.indexOf('\n\n')) !== -1) {
+            const rawEvent = buffer.slice(0, separator);
+            buffer = buffer.slice(separator + 2);
+            const dataLine = rawEvent
+              .split('\n')
+              .find(line => line.startsWith('data:'));
+            if (!dataLine) {
+              continue;
             }
-          } catch {
-            // Ignore malformed SSE payloads.
+            const data = dataLine.slice('data:'.length).trim();
+            if (data.length === 0) {
+              continue;
+            }
+            try {
+              const message = JSON.parse(data) as JsonRpcMessage;
+              if (typeof message.method === 'string') {
+                options.onNotification(message.method, message.params);
+              }
+            } catch {
+              // Ignore malformed SSE payloads.
+            }
           }
         }
+        // Stream ended normally (server closed it). Brief pause then retry.
+        if (!closed) {
+          await sleep(1000);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
+        options.onStreamError(
+          error instanceof Error ? error.message : String(error)
+        );
+        if (!closed) {
+          await sleep(backoffMs);
+          backoffMs = Math.min(backoffMs * 2, 60000);
+        }
       }
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        return;
-      }
-      options.onStreamError(
-        error instanceof Error ? error.message : String(error)
-      );
     }
   }
 
@@ -910,6 +927,7 @@ export async function createMcpClientConnection(options: {
       compatibilityMode: effectiveCompatibilityMode,
       onNotification: options.onNotification,
       onStreamError: options.onStreamError,
+      onStreamReconnected: options.onReconnected,
     });
   } else {
     childProcess = spawn(options.config.command, options.config.args ?? [], {
