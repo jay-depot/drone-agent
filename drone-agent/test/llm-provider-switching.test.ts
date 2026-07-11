@@ -63,6 +63,7 @@ async function captureLlmPlugin(): Promise<Capture> {
         modelCommand = command;
       }
     },
+    unregisterPluginTools: () => {},
     hooks: {
       onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
       onSessionStart: cb => hooks.onSessionStart.push(cb),
