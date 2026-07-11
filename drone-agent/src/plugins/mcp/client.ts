@@ -916,6 +916,7 @@ export async function createMcpClientConnection(options: {
   };
 
   let childProcess: ChildProcessWithoutNullStreams | undefined;
+  let closed = false;
   let rpc: JsonRpcClient;
 
   if (options.config.transport === 'streamable_http') {
@@ -1023,6 +1024,58 @@ export async function createMcpClientConnection(options: {
     return { items, truncated };
   }
 
+
+  function startRespawnMonitor(): void {
+    let backoffMs = 1000;
+    const monitor = async () => {
+      while (!closed) {
+        if (state.status !== 'error') {
+          await sleep(200);
+          continue;
+        }
+        try {
+          const newChild = spawn(options.config.command, options.config.args ?? [], {
+            cwd: options.config.cwd,
+            env: {
+              ...process.env,
+              ...(options.config.env ?? {}),
+            },
+            stdio: 'pipe',
+          });
+          const newRpc = createStdioJsonRpcClient({
+            transport: createChildTransport(newChild),
+            requestTimeoutMs: effectiveRequestTimeoutMs,
+            onTransportIssue: error => {
+              state.status = 'error';
+              state.lastError = error;
+              state.lastErrorCategory = classifyErrorCategory(error);
+            },
+            encoding: options.config.encoding,
+          });
+          await newRpc.request('initialize', {
+            protocolVersion: '2024-11-05',
+            capabilities: { tools: {}, resources: {}, prompts: {} },
+            clientInfo: { name: 'drone-agent', version: '0.1.0' },
+          });
+          newRpc.notify('notifications/initialized', {});
+          childProcess = newChild;
+          rpc = newRpc;
+          state.status = 'connected';
+          state.lastError = undefined;
+          state.lastErrorCategory = undefined;
+          backoffMs = 1000;
+          options.onReconnected?.();
+        } catch (error) {
+          state.lastError = error instanceof Error ? error.message : String(error);
+          state.lastErrorCategory = classifyErrorCategory(error);
+          await sleep(backoffMs);
+          backoffMs = Math.min(backoffMs * 2, 60000);
+        }
+      }
+    };
+    void monitor();
+  }
+
   try {
     await requestWithRetry(
       'initialize',
@@ -1047,6 +1100,10 @@ export async function createMcpClientConnection(options: {
     if (options.config.transport === 'streamable_http') {
       rpc.startNotifications?.();
       state.streaming = true;
+    if (state.ownership === 'spawned') {
+      startRespawnMonitor();
+    }
+
     }
     options.onReconnected?.();
   } catch (error) {
@@ -1126,6 +1183,7 @@ export async function createMcpClientConnection(options: {
     },
     disconnect: async () => {
       // Attempt graceful shutdown for spawned servers
+      closed = true;
       if (state.ownership === 'spawned' && state.status === 'connected') {
         try {
           await requestWithRetry('shutdown', {}, false);
