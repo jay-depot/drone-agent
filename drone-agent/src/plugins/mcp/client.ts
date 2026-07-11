@@ -852,6 +852,8 @@ export async function createMcpClientConnection(options: {
   onNotification: (method: string, params: unknown) => void;
   onStreamError: (message: string) => void;
   logger: DroneLogger;
+  /** Fires after a successful reconnection (SSE stream reconnect or stdio child respawn). */
+  onReconnected?: () => void;
 }): Promise<McpClientConnection> {
   const effectiveRequestTimeoutMs =
     options.config.requestTimeoutMs ?? options.defaultRequestTimeoutMs;
@@ -1028,6 +1030,7 @@ export async function createMcpClientConnection(options: {
       rpc.startNotifications?.();
       state.streaming = true;
     }
+    options.onReconnected?.();
   } catch (error) {
     state.status = 'error';
     state.lastError = error instanceof Error ? error.message : String(error);
