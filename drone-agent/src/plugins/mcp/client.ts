@@ -523,7 +523,6 @@ function createStreamableHttpJsonRpcClient(options: {
   url: string;
   headers: Record<string, string>;
   requestTimeoutMs: number;
-  onNotification?: (method: string, params: unknown) => void;
   compatibilityMode: 'strict' | 'permissive';
   onNotification: (method: string, params: unknown) => void;
   onStreamError: (message: string) => void;
