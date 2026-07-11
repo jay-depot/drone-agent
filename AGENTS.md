@@ -2,11 +2,23 @@
 
 This file describes how to work on the `drone-agent` project itself. The project is a monorepo (pnpm workspace) with seven packages: `drone-agent`, `drone-core`, `drone-beacon`, `drone-coordinator`, `drone-coordinator-ui`, `drone-swarm-common`, and `drone-gateway`.
 
-**If you encounter any discrepancy between this document and the code, with the exception of aspirational statements, the code is the source of truth, and this document should be updated.**
+**If you encounter any discrepancy between this document and the code, the code is the source of truth, and this document should be updated.**
 
-**Aspirational statements in this document should be kept, so the project remains focused on its long-term vision, but do turn them into concrete statements of fact when they are implemented.**
+**Aspirational statements should be kept to preserve overall project direction. A statement is aspirational only when all of the following are true:**
+
+1. It uses explicit future-intent language (for example: "will", "planned", "intended", "future", "roadmap") and/or primarily future-tense verbs.
+2. It does not claim current behavior.
+3. The capability is not implemented in code at all (including no stubs).
+
+If any implementation artifact exists (even a stub), rewrite the statement as current-state factual documentation, including what is incomplete.
+
+If classification is ambiguous, ask for clarification before editing that specific statement.
 
 ## Project Structure
+
+**Update this list in this file immediately when you create a new file in the project.**
+
+**If you see a file listed here that does not exist, create a git commit so any mistake can be undone, and then remove the missing file from this list.**
 
 ```
 drone-agent/          ← The CLI + TUI coding agent (Ink-based)
@@ -534,7 +546,7 @@ When working on the project, proactively log insights using `self-improvement.in
 - `pnpm -r run lint` will run prettier by default, whenever eslint succeeds. Keep two things in mind about this:
   1. **If you run the linter, you will need to re-read all files before attempting to modify them again**, because prettier will reformat them.
   2. You don't need to worry about matching the formatting rules of the project in your changes. Worry about making LSP, typecheck, eslint, and build pass, then prettier will handle the formatting for you.
-- The "fast" test suite must pass. Check the "slow" test suite at your discretion, or when you are told to do so.
+- The "fast" test suite (`pnpm -r run test`) must pass. Check the "slow" test suite at your discretion, or when you are told to do so.
 - All new code must be covered by unit tests. If you are adding a new feature, you must add tests for it. If you are fixing a bug, you must add a test that reproduces the bug and then fixes it.
 - Dead code must be removed. Unused variables must be removed. "Fluff" comments must be removed.
 - If a comment isn't jsdoc, then it needs to be explaining a complex process or algorithm. If it is not explaining a complex process or algorithm either, then the only other kind of comment that is allowed is a TODO/FIXME comment. All other comments must be removed.
