@@ -1077,6 +1077,7 @@ export async function createMcpClientConnection(options: {
               state.lastErrorCategory = classifyErrorCategory(error);
             },
             encoding: stdioConfig.encoding,
+            onNotification: options.onNotification,
           });
           await newRpc.request('initialize', {
             protocolVersion: '2024-11-05',

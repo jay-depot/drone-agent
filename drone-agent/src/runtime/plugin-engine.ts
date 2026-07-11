@@ -379,15 +379,23 @@ export function createDronePluginEngine({
   }
 
   function unregisterPluginToolsImpl(pluginId: string): void {
-    const registered = registeredPlugins.find(
-      p => p.plugin.metadata.id === pluginId
-    );
-    if (!registered) return;
-    for (const tool of registered.tools) {
-      const canonicalName = getCanonicalToolName(pluginId, tool.name);
-      tools.delete(canonicalName);
+    // Delete all tools whose canonical name starts with the plugin prefix.
+    // This handles both statically registered tools (from register()) and
+    // dynamically registered tools (from registerTool() called at runtime,
+    // e.g. by the MCP plugin's listAndMountTools).
+    const prefix = `${pluginId}__`;
+    for (const [canonicalName] of tools) {
+      if (canonicalName.startsWith(prefix)) {
+        tools.delete(canonicalName);
+      }
     }
-    registered.tools = [];
+    // Also clear the plugin's own tool list so it doesn't hold stale refs.
+    const registered = registeredPlugins.find(
+      (p: { plugin: { metadata: { id: string } } }) => p.plugin.metadata.id === pluginId
+    );
+    if (registered) {
+      registered.tools = [];
+    }
   }
 
   async function registerPlugin(

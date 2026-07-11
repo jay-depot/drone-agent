@@ -285,13 +285,14 @@ export const mcpPlugin: DronePlugin = {
         );
       }
     }
+
     async function listAndMountTools(
       serverId: string,
       connection: McpClientConnection,
       serverConfig: { allowedTools?: string[] },
       logMessage: string
     ): Promise<void> {
-      registration.unregisterPluginTools("mcp");
+      registration.unregisterPluginTools('mcp');
       mountedToolNames.clear();
 
       const tools = await connection.listTools();
@@ -310,11 +311,29 @@ export const mcpPlugin: DronePlugin = {
       mountResourcePromptTools(serverId, connection);
       setServerState(connection.state);
 
+      // Re-register server_status tool (unregisterPluginTools clears it).
+      registration.registerTool({
+        name: 'server_status',
+        description:
+          'List MCP server connection state and mounted tool counts for this session.',
+        inputSchema: {
+          type: 'object',
+          additionalProperties: false,
+        },
+        execute: async () =>
+          JSON.stringify(
+            {
+              servers: Array.from(serverStates.values()),
+            },
+            null,
+            2
+          ),
+      });
+
       registration.logger.info(
         `mcp server ${logMessage}: ${serverId} (mounted ${mountedTools.length}/${tools.length} tool(s))`
       );
     }
-
 
     registration.registerTool({
       name: 'server_status',
@@ -405,6 +424,9 @@ export const mcpPlugin: DronePlugin = {
             'ready'
           );
 
+          registration.logger.info(
+            `mcp server ready: ${serverId} (${connection.state.transport}, mounted ${connection.state.mountedToolCount}/${connection.state.discoveredToolCount} tool(s))`
+          );
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
