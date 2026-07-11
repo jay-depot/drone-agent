@@ -16,13 +16,10 @@
  */
 
 import { Box, Static, Text } from 'ink';
-import type { ReactNode } from 'react';
 import { ColorTag, type DroneColorScheme } from '../theme.js';
 import type { ChatEntry, TailItem } from '../types.js';
 import { Markdown } from './Markdown.js';
 import { TailRegion } from './TailRegion.js';
-
-export type { ChatEntry };
 
 /** Separator rule placed under every user message, mirroring the top/bottom
  * padding around assistant responses for visual symmetry. */
@@ -109,6 +106,3 @@ function renderEntry(
       return <Text>{entry.text}</Text>;
   }
 }
-
-/** @internal Exposed for use by App to format diff output. */
-export type { ReactNode };
