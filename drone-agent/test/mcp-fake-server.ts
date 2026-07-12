@@ -552,8 +552,9 @@ export function startFakeMcpServer(
     FAKE_MCP_TOOLS_FULL: JSON.stringify(options.tools ?? null),
     FAKE_MCP_CRASH_ON_INIT: options.crashOnInit ? '1' : '0',
     FAKE_MCP_OMIT_SHUTDOWN: options.omitShutdown ? '1' : '0',
-    FAKE_MCP_NOTIFY_ON_TOOL_NAME: options.notifyOnToolName ?? "",
-    FAKE_MCP_NOTIFY_METHOD: options.notifyMethod ?? 'notifications/tools/list_changed',
+    FAKE_MCP_NOTIFY_ON_TOOL_NAME: options.notifyOnToolName ?? '',
+    FAKE_MCP_NOTIFY_METHOD:
+      options.notifyMethod ?? 'notifications/tools/list_changed',
   };
 
   return {

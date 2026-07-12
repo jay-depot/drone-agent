@@ -397,7 +397,8 @@ export function createDronePluginEngine({
     }
     // Also clear the plugin's own tool list so it doesn't hold stale refs.
     const registered = registeredPlugins.find(
-      (p: { plugin: { metadata: { id: string } } }) => p.plugin.metadata.id === pluginId
+      (p: { plugin: { metadata: { id: string } } }) =>
+        p.plugin.metadata.id === pluginId
     );
     if (registered) {
       registered.tools = [];
@@ -523,9 +524,9 @@ export function createDronePluginEngine({
       unregisterPluginTools: (pluginId: string) => {
         unregisterPluginToolsImpl(pluginId);
       },
-     unregisterTool: (canonicalName: string) => {
-       unregisterToolImpl(canonicalName);
-     },
+      unregisterTool: (canonicalName: string) => {
+        unregisterToolImpl(canonicalName);
+      },
     });
 
     return {
@@ -659,9 +660,9 @@ export function createDronePluginEngine({
     unregisterPluginTools: (pluginId: string) => {
       unregisterPluginToolsImpl(pluginId);
     },
-   unregisterTool: (canonicalName: string) => {
-     unregisterToolImpl(canonicalName);
-   },
+    unregisterTool: (canonicalName: string) => {
+      unregisterToolImpl(canonicalName);
+    },
     getHelpSnippets: () => {
       const result: string[] = [];
       for (const [pluginId, snippets] of helpSnippets) {

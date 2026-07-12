@@ -284,9 +284,7 @@ describe('createDronePluginEngine', () => {
       };
 
       const engine = createDronePluginEngine({
-        plugins: [
-          createTestPlugin({ id: 'test', tools: [toolA, toolB] }),
-        ],
+        plugins: [createTestPlugin({ id: 'test', tools: [toolA, toolB] })],
         config: createDefaultAgentConfig(),
         logger: silentLogger(),
       });

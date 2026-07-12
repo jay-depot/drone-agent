@@ -269,7 +269,7 @@ function createContentLengthJsonRpcClient(options: {
           continue;
         }
         entry.resolve(message.result);
-      } else if (typeof message.method === "string" && options.onNotification) {
+      } else if (typeof message.method === 'string' && options.onNotification) {
         options.onNotification(message.method, message.params);
       }
     }
@@ -420,7 +420,7 @@ function createLineDelimitedJsonRpcClient(options: {
           continue;
         }
         entry.resolve(message.result);
-      } else if (typeof message.method === "string" && options.onNotification) {
+      } else if (typeof message.method === 'string' && options.onNotification) {
         options.onNotification(message.method, message.params);
       }
     }
@@ -1094,7 +1094,8 @@ export async function createMcpClientConnection(options: {
           options.onReconnected?.();
           state.reconnectCount = (state.reconnectCount ?? 0) + 1;
         } catch (error) {
-          state.lastError = error instanceof Error ? error.message : String(error);
+          state.lastError =
+            error instanceof Error ? error.message : String(error);
           state.lastErrorCategory = classifyErrorCategory(error);
           await sleep(backoffMs);
           backoffMs = Math.min(backoffMs * 2, 60000);

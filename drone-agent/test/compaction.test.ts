@@ -225,8 +225,8 @@ describe('createCompactionPlugin', () => {
         },
         registerSlashCommand: () => {},
         registerWorkflow: () => {},
-    unregisterPluginTools: () => {},
-    unregisterTool: () => {},
+        unregisterPluginTools: () => {},
+        unregisterTool: () => {},
         hooks: {
           onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
           onSessionStart: cb => hooks.onSessionStart.push(cb),
