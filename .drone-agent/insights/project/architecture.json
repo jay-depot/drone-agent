@@ -302,5 +302,9 @@
   {
     "timestamp": "2026-07-12T20:52:42.904Z",
     "insight": "The plugin engine lacks a single-tool unregister method — it only has `unregisterPluginTools(pluginId)` which bulk-removes all tools for a plugin. The MCP list/mount pattern requires `unregisterTool(canonicalName)` for unmounting individual dynamically-mounted tools. This is a gap in the engine API that should be addressed as part of the list/mount plan."
+  },
+  {
+    "timestamp": "2026-07-12T21:04:53.092Z",
+    "insight": "The MCP list/mount deferred tool loading pattern is now implemented. Key observation for future expansion to global tool loading: the engine's `registerTool`/`unregisterTool` API works seamlessly for mid-session dynamic tool registration — `engine.listTools()` reads from the live tools Map, so newly registered tools appear on the next LLM turn automatically without any conversation service changes."
   }
 ]
