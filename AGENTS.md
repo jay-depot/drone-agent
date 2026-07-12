@@ -400,6 +400,43 @@ via `engine.addExternalPlugin()`.
 In non-interactive modes (`--once`, `--output-json`), deferred plugins are
 silently skipped.
 
+### MCP Plugin (Deferred Tool Loading)
+
+The MCP plugin uses a **deferred list/mount pattern** for tool loading. When an
+MCP server connects, its individual tools are NOT mounted as native LLM tool
+definitions. Instead, three meta-tools are mounted per server:
+
+- **`<serverId>__list_tools`** — Returns tool names and descriptions (no schemas).
+  The LLM calls this to browse available tools.
+- **`<serverId>__mount_tool`** — Dynamically registers a specific tool with its
+  full JSON schema as a native tool definition. The LLM calls this after
+  discovering a tool it wants to use via `__list_tools`.
+- **`<serverId>__unmount_tool`** — Removes a previously mounted tool from the
+  active tool list.
+
+This bounds context cost to 3 meta-tools per server regardless of how many tools
+the server offers. Real-world MCP servers like Datadog (142 tools, ~70K tokens)
+or MCP_DOCKER (135 tools, ~126K tokens) can otherwise consume most of the
+context window with tool definitions alone.
+
+Resources, prompts, and resource templates are still mounted eagerly (they do
+not have the same context cost profile as tool definitions).
+
+The `allowedTools` allowlist is enforced by `__mount_tool` — `__list_tools`
+shows all tools, but mounting a non-allowlisted tool throws an error.
+
+When the server sends `notifications/tools/list_changed`, the plugin surgically
+updates the per-server tool cache and unmounts any tools that no longer exist on
+the server (without nuking all MCP plugin tools across all servers).
+
+The `unregisterTool(canonicalName)` method on the plugin engine is used for
+single-tool removal, complementing the existing `unregisterPluginTools(pluginId)`
+for bulk removal.
+
+**Long-term vision**: If this pattern works well for MCP, it may be expanded
+globally to all tools (not just MCP) to bound context cost across the entire
+tool surface.
+
 ### Slash Commands
 
 All slash commands (built-in and plugin-registered) are dispatched through the engine's unified registry. Built-in commands (`/exit`, `/quit`, `/help`, `/clear`, `/plugins`, `/tools`, `/systemprompt`, `/tool`, `/exec`) have lower precedence than plugin commands, allowing plugins to override them. Unrecognized slash commands display an error instead of being sent to the LLM. The `?` alias for `/help` has been removed.
