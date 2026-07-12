@@ -14,6 +14,8 @@
  *   FAKE_MCP_TOOLS_FULL   JSON array of { name, description, inputSchema }
  *   FAKE_MCP_CRASH_ON_INIT '1' => exit immediately on initialize (unavailable)
  *   FAKE_MCP_OMIT_SHUTDOWN '1' => return -32601 for shutdown
+ *   FAKE_MCP_NOTIFY_ON_TOOL_NAME  tool name that triggers a notification
+ *   FAKE_MCP_NOTIFY_METHOD        notification method to send (default: notifications/tools/list_changed)
  */
 
 import process from 'node:process';
@@ -35,6 +37,8 @@ const TOOLS = parseEnvTools();
 
 const CRASH_ON_INIT = process.env.FAKE_MCP_CRASH_ON_INIT === '1';
 const OMIT_SHUTDOWN = process.env.FAKE_MCP_OMIT_SHUTDOWN === '1';
+const NOTIFY_ON_TOOL = process.env.FAKE_MCP_NOTIFY_ON_TOOL_NAME || '';
+const NOTIFY_METHOD = process.env.FAKE_MCP_NOTIFY_METHOD || 'notifications/tools/list_changed';
 
 const RESOURCES = [
   { uri: 'file:///a.txt', name: 'a', description: 'Resource A' },
@@ -88,6 +92,10 @@ function handleRequest(method, id, params) {
       return;
     case 'tools/call': {
       const name = params && params.name;
+      if (name === NOTIFY_ON_TOOL) {
+        // Send a notification before responding so the client sees both.
+        send({ jsonrpc: '2.0', method: NOTIFY_METHOD });
+      }
       respond(id, {
         content: [
           {

@@ -152,6 +152,7 @@ function createChildTransport(
 function createStdioJsonRpcClient(options: {
   transport: RpcTransport;
   requestTimeoutMs: number;
+  onNotification?: (method: string, params: unknown) => void;
   onTransportIssue: (error: string) => void;
   encoding?: 'content-length' | 'line-delimited';
 }): JsonRpcClient {
@@ -168,6 +169,7 @@ function createStdioJsonRpcClient(options: {
 function createContentLengthJsonRpcClient(options: {
   transport: RpcTransport;
   requestTimeoutMs: number;
+  onNotification?: (method: string, params: unknown) => void;
   onTransportIssue: (error: string) => void;
 }): JsonRpcClient {
   let nextId = 1;
@@ -267,6 +269,8 @@ function createContentLengthJsonRpcClient(options: {
           continue;
         }
         entry.resolve(message.result);
+      } else if (typeof message.method === "string" && options.onNotification) {
+        options.onNotification(message.method, message.params);
       }
     }
   }
@@ -337,6 +341,7 @@ function createContentLengthJsonRpcClient(options: {
 function createLineDelimitedJsonRpcClient(options: {
   transport: RpcTransport;
   requestTimeoutMs: number;
+  onNotification?: (method: string, params: unknown) => void;
   onTransportIssue: (error: string) => void;
 }): JsonRpcClient {
   let nextId = 1;
@@ -415,6 +420,8 @@ function createLineDelimitedJsonRpcClient(options: {
           continue;
         }
         entry.resolve(message.result);
+      } else if (typeof message.method === "string" && options.onNotification) {
+        options.onNotification(message.method, message.params);
       }
     }
   }
@@ -967,6 +974,7 @@ export async function createMcpClientConnection(options: {
         state.lastErrorCategory = classifyErrorCategory(error);
       },
       encoding: stdioConfig.encoding,
+      onNotification: options.onNotification,
     });
   }
 
@@ -1069,6 +1077,7 @@ export async function createMcpClientConnection(options: {
               state.lastErrorCategory = classifyErrorCategory(error);
             },
             encoding: stdioConfig.encoding,
+            onNotification: options.onNotification,
           });
           await newRpc.request('initialize', {
             protocolVersion: '2024-11-05',

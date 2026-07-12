@@ -286,6 +286,55 @@ export const mcpPlugin: DronePlugin = {
       }
     }
 
+    async function listAndMountTools(
+      serverId: string,
+      connection: McpClientConnection,
+      serverConfig: { allowedTools?: string[] },
+      logMessage: string
+    ): Promise<void> {
+      registration.unregisterPluginTools('mcp');
+      mountedToolNames.clear();
+
+      const tools = await connection.listTools();
+      const allowlist = serverConfig.allowedTools;
+      const allowedToolSet = allowlist ? new Set(allowlist) : undefined;
+      const mountedTools = allowedToolSet
+        ? tools.filter((tool: McpToolMeta) => allowedToolSet.has(tool.name))
+        : tools;
+
+      connection.state.discoveredToolCount = tools.length;
+      connection.state.filteredToolCount =
+        tools.length - mountedTools.length;
+      connection.state.mountedToolCount = mountedTools.length;
+
+      mountMcpTools(serverId, connection, mountedTools);
+      mountResourcePromptTools(serverId, connection);
+      setServerState(connection.state);
+
+      // Re-register server_status tool (unregisterPluginTools clears it).
+      registration.registerTool({
+        name: 'server_status',
+        description:
+          'List MCP server connection state and mounted tool counts for this session.',
+        inputSchema: {
+          type: 'object',
+          additionalProperties: false,
+        },
+        execute: async () =>
+          JSON.stringify(
+            {
+              servers: Array.from(serverStates.values()),
+            },
+            null,
+            2
+          ),
+      });
+
+      registration.logger.info(
+        `mcp server ${logMessage}: ${serverId} (mounted ${mountedTools.length}/${tools.length} tool(s))`
+      );
+    }
+
     registration.registerTool({
       name: 'server_status',
       description:
@@ -318,12 +367,18 @@ export const mcpPlugin: DronePlugin = {
 
       for (const [serverId, serverConfig] of configuredServers) {
         let connection: McpClientConnection | undefined;
-        const onNotification = (method: string): void => {
+        const onNotification = (method: string, _params: unknown): void => {
           registration.logger.info(
             `mcp server ${serverId} notification: ${method}`
           );
-          // Item-6 hook point: e.g. `notifications/tools/list_changed`
-          // would re-list + re-mount tools here. Deliberately not wired yet.
+          if (method === 'notifications/tools/list_changed' && connection) {
+            void listAndMountTools(
+              serverId,
+              connection,
+              serverConfig,
+              'tools list changed'
+            );
+          }
         };
         const onStreamError = (message: string): void => {
           registration.logger.warn(
@@ -337,28 +392,11 @@ export const mcpPlugin: DronePlugin = {
         };
         const onReconnected = async (): Promise<void> => {
           if (!connection) return;
-          // Clear old tool registrations so re-registration won't hit duplicates.
-          registration.unregisterPluginTools('mcp');
-          mountedToolNames.clear();
-          // Re-list and re-mount tools.
-          const tools = await connection.listTools();
-          const allowlist = serverConfig.allowedTools;
-          const allowedToolSet = allowlist ? new Set(allowlist) : undefined;
-          const mountedTools = allowedToolSet
-            ? tools.filter((tool: McpToolMeta) => allowedToolSet.has(tool.name))
-            : tools;
-
-          connection.state.discoveredToolCount = tools.length;
-          connection.state.filteredToolCount =
-            tools.length - mountedTools.length;
-          connection.state.mountedToolCount = mountedTools.length;
-
-          mountMcpTools(serverId, connection, mountedTools);
-          mountResourcePromptTools(serverId, connection);
-          setServerState(connection.state);
-
-          registration.logger.info(
-            `mcp server reconnected: ${serverId} (mounted ${mountedTools.length}/${tools.length} tool(s))`
+          await listAndMountTools(
+            serverId,
+            connection,
+            serverConfig,
+            'reconnected'
           );
         };
         try {
@@ -379,24 +417,15 @@ export const mcpPlugin: DronePlugin = {
           connections.set(serverId, connection);
           setServerState(connection.state);
 
-          const tools = await connection.listTools();
-          const allowlist = serverConfig.allowedTools;
-          const allowedToolSet = allowlist ? new Set(allowlist) : undefined;
-          const mountedTools = allowedToolSet
-            ? tools.filter((tool: McpToolMeta) => allowedToolSet.has(tool.name))
-            : tools;
-
-          connection.state.discoveredToolCount = tools.length;
-          connection.state.filteredToolCount =
-            tools.length - mountedTools.length;
-          connection.state.mountedToolCount = mountedTools.length;
-
-          mountMcpTools(serverId, connection, mountedTools);
-          mountResourcePromptTools(serverId, connection);
-          setServerState(connection.state);
+          await listAndMountTools(
+            serverId,
+            connection,
+            serverConfig,
+            'ready'
+          );
 
           registration.logger.info(
-            `mcp server ready: ${serverId} (${connection.state.transport}, mounted ${mountedTools.length}/${tools.length} tool(s))`
+            `mcp server ready: ${serverId} (${connection.state.transport}, mounted ${connection.state.mountedToolCount}/${connection.state.discoveredToolCount} tool(s))`
           );
         } catch (error) {
           const message =

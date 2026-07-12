@@ -507,6 +507,10 @@ const SERVER_SCRIPT = path.join(__dirname, 'mcp-fake-server.mjs');
 export type FakeMcpServerOptions = {
   /** Tool names to advertise. Defaults to echo/add. */
   toolNames?: string[];
+  /** Tool name that triggers a notification on call. */
+  notifyOnToolName?: string;
+  /** Notification method to send (default: notifications/tools/list_changed). */
+  notifyMethod?: string;
   /** If true, the child will refuse `initialize` (e.g. exit immediately). */
   crashOnInit?: boolean;
   /** If true, the child omits `shutdown` (-32601). */
@@ -548,6 +552,8 @@ export function startFakeMcpServer(
     FAKE_MCP_TOOLS_FULL: JSON.stringify(options.tools ?? null),
     FAKE_MCP_CRASH_ON_INIT: options.crashOnInit ? '1' : '0',
     FAKE_MCP_OMIT_SHUTDOWN: options.omitShutdown ? '1' : '0',
+    FAKE_MCP_NOTIFY_ON_TOOL_NAME: options.notifyOnToolName ?? "",
+    FAKE_MCP_NOTIFY_METHOD: options.notifyMethod ?? 'notifications/tools/list_changed',
   };
 
   return {

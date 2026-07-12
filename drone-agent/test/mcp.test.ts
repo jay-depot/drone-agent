@@ -252,4 +252,29 @@ describe('mcp plugin integration (stdio child)', () => {
     expect(missing.status).toBe('error');
     expect(missing.lastError).toBeTruthy();
   });
+
+  it('re-mounts tools when server sends a notification via stdio', async () => {
+    const server = startFakeMcpServer({
+      toolNames: ['echo'],
+      notifyOnToolName: 'echo',
+    });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    // Sanity: tool is mounted.
+    let names = toolNames(engine);
+    expect(names).toContain('mcp__demo__echo');
+
+    // Calling the configured tool triggers a notification from the server.
+    // The client's onNotification handler should re-mount tools seamlessly.
+    await engine.executeTool('mcp__demo__echo', {});
+
+    // Give the notification handler a tick to process.
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Tool should still be mounted after re-mount.
+    names = toolNames(engine);
+    expect(names).toContain('mcp__demo__echo');
+  });
 });
