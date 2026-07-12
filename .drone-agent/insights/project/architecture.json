@@ -298,5 +298,9 @@
   {
     "timestamp": "2026-07-11T20:21:17.034Z",
     "insight": "unregisterPluginToolsImpl in plugin-engine.ts had a subtle bug: it only iterated over the plugin's static tool list (registered during register()), but the MCP plugin registers tools dynamically via registerTool() at runtime. Those dynamic tools were never cleaned up, causing \"Tool already registered\" errors on re-mount. Fixed by iterating the tools map by prefix instead."
+  },
+  {
+    "timestamp": "2026-07-12T20:52:42.904Z",
+    "insight": "The plugin engine lacks a single-tool unregister method — it only has `unregisterPluginTools(pluginId)` which bulk-removes all tools for a plugin. The MCP list/mount pattern requires `unregisterTool(canonicalName)` for unmounting individual dynamically-mounted tools. This is a gap in the engine API that should be addressed as part of the list/mount plan."
   }
 ]
