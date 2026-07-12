@@ -146,6 +146,7 @@ function makeEngine(options: EngineOptions): DronePluginEngine & {
     getRegisteredPluginCount: () => 0,
     getRegisteredToolCount: () => toolList.length,
     unregisterPluginTools: () => {},
+    unregisterTool: () => {},
     getHelpSnippets: () => [],
     getConfig: () => {
       throw new Error('getConfig not used in conversation-service tests');

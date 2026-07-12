@@ -40,6 +40,7 @@ function createRegistrationCapture(
     registerWorkflow: () => {},
     registerSlashCommand: () => {},
     unregisterPluginTools: () => {},
+    unregisterTool: () => {},
     hooks: {
       onPluginsLoaded: () => {},
       onSessionStart: () => {},

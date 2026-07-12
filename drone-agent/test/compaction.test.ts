@@ -129,6 +129,7 @@ async function captureRegistration(
     registerSlashCommand: () => {},
     registerWorkflow: () => {},
     unregisterPluginTools: () => {},
+    unregisterTool: () => {},
     hooks: {
       onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
       onSessionStart: cb => hooks.onSessionStart.push(cb),
@@ -225,6 +226,7 @@ describe('createCompactionPlugin', () => {
         registerSlashCommand: () => {},
         registerWorkflow: () => {},
     unregisterPluginTools: () => {},
+    unregisterTool: () => {},
         hooks: {
           onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
           onSessionStart: cb => hooks.onSessionStart.push(cb),

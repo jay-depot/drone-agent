@@ -347,6 +347,7 @@ describe('promptFilePlugin', () => {
       registerWorkflow: () => {},
       registerSlashCommand: () => {},
       unregisterPluginTools: () => {},
+      unregisterTool: () => {},
       hooks: {
         onPluginsLoaded: cb => captured.hooks.onPluginsLoaded.push(cb),
         onSessionStart: () => {},

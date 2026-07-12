@@ -270,6 +270,85 @@ describe('createDronePluginEngine', () => {
     );
   });
 
+  describe('unregisterTool', () => {
+    it('removes a single tool by canonical name', async () => {
+      const toolA: DroneToolDefinition = {
+        name: 'alpha',
+        description: 'alpha tool',
+        execute: async () => 'a',
+      };
+      const toolB: DroneToolDefinition = {
+        name: 'beta',
+        description: 'beta tool',
+        execute: async () => 'b',
+      };
+
+      const engine = createDronePluginEngine({
+        plugins: [
+          createTestPlugin({ id: 'test', tools: [toolA, toolB] }),
+        ],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+
+      expect(engine.getTool('test__alpha')).toBeDefined();
+      expect(engine.getTool('test__beta')).toBeDefined();
+      expect(engine.listTools()).toHaveLength(2);
+
+      engine.unregisterTool('test__alpha');
+
+      expect(engine.getTool('test__alpha')).toBeUndefined();
+      expect(engine.getTool('test__beta')).toBeDefined();
+      expect(engine.listTools()).toHaveLength(1);
+    });
+
+    it('silently does nothing for an unknown tool name', async () => {
+      const engine = createDronePluginEngine({
+        plugins: [createTestPlugin({ id: 'test' })],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+
+      engine.unregisterTool('test__nonexistent');
+      expect(engine.listTools()).toHaveLength(0);
+    });
+
+    it('allows re-registering a tool after unregistering it', async () => {
+      let registerToolFn: ((tool: DroneToolDefinition) => void) | undefined;
+
+      const engine = createDronePluginEngine({
+        plugins: [
+          createTestPlugin({
+            id: 'test',
+            tools: [
+              { name: 'temp', description: 'temp', execute: async () => 't' },
+            ],
+            register: ({ registerTool }) => {
+              registerToolFn = registerTool;
+            },
+          }),
+        ],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+
+      expect(engine.getTool('test__temp')).toBeDefined();
+      engine.unregisterTool('test__temp');
+      expect(engine.getTool('test__temp')).toBeUndefined();
+
+      // Re-register the same tool — should not throw
+      registerToolFn!({
+        name: 'temp',
+        description: 'temp',
+        execute: async () => 't',
+      });
+      expect(engine.getTool('test__temp')).toBeDefined();
+    });
+  });
+
   it('renders prompt fragments and filters empty/false values', async () => {
     const plugins: DronePlugin[] = [
       createTestPlugin({
