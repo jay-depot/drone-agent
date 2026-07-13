@@ -3,7 +3,7 @@ key: roadmap
 tags:
   - roadmap
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-07-08T20:13:31.773Z
+updated: 2026-07-13T02:23:10.261Z
 ---
 
 # Swarm Roadmap
@@ -234,184 +234,23 @@ Personal control plane for YOUR swarm across machines.
 
 #### 3.1 Secure Foundation ✅
 
-- Ed25519 Keypair Management (`identity.ts`)
-- TLS Certificate Generation (`tls.ts`) — auto-generates self-signed certs via openssl
-- Beacon Approval Flow & Trust Tables
-- Local-only WSS Enforcement
-- HTTPS Server Configuration (Fastify TLS)
-
 #### 3.2 Shared Session Storage ✅
-
-- `swarm_sessions`, `swarm_events`, `agent_locations` tables with FTS5
-- Session registration and event push from beacons
-- Full-text search on event payloads
-- Agent location tracking for cross-beacon routing
 
 #### 3.3 Global Memory & Skills ✅
 
-- `knowledge` table with CRUD + search + sync (push/pull)
-- Confidence-based conflict resolution
-- Beacon-side knowledge cache with periodic sync
-
 #### 3.4 Swarm Knowledge Base (LLM Wiki) ✅
-
-- Wiki pages stored as `.md` files on server filesystem with YAML frontmatter
-- REST endpoints on both beacon and coordinator
-- Beacon proxies coordinator-scoped requests
-- Scope enforcement (no downward links)
-- Agent tools: `wiki_read`, `wiki_write`, `wiki_search`, `wiki_list`, `wiki_delete`, `wiki_lint`
 
 #### 3.5 Swarm-Wide Insights & Principles ✅
 
-- Self-improvement plugin refactored to broker pattern with storage engine registration
-- Beacon and coordinator each have insights and principles tables
-- REST endpoints: CRUD for both, with `?scope=coordinator` proxy on beacon
-- Swarm plugin registers HTTP storage engines for beacon/coordinator
-- Combined principles prompt fragment reads from all relevant providers
-
 #### 3.6 Migration Tool ✅
 
-A CLI tool (`drone-migrate` or `drone-agent migrate`) for promoting/demoting assets between local and swarm scopes.
+#### ✅ 3.7 Web UI (Monitoring Dashboard) — Complete
 
-**Supported asset types:** persona, skill, insight, principle, wiki
+#### ⏳ 3.8 Make `--https` Default — Pending
 
-**Operations:**
+#### ✅ 3.9 Inter-Beacon Spawn Routing — Complete
 
-- Promote (local → swarm): project → user → beacon → coordinator
-- Demote/pull (swarm → local): coordinator → beacon → user → project
-- Batch migration of all assets of a type
-- Backup before migration
-
-**Key Files:**
-
-- `drone-agent/bin/drone-migrate` — CLI binary
-- `drone-agent/src/migrate.ts` — CLI entry point
-- `drone-agent/src/runtime/migration/` — Migration logic (modular, ~12 files)
-- `drone-agent/test/migration.test.ts` — Tests
-
-#### ✅ 3.7 Web UI (Monitoring Dashboard)
-
-**Status:** Complete
-
-A monitoring dashboard web UI for the coordinator — React SPA with shadcn/ui, tweakcn themes, and WebSocket-based real-time updates. Served by the coordinator itself via `@fastify/static`.
-
-**Pages (v1 — monitoring only):**
-
-- **Swarm Topology** — beacons with online/offline status and active agent counts
-- **Sessions** — list of open sessions with real-time peek into session event logs
-- **Session Detail** — dedicated page showing all recent events with collapsible payloads
-- **Personas** — read-only list
-- **Skills** — read-only list
-- **Wiki** — read-only list
-
-**Architecture:**
-
-- New `drone-coordinator-ui` package in the monorepo (Vite + React + shadcn/ui)
-- Declared as `"drone-coordinator-ui": "workspace:*"` dependency of `drone-coordinator`
-- Coordinator serves built static files and provides WebSocket endpoint at `/ws`
-- In-memory pub/sub for pushing new swarm events to connected clients
-- CORS enabled in development mode
-
-**Key Files:**
-
-- `drone-coordinator-ui/package.json` — Vite/React project config
-- `drone-coordinator-ui/src/App.tsx` — Router + layout
-- `drone-coordinator-ui/src/pages/topology.tsx` — Beacon topology view
-- `drone-coordinator-ui/src/pages/sessions.tsx` — Session list
-- `drone-coordinator-ui/src/pages/session-detail.tsx` — Session event log
-- `drone-coordinator-ui/src/pages/personas.tsx` — Persona list
-- `drone-coordinator-ui/src/pages/skills.tsx` — Skill list
-- `drone-coordinator-ui/src/pages/wiki.tsx` — Wiki page list
-- `drone-coordinator-ui/src/hooks/use-websocket.ts` — WebSocket connection hook
-
-**Coordinator changes:**
-
-- Add `@fastify/websocket`, `@fastify/static`, `@fastify/cors` dependencies
-- Register WebSocket endpoint at `/ws` with per-session event subscription
-- Serve UI static files and add SPA fallback handler
-
-**Dependencies:** 3.2 (session storage), 3.4 (wiki)
-
-#### ⏳ 3.8 Make `--https` Default
-
-**Status:** Pending
-
-Certificate auto-generation already exists on both beacon and coordinator. The change is to flip the default from `false` to `true`:
-
-- Coordinator: `process.env.COORDINATOR_HTTPS === 'true'` → `process.env.COORDINATOR_HTTPS !== 'false'`
-- Beacon: Same pattern for `BEACON_HTTPS` and `COORDINATOR_HTTPS`
-
-**Note (verified 2026-07-07):** Both beacon (`drone-beacon/src/index.ts` lines 82-83) and coordinator (`drone-coordinator/src/index.ts` line 80) still use `=== 'true'` (opt-in, default off). This item remains unimplemented.
-
-**Nice-to-have:** Add a pure Node.js certificate generation fallback (using `crypto`) for environments without `openssl` CLI.
-
-#### ✅ 3.9 Inter-Beacon Spawn Routing
-
-**Status:** Complete
-
-The coordinator now has a full set of spawn relay routes that forward requests to target beacons, plus LLM-facing tools in the swarm plugin for remote agent lifecycle management.
-
-**Coordinator routes** (in `drone-coordinator/src/routes/spawn.ts`):
-
-| Route                              | Purpose                                                  |
-| ---------------------------------- | -------------------------------------------------------- |
-| `POST /spawn`                      | Spawn agent on target beacon (requires `targetBeaconId`) |
-| `GET /spawn/:beaconId`             | List spawns on a beacon (optional `?status=` filter)     |
-| `GET /spawn/:beaconId/:spawnId`    | Get spawn status                                         |
-| `DELETE /spawn/:beaconId/:spawnId` | Terminate a spawned agent                                |
-
-All routes follow the same pattern as the message relay: look up beacon via `db.getBeacon()` → 404 if not found → forward via `fetch()` → 502 on beacon error → 503 on network error.
-
-**LLM tools** (in `drone-agent/src/plugins/swarm/index.ts`):
-
-| Tool                    | Calls Coordinator                                   |
-| ----------------------- | --------------------------------------------------- |
-| `swarm_list_beacons`    | `GET /beacons`                                      |
-| `swarm_list_agents`     | `GET /agents/location` (optional `beaconId` filter) |
-| `swarm_spawn`           | `POST /spawn`                                       |
-| `swarm_get_spawn`       | `GET /spawn/:beaconId/:spawnId`                     |
-| `swarm_list_spawns`     | `GET /spawn/:beaconId` (optional `status` filter)   |
-| `swarm_terminate_spawn` | `DELETE /spawn/:beaconId/:spawnId`                  |
-
-**Config:** Added `coordinatorUrl` to both `SwarmConfig` (plugin) and `DroneSwarmConfig` (drone-core types). All tools return a clear error if not configured.
-
-**Key Files:**
-
-- `drone-coordinator/src/routes/spawn.ts` — All 4 spawn relay routes
-- `drone-coordinator/src/types.ts` — `SpawnConfig` and `SpawnRequest` types
-- `drone-agent/src/plugins/swarm/index.ts` — 6 spawn/info tools
-- `drone-core/src/config-types.ts` — `coordinatorUrl` in `DroneSwarmConfig`
-- `drone-coordinator/test/routes.test.ts` — 16 spawn route tests
-- `drone-agent/test/swarm-spawn.test.ts` — 12 swarm plugin tool tests
-
-**Dependencies:** 3.2 (agent location tracking), beacon's existing `/spawn` endpoint
-
-#### ✅ 3.10 Coordinator & Beacon Test Coverage
-
-**Status:** Complete
-
-Comprehensive test coverage for both `drone-coordinator` and `drone-beacon` packages.
-
-**Coordinator tests (5 test files, ~200 tests):**
-
-- `test/db.test.ts` — 76 tests covering Persona, Skill, Beacon, BeaconTrust, BeaconSession, SwarmSession, SwarmEvent, AgentLocation, Insight, Principle CRUD
-- `test/knowledge.test.ts` — 13 tests for knowledge CRUD
-- `test/storage.test.ts` — 11 tests for blob storage engine
-- `test/routes.test.ts` — 134 tests covering all route files (health, personas, skills, beacons, knowledge, swarm, messages, insights, principles, spawn) including knowledge route-ordering, swarm large payload, session pipeline 409 transitions, detailed message relay/broadcast with fetch stubbing, and spawn relay routes
-- `test/auth.test.ts` — 11 tests for `isLocalRequest` and `createWebAuthMiddleware`
-- `test/helpers/server.ts` — Shared harness (`makeApp`/`teardownApp`) for route tests
-
-**Beacon tests (8 test files, ~160 tests):**
-
-- `test/db.test.ts` — 60 tests covering Persona, Skill, AgentSession, Memory, Message, Spawn, Config, EventLog, KnowledgeCache, Insight, Principle CRUD
-- `test/identity.test.ts` — 7 tests for Ed25519 keypair management
-- `test/tls.test.ts` — 4 tests for TLS cert management
-- `test/wiki-storage.test.ts` — 12 tests for wiki filesystem operations
-- `test/ws-server.test.ts` — 11 tests for IP validation and connection management
-- `test/coordinator-client.test.ts` — 14 tests for HTTP client with mocked http.request
-- `test/routes.test.ts` — 80 tests covering all beacon route files (health, personas, skills, agents, memory, messages, spawn, config, events, insights, principles, sync)
-
-**Total: 1151 tests across 57 test files (0 failures)**
+#### ✅ 3.10 Coordinator & Beacon Test Coverage — Complete
 
 ---
 
@@ -419,218 +258,19 @@ Comprehensive test coverage for both `drone-coordinator` and `drone-beacon` pack
 
 **Status:** Core complete; Matrix adapter and config-model refactor done; remaining adapters and control surfaces pending
 
-Chat API integration layer — YOUR agents receive messages from chat platforms and respond back.
+#### ✅ 4.1 Gateway Core — Complete
 
-**Domain Language:**
+#### ✅ 4.2 Matrix Service Adapter — Complete
 
-- **Gateway** — the standalone service itself
-- **Service Adapter** — a platform integration (Matrix, Telegram, Slack). Each adapter knows how to connect to that platform's API, authenticate, and translate between platform-specific message formats and the gateway's internal format.
-- **Control Surface** — a configuration that maps a chat conversation (room, DM, channel) to a behavior. A control surface is attached to a service adapter.
-- **Persona Assignment** — a control surface that routes all messages in a conversation to a specific persona
-- **Swarm Console** — a control surface that exposes coordinator commands (spawn, status, terminate, list beacons, etc.)
-- **Mention Router** — a control surface that watches for `!persona` (and eventually `!persona@gateway`) mentions and routes those messages to the specified persona
-- **Discard Control Surface** — a built-in control surface that silently consumes messages (returns `{response:null, handled:true}`). Used for explicit "/dev/null" routing.
-- **Conversation** — a single chat conversation identified by a `conversationId`. The adapter owns the routing scheme (room IDs, `dm:@peer:server`, etc.). The engine and control surfaces treat it as opaque.
-- **Wildcard Control Surface** — a control surface attached to the reserved conversationId `"*"`, acting as a per-adapter catch-all. Configured via `_default_.json`.
+#### ✅ 4.3 Persona Assignment Control Surface — Complete
 
-**Architecture:**
+#### ⏳ 4.4 Swarm Console Control Surface — Not started
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   drone-gateway                      │
-│                                                      │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  │
-│  │ Matrix       │  │ Telegram    │  │ Slack       │  │
-│  │ Adapter      │  │ Adapter     │  │ Adapter     │  │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  │
-│         │                │                │          │
-│         ▼                ▼                ▼          │
-│  ┌─────────────────────────────────────────────────┐ │
-│  │              Gateway Engine                     │ │
-│  │  (routes messages → control surfaces → send)   │ │
-│  └──────────────────────┬──────────────────────────┘ │
-│                         │                             │
-│  ┌──────────────────────┴──────────────────────────┐ │
-│  │           Coordinator Client                    │ │
-│  │  (HTTP to coordinator:8080, bearer token auth)  │ │
-│  └─────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────┘
-                         │
-                         ▼
-              drone-coordinator:8080
-              (web port, bearer token auth)
-```
+#### ⏳ 4.5 Mention Router Control Surface — Not started
 
-**Key design decisions:**
+#### ⏳ 4.6 Telegram Service Adapter — Not started
 
-- New `drone-gateway` package in the monorepo (ESM, TypeScript, pnpm workspace)
-- Folder-based config hierarchy (`config.json` + `adapters/<id>/adapter.json` + `adapters/<id>/conversations/<conv>.json`)
-- Per-conversation dedicated control surface instances (never shared across conversations)
-- Adapter owns conversation routing; control surfaces are context-ignorant
-- First-match-wins dispatch: exact convId → wildcard `"*"` → unhandled
-- Coordinator client talks to the web UI port (8080) with optional Bearer token auth
-- Recommended deployment: on the coordinator's host (local/Tailnet bypass applies)
-- Control surfaces are per-conversation, configured per adapter
-
-#### ✅ 4.1 Gateway Core
-
-**Status:** Complete
-
-The core gateway package: engine loop, service adapter interface, control surface interface, coordinator client, config loading, CLI entry point, spawn backends, comprehensive test coverage, and architecture documentation.
-
-**What's Built:**
-
-- `drone-gateway/package.json` — ESM package scaffold, registered in pnpm workspace
-- `drone-gateway/src/types.ts` — `DroneServiceAdapter`, `DroneControlSurface`, `GatewayConfig`, `SpawnSession`, `AdapterMessage`
-- `drone-gateway/src/spawn-backend.ts` — `SpawnBackend` interface (spawn, send message, terminate)
-- `drone-gateway/src/engine.ts` — `GatewayEngine`: adapter lifecycle, message routing loop, control surface evaluation (first-match wins), persona-assignment surface implementation
-- `drone-gateway/src/coordinator-client.ts` — HTTP client for coordinator web port (spawn, list beacons, list agents, get spawn, list spawns, terminate spawn, send message)
-- `drone-gateway/src/local-spawn-backend.ts` — Spawns `drone-agent` processes with `--output-json`, NDJSON communication over stdin/stdout, turn-complete detection
-- `drone-gateway/src/coordinator-spawn-backend.ts` — Delegates to coordinator's web port via `CoordinatorClient`
-- `drone-gateway/src/index.ts` — CLI entry point, arg parsing (`--config`, `--help`), config loading with validation, spawn backend creation, signal handling
-- `drone-gateway/src/logger.ts` — Pino logger
-- `drone-gateway/src/which.ts` — PATH resolution utility
-- `drone-gateway/bin/drone-gateway` — CLI binary
-- `drone-gateway/CONTEXT.md` — Domain language documentation
-- `drone-gateway/docs/adr/001-gateway-architecture.md` — Architecture decision record
-
-**Test Coverage (6 test files, 59 tests):**
-
-| Test File                                | Tests | What's Tested                                                                          |
-| ---------------------------------------- | ----- | -------------------------------------------------------------------------------------- |
-| `test/which.test.ts`                     | 5     | PATH resolution, not-found, empty PATH                                                 |
-| `test/coordinator-client.test.ts`        | 18    | All 7 API methods, error handling, auth header                                         |
-| `test/local-spawn-backend.test.ts`       | 11    | Process spawning, NDJSON parsing, session lifecycle, cleanup                           |
-| `test/coordinator-spawn-backend.test.ts` | 6     | Coordinator delegation, idempotency, error handling                                    |
-| `test/engine.test.ts`                    | 5     | Constructor, start/stop lifecycle, adapter validation                                  |
-| `test/index.test.ts`                     | 14    | Arg parsing, config loading/validation, spawn backend selection, main() error handling |
-
-**Key Files:**
-
-- `drone-gateway/src/types.ts` — All gateway types
-- `drone-gateway/src/engine.ts` — Gateway engine
-- `drone-gateway/src/coordinator-client.ts` — Coordinator HTTP client
-- `drone-gateway/src/local-spawn-backend.ts` — Local agent spawning
-- `drone-gateway/src/coordinator-spawn-backend.ts` — Coordinator-based spawning
-- `drone-gateway/src/index.ts` — CLI entry point
-
-**Dependencies:** drone-core (shared types)
-
-#### ✅ 4.2 Matrix Service Adapter
-
-**Status:** Complete
-
-Matrix chat platform integration. Connects to a Matrix homeserver via `matrix-js-sdk`, listens for messages in rooms and DMs, sends responses back with markdown→HTML rendering, read receipts, and typing notifications.
-
-**What's Built:**
-
-- `src/adapters/matrix.ts` — `MatrixServiceAdapter` implementing `DroneServiceAdapter`
-- `matrix-js-sdk` dependency added to `package.json`
-- DM detection via 2-joined-member heuristic; conversationId format `dm:@peer:server`
-- Room allowlist (`rooms[]` config) + DMs always included
-- Best-effort E2EE crypto initialization (warns on failure, degrades to unencrypted)
-- Markdown→HTML rendering via `BasicMarkdownRenderer` (code fences, inline code, bold, italic, links, lists, paragraphs)
-- Read receipts and typing notifications on outgoing messages
-- Graceful stop: `client.stopClient()` flushes crypto/sync store — does NOT delete `dataPath`
-- Auto-join allowlisted room invites
-- DM room lookup (existing) with fallback logging (no auto-create)
-
-**Config-model refactor (delivered alongside 4.2):**
-
-- Folder-based config hierarchy: `config.json` + `adapters/<id>/adapter.json` + `adapters/<id>/conversations/<conv>.json`
-- `src/config/load.ts` — Async folder-walking config loader
-- `src/config/files.ts` — Lossless `convIdToFilename`/`filenameToConvId` encoding for special characters
-- `src/types.ts` — New `ControlSurfaceSpec`, `ResolvedServiceAdapter`, `MarkdownRenderer`, `RenderedMessage` types
-- `src/engine.ts` — Per-conversation dedicated control surface instances (`Map<adapterId, Map<convId, DroneControlSurface[]>>`), exact-then-`"*"` wildcard dispatch, `discard` built-in surface type
-- `src/markdown.ts` — `BasicMarkdownRenderer` behind swappable `MarkdownRenderer` interface
-- `docs/adr/002-gateway-config-model.md` — Architecture decision record
-- `CONTEXT.md` — Updated with Conversation, Wildcard, Discard terms and folder layout
-
-**Test Coverage (3 new test files, ~28 new tests):**
-
-| Test File                     | Tests | What's Tested                                                                                                                                                    |
-| ----------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `test/markdown.test.ts`       | 12    | Code fences, inline code, bold, italic, links, lists, paragraphs, HTML escaping                                                                                  |
-| `test/config-load.test.ts`    | 8     | convId↔filename round-trips, validation, wildcard encoding                                                                                                       |
-| `test/matrix-adapter.test.ts` | 16    | Client creation, crypto init, DM/room routing, allowlist, own-msg skip, backlog skip, sendMessage with HTML+receipt+typing, stop lifecycle, dataPath persistence |
-
-**Key Files:**
-
-- `drone-gateway/src/adapters/matrix.ts` — Matrix adapter
-- `drone-gateway/src/markdown.ts` — Markdown renderer
-- `drone-gateway/src/config/load.ts` — Folder config loader
-- `drone-gateway/src/config/files.ts` — Filename encoding
-- `drone-gateway/src/types.ts` — Reshaped types
-- `drone-gateway/src/engine.ts` — Refactored engine with per-conversation instances + discard
-- `drone-gateway/docs/adr/002-gateway-config-model.md` — ADR
-
-**Dependencies:** 4.1 (gateway core), `matrix-js-sdk` (new)
-
-**Appservice (bridge mode) deferred to Phase 5 as a moonshot.**
-
-#### ✅ 4.3 Persona Assignment Control Surface
-
-**Status:** Complete (verified 2026-07-07)
-
-Routes all messages in a conversation to a specific persona. Implemented in `drone-gateway/src/engine.ts` via `createPersonaAssignmentSurface()` (dispatched by `createControlSurface()` for control-surface type `'persona-assignment'`).
-
-**What's Built:**
-
-- `conversationId → personaId` mapping via control surface config
-- Uses the configured spawn backend (coordinator `POST /spawn` or local spawn) to launch agents
-- Session reuse across multiple messages in the same conversation
-- First-match-wins control surface evaluation in the engine loop
-- Dedicated per-conversation instance (no convId re-check needed — engine guarantees it)
-
-**Key Files:**
-
-- `drone-gateway/src/engine.ts` — `createPersonaAssignmentSurface()` + `createControlSurface()`
-
-**Dependencies:** 4.1 (gateway core), 3.9 (spawn routing)
-
-#### ⏳ 4.4 Swarm Console Control Surface
-
-**Status:** Not started
-
-Exposes coordinator commands as chat-accessible commands. Users can type commands like `!spawn`, `!status`, `!beacons`, `!terminate` to manage the swarm from chat.
-
-**Key considerations:**
-
-- Command parsing and dispatch
-- Maps to coordinator client methods (spawn, list beacons, list agents, get spawn, list spawns, terminate)
-- Response formatting for chat readability
-
-**Dependencies:** 4.1 (gateway core), 3.9 (spawn routing)
-
-#### ⏳ 4.5 Mention Router Control Surface
-
-**Status:** Not started
-
-Watches for `!persona` and `!persona@beaconId` mentions in a conversation and routes those messages to the specified persona. E.g., `!coder fix this bug` spawns a coder agent with that task. Should also support `!coder@beaconId fix this bug` to route to a specific beacon.
-
-**Key considerations:**
-
-- Parses `!personaId rest of message` and `!personaId@beaconId rest of message` syntax
-- Falls through (unhandled) if no mention is detected, allowing other control surfaces to process the message
-- Can be combined with persona assignment in the same room (ordered array)
-
-**Dependencies:** 4.1 (gateway core), 3.9 (spawn routing)
-
-#### ⏳ 4.6 Telegram Service Adapter
-
-**Status:** Not started
-
-Telegram bot integration. Connects via the Bot API, listens for messages in groups and DMs, sends responses back.
-
-**Dependencies:** 4.1 (gateway core)
-
-#### ⏳ 4.7 Slack Service Adapter
-
-**Status:** Not started
-
-Slack bot/app integration. Connects via Slack Events API or Socket Mode, listens for messages in channels and DMs, sends responses back.
-
-**Dependencies:** 4.1 (gateway core)
+#### ⏳ 4.7 Slack Service Adapter — Not started
 
 ---
 
@@ -638,77 +278,51 @@ Slack bot/app integration. Connects via Slack Events API or Socket Mode, listens
 
 **Status:** Design phase (portions implemented — see 5.3)
 
-Advanced swarm capabilities for YOU, built on phases 1-4.
+#### 5.1 Conversation Log Migration — Not started
 
-#### 5.1 Conversation Log Migration
+#### 5.2 Automated Learning Loop — Aspirational, not yet implemented
 
-Adds `conversation`/`session`/`log` as a supported asset type in the migration tool, enabling promotion of session logs from local to swarm scopes.
+#### ✅ 5.3 Model Provider Plugin System — Complete
 
-**Note (verified 2026-07-07):** The `AssetType` union in `drone-agent/src/runtime/migration/types.ts` is still `'persona' | 'skill' | 'insight' | 'principle' | 'wiki'`. No `conversation`/`session`/`log` type exists, and the earlier "phase 5 placeholder comment" is no longer present in the codebase. This item remains unimplemented.
+#### 5.4 Distributed Memory & Task Routing — Not started
 
-#### 5.2 Automated Learning Loop
+#### 5.5 Web UI Management Console — Not started
 
-The following features are aspirational and not yet implemented:
+#### 5.6 Bootstrap Swarm Workflow — Not started
 
-- **Background review fork**: A per-turn learning mechanism that runs in the background after each agent turn, extracting insights and patterns from the conversation.
-- **Swarm review task**: A periodic task on the coordinator that identifies patterns across all beacons' sessions and derives shared principles or knowledge.
-- **Automatic insight → principle derivation**: Rather than requiring manual `principles-store` calls, the system would automatically detect patterns across insights and suggest or create principles. (Currently manual only.)
-- **Cross-beacon session search tool**: An agent-facing tool to search across all sessions in the swarm, building on the existing FTS5 infrastructure.
+#### 5.7 MCP Server Description Cache Invalidation
 
-#### ✅ 5.3 Model Provider Plugin System
+**Status:** Not started — deferred from MCP list/mount + server descriptions feature (2026-07-12)
 
-**Status:** Complete (verified 2026-07-07)
+Currently, MCP server descriptions generated by the LLM are cached at `~/.drone-agent/cache/mcp/server-descriptions.json` and never invalidated automatically. If a server's tool list changes significantly (e.g., a server adds a new toolset or changes its purpose), the cached description becomes stale.
 
-Model providers are implemented as plugins registered through the `llm` broker's `registerProvider()` capability — the "v2: Model providers become plugins" design goal is met.
+**Options to revisit:**
 
-**What's Built:**
+- Tool-list-hash comparison: store a hash of tool names+descriptions in the cache entry, regenerate when the hash changes
+- Manual refresh: provide a tool or CLI command to force regeneration
+- TTL-based: regenerate after N days
 
-- `llm` broker plugin (`drone-agent/src/plugins/llm/index.ts`) exposes a `DroneLlmCapability` with `registerProvider()` / `unregisterProvider()`
-- Five provider plugins register through it: `ollama` (default-enabled), `openai`, `anthropic`, `openrouter`, `echo`
-- The provider set is **not closed** — any plugin (including external disk-loaded plugins) can call `llmCap.registerProvider()` to add a new provider at runtime
-- Broker sorts providers by precedence and auto-activates based on `config.llm.provider`; `/model --provider <id>` switches at runtime
+**Dependencies:** None (can be done independently)
 
-**Key Files:**
+#### 5.8 List/Mount Pre-mounting Check-in
 
-- `drone-agent/src/plugins/llm/index.ts` — LLM broker + capability
-- `drone-agent/src/plugins/ollama.ts`, `openai/index.ts`, `anthropic/index.ts`, `openrouter/index.ts`, `echo/index.ts` — provider plugins
+**Status:** Not started — deferred from tool reduction follow-up plan (2026-07-12)
 
-**Caveat:** All five providers are still compiled into the `staticBuiltInPlugins` array in `drone-agent/src/plugins/index.ts`; they are not hot-loaded from disk, but the registration API is fully dynamic.
+After seeing list/mount live for a while (git, swarm, MCP), check in on whether some tools should be pre-mounted by default. Some commonly-used tools (e.g., git status, git diff) might benefit from being always available, while less common ones (e.g., git stash, swarm_spawn) stay in the cache. This is a UX decision that needs real-world observation.
 
-#### 5.4 Distributed Memory & Task Routing
+**Dependencies:** Tool reduction follow-up plan must be executed first
 
-- Vector search for global session/memory retrieval
-- Distributed task routing within YOUR swarm
-- Route to node with best model for task
+#### 5.9 LSP Ergonomics for LLM
 
-**Note (verified 2026-07-07):** `search__semantic` in `drone-agent/src/plugins/search.ts` is still a placeholder stub; no vector/embedding search exists. Unimplemented.
+**Status:** Not started — future plan
 
-#### 5.5 Web UI Management Console
+When we get to converting LSP to list/mount (or otherwise improving LSP tool ergonomics), we want to:
 
-**Status:** Not started
+- Give the LLM a way to provide the text it's looking at for "cursor position" based tools (hover, go-to-definition, etc.) rather than requiring it to guess line/column numbers
+- Figure out the correct cursor position ourselves from the text context
+- Otherwise find ways to make LSP more ergonomic for the model
 
-Extend the coordinator web UI (built in 3.7) from monitoring-only to a full management console. Adds create/edit/delete forms for all resource types.
-
-**Planned features:**
-
-- **Persona management** — create, edit, and delete swarm personas via the UI
-- **Skill management** — create, edit, and delete swarm skills
-- **Wiki management** — create, edit, and delete wiki pages with a markdown editor
-- **Knowledge management** — browse, edit, and delete knowledge entries
-- **Beacon management** — approve/reject pending beacons, view trust details
-- **Insights & Principles management** — browse and delete insights/principles
-- **Session management** — force-close stale sessions
-- **Wiki browsing** — full wiki reader with search, navigation, and wiki-link traversal
-
-**Dependencies:** 3.7 (web UI foundation)
-
-#### 5.6 Bootstrap Swarm Workflow
-
-**Status:** Not started
-
-A guided workflow (`bootstrap.swarm`) to set up beacon/coordinator connection, configure swarm mode, and register with a beacon. Currently the bootstrap plugin only has `bootstrap.project` and `bootstrap.user`.
-
-**Note (verified 2026-07-07):** No `bootstrap.swarm` workflow exists; only `bootstrap.analyze`, `bootstrap.project`, and `bootstrap.user` are present in `drone-agent/src/plugins/bootstrap/index.ts`. Unimplemented.
+**Dependencies:** None (can be done independently, but should be informed by the list/mount pattern's real-world performance)
 
 ---
 
@@ -783,4 +397,4 @@ Phase 5 (Advanced)
 
 ---
 
-_Last updated: 2026-07-08_
+_Last updated: 2026-07-12 (added 5.7 MCP description cache invalidation, 5.8 list/mount pre-mounting check-in, 5.9 LSP ergonomics)_

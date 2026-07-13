@@ -8,6 +8,7 @@ import {
   type DroneConversationEvent,
   type DroneContextWindowInfo,
   type DroneLlmProvider,
+  type DroneLogger,
   type DronePluginRegistration,
   type DroneSessionSafetyTrimPayload,
 } from 'drone-core';
@@ -101,6 +102,7 @@ type RegistrationCapture = {
   registration: DronePluginRegistration;
   hooks: HookBucket;
   capability: { value: unknown };
+  logger: DroneLogger;
 };
 
 async function captureRegistration(
@@ -120,8 +122,13 @@ async function captureRegistration(
   };
   const capability: { value: unknown } = { value: undefined };
 
+  const logger: DroneLogger = {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  };
   const registration: DronePluginRegistration = {
-    logger: silentLogger(),
+    logger,
     getConfig: () => config,
     registerTool: () => {},
     registerPromptFragment: () => {},
@@ -153,7 +160,7 @@ async function captureRegistration(
 
   await plugin.register(registration);
 
-  return { registration, hooks, capability };
+  return { registration, hooks, capability, logger };
 }
 
 async function runBeforePrompt(capture: RegistrationCapture): Promise<void> {
@@ -575,11 +582,44 @@ describe('createCompactionPlugin', () => {
     });
 
     const capture = await captureRegistration(plugin, config);
-    await expect(runBeforePrompt(capture)).rejects.toThrow(
-      /Ollama provider is not available/
+    // The hook should catch the error and log it as a warning, not reject.
+    await runBeforePrompt(capture);
+    expect(capture.logger.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/compaction: error during evaluation/)
     );
   });
 
+  it('catches errors from buildSystemMessages and does not reject', async () => {
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 5; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(400));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(400));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+    });
+
+    const plugin = createCompactionPlugin({
+      budgetService: {
+        buildSystemMessages: async () => {
+          throw new Error('Prompt fragment renderer failed.');
+        },
+      } as unknown as ContextBudgetService,
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => makeProvider({ contextWindow: 1000 }),
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    await runBeforePrompt(capture);
+    expect(capture.logger.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/compaction: error during evaluation/)
+    );
+  });
   it('fires compaction via onAfterToolCall when tool results push usage over threshold', async () => {
     // Simulates a multi-round tool-call loop: usage is below threshold initially,
     // but after several rounds of tool results are appended to the session,

@@ -494,7 +494,15 @@ export function createConversationService({
             );
           }
 
-          await engine.runHooks('onAfterToolCall');
+          try {
+            await engine.runHooks('onAfterToolCall');
+          } catch (hookError) {
+            const msg =
+              hookError instanceof Error
+                ? hookError.message
+                : String(hookError);
+            logger.warn(`onAfterToolCall hook error (non-fatal): ${msg}`);
+          }
 
           continue;
         }
