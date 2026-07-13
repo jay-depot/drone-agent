@@ -2,5 +2,11 @@
   {
     "timestamp": "2026-07-13T02:52:43.034Z",
     "insight": "When plugins convert from eagerly-mounted tools to list/mount, defaultHidden on individual tools becomes redundant — the persona filter on __list_tools handles visibility before mounting, and the persona filter in getLlmTools() handles visibility after mounting. Plugin authors should drop defaultHidden from cached tools and rely on persona filtering instead. This means personas need explicit allowedTools lists to control which list/mount tools are visible."
+  },
+  {
+    "timestamp": "2026-07-13T19:54:28.670Z",
+    "insight": "The MCP plugin's meta-tools (__list_tools, __mount_tool, __unmount_tool) and resource/prompt tools are now tracked via a metaToolNames set to prevent re-registration on reconnect. The server_status tool is registered once at plugin registration time, not in listAndMountTools, avoiding duplicate registration errors."
+  }
+]is correctly."
   }
 ]
