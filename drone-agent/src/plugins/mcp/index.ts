@@ -356,7 +356,7 @@ export const mcpPlugin: DronePlugin = {
 
           // Check if already mounted
           if (cache.isMounted(toolName)) {
-            const mountedName = `${serverId}__${sanitizeToolSegment(toolName)}`;
+            const mountedName = `mcp__${serverId}__${sanitizeToolSegment(toolName)}`;
             return JSON.stringify(
               { serverId, tool: toolName, mountedName, alreadyMounted: true },
               null,
@@ -369,7 +369,7 @@ export const mcpPlugin: DronePlugin = {
           connection.state.mountedToolCount = cache.exportMounted().length;
           setServerState(connection.state);
 
-          const mountedName = `${serverId}__${sanitizeToolSegment(toolName)}`;
+          const mountedName = `mcp__${serverId}__${sanitizeToolSegment(toolName)}`;
           return JSON.stringify(
             { serverId, tool: toolName, mountedName, mounted: true },
             null,
