@@ -399,4 +399,34 @@ describe('mcp plugin integration (stdio child)', () => {
     expect(toolNames(engine)).toContain('mcp__demo__list_tools');
     expect(toolNames(engine)).toContain('mcp__demo__mount_tool');
   });
+
+  it('two MCP servers: both servers meta-tools are visible (regression: no clobbering)', async () => {
+    const serverA = startFakeMcpServer({ toolNames: ['echo'] });
+    const serverB = startFakeMcpServer({ toolNames: ['add'] });
+    const engine = await bootWithServers({
+      serverA: serverA.serverConfig,
+      serverB: serverB.serverConfig,
+    });
+
+    const names = toolNames(engine);
+
+    // Both servers' meta-tools should be present.
+    expect(names).toContain('mcp__serverA__list_tools');
+    expect(names).toContain('mcp__serverA__mount_tool');
+    expect(names).toContain('mcp__serverA__unmount_tool');
+    expect(names).toContain('mcp__serverA__list_resources');
+    expect(names).toContain('mcp__serverA__read_resource');
+    expect(names).toContain('mcp__serverA__list_prompts');
+    expect(names).toContain('mcp__serverA__get_prompt');
+    expect(names).toContain('mcp__serverA__list_resource_templates');
+
+    expect(names).toContain('mcp__serverB__list_tools');
+    expect(names).toContain('mcp__serverB__mount_tool');
+    expect(names).toContain('mcp__serverB__unmount_tool');
+    expect(names).toContain('mcp__serverB__list_resources');
+    expect(names).toContain('mcp__serverB__read_resource');
+    expect(names).toContain('mcp__serverB__list_prompts');
+    expect(names).toContain('mcp__serverB__get_prompt');
+    expect(names).toContain('mcp__serverB__list_resource_templates');
+  });
 });
