@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import type { DroneToolDefinition } from 'drone-core';
 import { createServerManager } from '../src/plugins/lsp/server.js';
 import {
   createHoverTool,
@@ -234,23 +235,17 @@ describe('resolveTextPosition (via parsePositionInput)', () => {
 
 describe('tool input schemas accept text/symbol parameters', () => {
   // Helper to check a tool's input schema has text/symbol params
-  function expectTextSymbolParams(
-    tool: {
-      inputSchema: {
-        properties?: Record<string, unknown>;
-        required?: string[];
-      };
-    },
-    _name: string
-  ) {
-    const props = tool.inputSchema.properties ?? {};
+  function expectTextSymbolParams(tool: DroneToolDefinition, _name: string) {
+    const schema = tool.inputSchema;
+    expect(schema).toBeDefined();
+    const props = schema!.properties ?? {};
     expect(props.text).toBeDefined();
     expect(props.symbol).toBeDefined();
     expect(props.line).toBeDefined();
     expect(props.column).toBeDefined();
     // line/column should NOT be in required
-    expect(tool.inputSchema.required).not.toContain('line');
-    expect(tool.inputSchema.required).not.toContain('column');
+    expect(schema!.required).not.toContain('line');
+    expect(schema!.required).not.toContain('column');
   }
 
   // Create a minimal server for tool creation
@@ -325,38 +320,40 @@ describe('tool input schemas accept text/symbol parameters', () => {
 
   it('rename accepts text/symbol and apply', () => {
     const tool = createRenameTool(server);
-    const props = tool.inputSchema.properties ?? {};
+    const schema = tool.inputSchema!;
+    const props = schema.properties ?? {};
     expect(props.text).toBeDefined();
     expect(props.symbol).toBeDefined();
     expect(props.apply).toBeDefined();
     expect((props.apply as { type: string }).type).toBe('boolean');
-    expect(tool.inputSchema.required).not.toContain('line');
-    expect(tool.inputSchema.required).not.toContain('column');
-    expect(tool.inputSchema.required).toContain('newName');
+    expect(schema.required).not.toContain('line');
+    expect(schema.required).not.toContain('column');
+    expect(schema.required).toContain('newName');
   });
 
   it('code_action accepts text/symbol and optional range', () => {
     const tool = createCodeActionTool(server);
-    const props = tool.inputSchema.properties ?? {};
+    const schema = tool.inputSchema!;
+    const props = schema.properties ?? {};
     expect(props.text).toBeDefined();
     expect(props.symbol).toBeDefined();
     // Range params should be optional
-    expect(tool.inputSchema.required).not.toContain('startLine');
-    expect(tool.inputSchema.required).not.toContain('startColumn');
-    expect(tool.inputSchema.required).not.toContain('endLine');
-    expect(tool.inputSchema.required).not.toContain('endColumn');
+    expect(schema.required).not.toContain('startLine');
+    expect(schema.required).not.toContain('startColumn');
+    expect(schema.required).not.toContain('endLine');
+    expect(schema.required).not.toContain('endColumn');
   });
 
   it('get_diagnostics accepts text/symbol', () => {
     const tool = createGetDiagnosticsTool(server);
-    const props = tool.inputSchema.properties ?? {};
+    const props = tool.inputSchema!.properties ?? {};
     expect(props.text).toBeDefined();
     expect(props.symbol).toBeDefined();
   });
 
   it('formatting does not have text/symbol (file-level tool)', () => {
     const tool = createFormattingTool(server);
-    const props = tool.inputSchema.properties ?? {};
+    const props = tool.inputSchema!.properties ?? {};
     expect(props.text).toBeUndefined();
     expect(props.symbol).toBeUndefined();
   });
