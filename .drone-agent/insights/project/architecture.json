@@ -7,6 +7,4 @@
     "timestamp": "2026-07-13T19:54:28.670Z",
     "insight": "The MCP plugin's meta-tools (__list_tools, __mount_tool, __unmount_tool) and resource/prompt tools are now tracked via a metaToolNames set to prevent re-registration on reconnect. The server_status tool is registered once at plugin registration time, not in listAndMountTools, avoiding duplicate registration errors."
   }
-]is correctly."
-  }
 ]
