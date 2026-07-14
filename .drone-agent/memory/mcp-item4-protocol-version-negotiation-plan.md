@@ -22,7 +22,8 @@ The MCP streamable HTTP client has two problems that prevent it from connecting 
 ## Spec Research (from modelcontextprotocol.io)
 
 **MCP 2025-06-18 spec** (the version the GitHub server likely implements):
-- The `MCP-Protocol-Version` HTTP header is **MANDATORY** on all requests: *"If using HTTP, the client MUST include the `MCP-Protocol-Version: <protocol-version>` HTTP header on all subsequent requests to the MCP server"*
+
+- The `MCP-Protocol-Version` HTTP header is **MANDATORY** on all requests: _"If using HTTP, the client MUST include the `MCP-Protocol-Version: <protocol-version>` HTTP header on all subsequent requests to the MCP server"_
 - The client sends `protocolVersion` in the `initialize` body — this SHOULD be the latest version the client supports
 - The server responds with its negotiated version
 - The client MUST use the negotiated version in the header on all subsequent requests
@@ -42,26 +43,31 @@ The MCP streamable HTTP client has two problems that prevent it from connecting 
 ### 1. `client.ts` — `createStreamableHttpJsonRpcClient` (line 521)
 
 **Add state variable** after `let sessionId: string | undefined;`:
+
 ```typescript
 let negotiatedProtocolVersion = '2025-06-18';
 ```
 
 **Add `MCP-Protocol-Version` header to POST requests** (line ~640, inside the `request` function's headers object):
+
 ```typescript
 'MCP-Protocol-Version': negotiatedProtocolVersion,
 ```
 
 **Add `MCP-Protocol-Version` header to GET requests** (line ~540, inside `openGetStream`'s headers object):
+
 ```typescript
 'MCP-Protocol-Version': negotiatedProtocolVersion,
 ```
 
 **Add `MCP-Protocol-Version` header to DELETE requests** (line ~710, inside `disconnect`'s headers object):
+
 ```typescript
 'MCP-Protocol-Version': negotiatedProtocolVersion,
 ```
 
 **Expose a setter** so the caller can update the version after `initialize`:
+
 ```typescript
 // Add to the returned JsonRpcClient object:
 setProtocolVersion: (version: string) => {
@@ -72,6 +78,7 @@ setProtocolVersion: (version: string) => {
 ### 2. `client.ts` — `createMcpClientConnection` (line 1100)
 
 **Update the main `initialize` body** to use `'2025-06-18'` instead of `'2024-11-05'`:
+
 ```typescript
 await requestWithRetry(
   'initialize',
@@ -85,14 +92,18 @@ await requestWithRetry(
 ```
 
 **After the main `initialize` succeeds** (after line ~1126), extract the negotiated version from the server's response and pass it to the RPC client:
+
 ```typescript
 const initResult = result as { protocolVersion?: string };
 if (initResult.protocolVersion && initResult.protocolVersion !== '2025-06-18') {
-  (rpc as { setProtocolVersion?: (v: string) => void }).setProtocolVersion?.(initResult.protocolVersion);
+  (rpc as { setProtocolVersion?: (v: string) => void }).setProtocolVersion?.(
+    initResult.protocolVersion
+  );
 }
 ```
 
 **Update the respawn monitor's initialize** (line ~1083) to also use `'2025-06-18'` and the stored version:
+
 ```typescript
 await newRpc.request('initialize', {
   protocolVersion: '2025-06-18',
@@ -111,21 +122,26 @@ The mock's `RequestRecord` type already captures `headers` (line ~130). No chang
 ### 4. `mcp-client.test.ts` — Update tests
 
 **Update existing test** "sends a single initialize with protocolVersion 2024-11-05..." (line ~120) to:
+
 - Change the expected `protocolVersion` from `'2024-11-05'` to `'2025-06-18'`
 - Add assertion: `expect(init!.headers['mcp-protocol-version']).toBe('2025-06-18');`
 
 **Add test** "sends MCP-Protocol-Version header on subsequent POSTs":
+
 - After `makeConnection`, call `conn.listTools()`
 - Assert the `tools/list` request has `mcp-protocol-version` header
 
 **Add test** "sends MCP-Protocol-Version header on GET SSE stream":
+
 - After `makeConnection`, check the GET request has the header
 
 **Add test** "sends MCP-Protocol-Version header on DELETE disconnect":
+
 - After `makeConnection`, call `conn.disconnect()`
 - Assert the DELETE request has the header
 
 **Add test** "uses negotiated protocol version from server response":
+
 - Create a mock that returns a different protocol version (e.g., `'2025-03-26'`)
 - Assert subsequent requests use the negotiated version in the header
 

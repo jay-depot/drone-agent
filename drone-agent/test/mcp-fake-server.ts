@@ -274,7 +274,7 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
 
   const handlers: Record<string, FakeHandler> = {
     initialize: () => ({
-      protocolVersion: '2024-11-05',
+      protocolVersion: '2025-06-18',
       capabilities: { tools: {}, resources: {}, prompts: {} },
       serverInfo: { name: 'fake-mcp', version: '0.0.0' },
     }),

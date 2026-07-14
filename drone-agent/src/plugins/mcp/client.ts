@@ -30,6 +30,7 @@ type JsonRpcClient = {
   request: <T>(method: string, params?: unknown) => Promise<T>;
   notify: (method: string, params?: unknown) => void;
   disconnect: () => void;
+  setProtocolVersion: (version: string) => void;
   startNotifications?: () => void;
 };
 
@@ -326,6 +327,9 @@ function createContentLengthJsonRpcClient(options: {
       markClosed('MCP transport disconnected');
       options.transport.close();
     },
+    setProtocolVersion: () => {
+      // stdio transport does not use the MCP-Protocol-Version header
+    },
   };
 }
 
@@ -477,6 +481,9 @@ function createLineDelimitedJsonRpcClient(options: {
       markClosed('MCP transport disconnected');
       options.transport.close();
     },
+    setProtocolVersion: () => {
+      // stdio transport does not use the MCP-Protocol-Version header
+    },
   };
 }
 
@@ -532,6 +539,7 @@ function createStreamableHttpJsonRpcClient(options: {
   let closed = false;
   let streaming = false;
   let sessionId: string | undefined;
+  let negotiatedProtocolVersion = '2025-06-18';
 
   async function openGetStream(): Promise<void> {
     let backoffMs = 1000;
@@ -542,6 +550,7 @@ function createStreamableHttpJsonRpcClient(options: {
           headers: {
             accept: 'text/event-stream',
             ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
+            'MCP-Protocol-Version': negotiatedProtocolVersion,
             ...options.headers,
           },
           signal: AbortSignal.timeout(options.requestTimeoutMs),
@@ -639,6 +648,7 @@ function createStreamableHttpJsonRpcClient(options: {
           headers: {
             'content-type': 'application/json',
             accept: 'application/json',
+            'MCP-Protocol-Version': negotiatedProtocolVersion,
             ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
             ...options.headers,
           },
@@ -700,6 +710,9 @@ function createStreamableHttpJsonRpcClient(options: {
       // Fire-and-forget: open the server->client SSE channel.
       void openGetStream();
     },
+    setProtocolVersion: (version: string) => {
+      negotiatedProtocolVersion = version;
+    },
     disconnect: () => {
       closed = true;
       streaming = false;
@@ -709,6 +722,7 @@ function createStreamableHttpJsonRpcClient(options: {
       void fetch(options.url, {
         method: 'DELETE',
         headers: {
+          'MCP-Protocol-Version': negotiatedProtocolVersion,
           ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
           ...options.headers,
         },
@@ -1080,7 +1094,7 @@ export async function createMcpClientConnection(options: {
             onNotification: options.onNotification,
           });
           await newRpc.request('initialize', {
-            protocolVersion: '2024-11-05',
+            protocolVersion: '2025-06-18',
             capabilities: { tools: {}, resources: {}, prompts: {} },
             clientInfo: { name: 'drone-agent', version: '0.1.0' },
           });
@@ -1106,10 +1120,10 @@ export async function createMcpClientConnection(options: {
   }
 
   try {
-    await requestWithRetry(
+    const initResult = await requestWithRetry<{ protocolVersion?: string }>(
       'initialize',
       {
-        protocolVersion: '2024-11-05',
+        protocolVersion: '2025-06-18',
         capabilities: {
           tools: {},
           resources: {},
@@ -1123,6 +1137,10 @@ export async function createMcpClientConnection(options: {
       false
     );
     rpc.notify('notifications/initialized', {});
+    // Extract the negotiated protocol version from the server's response
+    if (initResult?.protocolVersion) {
+      rpc.setProtocolVersion(initResult.protocolVersion);
+    }
     state.status = 'connected';
     state.lastError = undefined;
     state.lastErrorCategory = undefined;
