@@ -21,6 +21,7 @@ Two things to address for large/streaming MCP responses:
 ## MCP SSE streaming spec
 
 When a server responds to a POST with `text/event-stream`, it sends one or more SSE events. Each event has a `data:` line containing a JSON-RPC message. The client should:
+
 - Collect all events
 - If an event has an `id` matching the request, it's the final result (or an error)
 - If an event has no `id` (a notification), it's a progress update — the client can log it but should continue reading
@@ -30,6 +31,7 @@ When a server responds to a POST with `text/event-stream`, it sends one or more 
 ### Step 1: Update `parseSseResponse` to handle multiple events
 
 Change `parseSseResponse` to:
+
 - Read all SSE events from the stream
 - Dispatch notification events (no `id`) to an `onNotification` callback
 - Return the first event with a matching `id` (the final result)
@@ -146,12 +148,14 @@ Pass it to `createMcpClientConnection` as `defaultMaxResponseSizeBytes`.
 ### Step 5: Wire `parseSseResponse` and `readResponseBody` into the POST handler
 
 In `createStreamableHttpJsonRpcClient`'s `request` method:
+
 - Pass `onNotification` and `maxSizeBytes` to `parseSseResponse`
 - Use `readResponseBody` instead of `response.text()` for the JSON path
 
 ### Step 6: Add tests
 
 In `mcp-client.test.ts`:
+
 - Add a test that verifies a response exceeding the size limit throws an error
 - Add a test that verifies SSE responses with progress notifications are dispatched to `onNotification` before the final result
 

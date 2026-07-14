@@ -39,7 +39,7 @@ drone-agent/          ← The CLI + TUI coding agent (Ink-based)
       compaction/    ← Context compaction (summary-drop strategy)
       config/        ← Config capability (injectors, rebuild)
       echo/          ← Mock LLM provider for deterministic testing
-      git/           ← Git operations (status, diff, log, commit, branch, etc.)
+      git/           ← Git operations (list/mount pattern: list_tools, mount_tool, unmount_tool)
       lightpanda/    ← Lightpanda browser automation MCP integration
       llm/           ← LLM provider broker
       log/           ← Session logging to JSON files
@@ -62,10 +62,10 @@ drone-agent/          ← The CLI + TUI coding agent (Ink-based)
       skills/        ← Skills broker plugin
       startup.ts     ← Startup banner and status tool
       subagent/      ← Subagent spawning
-      swarm/         ← Swarm plugin (beacon/coordinator integration)
+      swarm/         ← Swarm plugin (list/mount pattern: list_tools, mount_tool, unmount_tool)
       terminal/      ← Terminal emulator plugin
       todo.ts        ← TODO list management
-      utils.ts       ← Utility tools (arithmetic, counting, spelling)
+      utils.ts       ← Utility tools (calculator, string operations)
       exec.ts        ← Shell command execution
       external-loader.ts ← External plugin discovery, loading, trust management
       fetch.ts       ← HTTP fetch tool
@@ -361,7 +361,7 @@ Custom slash commands defined in `.macro` files. The `macros` plugin loads them 
 
 ### Swarm Plugin
 
-The `swarm` plugin connects to a `drone-beacon` instance to provide swarm-wide personas, skills, and config injection. It registers persona and skill providers at both the beacon and coordinator precedence levels, provides a WebSocket-based messaging channel for inter-agent communication, registers HTTP storage engines for swarm-scoped insights and principles, registers wiki tools (`wiki_read`, `wiki_write`, `wiki_search`, `wiki_list`, `wiki_delete`, `wiki_lint`), and pushes conversation events to the coordinator. The swarm plugin is not enabled by default.
+The `swarm` plugin connects to a `drone-beacon` instance to provide swarm-wide personas, skills, and config injection. It registers persona and skill providers at both the beacon and coordinator precedence levels, provides a WebSocket-based messaging channel for inter-agent communication, registers HTTP storage engines for swarm-scoped insights and principles, registers wiki and coordinator tools using the list/mount pattern (3 meta-tools: `list_tools`, `mount_tool`, `unmount_tool`), and pushes conversation events to the coordinator. The swarm plugin is not enabled by default.
 
 ### External Plugin Loading
 
@@ -545,10 +545,10 @@ When working on the project, proactively log insights using `self-improvement.in
 | `drone-agent/src/plugins/external-loader.ts`          | External plugin discovery, loading, trust management   |
 | `drone-agent/src/plugins/fetch.ts`                    | HTTP fetch tool                                        |
 | `drone-agent/src/plugins/file.ts`                     | File read/write/glob/diff tools                        |
-| `drone-agent/src/plugins/git/index.ts`                | Git status/diff/commit/log tools                       |
+| `drone-agent/src/plugins/git/index.ts`                | Git operations (list/mount pattern)                    |
 | `drone-agent/src/plugins/search.ts`                   | Text search (ripgrep/grep)                             |
 | `drone-agent/src/plugins/todo.ts`                     | TODO list management                                   |
-| `drone-agent/src/plugins/utils.ts`                    | Utility tools (arithmetic, counting, spelling)         |
+| `drone-agent/src/plugins/utils.ts`                    | Utility tools (calculator, string operations)          |
 | `drone-agent/src/plugins/notepad.ts`                  | Session notepad                                        |
 | `drone-agent/src/plugins/terminal/index.ts`           | Terminal emulator plugin                               |
 | `drone-agent/src/plugins/prompt-file/index.ts`        | Prompt file injection                                  |

@@ -23,16 +23,17 @@ Add to `DroneMcpConfig` (global default) and `DroneMcpStdioServerConfig` (per-se
 ```typescript
 export type DroneMcpConfig = {
   // ... existing fields ...
-  spawnTimeoutMs: number;  // default: 30000
+  spawnTimeoutMs: number; // default: 30000
 };
 
 export type DroneMcpStdioServerConfig = {
   // ... existing fields ...
-  spawnTimeoutMs?: number;  // per-server override
+  spawnTimeoutMs?: number; // per-server override
 };
 ```
 
 Update the default in the `DEFAULT_CONFIG` section:
+
 ```typescript
 mcp: {
   // ... existing defaults ...
@@ -75,6 +76,7 @@ Add `defaultSpawnTimeoutMs: mcpConfig.spawnTimeoutMs` to the `createMcpClientCon
 ### Step 6: Add tests
 
 In `mcp-client.test.ts`:
+
 - Add a test that verifies `spawnTimeoutMs` is used for the `initialize` request (e.g., by setting a very short spawn timeout and verifying the initialize fails with a timeout)
 
 ### Step 7: Verify build, lint, and tests pass

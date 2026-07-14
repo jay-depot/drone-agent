@@ -19,6 +19,7 @@ The fix: advertise `logging` in capabilities, and handle `notifications/message`
 ## MCP `notifications/message` spec
 
 The notification params have the shape:
+
 ```typescript
 {
   level: 'debug' | 'info' | 'warning' | 'error';
@@ -32,12 +33,14 @@ The notification params have the shape:
 ### Step 1: Add `logging` to `initialize` capabilities in `client.ts`
 
 In `createMcpClientConnection`, add `logging: {}` to the capabilities object in both places:
+
 - The main `initialize` call (line ~1190)
 - The respawn monitor's `initialize` call (line ~1161)
 
 ### Step 2: Handle `notifications/message` in `index.ts`
 
 Update the `onNotification` callback to handle `notifications/message` by parsing the params and dispatching to the logger at the appropriate level. The MCP `level` field maps to `DroneLogger` methods:
+
 - `debug` → `info` (DroneLogger has no `debug`)
 - `info` → `info`
 - `warning` → `warn`
@@ -48,6 +51,7 @@ The log message should include the logger name (if present) and the data content
 ### Step 3: Add tests
 
 In `mcp-client.test.ts`:
+
 - Add a test that verifies the `initialize` capabilities include `logging: {}`
 - Add a test that verifies `notifications/message` is dispatched to the logger with the correct level and content
 

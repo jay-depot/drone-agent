@@ -21,10 +21,7 @@ updated: 2026-07-14T04:11:17.047Z
 Change `sanitizeToolSegment` to accept a set of already-used names and append a numeric suffix on collision:
 
 ```typescript
-function sanitizeToolSegment(
-  name: string,
-  usedNames: Set<string>
-): string {
+function sanitizeToolSegment(name: string, usedNames: Set<string>): string {
   let sanitized = name.replace(/[^a-zA-Z0-9_-]/g, '_');
   if (!usedNames.has(sanitized)) {
     usedNames.add(sanitized);
@@ -60,6 +57,7 @@ Same pattern in `handleToolsListChanged`.
 ### Step 3: Add a test
 
 In `mcp-client.test.ts` or `mcp.test.ts`:
+
 - Add a test that configures a server with tools `"foo bar"` and `"foo-bar"` and verifies both are mountable with distinct names (e.g., `foo_bar` and `foo_bar_1`)
 
 ### Step 4: Verify build, lint, and tests pass

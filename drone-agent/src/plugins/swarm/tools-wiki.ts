@@ -54,7 +54,6 @@ function createWikiReadTool(ctx: SwarmContext): DroneToolDefinition {
 function createWikiWriteTool(ctx: SwarmContext): DroneToolDefinition {
   return {
     name: 'wiki_write',
-    defaultHidden: true,
     description: 'Create or update a wiki page in the swarm knowledge base.',
     inputSchema: {
       type: 'object',
@@ -189,7 +188,6 @@ function createWikiListTool(ctx: SwarmContext): DroneToolDefinition {
 function createWikiDeleteTool(ctx: SwarmContext): DroneToolDefinition {
   return {
     name: 'wiki_delete',
-    defaultHidden: true,
     description: 'Delete a wiki page from the swarm knowledge base.',
     inputSchema: {
       type: 'object',
