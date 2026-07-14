@@ -4,6 +4,8 @@ export type DroneSearchPath = {
   path: string;
   embeddingProvider?: string;
   includeHidden?: boolean;
+  includeNodeModules?: boolean;
+  exclude?: string[];
 };
 
 export type DroneSearchConfig = {

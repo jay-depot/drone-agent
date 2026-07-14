@@ -108,7 +108,10 @@ export async function runIndexing(
       );
       continue;
     }
-    await collectFiles(absDir, allFiles, 0, dirConfig.includeHidden ?? false);
+    const includeHidden = dirConfig.includeHidden ?? false;
+    const includeNodeModules = dirConfig.includeNodeModules ?? false;
+    const exclude = dirConfig.exclude ?? [];
+    await collectFiles(absDir, allFiles, 0, includeHidden, includeNodeModules, exclude);
   }
 
   // Remove stale files from the index
@@ -161,11 +164,29 @@ export async function runIndexing(
 
 // ── File collection ─────────────────────────────────────────────────
 
+/** Check if a path matches any of the exclude patterns. */
+function isExcluded(fullPath: string, exclude: string[]): boolean {
+  for (const pattern of exclude) {
+    // Support simple glob-like patterns: if the pattern ends with /**,
+    // match any path under that directory. Otherwise check if the path
+    // contains the pattern as a segment.
+    if (pattern.endsWith('/**')) {
+      const prefix = pattern.slice(0, -3);
+      if (fullPath.includes(prefix)) return true;
+    } else if (fullPath.includes(pattern)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function collectFiles(
   dir: string,
   result: Set<string>,
   depth = 0,
-  includeHidden = false
+  includeHidden = false,
+  includeNodeModules = false,
+  exclude: string[] = []
 ): Promise<void> {
   if (depth > 20) return;
 
@@ -179,15 +200,19 @@ async function collectFiles(
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
 
+    // Check exclude patterns before any other filtering
+    if (isExcluded(fullPath, exclude)) continue;
+
     if (entry.isDirectory()) {
       // Skip hidden directories unless includeHidden is true
       if (!includeHidden && entry.name.startsWith('.')) {
         continue;
       }
-      if (entry.name === 'node_modules') {
+      // Skip node_modules unless includeNodeModules is true
+      if (!includeNodeModules && entry.name === 'node_modules') {
         continue;
       }
-      await collectFiles(fullPath, result, depth + 1, includeHidden);
+      await collectFiles(fullPath, result, depth + 1, includeHidden, includeNodeModules, exclude);
     } else if (entry.isFile()) {
       // Skip hidden files unless includeHidden is true
       if (!includeHidden && entry.name.startsWith('.')) {

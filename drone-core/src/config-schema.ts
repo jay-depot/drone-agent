@@ -204,6 +204,8 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
             path: Type.String(),
             embeddingProvider: Type.Optional(Type.String()),
             includeHidden: Type.Optional(Type.Boolean()),
+            includeNodeModules: Type.Optional(Type.Boolean()),
+            exclude: Type.Optional(Type.Array(Type.String())),
           })
         )
       ),
