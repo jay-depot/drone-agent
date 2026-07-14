@@ -118,7 +118,8 @@ function classifyErrorCategory(
 
 function createChildTransport(
   childProcess: ChildProcessWithoutNullStreams,
-  logger: DroneLogger
+  logger: DroneLogger,
+  serverId: string
 ): RpcTransport {
   return {
     write: payload => {
@@ -144,7 +145,7 @@ function createChildTransport(
       childProcess.stderr.on('data', chunk => {
         const message = chunk.toString('utf8').trim();
         if (message.length > 0) {
-          logger.warn(`[mcp stderr] ${message}`);
+          logger.warn(`[mcp.${serverId}.stderr] ${message}`);
         }
       });
     },
@@ -1020,7 +1021,7 @@ export async function createMcpClientConnection(options: {
     });
 
     rpc = createStdioJsonRpcClient({
-      transport: createChildTransport(childProcess, options.logger),
+      transport: createChildTransport(childProcess, options.logger, options.serverId),
       requestTimeoutMs: effectiveRequestTimeoutMs,
       onTransportIssue: error => {
         state.status = 'error';
@@ -1147,7 +1148,7 @@ export async function createMcpClientConnection(options: {
             stdio: 'pipe',
           });
           const newRpc = createStdioJsonRpcClient({
-            transport: createChildTransport(newChild, options.logger),
+            transport: createChildTransport(newChild, options.logger, options.serverId),
             requestTimeoutMs: effectiveRequestTimeoutMs,
             onTransportIssue: error => {
               state.status = 'error';
