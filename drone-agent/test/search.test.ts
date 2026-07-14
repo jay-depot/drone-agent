@@ -143,9 +143,10 @@ describe('SearchStore', () => {
   let tmpDir: string;
   let store: SearchStore;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'drone-search-store-'));
     store = new SearchStore('project', tmpDir);
+    await store.ensureDir();
   });
 
   afterAll(() => {
@@ -216,9 +217,10 @@ describe('semanticSearch', () => {
   let tmpDir: string;
   let store: SearchStore;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'drone-search-semantic-'));
     store = new SearchStore('project', tmpDir);
+    await store.ensureDir();
 
     // Insert file records first (required by foreign key constraint)
     store.upsertFile('/test/animals.txt', 'hash1');

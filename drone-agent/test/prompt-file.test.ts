@@ -32,23 +32,23 @@ describe('resolvePromptFilePath', () => {
 
   it('resolves ~/ to the home directory', async () => {
     await writeFile(path.join(tmpDir, 'home-file.md'), 'hello');
-    const result = resolvePromptFilePath('~/home-file.md');
+    const result = await resolvePromptFilePath('~/home-file.md');
     expect(result).toBe(path.join(tmpDir, 'home-file.md'));
   });
 
   it('returns null for ~/ when file does not exist', async () => {
-    const result = resolvePromptFilePath('~/nonexistent.md');
+    const result = await resolvePromptFilePath('~/nonexistent.md');
     expect(result).toBeNull();
   });
 
   it('resolves ./ relative to CWD', async () => {
     await writeFile(path.join(tmpDir, 'cwd-file.md'), 'hello');
-    const result = resolvePromptFilePath('./cwd-file.md');
+    const result = await resolvePromptFilePath('./cwd-file.md');
     expect(result).toBe(path.join(tmpDir, 'cwd-file.md'));
   });
 
   it('returns null for ./ when file does not exist', async () => {
-    const result = resolvePromptFilePath('./nonexistent.md');
+    const result = await resolvePromptFilePath('./nonexistent.md');
     expect(result).toBeNull();
   });
 
@@ -58,7 +58,7 @@ describe('resolvePromptFilePath', () => {
     await writeFile(path.join(tmpDir, 'root-file.md'), 'found');
     process.chdir(nestedDir);
 
-    const result = resolvePromptFilePath('..?/root-file.md');
+    const result = await resolvePromptFilePath('..?/root-file.md');
     expect(result).toBe(path.join(tmpDir, 'root-file.md'));
   });
 
@@ -67,18 +67,18 @@ describe('resolvePromptFilePath', () => {
     await mkdir(nestedDir, { recursive: true });
     process.chdir(nestedDir);
 
-    const result = resolvePromptFilePath('..?/nonexistent.md');
+    const result = await resolvePromptFilePath('..?/nonexistent.md');
     expect(result).toBeNull();
   });
 
   it('treats no-prefix paths as relative to CWD', async () => {
     await writeFile(path.join(tmpDir, 'plain-file.md'), 'hello');
-    const result = resolvePromptFilePath('plain-file.md');
+    const result = await resolvePromptFilePath('plain-file.md');
     expect(result).toBe(path.join(tmpDir, 'plain-file.md'));
   });
 
   it('returns null for no-prefix paths that do not exist', async () => {
-    const result = resolvePromptFilePath('nonexistent.md');
+    const result = await resolvePromptFilePath('nonexistent.md');
     expect(result).toBeNull();
   });
 });

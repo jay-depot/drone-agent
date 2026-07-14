@@ -1,12 +1,9 @@
 ---
 key: plan-semantic-search
 tags:
-  - semantic-search
-  - search
-  - file
-  - plan
+  []
 created: 2026-07-14T20:06:09.160Z
-updated: 2026-07-14T20:06:09.160Z
+updated: 2026-07-14T21:33:58.816Z
 ---
 
 # Plan: Semantic Search (Item 15)
@@ -159,15 +156,27 @@ A new file `drone-agent/src/plugins/search/providers/ollama.ts`:
 
 ### Validation Criteria
 
-- [ ] `search` config section exists with `indexedDirectories`, `userEmbeddingProvider`, `projectEmbeddingProvider`
-- [ ] SQLite DBs created at user and project scope with correct schema
-- [ ] Incremental indexing: only reindexes files whose content hash changed
-- [ ] `mode: "semantic"` works with at least one embedding provider registered
-- [ ] `mode: "semantic"` gracefully degrades (removed from enum) when no providers registered
-- [ ] Multiple embedding providers can be registered and selected by scope
-- [ ] Project-level index uses `projectEmbeddingProvider`; user-level index uses `userEmbeddingProvider` — they can differ
-- [ ] Ollama + Nomic provider works out of the box, using `search_document:` prefix for indexing and `search_query:` prefix for queries
-- [ ] All existing tests pass
-- [ ] LSP diagnostics pass
-- [ ] `pnpm -r run build` passes
-- [ ] `pnpm -r run lint` passes
+- [x] `search` config section exists with `indexedDirectories`, `userEmbeddingProvider`, `projectEmbeddingProvider`
+- [x] SQLite DBs created at user and project scope with correct schema
+- [x] Incremental indexing: only reindexes files whose content hash changed
+- [x] `mode: "semantic"` works with at least one embedding provider registered
+- [x] `mode: "semantic"` gracefully degrades (removed from enum) when no providers registered
+- [x] Multiple embedding providers can be registered and selected by scope
+- [x] Project-level index uses `projectEmbeddingProvider`; user-level index uses `userEmbeddingProvider` — they can differ
+- [x] Ollama + Nomic provider works out of the box, using `search_document:` prefix for indexing and `search_query:` prefix for queries
+- [x] All existing tests pass
+- [x] LSP diagnostics pass
+- [x] `pnpm -r run build` passes
+- [x] `pnpm -r run lint` passes
+
+## Implementation Summary (2026-07-14)
+
+All 14 steps completed. The old `drone-agent/src/plugins/search.ts` was replaced with a new `drone-agent/src/plugins/search/` directory containing:
+
+- `index.ts` — Plugin registration, capability offering, tool handler, lifecycle hooks
+- `store.ts` — SQLite-backed SearchStore (meta, files, chunks tables)
+- `indexer.ts` — Incremental indexing with content-hash detection, paragraph chunking
+- `searcher.ts` — Cosine similarity search with minScore filtering
+- `providers/ollama.ts` — Ollama + Nomic embedding provider
+
+16 new tests added covering SearchStore CRUD, semantic search with mock embeddings, and the plugin's regex search behavior. All 1474 existing tests pass. Build and lint pass cleanly.

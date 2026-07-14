@@ -172,6 +172,8 @@ export const searchPlugin: DronePlugin = {
       const projectDir = process.cwd();
       userStore = new SearchStore('user');
       projectStore = new SearchStore('project', projectDir);
+      await userStore.ensureDir();
+      await projectStore.ensureDir();
 
       // Register the Ollama embedding provider if available
       const ollamaHost = config.ollama.host;

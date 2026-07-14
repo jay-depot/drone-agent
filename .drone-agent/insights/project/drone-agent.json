@@ -14,5 +14,9 @@
   {
     "timestamp": "2026-07-14T20:58:46.803Z",
     "insight": "The `file__write` tool has a bug where it truncates files when writing content that contains template literal backticks or certain special characters. This happened multiple times when writing TypeScript files with template literals (e.g., `Safety trim: dropping ${turnsToDrop} turn(s)`). The workaround is to use `git checkout` to restore the file, then use `sed` or Python scripts for surgical edits instead of `file__write` for files with complex template literals."
+  },
+  {
+    "timestamp": "2026-07-14T21:34:07.117Z",
+    "insight": "When using sed to insert multi-line blocks after a pattern, the approach of matching a closing brace pattern like `/^        },/` is fragile because it matches the first closing brace after the opening pattern, not the correct one. For inserting new config fields into test files that construct DroneAgentConfig objects, it's safer to either write the whole file or use a more targeted approach like matching the specific closing brace of the swarm block. The sed command corrupted two test files (log-plugin.test.ts and prompt-file.test.ts) by inserting the search config block multiple times inside the swarm block instead of after it."
   }
 ]

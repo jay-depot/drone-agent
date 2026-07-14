@@ -34,9 +34,9 @@ describe('Beacon Identity', () => {
   it('should load existing identity from disk', async () => {
     const { loadOrCreateIdentity } = await import('../src/identity.js');
     // Generate first
-    const first = loadOrCreateIdentity('test-beacon', configDir);
+    const first = await loadOrCreateIdentity('test-beacon', configDir);
     // Load again
-    const second = loadOrCreateIdentity('test-beacon', configDir);
+    const second = await loadOrCreateIdentity('test-beacon', configDir);
     expect(second.publicKey).toBe(first.publicKey);
     expect(second.privateKeyPem).toBe(first.privateKeyPem);
     expect(second.publicKeyHex).toBe(first.publicKeyHex);
@@ -44,15 +44,15 @@ describe('Beacon Identity', () => {
 
   it('should generate new identity when file is missing', async () => {
     const { loadOrCreateIdentity } = await import('../src/identity.js');
-    const identity = loadOrCreateIdentity('new-beacon', configDir);
+    const identity = await loadOrCreateIdentity('new-beacon', configDir);
     expect(identity.id).toBe('new-beacon');
     expect(identity.publicKey).toBeTruthy();
   });
 
   it('should generate new identity when id changes', async () => {
     const { loadOrCreateIdentity } = await import('../src/identity.js');
-    const first = loadOrCreateIdentity('beacon-a', configDir);
-    const second = loadOrCreateIdentity('beacon-b', configDir);
+    const first = await loadOrCreateIdentity('beacon-a', configDir);
+    const second = await loadOrCreateIdentity('beacon-b', configDir);
     // Different id should generate different identity
     expect(second.publicKey).not.toBe(first.publicKey);
   });
@@ -68,7 +68,7 @@ describe('Beacon Identity', () => {
 
   it('should persist identity to disk as JSON', async () => {
     const { loadOrCreateIdentity } = await import('../src/identity.js');
-    const identity = loadOrCreateIdentity('persist-test', configDir);
+    const identity = await loadOrCreateIdentity('persist-test', configDir);
     const filePath = path.join(configDir, 'beacon-identity.json');
     const content = await readFile(filePath, 'utf-8');
     const parsed = JSON.parse(content);

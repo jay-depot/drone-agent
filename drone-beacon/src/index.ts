@@ -147,7 +147,7 @@ async function main() {
   setKnowledgeBaseDir(path.join(config.configDir, 'knowledge-base'));
 
   // Load or create beacon identity (Ed25519 keypair)
-  const identity = loadOrCreateIdentity(config.beaconId, config.configDir);
+  const identity = await loadOrCreateIdentity(config.beaconId, config.configDir);
   logger.info(
     `Beacon identity loaded (public key: ${identity.publicKeyHex.slice(0, 16)}...)`
   );

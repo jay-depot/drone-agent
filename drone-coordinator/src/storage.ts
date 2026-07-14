@@ -1,4 +1,4 @@
-import fs from 'fs';
+import { mkdir, writeFile, readdir, readFile, rm } from 'node:fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 import { logger } from './logger.js';
@@ -8,9 +8,9 @@ const BLOB_DIR = 'blobs';
 
 let storageDir: string | null = null;
 
-export function initStorage(baseDir: string): void {
+export async function initStorage(baseDir: string): Promise<void> {
   storageDir = path.join(baseDir, BLOB_DIR);
-  fs.mkdirSync(storageDir, { recursive: true });
+  await mkdir(storageDir, { recursive: true });
   logger.info(`Storage engine initialized at: ${storageDir}`);
 }
 
@@ -32,14 +32,14 @@ export function isLargePayload(payload: string): boolean {
  * Store a large payload on disk and return a reference string.
  * The reference format is: "blob:<sessionId>/<eventId>/<hash>"
  */
-export function storeLargePayload(
+export async function storeLargePayload(
   sessionId: string,
   eventId: string,
   content: string
-): string {
+): Promise<string> {
   const dir = getStorageDir();
   const sessionDir = path.join(dir, sessionId);
-  fs.mkdirSync(sessionDir, { recursive: true });
+  await mkdir(sessionDir, { recursive: true });
 
   const hash = crypto
     .createHash('sha256')
@@ -49,7 +49,7 @@ export function storeLargePayload(
   const filename = `${eventId}-${hash}.blob`;
   const filePath = path.join(sessionDir, filename);
 
-  fs.writeFileSync(filePath, content, 'utf-8');
+  await writeFile(filePath, content, 'utf-8');
   const ref = `blob:${sessionId}/${eventId}/${hash}`;
 
   logger.debug(
@@ -61,7 +61,9 @@ export function storeLargePayload(
 /**
  * Retrieve a large payload from disk by reference string.
  */
-export function retrieveLargePayload(ref: string): string | null {
+export async function retrieveLargePayload(
+  ref: string
+): Promise<string | null> {
   // Parse reference: "blob:<sessionId>/<eventId>/<hash>"
   const match = ref.match(/^blob:([^/]+)\/([^/]+)\/([^/]+)$/);
   if (!match) {
@@ -76,10 +78,10 @@ export function retrieveLargePayload(ref: string): string | null {
   // Search for matching blob file
   const prefix = `${eventId}-${hash}`;
   try {
-    const files = fs.readdirSync(sessionDir);
+    const files = await readdir(sessionDir);
     for (const file of files) {
       if (file.startsWith(prefix) && file.endsWith('.blob')) {
-        const content = fs.readFileSync(path.join(sessionDir, file), 'utf-8');
+        const content = await readFile(path.join(sessionDir, file), 'utf-8');
         return content;
       }
     }
@@ -94,11 +96,11 @@ export function retrieveLargePayload(ref: string): string | null {
 /**
  * Delete all blob files for a given session.
  */
-export function deleteSessionBlobs(sessionId: string): void {
+export async function deleteSessionBlobs(sessionId: string): Promise<void> {
   const dir = getStorageDir();
   const sessionDir = path.join(dir, sessionId);
   try {
-    fs.rmSync(sessionDir, { recursive: true, force: true });
+    await rm(sessionDir, { recursive: true, force: true });
     logger.debug(`Deleted blobs for session: ${sessionId}`);
   } catch {
     // Directory doesn't exist
