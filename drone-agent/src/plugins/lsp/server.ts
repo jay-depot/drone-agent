@@ -49,6 +49,13 @@ import {
   sortDiagnostics,
   type PublishDiagnosticsParams,
 } from './server/helpers.js';
+import {
+  flattenDocumentSymbols,
+  normalizeWorkspaceSymbols,
+  type LspDocumentSymbolResponse,
+  type LspWorkspaceSymbolResponse,
+  type NormalizedSymbol,
+} from './normalize/index.js';
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -111,7 +118,7 @@ export type ServerManager = {
   parsePositionInput: (
     toolName: string,
     input: Record<string, unknown>
-  ) => { filePath: string; line: number; column: number };
+  ) => Promise<{ filePath: string; line: number; column: number }>;
   resolveAtPosition: (
     toolName: string,
     input: Record<string, unknown>
@@ -793,16 +800,267 @@ export function createServerManager(
     return documentState;
   }
 
-  function parsePositionInput(
+  /**
+   * Sync a single file from disk if it has changed since the last sync.
+   * This ensures that if the LLM wrote to a file via file__write in the
+   * same turn, the LSP server sees the latest content.
+   */
+  async function syncFileIfNeeded(filePath: string): Promise<void> {
+    const absolutePath = path.resolve(filePath);
+    const runtime = findRuntimeForFile(absolutePath);
+    if (!runtime) return;
+
+    const snapshot = await readDocumentSnapshot(absolutePath);
+    if (!snapshot) return;
+
+    const existing = runtime.documents.get(absolutePath);
+    if (!existing) {
+      // File not yet open — will be opened by ensureDocumentLoaded
+      return;
+    }
+
+    if (
+      existing.mtimeMs === snapshot.mtimeMs &&
+      existing.size === snapshot.size
+    ) {
+      return; // No change
+    }
+
+    const nextVersion = existing.version + 1;
+    runtime.client.notify('textDocument/didChange', {
+      textDocument: { uri: existing.uri, version: nextVersion },
+      contentChanges: [{ text: snapshot.text }],
+    });
+    runtime.documents.set(absolutePath, {
+      ...existing,
+      version: nextVersion,
+      text: snapshot.text,
+      mtimeMs: snapshot.mtimeMs,
+      size: snapshot.size,
+    });
+  }
+
+  /**
+   * Search file content for a text snippet and return its 1-based position.
+   *
+   * 1. Exact match (case-sensitive) first
+   * 2. Fall back to case-insensitive if no exact match
+   * 3. If exactly one match, return `{ line, column }` (1-based)
+   * 4. If multiple matches, throw with each position + 2 lines of context
+   * 5. If no matches, throw
+   */
+  async function resolveTextPosition(
+    filePath: string,
+    text: string
+  ): Promise<{ line: number; column: number }> {
+    const absolutePath = path.resolve(filePath);
+    const snapshot = await readDocumentSnapshot(absolutePath);
+    if (!snapshot) {
+      throw new Error(`Could not read file: ${absolutePath}`);
+    }
+
+    const lines = snapshot.text.split('\n');
+    const matches: Array<{
+      line: number;
+      column: number;
+      context: string;
+    }> = [];
+
+    // Case-sensitive search
+    for (let i = 0; i < lines.length; i++) {
+      const col = lines[i].indexOf(text);
+      if (col !== -1) {
+        const contextLines = lines.slice(
+          Math.max(0, i - 2),
+          Math.min(lines.length, i + 3)
+        );
+        matches.push({
+          line: i + 1,
+          column: col + 1,
+          context: contextLines.join('\n'),
+        });
+      }
+    }
+
+    // Fall back to case-insensitive if no exact matches
+    if (matches.length === 0) {
+      const lowerText = text.toLowerCase();
+      for (let i = 0; i < lines.length; i++) {
+        const col = lines[i].toLowerCase().indexOf(lowerText);
+        if (col !== -1) {
+          const contextLines = lines.slice(
+            Math.max(0, i - 2),
+            Math.min(lines.length, i + 3)
+          );
+          matches.push({
+            line: i + 1,
+            column: col + 1,
+            context: contextLines.join('\n'),
+          });
+        }
+      }
+    }
+
+    if (matches.length === 0) {
+      throw new Error(`Text "${text}" not found in ${absolutePath}.`);
+    }
+
+    if (matches.length > 1) {
+      const details = matches
+        .map(
+          (m, idx) =>
+            `  ${idx + 1}. Line ${m.line}, column ${m.column}:\n${m.context
+              .split('\n')
+              .map(l => `     ${l}`)
+              .join('\n')}`
+        )
+        .join('\n');
+      throw new Error(
+        `Text "${text}" is ambiguous — found ${matches.length} matches in ${absolutePath}:\n${details}`
+      );
+    }
+
+    return { line: matches[0].line, column: matches[0].column };
+  }
+
+  /**
+   * Search for a symbol by name and return its 1-based position.
+   *
+   * 1. Try `textDocument/documentSymbol` on the file's runtime
+   * 2. Search for exact name match, fall back to prefix match
+   * 3. Filter out symbols without position info
+   * 4. If no match, try `workspace/symbol` on the runtime
+   * 5. If exactly one match, return `{ line, column }` (1-based)
+   * 6. If multiple matches, throw with context
+   * 7. If no matches, throw
+   */
+  async function resolveSymbolPosition(
+    filePath: string,
+    symbol: string
+  ): Promise<{ line: number; column: number }> {
+    const absolutePath = path.resolve(filePath);
+    const runtime = findRuntimeForFile(absolutePath);
+    if (!runtime) {
+      throw new Error(
+        `No connected LSP server is available for ${absolutePath}.`
+      );
+    }
+
+    const document = await ensureDocumentLoaded(runtime, absolutePath);
+
+    // Try document symbols first
+    const docSymbols =
+      await runtime.client.request<LspDocumentSymbolResponse[]>(
+        'textDocument/documentSymbol',
+        { textDocument: { uri: document.uri } }
+      );
+    const flat = flattenDocumentSymbols(docSymbols);
+    const exact = flat.filter(s => s.name === symbol);
+    const candidates =
+      exact.length > 0
+        ? exact
+        : flat.filter(s => s.name.startsWith(symbol));
+
+    // Filter out symbols without position info
+    const withPosition = candidates.filter(
+      (s): s is NormalizedSymbol & { line: number; column: number } =>
+        s.line !== undefined && s.column !== undefined
+    );
+
+    if (withPosition.length === 1) {
+      return { line: withPosition[0].line, column: withPosition[0].column };
+    }
+
+    if (withPosition.length > 1) {
+      const details = withPosition
+        .map(
+          (s, idx) =>
+            `  ${idx + 1}. Line ${s.line}, column ${s.column} — ${s.name}`
+        )
+        .join('\n');
+      throw new Error(
+        `Symbol "${symbol}" is ambiguous — found ${withPosition.length} matches in ${absolutePath}:\n${details}`
+      );
+    }
+
+    // Fall back to workspace symbol
+    const wsSymbols =
+      await runtime.client.request<LspWorkspaceSymbolResponse[]>(
+        'workspace/symbol',
+        { query: symbol }
+      );
+    const wsFlat = normalizeWorkspaceSymbols(wsSymbols);
+    const wsExact = wsFlat.filter(s => s.name === symbol);
+    const wsCandidates =
+      wsExact.length > 0
+        ? wsExact
+        : wsFlat.filter(s => s.name.startsWith(symbol));
+
+    // Filter out workspace symbols without position info
+    const wsWithPosition = wsCandidates.filter(
+      (s): s is NormalizedSymbol & { line: number; column: number } =>
+        s.line !== undefined && s.column !== undefined
+    );
+
+    if (wsWithPosition.length === 0) {
+      throw new Error(`Symbol "${symbol}" not found in workspace.`);
+    }
+
+    if (wsWithPosition.length === 1) {
+      return {
+        line: wsWithPosition[0].line,
+        column: wsWithPosition[0].column,
+      };
+    }
+
+    // Multiple workspace matches
+    const details = wsWithPosition
+      .map(
+        (s, idx) =>
+          `  ${idx + 1}. ${s.filePath}:${s.line}:${s.column} — ${s.name}`
+      )
+      .join('\n');
+    throw new Error(
+      `Symbol "${symbol}" is ambiguous across the workspace — found ${wsWithPosition.length} matches:\n${details}`
+    );
+  }
+
+  /**
+   * Parse position input from a tool call. Accepts either:
+   * - `{ filePath, line, column }` (traditional)
+   * - `{ filePath, text }` (resolve text to position)
+   * - `{ filePath, symbol }` (resolve symbol to position)
+   */
+  async function parsePositionInput(
     toolName: string,
     input: Record<string, unknown>
-  ): { filePath: string; line: number; column: number } {
+  ): Promise<{ filePath: string; line: number; column: number }> {
     if (
       typeof input.filePath !== 'string' ||
       input.filePath.trim().length === 0
     ) {
       throw new Error(`${toolName} requires a non-empty filePath string.`);
     }
+    const filePath = path.resolve(workspaceRoot, input.filePath);
+
+    // If text or symbol is provided, resolve from that
+    if (typeof input.text === 'string' && input.text.length > 0) {
+      await syncFileIfNeeded(filePath);
+      return {
+        filePath,
+        ...(await resolveTextPosition(filePath, input.text)),
+      };
+    }
+
+    if (typeof input.symbol === 'string' && input.symbol.length > 0) {
+      await syncFileIfNeeded(filePath);
+      return {
+        filePath,
+        ...(await resolveSymbolPosition(filePath, input.symbol)),
+      };
+    }
+
+    // Fall back to line/column
     if (
       typeof input.line !== 'number' ||
       !Number.isInteger(input.line) ||
@@ -818,18 +1076,17 @@ export function createServerManager(
       throw new Error(`${toolName} column must be a positive integer.`);
     }
 
-    return {
-      filePath: path.resolve(workspaceRoot, input.filePath),
-      line: input.line,
-      column: input.column,
-    };
+    return { filePath, line: input.line, column: input.column };
   }
 
   async function resolveAtPosition(
     toolName: string,
     input: Record<string, unknown>
   ): Promise<ResolvedPosition> {
-    const { filePath, line, column } = parsePositionInput(toolName, input);
+    const { filePath, line, column } = await parsePositionInput(
+      toolName,
+      input
+    );
     const runtime = findRuntimeForFile(filePath);
     if (!runtime) {
       throw new Error(`No connected LSP server is available for ${filePath}.`);

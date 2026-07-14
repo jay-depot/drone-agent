@@ -23,19 +23,31 @@ export function createHoverTool(server: ServerManager): DroneToolDefinition {
         },
         line: {
           type: 'integer',
-          description: '1-based line number.',
+          description:
+            '1-based line number (optional if text or symbol is provided).',
         },
         column: {
           type: 'integer',
-          description: '1-based column number.',
+          description:
+            '1-based column number (optional if text or symbol is provided).',
+        },
+        text: {
+          type: 'string',
+          description:
+            'Text content to search for in the file (alternative to line/column).',
+        },
+        symbol: {
+          type: 'string',
+          description:
+            'Symbol name to resolve (alternative to line/column).',
         },
       },
-      required: ['filePath', 'line', 'column'],
+      required: ['filePath'],
       additionalProperties: false,
     },
     execute: async input => {
       await server.refreshIfNeeded();
-      const { filePath, line, column } = server.parsePositionInput(
+      const { filePath, line, column } = await server.parsePositionInput(
         'lsp__hover',
         input
       );
@@ -89,19 +101,31 @@ export function createGoToDefinitionTool(
         },
         line: {
           type: 'integer',
-          description: '1-based line number.',
+          description:
+            '1-based line number (optional if text or symbol is provided).',
         },
         column: {
           type: 'integer',
-          description: '1-based column number.',
+          description:
+            '1-based column number (optional if text or symbol is provided).',
+        },
+        text: {
+          type: 'string',
+          description:
+            'Text content to search for in the file (alternative to line/column).',
+        },
+        symbol: {
+          type: 'string',
+          description:
+            'Symbol name to resolve (alternative to line/column).',
         },
       },
-      required: ['filePath', 'line', 'column'],
+      required: ['filePath'],
       additionalProperties: false,
     },
     execute: async input => {
       await server.refreshIfNeeded();
-      const { filePath, line, column } = server.parsePositionInput(
+      const { filePath, line, column } = await server.parsePositionInput(
         'lsp__go_to_definition',
         input
       );
@@ -169,11 +193,23 @@ export function createFindReferencesTool(
         },
         line: {
           type: 'integer',
-          description: '1-based line number.',
+          description:
+            '1-based line number (optional if text or symbol is provided).',
         },
         column: {
           type: 'integer',
-          description: '1-based column number.',
+          description:
+            '1-based column number (optional if text or symbol is provided).',
+        },
+        text: {
+          type: 'string',
+          description:
+            'Text content to search for in the file (alternative to line/column).',
+        },
+        symbol: {
+          type: 'string',
+          description:
+            'Symbol name to resolve (alternative to line/column).',
         },
         includeDeclaration: {
           type: 'boolean',
@@ -181,12 +217,12 @@ export function createFindReferencesTool(
             'Whether declaration sites should be included in the results. Defaults to true.',
         },
       },
-      required: ['filePath', 'line', 'column'],
+      required: ['filePath'],
       additionalProperties: false,
     },
     execute: async input => {
       await server.refreshIfNeeded();
-      const { filePath, line, column } = server.parsePositionInput(
+      const { filePath, line, column } = await server.parsePositionInput(
         'lsp__find_references',
         input
       );
@@ -258,14 +294,26 @@ export function createImplementationTool(
         },
         line: {
           type: 'integer',
-          description: '1-based line number.',
+          description:
+            '1-based line number (optional if text or symbol is provided).',
         },
         column: {
           type: 'integer',
-          description: '1-based column number.',
+          description:
+            '1-based column number (optional if text or symbol is provided).',
+        },
+        text: {
+          type: 'string',
+          description:
+            'Text content to search for in the file (alternative to line/column).',
+        },
+        symbol: {
+          type: 'string',
+          description:
+            'Symbol name to resolve (alternative to line/column).',
         },
       },
-      required: ['filePath', 'line', 'column'],
+      required: ['filePath'],
       additionalProperties: false,
     },
     execute: async input => {
@@ -314,14 +362,26 @@ export function createTypeDefinitionTool(
         },
         line: {
           type: 'integer',
-          description: '1-based line number.',
+          description:
+            '1-based line number (optional if text or symbol is provided).',
         },
         column: {
           type: 'integer',
-          description: '1-based column number.',
+          description:
+            '1-based column number (optional if text or symbol is provided).',
+        },
+        text: {
+          type: 'string',
+          description:
+            'Text content to search for in the file (alternative to line/column).',
+        },
+        symbol: {
+          type: 'string',
+          description:
+            'Symbol name to resolve (alternative to line/column).',
         },
       },
-      required: ['filePath', 'line', 'column'],
+      required: ['filePath'],
       additionalProperties: false,
     },
     execute: async input => {
