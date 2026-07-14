@@ -252,7 +252,26 @@ export const filePlugin: DronePlugin = {
         } catch (err) {
           throw enhanceFsError('file__write', filePath, err);
         }
-        return JSON.stringify({ path: filePath, written: true }, null, 2);
+
+        // Verify the write by reading back and comparing.
+        let verified = true;
+        let verificationError: string | undefined;
+        try {
+          const written = await readFile(filePath, 'utf-8');
+          if (written !== input.content) {
+            verified = false;
+            verificationError = `Content mismatch: wrote ${input.content.length} bytes but read back ${written.length} bytes`;
+          }
+        } catch (err) {
+          verified = false;
+          verificationError = `Could not verify: ${err instanceof Error ? err.message : String(err)}`;
+        }
+
+        return JSON.stringify(
+          { path: filePath, written: true, verified, verificationError },
+          null,
+          2
+        );
       },
     });
 
