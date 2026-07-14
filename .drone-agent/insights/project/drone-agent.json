@@ -10,5 +10,9 @@
   {
     "timestamp": "2026-07-14T19:06:29.322Z",
     "insight": "The mcp-client.test.ts has 10 pre-existing test failures related to mock fetch behavior (GET/DELETE requests not being recorded, protocol version mismatches, bare response handling). These are unrelated to the logging capability changes and appear to be pre-existing issues in the test infrastructure."
+  },
+  {
+    "timestamp": "2026-07-14T20:58:46.803Z",
+    "insight": "The `file__write` tool has a bug where it truncates files when writing content that contains template literal backticks or certain special characters. This happened multiple times when writing TypeScript files with template literals (e.g., `Safety trim: dropping ${turnsToDrop} turn(s)`). The workaround is to use `git checkout` to restore the file, then use `sed` or Python scripts for surgical edits instead of `file__write` for files with complex template literals."
   }
 ]
