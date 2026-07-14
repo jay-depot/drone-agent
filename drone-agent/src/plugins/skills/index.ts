@@ -341,7 +341,9 @@ export const skillsPlugin: DronePlugin = {
         }
 
         if (subcommand === 'reload') {
-          ctx.logger.info(await ctx.engine.executeTool('skills__list', { reload: true }));
+          ctx.logger.info(
+            await ctx.engine.executeTool('skills__list', { reload: true })
+          );
           return true;
         }
 

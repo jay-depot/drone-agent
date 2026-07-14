@@ -1,5 +1,12 @@
 // ── LSP types ────────────────────────────────────────────────────────
 
+/**
+ * 0-based LSP position (raw wire format).
+ *
+ * `line` and `character` follow the LSP protocol convention: both are
+ * zero-based. Tools in the LSP plugin convert to 1-based for the LLM
+ * and back to 0-based when sending requests to the server.
+ */
 export type DroneLspPosition = {
   line: number;
   character: number;
@@ -21,7 +28,9 @@ export type DroneLspDiagnostic = {
 
 export type DroneLspHoverResult = {
   filePath: string;
+  /** 1-based line number (post-conversion from LSP). */
   line: number;
+  /** 1-based column number (post-conversion from LSP). */
   column: number;
   contents: string;
   range?: DroneLspRange;

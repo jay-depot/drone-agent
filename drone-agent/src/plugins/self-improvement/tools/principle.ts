@@ -35,13 +35,11 @@ export function createPrincipleTool(
         targetType: {
           type: 'string',
           enum: ['persona', 'skill', 'project'],
-          description:
-            'Target type (required for store, recall, and delete).',
+          description: 'Target type (required for store, recall, and delete).',
         },
         targetId: {
           type: 'string',
-          description:
-            'Target id (required for store, recall, and delete).',
+          description: 'Target id (required for store, recall, and delete).',
         },
         principle: {
           type: 'string',
@@ -80,7 +78,8 @@ export function createPrincipleTool(
             const engineResults = await engine.listPrinciples(tt);
             results.push(...engineResults);
           }
-          const defaultResults = await defaultPrincipleEngine.listPrinciples(tt);
+          const defaultResults =
+            await defaultPrincipleEngine.listPrinciples(tt);
           results.push(...defaultResults);
         }
 

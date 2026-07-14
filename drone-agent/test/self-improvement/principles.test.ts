@@ -347,11 +347,14 @@ describe('self-improvement__principle (delete action)', () => {
     expect(parsed.ok).toBe(true);
     expect(parsed.remainingCount).toBe(1);
 
-    const recallResult = await engine.executeTool('self-improvement__principle', {
-      action: 'recall',
-      targetType: 'project',
-      targetId: 'test',
-    });
+    const recallResult = await engine.executeTool(
+      'self-improvement__principle',
+      {
+        action: 'recall',
+        targetType: 'project',
+        targetId: 'test',
+      }
+    );
     const recallParsed = JSON.parse(recallResult);
     expect(recallParsed.principles).toHaveLength(1);
     expect(recallParsed.principles[0].principle).toBe('Keep me.');

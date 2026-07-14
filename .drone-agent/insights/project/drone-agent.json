@@ -1,0 +1,10 @@
+[
+  {
+    "timestamp": "2026-07-14T17:33:59.915Z",
+    "insight": "The syntax highlighting in Markdown.tsx's renderHighlightedTree() uses nested <Text> elements with different color props per token. Ink's Yoga layout miscalculates inline flow for nested <Text> with different colors, inserting spurious line breaks between tokens. This is the same class of bug that MultilineTextInput's renderWithCursor() works around by using raw ANSI escape codes instead of nested <Text inverse>. The fix should follow the same pattern: render each line as a single <Text> with ANSI color codes embedded in the string."
+  },
+  {
+    "timestamp": "2026-07-14T18:23:49.502Z",
+    "insight": "LSP ergonomics implementation: The key architectural insight was that parsePositionInput needed to become async to support text/symbol resolution (which requires reading files from disk and making LSP requests). This rippled through all 14 cursor-position tools. The NormalizedSymbol type has optional line/column fields, so resolveSymbolPosition needed type-narrowing filters to handle symbols without position info. The test pattern of creating a minimal ServerManager with no real LSP servers worked well for testing text resolution in isolation."
+  }
+]

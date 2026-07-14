@@ -423,7 +423,11 @@ export const configPlugin: DronePlugin = {
               path: layer.path ?? null,
               keys: Object.keys(layer.config),
             }));
-            return JSON.stringify({ key, value, source, layers: layerInfo }, null, 2);
+            return JSON.stringify(
+              { key, value, source, layers: layerInfo },
+              null,
+              2
+            );
           }
           return JSON.stringify(
             {
@@ -444,7 +448,11 @@ export const configPlugin: DronePlugin = {
             path: layer.path ?? null,
             keys: Object.keys(layer.config),
           }));
-          return JSON.stringify({ ...mergedConfig, _provenance: provenance, layers: layerInfo }, null, 2);
+          return JSON.stringify(
+            { ...mergedConfig, _provenance: provenance, layers: layerInfo },
+            null,
+            2
+          );
         }
         return JSON.stringify(
           {

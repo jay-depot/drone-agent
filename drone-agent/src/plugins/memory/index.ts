@@ -152,7 +152,8 @@ export const memoryPlugin: DronePlugin = {
           tags: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Optional tags for categorization (store action only).',
+            description:
+              'Optional tags for categorization (store action only).',
           },
         },
         required: ['action', 'key'],

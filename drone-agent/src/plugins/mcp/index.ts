@@ -175,7 +175,7 @@ export const mcpPlugin: DronePlugin = {
       registerMetaTool(
         `${serverId}__list`,
         `List MCP resources, resource templates, or prompts for server ${serverId}. ` +
-        `Use type="resources", type="resource_templates", or type="prompts".`,
+          `Use type="resources", type="resource_templates", or type="prompts".`,
         {
           type: 'object',
           properties: {
@@ -210,8 +210,8 @@ export const mcpPlugin: DronePlugin = {
       registerMetaTool(
         `${serverId}__get`,
         `Get an MCP resource or prompt from server ${serverId}. ` +
-        `Use type="resource" with a uri to read a resource. ` +
-        `Use type="prompt" with a name (and optional arguments) to get a prompt.`,
+          `Use type="resource" with a uri to read a resource. ` +
+          `Use type="prompt" with a name (and optional arguments) to get a prompt.`,
         {
           type: 'object',
           properties: {
@@ -227,8 +227,7 @@ export const mcpPlugin: DronePlugin = {
             },
             name: {
               type: 'string',
-              description:
-                'Prompt name to fetch (required for type="prompt").',
+              description: 'Prompt name to fetch (required for type="prompt").',
             },
             arguments: {
               type: 'object',
@@ -263,11 +262,7 @@ export const mcpPlugin: DronePlugin = {
               ? (input.arguments as Record<string, unknown>)
               : undefined;
             const result = await connection.getPrompt(name, args);
-            return JSON.stringify(
-              { serverId, name, result },
-              null,
-              2
-            );
+            return JSON.stringify({ serverId, name, result }, null, 2);
           }
           throw new Error(`Unknown get type: ${getType}`);
         }
