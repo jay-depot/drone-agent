@@ -115,11 +115,7 @@ describe('initialize handshake', () => {
     };
     expect(params.protocolVersion).toBe('2025-06-18');
     expect(init!.headers['mcp-protocol-version']).toBe('2025-06-18');
-    expect(params.capabilities).toEqual({
-      tools: {},
-      resources: {},
-      prompts: {},
-    });
+    expect(params.capabilities).toEqual({ tools: {}, resources: {}, prompts: {}, logging: {} });
     // clientInfo is advertised
     expect((init!.params as { clientInfo?: unknown }).clientInfo).toBeDefined();
   });
@@ -591,6 +587,34 @@ describe('streamable-HTTP GET SSE stream + DELETE termination (point 8)', () => 
     expect(received).toContain('notifications/tools/list_changed');
     expect(received).toContain('notifications/message');
     expect(received.length).toBe(2);
+  });
+
+  it('passes notifications/message params through to onNotification with level and data', async () => {
+    const received: Array<{ method: string; params: unknown }> = [];
+    const mock = createMockFetch({
+      sessionId: 'sess-xyz',
+      sseEvents: [
+        {
+          method: 'notifications/message',
+          params: { level: 'warning', logger: 'test-logger', data: 'something went wrong' },
+        },
+        {
+          method: 'notifications/message',
+          params: { level: 'error', data: { code: 42, detail: 'fatal' } },
+        },
+      ],
+    });
+    installFetch(mock);
+    await makeConnection(mock, {}, {}, {
+      onNotification: (method: string, params: unknown) => {
+        received.push({ method, params });
+      },
+    });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(received).toEqual([
+      { method: 'notifications/message', params: { level: 'warning', logger: 'test-logger', data: 'something went wrong' } },
+      { method: 'notifications/message', params: { level: 'error', data: { code: 42, detail: 'fatal' } } },
+    ]);
   });
 
   it('dispatches each SSE event individually to onNotification', async () => {
