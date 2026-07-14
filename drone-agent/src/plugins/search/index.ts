@@ -196,16 +196,15 @@ export const searchPlugin: DronePlugin = {
       // Run initial indexing
       const directories = searchConfig.paths ?? [];
       if (directories.length > 0) {
-        const dirPaths = directories.map(d => d.path);
         const provider = resolveProvider('project');
         if (provider && projectStore) {
           registration.logger.info(
-            `search: starting initial indexing of ${dirPaths.length} directory/directories...`
+            `search: starting initial indexing of ${directories.length} directory/directories...`
           );
           const result = await runIndexing({
             store: projectStore,
             provider,
-            directories: dirPaths,
+            directories,
             logger: registration.logger,
           });
           registration.logger.info(
@@ -214,8 +213,8 @@ export const searchPlugin: DronePlugin = {
 
           // Register a prompt fragment so the model knows which directories
           // are indexed for semantic search.
-          const dirList = dirPaths
-            .map(d => `  - ${d}`)
+          const dirList = directories
+            .map(d => `  - ${d.path}`)
             .join('\n');
           registration.registerPromptFragment({
             key: 'search-indexed-directories',

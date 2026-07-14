@@ -203,6 +203,7 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
           Type.Object({
             path: Type.String(),
             embeddingProvider: Type.Optional(Type.String()),
+            includeHidden: Type.Optional(Type.Boolean()),
           })
         )
       ),

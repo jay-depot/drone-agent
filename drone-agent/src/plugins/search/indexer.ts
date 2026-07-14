@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import path from 'node:path';
-import type { DroneEmbeddingProvider } from 'drone-core';
+import type { DroneEmbeddingProvider, DroneSearchPath } from 'drone-core';
 import { SearchStore } from './store.js';
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -10,7 +10,7 @@ import { SearchStore } from './store.js';
 export type IndexerOptions = {
   store: SearchStore;
   provider: DroneEmbeddingProvider;
-  directories: string[];
+  directories: DroneSearchPath[];
   logger?: { warn: (msg: string) => void; info: (msg: string) => void };
 };
 
@@ -42,10 +42,7 @@ function chunkText(text: string, maxTokens: number): string[] {
 
   for (const para of paragraphs) {
     const paraTrimmed = para.trim();
-    if (
-      current.length > 0 &&
-      current.length + paraTrimmed.length + 2 > maxChars
-    ) {
+    if (current.length > 0 && current.length + paraTrimmed.length + 2 > maxChars) {
       chunks.push(current);
       current = paraTrimmed;
     } else if (current.length === 0) {
@@ -101,8 +98,8 @@ export async function runIndexing(
 
   // Collect all file paths from configured directories
   const allFiles = new Set<string>();
-  for (const dir of directories) {
-    const absDir = path.resolve(dir);
+  for (const dirConfig of directories) {
+    const absDir = path.resolve(dirConfig.path);
     try {
       await stat(absDir);
     } catch {
@@ -111,7 +108,7 @@ export async function runIndexing(
       );
       continue;
     }
-    await collectFiles(absDir, allFiles);
+    await collectFiles(absDir, allFiles, 0, dirConfig.includeHidden ?? false);
   }
 
   // Remove stale files from the index
@@ -167,7 +164,8 @@ export async function runIndexing(
 async function collectFiles(
   dir: string,
   result: Set<string>,
-  depth = 0
+  depth = 0,
+  includeHidden = false
 ): Promise<void> {
   if (depth > 20) return;
 
@@ -182,44 +180,27 @@ async function collectFiles(
     const fullPath = path.join(dir, entry.name);
 
     if (entry.isDirectory()) {
-      if (entry.name.startsWith('.') || entry.name === 'node_modules') {
+      // Skip hidden directories unless includeHidden is true
+      if (!includeHidden && entry.name.startsWith('.')) {
         continue;
       }
-      await collectFiles(fullPath, result, depth + 1);
+      if (entry.name === 'node_modules') {
+        continue;
+      }
+      await collectFiles(fullPath, result, depth + 1, includeHidden);
     } else if (entry.isFile()) {
+      // Skip hidden files unless includeHidden is true
+      if (!includeHidden && entry.name.startsWith('.')) {
+        continue;
+      }
       const ext = path.extname(entry.name).toLowerCase();
       const binaryExts = new Set([
-        '.png',
-        '.jpg',
-        '.jpeg',
-        '.gif',
-        '.bmp',
-        '.ico',
-        '.svg',
-        '.woff',
-        '.woff2',
-        '.ttf',
-        '.eot',
-        '.zip',
-        '.gz',
-        '.tar',
-        '.rar',
-        '.7z',
-        '.mp3',
-        '.mp4',
-        '.avi',
-        '.mov',
-        '.wav',
-        '.pdf',
-        '.doc',
-        '.docx',
-        '.xls',
-        '.xlsx',
-        '.o',
-        '.so',
-        '.dll',
-        '.dylib',
-        '.exe',
+        '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.svg',
+        '.woff', '.woff2', '.ttf', '.eot',
+        '.zip', '.gz', '.tar', '.rar', '.7z',
+        '.mp3', '.mp4', '.avi', '.mov', '.wav',
+        '.pdf', '.doc', '.docx', '.xls', '.xlsx',
+        '.o', '.so', '.dll', '.dylib', '.exe',
         '.wasm',
       ]);
       if (!binaryExts.has(ext)) {

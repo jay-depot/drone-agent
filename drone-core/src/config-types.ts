@@ -3,6 +3,7 @@
 export type DroneSearchPath = {
   path: string;
   embeddingProvider?: string;
+  includeHidden?: boolean;
 };
 
 export type DroneSearchConfig = {
