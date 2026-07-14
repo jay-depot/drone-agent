@@ -115,7 +115,12 @@ describe('initialize handshake', () => {
     };
     expect(params.protocolVersion).toBe('2025-06-18');
     expect(init!.headers['mcp-protocol-version']).toBe('2025-06-18');
-    expect(params.capabilities).toEqual({ tools: {}, resources: {}, prompts: {}, logging: {} });
+    expect(params.capabilities).toEqual({
+      tools: {},
+      resources: {},
+      prompts: {},
+      logging: {},
+    });
     // clientInfo is advertised
     expect((init!.params as { clientInfo?: unknown }).clientInfo).toBeDefined();
   });
@@ -596,7 +601,11 @@ describe('streamable-HTTP GET SSE stream + DELETE termination (point 8)', () => 
       sseEvents: [
         {
           method: 'notifications/message',
-          params: { level: 'warning', logger: 'test-logger', data: 'something went wrong' },
+          params: {
+            level: 'warning',
+            logger: 'test-logger',
+            data: 'something went wrong',
+          },
         },
         {
           method: 'notifications/message',
@@ -605,15 +614,30 @@ describe('streamable-HTTP GET SSE stream + DELETE termination (point 8)', () => 
       ],
     });
     installFetch(mock);
-    await makeConnection(mock, {}, {}, {
-      onNotification: (method: string, params: unknown) => {
-        received.push({ method, params });
-      },
-    });
+    await makeConnection(
+      mock,
+      {},
+      {},
+      {
+        onNotification: (method: string, params: unknown) => {
+          received.push({ method, params });
+        },
+      }
+    );
     await new Promise(resolve => setTimeout(resolve, 20));
     expect(received).toEqual([
-      { method: 'notifications/message', params: { level: 'warning', logger: 'test-logger', data: 'something went wrong' } },
-      { method: 'notifications/message', params: { level: 'error', data: { code: 42, detail: 'fatal' } } },
+      {
+        method: 'notifications/message',
+        params: {
+          level: 'warning',
+          logger: 'test-logger',
+          data: 'something went wrong',
+        },
+      },
+      {
+        method: 'notifications/message',
+        params: { level: 'error', data: { code: 42, detail: 'fatal' } },
+      },
     ]);
   });
 

@@ -39,7 +39,8 @@ const TOOLS = parseEnvTools();
 const CRASH_ON_INIT = process.env.FAKE_MCP_CRASH_ON_INIT === '1';
 const OMIT_SHUTDOWN = process.env.FAKE_MCP_OMIT_SHUTDOWN === '1';
 const NOTIFY_ON_TOOL = process.env.FAKE_MCP_NOTIFY_ON_TOOL_NAME || '';
-const NOTIFY_MESSAGE_ON_TOOL = process.env.FAKE_MCP_NOTIFY_MESSAGE_ON_TOOL_NAME || '';
+const NOTIFY_MESSAGE_ON_TOOL =
+  process.env.FAKE_MCP_NOTIFY_MESSAGE_ON_TOOL_NAME || '';
 const NOTIFY_METHOD =
   process.env.FAKE_MCP_NOTIFY_METHOD || 'notifications/tools/list_changed';
 
@@ -104,7 +105,11 @@ function handleRequest(method, id, params) {
         send({
           jsonrpc: '2.0',
           method: 'notifications/message',
-          params: { level: 'warning', logger: 'fake-server', data: `log from ${name}` },
+          params: {
+            level: 'warning',
+            logger: 'fake-server',
+            data: `log from ${name}`,
+          },
         });
       }
       respond(id, {
