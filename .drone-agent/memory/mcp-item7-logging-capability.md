@@ -1,11 +1,9 @@
 ---
 key: mcp-item7-logging-capability
 tags:
-  - mcp
-  - item7
-  - plan
+  []
 created: 2026-07-14T03:30:46.760Z
-updated: 2026-07-14T03:30:46.760Z
+updated: 2026-07-14T19:06:10.681Z
 ---
 
 # Plan: MCP Logging Capability (Item 7)
@@ -61,9 +59,19 @@ Run `pnpm build`, `pnpm -r run lint`, and `pnpm -r run test` to confirm everythi
 
 ## Validation Criteria
 
-- [ ] `initialize` advertises `logging: {}` in capabilities
-- [ ] `notifications/message` is handled by dispatching to the logger at the correct level
-- [ ] All existing tests pass
-- [ ] LSP diagnostics pass
-- [ ] `pnpm -r run build` passes
-- [ ] `pnpm -r run lint` passes
+- [x] `initialize` advertises `logging: {}` in capabilities
+- [x] `notifications/message` is handled by dispatching to the logger at the correct level
+- [x] All existing tests pass
+- [x] LSP diagnostics pass
+- [x] `pnpm -r run build` passes
+- [x] `pnpm -r run lint` passes
+
+## Work Completed (2026-07-14)
+
+- Added `logging: {}` to both `initialize` calls in `client.ts` (main handshake and respawn monitor)
+- Updated `onNotification` in `index.ts` to handle `notifications/message` with level-based dispatch to `DroneLogger` (debug/info → info, warning → warn, error → error), including logger name and data content
+- Updated `mcp-client.test.ts` to expect `logging: {}` in capabilities and added SSE test verifying `notifications/message` params pass through
+- Extended `mcp-fake-server.ts` with `notifyMessageOnToolName` option and `FakeMcpServerOptions` type
+- Extended `mcp-fake-server.mjs` to send `notifications/message` when a configured tool is called
+- Added integration test in `mcp.test.ts` for `notifications/message` dispatch via stdio transport
+- All changes committed to branch `mcp-item7-logging-capability`

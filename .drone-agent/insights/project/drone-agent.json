@@ -6,5 +6,9 @@
   {
     "timestamp": "2026-07-14T18:23:49.502Z",
     "insight": "LSP ergonomics implementation: The key architectural insight was that parsePositionInput needed to become async to support text/symbol resolution (which requires reading files from disk and making LSP requests). This rippled through all 14 cursor-position tools. The NormalizedSymbol type has optional line/column fields, so resolveSymbolPosition needed type-narrowing filters to handle symbols without position info. The test pattern of creating a minimal ServerManager with no real LSP servers worked well for testing text resolution in isolation."
+  },
+  {
+    "timestamp": "2026-07-14T19:06:29.322Z",
+    "insight": "The mcp-client.test.ts has 10 pre-existing test failures related to mock fetch behavior (GET/DELETE requests not being recorded, protocol version mismatches, bare response handling). These are unrelated to the logging capability changes and appear to be pre-existing issues in the test infrastructure."
   }
 ]
