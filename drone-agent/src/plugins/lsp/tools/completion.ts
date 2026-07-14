@@ -39,8 +39,7 @@ export function createSignatureHelpTool(
         },
         symbol: {
           type: 'string',
-          description:
-            'Symbol name to resolve (alternative to line/column).',
+          description: 'Symbol name to resolve (alternative to line/column).',
         },
       },
       required: ['filePath'],
@@ -100,8 +99,7 @@ export function createCompletionTool(
         },
         symbol: {
           type: 'string',
-          description:
-            'Symbol name to resolve (alternative to line/column).',
+          description: 'Symbol name to resolve (alternative to line/column).',
         },
         limit: {
           type: 'integer',

@@ -39,8 +39,7 @@ export function createCallHierarchyIncomingTool(
         },
         symbol: {
           type: 'string',
-          description:
-            'Symbol name to resolve (alternative to line/column).',
+          description: 'Symbol name to resolve (alternative to line/column).',
         },
       },
       required: ['filePath'],
@@ -110,8 +109,7 @@ export function createCallHierarchyOutgoingTool(
         },
         symbol: {
           type: 'string',
-          description:
-            'Symbol name to resolve (alternative to line/column).',
+          description: 'Symbol name to resolve (alternative to line/column).',
         },
       },
       required: ['filePath'],

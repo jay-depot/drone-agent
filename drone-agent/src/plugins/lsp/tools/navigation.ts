@@ -38,8 +38,7 @@ export function createHoverTool(server: ServerManager): DroneToolDefinition {
         },
         symbol: {
           type: 'string',
-          description:
-            'Symbol name to resolve (alternative to line/column).',
+          description: 'Symbol name to resolve (alternative to line/column).',
         },
       },
       required: ['filePath'],
@@ -116,8 +115,7 @@ export function createGoToDefinitionTool(
         },
         symbol: {
           type: 'string',
-          description:
-            'Symbol name to resolve (alternative to line/column).',
+          description: 'Symbol name to resolve (alternative to line/column).',
         },
       },
       required: ['filePath'],
@@ -208,8 +206,7 @@ export function createFindReferencesTool(
         },
         symbol: {
           type: 'string',
-          description:
-            'Symbol name to resolve (alternative to line/column).',
+          description: 'Symbol name to resolve (alternative to line/column).',
         },
         includeDeclaration: {
           type: 'boolean',
@@ -309,8 +306,7 @@ export function createImplementationTool(
         },
         symbol: {
           type: 'string',
-          description:
-            'Symbol name to resolve (alternative to line/column).',
+          description: 'Symbol name to resolve (alternative to line/column).',
         },
       },
       required: ['filePath'],
@@ -377,8 +373,7 @@ export function createTypeDefinitionTool(
         },
         symbol: {
           type: 'string',
-          description:
-            'Symbol name to resolve (alternative to line/column).',
+          description: 'Symbol name to resolve (alternative to line/column).',
         },
       },
       required: ['filePath'],

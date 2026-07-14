@@ -104,10 +104,7 @@ export function createCodeActionTool(
 
       if (typeof input.text === 'string' || typeof input.symbol === 'string') {
         // Resolve position from text/symbol, build a single-character range
-        const pos = await server.parsePositionInput(
-          'lsp__code_action',
-          input
-        );
+        const pos = await server.parsePositionInput('lsp__code_action', input);
         range = {
           start: { line: pos.line - 1, character: pos.column - 1 },
           end: { line: pos.line - 1, character: pos.column },
@@ -118,8 +115,7 @@ export function createCodeActionTool(
           const de = d.range.end;
           if (
             ds.line > range!.end.line ||
-            (ds.line === range!.end.line &&
-              ds.character > range!.end.character)
+            (ds.line === range!.end.line && ds.character > range!.end.character)
           ) {
             return false;
           }
@@ -167,8 +163,7 @@ export function createCodeActionTool(
           const de = d.range.end;
           if (
             ds.line > range!.end.line ||
-            (ds.line === range!.end.line &&
-              ds.character > range!.end.character)
+            (ds.line === range!.end.line && ds.character > range!.end.character)
           ) {
             return false;
           }
@@ -273,8 +268,7 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
         },
         symbol: {
           type: 'string',
-          description:
-            'Symbol name to resolve (alternative to line/column).',
+          description: 'Symbol name to resolve (alternative to line/column).',
         },
         newName: {
           type: 'string',
@@ -388,8 +382,7 @@ export function createFormattingTool(
         },
         insertSpaces: {
           type: 'boolean',
-          description:
-            'Optional space-vs-tabs hint forwarded to the server.',
+          description: 'Optional space-vs-tabs hint forwarded to the server.',
         },
       },
       required: ['filePath'],
@@ -454,9 +447,7 @@ export function createFormattingTool(
         if (startLine === endLine) {
           const line = lines[startLine];
           lines[startLine] =
-            line.slice(0, startChar) +
-            textEdit.newText +
-            line.slice(endChar);
+            line.slice(0, startChar) + textEdit.newText + line.slice(endChar);
         } else {
           const before = lines[startLine].slice(0, startChar);
           const after = lines[endLine].slice(endChar);

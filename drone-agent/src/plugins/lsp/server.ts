@@ -949,17 +949,13 @@ export function createServerManager(
     const document = await ensureDocumentLoaded(runtime, absolutePath);
 
     // Try document symbols first
-    const docSymbols =
-      await runtime.client.request<LspDocumentSymbolResponse[]>(
-        'textDocument/documentSymbol',
-        { textDocument: { uri: document.uri } }
-      );
+    const docSymbols = await runtime.client.request<
+      LspDocumentSymbolResponse[]
+    >('textDocument/documentSymbol', { textDocument: { uri: document.uri } });
     const flat = flattenDocumentSymbols(docSymbols);
     const exact = flat.filter(s => s.name === symbol);
     const candidates =
-      exact.length > 0
-        ? exact
-        : flat.filter(s => s.name.startsWith(symbol));
+      exact.length > 0 ? exact : flat.filter(s => s.name.startsWith(symbol));
 
     // Filter out symbols without position info
     const withPosition = candidates.filter(
@@ -984,11 +980,9 @@ export function createServerManager(
     }
 
     // Fall back to workspace symbol
-    const wsSymbols =
-      await runtime.client.request<LspWorkspaceSymbolResponse[]>(
-        'workspace/symbol',
-        { query: symbol }
-      );
+    const wsSymbols = await runtime.client.request<
+      LspWorkspaceSymbolResponse[]
+    >('workspace/symbol', { query: symbol });
     const wsFlat = normalizeWorkspaceSymbols(wsSymbols);
     const wsExact = wsFlat.filter(s => s.name === symbol);
     const wsCandidates =
