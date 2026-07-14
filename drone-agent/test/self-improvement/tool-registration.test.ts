@@ -18,15 +18,17 @@ describe('tool registration', () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it('registers all new tools', async () => {
+  it('registers consolidated tools', async () => {
     const engine = await createEngine();
     const toolNames = engine.listTools().map(t => t.name);
 
-    expect(toolNames).toContain('self-improvement__insights-list');
-    expect(toolNames).toContain('self-improvement__insights-recall');
-    expect(toolNames).toContain('self-improvement__principles-store');
-    expect(toolNames).toContain('self-improvement__principles-list');
-    expect(toolNames).toContain('self-improvement__principles-recall');
-    expect(toolNames).toContain('self-improvement__principles-delete');
+    expect(toolNames).toContain('self-improvement__insight');
+    expect(toolNames).toContain('self-improvement__principle');
+    expect(toolNames).not.toContain('self-improvement__insights-list');
+    expect(toolNames).not.toContain('self-improvement__insights-recall');
+    expect(toolNames).not.toContain('self-improvement__principles-store');
+    expect(toolNames).not.toContain('self-improvement__principles-list');
+    expect(toolNames).not.toContain('self-improvement__principles-recall');
+    expect(toolNames).not.toContain('self-improvement__principles-delete');
   });
 });

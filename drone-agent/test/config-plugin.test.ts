@@ -67,7 +67,7 @@ describe('config plugin', () => {
     const toolNames = tools.map(t => t.name);
     expect(toolNames).toContain('config__get');
     expect(toolNames).toContain('config__set');
-    expect(toolNames).toContain('config__list_layers');
+    expect(toolNames).not.toContain('config__list_layers');
   });
 
   it('offers DroneConfigCapability', async () => {
@@ -283,9 +283,9 @@ describe('config plugin', () => {
     });
   });
 
-  describe('config__list_layers', () => {
-    it('lists config layers with scope, path, and keys', async () => {
-      const { projectDir } = await setupDirs();
+  describe('config__get with showLayers', () => {
+    it('includes layer info when showLayers=true', async () => {
+      const { homeDir, projectDir } = await setupDirs();
       process.chdir(projectDir);
 
       // Write a project-level config
@@ -301,7 +301,7 @@ describe('config plugin', () => {
 
       await engine.initialize();
 
-      const result = await engine.executeTool('config__list_layers', {});
+      const result = await engine.executeTool('config__get', { showLayers: true });
       const parsed = JSON.parse(result);
 
       expect(parsed.layers).toBeDefined();

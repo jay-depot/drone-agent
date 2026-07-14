@@ -121,15 +121,15 @@ describe('search plugin — text', () => {
       await fs.rm(searchRoot, { recursive: true, force: true });
     }
   });
-});
 
-describe('search plugin — semantic (placeholder)', () => {
-  it('returns an informational message rather than crashing', async () => {
+  it('returns placeholder message when mode="semantic"', async () => {
     const { registration, tools } = captureRegistration();
     await searchPlugin.register(registration);
-    const semantic = tools.get('semantic');
-    expect(semantic).toBeDefined();
-    const result = JSON.parse(await semantic!({ query: 'where is foo' }));
+    const text = tools.get('text');
+    expect(text).toBeDefined();
+    const result = JSON.parse(
+      await text!({ pattern: 'foo', mode: 'semantic' })
+    );
     expect(result.note).toMatch(/not yet implemented/i);
   });
 });

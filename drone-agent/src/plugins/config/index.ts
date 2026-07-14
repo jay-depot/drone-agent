@@ -328,6 +328,11 @@ function mergeLayers(layers: DroneConfigLayer[]): DroneAgentConfig {
 const configGetSchema: DroneToolJsonSchema = {
   type: 'object',
   properties: {
+    showLayers: {
+      type: 'boolean',
+      description:
+        'If true, include layer info (scope, path, keys) in the response.',
+    },
     key: {
       type: 'string',
       description:
@@ -358,12 +363,6 @@ const configSetSchema: DroneToolJsonSchema = {
     },
   },
   required: ['key', 'value'],
-  additionalProperties: false,
-};
-
-const configListLayersSchema: DroneToolJsonSchema = {
-  type: 'object',
-  properties: {},
   additionalProperties: false,
 };
 
@@ -400,7 +399,8 @@ export const configPlugin: DronePlugin = {
         'Returns the current resolved drone-agent configuration. ' +
         'When called without a key, returns the full config with a _provenance map ' +
         'showing which layer (default/user/project) each setting came from. ' +
-        'When called with a dot-notation key (e.g. "ollama.model"), returns just that value with its source layer.',
+        'When called with a dot-notation key (e.g. "ollama.model"), returns just that value with its source layer. ' +
+        'Pass showLayers=true to include layer info (scope, path, keys) in the response.',
       inputSchema: configGetSchema,
       execute: async input => {
         const layers = await getLayers();
@@ -408,6 +408,7 @@ export const configPlugin: DronePlugin = {
         // are consistent (the engine's config may differ from disk).
         const mergedConfig = mergeLayers(layers);
         const key = input.key as string | undefined;
+        const showLayers = input.showLayers === true;
 
         if (key) {
           validateConfigKey(key);
@@ -416,6 +417,14 @@ export const configPlugin: DronePlugin = {
             key
           );
           const source = resolveLayerProvenance(key, layers);
+          if (showLayers) {
+            const layerInfo = layers.map(layer => ({
+              scope: layer.scope,
+              path: layer.path ?? null,
+              keys: Object.keys(layer.config),
+            }));
+            return JSON.stringify({ key, value, source, layers: layerInfo }, null, 2);
+          }
           return JSON.stringify(
             {
               key,
@@ -429,6 +438,14 @@ export const configPlugin: DronePlugin = {
 
         // Full config with provenance
         const provenance = collectProvenance(layers);
+        if (showLayers) {
+          const layerInfo = layers.map(layer => ({
+            scope: layer.scope,
+            path: layer.path ?? null,
+            keys: Object.keys(layer.config),
+          }));
+          return JSON.stringify({ ...mergedConfig, _provenance: provenance, layers: layerInfo }, null, 2);
+        }
         return JSON.stringify(
           {
             ...mergedConfig,
@@ -488,33 +505,6 @@ export const configPlugin: DronePlugin = {
       },
     });
 
-    // ── config.list_layers ─────────────────────────────────────────
-    registration.registerTool({
-      name: 'list_layers',
-      description:
-        'Lists the config layers (default, user, project) with their file paths and a summary of keys set in each layer.',
-      inputSchema: configListLayersSchema,
-      execute: async () => {
-        const layers = await getLayers();
-        const layerInfo = layers.map(layer => {
-          const keys = Object.keys(layer.config);
-          return {
-            scope: layer.scope,
-            path: layer.path ?? null,
-            keys,
-          };
-        });
-
-        return JSON.stringify(
-          {
-            layers: layerInfo,
-          },
-          null,
-          2
-        );
-      },
-    });
-
     // ── Capability ──────────────────────────────────────────────────
     const capability: DroneConfigCapability = {
       getConfig: () => registration.getConfig(),
@@ -540,7 +530,7 @@ export const configPlugin: DronePlugin = {
     // ── Lifecycle ───────────────────────────────────────────────────
     registration.hooks.onPluginsLoaded(async () => {
       registration.logger.info(
-        'config plugin ready (use config.get, config.set, config.list_layers tools)'
+        'config plugin ready (use config.get, config.set tools)'
       );
     });
   },

@@ -4,9 +4,14 @@ import type {
   DroneSkillsCapability,
   DroneToolDefinition,
 } from 'drone-core';
-import { validateTarget } from '../validation.js';
+import {
+  VALID_TARGET_TYPES,
+  isValidTargetType,
+  validateTarget,
+  type TargetType,
+} from '../validation.js';
 import { resolveInsightEngine } from '../capability.js';
-import { incrementInsightCount } from '../state.js';
+import { incrementInsightCount, insightEngines } from '../state.js';
 
 export function createInsightTool(
   personaCap: () => DronePersonaCapability | undefined,
@@ -16,72 +21,118 @@ export function createInsightTool(
   return {
     name: 'insight',
     description:
-      'Record a self-improvement insight about a persona, skill, or the project. ' +
-      'Whenever you encounter an issue, gap, or opportunity related ' +
-      'to a persona, skill, or the project itself, use this tool to log it as an insight. ' +
-      'Do this proactively as you work, and do not worry about creating ' +
-      'too many insights. They will be evaluated all together all at once ' +
-      'to look for patterns, so more is better! Insights should be ' +
-      'short and focused on a single observation or issue. ' +
-      'Use `persona__list` and `skills__list` to discover valid IDs before calling this tool.',
+      'Manage self-improvement insights. ' +
+      'Use action="record" to log a new insight, action="list" to browse all insight files, ' +
+      'action="recall" to read all insights for a specific target.',
     inputSchema: {
       type: 'object',
       properties: {
+        action: {
+          type: 'string',
+          enum: ['record', 'list', 'recall'],
+          description:
+            'What to do: record (log new), list (browse files), recall (read entries).',
+        },
         targetType: {
           type: 'string',
           enum: ['persona', 'skill', 'project'],
-          description:
-            'Whether this insight is about a persona, a skill, or the project.',
+          description: 'Target type (required for record and recall).',
         },
         targetId: {
           type: 'string',
-          description:
-            'The id of the persona or skill this insight applies to. ' +
-            'Use `persona__list` or `skills__list` to discover valid IDs. ' +
-            'For project insights, use a descriptive category like "architecture" or "workflow".',
+          description: 'Target id (required for record and recall).',
         },
         insight: {
           type: 'string',
-          description:
-            'A short (1-3 sentence) observation about what could be ' +
-            'improved, what worked well, or what is missing.',
+          description: 'Insight text (required for record action).',
         },
       },
-      required: ['targetType', 'targetId', 'insight'],
+      required: ['action'],
       additionalProperties: false,
     },
     execute: async input => {
-      const targetType = input.targetType as string;
-      const targetId = (input.targetId as string).trim().toLowerCase();
-      const insight = (input.insight as string).trim();
+      const action = input.action as string;
 
-      if (!insight) {
-        throw new Error('insight must be a non-empty string.');
+      if (action === 'list') {
+        const filterType = input.targetType as string | undefined;
+        const results: Array<{
+          targetType: string;
+          targetId: string;
+          entryCount: number;
+          lastTimestamp?: string;
+        }> = [];
+
+        const typesToScan: TargetType[] =
+          filterType && isValidTargetType(filterType)
+            ? [filterType]
+            : [...VALID_TARGET_TYPES];
+
+        for (const tt of typesToScan) {
+          for (const engine of insightEngines.values()) {
+            const engineResults = await engine.listInsights(tt);
+            results.push(...engineResults);
+          }
+          const defaultResults = await defaultInsightEngine.listInsights(tt);
+          results.push(...defaultResults);
+        }
+
+        return JSON.stringify({ insights: results }, null, 2);
       }
 
-      validateTarget(targetType, targetId, personaCap(), skillsCap());
+      const targetType = input.targetType as string;
+      const targetId = (input.targetId as string).trim().toLowerCase();
 
-      const engine = resolveInsightEngine(
-        targetType,
-        targetId,
-        defaultInsightEngine,
-        personaCap(),
-        skillsCap()
-      );
-      const result = await engine.recordInsight(targetType, targetId, insight);
-      incrementInsightCount();
+      if (action === 'record') {
+        const insight = (input.insight as string).trim();
 
-      return JSON.stringify(
-        {
-          ok: true,
+        if (!insight) {
+          throw new Error('insight must be a non-empty string.');
+        }
+
+        validateTarget(targetType, targetId, personaCap(), skillsCap());
+
+        const engine = resolveInsightEngine(
           targetType,
           targetId,
-          entryCount: result.entryCount,
-          message: `Insight recorded for ${targetType} "${targetId}" via ${engine.providerId}.`,
-        },
-        null,
-        2
-      );
+          defaultInsightEngine,
+          personaCap(),
+          skillsCap()
+        );
+        const result = await engine.recordInsight(
+          targetType,
+          targetId,
+          insight
+        );
+        incrementInsightCount();
+
+        return JSON.stringify(
+          {
+            ok: true,
+            targetType,
+            targetId,
+            entryCount: result.entryCount,
+            message: `Insight recorded for ${targetType} "${targetId}" via ${engine.providerId}.`,
+          },
+          null,
+          2
+        );
+      }
+
+      if (action === 'recall') {
+        validateTarget(targetType, targetId, personaCap(), skillsCap());
+
+        const engine = resolveInsightEngine(
+          targetType,
+          targetId,
+          defaultInsightEngine,
+          personaCap(),
+          skillsCap()
+        );
+        const entries = await engine.readInsights(targetType, targetId);
+        return JSON.stringify({ targetType, targetId, entries }, null, 2);
+      }
+
+      throw new Error(`Unknown action: ${action}`);
     },
   };
 }

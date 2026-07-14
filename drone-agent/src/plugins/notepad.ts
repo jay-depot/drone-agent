@@ -35,59 +35,52 @@ export const notepadPlugin: DronePlugin = {
     });
 
     registration.registerTool({
-      name: 'notepad__set',
-      description: 'Set the contents of the notepad.',
+      name: 'manage',
+      description:
+        'Manage the session notepad. Use action="set" to replace contents, ' +
+        'action="append" to add text, action="clear" to empty it. ' +
+        'The notepad is included in the system prompt and persists for the session.',
       inputSchema: {
         type: 'object',
         properties: {
-          content: { type: 'string' },
+          action: {
+            type: 'string',
+            enum: ['set', 'clear', 'append'],
+            description:
+              'What to do: set (replace), clear (empty), append (add to end).',
+          },
+          content: {
+            type: 'string',
+            description: 'Text content (required for set and append).',
+          },
         },
-        required: ['content'],
+        required: ['action'],
+        additionalProperties: false,
       },
-
       execute: async input => {
+        const action = input.action as string;
+
+        if (action === 'clear') {
+          state.currentNotepad = null;
+          return JSON.stringify({ success: true });
+        }
+
         if (typeof input.content !== 'string') {
           return JSON.stringify({ success: false, error: 'Missing content' });
         }
-        const content = input.content.trim();
-        state.currentNotepad = content;
-        return JSON.stringify({ success: true });
-      },
-    });
 
-    registration.registerTool({
-      name: 'notepad__clear',
-      description: 'Clear the contents of the notepad.',
-      inputSchema: {
-        type: 'object',
-        properties: {},
-      },
-      execute: async () => {
-        state.currentNotepad = null;
-        return JSON.stringify({ success: true });
-      },
-    });
-
-    registration.registerTool({
-      name: 'notepad__append',
-      description: 'Append text to the contents of the notepad.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          content: { type: 'string' },
-        },
-        required: ['content'],
-      },
-      execute: async input => {
-        if (typeof input.content !== 'string') {
-          return JSON.stringify({ success: false, error: 'Missing content' });
-        }
         const content = input.content.trim();
-        if (!state.currentNotepad) {
+
+        if (action === 'set') {
           state.currentNotepad = content;
-        } else {
-          state.currentNotepad += '\n' + content;
+        } else if (action === 'append') {
+          if (!state.currentNotepad) {
+            state.currentNotepad = content;
+          } else {
+            state.currentNotepad += '\n' + content;
+          }
         }
+
         return JSON.stringify({ success: true });
       },
     });

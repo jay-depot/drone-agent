@@ -78,11 +78,9 @@ describe('insight-targets prompt fragment', () => {
     const fragments = await engine.renderPromptFragments();
     const fragment = fragments.find(f => f.includes('Insight tools'));
     expect(fragment).toBeDefined();
-    expect(fragment).toContain('insights-list');
-    expect(fragment).toContain('insights-recall');
-    expect(fragment).toContain('principles-store');
-    expect(fragment).toContain('principles-list');
-    expect(fragment).toContain('principles-recall');
-    expect(fragment).toContain('principles-delete');
+    expect(fragment).toContain('self-improvement__insight');
+    expect(fragment).toContain('self-improvement__principle');
+    expect(fragment).toContain('record/list/recall');
+    expect(fragment).toContain('store/list/recall/delete');
   });
 });

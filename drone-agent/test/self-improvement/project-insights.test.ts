@@ -22,6 +22,7 @@ describe('project insights', () => {
     const engine = await createEngine();
 
     const result = await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'project',
       targetId: 'architecture',
       insight: 'The plugin architecture should use dependency injection.',
@@ -48,12 +49,14 @@ describe('project insights', () => {
     const engine = await createEngine();
 
     await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'project',
       targetId: 'workflow',
       insight: 'First insight.',
     });
 
     const result = await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'project',
       targetId: 'workflow',
       insight: 'Second insight.',
@@ -75,6 +78,7 @@ describe('project insights', () => {
 
     await expect(
       engine.executeTool('self-improvement__insight', {
+        action: 'record',
         targetType: 'project',
         targetId: '',
         insight: 'Some insight.',
@@ -87,6 +91,7 @@ describe('project insights', () => {
 
     await expect(
       engine.executeTool('self-improvement__insight', {
+        action: 'record',
         targetType: 'project',
         targetId: 'testing',
         insight: '',
@@ -98,6 +103,7 @@ describe('project insights', () => {
     const engine = await createEngine();
 
     const result = await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'project',
       targetId: 'testing',
       insight: 'Works without validation.',

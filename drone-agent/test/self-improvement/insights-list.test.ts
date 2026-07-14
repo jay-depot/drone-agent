@@ -4,7 +4,7 @@ import os from 'node:os';
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { createEngine } from './setup.js';
 
-describe('self-improvement__insights-list', () => {
+describe('self-improvement__insight (list action)', () => {
   let tmpDir: string;
 
   beforeEach(async () => {
@@ -20,10 +20,9 @@ describe('self-improvement__insights-list', () => {
 
   it('returns empty list when no insights exist', async () => {
     const engine = await createEngine();
-    const result = await engine.executeTool(
-      'self-improvement__insights-list',
-      {}
-    );
+    const result = await engine.executeTool('self-improvement__insight', {
+      action: 'list',
+    });
     const parsed = JSON.parse(result);
     expect(parsed.insights).toEqual([]);
   });
@@ -32,15 +31,15 @@ describe('self-improvement__insights-list', () => {
     const engine = await createEngine();
 
     await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'project',
       targetId: 'architecture',
       insight: 'Architecture insight.',
     });
 
-    const result = await engine.executeTool(
-      'self-improvement__insights-list',
-      {}
-    );
+    const result = await engine.executeTool('self-improvement__insight', {
+      action: 'list',
+    });
     const parsed = JSON.parse(result);
     expect(parsed.insights).toHaveLength(1);
     expect(parsed.insights[0].targetType).toBe('project');
@@ -53,15 +52,15 @@ describe('self-improvement__insights-list', () => {
     const engine = await createEngine();
 
     await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'skill',
       targetId: 'my-skill',
       insight: 'Skill insight.',
     });
 
-    const result = await engine.executeTool(
-      'self-improvement__insights-list',
-      {}
-    );
+    const result = await engine.executeTool('self-improvement__insight', {
+      action: 'list',
+    });
     const parsed = JSON.parse(result);
     expect(parsed.insights).toHaveLength(1);
     expect(parsed.insights[0].targetType).toBe('skill');
@@ -72,15 +71,15 @@ describe('self-improvement__insights-list', () => {
     const engine = await createEngine();
 
     await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'persona',
       targetId: 'my-persona',
       insight: 'Persona insight.',
     });
 
-    const result = await engine.executeTool(
-      'self-improvement__insights-list',
-      {}
-    );
+    const result = await engine.executeTool('self-improvement__insight', {
+      action: 'list',
+    });
     const parsed = JSON.parse(result);
     expect(parsed.insights).toHaveLength(1);
     expect(parsed.insights[0].targetType).toBe('persona');
@@ -91,17 +90,20 @@ describe('self-improvement__insights-list', () => {
     const engine = await createEngine();
 
     await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'project',
       targetId: 'arch',
       insight: 'Arch insight.',
     });
     await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'skill',
       targetId: 'test',
       insight: 'Test insight.',
     });
 
-    const result = await engine.executeTool('self-improvement__insights-list', {
+    const result = await engine.executeTool('self-improvement__insight', {
+      action: 'list',
       targetType: 'project',
     });
     const parsed = JSON.parse(result);
@@ -111,7 +113,7 @@ describe('self-improvement__insights-list', () => {
   });
 });
 
-describe('self-improvement__insights-recall', () => {
+describe('self-improvement__insight (recall action)', () => {
   let tmpDir: string;
 
   beforeEach(async () => {
@@ -129,23 +131,23 @@ describe('self-improvement__insights-recall', () => {
     const engine = await createEngine();
 
     await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'project',
       targetId: 'testing',
       insight: 'Test insight one.',
     });
     await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'project',
       targetId: 'testing',
       insight: 'Test insight two.',
     });
 
-    const result = await engine.executeTool(
-      'self-improvement__insights-recall',
-      {
-        targetType: 'project',
-        targetId: 'testing',
-      }
-    );
+    const result = await engine.executeTool('self-improvement__insight', {
+      action: 'recall',
+      targetType: 'project',
+      targetId: 'testing',
+    });
     const parsed = JSON.parse(result);
     expect(parsed.targetType).toBe('project');
     expect(parsed.targetId).toBe('testing');
@@ -157,13 +159,11 @@ describe('self-improvement__insights-recall', () => {
   it('returns empty array when no insights exist', async () => {
     const engine = await createEngine();
 
-    const result = await engine.executeTool(
-      'self-improvement__insights-recall',
-      {
-        targetType: 'project',
-        targetId: 'nonexistent',
-      }
-    );
+    const result = await engine.executeTool('self-improvement__insight', {
+      action: 'recall',
+      targetType: 'project',
+      targetId: 'nonexistent',
+    });
     const parsed = JSON.parse(result);
     expect(parsed.entries).toEqual([]);
   });
@@ -172,7 +172,8 @@ describe('self-improvement__insights-recall', () => {
     const engine = await createEngine();
 
     await expect(
-      engine.executeTool('self-improvement__insights-recall', {
+      engine.executeTool('self-improvement__insight', {
+        action: 'recall',
         targetType: 'invalid',
         targetId: 'foo',
       })
@@ -183,7 +184,8 @@ describe('self-improvement__insights-recall', () => {
     const engine = await createEngine();
 
     await expect(
-      engine.executeTool('self-improvement__insights-recall', {
+      engine.executeTool('self-improvement__insight', {
+        action: 'recall',
         targetType: 'project',
         targetId: '',
       })
