@@ -440,7 +440,7 @@ describe('terminalPlugin', () => {
         },
         search: {
           enabled: false,
-          indexedDirectories: [],
+          paths: [],
         },
       }),
       registerTool: (tool: { name: string; defaultHidden?: boolean }) => {

@@ -368,7 +368,7 @@ async function getCapability(
       },
       search: {
         enabled: false,
-        indexedDirectories: [],
+        paths: [],
       },
     }),
     registerTool: () => {},

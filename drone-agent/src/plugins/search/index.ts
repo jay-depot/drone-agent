@@ -194,7 +194,7 @@ export const searchPlugin: DronePlugin = {
       }
 
       // Run initial indexing
-      const directories = searchConfig.indexedDirectories ?? [];
+      const directories = searchConfig.paths ?? [];
       if (directories.length > 0) {
         const dirPaths = directories.map(d => d.path);
         const provider = resolveProvider('project');

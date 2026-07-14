@@ -338,7 +338,7 @@ describe('promptFilePlugin', () => {
       },
       search: {
         enabled: false,
-        indexedDirectories: [],
+        paths: [],
       },
     };
 

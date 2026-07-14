@@ -140,7 +140,7 @@ const KNOWN_CONFIG_KEYS: string[] = [
   'promptFile.files',
   // search.*
   'search.enabled',
-  'search.indexedDirectories',
+  'search.paths',
   'search.userEmbeddingProvider',
   'search.projectEmbeddingProvider',
 ];

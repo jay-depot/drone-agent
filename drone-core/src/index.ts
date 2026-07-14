@@ -54,7 +54,7 @@ export type {
   DronePromptFileConfig,
   DroneKnowledgeSyncConfig,
   DroneSwarmConfig,
-  DroneSearchIndexedDir,
+  DroneSearchPath,
   DroneSearchConfig,
   DroneLspSpawnServerConfig,
   DroneLspExternalServerConfig,

@@ -1,13 +1,13 @@
 // ── Search config types ─────────────────────────────────────────────
 
-export type DroneSearchIndexedDir = {
+export type DroneSearchPath = {
   path: string;
   embeddingProvider?: string;
 };
 
 export type DroneSearchConfig = {
   enabled: boolean;
-  indexedDirectories: DroneSearchIndexedDir[];
+  paths: DroneSearchPath[];
   userEmbeddingProvider?: string;
   projectEmbeddingProvider?: string;
 };
@@ -456,7 +456,7 @@ export function createDefaultAgentConfig(
     },
     search: {
       enabled: false,
-      indexedDirectories: [],
+      paths: [],
     },
   };
   return { ...base, ...overrides };
@@ -585,9 +585,9 @@ export function applyAgentConfigLayer(
       ? {
           ...baseConfig.search,
           ...layer.search,
-          indexedDirectories:
-            layer.search.indexedDirectories ??
-            baseConfig.search.indexedDirectories,
+          paths:
+            layer.search.paths ??
+            baseConfig.search.paths,
         }
       : baseConfig.search,
   };
