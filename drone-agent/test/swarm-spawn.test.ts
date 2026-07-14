@@ -61,13 +61,161 @@ function createRegistrationCapture(
   return { registration, registeredTools };
 }
 
-describe('swarm spawn tools', () => {
+describe('swarm spawn tools (list/mount pattern)', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('registers only 3 meta-tools at init', async () => {
+    const mockFetch = mockFetchWithBeaconRegistration(() =>
+      Promise.resolve({ ok: true, json: async () => [] })
+    );
+    vi.stubGlobal('fetch', mockFetch);
+
+    const config = createDefaultAgentConfig({
+      swarm: { coordinatorUrl: 'http://localhost:3456' },
+    });
+    const { registration, registeredTools } = createRegistrationCapture(config);
+    const plugin = createSwarmPlugin({
+      coordinatorUrl: 'http://localhost:3456',
+    });
+    await plugin.register(registration);
+
+    expect(registeredTools.has('list_tools')).toBe(true);
+    expect(registeredTools.has('mount_tool')).toBe(true);
+    expect(registeredTools.has('unmount_tool')).toBe(true);
+    expect(registeredTools.size).toBe(3);
+  });
+
+  it('list_tools returns all 13 tool descriptions', async () => {
+    const mockFetch = mockFetchWithBeaconRegistration(() =>
+      Promise.resolve({ ok: true, json: async () => [] })
+    );
+    vi.stubGlobal('fetch', mockFetch);
+
+    const config = createDefaultAgentConfig({
+      swarm: { coordinatorUrl: 'http://localhost:3456' },
+    });
+    const { registration, registeredTools } = createRegistrationCapture(config);
+    const plugin = createSwarmPlugin({
+      coordinatorUrl: 'http://localhost:3456',
+    });
+    await plugin.register(registration);
+
+    const result = JSON.parse(
+      await registeredTools.get('list_tools')!.execute({})
+    );
+    expect(result.toolCount).toBe(13);
+    const names = result.tools.map((t: { name: string }) => t.name);
+    expect(names).toContain('swarm_message');
+    expect(names).toContain('wiki_read');
+    expect(names).toContain('wiki_write');
+    expect(names).toContain('wiki_search');
+    expect(names).toContain('wiki_list');
+    expect(names).toContain('wiki_delete');
+    expect(names).toContain('wiki_lint');
+    expect(names).toContain('swarm_list_beacons');
+    expect(names).toContain('swarm_list_agents');
+    expect(names).toContain('swarm_spawn');
+    expect(names).toContain('swarm_get_spawn');
+    expect(names).toContain('swarm_list_spawns');
+    expect(names).toContain('swarm_terminate_spawn');
+  });
+
+  it('mount_tool mounts a tool and it becomes callable', async () => {
+    const mockFetch = mockFetchWithBeaconRegistration(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => [
+          { id: 'b1', name: 'Beacon 1', host: 'localhost', port: 3457 },
+        ],
+      })
+    );
+    vi.stubGlobal('fetch', mockFetch);
+
+    const config = createDefaultAgentConfig({
+      swarm: { coordinatorUrl: 'http://localhost:3456' },
+    });
+    const { registration, registeredTools } = createRegistrationCapture(config);
+    const plugin = createSwarmPlugin({
+      coordinatorUrl: 'http://localhost:3456',
+    });
+    await plugin.register(registration);
+
+    // Mount the tool
+    const mountResult = JSON.parse(
+      await registeredTools
+        .get('mount_tool')!
+        .execute({ tool: 'swarm_list_beacons' })
+    );
+    expect(mountResult.success).toBe(true);
+    expect(mountResult.tool).toBe('swarm_list_beacons');
+
+    // Now it should be registered
+    expect(registeredTools.has('swarm_list_beacons')).toBe(true);
+
+    // Call the mounted tool
+    const result = await registeredTools.get('swarm_list_beacons')!.execute({});
+    const parsed = JSON.parse(result);
+    expect(parsed.success).toBe(true);
+    expect(parsed[0].id).toBe('b1');
+  });
+
+  it('mount_tool rejects an unknown tool name', async () => {
+    const mockFetch = mockFetchWithBeaconRegistration(() =>
+      Promise.resolve({ ok: true, json: async () => [] })
+    );
+    vi.stubGlobal('fetch', mockFetch);
+
+    const config = createDefaultAgentConfig({
+      swarm: { coordinatorUrl: 'http://localhost:3456' },
+    });
+    const { registration, registeredTools } = createRegistrationCapture(config);
+    const plugin = createSwarmPlugin({
+      coordinatorUrl: 'http://localhost:3456',
+    });
+    await plugin.register(registration);
+
+    const result = JSON.parse(
+      await registeredTools.get('mount_tool')!.execute({ tool: 'nonexistent' })
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('nonexistent');
+  });
+
+  it('unmount_tool removes a mounted tool', async () => {
+    const mockFetch = mockFetchWithBeaconRegistration(() =>
+      Promise.resolve({ ok: true, json: async () => [] })
+    );
+    vi.stubGlobal('fetch', mockFetch);
+
+    const config = createDefaultAgentConfig({
+      swarm: { coordinatorUrl: 'http://localhost:3456' },
+    });
+    const { registration, registeredTools } = createRegistrationCapture(config);
+    const plugin = createSwarmPlugin({
+      coordinatorUrl: 'http://localhost:3456',
+    });
+    await plugin.register(registration);
+
+    // Mount first
+    await registeredTools
+      .get('mount_tool')!
+      .execute({ tool: 'swarm_list_beacons' });
+    expect(registeredTools.has('swarm_list_beacons')).toBe(true);
+
+    // Unmount
+    const unmountResult = JSON.parse(
+      await registeredTools
+        .get('unmount_tool')!
+        .execute({ tool: 'swarm_list_beacons' })
+    );
+    expect(unmountResult.success).toBe(true);
+    expect(unmountResult.tool).toBe('swarm_list_beacons');
   });
 
   describe('swarm_list_beacons', () => {
@@ -92,6 +240,11 @@ describe('swarm spawn tools', () => {
       });
       await plugin.register(registration);
 
+      // Mount the tool first
+      await registeredTools
+        .get('mount_tool')!
+        .execute({ tool: 'swarm_list_beacons' });
+
       const tool = registeredTools.get('swarm_list_beacons')!;
       expect(tool).toBeDefined();
       const result = await tool.execute({});
@@ -111,6 +264,11 @@ describe('swarm spawn tools', () => {
         createRegistrationCapture(config);
       const plugin = createSwarmPlugin({});
       await plugin.register(registration);
+
+      // Mount the tool first
+      await registeredTools
+        .get('mount_tool')!
+        .execute({ tool: 'swarm_list_beacons' });
 
       const tool = registeredTools.get('swarm_list_beacons')!;
       expect(tool).toBeDefined();
@@ -135,6 +293,11 @@ describe('swarm spawn tools', () => {
         coordinatorUrl: 'http://localhost:3456',
       });
       await plugin.register(registration);
+
+      // Mount the tool first
+      await registeredTools
+        .get('mount_tool')!
+        .execute({ tool: 'swarm_list_beacons' });
 
       const tool = registeredTools.get('swarm_list_beacons')!;
       expect(tool).toBeDefined();
@@ -167,6 +330,11 @@ describe('swarm spawn tools', () => {
       });
       await plugin.register(registration);
 
+      // Mount the tool first
+      await registeredTools
+        .get('mount_tool')!
+        .execute({ tool: 'swarm_list_agents' });
+
       const tool = registeredTools.get('swarm_list_agents')!;
       expect(tool).toBeDefined();
       const result = await tool.execute({});
@@ -190,6 +358,11 @@ describe('swarm spawn tools', () => {
         coordinatorUrl: 'http://localhost:3456',
       });
       await plugin.register(registration);
+
+      // Mount the tool first
+      await registeredTools
+        .get('mount_tool')!
+        .execute({ tool: 'swarm_list_agents' });
 
       const tool = registeredTools.get('swarm_list_agents')!;
       expect(tool).toBeDefined();
@@ -226,6 +399,9 @@ describe('swarm spawn tools', () => {
       });
       await plugin.register(registration);
 
+      // Mount the tool first
+      await registeredTools.get('mount_tool')!.execute({ tool: 'swarm_spawn' });
+
       const tool = registeredTools.get('swarm_spawn')!;
       expect(tool).toBeDefined();
       const result = await tool.execute({
@@ -250,6 +426,9 @@ describe('swarm spawn tools', () => {
         createRegistrationCapture(config);
       const plugin = createSwarmPlugin({});
       await plugin.register(registration);
+
+      // Mount the tool first
+      await registeredTools.get('mount_tool')!.execute({ tool: 'swarm_spawn' });
 
       const tool = registeredTools.get('swarm_spawn')!;
       expect(tool).toBeDefined();
@@ -284,6 +463,11 @@ describe('swarm spawn tools', () => {
       });
       await plugin.register(registration);
 
+      // Mount the tool first
+      await registeredTools
+        .get('mount_tool')!
+        .execute({ tool: 'swarm_get_spawn' });
+
       const tool = registeredTools.get('swarm_get_spawn')!;
       expect(tool).toBeDefined();
       const result = await tool.execute({ beaconId: 'b1', spawnId: 's1' });
@@ -313,6 +497,11 @@ describe('swarm spawn tools', () => {
       });
       await plugin.register(registration);
 
+      // Mount the tool first
+      await registeredTools
+        .get('mount_tool')!
+        .execute({ tool: 'swarm_list_spawns' });
+
       const tool = registeredTools.get('swarm_list_spawns')!;
       expect(tool).toBeDefined();
       const result = await tool.execute({ beaconId: 'b1' });
@@ -336,6 +525,11 @@ describe('swarm spawn tools', () => {
         coordinatorUrl: 'http://localhost:3456',
       });
       await plugin.register(registration);
+
+      // Mount the tool first
+      await registeredTools
+        .get('mount_tool')!
+        .execute({ tool: 'swarm_list_spawns' });
 
       const tool = registeredTools.get('swarm_list_spawns')!;
       expect(tool).toBeDefined();
@@ -370,6 +564,11 @@ describe('swarm spawn tools', () => {
       });
       await plugin.register(registration);
 
+      // Mount the tool first
+      await registeredTools
+        .get('mount_tool')!
+        .execute({ tool: 'swarm_terminate_spawn' });
+
       const tool = registeredTools.get('swarm_terminate_spawn')!;
       expect(tool).toBeDefined();
       const result = await tool.execute({ beaconId: 'b1', spawnId: 's1' });
@@ -392,6 +591,11 @@ describe('swarm spawn tools', () => {
         coordinatorUrl: 'http://localhost:3456',
       });
       await plugin.register(registration);
+
+      // Mount the tool first
+      await registeredTools
+        .get('mount_tool')!
+        .execute({ tool: 'swarm_terminate_spawn' });
 
       const tool = registeredTools.get('swarm_terminate_spawn')!;
       expect(tool).toBeDefined();

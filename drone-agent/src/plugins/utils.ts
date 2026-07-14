@@ -345,9 +345,9 @@ export const utilsPlugin: DronePlugin = {
   },
   register: async registration => {
     registration.registerTool({
-      name: 'evaluate_arithmetic',
+      name: 'calculator',
       description:
-        'Evaluates arithmetic expressions deterministically with proper operator precedence.',
+        'Evaluates arithmetic expressions deterministically with proper operator precedence. Supports +, -, *, /, ^, parentheses, decimals.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -370,190 +370,105 @@ export const utilsPlugin: DronePlugin = {
     });
 
     registration.registerTool({
-      name: 'count_words',
-      description: 'Counts words in text with case-insensitive normalization.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          text: {
-            type: 'string',
-            description: 'Text to analyze for word count.',
-          },
-        },
-        required: ['text'],
-        additionalProperties: false,
-      },
-      execute: async input => {
-        if (typeof input.text !== 'string') {
-          throw new Error('text must be a string.');
-        }
-        const words = tokenizeWords(input.text);
-        return JSON.stringify(
-          { success: true, totalWords: words.length },
-          null,
-          2
-        );
-      },
-    });
-
-    registration.registerTool({
-      name: 'count_letters',
-      description: 'Counts letters in text (case-insensitive).',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          text: {
-            type: 'string',
-            description: 'Text to analyze for letter count.',
-          },
-        },
-        required: ['text'],
-        additionalProperties: false,
-      },
-      execute: async input => {
-        if (typeof input.text !== 'string') {
-          throw new Error('text must be a string.');
-        }
-        const letters = extractLetters(input.text);
-        return JSON.stringify(
-          { success: true, totalLetters: letters.length },
-          null,
-          2
-        );
-      },
-    });
-
-    registration.registerTool({
-      name: 'count_characters',
-      description: 'Counts non-whitespace characters in text.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          text: {
-            type: 'string',
-            description: 'Text to analyze for character count.',
-          },
-        },
-        required: ['text'],
-        additionalProperties: false,
-      },
-      execute: async input => {
-        if (typeof input.text !== 'string') {
-          throw new Error('text must be a string.');
-        }
-        const count = countNonWhitespaceCharacters(input.text);
-        return JSON.stringify(
-          { success: true, totalCharacters: count },
-          null,
-          2
-        );
-      },
-    });
-
-    registration.registerTool({
-      name: 'count_lines',
-      description: 'Counts lines in text.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          text: {
-            type: 'string',
-            description: 'Text to analyze for line count.',
-          },
-        },
-        required: ['text'],
-        additionalProperties: false,
-      },
-      execute: async input => {
-        if (typeof input.text !== 'string') {
-          throw new Error('text must be a string.');
-        }
-        const count = countLines(input.text);
-        return JSON.stringify({ success: true, totalLines: count }, null, 2);
-      },
-    });
-
-    registration.registerTool({
-      name: 'count_unique_words',
-      description: 'Counts unique words in text.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          text: {
-            type: 'string',
-            description: 'Text to analyze for unique word count.',
-          },
-        },
-        required: ['text'],
-        additionalProperties: false,
-      },
-      execute: async input => {
-        if (typeof input.text !== 'string') {
-          throw new Error('text must be a string.');
-        }
-        const words = tokenizeWords(input.text);
-        const unique = new Set(words).size;
-        return JSON.stringify(
-          { success: true, uniqueWords: unique, totalWords: words.length },
-          null,
-          2
-        );
-      },
-    });
-
-    registration.registerTool({
-      name: 'count_sentences_paragraphs',
-      description: 'Counts sentences and paragraphs in text.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          text: {
-            type: 'string',
-            description: 'Text to analyze for sentence and paragraph counts.',
-          },
-        },
-        required: ['text'],
-        additionalProperties: false,
-      },
-      execute: async input => {
-        if (typeof input.text !== 'string') {
-          throw new Error('text must be a string.');
-        }
-        const sentences = countSentences(input.text);
-        const paragraphs = countParagraphs(input.text);
-        return JSON.stringify(
-          {
-            success: true,
-            totalSentences: sentences,
-            totalParagraphs: paragraphs,
-          },
-          null,
-          2
-        );
-      },
-    });
-
-    registration.registerTool({
-      name: 'spell',
+      name: 'string',
       description:
-        'Returns the character-by-character spelling of an input string.',
+        'Performs string analysis operations: count_words, count_letters, count_characters, count_lines, count_unique_words, count_sentences_paragraphs, spell.',
       inputSchema: {
         type: 'object',
         properties: {
-          word: {
+          operation: {
             type: 'string',
-            description: 'String to spell out character by character.',
+            enum: [
+              'count_words',
+              'count_letters',
+              'count_characters',
+              'count_lines',
+              'count_unique_words',
+              'count_sentences_paragraphs',
+              'spell',
+            ],
+            description: 'The string operation to perform.',
+          },
+          target: {
+            type: 'string',
+            description:
+              'The text to analyze (or the string to spell, for the spell operation).',
           },
         },
-        required: ['word'],
+        required: ['operation', 'target'],
         additionalProperties: false,
       },
       execute: async input => {
-        if (typeof input.word !== 'string') {
-          throw new Error('word must be a string.');
+        if (
+          typeof input.operation !== 'string' ||
+          typeof input.target !== 'string'
+        ) {
+          throw new Error('operation and target must be strings.');
         }
-        const chars = Array.from(input.word);
-        return JSON.stringify(chars, null, 2);
+        switch (input.operation) {
+          case 'count_words': {
+            const words = tokenizeWords(input.target);
+            return JSON.stringify(
+              { success: true, totalWords: words.length },
+              null,
+              2
+            );
+          }
+          case 'count_letters': {
+            const letters = extractLetters(input.target);
+            return JSON.stringify(
+              { success: true, totalLetters: letters.length },
+              null,
+              2
+            );
+          }
+          case 'count_characters': {
+            const count = countNonWhitespaceCharacters(input.target);
+            return JSON.stringify(
+              { success: true, totalCharacters: count },
+              null,
+              2
+            );
+          }
+          case 'count_lines': {
+            const count = countLines(input.target);
+            return JSON.stringify(
+              { success: true, totalLines: count },
+              null,
+              2
+            );
+          }
+          case 'count_unique_words': {
+            const words = tokenizeWords(input.target);
+            const unique = new Set(words).size;
+            return JSON.stringify(
+              { success: true, uniqueWords: unique, totalWords: words.length },
+              null,
+              2
+            );
+          }
+          case 'count_sentences_paragraphs': {
+            const sentences = countSentences(input.target);
+            const paragraphs = countParagraphs(input.target);
+            return JSON.stringify(
+              {
+                success: true,
+                totalSentences: sentences,
+                totalParagraphs: paragraphs,
+              },
+              null,
+              2
+            );
+          }
+          case 'spell': {
+            const chars = Array.from(input.target);
+            return JSON.stringify(chars, null, 2);
+          }
+          default:
+            throw new Error(
+              `Unknown operation: ${input.operation}. Valid operations: count_words, count_letters, count_characters, count_lines, count_unique_words, count_sentences_paragraphs, spell.`
+            );
+        }
       },
     });
 

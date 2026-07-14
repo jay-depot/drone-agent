@@ -6,5 +6,9 @@
   {
     "timestamp": "2026-07-13T19:54:28.670Z",
     "insight": "The MCP plugin's meta-tools (__list_tools, __mount_tool, __unmount_tool) and resource/prompt tools are now tracked via a metaToolNames set to prevent re-registration on reconnect. The server_status tool is registered once at plugin registration time, not in listAndMountTools, avoiding duplicate registration errors."
+  },
+  {
+    "timestamp": "2026-07-14T04:38:03.720Z",
+    "insight": "The list/mount pattern from MCP was successfully expanded to git and swarm plugins, reducing native tool surface by ~18 tools. The pattern is now established as a reusable convention: 3 meta-tools (list_tools, mount_tool, unmount_tool) backed by ToolMountingCache, hardcoded descriptions, persona filtering, and no pre-mounting."
   }
 ]

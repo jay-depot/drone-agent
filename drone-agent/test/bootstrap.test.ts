@@ -138,8 +138,8 @@ describe('bootstrap plugin', () => {
         defaultEnabled: false,
         tools: [
           {
-            name: 'status',
-            description: 'git status',
+            name: 'list_tools',
+            description: 'List all available git tools.',
             inputSchema: { type: 'object', additionalProperties: false },
             execute: async () => 'ok',
           },
@@ -157,7 +157,7 @@ describe('bootstrap plugin', () => {
       expect(engine.listPlugins().find(p => p.id === 'git')?.enabled).toBe(
         false
       );
-      expect(engine.getTool('git__status')).toBeUndefined();
+      expect(engine.getTool('git__list_tools')).toBeUndefined();
 
       // Enable git plugin
       const result = await engine.enablePlugin('git');
@@ -165,7 +165,7 @@ describe('bootstrap plugin', () => {
       expect(engine.listPlugins().find(p => p.id === 'git')?.enabled).toBe(
         true
       );
-      expect(engine.getTool('git__status')).toBeDefined();
+      expect(engine.getTool('git__list_tools')).toBeDefined();
     });
   });
 });
