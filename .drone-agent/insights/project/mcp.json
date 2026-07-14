@@ -2,5 +2,9 @@
   {
     "timestamp": "2026-07-07T18:29:50.307Z",
     "insight": "The MCP plugin's mounting hook (`hooks.onPluginsLoaded`) is NOT auto-run by `engine.initialize()`; plugin tests that boot a real engine must call `engine.runHooks('onPluginsLoaded')` explicitly to trigger tool mounting. The `server_status` tool is registered in `register()` (always present), but per-server `mcp__<serverId>__*` tools only appear after the hook runs."
+  },
+  {
+    "timestamp": "2026-07-14T02:47:20.858Z",
+    "insight": "Item 9 fixed: listTools now walks all pages via walkAllPages function. The paginateList function's maxListPages/maxListItems caps were truncating the tool list that feeds the ToolMountingCache, meaning mcp__<server>__list_tools only showed a subset of tools to the LLM. The fix adds a dedicated walkAllPages function that only has infinite-loop protection (cursor dedup) and uses it for listTools, while resources/prompts/resourceTemplates still use paginateList with caps."
   }
 ]

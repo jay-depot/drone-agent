@@ -6,7 +6,7 @@ tags:
   - testing
   - planning
 created: 2026-07-07T17:29:50.826Z
-updated: 2026-07-14T01:34:24.535Z
+updated: 2026-07-14T02:47:00.784Z
 ---
 
 # MCP Client Gap Analysis (2026-07-07, updated 2026-07-14)
@@ -23,6 +23,7 @@ Tests EXIST: `drone-agent/test/mcp-client.test.ts` (fast, in-process `fetch` moc
 - **Item 15** — DONE (2026-07-12). `client.ts:537-620` (`openGetStream`) implements auto-reconnect with exponential backoff (1s → 2s → 4s → ... → 60s cap). On successful reconnection, `onStreamReconnected` fires, triggering `listAndMountTools` in `index.ts:395-400`.
 - **Item 16** — DONE (2026-07-12). `client.ts:1050-1102` (`startRespawnMonitor`) implements auto-respawn for stdio MCP servers. When a stdio server enters `status: 'error'`, the monitor respawns with exponential backoff, re-initializes the JSON-RPC client, and calls `onReconnected` which triggers a tool re-mount.
 - **Item 4** — DONE (2026-07-14). Implemented via `mcp-item4-protocol-version-negotiation-plan`. Updated default `protocolVersion` from `'2024-11-05'` to `'2025-06-18'` in both main initialize and respawn monitor. Added `MCP-Protocol-Version` HTTP header to all POST, GET, and DELETE requests in the streamable HTTP transport. Added `setProtocolVersion` to `JsonRpcClient` interface. Extract negotiated version from server's `initialize` response and apply to subsequent requests. 4 new tests added (39 total in fast suite). Commit `20fce35`.
+- **Item 9** — DONE (2026-07-14). Implemented via `mcp-item9-listtools-walk-all-pages`. Added `walkAllPages` function alongside `paginateList` that walks all pages without maxListPages/maxListItems caps (only infinite-loop protection via cursor dedup). Changed `listTools` to use it, so the ToolMountingCache and `mcp__<server>__list_tools` now show the full tool list. `discoveredToolCount` reflects the true total; `toolsListTruncated` is always `false` for tools. Updated 3 tests. Commit `852d386`.
 
 ## Critical (correctness / spec compliance)
 
@@ -36,8 +37,8 @@ Tests EXIST: `drone-agent/test/mcp-client.test.ts` (fast, in-process `fetch` moc
 5. ~~No resource templates (`resources/templates/list`/`read`); `DroneMcpResourceMeta` only models concrete resources.~~ **FIXED** (2026-07-08, `mcp-resource-templates-plan`). `DroneMcpResourceTemplateMeta` + `__list_resource_templates` tool; templates read via the shared `resources/read`.
 6. ~~No `notifications/tools/list_changed` handling — tools mounted statically at `onPluginsLoaded`, go stale.~~ **FIXED** (2026-07-12). `onNotification` callback handles `notifications/tools/list_changed` and triggers full re-mount via `listAndMountTools()`.
 7. No notification/progress/log handling; `initialize` advertises only tools/resources/prompts (no `logging`, `roots`). (`client.ts` initialize `capabilities`.) Note: item 8 delivers notifications via `onNotification`, and item 6 handles `notifications/tools/list_changed`, but `initialize` still doesn't advertise `logging`/`roots`, and the client doesn't act on `notifications/message` (logging) yet.
-8. ~~**HTTP transport is single-POST only; no GET SSE stream for server→client msgs; no `DELETE` session termination (`disconnect` just flips `closed`).**~~ **FIXED** (2026-07-08, `mcp-fix-point-8-plan`). GET SSE reader + `onNotification`/`onStreamError` dispatch; best-effort `DELETE` on disconnect.
-9. `discoveredToolCount` set to truncated paginated count, not true server total. (`client.ts` `listTools` returns capped `items`; `index.ts` assigns `tools.length`.) _Investigating — index.ts overwrites the client-level value with the true total, but this layering should be refactored._
+8. ~~**HTTP transport is single-POST only; no GET SSE stream for server→client msgs; no `DELETE` session termination (`disconnect` just flips `closed`).~~ **FIXED** (2026-07-08, `mcp-fix-point-8-plan`). GET SSE reader + `onNotification`/`onStreamError` dispatch; best-effort `DELETE` on disconnect.
+9. ~~`discoveredToolCount` set to truncated paginated count, not true server total. (`client.ts` `listTools` returns capped `items`; `index.ts` assigns `tools.length`.)~~ **FIXED** (2026-07-14). `listTools` now uses `walkAllPages` which fetches all pages. `discoveredToolCount` reflects the true total; `toolsListTruncated` is `false` for tools. Commit `852d386`.
 10. No `roots` capability.
 11. No `completion/complete`.
 12. No spawn-timeout separate from request-timeout.
@@ -51,5 +52,5 @@ Tests EXIST: `drone-agent/test/mcp-client.test.ts` (fast, in-process `fetch` moc
 
 ## Remaining work (open items)
 
-- Critical/Important: 7, 9
+- Critical/Important: 7
 - Minor: 10, 11, 12, 13, 14
