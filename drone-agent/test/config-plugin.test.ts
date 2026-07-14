@@ -301,7 +301,9 @@ describe('config plugin', () => {
 
       await engine.initialize();
 
-      const result = await engine.executeTool('config__get', { showLayers: true });
+      const result = await engine.executeTool('config__get', {
+        showLayers: true,
+      });
       const parsed = JSON.parse(result);
 
       expect(parsed.layers).toBeDefined();

@@ -1021,7 +1021,11 @@ export async function createMcpClientConnection(options: {
     });
 
     rpc = createStdioJsonRpcClient({
-      transport: createChildTransport(childProcess, options.logger, options.serverId),
+      transport: createChildTransport(
+        childProcess,
+        options.logger,
+        options.serverId
+      ),
       requestTimeoutMs: effectiveRequestTimeoutMs,
       onTransportIssue: error => {
         state.status = 'error';
@@ -1148,7 +1152,11 @@ export async function createMcpClientConnection(options: {
             stdio: 'pipe',
           });
           const newRpc = createStdioJsonRpcClient({
-            transport: createChildTransport(newChild, options.logger, options.serverId),
+            transport: createChildTransport(
+              newChild,
+              options.logger,
+              options.serverId
+            ),
             requestTimeoutMs: effectiveRequestTimeoutMs,
             onTransportIssue: error => {
               state.status = 'error';

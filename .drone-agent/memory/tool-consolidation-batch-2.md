@@ -14,18 +14,18 @@ Completed 2026-07-14. Reduced 28 tools to 14 across 7 plugins, plus MCP resource
 
 ## Changes
 
-| Plugin | Before | After | Saved | Pattern |
-|--------|--------|-------|-------|---------|
-| Notepad | 3 | 1 | 2 | action param (`notepad__manage`) |
-| Search | 2 | 1 | 1 | mode param (`search__text` absorbs `search__semantic`) |
-| Skills | 4 | 3 | 1 | reload param (`skills__list` absorbs `skills__reload`) |
-| Persona | 4 | 3 | 1 | showCurrent param (`persona__list` absorbs `persona__current`) |
-| Config | 3 | 2 | 1 | showLayers param (`config__get` absorbs `config__list_layers`) |
-| Memory | 5 | 2 | 3 | action params (`memory__manage` + `memory__browse`) |
-| Self-improvement | 7 | 2 | 5 | action params (`self-improvement__insight` + `self-improvement__principle`) |
-| MCP (per server) | 5 | 2 | 3 | action params (`__list` + `__get`) |
-| Subagent | 1 (pokemon) | 1 (clean) | 0 | renamed `subagent__dispatch` → `dispatch` |
-| **Total** | **~34** | **~17** | **~17** | |
+| Plugin           | Before      | After     | Saved   | Pattern                                                                     |
+| ---------------- | ----------- | --------- | ------- | --------------------------------------------------------------------------- |
+| Notepad          | 3           | 1         | 2       | action param (`notepad__manage`)                                            |
+| Search           | 2           | 1         | 1       | mode param (`search__text` absorbs `search__semantic`)                      |
+| Skills           | 4           | 3         | 1       | reload param (`skills__list` absorbs `skills__reload`)                      |
+| Persona          | 4           | 3         | 1       | showCurrent param (`persona__list` absorbs `persona__current`)              |
+| Config           | 3           | 2         | 1       | showLayers param (`config__get` absorbs `config__list_layers`)              |
+| Memory           | 5           | 2         | 3       | action params (`memory__manage` + `memory__browse`)                         |
+| Self-improvement | 7           | 2         | 5       | action params (`self-improvement__insight` + `self-improvement__principle`) |
+| MCP (per server) | 5           | 2         | 3       | action params (`__list` + `__get`)                                          |
+| Subagent         | 1 (pokemon) | 1 (clean) | 0       | renamed `subagent__dispatch` → `dispatch`                                   |
+| **Total**        | **~34**     | **~17**   | **~17** |                                                                             |
 
 ## Files Modified
 
