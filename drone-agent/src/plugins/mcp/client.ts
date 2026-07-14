@@ -30,6 +30,7 @@ type JsonRpcClient = {
   request: <T>(method: string, params?: unknown) => Promise<T>;
   notify: (method: string, params?: unknown) => void;
   disconnect: () => void;
+  setProtocolVersion: (version: string) => void;
   startNotifications?: () => void;
 };
 
@@ -326,6 +327,9 @@ function createContentLengthJsonRpcClient(options: {
       markClosed('MCP transport disconnected');
       options.transport.close();
     },
+    setProtocolVersion: () => {
+      // stdio transport does not use the MCP-Protocol-Version header
+    },
   };
 }
 
@@ -477,7 +481,40 @@ function createLineDelimitedJsonRpcClient(options: {
       markClosed('MCP transport disconnected');
       options.transport.close();
     },
+    setProtocolVersion: () => {
+      // stdio transport does not use the MCP-Protocol-Version header
+    },
   };
+}
+
+/**
+ * Parse an SSE stream response and extract the first JSON-RPC message with
+ * the matching id. Used when a POST request returns text/event-stream instead
+ * of application/json (per MCP 2025-06-18 spec, servers may respond either way).
+ */
+async function parseSseResponse(
+  response: Response,
+  id: number
+): Promise<JsonRpcMessage> {
+  if (!response.body) {
+    throw new Error('SSE response has no body stream.');
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    // Look for a data: line containing a JSON-RPC message with our id
+    const match = buffer.match(/^data:\s*(\{.*?\})\s*$/m);
+    if (match) {
+      try {
+        return JSON.parse(match[1]) as JsonRpcMessage;
+      } catch { /* continue reading */ }
+    }
+  }
+  throw new Error('Invalid JSON payload from streamable HTTP MCP server.');
 }
 
 function normalizeHttpEnvelope(
@@ -530,8 +567,8 @@ function createStreamableHttpJsonRpcClient(options: {
 }): JsonRpcClient {
   let nextId = 1;
   let closed = false;
-  let streaming = false;
   let sessionId: string | undefined;
+  let negotiatedProtocolVersion = '2025-06-18';
 
   async function openGetStream(): Promise<void> {
     let backoffMs = 1000;
@@ -542,6 +579,7 @@ function createStreamableHttpJsonRpcClient(options: {
           headers: {
             accept: 'text/event-stream',
             ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
+            'MCP-Protocol-Version': negotiatedProtocolVersion,
             ...options.headers,
           },
           signal: AbortSignal.timeout(options.requestTimeoutMs),
@@ -551,6 +589,11 @@ function createStreamableHttpJsonRpcClient(options: {
           options.onStreamError(
             `GET stream returned ${response.status} ${response.statusText}`
           );
+          // 405 Method Not Allowed means the server does not offer an SSE
+          // stream at this endpoint (per MCP 2025-06-18 spec). Stop retrying.
+          if (response.status === 405) {
+            return;
+          }
           if (!closed) {
             await sleep(backoffMs);
             backoffMs = Math.min(backoffMs * 2, 60000);
@@ -560,7 +603,6 @@ function createStreamableHttpJsonRpcClient(options: {
 
         // Successfully opened — reset backoff and mark streaming
         backoffMs = 1000;
-        streaming = true;
         options.onStreamReconnected?.();
 
         const reader = response.body.getReader();
@@ -571,7 +613,6 @@ function createStreamableHttpJsonRpcClient(options: {
           const { done, value } = await reader.read();
           if (done) {
             // Stream ended normally (server closed it)
-            streaming = false;
             if (!closed) {
               await sleep(1000); // brief pause before retry
             }
@@ -607,7 +648,6 @@ function createStreamableHttpJsonRpcClient(options: {
         if (error instanceof Error && error.name === 'AbortError') {
           return;
         }
-        streaming = false;
         options.onStreamError(
           error instanceof Error ? error.message : String(error)
         );
@@ -638,7 +678,8 @@ function createStreamableHttpJsonRpcClient(options: {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
-            accept: 'application/json',
+            accept: 'application/json, text/event-stream',
+            'MCP-Protocol-Version': negotiatedProtocolVersion,
             ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
             ...options.headers,
           },
@@ -662,14 +703,21 @@ function createStreamableHttpJsonRpcClient(options: {
           sessionId = serverSessionId;
         }
 
-        const rawBody = await response.text();
+        const contentType = response.headers.get('content-type') ?? '';
+        const isSse = contentType.includes('text/event-stream');
         let parsedBody: unknown;
-        try {
-          parsedBody = JSON.parse(rawBody);
-        } catch {
-          throw new Error(
-            'Invalid JSON payload from streamable HTTP MCP server.'
-          );
+        if (isSse) {
+          const sseMessage = await parseSseResponse(response, id);
+          parsedBody = sseMessage;
+        } else {
+          const rawBody = await response.text();
+          try {
+            parsedBody = JSON.parse(rawBody);
+          } catch {
+            throw new Error(
+              'Invalid JSON payload from streamable HTTP MCP server.'
+            );
+          }
         }
 
         const payload = normalizeHttpEnvelope(
@@ -700,15 +748,18 @@ function createStreamableHttpJsonRpcClient(options: {
       // Fire-and-forget: open the server->client SSE channel.
       void openGetStream();
     },
+    setProtocolVersion: (version: string) => {
+      negotiatedProtocolVersion = version;
+    },
     disconnect: () => {
       closed = true;
-      streaming = false;
       // Best-effort DELETE to terminate the session server-side. Non-blocking
       // so disconnect() keeps its synchronous signature; failures are logged
       // via onStreamError but never throw.
       void fetch(options.url, {
         method: 'DELETE',
         headers: {
+          'MCP-Protocol-Version': negotiatedProtocolVersion,
           ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
           ...options.headers,
         },
@@ -1080,7 +1131,7 @@ export async function createMcpClientConnection(options: {
             onNotification: options.onNotification,
           });
           await newRpc.request('initialize', {
-            protocolVersion: '2024-11-05',
+            protocolVersion: '2025-06-18',
             capabilities: { tools: {}, resources: {}, prompts: {} },
             clientInfo: { name: 'drone-agent', version: '0.1.0' },
           });
@@ -1106,10 +1157,10 @@ export async function createMcpClientConnection(options: {
   }
 
   try {
-    await requestWithRetry(
+    const initResult = await requestWithRetry<{ protocolVersion?: string }>(
       'initialize',
       {
-        protocolVersion: '2024-11-05',
+        protocolVersion: '2025-06-18',
         capabilities: {
           tools: {},
           resources: {},
@@ -1123,6 +1174,10 @@ export async function createMcpClientConnection(options: {
       false
     );
     rpc.notify('notifications/initialized', {});
+    // Extract the negotiated protocol version from the server's response
+    if (initResult?.protocolVersion) {
+      rpc.setProtocolVersion(initResult.protocolVersion);
+    }
     state.status = 'connected';
     state.lastError = undefined;
     state.lastErrorCategory = undefined;

@@ -103,7 +103,7 @@ afterEach(() => {
 });
 
 describe('initialize handshake', () => {
-  it('sends a single initialize with protocolVersion 2024-11-05 and tools/resources/prompts capabilities', async () => {
+  it('sends a single initialize with protocolVersion 2025-06-18 and MCP-Protocol-Version header', async () => {
     const mock = currentMock!;
     await makeConnection(mock);
     const init = mock.lastRequest('initialize');
@@ -113,7 +113,8 @@ describe('initialize handshake', () => {
       protocolVersion: string;
       capabilities: { tools: unknown; resources: unknown; prompts: unknown };
     };
-    expect(params.protocolVersion).toBe('2024-11-05');
+    expect(params.protocolVersion).toBe('2025-06-18');
+    expect(init!.headers['mcp-protocol-version']).toBe('2025-06-18');
     expect(params.capabilities).toEqual({
       tools: {},
       resources: {},
@@ -149,6 +150,58 @@ describe('initialize handshake', () => {
     });
     installFetch(mock);
     await expect(makeConnection(mock)).rejects.toThrow(/boom/);
+  });
+
+  it('sends MCP-Protocol-Version header on subsequent POST requests', async () => {
+    const mock = currentMock!;
+    const conn = await makeConnection(mock);
+    mock.reset();
+    await conn.listTools();
+    const listReq = mock.lastRequest('tools/list');
+    expect(listReq).toBeDefined();
+    expect(listReq!.headers['mcp-protocol-version']).toBe('2025-06-18');
+  });
+
+  it('sends MCP-Protocol-Version header on GET SSE stream', async () => {
+    const mock = currentMock!;
+    await makeConnection(mock);
+    const getReq = mock.requests.find(r => r.method === 'GET');
+    expect(getReq).toBeDefined();
+    expect(getReq!.headers['mcp-protocol-version']).toBe('2025-06-18');
+  });
+
+  it('sends MCP-Protocol-Version header on DELETE disconnect', async () => {
+    const mock = createMockFetch({ sessionId: 'sess-xyz' });
+    installFetch(mock);
+    const conn = await makeConnection(mock);
+    conn.state.status = 'connected';
+    await conn.disconnect();
+    const delReq = mock.requests.find(r => r.method === 'DELETE');
+    expect(delReq).toBeDefined();
+    expect(delReq!.headers['mcp-protocol-version']).toBe('2025-06-18');
+  });
+
+  it('uses negotiated protocol version from server response on subsequent requests', async () => {
+    const mock = createMockFetch({
+      handlers: {
+        initialize: () => ({
+          protocolVersion: '2025-03-26',
+          capabilities: { tools: {}, resources: {}, prompts: {} },
+          serverInfo: { name: 'fake-mcp', version: '0.0.0' },
+        }),
+      },
+    });
+    installFetch(mock);
+    const conn = await makeConnection(mock);
+    // The initialize request itself should use the default version
+    const initReq = mock.lastRequest('initialize');
+    expect(initReq!.headers['mcp-protocol-version']).toBe('2025-06-18');
+    // Subsequent requests should use the negotiated version
+    mock.reset();
+    await conn.listTools();
+    const listReq = mock.lastRequest('tools/list');
+    expect(listReq).toBeDefined();
+    expect(listReq!.headers['mcp-protocol-version']).toBe('2025-03-26');
   });
 });
 
