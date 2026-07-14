@@ -577,7 +577,35 @@ export const mcpPlugin: DronePlugin = {
 
       for (const [serverId, serverConfig] of configuredServers) {
         let connection: McpClientConnection | undefined;
-        const onNotification = (method: string, _params: unknown): void => {
+        const onNotification = (method: string, params: unknown): void => {
+          if (method === 'notifications/message') {
+            const msg = params as {
+              level?: string;
+              logger?: string;
+              data?: unknown;
+            };
+            const level = msg?.level ?? 'info';
+            const loggerName = msg?.logger ? ` [${msg.logger}]` : '';
+            const dataStr =
+              typeof msg?.data === 'string'
+                ? msg.data
+                : JSON.stringify(msg?.data);
+            const message = `mcp server ${serverId} log${loggerName}: ${dataStr}`;
+            switch (level) {
+              case 'warning':
+                registration.logger.warn(message);
+                break;
+              case 'error':
+                registration.logger.error(message);
+                break;
+              case 'debug':
+              case 'info':
+              default:
+                registration.logger.info(message);
+                break;
+            }
+            return;
+          }
           registration.logger.info(
             `mcp server ${serverId} notification: ${method}`
           );

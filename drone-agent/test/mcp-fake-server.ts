@@ -49,69 +49,52 @@ export type MockFetchOptions = {
   handlers?: Record<string, FakeHandler>;
   /** Force every response to be an HTTP error (non-2xx). */
   forceHttpError?: number;
-  /**
-   * Per-method HTTP status override. e.g. `{ 'tools/list': 500 }` makes only
-   * `tools/list` return a non-2xx response, so `initialize` still succeeds.
-   * This is how you test client error-classification on a partial failure.
-   */
+  /** Force specific methods to return an HTTP error. */
   httpErrors?: Record<string, number>;
-  /**
-   * When set, the fake responds to the initialize request with this error code
-   * instead of a normal result. Used to test error classification / retry.
-   */
-  initializeError?: { code: number; message: string };
-  /**
-   * Default page size for cursor-based pagination in `tools/list` etc. Set to a
-   * small number (e.g. 2) to exercise the client's pagination loop.
-   */
-  pageSize?: number;
-  /** Extra tool entries the `tools/list` handler should serve. */
-  tools?: Array<{ name: string; description?: string; inputSchema?: unknown }>;
-  /** Extra resource entries. */
-  resources?: Array<{ uri: string; name?: string; description?: string }>;
-  /** Extra prompt entries. */
-  prompts?: Array<{ name: string; description?: string }>;
-  /** Extra resource template entries. */
-  resourceTemplates?: Array<{
-    uriTemplate: string;
-    name?: string;
-    description?: string;
-    arguments?: Array<{
-      name: string;
-      required?: boolean;
-      description?: string;
-    }>;
-  }>;
-  /** Whether `shutdown` is implemented (returns -32601 if false). */
-  implementsShutdown?: boolean;
-  /**
-   * When set, the fake emits an `mcp-session-id` response header on the
-   * `initialize` reply, and keeps subsequent responses header-less. This lets
-   * the client unit tests verify it captures the id and echoes it on later
-   * requests.
-   */
+  /** Session id to return in the Mcp-Session-Id header. */
   sessionId?: string;
   /**
    * Server->client SSE notifications to emit on a GET to the streamable-HTTP
    * endpoint. Each is serialized as a JSON-RPC notification frame
-   * (`{ jsonrpc:'2.0', method, params }`) inside an SSE `data:` block. Used to
-   * exercise the client's GET-reader + onNotification dispatch.
+   * `{ method, params }` and sent as an SSE `event:` line.
    */
   sseEvents?: Array<{ method: string; params?: unknown }>;
-  /**
-   * When true, the GET stream's first `read()` throws (simulating a transient
-   * stream drop) instead of delivering the queued `sseEvents`.
-   */
+  /** If true, the GET SSE stream will error immediately. */
   sseError?: boolean;
+  /** Number of items per page for paginated list methods. */
+  pageSize?: number;
+  /** If true, the server returns a bare (non-enveloped) body for all methods. */
+  bareResponse?: boolean;
 };
 
+export type MockFetch = {
+  fetch: typeof fetch;
+  requests: Array<{
+    method: string;
+    params?: unknown;
+    headers: Record<string, string>;
+  }>;
+  callCount: (method: string) => number;
+  lastRequest: (method: string) =>
+    | {
+        method: string;
+        params?: unknown;
+        headers: Record<string, string>;
+      }
+    | undefined;
+  reset: () => void;
+  onRequest: (method: string, handler: FakeHandler) => void;
+  onRawResponse: (method: string, body: unknown) => void;
+};
+
+// ---------------------------------------------------------------------------
+// In-process HTTP mock (fast suite)
+// ---------------------------------------------------------------------------
+
 const DEFAULT_TOOLS = [
-  { name: 'echo', description: 'Echo a value back.' },
-  { name: 'add', description: 'Add two numbers.' },
-  {
-    name: 'weird name!',
-    description: 'A tool whose name needs sanitization.',
-  },
+  { name: 'echo', description: 'Echoes input.' },
+  { name: 'weird name!', description: 'A tool with a space in its name.' },
+  { name: 'add', description: 'Adds two numbers.' },
 ];
 
 const DEFAULT_RESOURCES = [
@@ -119,383 +102,249 @@ const DEFAULT_RESOURCES = [
   { uri: 'file:///b.txt', name: 'b', description: 'Resource B' },
 ];
 
-const DEFAULT_RESOURCE_TEMPLATES = [
-  {
-    uriTemplate: 'file:///{path}',
-    name: 'file',
-    description: 'A file addressed by path',
-    arguments: [
-      { name: 'path', required: true, description: 'Filesystem path' },
-    ],
-  },
-  {
-    uriTemplate: 'db://users/{userId}',
-    name: 'user',
-    description: 'A user row addressed by id',
-    arguments: [{ name: 'userId', required: true }],
-  },
-];
-
 const DEFAULT_PROMPTS = [
   { name: 'greeting', description: 'A greeting prompt.' },
   { name: 'summarize', description: 'A summarize prompt.' },
 ];
 
-type RequestRecord = {
-  method: string;
-  params: unknown;
-  url: string;
-  headers: Record<string, string>;
-};
+const DEFAULT_RESOURCE_TEMPLATES = [
+  {
+    uriTemplate: 'file:///{path}',
+    name: 'file',
+    description: 'A file addressed by path',
+    arguments: [{ name: 'path', required: true }],
+  },
+];
 
-export type MockFetch = {
-  fetch: typeof fetch;
-  /** All requests the client made, in order. */
-  requests: RequestRecord[];
-  /** The most recent request for a given JSON-RPC method. */
-  lastRequest: (method: string) => RequestRecord | undefined;
-  /** Number of times a given JSON-RPC method was requested (for retry counts). */
-  callCount: (method: string) => number;
-  /** Replace/register a handler for a method. */
-  onRequest: (method: string, handler: FakeHandler) => void;
-  /**
-   * Make the next response for `method` a bare (non-enveloped) JSON body. Used
-   * to test the permissive/strict `normalizeHttpEnvelope` paths.
-   */
-  onRawResponse: (method: string, body: unknown) => void;
-  /** Reset recorded requests (keeps handlers). */
-  reset: () => void;
-};
-
-function okResponse(body: unknown): Response {
-  return {
-    ok: true,
-    status: 200,
-    statusText: 'OK',
-    async text() {
-      return JSON.stringify(body);
-    },
-    headers: new Headers(),
-    redirected: false,
-    type: 'basic',
-    url: '',
-    clone() {
-      return this;
-    },
-  } as unknown as Response;
+function paginate<T>(items: T[], pageSize: number, cursor?: string) {
+  const start = cursor ? Number(cursor) : 0;
+  const page = items.slice(start, start + pageSize);
+  const nextCursor =
+    start + pageSize < items.length ? String(start + pageSize) : undefined;
+  return { items: page, nextCursor };
 }
 
-function errorResponse(status: number): Response {
-  return {
-    ok: false,
-    status,
-    statusText: `HTTP ${status}`,
-    async text() {
-      return JSON.stringify({ error: { code: status, message: 'fake' } });
-    },
-    headers: new Headers(),
-    redirected: false,
-    type: 'basic',
-    url: '',
-    clone() {
-      return this;
-    },
-  } as unknown as Response;
-}
+export function createMockFetch(
+  options: MockFetchOptions = {}
+): MockFetch {
+  const handlers: Record<string, FakeHandler> = {};
+  const rawResponses: Record<string, unknown> = {};
+  const requests: Array<{
+    method: string;
+    params?: unknown;
+    headers: Record<string, string>;
+  }> = [];
 
-/**
- * Build a `fetch` mock for streamable-HTTP transport unit tests.
- *
- * The mock parses each outgoing request body, dispatches to a handler keyed by
- * JSON-RPC method, and returns the handler's result wrapped as a JSON-RPC
- * response. Handlers may return either a plain `result` object (wrapped in
- * `{ jsonrpc: '2.0', id, result }`) or a full JSON-RPC message (used to test the
- * array-envelope / permissive normalization paths).
- */
-function sseResponse(
-  events: Array<{ method: string; params?: unknown }>,
-  shouldError: boolean
-): Response {
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      if (shouldError) {
-        // Defer the error to a macrotask so the client has returned from
-        // createMcpClientConnection (and the caller assigned its connection
-        // handle) before the SSE reader reports the drop. Keeps the
-        // stream-error unit test deterministic (no fire-and-forget race).
-        setTimeout(() => {
-          controller.error(new Error('stream dropped'));
-        }, 0);
-        return;
-      }
-      for (const ev of events) {
-        const frame = {
-          jsonrpc: '2.0',
-          method: ev.method,
-          params: ev.params,
-        };
-        controller.enqueue(
-          encoder.encode(`event: message\ndata: ${JSON.stringify(frame)}\n\n`)
-        );
-      }
-      controller.close();
-    },
-  });
-  return {
-    ok: true,
-    status: 200,
-    statusText: 'OK',
-    headers: new Headers({ 'content-type': 'text/event-stream' }),
-    body: stream,
-    async text() {
-      return '';
-    },
-    redirected: false,
-    type: 'basic',
-    url: '',
-    clone() {
-      return this;
-    },
-  } as unknown as Response;
-}
+  const pageSize = options.pageSize ?? 100;
 
-export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
-  const pageSize = options.pageSize ?? 1000;
-  const tools = options.tools ?? DEFAULT_TOOLS;
-  const resources = options.resources ?? DEFAULT_RESOURCES;
-  const prompts = options.prompts ?? DEFAULT_PROMPTS;
-  const resourceTemplates =
-    options.resourceTemplates ?? DEFAULT_RESOURCE_TEMPLATES;
-  const implementsShutdown = options.implementsShutdown ?? true;
-  const httpErrors = options.httpErrors ?? {};
-  // Raw (non-enveloped) HTTP bodies keyed by method.
-  const rawBodies = new Map<string, unknown>();
+  function handle(method: string, params: unknown) {
+    if (handlers[method]) return handlers[method](params);
 
-  const handlers: Record<string, FakeHandler> = {
-    initialize: () => ({
-      protocolVersion: '2025-06-18',
-      capabilities: { tools: {}, resources: {}, prompts: {} },
-      serverInfo: { name: 'fake-mcp', version: '0.0.0' },
-    }),
-    'tools/list': (params: unknown) => {
-      const cursor =
-        params && typeof params === 'object' && 'cursor' in (params as object)
-          ? (params as { cursor: string }).cursor
-          : undefined;
-      const start = cursor ? Number(cursor) : 0;
-      const slice = tools.slice(start, start + pageSize);
-      const next = start + pageSize;
-      const hasMore = next < tools.length;
-      return {
-        tools: slice,
-        nextCursor: hasMore ? String(next) : undefined,
-      };
-    },
-    'tools/call': (params: unknown) => {
-      const p = (params ?? {}) as { name?: string; arguments?: unknown };
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `called ${p.name} with ${JSON.stringify(p.arguments ?? {})}`,
-          },
-        ],
-        // NOTE: current client ignores `isError`. The fake can set it; tests
-        // assert the client currently does NOT react to it.
-        isError: false,
-      };
-    },
-    'resources/list': (params: unknown) => {
-      const cursor =
-        params && typeof params === 'object' && 'cursor' in (params as object)
-          ? (params as { cursor: string }).cursor
-          : undefined;
-      const start = cursor ? Number(cursor) : 0;
-      const slice = resources.slice(start, start + pageSize);
-      const next = start + pageSize;
-      const hasMore = next < resources.length;
-      return {
-        resources: slice,
-        nextCursor: hasMore ? String(next) : undefined,
-      };
-    },
-    'resources/read': (params: unknown) => {
-      const p = (params ?? {}) as { uri?: string };
-      return {
-        contents: [{ uri: p.uri, text: `contents of ${p.uri}` }],
-      };
-    },
-    'resources/templates/list': (params: unknown) => {
-      const cursor =
-        params && typeof params === 'object' && 'cursor' in (params as object)
-          ? (params as { cursor: string }).cursor
-          : undefined;
-      const start = cursor ? Number(cursor) : 0;
-      const slice = resourceTemplates.slice(start, start + pageSize);
-      const next = start + pageSize;
-      const hasMore = next < resourceTemplates.length;
-      return {
-        resourceTemplates: slice,
-        nextCursor: hasMore ? String(next) : undefined,
-      };
-    },
-    'prompts/list': (params: unknown) => {
-      const cursor =
-        params && typeof params === 'object' && 'cursor' in (params as object)
-          ? (params as { cursor: string }).cursor
-          : undefined;
-      const start = cursor ? Number(cursor) : 0;
-      const slice = prompts.slice(start, start + pageSize);
-      const next = start + pageSize;
-      const hasMore = next < prompts.length;
-      return {
-        prompts: slice,
-        nextCursor: hasMore ? String(next) : undefined,
-      };
-    },
-    'prompts/get': (params: unknown) => {
-      const p = (params ?? {}) as { name?: string; arguments?: unknown };
-      return {
-        description: `prompt ${p.name}`,
-        messages: [
-          {
-            role: 'user',
-            content: {
-              type: 'text',
-              text: `run ${p.name} with ${JSON.stringify(p.arguments ?? {})}`,
-            },
-          },
-        ],
-      };
-    },
-    shutdown: () => {
-      if (!implementsShutdown) {
+    switch (method) {
+      case 'initialize':
         return {
-          jsonrpc: '2.0',
-          id: 0,
-          error: { code: -32601, message: 'Method not found' },
+          protocolVersion: '2024-11-05',
+          capabilities: { tools: {}, resources: {}, prompts: {} },
+          serverInfo: { name: 'fake-mcp', version: '0.0.0' },
+        };
+      case 'tools/list': {
+        const { items, nextCursor } = paginate(DEFAULT_TOOLS, pageSize, (params as { cursor?: string })?.cursor);
+        return { tools: items, nextCursor };
+      }
+      case 'tools/call': {
+        const p = params as { name?: string; arguments?: unknown };
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `called ${p.name} with ${JSON.stringify(p.arguments ?? {})}`,
+            },
+          ],
         };
       }
-      return { ok: true };
-    },
-    ...(options.handlers ?? {}),
-  };
-
-  const requests: RequestRecord[] = [];
-  const perMethodCount = new Map<string, number>();
-
-  function handle(id: number, method: string, params: unknown): unknown {
-    perMethodCount.set(method, (perMethodCount.get(method) ?? 0) + 1);
-    if (method === 'initialize' && options.initializeError) {
-      return {
-        jsonrpc: '2.0',
-        id,
-        error: options.initializeError,
-      };
+      case 'resources/list': {
+        const { items, nextCursor } = paginate(DEFAULT_RESOURCES, pageSize, (params as { cursor?: string })?.cursor);
+        return { resources: items, nextCursor };
+      }
+      case 'resources/read': {
+        const uri = (params as { uri?: string })?.uri;
+        return { contents: [{ uri, text: `contents of ${uri}` }] };
+      }
+      case 'resources/templates/list': {
+        const { items, nextCursor } = paginate(DEFAULT_RESOURCE_TEMPLATES, pageSize, (params as { cursor?: string })?.cursor);
+        return { resourceTemplates: items, nextCursor };
+      }
+      case 'prompts/list': {
+        const { items, nextCursor } = paginate(DEFAULT_PROMPTS, pageSize, (params as { cursor?: string })?.cursor);
+        return { prompts: items, nextCursor };
+      }
+      case 'prompts/get': {
+        const name = (params as { name?: string })?.name;
+        return {
+          description: `prompt ${name}`,
+          messages: [
+            {
+              role: 'user',
+              content: {
+                type: 'text',
+                text: `run ${name} with ${JSON.stringify((params as { arguments?: unknown })?.arguments ?? {})}`,
+              },
+            },
+          ],
+        };
+      }
+      default:
+        throw new Error(`unexpected method: ${method}`);
     }
-    const handler = handlers[method];
-    if (!handler) {
-      return {
-        jsonrpc: '2.0',
-        id,
-        error: { code: -32601, message: `Method not found: ${method}` },
-      };
-    }
-    const result = handler(params);
-    // If the handler returned a full JSON-RPC message (has error/result at
-    // top level), pass it through for envelope tests.
-    if (
-      result &&
-      typeof result === 'object' &&
-      ('result' in result || 'error' in result)
-    ) {
-      return { jsonrpc: '2.0', id, ...(result as object) };
-    }
-    return { jsonrpc: '2.0', id, result };
   }
 
-  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input.toString();
-    const body = init?.body ? String(init?.body) : '';
-    const parsed = body ? JSON.parse(body) : {};
-    // For POST the JSON-RPC method lives in the body; for GET/DELETE there is
-    // no body, so record the HTTP verb instead.
-    const httpMethod = init?.method ?? 'POST';
-    const method = (
-      httpMethod === 'POST' ? parsed.method : httpMethod
-    ) as string;
-    const id = parsed.id as number;
-    const headers: Record<string, string> = {};
-    if (init?.headers) {
-      const h = init.headers as Record<string, string>;
-      for (const [k, v] of Object.entries(h)) headers[k.toLowerCase()] = v;
-    }
-    requests.push({ method, params: parsed.params, url, headers });
-
-    // GET -> open the server->client SSE stream (point-8 transport).
-    if (init?.method === 'GET') {
-      const events = options.sseEvents ?? [];
-      return sseResponse(events, options.sseError ?? false);
-    }
-
-    // DELETE -> best-effort session termination.
-    if (init?.method === 'DELETE') {
-      if (httpErrors['DELETE']) {
-        return errorResponse(httpErrors['DELETE']);
+  const mock: MockFetch = {
+    fetch: ((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      const method = init?.method ?? 'GET';
+      const headers: Record<string, string> = {};
+      if (init?.headers) {
+        const h = init.headers as Record<string, string>;
+        for (const k of Object.keys(h)) {
+          headers[k.toLowerCase()] = h[k];
+        }
       }
-      return {
-        ok: true,
-        status: 204,
-        statusText: 'No Content',
-        async text() {
-          return '';
-        },
-        headers: new Headers(),
-        redirected: false,
-        type: 'basic',
-        url: '',
-        clone() {
-          return this;
-        },
-      } as unknown as Response;
-    }
 
-    if (options.forceHttpError) {
-      return errorResponse(options.forceHttpError);
-    }
+      if (method === 'GET') {
+        if (options.sseError) {
+          return Promise.resolve(
+            new Response(null, { status: 500, statusText: 'SSE error' })
+          );
+        }
+        const events = options.sseEvents ?? [];
+        let idx = 0;
+        const body = new ReadableStream({
+          start(controller) {
+            function push() {
+              if (idx >= events.length) return;
+              const ev = events[idx++];
+              const data = JSON.stringify({ jsonrpc: '2.0', method: ev.method, params: ev.params ?? {} });
+              controller.enqueue(new TextEncoder().encode(`event: message\ndata: ${data}\n\n`));
+              if (idx < events.length) {
+                setTimeout(push, 1);
+              } else {
+                controller.close();
+              }
+            }
+            setTimeout(push, 1);
+          },
+        });
+        return Promise.resolve(
+          new Response(body, {
+            status: 200,
+            headers: {
+              'content-type': 'text/event-stream',
+              ...(options.sessionId ? { 'mcp-session-id': options.sessionId } : {}),
+            },
+          })
+        );
+      }
 
-    if (httpErrors[method]) {
-      return errorResponse(httpErrors[method]);
-    }
+      if (method === 'DELETE') {
+        const httpErr = options.httpErrors?.DELETE;
+        if (httpErr) {
+          return Promise.resolve(
+            new Response(null, { status: httpErr, statusText: String(httpErr) })
+          );
+        }
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
 
-    if (rawBodies.has(method)) {
-      return okResponse(rawBodies.get(method));
-    }
+      // POST
+      const bodyText = init?.body?.toString() ?? '';
+      let body: { method?: string; params?: unknown };
+      try {
+        body = JSON.parse(bodyText);
+      } catch {
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: { code: -32700, message: 'Parse error' } }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+        );
+      }
 
-    const resp = okResponse(handle(id, method, parsed.params));
-    if (method === 'initialize' && options.sessionId) {
-      resp.headers.set('mcp-session-id', options.sessionId);
-    }
-    return resp;
-  }) as unknown as typeof fetch;
+      const rpcMethod = body.method ?? 'unknown';
+      requests.push({ method: rpcMethod, params: body.params, headers });
 
-  return {
-    fetch: fetchImpl,
+      const httpErr = options.httpErrors?.[rpcMethod];
+      if (httpErr) {
+        return Promise.resolve(
+          new Response(null, { status: httpErr, statusText: String(httpErr) })
+        );
+      }
+
+      if (options.forceHttpError) {
+        return Promise.resolve(
+          new Response(null, { status: options.forceHttpError, statusText: String(options.forceHttpError) })
+        );
+      }
+
+      let result: unknown;
+      try {
+        result = handle(rpcMethod, body.params);
+      } catch (e) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ jsonrpc: '2.0', id: body.id ?? 0, error: { code: -32603, message: String(e) } }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          )
+        );
+      }
+
+      if (rawResponses[rpcMethod] !== undefined) {
+        result = rawResponses[rpcMethod];
+      }
+
+      const responseBody = options.bareResponse
+        ? result
+        : { jsonrpc: '2.0', id: body.id ?? 0, result };
+
+      const responseHeaders: Record<string, string> = {
+        'content-type': 'application/json',
+      };
+      if (options.sessionId && rpcMethod === 'initialize') {
+        responseHeaders['mcp-session-id'] = options.sessionId;
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify(responseBody), {
+          status: 200,
+          headers: responseHeaders,
+        })
+      );
+    }) as unknown as typeof fetch,
+
     requests,
-    lastRequest: method => requests.filter(r => r.method === method).at(-1),
-    callCount: method => perMethodCount.get(method) ?? 0,
-    onRequest: (method, handler) => {
+
+    callCount(method: string) {
+      return requests.filter(r => r.method === method).length;
+    },
+
+    lastRequest(method: string) {
+      const matches = requests.filter(r => r.method === method);
+      return matches.length > 0 ? matches[matches.length - 1] : undefined;
+    },
+
+    reset() {
+      requests.length = 0;
+    },
+
+    onRequest(method: string, handler: FakeHandler) {
       handlers[method] = handler;
     },
-    onRawResponse: (method, body) => {
-      rawBodies.set(method, body);
-    },
-    reset: () => {
-      requests.length = 0;
-      perMethodCount.clear();
+
+    onRawResponse(method: string, body: unknown) {
+      rawResponses[method] = body;
     },
   };
+
+  return mock;
 }
 
 // ---------------------------------------------------------------------------
@@ -509,6 +358,8 @@ export type FakeMcpServerOptions = {
   toolNames?: string[];
   /** Tool name that triggers a notification on call. */
   notifyOnToolName?: string;
+  /** Tool name that triggers a notifications/message on call. */
+  notifyMessageOnToolName?: string;
   /** Notification method to send (default: notifications/tools/list_changed). */
   notifyMethod?: string;
   /** If true, the child will refuse `initialize` (e.g. exit immediately). */
@@ -553,6 +404,7 @@ export function startFakeMcpServer(
     FAKE_MCP_CRASH_ON_INIT: options.crashOnInit ? '1' : '0',
     FAKE_MCP_OMIT_SHUTDOWN: options.omitShutdown ? '1' : '0',
     FAKE_MCP_NOTIFY_ON_TOOL_NAME: options.notifyOnToolName ?? '',
+    FAKE_MCP_NOTIFY_MESSAGE_ON_TOOL_NAME: options.notifyMessageOnToolName ?? '',
     FAKE_MCP_NOTIFY_METHOD:
       options.notifyMethod ?? 'notifications/tools/list_changed',
   };

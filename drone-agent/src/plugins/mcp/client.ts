@@ -1168,7 +1168,7 @@ export async function createMcpClientConnection(options: {
           });
           await newRpc.request('initialize', {
             protocolVersion: '2025-06-18',
-            capabilities: { tools: {}, resources: {}, prompts: {} },
+            capabilities: { tools: {}, resources: {}, prompts: {}, logging: {} },
             clientInfo: { name: 'drone-agent', version: '0.1.0' },
           });
           newRpc.notify('notifications/initialized', {});
@@ -1197,11 +1197,7 @@ export async function createMcpClientConnection(options: {
       'initialize',
       {
         protocolVersion: '2025-06-18',
-        capabilities: {
-          tools: {},
-          resources: {},
-          prompts: {},
-        },
+        capabilities: { tools: {}, resources: {}, prompts: {}, logging: {} },
         clientInfo: {
           name: 'drone-agent',
           version: '0.1.0',
