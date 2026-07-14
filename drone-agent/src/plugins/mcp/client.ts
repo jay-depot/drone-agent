@@ -537,7 +537,6 @@ function createStreamableHttpJsonRpcClient(options: {
 }): JsonRpcClient {
   let nextId = 1;
   let closed = false;
-  let streaming = false;
   let sessionId: string | undefined;
   let negotiatedProtocolVersion = '2025-06-18';
 
@@ -569,7 +568,6 @@ function createStreamableHttpJsonRpcClient(options: {
 
         // Successfully opened — reset backoff and mark streaming
         backoffMs = 1000;
-        streaming = true;
         options.onStreamReconnected?.();
 
         const reader = response.body.getReader();
@@ -580,7 +578,6 @@ function createStreamableHttpJsonRpcClient(options: {
           const { done, value } = await reader.read();
           if (done) {
             // Stream ended normally (server closed it)
-            streaming = false;
             if (!closed) {
               await sleep(1000); // brief pause before retry
             }
@@ -616,7 +613,6 @@ function createStreamableHttpJsonRpcClient(options: {
         if (error instanceof Error && error.name === 'AbortError') {
           return;
         }
-        streaming = false;
         options.onStreamError(
           error instanceof Error ? error.message : String(error)
         );
@@ -715,7 +711,6 @@ function createStreamableHttpJsonRpcClient(options: {
     },
     disconnect: () => {
       closed = true;
-      streaming = false;
       // Best-effort DELETE to terminate the session server-side. Non-blocking
       // so disconnect() keeps its synchronous signature; failures are logged
       // via onStreamError but never throw.
