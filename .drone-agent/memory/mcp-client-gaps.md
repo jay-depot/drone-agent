@@ -6,10 +6,10 @@ tags:
   - testing
   - planning
 created: 2026-07-07T17:29:50.826Z
-updated: 2026-07-12T20:01:32.436Z
+updated: 2026-07-14T01:34:24.535Z
 ---
 
-# MCP Client Gap Analysis (2026-07-07, updated 2026-07-12)
+# MCP Client Gap Analysis (2026-07-07, updated 2026-07-14)
 
 Source files: `drone-agent/src/plugins/mcp/index.ts`, `client.ts`; `drone-core/src/mcp-types.ts`, `config-types.ts`.
 Tests EXIST: `drone-agent/test/mcp-client.test.ts` (fast, in-process `fetch` mock via `mcp-fake-server.ts`) and `mcp.test.ts` + `mcp-fake-server.mjs` (slow stdio integration). The fast suite now asserts CORRECT (fixed) behavior — the `isError` no-op is gone (see item 2) and `Mcp-Session-Id` is captured/echoed (see item 1). The `PHASE 1 RULE` comment in `mcp.test.ts:13` and the header in `mcp-client.test.ts:14-15` describe the _former_ baseline that was fixed.
@@ -22,16 +22,17 @@ Tests EXIST: `drone-agent/test/mcp-client.test.ts` (fast, in-process `fetch` moc
 - **Item 6** — DONE (2026-07-12). `index.ts:372-380` handles `notifications/tools/list_changed` via `onNotification` callback. When received, calls `listAndMountTools()` which unregisters old tools, clears `mountedToolNames`, re-lists from server, and re-mounts.
 - **Item 15** — DONE (2026-07-12). `client.ts:537-620` (`openGetStream`) implements auto-reconnect with exponential backoff (1s → 2s → 4s → ... → 60s cap). On successful reconnection, `onStreamReconnected` fires, triggering `listAndMountTools` in `index.ts:395-400`.
 - **Item 16** — DONE (2026-07-12). `client.ts:1050-1102` (`startRespawnMonitor`) implements auto-respawn for stdio MCP servers. When a stdio server enters `status: 'error'`, the monitor respawns with exponential backoff, re-initializes the JSON-RPC client, and calls `onReconnected` which triggers a tool re-mount.
+- **Item 4** — DONE (2026-07-14). Implemented via `mcp-item4-protocol-version-negotiation-plan`. Updated default `protocolVersion` from `'2024-11-05'` to `'2025-06-18'` in both main initialize and respawn monitor. Added `MCP-Protocol-Version` HTTP header to all POST, GET, and DELETE requests in the streamable HTTP transport. Added `setProtocolVersion` to `JsonRpcClient` interface. Extract negotiated version from server's `initialize` response and apply to subsequent requests. 4 new tests added (39 total in fast suite). Commit `20fce35`.
 
 ## Critical (correctness / spec compliance)
 
 1. ~~**Streamable HTTP ignores `Mcp-Session-Id` header.**~~ **FIXED** (runtime-only capture + echo; no drone-core config change). `client.ts` reads `response.headers.get('mcp-session-id')` and echoes it on subsequent POSTs.
 2. ~~**No `tools/call` `isError` handling.**~~ **FIXED.** `callTool` throws on `isError: true` (Bug 2 Option A).
 3. **Tests exist.** `mcp-client.test.ts` + `mcp-fake-server.ts` cover the HTTP transport with a mocked `fetch`; `mcp.test.ts` covers stdio framing. The fast suite now encodes corrected behavior (items 1/2 flipped). DONE.
+4. ~~Hardcoded `protocolVersion: '2024-11-05'` in `initialize`, no negotiation, no newer revisions. (`client.ts` initialize params.) Note: appears in two places — main initialize (`client.ts:1111`) and respawn monitor's initialize (`client.ts:1083`).~~ **FIXED** (2026-07-14). Default is now `'2025-06-18'`, `MCP-Protocol-Version` header sent on all HTTP requests, and version is negotiated from server response.
 
 ## Important (capability / robustness)
 
-4. Hardcoded `protocolVersion: '2024-11-05'` in `initialize`, no negotiation, no newer revisions. (`client.ts` initialize params.) Note: appears in two places — main initialize (`client.ts:1111`) and respawn monitor's initialize (`client.ts:1083`).
 5. ~~No resource templates (`resources/templates/list`/`read`); `DroneMcpResourceMeta` only models concrete resources.~~ **FIXED** (2026-07-08, `mcp-resource-templates-plan`). `DroneMcpResourceTemplateMeta` + `__list_resource_templates` tool; templates read via the shared `resources/read`.
 6. ~~No `notifications/tools/list_changed` handling — tools mounted statically at `onPluginsLoaded`, go stale.~~ **FIXED** (2026-07-12). `onNotification` callback handles `notifications/tools/list_changed` and triggers full re-mount via `listAndMountTools()`.
 7. No notification/progress/log handling; `initialize` advertises only tools/resources/prompts (no `logging`, `roots`). (`client.ts` initialize `capabilities`.) Note: item 8 delivers notifications via `onNotification`, and item 6 handles `notifications/tools/list_changed`, but `initialize` still doesn't advertise `logging`/`roots`, and the client doesn't act on `notifications/message` (logging) yet.
@@ -50,5 +51,5 @@ Tests EXIST: `drone-agent/test/mcp-client.test.ts` (fast, in-process `fetch` moc
 
 ## Remaining work (open items)
 
-- Critical/Important: 4, 7, 9
+- Critical/Important: 7, 9
 - Minor: 10, 11, 12, 13, 14

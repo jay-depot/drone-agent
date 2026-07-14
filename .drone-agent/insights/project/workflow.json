@@ -210,5 +210,9 @@
   {
     "timestamp": "2026-07-14T01:23:42.623Z",
     "insight": "When investigating MCP server connection failures, always check the HTTP headers being sent first — the MCP 2025-06-18 spec requires MCP-Protocol-Version on all requests, and missing it causes 400 errors that look like auth or URL issues. The DELETE-on-disconnect issue was a red herring; the real problem was the missing protocol version header."
+  },
+  {
+    "timestamp": "2026-07-14T01:34:33.379Z",
+    "insight": "When adding a new required method to the JsonRpcClient interface, all three transport implementations (content-length, line-delimited, streamable HTTP) must be updated. The stdio transports just need no-op stubs since they don't use HTTP headers."
   }
 ]
