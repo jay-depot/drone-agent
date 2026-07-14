@@ -487,6 +487,36 @@ function createLineDelimitedJsonRpcClient(options: {
   };
 }
 
+/**
+ * Parse an SSE stream response and extract the first JSON-RPC message with
+ * the matching id. Used when a POST request returns text/event-stream instead
+ * of application/json (per MCP 2025-06-18 spec, servers may respond either way).
+ */
+async function parseSseResponse(
+  response: Response,
+  id: number
+): Promise<JsonRpcMessage> {
+  if (!response.body) {
+    throw new Error('SSE response has no body stream.');
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    // Look for a data: line containing a JSON-RPC message with our id
+    const match = buffer.match(/^data:\s*(\{.*?\})\s*$/m);
+    if (match) {
+      try {
+        return JSON.parse(match[1]) as JsonRpcMessage;
+      } catch { /* continue reading */ }
+    }
+  }
+  throw new Error('Invalid JSON payload from streamable HTTP MCP server.');
+}
+
 function normalizeHttpEnvelope(
   input: unknown,
   id: number,
@@ -643,7 +673,7 @@ function createStreamableHttpJsonRpcClient(options: {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
-            accept: 'application/json',
+            accept: 'application/json, text/event-stream',
             'MCP-Protocol-Version': negotiatedProtocolVersion,
             ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
             ...options.headers,
@@ -668,14 +698,21 @@ function createStreamableHttpJsonRpcClient(options: {
           sessionId = serverSessionId;
         }
 
-        const rawBody = await response.text();
+        const contentType = response.headers.get('content-type') ?? '';
+        const isSse = contentType.includes('text/event-stream');
         let parsedBody: unknown;
-        try {
-          parsedBody = JSON.parse(rawBody);
-        } catch {
-          throw new Error(
-            'Invalid JSON payload from streamable HTTP MCP server.'
-          );
+        if (isSse) {
+          const sseMessage = await parseSseResponse(response, id);
+          parsedBody = sseMessage;
+        } else {
+          const rawBody = await response.text();
+          try {
+            parsedBody = JSON.parse(rawBody);
+          } catch {
+            throw new Error(
+              'Invalid JSON payload from streamable HTTP MCP server.'
+            );
+          }
         }
 
         const payload = normalizeHttpEnvelope(
