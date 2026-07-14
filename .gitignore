@@ -3,3 +3,4 @@ dist/
 *.tsbuildinfo
 LOCAL.md
 search-index.db*
+.drone-agent/config.json

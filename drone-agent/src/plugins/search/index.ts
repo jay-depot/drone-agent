@@ -211,6 +211,22 @@ export const searchPlugin: DronePlugin = {
           registration.logger.info(
             `search: indexing complete — ${result.filesIndexed} indexed, ${result.filesSkipped} skipped, ${result.filesRemoved} removed, ${result.chunksCreated} chunks`
           );
+
+          // Register a prompt fragment so the model knows which directories
+          // are indexed for semantic search.
+          const dirList = dirPaths
+            .map(d => `  - ${d}`)
+            .join('\n');
+          registration.registerPromptFragment({
+            key: 'search-indexed-directories',
+            phase: 'header',
+            render: async () =>
+              `# Search Index\n` +
+              `The following directories are indexed for semantic search. ` +
+              `Use \`search__text\` with \`mode: "semantic"\` to query them ` +
+              `by meaning rather than regex.\n` +
+              `${dirList}\n`,
+          });
         } else {
           registration.logger.info(
             'search: no embedding provider available, skipping indexing'
