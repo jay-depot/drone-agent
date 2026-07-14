@@ -232,20 +232,20 @@ describe('listTools normalization + pagination', () => {
     expect(mock.callCount('tools/list')).toBe(2);
   });
 
-  it('caps list at maxListItems and sets toolsListTruncated', async () => {
+  it('caps list at maxListItems and sets toolsListTruncated (resources)', async () => {
     const mock = createMockFetch({ pageSize: 1 });
     installFetch(mock);
     const conn = await makeConnection(
       mock,
       {},
-      { maxListPages: 25, maxListItems: 2 }
+      { maxListPages: 25, maxListItems: 1 }
     );
-    const tools = await conn.listTools();
-    expect(tools.length).toBe(2);
-    expect(conn.state.toolsListTruncated).toBe(true);
+    const resources = await conn.listResources();
+    expect(resources.length).toBe(1);
+    expect(conn.state.resourcesListTruncated).toBe(true);
   });
 
-  it('stops paginating once maxListPages is exhausted and flags truncation', async () => {
+  it('walks all pages for tools/list (no maxListPages cap)', async () => {
     const mock = createMockFetch({ pageSize: 1 });
     installFetch(mock);
     const conn = await makeConnection(
@@ -254,12 +254,13 @@ describe('listTools normalization + pagination', () => {
       { maxListPages: 1, maxListItems: 500 }
     );
     const tools = await conn.listTools();
-    expect(tools.length).toBe(1);
-    expect(mock.callCount('tools/list')).toBe(1);
-    expect(conn.state.toolsListTruncated).toBe(true);
+    // DEFAULT_TOOLS has 3 entries; pageSize 1 => 3 pages, all walked
+    expect(tools.length).toBe(3);
+    expect(mock.callCount('tools/list')).toBe(3);
+    expect(conn.state.toolsListTruncated).toBe(false);
   });
 
-  it('sets discoveredToolCount to the (possibly truncated) returned count', async () => {
+  it('sets discoveredToolCount to the full server tool count', async () => {
     const mock = createMockFetch({ pageSize: 1 });
     installFetch(mock);
     const conn = await makeConnection(
@@ -268,8 +269,8 @@ describe('listTools normalization + pagination', () => {
       { maxListPages: 1, maxListItems: 500 }
     );
     await conn.listTools();
-    // discoveredToolCount reflects the number of tools fetched from the server.
-    expect(conn.state.discoveredToolCount).toBe(1);
+    // discoveredToolCount reflects the full server tool count (all pages walked).
+    expect(conn.state.discoveredToolCount).toBe(3);
   });
 });
 

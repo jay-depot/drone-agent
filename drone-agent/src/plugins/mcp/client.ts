@@ -511,7 +511,9 @@ async function parseSseResponse(
     if (match) {
       try {
         return JSON.parse(match[1]) as JsonRpcMessage;
-      } catch { /* continue reading */ }
+      } catch {
+        /* continue reading */
+      }
     }
   }
   throw new Error('Invalid JSON payload from streamable HTTP MCP server.');
@@ -1101,6 +1103,30 @@ export async function createMcpClientConnection(options: {
     return { items, truncated };
   }
 
+  async function walkAllPages<T>(
+    method: string,
+    normalize: (result: unknown) => T[]
+  ): Promise<ListResult<T>> {
+    const items: T[] = [];
+    let cursor: string | undefined;
+    const seenCursors = new Set<string>();
+
+    while (true) {
+      const params = cursor ? { cursor } : {};
+      const result = await requestWithRetry<unknown>(method, params, true);
+      const pageItems = normalize(result);
+      items.push(...pageItems);
+
+      const nextCursor = parseNextCursor(result);
+      if (!nextCursor) break;
+      if (seenCursors.has(nextCursor)) break; // infinite-loop protection
+      seenCursors.add(nextCursor);
+      cursor = nextCursor;
+    }
+
+    return { items, truncated: false };
+  }
+
   function startRespawnMonitor(): void {
     const stdioConfig = options.config as DroneMcpStdioServerConfig;
     let backoffMs = 1000;
@@ -1204,8 +1230,8 @@ export async function createMcpClientConnection(options: {
     serverId: options.serverId,
     state,
     listTools: async () => {
-      const toolsResult = await paginateList('tools/list', normalizeTools);
-      state.toolsListTruncated = toolsResult.truncated;
+      const toolsResult = await walkAllPages('tools/list', normalizeTools);
+      state.toolsListTruncated = false;
       state.discoveredToolCount = toolsResult.items.length;
       return toolsResult.items;
     },
