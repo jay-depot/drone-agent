@@ -6,5 +6,9 @@
   {
     "timestamp": "2026-07-14T02:47:20.858Z",
     "insight": "Item 9 fixed: listTools now walks all pages via walkAllPages function. The paginateList function's maxListPages/maxListItems caps were truncating the tool list that feeds the ToolMountingCache, meaning mcp__<server>__list_tools only showed a subset of tools to the LLM. The fix adds a dedicated walkAllPages function that only has infinite-loop protection (cursor dedup) and uses it for listTools, while resources/prompts/resourceTemplates still use paginateList with caps."
+  },
+  {
+    "timestamp": "2026-07-14T05:37:58.918Z",
+    "insight": "Fixed stderr-as-transport-error bug in createChildTransport. The function was treating any stderr output from spawned MCP processes as a fatal transport error, which broke servers launched via npx (which prints informational messages to stderr). Changed to log stderr via logger.warn instead, matching the official MCP TypeScript SDK behavior."
   }
 ]
