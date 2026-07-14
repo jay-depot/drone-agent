@@ -101,6 +101,12 @@ function renderEntry(
       );
     case 'markdown':
       return <Markdown color={scheme.info}>{entry.text}</Markdown>;
+    case 'compaction':
+      return (
+        <Text>
+          <ColorTag color={scheme.compaction}>{entry.text}</ColorTag>
+        </Text>
+      );
     case 'plain':
     default:
       return <Text>{entry.text}</Text>;

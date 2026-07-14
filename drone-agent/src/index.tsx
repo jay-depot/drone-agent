@@ -98,6 +98,13 @@ async function main(): Promise<void> {
       }
       return llm.getActiveProvider();
     },
+    emitEvent: event => {
+      try {
+        getEngine().runConversationEventHooks(event);
+      } catch {
+        // Non-fatal — compaction events are best-effort for TUI visibility.
+      }
+    },
   });
 
   // ── External plugin discovery ───────────────────────────────────────

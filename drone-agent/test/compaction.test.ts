@@ -796,3 +796,126 @@ describe('createCompactionPlugin', () => {
     expect(sessionManager.getSummaryTurns()).toHaveLength(1);
   });
 });
+
+it('emits compaction events when emitEvent is provided', async () => {
+  const sessionManager = createSessionManager();
+  for (let i = 0; i < 6; i++) {
+    sessionManager.appendUserMessage(`u${i} `.repeat(300));
+    sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+  }
+
+  const config = makeConfig({
+    softThresholdPercent: 5,
+    slicePercent: 25,
+    minTurnsToCompact: 2,
+    summaryMaxTokens: 200,
+    summaryBudgetPercent: 50,
+  });
+
+  const provider = makeProvider({
+    contextWindow: 200,
+    chatResponses: [{ message: 'A concise summary.' }],
+  });
+  const budgetService = makeBudgetService({ provider, config });
+  const emitEvent = vi.fn();
+  const plugin = createCompactionPlugin({
+    budgetService,
+    sessionManager,
+    getModel: () => 'fake',
+    getProvider: () => provider,
+    emitEvent,
+  });
+
+  const capture = await captureRegistration(plugin, config);
+  await runBeforePrompt(capture);
+
+  expect(emitEvent).toHaveBeenCalledTimes(2);
+  expect(emitEvent).toHaveBeenNthCalledWith(1, {
+    kind: 'compaction',
+    message: expect.stringMatching(/Compacting/),
+    status: 'started',
+  });
+  expect(emitEvent).toHaveBeenNthCalledWith(2, {
+    kind: 'compaction',
+    message: expect.stringMatching(/Compacted/),
+    status: 'completed',
+  });
+});
+
+it('emits a failed compaction event when summarization fails', async () => {
+  const sessionManager = createSessionManager();
+  for (let i = 0; i < 5; i++) {
+    sessionManager.appendUserMessage(`u${i} `.repeat(400));
+  }
+
+  const config = makeConfig({
+    softThresholdPercent: 5,
+    slicePercent: 25,
+    minTurnsToCompact: 2,
+    summaryMaxTokens: 200,
+  });
+
+  const provider = makeProvider({
+    contextWindow: 200,
+    chatResponses: [{ message: '' }],
+  });
+  const budgetService = makeBudgetService({ provider, config });
+  const emitEvent = vi.fn();
+  const plugin = createCompactionPlugin({
+    budgetService,
+    sessionManager,
+    getModel: () => 'fake',
+    getProvider: () => provider,
+    emitEvent,
+  });
+
+  const capture = await captureRegistration(plugin, config);
+  await runBeforePrompt(capture);
+
+  expect(emitEvent).toHaveBeenCalledTimes(2);
+  expect(emitEvent).toHaveBeenNthCalledWith(1, {
+    kind: 'compaction',
+    message: expect.stringMatching(/Compacting/),
+    status: 'started',
+  });
+  expect(emitEvent).toHaveBeenNthCalledWith(2, {
+    kind: 'compaction',
+    message: expect.stringMatching(/Compaction failed/),
+    status: 'failed',
+  });
+});
+
+it('emits a compaction event when self-purging old summaries', async () => {
+  const sessionManager = createSessionManager();
+  sessionManager.prependSystemTurn('S1 '.repeat(200), { kind: 'summary' });
+  sessionManager.appendUserMessage('a');
+  sessionManager.appendUserMessage('b');
+
+  const config = makeConfig({
+    summaryBudgetPercent: 10,
+    softThresholdPercent: 50,
+    slicePercent: 25,
+    minTurnsToCompact: 2,
+  });
+
+  const provider = makeProvider({ contextWindow: 200 });
+  const budgetService = makeBudgetService({ provider, config });
+  const emitEvent = vi.fn();
+  const plugin = createCompactionPlugin({
+    budgetService,
+    sessionManager,
+    getModel: () => 'fake',
+    getProvider: () => provider,
+    emitEvent,
+  });
+
+  const capture = await captureRegistration(plugin, config);
+  await runBeforePrompt(capture);
+
+  expect(emitEvent).toHaveBeenCalledTimes(1);
+  expect(emitEvent).toHaveBeenCalledWith({
+    kind: 'compaction',
+    message: 'Dropped oldest summary turn',
+    status: 'completed',
+  });
+});

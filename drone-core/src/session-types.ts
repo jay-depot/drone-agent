@@ -148,4 +148,9 @@ export type DroneConversationEvent =
         arguments: Record<string, unknown>;
       }>;
     }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; message: string }
+  | {
+      kind: 'compaction';
+      message: string;
+      status: 'started' | 'completed' | 'failed';
+    };

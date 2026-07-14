@@ -32,7 +32,7 @@ import type React from 'react';
  * (JSON with arrows) is used as fallback.
  */
 
-import { Box, useApp, useInput } from 'ink';
+import { Box, Text, useApp, useInput } from 'ink';
 import os from 'node:os';
 import path from 'node:path';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -143,6 +143,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   const currentToolCallIds = useRef<string[]>([]);
   const currentMessageId = useRef<string | null>(null);
   const currentMessageText = useRef<string>('');
+  const currentCompactionId = useRef<string | null>(null);
 
   // ── Conversation event listener ─────────────────────────────────────
   // Uses the tail region to buffer all in-flight content as live components,
@@ -308,6 +309,51 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           }
           break;
         }
+        case 'compaction': {
+          if (event.status === 'started') {
+            // Clear any previous compaction item that wasn't committed
+            if (currentCompactionId.current) {
+              try {
+                const entry = commitItem(currentCompactionId.current);
+                appendEntry(entry);
+              } catch {
+                // Already committed or removed
+              }
+            }
+            const id = addItem(
+              'compaction',
+              <Text color={s.compaction}>📦 {event.message}</Text>,
+              () => ({
+                text: `📦 ${event.message}`,
+                kind: 'compaction',
+              })
+            );
+            currentCompactionId.current = id;
+          } else {
+            // 'completed' or 'failed' — update and commit
+            if (currentCompactionId.current) {
+              updateItem(
+                currentCompactionId.current,
+                <Text color={s.compaction}>📦 {event.message}</Text>,
+                () => ({
+                  text: `📦 ${event.message}`,
+                  kind: 'compaction',
+                })
+              );
+              try {
+                const entry = commitItem(currentCompactionId.current);
+                appendEntry(entry);
+              } catch {
+                // Already committed or removed
+              }
+              currentCompactionId.current = null;
+            } else {
+              // No tail item to update — just log directly
+              log(`📦 ${event.message}`, 'compaction');
+            }
+          }
+          break;
+        }
         case 'error': {
           // Clear any in-flight tail items on error
           clearTail();
@@ -316,6 +362,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           currentToolCallIds.current = [];
           currentMessageId.current = null;
           currentMessageText.current = '';
+          currentCompactionId.current = null;
           log(`Error: ${event.message}`, 'error');
           break;
         }
