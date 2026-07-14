@@ -589,6 +589,11 @@ function createStreamableHttpJsonRpcClient(options: {
           options.onStreamError(
             `GET stream returned ${response.status} ${response.statusText}`
           );
+          // 405 Method Not Allowed means the server does not offer an SSE
+          // stream at this endpoint (per MCP 2025-06-18 spec). Stop retrying.
+          if (response.status === 405) {
+            return;
+          }
           if (!closed) {
             await sleep(backoffMs);
             backoffMs = Math.min(backoffMs * 2, 60000);
