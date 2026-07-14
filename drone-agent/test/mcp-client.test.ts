@@ -215,7 +215,7 @@ describe('listTools normalization + pagination', () => {
       { maxListPages: 1, maxListItems: 500 }
     );
     await conn.listTools();
-    // CURRENT behavior: discoveredToolCount reflects truncated page count.
+    // discoveredToolCount reflects the number of tools fetched from the server.
     expect(conn.state.discoveredToolCount).toBe(1);
   });
 });

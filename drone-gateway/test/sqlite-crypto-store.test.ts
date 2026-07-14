@@ -87,7 +87,13 @@ describe('SqliteCryptoStore', () => {
     });
 
     it('round-trips cross-signing keys', () => {
-      const keys = { master: { keys: { 'ed25519:abc': 'key1' } } };
+      const keys = {
+        master: {
+          keys: { 'ed25519:abc': 'key1' },
+          usage: ['master'],
+          user_id: '@alice:test',
+        },
+      };
       store.storeCrossSigningKeys(null, keys);
       store.getCrossSigningKeys(null, result => {
         expect(result).toEqual(keys);

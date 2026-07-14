@@ -400,6 +400,63 @@ via `engine.addExternalPlugin()`.
 In non-interactive modes (`--once`, `--output-json`), deferred plugins are
 silently skipped.
 
+### MCP Plugin (Deferred Tool Loading)
+
+The MCP plugin uses a **deferred list/mount pattern** for tool loading, backed by a `ToolMountingCache` class in `drone-core`. When an
+MCP server connects, its individual tools are NOT mounted as native LLM tool
+definitions. Instead, three meta-tools are mounted per server:
+
+- **`<serverId>__list_tools`** — Returns tool names and descriptions (no schemas).
+  The LLM calls this to browse available tools.
+- **`<serverId>__mount_tool`** — Dynamically registers a specific tool with its
+  full JSON schema as a native tool definition. The LLM calls this after
+  discovering a tool it wants to use via `__list_tools`.
+- **`<serverId>__unmount_tool`** — Removes a previously mounted tool from the
+  active tool list.
+
+This bounds context cost to 3 meta-tools per server regardless of how many tools
+the server offers. Real-world MCP servers like Datadog (142 tools, ~70K tokens)
+or MCP_DOCKER (135 tools, ~126K tokens) can otherwise consume most of the
+context window with tool definitions alone.
+
+**`ToolMountingCache`** (`drone-core/src/tool-mounting-cache.ts`) is a reusable
+data structure for managing list/mount style tool collections. One instance is
+created per MCP server, preventing cross-server tool clobbering. It stores full
+`DroneToolDefinition` objects and provides `addTool`, `removeTool`, `mountTool`,
+`unmountTool`, and query methods. The cache uses the plugin ID to construct
+canonical names for engine registration/unregistration.
+
+Resources, prompts, and resource templates are still mounted eagerly (they do
+not have the same context cost profile as tool definitions).
+
+The `allowedTools` allowlist is enforced by `__mount_tool` — `__list_tools`
+shows all tools, but mounting a non-allowlisted tool throws an error.
+
+**Server descriptions**: When connecting to a new MCP server, the plugin
+optionally calls the LLM (via the `llm` optional dependency) to generate a
+≤3-sentence summary of what the server does. The summary is included in the
+`__list_tools` description, giving the LLM context for which tools to mount.
+Descriptions are cached at `~/.drone-agent/cache/mcp/server-descriptions.json`
+(user scope, keyed by server ID). If no LLM is available, the description falls
+back to a generic string.
+
+**Persona filtering**: When the `persona` optional dependency is available,
+`__list_tools` filters its output through the active persona's `allowedTools`
+patterns. This ensures the LLM only sees tools it is permitted to mount,
+preventing confusion from tools that would be rejected by `__mount_tool`.
+
+When the server sends `notifications/tools/list_changed`, the plugin surgically
+updates the per-server tool cache and unmounts any tools that no longer exist on
+the server (without nuking all MCP plugin tools across all servers).
+
+The `unregisterTool(canonicalName)` method on the plugin engine is used for
+single-tool removal, complementing the existing `unregisterPluginTools(pluginId)`
+for bulk removal.
+
+**Long-term vision**: If this pattern works well for MCP, it may be expanded
+globally to all tools (not just MCP) to bound context cost across the entire
+tool surface.
+
 ### Slash Commands
 
 All slash commands (built-in and plugin-registered) are dispatched through the engine's unified registry. Built-in commands (`/exit`, `/quit`, `/help`, `/clear`, `/plugins`, `/tools`, `/systemprompt`, `/tool`, `/exec`) have lower precedence than plugin commands, allowing plugins to override them. Unrecognized slash commands display an error instead of being sent to the LLM. The `?` alias for `/help` has been removed.
@@ -452,82 +509,83 @@ When working on the project, proactively log insights using `self-improvement.in
 
 ## Key Files to Know
 
-| File                                                  | Purpose                                               |
-| ----------------------------------------------------- | ----------------------------------------------------- |
-| `drone-agent/src/index.tsx`                           | CLI entry point, first-run setup, engine init         |
-| `drone-agent/src/cli.ts`                              | CLI argument parsing                                  |
-| `drone-agent/src/elicitation.ts`                      | Readline-based elicitation for plain-output mode      |
-| `drone-agent/src/interactive.ts`                      | Interactive loop and JSON mode for non-TUI sessions   |
-| `drone-agent/src/output-handlers.ts`                  | Plain output event handler                            |
-| `drone-agent/src/first-run.tsx`                       | First-run setup wizard (LLM provider probing)         |
-| `drone-agent/src/lib.ts`                              | Public library exports for embedding drone-agent      |
-| `drone-agent/src/migrate.ts`                          | Migration workflows (promote/demote)                  |
-| `drone-agent/src/runtime/plugin-engine.ts`            | Plugin lifecycle, tool dispatch, workflow execution   |
-| `drone-agent/src/runtime/builtin-commands.ts`         | Built-in slash command definitions                    |
-| `drone-agent/src/runtime/config.ts`                   | Config loading, merging, environment interpolation    |
-| `drone-agent/src/runtime/conversation-service.ts`     | LLM conversation loop, tool iteration                 |
-| `drone-agent/src/runtime/session-manager.ts`          | Session state, turn tracking                          |
-| `drone-agent/src/runtime/context-budget-service.ts`   | Context window budgeting, compaction triggers         |
-| `drone-agent/src/tui/app.tsx`                         | Root TUI component                                    |
-| `drone-agent/src/plugins/index.ts`                    | Built-in plugin registry                              |
-| `drone-agent/src/plugins/bootstrap/index.ts`          | Bootstrap plugin (project/user setup workflows)       |
-| `drone-agent/src/plugins/bootstrap/project-detect.ts` | Project detection logic (shared by tool and workflow) |
-| `drone-agent/src/plugins/swarm/index.ts`              | Swarm plugin (beacon/coordinator integration)         |
-| `drone-agent/src/plugins/subagent/plugin.ts`          | Subagent spawning plugin                              |
-| `drone-agent/src/plugins/macros/index.ts`             | Macros plugin (.macro file loading)                   |
-| `drone-agent/src/plugins/self-improvement/index.ts`   | Insight and principle system                          |
-| `drone-agent/src/plugins/startup.ts`                  | Startup banner and status tool                        |
-| `drone-agent/src/plugins/focus.ts`                    | Session focus management                              |
-| `drone-agent/src/plugins/lightpanda/index.ts`         | Lightpanda browser automation MCP integration         |
-| `drone-agent/src/plugins/ollama.ts`                   | Ollama LLM provider                                   |
-| `drone-agent/src/plugins/anthropic/index.ts`          | Anthropic LLM provider                                |
-| `drone-agent/src/plugins/openai/index.ts`             | OpenAI LLM provider                                   |
-| `drone-agent/src/plugins/openrouter/index.ts`         | OpenRouter LLM provider                               |
-| `drone-agent/src/plugins/echo/index.ts`               | Mock LLM provider for deterministic testing           |
-| `drone-agent/src/plugins/exec.ts`                     | Shell command execution                               |
-| `drone-agent/src/plugins/external-loader.ts`          | External plugin discovery, loading, trust management  |
-| `drone-agent/src/plugins/fetch.ts`                    | HTTP fetch tool                                       |
-| `drone-agent/src/plugins/file.ts`                     | File read/write/glob/diff tools                       |
-| `drone-agent/src/plugins/git/index.ts`                | Git status/diff/commit/log tools                      |
-| `drone-agent/src/plugins/search.ts`                   | Text search (ripgrep/grep)                            |
-| `drone-agent/src/plugins/todo.ts`                     | TODO list management                                  |
-| `drone-agent/src/plugins/utils.ts`                    | Utility tools (arithmetic, counting, spelling)        |
-| `drone-agent/src/plugins/notepad.ts`                  | Session notepad                                       |
-| `drone-agent/src/plugins/terminal/index.ts`           | Terminal emulator plugin                              |
-| `drone-agent/src/plugins/prompt-file/index.ts`        | Prompt file injection                                 |
-| `drone-agent/src/plugins/compaction/index.ts`         | Context compaction (summary-drop strategy)            |
-| `drone-agent/src/plugins/config/index.ts`             | Config capability (injectors, rebuild)                |
-| `drone-agent/src/plugins/log/index.ts`                | Session logging to JSON files                         |
-| `drone-agent/src/plugins/memory/index.ts`             | Project-level memory (JSON files)                     |
-| `drone-agent/src/plugins/persona/index.ts`            | Persona broker plugin                                 |
-| `drone-agent/src/plugins/skills/index.ts`             | Skills broker plugin                                  |
-| `drone-agent/src/plugins/llm/index.ts`                | LLM provider broker                                   |
-| `drone-agent/src/plugins/mcp/index.ts`                | MCP client (stdio and streamable HTTP)                |
-| `drone-agent/src/plugins/lsp/plugin.ts`               | LSP server connections                                |
-| `drone-core/src/index.ts`                             | All shared types and config defaults                  |
-| `drone-core/src/config-types.ts`                      | DroneAgentConfig, PartialDroneAgentConfig, defaults   |
-| `drone-core/src/config-schema.ts`                     | JSON schema parsing and validation                    |
-| `drone-core/src/plugin-system.ts`                     | DronePlugin, DronePluginRegistration, workflows       |
-| `drone-core/src/capabilities.ts`                      | Capability registry types                             |
-| `drone-core/src/session-types.ts`                     | Session, message, tool, and token types               |
-| `drone-core/src/provider-types.ts`                    | Provider types for brokers                            |
-| `drone-core/src/skill-types.ts`                       | Skill definition types                                |
-| `drone-core/src/persona-types.ts`                     | Persona definition and capability types               |
-| `drone-core/src/domain-types.ts`                      | Domain types for beacon/coordinator                   |
-| `drone-core/src/lsp-types.ts`                         | LSP server types                                      |
-| `drone-core/src/mcp-types.ts`                         | MCP server types                                      |
-| `drone-core/src/wiki-types.ts`                        | Wiki page types                                       |
-| `drone-core/src/token-estimate.ts`                    | Token estimation functions                            |
-| `drone-core/src/utils.ts`                             | Utility functions                                     |
-| `drone-beacon/src/routes/index.ts`                    | Beacon route registration assembly                    |
-| `drone-beacon/src/db/index.ts`                        | Beacon database layer                                 |
-| `drone-coordinator/src/routes/index.ts`               | Coordinator route registration assembly               |
-| `drone-coordinator/src/db/index.ts`                   | Coordinator database layer                            |
-| `drone-coordinator/src/storage.ts`                    | Coordinator storage layer                             |
-| `drone-coordinator/src/web-auth.ts`                   | Web UI authentication                                 |
-| `drone-coordinator/src/ws-pubsub.ts`                  | WebSocket pub/sub for live updates                    |
-| `drone-swarm-common/src/tls.ts`                       | Shared TLS certificate management                     |
-| `drone-swarm-common/src/wiki-storage.ts`              | Shared wiki filesystem management                     |
+| File                                                  | Purpose                                                |
+| ----------------------------------------------------- | ------------------------------------------------------ |
+| `drone-agent/src/index.tsx`                           | CLI entry point, first-run setup, engine init          |
+| `drone-agent/src/cli.ts`                              | CLI argument parsing                                   |
+| `drone-agent/src/elicitation.ts`                      | Readline-based elicitation for plain-output mode       |
+| `drone-agent/src/interactive.ts`                      | Interactive loop and JSON mode for non-TUI sessions    |
+| `drone-agent/src/output-handlers.ts`                  | Plain output event handler                             |
+| `drone-agent/src/first-run.tsx`                       | First-run setup wizard (LLM provider probing)          |
+| `drone-agent/src/lib.ts`                              | Public library exports for embedding drone-agent       |
+| `drone-agent/src/migrate.ts`                          | Migration workflows (promote/demote)                   |
+| `drone-agent/src/runtime/plugin-engine.ts`            | Plugin lifecycle, tool dispatch, workflow execution    |
+| `drone-agent/src/runtime/builtin-commands.ts`         | Built-in slash command definitions                     |
+| `drone-agent/src/runtime/config.ts`                   | Config loading, merging, environment interpolation     |
+| `drone-agent/src/runtime/conversation-service.ts`     | LLM conversation loop, tool iteration                  |
+| `drone-agent/src/runtime/session-manager.ts`          | Session state, turn tracking                           |
+| `drone-agent/src/runtime/context-budget-service.ts`   | Context window budgeting, compaction triggers          |
+| `drone-agent/src/tui/app.tsx`                         | Root TUI component                                     |
+| `drone-agent/src/plugins/index.ts`                    | Built-in plugin registry                               |
+| `drone-agent/src/plugins/bootstrap/index.ts`          | Bootstrap plugin (project/user setup workflows)        |
+| `drone-agent/src/plugins/bootstrap/project-detect.ts` | Project detection logic (shared by tool and workflow)  |
+| `drone-agent/src/plugins/swarm/index.ts`              | Swarm plugin (beacon/coordinator integration)          |
+| `drone-agent/src/plugins/subagent/plugin.ts`          | Subagent spawning plugin                               |
+| `drone-agent/src/plugins/macros/index.ts`             | Macros plugin (.macro file loading)                    |
+| `drone-agent/src/plugins/self-improvement/index.ts`   | Insight and principle system                           |
+| `drone-agent/src/plugins/startup.ts`                  | Startup banner and status tool                         |
+| `drone-agent/src/plugins/focus.ts`                    | Session focus management                               |
+| `drone-agent/src/plugins/lightpanda/index.ts`         | Lightpanda browser automation MCP integration          |
+| `drone-agent/src/plugins/ollama.ts`                   | Ollama LLM provider                                    |
+| `drone-agent/src/plugins/anthropic/index.ts`          | Anthropic LLM provider                                 |
+| `drone-agent/src/plugins/openai/index.ts`             | OpenAI LLM provider                                    |
+| `drone-agent/src/plugins/openrouter/index.ts`         | OpenRouter LLM provider                                |
+| `drone-agent/src/plugins/echo/index.ts`               | Mock LLM provider for deterministic testing            |
+| `drone-agent/src/plugins/exec.ts`                     | Shell command execution                                |
+| `drone-agent/src/plugins/external-loader.ts`          | External plugin discovery, loading, trust management   |
+| `drone-agent/src/plugins/fetch.ts`                    | HTTP fetch tool                                        |
+| `drone-agent/src/plugins/file.ts`                     | File read/write/glob/diff tools                        |
+| `drone-agent/src/plugins/git/index.ts`                | Git status/diff/commit/log tools                       |
+| `drone-agent/src/plugins/search.ts`                   | Text search (ripgrep/grep)                             |
+| `drone-agent/src/plugins/todo.ts`                     | TODO list management                                   |
+| `drone-agent/src/plugins/utils.ts`                    | Utility tools (arithmetic, counting, spelling)         |
+| `drone-agent/src/plugins/notepad.ts`                  | Session notepad                                        |
+| `drone-agent/src/plugins/terminal/index.ts`           | Terminal emulator plugin                               |
+| `drone-agent/src/plugins/prompt-file/index.ts`        | Prompt file injection                                  |
+| `drone-agent/src/plugins/compaction/index.ts`         | Context compaction (summary-drop strategy)             |
+| `drone-agent/src/plugins/config/index.ts`             | Config capability (injectors, rebuild)                 |
+| `drone-agent/src/plugins/log/index.ts`                | Session logging to JSON files                          |
+| `drone-agent/src/plugins/memory/index.ts`             | Project-level memory (JSON files)                      |
+| `drone-agent/src/plugins/persona/index.ts`            | Persona broker plugin                                  |
+| `drone-agent/src/plugins/skills/index.ts`             | Skills broker plugin                                   |
+| `drone-agent/src/plugins/llm/index.ts`                | LLM provider broker                                    |
+| `drone-agent/src/plugins/mcp/index.ts`                | MCP client (stdio and streamable HTTP)                 |
+| `drone-agent/src/plugins/lsp/plugin.ts`               | LSP server connections                                 |
+| `drone-core/src/index.ts`                             | All shared types and config defaults                   |
+| `drone-core/src/config-types.ts`                      | DroneAgentConfig, PartialDroneAgentConfig, defaults    |
+| `drone-core/src/config-schema.ts`                     | JSON schema parsing and validation                     |
+| `drone-core/src/plugin-system.ts`                     | DronePlugin, DronePluginRegistration, workflows        |
+| `drone-core/src/capabilities.ts`                      | Capability registry types                              |
+| `drone-core/src/session-types.ts`                     | Session, message, tool, and token types                |
+| `drone-core/src/provider-types.ts`                    | Provider types for brokers                             |
+| `drone-core/src/skill-types.ts`                       | Skill definition types                                 |
+| `drone-core/src/persona-types.ts`                     | Persona definition and capability types                |
+| `drone-core/src/domain-types.ts`                      | Domain types for beacon/coordinator                    |
+| `drone-core/src/lsp-types.ts`                         | LSP server types                                       |
+| `drone-core/src/mcp-types.ts`                         | MCP server types                                       |
+| `drone-core/src/wiki-types.ts`                        | Wiki page types                                        |
+| `drone-core/src/token-estimate.ts`                    | Token estimation functions                             |
+| `drone-core/src/utils.ts`                             | Utility functions                                      |
+| `drone-core/src/tool-mounting-cache.ts`               | ToolMountingCache class for list/mount tool management |
+| `drone-beacon/src/routes/index.ts`                    | Beacon route registration assembly                     |
+| `drone-beacon/src/db/index.ts`                        | Beacon database layer                                  |
+| `drone-coordinator/src/routes/index.ts`               | Coordinator route registration assembly                |
+| `drone-coordinator/src/db/index.ts`                   | Coordinator database layer                             |
+| `drone-coordinator/src/storage.ts`                    | Coordinator storage layer                              |
+| `drone-coordinator/src/web-auth.ts`                   | Web UI authentication                                  |
+| `drone-coordinator/src/ws-pubsub.ts`                  | WebSocket pub/sub for live updates                     |
+| `drone-swarm-common/src/tls.ts`                       | Shared TLS certificate management                      |
+| `drone-swarm-common/src/wiki-storage.ts`              | Shared wiki filesystem management                      |
 
 ## Design Principles
 

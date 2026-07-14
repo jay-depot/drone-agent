@@ -1,15 +1,20 @@
 import { isRecord } from '../../shared/type-guards.js';
 import type {
+  DroneLlmCapability,
   DroneMcpServerState,
+  DronePersonaCapability,
   DronePlugin,
   DroneToolJsonSchema,
   DroneToolJsonSchemaProperty,
+  DroneToolDefinition,
 } from 'drone-core';
+import { ToolMountingCache } from 'drone-core';
 import {
   createMcpClientConnection,
   type McpClientConnection,
   type McpToolMeta,
 } from './client.js';
+import { getOrCreateServerDescription } from './server-description.js';
 
 const TOOL_PROPERTY_TYPES: DroneToolJsonSchemaProperty['type'][] = [
   'string',
@@ -126,31 +131,35 @@ export const mcpPlugin: DronePlugin = {
     description:
       'Connects to MCP servers and mounts their tools/resources/prompts.',
     defaultEnabled: true,
+    dependencies: [
+      { id: 'llm', optional: true },
+      { id: 'persona', optional: true },
+    ],
   },
   register: async registration => {
     const mcpConfig = registration.getConfig().mcp;
     const connections = new Map<string, McpClientConnection>();
     const serverStates = new Map<string, DroneMcpServerState>();
-    const mountedToolNames = new Set<string>();
+    const serverCaches = new Map<string, ToolMountingCache>();
+    const serverAllowlists = new Map<string, Set<string> | undefined>();
+    const metaToolNames = new Set<string>();
+    const llmCapability = registration.request<DroneLlmCapability>('llm');
+    const personaCap = registration.request<DronePersonaCapability>('persona');
 
     function setServerState(state: DroneMcpServerState): void {
       serverStates.set(state.id, { ...state });
     }
 
-    function registerMountedTool(
+    function registerMetaTool(
       name: string,
       description: string,
       inputSchema: DroneToolJsonSchema | undefined,
       execute: (input: Record<string, unknown>) => Promise<string>
     ): void {
-      if (mountedToolNames.has(name)) {
-        registration.logger.warn(
-          `mcp tool name already mounted, skipping duplicate: ${name}`
-        );
+      if (metaToolNames.has(name)) {
         return;
       }
-
-      mountedToolNames.add(name);
+      metaToolNames.add(name);
       registration.registerTool({
         name,
         description,
@@ -163,7 +172,7 @@ export const mcpPlugin: DronePlugin = {
       serverId: string,
       connection: McpClientConnection
     ): void {
-      registerMountedTool(
+      registerMetaTool(
         `${serverId}__list_resources`,
         `List MCP resources for server ${serverId}.`,
         { type: 'object', additionalProperties: false },
@@ -173,7 +182,7 @@ export const mcpPlugin: DronePlugin = {
         }
       );
 
-      registerMountedTool(
+      registerMetaTool(
         `${serverId}__read_resource`,
         `Read an MCP resource by URI from server ${serverId}. Accepts both concrete resource URIs and URIs produced by substituting variables into a resource template from ${serverId}__list_resource_templates.`,
         {
@@ -198,7 +207,7 @@ export const mcpPlugin: DronePlugin = {
         }
       );
 
-      registerMountedTool(
+      registerMetaTool(
         `${serverId}__list_resource_templates`,
         `List MCP resource templates for server ${serverId}. Each template has a uriTemplate (RFC 6570) with variables to substitute, then read with ${serverId}__read_resource.`,
         { type: 'object', additionalProperties: false },
@@ -208,7 +217,7 @@ export const mcpPlugin: DronePlugin = {
         }
       );
 
-      registerMountedTool(
+      registerMetaTool(
         `${serverId}__list_prompts`,
         `List MCP prompts for server ${serverId}.`,
         { type: 'object', additionalProperties: false },
@@ -218,7 +227,7 @@ export const mcpPlugin: DronePlugin = {
         }
       );
 
-      registerMountedTool(
+      registerMetaTool(
         `${serverId}__get_prompt`,
         `Get an MCP prompt from server ${serverId}.`,
         {
@@ -259,31 +268,169 @@ export const mcpPlugin: DronePlugin = {
       );
     }
 
-    function mountMcpTools(
+    function mountMetaTools(
       serverId: string,
       connection: McpClientConnection,
-      tools: McpToolMeta[]
+      serverDescription?: string
     ): void {
-      for (const tool of tools) {
-        const mountedName = `${serverId}__${sanitizeToolSegment(tool.name)}`;
-        registerMountedTool(
-          mountedName,
-          tool.description ?? `MCP tool ${tool.name} from server ${serverId}.`,
-          toDroneInputSchema(tool.inputSchema),
-          async input => {
-            const result = await connection.callTool(tool.name, input);
+      const listToolsDescription = serverDescription
+        ? `List all available tools for MCP server ${serverId}. Returns tool names and descriptions. Use ${serverId}__mount_tool to mount a tool before calling it.\n\nServer summary: ${serverDescription}`
+        : `List all available tools for MCP server ${serverId}. Returns tool names and descriptions. Use ${serverId}__mount_tool to mount a tool before calling it.`;
+
+      registerMetaTool(
+        `${serverId}__list_tools`,
+        listToolsDescription,
+        { type: 'object', additionalProperties: false },
+        async () => {
+          const cache = serverCaches.get(serverId);
+          if (!cache) {
+            return JSON.stringify({ serverId, tools: [] }, null, 2);
+          }
+          let tools = cache.listAvailable();
+          // Filter through persona capability if available
+          if (personaCap) {
+            const descriptors = tools.map(t => ({
+              name: t.name,
+              description: t.description,
+              inputSchema: undefined,
+              defaultHidden: false,
+            }));
+            const filtered = personaCap.getFilteredTools(descriptors);
+            const filteredNames = new Set(filtered.map(t => t.name));
+            tools = tools.filter(t => filteredNames.has(t.name));
+          }
+          return JSON.stringify(
+            { serverId, toolCount: tools.length, tools },
+            null,
+            2
+          );
+        }
+      );
+
+      registerMetaTool(
+        `${serverId}__mount_tool`,
+        `Mount a specific tool from MCP server ${serverId} so it becomes available as a native tool. Use ${serverId}__list_tools to see available tools. Once mounted, the tool will appear in your tool list with its full schema.`,
+        {
+          type: 'object',
+          properties: {
+            tool: {
+              type: 'string',
+              description: `The name of the tool to mount (as shown by ${serverId}__list_tools).`,
+            },
+          },
+          required: ['tool'],
+          additionalProperties: false,
+        },
+        async input => {
+          if (
+            typeof input.tool !== 'string' ||
+            input.tool.trim().length === 0
+          ) {
+            throw new Error(
+              `${serverId}__mount_tool requires a non-empty tool string.`
+            );
+          }
+          const toolName = input.tool;
+          const cache = serverCaches.get(serverId);
+          if (!cache) {
+            throw new Error(`MCP server ${serverId} has no tool cache.`);
+          }
+
+          // Check if tool exists in cache
+          const available = cache.listAvailable();
+          const toolMeta = available.find(t => t.name === toolName);
+          if (!toolMeta) {
+            const availableNames = available.map(t => t.name).join(', ');
+            throw new Error(
+              `Tool '${toolName}' not found on MCP server ${serverId}. Available tools: ${availableNames}`
+            );
+          }
+
+          // Enforce allowlist
+          const allowedToolSet = serverAllowlists.get(serverId);
+          if (allowedToolSet && !allowedToolSet.has(toolName)) {
+            throw new Error(
+              `Tool '${toolName}' is not in the allowedTools list for MCP server ${serverId}.`
+            );
+          }
+
+          // Check if already mounted
+          if (cache.isMounted(toolName)) {
+            const mountedName = `mcp__${serverId}__${sanitizeToolSegment(toolName)}`;
             return JSON.stringify(
-              {
-                serverId,
-                tool: tool.name,
-                result,
-              },
+              { serverId, tool: toolName, mountedName, alreadyMounted: true },
               null,
               2
             );
           }
-        );
-      }
+
+          // Mount via cache
+          cache.mountTool(toolName, registration);
+          connection.state.mountedToolCount = cache.exportMounted().length;
+          setServerState(connection.state);
+
+          const mountedName = `mcp__${serverId}__${sanitizeToolSegment(toolName)}`;
+          return JSON.stringify(
+            { serverId, tool: toolName, mountedName, mounted: true },
+            null,
+            2
+          );
+        }
+      );
+
+      registerMetaTool(
+        `${serverId}__unmount_tool`,
+        `Unmount a previously mounted tool from MCP server ${serverId}. This removes the tool from your active tool list to reduce clutter.`,
+        {
+          type: 'object',
+          properties: {
+            tool: {
+              type: 'string',
+              description: `The name of the tool to unmount (as shown by ${serverId}__list_tools, not the mounted name).`,
+            },
+          },
+          required: ['tool'],
+          additionalProperties: false,
+        },
+        async input => {
+          if (
+            typeof input.tool !== 'string' ||
+            input.tool.trim().length === 0
+          ) {
+            throw new Error(
+              `${serverId}__unmount_tool requires a non-empty tool string.`
+            );
+          }
+          const toolName = input.tool;
+          const cache = serverCaches.get(serverId);
+          if (!cache) {
+            return JSON.stringify(
+              { serverId, tool: toolName, wasMounted: false },
+              null,
+              2
+            );
+          }
+
+          if (!cache.isMounted(toolName)) {
+            return JSON.stringify(
+              { serverId, tool: toolName, wasMounted: false },
+              null,
+              2
+            );
+          }
+
+          cache.unmountTool(toolName, registration);
+          connection.state.mountedToolCount = cache.exportMounted().length;
+          setServerState(connection.state);
+
+          const mountedName = `${serverId}__${sanitizeToolSegment(toolName)}`;
+          return JSON.stringify(
+            { serverId, tool: toolName, mountedName, unmounted: true },
+            null,
+            2
+          );
+        }
+      );
     }
 
     async function listAndMountTools(
@@ -292,49 +439,111 @@ export const mcpPlugin: DronePlugin = {
       serverConfig: { allowedTools?: string[] },
       logMessage: string
     ): Promise<void> {
-      registration.unregisterPluginTools('mcp');
-      mountedToolNames.clear();
-
       const tools = await connection.listTools();
       const allowlist = serverConfig.allowedTools;
       const allowedToolSet = allowlist ? new Set(allowlist) : undefined;
-      const mountedTools = allowedToolSet
-        ? tools.filter((tool: McpToolMeta) => allowedToolSet.has(tool.name))
-        : tools;
 
-      connection.state.discoveredToolCount = tools.length;
-      connection.state.filteredToolCount =
-        tools.length - mountedTools.length;
-      connection.state.mountedToolCount = mountedTools.length;
+      // Generate server description via LLM (if available)
+      const serverDescription = await getOrCreateServerDescription(
+        serverId,
+        tools.map(t => ({ name: t.name, description: t.description })),
+        llmCapability,
+        registration.logger
+      );
 
-      mountMcpTools(serverId, connection, mountedTools);
+      // Create a fresh cache for this server
+      const cache = new ToolMountingCache('mcp');
+      for (const tool of tools) {
+        const mountedName = `${serverId}__${sanitizeToolSegment(tool.name)}`;
+        const toolDef: DroneToolDefinition = {
+          name: mountedName,
+          description:
+            tool.description ??
+            `MCP tool ${tool.name} from server ${serverId}.`,
+          inputSchema: toDroneInputSchema(tool.inputSchema),
+          execute: async toolInput => {
+            const result = await connection.callTool(tool.name, toolInput);
+            return JSON.stringify(
+              { serverId, tool: tool.name, result },
+              null,
+              2
+            );
+          },
+        };
+        cache.addTool(tool.name, toolDef);
+      }
+      serverCaches.set(serverId, cache);
+      serverAllowlists.set(serverId, allowedToolSet);
+
+      const allowlistedCount = allowedToolSet
+        ? tools.filter((t: McpToolMeta) => allowedToolSet.has(t.name)).length
+        : tools.length;
+
+      connection.state.filteredToolCount = tools.length - allowlistedCount;
+      connection.state.mountedToolCount = 0;
+
+      mountMetaTools(serverId, connection, serverDescription);
       mountResourcePromptTools(serverId, connection);
       setServerState(connection.state);
 
-      // Re-register server_status tool (unregisterPluginTools clears it).
-      registration.registerTool({
-        name: 'server_status',
-        description:
-          'List MCP server connection state and mounted tool counts for this session.',
-        inputSchema: {
-          type: 'object',
-          additionalProperties: false,
-        },
-        execute: async () =>
-          JSON.stringify(
-            {
-              servers: Array.from(serverStates.values()),
-            },
-            null,
-            2
-          ),
-      });
-
       registration.logger.info(
-        `mcp server ${logMessage}: ${serverId} (mounted ${mountedTools.length}/${tools.length} tool(s))`
+        `mcp server ${logMessage}: ${serverId} (discovered ${connection.state.discoveredToolCount} tool(s), mounted ${connection.state.mountedToolCount})`
       );
     }
 
+    async function handleToolsListChanged(
+      serverId: string,
+      connection: McpClientConnection
+    ): Promise<void> {
+      const cache = serverCaches.get(serverId);
+      if (!cache) return;
+
+      const oldToolNames = new Set(cache.listAvailable().map(t => t.name));
+
+      const tools = await connection.listTools();
+      const newToolNames = new Set(tools.map(t => t.name));
+
+      // Remove tools that no longer exist on the server
+      for (const oldName of oldToolNames) {
+        if (!newToolNames.has(oldName)) {
+          cache.unmountTool(oldName, registration);
+          cache.removeTool(oldName);
+        }
+      }
+
+      // Add new tools
+      for (const tool of tools) {
+        if (!oldToolNames.has(tool.name)) {
+          const mountedName = `${serverId}__${sanitizeToolSegment(tool.name)}`;
+          const toolDef: DroneToolDefinition = {
+            name: mountedName,
+            description:
+              tool.description ??
+              `MCP tool ${tool.name} from server ${serverId}.`,
+            inputSchema: toDroneInputSchema(tool.inputSchema),
+            execute: async toolInput => {
+              const result = await connection.callTool(tool.name, toolInput);
+              return JSON.stringify(
+                { serverId, tool: tool.name, result },
+                null,
+                2
+              );
+            },
+          };
+          cache.addTool(tool.name, toolDef);
+        }
+      }
+
+      connection.state.discoveredToolCount = tools.length;
+      connection.state.mountedToolCount = cache.exportMounted().length;
+      setServerState(connection.state);
+
+      registration.logger.info(
+        `mcp server ${serverId} tools list changed (discovered ${connection.state.discoveredToolCount}, mounted ${connection.state.mountedToolCount})`
+      );
+    }
+
+    // Register server_status once at plugin registration time
     registration.registerTool({
       name: 'server_status',
       description:
@@ -372,12 +581,7 @@ export const mcpPlugin: DronePlugin = {
             `mcp server ${serverId} notification: ${method}`
           );
           if (method === 'notifications/tools/list_changed' && connection) {
-            void listAndMountTools(
-              serverId,
-              connection,
-              serverConfig,
-              'tools list changed'
-            );
+            void handleToolsListChanged(serverId, connection);
           }
         };
         const onStreamError = (message: string): void => {
@@ -392,6 +596,13 @@ export const mcpPlugin: DronePlugin = {
         };
         const onReconnected = async (): Promise<void> => {
           if (!connection) return;
+          // Clear the existing cache and rebuild from scratch
+          const oldCache = serverCaches.get(serverId);
+          if (oldCache) {
+            for (const tool of oldCache.exportMounted()) {
+              oldCache.unmountTool(tool.name, registration);
+            }
+          }
           await listAndMountTools(
             serverId,
             connection,
@@ -417,15 +628,10 @@ export const mcpPlugin: DronePlugin = {
           connections.set(serverId, connection);
           setServerState(connection.state);
 
-          await listAndMountTools(
-            serverId,
-            connection,
-            serverConfig,
-            'ready'
-          );
+          await listAndMountTools(serverId, connection, serverConfig, 'ready');
 
           registration.logger.info(
-            `mcp server ready: ${serverId} (${connection.state.transport}, mounted ${connection.state.mountedToolCount}/${connection.state.discoveredToolCount} tool(s))`
+            `mcp server ready: ${serverId} (${connection.state.transport}, discovered ${connection.state.discoveredToolCount}, mounted ${connection.state.mountedToolCount} tool(s))`
           );
         } catch (error) {
           const message =

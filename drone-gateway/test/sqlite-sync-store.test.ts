@@ -49,13 +49,11 @@ describe('SqliteSyncStore', () => {
     it('round-trips saved sync data', async () => {
       const syncData: ISyncResponse = {
         next_batch: 's1234',
-        rooms: { join: {}, invite: {}, leave: {} },
+        rooms: { join: {}, invite: {}, leave: {}, knock: {} },
         account_data: { events: [] },
         to_device: { events: [] },
         device_lists: { changed: [], left: [] },
         device_one_time_keys_count: {},
-        device_unused_fallback_key_types: [],
-        groups: { join: {}, invite: {}, leave: {} },
       };
 
       await store.setSyncData(syncData);
@@ -156,11 +154,13 @@ describe('SqliteSyncStore', () => {
         {
           eventType: 'm.room_key_request',
           txnId: 'txn1',
-          batch: {
-            '@alice:test': {
-              DEVICE1: { type: 'm.room_key_request', content: {} },
+          batch: [
+            {
+              userId: '@alice:test',
+              deviceId: 'DEVICE1',
+              payload: { type: 'm.room_key_request', content: {} },
             },
-          },
+          ],
         },
       ];
 

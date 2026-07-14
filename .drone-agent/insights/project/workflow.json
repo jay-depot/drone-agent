@@ -202,5 +202,9 @@
   {
     "timestamp": "2026-07-11T17:30:40.990Z",
     "insight": "When rewriting large functions like createStreamableHttpJsonRpcClient, it's critical to understand the full architecture before making changes. The SSE reconnection implementation accidentally changed the response channel from POST HTTP body to GET SSE stream, which broke all 35 unit tests. Always verify the test suite passes before committing."
+  },
+  {
+    "timestamp": "2026-07-14T00:18:03.216Z",
+    "insight": "The self-improvement insight JSON files can become corrupted if text gets appended after the closing bracket. The insight tool should validate JSON before writing, or the file engine should guard against this. This caused a CI lint failure on the feat/mcp-list-mount-deferred-loading branch."
   }
 ]

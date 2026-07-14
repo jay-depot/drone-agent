@@ -10,12 +10,11 @@
  * force-kill, unavailable-server handling). The fast `mcp-client.test.ts`
  * covers the in-process protocol logic over the HTTP transport.
  *
- * PHASE 1 RULE: these tests encode CURRENT plugin behavior so they pass today.
- *
  * NOTE on tool naming: the engine registers every plugin tool under the
  * canonical name `<pluginId>__<toolName>`. The mcp plugin id is `mcp`, so a
- * tool `echo` from server `demo` mounts as `mcp__demo__echo`. These tests
- * assert that CURRENT naming (the later fix-phases may restructure it).
+ * meta-tool `__list_tools` from server `demo` mounts as `mcp__demo__list_tools`.
+ * Individual MCP tools are NOT mounted eagerly — the LLM must use
+ * `__list_tools` to discover them and `__mount_tool` to mount them.
  *
  * NOTE on child capture: the MCP client spawns ITS OWN child from the server
  * config when the engine boots (this suite does not spawn the child itself).
@@ -128,16 +127,18 @@ async function bootWithServers(
 }
 
 describe('mcp plugin integration (stdio child)', () => {
-  it('mounts demo__* tools and resource/prompt tools, reports connected', async () => {
+  it('mounts meta-tools and resource/prompt tools, not individual MCP tools', async () => {
     const server = startFakeMcpServer({ toolNames: ['echo', 'add'] });
     const engine = await bootWithServers({
       demo: server.serverConfig,
     });
 
     const names = toolNames(engine);
-    // Current naming: <pluginId>__<serverId>__<toolName>.
-    expect(names).toContain('mcp__demo__echo');
-    expect(names).toContain('mcp__demo__add');
+    // Meta-tools are mounted eagerly.
+    expect(names).toContain('mcp__demo__list_tools');
+    expect(names).toContain('mcp__demo__mount_tool');
+    expect(names).toContain('mcp__demo__unmount_tool');
+    // Resource/prompt tools are still mounted eagerly.
     expect(names).toContain('mcp__demo__list_resources');
     expect(names).toContain('mcp__demo__read_resource');
     expect(names).toContain('mcp__demo__list_prompts');
@@ -145,19 +146,118 @@ describe('mcp plugin integration (stdio child)', () => {
     expect(names).toContain('mcp__demo__list_resource_templates');
     expect(names).toContain('mcp__server_status');
 
+    // Individual MCP tools are NOT mounted eagerly.
+    expect(names).not.toContain('mcp__demo__echo');
+    expect(names).not.toContain('mcp__demo__add');
+
     const demo = await statusOf(engine, 'demo');
     expect(demo).toBeDefined();
     expect(demo.status).toBe('connected');
+    expect(demo.discoveredToolCount).toBe(2);
+    expect(demo.mountedToolCount).toBe(0);
   });
 
-  it('executes a mounted tool and returns its result', async () => {
+  it('list_tools returns tool names and descriptions without schemas', async () => {
+    const server = startFakeMcpServer({ toolNames: ['echo', 'add'] });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    const result = JSON.parse(
+      await engine.executeTool('mcp__demo__list_tools', {})
+    );
+    expect(result.serverId).toBe('demo');
+    expect(result.toolCount).toBe(2);
+    expect(Array.isArray(result.tools)).toBe(true);
+    const toolList = result.tools as Array<{
+      name: string;
+      description: string;
+    }>;
+    expect(toolList.map(t => t.name).sort()).toEqual(['add', 'echo']);
+    // Each entry should have a description string but no schema fields.
+    for (const t of toolList) {
+      expect(typeof t.description).toBe('string');
+      expect(t).not.toHaveProperty('inputSchema');
+    }
+  });
+
+  it('mount_tool mounts a tool with its full schema, then it is callable', async () => {
     const server = startFakeMcpServer({ toolNames: ['echo'] });
     const engine = await bootWithServers({
       demo: server.serverConfig,
     });
 
-    const result = JSON.parse(await engine.executeTool('mcp__demo__echo', {}));
-    expect(result.tool).toBe('echo');
+    // Tool not mounted yet.
+    expect(toolNames(engine)).not.toContain('mcp__demo__echo');
+
+    // Mount it.
+    const mountResult = JSON.parse(
+      await engine.executeTool('mcp__demo__mount_tool', { tool: 'echo' })
+    );
+    expect(mountResult.mounted).toBe(true);
+    expect(mountResult.mountedName).toBe('mcp__demo__echo');
+
+    // Now it appears in the tool list.
+    expect(toolNames(engine)).toContain('mcp__demo__echo');
+
+    // And it is callable.
+    const callResult = JSON.parse(
+      await engine.executeTool('mcp__demo__echo', {})
+    );
+    expect(callResult.tool).toBe('echo');
+  });
+
+  it('mount_tool is idempotent (mounting an already-mounted tool returns alreadyMounted)', async () => {
+    const server = startFakeMcpServer({ toolNames: ['echo'] });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    await engine.executeTool('mcp__demo__mount_tool', { tool: 'echo' });
+    const result = JSON.parse(
+      await engine.executeTool('mcp__demo__mount_tool', { tool: 'echo' })
+    );
+    expect(result.alreadyMounted).toBe(true);
+  });
+
+  it('mount_tool rejects a non-existent tool name', async () => {
+    const server = startFakeMcpServer({ toolNames: ['echo'] });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    await expect(
+      engine.executeTool('mcp__demo__mount_tool', { tool: 'nonexistent' })
+    ).rejects.toThrow(/not found/);
+  });
+
+  it('unmount_tool removes a mounted tool from the engine', async () => {
+    const server = startFakeMcpServer({ toolNames: ['echo'] });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    await engine.executeTool('mcp__demo__mount_tool', { tool: 'echo' });
+    expect(toolNames(engine)).toContain('mcp__demo__echo');
+
+    const result = JSON.parse(
+      await engine.executeTool('mcp__demo__unmount_tool', { tool: 'echo' })
+    );
+    expect(result.unmounted).toBe(true);
+
+    expect(toolNames(engine)).not.toContain('mcp__demo__echo');
+  });
+
+  it('unmount_tool is a no-op for a tool that was not mounted', async () => {
+    const server = startFakeMcpServer({ toolNames: ['echo'] });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    const result = JSON.parse(
+      await engine.executeTool('mcp__demo__unmount_tool', { tool: 'echo' })
+    );
+    expect(result.wasMounted).toBe(false);
   });
 
   it('lists resource templates and reads a filled-in template URI', async () => {
@@ -184,7 +284,7 @@ describe('mcp plugin integration (stdio child)', () => {
     expect(read.uri).toBe('file:///etc/hostname');
   });
 
-  it('honors allowedTools allowlist and sets filteredToolCount', async () => {
+  it('honors allowedTools allowlist: __list_tools shows all, __mount_tool rejects non-allowlisted', async () => {
     // Server advertises echo + add; allowlist restricts to echo only.
     const server = startFakeMcpServer({ toolNames: ['echo', 'add'] });
     const engine = await bootWithServers({
@@ -194,27 +294,45 @@ describe('mcp plugin integration (stdio child)', () => {
       },
     });
 
-    const names = toolNames(engine);
-    expect(names).toContain('mcp__demo__echo');
-    expect(names).not.toContain('mcp__demo__add');
+    // __list_tools shows all tools.
+    const listed = JSON.parse(
+      await engine.executeTool('mcp__demo__list_tools', {})
+    );
+    expect(listed.toolCount).toBe(2);
+
+    // Mounting echo (allowlisted) succeeds.
+    await engine.executeTool('mcp__demo__mount_tool', { tool: 'echo' });
+    expect(toolNames(engine)).toContain('mcp__demo__echo');
+
+    // Mounting add (not allowlisted) fails.
+    await expect(
+      engine.executeTool('mcp__demo__mount_tool', { tool: 'add' })
+    ).rejects.toThrow(/not in the allowedTools list/);
 
     const demo = await statusOf(engine, 'demo');
-    expect(demo.mountedToolCount).toBe(1);
     expect(demo.filteredToolCount).toBe(1);
     expect(demo.discoveredToolCount).toBe(2);
   });
 
-  it('sanitizes tool names with non-[a-zA-Z0-9_-] characters', async () => {
-    // 'weird name!' -> 'weird_name_' under the current sanitizer, mounted as
+  it('sanitizes tool names with non-[a-zA-Z0-9_-] characters when mounting', async () => {
+    // 'weird name!' -> 'weird_name_' under the sanitizer, mounted as
     // mcp__demo__weird_name_.
     const server = startFakeMcpServer({ toolNames: ['weird name!'] });
     const engine = await bootWithServers({
       demo: server.serverConfig,
     });
 
-    const names = toolNames(engine);
-    expect(names).toContain('mcp__demo__weird_name_');
-    expect(names).not.toContain('mcp__demo__weird name!');
+    // Not mounted eagerly.
+    expect(toolNames(engine)).not.toContain('mcp__demo__weird_name_');
+
+    // Mount it — the mounted name uses the sanitized segment.
+    const result = JSON.parse(
+      await engine.executeTool('mcp__demo__mount_tool', {
+        tool: 'weird name!',
+      })
+    );
+    expect(result.mountedName).toBe('mcp__demo__weird_name_');
+    expect(toolNames(engine)).toContain('mcp__demo__weird_name_');
   });
 
   it('child process is terminated and status flips to disconnected on shutdown', async () => {
@@ -253,7 +371,7 @@ describe('mcp plugin integration (stdio child)', () => {
     expect(missing.lastError).toBeTruthy();
   });
 
-  it('re-mounts tools when server sends a notification via stdio', async () => {
+  it('handles tools/list_changed by updating cache and unmounting stale tools', async () => {
     const server = startFakeMcpServer({
       toolNames: ['echo'],
       notifyOnToolName: 'echo',
@@ -262,19 +380,53 @@ describe('mcp plugin integration (stdio child)', () => {
       demo: server.serverConfig,
     });
 
-    // Sanity: tool is mounted.
-    let names = toolNames(engine);
-    expect(names).toContain('mcp__demo__echo');
+    // Mount the echo tool.
+    await engine.executeTool('mcp__demo__mount_tool', { tool: 'echo' });
+    expect(toolNames(engine)).toContain('mcp__demo__echo');
 
-    // Calling the configured tool triggers a notification from the server.
-    // The client's onNotification handler should re-mount tools seamlessly.
+    // Calling the configured tool triggers a tools/list_changed notification
+    // from the server. The handler should update the cache but keep echo
+    // mounted (since echo still exists on the server).
     await engine.executeTool('mcp__demo__echo', {});
 
     // Give the notification handler a tick to process.
     await new Promise(resolve => setTimeout(resolve, 50));
 
-    // Tool should still be mounted after re-mount.
-    names = toolNames(engine);
-    expect(names).toContain('mcp__demo__echo');
+    // Tool should still be mounted after list_changed (echo still exists).
+    expect(toolNames(engine)).toContain('mcp__demo__echo');
+
+    // Meta-tools should still be present.
+    expect(toolNames(engine)).toContain('mcp__demo__list_tools');
+    expect(toolNames(engine)).toContain('mcp__demo__mount_tool');
+  });
+
+  it('two MCP servers: both servers meta-tools are visible (regression: no clobbering)', async () => {
+    const serverA = startFakeMcpServer({ toolNames: ['echo'] });
+    const serverB = startFakeMcpServer({ toolNames: ['add'] });
+    const engine = await bootWithServers({
+      serverA: serverA.serverConfig,
+      serverB: serverB.serverConfig,
+    });
+
+    const names = toolNames(engine);
+
+    // Both servers' meta-tools should be present.
+    expect(names).toContain('mcp__serverA__list_tools');
+    expect(names).toContain('mcp__serverA__mount_tool');
+    expect(names).toContain('mcp__serverA__unmount_tool');
+    expect(names).toContain('mcp__serverA__list_resources');
+    expect(names).toContain('mcp__serverA__read_resource');
+    expect(names).toContain('mcp__serverA__list_prompts');
+    expect(names).toContain('mcp__serverA__get_prompt');
+    expect(names).toContain('mcp__serverA__list_resource_templates');
+
+    expect(names).toContain('mcp__serverB__list_tools');
+    expect(names).toContain('mcp__serverB__mount_tool');
+    expect(names).toContain('mcp__serverB__unmount_tool');
+    expect(names).toContain('mcp__serverB__list_resources');
+    expect(names).toContain('mcp__serverB__read_resource');
+    expect(names).toContain('mcp__serverB__list_prompts');
+    expect(names).toContain('mcp__serverB__get_prompt');
+    expect(names).toContain('mcp__serverB__list_resource_templates');
   });
 });

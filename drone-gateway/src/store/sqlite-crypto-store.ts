@@ -62,7 +62,8 @@ export class SqliteCryptoStore implements CryptoStore {
         SELECT COUNT(*) FROM device_data
       ) + (
         SELECT COUNT(*) FROM e2e_rooms
-      ) AS cnt`)
+      ) AS cnt`
+      )
       .get() as { cnt: number } | undefined;
     return Promise.resolve((row?.cnt ?? 0) > 0);
   }

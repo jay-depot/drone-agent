@@ -321,6 +321,12 @@ export function createCompactionPlugin(
             budgetService,
             registration.getConfig().systemPrompt
           );
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          context.logger.warn(
+            `compaction: error during evaluation; leaving session untouched: ${message}`
+          );
         } finally {
           context.compactionInFlight.value = false;
         }

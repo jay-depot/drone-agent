@@ -99,6 +99,12 @@ export type DronePluginEngine = {
    * duplicate check.
    */
   unregisterPluginTools: (pluginId: string) => void;
+  /**
+   * Remove a single tool by its canonical name. Used for unmounting
+   * individual dynamically-mounted tools (e.g. MCP tools mounted via
+   * `__mount_tool`). Silently does nothing if the tool is not found.
+   */
+  unregisterTool: (canonicalName: string) => void;
   /** Returns the resolved DroneAgentConfig used by the engine. */
   getConfig: () => DroneAgentConfig;
   /**
@@ -391,10 +397,29 @@ export function createDronePluginEngine({
     }
     // Also clear the plugin's own tool list so it doesn't hold stale refs.
     const registered = registeredPlugins.find(
-      (p: { plugin: { metadata: { id: string } } }) => p.plugin.metadata.id === pluginId
+      (p: { plugin: { metadata: { id: string } } }) =>
+        p.plugin.metadata.id === pluginId
     );
     if (registered) {
       registered.tools = [];
+    }
+  }
+
+  function unregisterToolImpl(canonicalName: string): void {
+    if (!tools.has(canonicalName)) {
+      return;
+    }
+    tools.delete(canonicalName);
+    for (const registered of registeredPlugins) {
+      const idx = registered.tools.findIndex(
+        (t: DroneToolDefinition) =>
+          getCanonicalToolName(registered.plugin.metadata.id, t.name) ===
+          canonicalName
+      );
+      if (idx >= 0) {
+        registered.tools.splice(idx, 1);
+        break;
+      }
     }
   }
 
@@ -498,6 +523,9 @@ export function createDronePluginEngine({
       requestElicitation: () => elicitationCapability,
       unregisterPluginTools: (pluginId: string) => {
         unregisterPluginToolsImpl(pluginId);
+      },
+      unregisterTool: (canonicalName: string) => {
+        unregisterToolImpl(canonicalName);
       },
     });
 
@@ -631,6 +659,9 @@ export function createDronePluginEngine({
     getConfig: () => config,
     unregisterPluginTools: (pluginId: string) => {
       unregisterPluginToolsImpl(pluginId);
+    },
+    unregisterTool: (canonicalName: string) => {
+      unregisterToolImpl(canonicalName);
     },
     getHelpSnippets: () => {
       const result: string[] = [];

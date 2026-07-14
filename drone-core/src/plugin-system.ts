@@ -113,6 +113,14 @@ export type DronePluginRegistration = {
    * for the same names won't hit the duplicate check.
    */
   unregisterPluginTools: (pluginId: string) => void;
+  /**
+   * Remove a single tool by its canonical name (`pluginId__toolName`).
+   * Used for unmounting individual dynamically-mounted tools (e.g. MCP
+   * tools mounted via `__mount_tool` that are no longer needed or whose
+   * server no longer lists them). Silently does nothing if the tool
+   * name is not found.
+   */
+  unregisterTool: (canonicalName: string) => void;
 };
 
 // ── Elicitation types ───────────────────────────────────────────────

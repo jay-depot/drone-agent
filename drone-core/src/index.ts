@@ -14,6 +14,7 @@
 //   - capabilities.ts     : Capability registry types
 //   - plugin-system.ts    : Plugin infrastructure types
 //   - utils.ts            : Utility functions
+//   - tool-mounting-cache.ts : ToolMountingCache class
 //   - token-estimate.ts   : Token estimation functions
 //   - config-schema.ts     : Config schema and parsing
 //   - wiki-types.ts       : Wiki page types for swarm knowledge base
@@ -205,6 +206,10 @@ export {
   createConsoleLogger,
   getCanonicalToolName,
 } from './utils.js';
+
+// ── ToolMountingCache ────────────────────────────────────────────────
+
+export { ToolMountingCache } from './tool-mounting-cache.js';
 
 // ── Token estimation ─────────────────────────────────────────────────
 
