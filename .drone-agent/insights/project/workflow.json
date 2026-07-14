@@ -206,5 +206,9 @@
   {
     "timestamp": "2026-07-14T00:18:03.216Z",
     "insight": "The self-improvement insight JSON files can become corrupted if text gets appended after the closing bracket. The insight tool should validate JSON before writing, or the file engine should guard against this. This caused a CI lint failure on the feat/mcp-list-mount-deferred-loading branch."
+  },
+  {
+    "timestamp": "2026-07-14T01:23:42.623Z",
+    "insight": "When investigating MCP server connection failures, always check the HTTP headers being sent first — the MCP 2025-06-18 spec requires MCP-Protocol-Version on all requests, and missing it causes 400 errors that look like auth or URL issues. The DELETE-on-disconnect issue was a red herring; the real problem was the missing protocol version header."
   }
 ]
