@@ -33,7 +33,8 @@ export const searchPlugin: DronePlugin = {
     registration.registerTool({
       name: 'text',
       description:
-        'Regex/fixed-string search via ripgrep (falls back to grep). Returns file, line, content.',
+        'Regex/fixed-string search via ripgrep (falls back to grep). Returns file, line, content. ' +
+        'Use mode="semantic" for a placeholder (not yet implemented).',
       inputSchema: {
         type: 'object',
         properties: {
@@ -54,11 +55,29 @@ export const searchPlugin: DronePlugin = {
             description: 'Max matches. Default 50.',
           },
           glob: { type: 'string', description: 'Glob filter (e.g. "*.ts").' },
+          mode: {
+            type: 'string',
+            enum: ['regex', 'semantic'],
+            description:
+              'Search mode. "regex" (default) uses ripgrep/grep. "semantic" is a placeholder.',
+          },
         },
         required: ['pattern'],
         additionalProperties: false,
       },
       execute: async input => {
+        const mode = (input.mode as string) || 'regex';
+
+        if (mode === 'semantic') {
+          return JSON.stringify(
+            {
+              note: 'Semantic search is not yet implemented. Use mode="regex" with regex patterns instead.',
+            },
+            null,
+            2
+          );
+        }
+
         if (
           typeof input.pattern !== 'string' ||
           input.pattern.trim().length === 0
@@ -168,32 +187,6 @@ export const searchPlugin: DronePlugin = {
             resultCount: results.length,
             truncated: results.length >= maxResults,
             results,
-          },
-          null,
-          2
-        );
-      },
-    });
-
-    // -----------------------------------------------------------------------
-    // search.semantic (placeholder)
-    // -----------------------------------------------------------------------
-    registration.registerTool({
-      name: 'semantic',
-      description:
-        'Placeholder for semantic search. Use search__text with regex.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Natural-language query.' },
-        },
-        required: ['query'],
-        additionalProperties: false,
-      },
-      execute: async () => {
-        return JSON.stringify(
-          {
-            note: 'Semantic search is not yet implemented. Use search__text with regex patterns instead.',
           },
           null,
           2

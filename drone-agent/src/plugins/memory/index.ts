@@ -125,178 +125,146 @@ export const memoryPlugin: DronePlugin = {
 
     // ── tools ──────────────────────────────────────────────────────────
 
-    // memory.store
+    // memory.manage — store, recall, delete
     registration.registerTool({
-      name: 'store',
+      name: 'manage',
       description:
-        'Store a value under a given key in project-level memory. Overwrites any existing entry with the same key.',
+        'Manage memory entries: store, recall, or delete. ' +
+        'Use action="store" with key+value to save, action="recall" with key to retrieve, ' +
+        'action="delete" with key to remove.',
       inputSchema: {
         type: 'object',
         properties: {
+          action: {
+            type: 'string',
+            enum: ['store', 'recall', 'delete'],
+            description:
+              'What to do: store (save), recall (retrieve), delete (remove).',
+          },
           key: {
             type: 'string',
-            description:
-              'Human-readable key for the memory entry (filesystem-safe).',
+            description: 'Memory key (required for all actions).',
           },
           value: {
             type: 'string',
-            description: 'Arbitrary text value to store.',
+            description: 'Text value to store (required for store action).',
           },
           tags: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Optional free-form tags for categorization.',
+            description: 'Optional tags for categorization (store action only).',
           },
         },
-        required: ['key', 'value'],
+        required: ['action', 'key'],
         additionalProperties: false,
       },
       execute: async input => {
-        if (typeof input.key !== 'string' || input.key.trim().length === 0) {
-          throw new Error('memory.store requires a non-empty key string.');
-        }
-        if (typeof input.value !== 'string') {
-          throw new Error('memory.store requires a string value.');
-        }
-        const tags = Array.isArray(input.tags)
-          ? (input.tags as string[]).filter(t => typeof t === 'string')
-          : [];
-        const entry = await capability.store(
-          input.key.trim(),
-          input.value,
-          tags
-        );
-        return JSON.stringify(
-          { key: entry.key, tags: entry.tags, createdAt: entry.createdAt },
-          null,
-          2
-        );
-      },
-    });
+        const action = input.action as string;
+        const key = (input.key as string).trim();
+        if (!key) throw new Error('memory.manage requires a non-empty key.');
 
-    // memory.recall
-    registration.registerTool({
-      name: 'recall',
-      description:
-        'Retrieve a stored memory entry by its exact key. Returns null if the key does not exist.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          key: {
-            type: 'string',
-            description: 'The memory key to look up.',
-          },
-        },
-        required: ['key'],
-        additionalProperties: false,
-      },
-      execute: async input => {
-        if (typeof input.key !== 'string' || input.key.trim().length === 0) {
-          throw new Error('memory.recall requires a non-empty key string.');
-        }
-        const entry = await capability.recall(input.key.trim());
-        if (!entry) {
+        if (action === 'store') {
+          const value = input.value as string;
+          if (typeof value !== 'string') {
+            throw new Error('memory.manage store requires a string value.');
+          }
+          const tags = Array.isArray(input.tags)
+            ? (input.tags as string[]).filter(t => typeof t === 'string')
+            : [];
+          const entry = await capability.store(key, value, tags);
           return JSON.stringify(
-            {
-              key: input.key,
-              entry: null,
-              message: 'No entry found for this key.',
-            },
+            { key: entry.key, tags: entry.tags, createdAt: entry.createdAt },
             null,
             2
           );
         }
-        return JSON.stringify(entry, null, 2);
+
+        if (action === 'recall') {
+          const entry = await capability.recall(key);
+          if (!entry) {
+            return JSON.stringify(
+              { key, entry: null, message: 'No entry found for this key.' },
+              null,
+              2
+            );
+          }
+          return JSON.stringify(entry, null, 2);
+        }
+
+        if (action === 'delete') {
+          const removed = await capability.delete(key);
+          return JSON.stringify({ key, removed }, null, 2);
+        }
+
+        throw new Error(`Unknown action: ${action}`);
       },
     });
 
-    // memory.list
+    // memory.browse — list, search
     registration.registerTool({
-      name: 'list',
+      name: 'browse',
       description:
-        'List all stored memory keys, optionally filtered by key prefix. Returns key and last-updated timestamp.',
+        'Browse memory entries: list all (optionally filtered by prefix) or search by substring.',
       inputSchema: {
         type: 'object',
         properties: {
+          action: {
+            type: 'string',
+            enum: ['list', 'search'],
+            description:
+              'What to do: list (by prefix) or search (by substring).',
+          },
           prefix: {
             type: 'string',
-            description: 'Optional key prefix to filter by.',
+            description: 'Key prefix filter (for list action).',
           },
-        },
-        additionalProperties: false,
-      },
-      execute: async input => {
-        const prefix =
-          typeof input.prefix === 'string' ? input.prefix : undefined;
-        const entries = await capability.list(prefix);
-        return JSON.stringify(
-          { count: entries.length, prefix: prefix ?? null, entries },
-          null,
-          2
-        );
-      },
-    });
-
-    // memory.search
-    registration.registerTool({
-      name: 'search',
-      description:
-        'Search memory entries by substring match against key, tags, and body text. Returns up to 50 matching entries.',
-      inputSchema: {
-        type: 'object',
-        properties: {
           query: {
             type: 'string',
-            description: 'Substring to search for (case-insensitive).',
+            description:
+              'Substring to search for (for search action, case-insensitive).',
           },
           limit: {
             type: 'number',
-            description: 'Maximum number of results (default 50).',
+            description: 'Maximum results (for search action, default 50).',
           },
         },
-        required: ['query'],
+        required: ['action'],
         additionalProperties: false,
       },
       execute: async input => {
-        if (
-          typeof input.query !== 'string' ||
-          input.query.trim().length === 0
-        ) {
-          throw new Error('memory.search requires a non-empty query string.');
+        const action = input.action as string;
+
+        if (action === 'list') {
+          const prefix =
+            typeof input.prefix === 'string' ? input.prefix : undefined;
+          const entries = await capability.list(prefix);
+          return JSON.stringify(
+            { count: entries.length, prefix: prefix ?? null, entries },
+            null,
+            2
+          );
         }
-        const limit =
-          typeof input.limit === 'number' && input.limit > 0
-            ? Math.floor(input.limit)
-            : 50;
-        const results = await capability.search(input.query.trim(), limit);
-        return JSON.stringify(
-          { count: results.length, query: input.query, results },
-          null,
-          2
-        );
-      },
-    });
-    registration.registerTool({
-      name: 'delete',
-      description:
-        'Delete a single memory entry by key. Returns whether the entry was removed.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          key: {
-            type: 'string',
-            description: 'The memory key to delete.',
-          },
-        },
-        required: ['key'],
-        additionalProperties: false,
-      },
-      execute: async input => {
-        if (typeof input.key !== 'string' || input.key.trim().length === 0) {
-          throw new Error('memory.delete requires a non-empty key string.');
+
+        if (action === 'search') {
+          const query = input.query as string;
+          if (typeof query !== 'string' || query.trim().length === 0) {
+            throw new Error(
+              'memory.browse search requires a non-empty query string.'
+            );
+          }
+          const limit =
+            typeof input.limit === 'number' && input.limit > 0
+              ? Math.floor(input.limit)
+              : 50;
+          const results = await capability.search(query.trim(), limit);
+          return JSON.stringify(
+            { count: results.length, query, results },
+            null,
+            2
+          );
         }
-        const removed = await capability.delete(input.key.trim());
-        return JSON.stringify({ key: input.key, removed }, null, 2);
+
+        throw new Error(`Unknown action: ${action}`);
       },
     });
 

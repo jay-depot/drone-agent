@@ -134,11 +134,8 @@ describe('memoryPlugin', () => {
 
     // Tools
     const toolNames = captured.tools.map(t => t.name);
-    expect(toolNames).toContain('store');
-    expect(toolNames).toContain('recall');
-    expect(toolNames).toContain('list');
-    expect(toolNames).toContain('search');
-    expect(toolNames).toContain('delete');
+    expect(toolNames).toContain('manage');
+    expect(toolNames).toContain('browse');
     expect(new Set(toolNames).size).toBe(toolNames.length); // no duplicates
 
     // Prompt fragment
@@ -201,17 +198,20 @@ describe('memoryPlugin', () => {
     expect(afterDelete).toBeNull();
   });
 
-  it('tools return proper error for missing keys', async () => {
+  it('manage tool returns proper error for missing keys', async () => {
     const { registration, captured } = createMockRegistration();
     await memoryPlugin.register(registration);
 
-    const recallTool = captured.tools.find(t => t.name === 'recall')!;
-    const result = await recallTool.execute({ key: 'nonexistent' });
+    const manageTool = captured.tools.find(t => t.name === 'manage')!;
+    const result = await manageTool.execute({
+      action: 'recall',
+      key: 'nonexistent',
+    });
     const parsed = JSON.parse(result);
     expect(parsed.entry).toBeNull();
   });
 
-  it('list tool accepts optional prefix', async () => {
+  it('browse tool with list action accepts optional prefix', async () => {
     const { registration, captured } = createMockRegistration();
     await memoryPlugin.register(registration);
 
@@ -219,8 +219,11 @@ describe('memoryPlugin', () => {
     await cap.store('session:abc', '1');
     await cap.store('session:xyz', '2');
 
-    const listTool = captured.tools.find(t => t.name === 'list')!;
-    const result = await listTool.execute({ prefix: 'session:' });
+    const browseTool = captured.tools.find(t => t.name === 'browse')!;
+    const result = await browseTool.execute({
+      action: 'list',
+      prefix: 'session:',
+    });
     const parsed = JSON.parse(result);
     expect(parsed.count).toBe(2);
   });

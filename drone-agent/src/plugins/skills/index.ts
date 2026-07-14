@@ -244,12 +244,23 @@ export const skillsPlugin: DronePlugin = {
     registration.registerTool({
       name: 'list',
       description:
-        'List all available skills with their descriptions and recall conditions.',
+        'List all available skills with their descriptions and recall conditions. ' +
+        'Pass reload=true to reload skill files from disk first.',
       inputSchema: {
         type: 'object',
+        properties: {
+          reload: {
+            type: 'boolean',
+            description:
+              'If true, reload skills from disk first before listing.',
+          },
+        },
         additionalProperties: false,
       },
-      execute: async () => {
+      execute: async input => {
+        if (input.reload === true) {
+          await capability.reloadSkills();
+        }
         const all = getAllSkills();
         return JSON.stringify(
           {
@@ -262,28 +273,6 @@ export const skillsPlugin: DronePlugin = {
               source: s.source,
               hasBody: s.body.length > 0,
             })),
-          },
-          null,
-          2
-        );
-      },
-    });
-
-    registration.registerTool({
-      name: 'reload',
-      description:
-        'Reload skill .md files from disk. Use after manually writing or editing a skill file.',
-      inputSchema: {
-        type: 'object',
-        additionalProperties: false,
-      },
-      execute: async () => {
-        await capability.reloadSkills();
-        const all = getAllSkills();
-        return JSON.stringify(
-          {
-            count: all.length,
-            skills: all.map(s => s.id),
           },
           null,
           2
@@ -352,7 +341,7 @@ export const skillsPlugin: DronePlugin = {
         }
 
         if (subcommand === 'reload') {
-          ctx.logger.info(await ctx.engine.executeTool('skills__reload', {}));
+          ctx.logger.info(await ctx.engine.executeTool('skills__list', { reload: true }));
           return true;
         }
 

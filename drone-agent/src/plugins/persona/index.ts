@@ -343,29 +343,52 @@ export const personaPlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     registration.registerTool({
       name: 'list',
-      description: 'List all available personas with their descriptions.',
+      description:
+        'List all available personas with their descriptions. ' +
+        'Pass showCurrent=true to include the currently active persona in the response.',
       inputSchema: {
         type: 'object',
+        properties: {
+          showCurrent: {
+            type: 'boolean',
+            description:
+              'If true, include the currently active persona in the response.',
+          },
+        },
         additionalProperties: false,
       },
-      execute: async () => {
+      execute: async input => {
         const all = getAllPersonas();
-        return JSON.stringify(
-          {
-            activePersona: activePersona?.id ?? null,
-            personas: all.map(p => ({
-              id: p.id,
-              name: p.name,
-              description: p.description,
-              hasOverride: !!p.systemPromptOverride,
-              fragmentCount: p.promptFragments?.length ?? 0,
-              uiColor: p.uiColor ?? null,
-              toolCallLimit: p.toolCallLimit ?? null,
-            })),
-          },
-          null,
-          2
-        );
+        const response: Record<string, unknown> = {
+          activePersona: activePersona?.id ?? null,
+          personas: all.map(p => ({
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            hasOverride: !!p.systemPromptOverride,
+            fragmentCount: p.promptFragments?.length ?? 0,
+            uiColor: p.uiColor ?? null,
+            toolCallLimit: p.toolCallLimit ?? null,
+          })),
+        };
+
+        if (input.showCurrent === true) {
+          if (activePersona) {
+            response.currentPersona = {
+              id: activePersona.id,
+              name: activePersona.name,
+              description: activePersona.description,
+              hasOverride: !!activePersona.systemPromptOverride,
+              fragmentCount: activePersona.promptFragments?.length ?? 0,
+              uiColor: activePersona.uiColor ?? null,
+              toolCallLimit: activePersona.toolCallLimit ?? null,
+            };
+          } else {
+            response.currentPersona = null;
+          }
+        }
+
+        return JSON.stringify(response, null, 2);
       },
     });
 
@@ -430,40 +453,6 @@ export const personaPlugin: DronePlugin = {
     });
 
     // -----------------------------------------------------------------------
-    // persona.current
-    // -----------------------------------------------------------------------
-    registration.registerTool({
-      name: 'current',
-      description: 'Show the currently active persona.',
-      inputSchema: {
-        type: 'object',
-        additionalProperties: false,
-      },
-      execute: async () => {
-        if (!activePersona) {
-          return JSON.stringify(
-            { activePersona: null, message: 'No persona is currently active.' },
-            null,
-            2
-          );
-        }
-        return JSON.stringify(
-          {
-            activePersona: activePersona.id,
-            name: activePersona.name,
-            description: activePersona.description,
-            hasOverride: !!activePersona.systemPromptOverride,
-            fragmentCount: activePersona.promptFragments?.length ?? 0,
-            uiColor: activePersona.uiColor ?? null,
-            toolCallLimit: activePersona.toolCallLimit ?? null,
-          },
-          null,
-          2
-        );
-      },
-    });
-
-    // -----------------------------------------------------------------------
     // persona.create — delegates to the persona-create workflow so all
     // three entry points (tool call / slash command / --workflow CLI
     // flag) share one implementation.
@@ -519,7 +508,11 @@ export const personaPlugin: DronePlugin = {
         }
 
         if (subcommand === 'current') {
-          ctx.logger.info(await ctx.engine.executeTool('persona__current', {}));
+          ctx.logger.info(
+            await ctx.engine.executeTool('persona__list', {
+              showCurrent: true,
+            })
+          );
           return true;
         }
 

@@ -30,9 +30,7 @@ describe('self-improvement plugin', () => {
     expect(insightTool).toBeDefined();
     expect(insightTool!.description).toContain('insight');
     expect(insightTool!.inputSchema).toBeDefined();
-    expect(insightTool!.inputSchema!.required).toContain('targetType');
-    expect(insightTool!.inputSchema!.required).toContain('targetId');
-    expect(insightTool!.inputSchema!.required).toContain('insight');
+    expect(insightTool!.inputSchema!.required).toContain('action');
   });
 
   it('writes an insight for a project-level persona', async () => {
@@ -54,6 +52,7 @@ describe('self-improvement plugin', () => {
     const engine = await createEngine({ personaCapability: personaCap });
 
     const result = await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'persona',
       targetId: 'coder',
       insight:
@@ -97,6 +96,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine({ personaCapability: personaCap });
 
       const result = await engine.executeTool('self-improvement__insight', {
+        action: 'record',
         targetType: 'persona',
         targetId: 'helper',
         insight: 'The helper persona should be more concise.',
@@ -150,6 +150,7 @@ describe('self-improvement plugin', () => {
     const engine = await createEngine({ skillsCapability: skillsCap });
 
     const result = await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'skill',
       targetId: 'testing',
       insight: 'The testing skill should include Playwright examples.',
@@ -201,6 +202,7 @@ describe('self-improvement plugin', () => {
       const engine = await createEngine({ skillsCapability: skillsCap });
 
       const result = await engine.executeTool('self-improvement__insight', {
+        action: 'record',
         targetType: 'skill',
         targetId: 'helper-skill',
         insight: 'The helper skill should be more detailed.',
@@ -243,12 +245,14 @@ describe('self-improvement plugin', () => {
     const engine = await createEngine({ personaCapability: personaCap });
 
     await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'persona',
       targetId: 'reviewer',
       insight: 'First insight.',
     });
 
     const result = await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'persona',
       targetId: 'reviewer',
       insight: 'Second insight.',
@@ -270,6 +274,7 @@ describe('self-improvement plugin', () => {
 
     await expect(
       engine.executeTool('self-improvement__insight', {
+        action: 'record',
         targetType: 'invalid',
         targetId: 'foo',
         insight: 'Some insight.',
@@ -282,6 +287,7 @@ describe('self-improvement plugin', () => {
 
     await expect(
       engine.executeTool('self-improvement__insight', {
+        action: 'record',
         targetType: 'persona',
         targetId: '',
         insight: 'Some insight.',
@@ -294,6 +300,7 @@ describe('self-improvement plugin', () => {
 
     await expect(
       engine.executeTool('self-improvement__insight', {
+        action: 'record',
         targetType: 'persona',
         targetId: 'foo',
         insight: '',
@@ -316,6 +323,7 @@ describe('self-improvement plugin', () => {
 
     await expect(
       engine.executeTool('self-improvement__insight', {
+        action: 'record',
         targetType: 'persona',
         targetId: 'nonexistent',
         insight: 'Some insight.',
@@ -333,6 +341,7 @@ describe('self-improvement plugin', () => {
 
     await expect(
       engine.executeTool('self-improvement__insight', {
+        action: 'record',
         targetType: 'skill',
         targetId: 'nonexistent',
         insight: 'Some insight.',
@@ -344,6 +353,7 @@ describe('self-improvement plugin', () => {
     const engine = await createEngine();
 
     const result = await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'persona',
       targetId: 'any-persona',
       insight: 'Works without validation.',
@@ -366,6 +376,7 @@ describe('self-improvement plugin', () => {
     const engine = await createEngine();
 
     const result = await engine.executeTool('self-improvement__insight', {
+      action: 'record',
       targetType: 'skill',
       targetId: 'My-Skill-Name',
       insight: 'Lowercase test.',

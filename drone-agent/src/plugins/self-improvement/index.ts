@@ -11,12 +11,7 @@ import { createSelfImprovementCapability } from './capability.js';
 import { renderInsightTargetsFragment } from './prompt-fragment.js';
 import { renderPrinciplesFragment } from './principles-fragment.js';
 import { createInsightTool } from './tools/insight.js';
-import { createInsightsListTool } from './tools/insights-list.js';
-import { createInsightsRecallTool } from './tools/insights-recall.js';
-import { createPrinciplesStoreTool } from './tools/principles-store.js';
-import { createPrinciplesListTool } from './tools/principles-list.js';
-import { createPrinciplesRecallTool } from './tools/principles-recall.js';
-import { createPrinciplesDeleteTool } from './tools/principles-delete.js';
+import { createPrincipleTool } from './tools/principle.js';
 
 export const selfImprovementPlugin: DronePlugin = {
   metadata: {
@@ -75,19 +70,8 @@ export const selfImprovementPlugin: DronePlugin = {
     registration.registerTool(
       createInsightTool(personaCap, skillsCap, defaultInsightEngine)
     );
-    registration.registerTool(createInsightsListTool(defaultInsightEngine));
     registration.registerTool(
-      createInsightsRecallTool(personaCap, skillsCap, defaultInsightEngine)
-    );
-    registration.registerTool(
-      createPrinciplesStoreTool(personaCap, skillsCap, defaultPrincipleEngine)
-    );
-    registration.registerTool(createPrinciplesListTool(defaultPrincipleEngine));
-    registration.registerTool(
-      createPrinciplesRecallTool(personaCap, skillsCap, defaultPrincipleEngine)
-    );
-    registration.registerTool(
-      createPrinciplesDeleteTool(personaCap, skillsCap, defaultPrincipleEngine)
+      createPrincipleTool(personaCap, skillsCap, defaultPrincipleEngine)
     );
 
     // ── Prompt fragment: principles (footer) ──────────────────────────

@@ -138,12 +138,9 @@ describe('mcp plugin integration (stdio child)', () => {
     expect(names).toContain('mcp__demo__list_tools');
     expect(names).toContain('mcp__demo__mount_tool');
     expect(names).toContain('mcp__demo__unmount_tool');
-    // Resource/prompt tools are still mounted eagerly.
-    expect(names).toContain('mcp__demo__list_resources');
-    expect(names).toContain('mcp__demo__read_resource');
-    expect(names).toContain('mcp__demo__list_prompts');
-    expect(names).toContain('mcp__demo__get_prompt');
-    expect(names).toContain('mcp__demo__list_resource_templates');
+    // Resource/prompt tools are consolidated into __list and __get.
+    expect(names).toContain('mcp__demo__list');
+    expect(names).toContain('mcp__demo__get');
     expect(names).toContain('mcp__server_status');
 
     // Individual MCP tools are NOT mounted eagerly.
@@ -267,7 +264,9 @@ describe('mcp plugin integration (stdio child)', () => {
     });
 
     const listed = JSON.parse(
-      await engine.executeTool('mcp__demo__list_resource_templates', {})
+      await engine.executeTool('mcp__demo__list', {
+        type: 'resource_templates',
+      })
     );
     expect(Array.isArray(listed.templates)).toBe(true);
     expect(
@@ -275,9 +274,10 @@ describe('mcp plugin integration (stdio child)', () => {
     ).toContain('file:///{path}');
 
     // A URI formed by substituting the template variable must be readable via
-    // the shared read_resource tool (the spec has no resources/templates/read).
+    // the shared __get tool with type="resource".
     const read = JSON.parse(
-      await engine.executeTool('mcp__demo__read_resource', {
+      await engine.executeTool('mcp__demo__get', {
+        type: 'resource',
         uri: 'file:///etc/hostname',
       })
     );
@@ -414,19 +414,13 @@ describe('mcp plugin integration (stdio child)', () => {
     expect(names).toContain('mcp__serverA__list_tools');
     expect(names).toContain('mcp__serverA__mount_tool');
     expect(names).toContain('mcp__serverA__unmount_tool');
-    expect(names).toContain('mcp__serverA__list_resources');
-    expect(names).toContain('mcp__serverA__read_resource');
-    expect(names).toContain('mcp__serverA__list_prompts');
-    expect(names).toContain('mcp__serverA__get_prompt');
-    expect(names).toContain('mcp__serverA__list_resource_templates');
+    expect(names).toContain('mcp__serverA__list');
+    expect(names).toContain('mcp__serverA__get');
 
     expect(names).toContain('mcp__serverB__list_tools');
     expect(names).toContain('mcp__serverB__mount_tool');
     expect(names).toContain('mcp__serverB__unmount_tool');
-    expect(names).toContain('mcp__serverB__list_resources');
-    expect(names).toContain('mcp__serverB__read_resource');
-    expect(names).toContain('mcp__serverB__list_prompts');
-    expect(names).toContain('mcp__serverB__get_prompt');
-    expect(names).toContain('mcp__serverB__list_resource_templates');
+    expect(names).toContain('mcp__serverB__list');
+    expect(names).toContain('mcp__serverB__get');
   });
 });

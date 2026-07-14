@@ -20,10 +20,10 @@ export async function renderInsightTargetsFragment(
     'Use `persona__list` to see all available personas and `skills__list` to see available skills.'
   );
   lines.push(
-    'Insight tools: `self-improvement__insight` (record), `self-improvement__insights-list` (browse), `self-improvement__insights-recall` (read).'
+    'Insight tools: `self-improvement__insight` (record/list/recall).'
   );
   lines.push(
-    'Principle tools: `self-improvement__principles-store` (create), `self-improvement__principles-list` (browse), `self-improvement__principles-recall` (read), `self-improvement__principles-delete` (remove).'
+    'Principle tools: `self-improvement__principle` (store/list/recall/delete).'
   );
   return lines.join('\n');
 }
