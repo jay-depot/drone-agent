@@ -173,97 +173,103 @@ export const mcpPlugin: DronePlugin = {
       connection: McpClientConnection
     ): void {
       registerMetaTool(
-        `${serverId}__list_resources`,
-        `List MCP resources for server ${serverId}.`,
-        { type: 'object', additionalProperties: false },
-        async () => {
-          const resources = await connection.listResources();
-          return JSON.stringify({ serverId, resources }, null, 2);
-        }
-      );
-
-      registerMetaTool(
-        `${serverId}__read_resource`,
-        `Read an MCP resource by URI from server ${serverId}. Accepts both concrete resource URIs and URIs produced by substituting variables into a resource template from ${serverId}__list_resource_templates.`,
+        `${serverId}__list`,
+        `List MCP resources, resource templates, or prompts for server ${serverId}. ` +
+        `Use type="resources", type="resource_templates", or type="prompts".`,
         {
           type: 'object',
           properties: {
-            uri: {
+            type: {
               type: 'string',
-              description: 'Resource URI to read.',
+              enum: ['resources', 'resource_templates', 'prompts'],
+              description:
+                'What to list: resources, resource_templates, or prompts.',
             },
           },
-          required: ['uri'],
+          required: ['type'],
           additionalProperties: false,
         },
         async input => {
-          if (typeof input.uri !== 'string' || input.uri.trim().length === 0) {
-            throw new Error(
-              `mcp__${serverId}__read_resource requires a non-empty uri string.`
-            );
+          const listType = input.type as string;
+          if (listType === 'resources') {
+            const resources = await connection.listResources();
+            return JSON.stringify({ serverId, resources }, null, 2);
           }
-          const result = await connection.readResource(input.uri);
-          return JSON.stringify({ serverId, uri: input.uri, result }, null, 2);
+          if (listType === 'resource_templates') {
+            const templates = await connection.listResourceTemplates();
+            return JSON.stringify({ serverId, templates }, null, 2);
+          }
+          if (listType === 'prompts') {
+            const prompts = await connection.listPrompts();
+            return JSON.stringify({ serverId, prompts }, null, 2);
+          }
+          throw new Error(`Unknown list type: ${listType}`);
         }
       );
 
       registerMetaTool(
-        `${serverId}__list_resource_templates`,
-        `List MCP resource templates for server ${serverId}. Each template has a uriTemplate (RFC 6570) with variables to substitute, then read with ${serverId}__read_resource.`,
-        { type: 'object', additionalProperties: false },
-        async () => {
-          const templates = await connection.listResourceTemplates();
-          return JSON.stringify({ serverId, templates }, null, 2);
-        }
-      );
-
-      registerMetaTool(
-        `${serverId}__list_prompts`,
-        `List MCP prompts for server ${serverId}.`,
-        { type: 'object', additionalProperties: false },
-        async () => {
-          const prompts = await connection.listPrompts();
-          return JSON.stringify({ serverId, prompts }, null, 2);
-        }
-      );
-
-      registerMetaTool(
-        `${serverId}__get_prompt`,
-        `Get an MCP prompt from server ${serverId}.`,
+        `${serverId}__get`,
+        `Get an MCP resource or prompt from server ${serverId}. ` +
+        `Use type="resource" with a uri to read a resource. ` +
+        `Use type="prompt" with a name (and optional arguments) to get a prompt.`,
         {
           type: 'object',
           properties: {
+            type: {
+              type: 'string',
+              enum: ['resource', 'prompt'],
+              description: 'What to get: resource or prompt.',
+            },
+            uri: {
+              type: 'string',
+              description:
+                'Resource URI to read (required for type="resource").',
+            },
             name: {
               type: 'string',
-              description: 'Prompt name to fetch.',
+              description:
+                'Prompt name to fetch (required for type="prompt").',
             },
             arguments: {
               type: 'object',
-              description: 'Optional prompt argument object.',
+              description:
+                'Optional prompt argument object (for type="prompt").',
               additionalProperties: true,
             },
           },
-          required: ['name'],
+          required: ['type'],
           additionalProperties: false,
         },
         async input => {
-          if (
-            typeof input.name !== 'string' ||
-            input.name.trim().length === 0
-          ) {
-            throw new Error(
-              `mcp__${serverId}__get_prompt requires a non-empty name string.`
+          const getType = input.type as string;
+          if (getType === 'resource') {
+            const uri = input.uri as string;
+            if (typeof uri !== 'string' || uri.trim().length === 0) {
+              throw new Error(
+                `mcp__${serverId}__get requires a non-empty uri for type="resource".`
+              );
+            }
+            const result = await connection.readResource(uri);
+            return JSON.stringify({ serverId, uri, result }, null, 2);
+          }
+          if (getType === 'prompt') {
+            const name = input.name as string;
+            if (typeof name !== 'string' || name.trim().length === 0) {
+              throw new Error(
+                `mcp__${serverId}__get requires a non-empty name for type="prompt".`
+              );
+            }
+            const args = isRecord(input.arguments)
+              ? (input.arguments as Record<string, unknown>)
+              : undefined;
+            const result = await connection.getPrompt(name, args);
+            return JSON.stringify(
+              { serverId, name, result },
+              null,
+              2
             );
           }
-          const args = isRecord(input.arguments)
-            ? (input.arguments as Record<string, unknown>)
-            : undefined;
-          const result = await connection.getPrompt(input.name, args);
-          return JSON.stringify(
-            { serverId, name: input.name, result },
-            null,
-            2
-          );
+          throw new Error(`Unknown get type: ${getType}`);
         }
       );
     }
