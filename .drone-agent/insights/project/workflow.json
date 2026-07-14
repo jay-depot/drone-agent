@@ -219,6 +219,4 @@
     "timestamp": "2026-07-14T06:32:10.559Z",
     "insight": "When consolidating tools with action-based parameters, the `required` field in the JSON schema should only include `action` — the other fields become conditionally required based on the action value. This is a limitation of JSON Schema (no conditional required), but it works well in practice because the LLM reads the descriptions."
   }
-]more appropriate."
-  }
 ]
