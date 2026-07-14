@@ -6,7 +6,7 @@ tags:
   - testing
   - planning
 created: 2026-07-07T17:29:50.826Z
-updated: 2026-07-14T02:47:00.784Z
+updated: 2026-07-14T04:06:32.451Z
 ---
 
 # MCP Client Gap Analysis (2026-07-07, updated 2026-07-14)
@@ -40,7 +40,7 @@ Tests EXIST: `drone-agent/test/mcp-client.test.ts` (fast, in-process `fetch` moc
 8. ~~**HTTP transport is single-POST only; no GET SSE stream for server→client msgs; no `DELETE` session termination (`disconnect` just flips `closed`).~~ **FIXED** (2026-07-08, `mcp-fix-point-8-plan`). GET SSE reader + `onNotification`/`onStreamError` dispatch; best-effort `DELETE` on disconnect.
 9. ~~`discoveredToolCount` set to truncated paginated count, not true server total. (`client.ts` `listTools` returns capped `items`; `index.ts` assigns `tools.length`.)~~ **FIXED** (2026-07-14). `listTools` now uses `walkAllPages` which fetches all pages. `discoveredToolCount` reflects the true total; `toolsListTruncated` is `false` for tools. Commit `852d386`.
 10. No `roots` capability.
-11. No `completion/complete`.
+11. ~~No `completion/complete`.~~ **WON'T DO** — `completion/complete` is an optional MCP capability for argument autocomplete in interactive UIs. It doesn't add value for an LLM agent that generates tool arguments itself. Intentionally not supported.
 12. No spawn-timeout separate from request-timeout.
 13. Tool-name sanitization collisions silently skipped (e.g. `foo bar` vs `foo-bar` both → `foo_bar`, duplicate skipped with warning in `mountMcpTools`/`registerMountedTool`).
 14. No streaming / partial-content for large tool results or resources.
@@ -53,4 +53,4 @@ Tests EXIST: `drone-agent/test/mcp-client.test.ts` (fast, in-process `fetch` moc
 ## Remaining work (open items)
 
 - Critical/Important: 7
-- Minor: 10, 11, 12, 13, 14
+- Minor: 10, 12, 13, 14
