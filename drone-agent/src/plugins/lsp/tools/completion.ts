@@ -24,14 +24,26 @@ export function createSignatureHelpTool(
         },
         line: {
           type: 'integer',
-          description: '1-based line number.',
+          description:
+            '1-based line number (optional if text or symbol is provided).',
         },
         column: {
           type: 'integer',
-          description: '1-based column number.',
+          description:
+            '1-based column number (optional if text or symbol is provided).',
+        },
+        text: {
+          type: 'string',
+          description:
+            'Text content to search for in the file (alternative to line/column).',
+        },
+        symbol: {
+          type: 'string',
+          description:
+            'Symbol name to resolve (alternative to line/column).',
         },
       },
-      required: ['filePath', 'line', 'column'],
+      required: ['filePath'],
       additionalProperties: false,
     },
     execute: async input => {
@@ -73,11 +85,23 @@ export function createCompletionTool(
         },
         line: {
           type: 'integer',
-          description: '1-based line number.',
+          description:
+            '1-based line number (optional if text or symbol is provided).',
         },
         column: {
           type: 'integer',
-          description: '1-based column number.',
+          description:
+            '1-based column number (optional if text or symbol is provided).',
+        },
+        text: {
+          type: 'string',
+          description:
+            'Text content to search for in the file (alternative to line/column).',
+        },
+        symbol: {
+          type: 'string',
+          description:
+            'Symbol name to resolve (alternative to line/column).',
         },
         limit: {
           type: 'integer',
@@ -85,7 +109,7 @@ export function createCompletionTool(
             'Optional maximum number of items to return. Defaults to 100.',
         },
       },
-      required: ['filePath', 'line', 'column'],
+      required: ['filePath'],
       additionalProperties: false,
     },
     execute: async input => {
