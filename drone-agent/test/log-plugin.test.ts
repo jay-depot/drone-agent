@@ -366,6 +366,10 @@ async function getCapability(
           pullIntervalMinutes: 60,
         },
       },
+      search: {
+        enabled: false,
+        indexedDirectories: [],
+      },
     }),
     registerTool: () => {},
     registerPromptFragment: () => {},

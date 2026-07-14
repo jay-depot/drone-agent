@@ -1,3 +1,17 @@
+// ── Search config types ─────────────────────────────────────────────
+
+export type DroneSearchIndexedDir = {
+  path: string;
+  embeddingProvider?: string;
+};
+
+export type DroneSearchConfig = {
+  enabled: boolean;
+  indexedDirectories: DroneSearchIndexedDir[];
+  userEmbeddingProvider?: string;
+  projectEmbeddingProvider?: string;
+};
+
 // ── Precedence constants for skill/persona/provider plugins ──────────
 /** Precedence for swarm-level providers (highest priority — lowest number). */
 export const PRECEDENCE_SWARM = 5000;
@@ -282,6 +296,7 @@ export type DroneAgentConfig = {
   terminal: DroneTerminalConfig;
   promptFile: DronePromptFileConfig;
   swarm: DroneSwarmConfig;
+  search: DroneSearchConfig;
 };
 
 export type PartialDroneAgentConfig = Partial<{
@@ -304,6 +319,7 @@ export type PartialDroneAgentConfig = Partial<{
   promptFile: Partial<DronePromptFileConfig>;
   terminal: Partial<DroneTerminalConfig>;
   swarm: Partial<DroneSwarmConfig>;
+  search: Partial<DroneSearchConfig>;
 }>;
 
 export type DroneConfigScope = 'default' | 'user' | 'project';
@@ -438,6 +454,10 @@ export function createDefaultAgentConfig(
         pullIntervalMinutes: 60,
       },
     },
+    search: {
+      enabled: false,
+      indexedDirectories: [],
+    },
   };
   return { ...base, ...overrides };
 }
@@ -561,5 +581,14 @@ export function applyAgentConfigLayer(
             : baseConfig.swarm.knowledgeSync,
         }
       : baseConfig.swarm,
+    search: layer.search
+      ? {
+          ...baseConfig.search,
+          ...layer.search,
+          indexedDirectories:
+            layer.search.indexedDirectories ??
+            baseConfig.search.indexedDirectories,
+        }
+      : baseConfig.search,
   };
 }

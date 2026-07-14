@@ -100,6 +100,7 @@ const KNOWN_CONFIG_KEYS: string[] = [
   'memory',
   'log',
   'promptFile',
+  'search',
   // ollama.*
   'ollama.host',
   'ollama.model',
@@ -137,6 +138,11 @@ const KNOWN_CONFIG_KEYS: string[] = [
   // promptFile.*
   'promptFile.enabled',
   'promptFile.files',
+  // search.*
+  'search.enabled',
+  'search.indexedDirectories',
+  'search.userEmbeddingProvider',
+  'search.projectEmbeddingProvider',
 ];
 
 // ---------------------------------------------------------------------------

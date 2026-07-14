@@ -438,6 +438,10 @@ describe('terminalPlugin', () => {
             pullIntervalMinutes: 60,
           },
         },
+        search: {
+          enabled: false,
+          indexedDirectories: [],
+        },
       }),
       registerTool: (tool: { name: string; defaultHidden?: boolean }) => {
         registeredTools.push(tool.name);
