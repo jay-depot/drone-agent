@@ -336,6 +336,42 @@ describe('mcp plugin integration (stdio child)', () => {
     expect(toolNames(engine)).toContain('mcp__demo__weird_name_');
   });
 
+  it('disambiguates tools whose sanitized names collide', async () => {
+    // 'foo bar' and 'foo.bar' both sanitize to 'foo_bar'. The second must
+    // get a numeric suffix ('foo_bar_1') so both can coexist and mount.
+    const server = startFakeMcpServer({
+      toolNames: ['foo bar', 'foo.bar'],
+    });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    // Mount both tools — they should get distinct canonical names.
+    const r1 = JSON.parse(
+      await engine.executeTool('mcp__demo__mount_tool', {
+        tool: 'foo bar',
+      })
+    );
+    const r2 = JSON.parse(
+      await engine.executeTool('mcp__demo__mount_tool', {
+        tool: 'foo.bar',
+      })
+    );
+    expect(r1.mountedName).toBe('mcp__demo__foo_bar');
+    expect(r2.mountedName).toBe('mcp__demo__foo_bar_1');
+    expect(r1.mountedName).not.toBe(r2.mountedName);
+
+    // Both should be registered with the engine as distinct tools.
+    const names = toolNames(engine);
+    expect(names).toContain('mcp__demo__foo_bar');
+    expect(names).toContain('mcp__demo__foo_bar_1');
+
+    // Unmount the first; the second should still be registered.
+    await engine.executeTool('mcp__demo__unmount_tool', { tool: 'foo bar' });
+    expect(toolNames(engine)).not.toContain('mcp__demo__foo_bar');
+    expect(toolNames(engine)).toContain('mcp__demo__foo_bar_1');
+  });
+
   it('child process is terminated and status flips to disconnected on shutdown', async () => {
     const server = startFakeMcpServer({ toolNames: ['echo'] });
     const engine = await bootWithServers({
