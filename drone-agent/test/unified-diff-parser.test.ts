@@ -197,7 +197,9 @@ describe('parseUnifiedDiff', () => {
     expect(hunks[0].newLines).toEqual(['LINE1']);
   });
 
-  it('classifies context correctly with interleaved context lines', () => {
+  // ── Interleaved context inside the change zone ────────────────────
+
+  it('preserves interleaved context lines in the change zone', () => {
     const diff = [
       '@@ -1,6 +1,6 @@',
       ' keep1',
@@ -212,8 +214,18 @@ describe('parseUnifiedDiff', () => {
     const hunks = parseUnifiedDiff(diff);
     expect(hunks).toHaveLength(1);
     expect(hunks[0].contextBefore).toEqual(['keep1']);
-    expect(hunks[0].oldLines).toEqual(['old1', 'old2']);
-    expect(hunks[0].newLines).toEqual(['new1', 'new2']);
+    // oldLines = old version of change zone = `-` lines + interleaved ` ` lines.
+    expect(hunks[0].oldLines).toEqual(['old1', 'keep2', 'old2']);
+    // newLines = new version of change zone = `+` lines + interleaved ` ` lines.
+    expect(hunks[0].newLines).toEqual(['new1', 'keep2', 'new2']);
     expect(hunks[0].contextAfter).toEqual(['keep3']);
+    // changeZone preserves the typed structure for rendering.
+    expect(hunks[0].changeZone).toEqual([
+      { kind: '-', content: 'old1' },
+      { kind: '+', content: 'new1' },
+      { kind: ' ', content: 'keep2' },
+      { kind: '-', content: 'old2' },
+      { kind: '+', content: 'new2' },
+    ]);
   });
 });
