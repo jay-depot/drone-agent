@@ -85,6 +85,12 @@ drone-agent/          ← The CLI + TUI coding agent (Ink-based)
       exec-async.ts
       openai-compatible.ts
       patch-applier.ts
+      patch-applier/     ← Split helpers for the patch-applier cascade
+        types.ts
+        fuzz.ts
+        matching.ts
+        levenshtein.ts
+        errors.ts
       type-guards.ts
       unified-diff-parser.ts
     tui/              ← Ink-based TUI (App, ChatLog, InputLine, StatusBar, etc.)
