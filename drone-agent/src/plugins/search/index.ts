@@ -135,6 +135,12 @@ export const searchPlugin: DronePlugin = {
             description: 'Max matches. Default 50.',
           },
           glob: { type: 'string', description: 'Glob filter (e.g. "*.ts").' },
+          minScore: {
+            type: 'number',
+            description:
+              'Minimum cosine similarity score (0.0–1.0) for semantic search results. ' +
+              'Only results at or above this threshold are returned. Default 0.0 (no filtering).',
+          },
           mode: {
             type: 'string',
             enum: ['regex', 'semantic'],
@@ -280,6 +286,11 @@ async function handleSemanticSearch(
       ? Math.max(1, Math.floor(input.maxResults))
       : 50;
 
+  const minScore =
+    typeof input.minScore === 'number' && Number.isFinite(input.minScore)
+      ? Math.max(0, Math.min(1, input.minScore))
+      : 0.0;
+
   // Determine which store to use based on the path
   const searchPath =
     typeof input.path === 'string' && input.path.trim().length > 0
@@ -318,7 +329,7 @@ async function handleSemanticSearch(
       provider,
       query,
       maxResults,
-      minScore: 0.0,
+      minScore,
     });
 
     return JSON.stringify(
@@ -346,7 +357,10 @@ async function handleSemanticSearch(
 async function handleRegexSearch(
   input: Record<string, unknown>
 ): Promise<string> {
-  if (typeof input.pattern !== 'string' || input.pattern.trim().length === 0) {
+  if (
+    typeof input.pattern !== 'string' ||
+    input.pattern.trim().length === 0
+  ) {
     throw new Error('search__text requires a non-empty pattern string.');
   }
 
