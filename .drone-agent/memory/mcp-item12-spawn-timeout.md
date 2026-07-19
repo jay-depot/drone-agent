@@ -4,8 +4,9 @@ tags:
   - mcp
   - item12
   - plan
+  - completed
 created: 2026-07-14T04:09:25.785Z
-updated: 2026-07-14T04:09:25.785Z
+updated: 2026-07-19T23:21:22.049Z
 ---
 
 # Plan: MCP Spawn Timeout (Item 12)
@@ -83,11 +84,32 @@ In `mcp-client.test.ts`:
 
 ## Validation Criteria
 
-- [ ] `spawnTimeoutMs` config field exists in `DroneMcpConfig` and `DroneMcpStdioServerConfig`
-- [ ] `initialize` uses `spawnTimeoutMs` instead of `requestTimeoutMs`
-- [ ] Subsequent JSON-RPC requests still use `requestTimeoutMs`
-- [ ] Respawn monitor uses `spawnTimeoutMs` for its `initialize` call
-- [ ] All existing tests pass
-- [ ] LSP diagnostics pass
-- [ ] `pnpm -r run build` passes
-- [ ] `pnpm -r run lint` passes
+- [x] `spawnTimeoutMs` config field exists in `DroneMcpConfig` and `DroneMcpStdioServerConfig`
+- [x] `initialize` uses `spawnTimeoutMs` instead of `requestTimeoutMs`
+- [x] Subsequent JSON-RPC requests still use `requestTimeoutMs`
+- [x] Respawn monitor uses `spawnTimeoutMs` for its `initialize` call
+- [x] All existing tests pass
+- [x] LSP diagnostics pass
+- [x] `pnpm -r run build` passes
+- [x] `pnpm -r run lint` passes
+
+## Implementation Summary (completed 2026-07-19)
+
+All steps completed. The implementation uses a runtime-mutable timeout approach:
+- Added `setRequestTimeout?(ms)` to the `JsonRpcClient` type
+- HTTP transport: the streamable HTTP client captures `requestTimeoutMs` in a closure variable that `setRequestTimeout` mutates. Before `initialize`, the client calls `setRequestTimeout(effectiveSpawnTimeoutMs)`; after `initialize` succeeds, it calls `setRequestTimeout(effectiveRequestTimeoutMs)` to shrink back to the runtime value. Same client instance retained (preserves sessionId + negotiated protocol version).
+- stdio transport: the stdio client captures `requestTimeoutMs` at construction. The initial client is created with `effectiveSpawnTimeoutMs`, and after `initialize` succeeds, a new stdio client is built with `effectiveRequestTimeoutMs` (same child process transport).
+- Respawn monitor creates its replacement stdio RPC client with `effectiveSpawnTimeoutMs` and calls `initialize` directly (not via `requestWithRetry`).
+
+### Test infrastructure fix (uncovered during step 7)
+
+The `mcp-fake-server.ts` mock had a latent bug: `handle()` was synchronous and did not `await` Promise-returning handlers. This caused async test handlers (used by the new spawnTimeoutMs tests) to silently return unresolved Promises, which JSON.stringify serialized as empty/undefined results — so the tests saw `[]` instead of timing out. Fixed by making `handle()` async and awaiting handler results. Also added proper `AbortSignal` support to `fetchCore` so the timeout path (via `AbortController`) actually rejects with an `AbortError`, matching real `fetch` behavior. This was required for the spawnTimeoutMs timeout tests to work correctly.
+
+### Tests added (3 new in `mcp-client.test.ts > initialize handshake`)
+1. `uses spawnTimeoutMs for the initialize request` — initialize takes 80ms, requestTimeoutMs=50, spawnTimeoutMs=500 → succeeds
+2. `times out initialize with a short spawnTimeoutMs` — initialize takes 1000ms, spawnTimeoutMs=50 → rejects with timeout
+3. `uses requestTimeoutMs for subsequent JSON-RPC requests after initialize` — initialize takes 150ms (within spawnTimeoutMs=1000), then tools/list takes 500ms with requestTimeoutMs=100 → rejects with timeout
+
+### Commits
+- `4da971e` feat(mcp): add spawnTimeoutMs and use it for initialize handshake
+- `5734021` test(mcp): fix async handlers in mcp-fake-server and spawnTimeoutMs tests

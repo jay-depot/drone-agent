@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-07-19T23:21:29.536Z",
+    "insight": "When adding tests that use async/Promise-returning handlers in mock fetch implementations, always verify the mock's dispatch function actually awaits handler results. The mcp-fake-server.ts mock had a synchronous `handle()` function that silently swallowed Promise-returning handlers (returning `{ result: <Promise> }` which serialized to empty), causing timeout tests to see `[]` instead of timing out. This was a latent bug that only surfaced when the new spawnTimeoutMs tests introduced async handlers. When a test fails with an unexpected empty result instead of the expected error/timeout, suspect the mock isn't awaiting async handlers. Also: AbortSignal support in mock fetch must reject the returned Promise (not just check signal.aborted after the fact) for timeout tests to work — the wrapper pattern with addEventListener('abort') is the correct approach."
+  }
+]
