@@ -20,7 +20,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMcpClientConnection } from '../src/plugins/mcp/client.js';
 import { createMockFetch } from './mcp-fake-server.js';
 import type { MockFetch } from './mcp-fake-server.js';
-import type { DroneMcpServerConfig, DroneLogger } from 'drone-core';
+import type {
+  DroneMcpRoot,
+  DroneMcpServerConfig,
+  DroneLogger,
+} from 'drone-core';
 
 const silentLogger: DroneLogger = {
   info: () => {},
@@ -59,7 +63,8 @@ async function makeConnection(
   callbacks: {
     onNotification?: (method: string, params: unknown) => void;
     onStreamError?: (message: string) => void;
-  } = {}
+  } = {},
+  roots?: DroneMcpRoot[]
 ) {
   const conn = await createMcpClientConnection({
     serverId: 'demo',
@@ -73,6 +78,7 @@ async function makeConnection(
     onNotification: callbacks.onNotification ?? (() => {}),
     onStreamError: callbacks.onStreamError ?? (() => {}),
     logger: silentLogger,
+    roots,
   });
   return conn;
 }
@@ -111,11 +117,22 @@ describe('initialize handshake', () => {
     expect(mock.callCount('initialize')).toBe(1);
     const params = init!.params as {
       protocolVersion: string;
-      capabilities: { tools: unknown; resources: unknown; prompts: unknown };
+      capabilities: {
+        tools: unknown;
+        resources: unknown;
+        prompts: unknown;
+        roots: unknown;
+      };
     };
     expect(params.protocolVersion).toBe('2025-06-18');
     expect(init!.headers['mcp-protocol-version']).toBe('2025-06-18');
-    expect(params.capabilities).toEqual({ tools: {}, resources: {}, prompts: {}, logging: {} });
+    expect(params.capabilities).toEqual({
+      tools: {},
+      resources: {},
+      prompts: {},
+      logging: {},
+      roots: {},
+    });
     // clientInfo is advertised
     expect((init!.params as { clientInfo?: unknown }).clientInfo).toBeDefined();
   });
@@ -551,6 +568,59 @@ describe('compatibilityMode envelope handling', () => {
   });
 });
 
+describe('roots capability', () => {
+  it('advertises roots: {} in initialize capabilities', async () => {
+    const mock = currentMock!;
+    await makeConnection(mock);
+    const init = mock.lastRequest('initialize');
+    expect(init).toBeDefined();
+    const params = init!.params as {
+      capabilities: { roots?: unknown };
+    };
+    expect(params.capabilities.roots).toEqual({});
+  });
+
+  it('responds to roots/list server request with configured roots', async () => {
+    const roots: DroneMcpRoot[] = [
+      { uri: 'file:///project', name: 'Project Root' },
+      { uri: 'file:///home/user', name: 'Home Directory' },
+    ];
+    const mock = createMockFetch({
+      sessionId: 'sess-roots',
+      sseEvents: [{ id: 100, method: 'roots/list' }],
+    });
+    installFetch(mock);
+    await makeConnection(mock, {}, {}, {}, roots);
+    // Give the fire-and-forget GET reader a tick to consume the SSE
+    // event and the POST response to be sent back.
+    await new Promise(resolve => setTimeout(resolve, 50));
+    // The client POSTs a JSON-RPC response back to the server URL.
+    // The mock records it as a POST with no `method` (responses have
+    // no method field) and the `id` and `result` from the body.
+    const response = mock.requests.find(
+      r => r.id === 100 && r.result !== undefined
+    );
+    expect(response).toBeDefined();
+    expect(response!.result).toEqual({ roots });
+  });
+
+  it('returns empty roots array when no roots are configured', async () => {
+    const mock = createMockFetch({
+      sessionId: 'sess-empty-roots',
+      sseEvents: [{ id: 200, method: 'roots/list' }],
+    });
+    installFetch(mock);
+    const conn = await makeConnection(mock);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const response = mock.requests.find(
+      r => r.id === 200 && r.result !== undefined
+    );
+    expect(response).toBeDefined();
+    expect(response!.result).toEqual({ roots: [] });
+    expect(conn.state.status).toBe('connected');
+  });
+});
+
 describe('streamable-HTTP GET SSE stream + DELETE termination (point 8)', () => {
   it('opens a GET SSE stream with text/event-stream accept + session id', async () => {
     const mock = createMockFetch({ sessionId: 'sess-xyz' });
@@ -596,7 +666,11 @@ describe('streamable-HTTP GET SSE stream + DELETE termination (point 8)', () => 
       sseEvents: [
         {
           method: 'notifications/message',
-          params: { level: 'warning', logger: 'test-logger', data: 'something went wrong' },
+          params: {
+            level: 'warning',
+            logger: 'test-logger',
+            data: 'something went wrong',
+          },
         },
         {
           method: 'notifications/message',
@@ -605,15 +679,30 @@ describe('streamable-HTTP GET SSE stream + DELETE termination (point 8)', () => 
       ],
     });
     installFetch(mock);
-    await makeConnection(mock, {}, {}, {
-      onNotification: (method: string, params: unknown) => {
-        received.push({ method, params });
-      },
-    });
+    await makeConnection(
+      mock,
+      {},
+      {},
+      {
+        onNotification: (method: string, params: unknown) => {
+          received.push({ method, params });
+        },
+      }
+    );
     await new Promise(resolve => setTimeout(resolve, 20));
     expect(received).toEqual([
-      { method: 'notifications/message', params: { level: 'warning', logger: 'test-logger', data: 'something went wrong' } },
-      { method: 'notifications/message', params: { level: 'error', data: { code: 42, detail: 'fatal' } } },
+      {
+        method: 'notifications/message',
+        params: {
+          level: 'warning',
+          logger: 'test-logger',
+          data: 'something went wrong',
+        },
+      },
+      {
+        method: 'notifications/message',
+        params: { level: 'error', data: { code: 42, detail: 'fatal' } },
+      },
     ]);
   });
 

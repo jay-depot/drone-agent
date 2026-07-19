@@ -1,6 +1,8 @@
 import { isRecord } from '../../shared/type-guards.js';
+import os from 'node:os';
 import type {
   DroneLlmCapability,
+  DroneMcpRoot,
   DroneMcpServerState,
   DronePersonaCapability,
   DronePlugin,
@@ -575,6 +577,12 @@ export const mcpPlugin: DronePlugin = {
         return;
       }
 
+      const defaultRoots: DroneMcpRoot[] = [
+        { uri: `file://${process.cwd()}`, name: 'Project Root' },
+        { uri: `file://${os.homedir()}`, name: 'Home Directory' },
+      ];
+      const roots = [...defaultRoots, ...(mcpConfig.roots ?? [])];
+
       for (const [serverId, serverConfig] of configuredServers) {
         let connection: McpClientConnection | undefined;
         const onNotification = (method: string, params: unknown): void => {
@@ -653,6 +661,7 @@ export const mcpPlugin: DronePlugin = {
             onStreamError,
             onReconnected,
             logger: registration.logger,
+            roots,
           });
           connections.set(serverId, connection);
           setServerState(connection.state);

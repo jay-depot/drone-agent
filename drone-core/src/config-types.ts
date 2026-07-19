@@ -246,6 +246,11 @@ export type DroneMcpServerConfig =
   | DroneMcpStdioServerConfig
   | DroneMcpStreamableHttpServerConfig;
 
+export type DroneMcpRoot = {
+  uri: string;
+  name?: string;
+};
+
 export type DroneMcpConfig = {
   enabled: boolean;
   requestTimeoutMs: number;
@@ -255,6 +260,7 @@ export type DroneMcpConfig = {
   maxListItems: number;
   compatibilityMode: 'strict' | 'permissive';
   servers: Record<string, DroneMcpServerConfig>;
+  roots?: DroneMcpRoot[];
 };
 
 export type DroneAgentConfig = {
