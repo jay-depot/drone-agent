@@ -213,6 +213,8 @@ export type DroneMcpStdioServerConfig = {
   cwd?: string;
   env?: Record<string, string>;
   allowedTools?: string[];
+  /** Timeout in ms for the initialize handshake after spawning. */
+  spawnTimeoutMs?: number;
   requestTimeoutMs?: number;
   retryCount?: number;
   retryDelayMs?: number;
@@ -234,6 +236,8 @@ export type DroneMcpStreamableHttpServerConfig = {
   url: string;
   headers?: Record<string, string>;
   allowedTools?: string[];
+  /** Timeout in ms for the initialize handshake after spawning. */
+  spawnTimeoutMs?: number;
   requestTimeoutMs?: number;
   retryCount?: number;
   retryDelayMs?: number;
@@ -254,6 +258,7 @@ export type DroneMcpRoot = {
 export type DroneMcpConfig = {
   enabled: boolean;
   requestTimeoutMs: number;
+  spawnTimeoutMs: number;
   retryCount: number;
   retryDelayMs: number;
   maxListPages: number;
@@ -403,6 +408,7 @@ export function createDefaultAgentConfig(
     mcp: {
       enabled: true,
       requestTimeoutMs: 10000,
+      spawnTimeoutMs: 30000,
       retryCount: 1,
       retryDelayMs: 200,
       maxListPages: 25,

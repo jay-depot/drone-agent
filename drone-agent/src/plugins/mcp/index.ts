@@ -652,6 +652,7 @@ export const mcpPlugin: DronePlugin = {
             serverId,
             config: serverConfig,
             defaultRequestTimeoutMs: mcpConfig.requestTimeoutMs,
+            defaultSpawnTimeoutMs: mcpConfig.spawnTimeoutMs,
             defaultRetryCount: mcpConfig.retryCount,
             defaultRetryDelayMs: mcpConfig.retryDelayMs,
             defaultMaxListPages: mcpConfig.maxListPages,

@@ -1046,6 +1046,7 @@ export async function createMcpClientConnection(options: {
   serverId: string;
   config: DroneMcpServerConfig;
   defaultRequestTimeoutMs: number;
+  defaultSpawnTimeoutMs: number;
   defaultRetryCount: number;
   defaultRetryDelayMs: number;
   defaultMaxListPages: number;
@@ -1061,6 +1062,8 @@ export async function createMcpClientConnection(options: {
 }): Promise<McpClientConnection> {
   const effectiveRequestTimeoutMs =
     options.config.requestTimeoutMs ?? options.defaultRequestTimeoutMs;
+  const effectiveSpawnTimeoutMs =
+    options.config.spawnTimeoutMs ?? options.defaultSpawnTimeoutMs;
   const effectiveRetryCount =
     options.config.retryCount ?? options.defaultRetryCount;
   const effectiveRetryDelayMs =
@@ -1105,13 +1108,16 @@ export async function createMcpClientConnection(options: {
   let childProcess: ChildProcessWithoutNullStreams | undefined;
   let closed = false;
   let rpc: JsonRpcClient;
+  /** RPC client used only for the initial initialize handshake; swapped to
+   *  rpc with effectiveRequestTimeoutMs after the handshake succeeds. */
+  let initRpc: JsonRpcClient | undefined;
 
   if (options.config.transport === 'streamable_http') {
     rpc = createStreamableHttpJsonRpcClient({
       serverId: options.serverId,
       url: options.config.url,
       headers: options.config.headers ?? {},
-      requestTimeoutMs: effectiveRequestTimeoutMs,
+      requestTimeoutMs: effectiveSpawnTimeoutMs,
       compatibilityMode: effectiveCompatibilityMode,
       onNotification: options.onNotification,
       onRequest: handleServerRequest,
@@ -1135,7 +1141,7 @@ export async function createMcpClientConnection(options: {
         options.logger,
         options.serverId
       ),
-      requestTimeoutMs: effectiveRequestTimeoutMs,
+      requestTimeoutMs: effectiveSpawnTimeoutMs,
       onTransportIssue: error => {
         state.status = 'error';
         state.lastError = error;
@@ -1145,6 +1151,8 @@ export async function createMcpClientConnection(options: {
       onNotification: options.onNotification,
       onRequest: handleServerRequest,
     });
+    initRpc = rpc;
+    initRpc = rpc;
   }
 
   function handleServerRequest(
@@ -1277,7 +1285,7 @@ export async function createMcpClientConnection(options: {
               options.logger,
               options.serverId
             ),
-            requestTimeoutMs: effectiveRequestTimeoutMs,
+            requestTimeoutMs: effectiveSpawnTimeoutMs,
             onTransportIssue: error => {
               state.status = 'error';
               state.lastError = error;
@@ -1338,10 +1346,31 @@ export async function createMcpClientConnection(options: {
       },
       false
     );
-    rpc.notify('notifications/initialized', {});
+    (initRpc ?? rpc).notify('notifications/initialized', {});
     // Extract the negotiated protocol version from the server's response
     if (initResult?.protocolVersion) {
-      rpc.setProtocolVersion(initResult.protocolVersion);
+      (initRpc ?? rpc).setProtocolVersion(initResult.protocolVersion);
+    }
+    if (initRpc && initRpc !== rpc) {
+      // Swap from spawn-time RPC client to the runtime RPC client so subsequent
+      // JSON-RPC requests use requestTimeoutMs instead of spawnTimeoutMs.
+      if (options.config.transport === 'streamable_http') {
+        initRpc.disconnect();
+        rpc = createStreamableHttpJsonRpcClient({
+          serverId: options.serverId,
+          url: options.config.url,
+          headers: options.config.headers ?? {},
+          requestTimeoutMs: effectiveRequestTimeoutMs,
+          compatibilityMode: effectiveCompatibilityMode,
+          onNotification: options.onNotification,
+          onRequest: handleServerRequest,
+          onStreamError: options.onStreamError,
+          onStreamReconnected: options.onReconnected,
+        });
+      } else {
+        initRpc.disconnect();
+      }
+      initRpc = undefined;
     }
     state.status = 'connected';
     state.lastError = undefined;
@@ -1359,6 +1388,7 @@ export async function createMcpClientConnection(options: {
     state.lastError = error instanceof Error ? error.message : String(error);
     state.lastErrorCategory = classifyErrorCategory(error);
     rpc.disconnect();
+    initRpc?.disconnect();
     if (childProcess) {
       childProcess.kill();
     }

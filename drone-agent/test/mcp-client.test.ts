@@ -54,6 +54,7 @@ async function makeConnection(
   configOverrides: Partial<DroneMcpServerConfig> = {},
   defaults: Partial<{
     requestTimeoutMs: number;
+    spawnTimeoutMs: number;
     retryCount: number;
     retryDelayMs: number;
     maxListPages: number;
@@ -70,6 +71,7 @@ async function makeConnection(
     serverId: 'demo',
     config: baseConfig(configOverrides),
     defaultRequestTimeoutMs: defaults.requestTimeoutMs ?? 1000,
+    defaultSpawnTimeoutMs: defaults.spawnTimeoutMs ?? 3000,
     defaultRetryCount: defaults.retryCount ?? 0,
     defaultRetryDelayMs: defaults.retryDelayMs ?? 0,
     defaultMaxListPages: defaults.maxListPages ?? 25,
@@ -163,6 +165,63 @@ describe('initialize handshake', () => {
     });
     installFetch(mock);
     await expect(makeConnection(mock)).rejects.toThrow(/boom/);
+  });
+
+  it('uses spawnTimeoutMs for the initialize request', async () => {
+    const mock = createMockFetch({
+      handlers: {
+        initialize: () => {
+          return new Promise(resolve => {
+            // Intentionally longer than requestTimeoutMs but shorter than spawnTimeoutMs.
+          });
+        },
+      },
+    });
+    installFetch(mock);
+    const conn = await makeConnection(
+      mock,
+      {},
+      { requestTimeoutMs: 50, spawnTimeoutMs: 500 }
+    );
+    expect(conn.state.status).toBe('connected');
+    // initialize should have succeeded because it used the longer spawnTimeoutMs
+    expect(mock.callCount('initialize')).toBe(1);
+  });
+
+  it('times out initialize with a short spawnTimeoutMs', async () => {
+    const mock = createMockFetch({
+      handlers: {
+        initialize: () =>
+          new Promise(resolve => {
+            setTimeout(resolve, 1000);
+          }),
+      },
+    });
+    installFetch(mock);
+    await expect(
+      makeConnection(mock, {}, { requestTimeoutMs: 50, spawnTimeoutMs: 50 })
+    ).rejects.toThrow(/timed out|initialize/i);
+  });
+
+  it('uses requestTimeoutMs for subsequent JSON-RPC requests after initialize', async () => {
+    const mock = createMockFetch({
+      handlers: {
+        initialize: () =>
+          new Promise(resolve => setTimeout(resolve, 150)),
+      },
+    });
+    installFetch(mock);
+    const conn = await makeConnection(
+      mock,
+      {},
+      { requestTimeoutMs: 100, spawnTimeoutMs: 1000 }
+    );
+    expect(conn.state.status).toBe('connected');
+    // Subsequent request with a long delay should fail using requestTimeoutMs.
+    mock.onRequest('tools/list', () =>
+      new Promise(resolve => setTimeout(resolve, 500))
+    );
+    await expect(conn.listTools()).rejects.toThrow(/timed out/);
   });
 
   it('sends MCP-Protocol-Version header on subsequent POST requests', async () => {
