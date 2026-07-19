@@ -61,6 +61,7 @@ export type {
   DroneMcpStdioServerConfig,
   DroneMcpStreamableHttpServerConfig,
   DroneMcpServerConfig,
+  DroneMcpRoot,
   DroneMcpConfig,
   DroneAgentConfig,
   PartialDroneAgentConfig,

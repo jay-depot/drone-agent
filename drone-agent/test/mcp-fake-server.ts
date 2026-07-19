@@ -97,7 +97,7 @@ export type MockFetchOptions = {
    * (`{ jsonrpc:'2.0', method, params }`) inside an SSE `data:` block. Used to
    * exercise the client's GET-reader + onNotification dispatch.
    */
-  sseEvents?: Array<{ method: string; params?: unknown }>;
+  sseEvents?: Array<{ id?: number; method: string; params?: unknown }>;
   /**
    * When true, the GET stream's first `read()` throws (simulating a transient
    * stream drop) instead of delivering the queued `sseEvents`.
@@ -146,6 +146,12 @@ type RequestRecord = {
   params: unknown;
   url: string;
   headers: Record<string, string>;
+  /** JSON-RPC id (present on both requests and responses). */
+  id?: number;
+  /** Result field (present on responses). */
+  result?: unknown;
+  /** Error field (present on error responses). */
+  error?: { code: number; message: string };
 };
 
 export type MockFetch = {
@@ -213,7 +219,7 @@ function errorResponse(status: number): Response {
  * array-envelope / permissive normalization paths).
  */
 function sseResponse(
-  events: Array<{ method: string; params?: unknown }>,
+  events: Array<{ id?: number; method: string; params?: unknown }>,
   shouldError: boolean
 ): Response {
   const encoder = new TextEncoder();
@@ -230,11 +236,14 @@ function sseResponse(
         return;
       }
       for (const ev of events) {
-        const frame = {
+        const frame: Record<string, unknown> = {
           jsonrpc: '2.0',
           method: ev.method,
           params: ev.params,
         };
+        if (ev.id !== undefined) {
+          frame.id = ev.id;
+        }
         controller.enqueue(
           encoder.encode(`event: message\ndata: ${JSON.stringify(frame)}\n\n`)
         );
@@ -431,7 +440,15 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
       const h = init.headers as Record<string, string>;
       for (const [k, v] of Object.entries(h)) headers[k.toLowerCase()] = v;
     }
-    requests.push({ method, params: parsed.params, url, headers });
+    requests.push({
+      method,
+      params: parsed.params,
+      url,
+      headers,
+      id: parsed.id,
+      result: parsed.result,
+      error: parsed.error,
+    });
 
     // GET -> open the server->client SSE stream (point-8 transport).
     if (init?.method === 'GET') {
