@@ -123,4 +123,14 @@ export class ToolMountingCache {
   isMounted(name: string): boolean {
     return this.mounted.has(name);
   }
+
+  /**
+   * Get the canonical mounted tool definition name for a given internal key.
+   * Returns `undefined` if the tool is not in the available pool. This lets
+   * callers report the actual registered name (which may include a collision
+   * disambiguation suffix) without re-deriving it.
+   */
+  getToolDefName(name: string): string | undefined {
+    return this.available.get(name)?.name;
+  }
 }
