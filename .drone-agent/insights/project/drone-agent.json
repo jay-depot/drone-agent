@@ -10,5 +10,9 @@
   {
     "timestamp": "2026-07-14T19:06:29.322Z",
     "insight": "The mcp-client.test.ts has 10 pre-existing test failures related to mock fetch behavior (GET/DELETE requests not being recorded, protocol version mismatches, bare response handling). These are unrelated to the logging capability changes and appear to be pre-existing issues in the test infrastructure."
+  },
+  {
+    "timestamp": "2026-07-19T18:04:08.795Z",
+    "insight": "The file__apply_diff tool consistently fails on files with certain content patterns (e.g., when context lines contain only whitespace or the @@ heading doesn't match exactly). For multi-line code insertions in TypeScript files, using a Python script with string replacement and assertions is more reliable than the diff tool. This was observed during the MCP roots capability implementation where all 13+ edits to client.ts were applied via Python instead of file__apply_diff."
   }
 ]
