@@ -1,375 +1,113 @@
 /**
- * Patch applier — core patch matching and application logic for
- * content-anchor-based diffs.
+ * Patch applier — content-anchor-based patch matching and application.
  *
- * Implements a 3-level progressive matching cascade:
- *   Level 0:   Exact match of all lines
- *   Level 1:   Strip trailing whitespace from all lines
- *   Level 100: Strip ALL whitespace from all lines
+ * Implements a 4-step progressive cascade per hunk (processed top-to-bottom):
  *
- * Inspired by OpenAI's V4A diff format approach.
+ *   Step 1:   Exact match of the old change zone (oldLines) as a contiguous run.
+ *   Step 1.5: Aggressive format-aware fuzz — collapse ALL whitespace including
+ *             newlines on both sides and substring-search. Handles auto-formatter
+ *             reflow (line wrap/join) and internal whitespace changes.
+ *   Step 2:   Context narrowing — among multiple survivors, filter by the
+ *             surrounding context lines (contextBefore + contextAfter) with a
+ *             loosening cascade (exact → trim-trailing → strip-all → aggressive
+ *             → drop outer context → require fewer context sides).
+ *   Step 3:   Section-heading narrowing — among remaining survivors, filter by
+ *             the @@ section heading with a loosening cascade (exact → trim →
+ *             strip → aggressive substring on collapsed form).
  *
- * Supports two optional search hints:
- *   - lineHint (1-based line number): search near this line first
- *   - sectionHeading: use as a soft anchor before falling back to context-only
- * Both hints fall through to full-file context matching if they don't match,
- * so incorrect hints never prevent a correct patch from applying.
+ * Hunks are applied top-to-bottom against a working copy; each hunk is matched
+ * against the current state of the working copy (which reflects prior hunks).
+ * Partial success is supported: successful hunks are applied and the file is
+ * written; failed hunks are reported in the error and do not block others.
+ *
+ * Failure reporting:
+ *   Type 1: Multiple matches survive all narrowing. Report every match with
+ *           surrounding context and line numbers, plus a reworked hunk per
+ *           match that would uniquely target it.
+ *   Type 2: Zero matches at step 1.5 (old code not in file in any form).
+ *           Levenshtein-fuzzy-match the oldLines against file windows and
+ *           suggest the top 5 closest spans.
+ *   Type 3: A later step over-narrowed to zero but an earlier step had
+ *           multiples. Unroll to the last multiple-match step and report
+ *           like Type 1.
  */
 
-import type { FuzzLevel } from './diff-renderer.js';
+import type {
+  AppliedHunk,
+  MatchSpan,
+  PatchError,
+  PatchHunk,
+  PatchResult,
+} from './patch-applier/types.js';
+import {
+  buildType1Failure,
+  buildType2Failure,
+  buildType3Failure,
+} from './patch-applier/errors.js';
+import {
+  findAggressiveOldLinesMatches,
+  findExactOldLinesMatches,
+  locatePureInsertion,
+  narrowByContextCascade,
+  narrowByHeadingCascade,
+  sortByLineHint,
+} from './patch-applier/matching.js';
 
-// ── Constants ───────────────────────────────────────────────────────────
-
-/** Size of the search window (in lines) around lineHint. */
-const LINE_HINT_WINDOW = 15;
-
-// ── Types ──────────────────────────────────────────────────────────────
-
-/** A single hunk in a content-anchor-based patch */
-export interface PatchHunk {
-  /** Content anchor line(s) — code that uniquely identifies the location */
-  anchors: string[];
-  /** Lines expected before the edit point (context) */
-  contextBefore: string[];
-  /** Lines to remove (old code) */
-  oldLines: string[];
-  /** Lines to insert (new code) */
-  newLines: string[];
-  /** Lines expected after the edit point (context) */
-  contextAfter: string[];
-
-  // ── Optional search hints (populated by unified-diff-parser) ─────────
-
-  /** 1-based line number hint from @@ -start,count header — soft hint */
-  lineHint?: number;
-  /** Section heading from @@ ... @@ heading — soft anchor */
-  sectionHeading?: string;
-}
-
-/** Result of applying a single hunk */
-export interface AppliedHunk {
-  /** The anchors that were used to locate this hunk */
-  anchors: string[];
-  /** Fuzz level used to match this hunk */
-  fuzz: FuzzLevel;
-  /** 1-based line number where the hunk was applied */
-  appliedAtLine: number;
-}
-
-/** Error information for a failed hunk */
-export interface PatchError {
-  /** Index of the hunk in the original array (0-based) */
-  hunkIndex: number;
-  /** Short human-readable error message */
-  message: string;
-  /** Detailed explanation including what was found vs expected */
-  detail: string;
-  /** The anchor lines that were used to search */
-  anchors: string[];
-  /** What was found at the best match location (for context mismatch) */
-  foundContextBefore?: string[];
-  foundContextAfter?: string[];
-  foundOldLines?: string[];
-}
-
-/** Overall result of applying a patch */
-export interface PatchResult {
-  /** Whether all hunks were applied successfully */
-  success: boolean;
-  /** Hunks that were successfully applied */
-  appliedHunks: AppliedHunk[];
-  /** Hunks that failed to apply */
-  errors: PatchError[];
-  /** The resulting lines after all successful hunks are applied */
-  patchedLines: string[];
-}
-
-// ── Matching helpers ──────────────────────────────────────────────────
+// Re-export public types for consumers (file.ts, tests, parser).
+export type {
+  ChangeZoneLine,
+  ChangeZoneLineKind,
+} from './patch-applier/types.js';
+export type { MatchSpan } from './patch-applier/types.js';
+export type { AppliedHunk } from './patch-applier/types.js';
+export type {
+  MatchSite,
+  FuzzySuggestion,
+  FailureType,
+} from './patch-applier/types.js';
+export type {
+  PatchHunk,
+  PatchError,
+  PatchResult,
+} from './patch-applier/types.js';
 
 /**
- * Normalize a line for matching at a given fuzz level.
- *
- * Level 0:   No normalization (exact match)
- * Level 1:   Strip trailing whitespace (CR/LF normalization)
- * Level 100: Strip ALL whitespace (most aggressive)
+ * Splice the matched span out of the working lines and insert the new lines.
+ * Mutates workingLines in place.
  */
-function normalizeLine(line: string, level: FuzzLevel): string {
-  switch (level) {
-    case 0:
-      return line;
-    case 1:
-      return line.replace(/\s+$/, '');
-    case 100:
-      return line.replace(/\s+/g, '');
-  }
+function applySpan(
+  workingLines: string[],
+  span: MatchSpan,
+  newLines: string[]
+): void {
+  workingLines.splice(span.start, span.end - span.start, ...newLines);
 }
 
 /**
- * Check if an array of expected lines matches an array of actual lines
- * at the given fuzz level.
+ * Record a successfully-applied hunk. Centralizes the AppliedHunk construction
+ * so every success path includes the original hunk index.
  */
-function linesMatch(
-  expected: string[],
-  actual: string[],
-  level: FuzzLevel
-): boolean {
-  if (expected.length !== actual.length) return false;
-  for (let i = 0; i < expected.length; i++) {
-    if (normalizeLine(expected[i], level) !== normalizeLine(actual[i], level)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/**
- * Find all occurrences of an anchor line in the file.
- * Returns 0-based indices.
- */
-function findAnchorOccurrences(
-  lines: string[],
-  anchor: string,
-  level: FuzzLevel
-): number[] {
-  const occurrences: number[] = [];
-  const normalizedAnchor = normalizeLine(anchor, level);
-  for (let i = 0; i < lines.length; i++) {
-    if (normalizeLine(lines[i], level) === normalizedAnchor) {
-      occurrences.push(i);
-    }
-  }
-  return occurrences;
-}
-
-/**
- * Narrow anchor occurrences by matching subsequent anchors.
- * Each subsequent anchor must appear on a line after the previous one.
- */
-function narrowByAnchors(
-  lines: string[],
+function recordApplied(
+  appliedHunks: AppliedHunk[],
+  hunkIndex: number,
   anchors: string[],
-  level: FuzzLevel,
-  candidateStarts: number[]
-): number[] {
-  if (anchors.length <= 1) return candidateStarts;
-
-  let candidates = candidateStarts;
-
-  for (let ai = 1; ai < anchors.length; ai++) {
-    const nextCandidates: number[] = [];
-    const normalizedAnchor = normalizeLine(anchors[ai], level);
-
-    for (const start of candidates) {
-      // Search from start+1 to end of file for the next anchor
-      for (let i = start + 1; i < lines.length; i++) {
-        if (normalizeLine(lines[i], level) === normalizedAnchor) {
-          nextCandidates.push(i);
-          break; // Take the first match after the previous anchor
-        }
-      }
-    }
-
-    candidates = nextCandidates;
-    if (candidates.length === 0) break;
-  }
-
-  return candidates;
+  span: MatchSpan
+): void {
+  appliedHunks.push({
+    anchors,
+    fuzz: span.fuzz,
+    appliedAtLine: span.start + 1,
+    hunkIndex,
+  });
 }
-
-/**
- * Result of a context match attempt.
- */
-interface ContextMatchResult {
-  /** 0-based index of the edit point */
-  editIndex: number;
-  /** Fuzz level used */
-  fuzz: FuzzLevel;
-}
-
-/**
- * Try to match a full context block (contextBefore + oldLines + contextAfter)
- * at a given anchor position in the file.
- *
- * Tries two possible edit point positions:
- *   1. At the anchor line (anchorIndex) — the anchor itself is being replaced
- *   2. After the anchor line (anchorIndex + 1) — the anchor is context above
- *
- * Returns the edit index and fuzz level, or null if no level matched.
- */
-function tryMatchContext(
-  lines: string[],
-  contextBefore: string[],
-  oldLines: string[],
-  contextAfter: string[],
-  anchorIndex: number
-): ContextMatchResult | null {
-  // Try two possible edit point positions
-  const editPositions = [anchorIndex, anchorIndex + 1];
-  const levels: FuzzLevel[] = [0, 1, 100];
-
-  for (const editStart of editPositions) {
-    const contextBeforeStart = editStart - contextBefore.length;
-
-    // Check bounds
-    if (contextBeforeStart < 0) continue;
-    if (editStart + oldLines.length + contextAfter.length > lines.length)
-      continue;
-
-    for (const level of levels) {
-      const beforeSlice = lines.slice(contextBeforeStart, editStart);
-      const oldSlice = lines.slice(editStart, editStart + oldLines.length);
-      const afterSlice = lines.slice(
-        editStart + oldLines.length,
-        editStart + oldLines.length + contextAfter.length
-      );
-
-      if (
-        linesMatch(contextBefore, beforeSlice, level) &&
-        linesMatch(oldLines, oldSlice, level) &&
-        linesMatch(contextAfter, afterSlice, level)
-      ) {
-        return { editIndex: editStart, fuzz: level };
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
- * Try to match a full context block (contextBefore + oldLines + contextAfter)
- * within a specific window of lines.
- * Returns the edit index and fuzz level, or null if no match found.
- */
-function findContextInWindow(
-  lines: string[],
-  contextBefore: string[],
-  oldLines: string[],
-  contextAfter: string[],
-  windowStart: number,
-  windowEnd: number
-): ContextMatchResult | null {
-  const totalLen = contextBefore.length + oldLines.length + contextAfter.length;
-  if (totalLen === 0) return null;
-
-  const levels: FuzzLevel[] = [0, 1, 100];
-  const searchEnd = Math.min(windowEnd, lines.length - totalLen + 1);
-
-  for (const level of levels) {
-    for (let i = windowStart; i < searchEnd; i++) {
-      // Quick bounds check
-      if (i + totalLen > lines.length) break;
-
-      const beforeSlice = lines.slice(i, i + contextBefore.length);
-      const oldSlice = lines.slice(
-        i + contextBefore.length,
-        i + contextBefore.length + oldLines.length
-      );
-      const afterSlice = lines.slice(
-        i + contextBefore.length + oldLines.length,
-        i + contextBefore.length + oldLines.length + contextAfter.length
-      );
-
-      if (
-        linesMatch(contextBefore, beforeSlice, level) &&
-        linesMatch(oldLines, oldSlice, level) &&
-        linesMatch(contextAfter, afterSlice, level)
-      ) {
-        return {
-          editIndex: i + contextBefore.length,
-          fuzz: level,
-        };
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
- * Try to match a full context block (contextBefore + oldLines + contextAfter)
- * anywhere in the file (no anchors). Returns the 0-based index of the edit
- * point and the fuzz level, or null if no match found.
- */
-function findContextAnywhere(
-  lines: string[],
-  contextBefore: string[],
-  oldLines: string[],
-  contextAfter: string[],
-  lineHint?: number
-): ContextMatchResult | null {
-  const totalLen = contextBefore.length + oldLines.length + contextAfter.length;
-  if (totalLen === 0) return null;
-
-  // If we have a line hint, try a focused window first
-  if (lineHint !== undefined) {
-    const hintIndex = lineHint - 1; // convert to 0-based
-    const windowStart = Math.max(0, hintIndex - LINE_HINT_WINDOW);
-    const windowEnd = Math.min(lines.length, hintIndex + LINE_HINT_WINDOW);
-    const windowed = findContextInWindow(
-      lines,
-      contextBefore,
-      oldLines,
-      contextAfter,
-      windowStart,
-      windowEnd
-    );
-    if (windowed !== null) return windowed;
-  }
-
-  // Fall through to full-file search
-  const levels: FuzzLevel[] = [0, 1, 100];
-
-  for (const level of levels) {
-    for (let i = 0; i <= lines.length - totalLen; i++) {
-      const beforeSlice = lines.slice(i, i + contextBefore.length);
-      const oldSlice = lines.slice(
-        i + contextBefore.length,
-        i + contextBefore.length + oldLines.length
-      );
-      const afterSlice = lines.slice(
-        i + contextBefore.length + oldLines.length,
-        i + contextBefore.length + oldLines.length + contextAfter.length
-      );
-
-      if (
-        linesMatch(contextBefore, beforeSlice, level) &&
-        linesMatch(oldLines, oldSlice, level) &&
-        linesMatch(contextAfter, afterSlice, level)
-      ) {
-        return {
-          editIndex: i + contextBefore.length, // edit point
-          fuzz: level,
-        };
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
- * Sort anchor candidate indices by proximity to a line hint.
- * Candidates closer to lineHint come first.
- */
-function sortByLineHint(
-  candidates: number[],
-  lineHint: number | undefined
-): number[] {
-  if (lineHint === undefined || candidates.length <= 1) return candidates;
-  const hintIndex = lineHint - 1; // 0-based
-  return [...candidates].sort(
-    (a, b) => Math.abs(a - hintIndex) - Math.abs(b - hintIndex)
-  );
-}
-
-// ── Main apply function ───────────────────────────────────────────────
 
 /**
  * Apply a set of content-anchor-based hunks to a file's lines.
  *
- * Hunks are applied bottom-up to avoid position invalidation.
- * Returns a PatchResult with details about what was applied and any errors.
+ * Hunks are applied top-to-bottom. Each hunk is matched against the current
+ * working copy (which reflects prior hunks). Partial success is supported:
+ * successful hunks are applied; failed hunks are reported but do not block
+ * others.
  *
  * @param lines - The file content as an array of lines (no trailing newline)
  * @param hunks - The hunks to apply
@@ -378,19 +116,10 @@ function sortByLineHint(
 export function applyPatch(lines: string[], hunks: PatchHunk[]): PatchResult {
   const appliedHunks: AppliedHunk[] = [];
   const errors: PatchError[] = [];
-
-  // Work on a copy so we can apply bottom-up
   const workingLines = [...lines];
 
-  // Process hunks bottom-up to avoid position invalidation
-  // We need to track the original indices for error reporting
-  const indexedHunks = hunks.map((hunk, i) => ({ hunk, originalIndex: i }));
-
-  // We'll apply in reverse order, but we need to track where each hunk
-  // was found in the CURRENT state of workingLines (which changes as we apply)
-  // So we process from bottom to top
-  for (let hi = indexedHunks.length - 1; hi >= 0; hi--) {
-    const { hunk, originalIndex } = indexedHunks[hi];
+  for (let hi = 0; hi < hunks.length; hi++) {
+    const hunk = hunks[hi];
     const {
       anchors,
       contextBefore,
@@ -401,222 +130,109 @@ export function applyPatch(lines: string[], hunks: PatchHunk[]): PatchResult {
       sectionHeading,
     } = hunk;
 
-    let editIndex: number | null = null;
-    let fuzz: FuzzLevel = 0;
-
-    if (anchors.length > 0) {
-      // Strategy 1: Use anchors to locate the edit site
-      // Find all occurrences of the first anchor
-      let candidates = findAnchorOccurrences(workingLines, anchors[0], 0);
-
-      // If no exact anchor match, try fuzzy
-      if (candidates.length === 0) {
-        candidates = findAnchorOccurrences(workingLines, anchors[0], 1);
-      }
-      if (candidates.length === 0) {
-        candidates = findAnchorOccurrences(workingLines, anchors[0], 100);
-      }
-
-      if (candidates.length === 0) {
-        errors.push({
-          hunkIndex: originalIndex,
-          message: `Anchor not found: "${anchors[0]}"`,
-          detail: `The anchor line "${anchors[0]}" does not appear anywhere in the file. Check for typos, indentation differences, or whitespace issues.`,
-          anchors,
-        });
+    // Special case: empty oldLines (pure insertion) — use context to locate.
+    if (oldLines.length === 0) {
+      const inserted = locatePureInsertion(
+        workingLines,
+        contextBefore,
+        contextAfter,
+        lineHint
+      );
+      if (inserted === null) {
+        errors.push(buildType2Failure(hi, hunk, workingLines));
         continue;
       }
-
-      // Narrow by subsequent anchors
-      if (anchors.length > 1) {
-        // Save first-anchor candidates so fuzzy fallback can retry from scratch
-        const firstAnchorCandidates = [...candidates];
-        candidates = narrowByAnchors(
-          workingLines,
-          anchors,
-          0,
-          firstAnchorCandidates
-        );
-        if (candidates.length === 0) {
-          // Try fuzzy narrowing from the original first-anchor matches
-          candidates = narrowByAnchors(
-            workingLines,
-            anchors,
-            1,
-            firstAnchorCandidates
-          );
-        }
-        if (candidates.length === 0) {
-          candidates = narrowByAnchors(
-            workingLines,
-            anchors,
-            100,
-            firstAnchorCandidates
-          );
-        }
-      }
-
-      if (candidates.length === 0) {
-        errors.push({
-          hunkIndex: originalIndex,
-          message: `Anchor chain not found: "${anchors.join('" > "')}"`,
-          detail: `The full anchor chain could not be matched in sequence. The first anchor "${anchors[0]}" was found, but subsequent anchors could not be found after it.`,
-          anchors,
-        });
-        continue;
-      }
-
-      // Sort candidates by proximity to lineHint (closest first)
-      candidates = sortByLineHint(candidates, lineHint);
-
-      // Try to match context at each candidate anchor position
-      let matched = false;
-      for (const candidate of candidates) {
-        const result = tryMatchContext(
-          workingLines,
-          contextBefore,
-          oldLines,
-          contextAfter,
-          candidate
-        );
-        if (result !== null) {
-          editIndex = result.editIndex;
-          fuzz = result.fuzz;
-          matched = true;
-          break;
-        }
-      }
-
-      if (!matched) {
-        // Build detailed error with what was found at the first candidate
-        const firstCandidate = candidates[0];
-        const editStart = firstCandidate + 1;
-        const contextBeforeStart = editStart - contextBefore.length;
-
-        const foundBefore =
-          contextBeforeStart >= 0
-            ? workingLines.slice(contextBeforeStart, editStart)
-            : [];
-        const foundOld =
-          editStart + oldLines.length <= workingLines.length
-            ? workingLines.slice(editStart, editStart + oldLines.length)
-            : [];
-        const foundAfter =
-          editStart + oldLines.length + contextAfter.length <=
-          workingLines.length
-            ? workingLines.slice(
-                editStart + oldLines.length,
-                editStart + oldLines.length + contextAfter.length
-              )
-            : [];
-
-        errors.push({
-          hunkIndex: originalIndex,
-          message: `Context does not match at anchor location`,
-          detail:
-            `Found ${candidates.length} anchor match(es) but context didn't match at any. At the first anchor occurrence:\n` +
-            `  Expected contextBefore: ${JSON.stringify(contextBefore)}\n` +
-            `  Found contextBefore:    ${JSON.stringify(foundBefore)}\n` +
-            `  Expected oldLines:      ${JSON.stringify(oldLines)}\n` +
-            `  Found oldLines:         ${JSON.stringify(foundOld)}\n` +
-            `  Expected contextAfter:  ${JSON.stringify(contextAfter)}\n` +
-            `  Found contextAfter:     ${JSON.stringify(foundAfter)}`,
-          anchors,
-          foundContextBefore: foundBefore,
-          foundContextAfter: foundAfter,
-          foundOldLines: foundOld,
-        });
-        continue;
-      }
-    } else {
-      // Strategy 2: No anchors — either use sectionHeading as a soft anchor,
-      // or go straight to context-only search
-
-      let matched = false;
-
-      // 2a: If we have a sectionHeading, try it as an anchor first
-      if (sectionHeading) {
-        let headingCandidates = findAnchorOccurrences(
-          workingLines,
-          sectionHeading,
-          0
-        );
-        if (headingCandidates.length === 0) {
-          headingCandidates = findAnchorOccurrences(
-            workingLines,
-            sectionHeading,
-            1
-          );
-        }
-        if (headingCandidates.length === 0) {
-          headingCandidates = findAnchorOccurrences(
-            workingLines,
-            sectionHeading,
-            100
-          );
-        }
-
-        if (headingCandidates.length > 0) {
-          // Sort by lineHint proximity
-          headingCandidates = sortByLineHint(headingCandidates, lineHint);
-
-          for (const candidate of headingCandidates) {
-            const result = tryMatchContext(
-              workingLines,
-              contextBefore,
-              oldLines,
-              contextAfter,
-              candidate
-            );
-            if (result !== null) {
-              editIndex = result.editIndex;
-              fuzz = result.fuzz;
-              matched = true;
-              break;
-            }
-          }
-        }
-      }
-
-      // 2b: Fall through to context-only search (with lineHint window)
-      if (!matched) {
-        const result = findContextAnywhere(
-          workingLines,
-          contextBefore,
-          oldLines,
-          contextAfter,
-          lineHint
-        );
-
-        if (result === null) {
-          errors.push({
-            hunkIndex: originalIndex,
-            message: `Context not found anywhere in file`,
-            detail:
-              `No anchors provided and the full context block ` +
-              `(contextBefore + oldLines + contextAfter) could not be matched ` +
-              `anywhere in the file. Try adding anchors to narrow the search.`,
-            anchors,
-          });
-          continue;
-        }
-
-        editIndex = result.editIndex;
-        fuzz = result.fuzz;
-      }
-    }
-
-    // Apply the hunk
-    if (editIndex !== null) {
-      // Remove oldLines and insert newLines
-      workingLines.splice(editIndex, oldLines.length, ...newLines);
-
+      workingLines.splice(inserted, 0, ...newLines);
       appliedHunks.push({
         anchors,
-        fuzz,
-        appliedAtLine: editIndex + 1, // 1-based
+        fuzz: 0,
+        appliedAtLine: inserted + 1,
+        hunkIndex: hi,
       });
+      continue;
     }
+
+    // ── Step 1: exact oldLines match ────────────────────────────────
+    let survivors = findExactOldLinesMatches(workingLines, oldLines);
+
+    // ── Step 1.5: aggressive format-aware fuzz on oldLines ──────────
+    if (survivors.length === 0) {
+      survivors = findAggressiveOldLinesMatches(workingLines, oldLines);
+      if (survivors.length === 0) {
+        errors.push(buildType2Failure(hi, hunk, workingLines));
+        continue;
+      }
+    }
+
+    if (survivors.length === 1) {
+      applySpan(workingLines, survivors[0], newLines);
+      recordApplied(appliedHunks, hi, anchors, survivors[0]);
+      continue;
+    }
+
+    // ── Step 2: context narrowing ───────────────────────────────────
+    const ctxResult = narrowByContextCascade(
+      workingLines,
+      survivors,
+      contextBefore,
+      contextAfter
+    );
+    survivors = ctxResult.survivors;
+
+    if (survivors.length === 1) {
+      applySpan(workingLines, survivors[0], newLines);
+      recordApplied(appliedHunks, hi, anchors, survivors[0]);
+      continue;
+    }
+
+    if (survivors.length === 0) {
+      errors.push(
+        buildType3Failure(hi, ctxResult.lastMultiple, workingLines, hunk)
+      );
+      continue;
+    }
+
+    // ── Step 3: section-heading narrowing ───────────────────────────
+    if (sectionHeading) {
+      const headingResult = narrowByHeadingCascade(
+        workingLines,
+        survivors,
+        sectionHeading
+      );
+      survivors = headingResult.survivors;
+
+      if (survivors.length === 1) {
+        applySpan(workingLines, survivors[0], newLines);
+        recordApplied(appliedHunks, hi, anchors, survivors[0]);
+        continue;
+      }
+
+      if (survivors.length === 0) {
+        errors.push(
+          buildType3Failure(hi, headingResult.lastMultiple, workingLines, hunk)
+        );
+        continue;
+      }
+    }
+
+    // ── lineHint tie-break ──────────────────────────────────────────
+    if (lineHint !== undefined) {
+      const sorted = sortByLineHint(survivors, lineHint);
+      const closest = sorted[0];
+      const closestDist = Math.abs(closest.start - (lineHint - 1));
+      const tiedAtClosest = sorted.filter(
+        s => Math.abs(s.start - (lineHint - 1)) === closestDist
+      );
+      if (tiedAtClosest.length === 1) {
+        applySpan(workingLines, closest, newLines);
+        recordApplied(appliedHunks, hi, anchors, closest);
+        continue;
+      }
+      survivors = tiedAtClosest;
+    }
+
+    // ── Type 1: multiple matches survive all narrowing ──────────────
+    errors.push(buildType1Failure(hi, survivors, workingLines, hunk));
   }
 
   return {
