@@ -394,7 +394,11 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
   const requests: RequestRecord[] = [];
   const perMethodCount = new Map<string, number>();
 
-  function handle(id: number, method: string, params: unknown): unknown {
+  async function handle(
+    id: number,
+    method: string,
+    params: unknown
+  ): Promise<unknown> {
     perMethodCount.set(method, (perMethodCount.get(method) ?? 0) + 1);
     if (method === 'initialize' && options.initializeError) {
       return {
@@ -411,7 +415,7 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
         error: { code: -32601, message: `Method not found: ${method}` },
       };
     }
-    const result = handler(params);
+    const result = await handler(params);
     // If the handler returned a full JSON-RPC message (has error/result at
     // top level), pass it through for envelope tests.
     if (
@@ -424,7 +428,10 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
     return { jsonrpc: '2.0', id, result };
   }
 
-  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const fetchCore = async (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<Response> => {
     const url = typeof input === 'string' ? input : input.toString();
     const body = init?.body ? String(init?.body) : '';
     const parsed = body ? JSON.parse(body) : {};
@@ -490,12 +497,54 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
       return okResponse(rawBodies.get(method));
     }
 
-    const resp = okResponse(handle(id, method, parsed.params));
+    const signal = init?.signal ?? null;
+    if (signal?.aborted) {
+      throw new DOMException('The operation was aborted.', 'AbortError');
+    }
+
+    const handlerResult = await handle(id, method, parsed.params);
+    if (signal?.aborted) {
+      throw new DOMException('The operation was aborted.', 'AbortError');
+    }
+
+    const resp = okResponse(handlerResult);
     if (method === 'initialize' && options.sessionId) {
       resp.headers.set('mcp-session-id', options.sessionId);
     }
     return resp;
-  }) as unknown as typeof fetch;
+  };
+
+  // Wrap so that an AbortSignal on the RequestInit actually rejects the
+  // returned Promise with an AbortError, matching real fetch behavior.
+  const fetchImpl = (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<Response> => {
+    return new Promise((resolve, reject) => {
+      const signal = init?.signal;
+      if (signal) {
+        const onAbort = () =>
+          reject(new DOMException('The operation was aborted.', 'AbortError'));
+        if (signal.aborted) {
+          onAbort();
+          return;
+        }
+        signal.addEventListener('abort', onAbort, { once: true });
+        fetchCore(input, init).then(
+          response => {
+            signal.removeEventListener('abort', onAbort);
+            resolve(response);
+          },
+          error => {
+            signal.removeEventListener('abort', onAbort);
+            reject(error);
+          }
+        );
+      } else {
+        void fetchCore(input, init).then(resolve, reject);
+      }
+    });
+  };
 
   return {
     fetch: fetchImpl,

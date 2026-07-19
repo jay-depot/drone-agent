@@ -168,13 +168,18 @@ describe('initialize handshake', () => {
   });
 
   it('uses spawnTimeoutMs for the initialize request', async () => {
+    const initResult = {
+      protocolVersion: '2025-06-18',
+      capabilities: { tools: {}, resources: {}, prompts: {} },
+      serverInfo: { name: 'fake-mcp', version: '0.0.0' },
+    };
     const mock = createMockFetch({
       handlers: {
-        initialize: () => {
-          return new Promise(resolve => {
+        initialize: () =>
+          new Promise(resolve => {
             // Intentionally longer than requestTimeoutMs but shorter than spawnTimeoutMs.
-          });
-        },
+            setTimeout(() => resolve(initResult), 80);
+          }),
       },
     });
     installFetch(mock);
@@ -189,11 +194,16 @@ describe('initialize handshake', () => {
   });
 
   it('times out initialize with a short spawnTimeoutMs', async () => {
+    const initResult = {
+      protocolVersion: '2025-06-18',
+      capabilities: { tools: {}, resources: {}, prompts: {} },
+      serverInfo: { name: 'fake-mcp', version: '0.0.0' },
+    };
     const mock = createMockFetch({
       handlers: {
         initialize: () =>
           new Promise(resolve => {
-            setTimeout(resolve, 1000);
+            setTimeout(() => resolve(initResult), 1000);
           }),
       },
     });
@@ -204,10 +214,15 @@ describe('initialize handshake', () => {
   });
 
   it('uses requestTimeoutMs for subsequent JSON-RPC requests after initialize', async () => {
+    const initResult = {
+      protocolVersion: '2025-06-18',
+      capabilities: { tools: {}, resources: {}, prompts: {} },
+      serverInfo: { name: 'fake-mcp', version: '0.0.0' },
+    };
     const mock = createMockFetch({
       handlers: {
         initialize: () =>
-          new Promise(resolve => setTimeout(resolve, 150)),
+          new Promise(resolve => setTimeout(() => resolve(initResult), 150)),
       },
     });
     installFetch(mock);
@@ -218,8 +233,9 @@ describe('initialize handshake', () => {
     );
     expect(conn.state.status).toBe('connected');
     // Subsequent request with a long delay should fail using requestTimeoutMs.
-    mock.onRequest('tools/list', () =>
-      new Promise(resolve => setTimeout(resolve, 500))
+    mock.onRequest(
+      'tools/list',
+      () => new Promise(resolve => setTimeout(resolve, 500))
     );
     await expect(conn.listTools()).rejects.toThrow(/timed out/);
   });

@@ -404,6 +404,7 @@ describe('terminalPlugin', () => {
         mcp: {
           enabled: false,
           requestTimeoutMs: 10000,
+          spawnTimeoutMs: 30000,
           retryCount: 1,
           retryDelayMs: 200,
           maxListPages: 25,

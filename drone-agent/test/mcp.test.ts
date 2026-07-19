@@ -105,6 +105,7 @@ async function bootWithServers(
     mcp: {
       enabled: true,
       requestTimeoutMs: 5000,
+      spawnTimeoutMs: 30000,
       retryCount: 0,
       retryDelayMs: 0,
       maxListPages: 25,

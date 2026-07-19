@@ -1,6 +1,7 @@
 import { isRecord } from '../../shared/type-guards.js';
 import type {
   DroneLogger,
+  DroneMcpStreamableHttpServerConfig,
   DroneMcpResourceMeta,
   DroneMcpResourceTemplateMeta,
   DroneMcpPromptArgument,
@@ -32,6 +33,8 @@ type JsonRpcClient = {
   notify: (method: string, params?: unknown) => void;
   disconnect: () => void;
   setProtocolVersion: (version: string) => void;
+  /** Optional: mutate the request timeout at runtime (used for HTTP). */
+  setRequestTimeout?: (ms: number) => void;
   startNotifications?: () => void;
 };
 
@@ -630,6 +633,7 @@ function createStreamableHttpJsonRpcClient(options: {
   let closed = false;
   let sessionId: string | undefined;
   let negotiatedProtocolVersion = '2025-06-18';
+  let requestTimeoutMs = options.requestTimeoutMs;
 
   async function openGetStream(): Promise<void> {
     let backoffMs = 1000;
@@ -643,7 +647,7 @@ function createStreamableHttpJsonRpcClient(options: {
             'MCP-Protocol-Version': negotiatedProtocolVersion,
             ...options.headers,
           },
-          signal: AbortSignal.timeout(options.requestTimeoutMs),
+          signal: AbortSignal.timeout(requestTimeoutMs),
         });
 
         if (!response.ok || !response.body) {
@@ -778,10 +782,7 @@ function createStreamableHttpJsonRpcClient(options: {
       const id = nextId;
       nextId += 1;
       const controller = new AbortController();
-      const timer = setTimeout(
-        () => controller.abort(),
-        options.requestTimeoutMs
-      );
+      const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
 
       try {
         const response = await fetch(options.url, {
@@ -860,6 +861,9 @@ function createStreamableHttpJsonRpcClient(options: {
     },
     setProtocolVersion: (version: string) => {
       negotiatedProtocolVersion = version;
+    },
+    setRequestTimeout: (ms: number) => {
+      requestTimeoutMs = ms;
     },
     disconnect: () => {
       closed = true;
@@ -1108,16 +1112,12 @@ export async function createMcpClientConnection(options: {
   let childProcess: ChildProcessWithoutNullStreams | undefined;
   let closed = false;
   let rpc: JsonRpcClient;
-  /** RPC client used only for the initial initialize handshake; swapped to
-   *  rpc with effectiveRequestTimeoutMs after the handshake succeeds. */
-  let initRpc: JsonRpcClient | undefined;
-
   if (options.config.transport === 'streamable_http') {
     rpc = createStreamableHttpJsonRpcClient({
       serverId: options.serverId,
       url: options.config.url,
       headers: options.config.headers ?? {},
-      requestTimeoutMs: effectiveSpawnTimeoutMs,
+      requestTimeoutMs: effectiveRequestTimeoutMs,
       compatibilityMode: effectiveCompatibilityMode,
       onNotification: options.onNotification,
       onRequest: handleServerRequest,
@@ -1126,6 +1126,8 @@ export async function createMcpClientConnection(options: {
     });
   } else {
     const stdioConfig = options.config as DroneMcpStdioServerConfig;
+    // stdio: the transport is the same child process, but the stdio client
+    // captures requestTimeoutMs in closures. Use spawn timeout for init, then rebuild.
     childProcess = spawn(stdioConfig.command, stdioConfig.args ?? [], {
       cwd: stdioConfig.cwd,
       env: {
@@ -1151,8 +1153,6 @@ export async function createMcpClientConnection(options: {
       onNotification: options.onNotification,
       onRequest: handleServerRequest,
     });
-    initRpc = rpc;
-    initRpc = rpc;
   }
 
   function handleServerRequest(
@@ -1328,6 +1328,12 @@ export async function createMcpClientConnection(options: {
   }
 
   try {
+    if (options.config.transport === 'streamable_http') {
+      // HTTP: expand the per-request timeout for the spawn-time initialize
+      // handshake. It is shrunk back to the runtime value after the handshake
+      // succeeds.
+      rpc.setRequestTimeout?.(effectiveSpawnTimeoutMs);
+    }
     const initResult = await requestWithRetry<{ protocolVersion?: string }>(
       'initialize',
       {
@@ -1346,31 +1352,34 @@ export async function createMcpClientConnection(options: {
       },
       false
     );
-    (initRpc ?? rpc).notify('notifications/initialized', {});
+    rpc.notify('notifications/initialized', {});
     // Extract the negotiated protocol version from the server's response
     if (initResult?.protocolVersion) {
-      (initRpc ?? rpc).setProtocolVersion(initResult.protocolVersion);
+      rpc.setProtocolVersion(initResult.protocolVersion);
     }
-    if (initRpc && initRpc !== rpc) {
-      // Swap from spawn-time RPC client to the runtime RPC client so subsequent
-      // JSON-RPC requests use requestTimeoutMs instead of spawnTimeoutMs.
-      if (options.config.transport === 'streamable_http') {
-        initRpc.disconnect();
-        rpc = createStreamableHttpJsonRpcClient({
-          serverId: options.serverId,
-          url: options.config.url,
-          headers: options.config.headers ?? {},
-          requestTimeoutMs: effectiveRequestTimeoutMs,
-          compatibilityMode: effectiveCompatibilityMode,
-          onNotification: options.onNotification,
-          onRequest: handleServerRequest,
-          onStreamError: options.onStreamError,
-          onStreamReconnected: options.onReconnected,
-        });
-      } else {
-        initRpc.disconnect();
-      }
-      initRpc = undefined;
+    if (options.config.transport === 'streamable_http') {
+      // HTTP: keep the same client (it holds sessionId and negotiated protocol
+      // version); just shrink the per-request timeout back to the runtime value.
+      rpc.setRequestTimeout?.(effectiveRequestTimeoutMs);
+    } else {
+      // stdio: rebuild the client with the shorter runtime timeout so subsequent
+      // JSON-RPC calls use requestTimeoutMs.
+      rpc = createStdioJsonRpcClient({
+        transport: createChildTransport(
+          childProcess!,
+          options.logger,
+          options.serverId
+        ),
+        requestTimeoutMs: effectiveRequestTimeoutMs,
+        onTransportIssue: error => {
+          state.status = 'error';
+          state.lastError = error;
+          state.lastErrorCategory = classifyErrorCategory(error);
+        },
+        encoding: (options.config as DroneMcpStdioServerConfig).encoding,
+        onNotification: options.onNotification,
+        onRequest: handleServerRequest,
+      });
     }
     state.status = 'connected';
     state.lastError = undefined;
@@ -1388,7 +1397,6 @@ export async function createMcpClientConnection(options: {
     state.lastError = error instanceof Error ? error.message : String(error);
     state.lastErrorCategory = classifyErrorCategory(error);
     rpc.disconnect();
-    initRpc?.disconnect();
     if (childProcess) {
       childProcess.kill();
     }
