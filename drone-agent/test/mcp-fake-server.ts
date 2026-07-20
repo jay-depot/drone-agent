@@ -108,16 +108,7 @@ export type MockFetchOptions = {
     string,
     Array<{ id?: number; method?: string; params?: unknown; result?: unknown }>
   >;
-  /**
-   * Per-method SSE responses for POST requests. When a POST request's method
-   * matches a key here, the mock returns an SSE stream with the given events
-   * instead of a JSON response. Used to test progress notifications before the
-   * final result.
-   */
-  postSseResponses?: Record<
-    string,
-    Array<{ id?: number; method: string; params?: unknown }>
-  >;
+
   /**
    * When true, the GET stream's first `read()` throws (simulating a transient
    * stream drop) instead of delivering the queued `sseEvents`.
