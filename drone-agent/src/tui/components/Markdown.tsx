@@ -76,6 +76,40 @@ interface MarkdownProps {
 }
 
 /**
+ * Recursively extract text from a lowlight AST token.
+ * Text nodes have a `value` property; element nodes have `children` arrays
+ * containing nested text/element nodes.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractTokenText(token: any): string {
+  if (token.value) return token.value;
+  if (token.children) {
+    return token.children.map(extractTokenText).join('');
+  }
+  return '';
+}
+
+/**
+ * Extract the Ink color name from a lowlight AST token.
+ *
+ * Element nodes carry color information in `properties.className`
+ * (e.g. `['hljs-keyword']`). Text nodes have no className and use
+ * the default color.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getTokenColor(token: any): string {
+  if (token.properties?.className) {
+    for (const cls of token.properties.className) {
+      if (typeof cls === 'string' && cls.startsWith('hljs-')) {
+        const key = cls.slice(5);
+        if (SYNTAX_COLORS[key]) return SYNTAX_COLORS[key];
+      }
+    }
+  }
+  return 'white';
+}
+
+/**
  * Main Markdown component - parses and renders markdown content.
  */
 export function Markdown({
@@ -371,9 +405,10 @@ function renderHighlightedTree(tree: any, backgroundColor: string): ReactNode {
         const tokens = line.children ?? [];
         let rendered = '';
         for (const token of tokens) {
-          const color = SYNTAX_COLORS[token.type] || 'white';
+          const color = getTokenColor(token);
           const ansiCode = ANSI_COLORS[color] || '37';
-          rendered += `\u001b[${ansiCode}m${token.value}\u001b[39m`;
+          const text = extractTokenText(token);
+          if (text) rendered += `\u001b[${ansiCode}m${text}\u001b[39m`;
         }
         return (
           <Text key={lineIndex} backgroundColor={backgroundColor}>

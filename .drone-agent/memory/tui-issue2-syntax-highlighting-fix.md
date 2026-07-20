@@ -22,6 +22,7 @@ The recent fix to `renderHighlightedTree` (commit `1e1a7c8`) replaced nested `<T
 ## Root cause analysis
 
 Lowlight's AST structure:
+
 - **Text nodes**: `{ type: 'text', value: 'const' }` — have `value`, no `children`, no `properties`
 - **Element nodes**: `{ type: 'element', tagName: 'span', properties: { className: ['hljs-keyword'] }, children: [{ type: 'text', value: 'const' }] }` — have `children`, no `value`, color info in `properties.className`
 
@@ -91,6 +92,7 @@ for (const token of tokens) {
 ### Step 4: Add unit tests
 
 Create `drone-agent/test/tui/Markdown.test.tsx` with tests for:
+
 - Code block with syntax highlighting (TSX) — verify no `"undefined"` strings in output
 - Code block with plaintext — verify plain rendering
 - Code block with mixed element/text nodes — verify colors are applied
