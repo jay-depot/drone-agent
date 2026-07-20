@@ -4,8 +4,9 @@ tags:
   - mcp
   - item13
   - plan
+  - completed
 created: 2026-07-14T04:11:17.047Z
-updated: 2026-07-14T04:11:17.047Z
+updated: 2026-07-19T23:31:06.151Z
 ---
 
 # Plan: Tool-Name Sanitization Collisions (Item 13)
@@ -70,10 +71,27 @@ In `mcp-client.test.ts` or `mcp.test.ts`:
 
 ## Validation Criteria
 
-- [ ] `sanitizeToolSegment` accepts a `usedNames` set and appends a suffix on collision
-- [ ] `listAndMountTools` and `handleToolsListChanged` use per-server `usedNames` sets
-- [ ] Tools with colliding sanitized names are both mountable with distinct names
-- [ ] All existing tests pass
-- [ ] LSP diagnostics pass
-- [ ] `pnpm -r run build` passes
-- [ ] `pnpm -r run lint` passes
+- [x] `sanitizeToolSegment` accepts a `usedNames` set and appends a suffix on collision
+- [x] `listAndMountTools` and `handleToolsListChanged` use per-server `usedNames` sets
+- [x] Tools with colliding sanitized names are both mountable with distinct names
+- [x] All existing tests pass
+- [x] LSP diagnostics pass
+- [x] `pnpm -r run build` passes
+- [x] `pnpm -r run lint` passes
+
+## Implementation Summary (completed 2026-07-19)
+
+All steps completed. Key implementation details:
+
+- `sanitizeToolSegment` now accepts a `Set<string>` and appends `_1`, `_2`, etc. on collision
+- A `serverUsedNames` map (parallel to `serverCaches`) stores per-server used name sets
+- `listAndMountTools` creates a fresh `usedNames` set and stores it in `serverUsedNames`
+- `handleToolsListChanged` retrieves the existing `usedNames` set and uses it for new tools; removed tools also have their sanitized name removed from the set (so the name slot is freed for reuse)
+- Added `ToolMountingCache.getToolDefName(originalName)` which returns the stored `toolDef.name` for a given internal key — this lets the `__mount_tool` and `__unmount_tool` meta-tool handlers report the actual registered name (including any collision suffix) without re-deriving it via `sanitizeToolSegment`
+
+### Test note
+The plan suggested `foo bar` and `foo-bar` as colliding examples, but `-` is in the allowed character set `[a-zA-Z0-9_-]`, so `foo-bar` doesn't sanitize to `foo_bar`. The test uses `foo bar` and `foo.bar` instead (both sanitize to `foo_bar`).
+
+### Commits
+- `9cccf20` feat(mcp): collision detection in sanitizeToolSegment (item 13, steps 1-2)
+- `3548514` test(mcp): add collision disambiguation test (item 13, step 3)

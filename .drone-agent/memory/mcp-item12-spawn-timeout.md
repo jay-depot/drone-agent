@@ -96,6 +96,7 @@ In `mcp-client.test.ts`:
 ## Implementation Summary (completed 2026-07-19)
 
 All steps completed. The implementation uses a runtime-mutable timeout approach:
+
 - Added `setRequestTimeout?(ms)` to the `JsonRpcClient` type
 - HTTP transport: the streamable HTTP client captures `requestTimeoutMs` in a closure variable that `setRequestTimeout` mutates. Before `initialize`, the client calls `setRequestTimeout(effectiveSpawnTimeoutMs)`; after `initialize` succeeds, it calls `setRequestTimeout(effectiveRequestTimeoutMs)` to shrink back to the runtime value. Same client instance retained (preserves sessionId + negotiated protocol version).
 - stdio transport: the stdio client captures `requestTimeoutMs` at construction. The initial client is created with `effectiveSpawnTimeoutMs`, and after `initialize` succeeds, a new stdio client is built with `effectiveRequestTimeoutMs` (same child process transport).
@@ -106,10 +107,12 @@ All steps completed. The implementation uses a runtime-mutable timeout approach:
 The `mcp-fake-server.ts` mock had a latent bug: `handle()` was synchronous and did not `await` Promise-returning handlers. This caused async test handlers (used by the new spawnTimeoutMs tests) to silently return unresolved Promises, which JSON.stringify serialized as empty/undefined results — so the tests saw `[]` instead of timing out. Fixed by making `handle()` async and awaiting handler results. Also added proper `AbortSignal` support to `fetchCore` so the timeout path (via `AbortController`) actually rejects with an `AbortError`, matching real `fetch` behavior. This was required for the spawnTimeoutMs timeout tests to work correctly.
 
 ### Tests added (3 new in `mcp-client.test.ts > initialize handshake`)
+
 1. `uses spawnTimeoutMs for the initialize request` — initialize takes 80ms, requestTimeoutMs=50, spawnTimeoutMs=500 → succeeds
 2. `times out initialize with a short spawnTimeoutMs` — initialize takes 1000ms, spawnTimeoutMs=50 → rejects with timeout
 3. `uses requestTimeoutMs for subsequent JSON-RPC requests after initialize` — initialize takes 150ms (within spawnTimeoutMs=1000), then tools/list takes 500ms with requestTimeoutMs=100 → rejects with timeout
 
 ### Commits
+
 - `4da971e` feat(mcp): add spawnTimeoutMs and use it for initialize handshake
 - `5734021` test(mcp): fix async handlers in mcp-fake-server and spawnTimeoutMs tests
