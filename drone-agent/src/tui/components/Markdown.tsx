@@ -395,27 +395,31 @@ function renderCodeBlock(
  * Uses raw ANSI escape codes for color changes within a single <Text>
  * element per line, avoiding Yoga layout bugs from nested <Text> elements
  * with different color props.
+ *
+ * The lowlight AST is flat — tree.children is an array of tokens, not an
+ * array of lines. Newlines are embedded inside text node values. We build
+ * a single ANSI string from all tokens, then split on \n to create lines.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderHighlightedTree(tree: any, backgroundColor: string): ReactNode {
-  const lines = tree.children;
+  // Build a single ANSI string from all tokens
+  let fullRendered = '';
+  for (const token of tree.children ?? []) {
+    const color = getTokenColor(token);
+    const ansiCode = ANSI_COLORS[color] || '37';
+    const text = extractTokenText(token);
+    if (text) fullRendered += `\u001b[${ansiCode}m${text}\u001b[39m`;
+  }
+
+  // Split on newlines to create one <Text> per line
+  const lines = fullRendered.split('\n');
   return (
     <>
-      {lines.map((line: any, lineIndex: number) => {
-        const tokens = line.children ?? [];
-        let rendered = '';
-        for (const token of tokens) {
-          const color = getTokenColor(token);
-          const ansiCode = ANSI_COLORS[color] || '37';
-          const text = extractTokenText(token);
-          if (text) rendered += `\u001b[${ansiCode}m${text}\u001b[39m`;
-        }
-        return (
-          <Text key={lineIndex} backgroundColor={backgroundColor}>
-            {rendered || line.value}
-          </Text>
-        );
-      })}
+      {lines.map((line: string, lineIndex: number) => (
+        <Text key={lineIndex} backgroundColor={backgroundColor}>
+          {line}
+        </Text>
+      ))}
     </>
   );
 }

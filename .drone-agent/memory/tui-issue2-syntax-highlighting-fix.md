@@ -5,8 +5,9 @@ tags:
   - tui
   - syntax-highlighting
   - bug-fix
+  - completed
 created: 2026-07-20T00:55:15.655Z
-updated: 2026-07-20T00:55:15.655Z
+updated: 2026-07-20T01:00:13.129Z
 ---
 
 # Plan: Fix syntax highlighting bugs in Markdown.tsx
@@ -22,7 +23,6 @@ The recent fix to `renderHighlightedTree` (commit `1e1a7c8`) replaced nested `<T
 ## Root cause analysis
 
 Lowlight's AST structure:
-
 - **Text nodes**: `{ type: 'text', value: 'const' }` — have `value`, no `children`, no `properties`
 - **Element nodes**: `{ type: 'element', tagName: 'span', properties: { className: ['hljs-keyword'] }, children: [{ type: 'text', value: 'const' }] }` — have `children`, no `value`, color info in `properties.className`
 
@@ -92,7 +92,6 @@ for (const token of tokens) {
 ### Step 4: Add unit tests
 
 Create `drone-agent/test/tui/Markdown.test.tsx` with tests for:
-
 - Code block with syntax highlighting (TSX) — verify no `"undefined"` strings in output
 - Code block with plaintext — verify plain rendering
 - Code block with mixed element/text nodes — verify colors are applied
@@ -107,10 +106,20 @@ Create `drone-agent/test/tui/Markdown.test.tsx` with tests for:
 
 ## Validation criteria
 
-- [ ] No `"undefined"` strings appear in syntax-highlighted output
-- [ ] Syntax highlighting applies correct colors (keyword=magenta, string=green, number=yellow, etc.)
-- [ ] All existing tests pass
-- [ ] New tests cover the fix
-- [ ] LSP diagnostics pass
-- [ ] `pnpm -r run build` passes
-- [ ] `pnpm -r run lint` passes
+- [x] No `"undefined"` strings appear in syntax-highlighted output
+- [x] Syntax highlighting applies correct colors (keyword=magenta, string=green, number=yellow, etc.)
+- [x] All existing tests pass
+- [x] New tests cover the fix
+- [x] LSP diagnostics pass
+- [x] `pnpm -r run build` passes
+- [x] `pnpm -r run lint` passes
+
+## Work completed (2026-07-19)
+
+Implemented the fix in commit `8854f09`:
+
+1. Added `extractTokenText(token)` — recursively extracts text from both text nodes (`value`) and element nodes (`children`)
+2. Added `getTokenColor(token)` — reads `properties.className`, strips `hljs-` prefix, looks up color in `SYNTAX_COLORS`
+3. Updated `renderHighlightedTree` loop to use both helpers, skipping empty text
+4. Added `drone-agent/test/Markdown.test.tsx` with 6 tests covering TSX, JS, Python code blocks, plaintext blocks, mixed element/text tokens, and inline codespan
+5. All validation criteria pass: 1483 tests (99 files), clean LSP, build, lint
