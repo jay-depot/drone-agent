@@ -5,52 +5,80 @@ tags:
   - gaps
   - testing
   - planning
+  - completed
 created: 2026-07-07T17:29:50.826Z
-updated: 2026-07-14T04:06:32.451Z
+updated: 2026-07-20T00:34:56.164Z
 ---
 
-# MCP Client Gap Analysis (2026-07-07, updated 2026-07-14)
+# MCP Client Gap Analysis (2026-07-07, updated 2026-07-19 — ALL ITEMS COMPLETE)
 
 Source files: `drone-agent/src/plugins/mcp/index.ts`, `client.ts`; `drone-core/src/mcp-types.ts`, `config-types.ts`.
-Tests EXIST: `drone-agent/test/mcp-client.test.ts` (fast, in-process `fetch` mock via `mcp-fake-server.ts`) and `mcp.test.ts` + `mcp-fake-server.mjs` (slow stdio integration). The fast suite now asserts CORRECT (fixed) behavior — the `isError` no-op is gone (see item 2) and `Mcp-Session-Id` is captured/echoed (see item 1). The `PHASE 1 RULE` comment in `mcp.test.ts:13` and the header in `mcp-client.test.ts:14-15` describe the _former_ baseline that was fixed.
+Tests: `drone-agent/test/mcp-client.test.ts` (fast, in-process `fetch` mock via `mcp-fake-server.ts`) and `mcp.test.ts` + `mcp-fake-server.mjs` (slow stdio integration).
 
-## Fix plan status
+## Status: ALL ITEMS COMPLETE
 
-- **Items 1 & 2** — DONE. Implemented and verified by now-green tests (commits `418b400` deleted the completed plan after ingestion into wiki). Bug 1 = runtime-only `Mcp-Session-Id` capture/echo in `createStreamableHttpJsonRpcClient` (`client.ts` — `let sessionId` now persists and is sent as `mcp-session-id` header; test at `mcp-client.test.ts:266-282`). Bug 2 = `callTool` (`client.ts`) now throws on `isError: true`, surfaced by `executeToolSafely` as a real `{kind:'error'}` tool result (test at `mcp-client.test.ts:250-264`).
-- **Item 8** — DONE (2026-07-08). Implemented via `mcp-fix-point-8-plan`. The streamable-HTTP transport now (a) opens a GET SSE reader after `initialize` and dispatches server→client notifications through an `onNotification` callback (`client.ts` `openGetStream`; `index.ts` logs them + records stream errors via `onStreamError`), and (b) sends a best-effort `DELETE` (with `mcp-session-id`) on `disconnect`. `DroneMcpServerState` gained `streaming?` / `lastStreamError?`. 6 new regression tests in `mcp-client.test.ts`.
-- **Item 5** — DONE (2026-07-08). Implemented via `mcp-resource-templates-plan`. Added `DroneMcpResourceTemplateMeta` + `resourceTemplatesListTruncated?` to drone-core; `normalizeResourceTemplates()` + `listResourceTemplates()` to the client (`resources/templates/list`, reusing `paginateList`); a dedicated `${serverId}__list_resource_templates` tool in `index.ts`; and `__read_resource` now documents that it accepts filled-in template URIs (no separate `resources/templates/read` — the spec reads templates through the shared `resources/read`). 4 fast + 2 integration tests added. Also fixed a pre-existing baseline break: `drone-core/src/index.ts` wasn't exporting `DroneElicitation`, which broke `pnpm build` (TS2305/TS7006 in 6 unrelated files) — added to the re-export list.
-- **Item 6** — DONE (2026-07-12). `index.ts:372-380` handles `notifications/tools/list_changed` via `onNotification` callback. When received, calls `listAndMountTools()` which unregisters old tools, clears `mountedToolNames`, re-lists from server, and re-mounts.
-- **Item 15** — DONE (2026-07-12). `client.ts:537-620` (`openGetStream`) implements auto-reconnect with exponential backoff (1s → 2s → 4s → ... → 60s cap). On successful reconnection, `onStreamReconnected` fires, triggering `listAndMountTools` in `index.ts:395-400`.
-- **Item 16** — DONE (2026-07-12). `client.ts:1050-1102` (`startRespawnMonitor`) implements auto-respawn for stdio MCP servers. When a stdio server enters `status: 'error'`, the monitor respawns with exponential backoff, re-initializes the JSON-RPC client, and calls `onReconnected` which triggers a tool re-mount.
-- **Item 4** — DONE (2026-07-14). Implemented via `mcp-item4-protocol-version-negotiation-plan`. Updated default `protocolVersion` from `'2024-11-05'` to `'2025-06-18'` in both main initialize and respawn monitor. Added `MCP-Protocol-Version` HTTP header to all POST, GET, and DELETE requests in the streamable HTTP transport. Added `setProtocolVersion` to `JsonRpcClient` interface. Extract negotiated version from server's `initialize` response and apply to subsequent requests. 4 new tests added (39 total in fast suite). Commit `20fce35`.
-- **Item 9** — DONE (2026-07-14). Implemented via `mcp-item9-listtools-walk-all-pages`. Added `walkAllPages` function alongside `paginateList` that walks all pages without maxListPages/maxListItems caps (only infinite-loop protection via cursor dedup). Changed `listTools` to use it, so the ToolMountingCache and `mcp__<server>__list_tools` now show the full tool list. `discoveredToolCount` reflects the true total; `toolsListTruncated` is always `false` for tools. Updated 3 tests. Commit `852d386`.
+All 14 actionable items from the original gap analysis have been implemented and verified. The only remaining item (#11, `completion/complete`) was intentionally marked WON'T DO.
 
-## Critical (correctness / spec compliance)
+## Item status
 
-1. ~~**Streamable HTTP ignores `Mcp-Session-Id` header.**~~ **FIXED** (runtime-only capture + echo; no drone-core config change). `client.ts` reads `response.headers.get('mcp-session-id')` and echoes it on subsequent POSTs.
-2. ~~**No `tools/call` `isError` handling.**~~ **FIXED.** `callTool` throws on `isError: true` (Bug 2 Option A).
-3. **Tests exist.** `mcp-client.test.ts` + `mcp-fake-server.ts` cover the HTTP transport with a mocked `fetch`; `mcp.test.ts` covers stdio framing. The fast suite now encodes corrected behavior (items 1/2 flipped). DONE.
-4. ~~Hardcoded `protocolVersion: '2024-11-05'` in `initialize`, no negotiation, no newer revisions. (`client.ts` initialize params.) Note: appears in two places — main initialize (`client.ts:1111`) and respawn monitor's initialize (`client.ts:1083`).~~ **FIXED** (2026-07-14). Default is now `'2025-06-18'`, `MCP-Protocol-Version` header sent on all HTTP requests, and version is negotiated from server response.
+| # | Description | Status | PR/Commit |
+|---|-------------|--------|-----------|
+| 1 | Streamable HTTP ignores `Mcp-Session-Id` header | ✅ DONE | `418b400` |
+| 2 | No `tools/call` `isError` handling | ✅ DONE | `418b400` |
+| 3 | Tests exist | ✅ DONE | `418b400` |
+| 4 | Hardcoded `protocolVersion` | ✅ DONE | `20fce35` |
+| 5 | No resource templates | ✅ DONE | `mcp-resource-templates-plan` |
+| 6 | No `notifications/tools/list_changed` handling | ✅ DONE | `0943ac8` |
+| 7 | No notification/progress/log handling; no `logging`/`roots` in initialize | ✅ DONE | `50228b6` (logging), `020a13f` (roots) |
+| 8 | HTTP transport is single-POST only | ✅ DONE | `f4846ac` |
+| 9 | `discoveredToolCount` set to truncated count | ✅ DONE | `db9137c` |
+| 10 | No `roots` capability | ✅ DONE | `020a13f` |
+| 11 | No `completion/complete` | ⏭️ WON'T DO | Not useful for LLM agents |
+| 12 | No spawn-timeout separate from request-timeout | ✅ DONE | `055c1ca` (#21) |
+| 13 | Tool-name sanitization collisions silently skipped | ✅ DONE | `055c1ca` (#21) |
+| 14 | No streaming / partial-content for large results | ✅ DONE | `055c1ca` (#21) |
+| 15 | Auto-reconnect GET SSE stream | ✅ DONE | `f4846ac` |
+| 16 | Respawn crashed stdio servers | ✅ DONE | `f4846ac` |
 
-## Important (capability / robustness)
+## Implementation details
 
-5. ~~No resource templates (`resources/templates/list`/`read`); `DroneMcpResourceMeta` only models concrete resources.~~ **FIXED** (2026-07-08, `mcp-resource-templates-plan`). `DroneMcpResourceTemplateMeta` + `__list_resource_templates` tool; templates read via the shared `resources/read`.
-6. ~~No `notifications/tools/list_changed` handling — tools mounted statically at `onPluginsLoaded`, go stale.~~ **FIXED** (2026-07-12). `onNotification` callback handles `notifications/tools/list_changed` and triggers full re-mount via `listAndMountTools()`.
-7. No notification/progress/log handling; `initialize` advertises only tools/resources/prompts (no `logging`, `roots`). (`client.ts` initialize `capabilities`.) Note: item 8 delivers notifications via `onNotification`, and item 6 handles `notifications/tools/list_changed`, but `initialize` still doesn't advertise `logging`/`roots`, and the client doesn't act on `notifications/message` (logging) yet.
-8. ~~\*\*HTTP transport is single-POST only; no GET SSE stream for server→client msgs; no `DELETE` session termination (`disconnect` just flips `closed`).~~ **FIXED** (2026-07-08, `mcp-fix-point-8-plan`). GET SSE reader + `onNotification`/`onStreamError` dispatch; best-effort `DELETE` on disconnect.
-9. ~~`discoveredToolCount` set to truncated paginated count, not true server total. (`client.ts` `listTools` returns capped `items`; `index.ts` assigns `tools.length`.)~~ **FIXED** (2026-07-14). `listTools` now uses `walkAllPages` which fetches all pages. `discoveredToolCount` reflects the true total; `toolsListTruncated` is `false` for tools. Commit `852d386`.
-10. No `roots` capability.
-11. ~~No `completion/complete`.~~ **WON'T DO** — `completion/complete` is an optional MCP capability for argument autocomplete in interactive UIs. It doesn't add value for an LLM agent that generates tool arguments itself. Intentionally not supported.
-12. No spawn-timeout separate from request-timeout.
-13. Tool-name sanitization collisions silently skipped (e.g. `foo bar` vs `foo-bar` both → `foo_bar`, duplicate skipped with warning in `mountMcpTools`/`registerMountedTool`).
-14. No streaming / partial-content for large tool results or resources.
+### Items 1 & 2 — Session-Id + isError (Phase 1 baseline fix)
+Runtime-only `Mcp-Session-Id` capture/echo in `createStreamableHttpJsonRpcClient` (`client.ts` — `let sessionId` persists and is sent as `mcp-session-id` header). `callTool` throws on `isError: true`, surfaced by `executeToolSafely` as a real `{kind:'error'}` tool result.
 
-## New (previously deferred, now mostly done)
+### Item 4 — Protocol version negotiation
+Default `protocolVersion` changed from `'2024-11-05'` to `'2025-06-18'` in both main initialize and respawn monitor. `MCP-Protocol-Version` HTTP header sent on all POST, GET, and DELETE requests. `setProtocolVersion` on `JsonRpcClient` interface. Negotiated version extracted from server's `initialize` response and applied to subsequent requests.
 
-15. ~~Auto-reconnect the GET SSE stream on transient drop/close (with backoff). Deferred from the point-8 fix (decision a: log-and-stop for now).~~ **FIXED** (2026-07-12). `openGetStream` implements exponential backoff reconnection (1s → 60s cap) with `onStreamReconnected` callback.
-16. ~~Respawn crashed stdio MCP servers (currently a crashed stdio server goes to `status: 'error'` permanently; no restart). Deferred from point-8 discussion.~~ **FIXED** (2026-07-12). `startRespawnMonitor` respawns stdio servers with exponential backoff and calls `onReconnected` for tool re-mount.
+### Item 5 — Resource templates
+`DroneMcpResourceTemplateMeta` + `resourceTemplatesListTruncated?` in drone-core. `normalizeResourceTemplates()` + `listResourceTemplates()` in client (`resources/templates/list`, reusing `paginateList`). Dedicated `${serverId}__list_resource_templates` tool. Templates read through shared `resources/read` (no separate read tool needed per spec).
 
-## Remaining work (open items)
+### Item 6 — tools/list_changed handling
+`onNotification` callback handles `notifications/tools/list_changed` and triggers surgical re-list + stale-tool unmount via `handleToolsListChanged`. Uses `unregisterTool` for single-tool removal. Does NOT nuke all MCP plugin tools across all servers.
 
-- Critical/Important: 7
-- Minor: 10, 12, 13, 14
+### Item 7 — Logging + roots capabilities
+`initialize` advertises `logging: {}` and `roots: {}` in capabilities. `notifications/message` dispatched to plugin logger at appropriate severity level. `roots/list` server→client requests handled via `onRequest` transport callback with default roots (CWD + home) + config overrides.
+
+### Item 8 — GET SSE stream + DELETE
+Streamable-HTTP transport opens a GET SSE reader after `initialize` and dispatches server→client notifications through `onNotification` callback. Best-effort `DELETE` (with `mcp-session-id`) on `disconnect`. `DroneMcpServerState` gained `streaming?` / `lastStreamError?`.
+
+### Item 9 — walkAllPages for tools
+`listTools` uses `walkAllPages` (separate from `paginateList`) which fetches all pages without `maxListPages`/`maxListItems` caps — only infinite-loop protection via cursor dedup. `discoveredToolCount` reflects true server total; `toolsListTruncated` is always `false` for tools.
+
+### Item 10 — Roots capability
+`roots: {}` advertised in initialize. `roots/list` server→client requests handled via `onRequest` transport callback. Default roots: `file://<cwd>` (Project Root) + `file://<home>` (Home Directory), merged with `mcp.roots` config.
+
+### Item 12 — Spawn timeout
+`spawnTimeoutMs` config field (default 30s) for the `initialize` handshake, separate from `requestTimeoutMs` for subsequent JSON-RPC calls. HTTP transport uses runtime-mutable timeout via `setRequestTimeout()`; stdio transport rebuilds the RPC client after initialize. Respawn monitor also uses spawn timeout.
+
+### Item 13 — Tool-name collisions
+`sanitizeToolSegment` detects collisions and appends `_1`, `_2`, etc. (e.g., `foo bar` and `foo.bar` → `foo_bar` and `foo_bar_1`). Per-server `usedNames` sets stored in `serverUsedNames` map. `ToolMountingCache.getToolDefName()` so meta-tool handlers report the actual registered name.
+
+### Item 14 — Streaming safety valve
+`parseSseResponse` handles multiple SSE events, dispatching progress notifications via `onNotification` and returning only the final result. `readResponseBody()` for chunked reading with byte limit enforcement. `maxResponseSizeBytes` config (default 1MB), computed from session context window (10% of `contextWindowTokens * 4`, min 1MB).
+
+### Items 15 & 16 — SSE reconnect + stdio respawn
+GET SSE stream auto-reconnects on transient drops with exponential backoff (1s → 2s → 4s → ... → 60s cap). Crashed stdio servers are automatically respawned with exponential backoff, re-initialized, and tools re-mounted via `onReconnected` callback.
+
+## Test coverage
+- **Fast suite** (`mcp-client.test.ts`): 49 tests covering all HTTP transport features including session-id, isError, protocol negotiation, resource templates, pagination, retry, error classification, compatibility modes, roots, SSE stream, DELETE, spawn timeout, size limits, and progress notifications.
+- **Slow suite** (`mcp.test.ts`): 16 tests covering stdio child lifecycle (shutdown, force-kill, error states, respawn, tools/list_changed, notifications/message, multi-server, tool-name sanitization, collision disambiguation).
+- **Total**: 1477 tests across all packages (98 files), all passing.
