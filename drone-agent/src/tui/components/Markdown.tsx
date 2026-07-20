@@ -48,6 +48,23 @@ const SYNTAX_COLORS: Record<string, string> = {
   sub: 'gray',
   sup: 'gray',
 };
+/**
+ * Mapping from Ink color names to ANSI foreground escape codes.
+ * Used to render syntax-highlighted code as a single <Text> element
+ * with raw escape codes, avoiding Yoga layout bugs from nested <Text>
+ * elements with different color props.
+ */
+const ANSI_COLORS: Record<string, string> = {
+  black: '30',
+  red: '31',
+  green: '32',
+  yellow: '33',
+  blue: '34',
+  magenta: '35',
+  cyan: '36',
+  white: '37',
+  gray: '90',
+};
 
 interface MarkdownProps {
   /** Markdown content to render */
@@ -340,27 +357,30 @@ function renderCodeBlock(
 
 /**
  * Render lowlight syntax tree to Ink components.
+ *
+ * Uses raw ANSI escape codes for color changes within a single <Text>
+ * element per line, avoiding Yoga layout bugs from nested <Text> elements
+ * with different color props.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function renderHighlightedTree(tree: any, backgroundColor: string): ReactNode {
   const lines = tree.children;
-
   return (
     <>
-      {lines.map((line: any, lineIndex: number) => (
-        <Text key={lineIndex} backgroundColor={backgroundColor}>
-          {line.children
-            ? line.children.map((token: any, tokenIndex: number) => {
-                const color = SYNTAX_COLORS[token.type] || 'white';
-                return (
-                  <Text key={tokenIndex} color={color}>
-                    {token.value}
-                  </Text>
-                );
-              })
-            : line.value}
-        </Text>
-      ))}
+      {lines.map((line: any, lineIndex: number) => {
+        const tokens = line.children ?? [];
+        let rendered = '';
+        for (const token of tokens) {
+          const color = SYNTAX_COLORS[token.type] || 'white';
+          const ansiCode = ANSI_COLORS[color] || '37';
+          rendered += `\u001b[${ansiCode}m${token.value}\u001b[39m`;
+        }
+        return (
+          <Text key={lineIndex} backgroundColor={backgroundColor}>
+            {rendered || line.value}
+          </Text>
+        );
+      })}
     </>
   );
 }
