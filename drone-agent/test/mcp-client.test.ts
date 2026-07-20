@@ -60,6 +60,7 @@ async function makeConnection(
     maxListPages: number;
     maxListItems: number;
     compatibilityMode: 'strict' | 'permissive';
+    maxResponseSizeBytes: number;
   }> = {},
   callbacks: {
     onNotification?: (method: string, params: unknown) => void;
@@ -77,6 +78,7 @@ async function makeConnection(
     defaultMaxListPages: defaults.maxListPages ?? 25,
     defaultMaxListItems: defaults.maxListItems ?? 500,
     defaultCompatibilityMode: defaults.compatibilityMode ?? 'strict',
+    defaultMaxResponseSizeBytes: defaults.maxResponseSizeBytes ?? 1048576,
     onNotification: callbacks.onNotification ?? (() => {}),
     onStreamError: callbacks.onStreamError ?? (() => {}),
     logger: silentLogger,
@@ -238,6 +240,65 @@ describe('initialize handshake', () => {
       () => new Promise(resolve => setTimeout(resolve, 500))
     );
     await expect(conn.listTools()).rejects.toThrow(/timed out/);
+  });
+
+  it('dispatches SSE progress notifications before the final result', async () => {
+    const notifications: Array<{ method: string; params: unknown }> = [];
+    const mock = createMockFetch({
+      postSseResponses: {
+        'tools/list': [
+          // Progress notification (no id)
+          { method: 'notifications/progress', params: { progress: 0.5 } },
+          // Final result (has id matching the request)
+          { result: { tools: [] } },
+        ],
+      },
+    });
+    installFetch(mock);
+    const conn = await makeConnection(
+      mock,
+      {},
+      {},
+      { onNotification: (m, p) => notifications.push({ method: m, params: p }) }
+    );
+    const result = await conn.listTools();
+    expect(result).toEqual([]);
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0].method).toBe('notifications/progress');
+    expect(notifications[0].params).toEqual({ progress: 0.5 });
+  });
+
+  it('rejects when SSE response exceeds maxResponseSizeBytes', async () => {
+    const mock = createMockFetch({
+      postSseResponses: {
+        'tools/list': [
+          // A large result that exceeds the tiny limit
+          {
+            result: {
+              tools: Array.from({ length: 100 }, (_, i) => ({
+                name: `tool${i}`,
+              })),
+            },
+          },
+        ],
+      },
+    });
+    installFetch(mock);
+    const conn = await makeConnection(mock, {}, { maxResponseSizeBytes: 500 });
+    await expect(conn.listTools()).rejects.toThrow(/exceeded maximum size/);
+  });
+
+  it('rejects when JSON response exceeds maxResponseSizeBytes', async () => {
+    const mock = createMockFetch({
+      handlers: {
+        'tools/list': () => ({
+          tools: Array.from({ length: 100 }, (_, i) => ({ name: `tool${i}` })),
+        }),
+      },
+    });
+    installFetch(mock);
+    const conn = await makeConnection(mock, {}, { maxResponseSizeBytes: 500 });
+    await expect(conn.listTools()).rejects.toThrow(/exceeded maximum size/);
   });
 
   it('sends MCP-Protocol-Version header on subsequent POST requests', async () => {

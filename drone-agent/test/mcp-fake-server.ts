@@ -99,6 +99,26 @@ export type MockFetchOptions = {
    */
   sseEvents?: Array<{ id?: number; method: string; params?: unknown }>;
   /**
+   * Per-method SSE responses for POST requests. When a POST request's method
+   * matches a key here, the mock returns an SSE stream with the given events
+   * instead of a JSON response. Used to test progress notifications before the
+   * final result.
+   */
+  postSseResponses?: Record<
+    string,
+    Array<{ id?: number; method?: string; params?: unknown; result?: unknown }>
+  >;
+  /**
+   * Per-method SSE responses for POST requests. When a POST request's method
+   * matches a key here, the mock returns an SSE stream with the given events
+   * instead of a JSON response. Used to test progress notifications before the
+   * final result.
+   */
+  postSseResponses?: Record<
+    string,
+    Array<{ id?: number; method: string; params?: unknown }>
+  >;
+  /**
    * When true, the GET stream's first `read()` throws (simulating a transient
    * stream drop) instead of delivering the queued `sseEvents`.
    */
@@ -174,13 +194,21 @@ export type MockFetch = {
 };
 
 function okResponse(body: unknown): Response {
+  const encoder = new TextEncoder();
+  const encoded = encoder.encode(JSON.stringify(body));
   return {
     ok: true,
     status: 200,
     statusText: 'OK',
     async text() {
-      return JSON.stringify(body);
+      return new TextDecoder().decode(encoded);
     },
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoded);
+        controller.close();
+      },
+    }),
     headers: new Headers(),
     redirected: false,
     type: 'basic',
@@ -219,7 +247,12 @@ function errorResponse(status: number): Response {
  * array-envelope / permissive normalization paths).
  */
 function sseResponse(
-  events: Array<{ id?: number; method: string; params?: unknown }>,
+  events: Array<{
+    id?: number;
+    method?: string;
+    params?: unknown;
+    result?: unknown;
+  }>,
   shouldError: boolean
 ): Response {
   const encoder = new TextEncoder();
@@ -236,11 +269,14 @@ function sseResponse(
         return;
       }
       for (const ev of events) {
-        const frame: Record<string, unknown> = {
-          jsonrpc: '2.0',
-          method: ev.method,
-          params: ev.params,
-        };
+        const frame: Record<string, unknown> = { jsonrpc: '2.0' };
+        if (ev.method !== undefined) {
+          frame.method = ev.method;
+          frame.params = ev.params;
+        }
+        if (ev.result !== undefined) {
+          frame.result = ev.result;
+        }
         if (ev.id !== undefined) {
           frame.id = ev.id;
         }
@@ -495,6 +531,18 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
 
     if (rawBodies.has(method)) {
       return okResponse(rawBodies.get(method));
+    }
+    // Per-method SSE responses for POST requests (progress notifications)
+    if (options.postSseResponses?.[method]) {
+      const events = options.postSseResponses[method].map(ev => {
+        // Inject the actual request id into result events (final result).
+        // Notification events (no result) are left as-is.
+        if (ev.result !== undefined) {
+          return { ...ev, id };
+        }
+        return ev;
+      });
+      return sseResponse(events, false);
     }
 
     const signal = init?.signal ?? null;

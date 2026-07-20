@@ -152,6 +152,12 @@ export const mcpPlugin: DronePlugin = {
   },
   register: async registration => {
     const mcpConfig = registration.getConfig().mcp;
+    const sessionConfig = registration.getConfig().session;
+    // 10% of context window as byte limit (1 token ≈ 4 bytes), min 1MB
+    const defaultMaxResponseSizeBytes = Math.max(
+      1024 * 1024,
+      Math.round((sessionConfig?.contextWindowTokens ?? 32768) * 4 * 0.1)
+    );
     const connections = new Map<string, McpClientConnection>();
     const serverStates = new Map<string, DroneMcpServerState>();
     const serverCaches = new Map<string, ToolMountingCache>();
@@ -678,6 +684,7 @@ export const mcpPlugin: DronePlugin = {
             defaultMaxListPages: mcpConfig.maxListPages,
             defaultMaxListItems: mcpConfig.maxListItems,
             defaultCompatibilityMode: mcpConfig.compatibilityMode,
+            defaultMaxResponseSizeBytes,
             onNotification,
             onStreamError,
             onReconnected,

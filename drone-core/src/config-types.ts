@@ -216,6 +216,7 @@ export type DroneMcpStdioServerConfig = {
   /** Timeout in ms for the initialize handshake after spawning. */
   spawnTimeoutMs?: number;
   requestTimeoutMs?: number;
+  maxResponseSizeBytes?: number;
   retryCount?: number;
   retryDelayMs?: number;
   maxListPages?: number;
@@ -239,6 +240,7 @@ export type DroneMcpStreamableHttpServerConfig = {
   /** Timeout in ms for the initialize handshake after spawning. */
   spawnTimeoutMs?: number;
   requestTimeoutMs?: number;
+  maxResponseSizeBytes?: number;
   retryCount?: number;
   retryDelayMs?: number;
   maxListPages?: number;
@@ -264,6 +266,7 @@ export type DroneMcpConfig = {
   maxListPages: number;
   maxListItems: number;
   compatibilityMode: 'strict' | 'permissive';
+  maxResponseSizeBytes: number;
   servers: Record<string, DroneMcpServerConfig>;
   roots?: DroneMcpRoot[];
 };
@@ -414,6 +417,7 @@ export function createDefaultAgentConfig(
       maxListPages: 25,
       maxListItems: 500,
       compatibilityMode: 'strict',
+      maxResponseSizeBytes: 1048576,
       servers: {},
     },
     compaction: {

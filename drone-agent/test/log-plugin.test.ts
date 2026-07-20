@@ -336,6 +336,7 @@ async function getCapability(
         maxListPages: 25,
         maxListItems: 500,
         compatibilityMode: 'strict',
+        maxResponseSizeBytes: 1048576,
         servers: {},
       },
       compaction: {

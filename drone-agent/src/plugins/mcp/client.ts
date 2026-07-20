@@ -555,7 +555,9 @@ function createLineDelimitedJsonRpcClient(options: {
  */
 async function parseSseResponse(
   response: Response,
-  id: number
+  id: number,
+  onNotification: (method: string, params: unknown) => void,
+  maxSizeBytes: number
 ): Promise<JsonRpcMessage> {
   if (!response.body) {
     throw new Error('SSE response has no body stream.');
@@ -563,21 +565,76 @@ async function parseSseResponse(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let totalBytes = 0;
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
+    totalBytes += value.length;
+    if (totalBytes > maxSizeBytes) {
+      reader.cancel();
+      throw new Error(
+        `MCP SSE response exceeded maximum size of ${maxSizeBytes} bytes`
+      );
+    }
     buffer += decoder.decode(value, { stream: true });
-    // Look for a data: line containing a JSON-RPC message with our id
-    const match = buffer.match(/^data:\s*(\{.*?\})\s*$/m);
-    if (match) {
+
+    // Process complete SSE events (separated by \n\n)
+    let separator: number;
+    while ((separator = buffer.indexOf('\n\n')) !== -1) {
+      const rawEvent = buffer.slice(0, separator);
+      buffer = buffer.slice(separator + 2);
+      const dataLine = rawEvent
+        .split('\n')
+        .find(line => line.startsWith('data:'));
+      if (!dataLine) continue;
+      const data = dataLine.slice('data:'.length).trim();
+      if (data.length === 0) continue;
       try {
-        return JSON.parse(match[1]) as JsonRpcMessage;
+        const message = JSON.parse(data) as JsonRpcMessage;
+        if (typeof message.id === 'number' && message.id === id) {
+          return message; // Final result
+        }
+        if (typeof message.method === 'string') {
+          onNotification(message.method, message.params); // Progress notification
+        }
       } catch {
-        /* continue reading */
+        // Ignore malformed SSE payloads
       }
     }
   }
+
   throw new Error('Invalid JSON payload from streamable HTTP MCP server.');
+}
+/**
+ * Read a response body with a byte limit, using chunked reading so we can
+ * enforce the limit incrementally rather than reading the entire body first.
+ */
+async function readResponseBody(
+  response: Response,
+  maxSizeBytes: number
+): Promise<string> {
+  if (!response.body) {
+    return await response.text(); // fallback for environments without body
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let result = '';
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.length;
+    if (totalBytes > maxSizeBytes) {
+      reader.cancel();
+      throw new Error(
+        `MCP response exceeded maximum size of ${maxSizeBytes} bytes`
+      );
+    }
+    result += decoder.decode(value, { stream: true });
+  }
+  result += decoder.decode(); // flush
+  return result;
 }
 
 function normalizeHttpEnvelope(
@@ -621,6 +678,7 @@ function normalizeHttpEnvelope(
 function createStreamableHttpJsonRpcClient(options: {
   serverId: string;
   url: string;
+  maxResponseSizeBytes: number;
   headers: Record<string, string>;
   requestTimeoutMs: number;
   compatibilityMode: 'strict' | 'permissive';
@@ -818,10 +876,18 @@ function createStreamableHttpJsonRpcClient(options: {
         const isSse = contentType.includes('text/event-stream');
         let parsedBody: unknown;
         if (isSse) {
-          const sseMessage = await parseSseResponse(response, id);
+          const sseMessage = await parseSseResponse(
+            response,
+            id,
+            options.onNotification,
+            options.maxResponseSizeBytes
+          );
           parsedBody = sseMessage;
         } else {
-          const rawBody = await response.text();
+          const rawBody = await readResponseBody(
+            response,
+            options.maxResponseSizeBytes
+          );
           try {
             parsedBody = JSON.parse(rawBody);
           } catch {
@@ -1056,6 +1122,7 @@ export async function createMcpClientConnection(options: {
   defaultMaxListPages: number;
   defaultMaxListItems: number;
   defaultCompatibilityMode: 'strict' | 'permissive';
+  defaultMaxResponseSizeBytes: number;
   onNotification: (method: string, params: unknown) => void;
   onStreamError: (message: string) => void;
   logger: DroneLogger;
@@ -1076,6 +1143,8 @@ export async function createMcpClientConnection(options: {
     options.config.maxListPages ?? options.defaultMaxListPages;
   const effectiveMaxListItems =
     options.config.maxListItems ?? options.defaultMaxListItems;
+  const effectiveMaxResponseSizeBytes =
+    options.config.maxResponseSizeBytes ?? options.defaultMaxResponseSizeBytes;
   const effectiveCompatibilityMode =
     options.config.transport === 'streamable_http'
       ? (options.config.compatibilityMode ?? options.defaultCompatibilityMode)
@@ -1116,6 +1185,7 @@ export async function createMcpClientConnection(options: {
     rpc = createStreamableHttpJsonRpcClient({
       serverId: options.serverId,
       url: options.config.url,
+      maxResponseSizeBytes: effectiveMaxResponseSizeBytes,
       headers: options.config.headers ?? {},
       requestTimeoutMs: effectiveRequestTimeoutMs,
       compatibilityMode: effectiveCompatibilityMode,
