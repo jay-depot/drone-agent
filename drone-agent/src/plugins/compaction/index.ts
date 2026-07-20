@@ -196,10 +196,23 @@ async function maybeCompact(input: {
 
     const summarySystemPrompt =
       'You are a conversation summarizer. Produce a concise summary of the ' +
-      'transcript below that preserves decisions, file paths, function ' +
-      'names, and any unresolved questions. Aim for a short, dense ' +
-      'paragraph plus a brief bullet list. Do not include greetings or ' +
-      'pleasantries. Stay under the requested token budget.';
+      'transcript below. Aim for a brief bullet list. Do not include greetings or ' +
+      'pleasantries. Stay under the requested token budget. Prioritize ' +
+      'including information in the summary according to the following ' +
+      'order from most to least important:\n' +
+      '1. User input, instruction, questions, and decisions. Preserve these ' +
+      'verbatim.\n' +
+      "2. Any context needed to understand the user's input, instructions, " +
+      'questions, and decisions. For instance, if the user says "Yes, like that," ' +
+      'whatever "that" refers to needs to be included in the summary, if ' +
+      'it is available.\n' +
+      '3. Architectural or design information.\n' +
+      '4. Any other relevant information.\n\n' +
+      'Detailed tool calls and results should be discarded. Provide a summary ' +
+      'of what was done if it is relevant and only if space allows.\n\n' +
+      `If any information is missing or ambiguous, note that in the summary. ` +
+      `Do not make anything up. If information is not in the transcript, ` +
+      `skip it. If you can't just skip it, note it.`;
 
     const summaryUserPrompt =
       `Summarize the following ${sliceSize} conversation turn(s) in at most ` +
@@ -217,7 +230,7 @@ async function maybeCompact(input: {
 
       const summaryText = (response.message ?? '').trim();
       if (summaryText.length === 0) {
-        throw new Error('Ollama returned an empty summary.');
+        throw new Error('LLM Provider returned an empty summary.');
       }
 
       sessionManager.dropOldestNonSummaryTurns(sliceSize);

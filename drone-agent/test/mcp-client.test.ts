@@ -54,11 +54,13 @@ async function makeConnection(
   configOverrides: Partial<DroneMcpServerConfig> = {},
   defaults: Partial<{
     requestTimeoutMs: number;
+    spawnTimeoutMs: number;
     retryCount: number;
     retryDelayMs: number;
     maxListPages: number;
     maxListItems: number;
     compatibilityMode: 'strict' | 'permissive';
+    maxResponseSizeBytes: number;
   }> = {},
   callbacks: {
     onNotification?: (method: string, params: unknown) => void;
@@ -70,11 +72,13 @@ async function makeConnection(
     serverId: 'demo',
     config: baseConfig(configOverrides),
     defaultRequestTimeoutMs: defaults.requestTimeoutMs ?? 1000,
+    defaultSpawnTimeoutMs: defaults.spawnTimeoutMs ?? 3000,
     defaultRetryCount: defaults.retryCount ?? 0,
     defaultRetryDelayMs: defaults.retryDelayMs ?? 0,
     defaultMaxListPages: defaults.maxListPages ?? 25,
     defaultMaxListItems: defaults.maxListItems ?? 500,
     defaultCompatibilityMode: defaults.compatibilityMode ?? 'strict',
+    defaultMaxResponseSizeBytes: defaults.maxResponseSizeBytes ?? 1048576,
     onNotification: callbacks.onNotification ?? (() => {}),
     onStreamError: callbacks.onStreamError ?? (() => {}),
     logger: silentLogger,
@@ -163,6 +167,138 @@ describe('initialize handshake', () => {
     });
     installFetch(mock);
     await expect(makeConnection(mock)).rejects.toThrow(/boom/);
+  });
+
+  it('uses spawnTimeoutMs for the initialize request', async () => {
+    const initResult = {
+      protocolVersion: '2025-06-18',
+      capabilities: { tools: {}, resources: {}, prompts: {} },
+      serverInfo: { name: 'fake-mcp', version: '0.0.0' },
+    };
+    const mock = createMockFetch({
+      handlers: {
+        initialize: () =>
+          new Promise(resolve => {
+            // Intentionally longer than requestTimeoutMs but shorter than spawnTimeoutMs.
+            setTimeout(() => resolve(initResult), 80);
+          }),
+      },
+    });
+    installFetch(mock);
+    const conn = await makeConnection(
+      mock,
+      {},
+      { requestTimeoutMs: 50, spawnTimeoutMs: 500 }
+    );
+    expect(conn.state.status).toBe('connected');
+    // initialize should have succeeded because it used the longer spawnTimeoutMs
+    expect(mock.callCount('initialize')).toBe(1);
+  });
+
+  it('times out initialize with a short spawnTimeoutMs', async () => {
+    const initResult = {
+      protocolVersion: '2025-06-18',
+      capabilities: { tools: {}, resources: {}, prompts: {} },
+      serverInfo: { name: 'fake-mcp', version: '0.0.0' },
+    };
+    const mock = createMockFetch({
+      handlers: {
+        initialize: () =>
+          new Promise(resolve => {
+            setTimeout(() => resolve(initResult), 1000);
+          }),
+      },
+    });
+    installFetch(mock);
+    await expect(
+      makeConnection(mock, {}, { requestTimeoutMs: 50, spawnTimeoutMs: 50 })
+    ).rejects.toThrow(/timed out|initialize/i);
+  });
+
+  it('uses requestTimeoutMs for subsequent JSON-RPC requests after initialize', async () => {
+    const initResult = {
+      protocolVersion: '2025-06-18',
+      capabilities: { tools: {}, resources: {}, prompts: {} },
+      serverInfo: { name: 'fake-mcp', version: '0.0.0' },
+    };
+    const mock = createMockFetch({
+      handlers: {
+        initialize: () =>
+          new Promise(resolve => setTimeout(() => resolve(initResult), 150)),
+      },
+    });
+    installFetch(mock);
+    const conn = await makeConnection(
+      mock,
+      {},
+      { requestTimeoutMs: 100, spawnTimeoutMs: 1000 }
+    );
+    expect(conn.state.status).toBe('connected');
+    // Subsequent request with a long delay should fail using requestTimeoutMs.
+    mock.onRequest(
+      'tools/list',
+      () => new Promise(resolve => setTimeout(resolve, 500))
+    );
+    await expect(conn.listTools()).rejects.toThrow(/timed out/);
+  });
+
+  it('dispatches SSE progress notifications before the final result', async () => {
+    const notifications: Array<{ method: string; params: unknown }> = [];
+    const mock = createMockFetch({
+      postSseResponses: {
+        'tools/list': [
+          // Progress notification (no id)
+          { method: 'notifications/progress', params: { progress: 0.5 } },
+          // Final result (has id matching the request)
+          { result: { tools: [] } },
+        ],
+      },
+    });
+    installFetch(mock);
+    const conn = await makeConnection(
+      mock,
+      {},
+      {},
+      { onNotification: (m, p) => notifications.push({ method: m, params: p }) }
+    );
+    const result = await conn.listTools();
+    expect(result).toEqual([]);
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0].method).toBe('notifications/progress');
+    expect(notifications[0].params).toEqual({ progress: 0.5 });
+  });
+
+  it('rejects when SSE response exceeds maxResponseSizeBytes', async () => {
+    const mock = createMockFetch({
+      postSseResponses: {
+        'tools/list': [
+          // A large result that exceeds the tiny limit
+          {
+            result: {
+              tools: Array.from({ length: 100 }, (_, i) => ({
+                name: `tool${i}`,
+              })),
+            },
+          },
+        ],
+      },
+    });
+    installFetch(mock);
+    const conn = await makeConnection(mock, {}, { maxResponseSizeBytes: 500 });
+    await expect(conn.listTools()).rejects.toThrow(/exceeded maximum size/);
+  });
+
+  it('rejects when JSON response exceeds maxResponseSizeBytes', async () => {
+    const mock = createMockFetch({
+      handlers: {
+        'tools/list': () => ({
+          tools: Array.from({ length: 100 }, (_, i) => ({ name: `tool${i}` })),
+        }),
+      },
+    });
+    installFetch(mock);
+    const conn = await makeConnection(mock, {}, { maxResponseSizeBytes: 500 });
+    await expect(conn.listTools()).rejects.toThrow(/exceeded maximum size/);
   });
 
   it('sends MCP-Protocol-Version header on subsequent POST requests', async () => {
