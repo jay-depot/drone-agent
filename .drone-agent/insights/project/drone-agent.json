@@ -46,5 +46,9 @@
   {
     "timestamp": "2026-07-21T21:23:30.451Z",
     "insight": "OpenAI and OpenRouter use different JSON formats for reasoning effort in their API requests. OpenAI uses a top-level `reasoning_effort` (snake_case string), while OpenRouter uses a nested `reasoning: { effort: string }` object. The solution was to add both fields to the shared `OpenAiChatRequest` type and let each plugin set the field its API expects. The API ignores fields it doesn't understand, so this is safe and avoids conditional logic."
+  },
+  {
+    "timestamp": "2026-07-21T22:26:35.605Z",
+    "insight": "OpenRouter returns `reasoning` inside `choice.message.reasoning` (as a field on the message object), not at `choice.reasoning` like OpenAI does. The shared `fromOpenAiResponse` adapter only checked `choice.reasoning`, so OpenRouter reasoning was silently dropped. Fixed by adding `reasoning?: string` to `OpenAiMessage` type and adding a fallback check in `fromOpenAiResponse` that checks `choice.message.reasoning` when `choice.reasoning` is absent. Choice-level still takes precedence when both are present."
   }
 ]
