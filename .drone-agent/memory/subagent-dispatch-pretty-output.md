@@ -25,6 +25,7 @@ All steps implemented and validated. Commit `ce5eb8b`.
 ### What was built
 
 **Real-time NDJSON parsing (plugin.ts):**
+
 - Added `onProgress` parameter to the `dispatch` tool's `execute` function
 - Each stdout line from the subagent is parsed as NDJSON and converted to a progress string:
   - `{kind:"reasoning", content:"..."}` → `reasoning:<text>`
@@ -34,12 +35,14 @@ All steps implemented and validated. Commit `ce5eb8b`.
 - Args truncated to ~80 chars, message content to ~120 chars
 
 **SubagentDispatchBlock component (new file):**
+
 - Running state: `… subagent__dispatch - <persona>` header, markdown-rendered kickoff, divider, and last action
 - Done state: `✓` header, markdown-rendered kickoff, divider, and markdown-rendered result
 - Error state: `✗` header, markdown-rendered kickoff, divider, and error message
 - Last action rendering: reasoning in gray, tool calls with `⚡` prefix, messages as plain text, done as markdown
 
 **Tests (10 tests):**
+
 - Running state with/without persona
 - Reasoning, tool call, and assistant message as last action
 - Done state with result and with error result
@@ -47,6 +50,7 @@ All steps implemented and validated. Commit `ce5eb8b`.
 - Most recent output line shown as last action
 
 ### Validation
+
 - `pnpm typecheck` ✅
 - `pnpm lint:eslint` + `pnpm lint:prettier` ✅
 - `pnpm build` ✅

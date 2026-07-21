@@ -30,6 +30,7 @@ A component that renders the `list_tools` result. Expected normalized result sha
 ```
 
 Rendering:
+
 - **Running state:** `… <name>__list_tools`
 - **Done state:** `✓ <name>__list_tools — <toolCount> tool(s)` followed by an indented list of tool names with their descriptions, one per line
 - **Error state:** `✗ <name>__list_tools — <error>`
@@ -45,12 +46,15 @@ Expected normalized result shape:
 ```json
 { "success": true, "tool": "status", "description": "..." }
 ```
+
 or
+
 ```json
 { "success": false, "error": "Unknown tool..." }
 ```
 
 Rendering:
+
 - **Running state:** `… <name>__mount_tool(<tool>)`
 - **Done (success):** `✓ <name>__mount_tool — <tool>: <description>`
 - **Done (failure):** `✗ <name>__mount_tool — <error>`
@@ -65,12 +69,15 @@ Expected normalized result shape:
 ```json
 { "success": true, "tool": "status" }
 ```
+
 or
+
 ```json
 { "success": false, "error": "..." }
 ```
 
 Rendering:
+
 - **Running state:** `… <name>__unmount_tool(<tool>)`
 - **Done (success):** `✓ <name>__unmount_tool — <tool>`
 - **Done (failure):** `✗ <name>__unmount_tool — <error>`
