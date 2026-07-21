@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 import type { DronePlugin } from 'drone-core';
+import { SubagentDispatchBlock } from '../../tui/components/SubagentDispatchBlock.js';
 import { writeNdjsonEvent, type OutputEvent } from '../../output-handlers.js';
 
 type RuntimeInfo = {
@@ -86,6 +87,7 @@ export const subagentPlugin: DronePlugin = {
       ctx.registerTool({
         name: 'dispatch',
         description: 'Launch a subagent to handle a task in parallel',
+        renderComponent: state => SubagentDispatchBlock({ state }),
         inputSchema: {
           type: 'object',
           properties: {
@@ -105,7 +107,7 @@ export const subagentPlugin: DronePlugin = {
           required: ['task'],
           additionalProperties: false,
         },
-        execute: async (input): Promise<string> => {
+        execute: async (input, onProgress): Promise<string> => {
           const subagentId = generateSubagentId();
           const timeoutMs =
             (input.timeout as number | undefined) ?? DEFAULT_TIMEOUT_MS;
@@ -183,6 +185,43 @@ export const subagentPlugin: DronePlugin = {
                 .split('\n')
                 .filter(l => l.trim());
               collectedOutput.push(...lines);
+
+              // Parse each line as NDJSON and emit progress events
+              for (const line of lines) {
+                try {
+                  const event = JSON.parse(line);
+                  if (
+                    event.kind === 'reasoning' &&
+                    typeof event.content === 'string'
+                  ) {
+                    onProgress?.(`reasoning:${event.content}`);
+                  } else if (
+                    event.kind === 'toolCall' &&
+                    typeof event.name === 'string'
+                  ) {
+                    const args = JSON.stringify(event.input ?? {});
+                    const truncated =
+                      args.length > 80 ? args.slice(0, 77) + '...' : args;
+                    onProgress?.(`tool:${event.name}(${truncated})`);
+                  } else if (
+                    event.kind === 'assistantMessage' &&
+                    typeof event.content === 'string'
+                  ) {
+                    const truncated =
+                      event.content.length > 120
+                        ? event.content.slice(0, 117) + '...'
+                        : event.content;
+                    onProgress?.(`msg:${truncated}`);
+                  } else if (
+                    event.kind === 'return' &&
+                    typeof event.result === 'string'
+                  ) {
+                    onProgress?.(`done:${event.result}`);
+                  }
+                } catch {
+                  // Skip invalid JSON
+                }
+              }
             });
 
             // Collect stderr
