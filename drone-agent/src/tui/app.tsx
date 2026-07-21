@@ -111,6 +111,25 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   const schemeRef = useRef<DroneColorScheme>(scheme);
   schemeRef.current = scheme;
 
+  // ── TUI config: syntax highlighting colors and code background ─────
+  const tuiConfig = useMemo(() => {
+    try {
+      return opts.engine.getConfig().tui;
+    } catch {
+      return undefined;
+    }
+  }, [opts.engine]);
+  const syntaxColors = tuiConfig?.syntaxHighlighting?.colors;
+  const codeBackground = tuiConfig?.syntaxHighlighting?.codeBackground;
+
+  // Refs for event listener (avoids stale closure)
+  const syntaxColorsRef = useRef<Record<string, string> | undefined>(
+    syntaxColors
+  );
+  syntaxColorsRef.current = syntaxColors;
+  const codeBackgroundRef = useRef<string | undefined>(codeBackground);
+  codeBackgroundRef.current = codeBackground;
+
   // ── Mid-panel widget state ────────────────────────────────────────────
   const midPanelWidgetsRef = useRef<MidPanelWidget[]>([]);
 
@@ -280,7 +299,12 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           if (!currentMessageId.current) {
             const id = addItem(
               'assistantMessage',
-              <AssistantMessageBlock content={event.content} scheme={s} />,
+              <AssistantMessageBlock
+                content={event.content}
+                scheme={s}
+                syntaxColors={syntaxColorsRef.current}
+                codeBackground={codeBackgroundRef.current}
+              />,
               () => ({
                 text: currentMessageText.current,
                 kind: 'markdown',
@@ -290,7 +314,12 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           } else {
             updateItem(
               currentMessageId.current,
-              <AssistantMessageBlock content={event.content} scheme={s} />,
+              <AssistantMessageBlock
+                content={event.content}
+                scheme={s}
+                syntaxColors={syntaxColorsRef.current}
+                codeBackground={codeBackgroundRef.current}
+              />,
               () => ({
                 text: currentMessageText.current,
                 kind: 'markdown',
@@ -493,7 +522,13 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   // ── Render ─────────────────────────────────────────────────────────
   return (
     <Box flexDirection="column" width="100%" height="100%">
-      <ChatLog entries={entries} tailItems={tailItems} scheme={scheme} />
+      <ChatLog
+        entries={entries}
+        tailItems={tailItems}
+        scheme={scheme}
+        syntaxColors={syntaxColors}
+        codeBackground={codeBackground}
+      />
       <MidPanel widgets={midPanelWidgetsRef.current} scheme={scheme} />
       <InputLine
         value={input}

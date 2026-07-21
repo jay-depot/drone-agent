@@ -21,14 +21,24 @@ const ASSISTANT_SEPARATOR = '\n\n---\n\n';
 export function AssistantMessageBlock({
   content,
   scheme,
+  syntaxColors,
+  codeBackground,
 }: {
   content: string;
   scheme: DroneColorScheme;
+  syntaxColors?: Record<string, string>;
+  codeBackground?: string;
 }): ReactNode {
   return (
     <>
       <Text>{ASSISTANT_SEPARATOR}</Text>
-      <Markdown color={scheme.info}>{content}</Markdown>
+      <Markdown
+        color={scheme.info}
+        syntaxColors={syntaxColors}
+        codeBackground={codeBackground}
+      >
+        {content}
+      </Markdown>
       <Text>{ASSISTANT_SEPARATOR}</Text>
     </>
   );

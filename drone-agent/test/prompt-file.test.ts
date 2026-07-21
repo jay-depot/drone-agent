@@ -340,6 +340,14 @@ describe('promptFilePlugin', () => {
             pullIntervalMinutes: 60,
           },
         },
+        tui: {
+          syntaxHighlighting: {
+            colors: {
+              keyword: 'magenta',
+            },
+            codeBackground: 'gray',
+          },
+        },
       }),
       registerTool: () => {},
       registerPromptFragment: fragment => {

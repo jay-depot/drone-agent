@@ -162,6 +162,13 @@ export type DroneSwarmConfig = {
   sessionId?: string;
 };
 
+export type DroneTuiConfig = {
+  syntaxHighlighting: {
+    colors: Record<string, string>;
+    codeBackground: string;
+  };
+};
+
 export type DroneLspSpawnServerConfig = {
   transport?: 'stdio';
   language?: string;
@@ -296,6 +303,7 @@ export type DroneAgentConfig = {
   terminal: DroneTerminalConfig;
   promptFile: DronePromptFileConfig;
   swarm: DroneSwarmConfig;
+  tui: DroneTuiConfig;
 };
 
 export type PartialDroneAgentConfig = Partial<{
@@ -318,6 +326,7 @@ export type PartialDroneAgentConfig = Partial<{
   promptFile: Partial<DronePromptFileConfig>;
   terminal: Partial<DroneTerminalConfig>;
   swarm: Partial<DroneSwarmConfig>;
+  tui?: Partial<DroneTuiConfig>;
 }>;
 
 export type DroneConfigScope = 'default' | 'user' | 'project';
@@ -454,6 +463,34 @@ export function createDefaultAgentConfig(
         pullIntervalMinutes: 60,
       },
     },
+    tui: {
+      syntaxHighlighting: {
+        colors: {
+          keyword: 'magenta',
+          function: 'cyan',
+          'function-variable': 'cyan',
+          string: 'green',
+          number: 'yellow',
+          comment: 'gray',
+          emphasis: 'italic',
+          strong: 'bold',
+          variable: 'blue',
+          attr: 'yellow',
+          tag: 'magenta',
+          built_in: 'cyan',
+          literal: 'yellow',
+          selector: 'yellow',
+          'selector-class': 'yellow',
+          'selector-id': 'yellow',
+          property: 'blue',
+          title: 'cyan',
+          params: 'white',
+          sub: 'gray',
+          sup: 'gray',
+        },
+        codeBackground: 'gray',
+      },
+    },
   };
   return { ...base, ...overrides };
 }
@@ -577,5 +614,23 @@ export function applyAgentConfigLayer(
             : baseConfig.swarm.knowledgeSync,
         }
       : baseConfig.swarm,
+    tui: layer.tui
+      ? {
+          ...baseConfig.tui,
+          ...layer.tui,
+          syntaxHighlighting: layer.tui.syntaxHighlighting
+            ? {
+                ...baseConfig.tui.syntaxHighlighting,
+                ...layer.tui.syntaxHighlighting,
+                colors: layer.tui.syntaxHighlighting.colors
+                  ? {
+                      ...baseConfig.tui.syntaxHighlighting.colors,
+                      ...layer.tui.syntaxHighlighting.colors,
+                    }
+                  : baseConfig.tui.syntaxHighlighting.colors,
+              }
+            : baseConfig.tui.syntaxHighlighting,
+        }
+      : baseConfig.tui,
   };
 }
