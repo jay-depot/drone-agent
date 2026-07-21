@@ -1,3 +1,6 @@
+import { ListToolsBlock } from '../../tui/components/ListToolsBlock.js';
+import { MountToolBlock } from '../../tui/components/MountToolBlock.js';
+import { UnmountToolBlock } from '../../tui/components/UnmountToolBlock.js';
 import type {
   DronePersonaCapability,
   DronePlugin,
@@ -92,6 +95,7 @@ export const gitPlugin: DronePlugin = {
         type: 'object',
         additionalProperties: false,
       },
+      renderComponent: state => ListToolsBlock({ state }),
       execute: async () => {
         let tools = GIT_TOOL_DESCRIPTIONS;
         if (personaCap) {
@@ -125,6 +129,7 @@ export const gitPlugin: DronePlugin = {
         required: ['tool'],
         additionalProperties: false,
       },
+      renderComponent: state => MountToolBlock({ state }),
       execute: async input => {
         if (typeof input.tool !== 'string' || input.tool.trim().length === 0) {
           throw new Error('git__mount_tool requires a non-empty tool name.');
@@ -169,6 +174,7 @@ export const gitPlugin: DronePlugin = {
         required: ['tool'],
         additionalProperties: false,
       },
+      renderComponent: state => UnmountToolBlock({ state }),
       execute: async input => {
         if (typeof input.tool !== 'string' || input.tool.trim().length === 0) {
           throw new Error('git__unmount_tool requires a non-empty tool name.');

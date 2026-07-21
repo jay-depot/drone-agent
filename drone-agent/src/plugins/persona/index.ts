@@ -1,3 +1,6 @@
+import { PersonaListBlock } from '../../tui/components/PersonaListBlock.js';
+import { PersonaSelectBlock } from '../../tui/components/PersonaSelectBlock.js';
+import { PersonaCreateBlock } from '../../tui/components/PersonaCreateBlock.js';
 import type {
   DronePersonaCapability,
   DronePersonaDefinition,
@@ -390,6 +393,7 @@ export const personaPlugin: DronePlugin = {
 
         return JSON.stringify(response, null, 2);
       },
+      renderComponent: state => PersonaListBlock({ state }),
     });
 
     // -----------------------------------------------------------------------
@@ -450,6 +454,7 @@ export const personaPlugin: DronePlugin = {
           2
         );
       },
+      renderComponent: state => PersonaSelectBlock({ state }),
     });
 
     // -----------------------------------------------------------------------
@@ -472,6 +477,7 @@ export const personaPlugin: DronePlugin = {
           JSON.stringify({ ok: true, message: 'Workflow completed.' }, null, 2)
         );
       },
+      renderComponent: state => PersonaCreateBlock({ state }),
     });
 
     // -----------------------------------------------------------------------

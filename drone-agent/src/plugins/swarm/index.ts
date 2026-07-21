@@ -1,3 +1,6 @@
+import { ListToolsBlock } from '../../tui/components/ListToolsBlock.js';
+import { MountToolBlock } from '../../tui/components/MountToolBlock.js';
+import { UnmountToolBlock } from '../../tui/components/UnmountToolBlock.js';
 /**
  * Swarm plugin — connects to a drone-beacon for swarm-wide personas,
  * skills, messaging, wiki, and coordinator integration.
@@ -216,6 +219,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
           type: 'object',
           additionalProperties: false,
         },
+        renderComponent: state => ListToolsBlock({ state }),
         execute: async () => {
           let tools = SWARM_TOOL_DESCRIPTIONS;
           if (personaCap) {
@@ -249,6 +253,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
           required: ['tool'],
           additionalProperties: false,
         },
+        renderComponent: state => MountToolBlock({ state }),
         execute: async input => {
           if (
             typeof input.tool !== 'string' ||
@@ -298,6 +303,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
           required: ['tool'],
           additionalProperties: false,
         },
+        renderComponent: state => UnmountToolBlock({ state }),
         execute: async input => {
           if (
             typeof input.tool !== 'string' ||

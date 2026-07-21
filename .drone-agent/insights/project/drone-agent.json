@@ -26,5 +26,21 @@
   {
     "timestamp": "2026-07-21T18:23:13.103Z",
     "insight": "Ingested the entire fix/tui-syntax-highlighting branch (7 commits) into the project wiki. Created ADR 077 covering all three bug fixes (ANSI escape codes for Yoga layout, proper lowlight AST traversal for stray undefined/missing colors, flat AST line splitting) and two enhancements (background width padding, configurable DroneTuiConfig). Updated modules/drone-agent-tui.md with a Syntax Highlighting section, entities/DroneAgentConfig.md with the tui section, and index.md. Also incidentally updated the MCP client gaps memory to mark all 14 items complete with a summary table."
+  },
+  {
+    "timestamp": "2026-07-21T19:20:26.208Z",
+    "insight": "The `file__apply_diff` tool's `renderComponent` registration was tricky because all 5 file tool registrations have identical context lines (`additionalProperties: false,\\n      },\\n      execute: async input => {`), causing `file__apply_diff` patches to land in the wrong spot. Had to rewrite the entire file to fix it. Lesson: when patching files with identical context blocks, use more unique context or write the whole file."
+  },
+  {
+    "timestamp": "2026-07-21T20:40:12.220Z",
+    "insight": "The subagent dispatch tool now has real-time NDJSON event streaming from the subagent's stdout. Each NDJSON event (reasoning, toolCall, assistantMessage, return) is parsed as it arrives and emitted via onProgress() with a prefixed string format (reasoning:, tool:, msg:, done:). This pattern is reusable for any future feature that needs to monitor subagent progress in real time — the infrastructure (onProgress callback, outputLines accumulation in app.tsx, custom renderComponent) is already in place."
+  },
+  {
+    "timestamp": "2026-07-21T20:52:29.107Z",
+    "insight": "Meta-tool pretty output plan: The list_tools/mount_tool/unmount_tool meta-tools across git, swarm, and MCP plugins are structurally identical but return slightly different JSON shapes (MCP includes serverId, uses different field names). A single set of 3 reusable components (ListToolsBlock, MountToolBlock, UnmountToolBlock) can serve all three plugins if we normalize the MCP result shapes. The plan is saved as project memory 'meta-tool-pretty-output'."
+  },
+  {
+    "timestamp": "2026-07-21T21:01:54.360Z",
+    "insight": "The file__apply_diff tool struggles with multi-hunk patches on files that have already been partially patched. When applying multiple changes to the same file, it's more reliable to write the complete file with file__write than to apply sequential patches. The patch tool also has issues with indentation-sensitive patches where the context lines have different indentation than expected — it can insert lines at wrong positions or create duplicate properties."
   }
 ]

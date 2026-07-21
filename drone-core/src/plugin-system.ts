@@ -26,7 +26,10 @@ export type DroneToolDefinition = {
   renderComponent?: (
     state: import('./session-types.js').ToolRenderState
   ) => unknown;
-  execute: (input: Record<string, unknown>) => Promise<string>;
+  execute: (
+    input: Record<string, unknown>,
+    onProgress?: (chunk: string) => void
+  ) => Promise<string>;
 };
 
 export type DronePromptFragment = {

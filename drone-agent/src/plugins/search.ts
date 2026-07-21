@@ -1,4 +1,5 @@
 import type { DronePlugin } from 'drone-core';
+import { SearchTextBlock } from '../tui/components/SearchTextBlock.js';
 import { execFileAsync } from '../shared/exec-async.js';
 
 // ── Ripgrep detection (cached) ──────────────────────────────────────
@@ -65,6 +66,7 @@ export const searchPlugin: DronePlugin = {
         required: ['pattern'],
         additionalProperties: false,
       },
+      renderComponent: state => SearchTextBlock({ state }),
       execute: async input => {
         const mode = (input.mode as string) || 'regex';
 

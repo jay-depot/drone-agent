@@ -12,59 +12,13 @@ import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import React from 'react';
 import { marked } from 'marked';
-import { createLowlight, common } from 'lowlight';
-
-/**
- * Create lowlight instance with common languages.
- * The 'common' preset includes all popular languages (javascript, typescript,
- * python, rust, go, json, bash, yaml, html, css, sql, markdown, etc.)
- */
-const lowlight = createLowlight(common);
-
-/**
- * Color mapping for syntax highlighting.
- * Terminal-friendly colors that work in most environments.
- */
-const SYNTAX_COLORS: Record<string, string> = {
-  keyword: 'magenta',
-  function: 'cyan',
-  'function-variable': 'cyan',
-  string: 'green',
-  number: 'yellow',
-  comment: 'gray',
-  emphasis: 'italic',
-  strong: 'bold',
-  variable: 'blue',
-  attr: 'yellow',
-  tag: 'magenta',
-  built_in: 'cyan',
-  literal: 'yellow',
-  selector: 'yellow',
-  'selector-class': 'yellow',
-  'selector-id': 'yellow',
-  property: 'blue',
-  title: 'cyan',
-  params: 'white',
-  sub: 'gray',
-  sup: 'gray',
-};
-/**
- * Mapping from Ink color names to ANSI foreground escape codes.
- * Used to render syntax-highlighted code as a single <Text> element
- * with raw escape codes, avoiding Yoga layout bugs from nested <Text>
- * elements with different color props.
- */
-const ANSI_COLORS: Record<string, string> = {
-  black: '30',
-  red: '31',
-  green: '32',
-  yellow: '33',
-  blue: '34',
-  magenta: '35',
-  cyan: '36',
-  white: '37',
-  gray: '90',
-};
+import {
+  lowlight,
+  SYNTAX_COLORS,
+  renderHighlightedTree,
+  extractTokenText,
+  getTokenColor,
+} from '../shared/syntax-highlight.js';
 
 interface MarkdownProps {
   /** Markdown content to render */
@@ -75,43 +29,6 @@ interface MarkdownProps {
   codeBackground?: string;
   /** Optional syntax highlighting color overrides (defaults to SYNTAX_COLORS) */
   syntaxColors?: Record<string, string>;
-}
-
-/**
- * Recursively extract text from a lowlight AST token.
- * Text nodes have a `value` property; element nodes have `children` arrays
- * containing nested text/element nodes.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractTokenText(token: any): string {
-  if (token.value) return token.value;
-  if (token.children) {
-    return token.children.map(extractTokenText).join('');
-  }
-  return '';
-}
-
-/**
- * Extract the Ink color name from a lowlight AST token.
- *
- * Element nodes carry color information in `properties.className`
- * (e.g. `['hljs-keyword']`). Text nodes have no className and use
- * the default color.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getTokenColor(
-  token: any,
-  syntaxColors: Record<string, string>
-): string {
-  if (token.properties?.className) {
-    for (const cls of token.properties.className) {
-      if (typeof cls === 'string' && cls.startsWith('hljs-')) {
-        const key = cls.slice(5);
-        if (syntaxColors[key]) return syntaxColors[key];
-      }
-    }
-  }
-  return 'white';
 }
 
 /**
@@ -400,57 +317,5 @@ function renderCodeBlock(
       )}
       <Box flexDirection="column">{highlighted}</Box>
     </Box>
-  );
-}
-
-/**
- * Render lowlight syntax tree to Ink components.
- *
- * Uses raw ANSI escape codes for color changes within a single <Text>
- * element per line, avoiding Yoga layout bugs from nested <Text> elements
- * with different color props.
- *
- * The lowlight AST is flat — tree.children is an array of tokens, not an
- * array of lines. Newlines are embedded inside text node values. We build
- * a single ANSI string from all tokens, then split on \n to create lines.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function renderHighlightedTree(
-  tree: any,
-  backgroundColor: string,
-  syntaxColors: Record<string, string>
-): ReactNode {
-  // Build a single ANSI string from all tokens
-  let fullRendered = '';
-  for (const token of tree.children ?? []) {
-    const color = getTokenColor(token, syntaxColors);
-    const ansiCode = ANSI_COLORS[color] || '37';
-    const text = extractTokenText(token);
-    if (text) fullRendered += `\u001b[${ansiCode}m${text}\u001b[39m`;
-  }
-
-  // Split on newlines to create one <Text> per line
-  const lines = fullRendered.split('\n');
-
-  // Find the longest visual line width (strip ANSI codes for measurement)
-  // so we can pad shorter lines to fill the background fully.
-  const maxWidth = lines.reduce((max, line) => {
-    const visible = line.replace(/\u001b\[\d+m/g, '');
-    return Math.max(max, visible.length);
-  }, 0);
-
-  return (
-    <>
-      {lines.map((line: string, lineIndex: number) => {
-        const visibleLen = line.replace(/\u001b\[\d+m/g, '').length;
-        const padding = ' '.repeat(Math.max(0, maxWidth - visibleLen));
-        return (
-          <Text key={lineIndex} backgroundColor={backgroundColor}>
-            {line}
-            {padding}
-          </Text>
-        );
-      })}
-    </>
   );
 }

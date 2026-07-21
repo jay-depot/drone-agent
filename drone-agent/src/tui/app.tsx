@@ -163,6 +163,13 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   const currentMessageId = useRef<string | null>(null);
   const currentMessageText = useRef<string>('');
 
+  // Accumulates streaming output lines per in-flight tool call.
+  // Keyed by tool canonical name; value holds the tail item id and
+  // accumulated lines so the render component can show streaming output.
+  const toolProgressRef = useRef<
+    Map<string, { id: string; lines: string[]; args: Record<string, unknown> }>
+  >(new Map());
+
   // ── Conversation event listener ─────────────────────────────────────
   // Uses the tail region to buffer all in-flight content as live components,
   // then commits them atomically when the content completes. The live
@@ -199,6 +206,28 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           }
           break;
         }
+        case 'toolProgress': {
+          const entry = toolProgressRef.current.get(event.name);
+          if (!entry || !entry.id) break;
+          entry.lines.push(event.content);
+          const toolDef = opts.engine.getTool(event.name);
+          const customRender = toolDef?.renderComponent;
+          if (!customRender) break;
+          const component = customRender({
+            name: event.name,
+            arguments: entry.args,
+            status: 'running' as const,
+            scheme: s as unknown,
+            outputLines: [...entry.lines],
+            syntaxColors: syntaxColorsRef.current,
+            codeBackground: codeBackgroundRef.current,
+          }) as React.ReactNode;
+          updateItem(entry.id, component, () => ({
+            text: `→ ${event.name}`,
+            kind: 'toolCall' as const,
+          }));
+          break;
+        }
         case 'reasoningComplete': {
           if (currentReasoningId.current) {
             const entry = commitItem(currentReasoningId.current);
@@ -210,6 +239,11 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         }
         case 'toolCallBatch': {
           currentToolCallIds.current = event.toolCalls.map(tc => {
+            toolProgressRef.current.set(tc.name, {
+              id: '',
+              lines: [],
+              args: tc.arguments,
+            });
             // Look up custom render component if registered
             const toolDef = opts.engine.getTool(tc.name);
             const customRender = toolDef?.renderComponent;
@@ -219,6 +253,8 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
                 arguments: tc.arguments,
                 status: 'running' as const,
                 scheme: s as unknown,
+                syntaxColors: syntaxColorsRef.current,
+                codeBackground: codeBackgroundRef.current,
               }) as React.ReactNode)
             ) : (
               <ToolCallProgress
@@ -229,10 +265,13 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
               />
             );
 
-            return addItem('toolCall', component, () => ({
+            const id = addItem('toolCall', component, () => ({
               text: `→ ${tc.name}(${preview(JSON.stringify(tc.arguments), PREVIEW_MAX)})`,
               kind: 'toolCall',
             }));
+            const entry = toolProgressRef.current.get(tc.name);
+            if (entry) entry.id = id;
+            return id;
           });
           break;
         }
@@ -249,6 +288,9 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
               const toolDef = opts.engine.getTool(result.name);
               const customRender = toolDef?.renderComponent;
 
+              const outputLines =
+                toolProgressRef.current.get(result.name)?.lines ?? [];
+
               // Build the live component (custom or default)
               const component = customRender ? (
                 (customRender({
@@ -257,6 +299,9 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
                   result: result.content,
                   status: isError ? ('error' as const) : ('done' as const),
                   scheme: s as unknown,
+                  outputLines,
+                  syntaxColors: syntaxColorsRef.current,
+                  codeBackground: codeBackgroundRef.current,
                 }) as React.ReactNode)
               ) : (
                 <ToolCallProgress
@@ -292,6 +337,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             }
           }
           currentToolCallIds.current = [];
+          toolProgressRef.current.clear();
           break;
         }
         case 'assistantMessage': {
@@ -343,6 +389,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           currentReasoningId.current = null;
           currentReasoningText.current = '';
           currentToolCallIds.current = [];
+          toolProgressRef.current.clear();
           currentMessageId.current = null;
           currentMessageText.current = '';
           log(`Error: ${event.message}`, 'error');

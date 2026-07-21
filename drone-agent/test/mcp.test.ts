@@ -164,7 +164,6 @@ describe('mcp plugin integration (stdio child)', () => {
     const result = JSON.parse(
       await engine.executeTool('mcp__demo__list_tools', {})
     );
-    expect(result.serverId).toBe('demo');
     expect(result.toolCount).toBe(2);
     expect(Array.isArray(result.tools)).toBe(true);
     const toolList = result.tools as Array<{
@@ -192,8 +191,8 @@ describe('mcp plugin integration (stdio child)', () => {
     const mountResult = JSON.parse(
       await engine.executeTool('mcp__demo__mount_tool', { tool: 'echo' })
     );
-    expect(mountResult.mounted).toBe(true);
-    expect(mountResult.mountedName).toBe('mcp__demo__echo');
+    expect(mountResult.success).toBe(true);
+    expect(mountResult.tool).toBe('echo');
 
     // Now it appears in the tool list.
     expect(toolNames(engine)).toContain('mcp__demo__echo');
@@ -215,7 +214,8 @@ describe('mcp plugin integration (stdio child)', () => {
     const result = JSON.parse(
       await engine.executeTool('mcp__demo__mount_tool', { tool: 'echo' })
     );
-    expect(result.alreadyMounted).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('already mounted');
   });
 
   it('mount_tool rejects a non-existent tool name', async () => {
@@ -241,7 +241,8 @@ describe('mcp plugin integration (stdio child)', () => {
     const result = JSON.parse(
       await engine.executeTool('mcp__demo__unmount_tool', { tool: 'echo' })
     );
-    expect(result.unmounted).toBe(true);
+    expect(result.success).toBe(true);
+    expect(result.tool).toBe('echo');
 
     expect(toolNames(engine)).not.toContain('mcp__demo__echo');
   });
@@ -255,7 +256,8 @@ describe('mcp plugin integration (stdio child)', () => {
     const result = JSON.parse(
       await engine.executeTool('mcp__demo__unmount_tool', { tool: 'echo' })
     );
-    expect(result.wasMounted).toBe(false);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not mounted');
   });
 
   it('lists resource templates and reads a filled-in template URI', async () => {
@@ -332,7 +334,8 @@ describe('mcp plugin integration (stdio child)', () => {
         tool: 'weird name!',
       })
     );
-    expect(result.mountedName).toBe('mcp__demo__weird_name_');
+    expect(result.success).toBe(true);
+    expect(result.tool).toBe('weird name!');
     expect(toolNames(engine)).toContain('mcp__demo__weird_name_');
   });
 
@@ -357,11 +360,8 @@ describe('mcp plugin integration (stdio child)', () => {
         tool: 'foo.bar',
       })
     );
-    expect(r1.mountedName).toBe('mcp__demo__foo_bar');
-    expect(r2.mountedName).toBe('mcp__demo__foo_bar_1');
-    expect(r1.mountedName).not.toBe(r2.mountedName);
-
-    // Both should be registered with the engine as distinct tools.
+    expect(r1.success).toBe(true);
+    expect(r2.success).toBe(true);
     const names = toolNames(engine);
     expect(names).toContain('mcp__demo__foo_bar');
     expect(names).toContain('mcp__demo__foo_bar_1');

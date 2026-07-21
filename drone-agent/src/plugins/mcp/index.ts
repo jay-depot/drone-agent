@@ -1,3 +1,7 @@
+import type { ReactNode } from 'react';
+import { ListToolsBlock } from '../../tui/components/ListToolsBlock.js';
+import { MountToolBlock } from '../../tui/components/MountToolBlock.js';
+import { UnmountToolBlock } from '../../tui/components/UnmountToolBlock.js';
 import { isRecord } from '../../shared/type-guards.js';
 import os from 'node:os';
 import type {
@@ -175,7 +179,10 @@ export const mcpPlugin: DronePlugin = {
       name: string,
       description: string,
       inputSchema: DroneToolJsonSchema | undefined,
-      execute: (input: Record<string, unknown>) => Promise<string>
+      execute: (input: Record<string, unknown>) => Promise<string>,
+      renderComponent?: (
+        state: import('drone-core').ToolRenderState
+      ) => ReactNode
     ): void {
       if (metaToolNames.has(name)) {
         return;
@@ -184,6 +191,7 @@ export const mcpPlugin: DronePlugin = {
       registration.registerTool({
         name,
         description,
+        renderComponent,
         inputSchema,
         execute,
       });
@@ -306,7 +314,7 @@ export const mcpPlugin: DronePlugin = {
         async () => {
           const cache = serverCaches.get(serverId);
           if (!cache) {
-            return JSON.stringify({ serverId, tools: [] }, null, 2);
+            return JSON.stringify({ toolCount: 0, tools: [] }, null, 2);
           }
           let tools = cache.listAvailable();
           // Filter through persona capability if available
@@ -321,12 +329,9 @@ export const mcpPlugin: DronePlugin = {
             const filteredNames = new Set(filtered.map(t => t.name));
             tools = tools.filter(t => filteredNames.has(t.name));
           }
-          return JSON.stringify(
-            { serverId, toolCount: tools.length, tools },
-            null,
-            2
-          );
-        }
+          return JSON.stringify({ toolCount: tools.length, tools }, null, 2);
+        },
+        state => ListToolsBlock({ state })
       );
 
       registerMetaTool(
@@ -378,10 +383,11 @@ export const mcpPlugin: DronePlugin = {
 
           // Check if already mounted
           if (cache.isMounted(toolName)) {
-            const shortName = cache.getToolDefName(toolName) ?? toolName;
-            const mountedName = `mcp__${shortName}`;
             return JSON.stringify(
-              { serverId, tool: toolName, mountedName, alreadyMounted: true },
+              {
+                success: false,
+                error: `Tool '${toolName}' is already mounted.`,
+              },
               null,
               2
             );
@@ -390,14 +396,17 @@ export const mcpPlugin: DronePlugin = {
           cache.mountTool(toolName, registration);
           connection.state.mountedToolCount = cache.exportMounted().length;
           setServerState(connection.state);
-          const shortName = cache.getToolDefName(toolName) ?? toolName;
-          const mountedName = `mcp__${shortName}`;
           return JSON.stringify(
-            { serverId, tool: toolName, mountedName, mounted: true },
+            {
+              success: true,
+              tool: toolName,
+              description: toolMeta.description,
+            },
             null,
             2
           );
-        }
+        },
+        state => MountToolBlock({ state })
       );
 
       registerMetaTool(
@@ -427,7 +436,10 @@ export const mcpPlugin: DronePlugin = {
           const cache = serverCaches.get(serverId);
           if (!cache) {
             return JSON.stringify(
-              { serverId, tool: toolName, wasMounted: false },
+              {
+                success: false,
+                error: `MCP server ${serverId} has no tool cache.`,
+              },
               null,
               2
             );
@@ -435,7 +447,7 @@ export const mcpPlugin: DronePlugin = {
 
           if (!cache.isMounted(toolName)) {
             return JSON.stringify(
-              { serverId, tool: toolName, wasMounted: false },
+              { success: false, error: `Tool '${toolName}' is not mounted.` },
               null,
               2
             );
@@ -445,14 +457,9 @@ export const mcpPlugin: DronePlugin = {
           connection.state.mountedToolCount = cache.exportMounted().length;
           setServerState(connection.state);
 
-          const mountedName =
-            cache.getToolDefName(toolName) ?? `${serverId}__${toolName}`;
-          return JSON.stringify(
-            { serverId, tool: toolName, mountedName, unmounted: true },
-            null,
-            2
-          );
-        }
+          return JSON.stringify({ success: true, tool: toolName }, null, 2);
+        },
+        state => UnmountToolBlock({ state })
       );
     }
 

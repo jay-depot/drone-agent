@@ -83,7 +83,8 @@ export type DronePluginEngine = {
   getTool: (canonicalName: string) => DroneToolDefinition | undefined;
   executeTool: (
     canonicalName: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    onProgress?: (chunk: string) => void
   ) => Promise<string>;
   listTools: () => DroneToolDescriptor[];
   getCapability: <T>(pluginId: string) => T | undefined;
@@ -630,12 +631,12 @@ export function createDronePluginEngine({
       );
     },
     getTool: canonicalName => tools.get(canonicalName),
-    executeTool: async (canonicalName, input) => {
+    executeTool: async (canonicalName, input, onProgress) => {
       const tool = tools.get(canonicalName);
       if (!tool) {
         throw new Error(`Unknown tool: ${canonicalName}`);
       }
-      return tool.execute(input);
+      return tool.execute(input, onProgress);
     },
     listTools: () =>
       Array.from(tools.entries()).map(([canonicalName, tool]) => ({
