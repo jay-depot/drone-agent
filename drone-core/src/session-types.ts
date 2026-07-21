@@ -121,6 +121,8 @@ export type ToolRenderState = {
   status: 'running' | 'done' | 'error';
   /** TUI color scheme, cast to unknown to keep drone-core React-free. */
   scheme: unknown;
+  /** Accumulated streaming output lines emitted via onProgress during execution. */
+  outputLines?: string[];
 };
 
 export type DroneConversationEvent =
@@ -148,4 +150,5 @@ export type DroneConversationEvent =
         arguments: Record<string, unknown>;
       }>;
     }
+  | { kind: 'toolProgress'; name: string; content: string }
   | { kind: 'error'; message: string };

@@ -46,10 +46,13 @@ Branch: `pretty-tool-output`
 **File:** `drone-core/src/plugin-system.ts`
 
 Change the `execute` signature from:
+
 ```ts
 execute: (input: Record<string, unknown>) => Promise<string>;
 ```
+
 to:
+
 ```ts
 execute: (
   input: Record<string, unknown>,
@@ -66,10 +69,15 @@ The `onProgress` parameter is optional so all existing tool implementations cont
 **File:** `drone-agent/src/runtime/conversation-service.ts`
 
 When calling `engine.executeTool(name, args)`:
+
 1. Build an `onProgress` callback that emits a `toolProgress` event via the engine's conversation event emitter:
    ```ts
    const onProgress = (chunk: string) => {
-     engine.emitConversationEvent({ kind: 'toolProgress', name, content: chunk });
+     engine.emitConversationEvent({
+       kind: 'toolProgress',
+       name,
+       content: chunk,
+     });
    };
    ```
 2. Pass `onProgress` as the second argument to `executeTool`.
@@ -93,7 +101,7 @@ Update `executeTool` to accept and forward the `onProgress` callback to the regi
    ```ts
    execute: async (input, onProgress) => {
      return runCommand(input, onProgress);
-   }
+   };
    ```
 
 ---
@@ -140,8 +148,9 @@ Update `executeTool` to accept and forward the `onProgress` callback to the regi
 - Trailing `\n` for scrollback separation
 
 Register on the `exec__run` tool definition:
+
 ```ts
-renderComponent: state => ExecRunBlock({ state })
+renderComponent: state => ExecRunBlock({ state });
 ```
 
 ---
@@ -167,7 +176,7 @@ renderComponent: state => ExecRunBlock({ state })
 - `===` separator at the end
 - Register on `file__read`:
   ```ts
-  renderComponent: state => FileReadBlock({ state })
+  renderComponent: state => FileReadBlock({ state });
   ```
 
 ---
@@ -301,10 +310,12 @@ Import and register `ExecRunBlock` on `exec__run`.
 ### Step 14 — Add unit tests [`drone-agent`]
 
 **File:** `drone-agent/test/exec.test.ts` (existing)
+
 - Add a test verifying that `onProgress` is called with chunks as they arrive, not just at the end.
 - Add a test verifying the final return shape still contains `stdout` and `stderr` separately.
 
 **File:** `drone-agent/test/pretty-tool-output.test.ts` (new)
+
 - For each new render component, test the `running`, `done`, and `error` states using a mock `ToolRenderState`.
 - For `FileReadBlock`: test that the first 5 lines are shown and a 6th line is not.
 - For `FileGlobBlock`: test the match count summary.
@@ -316,6 +327,7 @@ Import and register `ExecRunBlock` on `exec__run`.
 ### Step 15 — Validate against all criteria
 
 Run in order:
+
 ```sh
 pnpm typecheck       # Must pass with zero errors
 pnpm -r run lint     # ESLint + Prettier; re-read all modified files after this
@@ -329,22 +341,22 @@ Check LSP diagnostics after each significant file change.
 
 ## Validation Criteria
 
-| Check | Required |
-|---|---|
-| `pnpm typecheck` passes with zero errors | ✅ |
-| `pnpm -r run lint` passes (ESLint + Prettier) | ✅ |
-| `pnpm -r run build` compiles clean | ✅ |
-| `pnpm -r run test` (fast suite) passes | ✅ |
-| LSP diagnostics clean across all modified files | ✅ |
-| `exec__run`: shows `… exec__run $ <cmd>` while running | ✅ |
-| `exec__run`: streams output lines as they arrive (updateItem on each chunk) | ✅ |
-| `exec__run`: final result still returns `{stdout, stderr}` to LLM | ✅ |
-| `file__read`: shows path + line range header + up to 5 syntax-highlighted preview lines + `===` | ✅ |
-| `file__write`: shows `✓ Wrote <path>` | ✅ |
-| `file__apply_diff`: shows `✓ <path>` + `+N -N across N hunk(s)` | ✅ |
-| `file__list`: shows path header + emoji-prefixed entries | ✅ |
-| `file__glob`: shows pattern + matched paths + count | ✅ |
-| `search__text`: shows `<pattern> in <path>` + `file:line content` rows + count + truncated indicator | ✅ |
-| All new components handle `running`, `done`, and `error` states | ✅ |
-| All new render components covered by unit tests | ✅ |
-| No dead code, no unused imports | ✅ |
+| Check                                                                                                | Required |
+| ---------------------------------------------------------------------------------------------------- | -------- |
+| `pnpm typecheck` passes with zero errors                                                             | ✅       |
+| `pnpm -r run lint` passes (ESLint + Prettier)                                                        | ✅       |
+| `pnpm -r run build` compiles clean                                                                   | ✅       |
+| `pnpm -r run test` (fast suite) passes                                                               | ✅       |
+| LSP diagnostics clean across all modified files                                                      | ✅       |
+| `exec__run`: shows `… exec__run $ <cmd>` while running                                               | ✅       |
+| `exec__run`: streams output lines as they arrive (updateItem on each chunk)                          | ✅       |
+| `exec__run`: final result still returns `{stdout, stderr}` to LLM                                    | ✅       |
+| `file__read`: shows path + line range header + up to 5 syntax-highlighted preview lines + `===`      | ✅       |
+| `file__write`: shows `✓ Wrote <path>`                                                                | ✅       |
+| `file__apply_diff`: shows `✓ <path>` + `+N -N across N hunk(s)`                                      | ✅       |
+| `file__list`: shows path header + emoji-prefixed entries                                             | ✅       |
+| `file__glob`: shows pattern + matched paths + count                                                  | ✅       |
+| `search__text`: shows `<pattern> in <path>` + `file:line content` rows + count + truncated indicator | ✅       |
+| All new components handle `running`, `done`, and `error` states                                      | ✅       |
+| All new render components covered by unit tests                                                      | ✅       |
+| No dead code, no unused imports                                                                      | ✅       |

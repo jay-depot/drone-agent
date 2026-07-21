@@ -236,13 +236,18 @@ export function createConversationService({
 
   async function executeToolSafely(
     canonicalName: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    onProgress?: (chunk: string) => void
   ): Promise<
     | { kind: 'ok'; content: string }
     | { kind: 'error'; content: string; code: string | null }
   > {
     try {
-      const content = await engine.executeTool(canonicalName, input);
+      const content = await engine.executeTool(
+        canonicalName,
+        input,
+        onProgress
+      );
       return { kind: 'ok', content };
     } catch (err) {
       const rawMessage = err instanceof Error ? err.message : String(err);
@@ -378,13 +383,21 @@ export function createConversationService({
           // Execute all tool calls in parallel.
           const rawResults = await Promise.all(
             toolCalls.map(toolCall =>
-              executeToolSafely(toolCall.name, toolCall.arguments).then(
-                toolResult => ({
-                  name: toolCall.name,
-                  toolResult,
-                  toolCallId: toolCall.id,
-                })
-              )
+              executeToolSafely(
+                toolCall.name,
+                toolCall.arguments,
+                (chunk: string) => {
+                  emit({
+                    kind: 'toolProgress',
+                    name: toolCall.name,
+                    content: chunk,
+                  });
+                }
+              ).then(toolResult => ({
+                name: toolCall.name,
+                toolResult,
+                toolCallId: toolCall.id,
+              }))
             )
           );
 

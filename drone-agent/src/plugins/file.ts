@@ -2,6 +2,11 @@ import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import fg from 'fast-glob';
 import type { DronePlugin } from 'drone-core';
+import { FileReadBlock } from '../tui/components/FileReadBlock.js';
+import { FileWriteBlock } from '../tui/components/FileWriteBlock.js';
+import { FileApplyDiffBlock } from '../tui/components/FileApplyDiffBlock.js';
+import { FileListBlock } from '../tui/components/FileListBlock.js';
+import { FileGlobBlock } from '../tui/components/FileGlobBlock.js';
 import { renderDiffV2 } from '../shared/diff-renderer.js';
 import { applyPatch, type PatchError } from '../shared/patch-applier.js';
 import { parseUnifiedDiff } from '../shared/unified-diff-parser.js';
@@ -133,6 +138,7 @@ export const filePlugin: DronePlugin = {
         required: ['path'],
         additionalProperties: false,
       },
+      renderComponent: state => FileReadBlock({ state }),
       execute: async input => {
         if (typeof input.path !== 'string' || input.path.trim().length === 0) {
           throw new Error('file__read requires a non-empty path string.');
@@ -195,6 +201,7 @@ export const filePlugin: DronePlugin = {
         required: ['path'],
         additionalProperties: false,
       },
+      renderComponent: state => FileListBlock({ state }),
       execute: async input => {
         if (typeof input.path !== 'string' || input.path.trim().length === 0) {
           throw new Error('file__list requires a non-empty path string.');
@@ -244,6 +251,7 @@ export const filePlugin: DronePlugin = {
         required: ['path', 'content'],
         additionalProperties: false,
       },
+      renderComponent: state => FileWriteBlock({ state }),
       execute: async input => {
         if (typeof input.path !== 'string' || input.path.trim().length === 0) {
           throw new Error('file__write requires a non-empty path string.');
@@ -321,6 +329,7 @@ export const filePlugin: DronePlugin = {
         required: ['path', 'patch'],
         additionalProperties: false,
       },
+      renderComponent: state => FileApplyDiffBlock({ state }),
       execute: async input => {
         if (typeof input.path !== 'string' || input.path.trim().length === 0) {
           throw new Error('file__apply_diff requires a non-empty path string.');
@@ -443,6 +452,7 @@ export const filePlugin: DronePlugin = {
         required: ['pattern'],
         additionalProperties: false,
       },
+      renderComponent: state => FileGlobBlock({ state }),
       execute: async input => {
         if (
           typeof input.pattern !== 'string' ||
