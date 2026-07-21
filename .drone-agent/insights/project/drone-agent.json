@@ -42,5 +42,9 @@
   {
     "timestamp": "2026-07-21T21:01:54.360Z",
     "insight": "The file__apply_diff tool struggles with multi-hunk patches on files that have already been partially patched. When applying multiple changes to the same file, it's more reliable to write the complete file with file__write than to apply sequential patches. The patch tool also has issues with indentation-sensitive patches where the context lines have different indentation than expected — it can insert lines at wrong positions or create duplicate properties."
+  },
+  {
+    "timestamp": "2026-07-21T21:23:30.451Z",
+    "insight": "OpenAI and OpenRouter use different JSON formats for reasoning effort in their API requests. OpenAI uses a top-level `reasoning_effort` (snake_case string), while OpenRouter uses a nested `reasoning: { effort: string }` object. The solution was to add both fields to the shared `OpenAiChatRequest` type and let each plugin set the field its API expects. The API ignores fields it doesn't understand, so this is safe and avoids conditional logic."
   }
 ]
