@@ -1,3 +1,4 @@
+import type { DroneReasoningLevel } from 'drone-core';
 import type {
   DroneChatMessage,
   DroneChatResponse,
@@ -8,6 +9,16 @@ import type {
 export type AnthropicTextBlock = {
   type: 'text';
   text: string;
+};
+export type AnthropicThinkingBlock = {
+  type: 'thinking';
+  text: string;
+  signature?: string;
+};
+
+export type AnthropicSignatureBlock = {
+  type: 'signature';
+  signature: string;
 };
 
 export type AnthropicToolUseBlock = {
@@ -26,7 +37,9 @@ export type AnthropicToolResultBlock = {
 export type AnthropicContentBlock =
   | AnthropicTextBlock
   | AnthropicToolUseBlock
-  | AnthropicToolResultBlock;
+  | AnthropicToolResultBlock
+  | AnthropicThinkingBlock
+  | AnthropicSignatureBlock;
 
 export type AnthropicMessage = {
   role: 'user' | 'assistant';
@@ -45,6 +58,7 @@ export type AnthropicChatRequest = {
   system?: string;
   messages: AnthropicMessage[];
   tools?: AnthropicTool[];
+  thinking?: { type: 'enabled'; budget_tokens: number };
 };
 
 export type AnthropicChatResponse = {
@@ -57,7 +71,9 @@ export type AnthropicChatResponse = {
     id?: string;
     name?: string;
     input?: Record<string, unknown>;
+    signature?: string;
   }>;
+  usage?: { input_tokens: number; output_tokens: number };
 };
 
 export function toAnthropicRequestParts(input: {
@@ -65,6 +81,7 @@ export function toAnthropicRequestParts(input: {
   tools?: DroneToolDescriptor[];
   maxTokens: number;
   model: string;
+  reasoningLevel?: DroneReasoningLevel;
 }): AnthropicChatRequest {
   const systemMessages = input.messages
     .filter(message => message.role === 'system')
@@ -87,6 +104,12 @@ export function toAnthropicRequestParts(input: {
 
   if (input.tools && input.tools.length > 0) {
     request.tools = toAnthropicTools(input.tools);
+  }
+  if (input.reasoningLevel && input.reasoningLevel !== 'off') {
+    request.thinking = {
+      type: 'enabled',
+      budget_tokens: Math.floor(input.maxTokens * 0.5),
+    };
   }
 
   return request;
@@ -151,24 +174,36 @@ export function fromAnthropicResponse(
   const textParts: string[] = [];
   const toolCalls: DroneToolCall[] = [];
 
+  let reasoning: string | undefined;
   for (const block of response.content ?? []) {
     if (block.type === 'text' && typeof block.text === 'string') {
       textParts.push(block.text);
       continue;
     }
-
     if (block.type === 'tool_use' && block.name) {
       toolCalls.push({
         id: block.id,
         name: block.name,
         arguments: block.input ?? {},
       });
+      continue;
+    }
+
+    if (block.type === 'thinking' && typeof block.text === 'string') {
+      reasoning = reasoning ? reasoning + '\n' + block.text : block.text;
+      continue;
+    }
+
+    if (block.type === 'signature') {
+      continue;
     }
   }
-
   const result: DroneChatResponse = {
     message: textParts.join('\n').trim(),
   };
+  if (reasoning) {
+    result.reasoning = reasoning;
+  }
 
   if (toolCalls.length > 0) {
     result.toolCalls = toolCalls;

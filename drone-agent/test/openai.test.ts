@@ -290,4 +290,109 @@ describe('openai plugin', () => {
       },
     ]);
   });
+
+  it('sends reasoning_effort in request when reasoningLevel is provided', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.openai.apiKey = 'test-key';
+    capture.config.openai.baseUrl = 'https://api.openai.com/v1';
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          id: 'chatcmpl_3',
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: { role: 'assistant', content: 'Hello' },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await openaiPlugin.register(capture.registration);
+    const provider = capture.getRegisteredProvider()!.getProvider();
+
+    await provider.chat({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'hi' }],
+      reasoningLevel: 'high',
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit & { body?: string },
+    ];
+    const body = JSON.parse(init.body ?? '{}') as Record<string, unknown>;
+    expect(body.reasoning_effort).toBe('high');
+  });
+
+  it('extracts reasoning from response when choice.reasoning is present', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.openai.apiKey = 'test-key';
+    capture.config.openai.baseUrl = 'https://api.openai.com/v1';
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          id: 'chatcmpl_4',
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: { role: 'assistant', content: 'Final answer' },
+              reasoning: 'Step-by-step reasoning here',
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await openaiPlugin.register(capture.registration);
+    const provider = capture.getRegisteredProvider()!.getProvider();
+
+    const response = await provider.chat({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'think step by step' }],
+    });
+
+    expect(response.reasoning).toBe('Step-by-step reasoning here');
+    expect(response.message).toBe('Final answer');
+  });
+
+  it('does not set reasoning when choice.reasoning is absent', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.openai.apiKey = 'test-key';
+    capture.config.openai.baseUrl = 'https://api.openai.com/v1';
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          id: 'chatcmpl_5',
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: { role: 'assistant', content: 'No reasoning' },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await openaiPlugin.register(capture.registration);
+    const provider = capture.getRegisteredProvider()!.getProvider();
+
+    const response = await provider.chat({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'hello' }],
+    });
+
+    expect(response.reasoning).toBeUndefined();
+    expect(response.message).toBe('No reasoning');
+  });
 });

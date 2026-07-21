@@ -1,7 +1,6 @@
 ---
 key: reasoning-output-fix-plan
-tags:
-  []
+tags: []
 created: 2026-07-21T21:11:27.913Z
 updated: 2026-07-21T21:11:27.913Z
 ---
@@ -10,7 +9,7 @@ updated: 2026-07-21T21:11:27.913Z
 
 ## Summary
 
-The `DroneChatResponse` type has a `reasoning` field that the conversation service already consumes and the TUI already renders. However, only the Ollama provider populates it. OpenRouter sends reasoning in the request but doesn't extract it from the response. OpenAI doesn't send reasoning in the request *or* extract it from the response. Anthropic does neither. This plan fixes all three providers so reasoning output flows end-to-end.
+The `DroneChatResponse` type has a `reasoning` field that the conversation service already consumes and the TUI already renders. However, only the Ollama provider populates it. OpenRouter sends reasoning in the request but doesn't extract it from the response. OpenAI doesn't send reasoning in the request _or_ extract it from the response. Anthropic does neither. This plan fixes all three providers so reasoning output flows end-to-end.
 
 ## Design Decisions
 
@@ -25,6 +24,7 @@ The `DroneChatResponse` type has a `reasoning` field that the conversation servi
 **File:** `drone-agent/src/shared/openai-compatible.ts`
 
 **Changes:**
+
 1. Add `reasoning_effort?: string` to `OpenAiChatRequest` (native OpenAI format, alongside existing `reasoning?: { effort: string }` for OpenRouter)
 2. Add `reasoning?: string` to `OpenAiChatChoice` (the OpenAI API returns reasoning as a top-level field on the choice object)
 
@@ -32,15 +32,15 @@ The `DroneChatResponse` type has a `reasoning` field that the conversation servi
 export type OpenAiChatRequest = {
   model: string;
   messages: OpenAiMessage[];
-  reasoning?: { effort: string };     // OpenRouter format
-  reasoning_effort?: string;           // Native OpenAI format
+  reasoning?: { effort: string }; // OpenRouter format
+  reasoning_effort?: string; // Native OpenAI format
   tools?: OpenAiTool[];
 };
 
 export type OpenAiChatChoice = {
   message: OpenAiMessage;
   finish_reason: string;
-  reasoning?: string;                  // <-- NEW: reasoning content from API
+  reasoning?: string; // <-- NEW: reasoning content from API
 };
 ```
 
@@ -77,13 +77,16 @@ export function fromOpenAiResponse(
 **File:** `drone-agent/src/plugins/openai/index.ts`
 
 **Changes:**
+
 1. Destructure `reasoningLevel` from the `chat()` input (currently only destructures `{ model, messages, tools }`)
 2. Map `DroneReasoningLevel` to OpenAI's `reasoning_effort` values (`off` → `"none"`, `low` → `"low"`, etc.)
 3. Set `reasoning_effort` on the request body
 
 ```typescript
 // Add a mapping function (similar to OpenRouter's mapReasoningLevel)
-function mapReasoningLevel(level: DroneReasoningLevel | undefined): string | undefined {
+function mapReasoningLevel(
+  level: DroneReasoningLevel | undefined
+): string | undefined {
   if (level === undefined) return undefined;
   if (level === 'off') return 'none';
   if (level === 'low') return 'low';
@@ -107,7 +110,7 @@ chat: async ({ model, messages, tools, reasoningLevel }) => {
   }
 
   // ... rest of existing code ...
-}
+};
 ```
 
 ### Step 4: Update Anthropic types in `anthropic-adapter.ts`
@@ -115,6 +118,7 @@ chat: async ({ model, messages, tools, reasoningLevel }) => {
 **File:** `drone-agent/src/plugins/anthropic/anthropic-adapter.ts`
 
 **Changes:**
+
 1. Add `thinking` field to `AnthropicChatRequest`
 2. Add `AnthropicThinkingBlock` type (`type: 'thinking'`, `text: string`, `signature?: string`)
 3. Add `AnthropicSignatureBlock` type (`type: 'signature'`, `signature: string`)
@@ -180,9 +184,7 @@ export function fromAnthropicResponse(
 
     // NEW: Extract thinking content as reasoning
     if (block.type === 'thinking' && typeof block.text === 'string') {
-      reasoning = reasoning
-        ? reasoning + '\n' + block.text
-        : block.text;
+      reasoning = reasoning ? reasoning + '\n' + block.text : block.text;
       continue;
     }
 
@@ -213,6 +215,7 @@ export function fromAnthropicResponse(
 **File:** `drone-agent/src/plugins/anthropic/index.ts`
 
 **Changes:**
+
 1. Destructure `reasoningLevel` from the `chat()` input
 2. Map `DroneReasoningLevel` to Anthropic's `thinking` parameter
 3. Pass `thinking` through `toAnthropicRequestParts()` or set it directly on the body
@@ -226,7 +229,7 @@ export function toAnthropicRequestParts(input: {
   tools?: DroneToolDescriptor[];
   maxTokens: number;
   model: string;
-  reasoningLevel?: DroneReasoningLevel;  // NEW
+  reasoningLevel?: DroneReasoningLevel; // NEW
 }): AnthropicChatRequest {
   // ... existing code ...
 
@@ -252,10 +255,10 @@ chat: async ({ model, messages, tools, reasoningLevel }) => {
     messages,
     tools,
     maxTokens: config.session.responseReserveTokens,
-    reasoningLevel,  // NEW
+    reasoningLevel, // NEW
   });
   // ...
-}
+};
 ```
 
 ### Step 7: Update tests
@@ -263,17 +266,20 @@ chat: async ({ model, messages, tools, reasoningLevel }) => {
 **File:** `drone-agent/test/openai.test.ts`
 
 Add test cases:
+
 - Verify `reasoning_effort` is sent in the request body when `reasoningLevel` is provided
 - Verify reasoning is extracted from a mock response that includes `choice.reasoning`
 
 **File:** `drone-agent/test/openrouter.test.ts`
 
 Add test case:
+
 - Verify reasoning is extracted from a mock response that includes `choice.reasoning`
 
 **File:** `drone-agent/test/anthropic.test.ts`
 
 Add test cases:
+
 - Verify `thinking` is sent in the request body when `reasoningLevel` is provided
 - Verify reasoning is extracted from a mock response with `type: 'thinking'` content blocks
 - Verify `type: 'signature'` blocks are silently skipped
@@ -281,6 +287,7 @@ Add test cases:
 ### Step 8: Verify
 
 Run the full validation suite:
+
 ```bash
 pnpm -r run lint
 pnpm -r run build

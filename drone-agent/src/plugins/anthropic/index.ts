@@ -41,7 +41,7 @@ export const anthropicPlugin: DronePlugin = {
           source: 'config',
         };
       },
-      chat: async ({ model, messages, tools }) => {
+      chat: async ({ model, messages, tools, reasoningLevel }) => {
         const config = registration.getConfig();
         const apiKey = config.anthropic.apiKey;
 
@@ -54,6 +54,7 @@ export const anthropicPlugin: DronePlugin = {
         const body = toAnthropicRequestParts({
           model,
           messages,
+          reasoningLevel,
           tools,
           maxTokens: config.session.responseReserveTokens,
         });

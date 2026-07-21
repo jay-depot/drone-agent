@@ -1,3 +1,4 @@
+import type { DroneReasoningLevel } from 'drone-core';
 import type {
   DroneContextWindowInfo,
   DroneLlmCapability,
@@ -13,6 +14,27 @@ import {
   type OpenAiChatRequest,
   type OpenAiChatResponse,
 } from '../../shared/openai-compatible.js';
+/**
+ * Map a normalized reasoning level to the OpenAI `reasoning_effort` value.
+ * - `undefined` → omit (use provider default)
+ * - `off` → `"none"`
+ * - `low` → `"low"`
+ * - `medium` → `"medium"`
+ * - `high` → `"high"`
+ * - `max` → `"max"`
+ * - Any other string (raw pass-through) → pass as-is
+ */
+function mapReasoningLevel(
+  level: DroneReasoningLevel | undefined
+): string | undefined {
+  if (level === undefined) return undefined;
+  if (level === 'off') return 'none';
+  if (level === 'low') return 'low';
+  if (level === 'medium') return 'medium';
+  if (level === 'high') return 'high';
+  if (level === 'max') return 'max';
+  return level;
+}
 
 export const openaiPlugin: DronePlugin = {
   metadata: {
@@ -43,7 +65,7 @@ export const openaiPlugin: DronePlugin = {
           source: 'config',
         };
       },
-      chat: async ({ model, messages, tools }) => {
+      chat: async ({ model, messages, tools, reasoningLevel }) => {
         const config = registration.getConfig();
         const apiKey = config.openai.apiKey;
 
@@ -57,6 +79,11 @@ export const openaiPlugin: DronePlugin = {
           model,
           messages: messages.map(toOpenAiMessage),
         };
+
+        const reasoningEffort = mapReasoningLevel(reasoningLevel);
+        if (reasoningEffort) {
+          body.reasoning_effort = reasoningEffort;
+        }
 
         if (tools && tools.length > 0) {
           body.tools = toOpenAiTools(tools);
