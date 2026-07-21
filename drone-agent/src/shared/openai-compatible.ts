@@ -8,6 +8,7 @@ import type {
 export type OpenAiMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  reasoning?: string;
   tool_call_id?: string;
   name?: string;
   tool_calls?: OpenAiToolCall[];
@@ -35,12 +36,13 @@ export type OpenAiChatRequest = {
   model: string;
   messages: OpenAiMessage[];
   reasoning?: { effort: string };
+  reasoning_effort?: string;
   tools?: OpenAiTool[];
 };
-
 export type OpenAiChatChoice = {
   message: OpenAiMessage;
   finish_reason: string;
+  reasoning?: string;
 };
 
 export type OpenAiUsage = {
@@ -107,6 +109,12 @@ export function fromOpenAiResponse(
   const result: DroneChatResponse = {
     message: choice.message.content ?? '',
   };
+  if (choice.reasoning) {
+    result.reasoning = choice.reasoning;
+  }
+  if (!result.reasoning && choice.message.reasoning) {
+    result.reasoning = choice.message.reasoning;
+  }
 
   if (choice.message.tool_calls && choice.message.tool_calls.length > 0) {
     result.toolCalls = choice.message.tool_calls.map(tc => {

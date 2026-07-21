@@ -188,10 +188,21 @@ export const ollamaPlugin: DronePlugin = {
           source: 'config',
         };
       },
-      chat: async ({ model, messages, tools, reasoningLevel }) => {
+      chat: async ({ model, messages, tools, reasoningLevel, debug }) => {
         const agentConfig = registration.getConfig();
         const client = new Ollama({ host: agentConfig.ollama.host });
         let response;
+
+        if (debug) {
+          console.error(`[llm:request] ollama.chat({ model: ${model}, ... })`);
+          console.error(
+            `[llm:request] messages: ${JSON.stringify(messages.map(toOllamaMessage))}`
+          );
+        }
+        if (debug) {
+          console.error(`[llm:response] ${JSON.stringify(response)}`);
+        }
+
         try {
           response = await client.chat({
             model,
@@ -205,6 +216,12 @@ export const ollamaPlugin: DronePlugin = {
               | undefined,
           });
         } catch (error) {
+          if (debug) {
+            console.error(
+              `[llm:response] error: ${error instanceof Error ? error.message : String(error)}`
+            );
+          }
+
           const message =
             error instanceof Error ? error.message : String(error);
           if (message.includes('not found')) {
