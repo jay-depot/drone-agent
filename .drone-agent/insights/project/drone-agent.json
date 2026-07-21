@@ -38,5 +38,9 @@
   {
     "timestamp": "2026-07-21T20:52:29.107Z",
     "insight": "Meta-tool pretty output plan: The list_tools/mount_tool/unmount_tool meta-tools across git, swarm, and MCP plugins are structurally identical but return slightly different JSON shapes (MCP includes serverId, uses different field names). A single set of 3 reusable components (ListToolsBlock, MountToolBlock, UnmountToolBlock) can serve all three plugins if we normalize the MCP result shapes. The plan is saved as project memory 'meta-tool-pretty-output'."
+  },
+  {
+    "timestamp": "2026-07-21T21:01:54.360Z",
+    "insight": "The file__apply_diff tool struggles with multi-hunk patches on files that have already been partially patched. When applying multiple changes to the same file, it's more reliable to write the complete file with file__write than to apply sequential patches. The patch tool also has issues with indentation-sensitive patches where the context lines have different indentation than expected — it can insert lines at wrong positions or create duplicate properties."
   }
 ]
