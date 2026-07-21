@@ -91,7 +91,7 @@ export const openrouterPlugin: DronePlugin = {
           source: 'config',
         };
       },
-      chat: async ({ model, messages, tools, reasoningLevel }) => {
+      chat: async ({ model, messages, tools, reasoningLevel, debug }) => {
         const config = registration.getConfig();
         const apiKey = config.openrouter.apiKey;
 
@@ -134,10 +134,17 @@ export const openrouterPlugin: DronePlugin = {
         const doRequest = async (providerHints?: {
           require_parameters: boolean;
         }): Promise<Response> => {
+          const requestBody = buildBody(providerHints);
+          if (debug) {
+            console.error(
+              `[llm:request] POST ${config.openrouter.baseUrl}/chat/completions`
+            );
+            console.error(`[llm:request] ${JSON.stringify(requestBody)}`);
+          }
           return fetch(config.openrouter.baseUrl + '/chat/completions', {
             method: 'POST',
             headers,
-            body: JSON.stringify(buildBody(providerHints)),
+            body: JSON.stringify(requestBody),
           });
         };
 
@@ -163,6 +170,13 @@ export const openrouterPlugin: DronePlugin = {
             // errorText stays as-is if JSON parse fails
           }
 
+          if (debug) {
+            console.error(
+              `[llm:response] ${response.status} ${response.statusText}`
+            );
+            console.error(`[llm:response] ${errorText}`);
+          }
+
           if (isToolRoutingError(response.status, errorBody)) {
             try {
               response = await doRequest({ require_parameters: true });
@@ -182,6 +196,12 @@ export const openrouterPlugin: DronePlugin = {
               } catch {
                 retryErrorText = '(could not read response body)';
               }
+              if (debug) {
+                console.error(
+                  `[llm:response] ${response.status} ${response.statusText}`
+                );
+                console.error(`[llm:response] ${retryErrorText}`);
+              }
               throw new Error(
                 `OpenRouter API error (${response.status}): ${retryErrorText}`
               );
@@ -195,7 +215,14 @@ export const openrouterPlugin: DronePlugin = {
 
         let data;
         try {
-          data = await response.json();
+          const responseText = await response.text();
+          if (debug) {
+            console.error(
+              `[llm:response] ${response.status} ${response.statusText}`
+            );
+            console.error(`[llm:response] ${responseText}`);
+          }
+          data = JSON.parse(responseText);
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);

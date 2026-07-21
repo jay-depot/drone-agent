@@ -1,4 +1,5 @@
 export type CliOptions = {
+  debugSubsystems: string[];
   once: boolean;
   outputPlain: boolean;
   outputJson: boolean;
@@ -85,6 +86,7 @@ export function parseCliArgs(argv: string[]): CliInvocation {
     outputPlain: false,
     outputJson: false,
     pluginOverrides: [],
+    debugSubsystems: [],
   };
 
   const positionalArgs: string[] = [];
@@ -119,6 +121,13 @@ export function parseCliArgs(argv: string[]): CliInvocation {
         const trimmed = name.trim();
         if (trimmed.length > 0) {
           options.pluginOverrides.push(trimmed);
+        }
+      }
+    } else if (arg === '--debug' && i + 1 < argv.length) {
+      for (const name of argv[++i].split(',')) {
+        const trimmed = name.trim();
+        if (trimmed.length > 0) {
+          options.debugSubsystems.push(trimmed);
         }
       }
       // NEW: subagent mode flags
@@ -214,6 +223,7 @@ function parseMigrateSubcommand(args: string[]): CliInvocation {
     outputPlain: false,
     outputJson: false,
     pluginOverrides: [],
+    debugSubsystems: [],
   };
 
   for (let i = 0; i < args.length; i++) {

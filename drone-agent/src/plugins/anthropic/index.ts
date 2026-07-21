@@ -41,7 +41,7 @@ export const anthropicPlugin: DronePlugin = {
           source: 'config',
         };
       },
-      chat: async ({ model, messages, tools, reasoningLevel }) => {
+      chat: async ({ model, messages, tools, reasoningLevel, debug }) => {
         const config = registration.getConfig();
         const apiKey = config.anthropic.apiKey;
 
@@ -58,6 +58,13 @@ export const anthropicPlugin: DronePlugin = {
           tools,
           maxTokens: config.session.responseReserveTokens,
         });
+
+        if (debug) {
+          console.error(
+            `[llm:request] POST ${config.anthropic.baseUrl}/v1/messages`
+          );
+          console.error(`[llm:request] ${JSON.stringify(body)}`);
+        }
 
         let response: Response;
         try {
@@ -88,6 +95,12 @@ export const anthropicPlugin: DronePlugin = {
           } catch {
             errorBody = '(could not read response body)';
           }
+          if (debug) {
+            console.error(
+              `[llm:response] ${response.status} ${response.statusText}`
+            );
+            console.error(`[llm:response] ${errorBody}`);
+          }
           throw new Error(
             `Anthropic API error (${response.status}): ${errorBody}`
           );
@@ -95,7 +108,14 @@ export const anthropicPlugin: DronePlugin = {
 
         let data: AnthropicChatResponse;
         try {
-          data = (await response.json()) as AnthropicChatResponse;
+          const responseText = await response.text();
+          if (debug) {
+            console.error(
+              `[llm:response] ${response.status} ${response.statusText}`
+            );
+            console.error(`[llm:response] ${responseText}`);
+          }
+          data = JSON.parse(responseText) as AnthropicChatResponse;
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);

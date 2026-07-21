@@ -65,7 +65,7 @@ export const openaiPlugin: DronePlugin = {
           source: 'config',
         };
       },
-      chat: async ({ model, messages, tools, reasoningLevel }) => {
+      chat: async ({ model, messages, tools, reasoningLevel, debug }) => {
         const config = registration.getConfig();
         const apiKey = config.openai.apiKey;
 
@@ -79,6 +79,13 @@ export const openaiPlugin: DronePlugin = {
           model,
           messages: messages.map(toOpenAiMessage),
         };
+
+        if (debug) {
+          console.error(
+            `[llm:request] POST ${config.openai.baseUrl}/chat/completions`
+          );
+          console.error(`[llm:request] ${JSON.stringify(body)}`);
+        }
 
         const reasoningEffort = mapReasoningLevel(reasoningLevel);
         if (reasoningEffort) {
@@ -129,7 +136,14 @@ export const openaiPlugin: DronePlugin = {
 
         let data: OpenAiChatResponse;
         try {
-          data = (await response.json()) as OpenAiChatResponse;
+          const responseText = await response.text();
+          if (debug) {
+            console.error(
+              `[llm:response] ${response.status} ${response.statusText}`
+            );
+            console.error(`[llm:response] ${responseText}`);
+          }
+          data = JSON.parse(responseText) as OpenAiChatResponse;
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);

@@ -161,6 +161,7 @@ async function main(): Promise<void> {
     engine,
     config: resolvedConfig.config,
     logger,
+    debugSubsystems: invocation.options.debugSubsystems,
     sessionManager,
     budgetService,
     // When the tool iteration limit is reached and the config allows

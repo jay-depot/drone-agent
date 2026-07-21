@@ -1,7 +1,6 @@
 ---
 key: reasoning-output-fix-plan
-tags:
-  []
+tags: []
 created: 2026-07-21T21:11:27.913Z
 updated: 2026-07-21T21:23:14.780Z
 ---
@@ -10,7 +9,7 @@ updated: 2026-07-21T21:23:14.780Z
 
 ## Summary
 
-The `DroneChatResponse` type has a `reasoning` field that the conversation service already consumes and the TUI already renders. However, only the Ollama provider populates it. OpenRouter sends reasoning in the request but doesn't extract it from the response. OpenAI doesn't send reasoning in the request *or* extract it from the response. Anthropic does neither. This plan fixes all three providers so reasoning output flows end-to-end.
+The `DroneChatResponse` type has a `reasoning` field that the conversation service already consumes and the TUI already renders. However, only the Ollama provider populates it. OpenRouter sends reasoning in the request but doesn't extract it from the response. OpenAI doesn't send reasoning in the request _or_ extract it from the response. Anthropic does neither. This plan fixes all three providers so reasoning output flows end-to-end.
 
 ## Design Decisions
 
@@ -25,6 +24,7 @@ The `DroneChatResponse` type has a `reasoning` field that the conversation servi
 **File:** `drone-agent/src/shared/openai-compatible.ts`
 
 **Changes:**
+
 1. Add `reasoning_effort?: string` to `OpenAiChatRequest` (native OpenAI format, alongside existing `reasoning?: { effort: string }` for OpenRouter)
 2. Add `reasoning?: string` to `OpenAiChatChoice` (the OpenAI API returns reasoning as a top-level field on the choice object)
 
@@ -39,6 +39,7 @@ The `DroneChatResponse` type has a `reasoning` field that the conversation servi
 **File:** `drone-agent/src/plugins/openai/index.ts`
 
 **Changes:**
+
 1. Destructure `reasoningLevel` from the `chat()` input
 2. Map `DroneReasoningLevel` to OpenAI's `reasoning_effort` values
 3. Set `reasoning_effort` on the request body
@@ -48,6 +49,7 @@ The `DroneChatResponse` type has a `reasoning` field that the conversation servi
 **File:** `drone-agent/src/plugins/anthropic/anthropic-adapter.ts`
 
 **Changes:**
+
 1. Add `thinking` field to `AnthropicChatRequest`
 2. Add `AnthropicThinkingBlock` and `AnthropicSignatureBlock` types
 3. Update `AnthropicContentBlock` union

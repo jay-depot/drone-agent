@@ -50,6 +50,7 @@ type CreateConversationServiceOptions = {
   config: DroneAgentConfig;
   logger: DroneLogger;
   sessionManager: DroneSessionManager;
+  debugSubsystems?: string[];
   budgetService: ContextBudgetService;
   maxToolIterations?: number;
   /**
@@ -85,6 +86,7 @@ export function createConversationService({
   engine,
   config,
   logger,
+  debugSubsystems,
   sessionManager,
   budgetService,
   maxToolIterations,
@@ -94,6 +96,7 @@ export function createConversationService({
 }: CreateConversationServiceOptions): ConversationService {
   let hasWarnedAboutSafetyTrim = false;
   let reasoningLevel: DroneReasoningLevel | undefined;
+  const debugSet = new Set(debugSubsystems ?? []);
 
   // ── Message queue and cancel support ───────────────────────────────────
   const pendingMessages: string[] = [];
@@ -336,6 +339,7 @@ export function createConversationService({
           messages: [...systemMessages, ...sessionManager.getMessages()],
           tools,
           reasoningLevel: effectiveReasoningLevel,
+          debug: debugSet.has('llm'),
         });
 
         if (response.reasoning && response.reasoning.length > 0) {

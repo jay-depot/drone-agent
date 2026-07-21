@@ -91,6 +91,7 @@ export type DroneLlmProvider = {
     messages: DroneChatMessage[];
     tools?: DroneToolDescriptor[];
     reasoningLevel?: DroneReasoningLevel;
+    debug?: boolean;
   }) => Promise<DroneChatResponse>;
   getContextWindowInfo?: (input: {
     model: string;
