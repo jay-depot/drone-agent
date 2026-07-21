@@ -26,5 +26,9 @@
   {
     "timestamp": "2026-07-21T18:23:13.103Z",
     "insight": "Ingested the entire fix/tui-syntax-highlighting branch (7 commits) into the project wiki. Created ADR 077 covering all three bug fixes (ANSI escape codes for Yoga layout, proper lowlight AST traversal for stray undefined/missing colors, flat AST line splitting) and two enhancements (background width padding, configurable DroneTuiConfig). Updated modules/drone-agent-tui.md with a Syntax Highlighting section, entities/DroneAgentConfig.md with the tui section, and index.md. Also incidentally updated the MCP client gaps memory to mark all 14 items complete with a summary table."
+  },
+  {
+    "timestamp": "2026-07-21T19:20:26.208Z",
+    "insight": "The `file__apply_diff` tool's `renderComponent` registration was tricky because all 5 file tool registrations have identical context lines (`additionalProperties: false,\\n      },\\n      execute: async input => {`), causing `file__apply_diff` patches to land in the wrong spot. Had to rewrite the entire file to fix it. Lesson: when patching files with identical context blocks, use more unique context or write the whole file."
   }
 ]
