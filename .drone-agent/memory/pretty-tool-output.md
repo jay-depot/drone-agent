@@ -1,7 +1,6 @@
 ---
 key: pretty-tool-output
-tags:
-  []
+tags: []
 created: 2026-07-21T19:03:11.132Z
 updated: 2026-07-21T19:20:16.472Z
 ---
@@ -23,16 +22,19 @@ All 15 steps implemented and validated. Commit `d8207f8`.
 ### What was built
 
 **Infrastructure (drone-core):**
+
 - New `toolProgress` event kind in `DroneConversationEvent`
 - `outputLines?: string[]` field on `ToolRenderState`
 - `onProgress?: (chunk: string) => void` parameter on `DroneToolDefinition.execute`
 
 **Infrastructure (drone-agent runtime):**
+
 - `onProgress` threaded through `plugin-engine.ts` (`executeTool`) and `conversation-service.ts` (emits `toolProgress` events)
 - `exec.ts` streams stdout/stderr chunks via `onProgress` while still buffering `stdout`/`stderr` separately for the LLM return value
 - `app.tsx` accumulates `outputLines` per tool call in a `Map<string, {id, lines, args}>` ref, re-renders the custom component on each `toolProgress` event, and passes accumulated lines into the final `ToolRenderState`
 
 **Render components (7 new files):**
+
 - `ExecRunBlock.tsx` — `…/✓/✗ exec__run $ <command>` with streaming output lines
 - `FileReadBlock.tsx` — path + line range + up to 5 syntax-highlighted preview lines + `===`
 - `FileWriteBlock.tsx` — `✓ Wrote <path>`
@@ -42,12 +44,15 @@ All 15 steps implemented and validated. Commit `d8207f8`.
 - `SearchTextBlock.tsx` — `pattern in path` + `file:line  content` rows + `(N matches) [truncated]`
 
 **Shared extraction:**
+
 - `tui/shared/syntax-highlight.ts` — extracted lowlight instance, color maps, `renderHighlightedTree`, `extractTokenText`, `getTokenColor`, and `extToLang` from `Markdown.tsx` so `FileReadBlock` can reuse syntax highlighting
 
 **Tests:**
+
 - `test/pretty-tool-output.test.tsx` — 26 tests covering all 7 components in running/done/error states, 5-line preview limit, match count singular/plural, truncated indicator
 
 ### Validation
+
 - `pnpm typecheck` ✅
 - `pnpm lint:eslint` + `pnpm lint:prettier` ✅
 - `pnpm build` ✅

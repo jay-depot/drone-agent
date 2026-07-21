@@ -25,7 +25,7 @@ export function FileReadBlock({
       typeof state.arguments.path === 'string' ? state.arguments.path : '';
     return (
       <Text color={scheme.toolCall} wrap="wrap">
-        {`${indicator} ${path}`}
+        {`${indicator} file__read ${path}`}
       </Text>
     );
   }
@@ -55,22 +55,29 @@ export function FileReadBlock({
   const endLine = typeof parsed.endLine === 'number' ? parsed.endLine : 0;
   const content = typeof parsed.content === 'string' ? parsed.content : '';
 
-  const header = `✓ ${path} (${startLine}–${endLine} of ${totalLines} lines)`;
+  const header = `✓ file__read ${path} (${startLine}–${endLine} of ${totalLines} lines)`;
 
-  // Syntax-highlight the first 5 lines
+  // Syntax-highlight the first 10 lines
   const contentLines = content.split('\n');
-  const previewLines = contentLines.slice(0, 5);
+  const previewLines = contentLines.slice(0, 10);
   const previewCode = previewLines.join('\n');
 
   // Infer language from file extension
   const ext = path.split('.').pop() ?? '';
   const lang = extToLang(ext);
 
+  // Use user's syntax colors if available, fall back to defaults
+  const syntaxColors = (state.syntaxColors ?? SYNTAX_COLORS) as Record<
+    string,
+    string
+  >;
+  const codeBg = state.codeBackground ?? 'gray';
+
   let highlighted: ReactNode = null;
   if (previewCode.length > 0) {
     try {
       const tree = lowlight.highlight(lang, previewCode);
-      highlighted = renderHighlightedTree(tree, 'gray', SYNTAX_COLORS);
+      highlighted = renderHighlightedTree(tree, codeBg, syntaxColors);
     } catch {
       highlighted = <Text color="white">{previewCode}</Text>;
     }

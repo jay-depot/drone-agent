@@ -4,7 +4,7 @@ import type { DroneColorScheme } from '../theme.js';
 import type { ToolRenderState } from 'drone-core';
 import { tryParseJson } from '../shared/format.js';
 
-export function FileGlobBlock({
+export function SkillsListBlock({
   state,
 }: {
   state: ToolRenderState;
@@ -12,13 +12,9 @@ export function FileGlobBlock({
   const scheme = state.scheme as DroneColorScheme;
 
   if (state.status === 'running') {
-    const pattern =
-      typeof state.arguments.pattern === 'string'
-        ? state.arguments.pattern
-        : '';
     return (
       <Text color={scheme.toolCall} wrap="wrap">
-        {`… file__glob ${pattern}`}
+        {'… skills.list()'}
       </Text>
     );
   }
@@ -41,30 +37,26 @@ export function FileGlobBlock({
     );
   }
 
-  const pattern = typeof parsed.pattern === 'string' ? parsed.pattern : '';
-  const matches = Array.isArray(parsed.matches) ? parsed.matches : [];
+  const skills = (parsed.skills ?? []) as Array<Record<string, unknown>>;
+  const count = (parsed.count as number) ?? skills.length;
 
   const elements: ReactNode[] = [];
   elements.push(
     <Text key="header" color={scheme.toolResult} wrap="wrap">
-      {`file__glob ${pattern}`}
+      {`✓ skills.list: ${count} skill${count === 1 ? '' : 's'}`}
     </Text>
   );
 
-  for (let i = 0; i < matches.length; i++) {
-    const match = String(matches[i]);
+  for (let i = 0; i < skills.length; i++) {
+    const s = skills[i];
+    const id = (s.id as string) ?? '';
+    const desc = (s.description as string) ?? '';
     elements.push(
-      <Text key={`match-${i}`} wrap="wrap">
-        {match}
+      <Text key={`skill-${i}`} wrap="wrap">
+        {`  - ${id}  (${desc})`}
       </Text>
     );
   }
-
-  elements.push(
-    <Text key="count" color={scheme.info} wrap="wrap">
-      {`(${matches.length} match${matches.length === 1 ? '' : 'es'})`}
-    </Text>
-  );
 
   elements.push(<Text key="trailing">{'\n'}</Text>);
   return <>{elements}</>;

@@ -1,4 +1,5 @@
 import type { DronePlugin } from 'drone-core';
+import { NotepadBlock } from '../tui/components/NotepadBlock.js';
 
 type NotepadState = {
   currentNotepad: string | null;
@@ -83,6 +84,7 @@ export const notepadPlugin: DronePlugin = {
 
         return JSON.stringify({ success: true });
       },
+      renderComponent: state => NotepadBlock({ state }),
     });
   },
 };

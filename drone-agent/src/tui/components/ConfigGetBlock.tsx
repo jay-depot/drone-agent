@@ -4,7 +4,7 @@ import type { DroneColorScheme } from '../theme.js';
 import type { ToolRenderState } from 'drone-core';
 import { tryParseJson } from '../shared/format.js';
 
-export function FileApplyDiffBlock({
+export function ConfigGetBlock({
   state,
 }: {
   state: ToolRenderState;
@@ -12,11 +12,10 @@ export function FileApplyDiffBlock({
   const scheme = state.scheme as DroneColorScheme;
 
   if (state.status === 'running') {
-    const path =
-      typeof state.arguments.path === 'string' ? state.arguments.path : '';
+    const key = state.arguments.key as string | undefined;
     return (
       <Text color={scheme.toolCall} wrap="wrap">
-        {`… file__apply_diff ${path}`}
+        {`… config.get(${key ? `"${key}"` : ''})`}
       </Text>
     );
   }
@@ -39,25 +38,33 @@ export function FileApplyDiffBlock({
     );
   }
 
-  const path = typeof parsed.path === 'string' ? parsed.path : '';
-  const summary = parsed.summary as
-    | { additions?: number; deletions?: number; hunks?: number }
-    | undefined;
-  const additions = summary?.additions ?? 0;
-  const deletions = summary?.deletions ?? 0;
-  const hunks = summary?.hunks ?? 0;
+  // With a key: { key, value, source }
+  if (typeof parsed.key === 'string') {
+    const key = parsed.key as string;
+    const value = parsed.value;
+    const source = (parsed.source as string) ?? 'unknown';
+    const valueStr =
+      typeof value === 'string' ? `"${value}"` : JSON.stringify(value);
+    return (
+      <Text color={scheme.toolResult} wrap="wrap">
+        {`✓ config.get: ${key} = ${valueStr}  (source: ${source})`}
+      </Text>
+    );
+  }
+
+  // Full config: has _provenance map
+  if (parsed._provenance) {
+    const keys = Object.keys(parsed).filter(k => k !== '_provenance');
+    return (
+      <Text color={scheme.toolResult} wrap="wrap">
+        {`✓ config.get: all  (${keys.length} keys)`}
+      </Text>
+    );
+  }
 
   return (
-    <>
-      <Text color={scheme.toolResult} wrap="wrap">
-        {`✓ file__apply_diff ${path}`}
-      </Text>
-      <Text wrap="wrap">
-        <Text color={scheme.success}>+{additions}</Text>{' '}
-        <Text color={scheme.error}>-{deletions}</Text>
-        {` across ${hunks} hunk${hunks === 1 ? '' : 's'}`}
-      </Text>
-      <Text>{'\n'}</Text>
-    </>
+    <Text color={scheme.toolResult} wrap="wrap">
+      {`✓ ${result}`}
+    </Text>
   );
 }

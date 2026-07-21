@@ -123,6 +123,10 @@ export type ToolRenderState = {
   scheme: unknown;
   /** Accumulated streaming output lines emitted via onProgress during execution. */
   outputLines?: string[];
+  /** User-configured syntax highlighting colors (from tui.syntaxHighlighting.colors). */
+  syntaxColors?: Record<string, string>;
+  /** User-configured code background color (from tui.syntaxHighlighting.codeBackground). */
+  codeBackground?: string;
 };
 
 export type DroneConversationEvent =

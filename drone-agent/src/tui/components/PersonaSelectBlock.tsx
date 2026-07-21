@@ -4,7 +4,7 @@ import type { DroneColorScheme } from '../theme.js';
 import type { ToolRenderState } from 'drone-core';
 import { tryParseJson } from '../shared/format.js';
 
-export function FileApplyDiffBlock({
+export function PersonaSelectBlock({
   state,
 }: {
   state: ToolRenderState;
@@ -12,11 +12,10 @@ export function FileApplyDiffBlock({
   const scheme = state.scheme as DroneColorScheme;
 
   if (state.status === 'running') {
-    const path =
-      typeof state.arguments.path === 'string' ? state.arguments.path : '';
+    const id = state.arguments.id as string | undefined;
     return (
       <Text color={scheme.toolCall} wrap="wrap">
-        {`… file__apply_diff ${path}`}
+        {`… persona.select("${id ?? ''}")`}
       </Text>
     );
   }
@@ -39,25 +38,29 @@ export function FileApplyDiffBlock({
     );
   }
 
-  const path = typeof parsed.path === 'string' ? parsed.path : '';
-  const summary = parsed.summary as
-    | { additions?: number; deletions?: number; hunks?: number }
-    | undefined;
-  const additions = summary?.additions ?? 0;
-  const deletions = summary?.deletions ?? 0;
-  const hunks = summary?.hunks ?? 0;
+  // Error response from the tool (returned as done status with error: true)
+  if (parsed.error === true) {
+    return (
+      <Text color={scheme.error} wrap="wrap">
+        {`✗ persona.select: ${(parsed.message as string) ?? 'error'}`}
+      </Text>
+    );
+  }
+
+  const name =
+    (parsed.name as string) ?? (parsed.activePersona as string) ?? '';
+
+  if (parsed.activePersona === null) {
+    return (
+      <Text color={scheme.info} wrap="wrap">
+        {'✓ persona.select: (none) → cleared'}
+      </Text>
+    );
+  }
 
   return (
-    <>
-      <Text color={scheme.toolResult} wrap="wrap">
-        {`✓ file__apply_diff ${path}`}
-      </Text>
-      <Text wrap="wrap">
-        <Text color={scheme.success}>+{additions}</Text>{' '}
-        <Text color={scheme.error}>-{deletions}</Text>
-        {` across ${hunks} hunk${hunks === 1 ? '' : 's'}`}
-      </Text>
-      <Text>{'\n'}</Text>
-    </>
+    <Text color={scheme.success} wrap="wrap">
+      {`✓ persona.select: "${name}" → active`}
+    </Text>
   );
 }

@@ -4,7 +4,7 @@ import type { DroneColorScheme } from '../theme.js';
 import type { ToolRenderState } from 'drone-core';
 import { tryParseJson } from '../shared/format.js';
 
-export function FileWriteBlock({
+export function SkillsCreateBlock({
   state,
 }: {
   state: ToolRenderState;
@@ -12,11 +12,9 @@ export function FileWriteBlock({
   const scheme = state.scheme as DroneColorScheme;
 
   if (state.status === 'running') {
-    const path =
-      typeof state.arguments.path === 'string' ? state.arguments.path : '';
     return (
       <Text color={scheme.toolCall} wrap="wrap">
-        {`… file__write ${path}`}
+        {'… skills.create(...)'}
       </Text>
     );
   }
@@ -31,16 +29,14 @@ export function FileWriteBlock({
 
   const result = state.result ?? '';
   const parsed = tryParseJson(result);
-  const path =
-    parsed && typeof parsed.path === 'string'
-      ? parsed.path
-      : typeof state.arguments.path === 'string'
-        ? state.arguments.path
-        : '';
+  const message =
+    parsed && typeof parsed.message === 'string'
+      ? (parsed.message as string)
+      : 'Workflow completed.';
 
   return (
     <Text color={scheme.success} wrap="wrap">
-      {`✓ Wrote ${path}`}
+      {`✓ skills.create: ${message}`}
     </Text>
   );
 }

@@ -1,4 +1,6 @@
 import type { DronePlugin, DronePromptFragment } from 'drone-core';
+import { MemoryManageBlock } from '../../tui/components/MemoryManageBlock.js';
+import { MemoryBrowseBlock } from '../../tui/components/MemoryBrowseBlock.js';
 import process from 'node:process';
 import {
   createMemoryEntry,
@@ -199,6 +201,7 @@ export const memoryPlugin: DronePlugin = {
 
         throw new Error(`Unknown action: ${action}`);
       },
+      renderComponent: state => MemoryManageBlock({ state }),
     });
 
     // memory.browse — list, search
@@ -267,6 +270,7 @@ export const memoryPlugin: DronePlugin = {
 
         throw new Error(`Unknown action: ${action}`);
       },
+      renderComponent: state => MemoryBrowseBlock({ state }),
     });
 
     // ── help snippet ───────────────────────────────────────────────────

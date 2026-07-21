@@ -219,6 +219,8 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             status: 'running' as const,
             scheme: s as unknown,
             outputLines: [...entry.lines],
+            syntaxColors: syntaxColorsRef.current,
+            codeBackground: codeBackgroundRef.current,
           }) as React.ReactNode;
           updateItem(entry.id, component, () => ({
             text: `→ ${event.name}`,
@@ -251,6 +253,8 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
                 arguments: tc.arguments,
                 status: 'running' as const,
                 scheme: s as unknown,
+                syntaxColors: syntaxColorsRef.current,
+                codeBackground: codeBackgroundRef.current,
               }) as React.ReactNode)
             ) : (
               <ToolCallProgress
@@ -296,6 +300,8 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
                   status: isError ? ('error' as const) : ('done' as const),
                   scheme: s as unknown,
                   outputLines,
+                  syntaxColors: syntaxColorsRef.current,
+                  codeBackground: codeBackgroundRef.current,
                 }) as React.ReactNode)
               ) : (
                 <ToolCallProgress

@@ -16,7 +16,7 @@ export function FileListBlock({
       typeof state.arguments.path === 'string' ? state.arguments.path : '';
     return (
       <Text color={scheme.toolCall} wrap="wrap">
-        {`… ${path}`}
+        {`… file__list ${path}`}
       </Text>
     );
   }
@@ -45,7 +45,7 @@ export function FileListBlock({
   const elements: ReactNode[] = [];
   elements.push(
     <Text key="header" color={scheme.toolResult} wrap="wrap">
-      {path}
+      {`file__list ${path}`}
     </Text>
   );
 

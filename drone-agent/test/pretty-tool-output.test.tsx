@@ -103,7 +103,7 @@ describe('FileReadBlock', () => {
     });
     const { lastFrame } = render(<FileReadBlock state={state} />);
     expect(lastFrame()).toContain('…');
-    expect(lastFrame()).toContain('/tmp/test.ts');
+    expect(lastFrame()).toContain('file__read /tmp/test.ts');
   });
 
   it('shows done state with header and preview', () => {
@@ -121,12 +121,12 @@ describe('FileReadBlock', () => {
     });
     const { lastFrame } = render(<FileReadBlock state={state} />);
     expect(lastFrame()).toContain('✓');
-    expect(lastFrame()).toContain('/tmp/test.ts');
+    expect(lastFrame()).toContain('file__read /tmp/test.ts');
     expect(lastFrame()).toContain('1–10 of 10 lines');
     expect(lastFrame()).toContain('===');
   });
 
-  it('shows at most 5 preview lines', () => {
+  it('shows at most 10 preview lines', () => {
     const state = makeState({
       name: 'file__read',
       arguments: { path: '/tmp/test.ts' },
@@ -136,14 +136,16 @@ describe('FileReadBlock', () => {
         totalLines: 20,
         startLine: 1,
         endLine: 20,
-        content: Array.from({ length: 20 }, (_, i) => `line${i + 1}`).join('\n'),
+        content: Array.from({ length: 20 }, (_, i) => `line${i + 1}`).join(
+          '\n'
+        ),
       }),
     });
     const { lastFrame } = render(<FileReadBlock state={state} />);
     expect(lastFrame()).toContain('line1');
-    expect(lastFrame()).toContain('line5');
-    // line6 should not appear in the preview
-    expect(lastFrame()).not.toContain('line6');
+    expect(lastFrame()).toContain('line10');
+    // line11 should not appear in the preview
+    expect(lastFrame()).not.toContain('line11');
   });
 
   it('shows error state', () => {
@@ -169,7 +171,7 @@ describe('FileWriteBlock', () => {
     });
     const { lastFrame } = render(<FileWriteBlock state={state} />);
     expect(lastFrame()).toContain('…');
-    expect(lastFrame()).toContain('/tmp/test.ts');
+    expect(lastFrame()).toContain('file__write /tmp/test.ts');
   });
 
   it('shows done state with Wrote prefix', () => {
@@ -207,7 +209,7 @@ describe('FileApplyDiffBlock', () => {
     });
     const { lastFrame } = render(<FileApplyDiffBlock state={state} />);
     expect(lastFrame()).toContain('…');
-    expect(lastFrame()).toContain('/tmp/test.ts');
+    expect(lastFrame()).toContain('file__apply_diff /tmp/test.ts');
   });
 
   it('shows done state with summary', () => {
@@ -224,7 +226,7 @@ describe('FileApplyDiffBlock', () => {
     });
     const { lastFrame } = render(<FileApplyDiffBlock state={state} />);
     expect(lastFrame()).toContain('✓');
-    expect(lastFrame()).toContain('/tmp/test.ts');
+    expect(lastFrame()).toContain('file__apply_diff /tmp/test.ts');
     expect(lastFrame()).toContain('+5');
     expect(lastFrame()).toContain('-3');
     expect(lastFrame()).toContain('2 hunks');
@@ -253,7 +255,7 @@ describe('FileListBlock', () => {
     });
     const { lastFrame } = render(<FileListBlock state={state} />);
     expect(lastFrame()).toContain('…');
-    expect(lastFrame()).toContain('/tmp');
+    expect(lastFrame()).toContain('file__list /tmp');
   });
 
   it('shows done state with directory listing', () => {
@@ -270,7 +272,7 @@ describe('FileListBlock', () => {
       }),
     });
     const { lastFrame } = render(<FileListBlock state={state} />);
-    expect(lastFrame()).toContain('/tmp');
+    expect(lastFrame()).toContain('file__list /tmp');
     expect(lastFrame()).toContain('📁');
     expect(lastFrame()).toContain('subdir/');
     expect(lastFrame()).toContain('📄');
@@ -300,7 +302,7 @@ describe('FileGlobBlock', () => {
     });
     const { lastFrame } = render(<FileGlobBlock state={state} />);
     expect(lastFrame()).toContain('…');
-    expect(lastFrame()).toContain('**/*.ts');
+    expect(lastFrame()).toContain('file__glob **/*.ts');
   });
 
   it('shows done state with matches and count', () => {
@@ -315,7 +317,7 @@ describe('FileGlobBlock', () => {
       }),
     });
     const { lastFrame } = render(<FileGlobBlock state={state} />);
-    expect(lastFrame()).toContain('**/*.ts');
+    expect(lastFrame()).toContain('file__glob **/*.ts');
     expect(lastFrame()).toContain('/tmp/a.ts');
     expect(lastFrame()).toContain('/tmp/b.ts');
     expect(lastFrame()).toContain('(2 matches)');
@@ -397,9 +399,7 @@ describe('SearchTextBlock', () => {
         searchPath: '/tmp',
         resultCount: 50,
         truncated: true,
-        results: [
-          { file: '/tmp/a.ts', line: 10, content: '// TODO: fix me' },
-        ],
+        results: [{ file: '/tmp/a.ts', line: 10, content: '// TODO: fix me' }],
       }),
     });
     const { lastFrame } = render(<SearchTextBlock state={state} />);

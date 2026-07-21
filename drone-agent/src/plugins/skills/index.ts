@@ -1,3 +1,6 @@
+import { SkillsRecallBlock } from '../../tui/components/SkillsRecallBlock.js';
+import { SkillsListBlock } from '../../tui/components/SkillsListBlock.js';
+import { SkillsCreateBlock } from '../../tui/components/SkillsCreateBlock.js';
 import type {
   DronePlugin,
   DronePromptFragment,
@@ -239,6 +242,7 @@ export const skillsPlugin: DronePlugin = {
           2
         );
       },
+      renderComponent: state => SkillsRecallBlock({ state }),
     });
 
     registration.registerTool({
@@ -278,6 +282,7 @@ export const skillsPlugin: DronePlugin = {
           2
         );
       },
+      renderComponent: state => SkillsListBlock({ state }),
     });
 
     registration.registerTool({
@@ -295,6 +300,7 @@ export const skillsPlugin: DronePlugin = {
           JSON.stringify({ ok: true, message: 'Workflow completed.' }, null, 2)
         );
       },
+      renderComponent: state => SkillsCreateBlock({ state }),
     });
 
     registration.registerWorkflow(skillsCreateWorkflow);

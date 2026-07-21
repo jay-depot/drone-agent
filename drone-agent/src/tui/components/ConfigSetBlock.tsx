@@ -4,7 +4,7 @@ import type { DroneColorScheme } from '../theme.js';
 import type { ToolRenderState } from 'drone-core';
 import { tryParseJson } from '../shared/format.js';
 
-export function FileApplyDiffBlock({
+export function ConfigSetBlock({
   state,
 }: {
   state: ToolRenderState;
@@ -12,11 +12,10 @@ export function FileApplyDiffBlock({
   const scheme = state.scheme as DroneColorScheme;
 
   if (state.status === 'running') {
-    const path =
-      typeof state.arguments.path === 'string' ? state.arguments.path : '';
+    const key = state.arguments.key as string | undefined;
     return (
       <Text color={scheme.toolCall} wrap="wrap">
-        {`… file__apply_diff ${path}`}
+        {`… config.set("${key ?? ''}", ...)`}
       </Text>
     );
   }
@@ -39,25 +38,12 @@ export function FileApplyDiffBlock({
     );
   }
 
-  const path = typeof parsed.path === 'string' ? parsed.path : '';
-  const summary = parsed.summary as
-    | { additions?: number; deletions?: number; hunks?: number }
-    | undefined;
-  const additions = summary?.additions ?? 0;
-  const deletions = summary?.deletions ?? 0;
-  const hunks = summary?.hunks ?? 0;
+  const key = (parsed.key as string) ?? '';
+  const scope = (parsed.scope as string) ?? 'project';
 
   return (
-    <>
-      <Text color={scheme.toolResult} wrap="wrap">
-        {`✓ file__apply_diff ${path}`}
-      </Text>
-      <Text wrap="wrap">
-        <Text color={scheme.success}>+{additions}</Text>{' '}
-        <Text color={scheme.error}>-{deletions}</Text>
-        {` across ${hunks} hunk${hunks === 1 ? '' : 's'}`}
-      </Text>
-      <Text>{'\n'}</Text>
-    </>
+    <Text color={scheme.success} wrap="wrap">
+      {`✓ config.set: ${key} → ${scope} scope  (restart to apply)`}
+    </Text>
   );
 }
