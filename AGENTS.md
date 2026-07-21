@@ -24,7 +24,7 @@ If classification is ambiguous, ask for clarification before editing that specif
 drone-agent/          ← The CLI + TUI coding agent (Ink-based)
   src/
     index.tsx         ← Main entry point, CLI arg parsing, first-run setup
-    cli.ts            ← CLI argument parsing (--once, --plugin, --workflow, etc.)
+    cli.ts            ← CLI argument parsing (--once, --plugin, --workflow, --debug, etc.)
     elicitation.ts    ← Readline-based elicitation for plain-output mode
     interactive.ts    ← Interactive loop and JSON mode for non-TUI sessions
     output-handlers.ts← Plain output event handler
@@ -298,6 +298,33 @@ The engine supports `enablePlugin(pluginId)` — dynamically enabling and regist
 - Runs `onPluginsLoaded` and `onSessionStart` hooks for catch-up
 
 The `--plugin` CLI flag enables plugins for the current session by merging plugin IDs into the `enabledPlugins` config before engine initialization. Supports comma-separated names (`--plugin bootstrap,lsp,git`) and repeated flags.
+
+### `--debug` CLI Flag
+
+The `--debug` CLI flag enables subsystem-specific debug logging to stderr. It accepts a comma-separated list of subsystem names and supports repeated flags (same pattern as `--plugin`):
+
+- `--debug llm` — log LLM request/response bodies to stderr
+- `--debug llm,mcp` — enable multiple subsystems at once
+- `--debug llm --debug mcp` — repeated flags form
+
+**Convention: add new debug subsystems as you add features that need tracing.**
+
+When a new feature is added that involves network calls, complex state machines, or any subsystem where debugging would be aided by seeing the raw I/O, add a corresponding `--debug <subsystem>` option. The debug flag is parsed in `cli.ts` and stored as `debugSubsystems: string[]` on `CliOptions`. The conversation service threads it through to relevant providers as a `Set<string>`.
+
+**How it works:**
+
+1. `cli.ts` parses `--debug` into `debugSubsystems: string[]` (supports comma-separated and repeated forms)
+2. `index.tsx` passes `debugSubsystems` to the conversation service
+3. The conversation service stores it as a `Set<string>` and passes `debug: debugSet.has('llm')` to `provider.chat()`
+4. Each LLM provider logs its request body before sending and the raw response body after receiving, prefixed with `[llm:request]` and `[llm:response]` respectively
+
+**Output goes to stderr** — clean separation from TUI/plain output. Redirect with `2> debug.log` to capture.
+
+**Current subsystems:**
+
+| Subsystem | What it logs |
+|-----------|-------------|
+| `llm` | Full request and response bodies for all LLM providers (OpenAI, OpenRouter, Anthropic, Ollama) |
 
 ### Hook Ordering Guarantees
 
