@@ -1,91 +1,62 @@
 ---
 key: reasoning-output-fix-plan
-tags: []
+tags:
+  []
 created: 2026-07-21T21:11:27.913Z
-updated: 2026-07-21T21:23:14.780Z
+updated: 2026-07-21T22:23:09.780Z
 ---
 
-# Plan: Fix Reasoning Output for All LLM Providers
+## Plan: Fix OpenRouter Reasoning Extraction
 
-## Summary
+### Summary
+OpenRouter returns `reasoning` inside `choice.message.reasoning` (as a field on the message object), but the shared OpenAI-compatible adapter (`fromOpenAiResponse`) only checks `choice.reasoning` (at the choice level). This means reasoning from OpenRouter is silently dropped.
 
-The `DroneChatResponse` type has a `reasoning` field that the conversation service already consumes and the TUI already renders. However, only the Ollama provider populates it. OpenRouter sends reasoning in the request but doesn't extract it from the response. OpenAI doesn't send reasoning in the request _or_ extract it from the response. Anthropic does neither. This plan fixes all three providers so reasoning output flows end-to-end.
+The fix is to add `reasoning` to the `OpenAiMessage` type and check `choice.message.reasoning` as a fallback in `fromOpenAiResponse`.
 
-## Design Decisions
+### Files to modify
+1. `drone-agent/src/shared/openai-compatible.ts` — type + parser fix
+2. `drone-agent/test/openai.test.ts` — add test for message-level reasoning
+3. `drone-agent/test/openrouter.test.ts` — add test for message-level reasoning, update existing test
 
-1. **OpenAI vs OpenRouter format**: OpenAI uses `reasoning_effort` (top-level, snake_case); OpenRouter uses `reasoning: { effort: ... }` (nested). Both fields will be available on `OpenAiChatRequest` — each plugin uses the format its API expects. The API ignores fields it doesn't understand.
-2. **Anthropic thinking budget**: 50% of `config.session.responseReserveTokens` as `budget_tokens`.
-3. **Anthropic signature blocks**: Silently skipped — they're redacted hashes for Anthropic's internal verification.
+### Steps
 
-## Step-by-Step Implementation
+**Step 1: Add `reasoning` field to `OpenAiMessage` type**
+File: `drone-agent/src/shared/openai-compatible.ts`
+- Add `reasoning?: string` to the `OpenAiMessage` type definition (around line 8)
 
-### Step 1: Update shared types in `openai-compatible.ts`
+**Step 2: Update `fromOpenAiResponse` to check message-level reasoning**
+File: `drone-agent/src/shared/openai-compatible.ts`
+- After the existing `if (choice.reasoning)` check, add a fallback:
+  ```ts
+  if (!result.reasoning && choice.message.reasoning) {
+    result.reasoning = choice.message.reasoning;
+  }
+  ```
+  This ensures choice-level takes precedence (OpenAI standard), but message-level is used as fallback (OpenRouter's behavior).
 
-**File:** `drone-agent/src/shared/openai-compatible.ts`
+**Step 3: Add test for message-level reasoning in openai.test.ts**
+File: `drone-agent/test/openai.test.ts`
+- Add a test case: `'extracts reasoning from message.reasoning when choice.reasoning is absent'`
+- Mock response with `reasoning` inside `message` but not at `choice` level
+- Verify `response.reasoning` is extracted correctly
 
-**Changes:**
+**Step 4: Update openrouter.test.ts**
+File: `drone-agent/test/openrouter.test.ts`
+- Update the existing `'extracts reasoning from response when choice.reasoning is present'` test to use `message.reasoning` instead of `choice.reasoning` (since that's what OpenRouter actually returns)
+- Add a new test: `'extracts reasoning from message.reasoning when choice.reasoning is absent'` to cover the fallback path
 
-1. Add `reasoning_effort?: string` to `OpenAiChatRequest` (native OpenAI format, alongside existing `reasoning?: { effort: string }` for OpenRouter)
-2. Add `reasoning?: string` to `OpenAiChatChoice` (the OpenAI API returns reasoning as a top-level field on the choice object)
+**Step 5: Verify**
+- Run `pnpm -r run typecheck` — must pass
+- Run `pnpm -r run lint` — must pass
+- Run `pnpm -r run test` — must pass (specifically the openai and openrouter test files)
+- Run `pnpm -r run build` — must pass
 
-### Step 2: Update `fromOpenAiResponse()` to extract reasoning
-
-**File:** `drone-agent/src/shared/openai-compatible.ts`
-
-**Changes:** After extracting `choice.message.content`, also extract `choice.reasoning` and set it on `result.reasoning`.
-
-### Step 3: Update OpenAI plugin to send reasoning in request
-
-**File:** `drone-agent/src/plugins/openai/index.ts`
-
-**Changes:**
-
-1. Destructure `reasoningLevel` from the `chat()` input
-2. Map `DroneReasoningLevel` to OpenAI's `reasoning_effort` values
-3. Set `reasoning_effort` on the request body
-
-### Step 4: Update Anthropic types in `anthropic-adapter.ts`
-
-**File:** `drone-agent/src/plugins/anthropic/anthropic-adapter.ts`
-
-**Changes:**
-
-1. Add `thinking` field to `AnthropicChatRequest`
-2. Add `AnthropicThinkingBlock` and `AnthropicSignatureBlock` types
-3. Update `AnthropicContentBlock` union
-
-### Step 5: Update `fromAnthropicResponse()` to extract reasoning
-
-**File:** `drone-agent/src/plugins/anthropic/anthropic-adapter.ts`
-
-**Changes:** Handle `type: 'thinking'` (extract text into `result.reasoning`) and `type: 'signature'` (silently skip).
-
-### Step 6: Update `toAnthropicRequestParts()` to accept reasoningLevel and set thinking
-
-**File:** `drone-agent/src/plugins/anthropic/anthropic-adapter.ts`
-
-**Changes:** Add `reasoningLevel` parameter; set `thinking` with `budget_tokens: Math.floor(maxTokens * 0.5)` when reasoning is enabled.
-
-### Step 7: Update Anthropic plugin to pass reasoningLevel through
-
-**File:** `drone-agent/src/plugins/anthropic/index.ts`
-
-**Changes:** Pass `reasoningLevel` to `toAnthropicRequestParts()`.
-
-### Step 8: Add tests
-
-- `drone-agent/test/openai.test.ts` — reasoning_effort in request, reasoning extraction, absent reasoning
-- `drone-agent/test/openrouter.test.ts` — reasoning extraction from response
-- `drone-agent/test/anthropic.test.ts` — thinking in request, thinking off, thinking block extraction, signature block skipping
-
-### Step 9: Verify
-
-Run `pnpm lint:eslint`, `pnpm lint:prettier`, `pnpm build`, `pnpm test`.
-
-## Validation Criteria
-
-All met. See commit 9f1657d on branch `reasoning-output-fix`.
-
-## Work Completed
-
-All 11 steps implemented and validated. 10 files changed, 380 insertions, 22 deletions. All 1599 tests pass. Lint and build pass cleanly.
+### Validation Criteria
+- [ ] LSP diagnostics pass with zero errors
+- [ ] `pnpm -r run typecheck` passes
+- [ ] `pnpm -r run lint` passes
+- [ ] `pnpm -r run test` passes (all tests, including new ones)
+- [ ] `pnpm -r run build` passes
+- [ ] The `fromOpenAiResponse` function extracts reasoning from `choice.message.reasoning` when `choice.reasoning` is absent
+- [ ] The `fromOpenAiResponse` function still prefers `choice.reasoning` over `choice.message.reasoning` when both are present
+- [ ] No regressions in existing reasoning tests
