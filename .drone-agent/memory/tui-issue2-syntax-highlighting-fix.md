@@ -1,7 +1,6 @@
 ---
 key: tui-issue2-syntax-highlighting-fix
-tags:
-  []
+tags: []
 created: 2026-07-20T00:55:15.655Z
 updated: 2026-07-21T18:08:03.288Z
 ---
@@ -23,8 +22,8 @@ New type in `drone-core/src/config-types.ts`:
 ```typescript
 export type DroneTuiConfig = {
   syntaxHighlighting: {
-    colors: Record<string, string>;  // e.g. { "keyword": "red", "string": "green" }
-    codeBackground: string;          // e.g. "black" or "#333"
+    colors: Record<string, string>; // e.g. { "keyword": "red", "string": "green" }
+    codeBackground: string; // e.g. "black" or "#333"
   };
 };
 ```

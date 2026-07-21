@@ -73,6 +73,8 @@ interface MarkdownProps {
   color?: string;
   /** Optional background for inline code */
   codeBackground?: string;
+  /** Optional syntax highlighting color overrides (defaults to SYNTAX_COLORS) */
+  syntaxColors?: Record<string, string>;
 }
 
 /**
@@ -97,12 +99,15 @@ function extractTokenText(token: any): string {
  * the default color.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getTokenColor(token: any): string {
+function getTokenColor(
+  token: any,
+  syntaxColors: Record<string, string>
+): string {
   if (token.properties?.className) {
     for (const cls of token.properties.className) {
       if (typeof cls === 'string' && cls.startsWith('hljs-')) {
         const key = cls.slice(5);
-        if (SYNTAX_COLORS[key]) return SYNTAX_COLORS[key];
+        if (syntaxColors[key]) return syntaxColors[key];
       }
     }
   }
@@ -116,6 +121,7 @@ export function Markdown({
   children,
   color = 'white',
   codeBackground = 'gray',
+  syntaxColors = SYNTAX_COLORS,
 }: MarkdownProps): React.JSX.Element {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tokens = marked.lexer(children) as unknown as any[];
@@ -123,7 +129,13 @@ export function Markdown({
     <Box flexDirection="column">
       {tokens.map((token: any, index: number) => (
         <React.Fragment key={index}>
-          {renderToken(token, color, codeBackground, `root-${index}`)}
+          {renderToken(
+            token,
+            color,
+            codeBackground,
+            syntaxColors,
+            `root-${index}`
+          )}
         </React.Fragment>
       ))}
     </Box>
@@ -138,6 +150,7 @@ function renderToken(
   token: any,
   color: string,
   codeBackground: string,
+  syntaxColors: Record<string, string>,
   keyPrefix: string
 ): ReactNode {
   const textColor = token.type === 'paragraph' ? color : undefined;
@@ -164,7 +177,7 @@ function renderToken(
       return renderList(token, textColor ?? color, keyPrefix);
 
     case 'code':
-      return renderCodeBlock(token, codeBackground);
+      return renderCodeBlock(token, codeBackground, syntaxColors);
 
     case 'hr':
       return <Text color="gray">{'-'.repeat(80)}</Text>;
@@ -355,7 +368,8 @@ function renderListItemContent(
 function renderCodeBlock(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   token: any,
-  codeBackground: string
+  codeBackground: string,
+  syntaxColors: Record<string, string>
 ): ReactNode {
   const code = token.text ?? '';
   const lang = token.lang ?? 'plaintext';
@@ -365,7 +379,7 @@ function renderCodeBlock(
 
   try {
     const tree = lowlight.highlight(lang, code);
-    highlighted = renderHighlightedTree(tree, codeBackground);
+    highlighted = renderHighlightedTree(tree, codeBackground, syntaxColors);
   } catch {
     // Language not found or highlight failed
     highlighted = <Text color="white">{code}</Text>;
@@ -401,11 +415,15 @@ function renderCodeBlock(
  * a single ANSI string from all tokens, then split on \n to create lines.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function renderHighlightedTree(tree: any, backgroundColor: string): ReactNode {
+function renderHighlightedTree(
+  tree: any,
+  backgroundColor: string,
+  syntaxColors: Record<string, string>
+): ReactNode {
   // Build a single ANSI string from all tokens
   let fullRendered = '';
   for (const token of tree.children ?? []) {
-    const color = getTokenColor(token);
+    const color = getTokenColor(token, syntaxColors);
     const ansiCode = ANSI_COLORS[color] || '37';
     const text = extractTokenText(token);
     if (text) fullRendered += `\u001b[${ansiCode}m${text}\u001b[39m`;
@@ -413,13 +431,26 @@ function renderHighlightedTree(tree: any, backgroundColor: string): ReactNode {
 
   // Split on newlines to create one <Text> per line
   const lines = fullRendered.split('\n');
+
+  // Find the longest visual line width (strip ANSI codes for measurement)
+  // so we can pad shorter lines to fill the background fully.
+  const maxWidth = lines.reduce((max, line) => {
+    const visible = line.replace(/\u001b\[\d+m/g, '');
+    return Math.max(max, visible.length);
+  }, 0);
+
   return (
     <>
-      {lines.map((line: string, lineIndex: number) => (
-        <Text key={lineIndex} backgroundColor={backgroundColor}>
-          {line}
-        </Text>
-      ))}
+      {lines.map((line: string, lineIndex: number) => {
+        const visibleLen = line.replace(/\u001b\[\d+m/g, '').length;
+        const padding = ' '.repeat(Math.max(0, maxWidth - visibleLen));
+        return (
+          <Text key={lineIndex} backgroundColor={backgroundColor}>
+            {line}
+            {padding}
+          </Text>
+        );
+      })}
     </>
   );
 }

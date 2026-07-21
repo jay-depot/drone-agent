@@ -138,6 +138,60 @@ describe('Markdown', () => {
     });
   });
 
+  describe('background padding', () => {
+    it('pads shorter lines to match the longest line width', async () => {
+      // Lines of different lengths — the shorter line should be padded
+      // with trailing spaces so the background fills the full width.
+      const md = ['```tsx', 'const x: number = 42;', 'short', '```'].join('\n');
+
+      const inst = render(<Markdown>{md}</Markdown>);
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f => f.includes('short'));
+
+      // Both lines should be present
+      expect(frame).toContain('const');
+      expect(frame).toContain('x');
+      expect(frame).toContain('number');
+      expect(frame).toContain('42');
+      expect(frame).toContain('short');
+
+      // No stray "undefined" strings
+      expect(frame).not.toContain('undefined');
+    });
+
+    it('renders a single-line code block without issues', async () => {
+      const md = ['```tsx', 'const x = 1;', '```'].join('\n');
+
+      const inst = render(<Markdown>{md}</Markdown>);
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f => f.includes('const'));
+
+      expect(frame).toContain('const');
+      expect(frame).toContain('x');
+      expect(frame).toContain('1');
+      expect(frame).not.toContain('undefined');
+    });
+  });
+
+  describe('custom syntax colors', () => {
+    it('accepts a custom syntaxColors prop without errors', async () => {
+      const md = ['```tsx', 'const x: number = 42;', '```'].join('\n');
+      const customColors = { keyword: 'red', number: 'blue' };
+
+      const inst = render(
+        <Markdown syntaxColors={customColors}>{md}</Markdown>
+      );
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f => f.includes('const'));
+
+      expect(frame).toContain('const');
+      expect(frame).toContain('x');
+      expect(frame).toContain('number');
+      expect(frame).toContain('42');
+      expect(frame).not.toContain('undefined');
+    });
+  });
+
   describe('inline codespan', () => {
     it('renders inline code with backticks', async () => {
       const md = 'Use the `npm install` command.';
