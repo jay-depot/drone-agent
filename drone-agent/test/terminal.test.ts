@@ -440,6 +440,14 @@ describe('terminalPlugin', () => {
             pullIntervalMinutes: 60,
           },
         },
+        tui: {
+          syntaxHighlighting: {
+            colors: {
+              keyword: 'magenta',
+            },
+            codeBackground: 'gray',
+          },
+        },
       }),
       registerTool: (tool: { name: string; defaultHidden?: boolean }) => {
         registeredTools.push(tool.name);
