@@ -86,7 +86,7 @@ export function MemoryBrowseBlock({
 
   elements.push(
     <Text key="count" color={scheme.info} wrap="wrap">
-      {`(${count} ${action === 'search' ? (count === 1 ? 'result' : 'results') : (count === 1 ? 'entry' : 'entries')})`}
+      {`(${count} ${action === 'search' ? (count === 1 ? 'result' : 'results') : count === 1 ? 'entry' : 'entries'})`}
     </Text>
   );
 
