@@ -14,5 +14,9 @@
   {
     "timestamp": "2026-07-19T18:04:08.795Z",
     "insight": "The file__apply_diff tool consistently fails on files with certain content patterns (e.g., when context lines contain only whitespace or the @@ heading doesn't match exactly). For multi-line code insertions in TypeScript files, using a Python script with string replacement and assertions is more reliable than the diff tool. This was observed during the MCP roots capability implementation where all 13+ edits to client.ts were applied via Python instead of file__apply_diff."
+  },
+  {
+    "timestamp": "2026-07-21T18:08:06.455Z",
+    "insight": "Planned syntax highlighting fixes: (1) background width padding in renderHighlightedTree(), (2) configurable syntax colors via new DroneTuiConfig type in drone-core. Config threads through App → ChatLog/AssistantMessageBlock → Markdown. Plan saved as project memory 'tui-issue2-syntax-highlighting-fix'."
   }
 ]

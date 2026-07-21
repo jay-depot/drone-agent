@@ -50,5 +50,9 @@
   {
     "timestamp": "2026-07-20T01:00:18.491Z",
     "insight": "The file__apply_diff tool can silently apply hunks multiple times when the context matches multiple locations. In this session, the first hunk (inserting helper functions) was applied twice because the context lines matched both the intended location and another location in the file. Always verify the result of apply_diff by checking for duplicate content, especially when inserting new code blocks rather than modifying existing ones."
+  },
+  {
+    "timestamp": "2026-07-20T01:15:13.955Z",
+    "insight": "renderHighlightedTree fix: lowlight's AST is flat (tree.children is an array of tokens, not lines). Newlines are embedded inside text node values. The fix builds a single ANSI string from all tokens, then splits on \\n to create one <Text> per logical line. This was the second bug after the initial ANSI escape code fix — the first fix treated each token as a line, causing spurious line breaks between every token."
   }
 ]
