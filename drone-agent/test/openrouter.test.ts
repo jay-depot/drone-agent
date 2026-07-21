@@ -321,7 +321,7 @@ describe('openrouter plugin', () => {
     ]);
   });
 
-  it('extracts reasoning from response when choice.reasoning is present', async () => {
+  it('extracts reasoning from message.reasoning when choice.reasoning is absent', async () => {
     const capture = createRegistrationCapture();
     capture.config.openrouter.apiKey = 'test-openrouter-key';
     capture.config.openrouter.baseUrl = 'https://openrouter.ai/api/v1';
@@ -333,8 +333,11 @@ describe('openrouter plugin', () => {
           choices: [
             {
               finish_reason: 'stop',
-              message: { role: 'assistant', content: 'Final answer' },
-              reasoning: 'Deep reasoning chain here',
+              message: {
+                role: 'assistant',
+                content: 'Final answer',
+                reasoning: 'Deep reasoning chain here',
+              },
             },
           ],
         }),
@@ -352,6 +355,44 @@ describe('openrouter plugin', () => {
     });
 
     expect(response.reasoning).toBe('Deep reasoning chain here');
+    expect(response.message).toBe('Final answer');
+  });
+
+  it('prefers choice.reasoning over message.reasoning when both are present', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.openrouter.apiKey = 'test-openrouter-key';
+    capture.config.openrouter.baseUrl = 'https://openrouter.ai/api/v1';
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 'chatcmpl_11',
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: {
+                role: 'assistant',
+                content: 'Final answer',
+                reasoning: 'Message-level reasoning',
+              },
+              reasoning: 'Choice-level reasoning',
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await openrouterPlugin.register(capture.registration);
+    const provider = capture.getRegisteredProvider()!.getProvider();
+
+    const response = await provider.chat({
+      model: 'openai/gpt-4o',
+      messages: [{ role: 'user', content: 'think step by step' }],
+    });
+
+    expect(response.reasoning).toBe('Choice-level reasoning');
     expect(response.message).toBe('Final answer');
   });
 });

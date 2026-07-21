@@ -395,4 +395,41 @@ describe('openai plugin', () => {
     expect(response.reasoning).toBeUndefined();
     expect(response.message).toBe('No reasoning');
   });
+
+  it('extracts reasoning from message.reasoning when choice.reasoning is absent', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.openai.apiKey = 'test-key';
+    capture.config.openai.baseUrl = 'https://api.openai.com/v1';
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          id: 'chatcmpl_6',
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: {
+                role: 'assistant',
+                content: 'Final answer',
+                reasoning: 'Step-by-step reasoning inside message',
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await openaiPlugin.register(capture.registration);
+    const provider = capture.getRegisteredProvider()!.getProvider();
+
+    const response = await provider.chat({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'think step by step' }],
+    });
+
+    expect(response.reasoning).toBe('Step-by-step reasoning inside message');
+    expect(response.message).toBe('Final answer');
+  });
 });

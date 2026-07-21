@@ -1,7 +1,6 @@
 ---
 key: debug-flag-llm-logging
-tags:
-  []
+tags: []
 created: 2026-07-21T22:00:03.240Z
 updated: 2026-07-21T22:09:03.095Z
 ---
@@ -26,6 +25,7 @@ Add a `--debug` CLI flag that accepts a comma-separated list of subsystem names.
 **File:** `drone-agent/src/cli.ts`
 
 **Changes:**
+
 1. Add `debugSubsystems: string[]` to the `CliOptions` type
 2. Initialize it as `[]` in the parser
 3. Add a `--debug` flag handler (same pattern as `--plugin`):
@@ -44,6 +44,7 @@ Add a `--debug` CLI flag that accepts a comma-separated list of subsystem names.
 **File:** `drone-agent/src/runtime/conversation-service.ts`
 
 **Changes:**
+
 1. Add `debugSubsystems: string[]` to `CreateConversationServiceOptions`
 2. Store as a `Set<string>` inside `createConversationService`
 3. When calling `provider.chat()`, pass `debug: debugSet.has('llm')`
@@ -80,7 +81,8 @@ Add a `--debug` CLI flag that accepts a comma-separated list of subsystem names.
 
 ### Step 9: Update tests
 
-**Files:** 
+**Files:**
+
 - `drone-agent/test/openai.test.ts`
 - `drone-agent/test/openrouter.test.ts`
 - `drone-agent/test/anthropic.test.ts`
@@ -88,6 +90,7 @@ Add a `--debug` CLI flag that accepts a comma-separated list of subsystem names.
 - `drone-agent/test/cli.test.ts` (if it exists)
 
 **Changes:**
+
 1. Add a test for each provider that verifies debug output is written to stderr when `debug: true` is passed
 2. Add a test for the `--debug` CLI flag parsing
 3. Verify that existing tests still pass (debug is optional, defaults to undefined)
