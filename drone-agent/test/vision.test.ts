@@ -288,27 +288,39 @@ describe('session manager with images', () => {
 
 // ── Ollama vision auto-detection tests ─────────────────────────────
 
+const visionPatterns = ['llava', 'bakllava', 'moondream', 'minicpm-v', 'cogvlm', 'qwen-vl', 'qwen3', 'gemma-v', 'gemma4', 'gemini', 'phi-vision', 'minimax', 'kimi', 'mistral'];
+
 describe('Ollama vision auto-detection', () => {
   it('detects llava models as vision-capable', () => {
-    const visionPatterns = ['llava', 'bakllava', 'moondream', 'minicpm-v', 'cogvlm', 'qwen-vl', 'gemma-v', 'phi-vision'];
     const lower = 'llava:7b'.toLowerCase();
     expect(visionPatterns.some(p => lower.includes(p))).toBe(true);
   });
-
   it('detects qwen-vl models as vision-capable', () => {
-    const visionPatterns = ['llava', 'bakllava', 'moondream', 'minicpm-v', 'cogvlm', 'qwen-vl', 'gemma-v', 'phi-vision'];
     const lower = 'qwen-vl:7b'.toLowerCase();
     expect(visionPatterns.some(p => lower.includes(p))).toBe(true);
   });
+  it('detects cloud-hosted vision models', () => {
+    const cloudModels = [
+      'gemma4:cloud',
+      'gemma4:31b-cloud',
+      'qwen3.5:cloud',
+      'qwen3.5:397b-cloud',
+      'minimax-m3:cloud',
+      'kimi-k2.7-code:cloud',
+      'kimi-k2.6:cloud',
+      'gemini-3-flash-preview:latest',
+      'mistral-large-3:675b-cloud',
+    ];
+    for (const model of cloudModels) {
+      expect(visionPatterns.some(p => model.toLowerCase().includes(p))).toBe(true);
+    }
+  });
 
   it('does not flag text-only models as vision-capable', () => {
-    const visionPatterns = ['llava', 'bakllava', 'moondream', 'minicpm-v', 'cogvlm', 'qwen-vl', 'gemma-v', 'phi-vision'];
     const lower = 'llama3.1'.toLowerCase();
     expect(visionPatterns.some(p => lower.includes(p))).toBe(false);
   });
-
   it('does not flag deepseek models as vision-capable', () => {
-    const visionPatterns = ['llava', 'bakllava', 'moondream', 'minicpm-v', 'cogvlm', 'qwen-vl', 'gemma-v', 'phi-vision'];
     const lower = 'deepseek-v4'.toLowerCase();
     expect(visionPatterns.some(p => lower.includes(p))).toBe(false);
   });

@@ -287,7 +287,7 @@ export const ollamaPlugin: DronePlugin = {
           const config = registration.getConfig().ollama;
           if (config.hasVision !== undefined) return config.hasVision;
           // Auto-detect: check model name against known vision model patterns
-          const visionPatterns = ['llava', 'bakllava', 'moondream', 'minicpm-v', 'cogvlm', 'qwen-vl', 'gemma-v', 'phi-vision'];
+          const visionPatterns = ['llava', 'bakllava', 'moondream', 'minicpm-v', 'cogvlm', 'qwen-vl', 'qwen3', 'gemma-v', 'gemma4', 'gemini', 'phi-vision', 'minimax', 'kimi', 'mistral'];
           const lower = model.toLowerCase();
           return visionPatterns.some(p => lower.includes(p));
         },
