@@ -210,8 +210,21 @@ async function main() {
         logger.info('Run: drone-coordinator --approve <token> to approve');
         logger.info('Also available via the web UI at the coordinator address');
 
+        if (result.verificationCode) {
+          logger.info(
+            `Verification code: ${result.verificationCode}`
+          );
+          logger.info('Compare this code with the one shown in the coordinator web UI to verify no MitM attack occurred during key exchange.');
+        }
+
         // Re-output the approval token periodically until approved
         const tokenReminder = setInterval(() => {
+          logger.info(
+            `[REMINDER] Beacon still pending approval. Verification code: ${result.verificationCode}`
+          );
+          logger.info(
+            'Compare this code with the one shown in the coordinator web UI to verify no MitM attack occurred during key exchange.'
+          );
           logger.info(
             `[REMINDER] Beacon still pending approval. Token: ${result.approvalToken}`
           );

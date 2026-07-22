@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-07-22T02:56:04.330Z",
+    "insight": "The coordinator's GET /sessions endpoint returns { sessions, count } but the count reflects the current page size, not the total. This means pagination \"has more\" detection had to check if count > currentOffset + pageSize, which works but is fragile. A proper total count in the response would be better for future pagination improvements."
+  }
+]

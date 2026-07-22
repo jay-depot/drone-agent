@@ -36,6 +36,9 @@ export default function beaconRoutes(app: FastifyInstance) {
           if (trust.approvalToken) {
             response.approvalToken = trust.approvalToken;
           }
+          if (trust.verificationCode) {
+            response.verificationCode = trust.verificationCode;
+          }
           return reply.code(201).send(response);
         } catch (err) {
           if (
@@ -87,6 +90,7 @@ export default function beaconRoutes(app: FastifyInstance) {
         trustStatus: trust?.status ?? null,
         publicKey: trust?.publicKey ?? null,
         approvalToken: trust?.approvalToken ?? null,
+        verificationCode: trust?.verificationCode ?? null,
       };
     }
   );

@@ -130,6 +130,12 @@ export default function BeaconDetailPage() {
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="text-base">Beacon Information</CardTitle>
+          {beacon.verificationCode && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Compare this code with the one shown on the beacon to verify no
+              MitM attack occurred during key exchange.
+            </p>
+          )}
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-4 text-sm">
@@ -168,6 +174,16 @@ export default function BeaconDetailPage() {
                 {new Date(beacon.lastHeartbeat).toLocaleString()}
               </p>
             </div>
+            {beacon.verificationCode && (
+              <div className="col-span-2">
+                <span className="text-muted-foreground">
+                  Verification Code
+                </span>
+                <p className="font-mono text-base mt-0.5 font-bold text-primary">
+                  {beacon.verificationCode}
+                </p>
+              </div>
+            )}
             {beacon.tlsFingerprint && (
               <div className="col-span-2">
                 <span className="text-muted-foreground">TLS Fingerprint</span>

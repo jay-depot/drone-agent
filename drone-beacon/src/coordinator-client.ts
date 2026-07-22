@@ -1,12 +1,13 @@
 import https from 'https';
 import http from 'http';
+import { generateVerificationCode } from 'drone-swarm-common';
 import { logger } from './logger.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
 
 export interface BeaconStatusResponse {
-  status: 'pending' | 'approved' | 'rejected' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected';
   approvalToken?: string;
 }
 
@@ -17,6 +18,7 @@ export interface CoordinatorClient {
   ): Promise<{
     status: 'pending' | 'approved' | 'rejected';
     approvalToken?: string;
+    verificationCode?: string;
   }>;
   pollForApproval(): Promise<BeaconStatusResponse>;
   heartbeat(): Promise<void>;
@@ -185,6 +187,7 @@ export function createCoordinatorClient(
     ): Promise<{
       status: 'pending' | 'approved' | 'rejected';
       approvalToken?: string;
+      verificationCode?: string;
     }> {
       logger.info(`Registering beacon with coordinator at ${baseUrl}`);
 
@@ -214,7 +217,14 @@ export function createCoordinatorClient(
         logger.info(`Approval token: ${data.approvalToken}`);
       }
 
-      return { status: data.status, approvalToken: data.approvalToken };
+      // Compute the verification code locally from the same inputs the
+      // coordinator uses. Both sides should produce the same code.
+      const verificationCode = generateVerificationCode(
+        identity.publicKey,
+        tlsFingerprint
+      );
+
+      return { status: data.status, approvalToken: data.approvalToken, verificationCode };
     },
 
     async pollForApproval(): Promise<BeaconStatusResponse> {
