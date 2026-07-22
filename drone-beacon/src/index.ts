@@ -208,6 +208,17 @@ async function main() {
       if (result.status === 'pending' && result.approvalToken) {
         logger.info(`Beacon pending approval. Token: ${result.approvalToken}`);
         logger.info('Run: drone-coordinator --approve <token> to approve');
+        logger.info('Also available via the web UI at the coordinator address');
+
+        // Re-output the approval token periodically until approved
+        const tokenReminder = setInterval(() => {
+          logger.info(
+            `[REMINDER] Beacon still pending approval. Token: ${result.approvalToken}`
+          );
+          logger.info(
+            'Approve via: drone-coordinator --approve <token> or the coordinator web UI'
+          );
+        }, 60000);
 
         // Poll for approval
         const pollInterval = setInterval(async () => {
@@ -215,9 +226,11 @@ async function main() {
             const status = await coordinatorClient!.pollForApproval();
             if (status.status === 'approved') {
               logger.info('Beacon approved!');
+              clearInterval(tokenReminder);
               clearInterval(pollInterval);
             } else if (status.status === 'rejected') {
               logger.error('Beacon rejected by coordinator');
+              clearInterval(tokenReminder);
               clearInterval(pollInterval);
             }
           } catch (err) {
