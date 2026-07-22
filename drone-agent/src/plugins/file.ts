@@ -531,7 +531,9 @@ export const filePlugin: DronePlugin = {
           throw enhanceFsError('file__read_image', filePath, err);
         }
 
-        const maxSize = registration.getConfig().session.maxImageSizeBytes ?? 20 * 1024 * 1024;
+        const maxSize =
+          registration.getConfig().session.maxImageSizeBytes ??
+          20 * 1024 * 1024;
         if (buffer.length > maxSize) {
           throw new Error(
             `file__read_image: image size (${buffer.length} bytes) exceeds the maximum allowed size (${maxSize} bytes).`
@@ -539,7 +541,11 @@ export const filePlugin: DronePlugin = {
         }
 
         const data = buffer.toString('base64');
-        return JSON.stringify({ path: filePath, mimeType, data, size: buffer.length }, null, 2);
+        return JSON.stringify(
+          { path: filePath, mimeType, data, size: buffer.length },
+          null,
+          2
+        );
       },
     });
   },

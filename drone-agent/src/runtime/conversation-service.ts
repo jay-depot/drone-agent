@@ -584,7 +584,11 @@ function extractImageFromToolResult(content: string): DroneImageContent | null {
     const parsed = JSON.parse(content);
     if (isRecord(parsed)) {
       // Check for file__read_image format
-      if (typeof parsed.mimeType === 'string' && parsed.mimeType.startsWith('image/') && typeof parsed.data === 'string') {
+      if (
+        typeof parsed.mimeType === 'string' &&
+        parsed.mimeType.startsWith('image/') &&
+        typeof parsed.data === 'string'
+      ) {
         return { mimeType: parsed.mimeType, data: parsed.data };
       }
       // Check for MCP data URI in any string field

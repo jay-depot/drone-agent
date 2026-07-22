@@ -91,10 +91,12 @@ export function createSessionManager(): DroneSessionManager {
         images,
       });
     },
-    updateLastToolResultImages: (images) => {
+    updateLastToolResultImages: images => {
       const lastTurn = turns.at(-1);
       if (lastTurn) {
-        const lastToolMsg = [...lastTurn.messages].reverse().find(m => m.role === 'tool');
+        const lastToolMsg = [...lastTurn.messages]
+          .reverse()
+          .find(m => m.role === 'tool');
         if (lastToolMsg) {
           lastToolMsg.images = images;
         }

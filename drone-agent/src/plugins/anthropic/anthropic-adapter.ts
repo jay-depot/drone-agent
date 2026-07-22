@@ -139,8 +139,7 @@ function toAnthropicMessage(message: DroneChatMessage): AnthropicMessage {
     content.push({
       type: 'tool_result',
       tool_use_id:
-        message.toolCallId ??
-        `call_${Math.random().toString(36).slice(2, 10)}`,
+        message.toolCallId ?? `call_${Math.random().toString(36).slice(2, 10)}`,
       content: message.content,
     });
     return {
@@ -187,7 +186,10 @@ function toAnthropicMessage(message: DroneChatMessage): AnthropicMessage {
         source: { type: 'base64', media_type: img.mimeType, data: img.data },
       });
     }
-    return { role: message.role === 'assistant' ? 'assistant' : 'user', content };
+    return {
+      role: message.role === 'assistant' ? 'assistant' : 'user',
+      content,
+    };
   }
 
   return {

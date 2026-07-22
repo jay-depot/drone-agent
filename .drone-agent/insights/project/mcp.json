@@ -10,5 +10,9 @@
   {
     "timestamp": "2026-07-14T05:37:58.918Z",
     "insight": "Fixed stderr-as-transport-error bug in createChildTransport. The function was treating any stderr output from spawned MCP processes as a fatal transport error, which broke servers launched via npx (which prints informational messages to stderr). Changed to log stderr via logger.warn instead, matching the official MCP TypeScript SDK behavior."
+  },
+  {
+    "timestamp": "2026-07-22T01:44:35.058Z",
+    "insight": "The `__mount_tool` return value was returning the internal cache key (e.g., `\"web_search\"`) instead of the full canonical name (e.g., `\"mcp__searxng__web_search\"`). This caused agents to try using the wrong name when they read the tool result. Fixed by using `cache.getToolDefName()` to get the short mounted name and prepending `\"mcp__\"` to form the canonical name. This is a 3-line change in the MCP plugin plus 2 test assertion updates."
   }
 ]

@@ -216,14 +216,16 @@ export const llmPlugin: DronePlugin = {
               .getAvailableProviders()
               .map(provider => provider.id)
               .join(', ');
-            const lines = await Promise.all(models.map(async m => {
-              const isCurrent = m === current;
-              const hasVision = await llm.hasVision?.(m) ?? false;
-              const visionTag = hasVision ? ' [vision]' : '';
-              return isCurrent
-                ? `  * ${m}${visionTag} (current)`
-                : `    ${m}${visionTag}`;
-            }));
+            const lines = await Promise.all(
+              models.map(async m => {
+                const isCurrent = m === current;
+                const hasVision = (await llm.hasVision?.(m)) ?? false;
+                const visionTag = hasVision ? ' [vision]' : '';
+                return isCurrent
+                  ? `  * ${m}${visionTag} (current)`
+                  : `    ${m}${visionTag}`;
+              })
+            );
             ctx.logger.info(
               `Provider: ${providerId}\nRegistered providers: ${providers}\nAvailable models:\n${lines.join('\n')}`
             );

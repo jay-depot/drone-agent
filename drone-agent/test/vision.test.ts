@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { DroneChatMessage, DroneImageContent } from 'drone-core';
-import { toOpenAiMessage, type OpenAiContentPart } from '../src/shared/openai-compatible.js';
-import { __testing as anthropicTesting, type AnthropicContentBlock, type AnthropicImageBlock } from '../src/plugins/anthropic/anthropic-adapter.js';
+import {
+  toOpenAiMessage,
+  type OpenAiContentPart,
+} from '../src/shared/openai-compatible.js';
+import {
+  __testing as anthropicTesting,
+  type AnthropicContentBlock,
+  type AnthropicImageBlock,
+} from '../src/plugins/anthropic/anthropic-adapter.js';
 const { toAnthropicMessage } = anthropicTesting;
 
 // ── OpenAI/OpenRouter adapter tests ──────────────────────────────────
@@ -125,9 +132,7 @@ describe('toAnthropicMessage with images', () => {
       media_type: 'image/jpeg',
       data: 'jpegdata',
     });
-    const toolResultBlock = result.content.find(
-      b => b.type === 'tool_result'
-    );
+    const toolResultBlock = result.content.find(b => b.type === 'tool_result');
     expect(toolResultBlock).toBeDefined();
     expect(toolResultBlock).toMatchObject({
       type: 'tool_result',
@@ -244,7 +249,8 @@ describe('extractImageFromToolResult', () => {
 
 describe('session manager with images', () => {
   it('appendUserMessage accepts optional images', async () => {
-    const { createSessionManager } = await import('../src/runtime/session-manager.js');
+    const { createSessionManager } =
+      await import('../src/runtime/session-manager.js');
     const session = createSessionManager();
     const img: DroneImageContent = { mimeType: 'image/jpeg', data: 'abc' };
     session.appendUserMessage('hello', [img]);
@@ -254,7 +260,8 @@ describe('session manager with images', () => {
   });
 
   it('appendToolResult accepts optional images', async () => {
-    const { createSessionManager } = await import('../src/runtime/session-manager.js');
+    const { createSessionManager } =
+      await import('../src/runtime/session-manager.js');
     const session = createSessionManager();
     session.appendUserMessage('do it');
     const img: DroneImageContent = { mimeType: 'image/png', data: 'xyz' };
@@ -265,7 +272,8 @@ describe('session manager with images', () => {
   });
 
   it('updateLastToolResultImages updates the last tool message', async () => {
-    const { createSessionManager } = await import('../src/runtime/session-manager.js');
+    const { createSessionManager } =
+      await import('../src/runtime/session-manager.js');
     const session = createSessionManager();
     session.appendUserMessage('do it');
     session.appendToolResult('read_image', 'result', 'call-1');
@@ -277,7 +285,8 @@ describe('session manager with images', () => {
   });
 
   it('updateLastToolResultImages does nothing when no tool message exists', async () => {
-    const { createSessionManager } = await import('../src/runtime/session-manager.js');
+    const { createSessionManager } =
+      await import('../src/runtime/session-manager.js');
     const session = createSessionManager();
     session.appendUserMessage('hello');
     const img: DroneImageContent = { mimeType: 'image/jpeg', data: 'x' };
@@ -288,7 +297,22 @@ describe('session manager with images', () => {
 
 // ── Ollama vision auto-detection tests ─────────────────────────────
 
-const visionPatterns = ['llava', 'bakllava', 'moondream', 'minicpm-v', 'cogvlm', 'qwen-vl', 'qwen3', 'gemma-v', 'gemma4', 'gemini', 'phi-vision', 'minimax', 'kimi', 'mistral'];
+const visionPatterns = [
+  'llava',
+  'bakllava',
+  'moondream',
+  'minicpm-v',
+  'cogvlm',
+  'qwen-vl',
+  'qwen3',
+  'gemma-v',
+  'gemma4',
+  'gemini',
+  'phi-vision',
+  'minimax',
+  'kimi',
+  'mistral',
+];
 
 describe('Ollama vision auto-detection', () => {
   it('detects llava models as vision-capable', () => {
@@ -312,7 +336,9 @@ describe('Ollama vision auto-detection', () => {
       'mistral-large-3:675b-cloud',
     ];
     for (const model of cloudModels) {
-      expect(visionPatterns.some(p => model.toLowerCase().includes(p))).toBe(true);
+      expect(visionPatterns.some(p => model.toLowerCase().includes(p))).toBe(
+        true
+      );
     }
   });
 

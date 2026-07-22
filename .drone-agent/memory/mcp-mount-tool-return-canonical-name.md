@@ -4,64 +4,35 @@ tags:
   - plan
   - mcp
   - tool-mounting
+  - completed
 created: 2026-07-22T01:40:31.200Z
-updated: 2026-07-22T01:40:31.200Z
+updated: 2026-07-22T01:44:20.586Z
 ---
 
 # MCP Mount Tool: Return Full Canonical Name
 
 ## Summary
-
 When the LLM mounts an MCP tool via `__mount_tool`, the return value's `tool` field currently contains the internal cache key (e.g., `"web_search"`) instead of the full canonical name the LLM should use to call the tool (e.g., `"mcp__searxng__web_search"`). This causes confusion when agents try to use the returned name directly.
 
-## Plan
+## Implementation
 
-### Step 1 — Modify the `__mount_tool` return value (1-2 lines)
+### Changes Made
 
-**File:** `drone-agent/src/plugins/mcp/index.ts`
-**Location:** Inside `mountMetaTools()`, in the `__mount_tool` handler, after `cache.mountTool(toolName, registration)` succeeds (~line 370-380).
+**`drone-agent/src/plugins/mcp/index.ts`** (lines 399-400 added, line 403 changed):
+After `cache.mountTool(toolName, registration)` succeeds, we now:
+1. Call `cache.getToolDefName(toolName)` to get the short mounted name (e.g., `"searxng__web_search"`)
+2. Prepend `"mcp__"` to form the canonical name (e.g., `"mcp__searxng__web_search"`)
+3. Return that in the `tool` field instead of the raw internal key
 
-**Change:**
+**`drone-agent/test/mcp.test.ts`** (2 test assertions updated):
+- `mount_tool mounts a tool with its full schema, then it is callable`: now expects `"mcp__demo__echo"` instead of `"echo"`
+- `sanitizes tool names with non-[a-zA-Z0-9_-] characters when mounting`: now expects `"mcp__demo__weird_name_"` instead of `"weird name!"`
 
-```typescript
-// Before:
-return JSON.stringify(
-  {
-    success: true,
-    tool: toolName,
-    description: toolMeta.description,
-  },
-  null,
-  2
-);
+**`drone-core/src/token-estimate.ts`** (drive-by fix):
+- Renamed unused variable `img` to `_img` to fix a pre-existing lint error
 
-// After:
-const mountedName = cache.getToolDefName(toolName);
-const canonicalName = mountedName ? `mcp__${mountedName}` : toolName;
-return JSON.stringify(
-  {
-    success: true,
-    tool: canonicalName,
-    description: toolMeta.description,
-  },
-  null,
-  2
-);
-```
-
-This changes the `tool` field from `"web_search"` to `"mcp__searxng__web_search"` — the exact name the LLM should use to call the tool.
-
-### Step 2 — Verify the fix
-
-1. Run `pnpm build` to ensure compilation passes
-2. Run `pnpm -r run lint` to ensure linting passes
-3. Run `pnpm -r run test` to ensure tests pass
-4. Check LSP diagnostics are clean
-
-### Validation Criteria
-
-- [ ] LSP diagnostics are clean (no errors or warnings)
-- [ ] `pnpm -r run build` passes with zero errors
-- [ ] `pnpm -r run lint` passes with zero errors
-- [ ] `pnpm -r run test` passes (fast test suite)
-- [ ] The `__mount_tool` return value includes the full canonical name (e.g., `"mcp__searxng__web_search"`) instead of just the internal key
+### Validation
+- LSP diagnostics: clean
+- `pnpm -r run build`: passes
+- `pnpm lint`: passes
+- `pnpm test`: 104 test files, 1628 tests — all pass

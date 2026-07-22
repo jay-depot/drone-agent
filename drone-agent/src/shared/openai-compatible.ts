@@ -6,7 +6,10 @@ import type {
 } from 'drone-core';
 export type OpenAiContentPart =
   | { type: 'text'; text: string }
-  | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } };
+  | {
+      type: 'image_url';
+      image_url: { url: string; detail?: 'auto' | 'low' | 'high' };
+    };
 
 export type OpenAiMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -83,7 +86,6 @@ export function toOpenAiMessage(msg: DroneChatMessage): OpenAiMessage {
     base.content = parts;
   }
 
-
   if (msg.toolCallId) {
     base.tool_call_id = msg.toolCallId;
   }
@@ -128,14 +130,18 @@ export function fromOpenAiResponse(
   }
 
   const result: DroneChatResponse = {
-    message: typeof choice.message.content === 'string'
-      ? choice.message.content
-      : Array.isArray(choice.message.content)
+    message:
+      typeof choice.message.content === 'string'
         ? choice.message.content
-            .filter((p): p is OpenAiContentPart & { type: 'text' } => p.type === 'text')
-            .map(p => p.text)
-            .join('\n')
-        : '',
+        : Array.isArray(choice.message.content)
+          ? choice.message.content
+              .filter(
+                (p): p is OpenAiContentPart & { type: 'text' } =>
+                  p.type === 'text'
+              )
+              .map(p => p.text)
+              .join('\n')
+          : '',
   };
   if (choice.reasoning) {
     result.reasoning = choice.reasoning;
