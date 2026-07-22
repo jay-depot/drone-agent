@@ -21,6 +21,7 @@ function toOllamaMessage(message: DroneChatMessage) {
   return {
     role: message.role,
     content: message.content,
+    images: message.images?.map(img => img.data),
     tool_name: message.toolName,
     tool_calls: message.toolCalls?.map(toolCall => ({
       function: {
@@ -282,6 +283,14 @@ export const ollamaPlugin: DronePlugin = {
           return response.models.map(m => m.name);
         },
         getDefaultModel: () => registration.getConfig().ollama.model,
+        hasVision: (model: string) => {
+          const config = registration.getConfig().ollama;
+          if (config.hasVision !== undefined) return config.hasVision;
+          // Auto-detect: check model name against known vision model patterns
+          const visionPatterns = ['llava', 'bakllava', 'moondream', 'minicpm-v', 'cogvlm', 'qwen-vl', 'gemma-v', 'phi-vision'];
+          const lower = model.toLowerCase();
+          return visionPatterns.some(p => lower.includes(p));
+        },
       };
       llmCap.registerProvider(llmRegistration);
     } else {

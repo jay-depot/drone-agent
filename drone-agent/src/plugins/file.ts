@@ -482,5 +482,65 @@ export const filePlugin: DronePlugin = {
         return JSON.stringify({ pattern, cwd, matches }, null, 2);
       },
     });
+
+    // -----------------------------------------------------------------------
+    // file__read_image
+    // -----------------------------------------------------------------------
+    registration.registerTool({
+      name: 'read_image',
+      description:
+        'Read an image file and return its base64-encoded data. ' +
+        'Supported formats: JPEG, PNG, WebP, GIF. ' +
+        'The image data will be injected into the conversation for vision-capable models.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: 'Absolute path to the image file.',
+          },
+        },
+        required: ['path'],
+        additionalProperties: false,
+      },
+      execute: async input => {
+        if (typeof input.path !== 'string' || input.path.trim().length === 0) {
+          throw new Error('file__read_image requires a non-empty path string.');
+        }
+        const filePath = path.resolve(input.path.trim());
+
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeMap: Record<string, string> = {
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.webp': 'image/webp',
+          '.gif': 'image/gif',
+        };
+        const mimeType = mimeMap[ext];
+        if (!mimeType) {
+          throw new Error(
+            `file__read_image: unsupported image format "${ext}". Supported formats: .jpg, .jpeg, .png, .webp, .gif`
+          );
+        }
+
+        let buffer: Buffer;
+        try {
+          buffer = await readFile(filePath);
+        } catch (err) {
+          throw enhanceFsError('file__read_image', filePath, err);
+        }
+
+        const maxSize = registration.getConfig().session.maxImageSizeBytes ?? 20 * 1024 * 1024;
+        if (buffer.length > maxSize) {
+          throw new Error(
+            `file__read_image: image size (${buffer.length} bytes) exceeds the maximum allowed size (${maxSize} bytes).`
+          );
+        }
+
+        const data = buffer.toString('base64');
+        return JSON.stringify({ path: filePath, mimeType, data, size: buffer.length }, null, 2);
+      },
+    });
   },
 };

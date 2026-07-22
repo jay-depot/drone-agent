@@ -99,6 +99,8 @@ export type DroneLlmCapability = {
   setReasoningLevel: (level: DroneReasoningLevel | undefined) => void;
   /** List available models from the active provider. */
   listModels: () => Promise<string[]>;
+  /** Check whether a specific model supports vision. */
+  hasVision?: (model: string) => boolean | Promise<boolean>;
   /** Register a provider. Providers are sorted by precedence (ascending). */
   registerProvider: (registration: DroneLlmProviderRegistration) => void;
   /** Unregister a provider by id. */

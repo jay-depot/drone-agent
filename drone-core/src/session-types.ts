@@ -39,9 +39,17 @@ export type DroneToolJsonSchema = {
   readonly additionalProperties?: boolean;
 };
 
+export type DroneImageContent = {
+  /** MIME type of the image (e.g. "image/jpeg", "image/png"). */
+  mimeType: string;
+  /** Base64-encoded image data (without the data: URI prefix). */
+  data: string;
+};
+
 export type DroneChatMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  images?: DroneImageContent[];
   toolCallId?: string;
   toolName?: string;
   toolCalls?: DroneToolCall[];

@@ -124,6 +124,7 @@ export const anthropicPlugin: DronePlugin = {
 
         return fromAnthropicResponse(data);
       },
+      supportsImagesInToolResults: true,
     };
 
     const llmCap = registration.request<DroneLlmCapability>('llm');
@@ -137,6 +138,7 @@ export const anthropicPlugin: DronePlugin = {
           return config.anthropic.models.map(m => m.id);
         },
         getDefaultModel: () => registration.getConfig().anthropic.defaultModel,
+        hasVision: () => true,
       };
       llmCap.registerProvider(llmRegistration);
     } else {

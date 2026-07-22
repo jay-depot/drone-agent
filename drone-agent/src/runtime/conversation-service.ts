@@ -3,11 +3,13 @@ import type {
   DroneAgentConfig,
   DroneChatMessage,
   DroneConversationEvent,
+  DroneImageContent,
   DroneLlmCapability,
   DroneLogger,
   DroneSessionSafetyTrimPayload,
   DroneToolDescriptor,
 } from 'drone-core';
+import { isRecord } from '../shared/type-guards.js';
 import type { DronePluginEngine } from './plugin-engine.js';
 import type { DroneSessionManager } from './session-manager.js';
 import type { ContextBudgetService } from './context-budget-service.js';
@@ -521,6 +523,24 @@ export function createConversationService({
             logger.warn(`onAfterToolCall hook error (non-fatal): ${msg}`);
           }
 
+          // After appending tool results, check for image data in tool results
+          for (const result of bufferedResults) {
+            const imageContent = extractImageFromToolResult(result.content);
+            if (imageContent) {
+              const provider = llm.getActiveProvider();
+              if (provider.supportsImagesInToolResults) {
+                // Anthropic: update the tool result message to include images inline
+                sessionManager.updateLastToolResultImages([imageContent]);
+              } else {
+                // OpenAI/OpenRouter/Ollama: inject synthetic user message
+                sessionManager.appendUserMessage(
+                  `[Image from ${result.name} tool]`,
+                  [imageContent]
+                );
+              }
+            }
+          }
+
           continue;
         }
 
@@ -557,4 +577,42 @@ export function createConversationService({
       cancelled = true;
     },
   };
+}
+
+function extractImageFromToolResult(content: string): DroneImageContent | null {
+  try {
+    const parsed = JSON.parse(content);
+    if (isRecord(parsed)) {
+      // Check for file__read_image format
+      if (typeof parsed.mimeType === 'string' && parsed.mimeType.startsWith('image/') && typeof parsed.data === 'string') {
+        return { mimeType: parsed.mimeType, data: parsed.data };
+      }
+      // Check for MCP data URI in any string field
+      const dataUri = findDataUri(parsed);
+      if (dataUri) return dataUri;
+    }
+  } catch {
+    // Not JSON — skip
+  }
+  return null;
+}
+
+function findDataUri(obj: unknown): DroneImageContent | null {
+  if (typeof obj === 'string') {
+    const match = obj.match(/^data:(image\/\w+);base64,(.+)$/);
+    if (match) return { mimeType: match[1], data: match[2] };
+  }
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      const result = findDataUri(item);
+      if (result) return result;
+    }
+  }
+  if (isRecord(obj)) {
+    for (const val of Object.values(obj)) {
+      const result = findDataUri(val);
+      if (result) return result;
+    }
+  }
+  return null;
 }

@@ -1,13 +1,13 @@
 import type {
+  DroneImageContent,
   DroneSessionMessage,
   DroneSessionState,
   DroneSessionTurn,
   DroneToolCall,
 } from 'drone-core';
 import { randomUUID } from 'node:crypto';
-
 export type DroneSessionManager = {
-  appendUserMessage: (content: string) => void;
+  appendUserMessage: (content: string, images?: DroneImageContent[]) => void;
   appendAssistantMessage: (
     content: string,
     toolCalls?: DroneToolCall[]
@@ -15,8 +15,10 @@ export type DroneSessionManager = {
   appendToolResult: (
     toolName: string,
     content: string,
-    toolCallId?: string
+    toolCallId?: string,
+    images?: DroneImageContent[]
   ) => void;
+  updateLastToolResultImages: (images: DroneImageContent[]) => void;
   getMessages: () => DroneSessionMessage[];
   getTurns: () => DroneSessionTurn[];
   dropOldestTurns: (count: number) => DroneSessionTurn[];
@@ -64,11 +66,12 @@ export function createSessionManager(): DroneSessionManager {
   }
 
   return {
-    appendUserMessage: content => {
+    appendUserMessage: (content, images) => {
       turns.push(
         createTurn({
           role: 'user',
           content,
+          images,
         })
       );
     },
@@ -79,13 +82,23 @@ export function createSessionManager(): DroneSessionManager {
         toolCalls,
       });
     },
-    appendToolResult: (toolName, content, toolCallId) => {
+    appendToolResult: (toolName, content, toolCallId, images) => {
       appendToCurrentTurn({
         role: 'tool',
         content,
         toolName,
         toolCallId,
+        images,
       });
+    },
+    updateLastToolResultImages: (images) => {
+      const lastTurn = turns.at(-1);
+      if (lastTurn) {
+        const lastToolMsg = [...lastTurn.messages].reverse().find(m => m.role === 'tool');
+        if (lastToolMsg) {
+          lastToolMsg.images = images;
+        }
+      }
     },
     getMessages: () => flattenMessages(),
     getTurns: () =>
