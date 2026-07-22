@@ -8,9 +8,12 @@ import type {
 } from '../types.js';
 
 function generateApprovalToken(): string {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let token = '';
+  for (let i = 0; i < 8; i++) {
+    token += chars[crypto.getRandomValues(new Uint8Array(1))[0] % chars.length];
+  }
+  return token;
 }
 
 export function registerBeaconTrust(
