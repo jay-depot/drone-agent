@@ -11,6 +11,12 @@ export interface Beacon {
   publicKey?: string | null;
 }
 
+export interface BeaconDetail extends Beacon {
+  beaconId?: string;
+  approvalToken?: string | null;
+  tlsFingerprint?: string | null;
+}
+
 export interface AgentLocation {
   agentId: string;
   beaconId: string;
@@ -34,6 +40,15 @@ export interface BeaconSession {
   beaconPort?: number;
 }
 
+export interface SwarmSession {
+  id: string;
+  personaId: string | null;
+  beaconId: string;
+  status: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface SwarmEvent {
   id: string;
   sessionId: string;
@@ -54,6 +69,14 @@ export interface Persona {
   updatedAt: number;
 }
 
+export interface CreatePersonaRequest {
+  id: string;
+  name: string;
+  description: string;
+  systemPrompt: string;
+  scope?: string;
+}
+
 export interface Skill {
   id: string;
   name: string;
@@ -63,6 +86,15 @@ export interface Skill {
   scope: string;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface CreateSkillRequest {
+  id: string;
+  name: string;
+  description: string;
+  trigger: string;
+  body: string;
+  scope?: string;
 }
 
 export interface WikiPageMeta {
@@ -77,6 +109,26 @@ export interface WikiPageMeta {
 
 export interface WikiPage extends WikiPageMeta {
   content: string;
+}
+
+export interface CreateWikiPageRequest {
+  title: string;
+  content: string;
+  scope?: string;
+  tags?: string[];
+  sources?: string[];
+}
+
+// Pagination types
+export interface PaginationState {
+  limit: number;
+  offset: number;
+  total?: number;
+}
+
+export interface PaginatedResponse<T> {
+  sessions: T[];
+  count: number;
 }
 
 // WebSocket message types
