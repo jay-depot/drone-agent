@@ -34,12 +34,22 @@ export type AnthropicToolResultBlock = {
   content: string;
 };
 
+export type AnthropicImageBlock = {
+  type: 'image';
+  source: {
+    type: 'base64';
+    media_type: string;
+    data: string;
+  };
+};
+
 export type AnthropicContentBlock =
   | AnthropicTextBlock
   | AnthropicToolUseBlock
   | AnthropicToolResultBlock
   | AnthropicThinkingBlock
-  | AnthropicSignatureBlock;
+  | AnthropicSignatureBlock
+  | AnthropicImageBlock;
 
 export type AnthropicMessage = {
   role: 'user' | 'assistant';
@@ -117,17 +127,24 @@ export function toAnthropicRequestParts(input: {
 
 function toAnthropicMessage(message: DroneChatMessage): AnthropicMessage {
   if (message.role === 'tool') {
+    const content: AnthropicContentBlock[] = [];
+    if (message.images && message.images.length > 0) {
+      for (const img of message.images) {
+        content.push({
+          type: 'image',
+          source: { type: 'base64', media_type: img.mimeType, data: img.data },
+        });
+      }
+    }
+    content.push({
+      type: 'tool_result',
+      tool_use_id:
+        message.toolCallId ?? `call_${Math.random().toString(36).slice(2, 10)}`,
+      content: message.content,
+    });
     return {
       role: 'user',
-      content: [
-        {
-          type: 'tool_result',
-          tool_use_id:
-            message.toolCallId ??
-            `call_${Math.random().toString(36).slice(2, 10)}`,
-          content: message.content,
-        },
-      ],
+      content,
     };
   }
 
@@ -135,6 +152,14 @@ function toAnthropicMessage(message: DroneChatMessage): AnthropicMessage {
     const content: AnthropicContentBlock[] = [];
     if (message.content) {
       content.push({ type: 'text', text: message.content });
+    }
+    if (message.images) {
+      for (const img of message.images) {
+        content.push({
+          type: 'image',
+          source: { type: 'base64', media_type: img.mimeType, data: img.data },
+        });
+      }
     }
     for (const toolCall of message.toolCalls) {
       content.push({
@@ -146,6 +171,23 @@ function toAnthropicMessage(message: DroneChatMessage): AnthropicMessage {
     }
     return {
       role: 'assistant',
+      content,
+    };
+  }
+
+  if (message.images && message.images.length > 0) {
+    const content: AnthropicContentBlock[] = [];
+    if (message.content) {
+      content.push({ type: 'text', text: message.content });
+    }
+    for (const img of message.images) {
+      content.push({
+        type: 'image',
+        source: { type: 'base64', media_type: img.mimeType, data: img.data },
+      });
+    }
+    return {
+      role: message.role === 'assistant' ? 'assistant' : 'user',
       content,
     };
   }
@@ -211,3 +253,8 @@ export function fromAnthropicResponse(
 
   return result;
 }
+
+/**
+ * @internal Exposed for unit tests. Not part of the public API.
+ */
+export const __testing = { toAnthropicMessage };

@@ -322,9 +322,9 @@ When a new feature is added that involves network calls, complex state machines,
 
 **Current subsystems:**
 
-| Subsystem | What it logs |
-|-----------|-------------|
-| `llm` | Full request and response bodies for all LLM providers (OpenAI, OpenRouter, Anthropic, Ollama) |
+| Subsystem | What it logs                                                                                   |
+| --------- | ---------------------------------------------------------------------------------------------- |
+| `llm`     | Full request and response bodies for all LLM providers (OpenAI, OpenRouter, Anthropic, Ollama) |
 
 ### Hook Ordering Guarantees
 

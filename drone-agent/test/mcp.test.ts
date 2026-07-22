@@ -192,7 +192,7 @@ describe('mcp plugin integration (stdio child)', () => {
       await engine.executeTool('mcp__demo__mount_tool', { tool: 'echo' })
     );
     expect(mountResult.success).toBe(true);
-    expect(mountResult.tool).toBe('echo');
+    expect(mountResult.tool).toBe('mcp__demo__echo');
 
     // Now it appears in the tool list.
     expect(toolNames(engine)).toContain('mcp__demo__echo');
@@ -335,7 +335,7 @@ describe('mcp plugin integration (stdio child)', () => {
       })
     );
     expect(result.success).toBe(true);
-    expect(result.tool).toBe('weird name!');
+    expect(result.tool).toBe('mcp__demo__weird_name_');
     expect(toolNames(engine)).toContain('mcp__demo__weird_name_');
   });
 

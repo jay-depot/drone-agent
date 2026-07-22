@@ -80,6 +80,7 @@ export {
 
 export type {
   DroneLogger,
+  DroneImageContent,
   DroneToolJsonSchemaProperty,
   DroneToolJsonSchema,
   DroneChatMessage,

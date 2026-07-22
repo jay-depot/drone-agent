@@ -39,6 +39,7 @@ export type DroneOllamaConfig = {
   host: string;
   model: string;
   reasoningLevel?: DroneReasoningLevel;
+  hasVision?: boolean;
 };
 
 export type DroneLlmConfig = {
@@ -50,6 +51,7 @@ export type DroneLlmConfig = {
 export type DroneOpenRouterModelConfig = {
   id: string;
   contextWindow: number;
+  hasVision?: boolean;
 };
 
 export type DroneOpenRouterConfig = {
@@ -106,6 +108,12 @@ export type DroneSessionConfig = {
    * Defaults to false (hard error).
    */
   promptOnToolIterationLimit?: boolean;
+  /**
+   * Maximum size in bytes for images read via file__read_image or returned
+   * from MCP tools. Images exceeding this size will be rejected.
+   * Default is 20MB (20 * 1024 * 1024).
+   */
+  maxImageSizeBytes?: number;
 };
 
 export type DroneCompactionStrategy = 'summary-drop';
@@ -407,6 +415,7 @@ export function createDefaultAgentConfig(
       contextWindowTokens: 32768,
       responseReserveTokens: 4096,
       maxToolIterations: 50,
+      maxImageSizeBytes: 20 * 1024 * 1024,
       promptOnToolIterationLimit: false,
     },
     lsp: {

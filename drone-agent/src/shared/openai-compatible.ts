@@ -4,10 +4,16 @@ import type {
   DroneToolCall,
   DroneToolDescriptor,
 } from 'drone-core';
+export type OpenAiContentPart =
+  | { type: 'text'; text: string }
+  | {
+      type: 'image_url';
+      image_url: { url: string; detail?: 'auto' | 'low' | 'high' };
+    };
 
 export type OpenAiMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
+  content: string | OpenAiContentPart[];
   reasoning?: string;
   tool_call_id?: string;
   name?: string;
@@ -62,6 +68,23 @@ export function toOpenAiMessage(msg: DroneChatMessage): OpenAiMessage {
     role: msg.role,
     content: msg.content,
   };
+  // If message has images, build content array
+  if (msg.images && msg.images.length > 0) {
+    const parts: OpenAiContentPart[] = [];
+    if (msg.content) {
+      parts.push({ type: 'text', text: msg.content });
+    }
+    for (const img of msg.images) {
+      parts.push({
+        type: 'image_url',
+        image_url: {
+          url: `data:${img.mimeType};base64,${img.data}`,
+          detail: 'auto',
+        },
+      });
+    }
+    base.content = parts;
+  }
 
   if (msg.toolCallId) {
     base.tool_call_id = msg.toolCallId;
@@ -107,7 +130,18 @@ export function fromOpenAiResponse(
   }
 
   const result: DroneChatResponse = {
-    message: choice.message.content ?? '',
+    message:
+      typeof choice.message.content === 'string'
+        ? choice.message.content
+        : Array.isArray(choice.message.content)
+          ? choice.message.content
+              .filter(
+                (p): p is OpenAiContentPart & { type: 'text' } =>
+                  p.type === 'text'
+              )
+              .map(p => p.text)
+              .join('\n')
+          : '',
   };
   if (choice.reasoning) {
     result.reasoning = choice.reasoning;

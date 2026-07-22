@@ -396,10 +396,12 @@ export const mcpPlugin: DronePlugin = {
           cache.mountTool(toolName, registration);
           connection.state.mountedToolCount = cache.exportMounted().length;
           setServerState(connection.state);
+          const mountedName = cache.getToolDefName(toolName);
+          const canonicalName = mountedName ? `mcp__${mountedName}` : toolName;
           return JSON.stringify(
             {
               success: true,
-              tool: toolName,
+              tool: canonicalName,
               description: toolMeta.description,
             },
             null,
