@@ -121,6 +121,7 @@ export function toAnthropicRequestParts(input: {
       budget_tokens: Math.floor(input.maxTokens * 0.5),
     };
   }
+
   return request;
 }
 
@@ -147,6 +148,7 @@ function toAnthropicMessage(message: DroneChatMessage): AnthropicMessage {
       content,
     };
   }
+
   if (message.role === 'assistant' && message.toolCalls?.length) {
     const content: AnthropicContentBlock[] = [];
     if (message.content) {
@@ -172,6 +174,20 @@ function toAnthropicMessage(message: DroneChatMessage): AnthropicMessage {
       role: 'assistant',
       content,
     };
+  }
+
+  if (message.images && message.images.length > 0) {
+    const content: AnthropicContentBlock[] = [];
+    if (message.content) {
+      content.push({ type: 'text', text: message.content });
+    }
+    for (const img of message.images) {
+      content.push({
+        type: 'image',
+        source: { type: 'base64', media_type: img.mimeType, data: img.data },
+      });
+    }
+    return { role: message.role === 'assistant' ? 'assistant' : 'user', content };
   }
 
   return {
@@ -235,3 +251,8 @@ export function fromAnthropicResponse(
 
   return result;
 }
+
+/**
+ * @internal Exposed for unit tests. Not part of the public API.
+ */
+export const __testing = { toAnthropicMessage };

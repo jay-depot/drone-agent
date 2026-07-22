@@ -50,5 +50,9 @@
   {
     "timestamp": "2026-07-21T22:26:35.605Z",
     "insight": "OpenRouter returns `reasoning` inside `choice.message.reasoning` (as a field on the message object), not at `choice.reasoning` like OpenAI does. The shared `fromOpenAiResponse` adapter only checked `choice.reasoning`, so OpenRouter reasoning was silently dropped. Fixed by adding `reasoning?: string` to `OpenAiMessage` type and adding a fallback check in `fromOpenAiResponse` that checks `choice.message.reasoning` when `choice.reasoning` is absent. Choice-level still takes precedence when both are present."
+  },
+  {
+    "timestamp": "2026-07-22T01:07:27.030Z",
+    "insight": "When using file__apply_diff on multiple files in a session, some patches may silently fail to apply (e.g., when the file content has changed since the patch was generated). Always verify patches were applied by checking git diff or running typecheck after each batch of changes. In this session, several core type patches were lost and had to be re-applied manually."
   }
 ]

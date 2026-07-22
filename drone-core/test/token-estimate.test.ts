@@ -99,6 +99,33 @@ describe('estimateMessageTokens', () => {
       estimateMessageTokens(without)
     );
   });
+
+  it('adds ~256 tokens per image when images are present', () => {
+    const base: DroneChatMessage = { role: 'user', content: 'hello' };
+    const baseTokens = estimateMessageTokens(base);
+
+    const withOneImage: DroneChatMessage = {
+      role: 'user',
+      content: 'hello',
+      images: [{ mimeType: 'image/jpeg', data: 'abc123' }],
+    };
+    expect(estimateMessageTokens(withOneImage)).toBe(baseTokens + 256);
+  });
+
+  it('adds 256 tokens per image for multiple images', () => {
+    const base: DroneChatMessage = { role: 'user', content: 'hello' };
+    const baseTokens = estimateMessageTokens(base);
+
+    const withTwoImages: DroneChatMessage = {
+      role: 'user',
+      content: 'hello',
+      images: [
+        { mimeType: 'image/png', data: 'abc' },
+        { mimeType: 'image/jpeg', data: 'def' },
+      ],
+    };
+    expect(estimateMessageTokens(withTwoImages)).toBe(baseTokens + 512);
+  });
 });
 
 describe('estimateToolDescriptorTokens', () => {
