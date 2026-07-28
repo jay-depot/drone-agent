@@ -248,6 +248,24 @@ export default function swarmRoutes(app: FastifyInstance) {
     }
   );
 
+  // PATCH /sessions/:id/persona - Update session persona
+  app.patch<{
+    Params: { id: string };
+    Body: { personaId: string | null };
+  }>('/sessions/:id/persona', async (request, reply) => {
+    const { personaId } = request.body;
+    const session = db.updateSwarmSessionPersona(request.params.id, personaId);
+    if (!session) {
+      return reply.code(404).send({ error: 'Session not found' });
+    }
+    publishMutationEvent({
+      sessionId: request.params.id,
+      eventType: 'session.persona_changed',
+      payload: { sessionId: request.params.id, personaId },
+    });
+    return session;
+  });
+
   // === Tool Definition Routes ===
 
   app.post<{

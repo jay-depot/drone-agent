@@ -23,6 +23,7 @@ export {
   listAgents,
   updateAgentActivity,
   unregisterAgent,
+  updateAgentPersona,
 } from './agents.js';
 export {
   createMemory,

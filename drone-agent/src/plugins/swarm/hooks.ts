@@ -11,6 +11,7 @@ import type {
   DroneInsightStorageEngine,
   DronePrincipleStorageEngine,
   DroneSelfImprovementCapability,
+  DronePersonaCapability,
 } from 'drone-core';
 import type { SwarmContext } from './context.js';
 import {
@@ -58,6 +59,33 @@ export async function flushEventBuffer(ctx: SwarmContext): Promise<void> {
     }
   } catch (err) {
     ctx.registration.logger.warn(`Failed to push events: ${err}`);
+  }
+}
+
+/**
+ * Update the swarm session's active persona.
+ */
+export async function updateSwarmSessionPersona(
+  ctx: SwarmContext,
+  personaId: string | null
+): Promise<void> {
+  try {
+    const res = await fetch(`${ctx.baseUrl}/agents/${ctx.sessionId}/persona`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ personaId }),
+    });
+    if (!res.ok) {
+      ctx.registration.logger.warn(
+        `Failed to update session persona: ${res.status}`
+      );
+    } else {
+      ctx.registration.logger.info(
+        `Updated session persona to: ${personaId ?? 'none'}`
+      );
+    }
+  } catch (err) {
+    ctx.registration.logger.warn(`Failed to update session persona: ${err}`);
   }
 }
 
@@ -238,6 +266,11 @@ export function registerHooks(
 
   registration.hooks.onConversationEvent(async event => {
     const now = Date.now();
+    // Get the active persona from the persona capability
+    const personaCap =
+      ctx.registration.request<DronePersonaCapability>('persona');
+    const activePersona = personaCap?.getActivePersona();
+
     const evt = {
       id: generateUuid(),
       sessionId: ctx.sessionId,
@@ -247,6 +280,7 @@ export function registerHooks(
       metadata: JSON.stringify({
         kind: event.kind,
         ...('name' in event ? { name: event.name } : {}),
+        activePersona: activePersona?.id ?? null,
       }),
       createdAt: now,
     };

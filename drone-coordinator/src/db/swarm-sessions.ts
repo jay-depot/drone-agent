@@ -179,6 +179,22 @@ export function transitionSessionStatus(
   return { ...session, status: toStatus, updatedAt: now };
 }
 
+export function updateSwarmSessionPersona(
+  id: string,
+  personaId: string | null
+): SwarmSession | undefined {
+  const existing = getSwarmSession(id);
+  if (!existing) return undefined;
+
+  const now = Date.now();
+  const stmt = getDatabase().prepare(`
+    UPDATE swarm_sessions SET persona_id = @personaId, updatedAt = @updatedAt WHERE id = @id
+  `);
+  stmt.run({ id, personaId, updatedAt: now });
+
+  return { ...existing, personaId, updatedAt: now };
+}
+
 export function getStaleSessions(thresholdMs: number): SwarmSession[] {
   const cutoff = Date.now() - thresholdMs;
   const stmt = getDatabase().prepare(

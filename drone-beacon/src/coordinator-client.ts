@@ -55,6 +55,10 @@ export interface CoordinatorClient {
     sessionId: string,
     personaId: string | null
   ): Promise<void>;
+  updateSwarmSessionPersona(
+    sessionId: string,
+    personaId: string | null
+  ): Promise<void>;
   endSwarmSession(sessionId: string): Promise<void>;
   pushEvents(
     events: Array<{
@@ -572,6 +576,27 @@ export function createCoordinatorClient(
         }
       } catch (err) {
         logger.warn(`Failed to register swarm session: ${err}`);
+      }
+    },
+
+    async updateSwarmSessionPersona(
+      sessionId: string,
+      personaId: string | null
+    ): Promise<void> {
+      try {
+        const res = await cfetch(
+          `${baseUrl}/api/sessions/${sessionId}/persona`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ personaId }),
+          }
+        );
+        if (!res.ok) {
+          logger.warn(`Failed to update session persona: ${res.status}`);
+        }
+      } catch (err) {
+        logger.warn(`Failed to update session persona: ${err}`);
       }
     },
 

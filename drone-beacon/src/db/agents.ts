@@ -51,3 +51,21 @@ export function unregisterAgent(id: string): boolean {
   logger.info(`Unregistered agent: ${id}`);
   return result.changes > 0;
 }
+
+export function updateAgentPersona(
+  id: string,
+  personaId: string | null
+): AgentSession | undefined {
+  const session = getAgent(id);
+  if (!session) return undefined;
+
+  session.personaId = personaId;
+
+  const stmt = getDatabase().prepare(`
+    UPDATE agent_sessions SET personaId = @personaId WHERE id = @id
+  `);
+
+  stmt.run({ id, personaId });
+  logger.info(`Updated agent ${id} persona to: ${personaId ?? 'none'}`);
+  return session;
+}
