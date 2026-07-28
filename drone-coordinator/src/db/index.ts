@@ -59,6 +59,7 @@ export {
   updateSwarmSessionStatus,
   transitionSessionStatus,
   getStaleSessions,
+  markStaleSessions,
   updateSwarmSessionPersona,
   createSwarmEvent,
   getSwarmEvents,

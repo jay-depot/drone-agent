@@ -7,7 +7,7 @@
 export const SESSION_STATUSES = {
   ACTIVE: 'active',
   STALE: 'stale',
-  FINISHED: 'finished',
+  ENDED: 'ended',
   PROCESSING: 'processing',
   PROCESSED: 'processed',
 } as const;
