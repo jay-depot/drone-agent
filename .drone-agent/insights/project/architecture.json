@@ -10,5 +10,9 @@
   {
     "timestamp": "2026-07-14T04:38:03.720Z",
     "insight": "The list/mount pattern from MCP was successfully expanded to git and swarm plugins, reducing native tool surface by ~18 tools. The pattern is now established as a reusable convention: 3 meta-tools (list_tools, mount_tool, unmount_tool) backed by ToolMountingCache, hardcoded descriptions, persona filtering, and no pre-mounting."
+  },
+  {
+    "timestamp": "2026-07-28T22:57:56.918Z",
+    "insight": "The swarm session status system had a terminology mismatch: the end-session path used 'ended' while the pipeline expected 'finished'. The fix consolidated to 'ended' as the canonical pre-processing terminal status, added 'ended' to SESSION_STATUSES, and added automatic stale-session marking via a periodic interval on the coordinator. This revealed that the status system had no central state machine — each caller decides transitions independently via transitionSessionStatus()."
   }
 ]

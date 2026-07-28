@@ -1,8 +1,9 @@
 ---
 key: fix__session-status-mismatch
-tags: []
+tags:
+  []
 created: 2026-07-28T22:52:53.195Z
-updated: 2026-07-28T22:52:53.195Z
+updated: 2026-07-28T23:09:54.310Z
 ---
 
 # Fix: Beacon End-Session / Pipeline Status Mismatch
@@ -14,7 +15,6 @@ The beacon's `endSwarmSession()` calls `DELETE /sync/sessions/:id` on the coordi
 ## Root Cause
 
 Two code paths use different status terminology:
-
 - **End-session path** (beacon → coordinator): sets `'ended'`
 - **Pipeline path** (coordinator): expects `'finished'` as a pre-processing terminal status
 
@@ -23,47 +23,28 @@ Additionally, `'stale'` is defined in `SESSION_STATUSES` and referenced in the p
 ## Changes
 
 ### Step 1: Update `SESSION_STATUSES` in `drone-core/src/session-types.ts`
-
 Replace `FINISHED: 'finished'` with `ENDED: 'ended'`.
 
-```typescript
-export const SESSION_STATUSES = {
-  ACTIVE: 'active',
-  STALE: 'stale',
-  ENDED: 'ended',
-  PROCESSING: 'processing',
-  PROCESSED: 'processed',
-} as const;
-```
-
 ### Step 2: Update pipeline allowed from-statuses in `drone-coordinator/src/routes/swarm.ts`
-
-Change line 189 from `['active', 'stale', 'finished']` to `['active', 'stale', 'ended']`.
+Change from `['active', 'stale', 'finished']` to `['active', 'stale', 'ended']`.
 
 ### Step 3: Add `markStaleSessions()` DB function in `drone-coordinator/src/db/swarm-sessions.ts`
-
 Add a function that calls the existing `getStaleSessions()` and updates each found session to `'stale'`. Export it from `drone-coordinator/src/db/index.ts`.
 
 ### Step 4: Add `POST /sessions/mark-stale` route in `drone-coordinator/src/routes/swarm.ts`
-
 Add a route that calls `markStaleSessions()` with an optional `thresholdMs` query parameter (default: 30 minutes).
 
 ### Step 5: Add automatic stale-marking interval in `drone-coordinator/src/index.ts`
-
 Set up a `setInterval` that calls `markStaleSessions(30 * 60 * 1000)` every 5 minutes. Clean up on shutdown.
 
 ### Step 6: Update tests
-
 - `drone-coordinator/test/db.test.ts`: Update `'completed'` → `'ended'` in the `updateSwarmSessionStatus` test
 - `drone-coordinator/test/routes/swarm.test.ts`: Add tests for processing an ended session, marking stale sessions
-- `drone-coordinator/test/routes/edge-cases.test.ts`: No changes needed
 
 ### Step 7: Build, typecheck, lint, and test
-
-Run `pnpm build`, `pnpm typecheck`, `pnpm -r run lint`, `pnpm -r run test`.
+All pass. 104 test files, 1636 tests passed.
 
 ## Validation Criteria
-
 1. ✅ `SESSION_STATUSES` has `ENDED: 'ended'` and no `FINISHED`
 2. ✅ `POST /sessions/:id/process` allows transition from `'ended'` to `'processing'`
 3. ✅ `markStaleSessions()` exists and is exported
@@ -75,3 +56,11 @@ Run `pnpm build`, `pnpm typecheck`, `pnpm -r run lint`, `pnpm -r run test`.
 9. ✅ `pnpm typecheck` passes
 10. ✅ `pnpm -r run lint` passes
 11. ✅ `pnpm -r run test` passes
+
+## Commit
+`d430737` on branch `fix/session-status-mismatch`
+
+## Wiki Ingest
+Ingested into project wiki at commit `c214b31`:
+- New decision: `decisions/093-session-status-mismatch-fix.md`
+- Updated: `concepts/session-processing-pipeline.md`, `modules/drone-core.md`, `modules/drone-coordinator.md`, `index.md`, `log.md`, `meta.json`

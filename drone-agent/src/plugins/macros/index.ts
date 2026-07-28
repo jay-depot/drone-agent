@@ -111,7 +111,9 @@ export const macrosPlugin: DronePlugin = {
             } catch (err) {
               const message = err instanceof Error ? err.message : String(err);
               const usage = formatMacroUsage(macro);
-              ctxLogger.warn(`Macro "${command}" error: ${message}\nUsage: ${usage}`);
+              ctxLogger.warn(
+                `Macro "${command}" error: ${message}\nUsage: ${usage}`
+              );
             }
             return true;
           },
@@ -131,7 +133,9 @@ export const macrosPlugin: DronePlugin = {
     // Register help for all loaded macros.
     registration.registerHelp('/macro list           List available macros');
     registration.registerHelp('/macro show <name>    Show a macro definition');
-    registration.registerHelp('/macro reload         Reload .macro files from disk');
+    registration.registerHelp(
+      '/macro reload         Reload .macro files from disk'
+    );
 
     // Register the /macro management slash command.
     registerSlashCommand({

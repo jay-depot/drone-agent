@@ -172,7 +172,11 @@ describe('parseMacroFile', () => {
     expect(result.steps).toHaveLength(3);
 
     // Verify substitution works across all steps
-    const subbed1 = substituteMacroArgs('/persona select $1', ['coder'], result);
+    const subbed1 = substituteMacroArgs(
+      '/persona select $1',
+      ['coder'],
+      result
+    );
     expect(subbed1).toBe('/persona select coder');
 
     const subbed2 = substituteMacroArgs(
