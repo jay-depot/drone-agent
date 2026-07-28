@@ -74,5 +74,17 @@
   {
     "timestamp": "2026-07-28T19:52:42.717Z",
     "insight": "The mid-panel widget system in tui/app.tsx uses a hardcoded list of known plugin IDs and a useRef that doesn't trigger re-renders. This should be rearchitected to support dynamic registration from any plugin (including external/user plugins) with custom React components. Punted to roadmap — needs its own planning session."
+  },
+  {
+    "timestamp": "2026-07-28T20:47:19.039Z",
+    "insight": "When removing a dependency from a plugin's deps type (like budgetService from CompactionPluginDeps), the test file must also be updated. The initial code-quality-cleanup commit missed updating compaction.test.ts, which caused 15 LSP errors. Always grep for the removed field name in test files as part of the validation step."
+  },
+  {
+    "timestamp": "2026-07-28T21:19:30.041Z",
+    "insight": "The plan persona sometimes slips into implementation mode for trivial fixes. The project workflow accepts this — it's not worth fighting. The important thing is the fix is correct, not which persona wrote it. This is a pragmatic design choice: the workflow is resilient to role bleed."
+  },
+  {
+    "timestamp": "2026-07-28T21:27:30.375Z",
+    "insight": "Wiki ingest for 12 commits on feature/web-ui-management-console branch completed. Created 8 new wiki pages (7 decisions + 1 concept) and updated 7 module pages. The commits spanned 5 major features: Web UI Management Console (5.5), MitM verification, approval token improvements, live event streaming + /api prefix, active persona propagation, and code quality cleanup. All 1632 tests pass."
   }
 ]

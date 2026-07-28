@@ -119,13 +119,10 @@ export function parseMacroFile(
           `Invalid macro file "${filePath}": argument position must be >= 1, got $${position}.`
         );
       }
-      if (seenPositions.has(position)) {
-        throw new Error(
-          `Invalid macro file "${filePath}": duplicate argument $${position}.`
-        );
+      if (!seenPositions.has(position)) {
+        seenPositions.add(position);
+        argSpec.push({ position, required: !isOptional });
       }
-      seenPositions.add(position);
-      argSpec.push({ position, required: !isOptional });
     }
 
     // Scan for catch-all ($$ or $$?)
