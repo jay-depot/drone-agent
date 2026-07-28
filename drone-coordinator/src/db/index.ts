@@ -54,6 +54,7 @@ export {
 export {
   createSwarmSession,
   getSwarmSession,
+  countSwarmSessions,
   listSwarmSessions,
   updateSwarmSessionStatus,
   transitionSessionStatus,

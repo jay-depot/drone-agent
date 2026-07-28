@@ -125,6 +125,20 @@ export function listSwarmSessions(options?: {
   }));
 }
 
+export function countSwarmSessions(options?: { status?: string }): number {
+  let query = 'SELECT COUNT(*) as count FROM swarm_sessions WHERE 1=1';
+  const params: unknown[] = [];
+
+  if (options?.status) {
+    query += ' AND status = ?';
+    params.push(options.status);
+  }
+
+  const stmt = getDatabase().prepare(query);
+  const row = stmt.get(...params) as { count: number };
+  return row.count;
+}
+
 export function updateSwarmSessionStatus(
   id: string,
   status: string

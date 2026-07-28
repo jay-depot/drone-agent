@@ -142,17 +142,26 @@ export default function SessionsPage() {
     setDialogLoading(true);
     try {
       if (dialogAction === 'terminate') {
-        await authFetch(
-          `/beacons/${dialogSession.beaconId}/sessions/${dialogSession.agentId}`,
-          {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              disconnectedAt: Date.now(),
-              durationMs: Date.now() - dialogSession.connectedAt,
-            }),
-          }
-        );
+        // Try to end the beacon session (may already be ended)
+        try {
+          await authFetch(
+            `/beacons/${dialogSession.beaconId}/sessions/${dialogSession.agentId}`,
+            {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                disconnectedAt: Date.now(),
+                durationMs: Date.now() - dialogSession.connectedAt,
+              }),
+            }
+          );
+        } catch {
+          // Beacon session may already be ended — that's fine
+        }
+        // Always update the swarm session status
+        await authFetch(`/sessions/${dialogSession.id}/end`, {
+          method: 'POST',
+        });
       } else if (dialogAction === 'process') {
         await authFetch(`/sessions/${dialogSession.id}/process`, {
           method: 'POST',

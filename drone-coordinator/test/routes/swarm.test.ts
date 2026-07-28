@@ -57,6 +57,67 @@ describe('Swarm Routes', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  // ── Session End Route ──
+
+  it('POST /sessions/:id/end ends an active session', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/sync/sessions/register',
+      payload: { id: 'ss1', beaconId: 'b1' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sessions/ss1/end',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).status).toBe('ended');
+  });
+
+  it('POST /sessions/:id/end returns 404 for missing session', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sessions/nonexistent/end',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('POST /sessions/:id/end is idempotent on already-ended session', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/sync/sessions/register',
+      payload: { id: 'ss1', beaconId: 'b1' },
+    });
+    // End it once
+    await app.inject({ method: 'POST', url: '/sessions/ss1/end' });
+    // End it again — should still succeed
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sessions/ss1/end',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).status).toBe('ended');
+  });
+
+  it('GET /sessions count reflects total, not page size', async () => {
+    // Register 3 sessions
+    for (let i = 0; i < 3; i++) {
+      await app.inject({
+        method: 'POST',
+        url: '/sync/sessions/register',
+        payload: { id: `ss${i}`, beaconId: 'b1' },
+      });
+    }
+    // Fetch with limit=1 — count should be 3, not 1
+    const res = await app.inject({
+      method: 'GET',
+      url: '/sessions?limit=1&offset=0',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.sessions.length).toBe(1);
+    expect(body.count).toBe(3);
+  });
+
   it('POST /sync/events/push pushes events', async () => {
     await app.inject({
       method: 'POST',

@@ -157,7 +157,7 @@ export default function SessionDetailPage() {
         </div>
       ) : (
         <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-          {[...events].reverse().map(event => {
+          {events.map(event => {
             const { formatted, isJson } = tryFormatJson(event.payload);
             return (
               <Collapsible key={event.id}>

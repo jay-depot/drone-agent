@@ -128,7 +128,8 @@ export default function swarmRoutes(app: FastifyInstance) {
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
     });
-    return reply.send({ sessions, count: sessions.length });
+    const totalCount = db.countSwarmSessions({ status });
+    return reply.send({ sessions, count: totalCount });
   });
 
   app.get<{ Params: { id: string } }>(
@@ -207,6 +208,19 @@ export default function swarmRoutes(app: FastifyInstance) {
     }
     return reply.send({ session: result });
   });
+
+  app.post<{ Params: { id: string } }>(
+    '/sessions/:id/end',
+    async (request, reply) => {
+      const session = db.getSwarmSession(request.params.id);
+      if (!session) {
+        return reply.code(404).send({ error: 'Session not found' });
+      }
+      // Allow ending from any status
+      const result = db.updateSwarmSessionStatus(request.params.id, 'ended');
+      return reply.send(result);
+    }
+  );
 
   // === Tool Definition Routes ===
 
