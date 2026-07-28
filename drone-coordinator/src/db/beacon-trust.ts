@@ -66,7 +66,10 @@ export function registerBeaconTrust(
   const isLocal = req.host === 'localhost' || req.host === '127.0.0.1';
 
   // Auto-approve local beacons
-  const verificationCode = generateVerificationCode(req.publicKey, req.tlsFingerprint ?? '');
+  const verificationCode = generateVerificationCode(
+    req.publicKey,
+    req.tlsFingerprint ?? ''
+  );
   const status: BeaconTrustStatus = isLocal ? 'approved' : 'pending';
   const approvalToken = isLocal ? null : generateApprovalToken();
 

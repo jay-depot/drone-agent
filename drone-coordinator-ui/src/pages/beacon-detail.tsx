@@ -176,9 +176,7 @@ export default function BeaconDetailPage() {
             </div>
             {beacon.verificationCode && (
               <div className="col-span-2">
-                <span className="text-muted-foreground">
-                  Verification Code
-                </span>
+                <span className="text-muted-foreground">Verification Code</span>
                 <p className="font-mono text-base mt-0.5 font-bold text-primary">
                   {beacon.verificationCode}
                 </p>

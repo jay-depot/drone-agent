@@ -58,5 +58,9 @@
   {
     "timestamp": "2026-07-28T17:07:27.429Z",
     "insight": "Coordinator UI has a dual-session-table problem: `beacon_sessions` tracks per-beacon agent connections (with disconnected_at), while `swarm_sessions` tracks the overall session lifecycle (with status field). The terminate flow only touched beacon_sessions, leaving swarm_sessions stuck on 'active'. The fix adds a POST /sessions/:id/end endpoint that updates swarm_sessions, and the UI calls it after the beacon DELETE regardless of whether the beacon session was already ended."
+  },
+  {
+    "timestamp": "2026-07-28T17:24:22.835Z",
+    "insight": "The coordinator has two separate session tables (beacon_sessions and swarm_sessions) that can get out of sync. The terminate flow only updated beacon_sessions, leaving swarm_sessions stuck on 'active'. The fix adds a POST /sessions/:id/end endpoint that directly updates swarm_sessions, and the UI calls it after the beacon DELETE regardless of whether the beacon session was already ended. This pattern should be kept in mind for future session lifecycle work."
   }
 ]

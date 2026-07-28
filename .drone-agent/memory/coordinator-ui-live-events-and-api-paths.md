@@ -48,6 +48,7 @@ Add import: `import { publishMutationEvent } from '../ws-pubsub.js';`
 Wire up `publishMutationEvent` in these handlers:
 
 1. **`POST /sync/sessions/register`** — after `db.createSwarmSession()`:
+
    ```typescript
    publishMutationEvent({
      sessionId: id,
@@ -57,6 +58,7 @@ Wire up `publishMutationEvent` in these handlers:
    ```
 
 2. **`DELETE /sync/sessions/:id`** — after `db.updateSwarmSessionStatus()`:
+
    ```typescript
    publishMutationEvent({
      sessionId: request.params.id,
@@ -66,6 +68,7 @@ Wire up `publishMutationEvent` in these handlers:
    ```
 
 3. **`POST /sync/events/push`** — in the loop, after `db.createSwarmEvent()`:
+
    ```typescript
    publishMutationEvent({
      sessionId: evt.sessionId,
@@ -75,6 +78,7 @@ Wire up `publishMutationEvent` in these handlers:
    ```
 
 4. **`POST /sessions/:id/process`** — after successful transition:
+
    ```typescript
    publishMutationEvent({
      sessionId: request.params.id,
@@ -84,6 +88,7 @@ Wire up `publishMutationEvent` in these handlers:
    ```
 
 5. **`POST /sessions/:id/processed`** — after successful transition:
+
    ```typescript
    publishMutationEvent({
      sessionId: request.params.id,
@@ -93,6 +98,7 @@ Wire up `publishMutationEvent` in these handlers:
    ```
 
 6. **`POST /agents/location`** — after `db.registerAgentLocation()`:
+
    ```typescript
    publishMutationEvent({
      sessionId: agentId,
@@ -117,6 +123,7 @@ Add import: `import { publishMutationEvent } from '../ws-pubsub.js';`
 Wire up in:
 
 1. **`POST /beacons/:id/sessions`** — after `db.createBeaconSession()`:
+
    ```typescript
    publishMutationEvent({
      sessionId: request.body.agentId,
@@ -161,18 +168,21 @@ export async function registerRoutes(app: FastifyInstance) {
   health(app);
 
   // All other routes under /api prefix
-  await app.register(async (api) => {
-    personas(api);
-    skills(api);
-    beacons(api);
-    knowledge(api);
-    insights(api);
-    principles(api);
-    wiki(api);
-    swarm(api);
-    messages(api);
-    spawn(api);
-  }, { prefix: '/api' });
+  await app.register(
+    async api => {
+      personas(api);
+      skills(api);
+      beacons(api);
+      knowledge(api);
+      insights(api);
+      principles(api);
+      wiki(api);
+      swarm(api);
+      messages(api);
+      spawn(api);
+    },
+    { prefix: '/api' }
+  );
 }
 ```
 
@@ -192,17 +202,13 @@ All 34 `baseUrl` references need `/api` inserted before the path. The pattern is
 
 ```typescript
 // Before:
-`${baseUrl}/beacons`
-`${baseUrl}/sync/sessions/register`
-`${baseUrl}/sessions?${params}`
-
+`${baseUrl}/beacons``${baseUrl}/sync/sessions/register``${baseUrl}/sessions?${params}`
 // After:
-`${baseUrl}/api/beacons`
-`${baseUrl}/api/sync/sessions/register`
-`${baseUrl}/api/sessions?${params}`
+`${baseUrl}/api/beacons``${baseUrl}/api/sync/sessions/register``${baseUrl}/api/sessions?${params}`;
 ```
 
 Affected lines (by line number from search):
+
 - Line 194: `${baseUrl}/beacons`
 - Line 232: `${baseUrl}/beacons/trust/${config.beaconId}`
 - Line 249: `${baseUrl}/beacons/${config.beaconId}/heartbeat`
@@ -239,37 +245,37 @@ Affected lines (by line number from search):
 
 Every `authFetch(...)` call needs `/api` prepended to the URL path. The full list of changes:
 
-| File | Current URL | New URL |
-|------|-------------|---------|
-| `topology.tsx` | `/beacons` | `/api/beacons` |
-| `topology.tsx` | `/agents/location` | `/api/agents/location` |
-| `topology.tsx` | `/beacons/approve` | `/api/beacons/approve` |
-| `topology.tsx` | `/beacons/trust/${id}/reject` | `/api/beacons/trust/${id}/reject` |
-| `topology.tsx` | `/beacons/trust/${id}` | `/api/beacons/trust/${id}` |
-| `beacon-detail.tsx` | `/beacons/${id}` | `/api/beacons/${id}` |
-| `beacon-detail.tsx` | `/beacons/${id}/sessions` | `/api/beacons/${id}/sessions` |
-| `beacon-detail.tsx` | `/agents/location?beaconId=${id}` | `/api/agents/location?beaconId=${id}` |
-| `sessions.tsx` | `/sessions?limit=...` | `/api/sessions?limit=...` |
-| `sessions.tsx` | `/beacons` | `/api/beacons` |
-| `sessions.tsx` | `/beacons/${id}/sessions/${agentId}` | `/api/beacons/${id}/sessions/${agentId}` |
-| `sessions.tsx` | `/sessions/${id}/process` | `/api/sessions/${id}/process` |
-| `sessions.tsx` | `/sessions/${id}/processed` | `/api/sessions/${id}/processed` |
-| `session-detail.tsx` | `/sessions/${sessionId}/events` | `/api/sessions/${sessionId}/events` |
-| `personas.tsx` | `/personas` | `/api/personas` |
-| `personas.tsx` | `/personas/${id}` | `/api/personas/${id}` |
-| `persona-detail.tsx` | `/personas/${id}` | `/api/personas/${id}` |
-| `persona-editor.tsx` | `/personas/${id}` | `/api/personas/${id}` |
-| `persona-editor.tsx` | `/personas` | `/api/personas` |
-| `skills.tsx` | `/skills` | `/api/skills` |
-| `skills.tsx` | `/skills/${id}` | `/api/skills/${id}` |
-| `skill-detail.tsx` | `/skills/${id}` | `/api/skills/${id}` |
-| `skill-editor.tsx` | `/skills/${id}` | `/api/skills/${id}` |
-| `skill-editor.tsx` | `/skills` | `/api/skills` |
-| `wiki.tsx` | `/wiki` | `/api/wiki` |
-| `wiki.tsx` | `/wiki/search?q=...` | `/api/wiki/search?q=...` |
-| `wiki.tsx` | `/wiki/${id}` | `/api/wiki/${id}` |
-| `wiki-detail.tsx` | `/wiki/${pageId}` | `/api/wiki/${pageId}` |
-| `wiki-editor.tsx` | `/wiki/${pageId}` | `/api/wiki/${pageId}` |
+| File                 | Current URL                          | New URL                                  |
+| -------------------- | ------------------------------------ | ---------------------------------------- |
+| `topology.tsx`       | `/beacons`                           | `/api/beacons`                           |
+| `topology.tsx`       | `/agents/location`                   | `/api/agents/location`                   |
+| `topology.tsx`       | `/beacons/approve`                   | `/api/beacons/approve`                   |
+| `topology.tsx`       | `/beacons/trust/${id}/reject`        | `/api/beacons/trust/${id}/reject`        |
+| `topology.tsx`       | `/beacons/trust/${id}`               | `/api/beacons/trust/${id}`               |
+| `beacon-detail.tsx`  | `/beacons/${id}`                     | `/api/beacons/${id}`                     |
+| `beacon-detail.tsx`  | `/beacons/${id}/sessions`            | `/api/beacons/${id}/sessions`            |
+| `beacon-detail.tsx`  | `/agents/location?beaconId=${id}`    | `/api/agents/location?beaconId=${id}`    |
+| `sessions.tsx`       | `/sessions?limit=...`                | `/api/sessions?limit=...`                |
+| `sessions.tsx`       | `/beacons`                           | `/api/beacons`                           |
+| `sessions.tsx`       | `/beacons/${id}/sessions/${agentId}` | `/api/beacons/${id}/sessions/${agentId}` |
+| `sessions.tsx`       | `/sessions/${id}/process`            | `/api/sessions/${id}/process`            |
+| `sessions.tsx`       | `/sessions/${id}/processed`          | `/api/sessions/${id}/processed`          |
+| `session-detail.tsx` | `/sessions/${sessionId}/events`      | `/api/sessions/${sessionId}/events`      |
+| `personas.tsx`       | `/personas`                          | `/api/personas`                          |
+| `personas.tsx`       | `/personas/${id}`                    | `/api/personas/${id}`                    |
+| `persona-detail.tsx` | `/personas/${id}`                    | `/api/personas/${id}`                    |
+| `persona-editor.tsx` | `/personas/${id}`                    | `/api/personas/${id}`                    |
+| `persona-editor.tsx` | `/personas`                          | `/api/personas`                          |
+| `skills.tsx`         | `/skills`                            | `/api/skills`                            |
+| `skills.tsx`         | `/skills/${id}`                      | `/api/skills/${id}`                      |
+| `skill-detail.tsx`   | `/skills/${id}`                      | `/api/skills/${id}`                      |
+| `skill-editor.tsx`   | `/skills/${id}`                      | `/api/skills/${id}`                      |
+| `skill-editor.tsx`   | `/skills`                            | `/api/skills`                            |
+| `wiki.tsx`           | `/wiki`                              | `/api/wiki`                              |
+| `wiki.tsx`           | `/wiki/search?q=...`                 | `/api/wiki/search?q=...`                 |
+| `wiki.tsx`           | `/wiki/${id}`                        | `/api/wiki/${id}`                        |
+| `wiki-detail.tsx`    | `/wiki/${pageId}`                    | `/api/wiki/${pageId}`                    |
+| `wiki-editor.tsx`    | `/wiki/${pageId}`                    | `/api/wiki/${pageId}`                    |
 
 **File**: `drone-coordinator-ui/src/pages/login.tsx`
 
@@ -292,6 +298,7 @@ Check if it uses `fetch('/health')` — if so, it stays as-is since `/health` is
 **File**: `drone-coordinator/test/routes/health.test.ts`
 
 All test URLs that hit API routes need `/api` prepended. For example:
+
 - `url: '/sync/sessions/register'` → `url: '/api/sync/sessions/register'`
 - `url: '/sessions'` → `url: '/api/sessions'`
 - `url: '/personas'` → `url: '/api/personas'`
@@ -305,6 +312,7 @@ The health test stays as-is (`url: '/health'`).
 **File**: `drone-coordinator/test/routes/swarm.test.ts`
 
 Add tests that verify `publishEvent` is called when events are pushed. Since `publishEvent` broadcasts to WebSocket subscribers (which don't exist in test), the test should verify that:
+
 - The route handler completes successfully (status 201)
 - Events are stored in the database
 

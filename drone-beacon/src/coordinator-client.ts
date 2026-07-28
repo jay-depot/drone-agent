@@ -224,7 +224,11 @@ export function createCoordinatorClient(
         tlsFingerprint
       );
 
-      return { status: data.status, approvalToken: data.approvalToken, verificationCode };
+      return {
+        status: data.status,
+        approvalToken: data.approvalToken,
+        verificationCode,
+      };
     },
 
     async pollForApproval(): Promise<BeaconStatusResponse> {

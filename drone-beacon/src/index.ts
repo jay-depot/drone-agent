@@ -211,10 +211,10 @@ async function main() {
         logger.info('Also available via the web UI at the coordinator address');
 
         if (result.verificationCode) {
+          logger.info(`Verification code: ${result.verificationCode}`);
           logger.info(
-            `Verification code: ${result.verificationCode}`
+            'Compare this code with the one shown in the coordinator web UI to verify no MitM attack occurred during key exchange.'
           );
-          logger.info('Compare this code with the one shown in the coordinator web UI to verify no MitM attack occurred during key exchange.');
         }
 
         // Re-output the approval token periodically until approved
