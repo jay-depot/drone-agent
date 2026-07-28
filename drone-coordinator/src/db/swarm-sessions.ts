@@ -124,6 +124,22 @@ export function listSwarmSessions(options?: {
     status: row.status,
   }));
 }
+export function markStaleSessions(thresholdMs: number): SwarmSession[] {
+  const staleSessions = getStaleSessions(thresholdMs);
+  const updated: SwarmSession[] = [];
+  for (const session of staleSessions) {
+    const now = Date.now();
+    const stmt = getDatabase().prepare(
+      'UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt WHERE id = @id'
+    );
+    stmt.run({ id: session.id, status: 'stale', updatedAt: now });
+    updated.push({ ...session, status: 'stale', updatedAt: now });
+  }
+  if (updated.length > 0) {
+    logger.info(`Marked ${updated.length} stale session(s) as 'stale'`);
+  }
+  return updated;
+}
 
 export function countSwarmSessions(options?: { status?: string }): number {
   let query = 'SELECT COUNT(*) as count FROM swarm_sessions WHERE 1=1';

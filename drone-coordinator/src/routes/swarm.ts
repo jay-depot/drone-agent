@@ -26,6 +26,15 @@ export default function swarmRoutes(app: FastifyInstance) {
       return reply.code(201).send(session);
     }
   );
+  app.post<{
+    Querystring: { thresholdMs?: string };
+  }>('/sessions/mark-stale', async (request, reply) => {
+    const thresholdMs = request.query.thresholdMs
+      ? Number(request.query.thresholdMs)
+      : 30 * 60 * 1000; // default 30 minutes
+    const updated = db.markStaleSessions(thresholdMs);
+    return reply.send({ count: updated.length, sessions: updated });
+  });
 
   app.delete<{ Params: { id: string } }>(
     '/sync/sessions/:id',
@@ -186,7 +195,7 @@ export default function swarmRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const result = db.transitionSessionStatus(
         request.params.id,
-        ['active', 'stale', 'finished'],
+        ['active', 'stale', 'ended'],
         'processing'
       );
       if ('error' in result) {

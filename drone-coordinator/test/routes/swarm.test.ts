@@ -56,6 +56,61 @@ describe('Swarm Routes', () => {
     });
     expect(res.statusCode).toBe(404);
   });
+  it('POST /sessions/:id/process transitions ended session to processing', async () => {
+    // Create a session, end it, then process it — should succeed
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss-ended', beaconId: 'b1' },
+    });
+    await app.inject({ method: 'POST', url: '/api/sessions/ss-ended/end' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/ss-ended/process',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).session.status).toBe('processing');
+  });
+
+  it('POST /sessions/mark-stale marks old active sessions as stale', async () => {
+    // Create a session with a manually set old updatedAt
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss-stale', beaconId: 'b1' },
+    });
+    // Manually set updatedAt far in the past via direct DB call
+    const { getDatabase } = await import('../../src/db/init.js');
+    const db = getDatabase();
+    db.prepare(
+      "UPDATE swarm_sessions SET updatedAt = 0 WHERE id = 'ss-stale'"
+    ).run();
+    // Now mark stale with a very low threshold
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/mark-stale?thresholdMs=1',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.count).toBe(1);
+    expect(body.sessions[0].id).toBe('ss-stale');
+    expect(body.sessions[0].status).toBe('stale');
+  });
+
+  it('POST /sessions/mark-stale with no threshold defaults to 30 min', async () => {
+    // No sessions should be stale with default threshold (30 min) for a fresh session
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss-fresh', beaconId: 'b1' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/mark-stale',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).count).toBe(0);
+  });
 
   // ── Session End Route ──
 
