@@ -66,5 +66,13 @@
   {
     "timestamp": "2026-07-28T17:43:27.691Z",
     "insight": "The /api prefix migration touched more files than initially scoped. The drone-gateway package also has a CoordinatorClient class that calls coordinator API routes directly, and its tests needed updating too. When doing cross-package API path changes, always search for all consumers of the API across the entire monorepo, not just the obvious ones (coordinator + UI + beacon)."
+  },
+  {
+    "timestamp": "2026-07-28T19:11:07.841Z",
+    "insight": "Coordinator UI active persona bug fix: The root cause was that the swarm plugin registers the agent session with the beacon at `onPluginsLoaded` (with `personaId: null`), but the persona plugin activates the persona at `onSessionStart` (which fires later). The fix adds a complete pipeline: (1) a PATCH endpoint on the coordinator for updating session persona, (2) a PATCH endpoint on the beacon for updating agent persona, (3) a coordinator client method on the beacon, (4) a hook function in the swarm plugin, and (5) a subscription to persona changes in the swarm plugin's index. Also added `activePersona` to event metadata for audit trail."
+  },
+  {
+    "timestamp": "2026-07-28T19:52:42.717Z",
+    "insight": "The mid-panel widget system in tui/app.tsx uses a hardcoded list of known plugin IDs and a useRef that doesn't trigger re-renders. This should be rearchitected to support dynamic registration from any plugin (including external/user plugins) with custom React components. Punted to roadmap — needs its own planning session."
   }
 ]
