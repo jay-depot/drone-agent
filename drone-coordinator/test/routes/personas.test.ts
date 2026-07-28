@@ -26,7 +26,7 @@ describe('Persona Routes', () => {
   it('POST /personas creates a persona', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/personas',
+      url: '/api/personas',
       payload: validPersona,
     });
     expect(res.statusCode).toBe(201);
@@ -38,12 +38,12 @@ describe('Persona Routes', () => {
   it('GET /personas lists personas', async () => {
     await app.inject({
       method: 'POST',
-      url: '/personas',
+      url: '/api/personas',
       payload: validPersona,
     });
     const res = await app.inject({
       method: 'GET',
-      url: '/personas',
+      url: '/api/personas',
     });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
@@ -54,12 +54,12 @@ describe('Persona Routes', () => {
   it('GET /personas/:id returns a persona', async () => {
     await app.inject({
       method: 'POST',
-      url: '/personas',
+      url: '/api/personas',
       payload: validPersona,
     });
     const res = await app.inject({
       method: 'GET',
-      url: '/personas/test-persona',
+      url: '/api/personas/test-persona',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).id).toBe('test-persona');
@@ -68,7 +68,7 @@ describe('Persona Routes', () => {
   it('GET /personas/:id returns 404 for missing persona', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: '/personas/nonexistent',
+      url: '/api/personas/nonexistent',
     });
     expect(res.statusCode).toBe(404);
   });
@@ -76,12 +76,12 @@ describe('Persona Routes', () => {
   it('PUT /personas/:id updates a persona', async () => {
     await app.inject({
       method: 'POST',
-      url: '/personas',
+      url: '/api/personas',
       payload: validPersona,
     });
     const res = await app.inject({
       method: 'PUT',
-      url: '/personas/test-persona',
+      url: '/api/personas/test-persona',
       payload: { name: 'Updated' },
     });
     expect(res.statusCode).toBe(200);
@@ -91,7 +91,7 @@ describe('Persona Routes', () => {
   it('PUT /personas/:id returns 404 for missing persona', async () => {
     const res = await app.inject({
       method: 'PUT',
-      url: '/personas/nonexistent',
+      url: '/api/personas/nonexistent',
       payload: { name: 'x' },
     });
     expect(res.statusCode).toBe(404);
@@ -100,12 +100,12 @@ describe('Persona Routes', () => {
   it('DELETE /personas/:id deletes a persona', async () => {
     await app.inject({
       method: 'POST',
-      url: '/personas',
+      url: '/api/personas',
       payload: validPersona,
     });
     const res = await app.inject({
       method: 'DELETE',
-      url: '/personas/test-persona',
+      url: '/api/personas/test-persona',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).success).toBe(true);
@@ -114,7 +114,7 @@ describe('Persona Routes', () => {
   it('DELETE /personas/:id returns 404 for missing persona', async () => {
     const res = await app.inject({
       method: 'DELETE',
-      url: '/personas/nonexistent',
+      url: '/api/personas/nonexistent',
     });
     expect(res.statusCode).toBe(404);
   });

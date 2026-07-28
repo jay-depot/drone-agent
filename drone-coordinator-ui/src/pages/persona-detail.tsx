@@ -25,7 +25,7 @@ export default function PersonaDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await authFetch(`/personas/${id}`);
+        const res = await authFetch(`/api/personas/${id}`);
         if (res.ok) {
           setPersona(await res.json());
         } else {
@@ -44,7 +44,7 @@ export default function PersonaDetailPage() {
     if (!id) return;
     setDeleteLoading(true);
     try {
-      const res = await authFetch(`/personas/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/personas/${id}`, { method: 'DELETE' });
       if (res.ok) {
         navigate('/personas');
       }

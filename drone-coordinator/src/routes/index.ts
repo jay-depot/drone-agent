@@ -12,15 +12,23 @@ import messages from './messages.js';
 import spawn from './spawn.js';
 
 export async function registerRoutes(app: FastifyInstance) {
+  // Health stays at root level (exempted by SPA fallback)
   health(app);
-  personas(app);
-  skills(app);
-  beacons(app);
-  knowledge(app);
-  insights(app);
-  principles(app);
-  wiki(app);
-  swarm(app);
-  messages(app);
-  spawn(app);
+
+  // All other routes under /api prefix
+  await app.register(
+    async api => {
+      personas(api);
+      skills(api);
+      beacons(api);
+      knowledge(api);
+      insights(api);
+      principles(api);
+      wiki(api);
+      swarm(api);
+      messages(api);
+      spawn(api);
+    },
+    { prefix: '/api' }
+  );
 }

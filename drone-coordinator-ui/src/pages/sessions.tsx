@@ -49,7 +49,7 @@ export default function SessionsPage() {
       try {
         // Fetch sessions with pagination and status from the coordinator
         const sessionsRes = await authFetch(
-          `/sessions?limit=${PAGE_SIZE}&offset=${currentOffset}`
+          `/api/sessions?limit=${PAGE_SIZE}&offset=${currentOffset}`
         );
         if (!sessionsRes.ok) {
           setError('Failed to load sessions');
@@ -60,7 +60,7 @@ export default function SessionsPage() {
         const swarmSessions: SwarmSession[] = data.sessions || [];
 
         // Enrich with beacon names
-        const beaconsRes = await authFetch('/beacons');
+        const beaconsRes = await authFetch('/api/beacons');
         const beacons = beaconsRes.ok ? await beaconsRes.json() : [];
         const beaconMap = new Map(
           (beacons as Array<{ id: string; name: string }>).map(b => [
@@ -145,7 +145,7 @@ export default function SessionsPage() {
         // Try to end the beacon session (may already be ended)
         try {
           await authFetch(
-            `/beacons/${dialogSession.beaconId}/sessions/${dialogSession.agentId}`,
+            `/api/beacons/${dialogSession.beaconId}/sessions/${dialogSession.agentId}`,
             {
               method: 'DELETE',
               headers: { 'Content-Type': 'application/json' },
@@ -159,15 +159,15 @@ export default function SessionsPage() {
           // Beacon session may already be ended — that's fine
         }
         // Always update the swarm session status
-        await authFetch(`/sessions/${dialogSession.id}/end`, {
+        await authFetch(`/api/sessions/${dialogSession.id}/end`, {
           method: 'POST',
         });
       } else if (dialogAction === 'process') {
-        await authFetch(`/sessions/${dialogSession.id}/process`, {
+        await authFetch(`/api/sessions/${dialogSession.id}/process`, {
           method: 'POST',
         });
       } else if (dialogAction === 'processed') {
-        await authFetch(`/sessions/${dialogSession.id}/processed`, {
+        await authFetch(`/api/sessions/${dialogSession.id}/processed`, {
           method: 'POST',
         });
       }

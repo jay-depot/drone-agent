@@ -29,7 +29,7 @@ export default function WikiEditorPage() {
 
     async function fetchPage() {
       try {
-        const res = await authFetch(`/wiki/${pageId}`);
+        const res = await authFetch(`/api/wiki/${pageId}`);
         if (res.ok) {
           const p: WikiPage = await res.json();
           setTitle(p.title);
@@ -100,7 +100,7 @@ export default function WikiEditorPage() {
           .filter(Boolean),
       };
 
-      const res = await authFetch(`/wiki/${targetId}`, {
+      const res = await authFetch(`/api/wiki/${targetId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

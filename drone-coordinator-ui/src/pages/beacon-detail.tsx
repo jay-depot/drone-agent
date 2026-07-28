@@ -33,9 +33,9 @@ export default function BeaconDetailPage() {
       setError(null);
       try {
         const [beaconRes, sessionsRes, agentsRes] = await Promise.all([
-          authFetch(`/beacons/${id}`),
-          authFetch(`/beacons/${id}/sessions`),
-          authFetch(`/agents/location?beaconId=${id}`),
+          authFetch(`/api/beacons/${id}`),
+          authFetch(`/api/beacons/${id}/sessions`),
+          authFetch(`/api/agents/location?beaconId=${id}`),
         ]);
 
         if (beaconRes.ok) {

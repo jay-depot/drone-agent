@@ -25,7 +25,7 @@ export default function WikiDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await authFetch(`/wiki/${pageId}`);
+        const res = await authFetch(`/api/wiki/${pageId}`);
         if (res.ok) {
           setPage(await res.json());
         } else {
@@ -46,7 +46,7 @@ export default function WikiDetailPage() {
     if (!pageId) return;
     setDeleteLoading(true);
     try {
-      const res = await authFetch(`/wiki/${pageId}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/wiki/${pageId}`, { method: 'DELETE' });
       if (res.ok) {
         navigate('/wiki');
       }

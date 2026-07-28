@@ -37,7 +37,7 @@ export class CoordinatorClient {
       spawnId?: string;
     }
   ): Promise<unknown> {
-    const res = await this.request('POST', '/spawn', {
+    const res = await this.request('POST', '/api/spawn', {
       targetBeaconId,
       ...opts,
     });
@@ -49,7 +49,7 @@ export class CoordinatorClient {
   }
 
   async listBeacons(): Promise<unknown> {
-    const res = await this.request('GET', '/beacons');
+    const res = await this.request('GET', '/api/beacons');
     if (!res.ok) {
       throw new Error(`List beacons failed (${res.status})`);
     }
@@ -58,7 +58,7 @@ export class CoordinatorClient {
 
   async listAgents(beaconId?: string): Promise<unknown> {
     const query = beaconId ? `?beaconId=${beaconId}` : '';
-    const res = await this.request('GET', `/agents/location${query}`);
+    const res = await this.request('GET', `/api/agents/location${query}`);
     if (!res.ok) {
       throw new Error(`List agents failed (${res.status})`);
     }
@@ -66,7 +66,7 @@ export class CoordinatorClient {
   }
 
   async getSpawn(beaconId: string, spawnId: string): Promise<unknown> {
-    const res = await this.request('GET', `/spawn/${beaconId}/${spawnId}`);
+    const res = await this.request('GET', `/api/spawn/${beaconId}/${spawnId}`);
     if (!res.ok) {
       throw new Error(`Get spawn failed (${res.status})`);
     }
@@ -75,7 +75,7 @@ export class CoordinatorClient {
 
   async listSpawns(beaconId: string, status?: string): Promise<unknown> {
     const query = status ? `?status=${status}` : '';
-    const res = await this.request('GET', `/spawn/${beaconId}${query}`);
+    const res = await this.request('GET', `/api/spawn/${beaconId}${query}`);
     if (!res.ok) {
       throw new Error(`List spawns failed (${res.status})`);
     }
@@ -83,7 +83,10 @@ export class CoordinatorClient {
   }
 
   async terminateSpawn(beaconId: string, spawnId: string): Promise<unknown> {
-    const res = await this.request('DELETE', `/spawn/${beaconId}/${spawnId}`);
+    const res = await this.request(
+      'DELETE',
+      `/api/spawn/${beaconId}/${spawnId}`
+    );
     if (!res.ok) {
       throw new Error(`Terminate spawn failed (${res.status})`);
     }
@@ -94,7 +97,7 @@ export class CoordinatorClient {
    * Send a message to an agent via the coordinator's message relay.
    */
   async sendMessage(agentId: string, message: string): Promise<unknown> {
-    const res = await this.request('POST', '/messages', {
+    const res = await this.request('POST', '/api/messages/relay', {
       toAgentId: agentId,
       body: JSON.stringify({ type: 'chat', text: message }),
     });

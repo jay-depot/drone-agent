@@ -19,7 +19,7 @@ describe('Beacon Routes', () => {
   it('POST /beacons registers a beacon without publicKey', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
     });
     expect(res.statusCode).toBe(201);
@@ -29,7 +29,7 @@ describe('Beacon Routes', () => {
   it('POST /beacons registers a beacon with publicKey (auto-approved for localhost)', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: {
         id: 'b2',
         name: 'B2',
@@ -46,7 +46,7 @@ describe('Beacon Routes', () => {
   it('POST /beacons with publicKey mismatch returns 403', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: {
         id: 'b3',
         name: 'B3',
@@ -57,7 +57,7 @@ describe('Beacon Routes', () => {
     });
     const res = await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: {
         id: 'b3',
         name: 'B3',
@@ -72,10 +72,10 @@ describe('Beacon Routes', () => {
   it('GET /beacons lists beacons with trust status', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
     });
-    const res = await app.inject({ method: 'GET', url: '/beacons' });
+    const res = await app.inject({ method: 'GET', url: '/api/beacons' });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(Array.isArray(body)).toBe(true);
@@ -86,10 +86,10 @@ describe('Beacon Routes', () => {
   it('GET /beacons/:id returns beacon with trust info', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
     });
-    const res = await app.inject({ method: 'GET', url: '/beacons/b1' });
+    const res = await app.inject({ method: 'GET', url: '/api/beacons/b1' });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.beaconId).toBe('b1');
@@ -98,7 +98,7 @@ describe('Beacon Routes', () => {
   it('GET /beacons/:id returns 404 for missing beacon', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: '/beacons/nonexistent',
+      url: '/api/beacons/nonexistent',
     });
     expect(res.statusCode).toBe(404);
   });
@@ -108,7 +108,7 @@ describe('Beacon Routes', () => {
   it('POST /beacons/trust registers trust', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/beacons/trust',
+      url: '/api/beacons/trust',
       payload: {
         id: 'b1',
         name: 'B1',
@@ -124,7 +124,7 @@ describe('Beacon Routes', () => {
   it('POST /beacons/trust with public key mismatch returns 403', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons/trust',
+      url: '/api/beacons/trust',
       payload: {
         id: 'b1',
         name: 'B1',
@@ -135,7 +135,7 @@ describe('Beacon Routes', () => {
     });
     const res = await app.inject({
       method: 'POST',
-      url: '/beacons/trust',
+      url: '/api/beacons/trust',
       payload: {
         id: 'b1',
         name: 'B1',
@@ -150,7 +150,7 @@ describe('Beacon Routes', () => {
   it('GET /beacons/trust lists trust records', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons/trust',
+      url: '/api/beacons/trust',
       payload: {
         id: 'b1',
         name: 'B1',
@@ -159,7 +159,7 @@ describe('Beacon Routes', () => {
         publicKey: 'key1',
       },
     });
-    const res = await app.inject({ method: 'GET', url: '/beacons/trust' });
+    const res = await app.inject({ method: 'GET', url: '/api/beacons/trust' });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).length).toBe(1);
   });
@@ -167,7 +167,7 @@ describe('Beacon Routes', () => {
   it('GET /beacons/trust/:id returns trust status', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons/trust',
+      url: '/api/beacons/trust',
       payload: {
         id: 'b1',
         name: 'B1',
@@ -178,7 +178,7 @@ describe('Beacon Routes', () => {
     });
     const res = await app.inject({
       method: 'GET',
-      url: '/beacons/trust/b1',
+      url: '/api/beacons/trust/b1',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).status).toBe('approved');
@@ -187,7 +187,7 @@ describe('Beacon Routes', () => {
   it('GET /beacons/trust/:id returns 404 for missing trust', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: '/beacons/trust/nonexistent',
+      url: '/api/beacons/trust/nonexistent',
     });
     expect(res.statusCode).toBe(404);
   });
@@ -195,7 +195,7 @@ describe('Beacon Routes', () => {
   it('DELETE /beacons/trust/:id deletes trust', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons/trust',
+      url: '/api/beacons/trust',
       payload: {
         id: 'b1',
         name: 'B1',
@@ -206,7 +206,7 @@ describe('Beacon Routes', () => {
     });
     const res = await app.inject({
       method: 'DELETE',
-      url: '/beacons/trust/b1',
+      url: '/api/beacons/trust/b1',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).success).toBe(true);
@@ -215,7 +215,7 @@ describe('Beacon Routes', () => {
   it('DELETE /beacons/trust/:id returns 404 for missing trust', async () => {
     const res = await app.inject({
       method: 'DELETE',
-      url: '/beacons/trust/nonexistent',
+      url: '/api/beacons/trust/nonexistent',
     });
     expect(res.statusCode).toBe(404);
   });
@@ -225,7 +225,7 @@ describe('Beacon Routes', () => {
   it('POST /beacons/approve approves a pending beacon by token', async () => {
     const createRes = await app.inject({
       method: 'POST',
-      url: '/beacons/trust',
+      url: '/api/beacons/trust',
       payload: {
         id: 'b1',
         name: 'B1',
@@ -239,7 +239,7 @@ describe('Beacon Routes', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: '/beacons/approve',
+      url: '/api/beacons/approve',
       payload: { approvalToken },
     });
     expect(res.statusCode).toBe(200);
@@ -249,7 +249,7 @@ describe('Beacon Routes', () => {
   it('POST /beacons/approve returns 400 without approvalToken', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/beacons/approve',
+      url: '/api/beacons/approve',
       payload: {},
     });
     expect(res.statusCode).toBe(400);
@@ -258,7 +258,7 @@ describe('Beacon Routes', () => {
   it('POST /beacons/approve returns 404 for invalid token', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/beacons/approve',
+      url: '/api/beacons/approve',
       payload: { approvalToken: 'invalid-token' },
     });
     expect(res.statusCode).toBe(404);
@@ -267,7 +267,7 @@ describe('Beacon Routes', () => {
   it('POST /beacons/trust/:id/reject rejects a beacon', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons/trust',
+      url: '/api/beacons/trust',
       payload: {
         id: 'b1',
         name: 'B1',
@@ -278,7 +278,7 @@ describe('Beacon Routes', () => {
     });
     const res = await app.inject({
       method: 'POST',
-      url: '/beacons/trust/b1/reject',
+      url: '/api/beacons/trust/b1/reject',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).success).toBe(true);
@@ -287,7 +287,7 @@ describe('Beacon Routes', () => {
   it('POST /beacons/trust/:id/reject returns 404 for missing trust', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/beacons/trust/nonexistent/reject',
+      url: '/api/beacons/trust/nonexistent/reject',
     });
     expect(res.statusCode).toBe(404);
   });
@@ -297,12 +297,12 @@ describe('Beacon Routes', () => {
   it('POST /beacons/:id/sessions creates a session', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
     });
     const res = await app.inject({
       method: 'POST',
-      url: '/beacons/b1/sessions',
+      url: '/api/beacons/b1/sessions',
       payload: { id: 's1', agentId: 'agent-1' },
     });
     expect(res.statusCode).toBe(201);
@@ -312,7 +312,7 @@ describe('Beacon Routes', () => {
   it('POST /beacons/:id/sessions returns 404 for missing beacon', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/beacons/nonexistent/sessions',
+      url: '/api/beacons/nonexistent/sessions',
       payload: { id: 's1', agentId: 'agent-1' },
     });
     expect(res.statusCode).toBe(404);
@@ -321,17 +321,17 @@ describe('Beacon Routes', () => {
   it('GET /beacons/:id/sessions lists sessions', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
     });
     await app.inject({
       method: 'POST',
-      url: '/beacons/b1/sessions',
+      url: '/api/beacons/b1/sessions',
       payload: { id: 's1', agentId: 'agent-1' },
     });
     const res = await app.inject({
       method: 'GET',
-      url: '/beacons/b1/sessions',
+      url: '/api/beacons/b1/sessions',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).length).toBe(1);
@@ -340,7 +340,7 @@ describe('Beacon Routes', () => {
   it('GET /beacons/:id/sessions returns 404 for missing beacon', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: '/beacons/nonexistent/sessions',
+      url: '/api/beacons/nonexistent/sessions',
     });
     expect(res.statusCode).toBe(404);
   });
@@ -348,17 +348,17 @@ describe('Beacon Routes', () => {
   it('GET /beacons/:id/sessions/:agentId gets a session', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
     });
     await app.inject({
       method: 'POST',
-      url: '/beacons/b1/sessions',
+      url: '/api/beacons/b1/sessions',
       payload: { id: 's1', agentId: 'agent-1' },
     });
     const res = await app.inject({
       method: 'GET',
-      url: '/beacons/b1/sessions/agent-1',
+      url: '/api/beacons/b1/sessions/agent-1',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).id).toBe('s1');
@@ -367,12 +367,12 @@ describe('Beacon Routes', () => {
   it('GET /beacons/:id/sessions/:agentId returns 404 for missing session', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
     });
     const res = await app.inject({
       method: 'GET',
-      url: '/beacons/b1/sessions/nonexistent',
+      url: '/api/beacons/b1/sessions/nonexistent',
     });
     expect(res.statusCode).toBe(404);
   });
@@ -380,17 +380,17 @@ describe('Beacon Routes', () => {
   it('DELETE /beacons/:id/sessions/:agentId ends a session', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
     });
     await app.inject({
       method: 'POST',
-      url: '/beacons/b1/sessions',
+      url: '/api/beacons/b1/sessions',
       payload: { id: 's1', agentId: 'agent-1' },
     });
     const res = await app.inject({
       method: 'DELETE',
-      url: '/beacons/b1/sessions/agent-1',
+      url: '/api/beacons/b1/sessions/agent-1',
       payload: { disconnectedAt: 1000, durationMs: 5000 },
     });
     expect(res.statusCode).toBe(200);
@@ -402,12 +402,12 @@ describe('Beacon Routes', () => {
   it('DELETE /beacons/:id/sessions/:agentId returns 404 for missing session', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
     });
     const res = await app.inject({
       method: 'DELETE',
-      url: '/beacons/b1/sessions/nonexistent',
+      url: '/api/beacons/b1/sessions/nonexistent',
       payload: { disconnectedAt: 1000, durationMs: 5000 },
     });
     expect(res.statusCode).toBe(404);

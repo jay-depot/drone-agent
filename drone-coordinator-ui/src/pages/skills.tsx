@@ -30,7 +30,7 @@ export default function SkillsPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await authFetch('/skills');
+        const res = await authFetch('/api/skills');
         if (res.ok) {
           setSkills(await res.json());
         }
@@ -61,7 +61,7 @@ export default function SkillsPage() {
     if (!deleteTarget) return;
     setDeleteLoading(true);
     try {
-      const res = await authFetch(`/skills/${deleteTarget.id}`, {
+      const res = await authFetch(`/api/skills/${deleteTarget.id}`, {
         method: 'DELETE',
       });
       if (res.ok) {

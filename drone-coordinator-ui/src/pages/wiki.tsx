@@ -30,7 +30,7 @@ export default function WikiPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await authFetch('/wiki');
+        const res = await authFetch('/api/wiki');
         if (res.ok) {
           setPages(await res.json());
         }
@@ -50,7 +50,7 @@ export default function WikiPage() {
     async function searchWiki() {
       try {
         const res = await authFetch(
-          `/wiki/search?q=${encodeURIComponent(search)}`
+          `/api/wiki/search?q=${encodeURIComponent(search)}`
         );
         if (res.ok) {
           setPages(await res.json());
@@ -69,7 +69,7 @@ export default function WikiPage() {
     if (!deleteTarget) return;
     setDeleteLoading(true);
     try {
-      const res = await authFetch(`/wiki/${deleteTarget.id}`, {
+      const res = await authFetch(`/api/wiki/${deleteTarget.id}`, {
         method: 'DELETE',
       });
       if (res.ok) {

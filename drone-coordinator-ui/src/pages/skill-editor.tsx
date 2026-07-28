@@ -29,7 +29,7 @@ export default function SkillEditorPage() {
 
     async function fetchSkill() {
       try {
-        const res = await authFetch(`/skills/${id}`);
+        const res = await authFetch(`/api/skills/${id}`);
         if (res.ok) {
           const s: Skill = await res.json();
           setName(s.name);
@@ -96,7 +96,7 @@ export default function SkillEditorPage() {
       };
 
       if (isEdit) {
-        const res = await authFetch(`/skills/${id}`, {
+        const res = await authFetch(`/api/skills/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(bodyData),
@@ -108,7 +108,7 @@ export default function SkillEditorPage() {
           setError(data.error || 'Failed to update skill');
         }
       } else {
-        const res = await authFetch('/skills', {
+        const res = await authFetch('/api/skills', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(bodyData),

@@ -28,7 +28,7 @@ export default function SessionDetailPage() {
 
     async function fetchEvents() {
       try {
-        const res = await authFetch(`/sessions/${sessionId}/events`);
+        const res = await authFetch(`/api/sessions/${sessionId}/events`);
         if (res.ok) {
           const data = await res.json();
           setEvents(data);

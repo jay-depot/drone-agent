@@ -45,8 +45,8 @@ export default function TopologyPage() {
       setError(null);
       try {
         const [beaconsRes, agentsRes] = await Promise.all([
-          authFetch('/beacons'),
-          authFetch('/agents/location'),
+          authFetch('/api/beacons'),
+          authFetch('/api/agents/location'),
         ]);
         if (beaconsRes.ok) {
           setBeacons(await beaconsRes.json());
@@ -89,35 +89,35 @@ export default function TopologyPage() {
     setDialogLoading(true);
     try {
       if (dialogAction === 'approve') {
-        const res = await authFetch('/beacons/approve', {
+        const res = await authFetch('/api/beacons/approve', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ approvalToken }),
         });
         if (res.ok) {
           // Refresh beacon list
-          const beaconsRes = await authFetch('/beacons');
+          const beaconsRes = await authFetch('/api/beacons');
           if (beaconsRes.ok) {
             setBeacons(await beaconsRes.json());
           }
         }
       } else if (dialogAction === 'reject') {
         const res = await authFetch(
-          `/beacons/trust/${dialogBeacon.id}/reject`,
+          `/api/beacons/trust/${dialogBeacon.id}/reject`,
           { method: 'POST' }
         );
         if (res.ok) {
-          const beaconsRes = await authFetch('/beacons');
+          const beaconsRes = await authFetch('/api/beacons');
           if (beaconsRes.ok) {
             setBeacons(await beaconsRes.json());
           }
         }
       } else if (dialogAction === 'remove') {
-        const res = await authFetch(`/beacons/trust/${dialogBeacon.id}`, {
+        const res = await authFetch(`/api/beacons/trust/${dialogBeacon.id}`, {
           method: 'DELETE',
         });
         if (res.ok) {
-          const beaconsRes = await authFetch('/beacons');
+          const beaconsRes = await authFetch('/api/beacons');
           if (beaconsRes.ok) {
             setBeacons(await beaconsRes.json());
           }

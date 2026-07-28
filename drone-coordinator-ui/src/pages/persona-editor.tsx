@@ -28,7 +28,7 @@ export default function PersonaEditorPage() {
 
     async function fetchPersona() {
       try {
-        const res = await authFetch(`/personas/${id}`);
+        const res = await authFetch(`/api/personas/${id}`);
         if (res.ok) {
           const p: Persona = await res.json();
           setName(p.name);
@@ -93,7 +93,7 @@ export default function PersonaEditorPage() {
       };
 
       if (isEdit) {
-        const res = await authFetch(`/personas/${id}`, {
+        const res = await authFetch(`/api/personas/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
@@ -105,7 +105,7 @@ export default function PersonaEditorPage() {
           setError(data.error || 'Failed to update persona');
         }
       } else {
-        const res = await authFetch('/personas', {
+        const res = await authFetch('/api/personas', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),

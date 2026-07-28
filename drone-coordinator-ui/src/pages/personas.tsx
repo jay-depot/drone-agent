@@ -30,7 +30,7 @@ export default function PersonasPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await authFetch('/personas');
+        const res = await authFetch('/api/personas');
         if (res.ok) {
           setPersonas(await res.json());
         }
@@ -60,7 +60,7 @@ export default function PersonasPage() {
     if (!deleteTarget) return;
     setDeleteLoading(true);
     try {
-      const res = await authFetch(`/personas/${deleteTarget.id}`, {
+      const res = await authFetch(`/api/personas/${deleteTarget.id}`, {
         method: 'DELETE',
       });
       if (res.ok) {
