@@ -171,6 +171,20 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   >(new Map());
 
   // ── Conversation event listener ─────────────────────────────────────
+  // Store callbacks in refs to avoid re-subscribing on every render.
+  const logRef = useRef(log);
+  logRef.current = log;
+  const appendEntryRef = useRef(appendEntry);
+  appendEntryRef.current = appendEntry;
+  const addItemRef = useRef(addItem);
+  addItemRef.current = addItem;
+  const updateItemRef = useRef(updateItem);
+  updateItemRef.current = updateItem;
+  const commitItemRef = useRef(commitItem);
+  commitItemRef.current = commitItem;
+  const clearTailRef = useRef(clearTail);
+  clearTailRef.current = clearTail;
+
   // Uses the tail region to buffer all in-flight content as live components,
   // then commits them atomically when the content completes. The live
   // component is carried into the <Static> scrollback (as ChatEntry.node),
@@ -178,6 +192,21 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   useEffect(() => {
     const unregister = opts.engine.onConversationEvent?.(event => {
       const s = schemeRef.current;
+      const {
+        log: logFn,
+        appendEntry: appendFn,
+        addItem: addFn,
+        updateItem: updateFn,
+        commitItem: commitFn,
+        clearTail: clearFn,
+      } = {
+        log: logRef.current,
+        appendEntry: appendEntryRef.current,
+        addItem: addItemRef.current,
+        updateItem: updateItemRef.current,
+        commitItem: commitItemRef.current,
+        clearTail: clearTailRef.current,
+      };
 
       switch (event.kind) {
         case 'reasoning': {
@@ -185,7 +214,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           if (trimmed.length === 0) break;
           currentReasoningText.current = trimmed;
           if (!currentReasoningId.current) {
-            const id = addItem(
+            const id = addFn(
               'reasoning',
               <ReasoningBlock content={trimmed} scheme={s} />,
               () => ({
@@ -195,7 +224,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             );
             currentReasoningId.current = id;
           } else {
-            updateItem(
+            updateFn(
               currentReasoningId.current,
               <ReasoningBlock content={trimmed} scheme={s} />,
               () => ({
@@ -230,8 +259,8 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         }
         case 'reasoningComplete': {
           if (currentReasoningId.current) {
-            const entry = commitItem(currentReasoningId.current);
-            appendEntry(entry);
+            const entry = commitFn(currentReasoningId.current);
+            appendFn(entry);
             currentReasoningId.current = null;
             currentReasoningText.current = '';
           }
@@ -265,7 +294,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
               />
             );
 
-            const id = addItem('toolCall', component, () => ({
+            const id = addFn('toolCall', component, () => ({
               text: `→ ${tc.name}(${preview(JSON.stringify(tc.arguments), PREVIEW_MAX)})`,
               kind: 'toolCall',
             }));
@@ -319,7 +348,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
                 ? result.content
                 : preview(result.content, PREVIEW_MAX);
 
-              updateItem(id, component, () => ({
+              updateFn(id, component, () => ({
                 text: isError
                   ? `✗ ${result.name}: ${result.content}`
                   : `← ${result.name}: ${scrollbackText}`,
@@ -330,8 +359,8 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           // Commit all tool calls in order
           for (const id of ids) {
             try {
-              const entry = commitItem(id);
-              appendEntry(entry);
+              const entry = commitFn(id);
+              appendFn(entry);
             } catch {
               // Item may have been already committed; skip
             }
@@ -343,7 +372,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         case 'assistantMessage': {
           currentMessageText.current = event.content;
           if (!currentMessageId.current) {
-            const id = addItem(
+            const id = addFn(
               'assistantMessage',
               <AssistantMessageBlock
                 content={event.content}
@@ -358,7 +387,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             );
             currentMessageId.current = id;
           } else {
-            updateItem(
+            updateFn(
               currentMessageId.current,
               <AssistantMessageBlock
                 content={event.content}
@@ -376,8 +405,8 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         }
         case 'assistantMessageComplete': {
           if (currentMessageId.current) {
-            const entry = commitItem(currentMessageId.current);
-            appendEntry(entry);
+            const entry = commitFn(currentMessageId.current);
+            appendFn(entry);
             currentMessageId.current = null;
             currentMessageText.current = '';
           }
@@ -385,28 +414,20 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         }
         case 'error': {
           // Clear any in-flight tail items on error
-          clearTail();
+          clearFn();
           currentReasoningId.current = null;
           currentReasoningText.current = '';
           currentToolCallIds.current = [];
           toolProgressRef.current.clear();
           currentMessageId.current = null;
           currentMessageText.current = '';
-          log(`Error: ${event.message}`, 'error');
+          logFn(`Error: ${event.message}`, 'error');
           break;
         }
       }
     });
     return () => unregister?.();
-  }, [
-    opts.engine,
-    log,
-    appendEntry,
-    addItem,
-    updateItem,
-    commitItem,
-    clearTail,
-  ]);
+  }, [opts.engine]);
 
   // ── Slash command handlers ──────────────────────────────────────────
   const runSlashCommand = useCallback(
@@ -460,8 +481,46 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
     [opts, log, exit, setIsLlmActive]
   );
 
-  // ── Global keybindings ──────────────────────────────────────────────
-  useInput((input, key) => {
+  // ── Unified keybindings ──────────────────────────────────────────────
+  // Elicitation questions take priority; if none active, fall through to
+  // global bindings.
+  useInput((inputChar, key) => {
+    // ── Elicitation handling (highest priority) ────────────────────────
+    if (activeQuestion) {
+      if (key.ctrl && inputChar === 'c') {
+        cancelQuestion();
+        return;
+      }
+      if (activeQuestion.freeform) {
+        if (key.escape) {
+          cancelQuestion();
+        }
+        return;
+      }
+      const choices = activeQuestion.choices ?? [];
+      if (key.upArrow) {
+        setPickerIndex(prev => (prev - 1 + choices.length) % choices.length);
+        return;
+      }
+      if (key.downArrow) {
+        setPickerIndex(prev => (prev + 1) % choices.length);
+        return;
+      }
+      if (key.return) {
+        const choice = choices[pickerIndex];
+        if (choice) commitAnswer(choice.value);
+        return;
+      }
+      if (/^[1-9]$/.test(inputChar)) {
+        const idx = Number.parseInt(inputChar, 10) - 1;
+        if (idx >= 0 && idx < choices.length) {
+          commitAnswer(choices[idx].value);
+        }
+      }
+      return;
+    }
+
+    // ── Global keybindings (fall through) ─────────────────────────────
     if (key.escape) {
       if (isLlmActive) {
         opts.conversation.cancelCurrentRequest?.();
@@ -469,11 +528,11 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
       }
       return;
     }
-    if (key.ctrl && input === 'c') {
+    if (key.ctrl && inputChar === 'c') {
       exit();
       return;
     }
-    if (input === '?' && inputValueRef.current === '') {
+    if (inputChar === '?' && inputValueRef.current === '') {
       printHelp(opts, log);
     }
   });
@@ -527,41 +586,6 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   const statusLeft = ` model:${model} │ plugins:${pluginCount} │ tools:${availableTools}/${totalTools} │ ctx:${
     ctxPct ?? '?'
   }%${personaLabel} `;
-
-  // ── Elicitation useInput ──────────────────────────────────────────
-  useInput((inputChar, key) => {
-    if (!activeQuestion) return;
-    if (key.ctrl && inputChar === 'c') {
-      cancelQuestion();
-      return;
-    }
-    if (activeQuestion.freeform) {
-      if (key.escape) {
-        cancelQuestion();
-      }
-      return;
-    }
-    const choices = activeQuestion.choices ?? [];
-    if (key.upArrow) {
-      setPickerIndex(prev => (prev - 1 + choices.length) % choices.length);
-      return;
-    }
-    if (key.downArrow) {
-      setPickerIndex(prev => (prev + 1) % choices.length);
-      return;
-    }
-    if (key.return) {
-      const choice = choices[pickerIndex];
-      if (choice) commitAnswer(choice.value);
-      return;
-    }
-    if (/^[1-9]$/.test(inputChar)) {
-      const idx = Number.parseInt(inputChar, 10) - 1;
-      if (idx >= 0 && idx < choices.length) {
-        commitAnswer(choices[idx].value);
-      }
-    }
-  });
 
   // ── LLM working indicator: compute current frame and color ────────
   const llmColor = isLlmActive ? scheme.border : 'gray';

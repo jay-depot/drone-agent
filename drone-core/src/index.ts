@@ -68,7 +68,6 @@ export type {
   DroneConfigScope,
   DroneConfigLayer,
   DroneResolvedConfig,
-  DroneSessionPhase,
 } from './config-types.js';
 
 export {
@@ -86,7 +85,6 @@ export type {
   DroneChatMessage,
   DroneSessionMessage,
   DroneSessionTurn,
-  DroneSessionState,
   DroneToolCall,
   DroneToolDescriptor,
   DroneChatResponse,
@@ -196,8 +194,6 @@ export type {
   DroneWorkflow,
   DroneSlashCommandContext,
   DroneSlashCommand,
-  DroneMacroStep,
-  DroneMacroDefinition,
 } from './plugin-system.js';
 
 // ── Utils ───────────────────────────────────────────────────────────
@@ -212,6 +208,13 @@ export {
 // ── ToolMountingCache ────────────────────────────────────────────────
 
 export { ToolMountingCache } from './tool-mounting-cache.js';
+// ── Sorted Registry ─────────────────────────────────────────────────
+
+export {
+  insertSortedByPrecedence,
+  removeById,
+  insertWriterSorted,
+} from './sorted-registry.js';
 
 // ── Token estimation ─────────────────────────────────────────────────
 

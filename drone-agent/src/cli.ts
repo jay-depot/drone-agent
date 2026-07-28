@@ -73,6 +73,19 @@ export type MigrateCliOptions = {
 };
 
 /**
+ * Create a default CliOptions object with all flags set to their defaults.
+ */
+function createDefaultCliOptions(): CliOptions {
+  return {
+    once: false,
+    outputPlain: false,
+    outputJson: false,
+    pluginOverrides: [],
+    debugSubsystems: [],
+  };
+}
+
+/**
  * Parse command-line arguments into a structured CliInvocation.
  */
 export function parseCliArgs(argv: string[]): CliInvocation {
@@ -81,13 +94,7 @@ export function parseCliArgs(argv: string[]): CliInvocation {
     return parseMigrateSubcommand(argv.slice(1));
   }
 
-  const options: CliOptions = {
-    once: false,
-    outputPlain: false,
-    outputJson: false,
-    pluginOverrides: [],
-    debugSubsystems: [],
-  };
+  const options: CliOptions = createDefaultCliOptions();
 
   const positionalArgs: string[] = [];
 
@@ -218,13 +225,7 @@ export function parseCliArgs(argv: string[]): CliInvocation {
  */
 function parseMigrateSubcommand(args: string[]): CliInvocation {
   const migrateOptions: MigrateCliOptions = {};
-  const options: CliOptions = {
-    once: false,
-    outputPlain: false,
-    outputJson: false,
-    pluginOverrides: [],
-    debugSubsystems: [],
-  };
+  const options: CliOptions = createDefaultCliOptions();
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];

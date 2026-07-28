@@ -26,6 +26,7 @@ export function makePlainOutputEventHandler() {
   return (event: {
     kind: string;
     content?: string;
+    arguments?: Record<string, unknown>;
     name?: string;
     message?: string;
     toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>;
@@ -40,7 +41,7 @@ export function makePlainOutputEventHandler() {
         break;
       case 'toolCall':
         output.write(
-          `\x1b[33m⚡ ${event.name}(${JSON.stringify(event.content ?? {})})\x1b[0m\n`
+          `\x1b[33m⚡ ${event.name}(${JSON.stringify(event.arguments ?? {})})\x1b[0m\n`
         );
         break;
       case 'toolCallBatch':
@@ -78,25 +79,11 @@ export function makePlainOutputEventHandler() {
 }
 
 /**
- * Builds a JSON event handler for `sendUserMessage` that collects all events
- * into an array for structured output.
+ * Write an NDJSON event directly to stdout (for use outside of
+ * conversation.sendUserMessage, e.g., subagent.return).
  */
-export function makeJsonOutputEventHandler() {
-  const events: Array<{
-    kind: string;
-    content?: string;
-    name?: string;
-    message?: string;
-  }> = [];
-  const handler = (event: {
-    kind: string;
-    content?: string;
-    name?: string;
-    message?: string;
-  }): void => {
-    events.push(event);
-  };
-  return { handler, getEvents: () => events };
+export function writeNdjsonEvent(event: OutputEvent): void {
+  output.write(JSON.stringify(event) + '\n');
 }
 
 /**
@@ -113,12 +100,4 @@ export function makeNdjsonOutputEventHandler() {
   return (event: OutputEvent): void => {
     output.write(JSON.stringify(event) + '\n');
   };
-}
-
-/**
- * Write an NDJSON event directly to stdout (for use outside of
- * conversation.sendUserMessage, e.g., subagent.return).
- */
-export function writeNdjsonEvent(event: OutputEvent): void {
-  output.write(JSON.stringify(event) + '\n');
 }

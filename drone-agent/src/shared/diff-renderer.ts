@@ -26,13 +26,6 @@ const ANSI = {
 /** Fuzz level for a matched hunk */
 export type FuzzLevel = 0 | 1 | 100 | 200;
 
-/** Hunk input structure matching file.apply_diff input (V1 — line-number-based) */
-export interface DiffHunk {
-  startLine: number;
-  oldLines: string[];
-  newLines: string[];
-}
-
 /** Hunk input for the V2 apply_diff (content-anchor-based) */
 export interface DiffHunkV2 {
   /** Content anchor line(s) — code that uniquely identifies the location */
@@ -70,74 +63,6 @@ export interface DiffResult {
   plain: string;
   /** ANSI-colored diff (for terminal display) */
   colored: string;
-}
-
-/**
- * Renders a single V1 hunk into unified diff format.
- * Returns both plain and colored versions.
- */
-function renderHunk(
-  hunk: DiffHunk,
-  options: { useColor: boolean }
-): { plain: string; colored: string } {
-  const { useColor } = options;
-
-  // Calculate hunk header (unified diff format)
-  const oldCount = hunk.oldLines.length;
-  const newCount = hunk.newLines.length;
-  const header = `@@ -${hunk.startLine},${oldCount} +${hunk.startLine},${newCount} @@`;
-
-  const plainLines: string[] = [];
-  const coloredLines: string[] = [];
-
-  // Add header
-  if (useColor) {
-    coloredLines.push(`${ANSI.cyan}${header}${ANSI.reset}`);
-  } else {
-    plainLines.push(header);
-    coloredLines.push(header);
-  }
-
-  // Process lines: deletions first, then insertions, then context
-  // We interleave them to show the diff properly
-  const maxLen = Math.max(hunk.oldLines.length, hunk.newLines.length);
-
-  for (let i = 0; i < maxLen; i++) {
-    const oldLine = hunk.oldLines[i];
-    const newLine = hunk.newLines[i];
-
-    if (oldLine !== undefined && newLine === undefined) {
-      // Deletion
-      const prefix = '-';
-      plainLines.push(`${prefix}${oldLine}`);
-      coloredLines.push(`${ANSI.red}${prefix}${oldLine}${ANSI.reset}`);
-    } else if (oldLine === undefined && newLine !== undefined) {
-      // Insertion
-      const prefix = '+';
-      plainLines.push(`${prefix}${newLine}`);
-      coloredLines.push(`${ANSI.green}${prefix}${newLine}${ANSI.reset}`);
-    } else if (oldLine !== undefined && newLine !== undefined) {
-      // Context (unchanged) - show both old and new if they differ
-      if (oldLine === newLine) {
-        const prefix = ' ';
-        plainLines.push(`${prefix}${oldLine}`);
-        coloredLines.push(`${prefix}${oldLine}`);
-      } else {
-        // Modified line: show as deletion then insertion
-        const delPrefix = '-';
-        const addPrefix = '+';
-        plainLines.push(`${delPrefix}${oldLine}`);
-        plainLines.push(`${addPrefix}${newLine}`);
-        coloredLines.push(`${ANSI.red}${delPrefix}${oldLine}${ANSI.reset}`);
-        coloredLines.push(`${ANSI.green}${addPrefix}${newLine}${ANSI.reset}`);
-      }
-    }
-  }
-
-  return {
-    plain: plainLines.join('\n'),
-    colored: coloredLines.join('\n'),
-  };
 }
 
 /**
@@ -230,63 +155,6 @@ function renderHunkV2(
 }
 
 /**
- * Renders a complete diff from an array of V1 hunks.
- *
- * @param filePath - Absolute path to the file that was modified
- * @param hunks - Array of hunks to render
- * @param useColor - Whether to include ANSI color codes (default: true)
- */
-export function renderDiff(
-  filePath: string,
-  hunks: DiffHunk[],
-  useColor: boolean = true
-): DiffResult {
-  if (hunks.length === 0) {
-    return {
-      summary: { hunks: 0, additions: 0, deletions: 0 },
-      plain: '',
-      colored: '',
-    };
-  }
-
-  // Calculate summary
-  let additions = 0;
-  let deletions = 0;
-
-  for (const hunk of hunks) {
-    deletions += hunk.oldLines.length;
-    additions += hunk.newLines.length;
-  }
-
-  const summary: DiffSummary = {
-    hunks: hunks.length,
-    additions,
-    deletions,
-  };
-
-  // Render each hunk
-  const plainParts: string[] = [];
-  const coloredParts: string[] = [];
-
-  for (const hunk of hunks) {
-    const { plain, colored } = renderHunk(hunk, { useColor });
-    plainParts.push(plain);
-    coloredParts.push(colored);
-  }
-
-  // Build file header
-  const fileHeader = `--- ${filePath}\n+++ ${filePath}`;
-
-  return {
-    summary,
-    plain: fileHeader + '\n' + plainParts.join('\n'),
-    colored: useColor
-      ? `${ANSI.yellow}${fileHeader}${ANSI.reset}\n${coloredParts.join('\n')}`
-      : fileHeader + '\n' + plainParts.join('\n'),
-  };
-}
-
-/**
  * Count actual additions/deletions in a V2 hunk, excluding interleaved
  * context lines (which appear in both oldLines and newLines).
  */
@@ -367,71 +235,4 @@ export function renderDiffV2(
       ? `${ANSI.yellow}${fileHeader}${ANSI.reset}\n${coloredParts.join('\n')}`
       : fileHeader + '\n' + plainParts.join('\n'),
   };
-}
-
-/**
- * Strips ANSI color codes from a string.
- * Useful for outputting plain text when color is not supported.
- */
-export function stripAnsi(text: string): string {
-  // eslint-disable-next-line no-control-regex
-  return text.replace(/\x1b\[[0-9;]*m/g, '');
-}
-
-/**
- * Checks if the current environment supports color output.
- * Checks for common environment variables that indicate color support.
- */
-export function supportsColor(): boolean {
-  // Check common environment variables
-  const term = process.env.TERM?.toLowerCase() ?? '';
-  const noColor = process.env.NO_COLOR;
-  const forceColor = process.env.FORCE_COLOR;
-
-  // Explicitly disabled
-  if (noColor !== undefined && noColor !== '') {
-    return false;
-  }
-
-  // Explicitly enabled
-  if (forceColor !== undefined && forceColor !== '') {
-    return true;
-  }
-
-  // Terminal type suggests color support (common terminals known to support color)
-  const knownTerminals = [
-    'xterm',
-    'screen',
-    'tmux',
-    'vt100',
-    'vt220',
-    'rxvt',
-    'ansi',
-    'cygwin',
-    'linux',
-    'alacritty',
-    'kitty',
-    'wezterm',
-    'ios',
-  ];
-  if (
-    term.includes('color') ||
-    term.includes('256') ||
-    term === 'xterm' ||
-    knownTerminals.some(t => term.includes(t))
-  ) {
-    return true;
-  }
-
-  // Check if stdout is a TTY (not perfect but common check)
-  if (process.stdout.isTTY === true) {
-    return true;
-  }
-
-  // CI environments often support color
-  if (process.env.CI !== undefined) {
-    return true;
-  }
-
-  return false;
 }

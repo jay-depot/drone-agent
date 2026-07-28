@@ -1,4 +1,4 @@
-import type { DroneMacroDefinition, DroneMacroStep } from 'drone-core';
+import type { DroneMacroDefinition, DroneMacroStep } from './types.js';
 
 /**
  * Regex to match positional argument placeholders in a macro line.

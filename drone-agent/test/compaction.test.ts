@@ -589,7 +589,7 @@ describe('createCompactionPlugin', () => {
     );
   });
 
-  it('catches errors from buildSystemMessages and does not reject', async () => {
+  it('catches errors from summarization and does not reject', async () => {
     const sessionManager = createSessionManager();
     for (let i = 0; i < 5; i++) {
       sessionManager.appendUserMessage(`u${i} `.repeat(400));
@@ -604,20 +604,15 @@ describe('createCompactionPlugin', () => {
     });
 
     const plugin = createCompactionPlugin({
-      budgetService: {
-        buildSystemMessages: async () => {
-          throw new Error('Prompt fragment renderer failed.');
-        },
-      } as unknown as ContextBudgetService,
+      budgetService: {} as unknown as ContextBudgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => makeProvider({ contextWindow: 1000 }),
     });
-
     const capture = await captureRegistration(plugin, config);
     await runBeforePrompt(capture);
     expect(capture.logger.warn).toHaveBeenCalledWith(
-      expect.stringMatching(/compaction: error during evaluation/)
+      expect.stringMatching(/compaction: summary failed/)
     );
   });
   it('fires compaction via onAfterToolCall when tool results push usage over threshold', async () => {

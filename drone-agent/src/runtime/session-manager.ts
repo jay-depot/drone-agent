@@ -1,7 +1,6 @@
 import type {
   DroneImageContent,
   DroneSessionMessage,
-  DroneSessionState,
   DroneSessionTurn,
   DroneToolCall,
 } from 'drone-core';
@@ -30,7 +29,6 @@ export type DroneSessionManager = {
     opts?: { kind?: 'summary' }
   ) => DroneSessionTurn;
   clearSession: () => void;
-  getState: () => DroneSessionState;
 };
 
 export function createSessionManager(): DroneSessionManager {
@@ -157,13 +155,5 @@ export function createSessionManager(): DroneSessionManager {
     clearSession: () => {
       turns.length = 0;
     },
-    getState: () => ({
-      messages: flattenMessages(),
-      turns: turns.map(turn => ({
-        id: turn.id,
-        messages: [...turn.messages],
-        kind: turn.kind,
-      })),
-    }),
   };
 }

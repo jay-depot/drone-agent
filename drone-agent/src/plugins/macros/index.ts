@@ -1,8 +1,5 @@
-import type {
-  DroneMacroDefinition,
-  DronePlugin,
-  DroneSlashCommandContext,
-} from 'drone-core';
+import type { DronePlugin, DroneSlashCommandContext } from 'drone-core';
+import type { DroneMacroDefinition } from './types.js';
 import { loadMacros } from './loader.js';
 import { substituteMacroArgs } from './parser.js';
 
@@ -15,205 +12,194 @@ export const macrosPlugin: DronePlugin = {
   metadata: {
     id: 'macros',
     name: 'Macros',
-    version: '0.1.0',
-    description:
-      'Custom slash commands defined in .macro files. Off by default.',
-    defaultEnabled: false,
+    version: '1.0.0',
+    description: 'Custom slash commands from .macro files',
+    defaultEnabled: true,
   },
   register: async registration => {
+    const {
+      logger,
+      getConfig,
+      registerSlashCommand,
+      offer,
+      requestElicitation,
+    } = registration;
+    const config = getConfig();
     const projectDir = process.cwd();
+
     let macros = new Map<string, DroneMacroDefinition>();
 
-    // Track which macro command names we've registered so we can detect
-    // conflicts with other plugins' slash commands.
-    const registeredCommands = new Set<string>();
+    async function reloadMacros(): Promise<void> {
+      macros = await loadMacros(projectDir, logger);
+    }
 
-    async function reloadAndRegister(): Promise<void> {
-      macros = await loadMacros(projectDir, registration.logger);
+    await reloadMacros();
 
-      if (macros.size === 0) {
-        registration.logger.info('no .macro files found');
-        return;
+    function formatMacroUsage(macro: DroneMacroDefinition): string {
+      let usage = `/${macro.command}`;
+      for (const spec of macro.argSpec) {
+        usage += spec.required
+          ? ` <$${spec.position}>`
+          : ` [$${spec.position}?]`;
       }
+      if (macro.hasCatchAll) {
+        usage += macro.catchAllOptional ? ' [$$...]' : ' <$$...>';
+      }
+      return usage;
+    }
 
-      registration.logger.info(
-        `loaded ${macros.size} macro(s): ${Array.from(macros.keys()).join(', ')}`
-      );
+    function formatMacroHelp(macro: DroneMacroDefinition): string {
+      const usage = formatMacroUsage(macro);
+      return `  ${usage.padEnd(40)}${macro.description}`;
+    }
 
+    // Register a slash command for each loaded macro.
+    function registerMacroCommands(): void {
       for (const [command, macro] of macros) {
-        // Check for duplicate registration within the macros plugin.
-        if (registeredCommands.has(command)) {
-          registration.logger.warn(
-            `Duplicate macro command ${command} (from ${macro.filePath}) — skipping.`
-          );
-          continue;
-        }
-
-        registeredCommands.add(command);
-
-        registration.registerSlashCommand({
+        registerSlashCommand({
           command,
-          description: macro.description || `Custom macro (${macro.filePath})`,
+          description: macro.description,
           handler: async (ctx: DroneSlashCommandContext) => {
-            await executeMacro(macro, ctx);
+            const { args, logger: ctxLogger } = ctx;
+            try {
+              // Process each step in order.
+              for (const step of macro.steps) {
+                if (step.kind === 'slashCommand') {
+                  const substituted = substituteMacroArgs(
+                    step.line,
+                    args,
+                    macro
+                  );
+                  // Dispatch the substituted slash command through the engine.
+                  if (ctx.engine.dispatchSlashCommand) {
+                    const handled = await ctx.engine.dispatchSlashCommand(
+                      substituted,
+                      {
+                        logger: ctx.logger,
+                        engine: ctx.engine,
+                        conversation: ctx.conversation,
+                        sessionManager: ctx.sessionManager,
+                        exit: ctx.exit,
+                        printHelp: ctx.printHelp,
+                      }
+                    );
+                    if (!handled) {
+                      ctxLogger.warn(`Macro step not handled: ${substituted}`);
+                    }
+                  } else {
+                    ctxLogger.warn(
+                      'Macro engine does not support dispatchSlashCommand'
+                    );
+                  }
+                } else {
+                  // Chat prompt: send to conversation.
+                  const substituted = substituteMacroArgs(
+                    step.text,
+                    args,
+                    macro
+                  );
+                  ctxLogger.info(substituted);
+                  if (ctx.conversation?.enqueueUserMessage) {
+                    ctx.conversation.enqueueUserMessage(substituted);
+                  } else {
+                    ctxLogger.warn(
+                      'Macro cannot send chat prompt: no conversation service available'
+                    );
+                  }
+                }
+              }
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              const usage = formatMacroUsage(macro);
+              ctxLogger.warn(`Macro "${command}" error: ${message}\nUsage: ${usage}`);
+            }
             return true;
           },
         });
       }
     }
 
-    /**
-     * Build a usage hint string for a macro, showing its command and expected arguments.
-     */
-    function formatMacroUsage(macro: DroneMacroDefinition): string {
-      const parts: string[] = [macro.command];
-      for (const arg of macro.argSpec) {
-        if (arg.required) {
-          parts.push(`<arg${arg.position}>`);
-        } else {
-          parts.push(`[arg${arg.position}]`);
-        }
-      }
-      if (macro.hasCatchAll) {
-        if (macro.catchAllOptional) {
-          parts.push('[args...]');
-        } else {
-          parts.push('<args...>');
-        }
-      }
-      return parts.join(' ');
-    }
+    registerMacroCommands();
 
-    async function executeMacro(
-      macro: DroneMacroDefinition,
-      ctx: DroneSlashCommandContext
-    ): Promise<void> {
-      for (const step of macro.steps) {
-        try {
-          if (step.kind === 'slashCommand') {
-            const substituted = substituteMacroArgs(step.line, ctx.args, macro);
-            const handled = await ctx.engine.dispatchSlashCommand?.(
-              substituted,
-              ctx
-            );
-            if (!handled) {
-              ctx.logger.warn(`Macro step not handled: ${substituted}`);
-            }
-          } else {
-            // chatPrompt step
-            const substituted = substituteMacroArgs(step.text, ctx.args, macro);
-            ctx.logger.info(substituted);
-            if (ctx.conversation) {
-              await ctx.engine.runHooks?.('onBeforePrompt');
-              const reply = await ctx.conversation.sendUserMessage(substituted);
-              if (reply.length > 0) {
-                ctx.logger.info(reply);
-              }
-              await ctx.engine.runHooks?.('onAfterToolCall');
-            } else {
-              // Fallback: append as user message if no conversation available.
-              ctx.sessionManager?.appendUserMessage(substituted);
-            }
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          const usage = formatMacroUsage(macro);
-          ctx.logger.warn(
-            `Macro "${macro.command}" failed: ${message}\n` +
-              `Usage: ${usage}\n` +
-              `Description: ${macro.description || '(no description)'}`
-          );
-          // Stop executing further steps for this macro invocation.
-          return;
-        }
-      }
-    }
-
-    // Capability offered to other plugins (and the /macro slash command).
+    // Offer the macros capability so other plugins can list/reload macros.
     const capability: MacrosCapability = {
-      getMacros: () => Array.from(macros.values()),
-      reloadMacros: async () => {
-        await reloadAndRegister();
-        registration.logger.info('macros reloaded');
-      },
+      getMacros: () => [...macros.values()],
+      reloadMacros,
     };
+    offer<MacrosCapability>(capability);
 
-    registration.offer(capability);
+    // Register help for all loaded macros.
+    registration.registerHelp('/macro list           List available macros');
+    registration.registerHelp('/macro show <name>    Show a macro definition');
+    registration.registerHelp('/macro reload         Reload .macro files from disk');
 
-    // -----------------------------------------------------------------------
-    // onPluginsLoaded — load macros and register slash commands
-    // -----------------------------------------------------------------------
-    registration.hooks.onPluginsLoaded(async () => {
-      await reloadAndRegister();
-    });
-
-    // -----------------------------------------------------------------------
-    // /macro slash command — list, reload, show
-    // -----------------------------------------------------------------------
-    registration.registerSlashCommand({
+    // Register the /macro management slash command.
+    registerSlashCommand({
       command: '/macro',
-      description: 'Manage macros: list, reload, show.',
+      description: 'Manage macros: list, show, reload.',
       handler: async ctx => {
         const subcommand = ctx.args[0] ?? '';
-
         if (subcommand === 'list') {
-          const all = Array.from(macros.values());
+          const all = [...macros.values()];
           if (all.length === 0) {
             ctx.logger.info('No macros loaded.');
-            return true;
+          } else {
+            ctx.logger.info(
+              `Loaded macros:\n${all.map(m => formatMacroHelp(m)).join('\n')}`
+            );
           }
-          const lines = all.map(
-            m =>
-              `  ${m.command} — ${m.description || '(no description)'} (${m.steps.length} step(s))`
-          );
-          ctx.logger.info(`Macros:\n${lines.join('\n')}`);
           return true;
         }
-
         if (subcommand === 'reload') {
-          await reloadAndRegister();
+          await reloadMacros();
           ctx.logger.info(`Reloaded ${macros.size} macro(s).`);
           return true;
         }
-
         if (subcommand === 'show') {
           const name = ctx.args.slice(1).join(' ');
           if (!name) {
-            ctx.logger.warn('Usage: /macro show <command>');
+            ctx.logger.warn('Usage: /macro show <name>');
             return true;
           }
-          const macro = macros.get(name.startsWith('/') ? name : '/' + name);
+          const macro = macros.get('/' + name);
           if (!macro) {
             ctx.logger.warn(`Unknown macro: ${name}`);
             return true;
           }
-          const lines = [
-            `Macro: ${macro.command}`,
-            `  Description: ${macro.description || '(none)'}`,
-            `  File: ${macro.filePath}`,
-            `  Steps:`,
-          ];
-          for (const step of macro.steps) {
-            if (step.kind === 'slashCommand') {
-              lines.push(`    / ${step.line}`);
-            } else {
-              lines.push(`    > ${step.text}`);
-            }
-          }
-          ctx.logger.info(lines.join('\n'));
+          ctx.logger.info(
+            `Macro: ${macro.command}\nDescription: ${macro.description}\nSteps: ${macro.steps.length}`
+          );
           return true;
         }
-
         ctx.logger.warn(
-          'Unknown /macro command. Try: /macro list, /macro reload, /macro show <command>'
+          'Unknown macro command. Try: /macro list, /macro show <name>, /macro reload'
         );
         return true;
       },
     });
 
-    // Help snippets.
-    registration.registerHelp('/macro list          List loaded macros');
-    registration.registerHelp('/macro reload        Re-scan macro directories');
-    registration.registerHelp('/macro show <name>   Show macro definition');
+    // Register a workflow to reload macros.
+    registration.registerHelp(
+      `\n  Macros:\n${[...macros.values()]
+        .map(m => formatMacroHelp(m))
+        .join('\n')}`
+    );
+
+    // Register a workflow to reload macros.
+    registration.registerWorkflow({
+      name: 'reload',
+      description: 'Reload all .macro files from disk',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
+      run: async () => {
+        await reloadMacros();
+        return {
+          toolResult: JSON.stringify({ reloaded: true, count: macros.size }),
+        };
+      },
+    });
   },
 };

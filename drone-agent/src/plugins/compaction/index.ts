@@ -8,7 +8,6 @@ import {
   type DronePlugin,
   type DroneSessionTurn,
 } from 'drone-core';
-import type { ContextBudgetService } from '../../runtime/context-budget-service.js';
 import type { DroneSessionManager } from '../../runtime/session-manager.js';
 
 type RegistrationContext = {
@@ -254,14 +253,12 @@ async function maybeCompact(input: {
 
 async function runCompaction(
   context: RegistrationContext,
-  budgetService: ContextBudgetService,
   systemPrompt: string
 ): Promise<void> {
-  const systemMessages = await budgetService.buildSystemMessages();
   const baseSystemMessages: DroneChatMessage[] = [
     { role: 'system', content: systemPrompt },
   ];
-  const fragmentMessages = systemMessages.slice(1); // Everything after the base system prompt
+  const fragmentMessages: DroneChatMessage[] = [];
   await maybeCompact({
     context,
     baseSystemMessages,
@@ -274,25 +271,16 @@ export type CompactionCapability = {
 };
 
 export type CompactionPluginDeps = {
-  /**
-   * The context budget service, used to build system messages and resolve
-   * context-window info. The compaction plugin uses this to get the data
-   * it needs for its own summarization decisions, without reaching into
-   * the plugin engine directly.
-   */
-  budgetService: ContextBudgetService;
   sessionManager: DroneSessionManager;
   getModel: () => string;
   getProvider: () => DroneLlmProvider;
 };
-
 export function createCompactionPlugin(
   deps: CompactionPluginDeps
 ): DronePlugin {
   const sessionManager = deps.sessionManager;
   const getModel = deps.getModel;
   const getProvider = deps.getProvider;
-  const budgetService = deps.budgetService;
 
   return {
     metadata: {
@@ -329,11 +317,7 @@ export function createCompactionPlugin(
         context.compactionInFlight.value = true;
 
         try {
-          await runCompaction(
-            context,
-            budgetService,
-            registration.getConfig().systemPrompt
-          );
+          await runCompaction(context, registration.getConfig().systemPrompt);
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
@@ -355,11 +339,7 @@ export function createCompactionPlugin(
           }
           context.compactionInFlight.value = true;
           try {
-            await runCompaction(
-              context,
-              budgetService,
-              registration.getConfig().systemPrompt
-            );
+            await runCompaction(context, registration.getConfig().systemPrompt);
           } finally {
             context.compactionInFlight.value = false;
           }

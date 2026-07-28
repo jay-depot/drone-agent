@@ -49,7 +49,7 @@ export function useTailRegion(): {
       toEntry: () => Omit<ChatEntry, 'id'>
     ): string => {
       idCounter.current += 1;
-      const id = `tail-${Date.now()}-${idCounter.current}`;
+      const id = `tail-${idCounter.current}`;
       const item: TailItem = { id, kind, component, toEntry };
       itemsRef.current.set(id, item);
       setItems(prev => [...prev, item]);
