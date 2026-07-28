@@ -125,6 +125,20 @@ export function listSwarmSessions(options?: {
   }));
 }
 
+export function countSwarmSessions(options?: { status?: string }): number {
+  let query = 'SELECT COUNT(*) as count FROM swarm_sessions WHERE 1=1';
+  const params: unknown[] = [];
+
+  if (options?.status) {
+    query += ' AND status = ?';
+    params.push(options.status);
+  }
+
+  const stmt = getDatabase().prepare(query);
+  const row = stmt.get(...params) as { count: number };
+  return row.count;
+}
+
 export function updateSwarmSessionStatus(
   id: string,
   status: string
@@ -163,6 +177,22 @@ export function transitionSessionStatus(
   stmt.run({ id, status: toStatus, updatedAt: now });
 
   return { ...session, status: toStatus, updatedAt: now };
+}
+
+export function updateSwarmSessionPersona(
+  id: string,
+  personaId: string | null
+): SwarmSession | undefined {
+  const existing = getSwarmSession(id);
+  if (!existing) return undefined;
+
+  const now = Date.now();
+  const stmt = getDatabase().prepare(`
+    UPDATE swarm_sessions SET persona_id = @personaId, updatedAt = @updatedAt WHERE id = @id
+  `);
+  stmt.run({ id, personaId, updatedAt: now });
+
+  return { ...existing, personaId, updatedAt: now };
 }
 
 export function getStaleSessions(thresholdMs: number): SwarmSession[] {

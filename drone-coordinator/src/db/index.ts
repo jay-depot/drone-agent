@@ -54,10 +54,12 @@ export {
 export {
   createSwarmSession,
   getSwarmSession,
+  countSwarmSessions,
   listSwarmSessions,
   updateSwarmSessionStatus,
   transitionSessionStatus,
   getStaleSessions,
+  updateSwarmSessionPersona,
   createSwarmEvent,
   getSwarmEvents,
   getLatestSwarmEvents,

@@ -54,5 +54,37 @@
   {
     "timestamp": "2026-07-22T01:07:27.030Z",
     "insight": "When using file__apply_diff on multiple files in a session, some patches may silently fail to apply (e.g., when the file content has changed since the patch was generated). Always verify patches were applied by checking git diff or running typecheck after each batch of changes. In this session, several core type patches were lost and had to be re-applied manually."
+  },
+  {
+    "timestamp": "2026-07-28T17:07:27.429Z",
+    "insight": "Coordinator UI has a dual-session-table problem: `beacon_sessions` tracks per-beacon agent connections (with disconnected_at), while `swarm_sessions` tracks the overall session lifecycle (with status field). The terminate flow only touched beacon_sessions, leaving swarm_sessions stuck on 'active'. The fix adds a POST /sessions/:id/end endpoint that updates swarm_sessions, and the UI calls it after the beacon DELETE regardless of whether the beacon session was already ended."
+  },
+  {
+    "timestamp": "2026-07-28T17:24:22.835Z",
+    "insight": "The coordinator has two separate session tables (beacon_sessions and swarm_sessions) that can get out of sync. The terminate flow only updated beacon_sessions, leaving swarm_sessions stuck on 'active'. The fix adds a POST /sessions/:id/end endpoint that directly updates swarm_sessions, and the UI calls it after the beacon DELETE regardless of whether the beacon session was already ended. This pattern should be kept in mind for future session lifecycle work."
+  },
+  {
+    "timestamp": "2026-07-28T17:43:27.691Z",
+    "insight": "The /api prefix migration touched more files than initially scoped. The drone-gateway package also has a CoordinatorClient class that calls coordinator API routes directly, and its tests needed updating too. When doing cross-package API path changes, always search for all consumers of the API across the entire monorepo, not just the obvious ones (coordinator + UI + beacon)."
+  },
+  {
+    "timestamp": "2026-07-28T19:11:07.841Z",
+    "insight": "Coordinator UI active persona bug fix: The root cause was that the swarm plugin registers the agent session with the beacon at `onPluginsLoaded` (with `personaId: null`), but the persona plugin activates the persona at `onSessionStart` (which fires later). The fix adds a complete pipeline: (1) a PATCH endpoint on the coordinator for updating session persona, (2) a PATCH endpoint on the beacon for updating agent persona, (3) a coordinator client method on the beacon, (4) a hook function in the swarm plugin, and (5) a subscription to persona changes in the swarm plugin's index. Also added `activePersona` to event metadata for audit trail."
+  },
+  {
+    "timestamp": "2026-07-28T19:52:42.717Z",
+    "insight": "The mid-panel widget system in tui/app.tsx uses a hardcoded list of known plugin IDs and a useRef that doesn't trigger re-renders. This should be rearchitected to support dynamic registration from any plugin (including external/user plugins) with custom React components. Punted to roadmap — needs its own planning session."
+  },
+  {
+    "timestamp": "2026-07-28T20:47:19.039Z",
+    "insight": "When removing a dependency from a plugin's deps type (like budgetService from CompactionPluginDeps), the test file must also be updated. The initial code-quality-cleanup commit missed updating compaction.test.ts, which caused 15 LSP errors. Always grep for the removed field name in test files as part of the validation step."
+  },
+  {
+    "timestamp": "2026-07-28T21:19:30.041Z",
+    "insight": "The plan persona sometimes slips into implementation mode for trivial fixes. The project workflow accepts this — it's not worth fighting. The important thing is the fix is correct, not which persona wrote it. This is a pragmatic design choice: the workflow is resilient to role bleed."
+  },
+  {
+    "timestamp": "2026-07-28T21:27:30.375Z",
+    "insight": "Wiki ingest for 12 commits on feature/web-ui-management-console branch completed. Created 8 new wiki pages (7 decisions + 1 concept) and updated 7 module pages. The commits spanned 5 major features: Web UI Management Console (5.5), MitM verification, approval token improvements, live event streaming + /api prefix, active persona propagation, and code quality cleanup. All 1632 tests pass."
   }
 ]

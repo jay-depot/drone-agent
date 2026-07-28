@@ -19,7 +19,7 @@ describe('Message Routes', () => {
   it('POST /messages/relay returns 400 without required fields', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/messages/relay',
+      url: '/api/messages/relay',
       payload: {},
     });
     expect(res.statusCode).toBe(400);
@@ -28,7 +28,7 @@ describe('Message Routes', () => {
   it('POST /messages/relay returns 404 when target agent not found', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/messages/relay',
+      url: '/api/messages/relay',
       payload: {
         fromBeaconId: 'b1',
         fromAgentId: 'agent-1',
@@ -43,7 +43,7 @@ describe('Message Routes', () => {
   it('POST /messages/broadcast returns 400 without required fields', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/messages/broadcast',
+      url: '/api/messages/broadcast',
       payload: {},
     });
     expect(res.statusCode).toBe(400);
@@ -52,7 +52,7 @@ describe('Message Routes', () => {
   it('POST /messages/broadcast broadcasts to beacons', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/messages/broadcast',
+      url: '/api/messages/broadcast',
       payload: {
         fromAgentId: 'agent-1',
         channel: 'general',
@@ -79,12 +79,12 @@ describe('Message Routes (detailed)', () => {
     // Register an agent location with a beacon that has no beacon row
     await app.inject({
       method: 'POST',
-      url: '/agents/location',
+      url: '/api/agents/location',
       payload: { agentId: 'agent-1', beaconId: 'b1' },
     });
     const res = await app.inject({
       method: 'POST',
-      url: '/messages/relay',
+      url: '/api/messages/relay',
       payload: {
         fromBeaconId: 'b-from',
         fromAgentId: 'agent-from',
@@ -100,7 +100,7 @@ describe('Message Routes (detailed)', () => {
     // Register a beacon and agent location
     await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: {
         id: 'b-target',
         name: 'Target',
@@ -110,7 +110,7 @@ describe('Message Routes (detailed)', () => {
     });
     await app.inject({
       method: 'POST',
-      url: '/agents/location',
+      url: '/api/agents/location',
       payload: { agentId: 'agent-target', beaconId: 'b-target' },
     });
     // Stub fetch to return success
@@ -122,7 +122,7 @@ describe('Message Routes (detailed)', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: '/messages/relay',
+      url: '/api/messages/relay',
       payload: {
         fromBeaconId: 'b-from',
         fromAgentId: 'agent-from',
@@ -140,7 +140,7 @@ describe('Message Routes (detailed)', () => {
   it('POST /messages/relay returns 502 when target beacon returns error', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: {
         id: 'b-target',
         name: 'Target',
@@ -150,7 +150,7 @@ describe('Message Routes (detailed)', () => {
     });
     await app.inject({
       method: 'POST',
-      url: '/agents/location',
+      url: '/api/agents/location',
       payload: { agentId: 'agent-target', beaconId: 'b-target' },
     });
     const mockFetch = vi.fn().mockResolvedValue({
@@ -161,7 +161,7 @@ describe('Message Routes (detailed)', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: '/messages/relay',
+      url: '/api/messages/relay',
       payload: {
         fromBeaconId: 'b-from',
         fromAgentId: 'agent-from',
@@ -175,7 +175,7 @@ describe('Message Routes (detailed)', () => {
   it('POST /messages/relay returns 503 when fetch throws', async () => {
     await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: {
         id: 'b-target',
         name: 'Target',
@@ -185,7 +185,7 @@ describe('Message Routes (detailed)', () => {
     });
     await app.inject({
       method: 'POST',
-      url: '/agents/location',
+      url: '/api/agents/location',
       payload: { agentId: 'agent-target', beaconId: 'b-target' },
     });
     const mockFetch = vi
@@ -195,7 +195,7 @@ describe('Message Routes (detailed)', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: '/messages/relay',
+      url: '/api/messages/relay',
       payload: {
         fromBeaconId: 'b-from',
         fromAgentId: 'agent-from',
@@ -211,12 +211,12 @@ describe('Message Routes (detailed)', () => {
     // Register two beacons
     await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
     });
     await app.inject({
       method: 'POST',
-      url: '/beacons',
+      url: '/api/beacons',
       payload: { id: 'b2', name: 'B2', host: '10.0.0.1', port: 3457 },
     });
     // Stub fetch: first call succeeds, second throws
@@ -228,7 +228,7 @@ describe('Message Routes (detailed)', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: '/messages/broadcast',
+      url: '/api/messages/broadcast',
       payload: {
         fromAgentId: 'agent-1',
         channel: 'general',

@@ -20,7 +20,7 @@ export function useChatLog(): {
   const appendEntry = useCallback(
     (entry: Omit<ChatEntry, 'id'>) => {
       entryIdCounter.current += 1;
-      const id = `e${Date.now()}-${entryIdCounter.current}`;
+      const id = `e${entryIdCounter.current}`;
       setEntries(prev => [...prev, { ...entry, id }]);
     },
     [entryIdCounter]

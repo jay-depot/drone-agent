@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { getDatabase } from './init.js';
+import { generateVerificationCode } from 'drone-swarm-common';
 import { logger } from '../logger.js';
 import type {
   BeaconTrust,
@@ -8,9 +9,12 @@ import type {
 } from '../types.js';
 
 function generateApprovalToken(): string {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let token = '';
+  for (let i = 0; i < 8; i++) {
+    token += chars[crypto.getRandomValues(new Uint8Array(1))[0] % chars.length];
+  }
+  return token;
 }
 
 export function registerBeaconTrust(
@@ -62,6 +66,10 @@ export function registerBeaconTrust(
   const isLocal = req.host === 'localhost' || req.host === '127.0.0.1';
 
   // Auto-approve local beacons
+  const verificationCode = generateVerificationCode(
+    req.publicKey,
+    req.tlsFingerprint ?? ''
+  );
   const status: BeaconTrustStatus = isLocal ? 'approved' : 'pending';
   const approvalToken = isLocal ? null : generateApprovalToken();
 
@@ -77,6 +85,7 @@ export function registerBeaconTrust(
     tlsFingerprint: req.tlsFingerprint ?? null,
     createdAt: now,
     updatedAt: now,
+    verificationCode,
   };
 
   const stmt = getDatabase().prepare(`

@@ -19,7 +19,7 @@ describe('Insight Routes', () => {
   it('POST /insights creates an insight', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/insights',
+      url: '/api/insights',
       payload: {
         targetType: 'persona',
         targetId: 'test-persona',
@@ -35,7 +35,7 @@ describe('Insight Routes', () => {
   it('POST /insights returns 400 without required fields', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/insights',
+      url: '/api/insights',
       payload: { targetType: 'persona' },
     });
     expect(res.statusCode).toBe(400);
@@ -44,14 +44,14 @@ describe('Insight Routes', () => {
   it('GET /insights lists insights', async () => {
     await app.inject({
       method: 'POST',
-      url: '/insights',
+      url: '/api/insights',
       payload: {
         targetType: 'persona',
         targetId: 'p1',
         insight: 'i1',
       },
     });
-    const res = await app.inject({ method: 'GET', url: '/insights' });
+    const res = await app.inject({ method: 'GET', url: '/api/insights' });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).length).toBe(1);
   });
@@ -59,17 +59,17 @@ describe('Insight Routes', () => {
   it('GET /insights?targetType= filters by type', async () => {
     await app.inject({
       method: 'POST',
-      url: '/insights',
+      url: '/api/insights',
       payload: { targetType: 'persona', targetId: 'p1', insight: 'i1' },
     });
     await app.inject({
       method: 'POST',
-      url: '/insights',
+      url: '/api/insights',
       payload: { targetType: 'skill', targetId: 's1', insight: 'i2' },
     });
     const res = await app.inject({
       method: 'GET',
-      url: '/insights?targetType=persona',
+      url: '/api/insights?targetType=persona',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).length).toBe(1);
@@ -78,11 +78,11 @@ describe('Insight Routes', () => {
   it('GET /insights/:id gets an insight', async () => {
     const createRes = await app.inject({
       method: 'POST',
-      url: '/insights',
+      url: '/api/insights',
       payload: { targetType: 'persona', targetId: 'p1', insight: 'i1' },
     });
     const { id } = JSON.parse(createRes.body);
-    const res = await app.inject({ method: 'GET', url: `/insights/${id}` });
+    const res = await app.inject({ method: 'GET', url: `/api/insights/${id}` });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).id).toBe(id);
   });
@@ -90,7 +90,7 @@ describe('Insight Routes', () => {
   it('GET /insights/:id returns 404 for missing', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: '/insights/nonexistent',
+      url: '/api/insights/nonexistent',
     });
     expect(res.statusCode).toBe(404);
   });
@@ -98,13 +98,13 @@ describe('Insight Routes', () => {
   it('DELETE /insights/:id deletes an insight', async () => {
     const createRes = await app.inject({
       method: 'POST',
-      url: '/insights',
+      url: '/api/insights',
       payload: { targetType: 'persona', targetId: 'p1', insight: 'i1' },
     });
     const { id } = JSON.parse(createRes.body);
     const res = await app.inject({
       method: 'DELETE',
-      url: `/insights/${id}`,
+      url: `/api/insights/${id}`,
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).success).toBe(true);
@@ -113,7 +113,7 @@ describe('Insight Routes', () => {
   it('DELETE /insights/:id returns 404 for missing', async () => {
     const res = await app.inject({
       method: 'DELETE',
-      url: '/insights/nonexistent',
+      url: '/api/insights/nonexistent',
     });
     expect(res.statusCode).toBe(404);
   });

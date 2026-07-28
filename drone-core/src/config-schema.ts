@@ -231,7 +231,7 @@ export function transformEnvVars(
   keyPath: string = ''
 ): unknown {
   if (typeof value === 'string') {
-    return value.replace(/\$\{([A-Z0-9_]+)\}/g, (_, varName: string) => {
+    return value.replace(/\$\{([A-Za-z0-9_]+)\}/g, (_, varName: string) => {
       const resolved = process.env[varName];
       if (resolved === undefined) {
         throw new Error(

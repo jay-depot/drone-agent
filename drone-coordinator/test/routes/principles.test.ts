@@ -19,7 +19,7 @@ describe('Principle Routes', () => {
   it('POST /principles creates a principle', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/principles',
+      url: '/api/principles',
       payload: {
         targetType: 'persona',
         targetId: 'test-persona',
@@ -35,7 +35,7 @@ describe('Principle Routes', () => {
   it('POST /principles returns 400 without required fields', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/principles',
+      url: '/api/principles',
       payload: { targetType: 'persona' },
     });
     expect(res.statusCode).toBe(400);
@@ -44,10 +44,10 @@ describe('Principle Routes', () => {
   it('GET /principles lists principles', async () => {
     await app.inject({
       method: 'POST',
-      url: '/principles',
+      url: '/api/principles',
       payload: { targetType: 'persona', targetId: 'p1', principle: 'pr1' },
     });
-    const res = await app.inject({ method: 'GET', url: '/principles' });
+    const res = await app.inject({ method: 'GET', url: '/api/principles' });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).length).toBe(1);
   });
@@ -55,17 +55,17 @@ describe('Principle Routes', () => {
   it('GET /principles?targetType= filters by type', async () => {
     await app.inject({
       method: 'POST',
-      url: '/principles',
+      url: '/api/principles',
       payload: { targetType: 'persona', targetId: 'p1', principle: 'pr1' },
     });
     await app.inject({
       method: 'POST',
-      url: '/principles',
+      url: '/api/principles',
       payload: { targetType: 'skill', targetId: 's1', principle: 'pr2' },
     });
     const res = await app.inject({
       method: 'GET',
-      url: '/principles?targetType=persona',
+      url: '/api/principles?targetType=persona',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).length).toBe(1);
@@ -74,11 +74,14 @@ describe('Principle Routes', () => {
   it('GET /principles/:id gets a principle', async () => {
     const createRes = await app.inject({
       method: 'POST',
-      url: '/principles',
+      url: '/api/principles',
       payload: { targetType: 'persona', targetId: 'p1', principle: 'pr1' },
     });
     const { id } = JSON.parse(createRes.body);
-    const res = await app.inject({ method: 'GET', url: `/principles/${id}` });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/principles/${id}`,
+    });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).id).toBe(id);
   });
@@ -86,7 +89,7 @@ describe('Principle Routes', () => {
   it('GET /principles/:id returns 404 for missing', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: '/principles/nonexistent',
+      url: '/api/principles/nonexistent',
     });
     expect(res.statusCode).toBe(404);
   });
@@ -94,13 +97,13 @@ describe('Principle Routes', () => {
   it('DELETE /principles/:id deletes a principle', async () => {
     const createRes = await app.inject({
       method: 'POST',
-      url: '/principles',
+      url: '/api/principles',
       payload: { targetType: 'persona', targetId: 'p1', principle: 'pr1' },
     });
     const { id } = JSON.parse(createRes.body);
     const res = await app.inject({
       method: 'DELETE',
-      url: `/principles/${id}`,
+      url: `/api/principles/${id}`,
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).success).toBe(true);
@@ -109,7 +112,7 @@ describe('Principle Routes', () => {
   it('DELETE /principles/:id returns 404 for missing', async () => {
     const res = await app.inject({
       method: 'DELETE',
-      url: '/principles/nonexistent',
+      url: '/api/principles/nonexistent',
     });
     expect(res.statusCode).toBe(404);
   });

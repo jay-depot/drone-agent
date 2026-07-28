@@ -63,11 +63,6 @@ export type DroneSessionTurn = {
   kind?: 'summary';
 };
 
-export type DroneSessionState = {
-  messages: DroneSessionMessage[];
-  turns: DroneSessionTurn[];
-};
-
 export type DroneToolCall = {
   id?: string;
   name: string;

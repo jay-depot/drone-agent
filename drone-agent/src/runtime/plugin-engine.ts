@@ -758,8 +758,7 @@ function normalizeWorkflowResult(
   // result shape (don't JSON.stringify it). Anything else gets serialized.
   if (
     typeof raw === 'object' &&
-    (Object.prototype.hasOwnProperty.call(raw, 'kickMessage') ||
-      Object.prototype.hasOwnProperty.call(raw, 'toolResult'))
+    ('kickMessage' in raw || 'toolResult' in raw)
   ) {
     const result: DroneWorkflowResult = {};
     if (typeof raw.kickMessage === 'string') {

@@ -285,7 +285,6 @@ export function createConversationService({
         });
 
       const llm = getLlmCapability();
-      const tools = getLlmTools();
       let iterationCount = 0;
       let lastBudgetKey: string | undefined;
       let stuckCount = 0;
@@ -323,6 +322,9 @@ export function createConversationService({
 
         // ── Drain queued messages ──
         drainPendingMessages();
+        // Re-fetch tools each iteration so dynamic changes (MCP mount/unmount,
+        // persona switches) are reflected immediately.
+        const tools = getLlmTools();
 
         const systemMessages = await budgetService.buildSystemMessages();
         await ensureSafeBudget(systemMessages, tools);

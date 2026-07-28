@@ -350,13 +350,6 @@ export type DroneResolvedConfig = {
   layers: DroneConfigLayer[];
 };
 
-export type DroneSessionPhase =
-  | 'plugins-loaded'
-  | 'session-start'
-  | 'before-prompt'
-  | 'after-tool-call'
-  | 'shutdown';
-
 // ── Config helper functions ─────────────────────────────────────────
 
 export function createDefaultAgentConfig(

@@ -166,6 +166,24 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         );
       }
 
+      // Subscribe to persona changes and update swarm session
+      if (personaCap) {
+        // Listen for persona changes and update the coordinator session
+        personaCap.onPersonaChange(async persona => {
+          const { updateSwarmSessionPersona } = await import('./hooks.js');
+          await updateSwarmSessionPersona(ctx, persona?.id ?? null);
+        });
+
+        // Also sync initial persona on session start (in case one is already active)
+        registration.hooks.onSessionStart(async () => {
+          const active = personaCap.getActivePersona();
+          if (active) {
+            const { updateSwarmSessionPersona } = await import('./hooks.js');
+            await updateSwarmSessionPersona(ctx, active.id);
+          }
+        });
+      }
+
       const skillsCap = registration.request<DroneSkillsCapability>('skills');
       if (skillsCap) {
         registerSkillProviders(ctx, skillsCap);

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -9,11 +10,18 @@ import { cn } from '@/lib/utils';
 import { WebSocketProvider } from '@/hooks/use-websocket';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import TopologyPage from '@/pages/topology';
+import BeaconDetailPage from '@/pages/beacon-detail';
 import SessionsPage from '@/pages/sessions';
 import SessionDetailPage from '@/pages/session-detail';
 import PersonasPage from '@/pages/personas';
+import PersonaDetailPage from '@/pages/persona-detail';
+import PersonaEditorPage from '@/pages/persona-editor';
 import SkillsPage from '@/pages/skills';
+import SkillDetailPage from '@/pages/skill-detail';
+import SkillEditorPage from '@/pages/skill-editor';
 import WikiPage from '@/pages/wiki';
+import WikiDetailPage from '@/pages/wiki-detail';
+import WikiEditorPage from '@/pages/wiki-editor';
 import LoginPage from '@/pages/login';
 
 const navItems = [
@@ -23,6 +31,41 @@ const navItems = [
   { to: '/skills', label: 'Skills', icon: '⚙' },
   { to: '/wiki', label: 'Wiki', icon: '◈' },
 ];
+
+function DarkModeToggle() {
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem('dark-mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (dark) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    try {
+      localStorage.setItem('dark-mode', String(dark));
+    } catch {
+      // localStorage may be unavailable
+    }
+  }, [dark]);
+
+  return (
+    <button
+      onClick={() => setDark(!dark)}
+      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors hover:bg-sidebar-accent/50 text-sidebar-foreground/80 w-full"
+      title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+    >
+      <span className="text-base">{dark ? '☀️' : '🌙'}</span>
+      {dark ? 'Light Mode' : 'Dark Mode'}
+    </button>
+  );
+}
 
 function AppLayout() {
   const { isAuthenticated } = useAuth();
@@ -61,8 +104,11 @@ function AppLayout() {
             </NavLink>
           ))}
         </nav>
-        <div className="p-3 border-t border-sidebar-border text-xs text-sidebar-foreground/40">
-          v1.0.0
+        <div className="p-3 border-t border-sidebar-border space-y-2">
+          <DarkModeToggle />
+          <div className="text-xs text-sidebar-foreground/40 text-center">
+            v1.0.0
+          </div>
         </div>
       </aside>
 
@@ -70,11 +116,21 @@ function AppLayout() {
       <main className="flex-1 overflow-auto p-6">
         <Routes>
           <Route path="/" element={<TopologyPage />} />
+          <Route path="/beacons/:id" element={<BeaconDetailPage />} />
           <Route path="/sessions" element={<SessionsPage />} />
           <Route path="/sessions/:sessionId" element={<SessionDetailPage />} />
           <Route path="/personas" element={<PersonasPage />} />
+          <Route path="/personas/new" element={<PersonaEditorPage />} />
+          <Route path="/personas/:id" element={<PersonaDetailPage />} />
+          <Route path="/personas/:id/edit" element={<PersonaEditorPage />} />
           <Route path="/skills" element={<SkillsPage />} />
+          <Route path="/skills/new" element={<SkillEditorPage />} />
+          <Route path="/skills/:id" element={<SkillDetailPage />} />
+          <Route path="/skills/:id/edit" element={<SkillEditorPage />} />
           <Route path="/wiki" element={<WikiPage />} />
+          <Route path="/wiki/new" element={<WikiEditorPage />} />
+          <Route path="/wiki/:pageId" element={<WikiDetailPage />} />
+          <Route path="/wiki/:pageId/edit" element={<WikiEditorPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

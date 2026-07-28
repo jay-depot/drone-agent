@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { publishMutationEvent } from '../ws-pubsub.js';
 import {
   isLargePayload,
   storeLargePayload,
@@ -17,6 +18,11 @@ export default function swarmRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: 'id and beaconId are required' });
       }
       const session = db.createSwarmSession(id, personaId ?? null, beaconId);
+      publishMutationEvent({
+        sessionId: id,
+        eventType: 'session.created',
+        payload: { sessionId: id, personaId, beaconId, status: 'active' },
+      });
       return reply.code(201).send(session);
     }
   );
@@ -28,6 +34,11 @@ export default function swarmRoutes(app: FastifyInstance) {
       if (!session) {
         return reply.code(404).send({ error: 'Swarm session not found' });
       }
+      publishMutationEvent({
+        sessionId: request.params.id,
+        eventType: 'session.ended',
+        payload: { sessionId: request.params.id, status: 'ended' },
+      });
       return session;
     }
   );
@@ -67,6 +78,11 @@ export default function swarmRoutes(app: FastifyInstance) {
         createdAt: evt.createdAt,
       });
       created.push(event);
+      publishMutationEvent({
+        sessionId: evt.sessionId,
+        eventType: evt.type,
+        payload: evt.payload,
+      });
     }
     return reply.code(201).send({ count: created.length, events: created });
   });
@@ -128,7 +144,8 @@ export default function swarmRoutes(app: FastifyInstance) {
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
     });
-    return reply.send({ sessions, count: sessions.length });
+    const totalCount = db.countSwarmSessions({ status });
+    return reply.send({ sessions, count: totalCount });
   });
 
   app.get<{ Params: { id: string } }>(
@@ -188,6 +205,11 @@ export default function swarmRoutes(app: FastifyInstance) {
         }
         return { ...evt, payload };
       });
+      publishMutationEvent({
+        sessionId: request.params.id,
+        eventType: 'session.processing',
+        payload: { sessionId: request.params.id, status: 'processing' },
+      });
       return reply.send({ session: result, events: resolvedEvents });
     }
   );
@@ -205,7 +227,43 @@ export default function swarmRoutes(app: FastifyInstance) {
       const statusCode = result.error === 'Session not found' ? 404 : 409;
       return reply.code(statusCode).send(result);
     }
+    publishMutationEvent({
+      sessionId: request.params.id,
+      eventType: 'session.processed',
+      payload: { sessionId: request.params.id, status: 'processed' },
+    });
     return reply.send({ session: result });
+  });
+
+  app.post<{ Params: { id: string } }>(
+    '/sessions/:id/end',
+    async (request, reply) => {
+      const session = db.getSwarmSession(request.params.id);
+      if (!session) {
+        return reply.code(404).send({ error: 'Session not found' });
+      }
+      // Allow ending from any status
+      const result = db.updateSwarmSessionStatus(request.params.id, 'ended');
+      return reply.send(result);
+    }
+  );
+
+  // PATCH /sessions/:id/persona - Update session persona
+  app.patch<{
+    Params: { id: string };
+    Body: { personaId: string | null };
+  }>('/sessions/:id/persona', async (request, reply) => {
+    const { personaId } = request.body;
+    const session = db.updateSwarmSessionPersona(request.params.id, personaId);
+    if (!session) {
+      return reply.code(404).send({ error: 'Session not found' });
+    }
+    publishMutationEvent({
+      sessionId: request.params.id,
+      eventType: 'session.persona_changed',
+      payload: { sessionId: request.params.id, personaId },
+    });
+    return session;
   });
 
   // === Tool Definition Routes ===
@@ -254,6 +312,11 @@ export default function swarmRoutes(app: FastifyInstance) {
         beaconId,
         personaId ?? null
       );
+      publishMutationEvent({
+        sessionId: agentId,
+        eventType: 'agent.connected',
+        payload: { agentId, beaconId, personaId },
+      });
       return reply.code(201).send(location);
     }
   );
@@ -292,6 +355,11 @@ export default function swarmRoutes(app: FastifyInstance) {
       if (!deleted) {
         return reply.code(404).send({ error: 'Agent location not found' });
       }
+      publishMutationEvent({
+        sessionId: request.params.agentId,
+        eventType: 'agent.disconnected',
+        payload: { agentId: request.params.agentId },
+      });
       return { success: true };
     }
   );
