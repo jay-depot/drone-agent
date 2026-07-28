@@ -461,10 +461,10 @@ export async function main() {
   const webApp = await buildApp({ getToken: () => getWebToken() });
   await attachUi(webApp, uiDistPath, { getToken: () => getWebToken() });
 
-  // Check for stale sessions every 5 minutes (mark sessions inactive > 30 min)
+  // Check for stale sessions every 5 minutes (mark sessions inactive > 24 hours)
   const staleCheckInterval = setInterval(
     () => {
-      markStaleSessions(30 * 60 * 1000);
+      markStaleSessions(24 * 60 * 60 * 1000);
     },
     5 * 60 * 1000
   );

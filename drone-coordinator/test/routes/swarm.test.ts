@@ -97,8 +97,8 @@ describe('Swarm Routes', () => {
     expect(body.sessions[0].status).toBe('stale');
   });
 
-  it('POST /sessions/mark-stale with no threshold defaults to 30 min', async () => {
-    // No sessions should be stale with default threshold (30 min) for a fresh session
+  it('POST /sessions/mark-stale with no threshold defaults to 24 hours', async () => {
+    // No sessions should be stale with default threshold (24 hours) for a fresh session
     await app.inject({
       method: 'POST',
       url: '/api/sync/sessions/register',

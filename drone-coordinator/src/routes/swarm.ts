@@ -31,7 +31,7 @@ export default function swarmRoutes(app: FastifyInstance) {
   }>('/sessions/mark-stale', async (request, reply) => {
     const thresholdMs = request.query.thresholdMs
       ? Number(request.query.thresholdMs)
-      : 30 * 60 * 1000; // default 30 minutes
+      : 24 * 60 * 60 * 1000; // default 24 hours
     const updated = db.markStaleSessions(thresholdMs);
     return reply.send({ count: updated.length, sessions: updated });
   });
