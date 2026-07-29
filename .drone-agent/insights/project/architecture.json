@@ -14,5 +14,9 @@
   {
     "timestamp": "2026-07-28T22:57:56.918Z",
     "insight": "The swarm session status system had a terminology mismatch: the end-session path used 'ended' while the pipeline expected 'finished'. The fix consolidated to 'ended' as the canonical pre-processing terminal status, added 'ended' to SESSION_STATUSES, and added automatic stale-session marking via a periodic interval on the coordinator. This revealed that the status system had no central state machine — each caller decides transitions independently via transitionSessionStatus()."
+  },
+  {
+    "timestamp": "2026-07-29T00:22:30.585Z",
+    "insight": "The macros plugin's chat prompt step was broken by the conversation-loop refactor (commit 5e9e263) which introduced enqueueUserMessage. The macro handler called enqueueUserMessage but nobody called sendUserMessage to drain the queue, so the LLM never responded. The fix is to use sendUserMessage directly, which also restores the onBeforePrompt/onAfterToolCall lifecycle hooks that were lost in the same refactor. Additionally, the dispatchSlashCommand context construction in the macro handler was unnecessarily constructing a subset of ctx when passing ctx directly works fine."
   }
 ]
