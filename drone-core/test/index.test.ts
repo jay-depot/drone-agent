@@ -274,13 +274,17 @@ describe('deepMerge', () => {
 
   it('replaces fields listed in replaceNullable even when null', () => {
     const base = { a: 1, b: 2 };
-    const result = deepMerge(base, { a: null }, { replaceNullable: ['a'] });
+    const result = deepMerge(base, { a: null as any }, { replaceNullable: ['a'] });
     expect(result).toEqual({ a: null, b: 2 });
   });
 
   it('shallow-merges fields listed in merge', () => {
     const base = { a: { x: 1, y: 2 }, b: 3 };
-    const result = deepMerge(base, { a: { y: 99, z: 100 } }, { merge: ['a'] });
+    const result = deepMerge(
+      base,
+      { a: { y: 99, z: 100 } as any },
+      { merge: ['a'] }
+    );
     expect(result).toEqual({ a: { x: 1, y: 99, z: 100 }, b: 3 });
   });
 
@@ -299,7 +303,7 @@ describe('deepMerge', () => {
     };
     const result = deepMerge(
       base,
-      { outer: { inner: { b: 99, c: 3 } } },
+      { outer: { inner: { b: 99, c: 3 } } } as any,
       { deepMerge: { outer: { deepMerge: { inner: {} } } } }
     );
     expect(result).toEqual({
@@ -309,7 +313,7 @@ describe('deepMerge', () => {
 
   it('defaults unlisted objects to shallow spread merge', () => {
     const base = { a: { x: 1, y: 2 } };
-    const result = deepMerge(base, { a: { y: 99 } }, {});
+    const result = deepMerge(base, { a: { y: 99 } as any }, {});
     expect(result).toEqual({ a: { x: 1, y: 99 } });
   });
 
@@ -321,7 +325,7 @@ describe('deepMerge', () => {
 
   it('does not mutate the base object', () => {
     const base = { a: { x: 1 } };
-    const result = deepMerge(base, { a: { y: 2 } }, { merge: ['a'] });
+    const result = deepMerge(base, { a: { y: 2 } as any }, { merge: ['a'] });
     expect(base.a).toEqual({ x: 1 });
     expect(result.a).toEqual({ x: 1, y: 2 });
   });
@@ -336,7 +340,7 @@ describe('applyAgentConfigLayer — tui nested merge', () => {
           colors: { keyword: 'red' },
         },
       },
-    });
+    } as any);
     expect(merged.tui.syntaxHighlighting.colors.keyword).toBe('red');
     // Other colors from the base should be preserved
     expect(merged.tui.syntaxHighlighting.colors.function).toBe('cyan');

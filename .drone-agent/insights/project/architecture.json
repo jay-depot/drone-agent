@@ -22,5 +22,13 @@
   {
     "timestamp": "2026-07-29T00:25:54.258Z",
     "insight": "The DroneSlashCommandContext.conversation.sendUserMessage types its onEvent parameter as (event: unknown) => void, which means plugins that want to use it with a typed event handler need to cast. This is a deliberate design choice (the context type is in drone-core and can't import runtime types), but it means any plugin using sendUserMessage with an event handler needs to cast the event parameter. The macros plugin now does this with `const event = rawEvent as DroneConversationEvent`."
+  },
+  {
+    "timestamp": "2026-07-29T01:10:19.710Z",
+    "insight": "The config deep merge refactor replaced 136 lines of repetitive if-blocks with a 60-line generic deepMerge utility and a 20-line declarative MergeSpec. The key challenge was TypeScript type compatibility: deepMerge returns T (which is Record<string, unknown>), but the actual DroneAgentConfig has required fields that Partial<DroneLlmConfig> etc. can make optional. A single `as DroneAgentConfig` cast at the call site was the cleanest solution. The refactor reduced config-types.ts from 639 to 537 lines and makes adding new config sections a one-line spec addition."
+  },
+  {
+    "timestamp": "2026-07-29T02:24:27.344Z",
+    "insight": "The `deepMerge` function's generic type `T extends Record<string, unknown>` is overly restrictive for test scenarios. Tests that exercise runtime behavior like merging extra properties (z, c, y) or passing null values into a field typed as `number` require `as any` casts. The `PartialDroneAgentConfig` type also has deeply nested required fields (e.g., `tui.syntaxHighlighting.codeBackground`) that make partial test overlays fail typecheck. Consider relaxing the generic constraint or using a more permissive type for the overlay parameter to avoid needing casts in tests."
   }
 ]
