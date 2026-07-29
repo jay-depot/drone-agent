@@ -3,180 +3,116 @@ key: plan-semantic-search
 tags:
   []
 created: 2026-07-14T20:06:09.160Z
-updated: 2026-07-14T21:33:58.816Z
+updated: 2026-07-29T03:15:55.960Z
 ---
 
-# Plan: Semantic Search (Item 15)
+# Plan: Move Semantic Search to Beacon
 
 ## Summary
 
-Implement real semantic search in the `search` plugin. Currently `mode: "semantic"` is a stub that returns "not yet implemented". This plan fills it in with:
+Move the vector indexing and semantic search functionality from the agent's local search plugin into the beacon process. The agent's search plugin keeps regex search (local, always available) and gains an optional dependency on the swarm plugin — when swarm is connected, semantic search tools proxy to the beacon. The beacon handles background indexing, deduplicating indexes across agents that register the same directories. Shared vector store, chunking, and search logic go into `drone-swarm-common` for reuse by the coordinator (future wiki semantic search).
 
-- Config-driven indexed directories (user-level vs project-level)
-- SQLite-backed vector storage (separate DBs per scope)
-- Content-hash-based incremental indexing (no full reindex on startup)
-- Pluggable embedding model providers via a registration hook
-- First embedding provider: Ollama + Nomic (opinionated/lazy)
-- Graceful degradation: semantic mode hidden when no providers registered
+## Key Design Decisions
 
-## Architecture
+1. **Search paths communicated via separate beacon endpoint** (`POST /agents/:id/search-paths`), not in agent registration payload — keeps optional plugin from breaking agent registration
+2. **Single SQLite DB with `directory_path` column** for deduplication — one index per directory, shared across agents
+3. **Regex search stays local** in the agent — only semantic mode moves to the beacon
+4. **Shared code in `drone-swarm-common`** — `SearchStore`, chunking, cosine similarity, embedding provider — so coordinator can reuse for wiki search
+5. **Semantic search goes dead without swarm** — no local fallback; users who want semantic search without swarm should use an MCP server
 
-### Config (`drone-core/src/config-types.ts`)
+## Steps
 
-Add `DroneSearchConfig` to `DroneAgentConfig`:
+### Step 1: Move shared vector search code to `drone-swarm-common`
 
-```typescript
-type DroneSearchIndexedDir = {
-  path: string; // Absolute or relative path
-  embeddingProvider?: string; // Optional provider override for this dir
-};
+**Why**: Both the beacon (for agent file indexing) and coordinator (for future wiki semantic search) need the same vector store, chunking, and search logic.
 
-type DroneSearchConfig = {
-  enabled: boolean;
-  indexedDirectories: DroneSearchIndexedDir[];
-  // Per-scope embedding provider selection
-  userEmbeddingProvider?: string; // Provider for user-level index
-  projectEmbeddingProvider?: string; // Provider for project-level index
-};
-```
+**Files to create/modify:**
 
-User config adds user-level dirs, project config adds project-level dirs. The search plugin merges them.
+1. **`drone-swarm-common/package.json`** — Add `better-sqlite3` and `@types/better-sqlite3` dependencies
 
-**Critical design point**: The project-level index and user-level index can use **different** embedding providers. The `projectEmbeddingProvider` config key (set in project config) controls which provider generates embeddings for the project index. The `userEmbeddingProvider` config key (set in user config) controls the user index. This means:
+2. **`drone-swarm-common/src/search-store.ts`** — Move and refactor `SearchStore` from `drone-agent/src/plugins/search/store.ts`
+   - Keep the same schema (`meta`, `files`, `chunks` tables)
+   - Add a `directory_path` column to `files` and `chunks` tables for deduplication
+   - Add methods: `getFilesByDirectory(dirPath)`, `removeFilesByDirectory(dirPath)`, `getDirectoryPaths()`
+   - Use `better-sqlite3` directly (synchronous API) — the async wrappers in the current store are unnecessary overhead
 
-- A project can pin a specific embedding provider so all contributors use the same vectors (enabling checked-in index files if desired)
-- A user can independently choose a different provider for their personal index
-- When searching, the plugin uses the provider that was used to build the index being searched (stored per-DB, not per-query)
+3. **`drone-swarm-common/src/search-chunker.ts`** — Move `chunkText` from `drone-agent/src/plugins/search/indexer.ts`
+   - Pure function, no dependencies on agent code
+   - Export `chunkText(text: string, maxTokens: number): string[]`
 
-### SQLite Storage
+4. **`drone-swarm-common/src/search-searcher.ts`** — Move `cosineSimilarity` and `semanticSearch` from `drone-agent/src/plugins/search/searcher.ts`
+   - `semanticSearch` takes a `SearchStore`, `DroneEmbeddingProvider`, query, and options
+   - Pure computation, no agent dependencies
 
-Two separate SQLite databases (using `better-sqlite3`):
+5. **`drone-swarm-common/src/search-provider-ollama.ts`** — Move `createOllamaEmbeddingProvider` from `drone-agent/src/plugins/search/providers/ollama.ts`
+   - Same interface, no agent dependencies
 
-- `~/.drone-agent/search-index.db` (user scope)
-- `<project>/.drone-agent/search-index.db` (project scope)
+6. **`drone-swarm-common/src/index.ts`** — Add exports for all new modules
 
-Tables:
+7. **`drone-core/src/capabilities.ts`** — Add `DroneSearchIndexer` capability type (for beacon to expose indexing control to agents)
 
-```sql
-CREATE TABLE files (
-  path TEXT PRIMARY KEY,       -- Absolute path to the file
-  hash TEXT NOT NULL,           -- SHA-256 hex digest of file content
-  last_indexed TEXT NOT NULL    -- ISO-8601 timestamp
-);
+### Step 2: Add beacon search database tables
 
-CREATE TABLE chunks (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  file_path TEXT NOT NULL REFERENCES files(path) ON DELETE CASCADE,
-  chunk_index INTEGER NOT NULL,  -- Position within the file
-  text TEXT NOT NULL,             -- The chunk text
-  embedding BLOB NOT NULL         -- Float32 vector as binary blob
-);
+**File**: `drone-beacon/src/db/init.ts` — Add `search_directories`, `search_files`, `search_chunks` tables with `directory_path` column for dedup
 
-CREATE INDEX idx_chunks_file ON chunks(file_path);
-```
+**File**: `drone-beacon/src/db/search.ts` — New DB module with CRUD for search paths, files, and chunks
 
-### Embedding Provider Hook
+**File**: `drone-beacon/src/db/index.ts` — Add exports for new search DB functions
 
-Define in `drone-core/src/capabilities.ts`:
+### Step 3: Add beacon search routes
 
-```typescript
-type DroneEmbeddingProvider = {
-  id: string;
-  name: string;
-  /** Get the embedding vector for a text string. */
-  getEmbedding(text: string): Promise<Float32Array>;
-  /** Number of dimensions in the embedding vectors. */
-  dimensions: number;
-  /** Maximum number of tokens per chunk (for chunking). */
-  maxTokens: number;
-};
+**File**: `drone-beacon/src/routes/search.ts` — Three endpoints:
+- `PUT /agents/:id/search-paths` — Set search paths for an agent
+- `GET /agents/:id/search` — Semantic search (query, maxResults, minScore, path)
+- `POST /agents/:id/search/reindex` — Trigger reindexing
 
-type DroneSearchCapability = {
-  registerEmbeddingProvider(provider: DroneEmbeddingProvider): void;
-  unregisterEmbeddingProvider(id: string): void;
-  getEmbeddingProviders(): DroneEmbeddingProvider[];
-  /** Get the provider to use for a given scope/dir. */
-  resolveProvider(
-    scope: 'user' | 'project',
-    dirPath?: string
-  ): DroneEmbeddingProvider | undefined;
-};
-```
+**File**: `drone-beacon/src/routes/index.ts` — Add `search(app)` to route registration
 
-### Incremental Indexing (Content Hash)
+### Step 4: Add beacon background indexing service
 
-On startup and on demand:
+**File**: `drone-beacon/src/search-indexer.ts` — `SearchIndexer` class that:
+- Indexes directories in the background (non-blocking)
+- Deduplicates across agents (same directory = one index)
+- Uses shared `SearchStore`, `chunkText`, `createOllamaEmbeddingProvider` from `drone-swarm-common`
+- Runs periodic hash sweep (configurable interval, default 5 min)
 
-1. Walk configured directories, collect all file paths
-2. For each file, compute SHA-256 hash
-3. Query SQLite: if `hash` matches, skip (no change)
-4. If hash differs or file is new: reindex (chunk + embed)
-5. If file no longer exists: remove from DB (cascade deletes chunks)
+### Step 5: Refactor agent search plugin
 
-Chunking strategy: split by paragraph boundaries, max `maxTokens` tokens per chunk (from the provider), with overlap.
+**File**: `drone-agent/src/plugins/search/index.ts` — Remove local vector code, add optional swarm dependency, proxy semantic search to beacon
 
-### Search Plugin Changes
+**File**: `drone-agent/src/plugins/index.ts` — Update search plugin metadata with optional swarm dependency
 
-The `search` plugin (`drone-agent/src/plugins/search.ts`):
+### Step 6: Update config types
 
-1. **Offer `DroneSearchCapability`** via `registration.offer()`
-2. **Register `onPluginsLoaded` hook** to initialize SQLite DBs and run initial indexing
-3. **Update `search__text` tool**: when `mode: "semantic"` is selected and at least one provider is registered, perform cosine similarity search against the SQLite index
-4. **Graceful degradation**: if no embedding providers are registered, `mode: "semantic"` is removed from the enum (or the tool description says "no embedding providers available")
-5. **Register `onShutdown` hook** to close SQLite connections cleanly
+**File**: `drone-core/src/config-types.ts` — No type changes needed; semantics shift but shape stays the same
 
-### Ollama + Nomic Embedding Provider
+### Step 7: Wire up agent → beacon search path registration
 
-A new file `drone-agent/src/plugins/search/providers/ollama.ts`:
+**File**: `drone-agent/src/plugins/search/index.ts` — In `onPluginsLoaded`, read `search.paths` from config, call `PUT /agents/:id/search-paths` if swarm is available
 
-- Uses Ollama's embedding API (`POST /api/embed` with model `nomic-embed-text:v1.5`)
-- **Important**: Nomic requires task instruction prefixes per the [model card](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5):
-  - For indexing chunks: prefix with `search_document: <text>`
-  - For querying: prefix with `search_query: <text>`
-- 768 dimensions, 8192 max tokens
-- Registers itself with the search plugin's capability
-- Simple: no config beyond the Ollama host (reuses `ollama.host` from config)
+### Step 8: Clean up removed files
 
-### Steps
+Delete `store.ts`, `indexer.ts`, `searcher.ts`, `providers/ollama.ts` from `drone-agent/src/plugins/search/`
 
-1. Add `DroneSearchConfig` to `drone-core/src/config-types.ts` (type, defaults, merge)
-2. Add `DroneEmbeddingProvider` and `DroneSearchCapability` to `drone-core/src/capabilities.ts`
-3. Export new types from `drone-core/src/index.ts`
-4. Add `better-sqlite3` dependency to `drone-agent/package.json`
-5. Add `search` to `KNOWN_CONFIG_KEYS` in config plugin
-6. Implement SQLite storage layer (`drone-agent/src/plugins/search/store.ts`)
-7. Implement incremental indexing logic (`drone-agent/src/plugins/search/indexer.ts`)
-8. Implement cosine similarity search (`drone-agent/src/plugins/search/searcher.ts`)
-9. Rewrite `search.ts` → `plugins/search/index.ts` with capability offering, tool update, hooks
-10. Implement Ollama + Nomic embedding provider (`plugins/search/providers/ollama.ts`)
-11. Add tests
-12. Verify build, lint, tests pass
-13. Commit
-14. Update project memory
+### Step 9: Validation
 
-### Validation Criteria
+1. `pnpm -r run build` passes
+2. `pnpm -r run typecheck` passes
+3. `pnpm -r run lint` passes
+4. `pnpm -r run test` passes
+5. LSP diagnostics show zero errors
+6. Manual smoke test
 
-- [x] `search` config section exists with `indexedDirectories`, `userEmbeddingProvider`, `projectEmbeddingProvider`
-- [x] SQLite DBs created at user and project scope with correct schema
-- [x] Incremental indexing: only reindexes files whose content hash changed
-- [x] `mode: "semantic"` works with at least one embedding provider registered
-- [x] `mode: "semantic"` gracefully degrades (removed from enum) when no providers registered
-- [x] Multiple embedding providers can be registered and selected by scope
-- [x] Project-level index uses `projectEmbeddingProvider`; user-level index uses `userEmbeddingProvider` — they can differ
-- [x] Ollama + Nomic provider works out of the box, using `search_document:` prefix for indexing and `search_query:` prefix for queries
-- [x] All existing tests pass
-- [x] LSP diagnostics pass
-- [x] `pnpm -r run build` passes
-- [x] `pnpm -r run lint` passes
+## Reindexing Strategy
 
-## Implementation Summary (2026-07-14)
+**Two-pronged approach:**
 
-All 14 steps completed. The old `drone-agent/src/plugins/search.ts` was replaced with a new `drone-agent/src/plugins/search/` directory containing:
+1. **Agent-side `onAfterToolCall` hook** — Search plugin hooks into `onAfterToolCall`, checks for file-modifying tools (e.g., `file__write`, `file__apply_diff`), sends targeted reindex request to beacon for affected files.
 
-- `index.ts` — Plugin registration, capability offering, tool handler, lifecycle hooks
-- `store.ts` — SQLite-backed SearchStore (meta, files, chunks tables)
-- `indexer.ts` — Incremental indexing with content-hash detection, paragraph chunking
-- `searcher.ts` — Cosine similarity search with minScore filtering
-- `providers/ollama.ts` — Ollama + Nomic embedding provider
+2. **Beacon-side periodic hash sweep** — `SearchIndexer` runs a background sweep every N minutes (configurable, default 5). Walks files, computes hashes, reindexes files whose hash doesn't match stored hash. Lightweight because it only hashes changed files.
 
-16 new tests added covering SearchStore CRUD, semantic search with mock embeddings, and the plugin's regex search behavior. All 1474 existing tests pass. Build and lint pass cleanly.
+## Future Work (not in this plan)
+
+- Coordinator wiki semantic search using shared `SearchStore`
+- Coordinator knowledge semantic search
+- Per-path embedding provider override wiring

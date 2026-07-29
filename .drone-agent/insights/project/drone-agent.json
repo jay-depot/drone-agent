@@ -94,6 +94,9 @@
   {
     "timestamp": "2026-07-28T21:27:30.375Z",
     "insight": "Wiki ingest for 12 commits on feature/web-ui-management-console branch completed. Created 8 new wiki pages (7 decisions + 1 concept) and updated 7 module pages. The commits spanned 5 major features: Web UI Management Console (5.5), MitM verification, approval token improvements, live event streaming + /api prefix, active persona propagation, and code quality cleanup. All 1632 tests pass."
-
+  },
+  {
+    "timestamp": "2026-07-29T03:16:00.772Z",
+    "insight": "Planned the \"Move Semantic Search to Beacon\" feature. Key architectural decisions: (1) search paths via separate beacon endpoint (not in agent registration), (2) single SQLite DB with directory_path column for dedup, (3) regex stays local, semantic goes to beacon, (4) shared code in drone-swarm-common for future coordinator reuse, (5) reindexing via two-pronged approach: agent-side onAfterToolCall hook + beacon-side periodic hash sweep. Plan saved to project memory as plan-semantic-search."
   }
 ]
