@@ -18,5 +18,9 @@
   {
     "timestamp": "2026-07-29T00:22:30.585Z",
     "insight": "The macros plugin's chat prompt step was broken by the conversation-loop refactor (commit 5e9e263) which introduced enqueueUserMessage. The macro handler called enqueueUserMessage but nobody called sendUserMessage to drain the queue, so the LLM never responded. The fix is to use sendUserMessage directly, which also restores the onBeforePrompt/onAfterToolCall lifecycle hooks that were lost in the same refactor. Additionally, the dispatchSlashCommand context construction in the macro handler was unnecessarily constructing a subset of ctx when passing ctx directly works fine."
+  },
+  {
+    "timestamp": "2026-07-29T00:25:54.258Z",
+    "insight": "The DroneSlashCommandContext.conversation.sendUserMessage types its onEvent parameter as (event: unknown) => void, which means plugins that want to use it with a typed event handler need to cast. This is a deliberate design choice (the context type is in drone-core and can't import runtime types), but it means any plugin using sendUserMessage with an event handler needs to cast the event parameter. The macros plugin now does this with `const event = rawEvent as DroneConversationEvent`."
   }
 ]
