@@ -30,13 +30,13 @@ pipeline.
 The workflow needs these plugins enabled (the workflow should check and prompt
 to enable any that are missing):
 
-| Plugin | Why |
-|---|---|
-| `bootstrap` | Hosts this workflow. Must be passed via `--plugin bootstrap`. |
-| `swarm` | Needed to verify beacon/coordinator connectivity and to give the agent access to `wiki_write` etc. during the kickoff message phase. |
-| `exec` | Needed to run shell commands (check systemd status, write files, enable timer). |
-| `file` | Needed to write the shell script and systemd unit files. |
-| `ollama` (or any LLM provider) | Needed if the workflow asks the LLM to help design the pipeline. |
+| Plugin                         | Why                                                                                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `bootstrap`                    | Hosts this workflow. Must be passed via `--plugin bootstrap`.                                                                        |
+| `swarm`                        | Needed to verify beacon/coordinator connectivity and to give the agent access to `wiki_write` etc. during the kickoff message phase. |
+| `exec`                         | Needed to run shell commands (check systemd status, write files, enable timer).                                                      |
+| `file`                         | Needed to write the shell script and systemd unit files.                                                                             |
+| `ollama` (or any LLM provider) | Needed if the workflow asks the LLM to help design the pipeline.                                                                     |
 
 The workflow should use `ctx.enablePlugin()` to enable any missing plugins
 (except `bootstrap` itself, which must be passed on the CLI).
@@ -88,10 +88,11 @@ systemctl --user is-active drone-coordinator.service
 ```
 
 If not active, report:
+
 > The drone-coordinator service is not running. Start it with:
->   `systemctl --user start drone-coordinator.service`
+> `systemctl --user start drone-coordinator.service`
 > Or check its status with:
->   `systemctl --user status drone-coordinator.service`
+> `systemctl --user status drone-coordinator.service`
 
 #### 1b. Coordinator web port is reachable
 
@@ -101,6 +102,7 @@ curl -sf http://127.0.0.1:4300/health
 
 The coordinator's web port (4300) is HTTP and bound to `0.0.0.0`, so it should
 be reachable from localhost without TLS. If unreachable, check:
+
 - Is the coordinator actually listening on port 4300? (`ss -tlnp | grep 4300`)
 - Does the service unit have `--web-port 4300` and `--web-host 0.0.0.0`?
 
@@ -113,6 +115,7 @@ curl -s http://127.0.0.1:4300/api/personas | jq -r '.[].id' | grep -q coordinato
 If missing, the persona is auto-seeded on coordinator startup (see
 `seedDefaults()` in `drone-coordinator/src/index.ts`). Restarting the
 coordinator should create it:
+
 ```bash
 systemctl --user restart drone-coordinator.service
 ```
@@ -134,6 +137,7 @@ which curl && which jq
 ```
 
 Both are needed by the ingest script. If missing, prompt to install:
+
 ```bash
 sudo apt install curl jq   # Debian/Ubuntu
 ```
@@ -180,6 +184,7 @@ If `design` is not provided, the workflow asks:
 > Would you like to use this default, or describe a different approach?
 >
 > Choices:
+>
 > - `default` — Use the karpathy-wiki approach
 > - `custom` — Let me describe what I want
 
@@ -236,6 +241,7 @@ to reflect their description instead of the generic "key insights, decisions, an
 patterns" language.
 
 Make executable:
+
 ```bash
 chmod +x ~/.local/bin/drone-wiki-ingest.sh
 ```

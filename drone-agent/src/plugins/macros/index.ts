@@ -1,4 +1,8 @@
-import type { DronePlugin, DroneSlashCommandContext } from 'drone-core';
+import type {
+  DroneConversationEvent,
+  DronePlugin,
+  DroneSlashCommandContext,
+} from 'drone-core';
 import type { DroneMacroDefinition } from './types.js';
 import { loadMacros } from './loader.js';
 import { substituteMacroArgs } from './parser.js';
@@ -74,14 +78,7 @@ export const macrosPlugin: DronePlugin = {
                   if (ctx.engine.dispatchSlashCommand) {
                     const handled = await ctx.engine.dispatchSlashCommand(
                       substituted,
-                      {
-                        logger: ctx.logger,
-                        engine: ctx.engine,
-                        conversation: ctx.conversation,
-                        sessionManager: ctx.sessionManager,
-                        exit: ctx.exit,
-                        printHelp: ctx.printHelp,
-                      }
+                      ctx
                     );
                     if (!handled) {
                       ctxLogger.warn(`Macro step not handled: ${substituted}`);
@@ -92,19 +89,49 @@ export const macrosPlugin: DronePlugin = {
                     );
                   }
                 } else {
-                  // Chat prompt: send to conversation.
+                  // Chat prompt: send to conversation and wait for response.
                   const substituted = substituteMacroArgs(
                     step.text,
                     args,
                     macro
                   );
                   ctxLogger.info(substituted);
-                  if (ctx.conversation?.enqueueUserMessage) {
-                    ctx.conversation.enqueueUserMessage(substituted);
-                  } else {
-                    ctxLogger.warn(
-                      'Macro cannot send chat prompt: no conversation service available'
+                  if (ctx.conversation?.sendUserMessage) {
+                    await ctx.engine.runHooks?.('onBeforePrompt');
+                    const reply = await ctx.conversation.sendUserMessage(
+                      substituted,
+                      (rawEvent: unknown) => {
+                        const event = rawEvent as DroneConversationEvent;
+                        switch (event.kind) {
+                          case 'reasoning':
+                            ctxLogger.info(`💭 ${event.content}`);
+                            break;
+                          case 'toolCall':
+                            ctxLogger.info(
+                              `→ tool: ${event.name} ${JSON.stringify(event.arguments)}`
+                            );
+                            break;
+                          case 'toolResult':
+                            ctxLogger.info(
+                              `← ${event.name}: ${event.content.slice(0, 200)}`
+                            );
+                            break;
+                          case 'assistantMessage':
+                            ctxLogger.info(event.content);
+                            break;
+                          case 'error':
+                            ctxLogger.warn(`Error: ${event.message}`);
+                            break;
+                        }
+                      }
                     );
+                    if (reply.length > 0) {
+                      ctxLogger.info(reply);
+                    }
+                    await ctx.engine.runHooks?.('onAfterToolCall');
+                  } else {
+                    // Fallback: append as user message if no conversation available.
+                    ctx.sessionManager?.appendUserMessage(substituted);
                   }
                 }
               }

@@ -31,6 +31,7 @@ The fix is to call `sendUserMessage` directly (as the original code did before t
 **Change:** Replace the `enqueueUserMessage` call with `sendUserMessage`, including an event handler that logs events to `ctxLogger` (info for assistant messages, warn for errors, etc.), and wrap it with `onBeforePrompt`/`onAfterToolCall` hooks.
 
 The event handler should handle these event kinds (matching `DroneConversationEvent`):
+
 - `reasoning` → log with a `💭` prefix
 - `toolCall` → log with `→ tool:` prefix
 - `toolResult` → log with `←` prefix (truncate content to 200 chars)
@@ -96,26 +97,22 @@ After `sendUserMessage` resolves, log the reply if non-empty.
 **Change:** The current code constructs a new context object with only `{ logger, engine, conversation, sessionManager, exit, printHelp }`. The old code passed `ctx` directly. Since the engine's `dispatchSlashCommand` does `{ ...ctx, line, args }` (overwriting `line` and `args`), passing the full `ctx` is cleaner and avoids unnecessary object allocation.
 
 Replace:
+
 ```typescript
-const handled = await ctx.engine.dispatchSlashCommand(
-  substituted,
-  {
-    logger: ctx.logger,
-    engine: ctx.engine,
-    conversation: ctx.conversation,
-    sessionManager: ctx.sessionManager,
-    exit: ctx.exit,
-    printHelp: ctx.printHelp,
-  }
-);
+const handled = await ctx.engine.dispatchSlashCommand(substituted, {
+  logger: ctx.logger,
+  engine: ctx.engine,
+  conversation: ctx.conversation,
+  sessionManager: ctx.sessionManager,
+  exit: ctx.exit,
+  printHelp: ctx.printHelp,
+});
 ```
 
 With:
+
 ```typescript
-const handled = await ctx.engine.dispatchSlashCommand(
-  substituted,
-  ctx
-);
+const handled = await ctx.engine.dispatchSlashCommand(substituted, ctx);
 ```
 
 ### Step 3: Update the test that asserts `enqueueUserMessage` behavior
@@ -124,13 +121,14 @@ const handled = await ctx.engine.dispatchSlashCommand(
 
 **Location:** The test `'logs chatPrompt text and streams events through engine hooks'` (around line 650).
 
-**Change:** This test currently asserts `capturedEvents.length === 0` with a comment explaining that the macro enqueues rather than calling `sendUserMessage`. After the fix, the macro *does* call `sendUserMessage`, so events will flow through. Update the test to:
+**Change:** This test currently asserts `capturedEvents.length === 0` with a comment explaining that the macro enqueues rather than calling `sendUserMessage`. After the fix, the macro _does_ call `sendUserMessage`, so events will flow through. Update the test to:
 
 1. Have the mock `sendUserMessage` fire events via `engine.runConversationEventHooks` (it already does this)
 2. Assert that `capturedEvents` contains the expected events (reasoning, toolCall, toolResult, assistantMessage)
 3. Assert that the reply from `sendUserMessage` is logged via `infoMessages`
 
 **Rough assertion changes:**
+
 ```typescript
 // The substituted prompt text should be logged
 expect(infoMessages[0]).toBe('What is the meaning of life?');
@@ -151,6 +149,7 @@ expect(infoMessages[1]).toBe('42');
 **File:** `drone-agent/src/plugins/macros/index.ts`
 
 Add to the existing imports:
+
 ```typescript
 import type { DroneConversationEvent } from 'drone-core';
 ```
