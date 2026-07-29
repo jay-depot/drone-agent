@@ -1,5 +1,5 @@
 import type { DroneEmbeddingProvider } from 'drone-core';
-import { SearchStore, type SearchChunkRow } from './store.js';
+import { SearchStore, type SearchChunkRow } from './search-store.js';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -16,11 +16,13 @@ export type SearchOptions = {
   query: string;
   maxResults: number;
   minScore?: number;
+  /** Optional directory path to scope the search to. */
+  directoryPath?: string;
 };
 
 // ── Cosine Similarity ───────────────────────────────────────────────
 
-function cosineSimilarity(a: Float32Array, b: Float32Array): number {
+export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   let dot = 0;
   let normA = 0;
   let normB = 0;
@@ -41,13 +43,14 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 export async function semanticSearch(
   options: SearchOptions
 ): Promise<SearchResult[]> {
-  const { store, provider, query, maxResults, minScore } = options;
+  const { store, provider, query, maxResults, minScore, directoryPath } =
+    options;
 
   // Get the query embedding with search_query: prefix (per Nomic convention)
   const queryEmbedding = await provider.getEmbedding(`search_query: ${query}`);
 
-  // Get all chunks from the store
-  const allChunks = store.getAllChunks();
+  // Get all chunks from the store (optionally scoped to a directory)
+  const allChunks = store.getAllChunks(directoryPath);
 
   // Compute similarity for each chunk
   const scored: Array<{ chunk: SearchChunkRow; score: number }> = [];

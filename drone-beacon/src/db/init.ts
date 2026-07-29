@@ -139,6 +139,36 @@ export function initDatabase(dataPath: string): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_principles_target ON principles(targetType, targetId);
+
+    CREATE TABLE IF NOT EXISTS search_directories (
+      agent_id TEXT NOT NULL,
+      directory_path TEXT NOT NULL,
+      registered_at INTEGER NOT NULL,
+      PRIMARY KEY (agent_id, directory_path)
+    );
+
+    CREATE TABLE IF NOT EXISTS search_files (
+      id TEXT PRIMARY KEY,
+      directory_path TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      hash TEXT NOT NULL,
+      last_indexed INTEGER NOT NULL,
+      UNIQUE(directory_path, file_path)
+    );
+
+    CREATE TABLE IF NOT EXISTS search_chunks (
+      id TEXT PRIMARY KEY,
+      directory_path TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      chunk_index INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      embedding BLOB NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_search_files_dir ON search_files(directory_path);
+    CREATE INDEX IF NOT EXISTS idx_search_chunks_dir ON search_chunks(directory_path);
+    CREATE INDEX IF NOT EXISTS idx_search_directories_agent ON search_directories(agent_id);
+
     CREATE TABLE IF NOT EXISTS wiki_pages (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,

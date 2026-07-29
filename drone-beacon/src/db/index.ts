@@ -87,3 +87,27 @@ export {
   deletePrinciple,
 } from './principles.js';
 export type { PrincipleRow } from './principles.js';
+export {
+  registerSearchPath,
+  unregisterSearchPath,
+  listSearchPaths,
+  listAllSearchPaths,
+  getAgentsForDirectory,
+  getAllDirectoryPaths,
+  removeAgentSearchPaths,
+  getFileHash,
+  upsertFile,
+  removeFile,
+  getFilesByDirectory,
+  removeFilesByDirectory,
+  removeStaleFiles,
+  insertChunk,
+  deleteChunksForFile,
+  getAllChunks,
+  getChunkCount,
+} from './search.js';
+export type {
+  SearchDirectoryRow,
+  SearchFileRow,
+  SearchChunkRow,
+} from './search.js';

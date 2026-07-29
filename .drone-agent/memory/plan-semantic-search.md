@@ -1,7 +1,6 @@
 ---
 key: plan-semantic-search
-tags:
-  []
+tags: []
 created: 2026-07-14T20:06:09.160Z
 updated: 2026-07-29T03:15:55.960Z
 ---
@@ -62,6 +61,7 @@ Move the vector indexing and semantic search functionality from the agent's loca
 ### Step 3: Add beacon search routes
 
 **File**: `drone-beacon/src/routes/search.ts` — Three endpoints:
+
 - `PUT /agents/:id/search-paths` — Set search paths for an agent
 - `GET /agents/:id/search` — Semantic search (query, maxResults, minScore, path)
 - `POST /agents/:id/search/reindex` — Trigger reindexing
@@ -71,6 +71,7 @@ Move the vector indexing and semantic search functionality from the agent's loca
 ### Step 4: Add beacon background indexing service
 
 **File**: `drone-beacon/src/search-indexer.ts` — `SearchIndexer` class that:
+
 - Indexes directories in the background (non-blocking)
 - Deduplicates across agents (same directory = one index)
 - Uses shared `SearchStore`, `chunkText`, `createOllamaEmbeddingProvider` from `drone-swarm-common`

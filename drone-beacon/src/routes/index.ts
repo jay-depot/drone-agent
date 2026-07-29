@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import health from './health.js';
+import search from './search.js';
 import personas from './personas.js';
 import skills from './skills.js';
 import agents from './agents.js';
@@ -16,6 +17,7 @@ import sync from './sync.js';
 // Re-export helpers from context for external use
 export {
   setCoordinatorClient,
+  setSearchIndexer,
   setBeaconAddress,
   triggerCoordinatorSync,
 } from './context.js';
@@ -24,6 +26,7 @@ export async function registerRoutes(app: FastifyInstance) {
   health(app);
   personas(app);
   skills(app);
+  search(app);
   agents(app);
   memory(app);
   messages(app);

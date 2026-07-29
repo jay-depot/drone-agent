@@ -7,8 +7,7 @@ import {
   type DronePluginRegistration,
 } from 'drone-core';
 import { searchPlugin } from '../src/plugins/search/index.js';
-import { SearchStore } from '../src/plugins/search/store.js';
-import { semanticSearch } from '../src/plugins/search/searcher.js';
+import { SearchStore, semanticSearch } from 'drone-swarm-common';
 import { silentLogger } from './helpers.js';
 
 function captureRegistration(): {
@@ -133,7 +132,7 @@ describe('search plugin — text (regex)', () => {
     const result = JSON.parse(
       await text!({ pattern: 'foo', mode: 'semantic' })
     );
-    expect(result.note).toMatch(/no embedding providers/i);
+    expect(result.note).toMatch(/beacon connection/i);
   });
 });
 
@@ -145,8 +144,9 @@ describe('SearchStore', () => {
 
   beforeAll(async () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'drone-search-store-'));
-    store = new SearchStore('project', tmpDir);
-    await store.ensureDir();
+    const dbPath = path.join(tmpDir, 'search.db');
+    store = new SearchStore(dbPath);
+    store.open();
   });
 
   afterAll(() => {
@@ -162,52 +162,52 @@ describe('SearchStore', () => {
   });
 
   it('inserts and retrieves file hashes', () => {
-    store.upsertFile('/test/file1.ts', 'abc123');
-    expect(store.getFileHash('/test/file1.ts')).toBe('abc123');
+    store.upsertFile('/test', 'file1.ts', 'abc123');
+    expect(store.getFileHash('/test', 'file1.ts')).toBe('abc123');
   });
 
   it('updates existing file hashes', () => {
-    store.upsertFile('/test/file1.ts', 'def456');
-    expect(store.getFileHash('/test/file1.ts')).toBe('def456');
+    store.upsertFile('/test', 'file1.ts', 'def456');
+    expect(store.getFileHash('/test', 'file1.ts')).toBe('def456');
   });
 
   it('inserts and retrieves chunks', () => {
     const embedding = new Float32Array([0.1, 0.2, 0.3, 0.4]);
-    store.insertChunk('/test/file1.ts', 0, 'hello world', embedding);
+    store.insertChunk('/test', 'file1.ts', 0, 'hello world', embedding);
 
-    const chunks = store.getChunksForFile('/test/file1.ts');
+    const chunks = store.getChunksForFile('/test', 'file1.ts');
     expect(chunks).toHaveLength(1);
     expect(chunks[0].text).toBe('hello world');
     expect(chunks[0].chunk_index).toBe(0);
   });
 
   it('deletes chunks when file is removed', () => {
-    store.deleteChunksForFile('/test/file1.ts');
-    const chunks = store.getChunksForFile('/test/file1.ts');
+    store.deleteChunksForFile('/test', 'file1.ts');
+    const chunks = store.getChunksForFile('/test', 'file1.ts');
     expect(chunks).toHaveLength(0);
   });
 
   it('removes stale files', () => {
-    store.upsertFile('/test/stale.ts', 'stale');
+    store.upsertFile('/test', 'stale.ts', 'stale');
     const existing = new Set<string>();
-    const removed = store.removeStaleFiles(existing);
-    expect(removed).toContain('/test/stale.ts');
-    expect(store.getFileHash('/test/stale.ts')).toBeUndefined();
+    const removed = store.removeStaleFiles('/test', existing);
+    expect(removed).toContain('stale.ts');
+    expect(store.getFileHash('/test', 'stale.ts')).toBeUndefined();
   });
 
   it('returns all file paths', () => {
-    store.upsertFile('/test/a.ts', 'aaa');
-    store.upsertFile('/test/b.ts', 'bbb');
-    const paths = store.getAllFilePaths();
-    expect(paths).toContain('/test/a.ts');
-    expect(paths).toContain('/test/b.ts');
+    store.upsertFile('/test', 'a.ts', 'aaa');
+    store.upsertFile('/test', 'b.ts', 'bbb');
+    const paths = store.getAllFilePaths('/test');
+    expect(paths).toContain('a.ts');
+    expect(paths).toContain('b.ts');
   });
 
   it('returns chunk count', () => {
     const embedding = new Float32Array([0.1, 0.2, 0.3, 0.4]);
-    store.insertChunk('/test/a.ts', 0, 'chunk a', embedding);
-    store.insertChunk('/test/b.ts', 0, 'chunk b', embedding);
-    expect(store.getChunkCount()).toBeGreaterThanOrEqual(2);
+    store.insertChunk('/test', 'a.ts', 0, 'chunk a', embedding);
+    store.insertChunk('/test', 'b.ts', 0, 'chunk b', embedding);
+    expect(store.getChunkCount('/test')).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -219,31 +219,35 @@ describe('semanticSearch', () => {
 
   beforeAll(async () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'drone-search-semantic-'));
-    store = new SearchStore('project', tmpDir);
-    await store.ensureDir();
+    const dbPath = path.join(tmpDir, 'search.db');
+    store = new SearchStore(dbPath);
+    store.open();
 
     // Insert file records first (required by foreign key constraint)
-    store.upsertFile('/test/animals.txt', 'hash1');
-    store.upsertFile('/test/vehicles.txt', 'hash2');
+    store.upsertFile('/test', 'animals.txt', 'hash1');
+    store.upsertFile('/test', 'vehicles.txt', 'hash2');
 
     // Insert some test chunks with known embeddings
     // Embedding for "cat" concept: [1, 0, 0, 0]
     store.insertChunk(
-      '/test/animals.txt',
+      '/test',
+      'animals.txt',
       0,
       'The cat sat on the mat',
       new Float32Array([1, 0, 0, 0])
     );
     // Embedding for "dog" concept: [0, 1, 0, 0]
     store.insertChunk(
-      '/test/animals.txt',
+      '/test',
+      'animals.txt',
       1,
       'The dog barked loudly',
       new Float32Array([0, 1, 0, 0])
     );
     // Embedding for "car" concept: [0, 0, 1, 0]
     store.insertChunk(
-      '/test/vehicles.txt',
+      '/test',
+      'vehicles.txt',
       0,
       'The car drove fast',
       new Float32Array([0, 0, 1, 0])

@@ -1,5 +1,7 @@
 import fastify from 'fastify';
 import '@fastify/websocket';
+import { createOllamaEmbeddingProvider } from 'drone-swarm-common';
+import { SearchIndexer } from './search-indexer.js';
 import os from 'node:os';
 import path from 'path';
 import fs from 'fs';
@@ -13,6 +15,7 @@ import {
   setCoordinatorClient,
   setBeaconAddress,
   triggerCoordinatorSync,
+  setSearchIndexer,
 } from './routes/index.js';
 import {
   createCoordinatorClient,
@@ -142,12 +145,32 @@ async function main() {
 
   // Initialize database
   initDatabase(config.dbPath);
+  // Initialize search indexer
+  const ollamaHost = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
+  let searchIndexer: SearchIndexer;
+  try {
+    const provider = createOllamaEmbeddingProvider({ host: ollamaHost });
+    searchIndexer = new SearchIndexer(provider);
+    logger.info(
+      `Search indexer initialized with Ollama embedding provider (${ollamaHost})`
+    );
+  } catch (err) {
+    searchIndexer = new SearchIndexer();
+    logger.warn(
+      `Search indexer initialized without embedding provider: ${err}`
+    );
+  }
+  setSearchIndexer(searchIndexer);
+  searchIndexer.startPeriodicSweep();
 
   // Initialize wiki storage under config dir
   setKnowledgeBaseDir(path.join(config.configDir, 'knowledge-base'));
 
   // Load or create beacon identity (Ed25519 keypair)
-  const identity = await loadOrCreateIdentity(config.beaconId, config.configDir);
+  const identity = await loadOrCreateIdentity(
+    config.beaconId,
+    config.configDir
+  );
   logger.info(
     `Beacon identity loaded (public key: ${identity.publicKeyHex.slice(0, 16)}...)`
   );
@@ -314,6 +337,7 @@ async function main() {
   const shutdown = async () => {
     logger.info('Shutting down...');
     clearInterval(cleanupInterval);
+    searchIndexer.stopPeriodicSweep();
     if (syncInterval) {
       clearInterval(syncInterval);
     }

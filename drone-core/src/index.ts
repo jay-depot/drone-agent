@@ -169,6 +169,9 @@ export type {
   DroneSelfImprovementCapability,
   DroneEmbeddingProvider,
   DroneSearchCapability,
+  SearchResult,
+  IndexResult,
+  DroneSwarmCapability,
 } from './capabilities.js';
 
 // ── Wiki types ────────────────────────────────────────────────────────

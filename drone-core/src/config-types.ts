@@ -329,7 +329,7 @@ export type DroneAgentConfig = {
   terminal: DroneTerminalConfig;
   promptFile: DronePromptFileConfig;
   swarm: DroneSwarmConfig;
-  search: DroneSearchConfig
+  search: DroneSearchConfig;
   tui: DroneTuiConfig;
 };
 

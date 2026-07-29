@@ -29,6 +29,37 @@ export type DroneSearchCapability = {
   ): DroneEmbeddingProvider | undefined;
 };
 
+/**
+ * Capability offered by the swarm plugin. Lets other plugins discover
+ * the beacon URL and agent ID for proxying requests to the beacon.
+ */
+export type DroneSwarmCapability = {
+  /** Get the base URL of the connected beacon. */
+  getBeaconUrl(): string;
+  /** Get the agent's session ID registered with the beacon. */
+  getAgentId(): string;
+};
+
+/**
+ * Result of a semantic search operation.
+ */
+export type SearchResult = {
+  filePath: string;
+  chunkIndex: number;
+  text: string;
+  score: number;
+};
+
+/**
+ * Result of an indexing operation.
+ */
+export type IndexResult = {
+  filesIndexed: number;
+  filesSkipped: number;
+  filesRemoved: number;
+  chunksCreated: number;
+};
+
 // ── Capability types ───────────────────────────────────────────────
 
 import type { DroneReasoningLevel } from './config-types.js';

@@ -258,6 +258,9 @@ importers:
 
   drone-swarm-common:
     dependencies:
+      better-sqlite3:
+        specifier: ^11.8.1
+        version: 11.10.0
       drone-core:
         specifier: workspace:*
         version: link:../drone-core
@@ -265,6 +268,9 @@ importers:
         specifier: ^9.6.0
         version: 9.14.0
     devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
       '@types/node':
         specifier: ^24.0.10
         version: 24.13.2

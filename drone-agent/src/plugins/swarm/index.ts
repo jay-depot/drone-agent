@@ -1,6 +1,7 @@
 import { ListToolsBlock } from '../../tui/components/ListToolsBlock.js';
 import { MountToolBlock } from '../../tui/components/MountToolBlock.js';
 import { UnmountToolBlock } from '../../tui/components/UnmountToolBlock.js';
+import type { DroneSwarmCapability } from 'drone-core';
 /**
  * Swarm plugin — connects to a drone-beacon for swarm-wide personas,
  * skills, messaging, wiki, and coordinator integration.
@@ -9,8 +10,8 @@ import { UnmountToolBlock } from '../../tui/components/UnmountToolBlock.js';
  */
 
 import type {
-  DronePersonaCapability,
   DronePlugin,
+  DronePersonaCapability,
   DroneSkillsCapability,
   DroneToolDefinition,
 } from 'drone-core';
@@ -154,6 +155,14 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
 
       // Create shared context
       const ctx = createSwarmContext(baseUrl, sessionId, registration, wsUrl);
+
+      // ── Offer swarm capability ─────────────────────────────────────────
+      const swarmCap: DroneSwarmCapability = {
+        getBeaconUrl: () => baseUrl,
+        getAgentId: () => sessionId,
+      };
+      registration.offer(swarmCap);
+      registration.logger.info('Offered DroneSwarmCapability');
 
       // ── Persona and skill providers ─────────────────────────────────────
       const personaCap =

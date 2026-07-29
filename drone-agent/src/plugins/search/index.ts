@@ -1,73 +1,9 @@
-import path from 'node:path';
-import os from 'node:os';
 import type {
   DronePlugin,
-  DroneSearchCapability,
-  DroneEmbeddingProvider,
+  DronePluginRegistration,
+  DroneSwarmCapability,
 } from 'drone-core';
 import { execFileAsync } from '../../shared/exec-async.js';
-import { SearchStore } from './store.js';
-import { runIndexing } from './indexer.js';
-import { semanticSearch } from './searcher.js';
-import { createOllamaEmbeddingProvider } from './providers/ollama.js';
-
-// ── Embedding Provider Registry ──────────────────────────────────────
-
-const embeddingProviders: DroneEmbeddingProvider[] = [];
-
-function registerEmbeddingProvider(provider: DroneEmbeddingProvider): void {
-  const existingIdx = embeddingProviders.findIndex(p => p.id === provider.id);
-  if (existingIdx !== -1) {
-    embeddingProviders[existingIdx] = provider;
-  } else {
-    embeddingProviders.push(provider);
-  }
-}
-
-function unregisterEmbeddingProvider(id: string): void {
-  const idx = embeddingProviders.findIndex(p => p.id === id);
-  if (idx !== -1) {
-    embeddingProviders.splice(idx, 1);
-  }
-}
-
-function getEmbeddingProviders(): DroneEmbeddingProvider[] {
-  return [...embeddingProviders];
-}
-
-function resolveProvider(
-  scope: 'user' | 'project',
-  _dirPath?: string
-): DroneEmbeddingProvider | undefined {
-  const config = getConfigRef();
-  if (!config) return undefined;
-
-  const searchConfig = config.search;
-  if (!searchConfig) return undefined;
-
-  const providerId =
-    scope === 'user'
-      ? searchConfig.userEmbeddingProvider
-      : searchConfig.projectEmbeddingProvider;
-
-  if (providerId) {
-    const provider = embeddingProviders.find(p => p.id === providerId);
-    if (provider) return provider;
-  }
-
-  // Fall back to first available provider
-  return embeddingProviders[0];
-}
-
-// ── Config reference (set during registration) ──────────────────────
-
-let getConfigRef: () => import('drone-core').DroneAgentConfig | null = () =>
-  null;
-
-// ── Store references (set during onPluginsLoaded) ───────────────────
-
-let userStore: SearchStore | null = null;
-let projectStore: SearchStore | null = null;
 
 // ── Ripgrep detection (cached) ──────────────────────────────────────
 
@@ -90,30 +26,21 @@ export const searchPlugin: DronePlugin = {
   metadata: {
     id: 'search',
     name: 'Search',
-    version: '0.2.0',
+    version: '0.3.0',
     description:
-      'Text and code search across the workspace, with semantic search support.',
+      'Text and code search across the workspace. Regex search is always available. ' +
+      'Semantic search is available when the swarm plugin is connected to a beacon.',
     defaultEnabled: false,
+    dependencies: [{ id: 'swarm', optional: true }],
   },
   register: async registration => {
-    getConfigRef = () => registration.getConfig();
-
-    // ── Capability ──────────────────────────────────────────────────
-    const capability: DroneSearchCapability = {
-      registerEmbeddingProvider,
-      unregisterEmbeddingProvider,
-      getEmbeddingProviders,
-      resolveProvider,
-    };
-    registration.offer(capability);
-
     // ── search__text tool ──────────────────────────────────────────
     registration.registerTool({
       name: 'text',
       description:
         'Regex/fixed-string search via ripgrep (falls back to grep). ' +
         'Returns file, line, content. ' +
-        'Use mode="semantic" for semantic (vector) search when an embedding provider is available.',
+        'Use mode="semantic" for semantic (vector) search when a beacon connection is available.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -145,7 +72,7 @@ export const searchPlugin: DronePlugin = {
             type: 'string',
             enum: ['regex', 'semantic'],
             description:
-              'Search mode. "regex" (default) uses ripgrep/grep. "semantic" uses vector similarity search.',
+              'Search mode. "regex" (default) uses ripgrep/grep. "semantic" uses vector similarity search via the beacon.',
           },
         },
         required: ['pattern'],
@@ -155,7 +82,7 @@ export const searchPlugin: DronePlugin = {
         const mode = (input.mode as string) || 'regex';
 
         if (mode === 'semantic') {
-          return handleSemanticSearch(input);
+          return handleSemanticSearch(input, registration);
         }
 
         return handleRegexSearch(input);
@@ -174,80 +101,72 @@ export const searchPlugin: DronePlugin = {
         return;
       }
 
-      // Initialize stores
-      const projectDir = process.cwd();
-      userStore = new SearchStore('user');
-      projectStore = new SearchStore('project', projectDir);
-      await userStore.ensureDir();
-      await projectStore.ensureDir();
+      // Check if swarm is available
+      const swarmCap = registration.request<DroneSwarmCapability>('swarm');
 
-      // Register the Ollama embedding provider if available
-      const ollamaHost = config.ollama.host;
-      if (ollamaHost) {
-        try {
-          const provider = createOllamaEmbeddingProvider({
-            host: ollamaHost,
-          });
-          registerEmbeddingProvider(provider);
-          registration.logger.info(
-            `search: registered Ollama embedding provider (${provider.name})`
-          );
-        } catch (err) {
-          registration.logger.warn(
-            `search: failed to register Ollama embedding provider: ${err instanceof Error ? err.message : String(err)}`
-          );
-        }
+      if (!swarmCap) {
+        registration.logger.info(
+          'search: swarm plugin not available; semantic search will not be available. ' +
+            'Enable the swarm plugin and connect to a beacon for semantic search.'
+        );
+        return;
       }
 
-      // Run initial indexing
+      // Register search paths with the beacon
       const directories = searchConfig.paths ?? [];
-      if (directories.length > 0) {
-        const provider = resolveProvider('project');
-        if (provider && projectStore) {
-          registration.logger.info(
-            `search: starting initial indexing of ${directories.length} directory/directories...`
-          );
-          const result = await runIndexing({
-            store: projectStore,
-            provider,
-            directories,
-            logger: registration.logger,
-          });
-          registration.logger.info(
-            `search: indexing complete — ${result.filesIndexed} indexed, ${result.filesSkipped} skipped, ${result.filesRemoved} removed, ${result.chunksCreated} chunks`
-          );
+      if (directories.length === 0) {
+        registration.logger.info(
+          'search: no search paths configured; skipping beacon registration'
+        );
+        return;
+      }
 
-          // Register a prompt fragment so the model knows which directories
-          // are indexed for semantic search.
-          const dirList = directories
-            .map(d => `  - ${d.path}`)
-            .join('\n');
-          registration.registerPromptFragment({
-            key: 'search-indexed-directories',
-            phase: 'header',
-            render: async () =>
-              `# Search Index\n` +
-              `The following directories are indexed for semantic search. ` +
-              `Use \`search__text\` with \`mode: "semantic"\` to query them ` +
-              `by meaning rather than regex.\n` +
-              `${dirList}\n`,
-          });
-        } else {
-          registration.logger.info(
-            'search: no embedding provider available, skipping indexing'
+      const beaconUrl = swarmCap.getBeaconUrl();
+      const agentId = swarmCap.getAgentId();
+
+      try {
+        const response = await fetch(
+          `${beaconUrl}/agents/${agentId}/search-paths`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paths: directories }),
+          }
+        );
+
+        if (!response.ok) {
+          const body = await response.text().catch(() => '');
+          registration.logger.warn(
+            `search: failed to register search paths with beacon (HTTP ${response.status}): ${body}`
           );
+          return;
         }
-      }
-    });
 
-    registration.hooks.onShutdown(async () => {
-      if (userStore) {
-        userStore.close();
-        userStore = null;
-      }
-      if (projectStore) {
-        projectStore.close();
-        projectStore = null;
+        const result = (await response.json()) as {
+          indexed: boolean;
+          paths: string[];
+        };
+        registration.logger.info(
+          `search: registered ${result.paths.length} path(s) with beacon (indexed: ${result.indexed})`
+        );
+
+        // Register a prompt fragment so the model knows which directories
+        // are indexed for semantic search.
+        const dirList = directories.map(d => `  - ${d.path}`).join('\n');
+        registration.registerPromptFragment({
+          key: 'search-indexed-directories',
+          phase: 'header',
+          render: async () =>
+            `# Search Index\n` +
+            `The following directories are indexed for semantic search. ` +
+            `Use \`search__text\` with \`mode: "semantic"\` to query them ` +
+            `by meaning rather than regex.\n` +
+            `${dirList}\n`,
+        });
+      } catch (err) {
+        registration.logger.warn(
+          `search: failed to connect to beacon for search path registration: ${err}`
+        );
       }
     });
   },
@@ -256,15 +175,18 @@ export const searchPlugin: DronePlugin = {
 // ── Search handlers ───────────────────────────────────────────────────
 
 async function handleSemanticSearch(
-  input: Record<string, unknown>
+  input: Record<string, unknown>,
+  registration: DronePluginRegistration
 ): Promise<string> {
-  const providers = getEmbeddingProviders();
-  if (providers.length === 0) {
+  const swarmCap = registration.request<DroneSwarmCapability>('swarm');
+
+  if (!swarmCap) {
     return JSON.stringify(
       {
         note:
-          'Semantic search is not available — no embedding providers are registered. ' +
-          'Ensure Ollama is running and has the nomic-embed-text model installed.',
+          'Semantic search requires a beacon connection. ' +
+          'Enable the swarm plugin and connect to a beacon to use semantic search. ' +
+          'Alternatively, use an MCP server for vector search.',
       },
       null,
       2
@@ -291,62 +213,46 @@ async function handleSemanticSearch(
       ? Math.max(0, Math.min(1, input.minScore))
       : 0.0;
 
-  // Determine which store to use based on the path
   const searchPath =
     typeof input.path === 'string' && input.path.trim().length > 0
       ? input.path.trim()
-      : process.cwd();
+      : undefined;
 
-  // Resolve the store and provider
-  const projectDir = process.cwd();
-  const isProjectPath = searchPath.startsWith(projectDir);
-  const store = isProjectPath ? projectStore : userStore;
+  const beaconUrl = swarmCap.getBeaconUrl();
+  const agentId = swarmCap.getAgentId();
 
-  if (!store) {
-    return JSON.stringify(
-      {
-        note: 'Semantic search index is not initialized. Enable search in config and restart.',
-      },
-      null,
-      2
-    );
-  }
-
-  const provider = resolveProvider(isProjectPath ? 'project' : 'user');
-  if (!provider) {
-    return JSON.stringify(
-      {
-        note: 'No embedding provider available for semantic search.',
-      },
-      null,
-      2
-    );
-  }
+  const params = new URLSearchParams();
+  params.set('q', query);
+  params.set('maxResults', String(maxResults));
+  params.set('minScore', String(minScore));
+  if (searchPath) params.set('path', searchPath);
 
   try {
-    const results = await semanticSearch({
-      store,
-      provider,
-      query,
-      maxResults,
-      minScore,
-    });
-
-    return JSON.stringify(
-      {
-        query,
-        resultCount: results.length,
-        truncated: results.length >= maxResults,
-        results: results.map(r => ({
-          file: r.filePath,
-          chunkIndex: r.chunkIndex,
-          content: r.text,
-          score: r.score,
-        })),
-      },
-      null,
-      2
+    const response = await fetch(
+      `${beaconUrl}/agents/${agentId}/search?${params.toString()}`,
+      { method: 'GET' }
     );
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `Beacon search failed (HTTP ${response.status}): ${body || response.statusText}`
+      );
+    }
+
+    const data = (await response.json()) as {
+      query: string;
+      resultCount: number;
+      truncated: boolean;
+      results: Array<{
+        file: string;
+        chunkIndex: number;
+        content: string;
+        score: number;
+      }>;
+    };
+
+    return JSON.stringify(data, null, 2);
   } catch (err) {
     throw new Error(
       `Semantic search failed: ${err instanceof Error ? err.message : String(err)}`
@@ -357,10 +263,7 @@ async function handleSemanticSearch(
 async function handleRegexSearch(
   input: Record<string, unknown>
 ): Promise<string> {
-  if (
-    typeof input.pattern !== 'string' ||
-    input.pattern.trim().length === 0
-  ) {
+  if (typeof input.pattern !== 'string' || input.pattern.trim().length === 0) {
     throw new Error('search__text requires a non-empty pattern string.');
   }
 
