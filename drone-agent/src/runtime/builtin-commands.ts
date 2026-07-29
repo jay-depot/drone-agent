@@ -231,6 +231,60 @@ const execCommand: DroneSlashCommand = {
   },
 };
 
+// ── /debug ─────────────────────────────────────────────────────────────
+
+const debugCommand: DroneSlashCommand = {
+  command: '/debug',
+  description: 'Enable or disable a debug subsystem: /debug enable|disable <name>',
+  handler: async (ctx: DroneSlashCommandContext) => {
+    if (!ctx.conversation) {
+      ctx.logger.warn(
+        'Conversation service not available — cannot manage debug subsystems.'
+      );
+      return true;
+    }
+
+    const args = ctx.args;
+
+    // No arguments: show current state + usage
+    if (args.length === 0) {
+      const subsystems = ctx.conversation.getDebugSubsystems();
+      const state =
+        subsystems.length > 0
+          ? `Debug subsystems: ${subsystems.join(', ')}`
+          : 'No debug subsystems enabled.';
+      ctx.logger.info(
+        `${state}\nUsage: /debug enable|disable <subsystem>\nExample: /debug enable llm`
+      );
+      return true;
+    }
+
+    // Wrong number of arguments
+    if (args.length !== 2) {
+      ctx.logger.info(
+        'Usage: /debug enable|disable <subsystem>\nExample: /debug enable llm'
+      );
+      return true;
+    }
+
+    const [action, subsystem] = args;
+
+    if (action === 'enable') {
+      ctx.conversation.enableDebugSubsystem(subsystem);
+      ctx.logger.info(`Debug subsystem "${subsystem}" enabled.`);
+    } else if (action === 'disable') {
+      ctx.conversation.disableDebugSubsystem(subsystem);
+      ctx.logger.info(`Debug subsystem "${subsystem}" disabled.`);
+    } else {
+      ctx.logger.warn(
+        `Invalid action "${action}". Use "enable" or "disable".`
+      );
+    }
+
+    return true;
+  },
+};
+
 // ── All built-in commands ─────────────────────────────────────────────
 
 export const BUILT_IN_SLASH_COMMANDS: DroneSlashCommand[] = [
@@ -243,4 +297,5 @@ export const BUILT_IN_SLASH_COMMANDS: DroneSlashCommand[] = [
   systemPromptCommand,
   toolCommand,
   execCommand,
+  debugCommand,
 ];

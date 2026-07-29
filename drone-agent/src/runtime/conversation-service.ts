@@ -45,6 +45,12 @@ export type ConversationService = {
   enqueueUserMessage: (prompt: string) => void;
   /** Request soft cancellation of the current in-flight `sendUserMessage`. */
   cancelCurrentRequest: () => void;
+  /** Get the list of currently enabled debug subsystems. */
+  getDebugSubsystems: () => string[];
+  /** Enable a debug subsystem by name (e.g. "llm"). */
+  enableDebugSubsystem: (name: string) => void;
+  /** Disable a debug subsystem by name (e.g. "llm"). */
+  disableDebugSubsystem: (name: string) => void;
 };
 
 type CreateConversationServiceOptions = {
@@ -616,6 +622,13 @@ export function createConversationService({
     },
     cancelCurrentRequest: () => {
       cancelled = true;
+    },
+    getDebugSubsystems: () => Array.from(debugSet),
+    enableDebugSubsystem: (name: string) => {
+      debugSet.add(name);
+    },
+    disableDebugSubsystem: (name: string) => {
+      debugSet.delete(name);
     },
   };
 }

@@ -308,6 +308,12 @@ export type DroneSlashCommandContext = {
     enqueueUserMessage?: (prompt: string) => void;
     /** Soft-cancel the current in-flight request. */
     cancelCurrentRequest?: () => void;
+    /** Get the list of currently enabled debug subsystems. */
+    getDebugSubsystems: () => string[];
+    /** Enable a debug subsystem by name (e.g. "llm"). */
+    enableDebugSubsystem: (name: string) => void;
+    /** Disable a debug subsystem by name (e.g. "llm"). */
+    disableDebugSubsystem: (name: string) => void;
   };
   /** Session manager for appending synthetic messages. */
   sessionManager?: {

@@ -155,6 +155,9 @@ function makeOptions(
       setReasoningLevel: (_level: any) => {},
       enqueueUserMessage: () => {},
       cancelCurrentRequest: () => {},
+      getDebugSubsystems: () => [],
+      enableDebugSubsystem: () => {},
+      disableDebugSubsystem: () => {},
     },
     ...overrides,
   };

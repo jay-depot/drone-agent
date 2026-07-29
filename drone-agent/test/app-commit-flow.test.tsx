@@ -96,6 +96,9 @@ describe('App commit flow', () => {
         setReasoningLevel: () => {},
         enqueueUserMessage: () => {},
         cancelCurrentRequest: () => {},
+        getDebugSubsystems: () => [],
+        enableDebugSubsystem: () => {},
+        disableDebugSubsystem: () => {},
       },
     };
     instance = render(<App {...opts} />);
