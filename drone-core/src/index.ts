@@ -198,6 +198,9 @@ export type {
 
 // ── Utils ───────────────────────────────────────────────────────────
 
+export { deepMerge } from './deep-merge.js';
+export type { MergeSpec } from './deep-merge.js';
+
 export {
   matchGlob,
   filterByGlobPatterns,
