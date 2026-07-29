@@ -741,12 +741,18 @@ describe('macrosPlugin', () => {
 
       expect(handled).toBe(true);
 
-      // The substituted prompt text should be logged
+      // The substituted prompt text should be logged first
       expect(infoMessages[0]).toBe('What is the meaning of life?');
-      // The macro enqueues the message rather than calling sendUserMessage,
-      // so no conversation events are fired through the engine hooks.
-      // The enqueued message will be processed on the next loop iteration.
-      expect(capturedEvents.length).toBe(0);
+
+      // Events should be streamed through engine hooks
+      expect(capturedEvents.length).toBeGreaterThan(0);
+      expect(capturedEvents[0]?.kind).toBe('reasoning');
+      expect(capturedEvents[1]?.kind).toBe('toolCall');
+      expect(capturedEvents[2]?.kind).toBe('toolResult');
+      expect(capturedEvents[3]?.kind).toBe('assistantMessage');
+
+      // The reply from sendUserMessage should be logged
+      expect(infoMessages[1]).toBe('42');
     });
   });
 });

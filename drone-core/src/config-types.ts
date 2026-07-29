@@ -1,3 +1,5 @@
+import { deepMerge, type MergeSpec } from './deep-merge.js';
+
 // ── Precedence constants for skill/persona/provider plugins ──────────
 /** Precedence for swarm-level providers (highest priority — lowest number). */
 export const PRECEDENCE_SWARM = 5000;
@@ -352,6 +354,35 @@ export type DroneResolvedConfig = {
 
 // ── Config helper functions ─────────────────────────────────────────
 
+const CONFIG_MERGE_SPEC: MergeSpec = {
+  replace: ['enabledPlugins', 'externalPlugins', 'systemPrompt'],
+  replaceNullable: ['activePersona'],
+  merge: [
+    'trustedPlugins',
+    'llm',
+    'ollama',
+    'session',
+    'compaction',
+    'memory',
+    'log',
+    'terminal',
+  ],
+  deepMerge: {
+    openai: { replace: ['models'] },
+    anthropic: { replace: ['models'] },
+    openrouter: { replace: ['models'] },
+    lsp: { replace: ['servers'] },
+    mcp: { replace: ['servers'] },
+    promptFile: { mergeArrays: ['files'] },
+    swarm: { deepMerge: { knowledgeSync: {} } },
+    tui: {
+      deepMerge: {
+        syntaxHighlighting: { deepMerge: { colors: {} } },
+      },
+    },
+  },
+};
+
 export function createDefaultAgentConfig(
   overrides?: Partial<DroneAgentConfig>
 ): DroneAgentConfig {
@@ -501,138 +532,5 @@ export function applyAgentConfigLayer(
   baseConfig: DroneAgentConfig,
   layer: PartialDroneAgentConfig
 ): DroneAgentConfig {
-  return {
-    enabledPlugins: layer.enabledPlugins ?? baseConfig.enabledPlugins,
-    externalPlugins: layer.externalPlugins ?? baseConfig.externalPlugins,
-    trustedPlugins: layer.trustedPlugins
-      ? { ...baseConfig.trustedPlugins, ...layer.trustedPlugins }
-      : baseConfig.trustedPlugins,
-    systemPrompt: layer.systemPrompt ?? baseConfig.systemPrompt,
-    activePersona:
-      layer.activePersona !== undefined
-        ? layer.activePersona
-        : baseConfig.activePersona,
-    llm: layer.llm
-      ? {
-          ...baseConfig.llm,
-          ...layer.llm,
-        }
-      : baseConfig.llm,
-    ollama: layer.ollama
-      ? {
-          ...baseConfig.ollama,
-          ...layer.ollama,
-        }
-      : baseConfig.ollama,
-    openai: layer.openai
-      ? {
-          ...baseConfig.openai,
-          ...layer.openai,
-          models: layer.openai.models ?? baseConfig.openai.models,
-        }
-      : baseConfig.openai,
-    anthropic: layer.anthropic
-      ? {
-          ...baseConfig.anthropic,
-          ...layer.anthropic,
-          models: layer.anthropic.models ?? baseConfig.anthropic.models,
-        }
-      : baseConfig.anthropic,
-    openrouter: layer.openrouter
-      ? {
-          ...baseConfig.openrouter,
-          ...layer.openrouter,
-          models: layer.openrouter.models ?? baseConfig.openrouter.models,
-        }
-      : baseConfig.openrouter,
-    session: layer.session
-      ? {
-          ...baseConfig.session,
-          ...layer.session,
-        }
-      : baseConfig.session,
-    lsp: layer.lsp
-      ? {
-          ...baseConfig.lsp,
-          ...layer.lsp,
-          servers: layer.lsp.servers ?? baseConfig.lsp.servers,
-        }
-      : baseConfig.lsp,
-    mcp: layer.mcp
-      ? {
-          ...baseConfig.mcp,
-          ...layer.mcp,
-          servers: layer.mcp.servers ?? baseConfig.mcp.servers,
-        }
-      : baseConfig.mcp,
-    compaction: layer.compaction
-      ? {
-          ...baseConfig.compaction,
-          ...layer.compaction,
-        }
-      : baseConfig.compaction,
-    memory: layer.memory
-      ? {
-          ...baseConfig.memory,
-          ...layer.memory,
-        }
-      : baseConfig.memory,
-    log: layer.log
-      ? {
-          ...baseConfig.log,
-          ...layer.log,
-        }
-      : baseConfig.log,
-    terminal: layer.terminal
-      ? {
-          ...baseConfig.terminal,
-          ...layer.terminal,
-        }
-      : baseConfig.terminal,
-    promptFile: layer.promptFile
-      ? {
-          ...baseConfig.promptFile,
-          ...layer.promptFile,
-          // Merge and deduplicate files from both layers
-          files: layer.promptFile.files
-            ? [
-                ...new Set([
-                  ...baseConfig.promptFile.files,
-                  ...layer.promptFile.files,
-                ]),
-              ]
-            : baseConfig.promptFile.files,
-        }
-      : baseConfig.promptFile,
-    swarm: layer.swarm
-      ? {
-          ...baseConfig.swarm,
-          ...layer.swarm,
-          knowledgeSync: layer.swarm.knowledgeSync
-            ? {
-                ...baseConfig.swarm.knowledgeSync,
-                ...layer.swarm.knowledgeSync,
-              }
-            : baseConfig.swarm.knowledgeSync,
-        }
-      : baseConfig.swarm,
-    tui: layer.tui
-      ? {
-          ...baseConfig.tui,
-          ...layer.tui,
-          syntaxHighlighting: layer.tui.syntaxHighlighting
-            ? {
-                ...baseConfig.tui.syntaxHighlighting,
-                ...layer.tui.syntaxHighlighting,
-                colors: layer.tui.syntaxHighlighting.colors
-                  ? {
-                      ...baseConfig.tui.syntaxHighlighting.colors,
-                      ...layer.tui.syntaxHighlighting.colors,
-                    }
-                  : baseConfig.tui.syntaxHighlighting.colors,
-              }
-            : baseConfig.tui.syntaxHighlighting,
-        }
-      : baseConfig.tui,
-  };
+  return deepMerge(baseConfig, layer, CONFIG_MERGE_SPEC) as DroneAgentConfig;
 }

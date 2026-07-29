@@ -14,5 +14,21 @@
   {
     "timestamp": "2026-07-28T22:57:56.918Z",
     "insight": "The swarm session status system had a terminology mismatch: the end-session path used 'ended' while the pipeline expected 'finished'. The fix consolidated to 'ended' as the canonical pre-processing terminal status, added 'ended' to SESSION_STATUSES, and added automatic stale-session marking via a periodic interval on the coordinator. This revealed that the status system had no central state machine — each caller decides transitions independently via transitionSessionStatus()."
+  },
+  {
+    "timestamp": "2026-07-29T00:22:30.585Z",
+    "insight": "The macros plugin's chat prompt step was broken by the conversation-loop refactor (commit 5e9e263) which introduced enqueueUserMessage. The macro handler called enqueueUserMessage but nobody called sendUserMessage to drain the queue, so the LLM never responded. The fix is to use sendUserMessage directly, which also restores the onBeforePrompt/onAfterToolCall lifecycle hooks that were lost in the same refactor. Additionally, the dispatchSlashCommand context construction in the macro handler was unnecessarily constructing a subset of ctx when passing ctx directly works fine."
+  },
+  {
+    "timestamp": "2026-07-29T00:25:54.258Z",
+    "insight": "The DroneSlashCommandContext.conversation.sendUserMessage types its onEvent parameter as (event: unknown) => void, which means plugins that want to use it with a typed event handler need to cast. This is a deliberate design choice (the context type is in drone-core and can't import runtime types), but it means any plugin using sendUserMessage with an event handler needs to cast the event parameter. The macros plugin now does this with `const event = rawEvent as DroneConversationEvent`."
+  },
+  {
+    "timestamp": "2026-07-29T01:10:19.710Z",
+    "insight": "The config deep merge refactor replaced 136 lines of repetitive if-blocks with a 60-line generic deepMerge utility and a 20-line declarative MergeSpec. The key challenge was TypeScript type compatibility: deepMerge returns T (which is Record<string, unknown>), but the actual DroneAgentConfig has required fields that Partial<DroneLlmConfig> etc. can make optional. A single `as DroneAgentConfig` cast at the call site was the cleanest solution. The refactor reduced config-types.ts from 639 to 537 lines and makes adding new config sections a one-line spec addition."
+  },
+  {
+    "timestamp": "2026-07-29T02:24:27.344Z",
+    "insight": "The `deepMerge` function's generic type `T extends Record<string, unknown>` is overly restrictive for test scenarios. Tests that exercise runtime behavior like merging extra properties (z, c, y) or passing null values into a field typed as `number` require `as any` casts. The `PartialDroneAgentConfig` type also has deeply nested required fields (e.g., `tui.syntaxHighlighting.codeBackground`) that make partial test overlays fail typecheck. Consider relaxing the generic constraint or using a more permissive type for the overlay parameter to avoid needing casts in tests."
   }
 ]
