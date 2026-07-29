@@ -98,5 +98,9 @@
   {
     "timestamp": "2026-07-29T03:16:00.772Z",
     "insight": "Planned the \"Move Semantic Search to Beacon\" feature. Key architectural decisions: (1) search paths via separate beacon endpoint (not in agent registration), (2) single SQLite DB with directory_path column for dedup, (3) regex stays local, semantic goes to beacon, (4) shared code in drone-swarm-common for future coordinator reuse, (5) reindexing via two-pronged approach: agent-side onAfterToolCall hook + beacon-side periodic hash sweep. Plan saved to project memory as plan-semantic-search."
+  },
+  {
+    "timestamp": "2026-07-29T03:35:08.010Z",
+    "insight": "Pre-existing test failures discovered during plan-semantic-search validation: (1) compaction.test.ts has 3 tests failing because `makeBudgetService` helper function is missing (the tests call it but it was never defined in that file), (2) coordinator-client.test.ts has 1 test failing because `generateVerificationCode` receives undefined inputA (the test passes a Promise<BeaconIdentity> instead of awaiting it). These failures exist on the base commit too and are not related to the semantic search changes."
   }
 ]

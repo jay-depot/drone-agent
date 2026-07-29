@@ -760,10 +760,8 @@ it('emits compaction events when emitEvent is provided', async () => {
     contextWindow: 200,
     chatResponses: [{ message: 'A concise summary.' }],
   });
-  const budgetService = makeBudgetService({ provider, config });
   const emitEvent = vi.fn();
   const plugin = createCompactionPlugin({
-    budgetService,
     sessionManager,
     getModel: () => 'fake',
     getProvider: () => provider,
@@ -803,10 +801,8 @@ it('emits a failed compaction event when summarization fails', async () => {
     contextWindow: 200,
     chatResponses: [{ message: '' }],
   });
-  const budgetService = makeBudgetService({ provider, config });
   const emitEvent = vi.fn();
   const plugin = createCompactionPlugin({
-    budgetService,
     sessionManager,
     getModel: () => 'fake',
     getProvider: () => provider,
@@ -843,10 +839,8 @@ it('emits a compaction event when self-purging old summaries', async () => {
   });
 
   const provider = makeProvider({ contextWindow: 200 });
-  const budgetService = makeBudgetService({ provider, config });
   const emitEvent = vi.fn();
   const plugin = createCompactionPlugin({
-    budgetService,
     sessionManager,
     getModel: () => 'fake',
     getProvider: () => provider,

@@ -1,8 +1,9 @@
 ---
 key: plan-semantic-search
-tags: []
+tags:
+  []
 created: 2026-07-14T20:06:09.160Z
-updated: 2026-07-29T03:15:55.960Z
+updated: 2026-07-29T03:35:02.950Z
 ---
 
 # Plan: Move Semantic Search to Beacon
@@ -61,7 +62,6 @@ Move the vector indexing and semantic search functionality from the agent's loca
 ### Step 3: Add beacon search routes
 
 **File**: `drone-beacon/src/routes/search.ts` — Three endpoints:
-
 - `PUT /agents/:id/search-paths` — Set search paths for an agent
 - `GET /agents/:id/search` — Semantic search (query, maxResults, minScore, path)
 - `POST /agents/:id/search/reindex` — Trigger reindexing
@@ -71,7 +71,6 @@ Move the vector indexing and semantic search functionality from the agent's loca
 ### Step 4: Add beacon background indexing service
 
 **File**: `drone-beacon/src/search-indexer.ts` — `SearchIndexer` class that:
-
 - Indexes directories in the background (non-blocking)
 - Deduplicates across agents (same directory = one index)
 - Uses shared `SearchStore`, `chunkText`, `createOllamaEmbeddingProvider` from `drone-swarm-common`
@@ -117,3 +116,19 @@ Delete `store.ts`, `indexer.ts`, `searcher.ts`, `providers/ollama.ts` from `dron
 - Coordinator wiki semantic search using shared `SearchStore`
 - Coordinator knowledge semantic search
 - Per-path embedding provider override wiring
+
+## Execution Summary
+
+**Completed 2026-07-28 by code persona.** All 9 steps implemented and validated:
+
+- **Step 1**: Created `search-store.ts`, `search-chunker.ts`, `search-searcher.ts`, `search-provider-ollama.ts` in `drone-swarm-common`. Added `better-sqlite3` deps. Updated exports. Added `DroneSearchIndexer` capability to `drone-core`.
+- **Step 2**: Added search tables to `drone-beacon/src/db/init.ts`. Created `drone-beacon/src/db/search.ts` with CRUD functions. Updated exports.
+- **Step 3**: Created `drone-beacon/src/routes/search.ts` with 3 endpoints. Updated route registration.
+- **Step 4**: Created `drone-beacon/src/search-indexer.ts` with `SearchIndexer` class (background indexing, dedup, periodic sweep).
+- **Step 5**: Refactored `drone-agent/src/plugins/search/index.ts` — removed local vector code, added optional swarm dep, semantic search proxies to beacon via HTTP.
+- **Step 6**: No config type changes needed (semantics shift only).
+- **Step 7**: Wired up agent → beacon search path registration in `onPluginsLoaded`.
+- **Step 8**: Deleted `store.ts`, `indexer.ts`, `searcher.ts`, `providers/ollama.ts`.
+- **Step 9**: Build, typecheck, lint, and test all pass. Search test fixed to import from `drone-swarm-common`. Pre-existing test failures (compaction, coordinator-client) unchanged.
+
+**Commit**: `cde1366`
