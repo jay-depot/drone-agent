@@ -116,6 +116,13 @@ export type DroneSessionConfig = {
    * Default is 20MB (20 * 1024 * 1024).
    */
   maxImageSizeBytes?: number;
+  /**
+   * Maximum percentage of the context window that a single tool result
+   * may consume. Results exceeding this threshold are truncated with a
+   * note indicating the original size. Set to 0 to disable.
+   * Default is 15.
+   */
+  maxToolResultTokensPercent?: number;
 };
 
 export type DroneCompactionStrategy = 'summary-drop';
@@ -441,6 +448,7 @@ export function createDefaultAgentConfig(
       maxToolIterations: 50,
       maxImageSizeBytes: 20 * 1024 * 1024,
       promptOnToolIterationLimit: false,
+      maxToolResultTokensPercent: 15,
     },
     lsp: {
       enabled: true,

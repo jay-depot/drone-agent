@@ -1053,3 +1053,202 @@ describe('createConversationService — message queue', () => {
     expect(userMessages[0]?.content).toBe('fresh');
   });
 });
+
+// ── Tool result truncation ─────────────────────────────────────────────
+
+describe('tool result truncation', () => {
+  const LARGE_CONTENT = 'x'.repeat(100_000); // ~25K tokens
+  const SMALL_CONTENT = 'ok';
+
+  function makeTruncationProvider(
+    chatResponses: DroneChatResponse[],
+    contextWindowTokens: number
+  ): DroneLlmProvider & { __chatMock: ReturnType<typeof vi.fn> } {
+    const chatMock = vi.fn(async () => {
+      if (chatResponses.length === 0) {
+        return { message: 'no more responses queued' };
+      }
+      return chatResponses.shift() as DroneChatResponse;
+    });
+    return {
+      chat: chatMock,
+      getContextWindowInfo: async () =>
+        ({
+          model: 'fake',
+          contextWindowTokens,
+          source: 'config',
+        }) satisfies DroneContextWindowInfo,
+      __chatMock: chatMock,
+    };
+  }
+
+  it('truncates tool result exceeding 15% of context window', async () => {
+    const engine = makeEngine({
+      tools: [
+        {
+          name: 'test__large',
+          description: 'returns large output',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+      executeToolImpl: async () => LARGE_CONTENT,
+    });
+    const provider = makeTruncationProvider(
+      [
+        {
+          toolCalls: [
+            {
+              id: 'call-1',
+              name: 'test__large',
+              arguments: {},
+            },
+          ],
+        },
+        { message: 'Done.' },
+      ],
+      32768 // 15% = ~4915 tokens
+    );
+
+    const config = createDefaultAgentConfig();
+    config.session.maxToolResultTokensPercent = 15;
+    const sessionManager = createSessionManager();
+    const budgetService = createContextBudgetService({
+      config,
+      renderPromptFragments: async () => [],
+      getProvider: () => provider,
+      getModel: () => 'fake',
+    });
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    await conversation.sendUserMessage('run large tool');
+
+    const messages = sessionManager.getMessages();
+    const toolMessage = messages.find(m => m.role === 'tool');
+    expect(toolMessage).toBeDefined();
+    expect(toolMessage!.content).toContain('[Output truncated at ~');
+    expect(toolMessage!.content).toContain('Full output was ~25000 tokens');
+    expect(toolMessage!.content).toContain('request a smaller window');
+    // The truncated content should be shorter than the original
+    expect(toolMessage!.content.length).toBeLessThan(LARGE_CONTENT.length);
+  });
+
+  it('passes through small tool result unchanged', async () => {
+    const engine = makeEngine({
+      tools: [
+        {
+          name: 'test__small',
+          description: 'returns small output',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+      executeToolImpl: async () => SMALL_CONTENT,
+    });
+    const provider = makeTruncationProvider(
+      [
+        {
+          toolCalls: [
+            {
+              id: 'call-1',
+              name: 'test__small',
+              arguments: {},
+            },
+          ],
+        },
+        { message: 'Done.' },
+      ],
+      32768
+    );
+
+    const config = createDefaultAgentConfig();
+    config.session.maxToolResultTokensPercent = 15;
+    const sessionManager = createSessionManager();
+    const budgetService = createContextBudgetService({
+      config,
+      renderPromptFragments: async () => [],
+      getProvider: () => provider,
+      getModel: () => 'fake',
+    });
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    await conversation.sendUserMessage('run small tool');
+
+    const messages = sessionManager.getMessages();
+    const toolMessage = messages.find(m => m.role === 'tool');
+    expect(toolMessage).toBeDefined();
+    expect(toolMessage!.content).toBe(SMALL_CONTENT);
+  });
+
+  it('does not truncate when maxToolResultTokensPercent is 0', async () => {
+    const engine = makeEngine({
+      tools: [
+        {
+          name: 'test__large',
+          description: 'returns large output',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+      executeToolImpl: async () => LARGE_CONTENT,
+    });
+    const provider = makeTruncationProvider(
+      [
+        {
+          toolCalls: [
+            {
+              id: 'call-1',
+              name: 'test__large',
+              arguments: {},
+            },
+          ],
+        },
+        { message: 'Done.' },
+      ],
+      32768
+    );
+
+    const config = createDefaultAgentConfig();
+    config.session.maxToolResultTokensPercent = 0;
+    const sessionManager = createSessionManager();
+    const budgetService = createContextBudgetService({
+      config,
+      renderPromptFragments: async () => [],
+      getProvider: () => provider,
+      getModel: () => 'fake',
+    });
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    await conversation.sendUserMessage('run large tool');
+
+    const messages = sessionManager.getMessages();
+    const toolMessage = messages.find(m => m.role === 'tool');
+    expect(toolMessage).toBeDefined();
+    // Content should be the full large content, not truncated
+    expect(toolMessage!.content).toBe(LARGE_CONTENT);
+  });
+});

@@ -30,5 +30,9 @@
   {
     "timestamp": "2026-07-29T02:24:27.344Z",
     "insight": "The `deepMerge` function's generic type `T extends Record<string, unknown>` is overly restrictive for test scenarios. Tests that exercise runtime behavior like merging extra properties (z, c, y) or passing null values into a field typed as `number` require `as any` casts. The `PartialDroneAgentConfig` type also has deeply nested required fields (e.g., `tui.syntaxHighlighting.codeBackground`) that make partial test overlays fail typecheck. Consider relaxing the generic constraint or using a more permissive type for the overlay parameter to avoid needing casts in tests."
+  },
+  {
+    "timestamp": "2026-07-29T04:04:52.518Z",
+    "insight": "Tool result truncation was added at the conversation-service layer (after executeToolSafely returns, before session append) rather than at individual tool level. This is the right pattern because it covers all tools generically with a single config key (session.maxToolResultTokensPercent, default 15%). The token estimation uses the same estimateTextTokens function (chars/4) used elsewhere in the project, keeping the estimation consistent. The truncation note includes guidance for both file__read (request smaller window) and exec__run (pipe to temp file) to help the LLM recover from truncation."
   }
 ]
