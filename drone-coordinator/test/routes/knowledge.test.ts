@@ -26,7 +26,7 @@ describe('Knowledge Routes', () => {
   it('POST /knowledge creates knowledge', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/knowledge',
+      url: '/api/knowledge',
       payload: validKnowledge,
     });
     expect(res.statusCode).toBe(201);
@@ -36,10 +36,10 @@ describe('Knowledge Routes', () => {
   it('GET /knowledge lists knowledge', async () => {
     await app.inject({
       method: 'POST',
-      url: '/knowledge',
+      url: '/api/knowledge',
       payload: validKnowledge,
     });
-    const res = await app.inject({ method: 'GET', url: '/knowledge' });
+    const res = await app.inject({ method: 'GET', url: '/api/knowledge' });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).length).toBe(1);
   });
@@ -47,12 +47,12 @@ describe('Knowledge Routes', () => {
   it('GET /knowledge?type=fact filters by type', async () => {
     await app.inject({
       method: 'POST',
-      url: '/knowledge',
+      url: '/api/knowledge',
       payload: validKnowledge,
     });
     await app.inject({
       method: 'POST',
-      url: '/knowledge',
+      url: '/api/knowledge',
       payload: {
         id: 'k2',
         type: 'preference',
@@ -62,7 +62,7 @@ describe('Knowledge Routes', () => {
     });
     const res = await app.inject({
       method: 'GET',
-      url: '/knowledge?type=fact',
+      url: '/api/knowledge?type=fact',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).length).toBe(1);
@@ -71,10 +71,10 @@ describe('Knowledge Routes', () => {
   it('GET /knowledge/:id gets knowledge', async () => {
     await app.inject({
       method: 'POST',
-      url: '/knowledge',
+      url: '/api/knowledge',
       payload: validKnowledge,
     });
-    const res = await app.inject({ method: 'GET', url: '/knowledge/k1' });
+    const res = await app.inject({ method: 'GET', url: '/api/knowledge/k1' });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).id).toBe('k1');
   });
@@ -82,7 +82,7 @@ describe('Knowledge Routes', () => {
   it('GET /knowledge/:id returns 404 for missing', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: '/knowledge/nonexistent',
+      url: '/api/knowledge/nonexistent',
     });
     expect(res.statusCode).toBe(404);
   });
@@ -90,12 +90,12 @@ describe('Knowledge Routes', () => {
   it('PUT /knowledge/:id updates knowledge', async () => {
     await app.inject({
       method: 'POST',
-      url: '/knowledge',
+      url: '/api/knowledge',
       payload: validKnowledge,
     });
     const res = await app.inject({
       method: 'PUT',
-      url: '/knowledge/k1',
+      url: '/api/knowledge/k1',
       payload: { value: 'updated-value' },
     });
     expect(res.statusCode).toBe(200);
@@ -105,7 +105,7 @@ describe('Knowledge Routes', () => {
   it('PUT /knowledge/:id returns 404 for missing', async () => {
     const res = await app.inject({
       method: 'PUT',
-      url: '/knowledge/nonexistent',
+      url: '/api/knowledge/nonexistent',
       payload: { value: 'x' },
     });
     expect(res.statusCode).toBe(404);
@@ -114,12 +114,12 @@ describe('Knowledge Routes', () => {
   it('DELETE /knowledge/:id deletes knowledge', async () => {
     await app.inject({
       method: 'POST',
-      url: '/knowledge',
+      url: '/api/knowledge',
       payload: validKnowledge,
     });
     const res = await app.inject({
       method: 'DELETE',
-      url: '/knowledge/k1',
+      url: '/api/knowledge/k1',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).success).toBe(true);
@@ -128,7 +128,7 @@ describe('Knowledge Routes', () => {
   it('DELETE /knowledge/:id returns 404 for missing', async () => {
     const res = await app.inject({
       method: 'DELETE',
-      url: '/knowledge/nonexistent',
+      url: '/api/knowledge/nonexistent',
     });
     expect(res.statusCode).toBe(404);
   });
@@ -136,12 +136,12 @@ describe('Knowledge Routes', () => {
   it('GET /knowledge/search searches knowledge', async () => {
     await app.inject({
       method: 'POST',
-      url: '/knowledge',
+      url: '/api/knowledge',
       payload: validKnowledge,
     });
     const res = await app.inject({
       method: 'GET',
-      url: '/knowledge/search?q=test',
+      url: '/api/knowledge/search?q=test',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).length).toBe(1);
@@ -150,12 +150,12 @@ describe('Knowledge Routes', () => {
   it('GET /knowledge/search without q returns all', async () => {
     await app.inject({
       method: 'POST',
-      url: '/knowledge',
+      url: '/api/knowledge',
       payload: validKnowledge,
     });
     const res = await app.inject({
       method: 'GET',
-      url: '/knowledge/search',
+      url: '/api/knowledge/search',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).length).toBe(1);
@@ -164,7 +164,7 @@ describe('Knowledge Routes', () => {
   it('POST /sync/knowledge/push upserts knowledge', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/sync/knowledge/push',
+      url: '/api/sync/knowledge/push',
       payload: validKnowledge,
     });
     expect(res.statusCode).toBe(200);
@@ -174,12 +174,12 @@ describe('Knowledge Routes', () => {
   it('GET /sync/knowledge/pull pulls knowledge', async () => {
     await app.inject({
       method: 'POST',
-      url: '/knowledge',
+      url: '/api/knowledge',
       payload: validKnowledge,
     });
     const res = await app.inject({
       method: 'GET',
-      url: '/sync/knowledge/pull',
+      url: '/api/sync/knowledge/pull',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).length).toBe(1);
@@ -188,12 +188,12 @@ describe('Knowledge Routes', () => {
   it('GET /sync/knowledge/pull?since= filters by updatedAt', async () => {
     await app.inject({
       method: 'POST',
-      url: '/knowledge',
+      url: '/api/knowledge',
       payload: validKnowledge,
     });
     const res = await app.inject({
       method: 'GET',
-      url: '/sync/knowledge/pull?since=' + (Date.now() + 10000),
+      url: '/api/sync/knowledge/pull?since=' + (Date.now() + 10000),
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).length).toBe(0);

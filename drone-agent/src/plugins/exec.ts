@@ -1,6 +1,7 @@
 import { isRecord } from '../shared/type-guards.js';
 import { spawn } from 'node:child_process';
 import type { DronePlugin } from 'drone-core';
+import { ExecRunBlock } from '../tui/components/ExecRunBlock.js';
 
 type ExecInput = {
   command: string;
@@ -39,7 +40,10 @@ function parseExecInput(input: Record<string, unknown>): ExecInput {
   };
 }
 
-async function runCommand(input: ExecInput): Promise<string> {
+async function runCommand(
+  input: ExecInput,
+  onProgress?: (chunk: string) => void
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(input.command, {
       cwd: input.cwd,
@@ -69,11 +73,15 @@ async function runCommand(input: ExecInput): Promise<string> {
     };
 
     child.stdout.on('data', chunk => {
-      stdout += String(chunk);
+      const text = String(chunk);
+      stdout += text;
+      onProgress?.(text);
     });
 
     child.stderr.on('data', chunk => {
-      stderr += String(chunk);
+      const text = String(chunk);
+      stderr += text;
+      onProgress?.(text);
     });
 
     child.on('error', error => {
@@ -133,7 +141,9 @@ export const execPlugin: DronePlugin = {
         required: ['command'],
         additionalProperties: false,
       },
-      execute: async input => runCommand(parseExecInput(input)),
+      execute: async (input, onProgress) =>
+        runCommand(parseExecInput(input), onProgress),
+      renderComponent: state => ExecRunBlock({ state }),
     });
 
     registration.hooks.onPluginsLoaded(async () => {

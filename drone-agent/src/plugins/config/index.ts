@@ -1,6 +1,8 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { ConfigGetBlock } from '../../tui/components/ConfigGetBlock.js';
+import { ConfigSetBlock } from '../../tui/components/ConfigSetBlock.js';
 import {
   applyAgentConfigLayer,
   createDefaultAgentConfig,
@@ -469,6 +471,7 @@ export const configPlugin: DronePlugin = {
           2
         );
       },
+      renderComponent: state => ConfigGetBlock({ state }),
     });
 
     // ── config.set ──────────────────────────────────────────────────
@@ -517,6 +520,7 @@ export const configPlugin: DronePlugin = {
           2
         );
       },
+      renderComponent: state => ConfigSetBlock({ state }),
     });
 
     // ── Capability ──────────────────────────────────────────────────

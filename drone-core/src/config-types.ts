@@ -14,6 +14,7 @@ export type DroneSearchConfig = {
   userEmbeddingProvider?: string;
   projectEmbeddingProvider?: string;
 };
+import { deepMerge, type MergeSpec } from './deep-merge.js';
 
 // ── Precedence constants for skill/persona/provider plugins ──────────
 /** Precedence for swarm-level providers (highest priority — lowest number). */
@@ -56,6 +57,7 @@ export type DroneOllamaConfig = {
   host: string;
   model: string;
   reasoningLevel?: DroneReasoningLevel;
+  hasVision?: boolean;
 };
 
 export type DroneLlmConfig = {
@@ -67,6 +69,7 @@ export type DroneLlmConfig = {
 export type DroneOpenRouterModelConfig = {
   id: string;
   contextWindow: number;
+  hasVision?: boolean;
 };
 
 export type DroneOpenRouterConfig = {
@@ -123,6 +126,12 @@ export type DroneSessionConfig = {
    * Defaults to false (hard error).
    */
   promptOnToolIterationLimit?: boolean;
+  /**
+   * Maximum size in bytes for images read via file__read_image or returned
+   * from MCP tools. Images exceeding this size will be rejected.
+   * Default is 20MB (20 * 1024 * 1024).
+   */
+  maxImageSizeBytes?: number;
 };
 
 export type DroneCompactionStrategy = 'summary-drop';
@@ -179,6 +188,13 @@ export type DroneSwarmConfig = {
   sessionId?: string;
 };
 
+export type DroneTuiConfig = {
+  syntaxHighlighting: {
+    colors: Record<string, string>;
+    codeBackground: string;
+  };
+};
+
 export type DroneLspSpawnServerConfig = {
   transport?: 'stdio';
   language?: string;
@@ -230,7 +246,10 @@ export type DroneMcpStdioServerConfig = {
   cwd?: string;
   env?: Record<string, string>;
   allowedTools?: string[];
+  /** Timeout in ms for the initialize handshake after spawning. */
+  spawnTimeoutMs?: number;
   requestTimeoutMs?: number;
+  maxResponseSizeBytes?: number;
   retryCount?: number;
   retryDelayMs?: number;
   maxListPages?: number;
@@ -251,7 +270,10 @@ export type DroneMcpStreamableHttpServerConfig = {
   url: string;
   headers?: Record<string, string>;
   allowedTools?: string[];
+  /** Timeout in ms for the initialize handshake after spawning. */
+  spawnTimeoutMs?: number;
   requestTimeoutMs?: number;
+  maxResponseSizeBytes?: number;
   retryCount?: number;
   retryDelayMs?: number;
   maxListPages?: number;
@@ -263,15 +285,23 @@ export type DroneMcpServerConfig =
   | DroneMcpStdioServerConfig
   | DroneMcpStreamableHttpServerConfig;
 
+export type DroneMcpRoot = {
+  uri: string;
+  name?: string;
+};
+
 export type DroneMcpConfig = {
   enabled: boolean;
   requestTimeoutMs: number;
+  spawnTimeoutMs: number;
   retryCount: number;
   retryDelayMs: number;
   maxListPages: number;
   maxListItems: number;
   compatibilityMode: 'strict' | 'permissive';
+  maxResponseSizeBytes: number;
   servers: Record<string, DroneMcpServerConfig>;
+  roots?: DroneMcpRoot[];
 };
 
 export type DroneAgentConfig = {
@@ -299,7 +329,8 @@ export type DroneAgentConfig = {
   terminal: DroneTerminalConfig;
   promptFile: DronePromptFileConfig;
   swarm: DroneSwarmConfig;
-  search: DroneSearchConfig;
+  search: DroneSearchConfig
+  tui: DroneTuiConfig;
 };
 
 export type PartialDroneAgentConfig = Partial<{
@@ -323,6 +354,7 @@ export type PartialDroneAgentConfig = Partial<{
   terminal: Partial<DroneTerminalConfig>;
   swarm: Partial<DroneSwarmConfig>;
   search: Partial<DroneSearchConfig>;
+  tui?: Partial<DroneTuiConfig>;
 }>;
 
 export type DroneConfigScope = 'default' | 'user' | 'project';
@@ -338,14 +370,37 @@ export type DroneResolvedConfig = {
   layers: DroneConfigLayer[];
 };
 
-export type DroneSessionPhase =
-  | 'plugins-loaded'
-  | 'session-start'
-  | 'before-prompt'
-  | 'after-tool-call'
-  | 'shutdown';
-
 // ── Config helper functions ─────────────────────────────────────────
+
+const CONFIG_MERGE_SPEC: MergeSpec = {
+  replace: ['enabledPlugins', 'externalPlugins', 'systemPrompt'],
+  replaceNullable: ['activePersona'],
+  merge: [
+    'trustedPlugins',
+    'llm',
+    'ollama',
+    'session',
+    'compaction',
+    'memory',
+    'log',
+    'terminal',
+    'search',
+  ],
+  deepMerge: {
+    openai: { replace: ['models'] },
+    anthropic: { replace: ['models'] },
+    openrouter: { replace: ['models'] },
+    lsp: { replace: ['servers'] },
+    mcp: { replace: ['servers'] },
+    promptFile: { mergeArrays: ['files'] },
+    swarm: { deepMerge: { knowledgeSync: {} } },
+    tui: {
+      deepMerge: {
+        syntaxHighlighting: { deepMerge: { colors: {} } },
+      },
+    },
+  },
+};
 
 export function createDefaultAgentConfig(
   overrides?: Partial<DroneAgentConfig>
@@ -403,6 +458,7 @@ export function createDefaultAgentConfig(
       contextWindowTokens: 32768,
       responseReserveTokens: 4096,
       maxToolIterations: 50,
+      maxImageSizeBytes: 20 * 1024 * 1024,
       promptOnToolIterationLimit: false,
     },
     lsp: {
@@ -416,11 +472,13 @@ export function createDefaultAgentConfig(
     mcp: {
       enabled: true,
       requestTimeoutMs: 10000,
+      spawnTimeoutMs: 30000,
       retryCount: 1,
       retryDelayMs: 200,
       maxListPages: 25,
       maxListItems: 500,
       compatibilityMode: 'strict',
+      maxResponseSizeBytes: 1048576,
       servers: {},
     },
     compaction: {
@@ -461,6 +519,34 @@ export function createDefaultAgentConfig(
       enabled: false,
       paths: [],
     },
+    tui: {
+      syntaxHighlighting: {
+        colors: {
+          keyword: 'magenta',
+          function: 'cyan',
+          'function-variable': 'cyan',
+          string: 'green',
+          number: 'yellow',
+          comment: 'gray',
+          emphasis: 'italic',
+          strong: 'bold',
+          variable: 'blue',
+          attr: 'yellow',
+          tag: 'magenta',
+          built_in: 'cyan',
+          literal: 'yellow',
+          selector: 'yellow',
+          'selector-class': 'yellow',
+          'selector-id': 'yellow',
+          property: 'blue',
+          title: 'cyan',
+          params: 'white',
+          sub: 'gray',
+          sup: 'gray',
+        },
+        codeBackground: 'gray',
+      },
+    },
   };
   return { ...base, ...overrides };
 }
@@ -469,129 +555,5 @@ export function applyAgentConfigLayer(
   baseConfig: DroneAgentConfig,
   layer: PartialDroneAgentConfig
 ): DroneAgentConfig {
-  return {
-    enabledPlugins: layer.enabledPlugins ?? baseConfig.enabledPlugins,
-    externalPlugins: layer.externalPlugins ?? baseConfig.externalPlugins,
-    trustedPlugins: layer.trustedPlugins
-      ? { ...baseConfig.trustedPlugins, ...layer.trustedPlugins }
-      : baseConfig.trustedPlugins,
-    systemPrompt: layer.systemPrompt ?? baseConfig.systemPrompt,
-    activePersona:
-      layer.activePersona !== undefined
-        ? layer.activePersona
-        : baseConfig.activePersona,
-    llm: layer.llm
-      ? {
-          ...baseConfig.llm,
-          ...layer.llm,
-        }
-      : baseConfig.llm,
-    ollama: layer.ollama
-      ? {
-          ...baseConfig.ollama,
-          ...layer.ollama,
-        }
-      : baseConfig.ollama,
-    openai: layer.openai
-      ? {
-          ...baseConfig.openai,
-          ...layer.openai,
-          models: layer.openai.models ?? baseConfig.openai.models,
-        }
-      : baseConfig.openai,
-    anthropic: layer.anthropic
-      ? {
-          ...baseConfig.anthropic,
-          ...layer.anthropic,
-          models: layer.anthropic.models ?? baseConfig.anthropic.models,
-        }
-      : baseConfig.anthropic,
-    openrouter: layer.openrouter
-      ? {
-          ...baseConfig.openrouter,
-          ...layer.openrouter,
-          models: layer.openrouter.models ?? baseConfig.openrouter.models,
-        }
-      : baseConfig.openrouter,
-    session: layer.session
-      ? {
-          ...baseConfig.session,
-          ...layer.session,
-        }
-      : baseConfig.session,
-    lsp: layer.lsp
-      ? {
-          ...baseConfig.lsp,
-          ...layer.lsp,
-          servers: layer.lsp.servers ?? baseConfig.lsp.servers,
-        }
-      : baseConfig.lsp,
-    mcp: layer.mcp
-      ? {
-          ...baseConfig.mcp,
-          ...layer.mcp,
-          servers: layer.mcp.servers ?? baseConfig.mcp.servers,
-        }
-      : baseConfig.mcp,
-    compaction: layer.compaction
-      ? {
-          ...baseConfig.compaction,
-          ...layer.compaction,
-        }
-      : baseConfig.compaction,
-    memory: layer.memory
-      ? {
-          ...baseConfig.memory,
-          ...layer.memory,
-        }
-      : baseConfig.memory,
-    log: layer.log
-      ? {
-          ...baseConfig.log,
-          ...layer.log,
-        }
-      : baseConfig.log,
-    terminal: layer.terminal
-      ? {
-          ...baseConfig.terminal,
-          ...layer.terminal,
-        }
-      : baseConfig.terminal,
-    promptFile: layer.promptFile
-      ? {
-          ...baseConfig.promptFile,
-          ...layer.promptFile,
-          // Merge and deduplicate files from both layers
-          files: layer.promptFile.files
-            ? [
-                ...new Set([
-                  ...baseConfig.promptFile.files,
-                  ...layer.promptFile.files,
-                ]),
-              ]
-            : baseConfig.promptFile.files,
-        }
-      : baseConfig.promptFile,
-    swarm: layer.swarm
-      ? {
-          ...baseConfig.swarm,
-          ...layer.swarm,
-          knowledgeSync: layer.swarm.knowledgeSync
-            ? {
-                ...baseConfig.swarm.knowledgeSync,
-                ...layer.swarm.knowledgeSync,
-              }
-            : baseConfig.swarm.knowledgeSync,
-        }
-      : baseConfig.swarm,
-    search: layer.search
-      ? {
-          ...baseConfig.search,
-          ...layer.search,
-          paths:
-            layer.search.paths ??
-            baseConfig.search.paths,
-        }
-      : baseConfig.search,
-  };
+  return deepMerge(baseConfig, layer, CONFIG_MERGE_SPEC) as DroneAgentConfig;
 }

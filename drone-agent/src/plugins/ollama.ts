@@ -21,6 +21,7 @@ function toOllamaMessage(message: DroneChatMessage) {
   return {
     role: message.role,
     content: message.content,
+    images: message.images?.map(img => img.data),
     tool_name: message.toolName,
     tool_calls: message.toolCalls?.map(toolCall => ({
       function: {
@@ -188,10 +189,21 @@ export const ollamaPlugin: DronePlugin = {
           source: 'config',
         };
       },
-      chat: async ({ model, messages, tools, reasoningLevel }) => {
+      chat: async ({ model, messages, tools, reasoningLevel, debug }) => {
         const agentConfig = registration.getConfig();
         const client = new Ollama({ host: agentConfig.ollama.host });
         let response;
+
+        if (debug) {
+          console.error(`[llm:request] ollama.chat({ model: ${model}, ... })`);
+          console.error(
+            `[llm:request] messages: ${JSON.stringify(messages.map(toOllamaMessage))}`
+          );
+        }
+        if (debug) {
+          console.error(`[llm:response] ${JSON.stringify(response)}`);
+        }
+
         try {
           response = await client.chat({
             model,
@@ -205,6 +217,12 @@ export const ollamaPlugin: DronePlugin = {
               | undefined,
           });
         } catch (error) {
+          if (debug) {
+            console.error(
+              `[llm:response] error: ${error instanceof Error ? error.message : String(error)}`
+            );
+          }
+
           const message =
             error instanceof Error ? error.message : String(error);
           const statusCode = (error as any)?.status_code;
@@ -272,6 +290,29 @@ export const ollamaPlugin: DronePlugin = {
           return response.models.map(m => m.name);
         },
         getDefaultModel: () => registration.getConfig().ollama.model,
+        hasVision: (model: string) => {
+          const config = registration.getConfig().ollama;
+          if (config.hasVision !== undefined) return config.hasVision;
+          // Auto-detect: check model name against known vision model patterns
+          const visionPatterns = [
+            'llava',
+            'bakllava',
+            'moondream',
+            'minicpm-v',
+            'cogvlm',
+            'qwen-vl',
+            'qwen3',
+            'gemma-v',
+            'gemma4',
+            'gemini',
+            'phi-vision',
+            'minimax',
+            'kimi',
+            'mistral',
+          ];
+          const lower = model.toLowerCase();
+          return visionPatterns.some(p => lower.includes(p));
+        },
       };
       llmCap.registerProvider(llmRegistration);
     } else {

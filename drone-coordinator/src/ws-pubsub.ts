@@ -73,3 +73,19 @@ export function publishInitialState(
 export function getSubscriberCount(): number {
   return subscribers.size;
 }
+
+/**
+ * Convenience wrapper around publishEvent with error handling.
+ * Makes it easy to call from any route handler without try/catch boilerplate.
+ */
+export function publishMutationEvent(event: {
+  sessionId: string;
+  eventType: string;
+  payload?: unknown;
+}): void {
+  try {
+    publishEvent(event);
+  } catch (err) {
+    logger.warn(`Failed to publish mutation event: ${err}`);
+  }
+}

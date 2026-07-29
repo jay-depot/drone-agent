@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-07-19T23:31:18.253Z",
+    "insight": "When writing tests for tool-name collision disambiguation, double-check which characters are in the allowed set before choosing test data. The sanitizer replaces `[^a-zA-Z0-9_-]` with `_`, so hyphens (`-`) are allowed and `foo-bar` does NOT collide with `foo bar`. Use characters like `.` or `+` which ARE outside the allowed set to create actual collisions (e.g. `foo bar` and `foo.bar` both sanitize to `foo_bar`).\n\nWhen using file__apply_diff with multiple `});` patterns in the file, the fuzz matcher can anchor on the wrong closing brace and insert the new code in the wrong scope (e.g. inside a helper function instead of the describe block). For targeted insertions near common patterns like `});`, use a Python script with exact string matching instead of the diff tool, or include more unique surrounding context in the patch."
+  }
+]

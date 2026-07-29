@@ -91,10 +91,12 @@ export type DroneLlmProvider = {
     messages: DroneChatMessage[];
     tools?: DroneToolDescriptor[];
     reasoningLevel?: DroneReasoningLevel;
+    debug?: boolean;
   }) => Promise<DroneChatResponse>;
   getContextWindowInfo?: (input: {
     model: string;
   }) => Promise<DroneContextWindowInfo | null>;
+  supportsImagesInToolResults?: boolean;
 };
 
 // ── LLM provider broker types ───────────────────────────────────────
@@ -113,4 +115,5 @@ export type DroneLlmProviderRegistration = {
   listModels: () => Promise<string[]>;
   /** The default model to use when this provider is activated. */
   getDefaultModel: () => string;
+  hasVision?: (model: string) => boolean | Promise<boolean>;
 };

@@ -1,4 +1,5 @@
 import type { DronePlugin } from 'drone-core';
+import { UtilsBlock } from '../tui/components/UtilsBlock.js';
 
 // Text normalization helpers
 function tokenizeWords(text: string): string[] {
@@ -367,6 +368,7 @@ export const utilsPlugin: DronePlugin = {
         const result = evaluateArithmeticExpression(input.expression);
         return JSON.stringify(result, null, 2);
       },
+      renderComponent: state => UtilsBlock({ state }),
     });
 
     registration.registerTool({
@@ -470,6 +472,7 @@ export const utilsPlugin: DronePlugin = {
             );
         }
       },
+      renderComponent: state => UtilsBlock({ state }),
     });
 
     registration.hooks.onPluginsLoaded(async () => {

@@ -124,6 +124,36 @@ export function listSwarmSessions(options?: {
     status: row.status,
   }));
 }
+export function markStaleSessions(thresholdMs: number): SwarmSession[] {
+  const staleSessions = getStaleSessions(thresholdMs);
+  const updated: SwarmSession[] = [];
+  for (const session of staleSessions) {
+    const now = Date.now();
+    const stmt = getDatabase().prepare(
+      'UPDATE swarm_sessions SET status = @status, updatedAt = @updatedAt WHERE id = @id'
+    );
+    stmt.run({ id: session.id, status: 'stale', updatedAt: now });
+    updated.push({ ...session, status: 'stale', updatedAt: now });
+  }
+  if (updated.length > 0) {
+    logger.info(`Marked ${updated.length} stale session(s) as 'stale'`);
+  }
+  return updated;
+}
+
+export function countSwarmSessions(options?: { status?: string }): number {
+  let query = 'SELECT COUNT(*) as count FROM swarm_sessions WHERE 1=1';
+  const params: unknown[] = [];
+
+  if (options?.status) {
+    query += ' AND status = ?';
+    params.push(options.status);
+  }
+
+  const stmt = getDatabase().prepare(query);
+  const row = stmt.get(...params) as { count: number };
+  return row.count;
+}
 
 export function updateSwarmSessionStatus(
   id: string,
@@ -163,6 +193,22 @@ export function transitionSessionStatus(
   stmt.run({ id, status: toStatus, updatedAt: now });
 
   return { ...session, status: toStatus, updatedAt: now };
+}
+
+export function updateSwarmSessionPersona(
+  id: string,
+  personaId: string | null
+): SwarmSession | undefined {
+  const existing = getSwarmSession(id);
+  if (!existing) return undefined;
+
+  const now = Date.now();
+  const stmt = getDatabase().prepare(`
+    UPDATE swarm_sessions SET persona_id = @personaId, updatedAt = @updatedAt WHERE id = @id
+  `);
+  stmt.run({ id, personaId, updatedAt: now });
+
+  return { ...existing, personaId, updatedAt: now };
 }
 
 export function getStaleSessions(thresholdMs: number): SwarmSession[] {

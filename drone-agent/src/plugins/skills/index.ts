@@ -1,3 +1,11 @@
+import {
+  insertSortedByPrecedence,
+  removeById,
+  insertWriterSorted,
+} from 'drone-core';
+import { SkillsRecallBlock } from '../../tui/components/SkillsRecallBlock.js';
+import { SkillsListBlock } from '../../tui/components/SkillsListBlock.js';
+import { SkillsCreateBlock } from '../../tui/components/SkillsCreateBlock.js';
 import type {
   DronePlugin,
   DronePromptFragment,
@@ -26,46 +34,6 @@ export const skillsPlugin: DronePlugin = {
     const providers: DroneSkillProvider[] = [];
     const writers: DroneSkillWriter[] = [];
     const recallEnhancers: DroneRecallEnhancer[] = [];
-
-    function insertProviderSorted(provider: DroneSkillProvider): void {
-      const idx = providers.findIndex(p => p.precedence > provider.precedence);
-      if (idx === -1) {
-        providers.push(provider);
-      } else {
-        providers.splice(idx, 0, provider);
-      }
-    }
-
-    function removeProvider(providerId: string): void {
-      const idx = providers.findIndex(p => p.id === providerId);
-      if (idx !== -1) {
-        providers.splice(idx, 1);
-      }
-    }
-
-    // ── Writer management ─────────────────────────────────────────────────
-    function insertWriterSorted(writer: DroneSkillWriter): void {
-      const scopeOrder: Record<string, number> = {
-        project: 0,
-        user: 1,
-        beacon: 2,
-        coordinator: 3,
-      };
-      const order = scopeOrder[writer.scope] ?? 99;
-      const idx = writers.findIndex(w => (scopeOrder[w.scope] ?? 99) > order);
-      if (idx === -1) {
-        writers.push(writer);
-      } else {
-        writers.splice(idx, 0, writer);
-      }
-    }
-
-    function removeWriter(writerId: string): void {
-      const idx = writers.findIndex(w => w.id === writerId);
-      if (idx !== -1) {
-        writers.splice(idx, 1);
-      }
-    }
 
     function getAllSkills(): DroneSkillDefinition[] {
       const seen = new Set<string>();
@@ -139,40 +107,28 @@ export const skillsPlugin: DronePlugin = {
           await provider.reloadSkills();
         }
         registration.logger.info(
-          'reloaded skills from ' + providers.length + ' provider(s)'
+          `reloaded skills from ${providers.length} provider(s)`
         );
       },
       registerProvider: (provider: DroneSkillProvider) => {
-        insertProviderSorted(provider);
+        insertSortedByPrecedence(providers, provider);
         registration.logger.info(
-          'skill provider "' +
-            provider.id +
-            '" registered (precedence: ' +
-            provider.precedence +
-            ')'
+          `skill provider "${provider.id}" registered (precedence: ${provider.precedence})`
         );
       },
       unregisterProvider: (providerId: string) => {
-        removeProvider(providerId);
-        registration.logger.info(
-          'skill provider "' + providerId + '" unregistered'
-        );
+        removeById(providers, providerId);
+        registration.logger.info(`skill provider "${providerId}" unregistered`);
       },
       registerWriter: (writer: DroneSkillWriter) => {
-        insertWriterSorted(writer);
+        insertWriterSorted(writers, writer);
         registration.logger.info(
-          'skill writer "' +
-            writer.id +
-            '" registered (scope: ' +
-            writer.scope +
-            ')'
+          `skill writer "${writer.id}" registered (scope: ${writer.scope})`
         );
       },
       unregisterWriter: (writerId: string) => {
-        removeWriter(writerId);
-        registration.logger.info(
-          'skill writer "' + writerId + '" unregistered'
-        );
+        removeById(writers, writerId);
+        registration.logger.info(`skill writer "${writerId}" unregistered`);
       },
       getWriters: () => [...writers],
       onRecall: (enhancer: DroneRecallEnhancer) => {
@@ -186,7 +142,7 @@ export const skillsPlugin: DronePlugin = {
       const all = getAllSkills();
       if (all.length > 0) {
         registration.logger.info(
-          'loaded ' + all.length + ' skill(s): ' + all.map(s => s.id).join(', ')
+          `loaded ${all.length} skill(s): ${all.map(s => s.id).join(', ')}`
         );
       }
     });
@@ -214,10 +170,7 @@ export const skillsPlugin: DronePlugin = {
         if (!skill) {
           const all = getAllSkills();
           throw new Error(
-            'Unknown skill "' +
-              id +
-              '". Available skills: ' +
-              all.map(s => s.id).join(', ')
+            `Unknown skill "${id}". Available skills: ${all.map(s => s.id).join(', ')}`
           );
         }
 
@@ -239,6 +192,7 @@ export const skillsPlugin: DronePlugin = {
           2
         );
       },
+      renderComponent: state => SkillsRecallBlock({ state }),
     });
 
     registration.registerTool({
@@ -278,6 +232,7 @@ export const skillsPlugin: DronePlugin = {
           2
         );
       },
+      renderComponent: state => SkillsListBlock({ state }),
     });
 
     registration.registerTool({
@@ -295,6 +250,7 @@ export const skillsPlugin: DronePlugin = {
           JSON.stringify({ ok: true, message: 'Workflow completed.' }, null, 2)
         );
       },
+      renderComponent: state => SkillsCreateBlock({ state }),
     });
 
     registration.registerWorkflow(skillsCreateWorkflow);

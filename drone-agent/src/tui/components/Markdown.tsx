@@ -12,42 +12,13 @@ import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import React from 'react';
 import { marked } from 'marked';
-import { createLowlight, common } from 'lowlight';
-
-/**
- * Create lowlight instance with common languages.
- * The 'common' preset includes all popular languages (javascript, typescript,
- * python, rust, go, json, bash, yaml, html, css, sql, markdown, etc.)
- */
-const lowlight = createLowlight(common);
-
-/**
- * Color mapping for syntax highlighting.
- * Terminal-friendly colors that work in most environments.
- */
-const SYNTAX_COLORS: Record<string, string> = {
-  keyword: 'magenta',
-  function: 'cyan',
-  'function-variable': 'cyan',
-  string: 'green',
-  number: 'yellow',
-  comment: 'gray',
-  emphasis: 'italic',
-  strong: 'bold',
-  variable: 'blue',
-  attr: 'yellow',
-  tag: 'magenta',
-  built_in: 'cyan',
-  literal: 'yellow',
-  selector: 'yellow',
-  'selector-class': 'yellow',
-  'selector-id': 'yellow',
-  property: 'blue',
-  title: 'cyan',
-  params: 'white',
-  sub: 'gray',
-  sup: 'gray',
-};
+import {
+  lowlight,
+  SYNTAX_COLORS,
+  renderHighlightedTree,
+  extractTokenText,
+  getTokenColor,
+} from '../shared/syntax-highlight.js';
 
 interface MarkdownProps {
   /** Markdown content to render */
@@ -56,6 +27,8 @@ interface MarkdownProps {
   color?: string;
   /** Optional background for inline code */
   codeBackground?: string;
+  /** Optional syntax highlighting color overrides (defaults to SYNTAX_COLORS) */
+  syntaxColors?: Record<string, string>;
 }
 
 /**
@@ -65,6 +38,7 @@ export function Markdown({
   children,
   color = 'white',
   codeBackground = 'gray',
+  syntaxColors = SYNTAX_COLORS,
 }: MarkdownProps): React.JSX.Element {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tokens = marked.lexer(children) as unknown as any[];
@@ -72,7 +46,13 @@ export function Markdown({
     <Box flexDirection="column">
       {tokens.map((token: any, index: number) => (
         <React.Fragment key={index}>
-          {renderToken(token, color, codeBackground, `root-${index}`)}
+          {renderToken(
+            token,
+            color,
+            codeBackground,
+            syntaxColors,
+            `root-${index}`
+          )}
         </React.Fragment>
       ))}
     </Box>
@@ -87,6 +67,7 @@ function renderToken(
   token: any,
   color: string,
   codeBackground: string,
+  syntaxColors: Record<string, string>,
   keyPrefix: string
 ): ReactNode {
   const textColor = token.type === 'paragraph' ? color : undefined;
@@ -113,7 +94,7 @@ function renderToken(
       return renderList(token, textColor ?? color, keyPrefix);
 
     case 'code':
-      return renderCodeBlock(token, codeBackground);
+      return renderCodeBlock(token, codeBackground, syntaxColors);
 
     case 'hr':
       return <Text color="gray">{'-'.repeat(80)}</Text>;
@@ -304,7 +285,8 @@ function renderListItemContent(
 function renderCodeBlock(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   token: any,
-  codeBackground: string
+  codeBackground: string,
+  syntaxColors: Record<string, string>
 ): ReactNode {
   const code = token.text ?? '';
   const lang = token.lang ?? 'plaintext';
@@ -314,7 +296,7 @@ function renderCodeBlock(
 
   try {
     const tree = lowlight.highlight(lang, code);
-    highlighted = renderHighlightedTree(tree, codeBackground);
+    highlighted = renderHighlightedTree(tree, codeBackground, syntaxColors);
   } catch {
     // Language not found or highlight failed
     highlighted = <Text color="white">{code}</Text>;
@@ -335,32 +317,5 @@ function renderCodeBlock(
       )}
       <Box flexDirection="column">{highlighted}</Box>
     </Box>
-  );
-}
-
-/**
- * Render lowlight syntax tree to Ink components.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function renderHighlightedTree(tree: any, backgroundColor: string): ReactNode {
-  const lines = tree.children;
-
-  return (
-    <>
-      {lines.map((line: any, lineIndex: number) => (
-        <Text key={lineIndex} backgroundColor={backgroundColor}>
-          {line.children
-            ? line.children.map((token: any, tokenIndex: number) => {
-                const color = SYNTAX_COLORS[token.type] || 'white';
-                return (
-                  <Text key={tokenIndex} color={color}>
-                    {token.value}
-                  </Text>
-                );
-              })
-            : line.value}
-        </Text>
-      ))}
-    </>
   );
 }

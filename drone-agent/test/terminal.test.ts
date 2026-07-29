@@ -404,11 +404,13 @@ describe('terminalPlugin', () => {
         mcp: {
           enabled: false,
           requestTimeoutMs: 10000,
+          spawnTimeoutMs: 30000,
           retryCount: 1,
           retryDelayMs: 200,
           maxListPages: 25,
           maxListItems: 500,
           compatibilityMode: 'strict',
+          maxResponseSizeBytes: 1048576,
           servers: {},
         },
         compaction: {
@@ -441,6 +443,14 @@ describe('terminalPlugin', () => {
         search: {
           enabled: false,
           paths: [],
+        },
+        tui: {
+          syntaxHighlighting: {
+            colors: {
+              keyword: 'magenta',
+            },
+            codeBackground: 'gray',
+          },
         },
       }),
       registerTool: (tool: { name: string; defaultHidden?: boolean }) => {

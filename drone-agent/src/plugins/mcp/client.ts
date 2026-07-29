@@ -1,6 +1,7 @@
 import { isRecord } from '../../shared/type-guards.js';
 import type {
   DroneLogger,
+  DroneMcpStreamableHttpServerConfig,
   DroneMcpResourceMeta,
   DroneMcpResourceTemplateMeta,
   DroneMcpPromptArgument,
@@ -8,6 +9,7 @@ import type {
   DroneMcpStdioServerConfig,
   DroneMcpServerState,
   DroneMcpPromptMeta,
+  DroneMcpRoot,
 } from 'drone-core';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 
@@ -31,6 +33,8 @@ type JsonRpcClient = {
   notify: (method: string, params?: unknown) => void;
   disconnect: () => void;
   setProtocolVersion: (version: string) => void;
+  /** Optional: mutate the request timeout at runtime (used for HTTP). */
+  setRequestTimeout?: (ms: number) => void;
   startNotifications?: () => void;
 };
 
@@ -156,6 +160,7 @@ function createStdioJsonRpcClient(options: {
   transport: RpcTransport;
   requestTimeoutMs: number;
   onNotification?: (method: string, params: unknown) => void;
+  onRequest?: (method: string, params: unknown) => Promise<unknown>;
   onTransportIssue: (error: string) => void;
   encoding?: 'content-length' | 'line-delimited';
 }): JsonRpcClient {
@@ -173,6 +178,7 @@ function createContentLengthJsonRpcClient(options: {
   transport: RpcTransport;
   requestTimeoutMs: number;
   onNotification?: (method: string, params: unknown) => void;
+  onRequest?: (method: string, params: unknown) => Promise<unknown>;
   onTransportIssue: (error: string) => void;
 }): JsonRpcClient {
   let nextId = 1;
@@ -257,7 +263,14 @@ function createContentLengthJsonRpcClient(options: {
         return;
       }
 
-      if (typeof message.id === 'number') {
+      if (
+        typeof message.id === 'number' &&
+        typeof message.method === 'string'
+      ) {
+        if (options.onRequest) {
+          void handleServerRequest(message.id, message.method, message.params);
+        }
+      } else if (typeof message.id === 'number') {
         const entry = pending.get(message.id);
         if (!entry) {
           continue;
@@ -275,6 +288,25 @@ function createContentLengthJsonRpcClient(options: {
       } else if (typeof message.method === 'string' && options.onNotification) {
         options.onNotification(message.method, message.params);
       }
+    }
+  }
+
+  async function handleServerRequest(
+    id: number,
+    method: string,
+    params: unknown
+  ): Promise<void> {
+    try {
+      const result = await options.onRequest!(method, params);
+      sendMessage({ id, result });
+    } catch (error) {
+      sendMessage({
+        id,
+        error: {
+          code: -32603,
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
@@ -348,6 +380,7 @@ function createLineDelimitedJsonRpcClient(options: {
   transport: RpcTransport;
   requestTimeoutMs: number;
   onNotification?: (method: string, params: unknown) => void;
+  onRequest?: (method: string, params: unknown) => Promise<unknown>;
   onTransportIssue: (error: string) => void;
 }): JsonRpcClient {
   let nextId = 1;
@@ -411,7 +444,14 @@ function createLineDelimitedJsonRpcClient(options: {
         return;
       }
 
-      if (typeof message.id === 'number') {
+      if (
+        typeof message.id === 'number' &&
+        typeof message.method === 'string'
+      ) {
+        if (options.onRequest) {
+          void handleServerRequest(message.id, message.method, message.params);
+        }
+      } else if (typeof message.id === 'number') {
         const entry = pending.get(message.id);
         if (!entry) {
           continue;
@@ -429,6 +469,25 @@ function createLineDelimitedJsonRpcClient(options: {
       } else if (typeof message.method === 'string' && options.onNotification) {
         options.onNotification(message.method, message.params);
       }
+    }
+  }
+
+  async function handleServerRequest(
+    id: number,
+    method: string,
+    params: unknown
+  ): Promise<void> {
+    try {
+      const result = await options.onRequest!(method, params);
+      sendMessage({ id, result });
+    } catch (error) {
+      sendMessage({
+        id,
+        error: {
+          code: -32603,
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
@@ -496,7 +555,9 @@ function createLineDelimitedJsonRpcClient(options: {
  */
 async function parseSseResponse(
   response: Response,
-  id: number
+  id: number,
+  onNotification: (method: string, params: unknown) => void,
+  maxSizeBytes: number
 ): Promise<JsonRpcMessage> {
   if (!response.body) {
     throw new Error('SSE response has no body stream.');
@@ -504,21 +565,76 @@ async function parseSseResponse(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let totalBytes = 0;
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
+    totalBytes += value.length;
+    if (totalBytes > maxSizeBytes) {
+      reader.cancel();
+      throw new Error(
+        `MCP SSE response exceeded maximum size of ${maxSizeBytes} bytes`
+      );
+    }
     buffer += decoder.decode(value, { stream: true });
-    // Look for a data: line containing a JSON-RPC message with our id
-    const match = buffer.match(/^data:\s*(\{.*?\})\s*$/m);
-    if (match) {
+
+    // Process complete SSE events (separated by \n\n)
+    let separator: number;
+    while ((separator = buffer.indexOf('\n\n')) !== -1) {
+      const rawEvent = buffer.slice(0, separator);
+      buffer = buffer.slice(separator + 2);
+      const dataLine = rawEvent
+        .split('\n')
+        .find(line => line.startsWith('data:'));
+      if (!dataLine) continue;
+      const data = dataLine.slice('data:'.length).trim();
+      if (data.length === 0) continue;
       try {
-        return JSON.parse(match[1]) as JsonRpcMessage;
+        const message = JSON.parse(data) as JsonRpcMessage;
+        if (typeof message.id === 'number' && message.id === id) {
+          return message; // Final result
+        }
+        if (typeof message.method === 'string') {
+          onNotification(message.method, message.params); // Progress notification
+        }
       } catch {
-        /* continue reading */
+        // Ignore malformed SSE payloads
       }
     }
   }
+
   throw new Error('Invalid JSON payload from streamable HTTP MCP server.');
+}
+/**
+ * Read a response body with a byte limit, using chunked reading so we can
+ * enforce the limit incrementally rather than reading the entire body first.
+ */
+async function readResponseBody(
+  response: Response,
+  maxSizeBytes: number
+): Promise<string> {
+  if (!response.body) {
+    return await response.text(); // fallback for environments without body
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let result = '';
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.length;
+    if (totalBytes > maxSizeBytes) {
+      reader.cancel();
+      throw new Error(
+        `MCP response exceeded maximum size of ${maxSizeBytes} bytes`
+      );
+    }
+    result += decoder.decode(value, { stream: true });
+  }
+  result += decoder.decode(); // flush
+  return result;
 }
 
 function normalizeHttpEnvelope(
@@ -562,10 +678,12 @@ function normalizeHttpEnvelope(
 function createStreamableHttpJsonRpcClient(options: {
   serverId: string;
   url: string;
+  maxResponseSizeBytes: number;
   headers: Record<string, string>;
   requestTimeoutMs: number;
   compatibilityMode: 'strict' | 'permissive';
   onNotification: (method: string, params: unknown) => void;
+  onRequest?: (method: string, params: unknown) => Promise<unknown>;
   onStreamError: (message: string) => void;
   onStreamReconnected?: () => void;
 }): JsonRpcClient {
@@ -573,6 +691,7 @@ function createStreamableHttpJsonRpcClient(options: {
   let closed = false;
   let sessionId: string | undefined;
   let negotiatedProtocolVersion = '2025-06-18';
+  let requestTimeoutMs = options.requestTimeoutMs;
 
   async function openGetStream(): Promise<void> {
     let backoffMs = 1000;
@@ -586,7 +705,7 @@ function createStreamableHttpJsonRpcClient(options: {
             'MCP-Protocol-Version': negotiatedProtocolVersion,
             ...options.headers,
           },
-          signal: AbortSignal.timeout(options.requestTimeoutMs),
+          signal: AbortSignal.timeout(requestTimeoutMs),
         });
 
         if (!response.ok || !response.body) {
@@ -640,7 +759,18 @@ function createStreamableHttpJsonRpcClient(options: {
             }
             try {
               const message = JSON.parse(data) as JsonRpcMessage;
-              if (typeof message.method === 'string') {
+              if (
+                typeof message.id === 'number' &&
+                typeof message.method === 'string'
+              ) {
+                if (options.onRequest) {
+                  void handleHttpRequest(
+                    message.id,
+                    message.method,
+                    message.params
+                  );
+                }
+              } else if (typeof message.method === 'string') {
                 options.onNotification(message.method, message.params);
               }
             } catch {
@@ -663,6 +793,44 @@ function createStreamableHttpJsonRpcClient(options: {
     }
   }
 
+  async function handleHttpRequest(
+    id: number,
+    method: string,
+    params: unknown
+  ): Promise<void> {
+    try {
+      const result = await options.onRequest!(method, params);
+      await postJsonResponse({ jsonrpc: '2.0', id, result });
+    } catch (error) {
+      await postJsonResponse({
+        jsonrpc: '2.0',
+        id,
+        error: {
+          code: -32603,
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  async function postJsonResponse(message: object): Promise<void> {
+    try {
+      await fetch(options.url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          'MCP-Protocol-Version': negotiatedProtocolVersion,
+          ...(sessionId ? { 'mcp-session-id': sessionId } : {}),
+          ...options.headers,
+        },
+        body: JSON.stringify(message),
+      });
+    } catch {
+      // Best-effort response delivery; failures are silently ignored.
+    }
+  }
+
   return {
     request: async <T>(method: string, params?: unknown): Promise<T> => {
       if (closed) {
@@ -672,10 +840,7 @@ function createStreamableHttpJsonRpcClient(options: {
       const id = nextId;
       nextId += 1;
       const controller = new AbortController();
-      const timer = setTimeout(
-        () => controller.abort(),
-        options.requestTimeoutMs
-      );
+      const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
 
       try {
         const response = await fetch(options.url, {
@@ -711,10 +876,18 @@ function createStreamableHttpJsonRpcClient(options: {
         const isSse = contentType.includes('text/event-stream');
         let parsedBody: unknown;
         if (isSse) {
-          const sseMessage = await parseSseResponse(response, id);
+          const sseMessage = await parseSseResponse(
+            response,
+            id,
+            options.onNotification,
+            options.maxResponseSizeBytes
+          );
           parsedBody = sseMessage;
         } else {
-          const rawBody = await response.text();
+          const rawBody = await readResponseBody(
+            response,
+            options.maxResponseSizeBytes
+          );
           try {
             parsedBody = JSON.parse(rawBody);
           } catch {
@@ -754,6 +927,9 @@ function createStreamableHttpJsonRpcClient(options: {
     },
     setProtocolVersion: (version: string) => {
       negotiatedProtocolVersion = version;
+    },
+    setRequestTimeout: (ms: number) => {
+      requestTimeoutMs = ms;
     },
     disconnect: () => {
       closed = true;
@@ -940,19 +1116,25 @@ export async function createMcpClientConnection(options: {
   serverId: string;
   config: DroneMcpServerConfig;
   defaultRequestTimeoutMs: number;
+  defaultSpawnTimeoutMs: number;
   defaultRetryCount: number;
   defaultRetryDelayMs: number;
   defaultMaxListPages: number;
   defaultMaxListItems: number;
   defaultCompatibilityMode: 'strict' | 'permissive';
+  defaultMaxResponseSizeBytes: number;
   onNotification: (method: string, params: unknown) => void;
   onStreamError: (message: string) => void;
   logger: DroneLogger;
   /** Fires after a successful reconnection (SSE stream reconnect or stdio child respawn). */
   onReconnected?: () => void;
+  /** Roots to advertise via the roots/list client capability. */
+  roots?: DroneMcpRoot[];
 }): Promise<McpClientConnection> {
   const effectiveRequestTimeoutMs =
     options.config.requestTimeoutMs ?? options.defaultRequestTimeoutMs;
+  const effectiveSpawnTimeoutMs =
+    options.config.spawnTimeoutMs ?? options.defaultSpawnTimeoutMs;
   const effectiveRetryCount =
     options.config.retryCount ?? options.defaultRetryCount;
   const effectiveRetryDelayMs =
@@ -961,6 +1143,8 @@ export async function createMcpClientConnection(options: {
     options.config.maxListPages ?? options.defaultMaxListPages;
   const effectiveMaxListItems =
     options.config.maxListItems ?? options.defaultMaxListItems;
+  const effectiveMaxResponseSizeBytes =
+    options.config.maxResponseSizeBytes ?? options.defaultMaxResponseSizeBytes;
   const effectiveCompatibilityMode =
     options.config.transport === 'streamable_http'
       ? (options.config.compatibilityMode ?? options.defaultCompatibilityMode)
@@ -997,20 +1181,23 @@ export async function createMcpClientConnection(options: {
   let childProcess: ChildProcessWithoutNullStreams | undefined;
   let closed = false;
   let rpc: JsonRpcClient;
-
   if (options.config.transport === 'streamable_http') {
     rpc = createStreamableHttpJsonRpcClient({
       serverId: options.serverId,
       url: options.config.url,
+      maxResponseSizeBytes: effectiveMaxResponseSizeBytes,
       headers: options.config.headers ?? {},
       requestTimeoutMs: effectiveRequestTimeoutMs,
       compatibilityMode: effectiveCompatibilityMode,
       onNotification: options.onNotification,
+      onRequest: handleServerRequest,
       onStreamError: options.onStreamError,
       onStreamReconnected: options.onReconnected,
     });
   } else {
     const stdioConfig = options.config as DroneMcpStdioServerConfig;
+    // stdio: the transport is the same child process, but the stdio client
+    // captures requestTimeoutMs in closures. Use spawn timeout for init, then rebuild.
     childProcess = spawn(stdioConfig.command, stdioConfig.args ?? [], {
       cwd: stdioConfig.cwd,
       env: {
@@ -1026,7 +1213,7 @@ export async function createMcpClientConnection(options: {
         options.logger,
         options.serverId
       ),
-      requestTimeoutMs: effectiveRequestTimeoutMs,
+      requestTimeoutMs: effectiveSpawnTimeoutMs,
       onTransportIssue: error => {
         state.status = 'error';
         state.lastError = error;
@@ -1034,7 +1221,18 @@ export async function createMcpClientConnection(options: {
       },
       encoding: stdioConfig.encoding,
       onNotification: options.onNotification,
+      onRequest: handleServerRequest,
     });
+  }
+
+  function handleServerRequest(
+    method: string,
+    params: unknown
+  ): Promise<unknown> {
+    if (method === 'roots/list') {
+      return Promise.resolve({ roots: options.roots ?? [] });
+    }
+    return Promise.reject(new Error(`Unsupported server request: ${method}`));
   }
 
   async function requestWithRetry<T>(
@@ -1157,7 +1355,7 @@ export async function createMcpClientConnection(options: {
               options.logger,
               options.serverId
             ),
-            requestTimeoutMs: effectiveRequestTimeoutMs,
+            requestTimeoutMs: effectiveSpawnTimeoutMs,
             onTransportIssue: error => {
               state.status = 'error';
               state.lastError = error;
@@ -1165,6 +1363,7 @@ export async function createMcpClientConnection(options: {
             },
             encoding: stdioConfig.encoding,
             onNotification: options.onNotification,
+            onRequest: handleServerRequest,
           });
           await newRpc.request('initialize', {
             protocolVersion: '2025-06-18',
@@ -1173,6 +1372,7 @@ export async function createMcpClientConnection(options: {
               resources: {},
               prompts: {},
               logging: {},
+              roots: {},
             },
             clientInfo: { name: 'drone-agent', version: '0.1.0' },
           });
@@ -1198,11 +1398,23 @@ export async function createMcpClientConnection(options: {
   }
 
   try {
+    if (options.config.transport === 'streamable_http') {
+      // HTTP: expand the per-request timeout for the spawn-time initialize
+      // handshake. It is shrunk back to the runtime value after the handshake
+      // succeeds.
+      rpc.setRequestTimeout?.(effectiveSpawnTimeoutMs);
+    }
     const initResult = await requestWithRetry<{ protocolVersion?: string }>(
       'initialize',
       {
         protocolVersion: '2025-06-18',
-        capabilities: { tools: {}, resources: {}, prompts: {}, logging: {} },
+        capabilities: {
+          tools: {},
+          resources: {},
+          prompts: {},
+          logging: {},
+          roots: {},
+        },
         clientInfo: {
           name: 'drone-agent',
           version: '0.1.0',
@@ -1214,6 +1426,30 @@ export async function createMcpClientConnection(options: {
     // Extract the negotiated protocol version from the server's response
     if (initResult?.protocolVersion) {
       rpc.setProtocolVersion(initResult.protocolVersion);
+    }
+    if (options.config.transport === 'streamable_http') {
+      // HTTP: keep the same client (it holds sessionId and negotiated protocol
+      // version); just shrink the per-request timeout back to the runtime value.
+      rpc.setRequestTimeout?.(effectiveRequestTimeoutMs);
+    } else {
+      // stdio: rebuild the client with the shorter runtime timeout so subsequent
+      // JSON-RPC calls use requestTimeoutMs.
+      rpc = createStdioJsonRpcClient({
+        transport: createChildTransport(
+          childProcess!,
+          options.logger,
+          options.serverId
+        ),
+        requestTimeoutMs: effectiveRequestTimeoutMs,
+        onTransportIssue: error => {
+          state.status = 'error';
+          state.lastError = error;
+          state.lastErrorCategory = classifyErrorCategory(error);
+        },
+        encoding: (options.config as DroneMcpStdioServerConfig).encoding,
+        onNotification: options.onNotification,
+        onRequest: handleServerRequest,
+      });
     }
     state.status = 'connected';
     state.lastError = undefined;

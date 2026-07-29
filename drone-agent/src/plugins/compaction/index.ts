@@ -9,7 +9,6 @@ import {
   type DronePlugin,
   type DroneSessionTurn,
 } from 'drone-core';
-import type { ContextBudgetService } from '../../runtime/context-budget-service.js';
 import type { DroneSessionManager } from '../../runtime/session-manager.js';
 
 type RegistrationContext = {
@@ -203,10 +202,23 @@ async function maybeCompact(input: {
 
     const summarySystemPrompt =
       'You are a conversation summarizer. Produce a concise summary of the ' +
-      'transcript below that preserves decisions, file paths, function ' +
-      'names, and any unresolved questions. Aim for a short, dense ' +
-      'paragraph plus a brief bullet list. Do not include greetings or ' +
-      'pleasantries. Stay under the requested token budget.';
+      'transcript below. Aim for a brief bullet list. Do not include greetings or ' +
+      'pleasantries. Stay under the requested token budget. Prioritize ' +
+      'including information in the summary according to the following ' +
+      'order from most to least important:\n' +
+      '1. User input, instruction, questions, and decisions. Preserve these ' +
+      'verbatim.\n' +
+      "2. Any context needed to understand the user's input, instructions, " +
+      'questions, and decisions. For instance, if the user says "Yes, like that," ' +
+      'whatever "that" refers to needs to be included in the summary, if ' +
+      'it is available.\n' +
+      '3. Architectural or design information.\n' +
+      '4. Any other relevant information.\n\n' +
+      'Detailed tool calls and results should be discarded. Provide a summary ' +
+      'of what was done if it is relevant and only if space allows.\n\n' +
+      `If any information is missing or ambiguous, note that in the summary. ` +
+      `Do not make anything up. If information is not in the transcript, ` +
+      `skip it. If you can't just skip it, note it.`;
 
     const summaryUserPrompt =
       `Summarize the following ${sliceSize} conversation turn(s) in at most ` +
@@ -230,7 +242,7 @@ async function maybeCompact(input: {
 
       const summaryText = (response.message ?? '').trim();
       if (summaryText.length === 0) {
-        throw new Error('Ollama returned an empty summary.');
+        throw new Error('LLM Provider returned an empty summary.');
       }
 
       sessionManager.dropOldestNonSummaryTurns(sliceSize);
@@ -266,14 +278,12 @@ async function maybeCompact(input: {
 
 async function runCompaction(
   context: RegistrationContext,
-  budgetService: ContextBudgetService,
   systemPrompt: string
 ): Promise<void> {
-  const systemMessages = await budgetService.buildSystemMessages();
   const baseSystemMessages: DroneChatMessage[] = [
     { role: 'system', content: systemPrompt },
   ];
-  const fragmentMessages = systemMessages.slice(1); // Everything after the base system prompt
+  const fragmentMessages: DroneChatMessage[] = [];
   await maybeCompact({
     context,
     baseSystemMessages,
@@ -286,13 +296,6 @@ export type CompactionCapability = {
 };
 
 export type CompactionPluginDeps = {
-  /**
-   * The context budget service, used to build system messages and resolve
-   * context-window info. The compaction plugin uses this to get the data
-   * it needs for its own summarization decisions, without reaching into
-   * the plugin engine directly.
-   */
-  budgetService: ContextBudgetService;
   sessionManager: DroneSessionManager;
   getModel: () => string;
   getProvider: () => DroneLlmProvider;
@@ -304,14 +307,12 @@ export type CompactionPluginDeps = {
    */
   emitEvent?: (event: DroneConversationEvent) => void;
 };
-
 export function createCompactionPlugin(
   deps: CompactionPluginDeps
 ): DronePlugin {
   const sessionManager = deps.sessionManager;
   const getModel = deps.getModel;
   const getProvider = deps.getProvider;
-  const budgetService = deps.budgetService;
 
   return {
     metadata: {
@@ -349,11 +350,7 @@ export function createCompactionPlugin(
         context.compactionInFlight.value = true;
 
         try {
-          await runCompaction(
-            context,
-            budgetService,
-            registration.getConfig().systemPrompt
-          );
+          await runCompaction(context, registration.getConfig().systemPrompt);
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);
@@ -375,11 +372,7 @@ export function createCompactionPlugin(
           }
           context.compactionInFlight.value = true;
           try {
-            await runCompaction(
-              context,
-              budgetService,
-              registration.getConfig().systemPrompt
-            );
+            await runCompaction(context, registration.getConfig().systemPrompt);
           } finally {
             context.compactionInFlight.value = false;
           }

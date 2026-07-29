@@ -111,6 +111,25 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   const schemeRef = useRef<DroneColorScheme>(scheme);
   schemeRef.current = scheme;
 
+  // ── TUI config: syntax highlighting colors and code background ─────
+  const tuiConfig = useMemo(() => {
+    try {
+      return opts.engine.getConfig().tui;
+    } catch {
+      return undefined;
+    }
+  }, [opts.engine]);
+  const syntaxColors = tuiConfig?.syntaxHighlighting?.colors;
+  const codeBackground = tuiConfig?.syntaxHighlighting?.codeBackground;
+
+  // Refs for event listener (avoids stale closure)
+  const syntaxColorsRef = useRef<Record<string, string> | undefined>(
+    syntaxColors
+  );
+  syntaxColorsRef.current = syntaxColors;
+  const codeBackgroundRef = useRef<string | undefined>(codeBackground);
+  codeBackgroundRef.current = codeBackground;
+
   // ── Mid-panel widget state ────────────────────────────────────────────
   const midPanelWidgetsRef = useRef<MidPanelWidget[]>([]);
 
@@ -145,7 +164,28 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   const currentMessageText = useRef<string>('');
   const currentCompactionId = useRef<string | null>(null);
 
+  // Accumulates streaming output lines per in-flight tool call.
+  // Keyed by tool canonical name; value holds the tail item id and
+  // accumulated lines so the render component can show streaming output.
+  const toolProgressRef = useRef<
+    Map<string, { id: string; lines: string[]; args: Record<string, unknown> }>
+  >(new Map());
+
   // ── Conversation event listener ─────────────────────────────────────
+  // Store callbacks in refs to avoid re-subscribing on every render.
+  const logRef = useRef(log);
+  logRef.current = log;
+  const appendEntryRef = useRef(appendEntry);
+  appendEntryRef.current = appendEntry;
+  const addItemRef = useRef(addItem);
+  addItemRef.current = addItem;
+  const updateItemRef = useRef(updateItem);
+  updateItemRef.current = updateItem;
+  const commitItemRef = useRef(commitItem);
+  commitItemRef.current = commitItem;
+  const clearTailRef = useRef(clearTail);
+  clearTailRef.current = clearTail;
+
   // Uses the tail region to buffer all in-flight content as live components,
   // then commits them atomically when the content completes. The live
   // component is carried into the <Static> scrollback (as ChatEntry.node),
@@ -153,6 +193,21 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   useEffect(() => {
     const unregister = opts.engine.onConversationEvent?.(event => {
       const s = schemeRef.current;
+      const {
+        log: logFn,
+        appendEntry: appendFn,
+        addItem: addFn,
+        updateItem: updateFn,
+        commitItem: commitFn,
+        clearTail: clearFn,
+      } = {
+        log: logRef.current,
+        appendEntry: appendEntryRef.current,
+        addItem: addItemRef.current,
+        updateItem: updateItemRef.current,
+        commitItem: commitItemRef.current,
+        clearTail: clearTailRef.current,
+      };
 
       switch (event.kind) {
         case 'reasoning': {
@@ -160,7 +215,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           if (trimmed.length === 0) break;
           currentReasoningText.current = trimmed;
           if (!currentReasoningId.current) {
-            const id = addItem(
+            const id = addFn(
               'reasoning',
               <ReasoningBlock content={trimmed} scheme={s} />,
               () => ({
@@ -170,7 +225,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             );
             currentReasoningId.current = id;
           } else {
-            updateItem(
+            updateFn(
               currentReasoningId.current,
               <ReasoningBlock content={trimmed} scheme={s} />,
               () => ({
@@ -181,10 +236,32 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           }
           break;
         }
+        case 'toolProgress': {
+          const entry = toolProgressRef.current.get(event.name);
+          if (!entry || !entry.id) break;
+          entry.lines.push(event.content);
+          const toolDef = opts.engine.getTool(event.name);
+          const customRender = toolDef?.renderComponent;
+          if (!customRender) break;
+          const component = customRender({
+            name: event.name,
+            arguments: entry.args,
+            status: 'running' as const,
+            scheme: s as unknown,
+            outputLines: [...entry.lines],
+            syntaxColors: syntaxColorsRef.current,
+            codeBackground: codeBackgroundRef.current,
+          }) as React.ReactNode;
+          updateItem(entry.id, component, () => ({
+            text: `→ ${event.name}`,
+            kind: 'toolCall' as const,
+          }));
+          break;
+        }
         case 'reasoningComplete': {
           if (currentReasoningId.current) {
-            const entry = commitItem(currentReasoningId.current);
-            appendEntry(entry);
+            const entry = commitFn(currentReasoningId.current);
+            appendFn(entry);
             currentReasoningId.current = null;
             currentReasoningText.current = '';
           }
@@ -192,6 +269,11 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         }
         case 'toolCallBatch': {
           currentToolCallIds.current = event.toolCalls.map(tc => {
+            toolProgressRef.current.set(tc.name, {
+              id: '',
+              lines: [],
+              args: tc.arguments,
+            });
             // Look up custom render component if registered
             const toolDef = opts.engine.getTool(tc.name);
             const customRender = toolDef?.renderComponent;
@@ -201,6 +283,8 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
                 arguments: tc.arguments,
                 status: 'running' as const,
                 scheme: s as unknown,
+                syntaxColors: syntaxColorsRef.current,
+                codeBackground: codeBackgroundRef.current,
               }) as React.ReactNode)
             ) : (
               <ToolCallProgress
@@ -211,10 +295,13 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
               />
             );
 
-            return addItem('toolCall', component, () => ({
+            const id = addFn('toolCall', component, () => ({
               text: `→ ${tc.name}(${preview(JSON.stringify(tc.arguments), PREVIEW_MAX)})`,
               kind: 'toolCall',
             }));
+            const entry = toolProgressRef.current.get(tc.name);
+            if (entry) entry.id = id;
+            return id;
           });
           break;
         }
@@ -231,6 +318,9 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
               const toolDef = opts.engine.getTool(result.name);
               const customRender = toolDef?.renderComponent;
 
+              const outputLines =
+                toolProgressRef.current.get(result.name)?.lines ?? [];
+
               // Build the live component (custom or default)
               const component = customRender ? (
                 (customRender({
@@ -239,6 +329,9 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
                   result: result.content,
                   status: isError ? ('error' as const) : ('done' as const),
                   scheme: s as unknown,
+                  outputLines,
+                  syntaxColors: syntaxColorsRef.current,
+                  codeBackground: codeBackgroundRef.current,
                 }) as React.ReactNode)
               ) : (
                 <ToolCallProgress
@@ -256,7 +349,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
                 ? result.content
                 : preview(result.content, PREVIEW_MAX);
 
-              updateItem(id, component, () => ({
+              updateFn(id, component, () => ({
                 text: isError
                   ? `✗ ${result.name}: ${result.content}`
                   : `← ${result.name}: ${scrollbackText}`,
@@ -267,21 +360,27 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           // Commit all tool calls in order
           for (const id of ids) {
             try {
-              const entry = commitItem(id);
-              appendEntry(entry);
+              const entry = commitFn(id);
+              appendFn(entry);
             } catch {
               // Item may have been already committed; skip
             }
           }
           currentToolCallIds.current = [];
+          toolProgressRef.current.clear();
           break;
         }
         case 'assistantMessage': {
           currentMessageText.current = event.content;
           if (!currentMessageId.current) {
-            const id = addItem(
+            const id = addFn(
               'assistantMessage',
-              <AssistantMessageBlock content={event.content} scheme={s} />,
+              <AssistantMessageBlock
+                content={event.content}
+                scheme={s}
+                syntaxColors={syntaxColorsRef.current}
+                codeBackground={codeBackgroundRef.current}
+              />,
               () => ({
                 text: currentMessageText.current,
                 kind: 'markdown',
@@ -289,9 +388,14 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             );
             currentMessageId.current = id;
           } else {
-            updateItem(
+            updateFn(
               currentMessageId.current,
-              <AssistantMessageBlock content={event.content} scheme={s} />,
+              <AssistantMessageBlock
+                content={event.content}
+                scheme={s}
+                syntaxColors={syntaxColorsRef.current}
+                codeBackground={codeBackgroundRef.current}
+              />,
               () => ({
                 text: currentMessageText.current,
                 kind: 'markdown',
@@ -302,8 +406,8 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         }
         case 'assistantMessageComplete': {
           if (currentMessageId.current) {
-            const entry = commitItem(currentMessageId.current);
-            appendEntry(entry);
+            const entry = commitFn(currentMessageId.current);
+            appendFn(entry);
             currentMessageId.current = null;
             currentMessageText.current = '';
           }
@@ -356,28 +460,21 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         }
         case 'error': {
           // Clear any in-flight tail items on error
-          clearTail();
+          clearFn();
           currentReasoningId.current = null;
           currentReasoningText.current = '';
           currentToolCallIds.current = [];
+          toolProgressRef.current.clear();
           currentMessageId.current = null;
           currentMessageText.current = '';
           currentCompactionId.current = null;
-          log(`Error: ${event.message}`, 'error');
+          logFn(`Error: ${event.message}`, 'error');
           break;
         }
       }
     });
     return () => unregister?.();
-  }, [
-    opts.engine,
-    log,
-    appendEntry,
-    addItem,
-    updateItem,
-    commitItem,
-    clearTail,
-  ]);
+  }, [opts.engine]);
 
   // ── Slash command handlers ──────────────────────────────────────────
   const runSlashCommand = useCallback(
@@ -431,8 +528,46 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
     [opts, log, exit, setIsLlmActive]
   );
 
-  // ── Global keybindings ──────────────────────────────────────────────
-  useInput((input, key) => {
+  // ── Unified keybindings ──────────────────────────────────────────────
+  // Elicitation questions take priority; if none active, fall through to
+  // global bindings.
+  useInput((inputChar, key) => {
+    // ── Elicitation handling (highest priority) ────────────────────────
+    if (activeQuestion) {
+      if (key.ctrl && inputChar === 'c') {
+        cancelQuestion();
+        return;
+      }
+      if (activeQuestion.freeform) {
+        if (key.escape) {
+          cancelQuestion();
+        }
+        return;
+      }
+      const choices = activeQuestion.choices ?? [];
+      if (key.upArrow) {
+        setPickerIndex(prev => (prev - 1 + choices.length) % choices.length);
+        return;
+      }
+      if (key.downArrow) {
+        setPickerIndex(prev => (prev + 1) % choices.length);
+        return;
+      }
+      if (key.return) {
+        const choice = choices[pickerIndex];
+        if (choice) commitAnswer(choice.value);
+        return;
+      }
+      if (/^[1-9]$/.test(inputChar)) {
+        const idx = Number.parseInt(inputChar, 10) - 1;
+        if (idx >= 0 && idx < choices.length) {
+          commitAnswer(choices[idx].value);
+        }
+      }
+      return;
+    }
+
+    // ── Global keybindings (fall through) ─────────────────────────────
     if (key.escape) {
       if (isLlmActive) {
         opts.conversation.cancelCurrentRequest?.();
@@ -440,11 +575,11 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
       }
       return;
     }
-    if (key.ctrl && input === 'c') {
+    if (key.ctrl && inputChar === 'c') {
       exit();
       return;
     }
-    if (input === '?' && inputValueRef.current === '') {
+    if (inputChar === '?' && inputValueRef.current === '') {
       printHelp(opts, log);
     }
   });
@@ -499,48 +634,19 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
     ctxPct ?? '?'
   }%${personaLabel} `;
 
-  // ── Elicitation useInput ──────────────────────────────────────────
-  useInput((inputChar, key) => {
-    if (!activeQuestion) return;
-    if (key.ctrl && inputChar === 'c') {
-      cancelQuestion();
-      return;
-    }
-    if (activeQuestion.freeform) {
-      if (key.escape) {
-        cancelQuestion();
-      }
-      return;
-    }
-    const choices = activeQuestion.choices ?? [];
-    if (key.upArrow) {
-      setPickerIndex(prev => (prev - 1 + choices.length) % choices.length);
-      return;
-    }
-    if (key.downArrow) {
-      setPickerIndex(prev => (prev + 1) % choices.length);
-      return;
-    }
-    if (key.return) {
-      const choice = choices[pickerIndex];
-      if (choice) commitAnswer(choice.value);
-      return;
-    }
-    if (/^[1-9]$/.test(inputChar)) {
-      const idx = Number.parseInt(inputChar, 10) - 1;
-      if (idx >= 0 && idx < choices.length) {
-        commitAnswer(choices[idx].value);
-      }
-    }
-  });
-
   // ── LLM working indicator: compute current frame and color ────────
   const llmColor = isLlmActive ? scheme.border : 'gray';
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
     <Box flexDirection="column" width="100%" height="100%">
-      <ChatLog entries={entries} tailItems={tailItems} scheme={scheme} />
+      <ChatLog
+        entries={entries}
+        tailItems={tailItems}
+        scheme={scheme}
+        syntaxColors={syntaxColors}
+        codeBackground={codeBackground}
+      />
       <MidPanel widgets={midPanelWidgetsRef.current} scheme={scheme} />
       <InputLine
         value={input}

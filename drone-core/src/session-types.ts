@@ -7,7 +7,7 @@
 export const SESSION_STATUSES = {
   ACTIVE: 'active',
   STALE: 'stale',
-  FINISHED: 'finished',
+  ENDED: 'ended',
   PROCESSING: 'processing',
   PROCESSED: 'processed',
 } as const;
@@ -39,9 +39,17 @@ export type DroneToolJsonSchema = {
   readonly additionalProperties?: boolean;
 };
 
+export type DroneImageContent = {
+  /** MIME type of the image (e.g. "image/jpeg", "image/png"). */
+  mimeType: string;
+  /** Base64-encoded image data (without the data: URI prefix). */
+  data: string;
+};
+
 export type DroneChatMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
+  images?: DroneImageContent[];
   toolCallId?: string;
   toolName?: string;
   toolCalls?: DroneToolCall[];
@@ -53,11 +61,6 @@ export type DroneSessionTurn = {
   id: string;
   messages: DroneSessionMessage[];
   kind?: 'summary';
-};
-
-export type DroneSessionState = {
-  messages: DroneSessionMessage[];
-  turns: DroneSessionTurn[];
 };
 
 export type DroneToolCall = {
@@ -121,6 +124,12 @@ export type ToolRenderState = {
   status: 'running' | 'done' | 'error';
   /** TUI color scheme, cast to unknown to keep drone-core React-free. */
   scheme: unknown;
+  /** Accumulated streaming output lines emitted via onProgress during execution. */
+  outputLines?: string[];
+  /** User-configured syntax highlighting colors (from tui.syntaxHighlighting.colors). */
+  syntaxColors?: Record<string, string>;
+  /** User-configured code background color (from tui.syntaxHighlighting.codeBackground). */
+  codeBackground?: string;
 };
 
 export type DroneConversationEvent =
@@ -148,6 +157,7 @@ export type DroneConversationEvent =
         arguments: Record<string, unknown>;
       }>;
     }
+  | { kind: 'toolProgress'; name: string; content: string }
   | { kind: 'error'; message: string }
   | {
       kind: 'compaction';

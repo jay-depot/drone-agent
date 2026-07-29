@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-07-20T00:10:33.050Z",
+    "insight": "When adding a `body: ReadableStream` to a mock Response, the `clone()` method must also return a Response with a body, or tests that call `clone()` will break. The existing mock's `clone()` returns `this`, which works because the original mock had no body. After adding a body, `clone()` still returns `this` (same stream), which is fine for the current tests since they don't consume the body twice. But this is a latent issue — if a future test calls `clone()` and reads both bodies, the second read will get an empty stream.\n\nThe `file__apply_diff` tool's fuzz matching is unreliable when inserting code near common patterns like `});` — it frequently anchors on the wrong closing brace and inserts code in the wrong scope. For surgical insertions near repetitive patterns, use Python string manipulation or write the complete file instead."
+  }
+]

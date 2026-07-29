@@ -29,11 +29,15 @@ export function ChatLog({
   entries,
   tailItems,
   scheme,
+  syntaxColors,
+  codeBackground,
 }: {
   entries: ChatEntry[];
   /** Live-updating items rendered above the static area. */
   tailItems: TailItem[];
   scheme: DroneColorScheme;
+  syntaxColors?: Record<string, string>;
+  codeBackground?: string;
 }): React.JSX.Element {
   return (
     <Box flexDirection="column" flexGrow={1} overflowY="hidden">
@@ -41,7 +45,8 @@ export function ChatLog({
       <Static items={entries} style={{ width: '100%' }}>
         {entry => (
           <Box key={entry.id} flexDirection="column">
-            {entry.node ?? renderEntry(entry, scheme)}
+            {entry.node ??
+              renderEntry(entry, scheme, syntaxColors, codeBackground)}
           </Box>
         )}
       </Static>
@@ -51,7 +56,9 @@ export function ChatLog({
 
 function renderEntry(
   entry: ChatEntry,
-  scheme: DroneColorScheme
+  scheme: DroneColorScheme,
+  syntaxColors?: Record<string, string>,
+  codeBackground?: string
 ): React.JSX.Element {
   switch (entry.kind) {
     case 'user':
@@ -99,13 +106,21 @@ function renderEntry(
           <ColorTag color={scheme.success}>{entry.text}</ColorTag>
         </Text>
       );
-    case 'markdown':
-      return <Markdown color={scheme.info}>{entry.text}</Markdown>;
     case 'compaction':
       return (
         <Text>
           <ColorTag color={scheme.compaction}>{entry.text}</ColorTag>
         </Text>
+      );
+    case 'markdown':
+      return (
+        <Markdown
+          color={scheme.info}
+          syntaxColors={syntaxColors}
+          codeBackground={codeBackground}
+        >
+          {entry.text}
+        </Markdown>
       );
     case 'plain':
     default:

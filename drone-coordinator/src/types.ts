@@ -42,6 +42,7 @@ export interface BeaconTrust {
   tlsFingerprint: string | null;
   createdAt: number;
   updatedAt: number;
+  verificationCode?: string;
 }
 
 export interface RegisterBeaconTrustRequest {
@@ -56,6 +57,7 @@ export interface RegisterBeaconTrustRequest {
 export interface BeaconStatusResponse {
   status: BeaconTrustStatus;
   approvalToken?: string; // Only provided when status is 'pending'
+  verificationCode?: string; // Human-readable code for MitM verification
 }
 
 export interface BeaconSession {

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { publishMutationEvent } from '../ws-pubsub.js';
 import type {
   RegisterBeaconRequest,
   RegisterBeaconTrustRequest,
@@ -35,6 +36,9 @@ export default function beaconRoutes(app: FastifyInstance) {
           const response: BeaconStatusResponse = { status: trust.status };
           if (trust.approvalToken) {
             response.approvalToken = trust.approvalToken;
+          }
+          if (trust.verificationCode) {
+            response.verificationCode = trust.verificationCode;
           }
           return reply.code(201).send(response);
         } catch (err) {
@@ -87,6 +91,7 @@ export default function beaconRoutes(app: FastifyInstance) {
         trustStatus: trust?.status ?? null,
         publicKey: trust?.publicKey ?? null,
         approvalToken: trust?.approvalToken ?? null,
+        verificationCode: trust?.verificationCode ?? null,
       };
     }
   );
@@ -186,6 +191,11 @@ export default function beaconRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: 'Beacon not found' });
       }
       const session = db.createBeaconSession(request.params.id, request.body);
+      publishMutationEvent({
+        sessionId: request.body.agentId,
+        eventType: 'beacon.session.created',
+        payload: { beaconId: request.params.id, ...request.body },
+      });
       return reply.code(201).send(session);
     }
   );
@@ -229,6 +239,11 @@ export default function beaconRoutes(app: FastifyInstance) {
     if (!session) {
       return reply.code(404).send({ error: 'Session not found' });
     }
+    publishMutationEvent({
+      sessionId: request.params.agentId,
+      eventType: 'beacon.session.ended',
+      payload: { beaconId: request.params.id, agentId: request.params.agentId },
+    });
     return session;
   });
 }

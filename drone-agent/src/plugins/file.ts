@@ -2,6 +2,11 @@ import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import fg from 'fast-glob';
 import type { DronePlugin } from 'drone-core';
+import { FileReadBlock } from '../tui/components/FileReadBlock.js';
+import { FileWriteBlock } from '../tui/components/FileWriteBlock.js';
+import { FileApplyDiffBlock } from '../tui/components/FileApplyDiffBlock.js';
+import { FileListBlock } from '../tui/components/FileListBlock.js';
+import { FileGlobBlock } from '../tui/components/FileGlobBlock.js';
 import { renderDiffV2 } from '../shared/diff-renderer.js';
 import { applyPatch, type PatchError } from '../shared/patch-applier.js';
 import { parseUnifiedDiff } from '../shared/unified-diff-parser.js';
@@ -47,63 +52,68 @@ function enhanceFsError(
 export const __testing = { enhanceFsError };
 
 /**
- * Format a PatchError into a concise, LLM-friendly error message that speaks
- * in unified-diff terms ("- lines", "context lines", "@@ header") rather than
- * internal data structure names.
+ * Format a PatchError into an LLM-friendly error message. Each failure type
+ * is reported differently:
+ *
+ *   Type 1 (multiple matches): a cheat sheet listing each match with line
+ *     numbers + surrounding context, plus a reworked hunk that would uniquely
+ *     target each one (the LLM can crib and resubmit).
+ *   Type 2 (old code not found): up to 5 Levenshtein-closest file spans with
+ *     location + actual content; or a plain "not found" message if the old
+ *     code is too generic.
+ *   Type 3 (narrowing over-eliminated): unrolled to the last multiple-match
+ *     step, then reported like Type 1.
  */
 function formatPatchError(e: PatchError): string {
   const tag = `Hunk ${e.hunkIndex}:`;
 
-  if (e.message.startsWith('Anchor not found')) {
-    const heading = e.anchors[0] || '(no anchor)';
+  if (e.failureType === 'type2') {
+    const suggestions = e.suggestions ?? [];
+    if (suggestions.length === 0) {
+      return (
+        `${tag} The old code (the \`-\` lines) was not found in the file in any form.\n` +
+        `  ${e.detail}`
+      );
+    }
+    const lines = suggestions.map(
+      s =>
+        `  - line ${s.line} (distance ${s.distance}):\n` +
+        s.content
+          .split('\n')
+          .map(l => `      ${l}`)
+          .join('\n')
+    );
     return (
-      `${tag} The @@ section heading "${heading}" was not found in the file.\n` +
-      `  Detail: The heading was not found at any fuzz level. ` +
-      `Try removing the heading from the @@ line, or re-read the file with file__read to find the correct section.`
+      `${tag} The old code (the \`-\` lines) was not found in the file.\n` +
+      `  ${e.detail}\n` +
+      `  Closest candidates:\n${lines.join('\n')}`
     );
   }
 
-  if (e.message.startsWith('Anchor chain not found')) {
+  // Type 1 and Type 3 share the cheat-sheet format.
+  const sites = e.matchSites ?? [];
+  const siteBlocks = sites.map((site, idx) => {
+    const ctx = site.context.map(l => `    ${l}`).join('\n');
     return (
-      `${tag} The @@ section heading chain "${e.anchors.join(' > ')}" could not be matched.\n` +
-      `  Detail: The first heading "${e.anchors[0]}" exists, but subsequent headings don't follow it.`
+      `  Match ${idx + 1} (line ${site.line}):\n` +
+      `${ctx}\n` +
+      `  Reworked hunk to target this match:\n` +
+      '  ```diff\n' +
+      site.reworkedHunk
+        .split('\n')
+        .map(l => `  ${l}`)
+        .join('\n') +
+      '\n  ```'
     );
-  }
-
-  if (e.message.includes('Context does not match')) {
-    const expectedOld = JSON.stringify(e.foundOldLines ?? []);
-    const fileOld = e.foundOldLines
-      ? JSON.stringify(e.anchors?.length ? e.foundOldLines : [])
-      : '(unknown)';
-    const atLine =
-      e.anchors.length > 0
-        ? `near the @@ heading "${e.anchors[0]}"`
-        : 'at the anchor location';
-    return (
-      `${tag} The \`-\` lines didn't match what's in the file ${atLine}.\n` +
-      `  Your patch shows: ${expectedOld}\n` +
-      `  The file has:     ${fileOld}\n` +
-      `  Re-read the file with file__read to confirm the contents, then correct the \`-\` lines.`
-    );
-  }
-
-  if (e.message.includes('Context not found anywhere')) {
-    return (
-      `${tag} The context lines around the change couldn't be matched anywhere in the file.\n` +
-      `  The patch expects these \`-\` lines: ${JSON.stringify(e.foundOldLines ?? [])}\n` +
-      `  Re-read the file with file__read to see the current content, then adjust the context lines in the patch.`
-    );
-  }
-
-  // Fallback
-  return `${tag} ${e.message}\n  Detail: ${e.detail}`;
+  });
+  return `${tag} ${e.message}\n  ${e.detail}\n\n${siteBlocks.join('\n\n')}`;
 }
 
 export const filePlugin: DronePlugin = {
   metadata: {
     id: 'file',
     name: 'File',
-    version: '0.3.0',
+    version: '0.4.0',
     description: 'Read, write, list, and patch files in the workspace.',
     defaultEnabled: false,
   },
@@ -128,6 +138,7 @@ export const filePlugin: DronePlugin = {
         required: ['path'],
         additionalProperties: false,
       },
+      renderComponent: state => FileReadBlock({ state }),
       execute: async input => {
         if (typeof input.path !== 'string' || input.path.trim().length === 0) {
           throw new Error('file__read requires a non-empty path string.');
@@ -190,6 +201,7 @@ export const filePlugin: DronePlugin = {
         required: ['path'],
         additionalProperties: false,
       },
+      renderComponent: state => FileListBlock({ state }),
       execute: async input => {
         if (typeof input.path !== 'string' || input.path.trim().length === 0) {
           throw new Error('file__list requires a non-empty path string.');
@@ -239,6 +251,7 @@ export const filePlugin: DronePlugin = {
         required: ['path', 'content'],
         additionalProperties: false,
       },
+      renderComponent: state => FileWriteBlock({ state }),
       execute: async input => {
         if (typeof input.path !== 'string' || input.path.trim().length === 0) {
           throw new Error('file__write requires a non-empty path string.');
@@ -293,13 +306,21 @@ export const filePlugin: DronePlugin = {
         '```\n' +
         'Hunks start with @@ -start,count +start,count @@ [section heading].\n' +
         'Lines with ` ` are context, `-` are removed, `+` are added.\n' +
-        'Multiple hunks (multiple @@ sections) are applied bottom-up.\n\n' +
-        'Line numbers and section headings are soft hints — content-anchored\n' +
-        'matching is used for accuracy. The patch is robust to small file changes.\n\n' +
+        'Multiple hunks (multiple @@ sections) are applied top-to-bottom.\n\n' +
+        'Matching is content-anchored and robust to formatting changes:\n' +
+        '  1. The `-` lines (old change zone) are searched for in the file.\n' +
+        '  2. If multiple matches, surrounding context lines narrow them down.\n' +
+        '  3. If still ambiguous, the @@ section heading narrows further.\n' +
+        'Aggressive format-aware fuzz (collapse all whitespace including\n' +
+        'newlines) handles auto-formatter reflow (prettier/eslint --fix).\n\n' +
+        'Partial success is supported: successful hunks are applied and the\n' +
+        'file is written; failed hunks are reported but do not block others.\n' +
+        'On failure the error includes a cheat sheet with reworked hunks you\n' +
+        'can crib and resubmit, or the closest file spans for not-found code.\n\n' +
         'Tips:\n' +
         '  - Use `file__read` first to check the current file content.\n' +
         '  - Include 2-3 lines of context around each change.\n' +
-        '  - Whitespace differences are handled via progressive fuzzy matching.',
+        '  - Interleaved context lines inside the change zone are preserved.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -313,6 +334,7 @@ export const filePlugin: DronePlugin = {
               'Unified diff patch string in `git diff` format. ' +
               'Each hunk starts with @@ -start,count +start,count @@ [section heading].\n' +
               'Lines prefixed with ` ` are context, `-` are removed, `+` are added.\n' +
+              'Context lines between `-`/`+` lines are preserved (standard unified-diff semantics).\n' +
               'Example:\n' +
               '```diff\n' +
               '@@ -10,4 +10,4 @@ function_name:\n' +
@@ -326,6 +348,7 @@ export const filePlugin: DronePlugin = {
         required: ['path', 'patch'],
         additionalProperties: false,
       },
+      renderComponent: state => FileApplyDiffBlock({ state }),
       execute: async input => {
         if (typeof input.path !== 'string' || input.path.trim().length === 0) {
           throw new Error('file__apply_diff requires a non-empty path string.');
@@ -367,26 +390,23 @@ export const filePlugin: DronePlugin = {
         // Apply the patch (applies to a copy internally, returns patchedLines)
         const result = applyPatch(lines, hunks);
 
-        if (!result.success) {
-          // Concise error messages in unified-diff language
-          const errorMessages = result.errors
-            .map(formatPatchError)
-            .join('\n\n');
-          throw new Error(
-            `file__apply_diff: ${result.errors.length} of ${hunks.length} hunk(s) failed to apply.\n\n${errorMessages}\n\n` +
-              `Tip: Re-read the file with file__read to confirm the current contents, then correct the patch and try again. No changes were written.`
-          );
-        }
-
-        // Build DiffHunkV2 array for rendering
-        const diffHunks = hunks.map((hunk, i) => ({
-          anchors: hunk.anchors,
-          contextBefore: hunk.contextBefore,
-          oldLines: hunk.oldLines,
-          newLines: hunk.newLines,
-          contextAfter: hunk.contextAfter,
-          fuzz: result.appliedHunks[i]?.fuzz,
-        }));
+        // Build DiffHunkV2 array for rendering (only applied hunks).
+        // Each AppliedHunk carries its original hunkIndex so we can correlate.
+        const fuzzByIndex = new Map(
+          result.appliedHunks.map(a => [a.hunkIndex, a.fuzz])
+        );
+        const diffHunks = hunks
+          .map((hunk, i) => ({ hunk, i }))
+          .filter(({ i }) => fuzzByIndex.has(i))
+          .map(({ hunk, i }) => ({
+            anchors: hunk.anchors,
+            contextBefore: hunk.contextBefore,
+            changeZone: hunk.changeZone,
+            oldLines: hunk.oldLines,
+            newLines: hunk.newLines,
+            contextAfter: hunk.contextAfter,
+            fuzz: fuzzByIndex.get(i),
+          }));
 
         // Always use plain text — the diff result goes to both the LLM (which
         // shouldn't see ANSI codes) and the TUI (which does its own coloring
@@ -394,11 +414,29 @@ export const filePlugin: DronePlugin = {
         const diffResult = renderDiffV2(filePath, diffHunks, false);
         const diffOutput = diffResult.plain;
 
-        // Write the patched content from applyPatch's internal working copy
-        try {
-          await writeFile(filePath, result.patchedLines.join('\n'), 'utf-8');
-        } catch (err) {
-          throw enhanceFsError('file__apply_diff', filePath, err);
+        // Partial success: write the file if at least one hunk succeeded.
+        // If zero hunks succeeded, do not write (nothing changed).
+        const anyApplied = result.appliedHunks.length > 0;
+        if (anyApplied) {
+          try {
+            await writeFile(filePath, result.patchedLines.join('\n'), 'utf-8');
+          } catch (err) {
+            throw enhanceFsError('file__apply_diff', filePath, err);
+          }
+        }
+
+        if (!result.success) {
+          const errorMessages = result.errors
+            .map(formatPatchError)
+            .join('\n\n');
+          const writeNote = anyApplied
+            ? `The file was written with the ${result.appliedHunks.length} successful hunk(s) applied. The failed hunk(s) were not applied.`
+            : `No changes were written.`;
+          throw new Error(
+            `file__apply_diff: ${result.errors.length} of ${hunks.length} hunk(s) failed to apply.\n` +
+              `${writeNote}\n\n${errorMessages}\n\n` +
+              `Tip: Re-read the file with file__read to confirm the current contents, then correct the patch and try again.`
+          );
         }
 
         return JSON.stringify(
@@ -433,6 +471,7 @@ export const filePlugin: DronePlugin = {
         required: ['pattern'],
         additionalProperties: false,
       },
+      renderComponent: state => FileGlobBlock({ state }),
       execute: async input => {
         if (
           typeof input.pattern !== 'string' ||
@@ -460,6 +499,72 @@ export const filePlugin: DronePlugin = {
         const pattern = input.pattern.trim();
         const matches = await fg(pattern, { cwd, absolute: true });
         return JSON.stringify({ pattern, cwd, matches }, null, 2);
+      },
+    });
+
+    // -----------------------------------------------------------------------
+    // file__read_image
+    // -----------------------------------------------------------------------
+    registration.registerTool({
+      name: 'read_image',
+      description:
+        'Read an image file and return its base64-encoded data. ' +
+        'Supported formats: JPEG, PNG, WebP, GIF. ' +
+        'The image data will be injected into the conversation for vision-capable models.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: 'Absolute path to the image file.',
+          },
+        },
+        required: ['path'],
+        additionalProperties: false,
+      },
+      execute: async input => {
+        if (typeof input.path !== 'string' || input.path.trim().length === 0) {
+          throw new Error('file__read_image requires a non-empty path string.');
+        }
+        const filePath = path.resolve(input.path.trim());
+
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeMap: Record<string, string> = {
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.webp': 'image/webp',
+          '.gif': 'image/gif',
+        };
+        const mimeType = mimeMap[ext];
+        if (!mimeType) {
+          throw new Error(
+            `file__read_image: unsupported image format "${ext}". Supported formats: .jpg, .jpeg, .png, .webp, .gif`
+          );
+        }
+
+        let buffer: Buffer;
+        try {
+          buffer = await readFile(filePath);
+        } catch (err) {
+          throw enhanceFsError('file__read_image', filePath, err);
+        }
+
+        const maxSize =
+          registration.getConfig().session.maxImageSizeBytes ??
+          20 * 1024 * 1024;
+        if (buffer.length > maxSize) {
+          throw new Error(
+            `file__read_image: image size (${buffer.length} bytes) exceeds the maximum allowed size (${maxSize} bytes).`
+          );
+        }
+
+        const data = buffer.toString('base64');
+        return JSON.stringify(
+          { path: filePath, mimeType, data, size: buffer.length },
+          null,
+          2
+        );
       },
     });
   },

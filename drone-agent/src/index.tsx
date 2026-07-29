@@ -1,4 +1,8 @@
-import { createConsoleLogger, type DroneLlmCapability } from 'drone-core';
+import {
+  createConsoleLogger,
+  type DroneLlmCapability,
+  type DroneLlmProvider,
+} from 'drone-core';
 import { stdout as output } from 'node:process';
 import { createBuiltInPlugins } from './plugins/index.js';
 import {
@@ -30,6 +34,26 @@ import { runMigrate } from './migrate.js';
 async function main(): Promise<void> {
   const logger = createConsoleLogger('drone-agent');
   const invocation = parseCliArgs(process.argv.slice(2));
+  function createLlmGetters(engineRef: {
+    current: ReturnType<typeof createDronePluginEngine> | undefined;
+  }) {
+    return {
+      getProvider: (): DroneLlmProvider => {
+        const llm = engineRef.current?.getCapability<DroneLlmCapability>('llm');
+        if (!llm) {
+          throw new Error('LLM provider broker is not available.');
+        }
+        return llm.getActiveProvider();
+      },
+      getModel: (): string => {
+        const llm = engineRef.current?.getCapability<DroneLlmCapability>('llm');
+        if (!llm) {
+          return model;
+        }
+        return llm.getModel();
+      },
+    };
+  }
 
   const resolvedConfig = await loadAgentConfig(process.cwd(), {
     configDir: invocation.options.configDir,
@@ -66,45 +90,11 @@ async function main(): Promise<void> {
   const budgetService = createContextBudgetService({
     config: resolvedConfig.config,
     renderPromptFragments: () => getEngine().renderPromptFragments(),
-    getProvider: () => {
-      const llm = getEngine().getCapability<DroneLlmCapability>('llm');
-      if (!llm) {
-        throw new Error('LLM provider broker is not available.');
-      }
-      return llm.getActiveProvider();
-    },
-    getModel: () => {
-      const llm = getEngine().getCapability<DroneLlmCapability>('llm');
-      if (!llm) {
-        return model;
-      }
-      return llm.getModel();
-    },
+    ...createLlmGetters(engineRef),
   });
   const builtInPlugins = createBuiltInPlugins({
-    budgetService,
     sessionManager,
-    getModel: () => {
-      const llm = getEngine().getCapability<DroneLlmCapability>('llm');
-      if (!llm) {
-        return model;
-      }
-      return llm.getModel();
-    },
-    getProvider: () => {
-      const llm = getEngine().getCapability<DroneLlmCapability>('llm');
-      if (!llm) {
-        throw new Error('LLM provider broker is not available.');
-      }
-      return llm.getActiveProvider();
-    },
-    emitEvent: event => {
-      try {
-        getEngine().runConversationEventHooks(event);
-      } catch {
-        // Non-fatal — compaction events are best-effort for TUI visibility.
-      }
-    },
+    ...createLlmGetters(engineRef),
   });
 
   // ── External plugin discovery ───────────────────────────────────────
@@ -168,6 +158,7 @@ async function main(): Promise<void> {
     engine,
     config: resolvedConfig.config,
     logger,
+    debugSubsystems: invocation.options.debugSubsystems,
     sessionManager,
     budgetService,
     // When the tool iteration limit is reached and the config allows

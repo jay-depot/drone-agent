@@ -7,13 +7,19 @@
  *   - optional section heading text (used as a soft anchor)
  *
  * Body lines are classified by their first character:
- *   ` ` → context (assigned to contextBefore/contextAfter)
- *   `-` → oldLines (what to remove)
- *   `+` → newLines (what to insert)
+ *   ` ` → context (assigned to contextBefore/contextAfter, or interleaved inside the change zone)
+ *   `-` → removal (part of oldLines / the old change zone)
+ *   `+` → addition (part of newLines / the new change zone)
  *   `\` → no-newline marker (silently dropped)
+ *
+ * Interleaved context lines that appear between `-`/`+` lines inside the change
+ * zone are preserved as part of both `oldLines` and `newLines` (in their
+ * original positions), following standard unified-diff semantics. The typed
+ * `changeZone` array records the kind of each line so the renderer can show
+ * context lines as ` ` rather than as spurious `-`/`+` changes.
  */
 
-import type { PatchHunk } from './patch-applier.js';
+import type { ChangeZoneLine, PatchHunk } from './patch-applier.js';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -93,8 +99,14 @@ export function parseUnifiedDiff(diff: string): HunkWithHints[] {
 // ── Body classification ────────────────────────────────────────────────
 
 /**
- * Classify the body lines of a single hunk into contextBefore, oldLines,
- * newLines, and contextAfter.
+ * Classify the body lines of a single hunk into contextBefore, the typed
+ * changeZone, oldLines, newLines, and contextAfter.
+ *
+ * Lines between the first and last `-`/`+` line (inclusive) form the change
+ * zone. Interleaved ` `-prefixed lines inside the change zone are preserved
+ * in both oldLines and newLines (standard unified-diff semantics): the old
+ * version of the change zone is what the matching engine searches for, and
+ * the new version is what it replaces the matched span with.
  */
 function classifyBody(
   bodyLines: string[],
@@ -124,6 +136,7 @@ function classifyBody(
     return {
       anchors: sectionHeading ? [sectionHeading] : [],
       contextBefore,
+      changeZone: [],
       oldLines: [],
       newLines: [],
       contextAfter: [],
@@ -133,8 +146,7 @@ function classifyBody(
   }
 
   const contextBefore: string[] = [];
-  const oldLines: string[] = [];
-  const newLines: string[] = [];
+  const changeZone: ChangeZoneLine[] = [];
   const contextAfter: string[] = [];
 
   for (let i = 0; i < bodyLines.length; i++) {
@@ -156,20 +168,34 @@ function classifyBody(
     } else if (i > lastChangeIdx) {
       // All lines after the last change are contextAfter
       contextAfter.push(content);
-    } else if (ch === '-') {
-      oldLines.push(content);
-    } else if (ch === '+') {
-      newLines.push(content);
+    } else {
+      // Inside the change zone: classify by prefix
+      if (ch === '-') {
+        changeZone.push({ kind: '-', content });
+      } else if (ch === '+') {
+        changeZone.push({ kind: '+', content });
+      } else {
+        // Interleaved context line inside the change zone — preserved
+        // in both oldLines and newLines (standard unified-diff semantics).
+        changeZone.push({ kind: ' ', content });
+      }
     }
-    // Context lines (` ` prefix) between first and last change are
-    // deliberately dropped — they represent interleaved context that
-    // doesn't fit our contiguous matching model. They're non-essential
-    // for content-anchor matching.
   }
+
+  // Derive flat oldLines/newLines arrays from the typed change zone.
+  // oldLines = old version of the change zone = `-` lines + interleaved ` ` lines.
+  // newLines = new version of the change zone = `+` lines + interleaved ` ` lines.
+  const oldLines = changeZone
+    .filter(l => l.kind === '-' || l.kind === ' ')
+    .map(l => l.content);
+  const newLines = changeZone
+    .filter(l => l.kind === '+' || l.kind === ' ')
+    .map(l => l.content);
 
   return {
     anchors: sectionHeading ? [sectionHeading] : [],
     contextBefore,
+    changeZone,
     oldLines,
     newLines,
     contextAfter,

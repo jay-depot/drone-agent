@@ -1,12 +1,13 @@
 import https from 'https';
 import http from 'http';
+import { generateVerificationCode } from 'drone-swarm-common';
 import { logger } from './logger.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
 
 export interface BeaconStatusResponse {
-  status: 'pending' | 'approved' | 'rejected' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected';
   approvalToken?: string;
 }
 
@@ -17,6 +18,7 @@ export interface CoordinatorClient {
   ): Promise<{
     status: 'pending' | 'approved' | 'rejected';
     approvalToken?: string;
+    verificationCode?: string;
   }>;
   pollForApproval(): Promise<BeaconStatusResponse>;
   heartbeat(): Promise<void>;
@@ -50,6 +52,10 @@ export interface CoordinatorClient {
 
   // Swarm session storage
   registerSwarmSession(
+    sessionId: string,
+    personaId: string | null
+  ): Promise<void>;
+  updateSwarmSessionPersona(
     sessionId: string,
     personaId: string | null
   ): Promise<void>;
@@ -185,10 +191,11 @@ export function createCoordinatorClient(
     ): Promise<{
       status: 'pending' | 'approved' | 'rejected';
       approvalToken?: string;
+      verificationCode?: string;
     }> {
       logger.info(`Registering beacon with coordinator at ${baseUrl}`);
 
-      const res = await cfetch(`${baseUrl}/beacons`, {
+      const res = await cfetch(`${baseUrl}/api/beacons`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -214,12 +221,25 @@ export function createCoordinatorClient(
         logger.info(`Approval token: ${data.approvalToken}`);
       }
 
-      return { status: data.status, approvalToken: data.approvalToken };
+      // Compute the verification code locally from the same inputs the
+      // coordinator uses. Both sides should produce the same code.
+      const verificationCode = generateVerificationCode(
+        identity.publicKey,
+        tlsFingerprint
+      );
+
+      return {
+        status: data.status,
+        approvalToken: data.approvalToken,
+        verificationCode,
+      };
     },
 
     async pollForApproval(): Promise<BeaconStatusResponse> {
       try {
-        const res = await cfetch(`${baseUrl}/beacons/trust/${config.beaconId}`);
+        const res = await cfetch(
+          `${baseUrl}/api/beacons/trust/${config.beaconId}`
+        );
         if (!res.ok) {
           if (res.status === 404) {
             return { status: 'pending' };
@@ -236,7 +256,7 @@ export function createCoordinatorClient(
     async heartbeat(): Promise<void> {
       try {
         const res = await cfetch(
-          `${baseUrl}/beacons/${config.beaconId}/heartbeat`,
+          `${baseUrl}/api/beacons/${config.beaconId}/heartbeat`,
           {
             method: 'POST',
           }
@@ -250,7 +270,7 @@ export function createCoordinatorClient(
     },
 
     async fetchPersonas(): Promise<Persona[]> {
-      const res = await cfetch(`${baseUrl}/personas`);
+      const res = await cfetch(`${baseUrl}/api/personas`);
       if (!res.ok) {
         throw new Error(`Failed to fetch personas: ${res.status}`);
       }
@@ -261,7 +281,7 @@ export function createCoordinatorClient(
     },
 
     async fetchSkills(): Promise<Skill[]> {
-      const res = await cfetch(`${baseUrl}/skills`);
+      const res = await cfetch(`${baseUrl}/api/skills`);
       if (!res.ok) {
         throw new Error(`Failed to fetch skills: ${res.status}`);
       }
@@ -278,7 +298,7 @@ export function createCoordinatorClient(
     ): Promise<void> {
       try {
         const res = await cfetch(
-          `${baseUrl}/beacons/${config.beaconId}/sessions`,
+          `${baseUrl}/api/beacons/${config.beaconId}/sessions`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -304,7 +324,7 @@ export function createCoordinatorClient(
         const disconnectedAt = Date.now();
         const durationMs = disconnectedAt - connectedAt;
         const res = await cfetch(
-          `${baseUrl}/beacons/${config.beaconId}/sessions/${agentId}`,
+          `${baseUrl}/api/beacons/${config.beaconId}/sessions/${agentId}`,
           {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
@@ -332,7 +352,7 @@ export function createCoordinatorClient(
       personaId?: string
     ): Promise<void> {
       try {
-        const res = await cfetch(`${baseUrl}/agents/location`, {
+        const res = await cfetch(`${baseUrl}/api/agents/location`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -354,7 +374,7 @@ export function createCoordinatorClient(
     async updateAgentLocationHeartbeat(agentId: string): Promise<void> {
       try {
         const res = await cfetch(
-          `${baseUrl}/agents/location/${agentId}/heartbeat`,
+          `${baseUrl}/api/agents/location/${agentId}/heartbeat`,
           {
             method: 'POST',
           }
@@ -371,7 +391,7 @@ export function createCoordinatorClient(
 
     async unregisterAgentLocation(agentId: string): Promise<void> {
       try {
-        const res = await cfetch(`${baseUrl}/agents/location/${agentId}`, {
+        const res = await cfetch(`${baseUrl}/api/agents/location/${agentId}`, {
           method: 'DELETE',
         });
         if (!res.ok) {
@@ -390,7 +410,7 @@ export function createCoordinatorClient(
       body: string
     ): Promise<{ success: boolean; messageId?: string }> {
       try {
-        const res = await cfetch(`${baseUrl}/messages/relay`, {
+        const res = await cfetch(`${baseUrl}/api/messages/relay`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -418,7 +438,7 @@ export function createCoordinatorClient(
     // Knowledge push
     async pushPersona(persona: Persona): Promise<void> {
       try {
-        const res = await cfetch(`${baseUrl}/personas`, {
+        const res = await cfetch(`${baseUrl}/api/personas`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(persona),
@@ -435,7 +455,7 @@ export function createCoordinatorClient(
 
     async pushSkill(skill: Skill): Promise<void> {
       try {
-        const res = await cfetch(`${baseUrl}/skills`, {
+        const res = await cfetch(`${baseUrl}/api/skills`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(skill),
@@ -452,7 +472,7 @@ export function createCoordinatorClient(
 
     async deletePersona(id: string): Promise<void> {
       try {
-        const res = await cfetch(`${baseUrl}/personas/${id}`, {
+        const res = await cfetch(`${baseUrl}/api/personas/${id}`, {
           method: 'DELETE',
         });
         if (!res.ok) {
@@ -467,7 +487,7 @@ export function createCoordinatorClient(
 
     async deleteSkill(id: string): Promise<void> {
       try {
-        const res = await cfetch(`${baseUrl}/skills/${id}`, {
+        const res = await cfetch(`${baseUrl}/api/skills/${id}`, {
           method: 'DELETE',
         });
         if (!res.ok) {
@@ -483,7 +503,7 @@ export function createCoordinatorClient(
     // Knowledge sync (global memory)
     async pushKnowledge(knowledge: Knowledge): Promise<void> {
       try {
-        const res = await cfetch(`${baseUrl}/sync/knowledge/push`, {
+        const res = await cfetch(`${baseUrl}/api/sync/knowledge/push`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(knowledge),
@@ -500,7 +520,7 @@ export function createCoordinatorClient(
 
     async pullKnowledge(since?: number): Promise<Knowledge[]> {
       try {
-        let url = `${baseUrl}/sync/knowledge/pull`;
+        let url = `${baseUrl}/api/sync/knowledge/pull`;
         if (since) {
           url += `?since=${since}`;
         }
@@ -518,7 +538,7 @@ export function createCoordinatorClient(
 
     async searchKnowledge(query: string, type?: string): Promise<Knowledge[]> {
       try {
-        let url = `${baseUrl}/knowledge/search?q=${encodeURIComponent(query)}`;
+        let url = `${baseUrl}/api/knowledge/search?q=${encodeURIComponent(query)}`;
         if (type) {
           url += `&type=${encodeURIComponent(type)}`;
         }
@@ -540,7 +560,7 @@ export function createCoordinatorClient(
       personaId: string | null
     ): Promise<void> {
       try {
-        const res = await cfetch(`${baseUrl}/sync/sessions/register`, {
+        const res = await cfetch(`${baseUrl}/api/sync/sessions/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -559,9 +579,30 @@ export function createCoordinatorClient(
       }
     },
 
+    async updateSwarmSessionPersona(
+      sessionId: string,
+      personaId: string | null
+    ): Promise<void> {
+      try {
+        const res = await cfetch(
+          `${baseUrl}/api/sessions/${sessionId}/persona`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ personaId }),
+          }
+        );
+        if (!res.ok) {
+          logger.warn(`Failed to update session persona: ${res.status}`);
+        }
+      } catch (err) {
+        logger.warn(`Failed to update session persona: ${err}`);
+      }
+    },
+
     async endSwarmSession(sessionId: string): Promise<void> {
       try {
-        const res = await cfetch(`${baseUrl}/sync/sessions/${sessionId}`, {
+        const res = await cfetch(`${baseUrl}/api/sync/sessions/${sessionId}`, {
           method: 'DELETE',
         });
         if (!res.ok) {
@@ -586,7 +627,7 @@ export function createCoordinatorClient(
       }>
     ): Promise<void> {
       try {
-        const res = await cfetch(`${baseUrl}/sync/events/push`, {
+        const res = await cfetch(`${baseUrl}/api/sync/events/push`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ events }),
@@ -609,7 +650,7 @@ export function createCoordinatorClient(
       }>
     ): Promise<void> {
       try {
-        const res = await cfetch(`${baseUrl}/sync/tools/push`, {
+        const res = await cfetch(`${baseUrl}/api/sync/tools/push`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tools }),
@@ -628,7 +669,7 @@ export function createCoordinatorClient(
 
     async getDefaultHiddenTools(): Promise<{ tools: string[] }> {
       try {
-        const res = await cfetch(`${baseUrl}/tools/default-hidden`);
+        const res = await cfetch(`${baseUrl}/api/tools/default-hidden`);
         if (!res.ok) {
           logger.warn(`Failed to get default hidden tools: ${res.status}`);
           return { tools: [] };
@@ -645,7 +686,7 @@ export function createCoordinatorClient(
     ): Promise<{ sessions: any[]; count: number }> {
       try {
         const params = new URLSearchParams(query).toString();
-        const res = await cfetch(`${baseUrl}/sessions?${params}`);
+        const res = await cfetch(`${baseUrl}/api/sessions?${params}`);
         if (!res.ok) {
           logger.warn(`Failed to get sessions: ${res.status}`);
           return { sessions: [], count: 0 };
@@ -659,7 +700,7 @@ export function createCoordinatorClient(
 
     async getSessionLog(sessionId: string): Promise<any> {
       try {
-        const res = await cfetch(`${baseUrl}/sessions/${sessionId}/log`);
+        const res = await cfetch(`${baseUrl}/api/sessions/${sessionId}/log`);
         if (!res.ok) {
           logger.warn(`Failed to get session log: ${res.status}`);
           return null;
@@ -673,9 +714,12 @@ export function createCoordinatorClient(
 
     async processSession(sessionId: string): Promise<any> {
       try {
-        const res = await cfetch(`${baseUrl}/sessions/${sessionId}/process`, {
-          method: 'POST',
-        });
+        const res = await cfetch(
+          `${baseUrl}/api/sessions/${sessionId}/process`,
+          {
+            method: 'POST',
+          }
+        );
         if (!res.ok) {
           logger.warn(`Failed to process session: ${res.status}`);
           return null;
@@ -692,11 +736,14 @@ export function createCoordinatorClient(
       body: { summary?: string; notes?: string }
     ): Promise<any> {
       try {
-        const res = await cfetch(`${baseUrl}/sessions/${sessionId}/processed`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
+        const res = await cfetch(
+          `${baseUrl}/api/sessions/${sessionId}/processed`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }
+        );
         if (!res.ok) {
           logger.warn(`Failed to complete session processing: ${res.status}`);
           return null;

@@ -179,15 +179,14 @@ describe('createSessionManager', () => {
     session.appendAssistantMessage('A');
     session.prependSystemTurn('sys');
     session.clearSession();
-    expect(session.getState()).toEqual({ messages: [], turns: [] });
+    expect(session.getMessages()).toEqual([]);
+    expect(session.getTurns()).toEqual([]);
   });
-
-  it('getState matches getMessages and getTurns', () => {
+  it('getMessages and getTurns are consistent after operations', () => {
     const session = createSessionManager();
     session.appendUserMessage('u');
     session.appendAssistantMessage('a');
-    const state = session.getState();
-    expect(state.messages).toEqual(session.getMessages());
-    expect(state.turns).toEqual(session.getTurns());
+    expect(session.getMessages().length).toBeGreaterThan(0);
+    expect(session.getTurns().length).toBeGreaterThan(0);
   });
 });

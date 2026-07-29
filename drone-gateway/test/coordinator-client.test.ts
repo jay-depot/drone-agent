@@ -42,7 +42,7 @@ describe('CoordinatorClient', () => {
       });
 
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/spawn',
+        'http://localhost:8080/api/spawn',
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -78,7 +78,7 @@ describe('CoordinatorClient', () => {
       const result = await client.listBeacons();
 
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/beacons',
+        'http://localhost:8080/api/beacons',
         expect.objectContaining({ method: 'GET' })
       );
       expect(result).toEqual([{ id: 'beacon-1' }]);
@@ -100,7 +100,7 @@ describe('CoordinatorClient', () => {
       await client.listAgents();
 
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/agents/location',
+        'http://localhost:8080/api/agents/location',
         expect.anything()
       );
     });
@@ -111,7 +111,7 @@ describe('CoordinatorClient', () => {
       await client.listAgents('beacon-1');
 
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/agents/location?beaconId=beacon-1',
+        'http://localhost:8080/api/agents/location?beaconId=beacon-1',
         expect.anything()
       );
     });
@@ -134,7 +134,7 @@ describe('CoordinatorClient', () => {
       const result = await client.getSpawn('beacon-1', 'spawn-1');
 
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/spawn/beacon-1/spawn-1',
+        'http://localhost:8080/api/spawn/beacon-1/spawn-1',
         expect.objectContaining({ method: 'GET' })
       );
       expect(result).toEqual({ status: 'running' });
@@ -156,7 +156,7 @@ describe('CoordinatorClient', () => {
       await client.listSpawns('beacon-1');
 
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/spawn/beacon-1',
+        'http://localhost:8080/api/spawn/beacon-1',
         expect.anything()
       );
     });
@@ -167,7 +167,7 @@ describe('CoordinatorClient', () => {
       await client.listSpawns('beacon-1', 'running');
 
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/spawn/beacon-1?status=running',
+        'http://localhost:8080/api/spawn/beacon-1?status=running',
         expect.anything()
       );
     });
@@ -190,7 +190,7 @@ describe('CoordinatorClient', () => {
       const result = await client.terminateSpawn('beacon-1', 'spawn-1');
 
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/spawn/beacon-1/spawn-1',
+        'http://localhost:8080/api/spawn/beacon-1/spawn-1',
         expect.objectContaining({ method: 'DELETE' })
       );
       expect(result).toEqual({ status: 'terminated' });
@@ -212,7 +212,7 @@ describe('CoordinatorClient', () => {
       const result = await client.sendMessage('agent-1', 'Hello!');
 
       expect(fetchMock).toHaveBeenCalledWith(
-        'http://localhost:8080/messages',
+        'http://localhost:8080/api/messages/relay',
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

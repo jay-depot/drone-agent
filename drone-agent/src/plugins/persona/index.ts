@@ -1,3 +1,11 @@
+import {
+  insertSortedByPrecedence,
+  removeById,
+  insertWriterSorted,
+} from 'drone-core';
+import { PersonaListBlock } from '../../tui/components/PersonaListBlock.js';
+import { PersonaSelectBlock } from '../../tui/components/PersonaSelectBlock.js';
+import { PersonaCreateBlock } from '../../tui/components/PersonaCreateBlock.js';
 import type {
   DronePersonaCapability,
   DronePersonaDefinition,
@@ -32,48 +40,6 @@ export const personaPlugin: DronePlugin = {
     const changeCallbacks: Array<
       (persona: DronePersonaDefinition | null) => void
     > = [];
-
-    // ── Provider management ───────────────────────────────────────────────
-    function insertProviderSorted(provider: DronePersonaProvider): void {
-      const idx = providers.findIndex(p => p.precedence > provider.precedence);
-      if (idx === -1) {
-        providers.push(provider);
-      } else {
-        providers.splice(idx, 0, provider);
-      }
-    }
-
-    function removeProvider(providerId: string): void {
-      const idx = providers.findIndex(p => p.id === providerId);
-      if (idx !== -1) {
-        providers.splice(idx, 1);
-      }
-    }
-
-    // ── Writer management ─────────────────────────────────────────────────
-    function insertWriterSorted(writer: DronePersonaWriter): void {
-      // Writers are sorted by scope order: project, user, beacon, coordinator
-      const scopeOrder: Record<string, number> = {
-        project: 0,
-        user: 1,
-        beacon: 2,
-        coordinator: 3,
-      };
-      const order = scopeOrder[writer.scope] ?? 99;
-      const idx = writers.findIndex(w => (scopeOrder[w.scope] ?? 99) > order);
-      if (idx === -1) {
-        writers.push(writer);
-      } else {
-        writers.splice(idx, 0, writer);
-      }
-    }
-
-    function removeWriter(writerId: string): void {
-      const idx = writers.findIndex(w => w.id === writerId);
-      if (idx !== -1) {
-        writers.splice(idx, 1);
-      }
-    }
 
     // ── Merge helpers ─────────────────────────────────────────────────────
     function getAllPersonas(): DronePersonaDefinition[] {
@@ -257,25 +223,25 @@ export const personaPlugin: DronePlugin = {
         );
       },
       registerProvider: (provider: DronePersonaProvider) => {
-        insertProviderSorted(provider);
+        insertSortedByPrecedence(providers, provider);
         registration.logger.info(
           `persona provider "${provider.id}" registered (precedence: ${provider.precedence})`
         );
       },
       unregisterProvider: (providerId: string) => {
-        removeProvider(providerId);
+        removeById(providers, providerId);
         registration.logger.info(
           `persona provider "${providerId}" unregistered`
         );
       },
       registerWriter: (writer: DronePersonaWriter) => {
-        insertWriterSorted(writer);
+        insertWriterSorted(writers, writer);
         registration.logger.info(
           `persona writer "${writer.id}" registered (scope: ${writer.scope})`
         );
       },
       unregisterWriter: (writerId: string) => {
-        removeWriter(writerId);
+        removeById(writers, writerId);
         registration.logger.info(`persona writer "${writerId}" unregistered`);
       },
       getWriters: () => [...writers],
@@ -390,6 +356,7 @@ export const personaPlugin: DronePlugin = {
 
         return JSON.stringify(response, null, 2);
       },
+      renderComponent: state => PersonaListBlock({ state }),
     });
 
     // -----------------------------------------------------------------------
@@ -450,6 +417,7 @@ export const personaPlugin: DronePlugin = {
           2
         );
       },
+      renderComponent: state => PersonaSelectBlock({ state }),
     });
 
     // -----------------------------------------------------------------------
@@ -472,6 +440,7 @@ export const personaPlugin: DronePlugin = {
           JSON.stringify({ ok: true, message: 'Workflow completed.' }, null, 2)
         );
       },
+      renderComponent: state => PersonaCreateBlock({ state }),
     });
 
     // -----------------------------------------------------------------------

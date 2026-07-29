@@ -543,15 +543,12 @@ describe('Swarm Session & Events', () => {
 
   it('should update swarm session status', () => {
     createSwarmSession('ss1', null, 'b1');
-    const updated = updateSwarmSessionStatus('ss1', 'completed');
+    const updated = updateSwarmSessionStatus('ss1', 'ended');
     expect(updated).toBeDefined();
-    expect(updated!.status).toBe('completed');
+    expect(updated!.status).toBe('ended');
   });
-
   it('should return undefined when updating non-existent session', () => {
-    expect(
-      updateSwarmSessionStatus('nonexistent', 'completed')
-    ).toBeUndefined();
+    expect(updateSwarmSessionStatus('nonexistent', 'ended')).toBeUndefined();
   });
 
   it('should create a swarm event', () => {

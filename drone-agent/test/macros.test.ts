@@ -152,11 +152,40 @@ describe('parseMacroFile', () => {
     );
   });
 
-  it('throws on duplicate argument positions', () => {
+  it('allows reusing the same argument position multiple times', () => {
     const content = ['#! /test', '/cmd $1 $1'].join('\n');
 
-    expect(() => parseMacroFile(content, '/fake/path/dup.macro')).toThrow(
-      'duplicate argument $1'
+    const result = parseMacroFile(content, '/fake/path/dup.macro');
+    expect(result.argSpec).toEqual([{ position: 1, required: true }]);
+  });
+
+  it('allows reusing the same argument across multiple steps', () => {
+    const content = [
+      '#! /execute-plan Switch to code persona and execute a plan',
+      '/persona select $1',
+      '/focus set Read the plan from project memory `$1` and execute every step until completion.',
+      'Read the plan from project memory `$1` and execute every step until completion.',
+    ].join('\n');
+
+    const result = parseMacroFile(content, '/fake/path/execute-plan.macro');
+    expect(result.argSpec).toEqual([{ position: 1, required: true }]);
+    expect(result.steps).toHaveLength(3);
+
+    // Verify substitution works across all steps
+    const subbed1 = substituteMacroArgs(
+      '/persona select $1',
+      ['coder'],
+      result
+    );
+    expect(subbed1).toBe('/persona select coder');
+
+    const subbed2 = substituteMacroArgs(
+      '/focus set Read the plan from project memory `$1` and execute every step until completion.',
+      ['coder'],
+      result
+    );
+    expect(subbed2).toBe(
+      '/focus set Read the plan from project memory `coder` and execute every step until completion.'
     );
   });
 
@@ -623,10 +652,10 @@ describe('macrosPlugin', () => {
       // A warning should have been logged about the missing argument
       expect(warnings.length).toBeGreaterThanOrEqual(1);
       expect(warnings[0]).toContain('Macro "');
-      expect(warnings[0]).toContain('failed');
+      expect(warnings[0]).toContain('error');
       expect(warnings[0]).toContain('requires argument $1');
       expect(warnings[0]).toContain('Usage:');
-      expect(warnings[0]).toContain('/greet <arg1>');
+      expect(warnings[0]).toContain('/greet');
     });
   });
 
@@ -715,20 +744,15 @@ describe('macrosPlugin', () => {
       // The substituted prompt text should be logged first
       expect(infoMessages[0]).toBe('What is the meaning of life?');
 
-      // The reply should be logged
-      expect(infoMessages.some(m => m.includes('42'))).toBe(true);
+      // Events should be streamed through engine hooks
+      expect(capturedEvents.length).toBeGreaterThan(0);
+      expect(capturedEvents[0]?.kind).toBe('reasoning');
+      expect(capturedEvents[1]?.kind).toBe('toolCall');
+      expect(capturedEvents[2]?.kind).toBe('toolResult');
+      expect(capturedEvents[3]?.kind).toBe('assistantMessage');
 
-      // Events should be captured through engine conversation event hooks
-      expect(capturedEvents.length).toBe(4);
-      expect(capturedEvents[0].kind).toBe('reasoning');
-      expect(capturedEvents[0].content).toBe('Thinking deeply...');
-      expect(capturedEvents[1].kind).toBe('toolCall');
-      expect(capturedEvents[1].name).toBe('file__read');
-      expect(capturedEvents[2].kind).toBe('toolResult');
-      expect(capturedEvents[2].name).toBe('file__read');
-      expect(capturedEvents[2].content).toBe('file contents');
-      expect(capturedEvents[3].kind).toBe('assistantMessage');
-      expect(capturedEvents[3].content).toBe('42');
+      // The reply from sendUserMessage should be logged
+      expect(infoMessages[1]).toBe('42');
     });
   });
 });

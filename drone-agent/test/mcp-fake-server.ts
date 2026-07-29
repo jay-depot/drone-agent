@@ -97,7 +97,18 @@ export type MockFetchOptions = {
    * (`{ jsonrpc:'2.0', method, params }`) inside an SSE `data:` block. Used to
    * exercise the client's GET-reader + onNotification dispatch.
    */
-  sseEvents?: Array<{ method: string; params?: unknown }>;
+  sseEvents?: Array<{ id?: number; method: string; params?: unknown }>;
+  /**
+   * Per-method SSE responses for POST requests. When a POST request's method
+   * matches a key here, the mock returns an SSE stream with the given events
+   * instead of a JSON response. Used to test progress notifications before the
+   * final result.
+   */
+  postSseResponses?: Record<
+    string,
+    Array<{ id?: number; method?: string; params?: unknown; result?: unknown }>
+  >;
+
   /**
    * When true, the GET stream's first `read()` throws (simulating a transient
    * stream drop) instead of delivering the queued `sseEvents`.
@@ -146,6 +157,12 @@ type RequestRecord = {
   params: unknown;
   url: string;
   headers: Record<string, string>;
+  /** JSON-RPC id (present on both requests and responses). */
+  id?: number;
+  /** Result field (present on responses). */
+  result?: unknown;
+  /** Error field (present on error responses). */
+  error?: { code: number; message: string };
 };
 
 export type MockFetch = {
@@ -168,13 +185,21 @@ export type MockFetch = {
 };
 
 function okResponse(body: unknown): Response {
+  const encoder = new TextEncoder();
+  const encoded = encoder.encode(JSON.stringify(body));
   return {
     ok: true,
     status: 200,
     statusText: 'OK',
     async text() {
-      return JSON.stringify(body);
+      return new TextDecoder().decode(encoded);
     },
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoded);
+        controller.close();
+      },
+    }),
     headers: new Headers(),
     redirected: false,
     type: 'basic',
@@ -213,7 +238,12 @@ function errorResponse(status: number): Response {
  * array-envelope / permissive normalization paths).
  */
 function sseResponse(
-  events: Array<{ method: string; params?: unknown }>,
+  events: Array<{
+    id?: number;
+    method?: string;
+    params?: unknown;
+    result?: unknown;
+  }>,
   shouldError: boolean
 ): Response {
   const encoder = new TextEncoder();
@@ -230,11 +260,17 @@ function sseResponse(
         return;
       }
       for (const ev of events) {
-        const frame = {
-          jsonrpc: '2.0',
-          method: ev.method,
-          params: ev.params,
-        };
+        const frame: Record<string, unknown> = { jsonrpc: '2.0' };
+        if (ev.method !== undefined) {
+          frame.method = ev.method;
+          frame.params = ev.params;
+        }
+        if (ev.result !== undefined) {
+          frame.result = ev.result;
+        }
+        if (ev.id !== undefined) {
+          frame.id = ev.id;
+        }
         controller.enqueue(
           encoder.encode(`event: message\ndata: ${JSON.stringify(frame)}\n\n`)
         );
@@ -385,7 +421,11 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
   const requests: RequestRecord[] = [];
   const perMethodCount = new Map<string, number>();
 
-  function handle(id: number, method: string, params: unknown): unknown {
+  async function handle(
+    id: number,
+    method: string,
+    params: unknown
+  ): Promise<unknown> {
     perMethodCount.set(method, (perMethodCount.get(method) ?? 0) + 1);
     if (method === 'initialize' && options.initializeError) {
       return {
@@ -402,7 +442,7 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
         error: { code: -32601, message: `Method not found: ${method}` },
       };
     }
-    const result = handler(params);
+    const result = await handler(params);
     // If the handler returned a full JSON-RPC message (has error/result at
     // top level), pass it through for envelope tests.
     if (
@@ -415,7 +455,10 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
     return { jsonrpc: '2.0', id, result };
   }
 
-  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const fetchCore = async (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<Response> => {
     const url = typeof input === 'string' ? input : input.toString();
     const body = init?.body ? String(init?.body) : '';
     const parsed = body ? JSON.parse(body) : {};
@@ -431,7 +474,15 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
       const h = init.headers as Record<string, string>;
       for (const [k, v] of Object.entries(h)) headers[k.toLowerCase()] = v;
     }
-    requests.push({ method, params: parsed.params, url, headers });
+    requests.push({
+      method,
+      params: parsed.params,
+      url,
+      headers,
+      id: parsed.id,
+      result: parsed.result,
+      error: parsed.error,
+    });
 
     // GET -> open the server->client SSE stream (point-8 transport).
     if (init?.method === 'GET') {
@@ -472,13 +523,67 @@ export function createMockFetch(options: MockFetchOptions = {}): MockFetch {
     if (rawBodies.has(method)) {
       return okResponse(rawBodies.get(method));
     }
+    // Per-method SSE responses for POST requests (progress notifications)
+    if (options.postSseResponses?.[method]) {
+      const events = options.postSseResponses[method].map(ev => {
+        // Inject the actual request id into result events (final result).
+        // Notification events (no result) are left as-is.
+        if (ev.result !== undefined) {
+          return { ...ev, id };
+        }
+        return ev;
+      });
+      return sseResponse(events, false);
+    }
 
-    const resp = okResponse(handle(id, method, parsed.params));
+    const signal = init?.signal ?? null;
+    if (signal?.aborted) {
+      throw new DOMException('The operation was aborted.', 'AbortError');
+    }
+
+    const handlerResult = await handle(id, method, parsed.params);
+    if (signal?.aborted) {
+      throw new DOMException('The operation was aborted.', 'AbortError');
+    }
+
+    const resp = okResponse(handlerResult);
     if (method === 'initialize' && options.sessionId) {
       resp.headers.set('mcp-session-id', options.sessionId);
     }
     return resp;
-  }) as unknown as typeof fetch;
+  };
+
+  // Wrap so that an AbortSignal on the RequestInit actually rejects the
+  // returned Promise with an AbortError, matching real fetch behavior.
+  const fetchImpl = (
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<Response> => {
+    return new Promise((resolve, reject) => {
+      const signal = init?.signal;
+      if (signal) {
+        const onAbort = () =>
+          reject(new DOMException('The operation was aborted.', 'AbortError'));
+        if (signal.aborted) {
+          onAbort();
+          return;
+        }
+        signal.addEventListener('abort', onAbort, { once: true });
+        fetchCore(input, init).then(
+          response => {
+            signal.removeEventListener('abort', onAbort);
+            resolve(response);
+          },
+          error => {
+            signal.removeEventListener('abort', onAbort);
+            reject(error);
+          }
+        );
+      } else {
+        void fetchCore(input, init).then(resolve, reject);
+      }
+    });
+  };
 
   return {
     fetch: fetchImpl,

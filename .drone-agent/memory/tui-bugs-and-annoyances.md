@@ -42,6 +42,7 @@ Additionally, `FreeformInput` in `ElicitationPrompt.tsx` has the same problem â€
 
 ## Issue 2: Syntax-highlighted code blocks are unreadable
 
+**Status:** Fixed.
 **Severity:** Medium
 **Area:** `Markdown.tsx` (`drone-agent/src/tui/components/Markdown.tsx`), specifically `renderHighlightedTree()`
 

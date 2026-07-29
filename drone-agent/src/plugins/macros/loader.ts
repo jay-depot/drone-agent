@@ -1,7 +1,8 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import type { DroneMacroDefinition, DroneLogger } from 'drone-core';
+import type { DroneLogger } from 'drone-core';
+import type { DroneMacroDefinition } from './types.js';
 import { parseMacroFile } from './parser.js';
 
 const MACRO_DIR = 'macros';

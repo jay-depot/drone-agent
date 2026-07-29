@@ -63,13 +63,13 @@ export type {
   DroneMcpStdioServerConfig,
   DroneMcpStreamableHttpServerConfig,
   DroneMcpServerConfig,
+  DroneMcpRoot,
   DroneMcpConfig,
   DroneAgentConfig,
   PartialDroneAgentConfig,
   DroneConfigScope,
   DroneConfigLayer,
   DroneResolvedConfig,
-  DroneSessionPhase,
 } from './config-types.js';
 
 export {
@@ -81,12 +81,12 @@ export {
 
 export type {
   DroneLogger,
+  DroneImageContent,
   DroneToolJsonSchemaProperty,
   DroneToolJsonSchema,
   DroneChatMessage,
   DroneSessionMessage,
   DroneSessionTurn,
-  DroneSessionState,
   DroneToolCall,
   DroneToolDescriptor,
   DroneChatResponse,
@@ -198,11 +198,12 @@ export type {
   DroneWorkflow,
   DroneSlashCommandContext,
   DroneSlashCommand,
-  DroneMacroStep,
-  DroneMacroDefinition,
 } from './plugin-system.js';
 
 // ── Utils ───────────────────────────────────────────────────────────
+
+export { deepMerge } from './deep-merge.js';
+export type { MergeSpec } from './deep-merge.js';
 
 export {
   matchGlob,
@@ -214,6 +215,13 @@ export {
 // ── ToolMountingCache ────────────────────────────────────────────────
 
 export { ToolMountingCache } from './tool-mounting-cache.js';
+// ── Sorted Registry ─────────────────────────────────────────────────
+
+export {
+  insertSortedByPrecedence,
+  removeById,
+  insertWriterSorted,
+} from './sorted-registry.js';
 
 // ── Token estimation ─────────────────────────────────────────────────
 

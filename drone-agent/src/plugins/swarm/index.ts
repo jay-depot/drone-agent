@@ -1,3 +1,6 @@
+import { ListToolsBlock } from '../../tui/components/ListToolsBlock.js';
+import { MountToolBlock } from '../../tui/components/MountToolBlock.js';
+import { UnmountToolBlock } from '../../tui/components/UnmountToolBlock.js';
 /**
  * Swarm plugin — connects to a drone-beacon for swarm-wide personas,
  * skills, messaging, wiki, and coordinator integration.
@@ -163,6 +166,24 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         );
       }
 
+      // Subscribe to persona changes and update swarm session
+      if (personaCap) {
+        // Listen for persona changes and update the coordinator session
+        personaCap.onPersonaChange(async persona => {
+          const { updateSwarmSessionPersona } = await import('./hooks.js');
+          await updateSwarmSessionPersona(ctx, persona?.id ?? null);
+        });
+
+        // Also sync initial persona on session start (in case one is already active)
+        registration.hooks.onSessionStart(async () => {
+          const active = personaCap.getActivePersona();
+          if (active) {
+            const { updateSwarmSessionPersona } = await import('./hooks.js');
+            await updateSwarmSessionPersona(ctx, active.id);
+          }
+        });
+      }
+
       const skillsCap = registration.request<DroneSkillsCapability>('skills');
       if (skillsCap) {
         registerSkillProviders(ctx, skillsCap);
@@ -216,6 +237,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
           type: 'object',
           additionalProperties: false,
         },
+        renderComponent: state => ListToolsBlock({ state }),
         execute: async () => {
           let tools = SWARM_TOOL_DESCRIPTIONS;
           if (personaCap) {
@@ -249,6 +271,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
           required: ['tool'],
           additionalProperties: false,
         },
+        renderComponent: state => MountToolBlock({ state }),
         execute: async input => {
           if (
             typeof input.tool !== 'string' ||
@@ -298,6 +321,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
           required: ['tool'],
           additionalProperties: false,
         },
+        renderComponent: state => UnmountToolBlock({ state }),
         execute: async input => {
           if (
             typeof input.tool !== 'string' ||

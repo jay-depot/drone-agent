@@ -99,4 +99,31 @@ export default function agentRoutes(app: FastifyInstance) {
       return { success: true };
     }
   );
+
+  // PATCH /agents/:id/persona - Update agent persona
+  app.patch<{
+    Params: { id: string };
+    Body: { personaId: string | null };
+  }>('/agents/:id/persona', async (request, reply) => {
+    const { personaId } = request.body;
+    const agent = db.getAgent(request.params.id);
+    if (!agent) {
+      return reply.code(404).send({ error: 'Agent not found' });
+    }
+
+    // Update local beacon session
+    const updated = db.updateAgentPersona(request.params.id, personaId);
+
+    // Sync to coordinator
+    const client = getCoordinatorClient();
+    if (client) {
+      client
+        .updateSwarmSessionPersona(request.params.id, personaId)
+        .catch(err => {
+          logger.warn(`Failed to sync persona to coordinator: ${err}`);
+        });
+    }
+
+    return reply.send(updated);
+  });
 }

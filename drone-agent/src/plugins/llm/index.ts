@@ -107,6 +107,13 @@ export const llmPlugin: DronePlugin = {
         }
         return reg.listModels();
       },
+      hasVision: (model: string) => {
+        const active = getActiveProviderRegistration();
+        if (active?.hasVision) {
+          return active.hasVision(model);
+        }
+        return false;
+      },
       registerProvider: (provider: DroneLlmProviderRegistration) => {
         insertProviderSorted(provider);
         registration.logger.info(
@@ -209,8 +216,15 @@ export const llmPlugin: DronePlugin = {
               .getAvailableProviders()
               .map(provider => provider.id)
               .join(', ');
-            const lines = models.map(m =>
-              m === current ? `  * ${m} (current)` : `    ${m}`
+            const lines = await Promise.all(
+              models.map(async m => {
+                const isCurrent = m === current;
+                const hasVision = (await llm.hasVision?.(m)) ?? false;
+                const visionTag = hasVision ? ' [vision]' : '';
+                return isCurrent
+                  ? `  * ${m}${visionTag} (current)`
+                  : `    ${m}${visionTag}`;
+              })
             );
             ctx.logger.info(
               `Provider: ${providerId}\nRegistered providers: ${providers}\nAvailable models:\n${lines.join('\n')}`

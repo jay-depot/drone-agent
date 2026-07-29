@@ -1,3 +1,4 @@
+import { SelfImprovementInsightBlock } from '../../../tui/components/SelfImprovementInsightBlock.js';
 import type {
   DroneInsightStorageEngine,
   DronePersonaCapability,
@@ -134,5 +135,6 @@ export function createInsightTool(
 
       throw new Error(`Unknown action: ${action}`);
     },
+    renderComponent: state => SelfImprovementInsightBlock({ state }),
   };
 }

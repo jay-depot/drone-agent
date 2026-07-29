@@ -14,8 +14,6 @@ import {
 } from 'drone-core';
 import { createCompactionPlugin } from '../src/plugins/compaction/index.js';
 import { createSessionManager } from '../src/runtime/session-manager.js';
-import { createContextBudgetService } from '../src/runtime/context-budget-service.js';
-import type { ContextBudgetService } from '../src/runtime/context-budget-service.js';
 import { silentLogger } from './helpers.js';
 
 // ---------------------------------------------------------------------------
@@ -66,20 +64,6 @@ function makeProvider({
     __chatMock: chatMock,
     __contextMock: contextMock,
   };
-}
-
-function makeBudgetService(options: {
-  provider: DroneLlmProvider;
-  promptFragments?: string[];
-  config: DroneAgentConfig;
-}): ContextBudgetService {
-  const { provider, promptFragments = [], config } = options;
-  return createContextBudgetService({
-    config,
-    renderPromptFragments: async () => promptFragments ?? [],
-    getProvider: () => provider,
-    getModel: () => 'fake',
-  });
 }
 
 type HookBucket = {
@@ -181,11 +165,8 @@ async function runAfterToolCall(capture: RegistrationCapture): Promise<void> {
 
 describe('createCompactionPlugin', () => {
   it('reports the expected metadata', () => {
-    const config = makeConfig();
     const provider = makeProvider();
-    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      budgetService,
       sessionManager: createSessionManager(),
       getModel: () => 'fake',
       getProvider: () => provider,
@@ -200,9 +181,7 @@ describe('createCompactionPlugin', () => {
   it('registers help text and a CompactionCapability', async () => {
     const config = makeConfig();
     const provider = makeProvider();
-    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      budgetService,
       sessionManager: createSessionManager(),
       getModel: () => 'fake',
       getProvider: () => provider,
@@ -273,9 +252,7 @@ describe('createCompactionPlugin', () => {
 
     const config = makeConfig({ enabled: false });
     const provider = makeProvider();
-    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      budgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => provider,
@@ -294,9 +271,7 @@ describe('createCompactionPlugin', () => {
     const sessionManager = createSessionManager();
     const config = makeConfig();
     const provider = makeProvider();
-    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      budgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => provider,
@@ -320,9 +295,7 @@ describe('createCompactionPlugin', () => {
       minTurnsToCompact: 2,
     });
     const provider = makeProvider();
-    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      budgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => provider,
@@ -350,9 +323,7 @@ describe('createCompactionPlugin', () => {
     });
 
     const provider = makeProvider({ contextWindow: 200 });
-    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      budgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => provider,
@@ -393,9 +364,7 @@ describe('createCompactionPlugin', () => {
       contextWindow: 200,
       chatResponses: [{ message: 'A concise summary.' }],
     });
-    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      budgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => provider,
@@ -436,9 +405,7 @@ describe('createCompactionPlugin', () => {
       contextWindow: 200,
       chatResponses: [{ message: '' }], // empty -> "Ollama returned an empty summary."
     });
-    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      budgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => provider,
@@ -486,13 +453,7 @@ describe('createCompactionPlugin', () => {
         })
       ),
     };
-    const budgetService = makeBudgetService({
-      provider,
-      config,
-      promptFragments: [],
-    });
     const plugin = createCompactionPlugin({
-      budgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => provider,
@@ -536,9 +497,7 @@ describe('createCompactionPlugin', () => {
       contextWindow: 200,
       chatResponses: [{ message: 'forced summary' }],
     });
-    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      budgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => provider,
@@ -571,9 +530,6 @@ describe('createCompactionPlugin', () => {
     });
 
     const plugin = createCompactionPlugin({
-      budgetService: {
-        buildSystemMessages: async () => [],
-      } as unknown as ContextBudgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => {
@@ -589,7 +545,7 @@ describe('createCompactionPlugin', () => {
     );
   });
 
-  it('catches errors from buildSystemMessages and does not reject', async () => {
+  it('catches errors from summarization and does not reject', async () => {
     const sessionManager = createSessionManager();
     for (let i = 0; i < 5; i++) {
       sessionManager.appendUserMessage(`u${i} `.repeat(400));
@@ -604,20 +560,14 @@ describe('createCompactionPlugin', () => {
     });
 
     const plugin = createCompactionPlugin({
-      budgetService: {
-        buildSystemMessages: async () => {
-          throw new Error('Prompt fragment renderer failed.');
-        },
-      } as unknown as ContextBudgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => makeProvider({ contextWindow: 1000 }),
     });
-
     const capture = await captureRegistration(plugin, config);
     await runBeforePrompt(capture);
     expect(capture.logger.warn).toHaveBeenCalledWith(
-      expect.stringMatching(/compaction: error during evaluation/)
+      expect.stringMatching(/compaction: summary failed/)
     );
   });
   it('fires compaction via onAfterToolCall when tool results push usage over threshold', async () => {
@@ -642,9 +592,7 @@ describe('createCompactionPlugin', () => {
       contextWindow: 200,
       chatResponses: [{ message: 'Summary of tool results.' }],
     });
-    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      budgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => provider,
@@ -715,9 +663,7 @@ describe('createCompactionPlugin', () => {
       contextWindow: 200,
       chatResponses: [{ message: 'Summary after adding turns.' }],
     });
-    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      budgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => provider,
@@ -761,9 +707,7 @@ describe('createCompactionPlugin', () => {
       contextWindow: 200,
       chatResponses: [{ message: 'Summary after tool results.' }],
     });
-    const budgetService = makeBudgetService({ provider, config });
     const plugin = createCompactionPlugin({
-      budgetService,
       sessionManager,
       getModel: () => 'fake',
       getProvider: () => provider,

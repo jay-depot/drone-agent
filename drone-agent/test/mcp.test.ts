@@ -105,6 +105,7 @@ async function bootWithServers(
     mcp: {
       enabled: true,
       requestTimeoutMs: 5000,
+      spawnTimeoutMs: 30000,
       retryCount: 0,
       retryDelayMs: 0,
       maxListPages: 25,
@@ -163,7 +164,6 @@ describe('mcp plugin integration (stdio child)', () => {
     const result = JSON.parse(
       await engine.executeTool('mcp__demo__list_tools', {})
     );
-    expect(result.serverId).toBe('demo');
     expect(result.toolCount).toBe(2);
     expect(Array.isArray(result.tools)).toBe(true);
     const toolList = result.tools as Array<{
@@ -191,8 +191,8 @@ describe('mcp plugin integration (stdio child)', () => {
     const mountResult = JSON.parse(
       await engine.executeTool('mcp__demo__mount_tool', { tool: 'echo' })
     );
-    expect(mountResult.mounted).toBe(true);
-    expect(mountResult.mountedName).toBe('mcp__demo__echo');
+    expect(mountResult.success).toBe(true);
+    expect(mountResult.tool).toBe('mcp__demo__echo');
 
     // Now it appears in the tool list.
     expect(toolNames(engine)).toContain('mcp__demo__echo');
@@ -214,7 +214,8 @@ describe('mcp plugin integration (stdio child)', () => {
     const result = JSON.parse(
       await engine.executeTool('mcp__demo__mount_tool', { tool: 'echo' })
     );
-    expect(result.alreadyMounted).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('already mounted');
   });
 
   it('mount_tool rejects a non-existent tool name', async () => {
@@ -240,7 +241,8 @@ describe('mcp plugin integration (stdio child)', () => {
     const result = JSON.parse(
       await engine.executeTool('mcp__demo__unmount_tool', { tool: 'echo' })
     );
-    expect(result.unmounted).toBe(true);
+    expect(result.success).toBe(true);
+    expect(result.tool).toBe('echo');
 
     expect(toolNames(engine)).not.toContain('mcp__demo__echo');
   });
@@ -254,7 +256,8 @@ describe('mcp plugin integration (stdio child)', () => {
     const result = JSON.parse(
       await engine.executeTool('mcp__demo__unmount_tool', { tool: 'echo' })
     );
-    expect(result.wasMounted).toBe(false);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not mounted');
   });
 
   it('lists resource templates and reads a filled-in template URI', async () => {
@@ -331,8 +334,42 @@ describe('mcp plugin integration (stdio child)', () => {
         tool: 'weird name!',
       })
     );
-    expect(result.mountedName).toBe('mcp__demo__weird_name_');
+    expect(result.success).toBe(true);
+    expect(result.tool).toBe('mcp__demo__weird_name_');
     expect(toolNames(engine)).toContain('mcp__demo__weird_name_');
+  });
+
+  it('disambiguates tools whose sanitized names collide', async () => {
+    // 'foo bar' and 'foo.bar' both sanitize to 'foo_bar'. The second must
+    // get a numeric suffix ('foo_bar_1') so both can coexist and mount.
+    const server = startFakeMcpServer({
+      toolNames: ['foo bar', 'foo.bar'],
+    });
+    const engine = await bootWithServers({
+      demo: server.serverConfig,
+    });
+
+    // Mount both tools — they should get distinct canonical names.
+    const r1 = JSON.parse(
+      await engine.executeTool('mcp__demo__mount_tool', {
+        tool: 'foo bar',
+      })
+    );
+    const r2 = JSON.parse(
+      await engine.executeTool('mcp__demo__mount_tool', {
+        tool: 'foo.bar',
+      })
+    );
+    expect(r1.success).toBe(true);
+    expect(r2.success).toBe(true);
+    const names = toolNames(engine);
+    expect(names).toContain('mcp__demo__foo_bar');
+    expect(names).toContain('mcp__demo__foo_bar_1');
+
+    // Unmount the first; the second should still be registered.
+    await engine.executeTool('mcp__demo__unmount_tool', { tool: 'foo bar' });
+    expect(toolNames(engine)).not.toContain('mcp__demo__foo_bar');
+    expect(toolNames(engine)).toContain('mcp__demo__foo_bar_1');
   });
 
   it('child process is terminated and status flips to disconnected on shutdown', async () => {
