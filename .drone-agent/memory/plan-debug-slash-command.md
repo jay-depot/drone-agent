@@ -1,7 +1,6 @@
 ---
 key: plan-debug-slash-command
-tags:
-  []
+tags: []
 created: 2026-07-29T04:19:37.909Z
 updated: 2026-07-29T04:19:37.909Z
 ---
@@ -78,6 +77,7 @@ disableDebugSubsystem: (name: string) => {
 Add a new `debugCommand` constant and include it in the `BUILT_IN_SLASH_COMMANDS` array.
 
 Handler logic:
+
 - If `ctx.conversation` is absent → warn and return
 - If no args → show current subsystems + usage
 - If args.length !== 2 → show usage
@@ -99,6 +99,7 @@ disableDebugSubsystem: name => conversation.disableDebugSubsystem(name),
 Add the same three methods to the `conversation` type in `DroneTuiOptions`.
 
 ### No changes needed to:
+
 - `drone-agent/src/tui/app.tsx` — already passes `opts.conversation` (the full `ConversationService`) directly
 - `drone-agent/src/cli.ts` — no change needed; the CLI flag still works as before
 - `drone-agent/src/index.tsx` — no change needed; the conversation service already receives `debugSubsystems`

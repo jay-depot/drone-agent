@@ -72,6 +72,79 @@ function captureRegistration(): {
   return { registration, tools, helpText };
 }
 
+/** Mount a tool by name using the mount_tool meta-tool. */
+async function mountTool(
+  tools: Map<string, (input: Record<string, unknown>) => Promise<string>>,
+  toolName: string
+): Promise<void> {
+  const mount = tools.get('mount_tool');
+  if (!mount) throw new Error('mount_tool not registered');
+  const result = JSON.parse(await mount({ tool: toolName }));
+  if (!result.success) {
+    throw new Error(`Failed to mount tool ${toolName}: ${result.error}`);
+  }
+}
+
+describe('file plugin — list-mount pattern', () => {
+  it('registers only 3 meta-tools (list_tools, mount_tool, unmount_tool)', async () => {
+    const { registration, tools } = captureRegistration();
+    await filePlugin.register(registration);
+    const expected = ['list_tools', 'mount_tool', 'unmount_tool'];
+    for (const name of expected) {
+      expect(tools.has(name), `missing meta-tool: ${name}`).toBe(true);
+    }
+    expect(tools.size).toBe(3);
+  });
+
+  it('list_tools returns all 6 tool descriptions', async () => {
+    const { registration, tools } = captureRegistration();
+    await filePlugin.register(registration);
+    const result = JSON.parse(await tools.get('list_tools')!({}));
+    expect(result.toolCount).toBe(6);
+    const names = result.tools.map((t: { name: string }) => t.name);
+    expect(names).toContain('read');
+    expect(names).toContain('list');
+    expect(names).toContain('write');
+    expect(names).toContain('apply_diff');
+    expect(names).toContain('glob');
+    expect(names).toContain('read_image');
+  });
+
+  it('mount_tool mounts a tool and it becomes callable', async () => {
+    const { registration, tools } = captureRegistration();
+    await filePlugin.register(registration);
+    const mountResult = JSON.parse(
+      await tools.get('mount_tool')!({ tool: 'read' })
+    );
+    expect(mountResult.success).toBe(true);
+    expect(mountResult.tool).toBe('read');
+    expect(tools.has('read')).toBe(true);
+  });
+
+  it('mount_tool rejects an unknown tool name', async () => {
+    const { registration, tools } = captureRegistration();
+    await filePlugin.register(registration);
+    const result = JSON.parse(
+      await tools.get('mount_tool')!({ tool: 'nonexistent' })
+    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('nonexistent');
+  });
+
+  it('unmount_tool removes a mounted tool', async () => {
+    const { registration, tools } = captureRegistration();
+    await filePlugin.register(registration);
+    await tools.get('mount_tool')!({ tool: 'read' });
+    expect(tools.has('read')).toBe(true);
+
+    const unmountResult = JSON.parse(
+      await tools.get('unmount_tool')!({ tool: 'read' })
+    );
+    expect(unmountResult.success).toBe(true);
+    expect(unmountResult.tool).toBe('read');
+  });
+});
+
 describe('enhanceFsError', () => {
   function enoent(): NodeJS.ErrnoException {
     const e: NodeJS.ErrnoException = new Error(
@@ -143,6 +216,7 @@ describe('file plugin — error surfacing', () => {
   it('surfaces ENOENT from file__list as a clear tool error', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+    await mountTool(tools, 'list');
     const list = tools.get('list');
     expect(list).toBeDefined();
 
@@ -156,6 +230,7 @@ describe('file plugin — error surfacing', () => {
   it('surfaces ENOENT from file__read as a clear tool error', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+    await mountTool(tools, 'read');
     const read = tools.get('read');
     expect(read).toBeDefined();
 
@@ -167,6 +242,7 @@ describe('file plugin — error surfacing', () => {
   it('reads an existing file', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+    await mountTool(tools, 'read');
     const read = tools.get('read');
     expect(read).toBeDefined();
 
@@ -184,6 +260,7 @@ describe('file plugin — error surfacing', () => {
   it('surfaces EISDIR from file__read when given a directory', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+    await mountTool(tools, 'read');
     const read = tools.get('read');
     expect(read).toBeDefined();
 
@@ -193,6 +270,7 @@ describe('file plugin — error surfacing', () => {
   it('file__glob reports a missing cwd clearly', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+    await mountTool(tools, 'glob');
     const glob = tools.get('glob');
     expect(glob).toBeDefined();
 
@@ -206,6 +284,8 @@ describe('file plugin — read/write round trip', () => {
   it('writes a file then reads it back', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+    await mountTool(tools, 'write');
+    await mountTool(tools, 'read');
     const write = tools.get('write');
     const read = tools.get('read');
     expect(write).toBeDefined();
@@ -758,6 +838,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('produces correct JSON response with plain-text diff', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+    await mountTool(tools, 'apply_diff');
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 
@@ -797,6 +878,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('applies a multi-hunk patch top-to-bottom', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+    await mountTool(tools, 'apply_diff');
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 
@@ -854,6 +936,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('handles insertion patch with context', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+    await mountTool(tools, 'apply_diff');
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 
@@ -891,6 +974,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('handles pure deletion patch', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+    await mountTool(tools, 'apply_diff');
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 
@@ -932,6 +1016,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('handles interleaved context patch (round-trip)', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+    await mountTool(tools, 'apply_diff');
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 
@@ -974,6 +1059,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('partial success: writes file with applied hunks, reports failures', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+    await mountTool(tools, 'apply_diff');
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 
@@ -1020,6 +1106,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('rejects empty patch with a clear error', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+    await mountTool(tools, 'apply_diff');
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 
@@ -1035,6 +1122,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('rejects patch with no @@ headers with a clear error', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+    await mountTool(tools, 'apply_diff');
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 

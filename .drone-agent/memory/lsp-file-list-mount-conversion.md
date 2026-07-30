@@ -1,7 +1,6 @@
 ---
 key: lsp-file-list-mount-conversion
-tags:
-  []
+tags: []
 created: 2026-07-30T02:43:39.581Z
 updated: 2026-07-30T02:43:39.581Z
 ---
@@ -15,6 +14,7 @@ Convert the LSP plugin (16 tools) and File plugin (6 tools) from eager tool regi
 ## Architecture
 
 Both plugins will follow the **Git plugin pattern** exactly:
+
 - A single `ToolMountingCache` instance per plugin
 - 3 always-registered meta-tools: `list_tools`, `mount_tool`, `unmount_tool`
 - All actual tools deferred in the cache, mounted on demand
