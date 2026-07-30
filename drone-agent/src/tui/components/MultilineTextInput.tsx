@@ -21,10 +21,15 @@ import type React from 'react';
  * Yoga layout miscalculations that would place the cursor on the
  * wrong line. Text is truncated with an ellipsis when it exceeds
  * the available width, keeping the input box at a single-line height.
+ *
+ * Paste handling: uses `useBracketedPaste` to detect bracketed paste
+ * sequences and debounce rapid character input, delivering pasted text
+ * as a single atomic update at the cursor position.
  */
 
 import { Text, useInput } from 'ink';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useBracketedPaste } from '../hooks/useBracketedPaste.js';
 
 export function MultilineTextInput({
   value,
@@ -38,6 +43,25 @@ export function MultilineTextInput({
   focus?: boolean;
 }): React.JSX.Element {
   const [cursorOffset, setCursorOffset] = useState(value.length);
+
+  // Refs for the paste callback (avoids stale closures since the hook
+  // stores the callback in a ref internally).
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const cursorOffsetRef = useRef(cursorOffset);
+  cursorOffsetRef.current = cursorOffset;
+
+  // ── Paste handling ────────────────────────────────────────────────
+  const { onCharInput } = useBracketedPaste((text: string) => {
+    const curValue = valueRef.current;
+    const curOffset = Math.min(cursorOffsetRef.current, curValue.length);
+    const next =
+      curValue.slice(0, curOffset) + text + curValue.slice(curOffset);
+    onChangeRef.current(next);
+    setCursorOffset(curOffset + text.length);
+  });
 
   useInput(
     (input, key) => {
@@ -83,11 +107,10 @@ export function MultilineTextInput({
         return;
       }
 
-      // Printable characters (ignore ctrl/meta sequences)
+      // Printable characters — route through paste handler for
+      // debounce buffering, then process normally.
       if (input && !key.ctrl && !key.meta) {
-        const next = value.slice(0, offset) + input + value.slice(offset);
-        onChange(next);
-        setCursorOffset(offset + input.length);
+        onCharInput(input);
       }
     },
     { isActive: focus }
