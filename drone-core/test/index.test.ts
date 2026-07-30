@@ -274,7 +274,11 @@ describe('deepMerge', () => {
 
   it('replaces fields listed in replaceNullable even when null', () => {
     const base = { a: 1, b: 2 };
-    const result = deepMerge(base, { a: null as any }, { replaceNullable: ['a'] });
+    const result = deepMerge(
+      base,
+      { a: null as any },
+      { replaceNullable: ['a'] }
+    );
     expect(result).toEqual({ a: null, b: 2 });
   });
 

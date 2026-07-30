@@ -105,6 +105,9 @@ function makeOptions(
       getModel: () => model,
       getReasoningLevel: () => undefined,
       setReasoningLevel: (_level: any) => {},
+      getDebugSubsystems: () => [],
+      enableDebugSubsystem: () => {},
+      disableDebugSubsystem: () => {},
     },
     ...overrides,
   };

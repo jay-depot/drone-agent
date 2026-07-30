@@ -1,4 +1,4 @@
-import type { DroneReasoningLevel } from 'drone-core';
+import { estimateTextTokens, type DroneReasoningLevel } from 'drone-core';
 import type {
   DroneAgentConfig,
   DroneChatMessage,
@@ -45,6 +45,12 @@ export type ConversationService = {
   enqueueUserMessage: (prompt: string) => void;
   /** Request soft cancellation of the current in-flight `sendUserMessage`. */
   cancelCurrentRequest: () => void;
+  /** Get the list of currently enabled debug subsystems. */
+  getDebugSubsystems: () => string[];
+  /** Enable a debug subsystem by name (e.g. "llm"). */
+  enableDebugSubsystem: (name: string) => void;
+  /** Disable a debug subsystem by name (e.g. "llm"). */
+  disableDebugSubsystem: (name: string) => void;
 };
 
 type CreateConversationServiceOptions = {
@@ -239,6 +245,21 @@ export function createConversationService({
     });
   }
 
+  /**
+   * Truncate a tool result to a maximum token budget, appending a note
+   * about the original size and guidance for retrieving the full output.
+   */
+  function truncateToolResult(content: string, maxTokens: number): string {
+    if (maxTokens <= 0) return content;
+    const estimatedTokens = estimateTextTokens(content);
+    if (estimatedTokens <= maxTokens) return content;
+
+    // Truncate to the character equivalent of the token limit
+    const maxChars = maxTokens * 4;
+    const truncated = content.slice(0, maxChars);
+    return `${truncated}\n\n[Output truncated at ~${maxTokens} tokens. Full output was ~${estimatedTokens} tokens. For file__read and similar tools, request a smaller window. For exec__run, if you need the full output, consider piping the output of the command into a temp file and reading that.]`;
+  }
+
   async function executeToolSafely(
     canonicalName: string,
     input: Record<string, unknown>,
@@ -409,6 +430,30 @@ export function createConversationService({
             )
           );
 
+          // ── Tool result truncation ──────────────────────────────────────
+          // Cap each successful tool result to a percentage of the context
+          // window to prevent a single large result from consuming a
+          // disproportionate share of the budget.
+          const maxToolResultPct =
+            config.session.maxToolResultTokensPercent ?? 15;
+          if (maxToolResultPct > 0) {
+            const ctxWindow = await budgetService.resolveContextWindow();
+            const maxToolResultTokens = Math.max(
+              1,
+              Math.floor(
+                ctxWindow.contextWindowTokens * (maxToolResultPct / 100)
+              )
+            );
+            for (const r of rawResults) {
+              if (r.toolResult.kind === 'ok') {
+                r.toolResult.content = truncateToolResult(
+                  r.toolResult.content,
+                  maxToolResultTokens
+                );
+              }
+            }
+          }
+
           // Collect results in order (the map preserves the array order).
           const bufferedResults: Array<{
             name: string;
@@ -577,6 +622,13 @@ export function createConversationService({
     },
     cancelCurrentRequest: () => {
       cancelled = true;
+    },
+    getDebugSubsystems: () => Array.from(debugSet),
+    enableDebugSubsystem: (name: string) => {
+      debugSet.add(name);
+    },
+    disableDebugSubsystem: (name: string) => {
+      debugSet.delete(name);
     },
   };
 }
