@@ -90,5 +90,9 @@
   {
     "timestamp": "2026-07-29T04:34:28.064Z",
     "insight": "The `file__apply_diff` tool struggles with files that have duplicate property names in object literals (TypeScript error 1117). When a patch creates duplicates, the tool's fuzz matching can apply hunks to the wrong location, compounding the problem. The safest approach when dealing with duplicate properties is to write the entire file content via `file__write` rather than trying to surgically remove duplicates with `file__apply_diff`."
+  },
+  {
+    "timestamp": "2026-07-30T02:50:09.180Z",
+    "insight": "Converted LSP and file plugins to list-mount pattern. Key learnings: (1) The file plugin's tools were defined inline (not in separate factory files), so the conversion required extracting each tool object literal and passing it to `fileCache.addTool()` instead of `registration.registerTool()`. (2) The LSP plugin's tools were already in factory functions, making the conversion straightforward — just swap the registration loop for cache additions. (3) Both plugins now follow the exact same pattern as the git plugin: 3 meta-tools + ToolMountingCache + optional persona dependency. (4) The file test file needed `mountTool()` calls before each tool usage, which was a mechanical but thorough change across ~46 tests."
   }
 ]
