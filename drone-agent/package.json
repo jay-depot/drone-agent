@@ -41,7 +41,7 @@
     "node-pty": "^1.1.0",
     "ollama": "^0.6.0",
     "react": "^19.2.7",
-    "tar": "^7.5.16"
+    "tar": "^7.5.21"
   },
   "peerDependencies": {
     "react": "^19.0.0"
