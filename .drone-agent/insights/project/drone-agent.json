@@ -86,5 +86,9 @@
   {
     "timestamp": "2026-07-28T21:27:30.375Z",
     "insight": "Wiki ingest for 12 commits on feature/web-ui-management-console branch completed. Created 8 new wiki pages (7 decisions + 1 concept) and updated 7 module pages. The commits spanned 5 major features: Web UI Management Console (5.5), MitM verification, approval token improvements, live event streaming + /api prefix, active persona propagation, and code quality cleanup. All 1632 tests pass."
+  },
+  {
+    "timestamp": "2026-07-29T04:34:28.064Z",
+    "insight": "The `file__apply_diff` tool struggles with files that have duplicate property names in object literals (TypeScript error 1117). When a patch creates duplicates, the tool's fuzz matching can apply hunks to the wrong location, compounding the problem. The safest approach when dealing with duplicate properties is to write the entire file content via `file__write` rather than trying to surgically remove duplicates with `file__apply_diff`."
   }
 ]
