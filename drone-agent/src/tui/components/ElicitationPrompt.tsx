@@ -8,9 +8,10 @@ import type React from 'react';
  */
 
 import { Box, Text, useInput } from 'ink';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { DroneElicitationQuestion } from 'drone-core';
 import { ColorTag, type DroneColorScheme } from '../theme.js';
+import { useBracketedPaste } from '../hooks/useBracketedPaste.js';
 
 export function ElicitationPrompt({
   question,
@@ -102,6 +103,10 @@ function FreeformPrompt({
  * intercepts arrow/return/esc while a freeform question is active,
  * letting printable characters fall through to this component via
  * a separate useInput mounted here.
+ *
+ * Paste handling: uses `useBracketedPaste` to detect bracketed paste
+ * sequences and debounce rapid character input, delivering pasted text
+ * as a single atomic append.
  */
 function FreeformInput({
   value,
@@ -112,6 +117,16 @@ function FreeformInput({
   onChange: (next: string) => void;
   onSubmit: (answer: string) => void;
 }): React.JSX.Element {
+  // Refs for the paste callback (avoids stale closures).
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const { onCharInput } = useBracketedPaste((text: string) => {
+    onChangeRef.current(valueRef.current + text);
+  });
+
   useInput((inputChar, key) => {
     // Enter alone → submit
     if (key.return && !key.shift) {
@@ -134,7 +149,7 @@ function FreeformInput({
     }
     // Filter out control characters that would render as garbage.
     if (inputChar && !key.ctrl && !key.meta && inputChar.length > 0) {
-      onChange(value + inputChar);
+      onCharInput(inputChar);
     }
   });
   return <Text>{value.length > 0 ? value : ' '}</Text>;

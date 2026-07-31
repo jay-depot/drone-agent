@@ -373,8 +373,10 @@ export async function runInteractiveLoop(
               conversation.sendUserMessage(p, onEvent),
             clearSession: () => conversation.clearSession(),
             getDebugSubsystems: () => conversation.getDebugSubsystems(),
-            enableDebugSubsystem: name => conversation.enableDebugSubsystem(name),
-            disableDebugSubsystem: name => conversation.disableDebugSubsystem(name),
+            enableDebugSubsystem: name =>
+              conversation.enableDebugSubsystem(name),
+            disableDebugSubsystem: name =>
+              conversation.disableDebugSubsystem(name),
           },
           sessionManager: {
             appendUserMessage: m => sessionManager.appendUserMessage(m),

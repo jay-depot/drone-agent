@@ -235,7 +235,8 @@ const execCommand: DroneSlashCommand = {
 
 const debugCommand: DroneSlashCommand = {
   command: '/debug',
-  description: 'Enable or disable a debug subsystem: /debug enable|disable <name>',
+  description:
+    'Enable or disable a debug subsystem: /debug enable|disable <name>',
   handler: async (ctx: DroneSlashCommandContext) => {
     if (!ctx.conversation) {
       ctx.logger.warn(
@@ -276,9 +277,7 @@ const debugCommand: DroneSlashCommand = {
       ctx.conversation.disableDebugSubsystem(subsystem);
       ctx.logger.info(`Debug subsystem "${subsystem}" disabled.`);
     } else {
-      ctx.logger.warn(
-        `Invalid action "${action}". Use "enable" or "disable".`
-      );
+      ctx.logger.warn(`Invalid action "${action}". Use "enable" or "disable".`);
     }
 
     return true;
