@@ -253,4 +253,83 @@ describe('useBracketedPaste', () => {
     expect(captured.pastedTexts).toHaveLength(1);
     expect(captured.pastedTexts[0]).toBe('pasted content');
   });
+
+  // ── Line ending normalization ────────────────────────────────────
+
+  it('normalizes \\r\\n to \\n in bracketed paste content', async () => {
+    const { captured, instance: inst } = createHarness();
+    instance = inst;
+    await tick();
+
+    const handler = stdinHandlers[0];
+    expect(handler).toBeDefined();
+
+    const pasteContent = 'hello\r\nworld\r\nfoo';
+    const pasteSequence = `\x1b[200~${pasteContent}\x1b[201~`;
+    handler(Buffer.from(pasteSequence, 'utf-8'));
+    await tick();
+
+    expect(captured.pastedTexts).toHaveLength(1);
+    expect(captured.pastedTexts[0]).toBe('hello\nworld\nfoo');
+  });
+
+  it('normalizes bare \\r to \\n in bracketed paste content', async () => {
+    const { captured, instance: inst } = createHarness();
+    instance = inst;
+    await tick();
+
+    const handler = stdinHandlers[0];
+    expect(handler).toBeDefined();
+
+    const pasteContent = 'hello\rworld\rfoo';
+    const pasteSequence = `\x1b[200~${pasteContent}\x1b[201~`;
+    handler(Buffer.from(pasteSequence, 'utf-8'));
+    await tick();
+
+    expect(captured.pastedTexts).toHaveLength(1);
+    expect(captured.pastedTexts[0]).toBe('hello\nworld\nfoo');
+  });
+
+  it('normalizes \\r\\n to \\n in debounce fallback path', async () => {
+    const { captured, instance: inst } = createHarness();
+    instance = inst;
+    await tick();
+
+    // Simulate rapid input containing \r\n characters.
+    captured.onCharInput!('a');
+    captured.onCharInput!('\r');
+    captured.onCharInput!('\n');
+    captured.onCharInput!('b');
+
+    // First char 'a' delivered immediately, rest buffered.
+    expect(captured.pastedTexts).toHaveLength(1);
+    expect(captured.pastedTexts[0]).toBe('a');
+
+    // Wait for flush.
+    await new Promise(r => setTimeout(r, 60));
+    await tick();
+
+    // \r\n should be normalized to \n.
+    expect(captured.pastedTexts).toHaveLength(2);
+    expect(captured.pastedTexts[1]).toBe('\nb');
+  });
+
+  it('normalizes bare \\r to \\n in debounce fallback path', async () => {
+    const { captured, instance: inst } = createHarness();
+    instance = inst;
+    await tick();
+
+    captured.onCharInput!('a');
+    captured.onCharInput!('\r');
+    captured.onCharInput!('b');
+
+    expect(captured.pastedTexts).toHaveLength(1);
+    expect(captured.pastedTexts[0]).toBe('a');
+
+    await new Promise(r => setTimeout(r, 60));
+    await tick();
+
+    expect(captured.pastedTexts).toHaveLength(2);
+    expect(captured.pastedTexts[1]).toBe('\nb');
+  });
 });

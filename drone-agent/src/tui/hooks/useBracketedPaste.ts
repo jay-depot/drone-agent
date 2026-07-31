@@ -1,4 +1,18 @@
 /**
+ * Normalize line endings in pasted text to `\n`.
+ *
+ * Clipboard content and bracketed paste data can contain `\r\n` (Windows
+ * clipboard, some GUI apps) or bare `\r` (old Mac, terminal raw mode). Ink's
+ * output engine splits text on `\n` only — a `\r` survives as a literal
+ * character and causes the terminal to perform a carriage return, pulling
+ * the cursor back to column 0 on the same line instead of advancing to the
+ * next line.
+ */
+function normalizePastedText(text: string): string {
+  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+/**
  * Hook for detecting and buffering pasted text in the TUI.
  *
  * Uses two mechanisms:
@@ -76,7 +90,7 @@ export function useBracketedPaste(onPaste: (text: string) => void): {
           const text = pasteBufferRef.current;
           pasteBufferRef.current = '';
           inPasteRef.current = false;
-          onPasteRef.current(text);
+          onPasteRef.current(normalizePastedText(text));
           processed = true;
           // Continue loop in case there's another paste sequence.
           continue;
@@ -115,7 +129,7 @@ export function useBracketedPaste(onPaste: (text: string) => void): {
         // Deliver the paste.
         pasteBufferRef.current = '';
         inPasteRef.current = false;
-        onPasteRef.current(pasteContent);
+        onPasteRef.current(normalizePastedText(pasteContent));
         processed = true;
         // Continue loop in case there's another paste sequence.
         continue;
@@ -143,7 +157,7 @@ export function useBracketedPaste(onPaste: (text: string) => void): {
     const text = debounceBufferRef.current;
     if (text.length > 0) {
       debounceBufferRef.current = '';
-      onPasteRef.current(text);
+      onPasteRef.current(normalizePastedText(text));
     }
   };
 
@@ -167,7 +181,7 @@ export function useBracketedPaste(onPaste: (text: string) => void): {
       // Normal typing speed — flush any pending buffer first, then
       // deliver this character immediately.
       flushDebounceBuffer();
-      onPasteRef.current(input);
+      onPasteRef.current(normalizePastedText(input));
     }
   };
 
