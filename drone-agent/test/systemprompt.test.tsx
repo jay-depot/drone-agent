@@ -128,10 +128,8 @@ describe('App — /systemprompt', () => {
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
     await new Promise(r => setTimeout(r, 100));
-    for (const ch of '/systemprompt') {
-      instance.stdin.write(ch);
-      await new Promise(r => setTimeout(r, 20));
-    }
+    instance.stdin.write('/systemprompt');
+    await new Promise(r => setTimeout(r, 100));
     instance.stdin.write('\r');
     const frame = await waitUntilFrame(
       instance,
@@ -202,10 +200,8 @@ describe('App — /systemprompt', () => {
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
     await new Promise(r => setTimeout(r, 100));
-    for (const ch of '/systemprompt') {
-      instance.stdin.write(ch);
-      await new Promise(r => setTimeout(r, 20));
-    }
+    instance.stdin.write('/systemprompt');
+    await new Promise(r => setTimeout(r, 100));
     instance.stdin.write('\r');
     const frame = await waitUntilFrame(instance, f =>
       f.includes('You are a test agent.')
