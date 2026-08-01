@@ -19,6 +19,9 @@ import type React from 'react';
  *
  *   4. Ctrl+J newlines still work (explicit multiline is still
  *      supported).
+ *
+ *   5. Paste handling: multi-character inserts at cursor position
+ *      work correctly (simulating what the paste hook delivers).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -260,6 +263,89 @@ describe('MultilineTextInput', () => {
     // The cursor (inverse escape) should be present on the content line
     const contentLine = frame.split('\n')[1];
     expect(contentLine).toContain('\u001b[7m');
+
+    cleanup();
+  });
+
+  // ── Paste handling ─────────────────────────────────────────────
+  // Verify that multi-character inserts (simulating pastes) work
+  // correctly at various cursor positions.
+
+  it('renders pasted text at the end of existing text', async () => {
+    // Simulate a paste at the end: value goes from "hello" to "hello world"
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value="hello world" onChange={() => {}} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+
+    // The full pasted text should be visible (accounting for ANSI cursor
+    // escapes that split the text)
+    expect(frame).toContain('hello world');
+
+    // The cursor should be at the end (after the pasted text)
+    const contentLine = frame.split('\n')[1];
+    expect(contentLine).toContain('\u001b[7m');
+
+    cleanup();
+  });
+
+  it('renders pasted text with newlines correctly', async () => {
+    // Simulate a paste containing newlines
+    const pasted = 'line1\nline2\nline3';
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value={pasted} onChange={() => {}} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+
+    // All lines from the paste should be visible
+    expect(frame).toContain('line1');
+    expect(frame).toContain('line2');
+    expect(frame).toContain('line3');
+
+    cleanup();
+  });
+
+  it('renders large pasted text without truncation', async () => {
+    // Simulate a large paste (200+ characters)
+    const largePaste = 'x'.repeat(200);
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value={largePaste} onChange={() => {}} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+
+    // No ellipsis should appear (text is soft-wrapped, not truncated)
+    expect(frame).not.toContain('…');
+
+    // The text should span multiple lines
+    const lines = frame.split('\n');
+    let contentLines = 0;
+    for (let i = 1; i < lines.length - 1; i++) {
+      if (lines[i].includes('x')) {
+        contentLines++;
+      }
+    }
+    expect(contentLines).toBeGreaterThan(1);
+
+    cleanup();
+  });
+
+  it('renders pasted text with cursor at the start', async () => {
+    // The cursor is at the start (offset 0), so the first character
+    // is wrapped in ANSI inverse escapes.
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value="pasted" onChange={() => {}} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+
+    // The text should be visible despite ANSI cursor escapes
+    // The cursor is on 'p', so the rendered text is \u001b[7mp\u001b[27masted
+    expect(frame).toContain('\u001b[7m');
+    expect(frame).toContain('p');
+    expect(frame).toContain('asted');
 
     cleanup();
   });

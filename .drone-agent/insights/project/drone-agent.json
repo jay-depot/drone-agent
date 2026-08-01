@@ -94,5 +94,13 @@
   {
     "timestamp": "2026-07-30T02:50:09.180Z",
     "insight": "Converted LSP and file plugins to list-mount pattern. Key learnings: (1) The file plugin's tools were defined inline (not in separate factory files), so the conversion required extracting each tool object literal and passing it to `fileCache.addTool()` instead of `registration.registerTool()`. (2) The LSP plugin's tools were already in factory functions, making the conversion straightforward — just swap the registration loop for cache additions. (3) Both plugins now follow the exact same pattern as the git plugin: 3 meta-tools + ToolMountingCache + optional persona dependency. (4) The file test file needed `mountTool()` calls before each tool usage, which was a mechanical but thorough change across ~46 tests."
+  },
+  {
+    "timestamp": "2026-07-30T06:08:38.525Z",
+    "insight": "The useBracketedPaste hook's debounce fallback has a subtle behavior: the first character is always delivered immediately because lastCharTimeRef starts at 0 (Date.now() - 0 > 30ms). This means rapid pastes without bracketed paste support will have the first character delivered immediately and the rest buffered and flushed as a single string after 50ms. This is acceptable behavior — the user sees the first character appear instantly, then the rest appears atomically after a brief pause. For bracketed paste (the primary mechanism), the entire paste is delivered atomically with no perceptible delay."
+  },
+  {
+    "timestamp": "2026-07-31T16:29:52.244Z",
+    "insight": "TUI paste rendering bug: Ink's output engine (output.js) splits text on \\n only. A \\r character survives as a literal character in the rendered output, causing the terminal to perform a carriage return (cursor jumps to column 0 on the same line) instead of advancing to the next line. This was the root cause of pasted newlines not rendering correctly — the clipboard/terminal was sending \\r\\n or bare \\r, and the useBracketedPaste hook was delivering them as-is. Fix: normalize \\r\\n → \\n and \\r → \\n in useBracketedPaste.ts at all four delivery points (bracketed paste split-chunk, bracketed paste single-chunk, debounce flush, debounce immediate). The order matters: replace \\r\\n first, then remaining \\r, to avoid double-converting \\r\\n to \\n\\n."
   }
 ]

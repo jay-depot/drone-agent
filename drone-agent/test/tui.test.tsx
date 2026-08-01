@@ -189,10 +189,8 @@ describe('App', () => {
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
     await new Promise(r => setTimeout(r, 100));
-    for (const ch of '/help') {
-      instance.stdin.write(ch);
-      await new Promise(r => setTimeout(r, 20));
-    }
+    instance.stdin.write('/help');
+    await new Promise(r => setTimeout(r, 100));
     instance.stdin.write('\r');
     const frame = await waitUntilFrame(instance, f =>
       /native selection|Shift-drag|native/i.test(f)
