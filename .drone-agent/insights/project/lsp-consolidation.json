@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-08-01T20:52:48.705Z",
+    "insight": "LSP tools were consolidated from 16 to 10 by merging related tools with parameters (go_to with kind, call_hierarchy with direction, symbols with scope, inspect returning both hover+signature). The 'position properties' pattern (filePath, line, column, text, symbol) is shared across all position-sensitive LSP tools. Extracting it as a const object (POSITION_PROPERTIES) and spreading it into each tool's schema keeps the code DRY and makes future schema changes easier. This pattern could be further abstracted into a shared helper in the tools directory."
+  }
+]

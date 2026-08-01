@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-08-01T20:52:44.479Z",
+    "insight": "The file__apply_diff tool is under-utilized when file tools use the list-mount pattern. The LLM tends to mount 'write' and use it for all edits, never discovering apply_diff. Three nudging layers were added: (1) a prompt fragment naming apply_diff as preferred, (2) reordering list_tools output to show apply_diff before write, (3) enhanced descriptions marking apply_diff as preferred. The prompt fragment is the strongest lever since it's always present in the system prompt. If this is insufficient, the next step would be pre-mounting apply_diff, but that breaks the list-mount pattern's cleanliness."
+  }
+]

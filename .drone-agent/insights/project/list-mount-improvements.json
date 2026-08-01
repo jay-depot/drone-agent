@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-08-01T20:52:39.416Z",
+    "insight": "When adding a new method to the DronePluginEngine type, all mock engines in test files must be updated. There are at least 4 test files with manually-constructed mock engines (conversation-service.test.ts, conversation-service-events.test.ts, helpers.ts, persona-tool-call-limit.test.ts) that need updating whenever the engine interface changes. Consider a shared mock engine factory to avoid this recurring maintenance burden."
+  }
+]
