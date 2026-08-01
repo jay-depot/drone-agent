@@ -106,5 +106,9 @@
   {
     "timestamp": "2026-08-01T21:11:43.639Z",
     "insight": "The /systemprompt slash command manually assembles its output from config.systemPrompt + renderPromptFragments(), bypassing buildSystemMessages() from the context budget service. This means the runtime flags block (list-mount explainer, active plugins) is sent to the LLM but invisible to the user. The fix is to add buildSystemMessages to the engine interface, wire it from the budget service in index.tsx, and have the /systemprompt handler use it. This is tracked in plan-fix-systemprompt-runtime-flags."
+  },
+  {
+    "timestamp": "2026-08-01T21:16:40.406Z",
+    "insight": "When adding a new method to the DronePluginEngine interface, you must also add it to the DroneTuiOptions.engine Pick type in tui/types.ts, otherwise the TUI won't compile. This is a common gotcha when extending the engine surface."
   }
 ]
