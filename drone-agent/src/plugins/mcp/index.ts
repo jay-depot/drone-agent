@@ -9,6 +9,7 @@ import type {
   DroneMcpRoot,
   DroneMcpServerState,
   DronePersonaCapability,
+  RuntimeFlagRegistry,
   DronePlugin,
   DroneToolJsonSchema,
   DroneToolJsonSchemaProperty,
@@ -170,6 +171,10 @@ export const mcpPlugin: DronePlugin = {
     const metaToolNames = new Set<string>();
     const llmCapability = registration.request<DroneLlmCapability>('llm');
     const personaCap = registration.request<DronePersonaCapability>('persona');
+    const runtime = registration.request<{ flags?: RuntimeFlagRegistry }>(
+      'runtime'
+    );
+    runtime?.flags?.append('list-mount', 'mcp');
 
     function setServerState(state: DroneMcpServerState): void {
       serverStates.set(state.id, { ...state });

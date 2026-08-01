@@ -6,6 +6,7 @@ import { MountToolBlock } from '../tui/components/MountToolBlock.js';
 import { UnmountToolBlock } from '../tui/components/UnmountToolBlock.js';
 import type {
   DronePersonaCapability,
+  RuntimeFlagRegistry,
   DronePlugin,
   DroneToolDefinition,
 } from 'drone-core';
@@ -129,14 +130,14 @@ const FILE_TOOL_DESCRIPTIONS: Array<{ name: string; description: string }> = [
       'List a directory (absolute path). Returns names, types, sizes.',
   },
   {
-    name: 'write',
-    description:
-      'Write content to a file (absolute path). Creates parents; overwrites.',
-  },
-  {
     name: 'apply_diff',
     description:
-      'Apply a unified diff patch to a file. Accepts a patch string in `git/unified diff` format.',
+      'Apply a unified diff patch to a file. **Preferred for editing existing files** — preserves context and minimizes changes.',
+  },
+  {
+    name: 'write',
+    description:
+      'Write content to a file (absolute path). Creates parents; overwrites. Use for new files or complete rewrites.',
   },
   {
     name: 'glob',
@@ -161,6 +162,17 @@ export const filePlugin: DronePlugin = {
   },
   register: async registration => {
     const personaCap = registration.request<DronePersonaCapability>('persona');
+    const runtime = registration.request<{ flags?: RuntimeFlagRegistry }>(
+      'runtime'
+    );
+    runtime?.flags?.append('list-mount', 'file');
+
+    registration.registerPromptFragment({
+      key: 'editing-convention',
+      phase: 'header',
+      render: async () =>
+        `# File Editing\n\nFor editing existing files, prefer \`apply_diff\` over \`write\`. Mount it with \`file__mount_tool\` if not already available. Use \`write\` only for creating new files or complete rewrites.`,
+    });
     const fileCache = new ToolMountingCache('file');
 
     // -----------------------------------------------------------------------
@@ -599,7 +611,7 @@ export const filePlugin: DronePlugin = {
     registration.registerTool({
       name: 'list_tools',
       description:
-        'List all available file tools. Tools include: read, list, write, apply_diff, glob, read_image. Mount the ones you need with file__mount_tool.',
+        'List all available file tools. Tools include: read, list, apply_diff (preferred for editing existing files), write, glob, read_image. Mount the ones you need with file__mount_tool.',
       inputSchema: {
         type: 'object',
         additionalProperties: false,

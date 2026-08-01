@@ -31,12 +31,20 @@ function captureRegistration(): {
   registration: DronePluginRegistration;
   tools: Map<string, (input: Record<string, unknown>) => Promise<string>>;
   helpText: string[];
+  promptFragments: Array<{
+    key: string;
+    render: () => Promise<string | false>;
+  }>;
 } {
   const tools = new Map<
     string,
     (input: Record<string, unknown>) => Promise<string>
   >();
   const helpText: string[] = [];
+  const promptFragments: Array<{
+    key: string;
+    render: () => Promise<string | false>;
+  }> = [];
 
   const registration: DronePluginRegistration = {
     logger: silentLogger(),
@@ -44,7 +52,9 @@ function captureRegistration(): {
     registerTool: tool => {
       tools.set(tool.name, tool.execute);
     },
-    registerPromptFragment: () => {},
+    registerPromptFragment: fragment => {
+      promptFragments.push(fragment);
+    },
     registerHelp: help => {
       helpText.push(help);
     },
@@ -69,7 +79,7 @@ function captureRegistration(): {
     requestElicitation: () => undefined,
   };
 
-  return { registration, tools, helpText };
+  return { registration, tools, helpText, promptFragments };
 }
 
 /** Mount a tool by name using the mount_tool meta-tool. */
@@ -108,6 +118,27 @@ describe('file plugin — list-mount pattern', () => {
     expect(names).toContain('apply_diff');
     expect(names).toContain('glob');
     expect(names).toContain('read_image');
+  });
+  it('list_tools shows apply_diff before write', async () => {
+    const { registration, tools } = captureRegistration();
+    await filePlugin.register(registration);
+    const result = JSON.parse(await tools.get('list_tools')!({}));
+    const names = result.tools.map((t: { name: string }) => t.name);
+    const applyDiffIdx = names.indexOf('apply_diff');
+    const writeIdx = names.indexOf('write');
+    expect(applyDiffIdx).toBeGreaterThanOrEqual(0);
+    expect(writeIdx).toBeGreaterThanOrEqual(0);
+    expect(applyDiffIdx).toBeLessThan(writeIdx);
+  });
+
+  it('registers editing-convention prompt fragment', async () => {
+    const { registration, promptFragments } = captureRegistration();
+    await filePlugin.register(registration);
+    const fragment = promptFragments.find(f => f.key === 'editing-convention');
+    expect(fragment).toBeDefined();
+    const content = await fragment!.render();
+    expect(content).toContain('apply_diff');
+    expect(content).toContain('write');
   });
 
   it('mount_tool mounts a tool and it becomes callable', async () => {

@@ -1,171 +1,87 @@
 import type { DroneToolDefinition } from 'drone-core';
 import type { ServerManager } from '../server.js';
 import {
-  normalizeHoverContents,
-  normalizeLspRange,
   normalizeLspLocation,
-  type HoverResponse,
   type DefinitionResponse,
   type ReferencesResponse,
 } from '../normalize/index.js';
 
-export function createHoverTool(server: ServerManager): DroneToolDefinition {
-  return {
-    name: 'hover',
+const POSITION_PROPERTIES = {
+  filePath: {
+    type: 'string',
+    description: 'Workspace-relative or absolute file path.',
+  },
+  line: {
+    type: 'integer',
     description:
-      'Return LSP hover information for a symbol at a file, line, and column.',
+      '1-based line number (optional if text or symbol is provided).',
+  },
+  column: {
+    type: 'integer',
+    description:
+      '1-based column number (optional if text or symbol is provided).',
+  },
+  text: {
+    type: 'string',
+    description:
+      'Text content to search for in the file (alternative to line/column).',
+  },
+  symbol: {
+    type: 'string',
+    description: 'Symbol name to resolve (alternative to line/column).',
+  },
+} as const;
+
+export function createGoToTool(server: ServerManager): DroneToolDefinition {
+  return {
+    name: 'go_to',
+    description:
+      'Navigate to a symbol\'s definition, type definition, or implementation. Use `kind: "definition"` (default) to find where a symbol is defined, `kind: "type"` to find its type definition, or `kind: "implementation"` to find implementations of an interface or method. Supports `text` and `symbol` parameters for position resolution.',
     inputSchema: {
       type: 'object',
       properties: {
-        filePath: {
+        ...POSITION_PROPERTIES,
+        kind: {
           type: 'string',
-          description: 'Workspace-relative or absolute file path.',
-        },
-        line: {
-          type: 'integer',
+          enum: ['definition', 'type', 'implementation'],
           description:
-            '1-based line number (optional if text or symbol is provided).',
-        },
-        column: {
-          type: 'integer',
-          description:
-            '1-based column number (optional if text or symbol is provided).',
-        },
-        text: {
-          type: 'string',
-          description:
-            'Text content to search for in the file (alternative to line/column).',
-        },
-        symbol: {
-          type: 'string',
-          description: 'Symbol name to resolve (alternative to line/column).',
+            'Navigation kind: "definition" (default), "type", or "implementation".',
         },
       },
       required: ['filePath'],
       additionalProperties: false,
     },
     execute: async input => {
-      await server.refreshIfNeeded();
-      const { filePath, line, column } = await server.parsePositionInput(
-        'lsp__hover',
-        input
-      );
-      const runtime = server.findRuntimeForFile(filePath);
-      if (!runtime) {
-        throw new Error(
-          `No connected LSP server is available for ${filePath}.`
-        );
-      }
+      const kind = typeof input.kind === 'string' ? input.kind : 'definition';
+      const toolName = `lsp__go_to(${kind})`;
+      const { runtime, document, line, column } =
+        await server.resolveAtPosition(toolName, input);
 
-      const document = await server.ensureDocumentLoaded(runtime, filePath);
-      const response = await runtime.client.request<HoverResponse>(
-        'textDocument/hover',
+      const method =
+        kind === 'type'
+          ? 'textDocument/typeDefinition'
+          : kind === 'implementation'
+            ? 'textDocument/implementation'
+            : 'textDocument/definition';
+
+      const response = await runtime.client.request<DefinitionResponse>(
+        method,
         {
-          textDocument: {
-            uri: document.uri,
-          },
-          position: {
-            line: line - 1,
-            character: column - 1,
-          },
+          textDocument: { uri: document.uri },
+          position: { line: line - 1, character: column - 1 },
         }
       );
-      const contents = normalizeHoverContents(response?.contents);
-      const result = {
-        filePath,
-        line,
-        column,
-        contents,
-        range: response?.range ? normalizeLspRange(response.range) : undefined,
-      };
-
-      return JSON.stringify(result, null, 2);
-    },
-  };
-}
-
-export function createGoToDefinitionTool(
-  server: ServerManager
-): DroneToolDefinition {
-  return {
-    name: 'go_to_definition',
-    description:
-      'Resolve the definition location(s) for a symbol at a file, line, and column.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        filePath: {
-          type: 'string',
-          description: 'Workspace-relative or absolute file path.',
-        },
-        line: {
-          type: 'integer',
-          description:
-            '1-based line number (optional if text or symbol is provided).',
-        },
-        column: {
-          type: 'integer',
-          description:
-            '1-based column number (optional if text or symbol is provided).',
-        },
-        text: {
-          type: 'string',
-          description:
-            'Text content to search for in the file (alternative to line/column).',
-        },
-        symbol: {
-          type: 'string',
-          description: 'Symbol name to resolve (alternative to line/column).',
-        },
-      },
-      required: ['filePath'],
-      additionalProperties: false,
-    },
-    execute: async input => {
-      await server.refreshIfNeeded();
-      const { filePath, line, column } = await server.parsePositionInput(
-        'lsp__go_to_definition',
-        input
-      );
-      const runtime = server.findRuntimeForFile(filePath);
-      if (!runtime) {
-        throw new Error(
-          `No connected LSP server is available for ${filePath}.`
-        );
-      }
-
-      const document = await server.ensureDocumentLoaded(runtime, filePath);
-      const definition = await runtime.client.request<DefinitionResponse>(
-        'textDocument/definition',
-        {
-          textDocument: {
-            uri: document.uri,
-          },
-          position: {
-            line: line - 1,
-            character: column - 1,
-          },
-        }
-      );
-
-      const rawLocations = Array.isArray(definition)
-        ? definition
-        : definition
-          ? [definition]
+      const rawLocations = Array.isArray(response)
+        ? response
+        : response
+          ? [response]
           : [];
       const locations = rawLocations
-        .map(location => normalizeLspLocation(location))
-        .filter((location): location is NonNullable<typeof location> =>
-          Boolean(location)
-        );
-
+        .map(loc => normalizeLspLocation(loc))
+        .filter((loc): loc is NonNullable<typeof loc> => Boolean(loc));
       return JSON.stringify(
         {
-          query: {
-            filePath,
-            line,
-            column,
-          },
+          query: { filePath: document.uri, line, column, kind },
           locations: server.locationToAgentShape(locations),
         },
         null,
@@ -181,33 +97,11 @@ export function createFindReferencesTool(
   return {
     name: 'find_references',
     description:
-      'Find references to a symbol at a file, line, and column, optionally excluding declarations.',
+      'Find all references to a symbol across the workspace. Use this to see everywhere a symbol is used. Supports `text` and `symbol` parameters for position resolution.',
     inputSchema: {
       type: 'object',
       properties: {
-        filePath: {
-          type: 'string',
-          description: 'Workspace-relative or absolute file path.',
-        },
-        line: {
-          type: 'integer',
-          description:
-            '1-based line number (optional if text or symbol is provided).',
-        },
-        column: {
-          type: 'integer',
-          description:
-            '1-based column number (optional if text or symbol is provided).',
-        },
-        text: {
-          type: 'string',
-          description:
-            'Text content to search for in the file (alternative to line/column).',
-        },
-        symbol: {
-          type: 'string',
-          description: 'Symbol name to resolve (alternative to line/column).',
-        },
+        ...POSITION_PROPERTIES,
         includeDeclaration: {
           type: 'boolean',
           description:
@@ -266,140 +160,6 @@ export function createFindReferencesTool(
             column,
             includeDeclaration,
           },
-          locations: server.locationToAgentShape(locations),
-        },
-        null,
-        2
-      );
-    },
-  };
-}
-
-export function createImplementationTool(
-  server: ServerManager
-): DroneToolDefinition {
-  return {
-    name: 'implementation',
-    description:
-      'Return locations that implement the interface or method at a position.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        filePath: {
-          type: 'string',
-          description: 'Workspace-relative or absolute file path.',
-        },
-        line: {
-          type: 'integer',
-          description:
-            '1-based line number (optional if text or symbol is provided).',
-        },
-        column: {
-          type: 'integer',
-          description:
-            '1-based column number (optional if text or symbol is provided).',
-        },
-        text: {
-          type: 'string',
-          description:
-            'Text content to search for in the file (alternative to line/column).',
-        },
-        symbol: {
-          type: 'string',
-          description: 'Symbol name to resolve (alternative to line/column).',
-        },
-      },
-      required: ['filePath'],
-      additionalProperties: false,
-    },
-    execute: async input => {
-      const { runtime, document, line, column } =
-        await server.resolveAtPosition('lsp__implementation', input);
-      const response = await runtime.client.request<DefinitionResponse>(
-        'textDocument/implementation',
-        {
-          textDocument: { uri: document.uri },
-          position: { line: line - 1, character: column - 1 },
-        }
-      );
-      const rawLocations = Array.isArray(response)
-        ? response
-        : response
-          ? [response]
-          : [];
-      const locations = rawLocations
-        .map(loc => normalizeLspLocation(loc))
-        .filter((loc): loc is NonNullable<typeof loc> => Boolean(loc));
-      return JSON.stringify(
-        {
-          query: { filePath: document.uri, line, column },
-          locations: server.locationToAgentShape(locations),
-        },
-        null,
-        2
-      );
-    },
-  };
-}
-
-export function createTypeDefinitionTool(
-  server: ServerManager
-): DroneToolDefinition {
-  return {
-    name: 'type_definition',
-    description:
-      'Return the type-definition location(s) for a symbol at a position.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        filePath: {
-          type: 'string',
-          description: 'Workspace-relative or absolute file path.',
-        },
-        line: {
-          type: 'integer',
-          description:
-            '1-based line number (optional if text or symbol is provided).',
-        },
-        column: {
-          type: 'integer',
-          description:
-            '1-based column number (optional if text or symbol is provided).',
-        },
-        text: {
-          type: 'string',
-          description:
-            'Text content to search for in the file (alternative to line/column).',
-        },
-        symbol: {
-          type: 'string',
-          description: 'Symbol name to resolve (alternative to line/column).',
-        },
-      },
-      required: ['filePath'],
-      additionalProperties: false,
-    },
-    execute: async input => {
-      const { runtime, document, line, column } =
-        await server.resolveAtPosition('lsp__type_definition', input);
-      const response = await runtime.client.request<DefinitionResponse>(
-        'textDocument/typeDefinition',
-        {
-          textDocument: { uri: document.uri },
-          position: { line: line - 1, character: column - 1 },
-        }
-      );
-      const rawLocations = Array.isArray(response)
-        ? response
-        : response
-          ? [response]
-          : [];
-      const locations = rawLocations
-        .map(loc => normalizeLspLocation(loc))
-        .filter((loc): loc is NonNullable<typeof loc> => Boolean(loc));
-      return JSON.stringify(
-        {
-          query: { filePath: document.uri, line, column },
           locations: server.locationToAgentShape(locations),
         },
         null,

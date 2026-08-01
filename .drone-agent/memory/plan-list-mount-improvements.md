@@ -33,11 +33,11 @@ Create a `RuntimeFlagRegistry` class:
 ```typescript
 export type RuntimeFlagRegistry = {
   set(key: string, value: string): void;
-  append(key: string, value: string): void;  // comma-separated, dedup
+  append(key: string, value: string): void; // comma-separated, dedup
   get(key: string): string | undefined;
   has(key: string): boolean;
   entries(): Map<string, string>;
-  render(): string | null;  // null if empty
+  render(): string | null; // null if empty
 };
 ```
 
@@ -45,6 +45,7 @@ export type RuntimeFlagRegistry = {
 - `render()`: Produces a `# Runtime Flags` block. For the `list-mount` key specifically, includes the explainer text with the list of active plugins. Other keys render as `key: value` lines. Returns `null` if no flags are set.
 
 **Render output when list-mount flag is active:**
+
 ```
 # Runtime Flags
 
@@ -60,6 +61,7 @@ Active list-mount plugins: file, lsp, git, mcp, swarm
 ```
 
 **Render output when only non-list-mount flags are active:**
+
 ```
 # Runtime Flags
 
@@ -84,7 +86,7 @@ debug: llm, mcp
      subagentId: runtimeOptions?.subagentId,
      persona: runtimeOptions?.persona,
      isSubagent: !!runtimeOptions?.subagentId,
-     flags: runtimeFlagRegistry,  // NEW
+     flags: runtimeFlagRegistry, // NEW
    });
    ```
 4. Return the registry from `createDronePluginEngine` (alongside the existing return values) so it can be passed to the context budget service.
@@ -117,6 +119,7 @@ debug: llm, mcp
 ### Step 4: List-Mount Plugins Set the Flag
 
 **Files to modify:**
+
 - `drone-agent/src/plugins/file.ts`
 - `drone-agent/src/plugins/lsp/plugin.ts`
 - `drone-agent/src/plugins/git/index.ts`
@@ -124,6 +127,7 @@ debug: llm, mcp
 - `drone-agent/src/plugins/swarm/index.ts`
 
 In each plugin's `register()` function, request the `_runtime` capability and call:
+
 ```typescript
 const runtime = registration.request<RuntimeCapability>('runtime');
 runtime?.flags?.append('list-mount', '<pluginId>');
@@ -144,25 +148,51 @@ Where `<pluginId>` is `file`, `lsp`, `git`, `mcp`, `swarm` respectively.
 **File: `drone-agent/src/plugins/lsp/tools/hierarchy.ts`**
 
 Replace two factory functions with one:
+
 ```typescript
-export function createCallHierarchyTool(server: ServerManager): DroneToolDefinition {
+export function createCallHierarchyTool(
+  server: ServerManager
+): DroneToolDefinition {
   return {
     name: 'call_hierarchy',
-    description: 'Return the call hierarchy for a symbol. Use `direction: "incoming"` to see callers leading to this symbol, or `direction: "outgoing"` to see callees invoked by this symbol. Supports `text` and `symbol` parameters for position resolution.',
+    description:
+      'Return the call hierarchy for a symbol. Use `direction: "incoming"` to see callers leading to this symbol, or `direction: "outgoing"` to see callees invoked by this symbol. Supports `text` and `symbol` parameters for position resolution.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
       required: ['filePath', 'direction'],
       properties: {
-        filePath: { type: 'string', description: 'Workspace-relative or absolute file path.' },
-        direction: { type: 'string', enum: ['incoming', 'outgoing'], description: 'Direction of the call hierarchy.' },
-        line: { type: 'integer', description: '1-based line number (optional if text or symbol is provided).' },
-        column: { type: 'integer', description: '1-based column number (optional if text or symbol is provided).' },
-        text: { type: 'string', description: 'Text content to search for in the file (alternative to line/column).' },
-        symbol: { type: 'string', description: 'Symbol name to resolve (alternative to line/column).' },
+        filePath: {
+          type: 'string',
+          description: 'Workspace-relative or absolute file path.',
+        },
+        direction: {
+          type: 'string',
+          enum: ['incoming', 'outgoing'],
+          description: 'Direction of the call hierarchy.',
+        },
+        line: {
+          type: 'integer',
+          description:
+            '1-based line number (optional if text or symbol is provided).',
+        },
+        column: {
+          type: 'integer',
+          description:
+            '1-based column number (optional if text or symbol is provided).',
+        },
+        text: {
+          type: 'string',
+          description:
+            'Text content to search for in the file (alternative to line/column).',
+        },
+        symbol: {
+          type: 'string',
+          description: 'Symbol name to resolve (alternative to line/column).',
+        },
       },
     },
-    execute: async (args) => {
+    execute: async args => {
       // Route to incoming or outgoing based on args.direction
     },
   };
@@ -174,6 +204,7 @@ export function createCallHierarchyTool(server: ServerManager): DroneToolDefinit
 **File: `drone-agent/src/plugins/lsp/tools/navigation.ts`**
 
 Replace three factory functions with one:
+
 ```typescript
 export function createGoToTool(server: ServerManager): DroneToolDefinition {
   return {
@@ -204,23 +235,40 @@ export function createGoToTool(server: ServerManager): DroneToolDefinition {
 **File: `drone-agent/src/plugins/lsp/tools/symbols.ts`**
 
 Replace two factory functions with one:
+
 ```typescript
 export function createSymbolsTool(server: ServerManager): DroneToolDefinition {
   return {
     name: 'symbols',
-    description: 'List symbols in a file or search across the workspace. Use `scope: "document"` to list all symbols in a specific file (functions, classes, variables), or `scope: "workspace"` to search for symbols by name across the entire workspace with fuzzy matching.',
+    description:
+      'List symbols in a file or search across the workspace. Use `scope: "document"` to list all symbols in a specific file (functions, classes, variables), or `scope: "workspace"` to search for symbols by name across the entire workspace with fuzzy matching.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
       required: ['scope'],
       properties: {
-        scope: { type: 'string', enum: ['document', 'workspace'], description: 'Search scope.' },
-        filePath: { type: 'string', description: 'File path (required when scope is "document").' },
-        query: { type: 'string', description: 'Symbol name or substring to search for (required when scope is "workspace").' },
-        limit: { type: 'integer', description: 'Optional max results (workspace scope only, default 200).' },
+        scope: {
+          type: 'string',
+          enum: ['document', 'workspace'],
+          description: 'Search scope.',
+        },
+        filePath: {
+          type: 'string',
+          description: 'File path (required when scope is "document").',
+        },
+        query: {
+          type: 'string',
+          description:
+            'Symbol name or substring to search for (required when scope is "workspace").',
+        },
+        limit: {
+          type: 'integer',
+          description:
+            'Optional max results (workspace scope only, default 200).',
+        },
       },
     },
-    execute: async (args) => {
+    execute: async args => {
       // Route to documentSymbols or workspaceSymbol based on args.scope
     },
   };
@@ -232,6 +280,7 @@ export function createSymbolsTool(server: ServerManager): DroneToolDefinition {
 **File: `drone-agent/src/plugins/lsp/tools/completion.ts` (or a new `inspect.ts`)**
 
 Replace two factory functions with one:
+
 ```typescript
 export function createInspectTool(server: ServerManager): DroneToolDefinition {
   return {
@@ -270,13 +319,16 @@ registration.registerPromptFragment({
   render: async () => {
     const statuses = server.getServerStatuses();
     if (statuses.length === 0) return false;
-    const lines = statuses.map(s => `${s.languageId}: ${s.connected ? 'connected' : 'disconnected'}`);
+    const lines = statuses.map(
+      s => `${s.languageId}: ${s.connected ? 'connected' : 'disconnected'}`
+    );
     return `# LSP Servers\n\n${lines.join('\n')}`;
   },
 });
 ```
 
 Or merge with the existing diagnostics fragment so it becomes:
+
 ```
 # LSP
 
@@ -292,20 +344,60 @@ Update `LSP_TOOL_DESCRIPTIONS` to the 10 consolidated tools with enhanced descri
 
 ```typescript
 const LSP_TOOL_DESCRIPTIONS = [
-  { name: 'get_diagnostics', description: 'Return LSP diagnostics for the workspace or a specific file. Use this to check for errors and warnings.' },
-  { name: 'inspect', description: 'Inspect a symbol at a position — returns hover info (type, docs) and signature help (function parameters) together.' },
-  { name: 'go_to', description: 'Navigate to a symbol\'s definition, type definition, or implementation. Use kind: "definition" (default), "type", or "implementation".' },
-  { name: 'find_references', description: 'Find all references to a symbol across the workspace.' },
-  { name: 'symbols', description: 'List symbols in a file (scope: "document") or search the workspace (scope: "workspace").' },
-  { name: 'completion', description: 'Get completion suggestions at a position — includes kind, detail, and documentation.' },
-  { name: 'code_action', description: 'Get quick fixes, refactorings, and source actions for a file or position.' },
-  { name: 'rename', description: 'Rename a symbol across the entire workspace. Returns a preview, or applies directly with apply: true.' },
-  { name: 'call_hierarchy', description: 'Get the call hierarchy for a symbol — direction: "incoming" (callers) or "outgoing" (callees).' },
-  { name: 'formatting', description: 'Format a file using the LSP server. Applies formatting edits directly.' },
+  {
+    name: 'get_diagnostics',
+    description:
+      'Return LSP diagnostics for the workspace or a specific file. Use this to check for errors and warnings.',
+  },
+  {
+    name: 'inspect',
+    description:
+      'Inspect a symbol at a position — returns hover info (type, docs) and signature help (function parameters) together.',
+  },
+  {
+    name: 'go_to',
+    description:
+      'Navigate to a symbol\'s definition, type definition, or implementation. Use kind: "definition" (default), "type", or "implementation".',
+  },
+  {
+    name: 'find_references',
+    description: 'Find all references to a symbol across the workspace.',
+  },
+  {
+    name: 'symbols',
+    description:
+      'List symbols in a file (scope: "document") or search the workspace (scope: "workspace").',
+  },
+  {
+    name: 'completion',
+    description:
+      'Get completion suggestions at a position — includes kind, detail, and documentation.',
+  },
+  {
+    name: 'code_action',
+    description:
+      'Get quick fixes, refactorings, and source actions for a file or position.',
+  },
+  {
+    name: 'rename',
+    description:
+      'Rename a symbol across the entire workspace. Returns a preview, or applies directly with apply: true.',
+  },
+  {
+    name: 'call_hierarchy',
+    description:
+      'Get the call hierarchy for a symbol — direction: "incoming" (callers) or "outgoing" (callees).',
+  },
+  {
+    name: 'formatting',
+    description:
+      'Format a file using the LSP server. Applies formatting edits directly.',
+  },
 ];
 ```
 
 Update the `lsp__list_tools` description:
+
 ```
 List all available LSP tools. Tools include: get_diagnostics, inspect, go_to, find_references, symbols, completion, code_action, rename, call_hierarchy, formatting. Mount the ones you need with lsp__mount_tool.
 ```
@@ -315,6 +407,7 @@ List all available LSP tools. Tools include: get_diagnostics, inspect, go_to, fi
 **File: `drone-agent/src/plugins/lsp/plugin.ts`**
 
 Update the tool registration to use the new consolidated factories:
+
 ```typescript
 const tools = [
   createGetDiagnosticsTool(server),
@@ -350,6 +443,7 @@ Update barrel exports to reflect the consolidated functions.
 **File: `drone-agent/src/plugins/file.ts`**
 
 Register a prompt fragment:
+
 ```typescript
 registration.registerPromptFragment({
   key: 'editing-convention',
@@ -364,14 +458,39 @@ registration.registerPromptFragment({
 **File: `drone-agent/src/plugins/file.ts`**
 
 Reorder to put `apply_diff` before `write`:
+
 ```typescript
 const FILE_TOOL_DESCRIPTIONS = [
-  { name: 'read', description: 'Read a file (absolute path). Optional 1-based startLine/endLine.' },
-  { name: 'list', description: 'List a directory (absolute path). Returns names, types, sizes.' },
-  { name: 'apply_diff', description: 'Apply a unified diff patch to a file. **Preferred for editing existing files** — preserves context and minimizes changes.' },
-  { name: 'write', description: 'Write content to a file (absolute path). Creates parents; overwrites. Use for new files or complete rewrites.' },
-  { name: 'glob', description: 'Find files matching a glob (e.g. **/*.ts). Uses **, *, ? patterns.' },
-  { name: 'read_image', description: 'Read an image file and return its base64-encoded data. Supported formats: JPEG, PNG, WebP, GIF.' },
+  {
+    name: 'read',
+    description:
+      'Read a file (absolute path). Optional 1-based startLine/endLine.',
+  },
+  {
+    name: 'list',
+    description:
+      'List a directory (absolute path). Returns names, types, sizes.',
+  },
+  {
+    name: 'apply_diff',
+    description:
+      'Apply a unified diff patch to a file. **Preferred for editing existing files** — preserves context and minimizes changes.',
+  },
+  {
+    name: 'write',
+    description:
+      'Write content to a file (absolute path). Creates parents; overwrites. Use for new files or complete rewrites.',
+  },
+  {
+    name: 'glob',
+    description:
+      'Find files matching a glob (e.g. **/*.ts). Uses **, *, ? patterns.',
+  },
+  {
+    name: 'read_image',
+    description:
+      'Read an image file and return its base64-encoded data. Supported formats: JPEG, PNG, WebP, GIF.',
+  },
 ];
 ```
 
@@ -380,6 +499,7 @@ const FILE_TOOL_DESCRIPTIONS = [
 **File: `drone-agent/src/plugins/file.ts`**
 
 Update the `file__list_tools` description:
+
 ```
 List all available file tools. Tools include: read, list, apply_diff (preferred for editing existing files), write, glob, read_image. Mount the ones you need with file__mount_tool.
 ```
@@ -391,16 +511,22 @@ List all available file tools. Tools include: read, list, apply_diff (preferred 
 ### Step 7: Update Tests
 
 #### 7a: Runtime flags tests
+
 **File: `drone-core/test/runtime-flags.test.ts` (NEW)**
+
 - Test set, get, has, append (with dedup), entries, render (empty, with flags, with list-mount)
 
 #### 7b: Context budget service tests
+
 **File: `drone-agent/test/context-budget-service.test.ts` (modify or create)**
+
 - Test that buildSystemMessages includes runtime flags when set
 - Test that buildSystemMessages excludes runtime flags when empty
 
 #### 7c: LSP tool tests
+
 **File: `drone-agent/test/lsp-tools.test.ts` (modify or create)**
+
 - Test each consolidated tool handles both/all modes
 - Test `inspect` returns both hover and signature data
 - Test `go_to` routes to correct LSP method based on `kind`
@@ -409,7 +535,9 @@ List all available file tools. Tools include: read, list, apply_diff (preferred 
 - Test `server_status` prompt fragment renders correctly
 
 #### 7d: File plugin tests
+
 **File: `drone-agent/test/file-plugin.test.ts` (modify or create)**
+
 - Test prompt fragment renders the editing convention
 - Test list_tools output ordering (apply_diff before write)
 

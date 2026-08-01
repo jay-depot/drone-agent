@@ -1,5 +1,6 @@
 import {
   estimateSessionBudget,
+  type RuntimeFlagRegistry,
   type DroneAgentConfig,
   type DroneChatMessage,
   type DroneContextWindowInfo,
@@ -117,6 +118,12 @@ type CreateContextBudgetServiceOptions = {
   renderPromptFragments: () => Promise<string[]>;
   getProvider: () => DroneLlmProvider;
   getModel: () => string;
+  /**
+   * Lazy getter for the runtime flag registry. When provided, its rendered
+   * content is injected into the system messages between the config system
+   * prompt and plugin prompt fragments.
+   */
+  runtimeFlags?: () => RuntimeFlagRegistry;
 };
 
 export function createContextBudgetService({
@@ -124,13 +131,20 @@ export function createContextBudgetService({
   renderPromptFragments,
   getProvider,
   getModel,
+  runtimeFlags,
 }: CreateContextBudgetServiceOptions): ContextBudgetService {
   let contextWindowInfoPromise: Promise<DroneContextWindowInfo> | undefined;
-
   async function buildSystemMessages(): Promise<DroneChatMessage[]> {
     const base: DroneChatMessage[] = [
       { role: 'system', content: config.systemPrompt },
     ];
+    const flagsContent = runtimeFlags?.()?.render();
+    if (flagsContent) {
+      base.push({
+        role: 'system',
+        content: flagsContent,
+      } satisfies DroneChatMessage);
+    }
     const fragments = await renderPromptFragments();
     for (const content of fragments) {
       base.push({ role: 'system', content } satisfies DroneChatMessage);

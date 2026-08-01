@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createDefaultAgentConfig,
+  createRuntimeFlagRegistry,
   type DroneChatResponse,
   type DroneContextWindowInfo,
   type DroneLlmCapability,
@@ -61,6 +62,7 @@ function makeEngine(options: EngineOptions): DronePluginEngine & {
     getConfig: () => {
       throw new Error('getConfig not used in conversation-service tests');
     },
+    getRuntimeFlags: () => createRuntimeFlagRegistry(),
     setElicitation: () => {},
     getElicitation: () => undefined,
     runWorkflow: async () => {

@@ -1,6 +1,8 @@
 import {
   createConsoleLogger,
+  createRuntimeFlagRegistry,
   getCanonicalToolName,
+  type RuntimeFlagRegistry,
   type DroneAgentConfig,
   type DroneConversationEvent,
   type DroneElicitation,
@@ -108,6 +110,8 @@ export type DronePluginEngine = {
   unregisterTool: (canonicalName: string) => void;
   /** Returns the resolved DroneAgentConfig used by the engine. */
   getConfig: () => DroneAgentConfig;
+  /** Returns the runtime flag registry, for injecting into the system prompt. */
+  getRuntimeFlags: () => RuntimeFlagRegistry;
   /**
    * Set the host's elicitation capability. Must be called by the CLI shell
    * or TUI App BEFORE any workflow runs (and before `onSessionStart` if
@@ -285,6 +289,7 @@ export function createDronePluginEngine({
   const promptKeys = new Set<string>();
   const capabilities = new Map<string, unknown>();
   const registeredPlugins: RegisteredPluginState[] = [];
+  const runtimeFlagRegistry = createRuntimeFlagRegistry();
   const helpSnippets = new Map<string, string[]>();
   const slashCommands = new Map<string, DroneSlashCommand[]>();
   const builtInSlashCommands: DroneSlashCommand[] = [];
@@ -581,6 +586,7 @@ export function createDronePluginEngine({
         subagentId: runtimeOptions?.subagentId,
         persona: runtimeOptions?.persona,
         isSubagent: !!runtimeOptions?.subagentId,
+        flags: runtimeFlagRegistry,
       });
 
       // Log override warnings after all plugins are loaded.
@@ -658,6 +664,7 @@ export function createDronePluginEngine({
     getRegisteredPluginCount: () => registeredPlugins.length,
     getRegisteredToolCount: () => tools.size,
     getConfig: () => config,
+    getRuntimeFlags: () => runtimeFlagRegistry,
     unregisterPluginTools: (pluginId: string) => {
       unregisterPluginToolsImpl(pluginId);
     },

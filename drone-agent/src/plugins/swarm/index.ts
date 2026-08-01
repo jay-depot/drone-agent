@@ -10,6 +10,7 @@ import { UnmountToolBlock } from '../../tui/components/UnmountToolBlock.js';
 
 import type {
   DronePersonaCapability,
+  RuntimeFlagRegistry,
   DronePlugin,
   DroneSkillsCapability,
   DroneToolDefinition,
@@ -158,6 +159,10 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       // ── Persona and skill providers ─────────────────────────────────────
       const personaCap =
         registration.request<DronePersonaCapability>('persona');
+      const runtime = registration.request<{ flags?: RuntimeFlagRegistry }>(
+        'runtime'
+      );
+      runtime?.flags?.append('list-mount', 'swarm');
       if (personaCap) {
         registerPersonaProviders(ctx, personaCap);
       } else {

@@ -1,5 +1,6 @@
 import {
   createConsoleLogger,
+  createRuntimeFlagRegistry,
   type DroneConversationEvent,
   type DroneElicitation,
   type DroneLogger,
@@ -204,6 +205,7 @@ export function createFakeEngine(
     getConfig: () => {
       throw new Error('getConfig not implemented in fake engine');
     },
+    getRuntimeFlags: () => createRuntimeFlagRegistry(),
     setElicitation: cap => {
       elicit = cap;
     },

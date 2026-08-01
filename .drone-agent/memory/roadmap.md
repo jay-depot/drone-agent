@@ -251,23 +251,27 @@ Personal control plane for YOUR swarm across machines.
 #### 3.1 Secure Foundation ✅
 
 #### 3.2 Shared Session Storage ✅
-  - Stale session management (24h threshold, hourly detection)
+
+- Stale session management (24h threshold, hourly detection)
 
 #### 3.3 Global Memory & Skills ✅
-  - Default persona/skill seeding (coordinator-wiki-librarian, coordinator-admin personas; memory-wiki skill)
+
+- Default persona/skill seeding (coordinator-wiki-librarian, coordinator-admin personas; memory-wiki skill)
 
 #### 3.4 Swarm Knowledge Base (LLM Wiki) ✅
-  - FTS5 full-text search on events
-  - Knowledge sync protocol (push/pull with confidence-based conflict resolution)
-  - Tool definitions system (built-in hidden tool seeding)
+
+- FTS5 full-text search on events
+- Knowledge sync protocol (push/pull with confidence-based conflict resolution)
+- Tool definitions system (built-in hidden tool seeding)
 
 #### 3.5 Swarm-Wide Insights & Principles ✅
 
 #### 3.6 Migration Tool ✅
 
 #### ✅ 3.7 Web UI (Monitoring Dashboard) — Complete
-  - WebSocket pub/sub for real-time updates
-  - Dual-server architecture (API port 3456 + web port 8080 with auth)
+
+- WebSocket pub/sub for real-time updates
+- Dual-server architecture (API port 3456 + web port 8080 with auth)
 
 #### ⏳ 3.8 Make `--https` Default — Pending
 
@@ -282,17 +286,19 @@ Personal control plane for YOUR swarm across machines.
 **Status:** Core complete; Matrix adapter and config-model refactor done; remaining adapters and control surfaces pending
 
 #### ✅ 4.1 Gateway Core — Complete
-  - Discard control surface (explicit /dev/null routing)
-  - SQLite persistent store (Matrix sync + E2EE crypto key storage)
-  - Cleanup subcommand (logout + delete local data)
-  - Conversation ID ↔ filename encoding (lossless, reversible)
-  - Two fully implemented spawn backends (local + coordinator)
-  - Comprehensive test suite (12 files)
+
+- Discard control surface (explicit /dev/null routing)
+- SQLite persistent store (Matrix sync + E2EE crypto key storage)
+- Cleanup subcommand (logout + delete local data)
+- Conversation ID ↔ filename encoding (lossless, reversible)
+- Two fully implemented spawn backends (local + coordinator)
+- Comprehensive test suite (12 files)
 
 #### ✅ 4.2 Matrix Service Adapter — Complete
-  - E2EE via Rust crypto, typing notifications, read receipts
-  - DM detection (≤2 members), room allowlist
-  - Markdown → HTML rendering
+
+- E2EE via Rust crypto, typing notifications, read receipts
+- DM detection (≤2 members), room allowlist
+- Markdown → HTML rendering
 
 #### ✅ 4.3 Persona Assignment Control Surface — Complete
 

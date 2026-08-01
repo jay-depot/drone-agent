@@ -3,6 +3,7 @@ import { MountToolBlock } from '../../tui/components/MountToolBlock.js';
 import { UnmountToolBlock } from '../../tui/components/UnmountToolBlock.js';
 import type {
   DronePersonaCapability,
+  RuntimeFlagRegistry,
   DronePlugin,
   DroneToolDefinition,
 } from 'drone-core';
@@ -11,102 +12,66 @@ import process from 'node:process';
 import { createServerManager } from './server.js';
 import {
   createGetDiagnosticsTool,
-  createHoverTool,
-  createGoToDefinitionTool,
+  createGoToTool,
   createFindReferencesTool,
-  createDocumentSymbolsTool,
-  createWorkspaceSymbolTool,
-  createSignatureHelpTool,
+  createSymbolsTool,
+  createInspectTool,
   createCompletionTool,
   createCodeActionTool,
   createRenameTool,
-  createImplementationTool,
-  createTypeDefinitionTool,
-  createCallHierarchyIncomingTool,
-  createCallHierarchyOutgoingTool,
+  createCallHierarchyTool,
   createFormattingTool,
-  createServerStatusTool,
 } from './tools/index.js';
 
 const LSP_TOOL_DESCRIPTIONS: Array<{ name: string; description: string }> = [
   {
     name: 'get_diagnostics',
     description:
-      'Return the current LSP diagnostics for the workspace or a specific file.',
+      'Return LSP diagnostics for the workspace or a specific file. Use this to check for errors and warnings.',
   },
   {
-    name: 'hover',
+    name: 'inspect',
     description:
-      'Return LSP hover information for a symbol at a file, line, and column.',
+      'Inspect a symbol at a position — returns hover info (type, docs) and signature help (function parameters) together.',
   },
   {
-    name: 'go_to_definition',
+    name: 'go_to',
     description:
-      'Resolve the definition location(s) for a symbol at a file, line, and column.',
+      'Navigate to a symbol\'s definition, type definition, or implementation. Use kind: "definition" (default), "type", or "implementation".',
   },
   {
     name: 'find_references',
-    description:
-      'Find references to a symbol at a file, line, and column, optionally excluding declarations.',
+    description: 'Find all references to a symbol across the workspace.',
   },
   {
-    name: 'document_symbols',
+    name: 'symbols',
     description:
-      'Return the symbols defined in a single file (functions, classes, variables, etc.).',
-  },
-  {
-    name: 'workspace_symbol',
-    description:
-      'Search for symbols across the workspace by name. Supports fuzzy matching where the language server supports it.',
-  },
-  {
-    name: 'signature_help',
-    description:
-      'Return LSP signature help for the function call at a given position.',
+      'List symbols in a file (scope: "document") or search the workspace (scope: "workspace").',
   },
   {
     name: 'completion',
     description:
-      'Return LSP completion suggestions at a given position. Includes kind, detail, and documentation.',
+      'Get completion suggestions at a position — includes kind, detail, and documentation.',
   },
   {
     name: 'code_action',
     description:
-      'Return LSP code actions (quick fixes, refactorings, source actions) for a file and range.',
+      'Get quick fixes, refactorings, and source actions for a file or position.',
   },
   {
     name: 'rename',
     description:
-      'Rename a symbol across the workspace. Returns the workspace edit as JSON by default.',
+      'Rename a symbol across the entire workspace. Returns a preview, or applies directly with apply: true.',
   },
   {
-    name: 'implementation',
+    name: 'call_hierarchy',
     description:
-      'Return locations that implement the interface or method at a position.',
-  },
-  {
-    name: 'type_definition',
-    description:
-      'Return the type-definition location(s) for a symbol at a position.',
-  },
-  {
-    name: 'call_hierarchy_incoming',
-    description:
-      'Return the call hierarchy chain of callers leading to the symbol at a position.',
-  },
-  {
-    name: 'call_hierarchy_outgoing',
-    description:
-      'Return the call hierarchy chain of callees invoked by the symbol at a position.',
+      'Get the call hierarchy for a symbol — direction: "incoming" (callers) or "outgoing" (callees).',
   },
   {
     name: 'formatting',
     description:
       'Format a file using the LSP server. Applies formatting edits directly.',
-  },
-  {
-    name: 'server_status',
-    description: 'List LSP server connection state for this session.',
   },
 ];
 
@@ -114,7 +79,7 @@ export const lspPlugin: DronePlugin = {
   metadata: {
     id: 'lsp',
     name: 'LSP',
-    version: '0.1.0',
+    version: '0.2.0',
     description:
       'Adds lightweight language-server diagnostics and semantic queries.',
     defaultEnabled: false,
@@ -122,6 +87,10 @@ export const lspPlugin: DronePlugin = {
   },
   register: async registration => {
     const personaCap = registration.request<DronePersonaCapability>('persona');
+    const runtime = registration.request<{ flags?: RuntimeFlagRegistry }>(
+      'runtime'
+    );
+    runtime?.flags?.append('list-mount', 'lsp');
     const lspConfig = registration.getConfig().lsp;
 
     const server = createServerManager({
@@ -132,31 +101,34 @@ export const lspPlugin: DronePlugin = {
 
     const lspCache = new ToolMountingCache('lsp');
 
-    // Register diagnostics prompt fragment
+    // Register diagnostics + server status prompt fragment
     registration.registerPromptFragment({
-      key: 'diagnostics',
+      key: 'lsp-status',
       phase: 'header',
-      render: async () => server.renderDiagnosticsPrompt(),
+      render: async () => {
+        const diagPrompt = server.renderDiagnosticsPrompt();
+        const states = server.getServerStates();
+        if (states.length === 0) {
+          return diagPrompt;
+        }
+        const serverLines = states.map(s => `${s.language}: ${s.status}`);
+        const serversBlock = `# LSP Servers\n\n${serverLines.join('\n')}`;
+        return `${serversBlock}\n\n${diagPrompt}`;
+      },
     });
 
     // Build all tool definitions and add them to the cache
     const toolFactories: Array<() => DroneToolDefinition> = [
       () => createGetDiagnosticsTool(server),
-      () => createHoverTool(server),
-      () => createGoToDefinitionTool(server),
+      () => createInspectTool(server),
+      () => createGoToTool(server),
       () => createFindReferencesTool(server),
-      () => createDocumentSymbolsTool(server),
-      () => createWorkspaceSymbolTool(server),
-      () => createSignatureHelpTool(server),
+      () => createSymbolsTool(server),
       () => createCompletionTool(server),
       () => createCodeActionTool(server),
       () => createRenameTool(server),
-      () => createImplementationTool(server),
-      () => createTypeDefinitionTool(server),
-      () => createCallHierarchyIncomingTool(server),
-      () => createCallHierarchyOutgoingTool(server),
+      () => createCallHierarchyTool(server),
       () => createFormattingTool(server),
-      () => createServerStatusTool(server),
     ];
 
     for (const factory of toolFactories) {
@@ -169,7 +141,7 @@ export const lspPlugin: DronePlugin = {
     registration.registerTool({
       name: 'list_tools',
       description:
-        'List all available LSP tools. Tools include: get_diagnostics, hover, go_to_definition, find_references, document_symbols, workspace_symbol, signature_help, completion, code_action, rename, implementation, type_definition, call_hierarchy_incoming, call_hierarchy_outgoing, formatting, server_status. Mount the ones you need with lsp__mount_tool.',
+        'List all available LSP tools. Tools include: get_diagnostics, inspect, go_to, find_references, symbols, completion, code_action, rename, call_hierarchy, formatting. Mount the ones you need with lsp__mount_tool.',
       inputSchema: {
         type: 'object',
         additionalProperties: false,

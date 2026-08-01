@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDefaultAgentConfig,
+  createRuntimeFlagRegistry,
   type DronePluginRegistration,
 } from 'drone-core';
 import { lspPlugin } from '../src/plugins/lsp/plugin.js';
@@ -57,44 +58,43 @@ describe('lsp plugin integration', () => {
     expect(tools.size).toBe(3);
   });
 
-  it('list_tools returns all 16 tool descriptions', async () => {
+  it('list_tools returns all 10 tool descriptions', async () => {
     const tools = captureLspTools();
     const result = JSON.parse(await tools.get('list_tools')!({}));
-    expect(result.toolCount).toBe(16);
+    expect(result.toolCount).toBe(10);
     const names = result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain('get_diagnostics');
-    expect(names).toContain('hover');
-    expect(names).toContain('go_to_definition');
+    expect(names).toContain('inspect');
+    expect(names).toContain('go_to');
     expect(names).toContain('find_references');
-    expect(names).toContain('document_symbols');
-    expect(names).toContain('workspace_symbol');
-    expect(names).toContain('signature_help');
+    expect(names).toContain('symbols');
     expect(names).toContain('completion');
     expect(names).toContain('code_action');
     expect(names).toContain('rename');
-    expect(names).toContain('implementation');
-    expect(names).toContain('type_definition');
-    expect(names).toContain('call_hierarchy_incoming');
-    expect(names).toContain('call_hierarchy_outgoing');
+    expect(names).toContain('call_hierarchy');
     expect(names).toContain('formatting');
-    expect(names).toContain('server_status');
+    // Removed tools should not be present
+    expect(names).not.toContain('hover');
+    expect(names).not.toContain('go_to_definition');
+    expect(names).not.toContain('type_definition');
+    expect(names).not.toContain('implementation');
+    expect(names).not.toContain('document_symbols');
+    expect(names).not.toContain('workspace_symbol');
+    expect(names).not.toContain('signature_help');
+    expect(names).not.toContain('call_hierarchy_incoming');
+    expect(names).not.toContain('call_hierarchy_outgoing');
+    expect(names).not.toContain('server_status');
   });
 
   it('mount_tool mounts a tool and it becomes callable', async () => {
     const tools = captureLspTools();
-    // Mount the server_status tool
+    // Mount the get_diagnostics tool
     const mountResult = JSON.parse(
-      await tools.get('mount_tool')!({ tool: 'server_status' })
+      await tools.get('mount_tool')!({ tool: 'get_diagnostics' })
     );
     expect(mountResult.success).toBe(true);
-    expect(mountResult.tool).toBe('server_status');
-
-    // Now server_status should be registered
-    expect(tools.has('server_status')).toBe(true);
-
-    // Call the mounted server_status tool
-    const statusOut = JSON.parse(await tools.get('server_status')!({}));
-    expect(statusOut).toHaveProperty('servers');
+    expect(mountResult.tool).toBe('get_diagnostics');
+    expect(tools.has('get_diagnostics')).toBe(true);
   });
 
   it('mount_tool rejects an unknown tool name', async () => {
@@ -109,14 +109,14 @@ describe('lsp plugin integration', () => {
   it('unmount_tool removes a mounted tool', async () => {
     const tools = captureLspTools();
     // Mount first
-    await tools.get('mount_tool')!({ tool: 'server_status' });
-    expect(tools.has('server_status')).toBe(true);
+    await tools.get('mount_tool')!({ tool: 'get_diagnostics' });
+    expect(tools.has('get_diagnostics')).toBe(true);
 
     // Unmount
     const unmountResult = JSON.parse(
-      await tools.get('unmount_tool')!({ tool: 'server_status' })
+      await tools.get('unmount_tool')!({ tool: 'get_diagnostics' })
     );
     expect(unmountResult.success).toBe(true);
-    expect(unmountResult.tool).toBe('server_status');
+    expect(unmountResult.tool).toBe('get_diagnostics');
   });
 });

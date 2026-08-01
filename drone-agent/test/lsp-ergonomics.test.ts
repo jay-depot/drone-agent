@@ -5,11 +5,8 @@ import path from 'node:path';
 import type { DroneToolDefinition } from 'drone-core';
 import { createServerManager } from '../src/plugins/lsp/server.js';
 import {
-  createHoverTool,
-  createGoToDefinitionTool,
+  createGoToTool,
   createFindReferencesTool,
-  createImplementationTool,
-  createTypeDefinitionTool,
 } from '../src/plugins/lsp/tools/navigation.js';
 import {
   createCodeActionTool,
@@ -17,13 +14,10 @@ import {
   createFormattingTool,
 } from '../src/plugins/lsp/tools/editing.js';
 import {
-  createSignatureHelpTool,
+  createInspectTool,
   createCompletionTool,
 } from '../src/plugins/lsp/tools/completion.js';
-import {
-  createCallHierarchyIncomingTool,
-  createCallHierarchyOutgoingTool,
-} from '../src/plugins/lsp/tools/hierarchy.js';
+import { createCallHierarchyTool } from '../src/plugins/lsp/tools/hierarchy.js';
 import { createGetDiagnosticsTool } from '../src/plugins/lsp/tools/diagnostics.js';
 
 // ---------------------------------------------------------------------------
@@ -120,7 +114,6 @@ describe('resolveTextPosition (via parsePositionInput)', () => {
       });
 
       expect(result.line).toBe(2);
-      // "  return `Hello" — column 11 is where 'H' starts (1-based)
       expect(result.column).toBe(11);
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -176,7 +169,6 @@ describe('resolveTextPosition (via parsePositionInput)', () => {
       expect(err.message).toContain('2 matches');
       expect(err.message).toContain('Line 1');
       expect(err.message).toContain('Line 3');
-      // Should include context lines around each match
       expect(err.message).toContain('const x = 1');
       expect(err.message).toContain('const x = 3');
     } finally {
@@ -234,7 +226,6 @@ describe('resolveTextPosition (via parsePositionInput)', () => {
 });
 
 describe('tool input schemas accept text/symbol parameters', () => {
-  // Helper to check a tool's input schema has text/symbol params
   function expectTextSymbolParams(tool: DroneToolDefinition, _name: string) {
     const schema = tool.inputSchema;
     expect(schema).toBeDefined();
@@ -243,12 +234,10 @@ describe('tool input schemas accept text/symbol parameters', () => {
     expect(props.symbol).toBeDefined();
     expect(props.line).toBeDefined();
     expect(props.column).toBeDefined();
-    // line/column should NOT be in required
     expect(schema!.required).not.toContain('line');
     expect(schema!.required).not.toContain('column');
   }
 
-  // Create a minimal server for tool creation
   function createMockServer() {
     return {
       refreshIfNeeded: async () => {},
@@ -268,19 +257,19 @@ describe('tool input schemas accept text/symbol parameters', () => {
       locationToAgentShape: (_l: unknown[]) => [],
       initialize: async () => {},
       shutdown: async () => {},
-    } as Parameters<typeof createHoverTool>[0];
+    } as Parameters<typeof createInspectTool>[0];
   }
 
   const server = createMockServer();
 
-  it('hover accepts text/symbol', () => {
-    const tool = createHoverTool(server);
-    expectTextSymbolParams(tool, 'hover');
+  it('inspect accepts text/symbol', () => {
+    const tool = createInspectTool(server);
+    expectTextSymbolParams(tool, 'inspect');
   });
 
-  it('go_to_definition accepts text/symbol', () => {
-    const tool = createGoToDefinitionTool(server);
-    expectTextSymbolParams(tool, 'go_to_definition');
+  it('go_to accepts text/symbol', () => {
+    const tool = createGoToTool(server);
+    expectTextSymbolParams(tool, 'go_to');
   });
 
   it('find_references accepts text/symbol', () => {
@@ -288,34 +277,14 @@ describe('tool input schemas accept text/symbol parameters', () => {
     expectTextSymbolParams(tool, 'find_references');
   });
 
-  it('implementation accepts text/symbol', () => {
-    const tool = createImplementationTool(server);
-    expectTextSymbolParams(tool, 'implementation');
-  });
-
-  it('type_definition accepts text/symbol', () => {
-    const tool = createTypeDefinitionTool(server);
-    expectTextSymbolParams(tool, 'type_definition');
-  });
-
-  it('signature_help accepts text/symbol', () => {
-    const tool = createSignatureHelpTool(server);
-    expectTextSymbolParams(tool, 'signature_help');
-  });
-
   it('completion accepts text/symbol', () => {
     const tool = createCompletionTool(server);
     expectTextSymbolParams(tool, 'completion');
   });
 
-  it('call_hierarchy_incoming accepts text/symbol', () => {
-    const tool = createCallHierarchyIncomingTool(server);
-    expectTextSymbolParams(tool, 'call_hierarchy_incoming');
-  });
-
-  it('call_hierarchy_outgoing accepts text/symbol', () => {
-    const tool = createCallHierarchyOutgoingTool(server);
-    expectTextSymbolParams(tool, 'call_hierarchy_outgoing');
+  it('call_hierarchy accepts text/symbol', () => {
+    const tool = createCallHierarchyTool(server);
+    expectTextSymbolParams(tool, 'call_hierarchy');
   });
 
   it('rename accepts text/symbol and apply', () => {
@@ -337,7 +306,6 @@ describe('tool input schemas accept text/symbol parameters', () => {
     const props = schema.properties ?? {};
     expect(props.text).toBeDefined();
     expect(props.symbol).toBeDefined();
-    // Range params should be optional
     expect(schema.required).not.toContain('startLine');
     expect(schema.required).not.toContain('startColumn');
     expect(schema.required).not.toContain('endLine');
