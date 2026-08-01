@@ -102,5 +102,9 @@
   {
     "timestamp": "2026-07-31T16:29:52.244Z",
     "insight": "TUI paste rendering bug: Ink's output engine (output.js) splits text on \\n only. A \\r character survives as a literal character in the rendered output, causing the terminal to perform a carriage return (cursor jumps to column 0 on the same line) instead of advancing to the next line. This was the root cause of pasted newlines not rendering correctly — the clipboard/terminal was sending \\r\\n or bare \\r, and the useBracketedPaste hook was delivering them as-is. Fix: normalize \\r\\n → \\n and \\r → \\n in useBracketedPaste.ts at all four delivery points (bracketed paste split-chunk, bracketed paste single-chunk, debounce flush, debounce immediate). The order matters: replace \\r\\n first, then remaining \\r, to avoid double-converting \\r\\n to \\n\\n."
+  },
+  {
+    "timestamp": "2026-08-01T21:11:43.639Z",
+    "insight": "The /systemprompt slash command manually assembles its output from config.systemPrompt + renderPromptFragments(), bypassing buildSystemMessages() from the context budget service. This means the runtime flags block (list-mount explainer, active plugins) is sent to the LLM but invisible to the user. The fix is to add buildSystemMessages to the engine interface, wire it from the budget service in index.tsx, and have the /systemprompt handler use it. This is tracked in plan-fix-systemprompt-runtime-flags."
   }
 ]
