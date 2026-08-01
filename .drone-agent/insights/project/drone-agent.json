@@ -110,5 +110,9 @@
   {
     "timestamp": "2026-08-01T21:16:40.406Z",
     "insight": "When adding a new method to the DronePluginEngine interface, you must also add it to the DroneTuiOptions.engine Pick type in tui/types.ts, otherwise the TUI won't compile. This is a common gotcha when extending the engine surface."
+  },
+  {
+    "timestamp": "2026-08-01T22:02:55.071Z",
+    "insight": "When planning multi-language LSP support, we identified two tiers of project language detection: (1) heuristic detection for well-known languages with known LSP servers (reuse bootstrap's project detection), and (2) LLM-assisted detection for everything else (deferred to 5.10.2). The LLM-assisted approach was deemed a good candidate for a user-customizable macro rather than a complex built-in system. This two-tier pattern could apply to other \"detect and configure\" features."
   }
 ]

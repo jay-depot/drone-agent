@@ -3,7 +3,7 @@ key: roadmap
 tags:
   - roadmap
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-08-01T19:52:10.524Z
+updated: 2026-08-01T21:39:32.314Z
 ---
 
 # Swarm Roadmap
@@ -50,7 +50,7 @@ A **swarm** is a personal AI workforce - multiple agents working in concert for 
                        │
 ┌──────────────────────┴──────────────────────────────┐
 │                 drone-coordinator                   │
-│  (Personal control plane: web UI, task management,  │
+│  (Personal control plane: web UI, task management,   │
 │   your skills, personas, memory, identities)        │
 │  *Single-user: manages YOUR agents only            │
 │  *must* have a beacon on the same host              │
@@ -364,6 +364,23 @@ When we get to converting LSP to list/mount (or otherwise improving LSP tool erg
 
 **Dependencies:** None (can be done independently, but should be informed by the list/mount pattern's real-world performance)
 
+#### 5.10 Multi-Language LSP Support
+
+**Status:** Design phase
+
+The LSP plugin currently only has a known server spec for TypeScript (with auto-install from npm). Users can configure other servers manually via `lsp.servers`, but there's no auto-detection or auto-install for other popular languages.
+
+**Sub-items:**
+
+- **5.10.1 Auto-install for popular languages** — Add known server specs for Rust (rust-analyzer, cargo install), Python (pyright/pylsp, pip), Go (gopls, go install), and other popular languages. The auto-install system currently only supports npm tarballs; needs extension for other package managers (cargo, pip, go install, etc.). This is the easy win.
+
+- **5.10.2 LLM-assisted server suggestion** — When heuristic detection fails to identify the project language or find a matching server, ask the LLM to analyze the project structure and suggest an appropriate LSP server. Design questions to resolve:
+  - When does this trigger? (on session start? on demand via a tool? as a prompt fragment?)
+  - How does the suggestion get surfaced to the user? (config write? log message? slash command?)
+  - One promising approach: provide a macro template or slash command that the user can customize for their own setup, rather than building a complex built-in system
+
+**Dependencies:** 5.10.1 is independent. 5.10.2 depends on the LLM being available at the time of suggestion.
+
 ---
 
 ## Dependencies Between Phases
@@ -437,4 +454,4 @@ Phase 5 (Advanced)
 
 ---
 
-_Last updated: 2026-08-01 (backfilled sub-features under existing roadmap items from codebase review; added note to 5.9 about LSP tool usage frequency)_
+_Last updated: 2026-08-01 (added 5.10 Multi-Language LSP Support with auto-install and LLM-assisted suggestion sub-items)_
