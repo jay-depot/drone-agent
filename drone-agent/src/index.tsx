@@ -153,6 +153,7 @@ async function main(): Promise<void> {
       subagentId: invocation.options.subagentId,
       persona: invocation.options.persona,
     },
+    buildSystemMessages: () => budgetService.buildSystemMessages(),
   });
   engineRef.current = engine;
   const conversation = createConversationService({

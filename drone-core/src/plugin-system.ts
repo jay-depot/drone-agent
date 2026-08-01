@@ -284,6 +284,10 @@ export type DroneSlashCommandContext = {
     listTools?: () => import('./session-types.js').DroneToolDescriptor[];
     /** Render prompt fragments (for /systemprompt). */
     renderPromptFragments?: () => Promise<string[]>;
+    /** Build the full system messages as sent to the LLM (config prompt + runtime flags + prompt fragments). */
+    buildSystemMessages?: () => Promise<
+      import('./session-types.js').DroneChatMessage[]
+    >;
     /** Get the resolved config (for /systemprompt). */
     getConfig?: () => import('./config-types.js').DroneAgentConfig;
     /** Get all slash commands (for /help fallback). */

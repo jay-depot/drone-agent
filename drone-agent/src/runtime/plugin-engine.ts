@@ -1,6 +1,7 @@
 import {
   createConsoleLogger,
   createRuntimeFlagRegistry,
+  type DroneChatMessage,
   getCanonicalToolName,
   type RuntimeFlagRegistry,
   type DroneAgentConfig,
@@ -112,6 +113,8 @@ export type DronePluginEngine = {
   getConfig: () => DroneAgentConfig;
   /** Returns the runtime flag registry, for injecting into the system prompt. */
   getRuntimeFlags: () => RuntimeFlagRegistry;
+  /** Build the full system messages as sent to the LLM (config prompt + runtime flags + prompt fragments). */
+  buildSystemMessages: () => Promise<DroneChatMessage[]>;
   /**
    * Set the host's elicitation capability. Must be called by the CLI shell
    * or TUI App BEFORE any workflow runs (and before `onSessionStart` if
@@ -160,6 +163,7 @@ type CreateDronePluginEngineOptions = {
     subagentId?: string;
     persona?: string;
   };
+  buildSystemMessages?: () => Promise<DroneChatMessage[]>;
 };
 
 function createHookBuckets(): HookBuckets {
@@ -272,6 +276,7 @@ export function createDronePluginEngine({
   config,
   logger = createConsoleLogger('plugin-engine'),
   runtimeOptions,
+  buildSystemMessages: buildSystemMessagesFromHost,
 }: CreateDronePluginEngineOptions): DronePluginEngine {
   const pluginMap = validatePluginRegistry(plugins);
   const enabledPluginIds = resolveEnabledPluginIds(plugins, config);
@@ -665,6 +670,22 @@ export function createDronePluginEngine({
     getRegisteredToolCount: () => tools.size,
     getConfig: () => config,
     getRuntimeFlags: () => runtimeFlagRegistry,
+    buildSystemMessages: async () => {
+      if (buildSystemMessagesFromHost) {
+        return buildSystemMessagesFromHost();
+      }
+      // Fallback: assemble manually (same as the old /systemprompt behavior).
+      // Use promptFragments directly (not renderPromptFragments, which is a
+      // method on the return object and not yet accessible here).
+      const base: DroneChatMessage[] = [
+        { role: 'system', content: config.systemPrompt },
+      ];
+      const fragments = (await Promise.all(promptFragments.map(f => f.render()))).filter((p): p is string => typeof p === 'string' && p.length > 0);
+      for (const content of fragments) {
+        base.push({ role: 'system', content });
+      }
+      return base;
+    },
     unregisterPluginTools: (pluginId: string) => {
       unregisterPluginToolsImpl(pluginId);
     },

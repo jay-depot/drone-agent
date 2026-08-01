@@ -140,20 +140,11 @@ const systemPromptCommand: DroneSlashCommand = {
   command: '/systemprompt',
   description: 'Show the current system prompt',
   handler: async (ctx: DroneSlashCommandContext) => {
-    const fragments = (await ctx.engine.renderPromptFragments?.()) ?? [];
-    const config = ctx.engine.getConfig?.();
-    const lines: string[] = [
-      'System Prompt:',
-      '────────────────────────────────────────',
-      config?.systemPrompt ?? '(not available)',
-    ];
-    if (fragments.length > 0) {
+    const systemMessages = (await ctx.engine.buildSystemMessages?.()) ?? [];
+    const lines: string[] = ['System Messages:'];
+    for (const msg of systemMessages) {
       lines.push('────────────────────────────────────────');
-      lines.push('Prompt Fragments:');
-      for (const fragment of fragments) {
-        lines.push('────────────────────────────────────────');
-        lines.push(fragment);
-      }
+      lines.push(msg.content);
     }
     ctx.logger.info(lines.join('\n'));
     return true;

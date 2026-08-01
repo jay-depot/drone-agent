@@ -113,6 +113,7 @@ export type DroneTuiOptions = {
     | 'getHelpSnippets'
     | 'renderPromptFragments'
     | 'getConfig'
+    | 'buildSystemMessages'
     | 'dispatchSlashCommand'
     | 'setElicitation'
     | 'onConversationEvent'
