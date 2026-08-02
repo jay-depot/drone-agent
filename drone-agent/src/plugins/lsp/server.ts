@@ -42,6 +42,7 @@ import {
 import {
   pathExists,
   workspaceHasMarkers,
+  hasMatchingFiles,
   collectWorkspaceFiles,
   connectTcpServer,
   readDocumentSnapshot,
@@ -109,6 +110,13 @@ export type ServerManager = {
   getDiagnostics: () => DroneLspDiagnostic[];
   getServerStates: () => DroneLspServerState[];
   renderDiagnosticsPrompt: () => string | false;
+  getAvailableServers: () => Array<{
+    id: string;
+    language: string;
+    fileExtensions: string[];
+    status: 'available';
+  }>;
+  startServerForFile: (filePath: string) => Promise<boolean>;
   findRuntimeForFile: (filePath: string) => ServerRuntime | undefined;
   ensureDocumentLoaded: (
     runtime: ServerRuntime,
@@ -360,8 +368,16 @@ export function createServerManager(
   async function detectKnownLanguageSpecs(): Promise<KnownServerSpec[]> {
     const matches: KnownServerSpec[] = [];
     for (const spec of KNOWN_SERVER_SPECS) {
-      if (await workspaceHasMarkers(workspaceRoot, spec.rootPatterns)) {
-        matches.push(spec);
+      if (spec.rootPatterns.length > 0) {
+        // Root-marker-based detection: check for well-known files.
+        if (await workspaceHasMarkers(workspaceRoot, spec.rootPatterns)) {
+          matches.push(spec);
+        }
+      } else {
+        // Ambient language detection: scan for matching file extensions.
+        if (await hasMatchingFiles(workspaceRoot, spec.fileExtensions)) {
+          matches.push(spec);
+        }
       }
     }
     return matches;
@@ -449,7 +465,10 @@ export function createServerManager(
         installSpec.version,
         cacheKey
       );
-      const entry = path.join(cacheDir, installSpec.nodeEntry);
+      const entry = path.join(
+        cacheDir,
+        installSpec.entryPoint ?? config.command
+      );
       try {
         await access(entry, fsConstants.R_OK);
         return true;
@@ -1091,6 +1110,86 @@ export function createServerManager(
 
   // ── Public API ────────────────────────────────────────────────────
 
+  async function startServerForFile(filePath: string): Promise<boolean> {
+    const ext = path.extname(filePath).toLowerCase();
+    if (!ext) {
+      return false;
+    }
+
+    // Check if a runtime already handles this file.
+    const existing = findRuntimeForFile(filePath);
+    if (existing) {
+      return false;
+    }
+
+    // Find a known server spec that handles this extension.
+    const spec = KNOWN_SERVER_SPECS.find(s =>
+      s.fileExtensions.some(fe => fe.toLowerCase() === ext)
+    );
+    if (!spec) {
+      return false;
+    }
+
+    // Check if this server is already running (but maybe for a different
+    // language ID — skip if so).
+    if (serverRuntimes.has(spec.id)) {
+      return false;
+    }
+
+    // Start the server using the same flow as initializeServers.
+    const config: DroneLspServerConfig = {
+      transport: 'stdio',
+      language: spec.language,
+      command: spec.command,
+      args: spec.args,
+      fileExtensions: spec.fileExtensions,
+      rootPatterns: spec.rootPatterns,
+    };
+
+    let resolved: ResolvedSpawn | null = null;
+    let installStatus: DroneLspServerState['installStatus'] = 'unused';
+
+    try {
+      resolved = await resolveServerCommand(
+        spec.id,
+        spec.language,
+        config,
+        spec
+      );
+      installStatus = resolved?.installStatus ?? 'unused';
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn(`lsp server unavailable: ${spec.id} (${message})`);
+      return false;
+    }
+
+    try {
+      const runtime = await createRuntimeFromConfig(
+        spec.id,
+        spec.language,
+        config,
+        resolved ? { command: resolved.command, args: resolved.args } : null
+      );
+      if (resolved) {
+        updateServerState(runtime.id, {
+          installSource: resolved.source,
+          installStatus,
+        });
+      }
+      serverRuntimes.set(runtime.id, runtime);
+      await initializeClient(runtime);
+      workspaceDirty = true;
+      logger.info(
+        `lsp server ready: ${runtime.id} (${runtime.ownership}, ${runtime.detail}, install=${installStatus})`
+      );
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.warn(`lsp server unavailable: ${spec.id} (${message})`);
+      return false;
+    }
+  }
+
   return {
     initialize: async () => {
       await initializeServers();
@@ -1117,6 +1216,20 @@ export function createServerManager(
 
     getServerStates: () =>
       Array.from(serverRuntimes.values()).map(runtime => runtime.state),
+
+    getAvailableServers: () => {
+      const running = new Set(serverRuntimes.keys());
+      return KNOWN_SERVER_SPECS.filter(spec => !running.has(spec.id)).map(
+        spec => ({
+          id: spec.id,
+          language: spec.language,
+          fileExtensions: spec.fileExtensions,
+          status: 'available' as const,
+        })
+      );
+    },
+
+    startServerForFile,
 
     renderDiagnosticsPrompt: () => {
       const diagnostics = getAllDiagnostics().filter(

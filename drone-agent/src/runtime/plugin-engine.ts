@@ -680,7 +680,9 @@ export function createDronePluginEngine({
       const base: DroneChatMessage[] = [
         { role: 'system', content: config.systemPrompt },
       ];
-      const fragments = (await Promise.all(promptFragments.map(f => f.render()))).filter((p): p is string => typeof p === 'string' && p.length > 0);
+      const fragments = (
+        await Promise.all(promptFragments.map(f => f.render()))
+      ).filter((p): p is string => typeof p === 'string' && p.length > 0);
       for (const content of fragments) {
         base.push({ role: 'system', content });
       }

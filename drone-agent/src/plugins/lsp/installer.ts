@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import type { DroneLspInstallSpec, DroneLogger } from 'drone-core';
 import {
   access,
   chmod,
@@ -15,7 +16,6 @@ import process from 'node:process';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { extract as extractTar } from 'tar';
-import type { DroneLogger } from 'drone-core';
 
 const CACHE_DIR_ENV = 'DRONE_AGENT_LSP_CACHE';
 const CACHE_SUBDIR = 'lsp';
@@ -37,13 +37,7 @@ export type InstallerSpec = {
   id: string;
   command: string;
   args: string[];
-  install: {
-    npmPackage: string;
-    version: string;
-    tarballUrl: string;
-    integrity: string;
-    nodeEntry: string;
-  };
+  install: DroneLspInstallSpec;
 };
 
 export type InstallerOptions = {
@@ -103,6 +97,30 @@ export function resolveCacheDir(
   }
 
   return path.join(homedir, '.cache', 'drone-agent', CACHE_SUBDIR);
+}
+
+/**
+ * Resolve the download URL for a tarball based on the install type.
+ * For `github-release`, the URL is pre-resolved in the spec (includes
+ * platform/arch). For other types, we construct the URL from the
+ * package name and version.
+ */
+export function resolveTarballUrl(spec: DroneLspInstallSpec): string {
+  switch (spec.type) {
+    case 'npm':
+    case 'github-release':
+      return spec.tarballUrl;
+    case 'cargo':
+      return `https://crates.io/api/v1/crates/${spec.package}/${spec.version}/download`;
+    case 'pip':
+      // PyPI source tarball URL pattern:
+      // https://pypi.org/packages/source/{first-char}/{package}/{package}-{version}.tar.gz
+      return `https://pypi.org/packages/source/${spec.package[0]}/${spec.package}/${spec.package}-${spec.version}.tar.gz`;
+    case 'go':
+      return `https://proxy.golang.org/${spec.package}/@v/${spec.version}.tar.gz`;
+    default:
+      return spec.tarballUrl;
+  }
 }
 
 /**
@@ -275,9 +293,6 @@ async function extractTarball(
   destination: string
 ): Promise<void> {
   await mkdir(destination, { recursive: true });
-  // `tar.extract` accepts a stream: pipe the buffer in and let tar detect
-  // gzip via magic bytes. `strip: 1` removes the leading `package/`
-  // directory npm tarballs always wrap their contents in.
   await pipeline(
     Readable.from(tarball),
     extractTar({
@@ -289,9 +304,9 @@ async function extractTarball(
 
 async function isCacheEntryValid(
   cacheDir: string,
-  nodeEntry: string
+  entryPoint: string
 ): Promise<boolean> {
-  const entry = path.join(cacheDir, nodeEntry);
+  const entry = path.join(cacheDir, entryPoint);
   try {
     await access(entry, fsConstants.R_OK);
     return true;
@@ -339,13 +354,18 @@ export async function ensureServerInstalled(
   }
 
   // 2. Cache hit — verify the entrypoint exists and return.
-  if (await isCacheEntryValid(cacheDir, spec.install.nodeEntry)) {
+  if (
+    await isCacheEntryValid(cacheDir, spec.install.entryPoint ?? spec.command)
+  ) {
     logger?.info?.(
       `lsp server cached: ${spec.id}@${spec.install.version} (${cacheDir})`
     );
     return {
       command: resolvedNode,
-      args: [path.join(cacheDir, spec.install.nodeEntry), ...spec.args],
+      args: [
+        path.join(cacheDir, spec.install.entryPoint ?? spec.command),
+        ...spec.args,
+      ],
       source: 'cache',
       cacheDir,
     };
@@ -353,13 +373,15 @@ export async function ensureServerInstalled(
 
   // 3. Cache miss — install under a lock to avoid duplicate downloads.
   logger?.info?.(
-    `lsp server not found on PATH; downloading ${spec.install.npmPackage}@${spec.install.version}…`
+    `lsp server not found on PATH; downloading ${spec.install.package}@${spec.install.version}…`
   );
   const fetchImpl = options.fetchImpl ?? fetch;
   await withCacheLock(path.join(cacheRoot, spec.id, '.lock'), async () => {
     // Re-check after acquiring the lock — another process may have
     // finished populating the cache while we waited.
-    if (await isCacheEntryValid(cacheDir, spec.install.nodeEntry)) {
+    if (
+      await isCacheEntryValid(cacheDir, spec.install.entryPoint ?? spec.command)
+    ) {
       return;
     }
     // Always start from a clean slate so a partial extraction can't
@@ -367,7 +389,10 @@ export async function ensureServerInstalled(
     await rm(cacheDir, { recursive: true, force: true });
     await mkdir(cacheDir, { recursive: true });
 
-    const tarball = await downloadTarball(spec.install.tarballUrl, fetchImpl);
+    const tarball = await downloadTarball(
+      resolveTarballUrl(spec.install),
+      fetchImpl
+    );
     await verifyIntegrity(tarball, spec.install.integrity);
     await extractTarball(tarball, cacheDir);
 
@@ -378,11 +403,11 @@ export async function ensureServerInstalled(
       JSON.stringify(
         {
           serverId: spec.id,
-          npmPackage: spec.install.npmPackage,
+          packageName: spec.install.package,
           version: spec.install.version,
           installedAt: new Date().toISOString(),
           installId: randomUUID(),
-          tarballUrl: spec.install.tarballUrl,
+          tarballUrl: resolveTarballUrl(spec.install),
           integrity: spec.install.integrity,
           nodeVersion: process.versions.node,
         },
@@ -396,7 +421,10 @@ export async function ensureServerInstalled(
     // executable bit since we invoke it directly via `node`, but setting
     // 0o644 makes the cache directory self-debugging.
     try {
-      const entryAbs = path.join(cacheDir, spec.install.nodeEntry);
+      const entryAbs = path.join(
+        cacheDir,
+        spec.install.entryPoint ?? spec.command
+      );
       await chmod(entryAbs, 0o644);
     } catch {
       // Non-fatal.
@@ -404,15 +432,23 @@ export async function ensureServerInstalled(
   });
 
   // 4. Final verification — refuse to return a resolution we can't use.
-  if (!(await isCacheEntryValid(cacheDir, spec.install.nodeEntry))) {
+  if (
+    !(await isCacheEntryValid(
+      cacheDir,
+      spec.install.entryPoint ?? spec.command
+    ))
+  ) {
     throw new Error(
-      `LSP server entry not found after install: ${path.join(cacheDir, spec.install.nodeEntry)}`
+      `LSP server entry not found after install: ${path.join(cacheDir, spec.install.entryPoint ?? spec.command)}`
     );
   }
 
   return {
     command: resolvedNode,
-    args: [path.join(cacheDir, spec.install.nodeEntry), ...spec.args],
+    args: [
+      path.join(cacheDir, spec.install.entryPoint ?? spec.command),
+      ...spec.args,
+    ],
     source: 'cache',
     cacheDir,
   };

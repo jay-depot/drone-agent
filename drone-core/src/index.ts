@@ -127,6 +127,7 @@ export type {
   DroneLspDiagnostic,
   DroneLspHoverResult,
   DroneLspServerState,
+  DroneLspInstallSpec,
 } from './lsp-types.js';
 
 // ── MCP types ───────────────────────────────────────────────────────

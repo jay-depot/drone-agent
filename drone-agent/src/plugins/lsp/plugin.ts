@@ -108,12 +108,29 @@ export const lspPlugin: DronePlugin = {
       render: async () => {
         const diagPrompt = server.renderDiagnosticsPrompt();
         const states = server.getServerStates();
-        if (states.length === 0) {
-          return diagPrompt;
+        const parts: string[] = [];
+
+        if (states.length > 0) {
+          const serverLines = states.map(s => `${s.language}: ${s.status}`);
+          parts.push(`# LSP Servers\n\n${serverLines.join('\n')}`);
         }
-        const serverLines = states.map(s => `${s.language}: ${s.status}`);
-        const serversBlock = `# LSP Servers\n\n${serverLines.join('\n')}`;
-        return `${serversBlock}\n\n${diagPrompt}`;
+
+        const available = server.getAvailableServers();
+        if (available.length > 0) {
+          const availableLines = available.map(
+            s =>
+              `- ${s.language} (${s.id}): available — mount and use LSP tools for this language`
+          );
+          parts.push(
+            `## Available LSP Servers\n\n${availableLines.join('\n')}`
+          );
+        }
+
+        if (diagPrompt) {
+          parts.push(diagPrompt);
+        }
+
+        return parts.length > 0 ? parts.join('\n\n') : false;
       },
     });
 
