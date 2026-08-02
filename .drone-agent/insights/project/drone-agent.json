@@ -114,5 +114,13 @@
   {
     "timestamp": "2026-08-01T22:02:55.071Z",
     "insight": "When planning multi-language LSP support, we identified two tiers of project language detection: (1) heuristic detection for well-known languages with known LSP servers (reuse bootstrap's project detection), and (2) LLM-assisted detection for everything else (deferred to 5.10.2). The LLM-assisted approach was deemed a good candidate for a user-customizable macro rather than a complex built-in system. This two-tier pattern could apply to other \"detect and configure\" features."
+  },
+  {
+    "timestamp": "2026-08-02T02:08:38.186Z",
+    "insight": "When extending the DronePluginEngine interface with new methods, you must also add them to the DroneTuiOptions.engine Pick type in tui/types.ts, otherwise the TUI won't compile. This is a recurring gotcha — it happened again with buildSystemMessages and now with getAvailableServers/startServerForFile (though the LSP plugin doesn't use TUI types directly, the pattern is the same for any engine method exposed to TUI)."
+  },
+  {
+    "timestamp": "2026-08-02T02:08:42.560Z",
+    "insight": "The Go module proxy (proxy.golang.org) supports both .zip and .tar.gz formats for module downloads. Using .tar.gz is simpler because the existing tar extraction infrastructure handles it directly — no need for a zip library dependency. The URL pattern is: https://proxy.golang.org/{module}/@v/{version}.tar.gz"
   }
 ]
