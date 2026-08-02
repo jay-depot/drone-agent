@@ -1,5 +1,18 @@
 // ── LSP types ────────────────────────────────────────────────────────
 
+export type DroneLspPlatformKey =
+  | 'linux-x64'
+  | 'linux-arm64'
+  | 'darwin-x64'
+  | 'darwin-arm64'
+  | 'win32-x64'
+  | 'win32-arm64';
+
+export type DroneLspPlatformSpec = {
+  tarballUrl: string;
+  integrity: string;
+};
+
 /**
  * Describes how to auto-install a known LSP server when it isn't on PATH.
  * The `type` field determines how the tarball URL is resolved and how the
@@ -20,6 +33,9 @@ export type DroneLspInstallSpec = {
   tarballUrl: string;
   integrity: string;
   entryPoint?: string;
+  /** Platform-specific overrides. The top-level tarballUrl/integrity
+   *  serve as the default fallback. */
+  platforms?: Partial<Record<DroneLspPlatformKey, DroneLspPlatformSpec>>;
 };
 
 /**

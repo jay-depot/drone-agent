@@ -27,9 +27,12 @@ The LSP auto-download feature was recently extended to support 13 additional ser
 
 ```typescript
 export type DroneLspPlatformKey =
-  | 'linux-x64' | 'linux-arm64'
-  | 'darwin-x64' | 'darwin-arm64'
-  | 'win32-x64' | 'win32-arm64';
+  | 'linux-x64'
+  | 'linux-arm64'
+  | 'darwin-x64'
+  | 'darwin-arm64'
+  | 'win32-x64'
+  | 'win32-arm64';
 
 export type DroneLspPlatformSpec = {
   tarballUrl: string;
@@ -62,10 +65,12 @@ export type DroneLspInstallSpec = {
 **Details:**
 
 ```typescript
-export function resolvePlatformSpec(
-  spec: DroneLspInstallSpec
-): { tarballUrl: string; integrity: string } {
-  const platformKey = `${process.platform}-${process.arch}` as DroneLspPlatformKey;
+export function resolvePlatformSpec(spec: DroneLspInstallSpec): {
+  tarballUrl: string;
+  integrity: string;
+} {
+  const platformKey =
+    `${process.platform}-${process.arch}` as DroneLspPlatformKey;
   const platformOverride = spec.platforms?.[platformKey];
   if (platformOverride) {
     return platformOverride;
@@ -110,6 +115,7 @@ Failed to build gopls from source. Go must be installed and on PATH.
 **New file:** `scripts/compute-lsp-hashes.mjs`
 
 **What:** A standalone Node.js script that:
+
 1. Downloads each tarball from its URL
 2. Computes sha512 of the raw bytes
 3. Outputs the integrity string in `sha512-<base64>` format

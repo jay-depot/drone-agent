@@ -7,6 +7,7 @@ import process from 'node:process';
 import { create as createTar } from 'tar';
 import {
   resolveTarballUrl,
+  resolvePlatformSpec,
   commandExistsOnPath,
   computeCacheKey,
   ensureServerInstalled,
@@ -14,6 +15,7 @@ import {
   verifyIntegrity,
   type InstallerSpec,
 } from '../src/plugins/lsp/installer.js';
+import type { DroneLspInstallSpec } from 'drone-core';
 
 const TEST_ENTRY_POINT = 'lib/cli.mjs';
 
@@ -262,6 +264,137 @@ describe('lsp-installer — commandExistsOnPath', () => {
   });
 });
 
+describe('lsp-installer — resolveTarballUrl', () => {
+  it('returns tarballUrl as-is for npm type', () => {
+    const url = resolveTarballUrl({
+      type: 'npm',
+      package: 'typescript-language-server',
+      version: '5.3.0',
+      tarballUrl:
+        'https://registry.npmjs.org/typescript-language-server/-/typescript-language-server-5.3.0.tgz',
+      integrity: 'sha512-xxx',
+      entryPoint: 'lib/cli.mjs',
+    });
+    expect(url).toBe(
+      'https://registry.npmjs.org/typescript-language-server/-/typescript-language-server-5.3.0.tgz'
+    );
+  });
+
+  it('constructs cargo download URL', () => {
+    const url = resolveTarballUrl({
+      type: 'cargo',
+      package: 'rust-analyzer',
+      version: '2024-11-18',
+      tarballUrl: '',
+      integrity: 'sha512-xxx',
+    });
+    expect(url).toBe(
+      'https://crates.io/api/v1/crates/rust-analyzer/2024-11-18/download'
+    );
+  });
+
+  it('constructs pip source tarball URL', () => {
+    const url = resolveTarballUrl({
+      type: 'pip',
+      package: 'pyright',
+      version: '1.1.389',
+      tarballUrl: '',
+      integrity: 'sha512-xxx',
+    });
+    expect(url).toBe(
+      'https://pypi.org/packages/source/p/pyright/pyright-1.1.389.tar.gz'
+    );
+  });
+
+  it('constructs go module proxy URL with .zip extension', () => {
+    const url = resolveTarballUrl({
+      type: 'go',
+      package: 'golang.org/x/tools/gopls',
+      version: '0.16.2',
+      tarballUrl: '',
+      integrity: 'sha512-xxx',
+    });
+    expect(url).toBe(
+      'https://proxy.golang.org/golang.org/x/tools/gopls/@v/0.16.2.zip'
+    );
+  });
+
+  it('returns tarballUrl as-is for github-release type', () => {
+    const url = resolveTarballUrl({
+      type: 'github-release',
+      package: 'rust-lang/rust-analyzer',
+      version: '2024-11-18',
+      tarballUrl:
+        'https://github.com/rust-lang/rust-analyzer/releases/download/2024-11-18/rust-analyzer-x86_64-unknown-linux-gnu.tar.gz',
+      integrity: 'sha512-xxx',
+      entryPoint: 'rust-analyzer',
+    });
+    expect(url).toBe(
+      'https://github.com/rust-lang/rust-analyzer/releases/download/2024-11-18/rust-analyzer-x86_64-unknown-linux-gnu.tar.gz'
+    );
+  });
+});
+
+describe('lsp-installer — resolvePlatformSpec', () => {
+  it('returns platform override when it exists', () => {
+    const spec: DroneLspInstallSpec = {
+      type: 'github-release',
+      package: 'rust-lang/rust-analyzer',
+      version: '2026-07-27',
+      tarballUrl: 'https://example.com/default.tar.gz',
+      integrity: 'sha512-default',
+      entryPoint: 'rust-analyzer',
+      platforms: {
+        'linux-x64': {
+          tarballUrl: 'https://example.com/linux-x64.tar.gz',
+          integrity: 'sha512-linux-x64',
+        },
+      },
+    };
+
+    // On linux-x64, should return the platform override.
+    const result = resolvePlatformSpec(spec);
+    expect(result.tarballUrl).toBe('https://example.com/linux-x64.tar.gz');
+    expect(result.integrity).toBe('sha512-linux-x64');
+  });
+
+  it('falls back to top-level fields when no platform match', () => {
+    const spec: DroneLspInstallSpec = {
+      type: 'npm',
+      package: 'typescript-language-server',
+      version: '5.3.0',
+      tarballUrl: 'https://example.com/default.tgz',
+      integrity: 'sha512-default',
+      entryPoint: 'lib/cli.mjs',
+    };
+
+    const result = resolvePlatformSpec(spec);
+    expect(result.tarballUrl).toBe('https://example.com/default.tgz');
+    expect(result.integrity).toBe('sha512-default');
+  });
+
+  it('falls back to top-level fields when platform key does not match', () => {
+    const spec: DroneLspInstallSpec = {
+      type: 'github-release',
+      package: 'some/server',
+      version: '1.0.0',
+      tarballUrl: 'https://example.com/default.tar.gz',
+      integrity: 'sha512-default',
+      platforms: {
+        'darwin-arm64': {
+          tarballUrl: 'https://example.com/darwin-arm64.tar.gz',
+          integrity: 'sha512-darwin-arm64',
+        },
+      },
+    };
+
+    // On linux-x64, should fall back to top-level.
+    const result = resolvePlatformSpec(spec);
+    expect(result.tarballUrl).toBe('https://example.com/default.tar.gz');
+    expect(result.integrity).toBe('sha512-default');
+  });
+});
+
 describe('lsp-installer — ensureServerInstalled', () => {
   it('short-circuits when the command is on PATH', async () => {
     await withFakeBinary(async binaryPath => {
@@ -449,77 +582,57 @@ describe('lsp-installer — ensureServerInstalled', () => {
       // entry contents.
       const content = await readFile(second.args[0]!, 'utf8');
       expect(content).toContain('main');
+    });
+  });
 
-      describe('lsp-installer — resolveTarballUrl', () => {
-        it('returns tarballUrl as-is for npm type', () => {
-          const url = resolveTarballUrl({
-            type: 'npm',
-            package: 'typescript-language-server',
-            version: '5.3.0',
-            tarballUrl:
-              'https://registry.npmjs.org/typescript-language-server/-/typescript-language-server-5.3.0.tgz',
-            integrity: 'sha512-xxx',
-            entryPoint: 'lib/cli.mjs',
-          });
-          expect(url).toBe(
-            'https://registry.npmjs.org/typescript-language-server/-/typescript-language-server-5.3.0.tgz'
-          );
-        });
+  it('fails with a clear error when go build fails', async () => {
+    // Create a minimal zip buffer (just the EOCD, no entries).
+    const zipBuffer = createMinimalZip();
+    const integrity = `sha512-${sha512Base64(zipBuffer)}`;
 
-        it('constructs cargo download URL', () => {
-          const url = resolveTarballUrl({
-            type: 'cargo',
-            package: 'rust-analyzer',
-            version: '2024-11-18',
-            tarballUrl: '',
-            integrity: 'sha512-xxx',
-          });
-          expect(url).toBe(
-            'https://crates.io/api/v1/crates/rust-analyzer/2024-11-18/download'
-          );
-        });
+    const spec: InstallerSpec = {
+      id: 'gopls',
+      command: 'gopls',
+      args: [],
+      install: {
+        type: 'go',
+        package: 'golang.org/x/tools/gopls',
+        version: '0.16.2',
+        tarballUrl: 'https://example.test/gopls.zip',
+        integrity,
+        entryPoint: 'gopls',
+      },
+    };
 
-        it('constructs pip source tarball URL', () => {
-          const url = resolveTarballUrl({
-            type: 'pip',
-            package: 'pyright',
-            version: '1.1.389',
-            tarballUrl: '',
-            integrity: 'sha512-xxx',
-          });
-          expect(url).toBe(
-            'https://pypi.org/packages/source/p/pyright/pyright-1.1.389.tar.gz'
-          );
-        });
-
-        it('constructs go module proxy URL', () => {
-          const url = resolveTarballUrl({
-            type: 'go',
-            package: 'golang.org/x/tools/gopls',
-            version: '0.16.2',
-            tarballUrl: '',
-            integrity: 'sha512-xxx',
-          });
-          expect(url).toBe(
-            'https://proxy.golang.org/golang.org/x/tools/gopls/@v/0.16.2.tar.gz'
-          );
-        });
-
-        it('returns tarballUrl as-is for github-release type', () => {
-          const url = resolveTarballUrl({
-            type: 'github-release',
-            package: 'rust-lang/rust-analyzer',
-            version: '2024-11-18',
-            tarballUrl:
-              'https://github.com/rust-lang/rust-analyzer/releases/download/2024-11-18/rust-analyzer-x86_64-unknown-linux-gnu.tar.gz',
-            integrity: 'sha512-xxx',
-            entryPoint: 'rust-analyzer',
-          });
-          expect(url).toBe(
-            'https://github.com/rust-lang/rust-analyzer/releases/download/2024-11-18/rust-analyzer-x86_64-unknown-linux-gnu.tar.gz'
-          );
-        });
-      });
+    await withTempCache(async cacheDir => {
+      await expect(
+        ensureServerInstalled(spec, {
+          cacheDir,
+          nodePath: '/path/to/node',
+          fetchImpl: (async () =>
+            new Response(new Blob([new Uint8Array(zipBuffer)]), {
+              status: 200,
+            })) as unknown as typeof fetch,
+        })
+      ).rejects.toThrow(/Go must be installed/);
     });
   });
 });
+
+/**
+ * Create a minimal valid ZIP buffer with no entries (just EOCD).
+ * This is enough to test that the go build step is reached.
+ */
+function createMinimalZip(): Buffer {
+  // End of Central Directory record (22 bytes minimum)
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0); // signature
+  eocd.writeUInt16LE(0, 4); // disk number
+  eocd.writeUInt16LE(0, 6); // disk with CD
+  eocd.writeUInt16LE(0, 8); // num entries on disk
+  eocd.writeUInt16LE(0, 10); // total entries
+  eocd.writeUInt32LE(0, 12); // CD size
+  eocd.writeUInt32LE(0, 16); // CD offset
+  eocd.writeUInt16LE(0, 20); // comment length
+  return eocd;
+}

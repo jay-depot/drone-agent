@@ -60,7 +60,7 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
       version: '1.1.389',
       tarballUrl: 'https://registry.npmjs.org/pyright/-/pyright-1.1.389.tgz',
       integrity:
-        'sha512-0000000000000000000000000000000000000000000000000000000000000000000000000000000000==',
+        'sha512-EYt7yRtG6R6I3C3Wfa6O4tOPnbnN7e3ZG4BF9ZiyY6xs1hJGq2ymINyuWC+da0hPNebuMGkY7vvCnD+R7wwbdg==',
       entryPoint: 'langserver.index.js',
     },
   },
@@ -75,12 +75,38 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
     install: {
       type: 'github-release',
       package: 'rust-lang/rust-analyzer',
-      version: '2024-11-18',
+      version: '2026-07-27',
       tarballUrl:
-        'https://github.com/rust-lang/rust-analyzer/releases/download/2024-11-18/rust-analyzer-x86_64-unknown-linux-gnu.tar.gz',
+        'https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-x86_64-unknown-linux-gnu.gz',
       integrity:
-        'sha512-0000000000000000000000000000000000000000000000000000000000000000000000000000000000==',
+        'sha512-ZYGRwpqop78m3jrSDStDCil2yehUrVMZV/vd14IYi9hc3ty9AFnvQffQ4UaSyOBGDThQ5rrFMFKdcw3HDFD90Q==',
       entryPoint: 'rust-analyzer',
+      platforms: {
+        'linux-x64': {
+          tarballUrl:
+            'https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-x86_64-unknown-linux-gnu.gz',
+          integrity:
+            'sha512-ZYGRwpqop78m3jrSDStDCil2yehUrVMZV/vd14IYi9hc3ty9AFnvQffQ4UaSyOBGDThQ5rrFMFKdcw3HDFD90Q==',
+        },
+        'linux-arm64': {
+          tarballUrl:
+            'https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-aarch64-unknown-linux-gnu.gz',
+          integrity:
+            'sha512-uaS7HVmkzNTQ/8ZOYtB/kILw9HNbN7YhIX9yKVc2lbza4pWv8mzUgYd2cFnfFoDMEqidRLJdNStbGMcRJ9+Ryw==',
+        },
+        'darwin-x64': {
+          tarballUrl:
+            'https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-x86_64-apple-darwin.gz',
+          integrity:
+            'sha512-Db+tF1jeaitfLIBzNM2JFOMfHVIdRM7rCQK/JunXGvd9qiNg5efIvUmaji1cYMLU5gnciu/bumogJK9ynFqzxw==',
+        },
+        'darwin-arm64': {
+          tarballUrl:
+            'https://github.com/rust-lang/rust-analyzer/releases/download/2026-07-27/rust-analyzer-aarch64-apple-darwin.gz',
+          integrity:
+            'sha512-R64KDpY6xhfYxogu6cv0xZiCN2Y0MvZE07jMo2sU20IGp80SCnekHPrXwPWlGje8I31X9+oLj8PTfNhtFaLmlQ==',
+        },
+      },
     },
   },
   // ── Go (gopls — Go module proxy) ───────────────────────────────────
@@ -96,9 +122,9 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
       package: 'golang.org/x/tools/gopls',
       version: '0.16.2',
       tarballUrl:
-        'https://proxy.golang.org/golang.org/x/tools/gopls/@v/v0.16.2.tar.gz',
+        'https://proxy.golang.org/golang.org/x/tools/gopls/@v/v0.16.2.zip',
       integrity:
-        'sha512-0000000000000000000000000000000000000000000000000000000000000000000000000000000000==',
+        'sha512-t7g6lUhjOjVcVzWFwkdy63fXdSkmvx6EeWXsj1hS4u11361uruiiUxMfiS13sR+An7lnXN2dP6PrpU2+965V9g==',
       entryPoint: 'gopls',
     },
   },
@@ -117,8 +143,34 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
       tarballUrl:
         'https://github.com/LuaLS/lua-language-server/releases/download/3.10.6/lua-language-server-3.10.6-linux-x64.tar.gz',
       integrity:
-        'sha512-0000000000000000000000000000000000000000000000000000000000000000000000000000000000==',
+        'sha512-LMgX+3WYuSBdGxAxXG1r+8grQz7rY2Gr3zJAXB29hxH9y/vgILk/rF2hPmLGAiPch7PKX8yevdeerV1WYow+7Q==',
       entryPoint: 'bin/lua-language-server',
+      platforms: {
+        'linux-x64': {
+          tarballUrl:
+            'https://github.com/LuaLS/lua-language-server/releases/download/3.10.6/lua-language-server-3.10.6-linux-x64.tar.gz',
+          integrity:
+            'sha512-LMgX+3WYuSBdGxAxXG1r+8grQz7rY2Gr3zJAXB29hxH9y/vgILk/rF2hPmLGAiPch7PKX8yevdeerV1WYow+7Q==',
+        },
+        'linux-arm64': {
+          tarballUrl:
+            'https://github.com/LuaLS/lua-language-server/releases/download/3.10.6/lua-language-server-3.10.6-linux-arm64.tar.gz',
+          integrity:
+            'sha512-mvvjfBOQ3OnkYNlGSsqQF8eHAjaD/I0b1BUVGjOoA+Gbcl22MinGq9BL56CjGI0WMYObgHsVVsTJRkNMmuoK3Q==',
+        },
+        'darwin-x64': {
+          tarballUrl:
+            'https://github.com/LuaLS/lua-language-server/releases/download/3.10.6/lua-language-server-3.10.6-darwin-x64.tar.gz',
+          integrity:
+            'sha512-ZHVpC7grJZ3yadTWVeWbmJIf3DtLJ6lk6I2ncr8Fn+N8dBoTLUwnNmx5P6HDf+kIx+oeM2eMIAzpNhXbEPpdVQ==',
+        },
+        'darwin-arm64': {
+          tarballUrl:
+            'https://github.com/LuaLS/lua-language-server/releases/download/3.10.6/lua-language-server-3.10.6-darwin-arm64.tar.gz',
+          integrity:
+            'sha512-3K7kgqj09n2bSDFP9iby0hJYF52Lw4i4FU7hRXRco6V9tnY0UK9NRb82r6wxdKSRunkRozXLLbBPUsEyekG9Pg==',
+        },
+      },
     },
   },
   // ── Shell (bash-language-server — npm) ────────────────────────────
@@ -132,11 +184,11 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
     install: {
       type: 'npm',
       package: 'bash-language-server',
-      version: '5.1.8',
+      version: '5.6.0',
       tarballUrl:
-        'https://registry.npmjs.org/bash-language-server/-/bash-language-server-5.1.8.tgz',
+        'https://registry.npmjs.org/bash-language-server/-/bash-language-server-5.6.0.tgz',
       integrity:
-        'sha512-0000000000000000000000000000000000000000000000000000000000000000000000000000000000==',
+        'sha512-DCuV+/BZAAozsp5blvi6jDnU/ZDaTpJpWM0zqwGjnirfqv7iBsMK32xOze/jipxU0PUZ6CBUKgRUMKI7Kk70Lg==',
       entryPoint: 'bin/bash-language-server',
     },
   },
@@ -155,7 +207,7 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
       tarballUrl:
         'https://registry.npmjs.org/yaml-language-server/-/yaml-language-server-1.15.0.tgz',
       integrity:
-        'sha512-0000000000000000000000000000000000000000000000000000000000000000000000000000000000==',
+        'sha512-N47AqBDCMQmh6mBLmI6oqxryHRzi33aPFPsJhYy3VTUGCdLHYjGh4FZzpUjRlphaADBBkDmnkM/++KNIOHi5Rw==',
       entryPoint: 'bin/yaml-language-server',
     },
   },
@@ -170,11 +222,11 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
     install: {
       type: 'npm',
       package: 'vscode-json-languageserver',
-      version: '1.15.0',
+      version: '1.3.4',
       tarballUrl:
-        'https://registry.npmjs.org/vscode-json-languageserver/-/vscode-json-languageserver-1.15.0.tgz',
+        'https://registry.npmjs.org/vscode-json-languageserver/-/vscode-json-languageserver-1.3.4.tgz',
       integrity:
-        'sha512-0000000000000000000000000000000000000000000000000000000000000000000000000000000000==',
+        'sha512-+ghebnslXk6fVDySBrT0BVqozLDdmKY/qxgkDD4JtOQcU2vXc3e7jh7YyMxvuvE93E9OLvBqUrvajttj8xf3BA==',
       entryPoint: 'bin/vscode-json-languageserver',
     },
   },
@@ -193,11 +245,11 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
       tarballUrl:
         'https://registry.npmjs.org/dockerfile-language-server-nodejs/-/dockerfile-language-server-nodejs-0.13.0.tgz',
       integrity:
-        'sha512-0000000000000000000000000000000000000000000000000000000000000000000000000000000000==',
+        'sha512-r8GwQGVBHuRj83nFYoA7ulGfp6tgUH8gxlPRap0ewuroEb/XgP4KtLsIUIN9CvkTZge/IkX7cbFTVO0lq9gZ3A==',
       entryPoint: 'bin/dockerfile-language-server-nodejs',
     },
   },
-  // ── TOML (taplo — npm) ────────────────────────────────────────────
+  // ── TOML (@taplo/cli — npm) ───────────────────────────────────────
   {
     id: 'taplo',
     language: 'toml',
@@ -207,50 +259,50 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
     rootPatterns: [],
     install: {
       type: 'npm',
-      package: 'taplo',
-      version: '0.9.3',
-      tarballUrl: 'https://registry.npmjs.org/taplo/-/taplo-0.9.3.tgz',
+      package: '@taplo/cli',
+      version: '0.7.0',
+      tarballUrl: 'https://registry.npmjs.org/@taplo/cli/-/cli-0.7.0.tgz',
       integrity:
-        'sha512-0000000000000000000000000000000000000000000000000000000000000000000000000000000000==',
-      entryPoint: 'bin/taplo',
+        'sha512-Ck3zFhQhIhi02Hl6T4ZmJsXdnJE+wXcJz5f8klxd4keRYgenMnip3JDPMGDRLbnC/2iGd8P0sBIQqI3KxfVjBg==',
+      entryPoint: 'dist/cli.js',
     },
   },
-  // ── CSS / SCSS / Less (vscode-css-languageserver — npm) ────────────
+  // ── CSS / SCSS / Less (vscode-css-languageserver-bin — npm) ────────
   {
     id: 'css-language-server',
     language: 'css',
-    command: 'vscode-css-languageserver',
+    command: 'css-languageserver',
     args: ['--stdio'],
     fileExtensions: ['.css', '.scss', '.less'],
     rootPatterns: [],
     install: {
       type: 'npm',
-      package: 'vscode-css-languageserver',
-      version: '1.15.0',
+      package: 'vscode-css-languageserver-bin',
+      version: '1.4.0',
       tarballUrl:
-        'https://registry.npmjs.org/vscode-css-languageserver/-/vscode-css-languageserver-1.15.0.tgz',
+        'https://registry.npmjs.org/vscode-css-languageserver-bin/-/vscode-css-languageserver-bin-1.4.0.tgz',
       integrity:
-        'sha512-0000000000000000000000000000000000000000000000000000000000000000000000000000000000==',
-      entryPoint: 'bin/vscode-css-languageserver',
+        'sha512-KWrF5f4RYYe8RBDfqb1c0Sdf9xPS2Ly/Z/T18H+uUOMw2QyzIrkxv4bMKy5GFfPm4479k6Ln4ji4UHqSmhGf3g==',
+      entryPoint: 'cssServerMain.js',
     },
   },
-  // ── HTML (vscode-html-languageserver — npm) ─────────────────────────
+  // ── HTML (vscode-html-languageserver-bin — npm) ─────────────────────
   {
     id: 'html-language-server',
     language: 'html',
-    command: 'vscode-html-languageserver',
+    command: 'html-languageserver',
     args: ['--stdio'],
     fileExtensions: ['.html', '.htm'],
     rootPatterns: [],
     install: {
       type: 'npm',
-      package: 'vscode-html-languageserver',
-      version: '1.15.0',
+      package: 'vscode-html-languageserver-bin',
+      version: '1.4.0',
       tarballUrl:
-        'https://registry.npmjs.org/vscode-html-languageserver/-/vscode-html-languageserver-1.15.0.tgz',
+        'https://registry.npmjs.org/vscode-html-languageserver-bin/-/vscode-html-languageserver-bin-1.4.0.tgz',
       integrity:
-        'sha512-0000000000000000000000000000000000000000000000000000000000000000000000000000000000==',
-      entryPoint: 'bin/vscode-html-languageserver',
+        'sha512-rDnpvASQwf1dlRaGiu8edo5WlAr4dM3/r/dcPCH4O6UD4+eShhdC1E8IyiSisnJU6bRk+4mDTCgA6cyhGJY2xA==',
+      entryPoint: 'htmlServerMain.js',
     },
   },
   // ── Svelte (svelte-language-server — npm) ──────────────────────────
@@ -264,12 +316,12 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
     install: {
       type: 'npm',
       package: 'svelte-language-server',
-      version: '1.0.0',
+      version: '0.18.3',
       tarballUrl:
-        'https://registry.npmjs.org/svelte-language-server/-/svelte-language-server-1.0.0.tgz',
+        'https://registry.npmjs.org/svelte-language-server/-/svelte-language-server-0.18.3.tgz',
       integrity:
-        'sha512-0000000000000000000000000000000000000000000000000000000000000000000000000000000000==',
-      entryPoint: 'bin/svelte-language-server',
+        'sha512-60hbZVquRLjP/VIU3BS82IXQDT4JsDIJ15NvcnlMimy6tQfAkAv+og3SXGP3IT7TlaPdCrqmFe/kjOQOKtWTfw==',
+      entryPoint: 'bin/server.js',
     },
   },
   // ── PHP (intelephense — npm) ──────────────────────────────────────
@@ -287,7 +339,7 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
       tarballUrl:
         'https://registry.npmjs.org/intelephense/-/intelephense-1.12.0.tgz',
       integrity:
-        'sha512-0000000000000000000000000000000000000000000000000000000000000000000000000000000000==',
+        'sha512-Bgh8yBn3WYUDymJTtg+2I/eblksJncHKKgom9iPX0jdDoo9mnEooYubRESbMLQ/fG/96PHmY/s2BZhzNNsPYtg==',
       entryPoint: 'lib/intelephense.js',
     },
   },
