@@ -126,5 +126,9 @@
   {
     "timestamp": "2026-08-02T16:06:34.017Z",
     "insight": "LSP Hash Fix planning revealed several hidden issues beyond just computing hashes: (1) gopls URL returns 404 for .tar.gz, needs .zip + build step, (2) DroneLspInstallSpec lacks platform-awareness for platform-specific binary tarballs, (3) rust-analyzer and lua-language-server need ARM variants. The plan covers all of these in a single pass."
+  },
+  {
+    "timestamp": "2026-08-02T16:16:55.771Z",
+    "insight": "rust-analyzer GitHub releases use date-based tags and the old 2024-11-18 release assets were 404. The latest release (2026-07-27) uses .gz files (not .tar.gz) for the binary archives. When pinning GitHub release versions, always verify the actual asset names from the API."
   }
 ]
