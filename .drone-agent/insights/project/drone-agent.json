@@ -122,5 +122,9 @@
   {
     "timestamp": "2026-08-02T02:08:42.560Z",
     "insight": "The Go module proxy (proxy.golang.org) supports both .zip and .tar.gz formats for module downloads. Using .tar.gz is simpler because the existing tar extraction infrastructure handles it directly — no need for a zip library dependency. The URL pattern is: https://proxy.golang.org/{module}/@v/{version}.tar.gz"
+  },
+  {
+    "timestamp": "2026-08-02T16:06:34.017Z",
+    "insight": "LSP Hash Fix planning revealed several hidden issues beyond just computing hashes: (1) gopls URL returns 404 for .tar.gz, needs .zip + build step, (2) DroneLspInstallSpec lacks platform-awareness for platform-specific binary tarballs, (3) rust-analyzer and lua-language-server need ARM variants. The plan covers all of these in a single pass."
   }
 ]
