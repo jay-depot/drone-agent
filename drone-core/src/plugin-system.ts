@@ -102,6 +102,21 @@ export type DronePluginRegistration = {
     args: Record<string, unknown>
   ) => Promise<DroneWorkflowResult>;
   /**
+   * Mount a tool by its canonical name (`pluginId__toolName`). Makes the
+   * tool visible to the LLM immediately. Returns the tool definition if
+   * found and not already mounted, or `undefined` if the tool is not
+   * registered. Used by plugins that register tools dynamically and
+   * want them available without requiring the LLM to mount them first.
+   */
+  mountTool: (canonicalName: string) => DroneToolDefinition | undefined;
+  /**
+   * Unmount a tool by its canonical name (`pluginId__toolName`). The tool
+   * remains registered but is hidden from the LLM. Silently does nothing
+   * if the tool is not found or not mounted. Used by plugins that manage
+   * their own tool lifecycle (e.g. MCP plugin's unmount_tool).
+   */
+  unmountTool: (canonicalName: string) => void;
+  /**
    * Returns the host's elicitation capability (set by the CLI shell or
    * the TUI at engine init time). Lets plugins ask the user structured
    * questions (closed-set or freeform) without coupling to a host.

@@ -103,7 +103,7 @@ const pluginsCommand: DroneSlashCommand = {
 
 const toolsCommand: DroneSlashCommand = {
   command: '/tools',
-  description: 'List registered tools (/tools --all for full list)',
+  description: 'List mounted tools (/tools --all for all registered tools)',
   handler: async (ctx: DroneSlashCommandContext) => {
     const allTools = ctx.engine.listTools?.() ?? [];
     const showAll = ctx.args.includes('--all');

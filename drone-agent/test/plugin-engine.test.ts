@@ -11,6 +11,8 @@ import {
 } from '../src/runtime/plugin-engine.js';
 import { createTestPlugin, silentLogger } from './helpers.js';
 
+const RUNTIME_TOOL_COUNT = 3; // runtime__list_tools, runtime__mount_tool, runtime__unmount_tool
+
 describe('createDronePluginEngine', () => {
   it('registers plugins, exposes tools, and runs hooks in order', async () => {
     const calls: string[] = [];
@@ -222,8 +224,9 @@ describe('createDronePluginEngine', () => {
     await engine.initialize();
 
     const tools = engine.listTools();
-    expect(tools).toHaveLength(1);
-    expect(tools[0].name).toBe('echo-plugin__echo');
+    expect(tools).toHaveLength(RUNTIME_TOOL_COUNT);
+    // Mount the tool to make it visible
+    engine.executeTool('runtime__mount_tool', { tool: 'echo-plugin__echo' });
     expect(engine.getTool('echo-plugin__echo')).toBeDefined();
     expect(engine.getTool('missing')).toBeUndefined();
 
@@ -290,15 +293,18 @@ describe('createDronePluginEngine', () => {
       });
       await engine.initialize();
 
+      // Mount the tools so they appear in listTools()
+      await engine.executeTool('runtime__mount_tool', { tool: 'test__alpha' });
+      await engine.executeTool('runtime__mount_tool', { tool: 'test__beta' });
       expect(engine.getTool('test__alpha')).toBeDefined();
       expect(engine.getTool('test__beta')).toBeDefined();
-      expect(engine.listTools()).toHaveLength(2);
+      expect(engine.listTools()).toHaveLength(RUNTIME_TOOL_COUNT + 2);
 
       engine.unregisterTool('test__alpha');
 
       expect(engine.getTool('test__alpha')).toBeUndefined();
       expect(engine.getTool('test__beta')).toBeDefined();
-      expect(engine.listTools()).toHaveLength(1);
+      expect(engine.listTools()).toHaveLength(RUNTIME_TOOL_COUNT + 1);
     });
 
     it('silently does nothing for an unknown tool name', async () => {
@@ -310,7 +316,7 @@ describe('createDronePluginEngine', () => {
       await engine.initialize();
 
       engine.unregisterTool('test__nonexistent');
-      expect(engine.listTools()).toHaveLength(0);
+      expect(engine.listTools()).toHaveLength(RUNTIME_TOOL_COUNT);
     });
 
     it('allows re-registering a tool after unregistering it', async () => {

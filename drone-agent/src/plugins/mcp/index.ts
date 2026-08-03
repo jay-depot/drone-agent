@@ -1,7 +1,4 @@
 import type { ReactNode } from 'react';
-import { ListToolsBlock } from '../../tui/components/ListToolsBlock.js';
-import { MountToolBlock } from '../../tui/components/MountToolBlock.js';
-import { UnmountToolBlock } from '../../tui/components/UnmountToolBlock.js';
 import { isRecord } from '../../shared/type-guards.js';
 import os from 'node:os';
 import type {
@@ -9,13 +6,11 @@ import type {
   DroneMcpRoot,
   DroneMcpServerState,
   DronePersonaCapability,
-  RuntimeFlagRegistry,
   DronePlugin,
   DroneToolJsonSchema,
   DroneToolJsonSchemaProperty,
   DroneToolDefinition,
 } from 'drone-core';
-import { ToolMountingCache } from 'drone-core';
 import {
   createMcpClientConnection,
   type McpClientConnection,
@@ -165,16 +160,15 @@ export const mcpPlugin: DronePlugin = {
     );
     const connections = new Map<string, McpClientConnection>();
     const serverStates = new Map<string, DroneMcpServerState>();
-    const serverCaches = new Map<string, ToolMountingCache>();
+    const serverToolMaps = new Map<
+      string,
+      Map<string, { definition: DroneToolDefinition; mounted: boolean }>
+    >();
     const serverUsedNames = new Map<string, Set<string>>();
     const serverAllowlists = new Map<string, Set<string> | undefined>();
     const metaToolNames = new Set<string>();
     const llmCapability = registration.request<DroneLlmCapability>('llm');
     const personaCap = registration.request<DronePersonaCapability>('persona');
-    const runtime = registration.request<{ flags?: RuntimeFlagRegistry }>(
-      'runtime'
-    );
-    runtime?.flags?.append('list-mount', 'mcp');
 
     function setServerState(state: DroneMcpServerState): void {
       serverStates.set(state.id, { ...state });
@@ -200,6 +194,8 @@ export const mcpPlugin: DronePlugin = {
         inputSchema,
         execute,
       });
+      // Mount the meta-tool immediately so it's visible to the LLM
+      registration.mountTool(`mcp__${name}`);
     }
 
     function mountResourcePromptTools(
@@ -317,11 +313,14 @@ export const mcpPlugin: DronePlugin = {
         listToolsDescription,
         { type: 'object', additionalProperties: false },
         async () => {
-          const cache = serverCaches.get(serverId);
-          if (!cache) {
+          const toolMap = serverToolMaps.get(serverId);
+          if (!toolMap) {
             return JSON.stringify({ toolCount: 0, tools: [] }, null, 2);
           }
-          let tools = cache.listAvailable();
+          let tools = Array.from(toolMap.entries()).map(([key, entry]) => ({
+            name: key,
+            description: entry.definition.description,
+          }));
           // Filter through persona capability if available
           if (personaCap) {
             const descriptors = tools.map(t => ({
@@ -335,8 +334,7 @@ export const mcpPlugin: DronePlugin = {
             tools = tools.filter(t => filteredNames.has(t.name));
           }
           return JSON.stringify({ toolCount: tools.length, tools }, null, 2);
-        },
-        state => ListToolsBlock({ state })
+        }
       );
 
       registerMetaTool(
@@ -363,13 +361,18 @@ export const mcpPlugin: DronePlugin = {
             );
           }
           const toolName = input.tool;
-          const cache = serverCaches.get(serverId);
-          if (!cache) {
+          const toolMap = serverToolMaps.get(serverId);
+          if (!toolMap) {
             throw new Error(`MCP server ${serverId} has no tool cache.`);
           }
 
           // Check if tool exists in cache
-          const available = cache.listAvailable();
+          const available = Array.from(toolMap.entries()).map(
+            ([key, entry]) => ({
+              name: key,
+              description: entry.definition.description,
+            })
+          );
           const toolMeta = available.find(t => t.name === toolName);
           if (!toolMeta) {
             const availableNames = available.map(t => t.name).join(', ');
@@ -387,7 +390,7 @@ export const mcpPlugin: DronePlugin = {
           }
 
           // Check if already mounted
-          if (cache.isMounted(toolName)) {
+          if (toolMap.get(toolName)?.mounted) {
             return JSON.stringify(
               {
                 success: false,
@@ -397,12 +400,20 @@ export const mcpPlugin: DronePlugin = {
               2
             );
           }
-          // Mount via cache
-          cache.mountTool(toolName, registration);
-          connection.state.mountedToolCount = cache.exportMounted().length;
+          // Mount the tool
+          const entry = toolMap.get(toolName);
+          if (entry) {
+            entry.mounted = true;
+            registration.registerTool(entry.definition);
+            registration.mountTool(`mcp__${entry.definition.name}`);
+          }
+          connection.state.mountedToolCount = Array.from(
+            toolMap.values()
+          ).filter(e => e.mounted).length;
           setServerState(connection.state);
-          const mountedName = cache.getToolDefName(toolName);
-          const canonicalName = mountedName ? `mcp__${mountedName}` : toolName;
+          const canonicalName = entry
+            ? `mcp__${entry.definition.name}`
+            : toolName;
           return JSON.stringify(
             {
               success: true,
@@ -412,8 +423,7 @@ export const mcpPlugin: DronePlugin = {
             null,
             2
           );
-        },
-        state => MountToolBlock({ state })
+        }
       );
 
       registerMetaTool(
@@ -440,8 +450,8 @@ export const mcpPlugin: DronePlugin = {
             );
           }
           const toolName = input.tool;
-          const cache = serverCaches.get(serverId);
-          if (!cache) {
+          const toolMap = serverToolMaps.get(serverId);
+          if (!toolMap) {
             return JSON.stringify(
               {
                 success: false,
@@ -452,7 +462,7 @@ export const mcpPlugin: DronePlugin = {
             );
           }
 
-          if (!cache.isMounted(toolName)) {
+          if (!toolMap.get(toolName)?.mounted) {
             return JSON.stringify(
               { success: false, error: `Tool '${toolName}' is not mounted.` },
               null,
@@ -460,13 +470,20 @@ export const mcpPlugin: DronePlugin = {
             );
           }
 
-          cache.unmountTool(toolName, registration);
-          connection.state.mountedToolCount = cache.exportMounted().length;
+          // Unmount in the engine's ToolRegistry (keeps it registered but hidden)
+          const entry = toolMap.get(toolName);
+          if (entry) {
+            registration.unmountTool(`mcp__${entry.definition.name}`);
+            entry.mounted = false;
+            registration.unregisterTool(`mcp__${entry.definition.name}`);
+          }
+          connection.state.mountedToolCount = Array.from(
+            toolMap.values()
+          ).filter(e => e.mounted).length;
           setServerState(connection.state);
 
           return JSON.stringify({ success: true, tool: toolName }, null, 2);
-        },
-        state => UnmountToolBlock({ state })
+        }
       );
     }
 
@@ -488,8 +505,11 @@ export const mcpPlugin: DronePlugin = {
         registration.logger
       );
 
-      // Create a fresh cache for this server
-      const cache = new ToolMountingCache('mcp');
+      // Create a fresh tool map for this server
+      const toolMap = new Map<
+        string,
+        { definition: DroneToolDefinition; mounted: boolean }
+      >();
       const usedNames = new Set<string>();
       for (const tool of tools) {
         const mountedName = `${serverId}__${sanitizeToolSegment(tool.name, usedNames)}`;
@@ -508,9 +528,9 @@ export const mcpPlugin: DronePlugin = {
             );
           },
         };
-        cache.addTool(tool.name, toolDef);
+        toolMap.set(tool.name, { definition: toolDef, mounted: false });
       }
-      serverCaches.set(serverId, cache);
+      serverToolMaps.set(serverId, toolMap);
       serverUsedNames.set(serverId, usedNames);
       serverAllowlists.set(serverId, allowedToolSet);
 
@@ -534,11 +554,11 @@ export const mcpPlugin: DronePlugin = {
       serverId: string,
       connection: McpClientConnection
     ): Promise<void> {
-      const cache = serverCaches.get(serverId);
-      if (!cache) return;
+      const toolMap = serverToolMaps.get(serverId);
+      if (!toolMap) return;
       const usedNames = serverUsedNames.get(serverId) ?? new Set<string>();
 
-      const oldToolNames = new Set(cache.listAvailable().map(t => t.name));
+      const oldToolNames = new Set(toolMap.keys());
 
       const tools = await connection.listTools();
       const newToolNames = new Set(tools.map(t => t.name));
@@ -546,11 +566,14 @@ export const mcpPlugin: DronePlugin = {
       // Remove tools that no longer exist on the server
       for (const oldName of oldToolNames) {
         if (!newToolNames.has(oldName)) {
-          const shortName = cache.getToolDefName(oldName);
-          cache.unmountTool(oldName, registration);
-          cache.removeTool(oldName);
-          if (shortName) {
-            usedNames.delete(shortName);
+          const entry = toolMap.get(oldName);
+          if (entry?.mounted) {
+            entry.mounted = false;
+            registration.unregisterTool(`mcp__${entry.definition.name}`);
+          }
+          toolMap.delete(oldName);
+          if (entry) {
+            usedNames.delete(entry.definition.name);
           }
         }
       }
@@ -573,12 +596,14 @@ export const mcpPlugin: DronePlugin = {
               );
             },
           };
-          cache.addTool(tool.name, toolDef);
+          toolMap.set(tool.name, { definition: toolDef, mounted: false });
         }
       }
 
       connection.state.discoveredToolCount = tools.length;
-      connection.state.mountedToolCount = cache.exportMounted().length;
+      connection.state.mountedToolCount = Array.from(toolMap.values()).filter(
+        e => e.mounted
+      ).length;
       setServerState(connection.state);
 
       registration.logger.info(
@@ -604,6 +629,8 @@ export const mcpPlugin: DronePlugin = {
           2
         ),
     });
+    // Mount server_status immediately so it's visible to the LLM
+    registration.mountTool('mcp__server_status');
 
     registration.hooks.onPluginsLoaded(async () => {
       if (!mcpConfig.enabled) {
@@ -674,10 +701,13 @@ export const mcpPlugin: DronePlugin = {
         const onReconnected = async (): Promise<void> => {
           if (!connection) return;
           // Clear the existing cache and rebuild from scratch
-          const oldCache = serverCaches.get(serverId);
-          if (oldCache) {
-            for (const tool of oldCache.exportMounted()) {
-              oldCache.unmountTool(tool.name, registration);
+          const oldMap = serverToolMaps.get(serverId);
+          if (oldMap) {
+            for (const [, entry] of oldMap) {
+              if (entry.mounted) {
+                entry.mounted = false;
+                registration.unregisterTool(`mcp__${entry.definition.name}`);
+              }
             }
           }
           await listAndMountTools(

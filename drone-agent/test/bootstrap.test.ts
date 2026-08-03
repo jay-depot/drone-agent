@@ -123,6 +123,10 @@ describe('bootstrap plugin', () => {
         logger: silentLogger(),
       });
       await engine.initialize();
+      // Mount the workflow tool to verify it exists
+      await engine.executeTool('runtime__mount_tool', {
+        tool: 'bootstrap__analyze',
+      });
       // Workflows are registered but can only be run with elicitation,
       // so we verify they exist by trying to run them (they'll fail on missing elicitation)
       expect(engine.listTools()).toContainEqual(

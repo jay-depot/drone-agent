@@ -107,6 +107,7 @@ export type DroneTuiOptions = {
     | 'listPlugins'
     | 'getRegisteredPluginCount'
     | 'getRegisteredToolCount'
+    | 'getMountedToolCount'
     | 'getCapability'
     | 'runHooks'
     | 'executeTool'

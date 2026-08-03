@@ -5,9 +5,9 @@
 // by the context-budget-service, between config.systemPrompt and plugin
 // prompt fragments.
 //
-// The `list-mount` key gets special treatment: it renders an explainer
-// block that teaches the LLM the list/mount pattern and lists the active
-// plugins. Other keys render as `key: value` lines.
+// The `plugins` key lists all enabled plugin IDs so the LLM knows what
+// plugins are available to filter by in `runtime__list_tools`.
+// Other keys render as `key: value` lines.
 //
 // -----------------------------------------------------------------------
 
@@ -26,13 +26,13 @@ export type RuntimeFlagRegistry = {
   render(): string | null;
 };
 
-const LIST_MOUNT_EXPLAINER = `## List/Mount Pattern
+const TOOL_MANAGEMENT_EXPLAINER = `## Tool Management
 
-Some plugin tools use a list-mount pattern to keep context costs low.
-Call \`<plugin>__list_tools\` to browse available tools, then
-\`<plugin>__mount_tool\` to activate the ones you need. Mounted tools
-get their full schemas. Call \`<plugin>__unmount_tool\` when done to
-reduce clutter.`;
+All tools use a list-mount pattern to keep context costs low.
+Call \`runtime__list_tools\` to browse available tools (optionally
+filtered by plugin, e.g. \`{ "plugin": "file" }\`),
+\`runtime__mount_tool\` to activate one, and
+\`runtime__unmount_tool\` to deactivate it.`;
 
 export function createRuntimeFlagRegistry(): RuntimeFlagRegistry {
   const flags = new Map<string, string>();
@@ -72,19 +72,13 @@ export function createRuntimeFlagRegistry(): RuntimeFlagRegistry {
 
       const sections: string[] = ['# Runtime Flags'];
 
-      const listMountValue = flags.get('list-mount');
-      if (listMountValue) {
-        sections.push(LIST_MOUNT_EXPLAINER);
-        sections.push(`Active list-mount plugins: ${listMountValue}`);
-      }
+      // Always include the tool management explainer
+      sections.push(TOOL_MANAGEMENT_EXPLAINER);
 
-      const otherEntries = Array.from(flags.entries()).filter(
-        ([key]) => key !== 'list-mount'
-      );
-      if (otherEntries.length > 0) {
-        sections.push(
-          ...otherEntries.map(([key, value]) => `${key}: ${value}`)
-        );
+      // Render all flags as key: value lines
+      const entries = Array.from(flags.entries());
+      if (entries.length > 0) {
+        sections.push(...entries.map(([key, value]) => `${key}: ${value}`));
       }
 
       return sections.join('\n\n');

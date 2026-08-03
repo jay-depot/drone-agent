@@ -40,20 +40,19 @@ describe('context-budget-service runtime flags injection', () => {
     expect(msgs[0].content).not.toContain('Runtime Flags');
   });
 
-  it('includes flags block when registry has list-mount flag', async () => {
+  it('includes flags block when registry has plugins flag', async () => {
     const registry = createRuntimeFlagRegistry();
-    registry.append('list-mount', 'file');
-    registry.append('list-mount', 'lsp');
+    registry.set('plugins', 'exec, file, git, lsp');
     const svc = makeBudgetService(() => registry);
     const msgs = await svc.buildSystemMessages();
     expect(msgs.length).toBe(2);
     expect(msgs[0].content).not.toContain('Runtime Flags');
     expect(msgs[1].content).toContain('# Runtime Flags');
-    expect(msgs[1].content).toContain('## List/Mount Pattern');
-    expect(msgs[1].content).toContain('Active list-mount plugins: file, lsp');
+    expect(msgs[1].content).toContain('## Tool Management');
+    expect(msgs[1].content).toContain('plugins: exec, file, git, lsp');
   });
 
-  it('includes flags block for non-list-mount flags', async () => {
+  it('includes flags block for arbitrary flags', async () => {
     const registry = createRuntimeFlagRegistry();
     registry.set('debug', 'llm');
     const svc = makeBudgetService(() => registry);

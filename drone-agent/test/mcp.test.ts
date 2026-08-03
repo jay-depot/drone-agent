@@ -53,6 +53,27 @@ type Running = {
   engine: ReturnType<typeof createDronePluginEngine>;
 };
 
+/**
+ * Mount all MCP meta-tools for a given server so they appear in listTools().
+ * Under the new runtime-level list-mount system, all tools start unmounted.
+ */
+async function mountMcpMetaTools(
+  engine: ReturnType<typeof createDronePluginEngine>,
+  serverId: string
+): Promise<void> {
+  const metaTools = [
+    `mcp__${serverId}__list_tools`,
+    `mcp__${serverId}__mount_tool`,
+    `mcp__${serverId}__unmount_tool`,
+    `mcp__${serverId}__list`,
+    `mcp__${serverId}__get`,
+    'mcp__server_status',
+  ];
+  for (const tool of metaTools) {
+    await engine.executeTool('runtime__mount_tool', { tool });
+  }
+}
+
 const running: Running = { engine: undefined as never };
 
 beforeEach(() => {
@@ -133,6 +154,7 @@ describe('mcp plugin integration (stdio child)', () => {
     const engine = await bootWithServers({
       demo: server.serverConfig,
     });
+    await mountMcpMetaTools(engine, 'demo');
 
     const names = toolNames(engine);
     // Meta-tools are mounted eagerly.
@@ -160,6 +182,7 @@ describe('mcp plugin integration (stdio child)', () => {
     const engine = await bootWithServers({
       demo: server.serverConfig,
     });
+    await mountMcpMetaTools(engine, 'demo');
 
     const result = JSON.parse(
       await engine.executeTool('mcp__demo__list_tools', {})
@@ -183,6 +206,7 @@ describe('mcp plugin integration (stdio child)', () => {
     const engine = await bootWithServers({
       demo: server.serverConfig,
     });
+    await mountMcpMetaTools(engine, 'demo');
 
     // Tool not mounted yet.
     expect(toolNames(engine)).not.toContain('mcp__demo__echo');
@@ -234,6 +258,7 @@ describe('mcp plugin integration (stdio child)', () => {
     const engine = await bootWithServers({
       demo: server.serverConfig,
     });
+    await mountMcpMetaTools(engine, 'demo');
 
     await engine.executeTool('mcp__demo__mount_tool', { tool: 'echo' });
     expect(toolNames(engine)).toContain('mcp__demo__echo');
@@ -257,6 +282,7 @@ describe('mcp plugin integration (stdio child)', () => {
       await engine.executeTool('mcp__demo__unmount_tool', { tool: 'echo' })
     );
     expect(result.success).toBe(false);
+    await mountMcpMetaTools(engine, 'demo');
     expect(result.error).toContain('not mounted');
   });
 
@@ -265,6 +291,7 @@ describe('mcp plugin integration (stdio child)', () => {
     const engine = await bootWithServers({
       demo: server.serverConfig,
     });
+    await mountMcpMetaTools(engine, 'demo');
 
     const listed = JSON.parse(
       await engine.executeTool('mcp__demo__list', {
@@ -315,6 +342,7 @@ describe('mcp plugin integration (stdio child)', () => {
     const demo = await statusOf(engine, 'demo');
     expect(demo.filteredToolCount).toBe(1);
     expect(demo.discoveredToolCount).toBe(2);
+    await mountMcpMetaTools(engine, 'demo');
   });
 
   it('sanitizes tool names with non-[a-zA-Z0-9_-] characters when mounting', async () => {
@@ -326,6 +354,8 @@ describe('mcp plugin integration (stdio child)', () => {
     });
 
     // Not mounted eagerly.
+    await mountMcpMetaTools(engine, 'demo');
+    await mountMcpMetaTools(engine, 'other');
     expect(toolNames(engine)).not.toContain('mcp__demo__weird_name_');
 
     // Mount it — the mounted name uses the sanitized segment.
