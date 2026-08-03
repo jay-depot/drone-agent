@@ -526,8 +526,12 @@ export async function ensureServerInstalled(
   const resolvedNode = options.nodePath ?? process.execPath;
   // Native binaries (github-release, go) are invoked directly; npm packages
   // need `node` to run.
-  const isNative = spec.install.type === 'github-release' || spec.install.type === 'go';
-  const entryPath = path.join(cacheDir, spec.install.entryPoint ?? spec.command);
+  const isNative =
+    spec.install.type === 'github-release' || spec.install.type === 'go';
+  const entryPath = path.join(
+    cacheDir,
+    spec.install.entryPoint ?? spec.command
+  );
 
   // 1. PATH probe — short-circuit before any disk activity.
   if (await commandExistsOnPath(spec.command)) {
@@ -583,7 +587,8 @@ export async function ensureServerInstalled(
     if (downloadUrl.endsWith('.zip')) {
       await extractZip(tarball, cacheDir);
     } else if (
-      downloadUrl.endsWith('.gz') && !downloadUrl.endsWith('.tar.gz') &&
+      downloadUrl.endsWith('.gz') &&
+      !downloadUrl.endsWith('.tar.gz') &&
       spec.install.type === 'github-release'
     ) {
       const entryPoint = spec.install.entryPoint ?? spec.command;
@@ -597,9 +602,19 @@ export async function ensureServerInstalled(
     // install time so that `require('vscode-languageserver/node')` works.
     if (spec.install.type === 'npm') {
       try {
-        await execFileAsync('npm', ['install', '--production', '--no-audit', '--no-fund', '--no-package-lock'], {
-          cwd: cacheDir,
-        });
+        await execFileAsync(
+          'npm',
+          [
+            'install',
+            '--production',
+            '--no-audit',
+            '--no-fund',
+            '--no-package-lock',
+          ],
+          {
+            cwd: cacheDir,
+          }
+        );
       } catch (installError) {
         throw new Error(
           `Failed to install npm dependencies for ${spec.install.package}@${spec.install.version}.\n` +

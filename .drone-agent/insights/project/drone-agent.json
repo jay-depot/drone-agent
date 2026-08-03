@@ -146,5 +146,9 @@
   {
     "timestamp": "2026-08-03T17:04:11.579Z",
     "insight": "When fixing pre-existing type errors in test mocks, don't waste time proving they're pre-existing — just fix them. The \"who broke it\" question is irrelevant; the only thing that matters is that the code compiles and tests pass. This applies doubly to test infrastructure that lags behind production type changes."
+  },
+  {
+    "timestamp": "2026-08-03T17:47:37.993Z",
+    "insight": "The test fixture (test/fixtures/subagent.ts) is a near-duplicate of the production subagent spawn logic (src/plugins/subagent/plugin.ts). Both had to be updated in lockstep for the timeout changes. This is a maintenance burden — consider extracting a shared subagent-spawn utility to eliminate this duplication in a future refactoring pass."
   }
 ]

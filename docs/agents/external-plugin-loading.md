@@ -8,6 +8,7 @@ External plugins can be loaded from well-known directories at both user scope (`
 - **Project-scope plugins** require user trust on first encounter. Trust decisions are persisted to `~/.drone-agent/trusted-plugins.json` (user-scoped, so a project cannot push its own trust).
 
 The trust prompt offers three options:
+
 - **Yes, trust it** — loads the plugin now and on future starts
 - **No, skip this time** — skips the plugin for this session only
 - **No, and don't ask again** — marks the plugin as untrusted, skipped forever

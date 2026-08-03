@@ -21,6 +21,6 @@ Add new debug subsystems as you add features that need tracing. When a new featu
 
 ## Current Subsystems
 
-| Subsystem | What it logs |
-| --------- | ------------ |
+| Subsystem | What it logs                                                                                   |
+| --------- | ---------------------------------------------------------------------------------------------- |
 | `llm`     | Full request and response bodies for all LLM providers (OpenAI, OpenRouter, Anthropic, Ollama) |

@@ -88,9 +88,7 @@ async function initializeServer(
         },
       },
     },
-    workspaceFolders: [
-      { uri: `file://${workspaceRoot}`, name: 'test' },
-    ],
+    workspaceFolders: [{ uri: `file://${workspaceRoot}`, name: 'test' }],
   });
 
   client.notify('initialized', {});
