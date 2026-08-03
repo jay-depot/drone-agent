@@ -52,6 +52,12 @@ function renderLastAction(
       );
     case 'done':
       return <Markdown color={scheme.info}>{action.content}</Markdown>;
+    case 'error':
+      return (
+        <Text color={scheme.error} wrap="wrap">
+          ✗ {action.content}
+        </Text>
+      );
     default:
       return <Text wrap="wrap">{action.content}</Text>;
   }

@@ -11,9 +11,16 @@ type RuntimeInfo = {
 };
 
 /**
- * Default timeout for subagent dispatch (5 minutes).
+ * Default activity timeout for subagent dispatch (5 minutes).
+ * Resets on any NDJSON progress event from the subagent.
  */
 const DEFAULT_TIMEOUT_MS = 300_000;
+
+/**
+ * Hard cap for subagent execution (1 hour). Never resets.
+ * Prevents runaway subagents even if they keep making progress.
+ */
+const HARD_CAP_MS = 3_600_000;
 
 /**
  * Generate a unique subagent ID.
@@ -80,13 +87,17 @@ export const subagentPlugin: DronePlugin = {
         {
           resolve: (jsonResult: string) => void;
           reject: (error: Error) => void;
-          timeoutId: ReturnType<typeof setTimeout> | null;
+          activityTimer: ReturnType<typeof setTimeout> | null;
+          hardCapTimer: ReturnType<typeof setTimeout> | null;
         }
       >();
 
       ctx.registerTool({
         name: 'dispatch',
-        description: 'Launch a subagent to handle a task in parallel',
+        description:
+          'Launch a subagent to handle a task in parallel. ' +
+          'The subagent has an activity-based timeout (resets on any progress) ' +
+          'with a hard cap of 1 hour to prevent runaway execution.',
         renderComponent: state => SubagentDispatchBlock({ state }),
         inputSchema: {
           type: 'object',
@@ -101,7 +112,8 @@ export const subagentPlugin: DronePlugin = {
             },
             timeout: {
               type: 'number',
-              description: 'Timeout in ms (default: 300000)',
+              description:
+                'Activity timeout in ms (default: 300000). Resets on any progress. Hard cap of 1 hour always applies.',
             },
           },
           required: ['task'],
@@ -143,29 +155,46 @@ export const subagentPlugin: DronePlugin = {
               },
             });
 
-            // Set up timeout
-            const timeoutId = setTimeout(() => {
+            // Activity timeout — resets on any NDJSON event from subagent
+            let activityTimer!: ReturnType<typeof setTimeout>;
+            const startActivityTimer = () => {
+              activityTimer = setTimeout(() => {
+                timedOut = true;
+                child.kill('SIGTERM');
+                // Give it a moment to terminate gracefully, then force kill
+                setTimeout(() => {
+                  if (!child.killed) {
+                    child.kill('SIGKILL');
+                  }
+                }, 1000);
+              }, timeoutMs);
+            };
+            startActivityTimer();
+
+            // Hard cap — never resets, prevents runaway subagents
+            const hardCapTimer = setTimeout(() => {
               timedOut = true;
               child.kill('SIGTERM');
-              // Give it a moment to terminate gracefully, then force kill
               setTimeout(() => {
                 if (!child.killed) {
                   child.kill('SIGKILL');
                 }
               }, 1000);
-            }, timeoutMs);
+            }, HARD_CAP_MS);
 
             // Track this pending subagent
             pendingSubagents.set(subagentId, {
               resolve: resolvePromise,
               reject: rejectPromise,
-              timeoutId,
+              activityTimer,
+              hardCapTimer,
             });
 
             // Write kickoff to stdin
             const stdin = child.stdin;
             if (!stdin) {
-              clearTimeout(timeoutId);
+              clearTimeout(activityTimer);
+              clearTimeout(hardCapTimer);
               pendingSubagents.delete(subagentId);
               rejectPromise(new Error('Failed to open stdin for subagent'));
               return;
@@ -190,6 +219,10 @@ export const subagentPlugin: DronePlugin = {
               for (const line of lines) {
                 try {
                   const event = JSON.parse(line);
+                  // Any valid NDJSON event resets the activity timer
+                  clearTimeout(activityTimer);
+                  startActivityTimer();
+
                   if (
                     event.kind === 'reasoning' &&
                     typeof event.content === 'string'
@@ -217,6 +250,11 @@ export const subagentPlugin: DronePlugin = {
                     typeof event.result === 'string'
                   ) {
                     onProgress?.(`done:${event.result}`);
+                  } else if (
+                    event.kind === 'error' &&
+                    typeof event.message === 'string'
+                  ) {
+                    onProgress?.(`error:${event.message}`);
                   }
                 } catch {
                   // Skip invalid JSON
@@ -231,7 +269,8 @@ export const subagentPlugin: DronePlugin = {
 
             // Handle process exit
             child.on('close', code => {
-              clearTimeout(timeoutId);
+              clearTimeout(activityTimer);
+              clearTimeout(hardCapTimer);
               pendingSubagents.delete(subagentId);
 
               exitCode = code ?? undefined;
@@ -250,6 +289,20 @@ export const subagentPlugin: DronePlugin = {
                   }
                 } catch {
                   // Skip invalid JSON
+                }
+              }
+
+              // Fallback: if no return event found, scan for last error event
+              if (!result) {
+                for (const line of collectedOutput) {
+                  try {
+                    const event = JSON.parse(line);
+                    if (event.kind === 'error') {
+                      error = event.message as string;
+                    }
+                  } catch {
+                    // Skip invalid JSON
+                  }
                 }
               }
 
@@ -283,7 +336,8 @@ export const subagentPlugin: DronePlugin = {
             });
 
             child.on('error', (err: Error) => {
-              clearTimeout(timeoutId);
+              clearTimeout(activityTimer);
+              clearTimeout(hardCapTimer);
               pendingSubagents.delete(subagentId);
               rejectPromise(err);
             });
