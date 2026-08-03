@@ -138,5 +138,9 @@
   {
     "timestamp": "2026-08-03T00:08:26.019Z",
     "insight": "LSP installer: npm tarballs only contain the package's own files, not node_modules. The installer must run `npm install --production` after extraction for npm-type installs. Also, native binaries (github-release, go) must be invoked directly, not wrapped with `node`. The installer now dispatches correctly based on install type."
+  },
+  {
+    "timestamp": "2026-08-03T00:23:35.324Z",
+    "insight": "LSP transport: stderr from LSP servers is diagnostic logging, not a fatal error. Removed the stderr listener from createChildTransport's onError callback. Also, native binaries like lua-language-server need to be spawned from their own directory (cwd = cacheDir) to find support files. Added strip field to DroneLspInstallSpec for controlling tarball extraction depth — lua-language-server's tarball has no wrapping directory so it needs strip:0."
   }
 ]
