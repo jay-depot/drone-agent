@@ -154,5 +154,13 @@
   {
     "timestamp": "2026-08-03T19:12:48.574Z",
     "insight": "When promoting the list-mount pattern to the runtime level, the MCP plugin was the most complex to refactor because it used ToolMountingCache internally for per-server tool tracking. The approach of replacing ToolMountingCache with a simple Map<string, { definition, mounted }> worked well, but required careful handling of the mount/unmount lifecycle to ensure tools were properly registered in both the MCP plugin's internal map and the engine's ToolRegistry."
+  },
+  {
+    "timestamp": "2026-08-03T20:56:08.345Z",
+    "insight": "When adding new properties to DronePluginRegistration or DronePluginEngine types, all test mock objects across the test suite need to be updated. The affected files include: anthropic.test.ts, compaction.test.ts, llm-provider-switching.test.ts, log-plugin.test.ts, memory-index.test.ts, openai.test.ts, openrouter.test.ts, search.test.ts, terminal.test.ts, prompt-file.test.ts (DronePluginRegistration mocks), conversation-service-events.test.ts, conversation-service.test.ts, persona-tool-call-limit.test.ts (DronePluginEngine mocks), helpers.ts (createFakeEngine), and TUI test files (app-commit-flow.test.tsx, systemprompt.test.tsx, tui.test.tsx, tui-persona-color.test.tsx) which use a Pick type that may not include all engine properties."
+  },
+  {
+    "timestamp": "2026-08-03T21:02:00.301Z",
+    "insight": "Consolidated three nearly identical makeEngine functions (~45 lines each) from conversation-service-events.test.ts, conversation-service.test.ts, and persona-tool-call-limit.test.ts into a single createMockEngine factory in test/helpers.ts. The persona variant was handled via a getCapability override option. This eliminates ~180 lines of duplicated code and ensures future DronePluginEngine changes only need updating in one place. The remaining duplicated registration patterns (LLM provider tests, capture-tools tests) are more context-specific and not worth consolidating."
   }
 ]

@@ -1,79 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import {
   createDefaultAgentConfig,
-  createRuntimeFlagRegistry,
   type DroneChatResponse,
   type DroneContextWindowInfo,
   type DroneLlmCapability,
   type DroneLlmProvider,
-  type DroneToolDescriptor,
 } from 'drone-core';
-import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { createConversationService } from '../src/runtime/conversation-service.js';
 import { createContextBudgetService } from '../src/runtime/context-budget-service.js';
 import type { ContextBudgetService } from '../src/runtime/context-budget-service.js';
 import { createSessionManager } from '../src/runtime/session-manager.js';
-import { silentLogger } from './helpers.js';
+import { createMockEngine, silentLogger } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // Test fixtures (mirrors conversation-service.test.ts)
 // ---------------------------------------------------------------------------
-
-type EngineOptions = {
-  tools: DroneToolDescriptor[];
-  executeToolImpl: (
-    name: string,
-    input: Record<string, unknown>
-  ) => Promise<string>;
-  promptFragments?: string[];
-};
-
-function makeEngine(options: EngineOptions): DronePluginEngine & {
-  __executeMock: ReturnType<typeof vi.fn>;
-} {
-  const executeMock = vi.fn(options.executeToolImpl);
-  const toolList = options.tools;
-
-  return {
-    initialize: async () => [],
-    runHooks: async () => {},
-    runSessionSafetyTrimWillRunHooks: async () => {},
-    runSessionSafetyTrimAppliedHooks: async () => {},
-    runConversationEventHooks: async () => {},
-    renderPromptFragments: async () => options.promptFragments ?? [],
-    getTool: () => undefined,
-    executeTool: executeMock as unknown as DronePluginEngine['executeTool'],
-    listTools: () => toolList,
-    getCapability: <T>(id: string) =>
-      id === 'llm' ? ({} as unknown as T) : undefined,
-    listPlugins: () => [],
-    getRegisteredPluginCount: () => 0,
-    getRegisteredToolCount: () => toolList.length,
-    getMountedToolCount: () => 0,
-    listAllTools: () => toolList,
-    unregisterPluginTools: () => {},
-    unregisterTool: () => {},
-    getHelpSnippets: () => [],
-    getConfig: () => {
-      throw new Error('getConfig not used in conversation-service tests');
-    },
-    getRuntimeFlags: () => createRuntimeFlagRegistry(),
-    setElicitation: () => {},
-    getElicitation: () => undefined,
-    runWorkflow: async () => {
-      throw new Error('runWorkflow not used in conversation-service tests');
-    },
-    dispatchSlashCommand: async () => false,
-    getSlashCommands: () => [],
-    onConversationEvent: () => () => {},
-    registerBuiltinSlashCommand: () => {},
-    getBuiltinSlashCommands: () => [],
-    enablePlugin: async (_pluginId: string) => false,
-    buildSystemMessages: async () => [],
-    addExternalPlugin: async (_plugin: any) => false,
-    __executeMock: executeMock,
-  };
-}
 
 function makeProvider(
   chatResponses: DroneChatResponse[]
@@ -130,7 +72,7 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
 
 describe('conversation service — new batch events', () => {
   it('emits toolCallBatch and toolResultBatch events for successful tool calls', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -174,7 +116,7 @@ describe('conversation service — new batch events', () => {
   it('executes multiple tool calls in parallel', async () => {
     const executionOrder: string[] = [];
 
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'tool_a',
@@ -232,7 +174,7 @@ describe('conversation service — new batch events', () => {
   });
 
   it('emits reasoningComplete event when reasoning is present', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [],
       executeToolImpl: async () => '',
     });
@@ -265,7 +207,7 @@ describe('conversation service — new batch events', () => {
   });
 
   it('emits assistantMessageComplete when assistant message is returned', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [],
       executeToolImpl: async () => '',
     });
