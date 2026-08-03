@@ -1,7 +1,16 @@
 import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import fg from 'fast-glob';
-import type { DronePlugin } from 'drone-core';
+import { ListToolsBlock } from '../tui/components/ListToolsBlock.js';
+import { MountToolBlock } from '../tui/components/MountToolBlock.js';
+import { UnmountToolBlock } from '../tui/components/UnmountToolBlock.js';
+import type {
+  DronePersonaCapability,
+  RuntimeFlagRegistry,
+  DronePlugin,
+  DroneToolDefinition,
+} from 'drone-core';
+import { ToolMountingCache } from 'drone-core';
 import { FileReadBlock } from '../tui/components/FileReadBlock.js';
 import { FileWriteBlock } from '../tui/components/FileWriteBlock.js';
 import { FileApplyDiffBlock } from '../tui/components/FileApplyDiffBlock.js';
@@ -109,6 +118,39 @@ function formatPatchError(e: PatchError): string {
   return `${tag} ${e.message}\n  ${e.detail}\n\n${siteBlocks.join('\n\n')}`;
 }
 
+const FILE_TOOL_DESCRIPTIONS: Array<{ name: string; description: string }> = [
+  {
+    name: 'read',
+    description:
+      'Read a file (absolute path). Optional 1-based startLine/endLine.',
+  },
+  {
+    name: 'list',
+    description:
+      'List a directory (absolute path). Returns names, types, sizes.',
+  },
+  {
+    name: 'apply_diff',
+    description:
+      'Apply a unified diff patch to a file. **Preferred for editing existing files** — preserves context and minimizes changes.',
+  },
+  {
+    name: 'write',
+    description:
+      'Write content to a file (absolute path). Creates parents; overwrites. Use for new files or complete rewrites.',
+  },
+  {
+    name: 'glob',
+    description:
+      'Find files matching a glob (e.g. **/*.ts). Uses **, *, ? patterns.',
+  },
+  {
+    name: 'read_image',
+    description:
+      'Read an image file and return its base64-encoded data. Supported formats: JPEG, PNG, WebP, GIF.',
+  },
+];
+
 export const filePlugin: DronePlugin = {
   metadata: {
     id: 'file',
@@ -116,12 +158,27 @@ export const filePlugin: DronePlugin = {
     version: '0.4.0',
     description: 'Read, write, list, and patch files in the workspace.',
     defaultEnabled: false,
+    dependencies: [{ id: 'persona', optional: true }],
   },
   register: async registration => {
+    const personaCap = registration.request<DronePersonaCapability>('persona');
+    const runtime = registration.request<{ flags?: RuntimeFlagRegistry }>(
+      'runtime'
+    );
+    runtime?.flags?.append('list-mount', 'file');
+
+    registration.registerPromptFragment({
+      key: 'editing-convention',
+      phase: 'header',
+      render: async () =>
+        `# File Editing\n\nFor editing existing files, prefer \`apply_diff\` over \`write\`. Mount it with \`file__mount_tool\` if not already available. Use \`write\` only for creating new files or complete rewrites.`,
+    });
+    const fileCache = new ToolMountingCache('file');
+
     // -----------------------------------------------------------------------
     // file__read
     // -----------------------------------------------------------------------
-    registration.registerTool({
+    fileCache.addTool('read', {
       name: 'read',
       description:
         'Read a file (absolute path). Optional 1-based startLine/endLine.',
@@ -186,7 +243,7 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     // file__list
     // -----------------------------------------------------------------------
-    registration.registerTool({
+    fileCache.addTool('list', {
       name: 'list',
       description:
         'List a directory (absolute path). Returns names, types, sizes.',
@@ -238,7 +295,7 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     // file__write
     // -----------------------------------------------------------------------
-    registration.registerTool({
+    fileCache.addTool('write', {
       name: 'write',
       description:
         'Write content to a file (absolute path). Creates parents; overwrites.',
@@ -272,7 +329,7 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     // file__apply_diff
     // -----------------------------------------------------------------------
-    registration.registerTool({
+    fileCache.addTool('apply_diff', {
       name: 'apply_diff',
       description:
         'Apply a unified diff patch to a file. ' +
@@ -436,7 +493,7 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     // file__glob
     // -----------------------------------------------------------------------
-    registration.registerTool({
+    fileCache.addTool('glob', {
       name: 'glob',
       description:
         'Find files matching a glob (e.g. **/*.ts). Uses **, *, ? patterns.',
@@ -486,7 +543,7 @@ export const filePlugin: DronePlugin = {
     // -----------------------------------------------------------------------
     // file__read_image
     // -----------------------------------------------------------------------
-    registration.registerTool({
+    fileCache.addTool('read_image', {
       name: 'read_image',
       description:
         'Read an image file and return its base64-encoded data. ' +
@@ -546,6 +603,106 @@ export const filePlugin: DronePlugin = {
           null,
           2
         );
+      },
+    });
+
+    // ── Meta-tools ──────────────────────────────────────────────────────
+
+    registration.registerTool({
+      name: 'list_tools',
+      description:
+        'List all available file tools. Tools include: read, list, apply_diff (preferred for editing existing files), write, glob, read_image. Mount the ones you need with file__mount_tool.',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+      },
+      renderComponent: state => ListToolsBlock({ state }),
+      execute: async () => {
+        let tools = FILE_TOOL_DESCRIPTIONS;
+        if (personaCap) {
+          const descriptors = tools.map(t => ({
+            name: t.name,
+            description: t.description,
+            inputSchema: undefined,
+            defaultHidden: false,
+          }));
+          const filtered = personaCap.getFilteredTools(descriptors);
+          const filteredNames = new Set(filtered.map(t => t.name));
+          tools = tools.filter(t => filteredNames.has(t.name));
+        }
+        return JSON.stringify({ toolCount: tools.length, tools }, null, 2);
+      },
+    });
+
+    registration.registerTool({
+      name: 'mount_tool',
+      description:
+        'Mount a specific file tool so it becomes available as a native tool. Use file__list_tools to see available tools. Once mounted, the tool will appear in your tool list with its full schema.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          tool: {
+            type: 'string',
+            description:
+              'The name of the tool to mount (as shown by file__list_tools).',
+          },
+        },
+        required: ['tool'],
+        additionalProperties: false,
+      },
+      renderComponent: state => MountToolBlock({ state }),
+      execute: async input => {
+        if (typeof input.tool !== 'string' || input.tool.trim().length === 0) {
+          throw new Error('file__mount_tool requires a non-empty tool name.');
+        }
+        const toolName = input.tool.trim();
+        const result = fileCache.mountTool(toolName, registration);
+        if (!result) {
+          return JSON.stringify(
+            {
+              success: false,
+              error: `Unknown or already mounted tool: ${toolName}. Use file__list_tools to see available tools.`,
+            },
+            null,
+            2
+          );
+        }
+        return JSON.stringify(
+          {
+            success: true,
+            tool: toolName,
+            description: result.description,
+          },
+          null,
+          2
+        );
+      },
+    });
+
+    registration.registerTool({
+      name: 'unmount_tool',
+      description:
+        'Unmount a previously mounted file tool. This removes the tool from your active tool list to reduce clutter.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          tool: {
+            type: 'string',
+            description:
+              'The name of the tool to unmount (as shown by file__list_tools).',
+          },
+        },
+        required: ['tool'],
+        additionalProperties: false,
+      },
+      renderComponent: state => UnmountToolBlock({ state }),
+      execute: async input => {
+        if (typeof input.tool !== 'string' || input.tool.trim().length === 0) {
+          throw new Error('file__unmount_tool requires a non-empty tool name.');
+        }
+        const toolName = input.tool.trim();
+        fileCache.unmountTool(toolName, registration);
+        return JSON.stringify({ success: true, tool: toolName }, null, 2);
       },
     });
   },

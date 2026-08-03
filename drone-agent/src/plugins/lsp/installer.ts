@@ -1,4 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { createGunzip } from 'node:zlib';
+import { execFile } from 'node:child_process';
+import type {
+  DroneLspInstallSpec,
+  DroneLspPlatformKey,
+  DroneLogger,
+} from 'drone-core';
 import {
   access,
   chmod,
@@ -14,8 +21,10 @@ import path from 'node:path';
 import process from 'node:process';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { promisify } from 'node:util';
 import { extract as extractTar } from 'tar';
-import type { DroneLogger } from 'drone-core';
+
+const execFileAsync = promisify(execFile);
 
 const CACHE_DIR_ENV = 'DRONE_AGENT_LSP_CACHE';
 const CACHE_SUBDIR = 'lsp';
@@ -37,13 +46,7 @@ export type InstallerSpec = {
   id: string;
   command: string;
   args: string[];
-  install: {
-    npmPackage: string;
-    version: string;
-    tarballUrl: string;
-    integrity: string;
-    nodeEntry: string;
-  };
+  install: DroneLspInstallSpec;
 };
 
 export type InstallerOptions = {
@@ -103,6 +106,78 @@ export function resolveCacheDir(
   }
 
   return path.join(homedir, '.cache', 'drone-agent', CACHE_SUBDIR);
+}
+
+/**
+ * Extract a single gzip-compressed file (not a tar archive). Used for
+ * GitHub release assets like rust-analyzer which are distributed as
+ * `.gz` files containing a single binary.
+ *
+ * The decompressed file is written to `destination/<entryPoint>`.
+ */
+async function extractGzipSingle(
+  compressed: Buffer,
+  destination: string,
+  entryPoint: string
+): Promise<void> {
+  await mkdir(destination, { recursive: true });
+  const decompressed = await new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    createGunzip()
+      .on('error', reject)
+      .on('data', (chunk: Buffer) => chunks.push(chunk))
+      .on('end', () => resolve(Buffer.concat(chunks)))
+      .end(compressed);
+  });
+  if (decompressed.length === 0) {
+    throw new Error('Decompressed gzip file is empty');
+  }
+  const targetPath = path.join(destination, entryPoint);
+  await mkdir(path.dirname(targetPath), { recursive: true });
+  await writeFile(targetPath, decompressed);
+  await chmod(targetPath, 0o755);
+}
+
+/**
+ * Resolve the download URL for a tarball based on the install type.
+ * For `github-release`, the URL is pre-resolved in the spec (includes
+ * platform/arch). For other types, we construct the URL from the
+ * package name and version.
+ */
+export function resolveTarballUrl(spec: DroneLspInstallSpec): string {
+  switch (spec.type) {
+    case 'npm':
+    case 'github-release':
+      return spec.tarballUrl;
+    case 'cargo':
+      return `https://crates.io/api/v1/crates/${spec.package}/${spec.version}/download`;
+    case 'pip':
+      // PyPI source tarball URL pattern:
+      // https://pypi.org/packages/source/{first-char}/{package}/{package}-{version}.tar.gz
+      return `https://pypi.org/packages/source/${spec.package[0]}/${spec.package}/${spec.package}-${spec.version}.tar.gz`;
+    case 'go':
+      return `https://proxy.golang.org/${spec.package}/@v/${spec.version}.zip`;
+    default:
+      return spec.tarballUrl;
+  }
+}
+
+/**
+ * Resolve the platform-specific tarball URL and integrity hash for the
+ * current platform. Falls back to the top-level spec fields when no
+ * platform override exists.
+ */
+export function resolvePlatformSpec(spec: DroneLspInstallSpec): {
+  tarballUrl: string;
+  integrity: string;
+} {
+  const platformKey =
+    `${process.platform}-${process.arch}` as DroneLspPlatformKey;
+  const platformOverride = spec.platforms?.[platformKey];
+  if (platformOverride) {
+    return platformOverride;
+  }
+  return { tarballUrl: spec.tarballUrl, integrity: spec.integrity };
 }
 
 /**
@@ -272,26 +347,143 @@ async function downloadTarball(
 
 async function extractTarball(
   tarball: Buffer,
-  destination: string
+  destination: string,
+  strip: number = 1
 ): Promise<void> {
   await mkdir(destination, { recursive: true });
-  // `tar.extract` accepts a stream: pipe the buffer in and let tar detect
-  // gzip via magic bytes. `strip: 1` removes the leading `package/`
-  // directory npm tarballs always wrap their contents in.
   await pipeline(
     Readable.from(tarball),
     extractTar({
       cwd: destination,
-      strip: 1,
+      strip,
     })
   );
 }
 
+/**
+ * Minimal ZIP extraction using Node.js built-in `zlib` and `Buffer`.
+ * Handles the standard ZIP format (deflate-compressed entries) as used
+ * by the Go module proxy. Strips the top-level directory from each
+ * entry path.
+ *
+ * The Go module proxy zip layout is:
+ *   <package>@<version>/<files...>
+ * We strip the first path component so files land directly in
+ * `destination`.
+ */
+async function extractZip(
+  zipBuffer: Buffer,
+  destination: string
+): Promise<void> {
+  await mkdir(destination, { recursive: true });
+
+  // Locate the End of Central Directory record.
+  const eocdSignature = Buffer.from([0x50, 0x4b, 0x05, 0x06]);
+  const eocdIndex = zipBuffer.lastIndexOf(eocdSignature);
+  if (eocdIndex === -1) {
+    throw new Error('Invalid ZIP: no EOCD signature found');
+  }
+
+  // Parse EOCD to get the central directory offset.
+  // EOCD structure (from eocdIndex):
+  //   signature: 4 bytes
+  //   diskNumber: 2 bytes
+  //   diskWithCD: 2 bytes
+  //   numEntriesOnDisk: 2 bytes
+  //   totalEntries: 2 bytes
+  //   cdSize: 4 bytes
+  //   cdOffset: 4 bytes (absolute from start of archive)
+  //   commentLength: 2 bytes
+  const cdOffset = zipBuffer.readUInt32LE(eocdIndex + 16);
+  const numEntries = zipBuffer.readUInt16LE(eocdIndex + 10);
+
+  // Walk the central directory entries.
+  let cdPos = cdOffset;
+  for (let i = 0; i < numEntries; i += 1) {
+    // Central directory file header signature: 0x02014b50
+    if (zipBuffer.readUInt32LE(cdPos) !== 0x02014b50) {
+      throw new Error(
+        `Invalid ZIP: bad central directory entry at offset ${cdPos}`
+      );
+    }
+
+    const compressionMethod = zipBuffer.readUInt16LE(cdPos + 10);
+    const crc32 = zipBuffer.readUInt32LE(cdPos + 16);
+    const compressedSize = zipBuffer.readUInt32LE(cdPos + 20);
+    const uncompressedSize = zipBuffer.readUInt32LE(cdPos + 24);
+    const fileNameLength = zipBuffer.readUInt16LE(cdPos + 28);
+    const extraFieldLength = zipBuffer.readUInt16LE(cdPos + 30);
+    const commentLength = zipBuffer.readUInt16LE(cdPos + 32);
+    const localHeaderOffset = zipBuffer.readUInt32LE(cdPos + 42);
+
+    const fileName = zipBuffer.toString(
+      'utf8',
+      cdPos + 46,
+      cdPos + 46 + fileNameLength
+    );
+
+    // Skip directories and __MACOSX artifacts.
+    if (fileName.endsWith('/') || fileName.includes('__MACOSX')) {
+      cdPos += 46 + fileNameLength + extraFieldLength + commentLength;
+      continue;
+    }
+
+    // Strip the top-level directory (Go module proxy layout).
+    const strippedName = fileName.replace(/^[^/]+\//, '');
+    if (!strippedName) {
+      cdPos += 46 + fileNameLength + extraFieldLength + commentLength;
+      continue;
+    }
+
+    // Read the local file header to find the actual data offset.
+    // Local file header signature: 0x04034b50
+    if (zipBuffer.readUInt32LE(localHeaderOffset) !== 0x04034b50) {
+      throw new Error(
+        `Invalid ZIP: bad local header at offset ${localHeaderOffset}`
+      );
+    }
+    const localFileNameLength = zipBuffer.readUInt16LE(localHeaderOffset + 26);
+    const localExtraFieldLength = zipBuffer.readUInt16LE(
+      localHeaderOffset + 28
+    );
+    const dataOffset =
+      localHeaderOffset + 30 + localFileNameLength + localExtraFieldLength;
+
+    const compressedData = zipBuffer.subarray(
+      dataOffset,
+      dataOffset + compressedSize
+    );
+
+    let decompressed: Buffer;
+    if (compressionMethod === 0) {
+      // Stored (no compression).
+      decompressed = compressedData;
+    } else if (compressionMethod === 8) {
+      // Deflate.
+      const { inflateRaw } = await import('node:zlib');
+      decompressed = await new Promise<Buffer>((resolve, reject) => {
+        inflateRaw(compressedData, (err, result) => {
+          if (err) reject(err);
+          else resolve(result);
+        });
+      });
+    } else {
+      throw new Error(
+        `Unsupported ZIP compression method: ${compressionMethod}`
+      );
+    }
+
+    const targetPath = path.join(destination, strippedName);
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await writeFile(targetPath, decompressed);
+  }
+}
+
 async function isCacheEntryValid(
   cacheDir: string,
-  nodeEntry: string
+  entryPoint: string
 ): Promise<boolean> {
-  const entry = path.join(cacheDir, nodeEntry);
+  const entry = path.join(cacheDir, entryPoint);
   try {
     await access(entry, fsConstants.R_OK);
     return true;
@@ -332,6 +524,10 @@ export async function ensureServerInstalled(
     cacheKey
   );
   const resolvedNode = options.nodePath ?? process.execPath;
+  // Native binaries (github-release, go) are invoked directly; npm packages
+  // need `node` to run.
+  const isNative = spec.install.type === 'github-release' || spec.install.type === 'go';
+  const entryPath = path.join(cacheDir, spec.install.entryPoint ?? spec.command);
 
   // 1. PATH probe — short-circuit before any disk activity.
   if (await commandExistsOnPath(spec.command)) {
@@ -339,13 +535,15 @@ export async function ensureServerInstalled(
   }
 
   // 2. Cache hit — verify the entrypoint exists and return.
-  if (await isCacheEntryValid(cacheDir, spec.install.nodeEntry)) {
+  if (
+    await isCacheEntryValid(cacheDir, spec.install.entryPoint ?? spec.command)
+  ) {
     logger?.info?.(
       `lsp server cached: ${spec.id}@${spec.install.version} (${cacheDir})`
     );
     return {
-      command: resolvedNode,
-      args: [path.join(cacheDir, spec.install.nodeEntry), ...spec.args],
+      command: isNative ? entryPath : resolvedNode,
+      args: isNative ? spec.args : [entryPath, ...spec.args],
       source: 'cache',
       cacheDir,
     };
@@ -353,13 +551,15 @@ export async function ensureServerInstalled(
 
   // 3. Cache miss — install under a lock to avoid duplicate downloads.
   logger?.info?.(
-    `lsp server not found on PATH; downloading ${spec.install.npmPackage}@${spec.install.version}…`
+    `lsp server not found on PATH; downloading ${spec.install.package}@${spec.install.version}…`
   );
   const fetchImpl = options.fetchImpl ?? fetch;
   await withCacheLock(path.join(cacheRoot, spec.id, '.lock'), async () => {
     // Re-check after acquiring the lock — another process may have
     // finished populating the cache while we waited.
-    if (await isCacheEntryValid(cacheDir, spec.install.nodeEntry)) {
+    if (
+      await isCacheEntryValid(cacheDir, spec.install.entryPoint ?? spec.command)
+    ) {
       return;
     }
     // Always start from a clean slate so a partial extraction can't
@@ -367,9 +567,63 @@ export async function ensureServerInstalled(
     await rm(cacheDir, { recursive: true, force: true });
     await mkdir(cacheDir, { recursive: true });
 
-    const tarball = await downloadTarball(spec.install.tarballUrl, fetchImpl);
-    await verifyIntegrity(tarball, spec.install.integrity);
-    await extractTarball(tarball, cacheDir);
+    const { tarballUrl: resolvedUrl, integrity: resolvedIntegrity } =
+      resolvePlatformSpec(spec.install);
+    const tarball = await downloadTarball(
+      resolveTarballUrl({ ...spec.install, tarballUrl: resolvedUrl }),
+      fetchImpl
+    );
+    await verifyIntegrity(tarball, resolvedIntegrity);
+
+    // Dispatch between tar.gz and zip extraction based on the URL.
+    const downloadUrl = resolveTarballUrl({
+      ...spec.install,
+      tarballUrl: resolvedUrl,
+    });
+    if (downloadUrl.endsWith('.zip')) {
+      await extractZip(tarball, cacheDir);
+    } else if (
+      downloadUrl.endsWith('.gz') && !downloadUrl.endsWith('.tar.gz') &&
+      spec.install.type === 'github-release'
+    ) {
+      const entryPoint = spec.install.entryPoint ?? spec.command;
+      await extractGzipSingle(tarball, cacheDir, entryPoint);
+    } else {
+      await extractTarball(tarball, cacheDir, spec.install.strip ?? 1);
+    }
+
+    // Install npm dependencies for `npm` type installs. npm tarballs only
+    // contain the package's own files — dependencies must be resolved at
+    // install time so that `require('vscode-languageserver/node')` works.
+    if (spec.install.type === 'npm') {
+      try {
+        await execFileAsync('npm', ['install', '--production', '--no-audit', '--no-fund', '--no-package-lock'], {
+          cwd: cacheDir,
+        });
+      } catch (installError) {
+        throw new Error(
+          `Failed to install npm dependencies for ${spec.install.package}@${spec.install.version}.\n` +
+            `  Error: ${(installError as Error).message}\n` +
+            `npm must be installed and on PATH to use auto-installed LSP servers.`
+        );
+      }
+    }
+
+    // Build step for `go` type installs.
+    if (spec.install.type === 'go') {
+      const entryPoint = spec.install.entryPoint ?? spec.command;
+      try {
+        await execFileAsync('go', ['build', '-o', entryPoint], {
+          cwd: cacheDir,
+        });
+      } catch (buildError) {
+        throw new Error(
+          `Failed to build ${spec.install.package} from source. Go must be installed and on PATH.\n` +
+            `  Error: ${(buildError as Error).message}\n` +
+            `If you don't have Go installed, install gopls manually or set it up via your system package manager.`
+        );
+      }
+    }
 
     // Persist a manifest so users can audit where a cached copy came
     // from.
@@ -378,12 +632,15 @@ export async function ensureServerInstalled(
       JSON.stringify(
         {
           serverId: spec.id,
-          npmPackage: spec.install.npmPackage,
+          packageName: spec.install.package,
           version: spec.install.version,
           installedAt: new Date().toISOString(),
           installId: randomUUID(),
-          tarballUrl: spec.install.tarballUrl,
-          integrity: spec.install.integrity,
+          tarballUrl: resolveTarballUrl({
+            ...spec.install,
+            tarballUrl: resolvedUrl,
+          }),
+          integrity: resolvedIntegrity,
           nodeVersion: process.versions.node,
         },
         null,
@@ -394,25 +651,34 @@ export async function ensureServerInstalled(
 
     // Defensive: make the cached entry readable. Node doesn't need the
     // executable bit since we invoke it directly via `node`, but setting
-    // 0o644 makes the cache directory self-debugging.
+    // 0o644 makes the cache directory self-debugging. Native binaries
+    // get 0o755 so they can be executed directly.
     try {
-      const entryAbs = path.join(cacheDir, spec.install.nodeEntry);
-      await chmod(entryAbs, 0o644);
+      const entryAbs = path.join(
+        cacheDir,
+        spec.install.entryPoint ?? spec.command
+      );
+      await chmod(entryAbs, isNative ? 0o755 : 0o644);
     } catch {
       // Non-fatal.
     }
   });
 
   // 4. Final verification — refuse to return a resolution we can't use.
-  if (!(await isCacheEntryValid(cacheDir, spec.install.nodeEntry))) {
+  if (
+    !(await isCacheEntryValid(
+      cacheDir,
+      spec.install.entryPoint ?? spec.command
+    ))
+  ) {
     throw new Error(
-      `LSP server entry not found after install: ${path.join(cacheDir, spec.install.nodeEntry)}`
+      `LSP server entry not found after install: ${path.join(cacheDir, spec.install.entryPoint ?? spec.command)}`
     );
   }
 
   return {
-    command: resolvedNode,
-    args: [path.join(cacheDir, spec.install.nodeEntry), ...spec.args],
+    command: isNative ? entryPath : resolvedNode,
+    args: isNative ? spec.args : [entryPath, ...spec.args],
     source: 'cache',
     cacheDir,
   };

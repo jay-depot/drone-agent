@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:integration": "RUN_INTEGRATION_TESTS=true vitest run -c vitest.integration.config.ts",
+    "test:integration": "RUN_INTEGRATION_TESTS=true RUN_LSP_SMOKE_TESTS=true vitest run -c vitest.integration.config.ts",
     "docker:integration:up": "docker compose -f docker/docker-compose.integration-test.yaml up -d",
     "docker:integration:down": "docker compose -f docker/docker-compose.integration-test.yaml down",
     "docker:integration:test": "pnpm docker:integration:up && pnpm test:integration && pnpm docker:integration:down",

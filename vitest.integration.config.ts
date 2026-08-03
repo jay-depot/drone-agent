@@ -29,6 +29,7 @@ export default defineConfig({
       'drone-agent/test/agent-beacon.test.ts',
       'drone-agent/test/subagent/dispatch.test.ts',
       'drone-agent/test/mcp.test.ts',
+      'drone-agent/test/lsp-server-smoke.test.ts',
     ],
     environment: 'node',
     setupFiles: ['drone-agent/test/setup-color.ts'],

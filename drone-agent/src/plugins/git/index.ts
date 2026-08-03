@@ -3,6 +3,7 @@ import { MountToolBlock } from '../../tui/components/MountToolBlock.js';
 import { UnmountToolBlock } from '../../tui/components/UnmountToolBlock.js';
 import type {
   DronePersonaCapability,
+  RuntimeFlagRegistry,
   DronePlugin,
   DroneToolDefinition,
 } from 'drone-core';
@@ -63,6 +64,10 @@ export const gitPlugin: DronePlugin = {
   },
   register: async registration => {
     const personaCap = registration.request<DronePersonaCapability>('persona');
+    const runtime = registration.request<{ flags?: RuntimeFlagRegistry }>(
+      'runtime'
+    );
+    runtime?.flags?.append('list-mount', 'git');
     const gitCache = new ToolMountingCache('git');
 
     // Build all tool definitions and add them to the cache

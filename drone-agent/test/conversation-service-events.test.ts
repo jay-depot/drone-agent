@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createDefaultAgentConfig,
+  createRuntimeFlagRegistry,
   type DroneChatResponse,
   type DroneContextWindowInfo,
   type DroneLlmCapability,
@@ -54,6 +55,7 @@ function makeEngine(options: EngineOptions): DronePluginEngine & {
     getConfig: () => {
       throw new Error('getConfig not used in conversation-service tests');
     },
+    getRuntimeFlags: () => createRuntimeFlagRegistry(),
     setElicitation: () => {},
     getElicitation: () => undefined,
     runWorkflow: async () => {
@@ -65,6 +67,7 @@ function makeEngine(options: EngineOptions): DronePluginEngine & {
     registerBuiltinSlashCommand: () => {},
     getBuiltinSlashCommands: () => [],
     enablePlugin: async (_pluginId: string) => false,
+    buildSystemMessages: async () => [],
     addExternalPlugin: async (_plugin: any) => false,
     __executeMock: executeMock,
   };

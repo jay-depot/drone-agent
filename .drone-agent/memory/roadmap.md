@@ -3,7 +3,7 @@ key: roadmap
 tags:
   - roadmap
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-07-13T02:23:10.261Z
+updated: 2026-08-01T21:39:32.314Z
 ---
 
 # Swarm Roadmap
@@ -50,7 +50,7 @@ A **swarm** is a personal AI workforce - multiple agents working in concert for 
                        │
 ┌──────────────────────┴──────────────────────────────┐
 │                 drone-coordinator                   │
-│  (Personal control plane: web UI, task management,  │
+│  (Personal control plane: web UI, task management,   │
 │   your skills, personas, memory, identities)        │
 │  *Single-user: manages YOUR agents only            │
 │  *must* have a beacon on the same host              │
@@ -168,8 +168,11 @@ The standalone coding agent - your AI assistant, whether solo or as part of your
 - Ink-based TUI (full-screen interactive chat)
 - Plain text output mode
 - Plugin system with dynamic enabling
+  - External plugin loading with trust management (`~/.drone-agent/plugins/`, `<project>/.drone-agent/plugins/`)
 - Built-in plugins: skills, persona, memory, lsp, mcp, git, compact, bootstrap
+  - Also: subagent, terminal emulator, macros, lightpanda, session logging, focus, notepad, prompt-file, utility tools (calculator, string ops), TODO list, echo LLM provider (testing), LLM provider broker, multiple LLM providers (Anthropic, OpenAI, OpenRouter, Ollama), shared utilities (diff-renderer, patch-applier)
 - Config system with cascade (Project > User > Default)
+  - First-run setup wizard (LLM provider probing)
 - Session management (disposable workers)
 - Persona management (persistent identities)
 - Skills system (load from disk)
@@ -179,6 +182,7 @@ The standalone coding agent - your AI assistant, whether solo or as part of your
 - Context budgeting and compaction
 - Self-improvement/insights system
 - **Swarm plugin** for connecting to beacon
+- Migration system (promote/demote skills and personas between scopes)
 
 **Key Files:**
 
@@ -201,10 +205,22 @@ Local coordination layer for YOUR swarm on one machine.
 
 - Fastify HTTP server (port 3457 by default)
 - SQLite database (better-sqlite3) with tables for personas, skills, agent sessions, memory, events, wiki, insights, principles
+  - Also: messages (with 24h cleanup), spawns (lifecycle tracking), beacon_config, knowledge_cache
+  - Memory TTL with periodic cleanup
 - REST API endpoints for all CRUD operations
+  - Wiki CRUD + search + lint
+  - Insights/principles with coordinator proxy (`?scope=coordinator`)
+  - Sync endpoints (manual sync trigger, event push, session registration)
+  - Agent persona update (PATCH `/agents/:id/persona`)
 - WebSocket server for inter-agent messaging
+  - Cross-beacon message relay via coordinator
 - Agent spawn execution (`/spawn` endpoint with `spawner.ts`)
+  - Agent location tracking for cross-beacon routing
 - Coordinator client for registering beacon and syncing assets
+  - Beacon approval flow (pending → approved/rejected with polling)
+  - Verification code (MitM protection comparing public key + TLS fingerprint)
+  - Tool definition sync
+  - Session pipeline (getSessions, getSessionLog, processSession, completeSessionProcessing)
 - TLS support with auto-generated certificates
 - Ed25519 keypair identity management
 - Event logging and config overrides
@@ -236,15 +252,26 @@ Personal control plane for YOUR swarm across machines.
 
 #### 3.2 Shared Session Storage ✅
 
+- Stale session management (24h threshold, hourly detection)
+
 #### 3.3 Global Memory & Skills ✅
 
+- Default persona/skill seeding (coordinator-wiki-librarian, coordinator-admin personas; memory-wiki skill)
+
 #### 3.4 Swarm Knowledge Base (LLM Wiki) ✅
+
+- FTS5 full-text search on events
+- Knowledge sync protocol (push/pull with confidence-based conflict resolution)
+- Tool definitions system (built-in hidden tool seeding)
 
 #### 3.5 Swarm-Wide Insights & Principles ✅
 
 #### 3.6 Migration Tool ✅
 
 #### ✅ 3.7 Web UI (Monitoring Dashboard) — Complete
+
+- WebSocket pub/sub for real-time updates
+- Dual-server architecture (API port 3456 + web port 8080 with auth)
 
 #### ⏳ 3.8 Make `--https` Default — Pending
 
@@ -260,7 +287,18 @@ Personal control plane for YOUR swarm across machines.
 
 #### ✅ 4.1 Gateway Core — Complete
 
+- Discard control surface (explicit /dev/null routing)
+- SQLite persistent store (Matrix sync + E2EE crypto key storage)
+- Cleanup subcommand (logout + delete local data)
+- Conversation ID ↔ filename encoding (lossless, reversible)
+- Two fully implemented spawn backends (local + coordinator)
+- Comprehensive test suite (12 files)
+
 #### ✅ 4.2 Matrix Service Adapter — Complete
+
+- E2EE via Rust crypto, typing notifications, read receipts
+- DM detection (≤2 members), room allowlist
+- Markdown → HTML rendering
 
 #### ✅ 4.3 Persona Assignment Control Surface — Complete
 
@@ -286,7 +324,7 @@ Personal control plane for YOUR swarm across machines.
 
 #### 5.4 Distributed Memory & Task Routing — Not started
 
-#### 5.5 Web UI Management Console — Not started
+#### ✅ 5.5 Web UI Management Console — Mostly Complete
 
 #### 5.6 Bootstrap Swarm Workflow — Not started
 
@@ -314,7 +352,9 @@ After seeing list/mount live for a while (git, swarm, MCP), check in on whether 
 
 #### 5.9 LSP Ergonomics for LLM
 
-**Status:** Not started — future plan
+**Status:** In Progress — symbol-based resolution for all line/column-based LSP tools is implemented (all 12 position-sensitive tools support both `symbol` and `text` parameters, with a document-symbols → workspace-symbols fallback cascade), but reducing the total tool count and improving ergonomics is still in progress.
+
+**Note:** Despite the symbol/text resolution being fully implemented, LSP tools are not being used as often as expected. This may indicate the tool count is still too high, or that the LLM needs better guidance on when to reach for LSP tools. This should be evaluated alongside the list/mount pattern (5.8) before further changes.
 
 When we get to converting LSP to list/mount (or otherwise improving LSP tool ergonomics), we want to:
 
@@ -323,6 +363,23 @@ When we get to converting LSP to list/mount (or otherwise improving LSP tool erg
 - Otherwise find ways to make LSP more ergonomic for the model
 
 **Dependencies:** None (can be done independently, but should be informed by the list/mount pattern's real-world performance)
+
+#### 5.10 Multi-Language LSP Support
+
+**Status:** Design phase
+
+The LSP plugin currently only has a known server spec for TypeScript (with auto-install from npm). Users can configure other servers manually via `lsp.servers`, but there's no auto-detection or auto-install for other popular languages.
+
+**Sub-items:**
+
+- **5.10.1 Auto-install for popular languages** — Add known server specs for Rust (rust-analyzer, cargo install), Python (pyright/pylsp, pip), Go (gopls, go install), and other popular languages. The auto-install system currently only supports npm tarballs; needs extension for other package managers (cargo, pip, go install, etc.). This is the easy win.
+
+- **5.10.2 LLM-assisted server suggestion** — When heuristic detection fails to identify the project language or find a matching server, ask the LLM to analyze the project structure and suggest an appropriate LSP server. Design questions to resolve:
+  - When does this trigger? (on session start? on demand via a tool? as a prompt fragment?)
+  - How does the suggestion get surfaced to the user? (config write? log message? slash command?)
+  - One promising approach: provide a macro template or slash command that the user can customize for their own setup, rather than building a complex built-in system
+
+**Dependencies:** 5.10.1 is independent. 5.10.2 depends on the LLM being available at the time of suggestion.
 
 ---
 
@@ -397,4 +454,4 @@ Phase 5 (Advanced)
 
 ---
 
-_Last updated: 2026-07-12 (added 5.7 MCP description cache invalidation, 5.8 list/mount pre-mounting check-in, 5.9 LSP ergonomics)_
+_Last updated: 2026-08-01 (added 5.10 Multi-Language LSP Support with auto-install and LLM-assisted suggestion sub-items)_

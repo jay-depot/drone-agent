@@ -1,5 +1,48 @@
 // ── LSP types ────────────────────────────────────────────────────────
 
+export type DroneLspPlatformKey =
+  | 'linux-x64'
+  | 'linux-arm64'
+  | 'darwin-x64'
+  | 'darwin-arm64'
+  | 'win32-x64'
+  | 'win32-arm64';
+
+export type DroneLspPlatformSpec = {
+  tarballUrl: string;
+  integrity: string;
+};
+
+/**
+ * Describes how to auto-install a known LSP server when it isn't on PATH.
+ * The `type` field determines how the tarball URL is resolved and how the
+ * server binary is invoked after extraction.
+ *
+ * - `npm`: Download from the npm registry, invoke via `node <entryPoint>`.
+ * - `cargo`: Download from crates.io, invoke the extracted binary.
+ * - `pip`: Download from PyPI, invoke the extracted binary.
+ * - `go`: Download from the Go module proxy, invoke the extracted binary.
+ * - `github-release`: Download a prebuilt binary from a GitHub release,
+ *   invoke the extracted binary. The tarball URL is pre-resolved and
+ *   includes platform/arch in the filename.
+ */
+export type DroneLspInstallSpec = {
+  type: 'npm' | 'cargo' | 'pip' | 'go' | 'github-release';
+  package: string;
+  version: string;
+  tarballUrl: string;
+  integrity: string;
+  entryPoint?: string;
+  /**
+   * Number of leading path components to strip when extracting the
+   * tarball. Defaults to 1 (standard npm/GitHub release layout).
+   */
+  strip?: number;
+  /** Platform-specific overrides. The top-level tarballUrl/integrity
+   *  serve as the default fallback. */
+  platforms?: Partial<Record<DroneLspPlatformKey, DroneLspPlatformSpec>>;
+};
+
 /**
  * 0-based LSP position (raw wire format).
  *

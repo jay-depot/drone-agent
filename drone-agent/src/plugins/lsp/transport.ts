@@ -58,12 +58,9 @@ export function createChildTransport(
     },
     onError: callback => {
       childProcess.on('error', callback);
-      childProcess.stderr.on('data', chunk => {
-        const message = chunk.toString('utf8').trim();
-        if (message.length > 0) {
-          callback(new Error(message));
-        }
-      });
+      // stderr is not treated as a transport error — many LSP servers
+      // log diagnostic information to stderr (e.g., taplo prints
+      // "registered request handler method=\"initialize\"").
     },
   };
 }

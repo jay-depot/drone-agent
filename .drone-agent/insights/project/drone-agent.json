@@ -92,11 +92,59 @@
     "insight": "The `file__apply_diff` tool struggles with files that have duplicate property names in object literals (TypeScript error 1117). When a patch creates duplicates, the tool's fuzz matching can apply hunks to the wrong location, compounding the problem. The safest approach when dealing with duplicate properties is to write the entire file content via `file__write` rather than trying to surgically remove duplicates with `file__apply_diff`."
   },
   {
+    "timestamp": "2026-07-30T02:50:09.180Z",
+    "insight": "Converted LSP and file plugins to list-mount pattern. Key learnings: (1) The file plugin's tools were defined inline (not in separate factory files), so the conversion required extracting each tool object literal and passing it to `fileCache.addTool()` instead of `registration.registerTool()`. (2) The LSP plugin's tools were already in factory functions, making the conversion straightforward — just swap the registration loop for cache additions. (3) Both plugins now follow the exact same pattern as the git plugin: 3 meta-tools + ToolMountingCache + optional persona dependency. (4) The file test file needed `mountTool()` calls before each tool usage, which was a mechanical but thorough change across ~46 tests."
+  },
+  {
     "timestamp": "2026-07-30T06:08:38.525Z",
     "insight": "The useBracketedPaste hook's debounce fallback has a subtle behavior: the first character is always delivered immediately because lastCharTimeRef starts at 0 (Date.now() - 0 > 30ms). This means rapid pastes without bracketed paste support will have the first character delivered immediately and the rest buffered and flushed as a single string after 50ms. This is acceptable behavior — the user sees the first character appear instantly, then the rest appears atomically after a brief pause. For bracketed paste (the primary mechanism), the entire paste is delivered atomically with no perceptible delay."
   },
   {
     "timestamp": "2026-07-31T16:29:52.244Z",
     "insight": "TUI paste rendering bug: Ink's output engine (output.js) splits text on \\n only. A \\r character survives as a literal character in the rendered output, causing the terminal to perform a carriage return (cursor jumps to column 0 on the same line) instead of advancing to the next line. This was the root cause of pasted newlines not rendering correctly — the clipboard/terminal was sending \\r\\n or bare \\r, and the useBracketedPaste hook was delivering them as-is. Fix: normalize \\r\\n → \\n and \\r → \\n in useBracketedPaste.ts at all four delivery points (bracketed paste split-chunk, bracketed paste single-chunk, debounce flush, debounce immediate). The order matters: replace \\r\\n first, then remaining \\r, to avoid double-converting \\r\\n to \\n\\n."
+  },
+  {
+    "timestamp": "2026-08-01T21:11:43.639Z",
+    "insight": "The /systemprompt slash command manually assembles its output from config.systemPrompt + renderPromptFragments(), bypassing buildSystemMessages() from the context budget service. This means the runtime flags block (list-mount explainer, active plugins) is sent to the LLM but invisible to the user. The fix is to add buildSystemMessages to the engine interface, wire it from the budget service in index.tsx, and have the /systemprompt handler use it. This is tracked in plan-fix-systemprompt-runtime-flags."
+  },
+  {
+    "timestamp": "2026-08-01T21:16:40.406Z",
+    "insight": "When adding a new method to the DronePluginEngine interface, you must also add it to the DroneTuiOptions.engine Pick type in tui/types.ts, otherwise the TUI won't compile. This is a common gotcha when extending the engine surface."
+  },
+  {
+    "timestamp": "2026-08-01T22:02:55.071Z",
+    "insight": "When planning multi-language LSP support, we identified two tiers of project language detection: (1) heuristic detection for well-known languages with known LSP servers (reuse bootstrap's project detection), and (2) LLM-assisted detection for everything else (deferred to 5.10.2). The LLM-assisted approach was deemed a good candidate for a user-customizable macro rather than a complex built-in system. This two-tier pattern could apply to other \"detect and configure\" features."
+  },
+  {
+    "timestamp": "2026-08-02T02:08:38.186Z",
+    "insight": "When extending the DronePluginEngine interface with new methods, you must also add them to the DroneTuiOptions.engine Pick type in tui/types.ts, otherwise the TUI won't compile. This is a recurring gotcha — it happened again with buildSystemMessages and now with getAvailableServers/startServerForFile (though the LSP plugin doesn't use TUI types directly, the pattern is the same for any engine method exposed to TUI)."
+  },
+  {
+    "timestamp": "2026-08-02T02:08:42.560Z",
+    "insight": "The Go module proxy (proxy.golang.org) supports both .zip and .tar.gz formats for module downloads. Using .tar.gz is simpler because the existing tar extraction infrastructure handles it directly — no need for a zip library dependency. The URL pattern is: https://proxy.golang.org/{module}/@v/{version}.tar.gz"
+  },
+  {
+    "timestamp": "2026-08-02T16:06:34.017Z",
+    "insight": "LSP Hash Fix planning revealed several hidden issues beyond just computing hashes: (1) gopls URL returns 404 for .tar.gz, needs .zip + build step, (2) DroneLspInstallSpec lacks platform-awareness for platform-specific binary tarballs, (3) rust-analyzer and lua-language-server need ARM variants. The plan covers all of these in a single pass."
+  },
+  {
+    "timestamp": "2026-08-02T16:16:55.771Z",
+    "insight": "rust-analyzer GitHub releases use date-based tags and the old 2024-11-18 release assets were 404. The latest release (2026-07-27) uses .gz files (not .tar.gz) for the binary archives. When pinning GitHub release versions, always verify the actual asset names from the API."
+  },
+  {
+    "timestamp": "2026-08-03T00:08:22.633Z",
+    "insight": "LSP server smoke tests revealed that the transport layer has two bugs: (1) stderr output from LSP servers (like taplo's \"registered request handler\" log) is treated as a fatal error by createChildTransport's onError callback, and (2) native binaries like lua-language-server need to be spawned from their own directory (cwd = cacheDir) to find their support files. These are pre-existing issues in transport.ts and server.ts, not in the installer or server specs."
+  },
+  {
+    "timestamp": "2026-08-03T00:08:26.019Z",
+    "insight": "LSP installer: npm tarballs only contain the package's own files, not node_modules. The installer must run `npm install --production` after extraction for npm-type installs. Also, native binaries (github-release, go) must be invoked directly, not wrapped with `node`. The installer now dispatches correctly based on install type."
+  },
+  {
+    "timestamp": "2026-08-03T00:23:35.324Z",
+    "insight": "LSP transport: stderr from LSP servers is diagnostic logging, not a fatal error. Removed the stderr listener from createChildTransport's onError callback. Also, native binaries like lua-language-server need to be spawned from their own directory (cwd = cacheDir) to find support files. Added strip field to DroneLspInstallSpec for controlling tarball extraction depth — lua-language-server's tarball has no wrapping directory so it needs strip:0."
+  },
+  {
+    "timestamp": "2026-08-03T17:04:11.579Z",
+    "insight": "When fixing pre-existing type errors in test mocks, don't waste time proving they're pre-existing — just fix them. The \"who broke it\" question is irrelevant; the only thing that matters is that the code compiles and tests pass. This applies doubly to test infrastructure that lags behind production type changes."
   }
 ]

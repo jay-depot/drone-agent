@@ -1,6 +1,9 @@
 import {
   createConsoleLogger,
+  createRuntimeFlagRegistry,
+  type DroneChatMessage,
   getCanonicalToolName,
+  type RuntimeFlagRegistry,
   type DroneAgentConfig,
   type DroneConversationEvent,
   type DroneElicitation,
@@ -108,6 +111,10 @@ export type DronePluginEngine = {
   unregisterTool: (canonicalName: string) => void;
   /** Returns the resolved DroneAgentConfig used by the engine. */
   getConfig: () => DroneAgentConfig;
+  /** Returns the runtime flag registry, for injecting into the system prompt. */
+  getRuntimeFlags: () => RuntimeFlagRegistry;
+  /** Build the full system messages as sent to the LLM (config prompt + runtime flags + prompt fragments). */
+  buildSystemMessages: () => Promise<DroneChatMessage[]>;
   /**
    * Set the host's elicitation capability. Must be called by the CLI shell
    * or TUI App BEFORE any workflow runs (and before `onSessionStart` if
@@ -156,6 +163,7 @@ type CreateDronePluginEngineOptions = {
     subagentId?: string;
     persona?: string;
   };
+  buildSystemMessages?: () => Promise<DroneChatMessage[]>;
 };
 
 function createHookBuckets(): HookBuckets {
@@ -268,6 +276,7 @@ export function createDronePluginEngine({
   config,
   logger = createConsoleLogger('plugin-engine'),
   runtimeOptions,
+  buildSystemMessages: buildSystemMessagesFromHost,
 }: CreateDronePluginEngineOptions): DronePluginEngine {
   const pluginMap = validatePluginRegistry(plugins);
   const enabledPluginIds = resolveEnabledPluginIds(plugins, config);
@@ -285,6 +294,7 @@ export function createDronePluginEngine({
   const promptKeys = new Set<string>();
   const capabilities = new Map<string, unknown>();
   const registeredPlugins: RegisteredPluginState[] = [];
+  const runtimeFlagRegistry = createRuntimeFlagRegistry();
   const helpSnippets = new Map<string, string[]>();
   const slashCommands = new Map<string, DroneSlashCommand[]>();
   const builtInSlashCommands: DroneSlashCommand[] = [];
@@ -581,6 +591,7 @@ export function createDronePluginEngine({
         subagentId: runtimeOptions?.subagentId,
         persona: runtimeOptions?.persona,
         isSubagent: !!runtimeOptions?.subagentId,
+        flags: runtimeFlagRegistry,
       });
 
       // Log override warnings after all plugins are loaded.
@@ -658,6 +669,25 @@ export function createDronePluginEngine({
     getRegisteredPluginCount: () => registeredPlugins.length,
     getRegisteredToolCount: () => tools.size,
     getConfig: () => config,
+    getRuntimeFlags: () => runtimeFlagRegistry,
+    buildSystemMessages: async () => {
+      if (buildSystemMessagesFromHost) {
+        return buildSystemMessagesFromHost();
+      }
+      // Fallback: assemble manually (same as the old /systemprompt behavior).
+      // Use promptFragments directly (not renderPromptFragments, which is a
+      // method on the return object and not yet accessible here).
+      const base: DroneChatMessage[] = [
+        { role: 'system', content: config.systemPrompt },
+      ];
+      const fragments = (
+        await Promise.all(promptFragments.map(f => f.render()))
+      ).filter((p): p is string => typeof p === 'string' && p.length > 0);
+      for (const content of fragments) {
+        base.push({ role: 'system', content });
+      }
+      return base;
+    },
     unregisterPluginTools: (pluginId: string) => {
       unregisterPluginToolsImpl(pluginId);
     },

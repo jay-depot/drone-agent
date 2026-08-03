@@ -73,6 +73,7 @@ describe('App commit flow', () => {
         getConfig: () => {
           throw new Error('unused');
         },
+        buildSystemMessages: async () => [],
         getHelpSnippets: () => [],
         dispatchSlashCommand: async () => false,
         onConversationEvent: cb => {

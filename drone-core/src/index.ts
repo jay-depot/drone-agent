@@ -14,6 +14,7 @@
 //   - capabilities.ts     : Capability registry types
 //   - plugin-system.ts    : Plugin infrastructure types
 //   - utils.ts            : Utility functions
+//   - runtime-flags.ts    : Runtime flag registry for system prompt injection
 //   - tool-mounting-cache.ts : ToolMountingCache class
 //   - token-estimate.ts   : Token estimation functions
 //   - config-schema.ts     : Config schema and parsing
@@ -126,7 +127,9 @@ export type {
   DroneLspDiagnostic,
   DroneLspHoverResult,
   DroneLspServerState,
+  DroneLspInstallSpec,
 } from './lsp-types.js';
+export type { DroneLspPlatformKey, DroneLspPlatformSpec } from './lsp-types.js';
 
 // ── MCP types ───────────────────────────────────────────────────────
 
@@ -237,3 +240,8 @@ export {
   transformEnvVars,
 } from './config-schema.js';
 export type { PartialDroneAgentConfigDecoded } from './config-schema.js';
+
+// ── Runtime flags ────────────────────────────────────────────────────
+
+export type { RuntimeFlagRegistry } from './runtime-flags.js';
+export { createRuntimeFlagRegistry } from './runtime-flags.js';
