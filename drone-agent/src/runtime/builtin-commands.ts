@@ -105,26 +105,27 @@ const toolsCommand: DroneSlashCommand = {
   command: '/tools',
   description: 'List mounted tools (/tools --all for all registered tools)',
   handler: async (ctx: DroneSlashCommandContext) => {
-    const allTools = ctx.engine.listTools?.() ?? [];
     const showAll = ctx.args.includes('--all');
 
     let tools: DroneToolDescriptor[];
     if (showAll) {
-      tools = allTools;
+      tools = ctx.engine.listAllTools?.() ?? [];
     } else {
+      const mountedTools = ctx.engine.listTools?.() ?? [];
       const personaCap = ctx.engine.getCapability<{
         getFilteredTools: (
           tools: DroneToolDescriptor[]
         ) => DroneToolDescriptor[];
       }>('persona');
       tools = personaCap
-        ? personaCap.getFilteredTools(allTools)
-        : allTools.filter(t => !t.defaultHidden);
+        ? personaCap.getFilteredTools(mountedTools)
+        : mountedTools.filter(t => !t.defaultHidden);
     }
 
+    const totalCount = ctx.engine.getRegisteredToolCount?.() ?? 0;
     const lines = showAll
       ? [`All registered tools (${tools.length}):`]
-      : [`Available tools (${tools.length}/${allTools.length}):`];
+      : [`Available tools (${tools.length}/${totalCount}):`];
     for (const tool of tools) {
       lines.push(`  ${tool.name}`);
       lines.push(`    ${tool.description}`);

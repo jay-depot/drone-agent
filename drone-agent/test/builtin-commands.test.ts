@@ -66,6 +66,8 @@ describe('/tools built-in command', () => {
         runHooks: async () => {},
         getCapability: <T>() => makeFilteringPersonaCap() as T,
         listTools: () => allTools,
+        listAllTools: () => allTools,
+        getRegisteredToolCount: () => allTools.length,
       },
     };
 
@@ -88,6 +90,7 @@ describe('/tools built-in command', () => {
         runHooks: async () => {},
         getCapability: <T>() => makeFilteringPersonaCap() as T,
         listTools: () => allTools,
+        getRegisteredToolCount: () => allTools.length,
       },
     };
 
@@ -126,6 +129,7 @@ describe('/tools built-in command', () => {
         runHooks: async () => {},
         getCapability: <T>() => undefined as T,
         listTools: () => allToolsWithHidden,
+        getRegisteredToolCount: () => allToolsWithHidden.length,
       },
     };
 
@@ -161,6 +165,8 @@ describe('/tools built-in command', () => {
         runHooks: async () => {},
         getCapability: <T>() => undefined as T,
         listTools: () => allToolsWithHidden,
+        listAllTools: () => allToolsWithHidden,
+        getRegisteredToolCount: () => allToolsWithHidden.length,
       },
     };
 

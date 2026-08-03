@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { isRecord } from '../../shared/type-guards.js';
 import os from 'node:os';
 import type {
@@ -166,7 +165,6 @@ export const mcpPlugin: DronePlugin = {
     >();
     const serverUsedNames = new Map<string, Set<string>>();
     const serverAllowlists = new Map<string, Set<string> | undefined>();
-    const metaToolNames = new Set<string>();
     const llmCapability = registration.request<DroneLlmCapability>('llm');
     const personaCap = registration.request<DronePersonaCapability>('persona');
 
@@ -174,39 +172,16 @@ export const mcpPlugin: DronePlugin = {
       serverStates.set(state.id, { ...state });
     }
 
-    function registerMetaTool(
-      name: string,
-      description: string,
-      inputSchema: DroneToolJsonSchema | undefined,
-      execute: (input: Record<string, unknown>) => Promise<string>,
-      renderComponent?: (
-        state: import('drone-core').ToolRenderState
-      ) => ReactNode
-    ): void {
-      if (metaToolNames.has(name)) {
-        return;
-      }
-      metaToolNames.add(name);
-      registration.registerTool({
-        name,
-        description,
-        renderComponent,
-        inputSchema,
-        execute,
-      });
-      // Mount the meta-tool immediately so it's visible to the LLM
-      registration.mountTool(`mcp__${name}`);
-    }
-
-    function mountResourcePromptTools(
+    function registerResourcePromptTools(
       serverId: string,
       connection: McpClientConnection
     ): void {
-      registerMetaTool(
-        `${serverId}__list`,
-        `List MCP resources, resource templates, or prompts for server ${serverId}. ` +
+      registration.registerTool({
+        name: `${serverId}__list`,
+        description:
+          `List MCP resources, resource templates, or prompts for server ${serverId}. ` +
           `Use type="resources", type="resource_templates", or type="prompts".`,
-        {
+        inputSchema: {
           type: 'object',
           properties: {
             type: {
@@ -219,7 +194,7 @@ export const mcpPlugin: DronePlugin = {
           required: ['type'],
           additionalProperties: false,
         },
-        async input => {
+        execute: async input => {
           const listType = input.type as string;
           if (listType === 'resources') {
             const resources = await connection.listResources();
@@ -234,15 +209,16 @@ export const mcpPlugin: DronePlugin = {
             return JSON.stringify({ serverId, prompts }, null, 2);
           }
           throw new Error(`Unknown list type: ${listType}`);
-        }
-      );
+        },
+      });
 
-      registerMetaTool(
-        `${serverId}__get`,
-        `Get an MCP resource or prompt from server ${serverId}. ` +
+      registration.registerTool({
+        name: `${serverId}__get`,
+        description:
+          `Get an MCP resource or prompt from server ${serverId}. ` +
           `Use type="resource" with a uri to read a resource. ` +
           `Use type="prompt" with a name (and optional arguments) to get a prompt.`,
-        {
+        inputSchema: {
           type: 'object',
           properties: {
             type: {
@@ -269,7 +245,7 @@ export const mcpPlugin: DronePlugin = {
           required: ['type'],
           additionalProperties: false,
         },
-        async input => {
+        execute: async input => {
           const getType = input.type as string;
           if (getType === 'resource') {
             const uri = input.uri as string;
@@ -295,196 +271,8 @@ export const mcpPlugin: DronePlugin = {
             return JSON.stringify({ serverId, name, result }, null, 2);
           }
           throw new Error(`Unknown get type: ${getType}`);
-        }
-      );
-    }
-
-    function mountMetaTools(
-      serverId: string,
-      connection: McpClientConnection,
-      serverDescription?: string
-    ): void {
-      const listToolsDescription = serverDescription
-        ? `List all available tools for MCP server ${serverId}. Returns tool names and descriptions. Use ${serverId}__mount_tool to mount a tool before calling it.\n\nServer summary: ${serverDescription}`
-        : `List all available tools for MCP server ${serverId}. Returns tool names and descriptions. Use ${serverId}__mount_tool to mount a tool before calling it.`;
-
-      registerMetaTool(
-        `${serverId}__list_tools`,
-        listToolsDescription,
-        { type: 'object', additionalProperties: false },
-        async () => {
-          const toolMap = serverToolMaps.get(serverId);
-          if (!toolMap) {
-            return JSON.stringify({ toolCount: 0, tools: [] }, null, 2);
-          }
-          let tools = Array.from(toolMap.entries()).map(([key, entry]) => ({
-            name: key,
-            description: entry.definition.description,
-          }));
-          // Filter through persona capability if available
-          if (personaCap) {
-            const descriptors = tools.map(t => ({
-              name: t.name,
-              description: t.description,
-              inputSchema: undefined,
-              defaultHidden: false,
-            }));
-            const filtered = personaCap.getFilteredTools(descriptors);
-            const filteredNames = new Set(filtered.map(t => t.name));
-            tools = tools.filter(t => filteredNames.has(t.name));
-          }
-          return JSON.stringify({ toolCount: tools.length, tools }, null, 2);
-        }
-      );
-
-      registerMetaTool(
-        `${serverId}__mount_tool`,
-        `Mount a specific tool from MCP server ${serverId} so it becomes available as a native tool. Use ${serverId}__list_tools to see available tools. Once mounted, the tool will appear in your tool list with its full schema.`,
-        {
-          type: 'object',
-          properties: {
-            tool: {
-              type: 'string',
-              description: `The name of the tool to mount (as shown by ${serverId}__list_tools).`,
-            },
-          },
-          required: ['tool'],
-          additionalProperties: false,
         },
-        async input => {
-          if (
-            typeof input.tool !== 'string' ||
-            input.tool.trim().length === 0
-          ) {
-            throw new Error(
-              `${serverId}__mount_tool requires a non-empty tool string.`
-            );
-          }
-          const toolName = input.tool;
-          const toolMap = serverToolMaps.get(serverId);
-          if (!toolMap) {
-            throw new Error(`MCP server ${serverId} has no tool cache.`);
-          }
-
-          // Check if tool exists in cache
-          const available = Array.from(toolMap.entries()).map(
-            ([key, entry]) => ({
-              name: key,
-              description: entry.definition.description,
-            })
-          );
-          const toolMeta = available.find(t => t.name === toolName);
-          if (!toolMeta) {
-            const availableNames = available.map(t => t.name).join(', ');
-            throw new Error(
-              `Tool '${toolName}' not found on MCP server ${serverId}. Available tools: ${availableNames}`
-            );
-          }
-
-          // Enforce allowlist
-          const allowedToolSet = serverAllowlists.get(serverId);
-          if (allowedToolSet && !allowedToolSet.has(toolName)) {
-            throw new Error(
-              `Tool '${toolName}' is not in the allowedTools list for MCP server ${serverId}.`
-            );
-          }
-
-          // Check if already mounted
-          if (toolMap.get(toolName)?.mounted) {
-            return JSON.stringify(
-              {
-                success: false,
-                error: `Tool '${toolName}' is already mounted.`,
-              },
-              null,
-              2
-            );
-          }
-          // Mount the tool
-          const entry = toolMap.get(toolName);
-          if (entry) {
-            entry.mounted = true;
-            registration.registerTool(entry.definition);
-            registration.mountTool(`mcp__${entry.definition.name}`);
-          }
-          connection.state.mountedToolCount = Array.from(
-            toolMap.values()
-          ).filter(e => e.mounted).length;
-          setServerState(connection.state);
-          const canonicalName = entry
-            ? `mcp__${entry.definition.name}`
-            : toolName;
-          return JSON.stringify(
-            {
-              success: true,
-              tool: canonicalName,
-              description: toolMeta.description,
-            },
-            null,
-            2
-          );
-        }
-      );
-
-      registerMetaTool(
-        `${serverId}__unmount_tool`,
-        `Unmount a previously mounted tool from MCP server ${serverId}. This removes the tool from your active tool list to reduce clutter.`,
-        {
-          type: 'object',
-          properties: {
-            tool: {
-              type: 'string',
-              description: `The name of the tool to unmount (as shown by ${serverId}__list_tools, not the mounted name).`,
-            },
-          },
-          required: ['tool'],
-          additionalProperties: false,
-        },
-        async input => {
-          if (
-            typeof input.tool !== 'string' ||
-            input.tool.trim().length === 0
-          ) {
-            throw new Error(
-              `${serverId}__unmount_tool requires a non-empty tool string.`
-            );
-          }
-          const toolName = input.tool;
-          const toolMap = serverToolMaps.get(serverId);
-          if (!toolMap) {
-            return JSON.stringify(
-              {
-                success: false,
-                error: `MCP server ${serverId} has no tool cache.`,
-              },
-              null,
-              2
-            );
-          }
-
-          if (!toolMap.get(toolName)?.mounted) {
-            return JSON.stringify(
-              { success: false, error: `Tool '${toolName}' is not mounted.` },
-              null,
-              2
-            );
-          }
-
-          // Unmount in the engine's ToolRegistry (keeps it registered but hidden)
-          const entry = toolMap.get(toolName);
-          if (entry) {
-            registration.unmountTool(`mcp__${entry.definition.name}`);
-            entry.mounted = false;
-            registration.unregisterTool(`mcp__${entry.definition.name}`);
-          }
-          connection.state.mountedToolCount = Array.from(
-            toolMap.values()
-          ).filter(e => e.mounted).length;
-          setServerState(connection.state);
-
-          return JSON.stringify({ success: true, tool: toolName }, null, 2);
-        }
-      );
+      });
     }
 
     async function listAndMountTools(
@@ -529,6 +317,8 @@ export const mcpPlugin: DronePlugin = {
           },
         };
         toolMap.set(tool.name, { definition: toolDef, mounted: false });
+        // Register the tool with the engine (unmounted) so it appears in runtime__list_tools
+        registration.registerTool(toolDef);
       }
       serverToolMaps.set(serverId, toolMap);
       serverUsedNames.set(serverId, usedNames);
@@ -541,8 +331,7 @@ export const mcpPlugin: DronePlugin = {
       connection.state.filteredToolCount = tools.length - allowlistedCount;
       connection.state.mountedToolCount = 0;
 
-      mountMetaTools(serverId, connection, serverDescription);
-      mountResourcePromptTools(serverId, connection);
+      registerResourcePromptTools(serverId, connection);
       setServerState(connection.state);
 
       registration.logger.info(
@@ -597,6 +386,8 @@ export const mcpPlugin: DronePlugin = {
             },
           };
           toolMap.set(tool.name, { definition: toolDef, mounted: false });
+          // Register the new tool with the engine (unmounted)
+          registration.registerTool(toolDef);
         }
       }
 
@@ -629,8 +420,6 @@ export const mcpPlugin: DronePlugin = {
           2
         ),
     });
-    // Mount server_status immediately so it's visible to the LLM
-    registration.mountTool('mcp__server_status');
 
     registration.hooks.onPluginsLoaded(async () => {
       if (!mcpConfig.enabled) {
@@ -704,10 +493,8 @@ export const mcpPlugin: DronePlugin = {
           const oldMap = serverToolMaps.get(serverId);
           if (oldMap) {
             for (const [, entry] of oldMap) {
-              if (entry.mounted) {
-                entry.mounted = false;
-                registration.unregisterTool(`mcp__${entry.definition.name}`);
-              }
+              // Remove from engine registry (whether mounted or not)
+              registration.unregisterTool(`mcp__${entry.definition.name}`);
             }
           }
           await listAndMountTools(

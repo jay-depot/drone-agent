@@ -297,6 +297,10 @@ export type DroneSlashCommandContext = {
     }[];
     /** List all tools (for /tools). */
     listTools?: () => import('./session-types.js').DroneToolDescriptor[];
+    /** List all registered tools (mounted + unmounted, for /tools --all). */
+    listAllTools?: () => import('./session-types.js').DroneToolDescriptor[];
+    /** Get the total count of registered tools (for /tools). */
+    getRegisteredToolCount?: () => number;
     /** Render prompt fragments (for /systemprompt). */
     renderPromptFragments?: () => Promise<string[]>;
     /** Build the full system messages as sent to the LLM (config prompt + runtime flags + prompt fragments). */

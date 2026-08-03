@@ -25,6 +25,23 @@ export class ToolRegistry {
   }
 
   /**
+   * List all tools (mounted + unmounted) as `DroneToolDescriptor` objects.
+   * Used by the `/tools --all` slash command to show everything registered.
+   */
+  listAll(): DroneToolDescriptor[] {
+    const result: DroneToolDescriptor[] = [];
+    for (const [canonicalName, entry] of this.tools) {
+      result.push({
+        name: canonicalName,
+        description: entry.definition.description,
+        inputSchema: entry.definition.inputSchema,
+        defaultHidden: entry.definition.defaultHidden,
+      });
+    }
+    return result;
+  }
+
+  /**
    * Remove a tool from the registry by canonical name. Silently does
    * nothing if the tool is not found.
    */

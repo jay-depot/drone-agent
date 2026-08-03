@@ -150,5 +150,9 @@
   {
     "timestamp": "2026-08-03T17:47:37.993Z",
     "insight": "The test fixture (test/fixtures/subagent.ts) is a near-duplicate of the production subagent spawn logic (src/plugins/subagent/plugin.ts). Both had to be updated in lockstep for the timeout changes. This is a maintenance burden — consider extracting a shared subagent-spawn utility to eliminate this duplication in a future refactoring pass."
+  },
+  {
+    "timestamp": "2026-08-03T19:12:48.574Z",
+    "insight": "When promoting the list-mount pattern to the runtime level, the MCP plugin was the most complex to refactor because it used ToolMountingCache internally for per-server tool tracking. The approach of replacing ToolMountingCache with a simple Map<string, { definition, mounted }> worked well, but required careful handling of the mount/unmount lifecycle to ensure tools were properly registered in both the MCP plugin's internal map and the engine's ToolRegistry."
   }
 ]

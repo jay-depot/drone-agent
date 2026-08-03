@@ -91,6 +91,7 @@ export type DronePluginEngine = {
     onProgress?: (chunk: string) => void
   ) => Promise<string>;
   listTools: () => DroneToolDescriptor[];
+  listAllTools: () => DroneToolDescriptor[];
   getCapability: <T>(pluginId: string) => T | undefined;
   listPlugins: () => DronePluginStatus[];
   getRegisteredPluginCount: () => number;
@@ -807,6 +808,7 @@ export function createDronePluginEngine({
       return tool.execute(input, onProgress);
     },
     listTools: () => toolRegistry.listMounted(),
+    listAllTools: () => toolRegistry.listAll(),
     getCapability: <T>(pluginId: string) =>
       capabilities.get(pluginId) as T | undefined,
     listPlugins: () =>
