@@ -257,6 +257,8 @@ describe('tool input schemas accept text/symbol parameters', () => {
       locationToAgentShape: (_l: unknown[]) => [],
       initialize: async () => {},
       shutdown: async () => {},
+      getAvailableServers: () => [],
+      startServerForFile: async () => false,
     } as Parameters<typeof createInspectTool>[0];
   }
 
@@ -347,6 +349,8 @@ describe('rename tool description mentions apply', () => {
       locationToAgentShape: (_l: unknown[]) => [],
       initialize: async () => {},
       shutdown: async () => {},
+      getAvailableServers: () => [],
+      startServerForFile: async () => false,
     } as Parameters<typeof createRenameTool>[0];
 
     const tool = createRenameTool(server);
@@ -374,6 +378,8 @@ describe('formatting tool description mentions auto-apply', () => {
       locationToAgentShape: (_l: unknown[]) => [],
       initialize: async () => {},
       shutdown: async () => {},
+      getAvailableServers: () => [],
+      startServerForFile: async () => false,
     } as Parameters<typeof createFormattingTool>[0];
 
     const tool = createFormattingTool(server);

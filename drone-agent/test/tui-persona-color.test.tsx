@@ -43,6 +43,7 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
     getTool: (): undefined => undefined,
     runHooks: async (): Promise<void> => {},
     executeTool: async (): Promise<string> => 'ok',
+    buildSystemMessages: async (): Promise<import('drone-core').DroneChatMessage[]> => [],
     getHelpSnippets: (): string[] => [],
     renderPromptFragments: async (): Promise<string[]> => [],
     getConfig: (): import('drone-core').DroneAgentConfig => {

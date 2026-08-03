@@ -142,5 +142,9 @@
   {
     "timestamp": "2026-08-03T00:23:35.324Z",
     "insight": "LSP transport: stderr from LSP servers is diagnostic logging, not a fatal error. Removed the stderr listener from createChildTransport's onError callback. Also, native binaries like lua-language-server need to be spawned from their own directory (cwd = cacheDir) to find support files. Added strip field to DroneLspInstallSpec for controlling tarball extraction depth — lua-language-server's tarball has no wrapping directory so it needs strip:0."
+  },
+  {
+    "timestamp": "2026-08-03T17:04:11.579Z",
+    "insight": "When fixing pre-existing type errors in test mocks, don't waste time proving they're pre-existing — just fix them. The \"who broke it\" question is irrelevant; the only thing that matters is that the code compiles and tests pass. This applies doubly to test infrastructure that lags behind production type changes."
   }
 ]

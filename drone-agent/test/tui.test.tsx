@@ -89,6 +89,7 @@ function makeOptions(
       getConfig: () => {
         throw new Error('getConfig not used in tui tests');
       },
+      buildSystemMessages: async () => [],
       getHelpSnippets: () => [],
       dispatchSlashCommand: async (_line, ctx) => {
         // Handle built-in commands for testing
@@ -259,6 +260,7 @@ describe('App', () => {
         getConfig: () => {
           throw new Error('getConfig not used in tui tests');
         },
+        buildSystemMessages: async () => [],
         getHelpSnippets: () => [],
         dispatchSlashCommand: async (_line, ctx) => {
           if (_line === '/help' || _line === '?') {
