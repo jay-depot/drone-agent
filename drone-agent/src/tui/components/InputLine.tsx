@@ -1,4 +1,5 @@
 import type React from 'react';
+import type { SgrMouseEvent } from '../hooks/useSgrMouse.js';
 /**
  * The bottom input line.
  *
@@ -22,6 +23,8 @@ export function InputLine({
   llmFrame,
   llmColor,
   disabled,
+  columns,
+  mouseClick,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -49,6 +52,10 @@ export function InputLine({
    * Used when an elicitation question is active.
    */
   disabled?: boolean;
+  /** Terminal width for visual line calculation. */
+  columns: number;
+  /** Most recent SGR mouse click event (for click-to-position). */
+  mouseClick?: SgrMouseEvent | null;
 }): React.JSX.Element {
   return (
     <Box
@@ -71,6 +78,8 @@ export function InputLine({
           value={value}
           onChange={onChange}
           onSubmit={onSubmit}
+          columns={columns}
+          mouseClick={mouseClick}
           focus={!disabled}
         />
       </Box>

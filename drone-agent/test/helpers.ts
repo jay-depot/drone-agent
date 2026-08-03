@@ -267,11 +267,12 @@ export function createMockEngine(
     runConversationEventHooks: async () => {},
     renderPromptFragments: async () => options.promptFragments ?? [],
     getTool: () => undefined,
-    executeTool: executeMock as unknown as import('../src/runtime/plugin-engine.js').DronePluginEngine['executeTool'],
+    executeTool:
+      executeMock as unknown as import('../src/runtime/plugin-engine.js').DronePluginEngine['executeTool'],
     listTools: () => toolList,
-    getCapability: customGetCapability ??
-      (<T>(id: string) =>
-        id === 'llm' ? ({} as unknown as T) : undefined),
+    getCapability:
+      customGetCapability ??
+      (<T>(id: string) => (id === 'llm' ? ({} as unknown as T) : undefined)),
     listPlugins: () => [],
     getRegisteredPluginCount: () => 0,
     getRegisteredToolCount: () => toolList.length,

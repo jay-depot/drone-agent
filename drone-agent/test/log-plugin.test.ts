@@ -384,8 +384,8 @@ async function getCapability(
     registerSlashCommand: () => {},
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
-      mountTool: () => undefined,
-      unmountTool: () => {},
+    mountTool: () => undefined,
+    unmountTool: () => {},
     hooks: {
       onPluginsLoaded: () => {},
       onSessionStart: () => {},

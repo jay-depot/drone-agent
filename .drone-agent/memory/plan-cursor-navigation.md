@@ -38,8 +38,17 @@ type VisualLine = {
 };
 
 function computeVisualLines(text: string, width: number): VisualLine[];
-function offsetToVisual(text: string, offset: number, width: number): { line: number; col: number };
-function visualToOffset(text: string, line: number, col: number, width: number): number;
+function offsetToVisual(
+  text: string,
+  offset: number,
+  width: number
+): { line: number; col: number };
+function visualToOffset(
+  text: string,
+  line: number,
+  col: number,
+  width: number
+): number;
 function findWordStart(text: string, offset: number): number;
 function findWordEnd(text: string, offset: number): number;
 function findLineStart(text: string, offset: number): number;
@@ -54,8 +63,8 @@ Enables SGR mouse mode (1000 + 1006) on mount, disables on unmount. Returns clic
 
 ```ts
 type SgrMouseEvent = {
-  row: number;   // 1-based terminal row
-  col: number;   // 1-based terminal column
+  row: number; // 1-based terminal row
+  col: number; // 1-based terminal column
   button: 'left' | 'middle' | 'right';
   action: 'press' | 'release';
 };
@@ -68,21 +77,22 @@ Mode 1000 = report button press/release events (not drags). Mode 1006 = SGR exte
 ### Modified: `MultilineTextInput.tsx`
 
 **New props:**
+
 - `columns: number` — terminal width for visual line calculation
 - `onMouseClick?: (row: number, col: number) => void` — mouse click handler
 
 **New keybindings:**
 
-| Key | Action |
-|---|---|
-| Up arrow | Move cursor up one visual line (preferred column tracking) |
+| Key        | Action                                                       |
+| ---------- | ------------------------------------------------------------ |
+| Up arrow   | Move cursor up one visual line (preferred column tracking)   |
 | Down arrow | Move cursor down one visual line (preferred column tracking) |
-| Home | Move cursor to start of logical line |
-| End | Move cursor to end of logical line |
-| Ctrl+Left | Move cursor to start of previous word |
-| Ctrl+Right | Move cursor to start of next word |
-| Ctrl+U | Delete from cursor to start of logical line |
-| Ctrl+K | Delete from cursor to end of logical line |
+| Home       | Move cursor to start of logical line                         |
+| End        | Move cursor to end of logical line                           |
+| Ctrl+Left  | Move cursor to start of previous word                        |
+| Ctrl+Right | Move cursor to start of next word                            |
+| Ctrl+U     | Delete from cursor to start of logical line                  |
+| Ctrl+K     | Delete from cursor to end of logical line                    |
 
 **Preferred column tracking:** Store `preferredColumn` in a ref. On Up/Down, compute the visual column of the current cursor, store it as preferred. On subsequent Up/Down, use preferred column instead of the new line's actual column. On any non-vertical movement (Left/Right, typing, click), reset preferred column to null.
 
@@ -129,6 +139,7 @@ Create a pure module with the following exports:
 8. `findLineEnd(text, offset)` — find end of logical line (next `\n` or end)
 
 Word-wrap details:
+
 - Split text on `\n` to get logical lines
 - For each logical line, split into words on whitespace boundaries (preserve whitespace as part of the word they trail)
 - Pack words into visual lines: if adding a word would exceed `width`, start a new visual line
@@ -138,6 +149,7 @@ Word-wrap details:
 **Dependencies:** None (pure TypeScript, no React/Ink imports)
 
 **Tests:** `drone-agent/test/visual-text-model.test.ts` — cover:
+
 - Empty string
 - Single line shorter than width
 - Single line that wraps
@@ -167,11 +179,13 @@ Create a React hook that:
 **Important:** Only mode 1000 (not 1002) is enabled, so drag events are NOT captured. This preserves native text selection via drag.
 
 **Edge cases:**
+
 - If stdin is not a TTY, do nothing
 - If the terminal doesn't support SGR (1006), the escape sequences will just display as garbage characters in the input — this is acceptable degradation
 - Buffer partial sequences across multiple `data` chunks
 
 **Tests:** `drone-agent/test/useSgrMouse.test.tsx` — cover:
+
 - Enable/disable sequences written on mount/unmount
 - Parsing of SGR mouse events
 - No-op when stdin is not a TTY
@@ -202,7 +216,12 @@ Add the following changes:
      const visual = offsetToVisual(value, offset, columns);
      if (visual.line > 0) {
        const preferred = preferredColumnRef.current ?? visual.col;
-       const newOffset = visualToOffset(value, visual.line - 1, preferred, columns);
+       const newOffset = visualToOffset(
+         value,
+         visual.line - 1,
+         preferred,
+         columns
+       );
        setCursorOffset(newOffset);
        preferredColumnRef.current = preferred;
      }
@@ -215,7 +234,12 @@ Add the following changes:
      const lines = computeVisualLines(value, columns);
      if (visual.line < lines.length - 1) {
        const preferred = preferredColumnRef.current ?? visual.col;
-       const newOffset = visualToOffset(value, visual.line + 1, preferred, columns);
+       const newOffset = visualToOffset(
+         value,
+         visual.line + 1,
+         preferred,
+         columns
+       );
        setCursorOffset(newOffset);
        preferredColumnRef.current = preferred;
      }
@@ -237,14 +261,16 @@ Add the following changes:
    }
 
    // Ctrl+Left — previous word
-   if (key.ctrl && input === 'left') { // or detect via key.leftArrow + ctrl
+   if (key.ctrl && input === 'left') {
+     // or detect via key.leftArrow + ctrl
      setCursorOffset(findWordStart(value, offset));
      preferredColumnRef.current = null;
      return;
    }
 
    // Ctrl+Right — next word
-   if (key.ctrl && input === 'right') { // or detect via key.rightArrow + ctrl
+   if (key.ctrl && input === 'right') {
+     // or detect via key.rightArrow + ctrl
      setCursorOffset(findWordEnd(value, offset));
      preferredColumnRef.current = null;
      return;
@@ -283,6 +309,7 @@ Add the following changes:
 6. **Update `renderWithCursor`** — no changes needed, it already works with flat offset.
 
 **Tests:** Update `drone-agent/test/multiline-text-input.test.tsx` — add tests for:
+
 - Up arrow moves to previous visual line
 - Down arrow moves to next visual line
 - Home/End navigation
@@ -369,6 +396,7 @@ Add the following changes:
 ### Step 7: Update tests
 
 **Files:**
+
 - `drone-agent/test/multiline-text-input.test.tsx`
 - `drone-agent/test/visual-text-model.test.ts` (new)
 - `drone-agent/test/useSgrMouse.test.tsx` (new)
