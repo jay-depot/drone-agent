@@ -430,7 +430,7 @@ describe('lsp-installer — ensureServerInstalled', () => {
   it('downloads, verifies, and extracts on cache miss', async () => {
     const tarball = await buildSyntheticTarball({
       [TEST_ENTRY_POINT]: 'export const main = () => {};',
-      'package.json': '{"name":"typescript-language-server"}',
+      'package.json': '{"name":"typescript-language-server","version":"5.3.0"}',
     });
     const integrity = `sha512-${sha512Base64(tarball)}`;
     const spec = baseSpec(integrity);
@@ -479,6 +479,7 @@ describe('lsp-installer — ensureServerInstalled', () => {
   it('skips the network on a cache hit', async () => {
     const tarball = await buildSyntheticTarball({
       [TEST_ENTRY_POINT]: 'export const main = () => {};',
+      'package.json': '{"name":"typescript-language-server","version":"5.3.0"}',
     });
     const integrity = `sha512-${sha512Base64(tarball)}`;
     const spec = baseSpec(integrity);
@@ -511,6 +512,7 @@ describe('lsp-installer — ensureServerInstalled', () => {
   it('refuses to extract a tarball whose integrity does not match', async () => {
     const tarball = await buildSyntheticTarball({
       [TEST_ENTRY_POINT]: 'export const main = () => {};',
+      'package.json': '{"name":"typescript-language-server","version":"5.3.0"}',
     });
     // Compute integrity from a *different* buffer.
     const wrongIntegrity = `sha512-${sha512Base64(Buffer.from('not the tarball'))}`;
@@ -548,6 +550,7 @@ describe('lsp-installer — ensureServerInstalled', () => {
   it('clears a stale cache entry before re-installing', async () => {
     const tarball = await buildSyntheticTarball({
       [TEST_ENTRY_POINT]: 'export const main = () => {};',
+      'package.json': '{"name":"typescript-language-server","version":"5.3.0"}',
     });
     const integrity = `sha512-${sha512Base64(tarball)}`;
     const spec = baseSpec(integrity);

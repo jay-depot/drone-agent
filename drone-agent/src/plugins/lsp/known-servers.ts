@@ -144,7 +144,7 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
         'https://github.com/LuaLS/lua-language-server/releases/download/3.10.6/lua-language-server-3.10.6-linux-x64.tar.gz',
       integrity:
         'sha512-LMgX+3WYuSBdGxAxXG1r+8grQz7rY2Gr3zJAXB29hxH9y/vgILk/rF2hPmLGAiPch7PKX8yevdeerV1WYow+7Q==',
-      entryPoint: 'bin/lua-language-server',
+      entryPoint: 'lua-language-server',
       platforms: {
         'linux-x64': {
           tarballUrl:
@@ -189,7 +189,7 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
         'https://registry.npmjs.org/bash-language-server/-/bash-language-server-5.6.0.tgz',
       integrity:
         'sha512-DCuV+/BZAAozsp5blvi6jDnU/ZDaTpJpWM0zqwGjnirfqv7iBsMK32xOze/jipxU0PUZ6CBUKgRUMKI7Kk70Lg==',
-      entryPoint: 'bin/bash-language-server',
+      entryPoint: 'out/cli.js',
     },
   },
   // ── YAML (yaml-language-server — npm) ──────────────────────────────
@@ -221,13 +221,13 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
     rootPatterns: [],
     install: {
       type: 'npm',
-      package: 'vscode-json-languageserver',
-      version: '1.3.4',
+      package: 'vscode-langservers-extracted',
+      version: '4.10.0',
       tarballUrl:
-        'https://registry.npmjs.org/vscode-json-languageserver/-/vscode-json-languageserver-1.3.4.tgz',
+        'https://registry.npmjs.org/vscode-langservers-extracted/-/vscode-langservers-extracted-4.10.0.tgz',
       integrity:
-        'sha512-+ghebnslXk6fVDySBrT0BVqozLDdmKY/qxgkDD4JtOQcU2vXc3e7jh7YyMxvuvE93E9OLvBqUrvajttj8xf3BA==',
-      entryPoint: 'bin/vscode-json-languageserver',
+        'sha512-EFf9uQI4dAKbzMQFjDvVm1xJq1DXAQvBEuEfPGrK/xzfsL5xWTfIuRr90NgfmqwO+IEt6vLZm9EOj6R66xIifg==',
+      entryPoint: 'bin/vscode-json-language-server',
     },
   },
   // ── Dockerfile (dockerfile-language-server-nodejs — npm) ──────────
@@ -246,25 +246,34 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
         'https://registry.npmjs.org/dockerfile-language-server-nodejs/-/dockerfile-language-server-nodejs-0.13.0.tgz',
       integrity:
         'sha512-r8GwQGVBHuRj83nFYoA7ulGfp6tgUH8gxlPRap0ewuroEb/XgP4KtLsIUIN9CvkTZge/IkX7cbFTVO0lq9gZ3A==',
-      entryPoint: 'bin/dockerfile-language-server-nodejs',
+      entryPoint: 'bin/docker-langserver',
     },
   },
-  // ── TOML (@taplo/cli — npm) ───────────────────────────────────────
+  // ── TOML (taplo — GitHub release) ──────────────────────────────────
   {
     id: 'taplo',
     language: 'toml',
     command: 'taplo',
-    args: ['lsp', '--stdio'],
+    args: ['lsp', 'stdio'],
     fileExtensions: ['.toml'],
     rootPatterns: [],
     install: {
-      type: 'npm',
-      package: '@taplo/cli',
-      version: '0.7.0',
-      tarballUrl: 'https://registry.npmjs.org/@taplo/cli/-/cli-0.7.0.tgz',
+      type: 'github-release',
+      package: 'tamasfe/taplo',
+      version: '0.10.0',
+      tarballUrl:
+        'https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-linux-x86_64.gz',
       integrity:
-        'sha512-Ck3zFhQhIhi02Hl6T4ZmJsXdnJE+wXcJz5f8klxd4keRYgenMnip3JDPMGDRLbnC/2iGd8P0sBIQqI3KxfVjBg==',
-      entryPoint: 'dist/cli.js',
+        'sha512-/os53J3GCLEsw9oh2va8MFHqMC0kAy3aeFHJKu1osccMFpbFmDN0i3WQdKtCBFwrkUglg8E7x8+ma9QjssistA==',
+      entryPoint: 'taplo',
+      platforms: {
+        'linux-x64': {
+          tarballUrl:
+            'https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-linux-x86_64.gz',
+          integrity:
+            'sha512-/os53J3GCLEsw9oh2va8MFHqMC0kAy3aeFHJKu1osccMFpbFmDN0i3WQdKtCBFwrkUglg8E7x8+ma9QjssistA==',
+        },
+      },
     },
   },
   // ── CSS / SCSS / Less (vscode-css-languageserver-bin — npm) ────────
@@ -277,13 +286,13 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
     rootPatterns: [],
     install: {
       type: 'npm',
-      package: 'vscode-css-languageserver-bin',
-      version: '1.4.0',
+      package: 'vscode-langservers-extracted',
+      version: '4.10.0',
       tarballUrl:
-        'https://registry.npmjs.org/vscode-css-languageserver-bin/-/vscode-css-languageserver-bin-1.4.0.tgz',
+        'https://registry.npmjs.org/vscode-langservers-extracted/-/vscode-langservers-extracted-4.10.0.tgz',
       integrity:
-        'sha512-KWrF5f4RYYe8RBDfqb1c0Sdf9xPS2Ly/Z/T18H+uUOMw2QyzIrkxv4bMKy5GFfPm4479k6Ln4ji4UHqSmhGf3g==',
-      entryPoint: 'cssServerMain.js',
+        'sha512-EFf9uQI4dAKbzMQFjDvVm1xJq1DXAQvBEuEfPGrK/xzfsL5xWTfIuRr90NgfmqwO+IEt6vLZm9EOj6R66xIifg==',
+      entryPoint: 'bin/vscode-css-language-server',
     },
   },
   // ── HTML (vscode-html-languageserver-bin — npm) ─────────────────────
@@ -296,13 +305,13 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
     rootPatterns: [],
     install: {
       type: 'npm',
-      package: 'vscode-html-languageserver-bin',
-      version: '1.4.0',
+      package: 'vscode-langservers-extracted',
+      version: '4.10.0',
       tarballUrl:
-        'https://registry.npmjs.org/vscode-html-languageserver-bin/-/vscode-html-languageserver-bin-1.4.0.tgz',
+        'https://registry.npmjs.org/vscode-langservers-extracted/-/vscode-langservers-extracted-4.10.0.tgz',
       integrity:
-        'sha512-rDnpvASQwf1dlRaGiu8edo5WlAr4dM3/r/dcPCH4O6UD4+eShhdC1E8IyiSisnJU6bRk+4mDTCgA6cyhGJY2xA==',
-      entryPoint: 'htmlServerMain.js',
+        'sha512-EFf9uQI4dAKbzMQFjDvVm1xJq1DXAQvBEuEfPGrK/xzfsL5xWTfIuRr90NgfmqwO+IEt6vLZm9EOj6R66xIifg==',
+      entryPoint: 'bin/vscode-html-language-server',
     },
   },
   // ── Svelte (svelte-language-server — npm) ──────────────────────────

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { createGunzip } from 'node:zlib';
 import { execFile } from 'node:child_process';
 import type {
   DroneLspInstallSpec,
@@ -105,6 +106,36 @@ export function resolveCacheDir(
   }
 
   return path.join(homedir, '.cache', 'drone-agent', CACHE_SUBDIR);
+}
+
+/**
+ * Extract a single gzip-compressed file (not a tar archive). Used for
+ * GitHub release assets like rust-analyzer which are distributed as
+ * `.gz` files containing a single binary.
+ *
+ * The decompressed file is written to `destination/<entryPoint>`.
+ */
+async function extractGzipSingle(
+  compressed: Buffer,
+  destination: string,
+  entryPoint: string
+): Promise<void> {
+  await mkdir(destination, { recursive: true });
+  const decompressed = await new Promise<Buffer>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    createGunzip()
+      .on('error', reject)
+      .on('data', (chunk: Buffer) => chunks.push(chunk))
+      .on('end', () => resolve(Buffer.concat(chunks)))
+      .end(compressed);
+  });
+  if (decompressed.length === 0) {
+    throw new Error('Decompressed gzip file is empty');
+  }
+  const targetPath = path.join(destination, entryPoint);
+  await mkdir(path.dirname(targetPath), { recursive: true });
+  await writeFile(targetPath, decompressed);
+  await chmod(targetPath, 0o755);
 }
 
 /**
@@ -492,6 +523,10 @@ export async function ensureServerInstalled(
     cacheKey
   );
   const resolvedNode = options.nodePath ?? process.execPath;
+  // Native binaries (github-release, go) are invoked directly; npm packages
+  // need `node` to run.
+  const isNative = spec.install.type === 'github-release' || spec.install.type === 'go';
+  const entryPath = path.join(cacheDir, spec.install.entryPoint ?? spec.command);
 
   // 1. PATH probe — short-circuit before any disk activity.
   if (await commandExistsOnPath(spec.command)) {
@@ -506,11 +541,8 @@ export async function ensureServerInstalled(
       `lsp server cached: ${spec.id}@${spec.install.version} (${cacheDir})`
     );
     return {
-      command: resolvedNode,
-      args: [
-        path.join(cacheDir, spec.install.entryPoint ?? spec.command),
-        ...spec.args,
-      ],
+      command: isNative ? entryPath : resolvedNode,
+      args: isNative ? spec.args : [entryPath, ...spec.args],
       source: 'cache',
       cacheDir,
     };
@@ -549,8 +581,31 @@ export async function ensureServerInstalled(
     });
     if (downloadUrl.endsWith('.zip')) {
       await extractZip(tarball, cacheDir);
+    } else if (
+      downloadUrl.endsWith('.gz') && !downloadUrl.endsWith('.tar.gz') &&
+      spec.install.type === 'github-release'
+    ) {
+      const entryPoint = spec.install.entryPoint ?? spec.command;
+      await extractGzipSingle(tarball, cacheDir, entryPoint);
     } else {
       await extractTarball(tarball, cacheDir);
+    }
+
+    // Install npm dependencies for `npm` type installs. npm tarballs only
+    // contain the package's own files — dependencies must be resolved at
+    // install time so that `require('vscode-languageserver/node')` works.
+    if (spec.install.type === 'npm') {
+      try {
+        await execFileAsync('npm', ['install', '--production', '--no-audit', '--no-fund', '--no-package-lock'], {
+          cwd: cacheDir,
+        });
+      } catch (installError) {
+        throw new Error(
+          `Failed to install npm dependencies for ${spec.install.package}@${spec.install.version}.\n` +
+            `  Error: ${(installError as Error).message}\n` +
+            `npm must be installed and on PATH to use auto-installed LSP servers.`
+        );
+      }
     }
 
     // Build step for `go` type installs.
@@ -595,13 +650,14 @@ export async function ensureServerInstalled(
 
     // Defensive: make the cached entry readable. Node doesn't need the
     // executable bit since we invoke it directly via `node`, but setting
-    // 0o644 makes the cache directory self-debugging.
+    // 0o644 makes the cache directory self-debugging. Native binaries
+    // get 0o755 so they can be executed directly.
     try {
       const entryAbs = path.join(
         cacheDir,
         spec.install.entryPoint ?? spec.command
       );
-      await chmod(entryAbs, 0o644);
+      await chmod(entryAbs, isNative ? 0o755 : 0o644);
     } catch {
       // Non-fatal.
     }
@@ -620,11 +676,8 @@ export async function ensureServerInstalled(
   }
 
   return {
-    command: resolvedNode,
-    args: [
-      path.join(cacheDir, spec.install.entryPoint ?? spec.command),
-      ...spec.args,
-    ],
+    command: isNative ? entryPath : resolvedNode,
+    args: isNative ? spec.args : [entryPath, ...spec.args],
     source: 'cache',
     cacheDir,
   };
