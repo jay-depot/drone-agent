@@ -347,14 +347,15 @@ async function downloadTarball(
 
 async function extractTarball(
   tarball: Buffer,
-  destination: string
+  destination: string,
+  strip: number = 1
 ): Promise<void> {
   await mkdir(destination, { recursive: true });
   await pipeline(
     Readable.from(tarball),
     extractTar({
       cwd: destination,
-      strip: 1,
+      strip,
     })
   );
 }
@@ -588,7 +589,7 @@ export async function ensureServerInstalled(
       const entryPoint = spec.install.entryPoint ?? spec.command;
       await extractGzipSingle(tarball, cacheDir, entryPoint);
     } else {
-      await extractTarball(tarball, cacheDir);
+      await extractTarball(tarball, cacheDir, spec.install.strip ?? 1);
     }
 
     // Install npm dependencies for `npm` type installs. npm tarballs only

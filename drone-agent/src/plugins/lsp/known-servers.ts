@@ -144,7 +144,8 @@ export const KNOWN_SERVER_SPECS: KnownServerSpec[] = [
         'https://github.com/LuaLS/lua-language-server/releases/download/3.10.6/lua-language-server-3.10.6-linux-x64.tar.gz',
       integrity:
         'sha512-LMgX+3WYuSBdGxAxXG1r+8grQz7rY2Gr3zJAXB29hxH9y/vgILk/rF2hPmLGAiPch7PKX8yevdeerV1WYow+7Q==',
-      entryPoint: 'lua-language-server',
+      entryPoint: 'bin/lua-language-server',
+      strip: 0,
       platforms: {
         'linux-x64': {
           tarballUrl:
