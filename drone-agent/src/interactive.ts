@@ -176,10 +176,19 @@ export async function runJsonMode(
     }
   };
 
-  const response = await conversation.sendUserMessage(
-    task,
-    conversationHandler
-  );
+  // Resolve runtime info early so it's available in both success and error paths
+  const runtime = engine.getCapability<{ subagentId?: string }>('runtime');
+  const subagentId = runtime?.subagentId;
+
+  let response: string;
+  try {
+    response = await conversation.sendUserMessage(task, conversationHandler);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    ndjsonHandler({ kind: 'error', message });
+    ndjsonHandler({ kind: 'return', result: '', error: message, subagentId });
+    process.exit(1);
+  }
 
   // Output the final assistant message
   ndjsonHandler({ kind: 'assistantMessage', content: response });
@@ -188,8 +197,6 @@ export async function runJsonMode(
   // This ensures the parent always receives a result, even if the LLM
   // didn't call the subagent.return tool.
   if (!hasExplicitReturn) {
-    const runtime = engine.getCapability<{ subagentId?: string }>('runtime');
-    const subagentId = runtime?.subagentId;
     ndjsonHandler({
       kind: 'return',
       result: response,

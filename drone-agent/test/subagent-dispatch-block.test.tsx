@@ -192,4 +192,20 @@ describe('SubagentDispatchBlock', () => {
     expect(frame).toContain('Found 10 TODO comments. Now analyzing...');
     expect(frame).not.toContain('First, I will search for patterns...');
   });
+
+  it('shows error as last action while running', () => {
+    const state = makeState({
+      name: 'subagent__dispatch',
+      arguments: {
+        task: 'Process data',
+        persona: 'explore',
+      },
+      status: 'running',
+      outputLines: ['error:LLM API quota exceeded'],
+    });
+    const { lastFrame } = render(<SubagentDispatchBlock state={state} />);
+    const frame = lastFrame();
+    expect(frame).toContain('✗');
+    expect(frame).toContain('LLM API quota exceeded');
+  });
 });

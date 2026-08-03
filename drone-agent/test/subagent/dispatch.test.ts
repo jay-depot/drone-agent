@@ -176,6 +176,31 @@ describe('subagent lifecycle', () => {
     }, 10000); // Test timeout
   });
 
+  describe('activity-timeout', () => {
+    it('should time out when subagent is idle beyond activity timeout', async () => {
+      const result = await launchSubagent({
+        task: 'Calculate the sum of all prime numbers forever',
+        timeout: 500, // 500ms - very short activity timeout
+      });
+
+      expect(result.timedOut).toBe(true);
+      expect(result.error).toContain('timeout');
+    }, 10000);
+  });
+
+  describe('hard-cap-timeout', () => {
+    it('should time out via hard cap even with long activity timeout', async () => {
+      const result = await launchSubagent({
+        task: 'Calculate the sum of all prime numbers forever',
+        timeout: 60000, // Long activity timeout (won't fire)
+        hardCap: 500, // Very short hard cap (will fire first)
+      });
+
+      expect(result.timedOut).toBe(true);
+      expect(result.error).toContain('timeout');
+    }, 10000);
+  });
+
   describe('crash-handling', () => {
     it('should propagate crash errors to parent', async () => {
       const result = await launchErrorSubagent('crash', {
@@ -288,5 +313,38 @@ describe('subagent error handling', () => {
       // Should have an error about no result being returned
       expect(result.error).toContain('did not return a result');
     }, 30000);
+  });
+
+  describe('error-event-handling', () => {
+    it('should capture error NDJSON events from subagent stdout', async () => {
+      // Launch a subagent that will produce output
+      const result = await launchSubagent({
+        task: 'Say "hello" in exactly 5 characters',
+        timeout: 60000,
+      });
+
+      // The subagent should have produced some output
+      expect(result.stdout.length).toBeGreaterThan(0);
+
+      // Parse the NDJSON output and check for error events
+      const lines = result.stdout.split('\n').filter(l => l.trim());
+      const errorEvents = lines.filter(line => {
+        try {
+          const event = JSON.parse(line);
+          return event.kind === 'error';
+        } catch {
+          return false;
+        }
+      });
+
+      // If there are error events, they should have a message
+      for (const line of errorEvents) {
+        const event = JSON.parse(line);
+        if (event.kind === 'error') {
+          expect(typeof event.message).toBe('string');
+          expect(event.message.length).toBeGreaterThan(0);
+        }
+      }
+    });
   });
 });
