@@ -65,6 +65,7 @@ describe('App commit flow', () => {
         listPlugins: () => [],
         getRegisteredPluginCount: () => 1,
         getRegisteredToolCount: () => 1,
+        getMountedToolCount: () => 0,
         getCapability: () => undefined,
         getTool: () => undefined,
         runHooks: async () => {},

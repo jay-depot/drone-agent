@@ -20,6 +20,7 @@ import {
   type DroneWorkflowContext,
   type DroneWorkflowResult,
   type DroneWorkflowRunReturn,
+  ToolRegistry,
 } from 'drone-core';
 
 import { BUILT_IN_SLASH_COMMANDS } from './builtin-commands.js';
@@ -90,10 +91,12 @@ export type DronePluginEngine = {
     onProgress?: (chunk: string) => void
   ) => Promise<string>;
   listTools: () => DroneToolDescriptor[];
+  listAllTools: () => DroneToolDescriptor[];
   getCapability: <T>(pluginId: string) => T | undefined;
   listPlugins: () => DronePluginStatus[];
   getRegisteredPluginCount: () => number;
   getRegisteredToolCount: () => number;
+  getMountedToolCount: () => number;
   getHelpSnippets: () => string[];
   /**
    * Remove all tools registered by a plugin. Used when re-mounting tools
@@ -289,7 +292,7 @@ export function createDronePluginEngine({
 
   const hookBuckets = createHookBuckets();
   const promptFragments: DronePromptFragment[] = [];
-  const tools = new Map<string, DroneToolDefinition>();
+  const toolRegistry = new ToolRegistry();
   const workflows = new Map<string, DroneWorkflow>();
   const promptKeys = new Set<string>();
   const capabilities = new Map<string, unknown>();
@@ -397,15 +400,8 @@ export function createDronePluginEngine({
 
   function unregisterPluginToolsImpl(pluginId: string): void {
     // Delete all tools whose canonical name starts with the plugin prefix.
-    // This handles both statically registered tools (from register()) and
-    // dynamically registered tools (from registerTool() called at runtime,
-    // e.g. by the MCP plugin's listAndMountTools).
     const prefix = `${pluginId}__`;
-    for (const [canonicalName] of tools) {
-      if (canonicalName.startsWith(prefix)) {
-        tools.delete(canonicalName);
-      }
-    }
+    toolRegistry.removeByPrefix(prefix);
     // Also clear the plugin's own tool list so it doesn't hold stale refs.
     const registered = registeredPlugins.find(
       (p: { plugin: { metadata: { id: string } } }) =>
@@ -417,10 +413,10 @@ export function createDronePluginEngine({
   }
 
   function unregisterToolImpl(canonicalName: string): void {
-    if (!tools.has(canonicalName)) {
+    if (!toolRegistry.get(canonicalName)) {
       return;
     }
-    tools.delete(canonicalName);
+    toolRegistry.remove(canonicalName);
     for (const registered of registeredPlugins) {
       const idx = registered.tools.findIndex(
         (t: DroneToolDefinition) =>
@@ -458,10 +454,10 @@ export function createDronePluginEngine({
           plugin.metadata.id,
           tool.name
         );
-        if (tools.has(canonicalName)) {
+        if (toolRegistry.get(canonicalName)) {
           throw new Error(`Tool already registered: ${canonicalName}`);
         }
-        tools.set(canonicalName, tool);
+        toolRegistry.add(canonicalName, tool);
         pluginTools.push(tool);
       },
       registerPromptFragment: fragment => {
@@ -532,6 +528,12 @@ export function createDronePluginEngine({
       },
       runWorkflow: (canonicalName, args) => runWorkflow(canonicalName, args),
       requestElicitation: () => elicitationCapability,
+      mountTool: (canonicalName: string) => {
+        return toolRegistry.mount(canonicalName);
+      },
+      unmountTool: (canonicalName: string) => {
+        toolRegistry.unmount(canonicalName);
+      },
       unregisterPluginTools: (pluginId: string) => {
         unregisterPluginToolsImpl(pluginId);
       },
@@ -573,6 +575,155 @@ export function createDronePluginEngine({
     }
   }
 
+  /**
+   * Register the three runtime meta-tools that are always available:
+   * runtime__list_tools, runtime__mount_tool, runtime__unmount_tool.
+   */
+  function registerRuntimeMetaTools(): void {
+    const metaTools: Array<{
+      name: string;
+      description: string;
+      inputSchema: import('drone-core').DroneToolJsonSchema;
+      execute: (input: Record<string, unknown>) => Promise<string>;
+    }> = [
+      {
+        name: 'runtime__list_tools',
+        description:
+          'List all available tools. Optionally filter by plugin (e.g. "file"). Pass includeSchemas=true to include input schemas.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            plugin: {
+              type: 'string',
+              description:
+                'Optional plugin ID to filter by (e.g. "file", "git", "mcp").',
+            },
+            includeSchemas: {
+              type: 'boolean',
+              description: 'If true, include input schemas in the response.',
+            },
+          },
+          additionalProperties: false,
+        },
+        execute: async input => {
+          const pluginFilter =
+            typeof input.plugin === 'string' ? input.plugin : undefined;
+          const includeSchemas = input.includeSchemas === true;
+
+          let tools: Array<
+            | { name: string; description: string }
+            | import('drone-core').DroneToolDescriptor
+          > = includeSchemas
+            ? toolRegistry.listUnmountedWithSchemas(pluginFilter)
+            : toolRegistry.listUnmounted(pluginFilter);
+
+          // Filter by persona visibility
+          const personaCap = capabilities.get('persona') as
+            | {
+                getFilteredTools: (
+                  tools: import('drone-core').DroneToolDescriptor[]
+                ) => import('drone-core').DroneToolDescriptor[];
+              }
+            | undefined;
+          if (personaCap) {
+            const descriptors = tools.map(t => ({
+              name: t.name,
+              description: t.description,
+              inputSchema: includeSchemas
+                ? (t as import('drone-core').DroneToolDescriptor).inputSchema
+                : undefined,
+              defaultHidden: false,
+            }));
+            const filtered = personaCap.getFilteredTools(descriptors);
+            const filteredNames = new Set(filtered.map(t => t.name));
+            tools = tools.filter(t => filteredNames.has(t.name));
+          }
+
+          return JSON.stringify({ toolCount: tools.length, tools }, null, 2);
+        },
+      },
+      {
+        name: 'runtime__mount_tool',
+        description:
+          'Mount a tool by canonical name (e.g. "file__read"). Once mounted, the tool appears in your tool list with its full schema.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            tool: {
+              type: 'string',
+              description: 'Canonical tool name to mount (e.g. "file__read").',
+            },
+          },
+          required: ['tool'],
+          additionalProperties: false,
+        },
+        execute: async input => {
+          const toolName =
+            typeof input.tool === 'string' ? input.tool.trim() : '';
+          if (!toolName) {
+            throw new Error(
+              'runtime__mount_tool requires a non-empty tool name.'
+            );
+          }
+
+          const result = toolRegistry.mount(toolName);
+          if (!result) {
+            return JSON.stringify(
+              {
+                success: false,
+                error: `Unknown or already mounted tool: ${toolName}. Use runtime__list_tools to see available tools.`,
+              },
+              null,
+              2
+            );
+          }
+          return JSON.stringify(
+            {
+              success: true,
+              tool: toolName,
+              description: result.description,
+            },
+            null,
+            2
+          );
+        },
+      },
+      {
+        name: 'runtime__unmount_tool',
+        description:
+          'Unmount a previously mounted tool by canonical name. Reduces clutter.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            tool: {
+              type: 'string',
+              description: 'Canonical tool name to unmount.',
+            },
+          },
+          required: ['tool'],
+          additionalProperties: false,
+        },
+        execute: async input => {
+          const toolName =
+            typeof input.tool === 'string' ? input.tool.trim() : '';
+          if (!toolName) {
+            throw new Error(
+              'runtime__unmount_tool requires a non-empty tool name.'
+            );
+          }
+
+          toolRegistry.unmount(toolName);
+          return JSON.stringify({ success: true, tool: toolName }, null, 2);
+        },
+      },
+    ];
+
+    for (const tool of metaTools) {
+      toolRegistry.add(tool.name, tool);
+      toolRegistry.mount(tool.name);
+    }
+  }
+
   return {
     initialize: async () => {
       // Register built-in slash commands before plugins load.
@@ -585,6 +736,9 @@ export function createDronePluginEngine({
         registeredPlugins.push(await registerPlugin(plugin));
       }
 
+      // Register runtime meta-tools (always available)
+      registerRuntimeMetaTools();
+
       // Expose runtime options as a special '_runtime' capability
       // that any plugin can request via 'runtime'
       capabilities.set('_runtime', {
@@ -593,6 +747,10 @@ export function createDronePluginEngine({
         isSubagent: !!runtimeOptions?.subagentId,
         flags: runtimeFlagRegistry,
       });
+
+      // Inject enabled plugin list into system prompt
+      const enabledPluginList = Array.from(enabledPluginIds).sort().join(', ');
+      runtimeFlagRegistry.set('plugins', enabledPluginList);
 
       // Log override warnings after all plugins are loaded.
       logOverrideWarnings();
@@ -641,21 +799,16 @@ export function createDronePluginEngine({
           typeof prompt === 'string' && prompt.length > 0
       );
     },
-    getTool: canonicalName => tools.get(canonicalName),
+    getTool: canonicalName => toolRegistry.get(canonicalName),
     executeTool: async (canonicalName, input, onProgress) => {
-      const tool = tools.get(canonicalName);
+      const tool = toolRegistry.get(canonicalName);
       if (!tool) {
         throw new Error(`Unknown tool: ${canonicalName}`);
       }
       return tool.execute(input, onProgress);
     },
-    listTools: () =>
-      Array.from(tools.entries()).map(([canonicalName, tool]) => ({
-        name: canonicalName,
-        description: tool.description,
-        inputSchema: tool.inputSchema,
-        defaultHidden: tool.defaultHidden,
-      })),
+    listTools: () => toolRegistry.listMounted(),
+    listAllTools: () => toolRegistry.listAll(),
     getCapability: <T>(pluginId: string) =>
       capabilities.get(pluginId) as T | undefined,
     listPlugins: () =>
@@ -667,7 +820,8 @@ export function createDronePluginEngine({
         defaultEnabled: Boolean(plugin.metadata.defaultEnabled),
       })),
     getRegisteredPluginCount: () => registeredPlugins.length,
-    getRegisteredToolCount: () => tools.size,
+    getRegisteredToolCount: () => toolRegistry.getTotalCount(),
+    getMountedToolCount: () => toolRegistry.getMountedCount(),
     getConfig: () => config,
     getRuntimeFlags: () => runtimeFlagRegistry,
     buildSystemMessages: async () => {

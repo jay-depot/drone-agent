@@ -15,7 +15,7 @@
 //   - plugin-system.ts    : Plugin infrastructure types
 //   - utils.ts            : Utility functions
 //   - runtime-flags.ts    : Runtime flag registry for system prompt injection
-//   - tool-mounting-cache.ts : ToolMountingCache class
+//   - tool-registry.ts    : ToolRegistry class
 //   - token-estimate.ts   : Token estimation functions
 //   - config-schema.ts     : Config schema and parsing
 //   - wiki-types.ts       : Wiki page types for swarm knowledge base
@@ -211,9 +211,9 @@ export {
   getCanonicalToolName,
 } from './utils.js';
 
-// ── ToolMountingCache ────────────────────────────────────────────────
+// ── ToolRegistry ──────────────────────────────────────────────────────
 
-export { ToolMountingCache } from './tool-mounting-cache.js';
+export { ToolRegistry } from './tool-registry.js';
 // ── Sorted Registry ─────────────────────────────────────────────────
 
 export {

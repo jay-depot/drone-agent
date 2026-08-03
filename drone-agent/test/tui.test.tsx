@@ -81,6 +81,7 @@ function makeOptions(
       ],
       getRegisteredPluginCount: () => 2,
       getRegisteredToolCount: () => 3,
+      getMountedToolCount: () => 0,
       getCapability: () => undefined,
       getTool: () => undefined,
       runHooks: async () => {},
@@ -247,6 +248,7 @@ describe('App', () => {
         ],
         getRegisteredPluginCount: () => 2,
         getRegisteredToolCount: () => 3,
+        getMountedToolCount: () => 0,
         getCapability: ((pluginId: string) => {
           if (pluginId === 'todo') {
             return widget;

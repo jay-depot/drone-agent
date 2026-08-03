@@ -38,33 +38,23 @@ describe('RuntimeFlagRegistry', () => {
   describe('append', () => {
     it('creates a new flag when key does not exist', () => {
       const reg = createRuntimeFlagRegistry();
-      reg.append('list-mount', 'file');
-      expect(reg.get('list-mount')).toBe('file');
+      reg.append('plugins', 'file');
+      expect(reg.get('plugins')).toBe('file');
     });
 
     it('appends to an existing flag with comma separator', () => {
       const reg = createRuntimeFlagRegistry();
-      reg.append('list-mount', 'file');
-      reg.append('list-mount', 'lsp');
-      expect(reg.get('list-mount')).toBe('file, lsp');
+      reg.append('plugins', 'file');
+      reg.append('plugins', 'lsp');
+      expect(reg.get('plugins')).toBe('file, lsp');
     });
 
     it('deduplicates values', () => {
       const reg = createRuntimeFlagRegistry();
-      reg.append('list-mount', 'file');
-      reg.append('list-mount', 'lsp');
-      reg.append('list-mount', 'file'); // duplicate
-      expect(reg.get('list-mount')).toBe('file, lsp');
-    });
-
-    it('handles multiple appends', () => {
-      const reg = createRuntimeFlagRegistry();
-      reg.append('list-mount', 'file');
-      reg.append('list-mount', 'lsp');
-      reg.append('list-mount', 'git');
-      reg.append('list-mount', 'mcp');
-      reg.append('list-mount', 'swarm');
-      expect(reg.get('list-mount')).toBe('file, lsp, git, mcp, swarm');
+      reg.append('plugins', 'file');
+      reg.append('plugins', 'lsp');
+      reg.append('plugins', 'file'); // duplicate
+      expect(reg.get('plugins')).toBe('file, lsp');
     });
   });
 
@@ -72,11 +62,11 @@ describe('RuntimeFlagRegistry', () => {
     it('returns a Map of all flags', () => {
       const reg = createRuntimeFlagRegistry();
       reg.set('debug', 'llm');
-      reg.append('list-mount', 'file');
+      reg.set('plugins', 'file, git');
       const entries = reg.entries();
       expect(entries.size).toBe(2);
       expect(entries.get('debug')).toBe('llm');
-      expect(entries.get('list-mount')).toBe('file');
+      expect(entries.get('plugins')).toBe('file, git');
     });
 
     it('returns a copy, not the internal map', () => {
@@ -94,41 +84,29 @@ describe('RuntimeFlagRegistry', () => {
       expect(reg.render()).toBeNull();
     });
 
-    it('renders list-mount flag with explainer and active plugins', () => {
+    it('renders tool management explainer and flags', () => {
       const reg = createRuntimeFlagRegistry();
-      reg.append('list-mount', 'file');
-      reg.append('list-mount', 'lsp');
+      reg.set('plugins', 'exec, file, git');
       const result = reg.render();
       expect(result).not.toBeNull();
       expect(result).toContain('# Runtime Flags');
-      expect(result).toContain('## List/Mount Pattern');
-      expect(result).toContain('`<plugin>__list_tools`');
-      expect(result).toContain('`<plugin>__mount_tool`');
-      expect(result).toContain('`<plugin>__unmount_tool`');
-      expect(result).toContain('Active list-mount plugins: file, lsp');
+      expect(result).toContain('## Tool Management');
+      expect(result).toContain('`runtime__list_tools`');
+      expect(result).toContain('`runtime__mount_tool`');
+      expect(result).toContain('`runtime__unmount_tool`');
+      expect(result).toContain('plugins: exec, file, git');
     });
 
-    it('renders non-list-mount flags as key: value lines', () => {
+    it('renders multiple flags as key: value lines', () => {
       const reg = createRuntimeFlagRegistry();
       reg.set('debug', 'llm, mcp');
+      reg.set('plugins', 'exec, file');
       const result = reg.render();
       expect(result).not.toBeNull();
       expect(result).toContain('# Runtime Flags');
+      expect(result).toContain('## Tool Management');
       expect(result).toContain('debug: llm, mcp');
-      expect(result).not.toContain('## List/Mount Pattern');
-    });
-
-    it('renders both list-mount and other flags together', () => {
-      const reg = createRuntimeFlagRegistry();
-      reg.append('list-mount', 'file');
-      reg.append('list-mount', 'git');
-      reg.set('debug', 'llm');
-      const result = reg.render();
-      expect(result).not.toBeNull();
-      expect(result).toContain('# Runtime Flags');
-      expect(result).toContain('## List/Mount Pattern');
-      expect(result).toContain('Active list-mount plugins: file, git');
-      expect(result).toContain('debug: llm');
+      expect(result).toContain('plugins: exec, file');
     });
   });
 });

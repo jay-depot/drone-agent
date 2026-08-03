@@ -1,15 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import {
   createDefaultAgentConfig,
-  createRuntimeFlagRegistry,
   type DroneChatResponse,
   type DroneContextWindowInfo,
   type DroneLlmCapability,
   type DroneLlmProvider,
   type DroneSessionTurn,
-  type DroneToolDescriptor,
 } from 'drone-core';
-import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import {
   createConversationService,
   CANCEL_SENTINEL,
@@ -17,68 +15,11 @@ import {
 import { createContextBudgetService } from '../src/runtime/context-budget-service.js';
 import type { ContextBudgetService } from '../src/runtime/context-budget-service.js';
 import { createSessionManager } from '../src/runtime/session-manager.js';
-import { silentLogger } from './helpers.js';
+import { createMockEngine, silentLogger } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // Test fixtures
 // ---------------------------------------------------------------------------
-
-type EngineOptions = {
-  tools: DroneToolDescriptor[];
-  // The executeTool mock returns a string on success, or throws on error.
-  // Tests pass in a real or stubbed function so the service can route
-  // errors back to the model as tool messages.
-  executeToolImpl: (
-    name: string,
-    input: Record<string, unknown>
-  ) => Promise<string>;
-  promptFragments?: string[];
-};
-
-function makeEngine(options: EngineOptions): DronePluginEngine & {
-  __executeMock: ReturnType<typeof vi.fn>;
-} {
-  const executeMock = vi.fn(options.executeToolImpl);
-  const toolList = options.tools;
-
-  return {
-    initialize: async () => [],
-    runHooks: async () => {},
-    runSessionSafetyTrimWillRunHooks: async () => {},
-    runSessionSafetyTrimAppliedHooks: async () => {},
-    runConversationEventHooks: async () => {},
-    renderPromptFragments: async () => options.promptFragments ?? [],
-    getTool: () => undefined,
-    executeTool: executeMock as unknown as DronePluginEngine['executeTool'],
-    listTools: () => toolList,
-    getCapability: <T>(id: string) =>
-      id === 'llm' ? ({} as unknown as T) : undefined,
-    listPlugins: () => [],
-    getRegisteredPluginCount: () => 0,
-    getRegisteredToolCount: () => toolList.length,
-    unregisterPluginTools: () => {},
-    unregisterTool: () => {},
-    getHelpSnippets: () => [],
-    getConfig: () => {
-      throw new Error('getConfig not used in conversation-service tests');
-    },
-    getRuntimeFlags: () => createRuntimeFlagRegistry(),
-    setElicitation: () => {},
-    getElicitation: () => undefined,
-    runWorkflow: async () => {
-      throw new Error('runWorkflow not used in conversation-service tests');
-    },
-    dispatchSlashCommand: async () => false,
-    getSlashCommands: () => [],
-    onConversationEvent: () => () => {},
-    registerBuiltinSlashCommand: () => {},
-    getBuiltinSlashCommands: () => [],
-    enablePlugin: async (_pluginId: string) => false,
-    buildSystemMessages: async () => [],
-    addExternalPlugin: async (_plugin: any) => false,
-    __executeMock: executeMock,
-  };
-}
 
 function makeProvider(
   chatResponses: DroneChatResponse[]
@@ -134,7 +75,7 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
 }
 
 it('uses the newly active provider on the next loop iteration', async () => {
-  const engine = makeEngine({
+  const engine = createMockEngine({
     tools: [
       {
         name: 'switch.provider',
@@ -220,7 +161,7 @@ it('uses the newly active provider on the next loop iteration', async () => {
 
 describe('createConversationService — tool error handling', () => {
   it('returns a successful tool result to the model when the tool succeeds', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -280,7 +221,7 @@ describe('createConversationService — tool error handling', () => {
       return e;
     })();
 
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -336,7 +277,7 @@ describe('createConversationService — tool error handling', () => {
     const err: NodeJS.ErrnoException = new Error('boom');
     err.code = 'EACCES';
 
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__read',
@@ -384,7 +325,7 @@ describe('createConversationService — tool error handling', () => {
 
   it('continues the conversation loop after a tool error and lets the model retry', async () => {
     let attempt = 0;
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -446,7 +387,7 @@ describe('createConversationService — tool error handling', () => {
   });
 
   it('records tool call arguments in the assistant turn before running them', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__read',
@@ -502,7 +443,7 @@ describe('createConversationService — iteration limits', () => {
   function makeErrnoEngine(): DronePluginEngine & {
     __executeMock: ReturnType<typeof vi.fn>;
   } {
-    return makeEngine({
+    return createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -694,7 +635,7 @@ describe('createConversationService — iteration limits', () => {
 
 describe('createConversationService — stuck detection', () => {
   it('aborts early with a clear message after N consecutive same-error rounds', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -740,7 +681,7 @@ describe('createConversationService — stuck detection', () => {
 
   it('does not trigger stuck detection if the model makes progress', async () => {
     let attempt = 0;
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -807,7 +748,7 @@ describe('createConversationService — stuck detection', () => {
       return 'ok';
     });
 
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -871,7 +812,7 @@ describe('createConversationService — stuck detection', () => {
 
 describe('createConversationService — message queue', () => {
   it('drains queued messages before the LLM call on the next loop iteration', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'fake_tool',
@@ -922,7 +863,7 @@ describe('createConversationService — message queue', () => {
   it('cancelCurrentRequest causes early return with CANCEL_SENTINEL', async () => {
     let cancelNow: (() => void) | null = null;
 
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'fake_tool',
@@ -969,7 +910,7 @@ describe('createConversationService — message queue', () => {
   it('cancel preserves queued messages for the next sendUserMessage call', async () => {
     let cancelNow: (() => void) | null = null;
 
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'fake_tool',
@@ -1022,7 +963,7 @@ describe('createConversationService — message queue', () => {
   });
 
   it('clearSession flushes the queue', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [],
       executeToolImpl: async () => 'ok',
     });
@@ -1086,7 +1027,7 @@ describe('tool result truncation', () => {
   }
 
   it('truncates tool result exceeding 15% of context window', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'test__large',
@@ -1145,7 +1086,7 @@ describe('tool result truncation', () => {
   });
 
   it('passes through small tool result unchanged', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'test__small',
@@ -1200,7 +1141,7 @@ describe('tool result truncation', () => {
   });
 
   it('does not truncate when maxToolResultTokensPercent is 0', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'test__large',

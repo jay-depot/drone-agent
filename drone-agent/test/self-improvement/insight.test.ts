@@ -25,6 +25,9 @@ describe('self-improvement plugin', () => {
 
   it('registers the self-improvement.insight tool', async () => {
     const engine = await createEngine();
+    engine.executeTool('runtime__mount_tool', {
+      tool: 'self-improvement__insight',
+    });
     const tools = engine.listTools();
     const insightTool = tools.find(t => t.name === 'self-improvement__insight');
     expect(insightTool).toBeDefined();

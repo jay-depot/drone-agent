@@ -65,6 +65,8 @@ async function captureLlmPlugin(): Promise<Capture> {
     },
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
+    mountTool: () => undefined,
+    unmountTool: () => {},
     hooks: {
       onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
       onSessionStart: cb => hooks.onSessionStart.push(cb),
