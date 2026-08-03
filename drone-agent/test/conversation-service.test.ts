@@ -56,6 +56,8 @@ function makeEngine(options: EngineOptions): DronePluginEngine & {
     listPlugins: () => [],
     getRegisteredPluginCount: () => 0,
     getRegisteredToolCount: () => toolList.length,
+    getMountedToolCount: () => 0,
+    listAllTools: () => toolList,
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
     getHelpSnippets: () => [],

@@ -35,6 +35,7 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
     listPlugins: () => [],
     getRegisteredPluginCount: () => 0,
     getRegisteredToolCount: () => 0,
+    getMountedToolCount: () => 0,
     getCapability: ((_id: string) => (_id === 'persona' ? cap : undefined)) as <
       T,
     >(

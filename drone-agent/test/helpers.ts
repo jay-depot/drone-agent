@@ -196,6 +196,8 @@ export function createFakeEngine(
     getTool: () => undefined,
     executeTool: async () => '',
     listTools: () => [],
+    listAllTools: () => [],
+    getMountedToolCount: () => 0,
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
     getCapability: <T>() => undefined as T | undefined,
