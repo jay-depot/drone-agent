@@ -33,6 +33,11 @@ export type DroneLspInstallSpec = {
   tarballUrl: string;
   integrity: string;
   entryPoint?: string;
+  /**
+   * Number of leading path components to strip when extracting the
+   * tarball. Defaults to 1 (standard npm/GitHub release layout).
+   */
+  strip?: number;
   /** Platform-specific overrides. The top-level tarballUrl/integrity
    *  serve as the default fallback. */
   platforms?: Partial<Record<DroneLspPlatformKey, DroneLspPlatformSpec>>;

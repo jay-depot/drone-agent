@@ -89,6 +89,7 @@ type ResolvedSpawn = {
   command: string;
   args: string[];
   source: InstallerResolution['source'];
+  cacheDir?: string;
   installStatus: DroneLspServerState['installStatus'];
 };
 
@@ -277,7 +278,7 @@ export function createServerManager(
     serverId: string,
     language: string,
     config: DroneLspServerConfig,
-    resolved: { command: string; args: string[] } | null
+    resolved: ResolvedSpawn | null
   ): Promise<ServerRuntime> {
     const knownSpec = getKnownServerSpec(language);
     const fileExtensions = normalizeFileExtensions(
@@ -331,7 +332,10 @@ export function createServerManager(
     }
 
     const childProcess = spawn(resolved.command, resolved.args, {
-      cwd: workspaceRoot,
+      // Native binaries (e.g., lua-language-server) need to run from
+      // their own directory to find support files. Use cacheDir when
+      // available, falling back to workspaceRoot for PATH-based servers.
+      cwd: resolved.cacheDir ?? workspaceRoot,
       env: process.env,
       stdio: 'pipe',
     });
@@ -484,6 +488,7 @@ export function createServerManager(
     return {
       command: resolution.command,
       args: resolution.args,
+      cacheDir: resolution.cacheDir,
       source: resolution.source,
       installStatus: wasCached ? 'cached' : 'downloaded',
     };
@@ -615,7 +620,7 @@ export function createServerManager(
           candidate.serverId,
           candidate.language,
           candidate.config,
-          resolved ? { command: resolved.command, args: resolved.args } : null
+          resolved
         );
         // Surface install provenance on the runtime state.
         if (resolved) {
@@ -1168,7 +1173,7 @@ export function createServerManager(
         spec.id,
         spec.language,
         config,
-        resolved ? { command: resolved.command, args: resolved.args } : null
+        resolved
       );
       if (resolved) {
         updateServerState(runtime.id, {

@@ -60,7 +60,9 @@ async function initializeServer(
   });
 
   const child = spawn(resolution.command, resolution.args, {
-    cwd: workspaceRoot,
+    // Native binaries like lua-language-server need to run from their
+    // own directory to find support files.
+    cwd: resolution.cacheDir ?? workspaceRoot,
     stdio: 'pipe',
     env: process.env,
   });

@@ -130,5 +130,13 @@
   {
     "timestamp": "2026-08-02T16:16:55.771Z",
     "insight": "rust-analyzer GitHub releases use date-based tags and the old 2024-11-18 release assets were 404. The latest release (2026-07-27) uses .gz files (not .tar.gz) for the binary archives. When pinning GitHub release versions, always verify the actual asset names from the API."
+  },
+  {
+    "timestamp": "2026-08-03T00:08:22.633Z",
+    "insight": "LSP server smoke tests revealed that the transport layer has two bugs: (1) stderr output from LSP servers (like taplo's \"registered request handler\" log) is treated as a fatal error by createChildTransport's onError callback, and (2) native binaries like lua-language-server need to be spawned from their own directory (cwd = cacheDir) to find their support files. These are pre-existing issues in transport.ts and server.ts, not in the installer or server specs."
+  },
+  {
+    "timestamp": "2026-08-03T00:08:26.019Z",
+    "insight": "LSP installer: npm tarballs only contain the package's own files, not node_modules. The installer must run `npm install --production` after extraction for npm-type installs. Also, native binaries (github-release, go) must be invoked directly, not wrapped with `node`. The installer now dispatches correctly based on install type."
   }
 ]
