@@ -8,7 +8,7 @@ tags:
   - markdown
   - syntax-highlighting
 created: 2026-07-14T17:33:56.135Z
-updated: 2026-07-14T17:36:00.402Z
+updated: 2026-08-03T21:17:49.449Z
 ---
 
 # TUI Bugs & Minor Annoyances
@@ -37,6 +37,8 @@ Additionally, `FreeformInput` in `ElicitationPrompt.tsx` has the same problem �
 1. Buffer incoming characters in a ref and flush to state on a short debounce (e.g., 50ms of no input = paste complete)
 2. Use the `data` event from `stdin` directly to detect paste boundaries (bracketed paste sequences `\e[200~` ... `\e[201~`)
 3. For `FreeformInput`, replace with `MultilineTextInput` or add the same buffering logic
+
+**Note:** `useBracketedPaste` hook was added to address this. `FreeformInput` has been replaced with `MultilineTextInput` (which uses `useBracketedPaste`). The paste handling should now work correctly.
 
 ---
 
@@ -79,7 +81,8 @@ Render each line as a single `<Text>` element with raw ANSI escape codes for col
 
 ## Issue 3: Input cursor navigation is too limited
 
-**Severity:** Low
+**Status:** Fixed (commit 58d3d78).
+**Severity:** Low → Fixed
 **Area:** `MultilineTextInput` (`drone-agent/src/tui/components/MultilineTextInput.tsx`), `FreeformInput` (`drone-agent/src/tui/components/ElicitationPrompt.tsx`)
 
 **Symptoms:**
@@ -89,34 +92,20 @@ Render each line as a single `<Text>` element with raw ANSI escape codes for col
 - No Ctrl+Left/Ctrl+Right for word-jump
 - No Ctrl+U/Ctrl+K for line kill (FreeformInput has Ctrl+U but MultilineTextInput doesn't)
 
-**Current supported keys:**
-| Key | Action |
-|---|---|
-| Left arrow | Move cursor left by 1 |
-| Right arrow | Move cursor right by 1 |
-| Backspace | Delete char before cursor |
-| Delete | Same as Backspace |
-| Enter | Submit |
-| Ctrl+J | Insert newline at cursor |
-
-**Missing keys (desired):**
-| Key | Action |
-|---|---|
-| Up arrow | Move cursor up one line |
-| Down arrow | Move cursor down one line |
-| Home | Move cursor to start of line |
-| End | Move cursor to end of line |
-| Ctrl+Left | Move cursor left one word |
-| Ctrl+Right | Move cursor right one word |
-| Ctrl+U | Delete from cursor to start of line (kill) |
-| Ctrl+K | Delete from cursor to end of line (kill) |
-
-**Note:** Up/Down navigation requires line-aware cursor positioning, which means tracking not just a flat `cursorOffset` but also understanding line boundaries (where `\n` characters are). This is more complex than the other keybindings.
+**Fix implemented:**
+- Up/Down arrows navigate visual lines with preferred column tracking
+- Home/End jump to logical line boundaries
+- Ctrl+Left/Right jump words
+- Ctrl+U/K kill to start/end of logical line
+- Mouse click positions cursor (SGR mode 1000, not 1002 — drag-to-select preserved)
+- `FreeformInput` replaced with `MultilineTextInput` (full navigation in elicitation prompts)
+- New `visual-text-model.ts` module provides word-wrap aware visual line computation
+- New `useSgrMouse.ts` hook for SGR mouse mode
 
 ---
 
 ## Priority Order (for a batch fix)
 
-1. **Syntax highlighting** (Issue 2) — most visible, makes code responses actively hard to read
+1. ~~**Syntax highlighting** (Issue 2) — most visible, makes code responses actively hard to read~~ (Fixed)
 2. **Paste handling** (Issue 1) — functional regression for anyone pasting code/config
-3. **Cursor navigation** (Issue 3) — quality-of-life improvement, lower impact
+3. ~~**Cursor navigation** (Issue 3) — quality-of-life improvement, lower impact~~ (Fixed)

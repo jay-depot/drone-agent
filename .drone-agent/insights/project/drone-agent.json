@@ -162,5 +162,13 @@
   {
     "timestamp": "2026-08-03T21:02:00.301Z",
     "insight": "Consolidated three nearly identical makeEngine functions (~45 lines each) from conversation-service-events.test.ts, conversation-service.test.ts, and persona-tool-call-limit.test.ts into a single createMockEngine factory in test/helpers.ts. The persona variant was handled via a getCapability override option. This eliminates ~180 lines of duplicated code and ensures future DronePluginEngine changes only need updating in one place. The remaining duplicated registration patterns (LLM provider tests, capture-tools tests) are more context-specific and not worth consolidating."
+  },
+  {
+    "timestamp": "2026-08-03T21:18:01.779Z",
+    "insight": "The visual-text-model module's word-wrap algorithm was tricky to get right. The key insight is that trailing whitespace at the end of a visual line should be dropped (not included in the visual line's range), and leading whitespace at the start of a new visual line should be skipped. This matches how terminals actually render wrapped text."
+  },
+  {
+    "timestamp": "2026-08-03T21:18:04.711Z",
+    "insight": "SGR mouse mode 1000 (button events only, no drag) is the right choice for preserving native text selection. Mode 1002 would capture drag events and break the user's ability to select text. The trade-off is that click-to-position works but we don't get drag-to-select-in-input. This is acceptable since keyboard navigation covers the editing use case."
   }
 ]
