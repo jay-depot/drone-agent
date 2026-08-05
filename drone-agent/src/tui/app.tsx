@@ -48,7 +48,6 @@ import { useChatLog } from './hooks/useChatLog.js';
 import { useColorOverrides } from './hooks/useColorOverrides.js';
 import { useDebouncedWindowSize } from './hooks/useDebouncedWindowSize.js';
 import { useElicitation } from './hooks/useElicitation.js';
-import { useSgrMouse } from './hooks/useSgrMouse.js';
 import { useLlmIndicator } from './hooks/useLlmIndicator.js';
 import { useStatusBar } from './hooks/useStatusBar.js';
 import { useTailRegion } from './hooks/useTailRegion.js';
@@ -107,8 +106,6 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   );
   // Debounce resize events to reduce flicker during window-drag gestures.
   const { columns } = useDebouncedWindowSize(120);
-  // SGR mouse mode for click-to-position in the input.
-  const { lastClick } = useSgrMouse();
 
   // ── Scheme ref for event listener (avoids stale closure) ────────────
   const schemeRef = useRef<DroneColorScheme>(scheme);
@@ -631,7 +628,6 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         llmColor={llmColor}
         disabled={activeQuestion !== null}
         columns={columns}
-        mouseClick={lastClick}
       />
       {activeQuestion ? (
         <ElicitationPrompt
@@ -640,7 +636,6 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           scheme={scheme}
           onSubmit={commitAnswer}
           columns={columns}
-          mouseClick={lastClick}
         />
       ) : null}
       <StatusBar

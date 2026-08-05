@@ -58,6 +58,7 @@ function InputLineShell({
   value: string;
   onChange: (next: string) => void;
   onSubmit?: (value: string) => void;
+  columns?: number;
   focus?: boolean;
 }): React.JSX.Element {
   return (

@@ -1,5 +1,4 @@
 import type React from 'react';
-import type { SgrMouseEvent } from '../hooks/useSgrMouse.js';
 /**
  * The bottom input line.
  *
@@ -8,6 +7,13 @@ import type { SgrMouseEvent } from '../hooks/useSgrMouse.js';
  *
  * Renders an optional LLM working indicator (a trigram character)
  * to the left of the prompt label.
+ *
+ * The effective text width passed to MultilineTextInput is the
+ * terminal width minus:
+ *   - 2 for the border (left + right border chars)
+ *   - 2 for paddingX={1} (left + right padding)
+ *   - the LLM indicator width (if present)
+ *   - the prompt label width (if present)
  */
 
 import { Box, Text } from 'ink';
@@ -24,7 +30,6 @@ export function InputLine({
   llmColor,
   disabled,
   columns,
-  mouseClick,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -54,9 +59,13 @@ export function InputLine({
   disabled?: boolean;
   /** Terminal width for visual line calculation. */
   columns: number;
-  /** Most recent SGR mouse click event (for click-to-position). */
-  mouseClick?: SgrMouseEvent | null;
 }): React.JSX.Element {
+  const textWidth =
+    columns -
+    4 -
+    (llmFrame ? 2 : 0) -
+    (promptLabel ? promptLabel.length : 0);
+
   return (
     <Box
       borderStyle="single"
@@ -78,8 +87,7 @@ export function InputLine({
           value={value}
           onChange={onChange}
           onSubmit={onSubmit}
-          columns={columns}
-          mouseClick={mouseClick}
+          columns={textWidth}
           focus={!disabled}
         />
       </Box>

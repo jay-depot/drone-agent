@@ -12,7 +12,6 @@ import { useState } from 'react';
 import type { DroneElicitationQuestion } from 'drone-core';
 import { ColorTag, type DroneColorScheme } from '../theme.js';
 import { MultilineTextInput } from './MultilineTextInput.js';
-import type { SgrMouseEvent } from '../hooks/useSgrMouse.js';
 
 export function ElicitationPrompt({
   question,
@@ -20,16 +19,12 @@ export function ElicitationPrompt({
   scheme,
   onSubmit,
   columns,
-  mouseClick,
 }: {
   question: DroneElicitationQuestion & { uiKey: string };
   pickerIndex: number;
   scheme: DroneColorScheme;
-  onSubmit: (answer: string) => void;
-  /** Terminal width for visual line calculation. */
   columns: number;
-  /** Most recent SGR mouse click event (for click-to-position). */
-  mouseClick?: SgrMouseEvent | null;
+  onSubmit: (answer: string) => void;
 }): React.JSX.Element {
   return (
     <Box
@@ -49,7 +44,6 @@ export function ElicitationPrompt({
           onSubmit={onSubmit}
           scheme={scheme}
           columns={columns}
-          mouseClick={mouseClick}
         />
       ) : (
         <Box flexDirection="column">
@@ -81,7 +75,6 @@ function FreeformPrompt({
   onSubmit,
   scheme,
   columns,
-  mouseClick,
 }: {
   inputLabel: string;
   placeholder?: string;
@@ -89,7 +82,6 @@ function FreeformPrompt({
   onSubmit: (answer: string) => void;
   scheme: DroneColorScheme;
   columns: number;
-  mouseClick?: SgrMouseEvent | null;
 }): React.JSX.Element {
   const [value, setValue] = useState<string>(defaultValue ?? '');
   return (
@@ -105,7 +97,6 @@ function FreeformPrompt({
               onSubmit(v.trim());
             }}
             columns={columns}
-            mouseClick={mouseClick}
             focus={true}
           />
         </Box>

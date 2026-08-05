@@ -10,8 +10,6 @@ import type React from 'react';
  * - Ctrl+Left/Right jump words
  * - Ctrl+U/K kill to start/end of logical line
  * - Backspace/Delete remove characters before/at the cursor
- * - Mouse click positions the cursor (when SGR mouse events are provided)
- *
  * This replaces `ink-text-input`'s `TextInput` in the main input
  * line so that users can compose multi-line messages.
  *
@@ -36,9 +34,8 @@ import type React from 'react';
  */
 
 import { Text, useInput } from 'ink';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useBracketedPaste } from '../hooks/useBracketedPaste.js';
-import type { SgrMouseEvent } from '../hooks/useSgrMouse.js';
 import {
   computeVisualLines,
   offsetToVisual,
@@ -55,7 +52,6 @@ export function MultilineTextInput({
   onSubmit,
   focus = true,
   columns,
-  mouseClick,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -63,8 +59,6 @@ export function MultilineTextInput({
   focus?: boolean;
   /** Terminal width for visual line calculation. */
   columns: number;
-  /** Most recent SGR mouse click event (for click-to-position). */
-  mouseClick?: SgrMouseEvent | null;
 }): React.JSX.Element {
   const [cursorOffset, setCursorOffset] = useState(value.length);
 
@@ -81,10 +75,6 @@ export function MultilineTextInput({
   const cursorOffsetRef = useRef(cursorOffset);
   cursorOffsetRef.current = cursorOffset;
 
-  // Ref for the input container element to measure its screen position
-  // for mouse click handling.
-  const containerRef = useRef<{ top: number }>({ top: 0 });
-
   // ── Paste handling ────────────────────────────────────────────────
   const { onCharInput } = useBracketedPaste((text: string) => {
     const curValue = valueRef.current;
@@ -96,53 +86,15 @@ export function MultilineTextInput({
     preferredColumnRef.current = null;
   });
 
-  // ── Mouse click handling ──────────────────────────────────────────
-  useEffect(() => {
-    if (!mouseClick || !focus) return;
-
-    const offset = Math.min(cursorOffset, value.length);
-    const visual = offsetToVisual(value, offset, columns);
-
-    // The mouseClick row/col is 1-based terminal coordinates.
-    // We need to determine the input box's screen position to
-    // translate terminal row to visual line.
-    //
-    // For now, we use a simple heuristic: the input box is at the
-    // bottom of the screen. The terminal row of the input box's
-    // first visual line is approximately (terminal height - number
-    // of visual lines below the input). Since we don't have precise
-    // screen position tracking, we approximate by assuming the
-    // click is within the input area if it's near the bottom.
-    //
-    // A more precise approach would require Ink to expose component
-    // positions, which it doesn't. For now, we use the visual line
-    // model and assume the click row maps to a visual line relative
-    // to the input's position.
-    //
-    // The col is 1-based from the terminal. We subtract 1 to get
-    // 0-based, then clamp to the visual line's length.
-    const clickCol = Math.max(0, mouseClick.col - 1);
-
-    // Find which visual line the click is on by computing the
-    // visual lines and mapping the click row to a visual line index.
-    // We assume the input starts at a known terminal row (approximated
-    // as the last few rows of the terminal).
-    const lines = computeVisualLines(value, columns);
-    if (lines.length === 0) return;
-
-    // Map the click to a visual line. We don't know the exact
-    // terminal row of the input, so we use a heuristic: the click
-    // row is relative to the bottom of the terminal. The last visual
-    // line is at the bottom of the input area.
-    // For now, we just use the click col on the current visual line
-    // as a simple approximation.
-    const newOffset = visualToOffset(value, visual.line, clickCol, columns);
-    setCursorOffset(newOffset);
-    preferredColumnRef.current = null;
-  }, [mouseClick, focus, value, columns, cursorOffset]);
-
   useInput(
     (input, key) => {
+      // Filter out SGR mouse sequences (e.g. [<10;5;0M) that Ink's
+      // inputParser emits as valid CSI sequences. These are not text
+      // input and should not be inserted into the value.
+      if (input.startsWith('[<')) {
+        return;
+      }
+
       // Clamp cursorOffset to value.length in case the parent
       // reset the value externally (e.g. after submit). Without
       // this, backspace can silently fail because cursorOffset
