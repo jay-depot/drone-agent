@@ -61,10 +61,7 @@ export function InputLine({
   columns: number;
 }): React.JSX.Element {
   const textWidth =
-    columns -
-    4 -
-    (llmFrame ? 2 : 0) -
-    (promptLabel ? promptLabel.length : 0);
+    columns - 4 - (llmFrame ? 2 : 0) - (promptLabel ? promptLabel.length : 0);
 
   return (
     <Box
@@ -74,15 +71,15 @@ export function InputLine({
       flexDirection="row"
       flexGrow={0}
     >
-      <Box flexGrow={0}>
+      <Box flexGrow={0} flexShrink={0}>
         {llmFrame ? <Text color={llmColor}>{llmFrame} </Text> : null}
       </Box>
-      <Box flexGrow={0}>
+      <Box flexGrow={0} flexShrink={0}>
         {promptLabel ? (
           <Text color={scheme.userInput}>{promptLabel}</Text>
         ) : null}
       </Box>
-      <Box flexGrow={1} flexDirection="column">
+      <Box flexGrow={1} flexShrink={1} overflow="hidden" flexDirection="column">
         <MultilineTextInput
           value={value}
           onChange={onChange}

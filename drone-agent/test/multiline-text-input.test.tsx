@@ -63,8 +63,10 @@ function InputLineShell({
 }): React.JSX.Element {
   return (
     <Box borderStyle="single" paddingX={1} flexDirection="row" width={30}>
-      <Text>{'drone> '}</Text>
-      <Box flexGrow={1}>
+      <Box flexGrow={0} flexShrink={0}>
+        <Text>{'drone> '}</Text>
+      </Box>
+      <Box flexGrow={1} flexShrink={1} overflow="hidden">
         <MultilineTextInput
           value={value}
           onChange={onChange}
@@ -375,6 +377,42 @@ describe('MultilineTextInput', () => {
     const frame = lastFrame() ?? '';
     expect(frame).toContain('hello');
     expect(frame).toContain('world');
+    cleanup();
+  });
+
+  // ── Prompt label preservation after soft-wrap ──────────────────
+  // Regression test: when text exceeds the available width and
+  // soft-wraps, the prompt label's trailing space should NOT be
+  // truncated by Yoga shrinking the label Box to make room for the
+  // Text node's pre-wrap width (which includes the cursor's inverse
+  // space). The fix adds flexShrink={0} to the label Box and
+  // overflow="hidden" to the content Box.
+
+  it('preserves prompt label trailing space after soft-wrap', async () => {
+    // Use a narrow width so text wraps quickly.
+    // InputLineShell has width=30, border=2, padding=2, label='drone> ' (7).
+    // Effective text width = 30 - 4 - 7 = 19.
+    // Type 25 chars — well past the wrap at 19.
+    const longText = 'a'.repeat(25);
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value={longText} onChange={() => {}} columns={19} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+
+    // The full prompt label including trailing space must be present
+    expect(frame).toContain('drone> ');
+
+    // The text should have wrapped to multiple lines
+    const lines = frame.split('\n');
+    let contentLines = 0;
+    for (let i = 1; i < lines.length - 1; i++) {
+      if (lines[i].includes('a')) {
+        contentLines++;
+      }
+    }
+    expect(contentLines).toBeGreaterThan(1);
+
     cleanup();
   });
 
