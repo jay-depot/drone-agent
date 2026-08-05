@@ -170,5 +170,17 @@
   {
     "timestamp": "2026-08-03T21:18:04.711Z",
     "insight": "SGR mouse mode 1000 (button events only, no drag) is the right choice for preserving native text selection. Mode 1002 would capture drag events and break the user's ability to select text. The trade-off is that click-to-position works but we don't get drag-to-select-in-input. This is acceptable since keyboard navigation covers the editing use case."
+  },
+  {
+    "timestamp": "2026-08-05T22:54:47.948Z",
+    "insight": "Ink's Box component defaults to flexShrink: 1 (in Box.js). This means ALL Boxes inherit flexShrink: 1 unless explicitly overridden. In a horizontal row layout with fixed-width label Boxes (flexGrow={0}) and a flexible content Box (flexGrow={1}), if the content Box's Text node has a pre-wrap intrinsic width that exceeds the available space, Yoga will shrink the sibling label Boxes — silently truncating their content (e.g., eating the trailing space of a prompt label). The fix is to always set flexShrink={0} on fixed-width label/indicator Boxes, and add overflow=\"hidden\" to the flexible content Box to clip overflow rather than pushing siblings."
+  },
+  {
+    "timestamp": "2026-08-05T22:54:53.578Z",
+    "insight": "Ink's text wrapping happens in renderNodeToOutput (render-node-to-output.js), AFTER Yoga layout. It uses widestLine(text) to measure the pre-wrap width, and only wraps if it exceeds getMaxWidth(yogaNode). This means Yoga sees the UNWRAPPED width of the Text node during layout — including any cursor characters (like the inverse space at the end of MultilineTextInput's rendered text). The cursor's 1-character width is visible to Yoga and can cause sibling Box shrinkage even though wrapAnsi would later wrap the text to fit. This is a fundamental Ink architecture detail: layout uses pre-wrap measurements, rendering applies wrapping post-hoc."
+  },
+  {
+    "timestamp": "2026-08-05T22:54:58.493Z",
+    "insight": "When debugging TUI layout bugs in Ink, the key files to examine are: (1) Box.js — for default style values like flexShrink:1 that silently affect all Boxes; (2) build-layout.js — for how Yoga nodes are created and initial widths/heights set via measureText; (3) calculate-wrapped-text.js — for the post-layout wrapping pass that adjusts Text node dimensions; (4) render-node-to-output.js — for the final render-time wrapping using wrapAnsi and getMaxWidth; (5) get-max-width.js — for the formula: computedWidth - padding - border. The rendering pipeline is: buildLayout (initial Yoga) → calculateLayout → calculateWrappedText (re-measure text nodes) → renderNodeToOutput (final wrap + output). The split between layout-time and render-time wrapping is the source of many subtle sizing bugs."
   }
 ]

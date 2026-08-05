@@ -7,20 +7,20 @@ tags:
   - soft-wrap
   - flexbox
 created: 2026-08-05T22:43:34.850Z
-updated: 2026-08-05T22:43:34.850Z
+updated: 2026-08-05T22:53:46.114Z
 ---
 
 # Plan: Fix text shift after soft-wrap in TUI input
 
-## Status: Ready for implementation
+## Status: COMPLETED
 
 ## Problem
 
-When typing past a soft-wrap boundary in the TUI input, the prompt label's right padding disappears and all entered text shifts 1 space left. This happens 4-6 characters after the first soft-wrap.
+When typing past a soft-wrap boundary in the TUI input, the prompt label's right padding disappeared and all entered text shifted 1 space left. This happened 4-6 characters after the first soft-wrap.
 
 ## Root Cause
 
-Ink's `Box` component defaults to `flexShrink: 1`. In `InputLine`, the prompt label and LLM indicator Boxes are `<Box flexGrow={0}>` — they inherit `flexShrink: 1` from the default. The `MultilineTextInput` renders `<Text wrap="wrap">` with the cursor's inverse space appended (1 visible column). 
+Ink's `Box` component defaults to `flexShrink: 1`. In `InputLine`, the prompt label and LLM indicator Boxes were `<Box flexGrow={0}>` — they inherited `flexShrink: 1` from the default. The `MultilineTextInput` renders `<Text wrap="wrap">` with the cursor's inverse space appended (1 visible column).
 
 Ink's rendering pipeline:
 1. First Yoga layout pass: `Text` node's intrinsic width is measured by `widestLine()` BEFORE wrapping runs — includes the cursor's 1 character.
@@ -28,48 +28,36 @@ Ink's rendering pipeline:
 3. Since the input Box is `flexGrow={1}` (already at max), Yoga shrinks sibling Boxes with `flexShrink={1}` — the prompt label and LLM indicator.
 4. The prompt label loses 1 character (its trailing space), and all input text shifts left by 1.
 
-This happens 4-6 characters after the first soft-wrap because that's when the cursor (now on line 1) accumulates enough text to fill line 1 and pushes the `Text` node's widest line past the input Box width again.
-
 Key Ink internals:
 - `renderNodeToOutput` (render-node-to-output.js): wraps text using `wrapText`/`wrapAnsi` at `getMaxWidth(yogaNode)` only when `widestLine(text) > maxWidth`. This happens AFTER Yoga layout, so the pre-wrap width is what Yoga sees.
 - `getMaxWidth` (get-max-width.js): `computedWidth - paddingLeft - paddingRight - borderLeft - borderRight`
 - `Box` default styles (Box.js): `flexShrink: 1` is inherited by ALL Boxes unless overridden.
 
-## Fix
+## Fix (Completed)
 
-### Step 1: Prevent sibling shrinkage
+### Step 1: Prevent sibling shrinkage ✅
 **File:** `drone-agent/src/tui/components/InputLine.tsx`
 
-Add `flexShrink={0}` to the LLM indicator Box and the prompt label Box to prevent Yoga from shrinking them when the Text node's pre-wrap width exceeds the input Box's content width.
+Added `flexShrink={0}` to the LLM indicator Box and the prompt label Box to prevent Yoga from shrinking them when the Text node's pre-wrap width exceeds the input Box's content width.
 
-Add `overflow="hidden"` to the input content Box (the one with `flexGrow={1}`) to clip any Text overflow rather than letting it push siblings.
+Added `overflow="hidden"` to the input content Box (the one with `flexGrow={1}`) to clip any Text overflow rather than letting it push siblings.
 
-```tsx
-<Box flexGrow={0} flexShrink={0}>
-  {llmFrame ? <Text color={llmColor}>{llmFrame} </Text> : null}
-</Box>
-<Box flexGrow={0} flexShrink={0}>
-  {promptLabel ? (
-    <Text color={scheme.userInput}>{promptLabel}</Text>
-  ) : null}
-</Box>
-<Box flexGrow={1} flexShrink={1} overflow="hidden" flexDirection="column">
-  <MultilineTextInput ... />
-</Box>
-```
-
-### Step 2: Add regression test
+### Step 2: Add regression test ✅
 **File:** `drone-agent/test/multiline-text-input.test.tsx`
 
-Add a test that renders `InputLineShell` with text long enough to trigger a soft-wrap, and verifies the prompt label's trailing space is preserved (i.e., the prompt label text is not truncated). The test should check that the rendered output contains the full prompt label string including its trailing space, even when the input text exceeds the available width.
+Updated the `InputLineShell` test harness to match the fixed layout (with `flexShrink={0}` on the label Box and `overflow="hidden"` on the content Box). Added a regression test that renders with 25 chars of input at an effective text width of 19, verifying:
+- The full prompt label `'drone> '` (including trailing space) is preserved in the output
+- The text wraps to multiple lines
 
-### Step 3: Validation
-
-- `pnpm -r run typecheck` passes with zero errors (excluding pre-existing `useSgrMouse.test.tsx` mock type issues)
+### Step 3: Validation ✅
+- `pnpm -r run typecheck` passes (excluding pre-existing `useSgrMouse.test.tsx` mock type issues)
 - `pnpm -r run build` passes
-- `pnpm -r run lint` passes
-- `pnpm -r run test` passes
-- All LSP diagnostics for modified files are clean
+- `pnpm lint` passes (prettier reformatted the test file)
+- `pnpm -r run test` passes (110 files, 1735 tests, 9 skipped)
+- LSP diagnostics clean for modified files
+
+## Commit
+`7f523f7` on branch `feat/better-cursor-nav`
 
 ## Context
 

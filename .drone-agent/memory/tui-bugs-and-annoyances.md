@@ -93,6 +93,7 @@ Render each line as a single `<Text>` element with raw ANSI escape codes for col
 - No Ctrl+U/Ctrl+K for line kill (FreeformInput has Ctrl+U but MultilineTextInput doesn't)
 
 **Fix implemented:**
+
 - Up/Down arrows navigate visual lines with preferred column tracking
 - Home/End jump to logical line boundaries
 - Ctrl+Left/Right jump words
