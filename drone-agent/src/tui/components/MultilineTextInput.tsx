@@ -280,7 +280,20 @@ function renderWithCursor(
   // Use raw ANSI escape codes for inverse video within a single
   // text string. \u001b[7m = inverse on, \u001b[27m = inverse off.
   // This avoids nested <Text> elements which cause Yoga layout bugs.
-  const cursor = at ? `\u001b[7m${at}\u001b[27m` : '\u001b[7m \u001b[27m';
+  let cursor: string;
+  if (!at) {
+    // End of text: inverse space cursor
+    cursor = '\u001b[7m \u001b[27m';
+  } else if (at === '\n') {
+    // Cursor is at a newline (end of a non-last line). Inverting the
+    // newline itself renders nothing visible (the line break happens
+    // before the inverse video takes effect), so show an inverse space
+    // before the line break instead.
+    cursor = '\u001b[7m \u001b[27m\n';
+  } else {
+    // Normal: invert the character at the cursor
+    cursor = `\u001b[7m${at}\u001b[27m`;
+  }
 
   return before + cursor + after;
 }

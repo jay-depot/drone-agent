@@ -111,6 +111,44 @@ describe('MultilineTextInput', () => {
     cleanup();
   });
 
+  // ── Cursor at end of non-last line ────────────────────────────
+  // Regression test: when the cursor is at the end of a line that is
+  // not the last (i.e., positioned just before a \n), the cursor must
+  // still be visible. Previously the \n was inverted directly
+  // (\u001b[7m\n\u001b[27m), which rendered nothing visible because the
+  // line break happens before the inverse video takes effect. The fix
+  // renders an inverse space before the line break instead.
+
+  it('renders cursor at end of a non-last line', async () => {
+    // Multi-line text: "hello\nworld". Cursor starts at the end (offset 11).
+    // Send 6 left-arrows one at a time (with a tick between each so the
+    // cursor position updates) to move to offset 5 (end of "hello", just
+    // before the \n).
+    const { lastFrame, stdin, cleanup } = render(
+      <InputLineShell value={'hello\nworld'} onChange={() => {}} columns={80} />
+    );
+    await tick();
+
+    for (let i = 0; i < 6; i++) {
+      stdin.write('\u001B[D');
+      await tick();
+    }
+
+    const frame = lastFrame() ?? '';
+    const lines = frame.split('\n');
+
+    // The inverse escape must appear on the "hello" line (the first
+    // content line), not on the "world" line.
+    const helloLine = lines.find(l => l.includes('hello'));
+    const worldLine = lines.find(l => l.includes('world'));
+    expect(helloLine).toBeDefined();
+    expect(worldLine).toBeDefined();
+    expect(helloLine).toContain('\u001b[7m');
+    expect(worldLine).not.toContain('\u001b[7m');
+
+    cleanup();
+  });
+
   it('renders cursor on the content line, not the border line (one char typed)', async () => {
     const { lastFrame, cleanup } = render(
       <InputLineShell value="a" onChange={() => {}} />
