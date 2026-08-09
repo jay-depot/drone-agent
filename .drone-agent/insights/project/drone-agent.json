@@ -182,5 +182,11 @@
   {
     "timestamp": "2026-08-05T22:54:58.493Z",
     "insight": "When debugging TUI layout bugs in Ink, the key files to examine are: (1) Box.js — for default style values like flexShrink:1 that silently affect all Boxes; (2) build-layout.js — for how Yoga nodes are created and initial widths/heights set via measureText; (3) calculate-wrapped-text.js — for the post-layout wrapping pass that adjusts Text node dimensions; (4) render-node-to-output.js — for the final render-time wrapping using wrapAnsi and getMaxWidth; (5) get-max-width.js — for the formula: computedWidth - padding - border. The rendering pipeline is: buildLayout (initial Yoga) → calculateLayout → calculateWrappedText (re-measure text nodes) → renderNodeToOutput (final wrap + output). The split between layout-time and render-time wrapping is the source of many subtle sizing bugs."
+  },
+  {
+    "timestamp": "2026-08-09T01:39:45.539Z",
+    "insight": "ink-testing-library's Stdin.write overwrites `this.data` on each call (it's not a stream buffer — it sets a single property and emits 'readable'). To simulate multiple keystrokes, you must send them ONE AT A TIME with an `await tick()` between each. Sending all at once (`stdin.write('\\u001B[D'.repeat(6))`) causes Ink to batch them into a single React update, so every handler reads the same stale state and only moves the cursor by one position. Additionally, in JSX string literal attributes, `\\n` is a literal backslash-n, not a newline — use a JSX expression `{'hello\\nworld'}` for real newlines."
+  }
+]ell."
   }
 ]
