@@ -106,5 +106,9 @@
   {
     "timestamp": "2026-08-10T05:01:49.627Z",
     "insight": "The drone-agent package resolves drone-core from its built dist/ (package.json \"types\": \"./dist/index.d.ts\"), not from source. So after editing drone-core types, you MUST run `pnpm -r run build` before LSP/typecheck in dependent packages reflects the change; otherwise you'll chase stale diagnostics."
+  },
+  {
+    "timestamp": "2026-08-10T22:44:20.231Z",
+    "insight": "The beacon's coordinator-client (drone-beacon/src/coordinator-client.ts) is entirely fire-and-forget: pushEvents, endSwarmSession, pushPersona, etc. all just fetch() and log a warning on failure. There is NO durable write-behind queue today. The spawn path is the exception that must NOT be queued — a deferred spawn is a surprising side effect; spawn should drop + return an error when the coordinator is unreachable. Also, createCoordinatorFetch (self-signed-TLS-tolerant fetch) already exists in coordinator-client.ts and should be extracted into drone-swarm-common for reuse by any new CLI, since both beacon and coordinator use self-signed certs."
   }
 ]
