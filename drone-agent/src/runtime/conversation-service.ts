@@ -143,7 +143,9 @@ export function createConversationService({
     const personaCap = engine.getCapability<{
       getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
     }>('persona');
-    return personaCap ? personaCap.getFilteredTools(allTools) : allTools;
+    return personaCap
+      ? personaCap.getFilteredTools(allTools)
+      : allTools.filter(t => !t.defaultHidden);
   }
 
   /**

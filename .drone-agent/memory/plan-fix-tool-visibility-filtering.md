@@ -43,7 +43,8 @@ Replace the hardcoded `defaultHidden: false` mapping. Always build full descript
 
 ```typescript
 execute: async input => {
-  const pluginFilter = typeof input.plugin === 'string' ? input.plugin : undefined;
+  const pluginFilter =
+    typeof input.plugin === 'string' ? input.plugin : undefined;
   const includeSchemas = input.includeSchemas === true;
 
   // Always build full descriptors (with real defaultHidden) for filtering.
@@ -51,7 +52,11 @@ execute: async input => {
 
   // Filter by persona visibility (default-hidden + allowedTools overlay).
   const personaCap = capabilities.get('persona') as
-    | { getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[] }
+    | {
+        getFilteredTools: (
+          tools: DroneToolDescriptor[]
+        ) => DroneToolDescriptor[];
+      }
     | undefined;
   if (personaCap) {
     descriptors = personaCap.getFilteredTools(descriptors);
@@ -66,7 +71,7 @@ execute: async input => {
     : descriptors.map(({ name, description }) => ({ name, description }));
 
   return JSON.stringify({ toolCount: tools.length, tools }, null, 2);
-}
+};
 ```
 
 ### 2. `drone-agent/src/runtime/conversation-service.ts` — default-hidden fallback in `getLlmTools`

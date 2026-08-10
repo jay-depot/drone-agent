@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createDefaultAgentConfig,
+  filterByGlobPatterns,
   type DronePlugin,
   type DroneSessionSafetyTrimPayload,
+  type DroneToolDescriptor,
   type DroneToolDefinition,
 } from 'drone-core';
 import {
@@ -729,5 +731,101 @@ describe('createDronePluginEngine', () => {
         expect((err as Error).message).not.toMatch(/Unknown workflow/);
       }
     });
+  });
+});
+
+describe('runtime__list_tools — tool visibility filtering', () => {
+  // A persona capability whose getFilteredTools hides defaultHidden tools
+  // when no allowedTools are present (mirrors the persona plugin's behavior).
+  function makeDefaultHiddenPersonaCap(): {
+    getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
+  } {
+    return {
+      getFilteredTools: (tools: DroneToolDescriptor[]) =>
+        tools.filter(t => !t.defaultHidden),
+    };
+  }
+
+  // A persona capability whose getFilteredTools applies allowedTools globs
+  // (mirrors the persona plugin's behavior when a persona has allowedTools).
+  function makeAllowedToolsPersonaCap(allowedTools: string[]): {
+    getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
+  } {
+    return {
+      getFilteredTools: (tools: DroneToolDescriptor[]) => {
+        const names = tools.map(t => t.name);
+        const filtered = filterByGlobPatterns(names, allowedTools);
+        const filteredSet = new Set(filtered);
+        return tools.filter(t => filteredSet.has(t.name));
+      },
+    };
+  }
+
+  function makeToolPlugin(): DronePlugin {
+    return createTestPlugin({
+      id: 'term',
+      tools: [
+        {
+          name: 'create',
+          description: 'create a terminal session',
+          defaultHidden: true,
+          execute: async () => 'ok',
+        },
+        {
+          name: 'list',
+          description: 'list terminal sessions',
+          execute: async () => 'ok',
+        },
+      ],
+    });
+  }
+
+  async function listToolNames(plugins: DronePlugin[]): Promise<string[]> {
+    const engine = createDronePluginEngine({
+      plugins,
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+    });
+    await engine.initialize();
+    const result = JSON.parse(
+      await engine.executeTool('runtime__list_tools', {})
+    );
+    return (result.tools as Array<{ name: string }>).map(t => t.name);
+  }
+
+  it('filters default-hidden tools when a persona is active without allowedTools', async () => {
+    const personaPlugin = createTestPlugin({
+      id: 'persona',
+      capability: makeDefaultHiddenPersonaCap(),
+    });
+    const names = await listToolNames([personaPlugin, makeToolPlugin()]);
+    expect(names).toContain('term__list');
+    expect(names).not.toContain('term__create');
+  });
+
+  it('filters default-hidden tools when no persona is active', async () => {
+    const personaPlugin = createTestPlugin({
+      id: 'persona',
+      capability: makeDefaultHiddenPersonaCap(),
+    });
+    const names = await listToolNames([personaPlugin, makeToolPlugin()]);
+    expect(names).toContain('term__list');
+    expect(names).not.toContain('term__create');
+  });
+
+  it('allows a persona with allowedTools to re-include a default-hidden tool', async () => {
+    const personaPlugin = createTestPlugin({
+      id: 'persona',
+      capability: makeAllowedToolsPersonaCap(['term__create']),
+    });
+    const names = await listToolNames([personaPlugin, makeToolPlugin()]);
+    expect(names).toContain('term__create');
+    expect(names).not.toContain('term__list');
+  });
+
+  it('filters default-hidden tools when no persona capability is present', async () => {
+    const names = await listToolNames([makeToolPlugin()]);
+    expect(names).toContain('term__list');
+    expect(names).not.toContain('term__create');
   });
 });

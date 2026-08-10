@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import {
   createDefaultAgentConfig,
+  filterByGlobPatterns,
   type DroneChatResponse,
   type DroneContextWindowInfo,
   type DroneLlmCapability,
   type DroneLlmProvider,
   type DroneSessionTurn,
+  type DroneToolDescriptor,
 } from 'drone-core';
 import {
   createConversationService,
@@ -1194,5 +1196,108 @@ describe('tool result truncation', () => {
     expect(toolMessage).toBeDefined();
     // Content should be the full large content, not truncated
     expect(toolMessage!.content).toBe(LARGE_CONTENT);
+  });
+});
+
+describe('createConversationService — mounted tool list visibility filtering', () => {
+  function makePersonaCap(allowedTools?: string[]): {
+    getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
+  } {
+    return {
+      getFilteredTools: (tools: DroneToolDescriptor[]) => {
+        if (!allowedTools) {
+          return tools.filter(t => !t.defaultHidden);
+        }
+        const names = tools.map(t => t.name);
+        const filtered = filterByGlobPatterns(names, allowedTools);
+        const filteredSet = new Set(filtered);
+        return tools.filter(t => filteredSet.has(t.name));
+      },
+    };
+  }
+
+  async function runAndGetSentTools(
+    engine: DronePluginEngine,
+    provider: DroneLlmProvider & { __chatMock: ReturnType<typeof vi.fn> },
+    personaCap?: {
+      getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
+    }
+  ): Promise<DroneToolDescriptor[]> {
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => {
+      if (id === 'llm') return makeLlmCapability(provider);
+      if (id === 'persona') return personaCap;
+      return undefined;
+    };
+
+    await conversation.sendUserMessage('go');
+    const firstCall = provider.__chatMock.mock.calls[0][0] as {
+      tools?: DroneToolDescriptor[];
+    };
+    return firstCall.tools ?? [];
+  }
+
+  it('filters default-hidden tools from the mounted list when no persona is present', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'term__create',
+          description: 'create a terminal session',
+          defaultHidden: true,
+        },
+        {
+          name: 'term__list',
+          description: 'list terminal sessions',
+        },
+      ],
+      executeToolImpl: async () => 'ok',
+    });
+    const provider = makeProvider([{ message: 'done' }]);
+
+    const sentTools = await runAndGetSentTools(
+      engine as unknown as DronePluginEngine,
+      provider
+    );
+    const names = sentTools.map(t => t.name);
+    expect(names).toContain('term__list');
+    expect(names).not.toContain('term__create');
+  });
+
+  it('applies the persona overlay to the mounted list', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'term__create',
+          description: 'create a terminal session',
+          defaultHidden: true,
+        },
+        {
+          name: 'term__list',
+          description: 'list terminal sessions',
+        },
+      ],
+      executeToolImpl: async () => 'ok',
+    });
+    const provider = makeProvider([{ message: 'done' }]);
+
+    const sentTools = await runAndGetSentTools(
+      engine as unknown as DronePluginEngine,
+      provider,
+      makePersonaCap(['term__create'])
+    );
+    const names = sentTools.map(t => t.name);
+    expect(names).toContain('term__create');
+    expect(names).not.toContain('term__list');
   });
 });

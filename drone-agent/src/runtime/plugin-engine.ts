@@ -610,14 +610,10 @@ export function createDronePluginEngine({
             typeof input.plugin === 'string' ? input.plugin : undefined;
           const includeSchemas = input.includeSchemas === true;
 
-          let tools: Array<
-            | { name: string; description: string }
-            | import('drone-core').DroneToolDescriptor
-          > = includeSchemas
-            ? toolRegistry.listUnmountedWithSchemas(pluginFilter)
-            : toolRegistry.listUnmounted(pluginFilter);
+          // Always build full descriptors (with real defaultHidden) for filtering.
+          let descriptors = toolRegistry.listUnmountedWithSchemas(pluginFilter);
 
-          // Filter by persona visibility
+          // Filter by persona visibility (default-hidden + allowedTools overlay).
           const personaCap = capabilities.get('persona') as
             | {
                 getFilteredTools: (
@@ -626,18 +622,19 @@ export function createDronePluginEngine({
               }
             | undefined;
           if (personaCap) {
-            const descriptors = tools.map(t => ({
-              name: t.name,
-              description: t.description,
-              inputSchema: includeSchemas
-                ? (t as import('drone-core').DroneToolDescriptor).inputSchema
-                : undefined,
-              defaultHidden: false,
-            }));
-            const filtered = personaCap.getFilteredTools(descriptors);
-            const filteredNames = new Set(filtered.map(t => t.name));
-            tools = tools.filter(t => filteredNames.has(t.name));
+            descriptors = personaCap.getFilteredTools(descriptors);
+          } else {
+            // No persona plugin: honor default visibility by hiding defaultHidden tools.
+            descriptors = descriptors.filter(t => !t.defaultHidden);
           }
+
+          // Build the response, stripping schemas unless requested.
+          const tools = includeSchemas
+            ? descriptors
+            : descriptors.map(({ name, description }) => ({
+                name,
+                description,
+              }));
 
           return JSON.stringify({ toolCount: tools.length, tools }, null, 2);
         },
