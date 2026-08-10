@@ -18,5 +18,9 @@
   {
     "timestamp": "2026-08-10T23:09:18.343Z",
     "insight": "conversation-service.ts executes all tool calls in a single assistant turn in parallel via Promise.all (line ~419). Any plugin tool that does read-modify-write on a shared resource (e.g. a JSON file) will race itself when the LLM emits multiple calls to the same target in one turn. Plugin file writers must serialize (in-process per-key mutex) AND use tmp+rename atomic writes, because .drone-agent files aren't always checked into VCS so there's no external safety net. This bit self-improvement (recordInsight/storePrinciple/deletePrinciple); the memory plugin's writeMemoryEntry already used tmp+rename but NOT a mutex."
+  },
+  {
+    "timestamp": "2026-08-10T23:32:29.257Z",
+    "insight": "The project wiki (Obsidian vault at /home/unleet/Obsidian/drone-agent-project) is a separate git repo from the codebase. When ingesting work into the wiki: (1) diff from meta.json's last_commit to HEAD to find new commits; (2) bug fixes with a design choice go in decisions/ as ADRs (per meta/decision-bug-fixes-go-in-decisions.md), not concepts/; (3) update the affected concept/module pages, index.md, log.md, and advance meta.json; (4) commit the wiki repo separately. The .obsidian/workspace.json UI-state churn is tracked and committed alongside wiki content. Completed plans are deleted from project memory and that deletion is committed in the codebase repo."
   }
 ]
