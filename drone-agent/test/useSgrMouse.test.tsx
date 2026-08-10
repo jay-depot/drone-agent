@@ -7,7 +7,15 @@
  *   - No-op when stdin is not a TTY
  */
 
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import {
+  describe,
+  expect,
+  it,
+  vi,
+  beforeEach,
+  afterEach,
+  type MockInstance,
+} from 'vitest';
 import { render } from 'ink-testing-library';
 import { Text } from 'ink';
 import {
@@ -34,9 +42,7 @@ function createHarness() {
 }
 
 describe('useSgrMouse', () => {
-  let stdoutWriteSpy: ReturnType<typeof vi.spyOn>;
-  let stdinOnSpy: ReturnType<typeof vi.spyOn>;
-  let stdinOffSpy: ReturnType<typeof vi.spyOn>;
+  let stdoutWriteSpy: MockInstance<typeof process.stdout.write>;
   let stdinListeners: Array<(chunk: Buffer) => void> = [];
   let originalIsTTY: boolean | undefined;
 
@@ -47,20 +53,16 @@ describe('useSgrMouse', () => {
       .spyOn(process.stdout, 'write')
       .mockImplementation(() => true);
 
-    stdinOnSpy = vi
-      .spyOn(process.stdin, 'on')
-      .mockImplementation(
-        (event: string, listener: (...args: unknown[]) => void) => {
-          if (event === 'data') {
-            stdinListeners.push(listener as (chunk: Buffer) => void);
-          }
-          return process.stdin;
+    vi.spyOn(process.stdin, 'on').mockImplementation(
+      (event: string, listener: (...args: unknown[]) => void) => {
+        if (event === 'data') {
+          stdinListeners.push(listener as (chunk: Buffer) => void);
         }
-      );
+        return process.stdin;
+      }
+    );
 
-    stdinOffSpy = vi
-      .spyOn(process.stdin, 'off')
-      .mockImplementation(() => process.stdin);
+    vi.spyOn(process.stdin, 'off').mockImplementation(() => process.stdin);
 
     originalIsTTY = process.stdin.isTTY;
     (process.stdin as { isTTY: boolean | undefined }).isTTY = true;
