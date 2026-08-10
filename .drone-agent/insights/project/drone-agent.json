@@ -15,6 +15,4 @@
     "timestamp": "2026-08-10T05:01:49.627Z",
     "insight": "The drone-agent package resolves drone-core from its built dist/ (package.json \"types\": \"./dist/index.d.ts\"), not from source. So after editing drone-core types, you MUST run `pnpm -r run build` before LSP/typecheck in dependent packages reflects the change; otherwise you'll chase stale diagnostics."
   }
-]s before specifying import paths."
-  }
 ]
