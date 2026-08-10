@@ -48,7 +48,8 @@ Out of scope (deliberately deferred, record as principle): a tool-level `autoMou
      ```ts
      function applyToolPremount(): void {
        for (const tool of registration.listMountedTools()) {
-         if (!tool.name.startsWith('runtime__')) registration.unmountTool(tool.name);
+         if (!tool.name.startsWith('runtime__'))
+           registration.unmountTool(tool.name);
        }
        const premount = activePersona?.premountedTools;
        if (!premount) return;
@@ -57,7 +58,9 @@ Out of scope (deliberately deferred, record as principle): a tool-level `autoMou
            const canonical = `${pluginId}__${toolName}`;
            const def = registration.mountTool(canonical);
            if (!def) {
-             registration.logger.warn(`premountedTools: unknown tool "${canonical}"`);
+             registration.logger.warn(
+               `premountedTools: unknown tool "${canonical}"`
+             );
              continue;
            }
            if (def.defaultHidden && !allowedToolsMatches(canonical)) {
@@ -74,9 +77,13 @@ Out of scope (deliberately deferred, record as principle): a tool-level `autoMou
      ```ts
      const premountedNames = new Set(expandPremountedCanonical());
      // no activePersona / no allowedTools branch:
-     return allTools.filter(t => !t.defaultHidden || premountedNames.has(t.name));
+     return allTools.filter(
+       t => !t.defaultHidden || premountedNames.has(t.name)
+     );
      // allowedTools branch:
-     return allTools.filter(t => filteredSet.has(t.name) || premountedNames.has(t.name));
+     return allTools.filter(
+       t => filteredSet.has(t.name) || premountedNames.has(t.name)
+     );
      ```
    - (Nice-to-have) surface `premountCount` in the `persona.list` tool response.
 6. drone-agent/src/plugins/persona/wizard.ts — teach `buildPersonaSystemPrompt()` about the `premountedTools:` frontmatter format so `persona.create` can emit it.
@@ -110,3 +117,20 @@ Out of scope (deliberately deferred, record as principle): a tool-level `autoMou
 
 - Prefer `listMountedTools()` over `unmountAllNonRuntimeTools()` as the engine primitive — more broadly reusable. Unmount-all logic belongs in the caller (the persona plugin), iterating `listMountedTools()` and filtering `runtime__*` itself.
 - Tool-level `autoMount` on `DroneToolDefinition` is intentionally NOT introduced now; if/until a forced use case arises, the "none" persona's automount list is just the `runtime__*` meta-tools. Revisit "other auto-mount tools merge into the persona automount list" if autoMount is ever added.
+
+---
+
+## Implementation Summary (2026-08-10)
+
+All steps completed successfully:
+
+1. **Added `premountedTools?: Record<string, string[]>`** to `DronePersonaDefinition` in `drone-core/src/persona-types.ts`.
+2. **Added `listMountedTools()`** to `DronePluginRegistration` in `drone-core/src/plugin-system.ts`.
+3. **Implemented `listMountedTools()`** in the plugin registration object in `drone-agent/src/runtime/plugin-engine.ts` (delegates to `toolRegistry.listMounted()`).
+4. **Extended frontmatter parser** in `drone-agent/src/plugins/persona/loader.ts` to handle the nested map-of-arrays `premountedTools:` block, with proper flushing and coexistence with `tools`/`skills`/`fragments`.
+5. **Added `applyToolPremount()`** to `drone-agent/src/plugins/persona/index.ts`, invoked at the top of `notifyChange()`. It unmounts all non-`runtime__*` mounted tools, then mounts the active persona's premounted tools with warning logging for unknown or defaultHidden-not-in-allowedTools cases. Updated `getFilteredTools()` to union premounted canonical names so premounted tools remain visible.
+6. **Taught `buildPersonaSystemPrompt()`** in `drone-agent/src/plugins/persona/wizard.ts` about the `premountedTools:` frontmatter format.
+7. **Added tests** in `persona-loader.test.ts` (3 tests), `persona-premount.test.ts` (8 tests), and `plugin-engine.test.ts` (1 test for `listMountedTools`).
+8. **Updated mock registrations** in 15 test files to include `listMountedTools: () => []`.
+9. **Recorded both principles** from the plan's "Principles to record" section.
+10. **Validation**: LSP passes, `pnpm -r run build` passes, eslint passes, prettier passes for all changed files (pre-existing malformed `.drone-agent/insights/project/drone-agent.json` still causes full prettier failure), all 1754 tests pass.

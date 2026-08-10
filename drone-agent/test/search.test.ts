@@ -29,6 +29,7 @@ function captureRegistration(): {
     unregisterTool: () => {},
     mountTool: () => undefined,
     unmountTool: () => {},
+    listMountedTools: () => [],
     hooks: {
       onPluginsLoaded: () => {},
       onSessionStart: () => {},

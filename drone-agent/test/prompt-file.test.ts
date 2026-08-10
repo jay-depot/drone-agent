@@ -360,6 +360,7 @@ describe('promptFilePlugin', () => {
       unregisterTool: () => {},
       mountTool: () => undefined,
       unmountTool: () => {},
+      listMountedTools: () => [],
       hooks: {
         onPluginsLoaded: cb => captured.hooks.onPluginsLoaded.push(cb),
         onSessionStart: () => {},

@@ -534,6 +534,9 @@ export function createDronePluginEngine({
       unmountTool: (canonicalName: string) => {
         toolRegistry.unmount(canonicalName);
       },
+      listMountedTools: () => {
+        return toolRegistry.listMounted();
+      },
       unregisterPluginTools: (pluginId: string) => {
         unregisterPluginToolsImpl(pluginId);
       },

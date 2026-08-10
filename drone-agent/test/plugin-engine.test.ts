@@ -355,6 +355,61 @@ describe('createDronePluginEngine', () => {
     });
   });
 
+  describe('registration.listMountedTools', () => {
+    it('reflects toolRegistry mount state', async () => {
+      const toolA: DroneToolDefinition = {
+        name: 'alpha',
+        description: 'alpha tool',
+        execute: async () => 'a',
+      };
+      const toolB: DroneToolDefinition = {
+        name: 'beta',
+        description: 'beta tool',
+        execute: async () => 'b',
+      };
+
+      let listMountedFn: (() => DroneToolDescriptor[]) | undefined;
+      let mountFn:
+        | ((name: string) => DroneToolDefinition | undefined)
+        | undefined;
+      let unmountFn: ((name: string) => void) | undefined;
+
+      const engine = createDronePluginEngine({
+        plugins: [
+          createTestPlugin({
+            id: 'test',
+            tools: [toolA, toolB],
+            register: registration => {
+              listMountedFn = registration.listMountedTools;
+              mountFn = registration.mountTool;
+              unmountFn = registration.unmountTool;
+            },
+          }),
+        ],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+
+      // Initially only runtime tools are mounted
+      const initial = listMountedFn!();
+      expect(initial.length).toBe(RUNTIME_TOOL_COUNT);
+      expect(initial.every(t => t.name.startsWith('runtime__'))).toBe(true);
+
+      // Mount a tool via the registration API
+      const def = mountFn!('test__alpha');
+      expect(def).toBeDefined();
+      const mounted = listMountedFn!();
+      expect(mounted.map(t => t.name)).toContain('test__alpha');
+      expect(mounted.map(t => t.name)).not.toContain('test__beta');
+
+      // Unmount and verify it disappears
+      unmountFn!('test__alpha');
+      const after = listMountedFn!();
+      expect(after.map(t => t.name)).not.toContain('test__alpha');
+    });
+  });
+
   it('renders prompt fragments and filters empty/false values', async () => {
     const plugins: DronePlugin[] = [
       createTestPlugin({

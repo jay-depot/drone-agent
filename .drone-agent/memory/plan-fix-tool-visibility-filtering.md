@@ -147,4 +147,4 @@ The `pnpm lint` (which runs prettier over the whole repo) fails on a **pre-exist
 
 ### Commit
 
-- `100421b` — "fix: honor default-hidden and persona tool visibility in runtime__list_tools and mounted list"
+- `100421b` — "fix: honor default-hidden and persona tool visibility in runtime\_\_list_tools and mounted list"

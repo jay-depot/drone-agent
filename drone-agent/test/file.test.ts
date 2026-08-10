@@ -79,6 +79,7 @@ function captureRegistration(): {
     requestElicitation: () => undefined,
     mountTool: () => undefined,
     unmountTool: () => {},
+    listMountedTools: () => [],
   };
 
   return { registration, tools, helpText, promptFragments };
