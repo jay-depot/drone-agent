@@ -105,7 +105,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
     entries.length
   );
   // Debounce resize events to reduce flicker during window-drag gestures.
-  useDebouncedWindowSize(120);
+  const { columns } = useDebouncedWindowSize(120);
 
   // ── Scheme ref for event listener (avoids stale closure) ────────────
   const schemeRef = useRef<DroneColorScheme>(scheme);
@@ -627,6 +627,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         llmFrame={llmFrame}
         llmColor={llmColor}
         disabled={activeQuestion !== null}
+        columns={columns}
       />
       {activeQuestion ? (
         <ElicitationPrompt
@@ -634,6 +635,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           pickerIndex={pickerIndex}
           scheme={scheme}
           onSubmit={commitAnswer}
+          columns={columns}
         />
       ) : null}
       <StatusBar

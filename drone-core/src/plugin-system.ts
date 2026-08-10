@@ -117,6 +117,13 @@ export type DronePluginRegistration = {
    */
   unmountTool: (canonicalName: string) => void;
   /**
+   * List all currently-mounted tools as `DroneToolDescriptor` objects.
+   * Used by plugins that need to enumerate what is currently visible to
+   * the LLM (e.g. the persona plugin's applyToolPremount which unmounts
+   * everything non-runtime before mounting a new persona's tools).
+   */
+  listMountedTools: () => import('./session-types.js').DroneToolDescriptor[];
+  /**
    * Returns the host's elicitation capability (set by the CLI shell or
    * the TUI at engine init time). Lets plugins ask the user structured
    * questions (closed-set or freeform) without coupling to a host.
@@ -299,6 +306,12 @@ export type DroneSlashCommandContext = {
     listTools?: () => import('./session-types.js').DroneToolDescriptor[];
     /** List all registered tools (mounted + unmounted, for /tools --all). */
     listAllTools?: () => import('./session-types.js').DroneToolDescriptor[];
+    /** Mount a tool by canonical name (for /tool mount). Returns the tool definition if newly mounted, else undefined. */
+    mountTool?: (canonicalName: string) => DroneToolDefinition | undefined;
+    /** Unmount a mounted tool by canonical name (for /tool unmount). */
+    unmountTool?: (canonicalName: string) => void;
+    /** List currently-mounted tools (for /tool unmount --all). */
+    listMountedTools?: () => import('./session-types.js').DroneToolDescriptor[];
     /** Get the total count of registered tools (for /tools). */
     getRegisteredToolCount?: () => number;
     /** Render prompt fragments (for /systemprompt). */

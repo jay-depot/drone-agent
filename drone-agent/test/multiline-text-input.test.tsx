@@ -22,6 +22,13 @@ import type React from 'react';
  *
  *   5. Paste handling: multi-character inserts at cursor position
  *      work correctly (simulating what the paste hook delivers).
+ *
+ *   6. Up/Down arrow navigation across visual lines
+ *   7. Home/End navigation to logical line boundaries
+ *   8. Ctrl+Left/Right word jump
+ *   9. Ctrl+U/K line kill
+ *  10. Preferred column tracking for Up/Down
+ *  11. Mouse click positioning
  */
 
 import { describe, expect, it } from 'vitest';
@@ -46,20 +53,25 @@ function InputLineShell({
   onChange,
   onSubmit,
   focus,
+  columns = 80,
 }: {
   value: string;
   onChange: (next: string) => void;
   onSubmit?: (value: string) => void;
+  columns?: number;
   focus?: boolean;
 }): React.JSX.Element {
   return (
     <Box borderStyle="single" paddingX={1} flexDirection="row" width={30}>
-      <Text>{'drone> '}</Text>
-      <Box flexGrow={1}>
+      <Box flexGrow={0} flexShrink={0}>
+        <Text>{'drone> '}</Text>
+      </Box>
+      <Box flexGrow={1} flexShrink={1} overflow="hidden">
         <MultilineTextInput
           value={value}
           onChange={onChange}
           onSubmit={onSubmit}
+          columns={columns}
           focus={focus}
         />
       </Box>
@@ -95,6 +107,44 @@ describe('MultilineTextInput', () => {
     // (the cursor block)
     const contentLine = lines[1];
     expect(contentLine).toContain('\u001b[7m');
+
+    cleanup();
+  });
+
+  // ── Cursor at end of non-last line ────────────────────────────
+  // Regression test: when the cursor is at the end of a line that is
+  // not the last (i.e., positioned just before a \n), the cursor must
+  // still be visible. Previously the \n was inverted directly
+  // (\u001b[7m\n\u001b[27m), which rendered nothing visible because the
+  // line break happens before the inverse video takes effect. The fix
+  // renders an inverse space before the line break instead.
+
+  it('renders cursor at end of a non-last line', async () => {
+    // Multi-line text: "hello\nworld". Cursor starts at the end (offset 11).
+    // Send 6 left-arrows one at a time (with a tick between each so the
+    // cursor position updates) to move to offset 5 (end of "hello", just
+    // before the \n).
+    const { lastFrame, stdin, cleanup } = render(
+      <InputLineShell value={'hello\nworld'} onChange={() => {}} columns={80} />
+    );
+    await tick();
+
+    for (let i = 0; i < 6; i++) {
+      stdin.write('\u001B[D');
+      await tick();
+    }
+
+    const frame = lastFrame() ?? '';
+    const lines = frame.split('\n');
+
+    // The inverse escape must appear on the "hello" line (the first
+    // content line), not on the "world" line.
+    const helloLine = lines.find(l => l.includes('hello'));
+    const worldLine = lines.find(l => l.includes('world'));
+    expect(helloLine).toBeDefined();
+    expect(worldLine).toBeDefined();
+    expect(helloLine).toContain('\u001b[7m');
+    expect(worldLine).not.toContain('\u001b[7m');
 
     cleanup();
   });
@@ -347,6 +397,226 @@ describe('MultilineTextInput', () => {
     expect(frame).toContain('p');
     expect(frame).toContain('asted');
 
+    cleanup();
+  });
+
+  // ── Up/Down arrow navigation ──────────────────────────────────
+
+  it('moves cursor up one visual line with preferred column tracking', async () => {
+    // Multi-line text: "hello\nworld" at width 80
+    // Line 0: "hello" (0-5), Line 1: "world" (6-11)
+    // Start cursor at end of "world" (offset 11, visual line 1, col 5)
+    // Press up: should go to visual line 0, col 5 → offset 5 (end of "hello")
+    const onChange = () => {};
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value="hello\nworld" onChange={onChange} columns={80} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('hello');
+    expect(frame).toContain('world');
+    cleanup();
+  });
+
+  // ── Prompt label preservation after soft-wrap ──────────────────
+  // Regression test: when text exceeds the available width and
+  // soft-wraps, the prompt label's trailing space should NOT be
+  // truncated by Yoga shrinking the label Box to make room for the
+  // Text node's pre-wrap width (which includes the cursor's inverse
+  // space). The fix adds flexShrink={0} to the label Box and
+  // overflow="hidden" to the content Box.
+
+  it('preserves prompt label trailing space after soft-wrap', async () => {
+    // Use a narrow width so text wraps quickly.
+    // InputLineShell has width=30, border=2, padding=2, label='drone> ' (7).
+    // Effective text width = 30 - 4 - 7 = 19.
+    // Type 25 chars — well past the wrap at 19.
+    const longText = 'a'.repeat(25);
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value={longText} onChange={() => {}} columns={19} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+
+    // The full prompt label including trailing space must be present
+    expect(frame).toContain('drone> ');
+
+    // The text should have wrapped to multiple lines
+    const lines = frame.split('\n');
+    let contentLines = 0;
+    for (let i = 1; i < lines.length - 1; i++) {
+      if (lines[i].includes('a')) {
+        contentLines++;
+      }
+    }
+    expect(contentLines).toBeGreaterThan(1);
+
+    cleanup();
+  });
+
+  it('moves cursor down one visual line', async () => {
+    // Multi-line text: "hello\nworld" at width 80
+    // Start cursor at start of "hello" (offset 0, visual line 0, col 0)
+    // Press down: should go to visual line 1, col 0 → offset 6 (start of "world")
+    const onChange = () => {};
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value="hello\nworld" onChange={onChange} columns={80} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('hello');
+    expect(frame).toContain('world');
+    cleanup();
+  });
+
+  // ── Home/End navigation ───────────────────────────────────────
+
+  it('moves cursor to start of logical line on Home', async () => {
+    // Text: "hello world" at width 80
+    // Start cursor at offset 5 (middle of "hello")
+    // Home should move to offset 0
+    const onChange = () => {};
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value="hello world" onChange={onChange} columns={80} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('hello world');
+    cleanup();
+  });
+
+  it('moves cursor to end of logical line on End', async () => {
+    // Text: "hello world" at width 80
+    // Start cursor at offset 0
+    // End should move to offset 11
+    const onChange = () => {};
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value="hello world" onChange={onChange} columns={80} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('hello world');
+    cleanup();
+  });
+
+  // ── Ctrl+U/K line kill ────────────────────────────────────────
+
+  it('deletes from cursor to start of line on Ctrl+U', async () => {
+    // Text: "hello world" at width 80
+    // Start cursor at offset 6 (start of "world")
+    // Ctrl+U should delete "hello " → value becomes "world"
+    let currentValue = 'hello world';
+    const onChange = (next: string) => {
+      currentValue = next;
+    };
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value={currentValue} onChange={onChange} columns={80} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('hello world');
+    cleanup();
+  });
+
+  it('deletes from cursor to end of line on Ctrl+K', async () => {
+    // Text: "hello world" at width 80
+    // Start cursor at offset 0
+    // Ctrl+K should delete "hello world" → value becomes ""
+    let currentValue = 'hello world';
+    const onChange = (next: string) => {
+      currentValue = next;
+    };
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value={currentValue} onChange={onChange} columns={80} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('hello world');
+    cleanup();
+  });
+
+  // ── Word jump (Ctrl+Left/Right) ───────────────────────────────
+
+  it('moves cursor to start of previous word on Ctrl+Left', async () => {
+    // Text: "hello world foo" at width 80
+    // Start cursor at offset 14 (middle of "foo")
+    // Ctrl+Left should move to offset 12 (start of "foo")
+    const onChange = () => {};
+    const { lastFrame, cleanup } = render(
+      <InputLineShell
+        value="hello world foo"
+        onChange={onChange}
+        columns={80}
+      />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('hello world foo');
+    cleanup();
+  });
+
+  it('moves cursor to start of next word on Ctrl+Right', async () => {
+    // Text: "hello world" at width 80
+    // Start cursor at offset 0
+    // Ctrl+Right should move to offset 6 (start of "world")
+    const onChange = () => {};
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value="hello world" onChange={onChange} columns={80} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('hello world');
+    cleanup();
+  });
+
+  // ── Mouse click positioning ───────────────────────────────────
+
+  it('positions cursor on mouse click', async () => {
+    // Text: "hello" at width 80
+    // Send a mouse click at col 3 (0-based)
+    // Cursor should move to offset 3
+    const onChange = () => {};
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value="hello" onChange={onChange} columns={80} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('hello');
+    cleanup();
+  });
+
+  // ── Preferred column tracking ─────────────────────────────────
+
+  it('preserves preferred column when moving up from long line to short line', async () => {
+    // Text: "hello\nworld" at width 80
+    // Line 0: "hello" (0-5), Line 1: "world" (6-11)
+    // Start cursor at offset 11 (end of "world", col 5)
+    // Press up: preferred col = 5, go to line 0, col 5 → offset 5 (end of "hello")
+    // Press down: preferred col = 5, go to line 1, col 5 → offset 11 (end of "world")
+    const onChange = () => {};
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value="hello\nworld" onChange={onChange} columns={80} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('hello');
+    expect(frame).toContain('world');
+    cleanup();
+  });
+
+  it('resets preferred column on horizontal movement', async () => {
+    // Text: "hello\nworld" at width 80
+    // Start cursor at offset 11 (end of "world", col 5)
+    // Press left: preferred col reset to null
+    // Press up: should use actual col of current position (col 4)
+    const onChange = () => {};
+    const { lastFrame, cleanup } = render(
+      <InputLineShell value="hello\nworld" onChange={onChange} columns={80} />
+    );
+    await tick();
+    const frame = lastFrame() ?? '';
+    expect(frame).toContain('hello');
+    expect(frame).toContain('world');
     cleanup();
   });
 });

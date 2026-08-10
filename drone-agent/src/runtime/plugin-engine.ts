@@ -1,6 +1,8 @@
 import {
   createConsoleLogger,
+  createDebugFlagRegistry,
   createRuntimeFlagRegistry,
+  type DebugFlagRegistry,
   type DroneChatMessage,
   getCanonicalToolName,
   type RuntimeFlagRegistry,
@@ -92,6 +94,12 @@ export type DronePluginEngine = {
   ) => Promise<string>;
   listTools: () => DroneToolDescriptor[];
   listAllTools: () => DroneToolDescriptor[];
+  /** Mount a tool by canonical name (e.g. "file__read"). Returns the tool definition if newly mounted, else undefined. */
+  mountTool: (canonicalName: string) => DroneToolDefinition | undefined;
+  /** Unmount a mounted tool by canonical name. */
+  unmountTool: (canonicalName: string) => void;
+  /** List currently-mounted tools. */
+  listMountedTools: () => DroneToolDescriptor[];
   getCapability: <T>(pluginId: string) => T | undefined;
   listPlugins: () => DronePluginStatus[];
   getRegisteredPluginCount: () => number;
@@ -161,6 +169,7 @@ type CreateDronePluginEngineOptions = {
   plugins: DronePlugin[];
   config: DroneAgentConfig;
   logger?: DroneLogger;
+  debugFlags?: DebugFlagRegistry;
   // NEW:
   runtimeOptions?: {
     subagentId?: string;
@@ -278,6 +287,7 @@ export function createDronePluginEngine({
   plugins,
   config,
   logger = createConsoleLogger('plugin-engine'),
+  debugFlags = createDebugFlagRegistry(),
   runtimeOptions,
   buildSystemMessages: buildSystemMessagesFromHost,
 }: CreateDronePluginEngineOptions): DronePluginEngine {
@@ -314,6 +324,11 @@ export function createDronePluginEngine({
     (event: DroneConversationEvent) => void
   > = [];
   let elicitationCapability: DroneElicitation | undefined;
+  const logToolChange = (kind: string, detail: string): void => {
+    if (debugFlags.isEnabled('tools')) {
+      console.error(`[tools:${kind}] ${detail}`);
+    }
+  };
 
   // --- Local functions (declared before the return object so they can ---)
   // --- reference each other and be used in the return object)       ---
@@ -339,6 +354,7 @@ export function createDronePluginEngine({
     // Add to enabled set and register.
     enabledPluginIds.add(pluginId);
     registeredPlugins.push(await registerPlugin(plugin));
+    logToolChange('enable-plugin', pluginId);
     logger.info(`enabled plugin: ${pluginId}`);
     // Run lifecycle hooks so the plugin catches up.
     for (const callback of hookBuckets.onPluginsLoaded) {
@@ -361,6 +377,7 @@ export function createDronePluginEngine({
     enabledPluginIds.add(pluginId);
     // Register it.
     registeredPlugins.push(await registerPlugin(plugin));
+    logToolChange('add-external-plugin', pluginId);
     logger.info(`added external plugin: ${pluginId}`);
     // Run catch-up lifecycle hooks.
     for (const callback of hookBuckets.onPluginsLoaded) {
@@ -402,6 +419,7 @@ export function createDronePluginEngine({
     // Delete all tools whose canonical name starts with the plugin prefix.
     const prefix = `${pluginId}__`;
     toolRegistry.removeByPrefix(prefix);
+    logToolChange('unregister-plugin', pluginId);
     // Also clear the plugin's own tool list so it doesn't hold stale refs.
     const registered = registeredPlugins.find(
       (p: { plugin: { metadata: { id: string } } }) =>
@@ -417,6 +435,7 @@ export function createDronePluginEngine({
       return;
     }
     toolRegistry.remove(canonicalName);
+    logToolChange('unregister', canonicalName);
     for (const registered of registeredPlugins) {
       const idx = registered.tools.findIndex(
         (t: DroneToolDefinition) =>
@@ -458,6 +477,7 @@ export function createDronePluginEngine({
           throw new Error(`Tool already registered: ${canonicalName}`);
         }
         toolRegistry.add(canonicalName, tool);
+        logToolChange('register', canonicalName);
         pluginTools.push(tool);
       },
       registerPromptFragment: fragment => {
@@ -529,10 +549,18 @@ export function createDronePluginEngine({
       runWorkflow: (canonicalName, args) => runWorkflow(canonicalName, args),
       requestElicitation: () => elicitationCapability,
       mountTool: (canonicalName: string) => {
-        return toolRegistry.mount(canonicalName);
+        const def = toolRegistry.mount(canonicalName);
+        if (def) {
+          logToolChange('mount', canonicalName);
+        }
+        return def;
       },
       unmountTool: (canonicalName: string) => {
         toolRegistry.unmount(canonicalName);
+        logToolChange('unmount', canonicalName);
+      },
+      listMountedTools: () => {
+        return toolRegistry.listMounted();
       },
       unregisterPluginTools: (pluginId: string) => {
         unregisterPluginToolsImpl(pluginId);
@@ -610,14 +638,10 @@ export function createDronePluginEngine({
             typeof input.plugin === 'string' ? input.plugin : undefined;
           const includeSchemas = input.includeSchemas === true;
 
-          let tools: Array<
-            | { name: string; description: string }
-            | import('drone-core').DroneToolDescriptor
-          > = includeSchemas
-            ? toolRegistry.listUnmountedWithSchemas(pluginFilter)
-            : toolRegistry.listUnmounted(pluginFilter);
+          // Always build full descriptors (with real defaultHidden) for filtering.
+          let descriptors = toolRegistry.listUnmountedWithSchemas(pluginFilter);
 
-          // Filter by persona visibility
+          // Filter by persona visibility (default-hidden + allowedTools overlay).
           const personaCap = capabilities.get('persona') as
             | {
                 getFilteredTools: (
@@ -626,18 +650,19 @@ export function createDronePluginEngine({
               }
             | undefined;
           if (personaCap) {
-            const descriptors = tools.map(t => ({
-              name: t.name,
-              description: t.description,
-              inputSchema: includeSchemas
-                ? (t as import('drone-core').DroneToolDescriptor).inputSchema
-                : undefined,
-              defaultHidden: false,
-            }));
-            const filtered = personaCap.getFilteredTools(descriptors);
-            const filteredNames = new Set(filtered.map(t => t.name));
-            tools = tools.filter(t => filteredNames.has(t.name));
+            descriptors = personaCap.getFilteredTools(descriptors);
+          } else {
+            // No persona plugin: honor default visibility by hiding defaultHidden tools.
+            descriptors = descriptors.filter(t => !t.defaultHidden);
           }
+
+          // Build the response, stripping schemas unless requested.
+          const tools = includeSchemas
+            ? descriptors
+            : descriptors.map(({ name, description }) => ({
+                name,
+                description,
+              }));
 
           return JSON.stringify({ toolCount: tools.length, tools }, null, 2);
         },
@@ -677,6 +702,7 @@ export function createDronePluginEngine({
               2
             );
           }
+          logToolChange('mount', toolName);
           return JSON.stringify(
             {
               success: true,
@@ -713,6 +739,7 @@ export function createDronePluginEngine({
           }
 
           toolRegistry.unmount(toolName);
+          logToolChange('unmount', toolName);
           return JSON.stringify({ success: true, tool: toolName }, null, 2);
         },
       },
@@ -720,7 +747,9 @@ export function createDronePluginEngine({
 
     for (const tool of metaTools) {
       toolRegistry.add(tool.name, tool);
+      logToolChange('register', tool.name);
       toolRegistry.mount(tool.name);
+      logToolChange('mount', tool.name);
     }
   }
 
@@ -809,6 +838,9 @@ export function createDronePluginEngine({
     },
     listTools: () => toolRegistry.listMounted(),
     listAllTools: () => toolRegistry.listAll(),
+    mountTool: canonicalName => toolRegistry.mount(canonicalName),
+    unmountTool: canonicalName => toolRegistry.unmount(canonicalName),
+    listMountedTools: () => toolRegistry.listMounted(),
     getCapability: <T>(pluginId: string) =>
       capabilities.get(pluginId) as T | undefined,
     listPlugins: () =>

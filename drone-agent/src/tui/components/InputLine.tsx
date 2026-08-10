@@ -7,6 +7,13 @@ import type React from 'react';
  *
  * Renders an optional LLM working indicator (a trigram character)
  * to the left of the prompt label.
+ *
+ * The effective text width passed to MultilineTextInput is the
+ * terminal width minus:
+ *   - 2 for the border (left + right border chars)
+ *   - 2 for paddingX={1} (left + right padding)
+ *   - the LLM indicator width (if present)
+ *   - the prompt label width (if present)
  */
 
 import { Box, Text } from 'ink';
@@ -22,6 +29,7 @@ export function InputLine({
   llmFrame,
   llmColor,
   disabled,
+  columns,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -49,7 +57,12 @@ export function InputLine({
    * Used when an elicitation question is active.
    */
   disabled?: boolean;
+  /** Terminal width for visual line calculation. */
+  columns: number;
 }): React.JSX.Element {
+  const textWidth =
+    columns - 4 - (llmFrame ? 2 : 0) - (promptLabel ? promptLabel.length : 0);
+
   return (
     <Box
       borderStyle="single"
@@ -58,19 +71,20 @@ export function InputLine({
       flexDirection="row"
       flexGrow={0}
     >
-      <Box flexGrow={0}>
+      <Box flexGrow={0} flexShrink={0}>
         {llmFrame ? <Text color={llmColor}>{llmFrame} </Text> : null}
       </Box>
-      <Box flexGrow={0}>
+      <Box flexGrow={0} flexShrink={0}>
         {promptLabel ? (
           <Text color={scheme.userInput}>{promptLabel}</Text>
         ) : null}
       </Box>
-      <Box flexGrow={1} flexDirection="column">
+      <Box flexGrow={1} flexShrink={1} overflow="hidden" flexDirection="column">
         <MultilineTextInput
           value={value}
           onChange={onChange}
           onSubmit={onSubmit}
+          columns={textWidth}
           focus={!disabled}
         />
       </Box>

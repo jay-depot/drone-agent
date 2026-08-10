@@ -42,6 +42,17 @@ export type DronePersonaDefinition = {
    */
   allowedTools?: string[];
   /**
+   * Optional map of tools to automatically mount when this persona
+   * becomes active. Keys are plugin ids, values are tool names (without
+   * the `pluginId__` prefix). On persona change, all currently-mounted
+   * non-`runtime__*` tools are unmounted, then the active persona's
+   * premounted tools are mounted. A premounted tool that is `defaultHidden`
+   * is still visible to the LLM even if absent from `allowedTools`.
+   *
+   * Example: `{ file: ['read', 'list', 'apply_diff'], git: ['commit'] }`
+   */
+  premountedTools?: Record<string, string[]>;
+  /**
    * Optional glob patterns for filtering which global skills the LLM
    * sees when this persona is active. Each pattern is matched against
    * the skill id. Supports `*` and `?` wildcards. Prefix a pattern with

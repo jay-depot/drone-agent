@@ -216,3 +216,7 @@ When working on the project, proactively log insights using `self-improvement.in
 - Single-word comments indicating the "step" in a process should not be used. Name your functions and variables in a way that makes the step clear. When you encounter these comments, remove them.
 - If a file is growing beyond 750 lines, consider splitting it into multiple files. If a file is growing beyond 1000 lines, you must split it into multiple files.
 - Be absolutely ruthless when it comes to duplicated code. If you see a pattern emerging, extract it into a function or class. If you see a pattern that is already implemented elsewhere, extract it and use that. If you see any existing duplicated code, refactor it.
+
+## Special note (for drone-agent working on itself):
+
+If you _are_ drone-agent, know that the "project memory," and all other `.drone-agent` contents besides config.json itself, for this project are _checked into version control intentionally_, so that other users working on the project can share the same library of plans, skills, insights, other project memories and eventually principles. When these files are unstaged, always check them in with your next set of changes. Wait to make your final commit until _after_ you are done logging insights and project memories. If you leave uncommitted memories, skills, insights, or principles, and we are on a feature branch, check them in. Only leave them "hanging" unstaged if we're on the main branch. Do not commit them to main.

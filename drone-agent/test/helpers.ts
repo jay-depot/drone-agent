@@ -199,6 +199,9 @@ export function createFakeEngine(
     executeTool: async () => '',
     listTools: () => [],
     listAllTools: () => [],
+    mountTool: () => undefined,
+    unmountTool: () => {},
+    listMountedTools: () => [],
     getMountedToolCount: () => 0,
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
@@ -267,16 +270,20 @@ export function createMockEngine(
     runConversationEventHooks: async () => {},
     renderPromptFragments: async () => options.promptFragments ?? [],
     getTool: () => undefined,
-    executeTool: executeMock as unknown as import('../src/runtime/plugin-engine.js').DronePluginEngine['executeTool'],
+    executeTool:
+      executeMock as unknown as import('../src/runtime/plugin-engine.js').DronePluginEngine['executeTool'],
     listTools: () => toolList,
-    getCapability: customGetCapability ??
-      (<T>(id: string) =>
-        id === 'llm' ? ({} as unknown as T) : undefined),
+    getCapability:
+      customGetCapability ??
+      (<T>(id: string) => (id === 'llm' ? ({} as unknown as T) : undefined)),
     listPlugins: () => [],
     getRegisteredPluginCount: () => 0,
     getRegisteredToolCount: () => toolList.length,
     getMountedToolCount: () => 0,
     listAllTools: () => toolList,
+    mountTool: () => undefined,
+    unmountTool: () => {},
+    listMountedTools: () => [],
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
     getHelpSnippets: () => [],

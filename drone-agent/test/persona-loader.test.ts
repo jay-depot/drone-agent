@@ -237,3 +237,92 @@ describe('loadPersonas — tools field', () => {
     });
   });
 });
+
+describe('loadPersonas — premountedTools field', () => {
+  it('parses the nested map into Record<string, string[]>', async () => {
+    await withProjectDir(async dir => {
+      const personaDir = path.join(dir, '.drone-agent', 'personas');
+      await mkdir(personaDir, { recursive: true });
+      await writePersona(
+        personaDir,
+        'auto',
+        [
+          '---',
+          'name: Auto',
+          'premountedTools:',
+          '  file:',
+          '    - read',
+          '    - list',
+          '    - apply_diff',
+          '  git:',
+          '    - commit',
+          '---',
+          '',
+        ].join('\n')
+      );
+
+      const personas = await loadPersonas(dir);
+      expect(personas.size).toBe(1);
+      const p = personas.get('auto');
+      expect(p?.premountedTools).toEqual({
+        file: ['read', 'list', 'apply_diff'],
+        git: ['commit'],
+      });
+    });
+  });
+
+  it('leaves premountedTools undefined when the persona omits the field', async () => {
+    await withProjectDir(async dir => {
+      const personaDir = path.join(dir, '.drone-agent', 'personas');
+      await mkdir(personaDir, { recursive: true });
+      await writePersona(personaDir, 'plain', '---\nname: Plain\n---\n');
+
+      const personas = await loadPersonas(dir);
+      expect(personas.get('plain')?.premountedTools).toBeUndefined();
+    });
+  });
+
+  it('coexists with tools, skills, and fragments in one file', async () => {
+    await withProjectDir(async dir => {
+      const personaDir = path.join(dir, '.drone-agent', 'personas');
+      await mkdir(personaDir, { recursive: true });
+      await writePersona(
+        personaDir,
+        'combined',
+        [
+          '---',
+          'name: Combined',
+          'description: Everything together',
+          'fragments:',
+          '  - Be concise',
+          '  - Use tools often',
+          'skills:',
+          '  - code-review',
+          'tools:',
+          '  - file__*',
+          '  - !file__delete',
+          'premountedTools:',
+          '  file:',
+          '    - read',
+          '  git:',
+          '    - commit',
+          '    - diff',
+          '---',
+          'You are a combined persona.',
+          '',
+        ].join('\n')
+      );
+
+      const personas = await loadPersonas(dir);
+      const p = personas.get('combined');
+      expect(p?.promptFragments).toEqual(['Be concise', 'Use tools often']);
+      expect(p?.allowedSkills).toEqual(['code-review']);
+      expect(p?.allowedTools).toEqual(['file__*', '!file__delete']);
+      expect(p?.premountedTools).toEqual({
+        file: ['read'],
+        git: ['commit', 'diff'],
+      });
+      expect(p?.systemPromptOverride).toBe('You are a combined persona.');
+    });
+  });
+});

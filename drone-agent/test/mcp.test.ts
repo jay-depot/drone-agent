@@ -59,10 +59,7 @@ async function mountMcpResourceTools(
   engine: ReturnType<typeof createDronePluginEngine>,
   serverId: string
 ): Promise<void> {
-  const tools = [
-    `mcp__${serverId}__list`,
-    `mcp__${serverId}__get`,
-  ];
+  const tools = [`mcp__${serverId}__list`, `mcp__${serverId}__get`];
   for (const tool of tools) {
     await engine.executeTool('runtime__mount_tool', { tool });
   }
@@ -151,7 +148,11 @@ describe('mcp plugin integration (stdio child)', () => {
 
     const names = toolNames(engine);
     // Only runtime meta-tools are mounted initially
-    expect(names).toEqual(['runtime__list_tools', 'runtime__mount_tool', 'runtime__unmount_tool']);
+    expect(names).toEqual([
+      'runtime__list_tools',
+      'runtime__mount_tool',
+      'runtime__unmount_tool',
+    ]);
 
     // Individual MCP tools are NOT mounted eagerly.
     expect(names).not.toContain('mcp__demo__echo');
@@ -174,7 +175,10 @@ describe('mcp plugin integration (stdio child)', () => {
       await engine.executeTool('runtime__list_tools', { plugin: 'mcp' })
     );
     expect(result.toolCount).toBeGreaterThanOrEqual(2);
-    const toolList = result.tools as Array<{ name: string; description: string }>;
+    const toolList = result.tools as Array<{
+      name: string;
+      description: string;
+    }>;
     expect(toolList.map(t => t.name)).toContain('mcp__demo__echo');
     expect(toolList.map(t => t.name)).toContain('mcp__demo__add');
   });
@@ -190,7 +194,9 @@ describe('mcp plugin integration (stdio child)', () => {
 
     // Mount it via runtime__mount_tool.
     const mountResult = JSON.parse(
-      await engine.executeTool('runtime__mount_tool', { tool: 'mcp__demo__echo' })
+      await engine.executeTool('runtime__mount_tool', {
+        tool: 'mcp__demo__echo',
+      })
     );
     expect(mountResult.success).toBe(true);
     expect(mountResult.tool).toBe('mcp__demo__echo');
@@ -211,9 +217,13 @@ describe('mcp plugin integration (stdio child)', () => {
       demo: server.serverConfig,
     });
 
-    await engine.executeTool('runtime__mount_tool', { tool: 'mcp__demo__echo' });
+    await engine.executeTool('runtime__mount_tool', {
+      tool: 'mcp__demo__echo',
+    });
     const result = JSON.parse(
-      await engine.executeTool('runtime__mount_tool', { tool: 'mcp__demo__echo' })
+      await engine.executeTool('runtime__mount_tool', {
+        tool: 'mcp__demo__echo',
+      })
     );
     expect(result.success).toBe(false);
     expect(result.error).toContain('already mounted');
@@ -226,7 +236,9 @@ describe('mcp plugin integration (stdio child)', () => {
     });
 
     const result = JSON.parse(
-      await engine.executeTool('runtime__mount_tool', { tool: 'mcp__demo__nonexistent' })
+      await engine.executeTool('runtime__mount_tool', {
+        tool: 'mcp__demo__nonexistent',
+      })
     );
     expect(result.success).toBe(false);
     expect(result.error).toContain('Unknown');
@@ -239,12 +251,16 @@ describe('mcp plugin integration (stdio child)', () => {
     });
 
     // Mount echo
-    await engine.executeTool('runtime__mount_tool', { tool: 'mcp__demo__echo' });
+    await engine.executeTool('runtime__mount_tool', {
+      tool: 'mcp__demo__echo',
+    });
     expect(toolNames(engine)).toContain('mcp__demo__echo');
 
     // Unmount it
     const result = JSON.parse(
-      await engine.executeTool('runtime__unmount_tool', { tool: 'mcp__demo__echo' })
+      await engine.executeTool('runtime__unmount_tool', {
+        tool: 'mcp__demo__echo',
+      })
     );
     expect(result.success).toBe(true);
     expect(result.tool).toBe('mcp__demo__echo');
@@ -325,7 +341,9 @@ describe('mcp plugin integration (stdio child)', () => {
       demo: server.serverConfig,
     });
     // Mount the echo tool.
-    await engine.executeTool('runtime__mount_tool', { tool: 'mcp__demo__echo' });
+    await engine.executeTool('runtime__mount_tool', {
+      tool: 'mcp__demo__echo',
+    });
     expect(toolNames(engine)).toContain('mcp__demo__echo');
 
     // Calling the configured tool triggers a tools/list_changed notification
@@ -350,7 +368,9 @@ describe('mcp plugin integration (stdio child)', () => {
     });
 
     // Mount the log-trigger tool and call it, which triggers a notifications/message
-    await engine.executeTool('runtime__mount_tool', { tool: 'mcp__demo__log-trigger' });
+    await engine.executeTool('runtime__mount_tool', {
+      tool: 'mcp__demo__log-trigger',
+    });
     expect(toolNames(engine)).toContain('mcp__demo__log-trigger');
 
     // Call the tool — the fake server will send a notifications/message
