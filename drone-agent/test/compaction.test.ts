@@ -121,6 +121,9 @@ async function captureRegistration(
     registerWorkflow: () => {},
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
+    mountTool: () => undefined,
+    unmountTool: () => {},
+    listMountedTools: () => [],
     hooks: {
       onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
       onSessionStart: cb => hooks.onSessionStart.push(cb),
@@ -213,6 +216,9 @@ describe('createCompactionPlugin', () => {
         registerWorkflow: () => {},
         unregisterPluginTools: () => {},
         unregisterTool: () => {},
+        mountTool: () => undefined,
+        unmountTool: () => {},
+        listMountedTools: () => [],
         hooks: {
           onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
           onSessionStart: cb => hooks.onSessionStart.push(cb),

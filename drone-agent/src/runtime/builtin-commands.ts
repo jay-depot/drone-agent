@@ -103,28 +103,29 @@ const pluginsCommand: DroneSlashCommand = {
 
 const toolsCommand: DroneSlashCommand = {
   command: '/tools',
-  description: 'List registered tools (/tools --all for full list)',
+  description: 'List mounted tools (/tools --all for all registered tools)',
   handler: async (ctx: DroneSlashCommandContext) => {
-    const allTools = ctx.engine.listTools?.() ?? [];
     const showAll = ctx.args.includes('--all');
 
     let tools: DroneToolDescriptor[];
     if (showAll) {
-      tools = allTools;
+      tools = ctx.engine.listAllTools?.() ?? [];
     } else {
+      const mountedTools = ctx.engine.listTools?.() ?? [];
       const personaCap = ctx.engine.getCapability<{
         getFilteredTools: (
           tools: DroneToolDescriptor[]
         ) => DroneToolDescriptor[];
       }>('persona');
       tools = personaCap
-        ? personaCap.getFilteredTools(allTools)
-        : allTools.filter(t => !t.defaultHidden);
+        ? personaCap.getFilteredTools(mountedTools)
+        : mountedTools.filter(t => !t.defaultHidden);
     }
 
+    const totalCount = ctx.engine.getRegisteredToolCount?.() ?? 0;
     const lines = showAll
       ? [`All registered tools (${tools.length}):`]
-      : [`Available tools (${tools.length}/${allTools.length}):`];
+      : [`Available tools (${tools.length}/${totalCount}):`];
     for (const tool of tools) {
       lines.push(`  ${tool.name}`);
       lines.push(`    ${tool.description}`);
@@ -140,20 +141,11 @@ const systemPromptCommand: DroneSlashCommand = {
   command: '/systemprompt',
   description: 'Show the current system prompt',
   handler: async (ctx: DroneSlashCommandContext) => {
-    const fragments = (await ctx.engine.renderPromptFragments?.()) ?? [];
-    const config = ctx.engine.getConfig?.();
-    const lines: string[] = [
-      'System Prompt:',
-      '────────────────────────────────────────',
-      config?.systemPrompt ?? '(not available)',
-    ];
-    if (fragments.length > 0) {
+    const systemMessages = (await ctx.engine.buildSystemMessages?.()) ?? [];
+    const lines: string[] = ['System Messages:'];
+    for (const msg of systemMessages) {
       lines.push('────────────────────────────────────────');
-      lines.push('Prompt Fragments:');
-      for (const fragment of fragments) {
-        lines.push('────────────────────────────────────────');
-        lines.push(fragment);
-      }
+      lines.push(msg.content);
     }
     ctx.logger.info(lines.join('\n'));
     return true;
@@ -180,8 +172,69 @@ function tryParseJson(raw: string): Record<string, unknown> | undefined {
 
 const toolCommand: DroneSlashCommand = {
   command: '/tool',
-  description: 'Run a tool directly: /tool <name> [<json-args>]',
+  description:
+    'Tool utilities: /tool mount <name>, /tool unmount <name>|--all, or run a tool directly: /tool <name> [<json-args>]',
   handler: async (ctx: DroneSlashCommandContext) => {
+    const sub = ctx.args[0];
+
+    // ── /tool mount <canonicalName> ──
+    if (sub === 'mount') {
+      const name = ctx.args[1];
+      if (!name || ctx.args.length > 2) {
+        ctx.logger.error(
+          'Usage: /tool mount <canonicalName>  e.g. /tool mount file__read'
+        );
+        return true;
+      }
+      if (!ctx.engine.mountTool) {
+        ctx.logger.error('/tool mount: no mountTool callback available');
+        return true;
+      }
+      const def = ctx.engine.mountTool(name);
+      if (!def) {
+        ctx.logger.error(`Unknown or already mounted tool: ${name}`);
+      } else {
+        ctx.logger.info(`Mounted ${name}.`);
+      }
+      return true;
+    }
+
+    // ── /tool unmount <canonicalName> | --all ──
+    if (sub === 'unmount') {
+      if (!ctx.engine.unmountTool || !ctx.engine.listMountedTools) {
+        ctx.logger.error('/tool unmount: no unmount callback available');
+        return true;
+      }
+      if (ctx.args[1] === '--all') {
+        const targets = ctx.engine
+          .listMountedTools()
+          .filter(t => !t.name.startsWith('runtime__'));
+        if (targets.length === 0) {
+          ctx.logger.info('No mounted tools to unmount.');
+          return true;
+        }
+        for (const t of targets) {
+          ctx.engine.unmountTool(t.name);
+        }
+        ctx.logger.info(
+          `Unmounted ${targets.length} tool(s): ${targets
+            .map(t => t.name)
+            .join(', ')}`
+        );
+        return true;
+      }
+      const name = ctx.args[1];
+      if (!name || ctx.args.length > 2) {
+        ctx.logger.error(
+          'Usage: /tool unmount <canonicalName>  or  /tool unmount --all'
+        );
+        return true;
+      }
+      ctx.engine.unmountTool(name);
+      ctx.logger.info(`Unmounted ${name}.`);
+      return true;
+    }
+
     const rest = ctx.line.slice('/tool '.length).trim();
     const firstSpace = rest.indexOf(' ');
     const toolName = firstSpace === -1 ? rest : rest.slice(0, firstSpace);
@@ -231,6 +284,59 @@ const execCommand: DroneSlashCommand = {
   },
 };
 
+// ── /debug ─────────────────────────────────────────────────────────────
+
+const debugCommand: DroneSlashCommand = {
+  command: '/debug',
+  description:
+    'Enable or disable a debug subsystem: /debug enable|disable <name>',
+  handler: async (ctx: DroneSlashCommandContext) => {
+    if (!ctx.conversation) {
+      ctx.logger.warn(
+        'Conversation service not available — cannot manage debug subsystems.'
+      );
+      return true;
+    }
+
+    const args = ctx.args;
+
+    // No arguments: show current state + usage
+    if (args.length === 0) {
+      const subsystems = ctx.conversation.getDebugSubsystems();
+      const state =
+        subsystems.length > 0
+          ? `Debug subsystems: ${subsystems.join(', ')}`
+          : 'No debug subsystems enabled.';
+      ctx.logger.info(
+        `${state}\nUsage: /debug enable|disable <subsystem>\nExample: /debug enable llm`
+      );
+      return true;
+    }
+
+    // Wrong number of arguments
+    if (args.length !== 2) {
+      ctx.logger.info(
+        'Usage: /debug enable|disable <subsystem>\nExample: /debug enable llm'
+      );
+      return true;
+    }
+
+    const [action, subsystem] = args;
+
+    if (action === 'enable') {
+      ctx.conversation.enableDebugSubsystem(subsystem);
+      ctx.logger.info(`Debug subsystem "${subsystem}" enabled.`);
+    } else if (action === 'disable') {
+      ctx.conversation.disableDebugSubsystem(subsystem);
+      ctx.logger.info(`Debug subsystem "${subsystem}" disabled.`);
+    } else {
+      ctx.logger.warn(`Invalid action "${action}". Use "enable" or "disable".`);
+    }
+
+    return true;
+  },
+};
+
 // ── All built-in commands ─────────────────────────────────────────────
 
 export const BUILT_IN_SLASH_COMMANDS: DroneSlashCommand[] = [
@@ -243,4 +349,5 @@ export const BUILT_IN_SLASH_COMMANDS: DroneSlashCommand[] = [
   systemPromptCommand,
   toolCommand,
   execCommand,
+  debugCommand,
 ];

@@ -30,6 +30,9 @@ function captureRegistration(): {
     registerWorkflow: () => {},
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
+    mountTool: () => undefined,
+    unmountTool: () => {},
+    listMountedTools: () => [],
     hooks: {
       onPluginsLoaded: () => {},
       onSessionStart: () => {},

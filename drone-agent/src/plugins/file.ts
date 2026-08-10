@@ -1,7 +1,7 @@
 import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import fg from 'fast-glob';
-import type { DronePlugin } from 'drone-core';
+import type { DronePlugin, DroneToolDefinition } from 'drone-core';
 import { FileReadBlock } from '../tui/components/FileReadBlock.js';
 import { FileWriteBlock } from '../tui/components/FileWriteBlock.js';
 import { FileApplyDiffBlock } from '../tui/components/FileApplyDiffBlock.js';
@@ -118,6 +118,13 @@ export const filePlugin: DronePlugin = {
     defaultEnabled: false,
   },
   register: async registration => {
+    registration.registerPromptFragment({
+      key: 'editing-convention',
+      phase: 'header',
+      render: async () =>
+        `# File Editing\n\nFor editing existing files, prefer \`apply_diff\` over \`write\`. Mount it with \`runtime__mount_tool({ "tool": "file__apply_diff" })\` if not already available. Use \`write\` only for creating new files or complete rewrites.`,
+    });
+
     // -----------------------------------------------------------------------
     // file__read
     // -----------------------------------------------------------------------

@@ -735,6 +735,9 @@ describe('macrosPlugin', () => {
             });
             return '42';
           },
+          getDebugSubsystems: () => [],
+          enableDebugSubsystem: () => {},
+          disableDebugSubsystem: () => {},
         },
         sessionManager: undefined,
       });

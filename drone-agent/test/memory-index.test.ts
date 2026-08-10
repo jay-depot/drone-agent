@@ -76,6 +76,9 @@ function createMockRegistration(): {
     registerSlashCommand: () => {},
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
+    mountTool: () => undefined,
+    unmountTool: () => {},
+    listMountedTools: () => [],
     registerWorkflow: workflow => {
       captured.workflows.push(workflow);
     },

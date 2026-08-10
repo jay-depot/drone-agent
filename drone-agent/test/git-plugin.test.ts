@@ -46,6 +46,9 @@ function captureGitTools(): Map<
     registerWorkflow: () => {},
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
+    mountTool: () => undefined,
+    unmountTool: () => {},
+    listMountedTools: () => [],
     hooks: {
       onPluginsLoaded: () => {},
       onSessionStart: () => {},
@@ -83,79 +86,8 @@ afterAll(async () => {
 });
 
 describe('git plugin integration', () => {
-  it('registers only 3 meta-tools (list_tools, mount_tool, unmount_tool)', async () => {
-    const tools = captureGitTools();
-    const expected = ['list_tools', 'mount_tool', 'unmount_tool'];
-    for (const name of expected) {
-      expect(tools.has(name), `missing meta-tool: ${name}`).toBe(true);
-    }
-    expect(tools.size).toBe(3);
-  });
-
-  it('list_tools returns all 11 tool descriptions', async () => {
-    const tools = captureGitTools();
-    const result = JSON.parse(await tools.get('list_tools')!({}));
-    expect(result.toolCount).toBe(11);
-    const names = result.tools.map((t: { name: string }) => t.name);
-    expect(names).toContain('status');
-    expect(names).toContain('diff');
-    expect(names).toContain('log');
-    expect(names).toContain('show');
-    expect(names).toContain('add');
-    expect(names).toContain('restore');
-    expect(names).toContain('commit');
-    expect(names).toContain('branch');
-    expect(names).toContain('stash');
-    expect(names).toContain('fetch');
-    expect(names).toContain('pull');
-  });
-
-  it('mount_tool mounts a tool and it becomes callable', async () => {
-    const tools = captureGitTools();
-    // Mount the status tool
-    const mountResult = JSON.parse(
-      await tools.get('mount_tool')!({ tool: 'status' })
-    );
-    expect(mountResult.success).toBe(true);
-    expect(mountResult.tool).toBe('status');
-
-    // Now status should be registered
-    expect(tools.has('status')).toBe(true);
-
-    // Call the mounted status tool
-    const statusOut = JSON.parse(await tools.get('status')!({ cwd: repoDir }));
-    expect(statusOut).toHaveProperty('branch');
-    expect(statusOut).toHaveProperty('staged');
-    expect(statusOut).toHaveProperty('unstaged');
-    expect(statusOut).toHaveProperty('untracked');
-  });
-
-  it('mount_tool rejects an unknown tool name', async () => {
-    const tools = captureGitTools();
-    const result = JSON.parse(
-      await tools.get('mount_tool')!({ tool: 'nonexistent' })
-    );
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('nonexistent');
-  });
-
-  it('unmount_tool removes a mounted tool', async () => {
-    const tools = captureGitTools();
-    // Mount first
-    await tools.get('mount_tool')!({ tool: 'status' });
-    expect(tools.has('status')).toBe(true);
-
-    // Unmount
-    const unmountResult = JSON.parse(
-      await tools.get('unmount_tool')!({ tool: 'status' })
-    );
-    expect(unmountResult.success).toBe(true);
-    expect(unmountResult.tool).toBe('status');
-  });
-
   it('reports an unstaged modification under unstaged, NOT staged (regression)', async () => {
     const tools = captureGitTools();
-    await tools.get('mount_tool')!({ tool: 'status' });
     // Modify a tracked file so porcelain shows " M" (unstaged)
     await writeFile(path.join(repoDir, SEED), '# test\nmodified\n');
 
@@ -169,9 +101,6 @@ describe('git plugin integration', () => {
 
   it('add + commit stages only the selected file (no forced git add -A)', async () => {
     const tools = captureGitTools();
-    await tools.get('mount_tool')!({ tool: 'status' });
-    await tools.get('mount_tool')!({ tool: 'add' });
-    await tools.get('mount_tool')!({ tool: 'commit' });
     const a = path.join(repoDir, 'a.txt');
     const b = path.join(repoDir, 'b.txt');
     await writeFile(a, 'a\n');
@@ -199,7 +128,6 @@ describe('git plugin integration', () => {
 
   it('commit with all:true stages tracked modifications', async () => {
     const tools = captureGitTools();
-    await tools.get('mount_tool')!({ tool: 'commit' });
     // all:true maps to `git add -u`, which stages tracked modifications only
     await writeFile(path.join(repoDir, SEED), '# test\nall flag\n');
     const out = JSON.parse(
@@ -215,7 +143,6 @@ describe('git plugin integration', () => {
 
   it('branch create + switch + delete', async () => {
     const tools = captureGitTools();
-    await tools.get('mount_tool')!({ tool: 'branch' });
     const create = JSON.parse(
       await tools.get('branch')!({
         action: 'create',
@@ -247,7 +174,6 @@ describe('git plugin integration', () => {
 
   it('stash push + list + drop round-trip on a tracked modification', async () => {
     const tools = captureGitTools();
-    await tools.get('mount_tool')!({ tool: 'stash' });
     // Modify a tracked file so there is something to stash.
     await writeFile(path.join(repoDir, SEED), '# test\nstash me\n');
 
@@ -273,9 +199,6 @@ describe('git plugin integration', () => {
 
   it('restore --staged unstages a newly added file', async () => {
     const tools = captureGitTools();
-    await tools.get('mount_tool')!({ tool: 'status' });
-    await tools.get('mount_tool')!({ tool: 'add' });
-    await tools.get('mount_tool')!({ tool: 'restore' });
     const r = path.join(repoDir, 'restore-me.txt');
     await writeFile(r, 'stage then unstage\n');
     await tools.get('add')!({ paths: ['restore-me.txt'], cwd: repoDir });
@@ -297,7 +220,6 @@ describe('git plugin integration', () => {
 
   it('add returns non-empty file paths (tab-parsing bug regression)', async () => {
     const tools = captureGitTools();
-    await tools.get('mount_tool')!({ tool: 'add' });
     const a = path.join(repoDir, 'add-paths-a.txt');
     const b = path.join(repoDir, 'add-paths-b.txt');
     await writeFile(a, 'a\n');
@@ -328,7 +250,6 @@ describe('git plugin integration', () => {
 
   it('add with no paths and no all:true throws (no silent staging)', async () => {
     const tools = captureGitTools();
-    await tools.get('mount_tool')!({ tool: 'add' });
     await expect(tools.get('add')!({ cwd: repoDir })).rejects.toThrow(
       /paths|all/
     );
@@ -339,8 +260,6 @@ describe('git plugin integration', () => {
 
   it('restore --staged reports via name-status and does NOT mislabel untracked', async () => {
     const tools = captureGitTools();
-    await tools.get('mount_tool')!({ tool: 'status' });
-    await tools.get('mount_tool')!({ tool: 'restore' });
     const untracked = path.join(repoDir, 'untracked-restore.txt');
     // A tracked, staged modification (so unstaging leaves an unstaged diff).
     await writeFile(path.join(repoDir, SEED), '# test\nrestore-name-status\n');
@@ -373,7 +292,6 @@ describe('git plugin integration', () => {
 
   it('restore with staged:true + discard:true throws (contradictory combo)', async () => {
     const tools = captureGitTools();
-    await tools.get('mount_tool')!({ tool: 'restore' });
     await expect(
       tools.get('restore')!({
         staged: true,
@@ -386,7 +304,6 @@ describe('git plugin integration', () => {
 
   it('restore with discard:true but no paths throws', async () => {
     const tools = captureGitTools();
-    await tools.get('mount_tool')!({ tool: 'restore' });
     await expect(
       tools.get('restore')!({ discard: true, cwd: repoDir })
     ).rejects.toThrow(/paths/);
@@ -394,7 +311,6 @@ describe('git plugin integration', () => {
 
   it('log returns commit entries', async () => {
     const tools = captureGitTools();
-    await tools.get('mount_tool')!({ tool: 'log' });
     const log = JSON.parse(await tools.get('log')!({ cwd: repoDir }));
     expect(Array.isArray(log.entries)).toBe(true);
     expect(log.entries.length).toBeGreaterThan(0);

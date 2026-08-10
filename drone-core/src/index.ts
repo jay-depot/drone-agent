@@ -14,7 +14,8 @@
 //   - capabilities.ts     : Capability registry types
 //   - plugin-system.ts    : Plugin infrastructure types
 //   - utils.ts            : Utility functions
-//   - tool-mounting-cache.ts : ToolMountingCache class
+//   - runtime-flags.ts    : Runtime flag registry for system prompt injection
+//   - tool-registry.ts    : ToolRegistry class
 //   - token-estimate.ts   : Token estimation functions
 //   - config-schema.ts     : Config schema and parsing
 //   - wiki-types.ts       : Wiki page types for swarm knowledge base
@@ -128,7 +129,9 @@ export type {
   DroneLspDiagnostic,
   DroneLspHoverResult,
   DroneLspServerState,
+  DroneLspInstallSpec,
 } from './lsp-types.js';
+export type { DroneLspPlatformKey, DroneLspPlatformSpec } from './lsp-types.js';
 
 // ── MCP types ───────────────────────────────────────────────────────
 
@@ -215,9 +218,9 @@ export {
   getCanonicalToolName,
 } from './utils.js';
 
-// ── ToolMountingCache ────────────────────────────────────────────────
+// ── ToolRegistry ──────────────────────────────────────────────────────
 
-export { ToolMountingCache } from './tool-mounting-cache.js';
+export { ToolRegistry } from './tool-registry.js';
 // ── Sorted Registry ─────────────────────────────────────────────────
 
 export {
@@ -244,3 +247,13 @@ export {
   transformEnvVars,
 } from './config-schema.js';
 export type { PartialDroneAgentConfigDecoded } from './config-schema.js';
+
+// ── Runtime flags ────────────────────────────────────────────────────
+
+export type { RuntimeFlagRegistry } from './runtime-flags.js';
+export { createRuntimeFlagRegistry } from './runtime-flags.js';
+
+// ── Debug flags ─────────────────────────────────────────────────────
+
+export type { DebugFlagRegistry } from './debug-flags.js';
+export { createDebugFlagRegistry } from './debug-flags.js';

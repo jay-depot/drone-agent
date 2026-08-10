@@ -468,6 +468,9 @@ describe('terminalPlugin', () => {
       registerSlashCommand: () => {},
       unregisterPluginTools: () => {},
       unregisterTool: () => {},
+      mountTool: () => undefined,
+      unmountTool: () => {},
+      listMountedTools: () => [],
       hooks: {
         onPluginsLoaded: () => {},
         onSessionStart: () => {},

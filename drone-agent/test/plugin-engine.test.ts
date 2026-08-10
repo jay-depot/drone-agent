@@ -1,8 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createDefaultAgentConfig,
+  createDebugFlagRegistry,
+  filterByGlobPatterns,
   type DronePlugin,
   type DroneSessionSafetyTrimPayload,
+  type DroneToolDescriptor,
   type DroneToolDefinition,
 } from 'drone-core';
 import {
@@ -10,6 +13,8 @@ import {
   getDefaultEnabledPluginIds,
 } from '../src/runtime/plugin-engine.js';
 import { createTestPlugin, silentLogger } from './helpers.js';
+
+const RUNTIME_TOOL_COUNT = 3; // runtime__list_tools, runtime__mount_tool, runtime__unmount_tool
 
 describe('createDronePluginEngine', () => {
   it('registers plugins, exposes tools, and runs hooks in order', async () => {
@@ -222,8 +227,9 @@ describe('createDronePluginEngine', () => {
     await engine.initialize();
 
     const tools = engine.listTools();
-    expect(tools).toHaveLength(1);
-    expect(tools[0].name).toBe('echo-plugin__echo');
+    expect(tools).toHaveLength(RUNTIME_TOOL_COUNT);
+    // Mount the tool to make it visible
+    engine.executeTool('runtime__mount_tool', { tool: 'echo-plugin__echo' });
     expect(engine.getTool('echo-plugin__echo')).toBeDefined();
     expect(engine.getTool('missing')).toBeUndefined();
 
@@ -290,15 +296,18 @@ describe('createDronePluginEngine', () => {
       });
       await engine.initialize();
 
+      // Mount the tools so they appear in listTools()
+      await engine.executeTool('runtime__mount_tool', { tool: 'test__alpha' });
+      await engine.executeTool('runtime__mount_tool', { tool: 'test__beta' });
       expect(engine.getTool('test__alpha')).toBeDefined();
       expect(engine.getTool('test__beta')).toBeDefined();
-      expect(engine.listTools()).toHaveLength(2);
+      expect(engine.listTools()).toHaveLength(RUNTIME_TOOL_COUNT + 2);
 
       engine.unregisterTool('test__alpha');
 
       expect(engine.getTool('test__alpha')).toBeUndefined();
       expect(engine.getTool('test__beta')).toBeDefined();
-      expect(engine.listTools()).toHaveLength(1);
+      expect(engine.listTools()).toHaveLength(RUNTIME_TOOL_COUNT + 1);
     });
 
     it('silently does nothing for an unknown tool name', async () => {
@@ -310,7 +319,7 @@ describe('createDronePluginEngine', () => {
       await engine.initialize();
 
       engine.unregisterTool('test__nonexistent');
-      expect(engine.listTools()).toHaveLength(0);
+      expect(engine.listTools()).toHaveLength(RUNTIME_TOOL_COUNT);
     });
 
     it('allows re-registering a tool after unregistering it', async () => {
@@ -344,6 +353,61 @@ describe('createDronePluginEngine', () => {
         execute: async () => 't',
       });
       expect(engine.getTool('test__temp')).toBeDefined();
+    });
+  });
+
+  describe('registration.listMountedTools', () => {
+    it('reflects toolRegistry mount state', async () => {
+      const toolA: DroneToolDefinition = {
+        name: 'alpha',
+        description: 'alpha tool',
+        execute: async () => 'a',
+      };
+      const toolB: DroneToolDefinition = {
+        name: 'beta',
+        description: 'beta tool',
+        execute: async () => 'b',
+      };
+
+      let listMountedFn: (() => DroneToolDescriptor[]) | undefined;
+      let mountFn:
+        | ((name: string) => DroneToolDefinition | undefined)
+        | undefined;
+      let unmountFn: ((name: string) => void) | undefined;
+
+      const engine = createDronePluginEngine({
+        plugins: [
+          createTestPlugin({
+            id: 'test',
+            tools: [toolA, toolB],
+            register: registration => {
+              listMountedFn = registration.listMountedTools;
+              mountFn = registration.mountTool;
+              unmountFn = registration.unmountTool;
+            },
+          }),
+        ],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+
+      // Initially only runtime tools are mounted
+      const initial = listMountedFn!();
+      expect(initial.length).toBe(RUNTIME_TOOL_COUNT);
+      expect(initial.every(t => t.name.startsWith('runtime__'))).toBe(true);
+
+      // Mount a tool via the registration API
+      const def = mountFn!('test__alpha');
+      expect(def).toBeDefined();
+      const mounted = listMountedFn!();
+      expect(mounted.map(t => t.name)).toContain('test__alpha');
+      expect(mounted.map(t => t.name)).not.toContain('test__beta');
+
+      // Unmount and verify it disappears
+      unmountFn!('test__alpha');
+      const after = listMountedFn!();
+      expect(after.map(t => t.name)).not.toContain('test__alpha');
     });
   });
 
@@ -723,5 +787,186 @@ describe('createDronePluginEngine', () => {
         expect((err as Error).message).not.toMatch(/Unknown workflow/);
       }
     });
+  });
+});
+
+describe('runtime__list_tools — tool visibility filtering', () => {
+  // A persona capability whose getFilteredTools hides defaultHidden tools
+  // when no allowedTools are present (mirrors the persona plugin's behavior).
+  function makeDefaultHiddenPersonaCap(): {
+    getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
+  } {
+    return {
+      getFilteredTools: (tools: DroneToolDescriptor[]) =>
+        tools.filter(t => !t.defaultHidden),
+    };
+  }
+
+  // A persona capability whose getFilteredTools applies allowedTools globs
+  // (mirrors the persona plugin's behavior when a persona has allowedTools).
+  function makeAllowedToolsPersonaCap(allowedTools: string[]): {
+    getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
+  } {
+    return {
+      getFilteredTools: (tools: DroneToolDescriptor[]) => {
+        const names = tools.map(t => t.name);
+        const filtered = filterByGlobPatterns(names, allowedTools);
+        const filteredSet = new Set(filtered);
+        return tools.filter(t => filteredSet.has(t.name));
+      },
+    };
+  }
+
+  function makeToolPlugin(): DronePlugin {
+    return createTestPlugin({
+      id: 'term',
+      tools: [
+        {
+          name: 'create',
+          description: 'create a terminal session',
+          defaultHidden: true,
+          execute: async () => 'ok',
+        },
+        {
+          name: 'list',
+          description: 'list terminal sessions',
+          execute: async () => 'ok',
+        },
+      ],
+    });
+  }
+
+  async function listToolNames(plugins: DronePlugin[]): Promise<string[]> {
+    const engine = createDronePluginEngine({
+      plugins,
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+    });
+    await engine.initialize();
+    const result = JSON.parse(
+      await engine.executeTool('runtime__list_tools', {})
+    );
+    return (result.tools as Array<{ name: string }>).map(t => t.name);
+  }
+
+  it('filters default-hidden tools when a persona is active without allowedTools', async () => {
+    const personaPlugin = createTestPlugin({
+      id: 'persona',
+      capability: makeDefaultHiddenPersonaCap(),
+    });
+    const names = await listToolNames([personaPlugin, makeToolPlugin()]);
+    expect(names).toContain('term__list');
+    expect(names).not.toContain('term__create');
+  });
+
+  it('filters default-hidden tools when no persona is active', async () => {
+    const personaPlugin = createTestPlugin({
+      id: 'persona',
+      capability: makeDefaultHiddenPersonaCap(),
+    });
+    const names = await listToolNames([personaPlugin, makeToolPlugin()]);
+    expect(names).toContain('term__list');
+    expect(names).not.toContain('term__create');
+  });
+
+  it('allows a persona with allowedTools to re-include a default-hidden tool', async () => {
+    const personaPlugin = createTestPlugin({
+      id: 'persona',
+      capability: makeAllowedToolsPersonaCap(['term__create']),
+    });
+    const names = await listToolNames([personaPlugin, makeToolPlugin()]);
+    expect(names).toContain('term__create');
+    expect(names).not.toContain('term__list');
+  });
+
+  it('filters default-hidden tools when no persona capability is present', async () => {
+    const names = await listToolNames([makeToolPlugin()]);
+    expect(names).toContain('term__list');
+    expect(names).not.toContain('term__create');
+  });
+});
+
+describe('--debug tools — tool surface change logging', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeTool(name: string): DroneToolDefinition {
+    return {
+      name,
+      description: `${name} tool`,
+      execute: async () => 'ok',
+    };
+  }
+
+  it('logs mount/unmount/register/unregister when tools debug is enabled', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const debugFlags = createDebugFlagRegistry(['tools']);
+
+    const engine = createDronePluginEngine({
+      plugins: [createTestPlugin({ id: 'test', tools: [makeTool('alpha')] })],
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+      debugFlags,
+    });
+    await engine.initialize();
+
+    // Mount via runtime meta-tool
+    await engine.executeTool('runtime__mount_tool', { tool: 'test__alpha' });
+    // Unmount via runtime meta-tool
+    await engine.executeTool('runtime__unmount_tool', { tool: 'test__alpha' });
+    // Unregister
+    engine.unregisterTool('test__alpha');
+
+    const lines = errorSpy.mock.calls.map(c => c[0] as string);
+    expect(lines).toContain('[tools:register] test__alpha');
+    expect(lines).toContain('[tools:mount] test__alpha');
+    expect(lines).toContain('[tools:unmount] test__alpha');
+    expect(lines).toContain('[tools:unregister] test__alpha');
+  });
+
+  it('logs nothing when tools debug is disabled', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const debugFlags = createDebugFlagRegistry();
+
+    const engine = createDronePluginEngine({
+      plugins: [createTestPlugin({ id: 'test', tools: [makeTool('alpha')] })],
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+      debugFlags,
+    });
+    await engine.initialize();
+
+    await engine.executeTool('runtime__mount_tool', { tool: 'test__alpha' });
+    await engine.executeTool('runtime__unmount_tool', { tool: 'test__alpha' });
+    engine.unregisterTool('test__alpha');
+
+    const lines = errorSpy.mock.calls.map(c => c[0] as string);
+    expect(lines.filter(l => l.startsWith('[tools:'))).toEqual([]);
+  });
+
+  it('logs enable-plugin and add-external-plugin when tools debug is enabled', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const debugFlags = createDebugFlagRegistry(['tools']);
+
+    const engine = createDronePluginEngine({
+      plugins: [
+        createTestPlugin({ id: 'late', defaultEnabled: false }),
+        createTestPlugin({ id: 'external', defaultEnabled: false }),
+      ],
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+      debugFlags,
+    });
+    await engine.initialize();
+
+    await engine.enablePlugin('late');
+    await engine.addExternalPlugin(
+      createTestPlugin({ id: 'ext', defaultEnabled: false })
+    );
+
+    const lines = errorSpy.mock.calls.map(c => c[0] as string);
+    expect(lines).toContain('[tools:enable-plugin] late');
+    expect(lines).toContain('[tools:add-external-plugin] ext');
   });
 });

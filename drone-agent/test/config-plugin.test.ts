@@ -63,6 +63,9 @@ describe('config plugin', () => {
 
     await engine.initialize();
 
+    // Mount the tools to verify they exist
+    await engine.executeTool('runtime__mount_tool', { tool: 'config__get' });
+    await engine.executeTool('runtime__mount_tool', { tool: 'config__set' });
     const tools = engine.listTools();
     const toolNames = tools.map(t => t.name);
     expect(toolNames).toContain('config__get');

@@ -1,30 +1,24 @@
-import type { DronePlugin } from 'drone-core';
+import type { DronePlugin, DroneToolDefinition } from 'drone-core';
 import process from 'node:process';
 import { createServerManager } from './server.js';
 import {
   createGetDiagnosticsTool,
-  createHoverTool,
-  createGoToDefinitionTool,
+  createGoToTool,
   createFindReferencesTool,
-  createDocumentSymbolsTool,
-  createWorkspaceSymbolTool,
-  createSignatureHelpTool,
+  createSymbolsTool,
+  createInspectTool,
   createCompletionTool,
   createCodeActionTool,
   createRenameTool,
-  createImplementationTool,
-  createTypeDefinitionTool,
-  createCallHierarchyIncomingTool,
-  createCallHierarchyOutgoingTool,
+  createCallHierarchyTool,
   createFormattingTool,
-  createServerStatusTool,
 } from './tools/index.js';
 
 export const lspPlugin: DronePlugin = {
   metadata: {
     id: 'lsp',
     name: 'LSP',
-    version: '0.1.0',
+    version: '0.2.0',
     description:
       'Adds lightweight language-server diagnostics and semantic queries.',
     defaultEnabled: false,
@@ -38,34 +32,55 @@ export const lspPlugin: DronePlugin = {
       logger: registration.logger,
     });
 
-    // Register diagnostics prompt fragment
+    // Register diagnostics + server status prompt fragment
     registration.registerPromptFragment({
-      key: 'diagnostics',
+      key: 'lsp-status',
       phase: 'header',
-      render: async () => server.renderDiagnosticsPrompt(),
+      render: async () => {
+        const diagPrompt = server.renderDiagnosticsPrompt();
+        const states = server.getServerStates();
+        const parts: string[] = [];
+
+        if (states.length > 0) {
+          const serverLines = states.map(s => `${s.language}: ${s.status}`);
+          parts.push(`# LSP Servers\n\n${serverLines.join('\n')}`);
+        }
+
+        const available = server.getAvailableServers();
+        if (available.length > 0) {
+          const availableLines = available.map(
+            s =>
+              `- ${s.language} (${s.id}): available — mount and use LSP tools for this language`
+          );
+          parts.push(
+            `## Available LSP Servers\n\n${availableLines.join('\n')}`
+          );
+        }
+
+        if (diagPrompt) {
+          parts.push(diagPrompt);
+        }
+
+        return parts.length > 0 ? parts.join('\n\n') : false;
+      },
     });
 
-    // Register all tools
-    const tools = [
-      createGetDiagnosticsTool(server),
-      createHoverTool(server),
-      createGoToDefinitionTool(server),
-      createFindReferencesTool(server),
-      createDocumentSymbolsTool(server),
-      createWorkspaceSymbolTool(server),
-      createSignatureHelpTool(server),
-      createCompletionTool(server),
-      createCodeActionTool(server),
-      createRenameTool(server),
-      createImplementationTool(server),
-      createTypeDefinitionTool(server),
-      createCallHierarchyIncomingTool(server),
-      createCallHierarchyOutgoingTool(server),
-      createFormattingTool(server),
-      createServerStatusTool(server),
+    // Build all tool definitions and register them directly
+    const toolFactories: Array<() => DroneToolDefinition> = [
+      () => createGetDiagnosticsTool(server),
+      () => createInspectTool(server),
+      () => createGoToTool(server),
+      () => createFindReferencesTool(server),
+      () => createSymbolsTool(server),
+      () => createCompletionTool(server),
+      () => createCodeActionTool(server),
+      () => createRenameTool(server),
+      () => createCallHierarchyTool(server),
+      () => createFormattingTool(server),
     ];
 
-    for (const tool of tools) {
+    for (const factory of toolFactories) {
+      const tool = factory();
       registration.registerTool(tool);
     }
 

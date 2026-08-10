@@ -20,6 +20,15 @@ describe('tool registration', () => {
 
   it('registers consolidated tools', async () => {
     const engine = await createEngine();
+
+    // Mount the tools we want to check
+    await engine.executeTool('runtime__mount_tool', {
+      tool: 'self-improvement__insight',
+    });
+    await engine.executeTool('runtime__mount_tool', {
+      tool: 'self-improvement__principle',
+    });
+
     const toolNames = engine.listTools().map(t => t.name);
 
     expect(toolNames).toContain('self-improvement__insight');

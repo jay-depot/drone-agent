@@ -108,12 +108,14 @@ export type DroneTuiOptions = {
     | 'listPlugins'
     | 'getRegisteredPluginCount'
     | 'getRegisteredToolCount'
+    | 'getMountedToolCount'
     | 'getCapability'
     | 'runHooks'
     | 'executeTool'
     | 'getHelpSnippets'
     | 'renderPromptFragments'
     | 'getConfig'
+    | 'buildSystemMessages'
     | 'dispatchSlashCommand'
     | 'setElicitation'
     | 'onConversationEvent'
@@ -136,6 +138,9 @@ export type DroneTuiOptions = {
     setReasoningLevel: (level: DroneReasoningLevel | undefined) => void;
     enqueueUserMessage?: (prompt: string) => void;
     cancelCurrentRequest?: () => void;
+    getDebugSubsystems: () => string[];
+    enableDebugSubsystem: (name: string) => void;
+    disableDebugSubsystem: (name: string) => void;
   };
   model: string;
   logger: {

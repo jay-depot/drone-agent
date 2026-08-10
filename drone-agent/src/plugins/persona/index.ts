@@ -65,13 +65,68 @@ export const personaPlugin: DronePlugin = {
       }
       return undefined;
     }
+
+    function expandPremountedCanonical(): string[] {
+      if (!activePersona?.premountedTools) return [];
+      const result: string[] = [];
+      for (const [pluginId, toolNames] of Object.entries(
+        activePersona.premountedTools
+      )) {
+        for (const toolName of toolNames) {
+          result.push(`${pluginId}__${toolName}`);
+        }
+      }
+      return result;
+    }
+
+    function allowedToolsMatches(canonical: string): boolean {
+      if (!activePersona?.allowedTools) return false;
+      const matched = filterByGlobPatterns(
+        [canonical],
+        activePersona.allowedTools
+      );
+      return matched.length > 0;
+    }
+
+    function applyToolPremount(): void {
+      // Unmount all currently-mounted non-runtime tools.
+      for (const tool of registration.listMountedTools()) {
+        if (!tool.name.startsWith('runtime__')) {
+          registration.unmountTool(tool.name);
+        }
+      }
+      // Mount the active persona's premounted tools.
+      const premount = activePersona?.premountedTools;
+      if (!premount) return;
+      for (const [pluginId, toolNames] of Object.entries(premount)) {
+        for (const toolName of toolNames) {
+          const canonical = `${pluginId}__${toolName}`;
+          const def = registration.mountTool(canonical);
+          if (!def) {
+            registration.logger.warn(
+              `premountedTools: unknown tool "${canonical}"`
+            );
+            continue;
+          }
+          if (def.defaultHidden && !allowedToolsMatches(canonical)) {
+            registration.logger.warn(
+              `premountedTools: "${canonical}" is defaultHidden and not in allowedTools; it will still be visible because premounted. Add it to allowedTools or remove the premount.`
+            );
+          }
+        }
+      }
+    }
+
     function getFilteredTools(
       allTools: DroneToolDescriptor[]
     ): DroneToolDescriptor[] {
+      const premountedNames = new Set(expandPremountedCanonical());
       if (!activePersona || !activePersona.allowedTools) {
         // No active persona, or persona without explicit allowedTools:
         // hide defaultHidden tools from the LLM.
-        return allTools.filter(t => !t.defaultHidden);
+        return allTools.filter(
+          t => !t.defaultHidden || premountedNames.has(t.name)
+        );
       }
       // Persona has explicit allowedTools: apply glob filtering.
       // The persona's patterns take full control - they can re-include
@@ -79,7 +134,9 @@ export const personaPlugin: DronePlugin = {
       const names = allTools.map(t => t.name);
       const filtered = filterByGlobPatterns(names, activePersona.allowedTools);
       const filteredSet = new Set(filtered);
-      return allTools.filter(t => filteredSet.has(t.name));
+      return allTools.filter(
+        t => filteredSet.has(t.name) || premountedNames.has(t.name)
+      );
     }
     function getFilteredSkills(
       allSkills: DroneSkillDefinition[]
@@ -165,6 +222,7 @@ export const personaPlugin: DronePlugin = {
     registration.registerPromptFragment(availablePersonasFragment);
 
     function notifyChange(): void {
+      applyToolPremount();
       for (const cb of changeCallbacks) {
         cb(activePersona);
       }

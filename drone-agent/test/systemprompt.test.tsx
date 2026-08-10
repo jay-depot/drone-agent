@@ -10,7 +10,7 @@ import { render } from 'ink-testing-library';
 import { App } from '../src/tui/app.js';
 import type { DroneTuiOptions } from '../src/tui/types.js';
 import { silentLogger } from './helpers.js';
-import { createDefaultAgentConfig } from 'drone-core';
+import { createDefaultAgentConfig, type DroneChatMessage } from 'drone-core';
 
 /**
  * Poll until `lastFrame()` satisfies `predicate` or `timeoutMs` elapses.
@@ -54,6 +54,7 @@ function makeOptions(
       ],
       getRegisteredPluginCount: () => 1,
       getRegisteredToolCount: () => 0,
+      getMountedToolCount: () => 0,
       getCapability: () => undefined,
       getTool: () => undefined,
       runHooks: async () => {},
@@ -67,24 +68,23 @@ function makeOptions(
         ...createDefaultAgentConfig(),
         systemPrompt: 'You are a test agent.',
       }),
+      buildSystemMessages: async () => {
+        const base: DroneChatMessage[] = [
+          { role: 'system', content: 'You are a test agent.' },
+        ];
+        base.push({ role: 'system', content: 'Fragment header content' });
+        base.push({ role: 'system', content: 'Fragment footer content' });
+        return base;
+      },
       onConversationEvent: () => () => {},
       dispatchSlashCommand: async (_line, ctx) => {
-        // Handle /systemprompt by calling the engine methods directly
         if (_line === '/systemprompt') {
-          const fragments = (await ctx.engine.renderPromptFragments?.()) ?? [];
-          const config = ctx.engine.getConfig?.();
-          const lines: string[] = [
-            'System Prompt:',
-            '────────────────────────────────────────',
-            config?.systemPrompt ?? '(not available)',
-          ];
-          if (fragments.length > 0) {
+          const systemMessages =
+            (await ctx.engine.buildSystemMessages?.()) ?? [];
+          const lines: string[] = ['System Messages:'];
+          for (const msg of systemMessages) {
             lines.push('────────────────────────────────────────');
-            lines.push('Prompt Fragments:');
-            for (const fragment of fragments) {
-              lines.push('────────────────────────────────────────');
-              lines.push(fragment);
-            }
+            lines.push(msg.content);
           }
           ctx.logger.info(lines.join('\n'));
           return true;
@@ -105,6 +105,9 @@ function makeOptions(
       getModel: () => model,
       getReasoningLevel: () => undefined,
       setReasoningLevel: (_level: any) => {},
+      getDebugSubsystems: () => [],
+      enableDebugSubsystem: () => {},
+      disableDebugSubsystem: () => {},
     },
     ...overrides,
   };
@@ -125,10 +128,8 @@ describe('App — /systemprompt', () => {
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
     await new Promise(r => setTimeout(r, 100));
-    for (const ch of '/systemprompt') {
-      instance.stdin.write(ch);
-      await new Promise(r => setTimeout(r, 20));
-    }
+    instance.stdin.write('/systemprompt');
+    await new Promise(r => setTimeout(r, 100));
     instance.stdin.write('\r');
     const frame = await waitUntilFrame(
       instance,
@@ -157,6 +158,7 @@ describe('App — /systemprompt', () => {
         ],
         getRegisteredPluginCount: () => 1,
         getRegisteredToolCount: () => 0,
+        getMountedToolCount: () => 0,
         getCapability: () => undefined,
         getTool: () => undefined,
         runHooks: async () => {},
@@ -168,23 +170,20 @@ describe('App — /systemprompt', () => {
           systemPrompt: 'You are a test agent.',
         }),
         onConversationEvent: () => () => {},
+        buildSystemMessages: async () => {
+          const base: DroneChatMessage[] = [
+            { role: 'system', content: 'You are a test agent.' },
+          ];
+          return base;
+        },
         dispatchSlashCommand: async (_line, ctx) => {
           if (_line === '/systemprompt') {
-            const fragments =
-              (await ctx.engine.renderPromptFragments?.()) ?? [];
-            const config = ctx.engine.getConfig?.();
-            const lines: string[] = [
-              'System Prompt:',
-              '────────────────────────────────────────',
-              config?.systemPrompt ?? '(not available)',
-            ];
-            if (fragments.length > 0) {
+            const systemMessages =
+              (await ctx.engine.buildSystemMessages?.()) ?? [];
+            const lines: string[] = ['System Messages:'];
+            for (const msg of systemMessages) {
               lines.push('────────────────────────────────────────');
-              lines.push('Prompt Fragments:');
-              for (const fragment of fragments) {
-                lines.push('────────────────────────────────────────');
-                lines.push(fragment);
-              }
+              lines.push(msg.content);
             }
             ctx.logger.info(lines.join('\n'));
             return true;
@@ -199,10 +198,8 @@ describe('App — /systemprompt', () => {
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
     await new Promise(r => setTimeout(r, 100));
-    for (const ch of '/systemprompt') {
-      instance.stdin.write(ch);
-      await new Promise(r => setTimeout(r, 20));
-    }
+    instance.stdin.write('/systemprompt');
+    await new Promise(r => setTimeout(r, 100));
     instance.stdin.write('\r');
     const frame = await waitUntilFrame(instance, f =>
       f.includes('You are a test agent.')

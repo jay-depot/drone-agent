@@ -1,0 +1,12 @@
+[
+  {
+    "principle": "Prefer listMountedTools() over a dedicated unmountAllNonRuntimeTools() as the engine primitive — it's more broadly reusable. Unmount-all logic belongs in the caller (e.g. the persona plugin), which iterates listMountedTools() and filters runtime__* tools itself.",
+    "source": "plan-persona-level-tool-premounting",
+    "createdAt": "2026-08-10T02:55:04.160Z"
+  },
+  {
+    "principle": "Tool-level autoMount on DroneToolDefinition is intentionally NOT introduced now; the \"none\" persona's automount list is just the runtime__* meta-tools. Revisit \"other auto-mount tools merge into the persona automount list\" if autoMount is ever added.",
+    "source": "plan-persona-level-tool-premounting",
+    "createdAt": "2026-08-10T02:55:13.288Z"
+  }
+]

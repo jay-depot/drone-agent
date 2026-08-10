@@ -1,5 +1,7 @@
+import { vi } from 'vitest';
 import {
   createConsoleLogger,
+  createRuntimeFlagRegistry,
   type DroneConversationEvent,
   type DroneElicitation,
   type DroneLogger,
@@ -8,6 +10,7 @@ import {
   type DronePluginRegistration,
   type DronePromptFragment,
   type DroneSessionSafetyTrimPayload,
+  type DroneToolDescriptor,
   type DroneToolDefinition,
   type DroneWorkflow,
 } from 'drone-core';
@@ -185,6 +188,7 @@ export function createFakeEngine(
   return {
     initialize: async () => [],
     enablePlugin: async (_pluginId: string) => false,
+    buildSystemMessages: async () => [],
     addExternalPlugin: async (_plugin: DronePlugin) => false,
     runHooks: async () => {},
     runSessionSafetyTrimWillRunHooks: async () => {},
@@ -194,6 +198,11 @@ export function createFakeEngine(
     getTool: () => undefined,
     executeTool: async () => '',
     listTools: () => [],
+    listAllTools: () => [],
+    mountTool: () => undefined,
+    unmountTool: () => {},
+    listMountedTools: () => [],
+    getMountedToolCount: () => 0,
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
     getCapability: <T>() => undefined as T | undefined,
@@ -204,6 +213,7 @@ export function createFakeEngine(
     getConfig: () => {
       throw new Error('getConfig not implemented in fake engine');
     },
+    getRuntimeFlags: () => createRuntimeFlagRegistry(),
     setElicitation: cap => {
       elicit = cap;
     },
@@ -217,5 +227,83 @@ export function createFakeEngine(
     registerBuiltinSlashCommand: () => {},
     getBuiltinSlashCommands: () => [],
     __elicitation: options.elicit,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mock engine for conversation-service tests
+// ---------------------------------------------------------------------------
+
+export type MockEngineOptions = {
+  tools: DroneToolDescriptor[];
+  executeToolImpl: (
+    name: string,
+    input: Record<string, unknown>
+  ) => Promise<string>;
+  promptFragments?: string[];
+  /** Optional custom getCapability override. Defaults to returning {} for 'llm'. */
+  getCapability?: <T>(id: string) => T | undefined;
+};
+
+/**
+ * Build a mock `DronePluginEngine` for conversation-service tests.
+ * Returns the engine plus the underlying `vi.fn()` execute mock.
+ *
+ * The default `getCapability` returns `{}` for `'llm'` and `undefined` for
+ * everything else. Pass a custom `getCapability` to override (e.g. to also
+ * return a persona capability).
+ */
+export function createMockEngine(
+  options: MockEngineOptions
+): import('../src/runtime/plugin-engine.js').DronePluginEngine & {
+  __executeMock: ReturnType<typeof vi.fn>;
+} {
+  const executeMock = vi.fn(options.executeToolImpl);
+  const toolList = options.tools;
+  const customGetCapability = options.getCapability;
+
+  return {
+    initialize: async () => [],
+    runHooks: async () => {},
+    runSessionSafetyTrimWillRunHooks: async () => {},
+    runSessionSafetyTrimAppliedHooks: async () => {},
+    runConversationEventHooks: async () => {},
+    renderPromptFragments: async () => options.promptFragments ?? [],
+    getTool: () => undefined,
+    executeTool:
+      executeMock as unknown as import('../src/runtime/plugin-engine.js').DronePluginEngine['executeTool'],
+    listTools: () => toolList,
+    getCapability:
+      customGetCapability ??
+      (<T>(id: string) => (id === 'llm' ? ({} as unknown as T) : undefined)),
+    listPlugins: () => [],
+    getRegisteredPluginCount: () => 0,
+    getRegisteredToolCount: () => toolList.length,
+    getMountedToolCount: () => 0,
+    listAllTools: () => toolList,
+    mountTool: () => undefined,
+    unmountTool: () => {},
+    listMountedTools: () => [],
+    unregisterPluginTools: () => {},
+    unregisterTool: () => {},
+    getHelpSnippets: () => [],
+    getConfig: () => {
+      throw new Error('getConfig not used in conversation-service tests');
+    },
+    getRuntimeFlags: () => createRuntimeFlagRegistry(),
+    setElicitation: () => {},
+    getElicitation: () => undefined,
+    runWorkflow: async () => {
+      throw new Error('runWorkflow not used in conversation-service tests');
+    },
+    dispatchSlashCommand: async () => false,
+    getSlashCommands: () => [],
+    onConversationEvent: () => () => {},
+    registerBuiltinSlashCommand: () => {},
+    getBuiltinSlashCommands: () => [],
+    enablePlugin: async (_pluginId: string) => false,
+    buildSystemMessages: async () => [],
+    addExternalPlugin: async (_plugin: any) => false,
+    __executeMock: executeMock,
   };
 }

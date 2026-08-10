@@ -1,4 +1,4 @@
-import { access, readFile, readdir, stat } from 'node:fs/promises';
+import { access, readFile, readdir, stat, opendir } from 'node:fs/promises';
 import { createConnection, type Socket } from 'node:net';
 import path from 'node:path';
 import type { DroneLspDiagnostic, DroneLspServerConfig } from 'drone-core';
@@ -84,6 +84,47 @@ export async function collectWorkspaceFiles(
 
   await visitDirectory(rootPath);
   return matches.sort((left, right) => left.localeCompare(right));
+}
+
+/**
+ * Check if any files with the given extensions exist in the workspace,
+ * excluding common ignore directories. Returns true if at least one
+ * matching file is found. Stops scanning early to avoid traversing
+ * large trees unnecessarily.
+ */
+export async function hasMatchingFiles(
+  rootPath: string,
+  fileExtensions: string[]
+): Promise<boolean> {
+  const normalizedExtensions = normalizeFileExtensions(fileExtensions);
+  if (normalizedExtensions.length === 0) {
+    return false;
+  }
+
+  async function scanDirectory(directoryPath: string): Promise<boolean> {
+    const dir = await opendir(directoryPath).catch(() => null);
+    if (!dir) {
+      return false;
+    }
+    for await (const entry of dir) {
+      if (entry.isDirectory()) {
+        if (EXCLUDED_DIRECTORIES.has(entry.name)) {
+          continue;
+        }
+        if (await scanDirectory(path.join(directoryPath, entry.name))) {
+          return true;
+        }
+        continue;
+      }
+      const extension = path.extname(entry.name).toLowerCase();
+      if (normalizedExtensions.includes(extension)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  return scanDirectory(rootPath);
 }
 
 export async function connectTcpServer(

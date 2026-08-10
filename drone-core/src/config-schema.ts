@@ -149,6 +149,7 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       responseReserveTokens: Type.Optional(PositiveNumber),
       maxToolIterations: Type.Optional(PositiveInteger),
       promptOnToolIterationLimit: Type.Optional(Type.Boolean()),
+      maxToolResultTokensPercent: Type.Optional(Percent),
     }),
     lsp: Type.Object({
       enabled: Type.Optional(Type.Boolean()),

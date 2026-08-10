@@ -65,6 +65,7 @@ describe('App commit flow', () => {
         listPlugins: () => [],
         getRegisteredPluginCount: () => 1,
         getRegisteredToolCount: () => 1,
+        getMountedToolCount: () => 0,
         getCapability: () => undefined,
         getTool: () => undefined,
         runHooks: async () => {},
@@ -73,6 +74,7 @@ describe('App commit flow', () => {
         getConfig: () => {
           throw new Error('unused');
         },
+        buildSystemMessages: async () => [],
         getHelpSnippets: () => [],
         dispatchSlashCommand: async () => false,
         onConversationEvent: cb => {
@@ -96,6 +98,9 @@ describe('App commit flow', () => {
         setReasoningLevel: () => {},
         enqueueUserMessage: () => {},
         cancelCurrentRequest: () => {},
+        getDebugSubsystems: () => [],
+        enableDebugSubsystem: () => {},
+        disableDebugSubsystem: () => {},
       },
     };
     instance = render(<App {...opts} />);

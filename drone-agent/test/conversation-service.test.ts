@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import {
   createDefaultAgentConfig,
+  createDebugFlagRegistry,
+  filterByGlobPatterns,
   type DroneChatResponse,
   type DroneContextWindowInfo,
   type DroneLlmCapability,
@@ -8,7 +11,6 @@ import {
   type DroneSessionTurn,
   type DroneToolDescriptor,
 } from 'drone-core';
-import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import {
   createConversationService,
   CANCEL_SENTINEL,
@@ -16,66 +18,11 @@ import {
 import { createContextBudgetService } from '../src/runtime/context-budget-service.js';
 import type { ContextBudgetService } from '../src/runtime/context-budget-service.js';
 import { createSessionManager } from '../src/runtime/session-manager.js';
-import { silentLogger } from './helpers.js';
+import { createMockEngine, silentLogger } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // Test fixtures
 // ---------------------------------------------------------------------------
-
-type EngineOptions = {
-  tools: DroneToolDescriptor[];
-  // The executeTool mock returns a string on success, or throws on error.
-  // Tests pass in a real or stubbed function so the service can route
-  // errors back to the model as tool messages.
-  executeToolImpl: (
-    name: string,
-    input: Record<string, unknown>
-  ) => Promise<string>;
-  promptFragments?: string[];
-};
-
-function makeEngine(options: EngineOptions): DronePluginEngine & {
-  __executeMock: ReturnType<typeof vi.fn>;
-} {
-  const executeMock = vi.fn(options.executeToolImpl);
-  const toolList = options.tools;
-
-  return {
-    initialize: async () => [],
-    runHooks: async () => {},
-    runSessionSafetyTrimWillRunHooks: async () => {},
-    runSessionSafetyTrimAppliedHooks: async () => {},
-    runConversationEventHooks: async () => {},
-    renderPromptFragments: async () => options.promptFragments ?? [],
-    getTool: () => undefined,
-    executeTool: executeMock as unknown as DronePluginEngine['executeTool'],
-    listTools: () => toolList,
-    getCapability: <T>(id: string) =>
-      id === 'llm' ? ({} as unknown as T) : undefined,
-    listPlugins: () => [],
-    getRegisteredPluginCount: () => 0,
-    getRegisteredToolCount: () => toolList.length,
-    unregisterPluginTools: () => {},
-    unregisterTool: () => {},
-    getHelpSnippets: () => [],
-    getConfig: () => {
-      throw new Error('getConfig not used in conversation-service tests');
-    },
-    setElicitation: () => {},
-    getElicitation: () => undefined,
-    runWorkflow: async () => {
-      throw new Error('runWorkflow not used in conversation-service tests');
-    },
-    dispatchSlashCommand: async () => false,
-    getSlashCommands: () => [],
-    onConversationEvent: () => () => {},
-    registerBuiltinSlashCommand: () => {},
-    getBuiltinSlashCommands: () => [],
-    enablePlugin: async (_pluginId: string) => false,
-    addExternalPlugin: async (_plugin: any) => false,
-    __executeMock: executeMock,
-  };
-}
 
 function makeProvider(
   chatResponses: DroneChatResponse[]
@@ -131,7 +78,7 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
 }
 
 it('uses the newly active provider on the next loop iteration', async () => {
-  const engine = makeEngine({
+  const engine = createMockEngine({
     tools: [
       {
         name: 'switch.provider',
@@ -217,7 +164,7 @@ it('uses the newly active provider on the next loop iteration', async () => {
 
 describe('createConversationService — tool error handling', () => {
   it('returns a successful tool result to the model when the tool succeeds', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -277,7 +224,7 @@ describe('createConversationService — tool error handling', () => {
       return e;
     })();
 
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -333,7 +280,7 @@ describe('createConversationService — tool error handling', () => {
     const err: NodeJS.ErrnoException = new Error('boom');
     err.code = 'EACCES';
 
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__read',
@@ -381,7 +328,7 @@ describe('createConversationService — tool error handling', () => {
 
   it('continues the conversation loop after a tool error and lets the model retry', async () => {
     let attempt = 0;
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -443,7 +390,7 @@ describe('createConversationService — tool error handling', () => {
   });
 
   it('records tool call arguments in the assistant turn before running them', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__read',
@@ -499,7 +446,7 @@ describe('createConversationService — iteration limits', () => {
   function makeErrnoEngine(): DronePluginEngine & {
     __executeMock: ReturnType<typeof vi.fn>;
   } {
-    return makeEngine({
+    return createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -691,7 +638,7 @@ describe('createConversationService — iteration limits', () => {
 
 describe('createConversationService — stuck detection', () => {
   it('aborts early with a clear message after N consecutive same-error rounds', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -737,7 +684,7 @@ describe('createConversationService — stuck detection', () => {
 
   it('does not trigger stuck detection if the model makes progress', async () => {
     let attempt = 0;
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -804,7 +751,7 @@ describe('createConversationService — stuck detection', () => {
       return 'ok';
     });
 
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -868,7 +815,7 @@ describe('createConversationService — stuck detection', () => {
 
 describe('createConversationService — message queue', () => {
   it('drains queued messages before the LLM call on the next loop iteration', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'fake_tool',
@@ -919,7 +866,7 @@ describe('createConversationService — message queue', () => {
   it('cancelCurrentRequest causes early return with CANCEL_SENTINEL', async () => {
     let cancelNow: (() => void) | null = null;
 
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'fake_tool',
@@ -966,7 +913,7 @@ describe('createConversationService — message queue', () => {
   it('cancel preserves queued messages for the next sendUserMessage call', async () => {
     let cancelNow: (() => void) | null = null;
 
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [
         {
           name: 'fake_tool',
@@ -1019,7 +966,7 @@ describe('createConversationService — message queue', () => {
   });
 
   it('clearSession flushes the queue', async () => {
-    const engine = makeEngine({
+    const engine = createMockEngine({
       tools: [],
       executeToolImpl: async () => 'ok',
     });
@@ -1051,5 +998,340 @@ describe('createConversationService — message queue', () => {
     const userMessages = messages.filter(m => m.role === 'user');
     expect(userMessages).toHaveLength(1);
     expect(userMessages[0]?.content).toBe('fresh');
+  });
+});
+
+// ── Tool result truncation ─────────────────────────────────────────────
+
+describe('tool result truncation', () => {
+  const LARGE_CONTENT = 'x'.repeat(100_000); // ~25K tokens
+  const SMALL_CONTENT = 'ok';
+
+  function makeTruncationProvider(
+    chatResponses: DroneChatResponse[],
+    contextWindowTokens: number
+  ): DroneLlmProvider & { __chatMock: ReturnType<typeof vi.fn> } {
+    const chatMock = vi.fn(async () => {
+      if (chatResponses.length === 0) {
+        return { message: 'no more responses queued' };
+      }
+      return chatResponses.shift() as DroneChatResponse;
+    });
+    return {
+      chat: chatMock,
+      getContextWindowInfo: async () =>
+        ({
+          model: 'fake',
+          contextWindowTokens,
+          source: 'config',
+        }) satisfies DroneContextWindowInfo,
+      __chatMock: chatMock,
+    };
+  }
+
+  it('truncates tool result exceeding 15% of context window', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'test__large',
+          description: 'returns large output',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+      executeToolImpl: async () => LARGE_CONTENT,
+    });
+    const provider = makeTruncationProvider(
+      [
+        {
+          toolCalls: [
+            {
+              id: 'call-1',
+              name: 'test__large',
+              arguments: {},
+            },
+          ],
+        },
+        { message: 'Done.' },
+      ],
+      32768 // 15% = ~4915 tokens
+    );
+
+    const config = createDefaultAgentConfig();
+    config.session.maxToolResultTokensPercent = 15;
+    const sessionManager = createSessionManager();
+    const budgetService = createContextBudgetService({
+      config,
+      renderPromptFragments: async () => [],
+      getProvider: () => provider,
+      getModel: () => 'fake',
+    });
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    await conversation.sendUserMessage('run large tool');
+
+    const messages = sessionManager.getMessages();
+    const toolMessage = messages.find(m => m.role === 'tool');
+    expect(toolMessage).toBeDefined();
+    expect(toolMessage!.content).toContain('[Output truncated at ~');
+    expect(toolMessage!.content).toContain('Full output was ~25000 tokens');
+    expect(toolMessage!.content).toContain('request a smaller window');
+    // The truncated content should be shorter than the original
+    expect(toolMessage!.content.length).toBeLessThan(LARGE_CONTENT.length);
+  });
+
+  it('passes through small tool result unchanged', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'test__small',
+          description: 'returns small output',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+      executeToolImpl: async () => SMALL_CONTENT,
+    });
+    const provider = makeTruncationProvider(
+      [
+        {
+          toolCalls: [
+            {
+              id: 'call-1',
+              name: 'test__small',
+              arguments: {},
+            },
+          ],
+        },
+        { message: 'Done.' },
+      ],
+      32768
+    );
+
+    const config = createDefaultAgentConfig();
+    config.session.maxToolResultTokensPercent = 15;
+    const sessionManager = createSessionManager();
+    const budgetService = createContextBudgetService({
+      config,
+      renderPromptFragments: async () => [],
+      getProvider: () => provider,
+      getModel: () => 'fake',
+    });
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    await conversation.sendUserMessage('run small tool');
+
+    const messages = sessionManager.getMessages();
+    const toolMessage = messages.find(m => m.role === 'tool');
+    expect(toolMessage).toBeDefined();
+    expect(toolMessage!.content).toBe(SMALL_CONTENT);
+  });
+
+  it('does not truncate when maxToolResultTokensPercent is 0', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'test__large',
+          description: 'returns large output',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+      executeToolImpl: async () => LARGE_CONTENT,
+    });
+    const provider = makeTruncationProvider(
+      [
+        {
+          toolCalls: [
+            {
+              id: 'call-1',
+              name: 'test__large',
+              arguments: {},
+            },
+          ],
+        },
+        { message: 'Done.' },
+      ],
+      32768
+    );
+
+    const config = createDefaultAgentConfig();
+    config.session.maxToolResultTokensPercent = 0;
+    const sessionManager = createSessionManager();
+    const budgetService = createContextBudgetService({
+      config,
+      renderPromptFragments: async () => [],
+      getProvider: () => provider,
+      getModel: () => 'fake',
+    });
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    await conversation.sendUserMessage('run large tool');
+
+    const messages = sessionManager.getMessages();
+    const toolMessage = messages.find(m => m.role === 'tool');
+    expect(toolMessage).toBeDefined();
+    // Content should be the full large content, not truncated
+    expect(toolMessage!.content).toBe(LARGE_CONTENT);
+  });
+});
+
+describe('createConversationService — mounted tool list visibility filtering', () => {
+  function makePersonaCap(allowedTools?: string[]): {
+    getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
+  } {
+    return {
+      getFilteredTools: (tools: DroneToolDescriptor[]) => {
+        if (!allowedTools) {
+          return tools.filter(t => !t.defaultHidden);
+        }
+        const names = tools.map(t => t.name);
+        const filtered = filterByGlobPatterns(names, allowedTools);
+        const filteredSet = new Set(filtered);
+        return tools.filter(t => filteredSet.has(t.name));
+      },
+    };
+  }
+
+  async function runAndGetSentTools(
+    engine: DronePluginEngine,
+    provider: DroneLlmProvider & { __chatMock: ReturnType<typeof vi.fn> },
+    personaCap?: {
+      getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
+    }
+  ): Promise<DroneToolDescriptor[]> {
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => {
+      if (id === 'llm') return makeLlmCapability(provider);
+      if (id === 'persona') return personaCap;
+      return undefined;
+    };
+
+    await conversation.sendUserMessage('go');
+    const firstCall = provider.__chatMock.mock.calls[0][0] as {
+      tools?: DroneToolDescriptor[];
+    };
+    return firstCall.tools ?? [];
+  }
+
+  it('filters default-hidden tools from the mounted list when no persona is present', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'term__create',
+          description: 'create a terminal session',
+          defaultHidden: true,
+        },
+        {
+          name: 'term__list',
+          description: 'list terminal sessions',
+        },
+      ],
+      executeToolImpl: async () => 'ok',
+    });
+    const provider = makeProvider([{ message: 'done' }]);
+
+    const sentTools = await runAndGetSentTools(
+      engine as unknown as DronePluginEngine,
+      provider
+    );
+    const names = sentTools.map(t => t.name);
+    expect(names).toContain('term__list');
+    expect(names).not.toContain('term__create');
+  });
+
+  it('applies the persona overlay to the mounted list', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'term__create',
+          description: 'create a terminal session',
+          defaultHidden: true,
+        },
+        {
+          name: 'term__list',
+          description: 'list terminal sessions',
+        },
+      ],
+      executeToolImpl: async () => 'ok',
+    });
+    const provider = makeProvider([{ message: 'done' }]);
+
+    const sentTools = await runAndGetSentTools(
+      engine as unknown as DronePluginEngine,
+      provider,
+      makePersonaCap(['term__create'])
+    );
+    const names = sentTools.map(t => t.name);
+    expect(names).toContain('term__create');
+    expect(names).not.toContain('term__list');
+  });
+});
+
+describe('createConversationService — llm debug flag', () => {
+  it('passes debug: true to provider.chat() when llm is enabled in the shared registry', async () => {
+    const engine = createMockEngine({
+      tools: [],
+      executeToolImpl: async () => 'ok',
+    });
+    const provider = makeProvider([{ message: 'hello' }]);
+    const debugFlags = createDebugFlagRegistry(['llm']);
+
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      debugFlags,
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    await conversation.sendUserMessage('hi');
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    const chatInput = provider.__chatMock.mock.calls[0][0] as {
+      debug?: boolean;
+    };
+    expect(chatInput.debug).toBe(true);
   });
 });

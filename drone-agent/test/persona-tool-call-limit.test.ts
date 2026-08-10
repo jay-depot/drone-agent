@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { parsePersonaMd } from '../src/plugins/persona/loader.js';
 import {
   createDefaultAgentConfig,
@@ -8,12 +9,11 @@ import {
   type DroneLlmProvider,
   type DroneToolDescriptor,
 } from 'drone-core';
-import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { createConversationService } from '../src/runtime/conversation-service.js';
 import { createContextBudgetService } from '../src/runtime/context-budget-service.js';
 import type { ContextBudgetService } from '../src/runtime/context-budget-service.js';
 import { createSessionManager } from '../src/runtime/session-manager.js';
-import { silentLogger } from './helpers.js';
+import { createMockEngine, silentLogger } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // Step 5, test 1: Parsing toolCallLimit from persona frontmatter
@@ -107,66 +107,6 @@ describe('parsePersonaMd — invalid toolCallLimit values', () => {
 // Helpers for conversation service tests
 // ---------------------------------------------------------------------------
 
-type EngineOptions = {
-  tools: DroneToolDescriptor[];
-  executeToolImpl: (
-    name: string,
-    input: Record<string, unknown>
-  ) => Promise<string>;
-  promptFragments?: string[];
-  /** Optional persona capability to return from getCapability('persona'). */
-  personaCap?: {
-    getActivePersona: () => { toolCallLimit?: number } | null;
-    getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
-  };
-};
-
-function makeEngine(options: EngineOptions): DronePluginEngine & {
-  __executeMock: ReturnType<typeof vi.fn>;
-} {
-  const executeMock = vi.fn(options.executeToolImpl);
-  const toolList = options.tools;
-
-  return {
-    initialize: async () => [],
-    runHooks: async () => {},
-    runSessionSafetyTrimWillRunHooks: async () => {},
-    runSessionSafetyTrimAppliedHooks: async () => {},
-    runConversationEventHooks: async () => {},
-    renderPromptFragments: async () => options.promptFragments ?? [],
-    getTool: () => undefined,
-    executeTool: executeMock as unknown as DronePluginEngine['executeTool'],
-    listTools: () => toolList,
-    getCapability: <T>(id: string) => {
-      if (id === 'llm') return {} as unknown as T;
-      if (id === 'persona') return options.personaCap as unknown as T;
-      return undefined;
-    },
-    listPlugins: () => [],
-    getRegisteredPluginCount: () => 0,
-    getRegisteredToolCount: () => toolList.length,
-    unregisterPluginTools: () => {},
-    unregisterTool: () => {},
-    getHelpSnippets: () => [],
-    getConfig: () => {
-      throw new Error('getConfig not used in conversation-service tests');
-    },
-    setElicitation: () => {},
-    getElicitation: () => undefined,
-    runWorkflow: async () => {
-      throw new Error('runWorkflow not used in conversation-service tests');
-    },
-    dispatchSlashCommand: async () => false,
-    getSlashCommands: () => [],
-    onConversationEvent: () => () => {},
-    registerBuiltinSlashCommand: () => {},
-    getBuiltinSlashCommands: () => [],
-    enablePlugin: async (_pluginId: string) => false,
-    addExternalPlugin: async (_plugin: any) => false,
-    __executeMock: executeMock,
-  };
-}
-
 function makeProvider(
   chatResponses: DroneChatResponse[]
 ): DroneLlmProvider & { __chatMock: ReturnType<typeof vi.fn> } {
@@ -251,7 +191,7 @@ describe('createConversationService — persona toolCallLimit', () => {
     getActivePersona: () => { toolCallLimit?: number } | null;
     getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
   }): DronePluginEngine & { __executeMock: ReturnType<typeof vi.fn> } {
-    return makeEngine({
+    return createMockEngine({
       tools: [
         {
           name: 'file__list',
@@ -264,7 +204,11 @@ describe('createConversationService — persona toolCallLimit', () => {
         e.code = 'ENOENT';
         throw e;
       },
-      personaCap,
+      getCapability: <T>(id: string) => {
+        if (id === 'llm') return {} as unknown as T;
+        if (id === 'persona') return personaCap as unknown as T;
+        return undefined;
+      },
     });
   }
 

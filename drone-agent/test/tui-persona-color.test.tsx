@@ -35,6 +35,7 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
     listPlugins: () => [],
     getRegisteredPluginCount: () => 0,
     getRegisteredToolCount: () => 0,
+    getMountedToolCount: () => 0,
     getCapability: ((_id: string) => (_id === 'persona' ? cap : undefined)) as <
       T,
     >(
@@ -43,6 +44,9 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
     getTool: (): undefined => undefined,
     runHooks: async (): Promise<void> => {},
     executeTool: async (): Promise<string> => 'ok',
+    buildSystemMessages: async (): Promise<
+      import('drone-core').DroneChatMessage[]
+    > => [],
     getHelpSnippets: (): string[] => [],
     renderPromptFragments: async (): Promise<string[]> => [],
     getConfig: (): import('drone-core').DroneAgentConfig => {
@@ -72,6 +76,9 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
       getModel: (): string => model,
       getReasoningLevel: () => undefined,
       setReasoningLevel: (_level: any) => {},
+      getDebugSubsystems: () => [],
+      enableDebugSubsystem: () => {},
+      disableDebugSubsystem: () => {},
     },
   };
 }

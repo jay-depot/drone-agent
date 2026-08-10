@@ -1,15 +1,15 @@
 [
   {
-    "timestamp": "2026-07-14T17:33:59.915Z",
-    "insight": "The syntax highlighting in Markdown.tsx's renderHighlightedTree() uses nested <Text> elements with different color props per token. Ink's Yoga layout miscalculates inline flow for nested <Text> with different colors, inserting spurious line breaks between tokens. This is the same class of bug that MultilineTextInput's renderWithCursor() works around by using raw ANSI escape codes instead of nested <Text inverse>. The fix should follow the same pattern: render each line as a single <Text> with ANSI color codes embedded in the string."
+    "timestamp": "2026-08-10T02:56:38.985Z",
+    "insight": "The loader.ts frontmatter parser for persona .md files was extended to handle a nested map-of-arrays (premountedTools) by tracking an inPremountMode state plus currentPremountPlugin. The key insight is that the parser uses indentation to distinguish top-level keys from nested plugin-id keys under premountedTools, and it properly flushes state at boundaries. This pattern generalizes well for future nested YAML structures in persona frontmatter."
   },
   {
-    "timestamp": "2026-07-14T18:23:49.502Z",
-    "insight": "LSP ergonomics implementation: The key architectural insight was that parsePositionInput needed to become async to support text/symbol resolution (which requires reading files from disk and making LSP requests). This rippled through all 14 cursor-position tools. The NormalizedSymbol type has optional line/column fields, so resolveSymbolPosition needed type-narrowing filters to handle symbols without position info. The test pattern of creating a minimal ServerManager with no real LSP servers worked well for testing text resolution in isolation."
+    "timestamp": "2026-08-10T02:56:42.119Z",
+    "insight": "When adding a new required method to DronePluginRegistration (like listMountedTools), all mock registration objects in test files must be updated. Using sed to add the property after unmountTool worked but created duplicates when the same line pattern appeared multiple times with different indentation levels. A better approach would be to use a shared helper or spread pattern to construct mock registrations, reducing the number of files needing updates when the interface changes."
   },
   {
-    "timestamp": "2026-07-14T19:06:29.322Z",
-    "insight": "The mcp-client.test.ts has 10 pre-existing test failures related to mock fetch behavior (GET/DELETE requests not being recorded, protocol version mismatches, bare response handling). These are unrelated to the logging capability changes and appear to be pre-existing issues in the test infrastructure."
+    "timestamp": "2026-08-10T04:08:49.133Z",
+    "insight": "When adding a new debug subsystem that must be consumed by the plugin engine (e.g. `--debug tools`), the debug set cannot live privately in the conversation service because the engine is constructed before the conversation service in index.tsx. Extract a shared `DebugFlagRegistry` in drone-core (mirroring `RuntimeFlagRegistry`), created once in index.tsx and passed to both the engine and conversation service. This makes runtime toggling via `/debug` take effect in both layers and makes future debug flags trivial to add."
   },
   {
     "timestamp": "2026-07-14T20:58:46.803Z",
@@ -102,5 +102,9 @@
   {
     "timestamp": "2026-07-29T03:35:08.010Z",
     "insight": "Pre-existing test failures discovered during plan-semantic-search validation: (1) compaction.test.ts has 3 tests failing because `makeBudgetService` helper function is missing (the tests call it but it was never defined in that file), (2) coordinator-client.test.ts has 1 test failing because `generateVerificationCode` receives undefined inputA (the test passes a Promise<BeaconIdentity> instead of awaiting it). These failures exist on the base commit too and are not related to the semantic search changes."
+  },
+  {
+    "timestamp": "2026-08-10T05:01:49.627Z",
+    "insight": "The drone-agent package resolves drone-core from its built dist/ (package.json \"types\": \"./dist/index.d.ts\"), not from source. So after editing drone-core types, you MUST run `pnpm -r run build` before LSP/typecheck in dependent packages reflects the change; otherwise you'll chase stale diagnostics."
   }
 ]

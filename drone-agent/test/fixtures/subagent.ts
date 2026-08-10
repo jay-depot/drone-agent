@@ -42,9 +42,15 @@ export interface LaunchSubagentOptions {
    */
   persona?: string;
   /**
-   * Timeout in milliseconds (default: 300000 = 5 minutes).
+   * Activity timeout in milliseconds (default: 300000 = 5 minutes).
+   * Resets on any progress from the subagent.
    */
   timeout?: number;
+  /**
+   * Hard cap timeout in milliseconds (default: 3600000 = 1 hour).
+   * Never resets, prevents runaway subagents.
+   */
+  hardCap?: number;
   /**
    * Path to the drone-agent executable (auto-detected if not provided).
    */
@@ -54,7 +60,8 @@ export interface LaunchSubagentOptions {
 interface PendingSubagent {
   resolve: (result: SubagentResult) => void;
   reject: (error: Error) => void;
-  timeoutId: ReturnType<typeof setTimeout> | null;
+  activityTimer: ReturnType<typeof setTimeout> | null;
+  hardCapTimer: ReturnType<typeof setTimeout> | null;
 }
 
 /**
@@ -63,9 +70,14 @@ interface PendingSubagent {
 const pendingSubagents = new Map<string, PendingSubagent>();
 
 /**
- * Default timeout for subagent dispatch (5 minutes).
+ * Default activity timeout for subagent dispatch (5 minutes).
  */
 const DEFAULT_TIMEOUT_MS = 300_000;
+
+/**
+ * Default hard cap for subagent execution (1 hour).
+ */
+const DEFAULT_HARD_CAP_MS = 3_600_000;
 
 /**
  * Generate a unique subagent ID for testing.
@@ -120,6 +132,7 @@ export async function launchSubagent(
     task,
     persona,
     timeout = DEFAULT_TIMEOUT_MS,
+    hardCap = DEFAULT_HARD_CAP_MS,
     execPath: providedExecPath,
   } = options;
 
@@ -155,29 +168,46 @@ export async function launchSubagent(
       },
     });
 
-    // Set up timeout
-    const timeoutId = setTimeout(() => {
+    // Activity timeout — resets on any NDJSON event from subagent
+    let activityTimer!: ReturnType<typeof setTimeout>;
+    const startActivityTimer = () => {
+      activityTimer = setTimeout(() => {
+        timedOut = true;
+        child.kill('SIGTERM');
+        // Give it a moment to terminate gracefully, then force kill
+        setTimeout(() => {
+          if (!child.killed) {
+            child.kill('SIGKILL');
+          }
+        }, 1000);
+      }, timeout);
+    };
+    startActivityTimer();
+
+    // Hard cap — never resets, prevents runaway subagents
+    const hardCapTimer = setTimeout(() => {
       timedOut = true;
       child.kill('SIGTERM');
-      // Give it a moment to terminate gracefully, then force kill
       setTimeout(() => {
         if (!child.killed) {
           child.kill('SIGKILL');
         }
       }, 1000);
-    }, timeout);
+    }, hardCap);
 
     // Track this pending subagent for cleanup
     pendingSubagents.set(subagentId, {
       resolve: resolvePromise,
       reject: rejectPromise,
-      timeoutId,
+      activityTimer,
+      hardCapTimer,
     });
 
     // Write kickoff to stdin
     const stdin = child.stdin;
     if (!stdin) {
-      clearTimeout(timeoutId);
+      clearTimeout(activityTimer);
+      clearTimeout(hardCapTimer);
       pendingSubagents.delete(subagentId);
       rejectPromise(new Error('Failed to open stdin for subagent'));
       return;
@@ -197,6 +227,17 @@ export async function launchSubagent(
         .split('\n')
         .filter(l => l.trim());
       collectedOutput.push(...lines);
+
+      // Any NDJSON event resets the activity timer
+      for (const line of lines) {
+        try {
+          JSON.parse(line);
+          clearTimeout(activityTimer);
+          startActivityTimer();
+        } catch {
+          // Skip invalid JSON
+        }
+      }
     });
 
     // Collect stderr
@@ -206,7 +247,8 @@ export async function launchSubagent(
 
     // Handle process exit
     child.on('close', code => {
-      clearTimeout(timeoutId);
+      clearTimeout(activityTimer);
+      clearTimeout(hardCapTimer);
       pendingSubagents.delete(subagentId);
 
       exitCode = code ?? undefined;
@@ -255,7 +297,8 @@ export async function launchSubagent(
     });
 
     child.on('error', (err: Error) => {
-      clearTimeout(timeoutId);
+      clearTimeout(activityTimer);
+      clearTimeout(hardCapTimer);
       pendingSubagents.delete(subagentId);
       rejectPromise(err);
     });
@@ -408,8 +451,11 @@ export async function launchErrorSubagent(
  */
 export function cancelAllSubagents(): void {
   for (const [subagentId, pending] of pendingSubagents) {
-    if (pending.timeoutId) {
-      clearTimeout(pending.timeoutId);
+    if (pending.activityTimer) {
+      clearTimeout(pending.activityTimer);
+    }
+    if (pending.hardCapTimer) {
+      clearTimeout(pending.hardCapTimer);
     }
     pendingSubagents.delete(subagentId);
   }

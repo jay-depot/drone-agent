@@ -102,6 +102,28 @@ export type DronePluginRegistration = {
     args: Record<string, unknown>
   ) => Promise<DroneWorkflowResult>;
   /**
+   * Mount a tool by its canonical name (`pluginId__toolName`). Makes the
+   * tool visible to the LLM immediately. Returns the tool definition if
+   * found and not already mounted, or `undefined` if the tool is not
+   * registered. Used by plugins that register tools dynamically and
+   * want them available without requiring the LLM to mount them first.
+   */
+  mountTool: (canonicalName: string) => DroneToolDefinition | undefined;
+  /**
+   * Unmount a tool by its canonical name (`pluginId__toolName`). The tool
+   * remains registered but is hidden from the LLM. Silently does nothing
+   * if the tool is not found or not mounted. Used by plugins that manage
+   * their own tool lifecycle (e.g. MCP plugin's unmount_tool).
+   */
+  unmountTool: (canonicalName: string) => void;
+  /**
+   * List all currently-mounted tools as `DroneToolDescriptor` objects.
+   * Used by plugins that need to enumerate what is currently visible to
+   * the LLM (e.g. the persona plugin's applyToolPremount which unmounts
+   * everything non-runtime before mounting a new persona's tools).
+   */
+  listMountedTools: () => import('./session-types.js').DroneToolDescriptor[];
+  /**
    * Returns the host's elicitation capability (set by the CLI shell or
    * the TUI at engine init time). Lets plugins ask the user structured
    * questions (closed-set or freeform) without coupling to a host.
@@ -282,8 +304,22 @@ export type DroneSlashCommandContext = {
     }[];
     /** List all tools (for /tools). */
     listTools?: () => import('./session-types.js').DroneToolDescriptor[];
+    /** List all registered tools (mounted + unmounted, for /tools --all). */
+    listAllTools?: () => import('./session-types.js').DroneToolDescriptor[];
+    /** Mount a tool by canonical name (for /tool mount). Returns the tool definition if newly mounted, else undefined. */
+    mountTool?: (canonicalName: string) => DroneToolDefinition | undefined;
+    /** Unmount a mounted tool by canonical name (for /tool unmount). */
+    unmountTool?: (canonicalName: string) => void;
+    /** List currently-mounted tools (for /tool unmount --all). */
+    listMountedTools?: () => import('./session-types.js').DroneToolDescriptor[];
+    /** Get the total count of registered tools (for /tools). */
+    getRegisteredToolCount?: () => number;
     /** Render prompt fragments (for /systemprompt). */
     renderPromptFragments?: () => Promise<string[]>;
+    /** Build the full system messages as sent to the LLM (config prompt + runtime flags + prompt fragments). */
+    buildSystemMessages?: () => Promise<
+      import('./session-types.js').DroneChatMessage[]
+    >;
     /** Get the resolved config (for /systemprompt). */
     getConfig?: () => import('./config-types.js').DroneAgentConfig;
     /** Get all slash commands (for /help fallback). */
@@ -308,6 +344,12 @@ export type DroneSlashCommandContext = {
     enqueueUserMessage?: (prompt: string) => void;
     /** Soft-cancel the current in-flight request. */
     cancelCurrentRequest?: () => void;
+    /** Get the list of currently enabled debug subsystems. */
+    getDebugSubsystems: () => string[];
+    /** Enable a debug subsystem by name (e.g. "llm"). */
+    enableDebugSubsystem: (name: string) => void;
+    /** Disable a debug subsystem by name (e.g. "llm"). */
+    disableDebugSubsystem: (name: string) => void;
   };
   /** Session manager for appending synthetic messages. */
   sessionManager?: {

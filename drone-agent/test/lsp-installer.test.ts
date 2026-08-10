@@ -6,6 +6,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { create as createTar } from 'tar';
 import {
+  resolveTarballUrl,
+  resolvePlatformSpec,
   commandExistsOnPath,
   computeCacheKey,
   ensureServerInstalled,
@@ -13,8 +15,9 @@ import {
   verifyIntegrity,
   type InstallerSpec,
 } from '../src/plugins/lsp/installer.js';
+import type { DroneLspInstallSpec } from 'drone-core';
 
-const TEST_NODE_ENTRY = 'lib/cli.mjs';
+const TEST_ENTRY_POINT = 'lib/cli.mjs';
 
 /**
  * Build a synthetic npm-style tarball in memory. We stage files in a
@@ -62,11 +65,12 @@ function baseSpec(
     command: 'typescript-language-server',
     args: ['--stdio'],
     install: {
-      npmPackage: 'typescript-language-server',
+      type: 'npm',
+      package: 'typescript-language-server',
       version: '5.3.0',
       tarballUrl,
       integrity,
-      nodeEntry: TEST_NODE_ENTRY,
+      entryPoint: TEST_ENTRY_POINT,
     },
   };
 }
@@ -260,6 +264,137 @@ describe('lsp-installer — commandExistsOnPath', () => {
   });
 });
 
+describe('lsp-installer — resolveTarballUrl', () => {
+  it('returns tarballUrl as-is for npm type', () => {
+    const url = resolveTarballUrl({
+      type: 'npm',
+      package: 'typescript-language-server',
+      version: '5.3.0',
+      tarballUrl:
+        'https://registry.npmjs.org/typescript-language-server/-/typescript-language-server-5.3.0.tgz',
+      integrity: 'sha512-xxx',
+      entryPoint: 'lib/cli.mjs',
+    });
+    expect(url).toBe(
+      'https://registry.npmjs.org/typescript-language-server/-/typescript-language-server-5.3.0.tgz'
+    );
+  });
+
+  it('constructs cargo download URL', () => {
+    const url = resolveTarballUrl({
+      type: 'cargo',
+      package: 'rust-analyzer',
+      version: '2024-11-18',
+      tarballUrl: '',
+      integrity: 'sha512-xxx',
+    });
+    expect(url).toBe(
+      'https://crates.io/api/v1/crates/rust-analyzer/2024-11-18/download'
+    );
+  });
+
+  it('constructs pip source tarball URL', () => {
+    const url = resolveTarballUrl({
+      type: 'pip',
+      package: 'pyright',
+      version: '1.1.389',
+      tarballUrl: '',
+      integrity: 'sha512-xxx',
+    });
+    expect(url).toBe(
+      'https://pypi.org/packages/source/p/pyright/pyright-1.1.389.tar.gz'
+    );
+  });
+
+  it('constructs go module proxy URL with .zip extension', () => {
+    const url = resolveTarballUrl({
+      type: 'go',
+      package: 'golang.org/x/tools/gopls',
+      version: '0.16.2',
+      tarballUrl: '',
+      integrity: 'sha512-xxx',
+    });
+    expect(url).toBe(
+      'https://proxy.golang.org/golang.org/x/tools/gopls/@v/0.16.2.zip'
+    );
+  });
+
+  it('returns tarballUrl as-is for github-release type', () => {
+    const url = resolveTarballUrl({
+      type: 'github-release',
+      package: 'rust-lang/rust-analyzer',
+      version: '2024-11-18',
+      tarballUrl:
+        'https://github.com/rust-lang/rust-analyzer/releases/download/2024-11-18/rust-analyzer-x86_64-unknown-linux-gnu.tar.gz',
+      integrity: 'sha512-xxx',
+      entryPoint: 'rust-analyzer',
+    });
+    expect(url).toBe(
+      'https://github.com/rust-lang/rust-analyzer/releases/download/2024-11-18/rust-analyzer-x86_64-unknown-linux-gnu.tar.gz'
+    );
+  });
+});
+
+describe('lsp-installer — resolvePlatformSpec', () => {
+  it('returns platform override when it exists', () => {
+    const spec: DroneLspInstallSpec = {
+      type: 'github-release',
+      package: 'rust-lang/rust-analyzer',
+      version: '2026-07-27',
+      tarballUrl: 'https://example.com/default.tar.gz',
+      integrity: 'sha512-default',
+      entryPoint: 'rust-analyzer',
+      platforms: {
+        'linux-x64': {
+          tarballUrl: 'https://example.com/linux-x64.tar.gz',
+          integrity: 'sha512-linux-x64',
+        },
+      },
+    };
+
+    // On linux-x64, should return the platform override.
+    const result = resolvePlatformSpec(spec);
+    expect(result.tarballUrl).toBe('https://example.com/linux-x64.tar.gz');
+    expect(result.integrity).toBe('sha512-linux-x64');
+  });
+
+  it('falls back to top-level fields when no platform match', () => {
+    const spec: DroneLspInstallSpec = {
+      type: 'npm',
+      package: 'typescript-language-server',
+      version: '5.3.0',
+      tarballUrl: 'https://example.com/default.tgz',
+      integrity: 'sha512-default',
+      entryPoint: 'lib/cli.mjs',
+    };
+
+    const result = resolvePlatformSpec(spec);
+    expect(result.tarballUrl).toBe('https://example.com/default.tgz');
+    expect(result.integrity).toBe('sha512-default');
+  });
+
+  it('falls back to top-level fields when platform key does not match', () => {
+    const spec: DroneLspInstallSpec = {
+      type: 'github-release',
+      package: 'some/server',
+      version: '1.0.0',
+      tarballUrl: 'https://example.com/default.tar.gz',
+      integrity: 'sha512-default',
+      platforms: {
+        'darwin-arm64': {
+          tarballUrl: 'https://example.com/darwin-arm64.tar.gz',
+          integrity: 'sha512-darwin-arm64',
+        },
+      },
+    };
+
+    // On linux-x64, should fall back to top-level.
+    const result = resolvePlatformSpec(spec);
+    expect(result.tarballUrl).toBe('https://example.com/default.tar.gz');
+    expect(result.integrity).toBe('sha512-default');
+  });
+});
+
 describe('lsp-installer — ensureServerInstalled', () => {
   it('short-circuits when the command is on PATH', async () => {
     await withFakeBinary(async binaryPath => {
@@ -294,8 +429,8 @@ describe('lsp-installer — ensureServerInstalled', () => {
 
   it('downloads, verifies, and extracts on cache miss', async () => {
     const tarball = await buildSyntheticTarball({
-      [TEST_NODE_ENTRY]: 'export const main = () => {};',
-      'package.json': '{"name":"typescript-language-server"}',
+      [TEST_ENTRY_POINT]: 'export const main = () => {};',
+      'package.json': '{"name":"typescript-language-server","version":"5.3.0"}',
     });
     const integrity = `sha512-${sha512Base64(tarball)}`;
     const spec = baseSpec(integrity);
@@ -317,7 +452,7 @@ describe('lsp-installer — ensureServerInstalled', () => {
       expect(resolution.source).toBe('cache');
       expect(resolution.command).toBe('/path/to/node');
       // The first arg must point inside the cache, at the entry file
-      // for the configured `nodeEntry`.
+      // for the configured `entryPoint`.
       expect(resolution.args[0]).toMatch(/lib[/\\]cli\.mjs$/);
       expect(path.dirname(resolution.args[0]!)).toContain(spec.install.version);
       expect(resolution.args.slice(1)).toEqual(['--stdio']);
@@ -336,14 +471,15 @@ describe('lsp-installer — ensureServerInstalled', () => {
       const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
       expect(manifest.serverId).toBe('typescript');
       expect(manifest.version).toBe('5.3.0');
-      expect(manifest.npmPackage).toBe('typescript-language-server');
+      expect(manifest.packageName).toBe('typescript-language-server');
       expect(manifest.installId).toMatch(/^[0-9a-f-]{36}$/);
     });
   });
 
   it('skips the network on a cache hit', async () => {
     const tarball = await buildSyntheticTarball({
-      [TEST_NODE_ENTRY]: 'export const main = () => {};',
+      [TEST_ENTRY_POINT]: 'export const main = () => {};',
+      'package.json': '{"name":"typescript-language-server","version":"5.3.0"}',
     });
     const integrity = `sha512-${sha512Base64(tarball)}`;
     const spec = baseSpec(integrity);
@@ -375,7 +511,8 @@ describe('lsp-installer — ensureServerInstalled', () => {
 
   it('refuses to extract a tarball whose integrity does not match', async () => {
     const tarball = await buildSyntheticTarball({
-      [TEST_NODE_ENTRY]: 'export const main = () => {};',
+      [TEST_ENTRY_POINT]: 'export const main = () => {};',
+      'package.json': '{"name":"typescript-language-server","version":"5.3.0"}',
     });
     // Compute integrity from a *different* buffer.
     const wrongIntegrity = `sha512-${sha512Base64(Buffer.from('not the tarball'))}`;
@@ -412,7 +549,8 @@ describe('lsp-installer — ensureServerInstalled', () => {
 
   it('clears a stale cache entry before re-installing', async () => {
     const tarball = await buildSyntheticTarball({
-      [TEST_NODE_ENTRY]: 'export const main = () => {};',
+      [TEST_ENTRY_POINT]: 'export const main = () => {};',
+      'package.json': '{"name":"typescript-language-server","version":"5.3.0"}',
     });
     const integrity = `sha512-${sha512Base64(tarball)}`;
     const spec = baseSpec(integrity);
@@ -449,4 +587,55 @@ describe('lsp-installer — ensureServerInstalled', () => {
       expect(content).toContain('main');
     });
   });
+
+  it('fails with a clear error when go build fails', async () => {
+    // Create a minimal zip buffer (just the EOCD, no entries).
+    const zipBuffer = createMinimalZip();
+    const integrity = `sha512-${sha512Base64(zipBuffer)}`;
+
+    const spec: InstallerSpec = {
+      id: 'gopls',
+      command: 'gopls',
+      args: [],
+      install: {
+        type: 'go',
+        package: 'golang.org/x/tools/gopls',
+        version: '0.16.2',
+        tarballUrl: 'https://example.test/gopls.zip',
+        integrity,
+        entryPoint: 'gopls',
+      },
+    };
+
+    await withTempCache(async cacheDir => {
+      await expect(
+        ensureServerInstalled(spec, {
+          cacheDir,
+          nodePath: '/path/to/node',
+          fetchImpl: (async () =>
+            new Response(new Blob([new Uint8Array(zipBuffer)]), {
+              status: 200,
+            })) as unknown as typeof fetch,
+        })
+      ).rejects.toThrow(/Go must be installed/);
+    });
+  });
 });
+
+/**
+ * Create a minimal valid ZIP buffer with no entries (just EOCD).
+ * This is enough to test that the go build step is reached.
+ */
+function createMinimalZip(): Buffer {
+  // End of Central Directory record (22 bytes minimum)
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0); // signature
+  eocd.writeUInt16LE(0, 4); // disk number
+  eocd.writeUInt16LE(0, 6); // disk with CD
+  eocd.writeUInt16LE(0, 8); // num entries on disk
+  eocd.writeUInt16LE(0, 10); // total entries
+  eocd.writeUInt32LE(0, 12); // CD size
+  eocd.writeUInt32LE(0, 16); // CD offset
+  eocd.writeUInt16LE(0, 20); // comment length
+  return eocd;
+}

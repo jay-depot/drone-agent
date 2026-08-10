@@ -31,12 +31,20 @@ function captureRegistration(): {
   registration: DronePluginRegistration;
   tools: Map<string, (input: Record<string, unknown>) => Promise<string>>;
   helpText: string[];
+  promptFragments: Array<{
+    key: string;
+    render: () => Promise<string | false>;
+  }>;
 } {
   const tools = new Map<
     string,
     (input: Record<string, unknown>) => Promise<string>
   >();
   const helpText: string[] = [];
+  const promptFragments: Array<{
+    key: string;
+    render: () => Promise<string | false>;
+  }> = [];
 
   const registration: DronePluginRegistration = {
     logger: silentLogger(),
@@ -44,7 +52,9 @@ function captureRegistration(): {
     registerTool: tool => {
       tools.set(tool.name, tool.execute);
     },
-    registerPromptFragment: () => {},
+    registerPromptFragment: fragment => {
+      promptFragments.push(fragment);
+    },
     registerHelp: help => {
       helpText.push(help);
     },
@@ -67,9 +77,12 @@ function captureRegistration(): {
     request: <T>() => undefined as T | undefined,
     runWorkflow: async () => ({ toolResult: '{}' }),
     requestElicitation: () => undefined,
+    mountTool: () => undefined,
+    unmountTool: () => {},
+    listMountedTools: () => [],
   };
 
-  return { registration, tools, helpText };
+  return { registration, tools, helpText, promptFragments };
 }
 
 describe('enhanceFsError', () => {
@@ -143,6 +156,7 @@ describe('file plugin — error surfacing', () => {
   it('surfaces ENOENT from file__list as a clear tool error', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+
     const list = tools.get('list');
     expect(list).toBeDefined();
 
@@ -156,6 +170,7 @@ describe('file plugin — error surfacing', () => {
   it('surfaces ENOENT from file__read as a clear tool error', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+
     const read = tools.get('read');
     expect(read).toBeDefined();
 
@@ -167,6 +182,7 @@ describe('file plugin — error surfacing', () => {
   it('reads an existing file', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+
     const read = tools.get('read');
     expect(read).toBeDefined();
 
@@ -184,6 +200,7 @@ describe('file plugin — error surfacing', () => {
   it('surfaces EISDIR from file__read when given a directory', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+
     const read = tools.get('read');
     expect(read).toBeDefined();
 
@@ -193,6 +210,7 @@ describe('file plugin — error surfacing', () => {
   it('file__glob reports a missing cwd clearly', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+
     const glob = tools.get('glob');
     expect(glob).toBeDefined();
 
@@ -206,6 +224,7 @@ describe('file plugin — read/write round trip', () => {
   it('writes a file then reads it back', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+
     const write = tools.get('write');
     const read = tools.get('read');
     expect(write).toBeDefined();
@@ -758,6 +777,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('produces correct JSON response with plain-text diff', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 
@@ -797,6 +817,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('applies a multi-hunk patch top-to-bottom', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 
@@ -854,6 +875,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('handles insertion patch with context', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 
@@ -891,6 +913,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('handles pure deletion patch', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 
@@ -932,6 +955,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('handles interleaved context patch (round-trip)', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 
@@ -974,6 +998,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('partial success: writes file with applied hunks, reports failures', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 
@@ -1020,6 +1045,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('rejects empty patch with a clear error', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 
@@ -1035,6 +1061,7 @@ describe('file__apply_diff — round-trip integration', () => {
   it('rejects patch with no @@ headers with a clear error', async () => {
     const { registration, tools } = captureRegistration();
     await filePlugin.register(registration);
+
     const applyDiff = tools.get('apply_diff');
     expect(applyDiff).toBeDefined();
 

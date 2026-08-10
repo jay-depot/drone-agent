@@ -445,6 +445,9 @@ describe('promptFilePlugin', () => {
       registerSlashCommand: () => {},
       unregisterPluginTools: () => {},
       unregisterTool: () => {},
+      mountTool: () => undefined,
+      unmountTool: () => {},
+      listMountedTools: () => [],
       hooks: {
         onPluginsLoaded: cb => captured.hooks.onPluginsLoaded.push(cb),
         onSessionStart: () => {},

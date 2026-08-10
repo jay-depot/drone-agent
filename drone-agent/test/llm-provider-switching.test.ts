@@ -65,6 +65,9 @@ async function captureLlmPlugin(): Promise<Capture> {
     },
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
+    mountTool: () => undefined,
+    unmountTool: () => {},
+    listMountedTools: () => [],
     hooks: {
       onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
       onSessionStart: cb => hooks.onSessionStart.push(cb),
@@ -144,6 +147,9 @@ function makeCommandContext(
       sendUserMessage: async () => '',
       enqueueUserMessage: (p: string) => {},
       cancelCurrentRequest: () => {},
+      getDebugSubsystems: () => [],
+      enableDebugSubsystem: () => {},
+      disableDebugSubsystem: () => {},
     },
   };
 }
@@ -225,6 +231,9 @@ describe('llm plugin provider switching', () => {
       sendUserMessage: async () => '',
       enqueueUserMessage: (p: string) => {},
       cancelCurrentRequest: () => {},
+      getDebugSubsystems: () => [],
+      enableDebugSubsystem: () => {},
+      disableDebugSubsystem: () => {},
     };
     ctx.line = '/model --provider openrouter';
     ctx.args = ['--provider', 'openrouter'];
@@ -260,6 +269,9 @@ describe('llm plugin provider switching', () => {
       sendUserMessage: async () => '',
       enqueueUserMessage: (p: string) => {},
       cancelCurrentRequest: () => {},
+      getDebugSubsystems: () => [],
+      enableDebugSubsystem: () => {},
+      disableDebugSubsystem: () => {},
     };
     ctx.line = '/model not-real';
     ctx.args = ['not-real'];
@@ -302,6 +314,9 @@ describe('llm plugin provider switching', () => {
       sendUserMessage: async () => '',
       enqueueUserMessage: (p: string) => {},
       cancelCurrentRequest: () => {},
+      getDebugSubsystems: () => [],
+      enableDebugSubsystem: () => {},
+      disableDebugSubsystem: () => {},
     };
     ctx.line = '/model --provider openrouter openai/gpt-4.1';
     ctx.args = ['--provider', 'openrouter', 'openai/gpt-4.1'];
