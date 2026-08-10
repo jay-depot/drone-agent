@@ -1,4 +1,4 @@
-import { mkdir, writeFile, rm, readdir } from 'node:fs/promises';
+import { mkdir, rm, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   DroneInsightEntry,
@@ -11,7 +11,12 @@ import type {
 import { CONFIG_DIR, INSIGHTS_SUBDIR, PRINCIPLES_SUBDIR } from './constants.js';
 import { resolveBaseDir } from './validation.js';
 import { resolveInsightPaths, resolvePrinciplePaths } from './paths.js';
-import { readJsonArray, scanJsonDir } from './io.js';
+import {
+  readJsonArray,
+  scanJsonDir,
+  withFileLock,
+  writeJsonArrayAtomic,
+} from './io.js';
 
 /**
  * Create a file-based insight storage engine. This is the default for
@@ -41,10 +46,12 @@ export function createFileInsightEngine(
         skillsCap()
       );
       await mkdir(insightsDir, { recursive: true });
-      const entries = await readJsonArray<DroneInsightEntry>(filePath);
-      entries.push({ timestamp: new Date().toISOString(), insight });
-      await writeFile(filePath, JSON.stringify(entries, null, 2), 'utf-8');
-      return { ok: true, entryCount: entries.length };
+      return withFileLock(filePath, async () => {
+        const entries = await readJsonArray<DroneInsightEntry>(filePath);
+        entries.push({ timestamp: new Date().toISOString(), insight });
+        await writeJsonArrayAtomic(filePath, entries);
+        return { ok: true, entryCount: entries.length };
+      });
     },
     listInsights: async (targetType, targetId) => {
       const results: Array<{
@@ -137,14 +144,16 @@ export function createFilePrincipleEngine(
         skillsCap()
       );
       await mkdir(principlesDir, { recursive: true });
-      const entries = await readJsonArray<DronePrincipleEntry>(filePath);
-      entries.push({
-        principle,
-        source,
-        createdAt: new Date().toISOString(),
+      return withFileLock(filePath, async () => {
+        const entries = await readJsonArray<DronePrincipleEntry>(filePath);
+        entries.push({
+          principle,
+          source,
+          createdAt: new Date().toISOString(),
+        });
+        await writeJsonArrayAtomic(filePath, entries);
+        return { ok: true, principleCount: entries.length };
       });
-      await writeFile(filePath, JSON.stringify(entries, null, 2), 'utf-8');
-      return { ok: true, principleCount: entries.length };
     },
     listPrinciples: async (targetType, targetId) => {
       const results: Array<{
@@ -226,23 +235,25 @@ export function createFilePrincipleEngine(
         baseDir,
         skillsCap()
       );
-      const entries = await readJsonArray<DronePrincipleEntry>(filePath);
-      if (index >= entries.length) {
-        throw new Error(
-          `Index ${index} is out of bounds. The principles list has ${entries.length} entries.`
-        );
-      }
-      entries.splice(index, 1);
-      if (entries.length === 0) {
-        try {
-          await rm(filePath, { force: true });
-        } catch {
-          // Ignore
+      return withFileLock(filePath, async () => {
+        const entries = await readJsonArray<DronePrincipleEntry>(filePath);
+        if (index >= entries.length) {
+          throw new Error(
+            `Index ${index} is out of bounds. The principles list has ${entries.length} entries.`
+          );
         }
-      } else {
-        await writeFile(filePath, JSON.stringify(entries, null, 2), 'utf-8');
-      }
-      return { ok: true, remainingCount: entries.length };
+        entries.splice(index, 1);
+        if (entries.length === 0) {
+          try {
+            await rm(filePath, { force: true });
+          } catch {
+            // Ignore
+          }
+        } else {
+          await writeJsonArrayAtomic(filePath, entries);
+        }
+        return { ok: true, remainingCount: entries.length };
+      });
     },
   };
 }
