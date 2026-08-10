@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { BUILT_IN_SLASH_COMMANDS } from '../src/runtime/builtin-commands.js';
 import {
   createDebugFlagRegistry,
+  ToolRegistry,
   type DroneSlashCommandContext,
   type DroneToolDescriptor,
 } from 'drone-core';
@@ -30,7 +31,9 @@ function makeTestLogger(): {
       messages.push(msg);
     },
     warn: () => {},
-    error: () => {},
+    error: (msg: string) => {
+      messages.push(msg);
+    },
     messages,
   };
 }
@@ -224,5 +227,113 @@ describe('/debug built-in command', () => {
     await debugCmd.handler(ctx);
     expect(debugFlags.isEnabled('tools')).toBe(false);
     expect(logger.messages).toContain('Debug subsystem "tools" disabled.');
+  });
+});
+
+describe('/tool mount/unmount built-in command', () => {
+  const toolCmd = BUILT_IN_SLASH_COMMANDS.find(c => c.command === '/tool');
+  if (!toolCmd) {
+    throw new Error('/tool command not found in BUILT_IN_SLASH_COMMANDS');
+  }
+
+  function makeRegistry(): {
+    registry: ToolRegistry;
+    ctx: DroneSlashCommandContext;
+    logger: ReturnType<typeof makeTestLogger>;
+  } {
+    const logger = makeTestLogger();
+    const registry = new ToolRegistry();
+    registry.add('file__read', {
+      name: 'file__read',
+      description: 'Read a file',
+      execute: async () => 'read result',
+    });
+    registry.add('file__write', {
+      name: 'file__write',
+      description: 'Write a file',
+      execute: async () => 'write result',
+    });
+    registry.add('runtime__mount_tool', {
+      name: 'runtime__mount_tool',
+      description: 'Mount a tool',
+      execute: async () => 'ok',
+    });
+    // Pre-mount file__write and runtime__mount_tool so we can test unmount --all.
+    registry.mount('file__write');
+    registry.mount('runtime__mount_tool');
+
+    const ctx: DroneSlashCommandContext = {
+      line: '/tool',
+      args: [],
+      logger,
+      engine: {
+        executeTool: async name =>
+          (await registry.get(name)?.execute({})) ?? 'ok',
+        runHooks: async () => {},
+        getCapability: <T>() => undefined as T,
+        mountTool: name => registry.mount(name),
+        unmountTool: name => registry.unmount(name),
+        listMountedTools: () => registry.listMounted(),
+      },
+    };
+    return { registry, ctx, logger };
+  }
+
+  it('mounts a tool by canonical name', async () => {
+    const { registry, ctx, logger } = makeRegistry();
+    ctx.line = '/tool mount file__read';
+    ctx.args = ['mount', 'file__read'];
+
+    const result = await toolCmd.handler(ctx);
+    expect(result).toBe(true);
+    expect(registry.isMounted('file__read')).toBe(true);
+    expect(logger.messages).toContain('Mounted file__read.');
+  });
+
+  it('reports an error when mounting an unknown or already-mounted tool', async () => {
+    const { registry, ctx, logger } = makeRegistry();
+    ctx.line = '/tool mount bogus__tool';
+    ctx.args = ['mount', 'bogus__tool'];
+
+    const result = await toolCmd.handler(ctx);
+    expect(result).toBe(true);
+    expect(registry.isMounted('bogus__tool')).toBe(false);
+    expect(logger.messages).toContain(
+      'Unknown or already mounted tool: bogus__tool'
+    );
+  });
+
+  it('unmounts a single mounted tool', async () => {
+    const { registry, ctx, logger } = makeRegistry();
+    ctx.line = '/tool unmount file__write';
+    ctx.args = ['unmount', 'file__write'];
+
+    const result = await toolCmd.handler(ctx);
+    expect(result).toBe(true);
+    expect(registry.isMounted('file__write')).toBe(false);
+    expect(logger.messages).toContain('Unmounted file__write.');
+  });
+
+  it('unmounts all non-runtime tools with --all, leaving runtime__* mounted', async () => {
+    const { registry, ctx, logger } = makeRegistry();
+    ctx.line = '/tool unmount --all';
+    ctx.args = ['unmount', '--all'];
+
+    const result = await toolCmd.handler(ctx);
+    expect(result).toBe(true);
+    expect(registry.isMounted('file__write')).toBe(false);
+    expect(registry.isMounted('runtime__mount_tool')).toBe(true);
+    expect(logger.messages).toContain('Unmounted 1 tool(s): file__write');
+  });
+
+  it('still runs a tool directly when not a mount/unmount subcommand', async () => {
+    const { ctx, logger } = makeRegistry();
+    ctx.line = '/tool file__read {}';
+    ctx.args = ['file__read', '{}'];
+
+    const result = await toolCmd.handler(ctx);
+    expect(result).toBe(true);
+    expect(logger.messages.length).toBe(1);
+    expect(logger.messages[0]).toContain('read result');
   });
 });

@@ -94,6 +94,12 @@ export type DronePluginEngine = {
   ) => Promise<string>;
   listTools: () => DroneToolDescriptor[];
   listAllTools: () => DroneToolDescriptor[];
+  /** Mount a tool by canonical name (e.g. "file__read"). Returns the tool definition if newly mounted, else undefined. */
+  mountTool: (canonicalName: string) => DroneToolDefinition | undefined;
+  /** Unmount a mounted tool by canonical name. */
+  unmountTool: (canonicalName: string) => void;
+  /** List currently-mounted tools. */
+  listMountedTools: () => DroneToolDescriptor[];
   getCapability: <T>(pluginId: string) => T | undefined;
   listPlugins: () => DronePluginStatus[];
   getRegisteredPluginCount: () => number;
@@ -832,6 +838,9 @@ export function createDronePluginEngine({
     },
     listTools: () => toolRegistry.listMounted(),
     listAllTools: () => toolRegistry.listAll(),
+    mountTool: canonicalName => toolRegistry.mount(canonicalName),
+    unmountTool: canonicalName => toolRegistry.unmount(canonicalName),
+    listMountedTools: () => toolRegistry.listMounted(),
     getCapability: <T>(pluginId: string) =>
       capabilities.get(pluginId) as T | undefined,
     listPlugins: () =>

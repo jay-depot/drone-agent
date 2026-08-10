@@ -172,8 +172,69 @@ function tryParseJson(raw: string): Record<string, unknown> | undefined {
 
 const toolCommand: DroneSlashCommand = {
   command: '/tool',
-  description: 'Run a tool directly: /tool <name> [<json-args>]',
+  description:
+    'Tool utilities: /tool mount <name>, /tool unmount <name>|--all, or run a tool directly: /tool <name> [<json-args>]',
   handler: async (ctx: DroneSlashCommandContext) => {
+    const sub = ctx.args[0];
+
+    // ── /tool mount <canonicalName> ──
+    if (sub === 'mount') {
+      const name = ctx.args[1];
+      if (!name || ctx.args.length > 2) {
+        ctx.logger.error(
+          'Usage: /tool mount <canonicalName>  e.g. /tool mount file__read'
+        );
+        return true;
+      }
+      if (!ctx.engine.mountTool) {
+        ctx.logger.error('/tool mount: no mountTool callback available');
+        return true;
+      }
+      const def = ctx.engine.mountTool(name);
+      if (!def) {
+        ctx.logger.error(`Unknown or already mounted tool: ${name}`);
+      } else {
+        ctx.logger.info(`Mounted ${name}.`);
+      }
+      return true;
+    }
+
+    // ── /tool unmount <canonicalName> | --all ──
+    if (sub === 'unmount') {
+      if (!ctx.engine.unmountTool || !ctx.engine.listMountedTools) {
+        ctx.logger.error('/tool unmount: no unmount callback available');
+        return true;
+      }
+      if (ctx.args[1] === '--all') {
+        const targets = ctx.engine
+          .listMountedTools()
+          .filter(t => !t.name.startsWith('runtime__'));
+        if (targets.length === 0) {
+          ctx.logger.info('No mounted tools to unmount.');
+          return true;
+        }
+        for (const t of targets) {
+          ctx.engine.unmountTool(t.name);
+        }
+        ctx.logger.info(
+          `Unmounted ${targets.length} tool(s): ${targets
+            .map(t => t.name)
+            .join(', ')}`
+        );
+        return true;
+      }
+      const name = ctx.args[1];
+      if (!name || ctx.args.length > 2) {
+        ctx.logger.error(
+          'Usage: /tool unmount <canonicalName>  or  /tool unmount --all'
+        );
+        return true;
+      }
+      ctx.engine.unmountTool(name);
+      ctx.logger.info(`Unmounted ${name}.`);
+      return true;
+    }
+
     const rest = ctx.line.slice('/tool '.length).trim();
     const firstSpace = rest.indexOf(' ');
     const toolName = firstSpace === -1 ? rest : rest.slice(0, firstSpace);
