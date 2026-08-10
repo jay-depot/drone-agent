@@ -6,8 +6,9 @@ tags:
   - persona
   - list-mount
   - bug-fix
+  - completed
 created: 2026-08-10T01:25:14.023Z
-updated: 2026-08-10T01:25:14.023Z
+updated: 2026-08-10T01:37:22.426Z
 ---
 
 # Plan: Fix Tool Visibility Filtering (default-hidden + persona overlay)
@@ -115,3 +116,35 @@ Add tests using `createMockEngine` with a `getCapability` override, asserting on
 3. **`pnpm -r run lint` passes** — eslint + prettier.
 4. **`pnpm -r run test` passes** — all existing tests plus the new regression tests pass.
 5. **Manual verification:** with the terminal plugin enabled and a persona active (or no persona), `runtime__list_tools` no longer lists `terminal__*` tools unless the active persona's `allowedTools` explicitly includes them; the mounted tool list sent to the LLM likewise excludes them.
+
+---
+
+## Implementation Summary (2026-08-10)
+
+**Completed.** All steps of the plan were executed and validated.
+
+### Changes made
+
+1. **`drone-agent/src/runtime/plugin-engine.ts`** — Fixed `runtime__list_tools` to always build full descriptors (with real `defaultHidden` from the registry), apply persona filtering via `getFilteredTools()`, and add a default-hidden fallback (`descriptors.filter(t => !t.defaultHidden)`) when no persona capability is present. Schemas are stripped from the response unless `includeSchemas` is true.
+
+2. **`drone-agent/src/runtime/conversation-service.ts`** — Added the same default-hidden fallback to `getLlmTools()` when no persona capability is present, matching the `/tools` slash command behavior.
+
+3. **`drone-agent/test/plugin-engine.test.ts`** — Added 4 regression tests for `runtime__list_tools` covering: default-hidden filtered with persona active (no allowedTools), default-hidden filtered with no persona active, persona allowedTools re-including a default-hidden tool, and default-hidden filtered with no persona capability at all.
+
+4. **`drone-agent/test/conversation-service.test.ts`** — Added 2 regression tests for the mounted tool list: default-hidden filtered when no persona present, and persona overlay applied to the mounted list.
+
+### Validation results
+
+- ✅ `pnpm -r run typecheck` — all packages pass
+- ✅ `pnpm -r run build` — all packages compile cleanly
+- ✅ `pnpm lint:eslint` — passes
+- ✅ `pnpm test` — 1742 passed, 9 skipped (110 files passed, 1 skipped)
+- ✅ Prettier passes on all changed files
+
+### Note
+
+The `pnpm lint` (which runs prettier over the whole repo) fails on a **pre-existing malformed JSON** file `.drone-agent/insights/project/drone-agent.json` (a syntax error at line 190, committed in a prior commit, unrelated to this work). All files changed in this work pass prettier cleanly.
+
+### Commit
+
+- `100421b` — "fix: honor default-hidden and persona tool visibility in runtime__list_tools and mounted list"
