@@ -123,6 +123,7 @@ async function captureRegistration(
     unregisterTool: () => {},
     mountTool: () => undefined,
     unmountTool: () => {},
+    listMountedTools: () => [],
     hooks: {
       onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
       onSessionStart: cb => hooks.onSessionStart.push(cb),
@@ -217,6 +218,7 @@ describe('createCompactionPlugin', () => {
         unregisterTool: () => {},
         mountTool: () => undefined,
         unmountTool: () => {},
+        listMountedTools: () => [],
         hooks: {
           onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
           onSessionStart: cb => hooks.onSessionStart.push(cb),

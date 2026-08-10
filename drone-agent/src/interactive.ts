@@ -370,6 +370,9 @@ export async function runInteractiveLoop(
             dispatchSlashCommand: (l, ctx) =>
               engine.dispatchSlashCommand(l, ctx),
             onConversationEvent: cb => engine.onConversationEvent?.(cb),
+            mountTool: name => engine.mountTool(name),
+            unmountTool: name => engine.unmountTool(name),
+            listMountedTools: () => engine.listMountedTools(),
           },
           conversation: {
             getModel: () => conversation.getModel(),

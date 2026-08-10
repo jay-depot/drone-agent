@@ -27,11 +27,19 @@ const CONFIG_DIR = '.drone-agent';
  *     - exec.*
  *     - file.*
  *     - !exec.run
+ *   premountedTools:
+ *     file:
+ *       - read
+ *       - list
+ *     git:
+ *       - commit
  *   ---
  *   System prompt override body (optional)
  *
  * The `skills` field filters which global skills the LLM sees (glob patterns).
  * The `tools` field filters which tools the LLM sees (glob patterns).
+ * The `premountedTools` field maps plugin ids to tool names that are
+ * automatically mounted when the persona becomes active.
  * Persona-owned skills (from the `skills/` subdirectory) are always visible.
  */
 function _parsePersonaMdInternal(
@@ -61,15 +69,24 @@ function _parsePersonaMdInternal(
     scope,
   };
 
-  // Parse YAML-like frontmatter (simple line-by-line, no nested objects beyond arrays)
+  // Parse YAML-like frontmatter (simple line-by-line; flat arrays for
+  // fragments/skills/tools, and a nested map-of-arrays for premountedTools).
   const lines = rawFrontmatter.split('\n');
   let currentArrayKey: string | null = null;
   const arrayValues: string[] = [];
+  let inPremountMode = false;
+  let currentPremountPlugin: string | null = null;
+  const premountValues: string[] = [];
+  const premountMap: Record<string, string[]> = {};
 
   for (const line of lines) {
     const arrayItemMatch = line.match(/^\s+-\s+(.+)$/);
-    if (arrayItemMatch && currentArrayKey) {
-      arrayValues.push(arrayItemMatch[1]);
+    if (arrayItemMatch) {
+      if (currentPremountPlugin) {
+        premountValues.push(arrayItemMatch[1]);
+      } else if (currentArrayKey) {
+        arrayValues.push(arrayItemMatch[1]);
+      }
       continue;
     }
 
@@ -86,13 +103,37 @@ function _parsePersonaMdInternal(
       arrayValues.length = 0;
     }
 
-    const kvMatch = line.match(/^(\w+):\s*(.*)$/);
+    // Flush premount values for the current plugin
+    if (currentPremountPlugin) {
+      premountMap[currentPremountPlugin] = [...premountValues];
+      premountValues.length = 0;
+      currentPremountPlugin = null;
+    }
+
+    const kvMatch = line.match(/^(\s*)(\w+):\s*(.*)$/);
     if (!kvMatch) continue;
 
-    const key = kvMatch[1];
-    const rawValue = kvMatch[2].trim();
+    const indent = kvMatch[1];
+    const key = kvMatch[2];
+    const rawValue = kvMatch[3].trim();
     // Strip surrounding single or double quotes
     const value = rawValue.replace(/^'(.*)'$/, '$1').replace(/^"(.*)"$/, '$1');
+
+    if (inPremountMode && indent.length > 0) {
+      // A plugin id key inside premountedTools
+      currentPremountPlugin = key;
+      continue;
+    }
+
+    // Non-indented key exits premount mode (unless it re-enters below)
+    inPremountMode = false;
+
+    if (key === 'premountedTools') {
+      if (value === '') {
+        inPremountMode = true;
+      }
+      continue;
+    }
 
     if (key === 'name') {
       definition.name = value;
@@ -133,6 +174,17 @@ function _parsePersonaMdInternal(
   }
   if (currentArrayKey === 'tools' && arrayValues.length > 0) {
     definition.allowedTools = [...arrayValues];
+  }
+
+  // Flush trailing premount plugin values
+  if (currentPremountPlugin) {
+    premountMap[currentPremountPlugin] = [...premountValues];
+    premountValues.length = 0;
+    currentPremountPlugin = null;
+  }
+
+  if (Object.keys(premountMap).length > 0) {
+    definition.premountedTools = premountMap;
   }
 
   if (body.length > 0) {

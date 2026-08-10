@@ -29,6 +29,7 @@ function captureLspTools(): Map<
     unregisterTool: () => {},
     mountTool: () => undefined,
     unmountTool: () => {},
+    listMountedTools: () => [],
     hooks: {
       onPluginsLoaded: () => {},
       onSessionStart: () => {},
@@ -83,6 +84,7 @@ describe('lsp plugin integration', () => {
       unregisterTool: () => {},
       mountTool: () => undefined,
       unmountTool: () => {},
+      listMountedTools: () => [],
       hooks: {
         onPluginsLoaded: () => {},
         onSessionStart: () => {},

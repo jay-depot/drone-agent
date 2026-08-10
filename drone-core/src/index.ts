@@ -245,3 +245,8 @@ export type { PartialDroneAgentConfigDecoded } from './config-schema.js';
 
 export type { RuntimeFlagRegistry } from './runtime-flags.js';
 export { createRuntimeFlagRegistry } from './runtime-flags.js';
+
+// ── Debug flags ─────────────────────────────────────────────────────
+
+export type { DebugFlagRegistry } from './debug-flags.js';
+export { createDebugFlagRegistry } from './debug-flags.js';

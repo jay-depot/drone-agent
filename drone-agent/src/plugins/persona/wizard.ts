@@ -67,6 +67,10 @@ function buildPersonaSystemPrompt(): string {
     'color: <optional TUI tint, use "#rrggbb" format only. For example, "#00ffff". Prefer lighter colors for better contrast with most terminals.>',
     'fragments:',
     '  - <optional list of short prompt fragments>',
+    'premountedTools:',
+    '  <pluginId>:',
+    '    - <toolName>',
+    '    - <toolName>',
     '---',
     '<optional body — becomes the systemPromptOverride>',
     '',
@@ -77,6 +81,8 @@ function buildPersonaSystemPrompt(): string {
     '- Keep the body concise (≤200 words).',
     "- Pick a `color` that fits the persona's vibe (omit the field if uncertain).",
     '- Use `fragments:` only if you have 2+ short, actionable directives.',
+    '- Use `premountedTools:` only if the persona needs specific tools always visible, mapped by plugin id to tool names (e.g. `file: [read, list, apply_diff]`).',
+    '- Omit `premountedTools:` if the persona does not need any tools pre-mounted.',
     '- The `name` field MUST be exactly the id provided in the user prompt (lowercase, hyphenated).',
   ].join('\n');
 }

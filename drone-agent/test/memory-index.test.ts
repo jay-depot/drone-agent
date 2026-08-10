@@ -78,6 +78,7 @@ function createMockRegistration(): {
     unregisterTool: () => {},
     mountTool: () => undefined,
     unmountTool: () => {},
+    listMountedTools: () => [],
     registerWorkflow: workflow => {
       captured.workflows.push(workflow);
     },

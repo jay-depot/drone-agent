@@ -1,4 +1,9 @@
-import { estimateTextTokens, type DroneReasoningLevel } from 'drone-core';
+import {
+  createDebugFlagRegistry,
+  estimateTextTokens,
+  type DebugFlagRegistry,
+  type DroneReasoningLevel,
+} from 'drone-core';
 import type {
   DroneAgentConfig,
   DroneChatMessage,
@@ -58,7 +63,7 @@ type CreateConversationServiceOptions = {
   config: DroneAgentConfig;
   logger: DroneLogger;
   sessionManager: DroneSessionManager;
-  debugSubsystems?: string[];
+  debugFlags?: DebugFlagRegistry;
   budgetService: ContextBudgetService;
   maxToolIterations?: number;
   /**
@@ -94,7 +99,7 @@ export function createConversationService({
   engine,
   config,
   logger,
-  debugSubsystems,
+  debugFlags = createDebugFlagRegistry(),
   sessionManager,
   budgetService,
   maxToolIterations,
@@ -104,7 +109,6 @@ export function createConversationService({
 }: CreateConversationServiceOptions): ConversationService {
   let hasWarnedAboutSafetyTrim = false;
   let reasoningLevel: DroneReasoningLevel | undefined;
-  const debugSet = new Set(debugSubsystems ?? []);
 
   // ── Message queue and cancel support ───────────────────────────────────
   const pendingMessages: string[] = [];
@@ -143,7 +147,9 @@ export function createConversationService({
     const personaCap = engine.getCapability<{
       getFilteredTools: (tools: DroneToolDescriptor[]) => DroneToolDescriptor[];
     }>('persona');
-    return personaCap ? personaCap.getFilteredTools(allTools) : allTools;
+    return personaCap
+      ? personaCap.getFilteredTools(allTools)
+      : allTools.filter(t => !t.defaultHidden);
   }
 
   /**
@@ -364,7 +370,7 @@ export function createConversationService({
           messages: [...systemMessages, ...sessionManager.getMessages()],
           tools,
           reasoningLevel: effectiveReasoningLevel,
-          debug: debugSet.has('llm'),
+          debug: debugFlags.isEnabled('llm'),
         });
 
         if (response.reasoning && response.reasoning.length > 0) {
@@ -623,12 +629,12 @@ export function createConversationService({
     cancelCurrentRequest: () => {
       cancelled = true;
     },
-    getDebugSubsystems: () => Array.from(debugSet),
+    getDebugSubsystems: () => debugFlags.list(),
     enableDebugSubsystem: (name: string) => {
-      debugSet.add(name);
+      debugFlags.enable(name);
     },
     disableDebugSubsystem: (name: string) => {
-      debugSet.delete(name);
+      debugFlags.disable(name);
     },
   };
 }
