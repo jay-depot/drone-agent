@@ -6,5 +6,9 @@
   {
     "timestamp": "2026-08-10T02:56:42.119Z",
     "insight": "When adding a new required method to DronePluginRegistration (like listMountedTools), all mock registration objects in test files must be updated. Using sed to add the property after unmountTool worked but created duplicates when the same line pattern appeared multiple times with different indentation levels. A better approach would be to use a shared helper or spread pattern to construct mock registrations, reducing the number of files needing updates when the interface changes."
+  },
+  {
+    "timestamp": "2026-08-10T04:08:49.133Z",
+    "insight": "When adding a new debug subsystem that must be consumed by the plugin engine (e.g. `--debug tools`), the debug set cannot live privately in the conversation service because the engine is constructed before the conversation service in index.tsx. Extract a shared `DebugFlagRegistry` in drone-core (mirroring `RuntimeFlagRegistry`), created once in index.tsx and passed to both the engine and conversation service. This makes runtime toggling via `/debug` take effect in both layers and makes future debug flags trivial to add."
   }
 ]

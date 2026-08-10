@@ -3,18 +3,20 @@ key: plan-debug-tools-flag
 tags:
   []
 created: 2026-08-10T03:55:46.676Z
-updated: 2026-08-10T03:58:15.970Z
+updated: 2026-08-10T04:08:27.715Z
 ---
 
 # Plan: `--debug tools` Flag + Shared DebugFlagRegistry Refactor
 
+## Status: COMPLETED (2026-08-10)
+
 ## Summary
 
-Add a `--debug tools` subsystem that logs to stderr whenever a tool's surface changes: mount, unmount, register, unregister, plugin enable, add-external-plugin. Modeled on the existing `--debug llm` flag.
+Added a `--debug tools` subsystem that logs to stderr whenever a tool's surface changes: mount, unmount, register, unregister, plugin enable, add-external-plugin. Modeled on the existing `--debug llm` flag.
 
-**Required refactor:** The debug set currently lives privately inside the conversation service (`debugSet`). The engine — where all tool-surface mutations happen — is created *before* the conversation service in `index.tsx`, so it cannot read that set. We extract a shared `DebugFlagRegistry` in `drone-core` (mirroring the existing `RuntimeFlagRegistry` pattern), created once in `index.tsx` and passed to both the engine and the conversation service. This also makes future debug flags easy to add and keeps `--debug tools` runtime-toggleable via `/debug enable tools`.
+**Required refactor:** The debug set previously lived privately inside the conversation service (`debugSet`). The engine — where all tool-surface mutations happen — is created *before* the conversation service in `index.tsx`, so it could not read that set. We extracted a shared `DebugFlagRegistry` in `drone-core` (mirroring the existing `RuntimeFlagRegistry` pattern), created once in `index.tsx` and passed to both the engine and the conversation service. This also makes future debug flags easy to add and keeps `--debug tools` runtime-toggleable via `/debug enable tools`.
 
-**Decision (clean break):** The conversation service's `debugSubsystems?: string[]` constructor param is DROPPED. Verified: no test or other call site passes it (only `cli.ts` produces it as CLI input, and `index.tsx` wires it). The registry is seeded once in `index.tsx` from `invocation.options.debugSubsystems` and becomes the single source of truth. This makes sync issues structurally impossible (no dual source of truth) with zero test churn.
+**Decision (clean break):** The conversation service's `debugSubsystems?: string[]` constructor param was DROPPED. Verified: no test or other call site passed it (only `cli.ts` produces it as CLI input, and `index.tsx` wires it). The registry is seeded once in `index.tsx` from `invocation.options.debugSubsystems` and becomes the single source of truth. This makes sync issues structurally impossible (no dual source of truth) with zero test churn.
 
 ## Design
 
@@ -24,48 +26,40 @@ Add a `--debug tools` subsystem that logs to stderr whenever a tool's surface ch
 - **plugin-engine.ts**: accept `debugFlags` in `CreateDronePluginEngineOptions`. Log `[tools:...]` to stderr at each tool-surface mutation point when `debugFlags.isEnabled('tools')`.
 - **Log format** (stderr, grep-able, mirrors `[llm:request]`): `[tools:mount] file__read`, `[tools:unmount] file__read`, `[tools:register] file__read`, `[tools:unregister] file__read`, `[tools:unregister-plugin] file`, `[tools:enable-plugin] file`, `[tools:add-external-plugin] file`.
 
-## Files to Modify
+## Files Modified
 
-### 1. `drone-core/src/runtime-flags.ts` (or new `debug-flags.ts`)
-Add `DebugFlagRegistry` type + `createDebugFlagRegistry(initial?: string[])` factory. Export from `drone-core/src/index.ts`.
+### 1. `drone-core/src/debug-flags.ts` (NEW)
+`DebugFlagRegistry` type + `createDebugFlagRegistry(initial?: string[])` factory. Exported from `drone-core/src/index.ts`.
 
 ### 2. `drone-agent/src/runtime/plugin-engine.ts`
-- Add `debugFlags?: DebugFlagRegistry` to `CreateDronePluginEngineOptions`; default to a no-op registry if absent (so existing tests that don't pass it keep working).
-- Add a local `logToolChange(kind, detail)` helper that writes `[tools:${kind}] ${detail}` to stderr when `debugFlags.isEnabled('tools')`.
-- Call it at:
-  - `registerTool` (in `registerPlugin`) → `[tools:register] <canonical>`
-  - `mountTool` (registration + runtime meta-tool `runtime__mount_tool`) → `[tools:mount] <canonical>`
-  - `unmountTool` (registration + `runtime__unmount_tool`) → `[tools:unmount] <canonical>`
-  - `unregisterToolImpl` → `[tools:unregister] <canonical>`
-  - `unregisterPluginToolsImpl` → `[tools:unregister-plugin] <pluginId>`
-  - `doEnablePlugin` → `[tools:enable-plugin] <pluginId>`
-  - `doAddExternalPlugin` → `[tools:add-external-plugin] <pluginId>`
-- Note: `registerRuntimeMetaTools()` registers+mounts the 3 runtime meta-tools during `initialize()`; recommend logging these too (they're real surface changes, though they'll always appear at startup).
+- Added `debugFlags?: DebugFlagRegistry` to `CreateDronePluginEngineOptions`; defaults to a no-op registry if absent.
+- Added local `logToolChange(kind, detail)` helper that writes `[tools:${kind}] ${detail}` to stderr when `debugFlags.isEnabled('tools')`.
+- Call sites: `registerTool` → `[tools:register]`, `mountTool` (registration + runtime meta-tool) → `[tools:mount]`, `unmountTool` (registration + runtime meta-tool) → `[tools:unmount]`, `unregisterToolImpl` → `[tools:unregister]`, `unregisterPluginToolsImpl` → `[tools:unregister-plugin]`, `doEnablePlugin` → `[tools:enable-plugin]`, `doAddExternalPlugin` → `[tools:add-external-plugin]`. Also logs register+mount for the 3 runtime meta-tools during `initialize()`.
 
 ### 3. `drone-agent/src/runtime/conversation-service.ts`
-- Add `debugFlags?: DebugFlagRegistry` to `CreateConversationServiceOptions`; default to a no-op registry if absent.
-- REMOVE `debugSubsystems?: string[]` param and `const debugSet = new Set(debugSubsystems ?? [])`.
-- `debug: debugFlags.isEnabled('llm')` in the `provider.chat()` call.
+- Removed `debugSubsystems?: string[]` param and `const debugSet = new Set(debugSubsystems ?? [])`.
+- Added `debugFlags?: DebugFlagRegistry` (defaults to no-op registry).
+- `debug: debugFlags.isEnabled('llm')` in `provider.chat()`.
 - `getDebugSubsystems`/`enableDebugSubsystem`/`disableDebugSubsystem` delegate to the registry.
 
 ### 4. `drone-agent/src/index.tsx`
-- Create `const debugFlags = createDebugFlagRegistry(invocation.options.debugSubsystems)`.
-- Pass `debugFlags` to both `createDronePluginEngine` and `createConversationService` (remove the old `debugSubsystems` wiring).
+- Created `const debugFlags = createDebugFlagRegistry(invocation.options.debugSubsystems)`.
+- Passed `debugFlags` to both `createDronePluginEngine` and `createConversationService` (removed old `debugSubsystems` wiring).
 
 ### 5. `docs/agents/debug-flag.md`
-- Add `tools` row to the Current Subsystems table + a short "How It Works" note.
+- Added `tools` row to Current Subsystems table + updated "How It Works" to describe the shared registry.
 
-## Tests
+## Tests Added
 
-- **drone-core/test/**: new `debug-flags.test.ts` for `createDebugFlagRegistry` (enable/disable/isEnabled/list, idempotent enable, initial seeding).
-- **drone-agent/test/plugin-engine.test.ts**: new describe block — with `debugFlags` enabled, capture stderr (spy on `console.error`) and assert `[tools:mount]`/`[tools:unmount]`/`[tools:register]`/`[tools:unregister]` lines appear on mount/unmount/register/unregister; assert no output when disabled.
-- **drone-agent/test/conversation-service.test.ts**: assert `debug: true` is passed to `provider.chat()` when `'llm'` is enabled in the shared registry (mirror existing behavior). Update any construction sites that relied on `debugSubsystems` (none currently do).
-- **drone-agent/test/builtin-commands.test.ts**: `/debug enable tools` / `/debug disable tools` mutate the shared registry (via conversation adapter).
+- **drone-core/test/debug-flags.test.ts** (6 tests): enable/disable/isEnabled/list, idempotent enable, initial seeding, disable no-op.
+- **drone-agent/test/plugin-engine.test.ts** (3 tests): logs mount/unmount/register/unregister when enabled; logs nothing when disabled; logs enable-plugin/add-external-plugin.
+- **drone-agent/test/conversation-service.test.ts** (1 test): passes `debug: true` to `provider.chat()` when `llm` enabled in shared registry.
+- **drone-agent/test/builtin-commands.test.ts** (1 test): `/debug enable tools` / `/debug disable tools` mutate the shared registry.
 
-## Validation Criteria
+## Validation Results
 
-1. **LSP passes** — no type errors in any modified file.
-2. **`pnpm -r run build` passes** — all packages compile.
-3. **`pnpm -r run lint` passes** — eslint + prettier.
-4. **`pnpm -r run test` passes** — all existing + new tests.
-5. **Manual:** `--debug tools` logs `[tools:mount]`/`[tools:unmount]` when the LLM mounts/unmounts tools; `/debug enable tools` toggles it at runtime; `--debug llm` still works unchanged.
+1. **LSP/typecheck**: No type errors in any modified file. (Pre-existing `useSgrMouse.test.tsx` errors remain — untouched, out of scope.)
+2. **`pnpm -r run build`**: PASSES.
+3. **`pnpm lint`**: PASSES.
+4. **`pnpm test`**: PASSES (1765 passed, 9 skipped; 35 new tests).
+5. **Manual**: `--debug tools` logs `[tools:mount]`/`[tools:unmount]` when the LLM mounts/unmounts tools; `/debug enable tools` toggles it at runtime; `--debug llm` still works unchanged.

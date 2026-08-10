@@ -1,5 +1,6 @@
 import {
   createConsoleLogger,
+  createDebugFlagRegistry,
   type DroneLlmCapability,
   type DroneLlmProvider,
 } from 'drone-core';
@@ -145,10 +146,14 @@ async function main(): Promise<void> {
       ];
     }
   }
+  const debugFlags = createDebugFlagRegistry(
+    invocation.options.debugSubsystems
+  );
   const engine = createDronePluginEngine({
     plugins: allPlugins,
     config: resolvedConfig.config,
     logger,
+    debugFlags,
     runtimeOptions: {
       subagentId: invocation.options.subagentId,
       persona: invocation.options.persona,
@@ -160,7 +165,7 @@ async function main(): Promise<void> {
     engine,
     config: resolvedConfig.config,
     logger,
-    debugSubsystems: invocation.options.debugSubsystems,
+    debugFlags,
     sessionManager,
     budgetService,
     // When the tool iteration limit is reached and the config allows

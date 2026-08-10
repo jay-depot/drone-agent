@@ -9,7 +9,11 @@
 
 import { describe, expect, it } from 'vitest';
 import { BUILT_IN_SLASH_COMMANDS } from '../src/runtime/builtin-commands.js';
-import type { DroneSlashCommandContext, DroneToolDescriptor } from 'drone-core';
+import {
+  createDebugFlagRegistry,
+  type DroneSlashCommandContext,
+  type DroneToolDescriptor,
+} from 'drone-core';
 
 /**
  * Collect the logger.info calls into an array so we can assert on them.
@@ -176,5 +180,49 @@ describe('/tools built-in command', () => {
     expect(logger.messages[0]).toContain('All registered tools (7):');
     expect(logger.messages[0]).toContain('admin__tool');
     expect(logger.messages[0]).toContain('internal__tool');
+  });
+});
+
+describe('/debug built-in command', () => {
+  const debugCmd = BUILT_IN_SLASH_COMMANDS.find(c => c.command === '/debug');
+  if (!debugCmd) {
+    throw new Error('/debug command not found in BUILT_IN_SLASH_COMMANDS');
+  }
+
+  it('enables and disables a debug subsystem via the shared registry', async () => {
+    const logger = makeTestLogger();
+    const debugFlags = createDebugFlagRegistry();
+    const ctx: DroneSlashCommandContext = {
+      line: '/debug enable tools',
+      args: ['enable', 'tools'],
+      logger,
+      engine: {
+        executeTool: async () => 'ok',
+        runHooks: async () => {},
+        getCapability: <T>() => undefined as T,
+      },
+      conversation: {
+        getModel: () => 'fake',
+        setModel: () => {},
+        getReasoningLevel: () => undefined,
+        setReasoningLevel: () => {},
+        sendUserMessage: async () => '',
+        getDebugSubsystems: () => debugFlags.list(),
+        enableDebugSubsystem: name => debugFlags.enable(name),
+        disableDebugSubsystem: name => debugFlags.disable(name),
+      },
+    };
+
+    const result = await debugCmd.handler(ctx);
+    expect(result).toBe(true);
+    expect(debugFlags.isEnabled('tools')).toBe(true);
+    expect(logger.messages).toContain('Debug subsystem "tools" enabled.');
+
+    // Disable it
+    ctx.line = '/debug disable tools';
+    ctx.args = ['disable', 'tools'];
+    await debugCmd.handler(ctx);
+    expect(debugFlags.isEnabled('tools')).toBe(false);
+    expect(logger.messages).toContain('Debug subsystem "tools" disabled.');
   });
 });

@@ -1,6 +1,8 @@
 import {
   createConsoleLogger,
+  createDebugFlagRegistry,
   createRuntimeFlagRegistry,
+  type DebugFlagRegistry,
   type DroneChatMessage,
   getCanonicalToolName,
   type RuntimeFlagRegistry,
@@ -161,6 +163,7 @@ type CreateDronePluginEngineOptions = {
   plugins: DronePlugin[];
   config: DroneAgentConfig;
   logger?: DroneLogger;
+  debugFlags?: DebugFlagRegistry;
   // NEW:
   runtimeOptions?: {
     subagentId?: string;
@@ -278,6 +281,7 @@ export function createDronePluginEngine({
   plugins,
   config,
   logger = createConsoleLogger('plugin-engine'),
+  debugFlags = createDebugFlagRegistry(),
   runtimeOptions,
   buildSystemMessages: buildSystemMessagesFromHost,
 }: CreateDronePluginEngineOptions): DronePluginEngine {
@@ -314,6 +318,11 @@ export function createDronePluginEngine({
     (event: DroneConversationEvent) => void
   > = [];
   let elicitationCapability: DroneElicitation | undefined;
+  const logToolChange = (kind: string, detail: string): void => {
+    if (debugFlags.isEnabled('tools')) {
+      console.error(`[tools:${kind}] ${detail}`);
+    }
+  };
 
   // --- Local functions (declared before the return object so they can ---)
   // --- reference each other and be used in the return object)       ---
@@ -339,6 +348,7 @@ export function createDronePluginEngine({
     // Add to enabled set and register.
     enabledPluginIds.add(pluginId);
     registeredPlugins.push(await registerPlugin(plugin));
+    logToolChange('enable-plugin', pluginId);
     logger.info(`enabled plugin: ${pluginId}`);
     // Run lifecycle hooks so the plugin catches up.
     for (const callback of hookBuckets.onPluginsLoaded) {
@@ -361,6 +371,7 @@ export function createDronePluginEngine({
     enabledPluginIds.add(pluginId);
     // Register it.
     registeredPlugins.push(await registerPlugin(plugin));
+    logToolChange('add-external-plugin', pluginId);
     logger.info(`added external plugin: ${pluginId}`);
     // Run catch-up lifecycle hooks.
     for (const callback of hookBuckets.onPluginsLoaded) {
@@ -402,6 +413,7 @@ export function createDronePluginEngine({
     // Delete all tools whose canonical name starts with the plugin prefix.
     const prefix = `${pluginId}__`;
     toolRegistry.removeByPrefix(prefix);
+    logToolChange('unregister-plugin', pluginId);
     // Also clear the plugin's own tool list so it doesn't hold stale refs.
     const registered = registeredPlugins.find(
       (p: { plugin: { metadata: { id: string } } }) =>
@@ -417,6 +429,7 @@ export function createDronePluginEngine({
       return;
     }
     toolRegistry.remove(canonicalName);
+    logToolChange('unregister', canonicalName);
     for (const registered of registeredPlugins) {
       const idx = registered.tools.findIndex(
         (t: DroneToolDefinition) =>
@@ -458,6 +471,7 @@ export function createDronePluginEngine({
           throw new Error(`Tool already registered: ${canonicalName}`);
         }
         toolRegistry.add(canonicalName, tool);
+        logToolChange('register', canonicalName);
         pluginTools.push(tool);
       },
       registerPromptFragment: fragment => {
@@ -529,10 +543,15 @@ export function createDronePluginEngine({
       runWorkflow: (canonicalName, args) => runWorkflow(canonicalName, args),
       requestElicitation: () => elicitationCapability,
       mountTool: (canonicalName: string) => {
-        return toolRegistry.mount(canonicalName);
+        const def = toolRegistry.mount(canonicalName);
+        if (def) {
+          logToolChange('mount', canonicalName);
+        }
+        return def;
       },
       unmountTool: (canonicalName: string) => {
         toolRegistry.unmount(canonicalName);
+        logToolChange('unmount', canonicalName);
       },
       listMountedTools: () => {
         return toolRegistry.listMounted();
@@ -677,6 +696,7 @@ export function createDronePluginEngine({
               2
             );
           }
+          logToolChange('mount', toolName);
           return JSON.stringify(
             {
               success: true,
@@ -713,6 +733,7 @@ export function createDronePluginEngine({
           }
 
           toolRegistry.unmount(toolName);
+          logToolChange('unmount', toolName);
           return JSON.stringify({ success: true, tool: toolName }, null, 2);
         },
       },
@@ -720,7 +741,9 @@ export function createDronePluginEngine({
 
     for (const tool of metaTools) {
       toolRegistry.add(tool.name, tool);
+      logToolChange('register', tool.name);
       toolRegistry.mount(tool.name);
+      logToolChange('mount', tool.name);
     }
   }
 

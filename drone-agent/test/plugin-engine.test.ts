@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createDefaultAgentConfig,
+  createDebugFlagRegistry,
   filterByGlobPatterns,
   type DronePlugin,
   type DroneSessionSafetyTrimPayload,
@@ -882,5 +883,90 @@ describe('runtime__list_tools — tool visibility filtering', () => {
     const names = await listToolNames([makeToolPlugin()]);
     expect(names).toContain('term__list');
     expect(names).not.toContain('term__create');
+  });
+});
+
+describe('--debug tools — tool surface change logging', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeTool(name: string): DroneToolDefinition {
+    return {
+      name,
+      description: `${name} tool`,
+      execute: async () => 'ok',
+    };
+  }
+
+  it('logs mount/unmount/register/unregister when tools debug is enabled', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const debugFlags = createDebugFlagRegistry(['tools']);
+
+    const engine = createDronePluginEngine({
+      plugins: [createTestPlugin({ id: 'test', tools: [makeTool('alpha')] })],
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+      debugFlags,
+    });
+    await engine.initialize();
+
+    // Mount via runtime meta-tool
+    await engine.executeTool('runtime__mount_tool', { tool: 'test__alpha' });
+    // Unmount via runtime meta-tool
+    await engine.executeTool('runtime__unmount_tool', { tool: 'test__alpha' });
+    // Unregister
+    engine.unregisterTool('test__alpha');
+
+    const lines = errorSpy.mock.calls.map(c => c[0] as string);
+    expect(lines).toContain('[tools:register] test__alpha');
+    expect(lines).toContain('[tools:mount] test__alpha');
+    expect(lines).toContain('[tools:unmount] test__alpha');
+    expect(lines).toContain('[tools:unregister] test__alpha');
+  });
+
+  it('logs nothing when tools debug is disabled', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const debugFlags = createDebugFlagRegistry();
+
+    const engine = createDronePluginEngine({
+      plugins: [createTestPlugin({ id: 'test', tools: [makeTool('alpha')] })],
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+      debugFlags,
+    });
+    await engine.initialize();
+
+    await engine.executeTool('runtime__mount_tool', { tool: 'test__alpha' });
+    await engine.executeTool('runtime__unmount_tool', { tool: 'test__alpha' });
+    engine.unregisterTool('test__alpha');
+
+    const lines = errorSpy.mock.calls.map(c => c[0] as string);
+    expect(lines.filter(l => l.startsWith('[tools:'))).toEqual([]);
+  });
+
+  it('logs enable-plugin and add-external-plugin when tools debug is enabled', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const debugFlags = createDebugFlagRegistry(['tools']);
+
+    const engine = createDronePluginEngine({
+      plugins: [
+        createTestPlugin({ id: 'late', defaultEnabled: false }),
+        createTestPlugin({ id: 'external', defaultEnabled: false }),
+      ],
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+      debugFlags,
+    });
+    await engine.initialize();
+
+    await engine.enablePlugin('late');
+    await engine.addExternalPlugin(
+      createTestPlugin({ id: 'ext', defaultEnabled: false })
+    );
+
+    const lines = errorSpy.mock.calls.map(c => c[0] as string);
+    expect(lines).toContain('[tools:enable-plugin] late');
+    expect(lines).toContain('[tools:add-external-plugin] ext');
   });
 });

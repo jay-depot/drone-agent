@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import {
   createDefaultAgentConfig,
+  createDebugFlagRegistry,
   filterByGlobPatterns,
   type DroneChatResponse,
   type DroneContextWindowInfo,
@@ -1299,5 +1300,38 @@ describe('createConversationService — mounted tool list visibility filtering',
     const names = sentTools.map(t => t.name);
     expect(names).toContain('term__create');
     expect(names).not.toContain('term__list');
+  });
+});
+
+describe('createConversationService — llm debug flag', () => {
+  it('passes debug: true to provider.chat() when llm is enabled in the shared registry', async () => {
+    const engine = createMockEngine({
+      tools: [],
+      executeToolImpl: async () => 'ok',
+    });
+    const provider = makeProvider([{ message: 'hello' }]);
+    const debugFlags = createDebugFlagRegistry(['llm']);
+
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      debugFlags,
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    await conversation.sendUserMessage('hi');
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    const chatInput = provider.__chatMock.mock.calls[0][0] as {
+      debug?: boolean;
+    };
+    expect(chatInput.debug).toBe(true);
   });
 });
