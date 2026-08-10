@@ -10,5 +10,11 @@
   {
     "timestamp": "2026-08-10T04:08:49.133Z",
     "insight": "When adding a new debug subsystem that must be consumed by the plugin engine (e.g. `--debug tools`), the debug set cannot live privately in the conversation service because the engine is constructed before the conversation service in index.tsx. Extract a shared `DebugFlagRegistry` in drone-core (mirroring `RuntimeFlagRegistry`), created once in index.tsx and passed to both the engine and conversation service. This makes runtime toggling via `/debug` take effect in both layers and makes future debug flags trivial to add."
+  },
+  {
+    "timestamp": "2026-08-10T05:01:49.627Z",
+    "insight": "The drone-agent package resolves drone-core from its built dist/ (package.json \"types\": \"./dist/index.d.ts\"), not from source. So after editing drone-core types, you MUST run `pnpm -r run build` before LSP/typecheck in dependent packages reflects the change; otherwise you'll chase stale diagnostics."
+  }
+]s before specifying import paths."
   }
 ]
