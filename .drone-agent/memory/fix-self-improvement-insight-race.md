@@ -109,3 +109,37 @@ Mirror existing `test/self-improvement/setup.ts` createEngine harness. Drive via
 5. Behavioral proof: concurrent record/store calls to the SAME file yield valid JSON with all entries preserved (previously lost updates / corrupted file).
 6. All three write paths wrapped in per-file lock + atomic write.
 7. No new runtime dependencies.
+
+## Completion Summary (2026-08-10)
+
+All steps implemented and validated on branch `fix/self-improvement-insight-race`.
+Committed as `95c6298`.
+
+**Implemented:**
+- `withFileLock` per-key in-process mutex in `io.ts` (promise-chain + map cleanup).
+- `writeJsonArrayAtomic` tmp+rename helper in `io.ts`.
+- `recordInsight`, `storePrinciple`, and `deletePrinciple` in `file-engine.ts` now
+  run their full read-modify-write under `withFileLock(filePath, ...)` and write
+  via `writeJsonArrayAtomic`. The `rm` branch in `deletePrinciple` stays inside the
+  lock so it cannot race a concurrent store.
+- `test/self-improvement/insight-concurrency.test.ts`: 20 concurrent record calls
+  and 20 concurrent store calls to the same file, plus a mixed store+delete test.
+
+**Validation results (all pass):**
+- LSP: no new diagnostics on changed files.
+- `pnpm lint` zero errors (eslint + prettier --write; prettier reformatted the
+  memory file, reverted unrelated pnpm-lock.yaml churn).
+- `pnpm build` zero errors.
+- `pnpm typecheck` passes.
+- `pnpm test`: 1773 passed / 9 skipped.
+- Self-improvement suite: 60/60 passed.
+- Behavioral proof: stashing the source fix makes all 3 concurrency tests FAIL
+  (lost updates + corrupted/missing JSON); restoring the fix makes them PASS.
+  This confirms the tests reproduce the original race.
+
+**Notes / scope:**
+- Swarm/HTTP storage engines (beacon/coordinator) were intentionally left
+  untouched — they go over HTTP and are a separate path.
+- Cross-process safety (multiple drone-agent instances on the same project) was
+  explicitly scoped OUT by the user; the in-process mutex covers the reported
+  single-agent parallel-write race.
