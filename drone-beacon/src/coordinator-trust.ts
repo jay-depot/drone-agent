@@ -9,6 +9,7 @@ let configDir: string | undefined;
 let pendingFingerprint: string | undefined;
 let trustedFingerprint: string | undefined;
 let beaconApproved = false;
+let beaconVerificationCode: string | undefined;
 
 /**
  * Initialize the coordinator trust state from disk. Call once at startup
@@ -135,6 +136,25 @@ export function isBeaconApproved(): boolean {
 }
 
 /**
+ * Record the verification code the beacon computed when registering with the
+ * coordinator. The code is derived from the beacon's public key, its TLS
+ * fingerprint, and the observed coordinator fingerprint. It is held in memory
+ * so the `/coordinator/trust` compare-only endpoint can validate a code the
+ * user transcribes from the coordinator's web UI.
+ */
+export function setBeaconVerificationCode(code: string): void {
+  beaconVerificationCode = code;
+}
+
+/**
+ * The verification code the beacon computed at registration, or undefined if
+ * the beacon has not yet registered with the coordinator.
+ */
+export function getBeaconVerificationCode(): string | undefined {
+  return beaconVerificationCode;
+}
+
+/**
  * True when both sides of the trust gate are satisfied: the coordinator's
  * TLS fingerprint is confirmed AND the coordinator has approved this beacon.
  */
@@ -150,4 +170,5 @@ export function resetCoordinatorTrust(): void {
   pendingFingerprint = undefined;
   trustedFingerprint = undefined;
   beaconApproved = false;
+  beaconVerificationCode = undefined;
 }

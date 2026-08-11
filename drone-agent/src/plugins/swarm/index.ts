@@ -88,11 +88,14 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         if (regRes.ok) {
           const regData = (await regRes.json().catch(() => null)) as {
             coordinatorTrust?: {
-              trusted: boolean;
+              fingerprintTrusted: boolean;
+              beaconApproved: boolean;
               pendingFingerprint: string | null;
+              verificationCode: string | null;
             };
           } | null;
-          if (regData?.coordinatorTrust && !regData.coordinatorTrust.trusted) {
+          const trust = regData?.coordinatorTrust;
+          if (trust && (!trust.fingerprintTrusted || !trust.beaconApproved)) {
             await surfacePendingCoordinatorTrust(baseUrl, registration);
           }
         }

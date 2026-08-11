@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import { getDatabase } from './init.js';
 import { generateVerificationCode } from 'drone-swarm-common';
 import { logger } from '../logger.js';
@@ -9,13 +8,34 @@ import type {
   RegisterBeaconTrustRequest,
 } from '../types.js';
 
-function generateApprovalToken(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  let token = '';
-  for (let i = 0; i < 8; i++) {
-    token += chars[crypto.getRandomValues(new Uint8Array(1))[0] % chars.length];
-  }
-  return token;
+interface BeaconTrustRow {
+  beacon_id: string;
+  name: string;
+  public_key: string;
+  host: string;
+  port: number;
+  status: BeaconTrustStatus;
+  approved_at: number | null;
+  tls_fingerprint: string | null;
+  verification_code: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+function rowToBeaconTrust(row: BeaconTrustRow): BeaconTrust {
+  return {
+    beaconId: row.beacon_id,
+    name: row.name,
+    publicKey: row.public_key,
+    host: row.host,
+    port: row.port,
+    status: row.status,
+    approvedAt: row.approved_at,
+    tlsFingerprint: row.tls_fingerprint,
+    verificationCode: row.verification_code ?? '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 export function registerBeaconTrust(
@@ -73,7 +93,6 @@ export function registerBeaconTrust(
     getCoordinatorFingerprint() ?? ''
   );
   const status: BeaconTrustStatus = isLocal ? 'approved' : 'pending';
-  const approvalToken = isLocal ? null : generateApprovalToken();
 
   const trust: BeaconTrust = {
     beaconId: req.id,
@@ -82,18 +101,17 @@ export function registerBeaconTrust(
     host: req.host,
     port: req.port,
     status,
-    approvalToken,
     approvedAt: isLocal ? now : null,
     tlsFingerprint: req.tlsFingerprint ?? null,
+    verificationCode,
     createdAt: now,
     updatedAt: now,
-    verificationCode,
   };
 
   const stmt = getDatabase().prepare(`
     INSERT INTO beacon_trust 
-    (beacon_id, name, public_key, host, port, status, approval_token, approved_at, tls_fingerprint, created_at, updated_at)
-    VALUES (@beaconId, @name, @publicKey, @host, @port, @status, @approvalToken, @approvedAt, @tlsFingerprint, @createdAt, @updatedAt)
+    (beacon_id, name, public_key, host, port, status, approved_at, tls_fingerprint, verification_code, created_at, updated_at)
+    VALUES (@beaconId, @name, @publicKey, @host, @port, @status, @approvedAt, @tlsFingerprint, @verificationCode, @createdAt, @updatedAt)
   `);
 
   stmt.run({
@@ -103,9 +121,9 @@ export function registerBeaconTrust(
     host: trust.host,
     port: trust.port,
     status: trust.status,
-    approvalToken: trust.approvalToken,
     approvedAt: trust.approvedAt,
     tlsFingerprint: trust.tlsFingerprint,
+    verificationCode: trust.verificationCode,
     createdAt: trust.createdAt,
     updatedAt: trust.updatedAt,
   });
@@ -120,134 +138,44 @@ export function getBeaconTrust(beaconId: string): BeaconTrust | undefined {
   const stmt = getDatabase().prepare(
     'SELECT * FROM beacon_trust WHERE beacon_id = ?'
   );
-  const row = stmt.get(beaconId) as
-    | {
-        beacon_id: string;
-        name: string;
-        public_key: string;
-        host: string;
-        port: number;
-        status: BeaconTrustStatus;
-        approval_token: string | null;
-        approved_at: number | null;
-        tls_fingerprint: string | null;
-        created_at: number;
-        updated_at: number;
-      }
-    | undefined;
+  const row = stmt.get(beaconId) as BeaconTrustRow | undefined;
   if (!row) return undefined;
-  return {
-    beaconId: row.beacon_id,
-    name: row.name,
-    publicKey: row.public_key,
-    host: row.host,
-    port: row.port,
-    status: row.status,
-    approvalToken: row.approval_token,
-    approvedAt: row.approved_at,
-    tlsFingerprint: row.tls_fingerprint,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
+  return rowToBeaconTrust(row);
 }
 
 export function listBeaconTrust(): BeaconTrust[] {
   const stmt = getDatabase().prepare(
     'SELECT * FROM beacon_trust ORDER BY name'
   );
-  const rows = stmt.all() as Array<{
-    beacon_id: string;
-    name: string;
-    public_key: string;
-    host: string;
-    port: number;
-    status: BeaconTrustStatus;
-    approval_token: string | null;
-    approved_at: number | null;
-    tls_fingerprint: string | null;
-    created_at: number;
-    updated_at: number;
-  }>;
-  return rows.map(row => ({
-    beaconId: row.beacon_id,
-    name: row.name,
-    publicKey: row.public_key,
-    host: row.host,
-    port: row.port,
-    status: row.status,
-    approvalToken: row.approval_token,
-    approvedAt: row.approved_at,
-    tlsFingerprint: row.tls_fingerprint,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }));
+  const rows = stmt.all() as BeaconTrustRow[];
+  return rows.map(rowToBeaconTrust);
 }
 
-export function approveBeacon(approvalToken: string): BeaconTrust | null {
+export function approveBeaconById(beaconId: string): BeaconTrust | null {
   const now = Date.now();
-
-  // First, find the beacon_id for this token before updating
-  const findStmt = getDatabase().prepare(
-    'SELECT beacon_id FROM beacon_trust WHERE approval_token = ? AND status = ?'
-  );
-  const found = findStmt.get(approvalToken, 'pending') as
-    | { beacon_id: string }
-    | undefined;
-  if (!found) return null;
-
   const stmt = getDatabase().prepare(`
     UPDATE beacon_trust 
-    SET status = 'approved', approval_token = NULL, approved_at = ?, updated_at = ?
-    WHERE approval_token = ? AND status = 'pending'
+    SET status = 'approved', approved_at = ?, updated_at = ?
+    WHERE beacon_id = ? AND status = 'pending'
   `);
-  const result = stmt.run(now, now, approvalToken);
+  const result = stmt.run(now, now, beaconId);
 
   if (result.changes === 0) {
     return null;
   }
 
-  // Fetch the updated trust by beacon_id
-  const stmt2 = getDatabase().prepare(
-    'SELECT * FROM beacon_trust WHERE beacon_id = ?'
-  );
-  const row = stmt2.get(found.beacon_id) as
-    | {
-        beacon_id: string;
-        name: string;
-        public_key: string;
-        host: string;
-        port: number;
-        status: BeaconTrustStatus;
-        approval_token: string | null;
-        approved_at: number | null;
-        tls_fingerprint: string | null;
-        created_at: number;
-        updated_at: number;
-      }
-    | undefined;
-  if (!row) return null;
+  const updated = getBeaconTrust(beaconId);
+  if (!updated) return null;
 
-  logger.info(`Approved beacon: ${row.beacon_id}`);
-  return {
-    beaconId: row.beacon_id,
-    name: row.name,
-    publicKey: row.public_key,
-    host: row.host,
-    port: row.port,
-    status: row.status,
-    approvalToken: row.approval_token,
-    approvedAt: row.approved_at,
-    tlsFingerprint: row.tls_fingerprint,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
+  logger.info(`Approved beacon: ${updated.beaconId}`);
+  return updated;
 }
 
 export function rejectBeacon(beaconId: string): boolean {
   const now = Date.now();
   const stmt = getDatabase().prepare(`
     UPDATE beacon_trust 
-    SET status = 'rejected', approval_token = NULL, updated_at = ?
+    SET status = 'rejected', updated_at = ?
     WHERE beacon_id = ?
   `);
   const result = stmt.run(now, beaconId);

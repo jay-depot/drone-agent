@@ -6,6 +6,7 @@ import { logger } from './logger.js';
 import {
   isSwarmReady,
   getObservedCoordinatorFingerprint,
+  setBeaconVerificationCode,
 } from './coordinator-trust.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
@@ -33,7 +34,6 @@ function coordinatorTrusted(): boolean {
 
 export interface BeaconStatusResponse {
   status: 'pending' | 'approved' | 'rejected';
-  approvalToken?: string;
 }
 
 export interface CoordinatorClient {
@@ -42,7 +42,6 @@ export interface CoordinatorClient {
     tlsFingerprint: string
   ): Promise<{
     status: 'pending' | 'approved' | 'rejected';
-    approvalToken?: string;
     verificationCode?: string;
   }>;
   pollForApproval(): Promise<BeaconStatusResponse>;
@@ -281,7 +280,6 @@ export function createCoordinatorClient(
       tlsFingerprint: string
     ): Promise<{
       status: 'pending' | 'approved' | 'rejected';
-      approvalToken?: string;
       verificationCode?: string;
     }> {
       logger.info(`Registering beacon with coordinator at ${baseUrl}`);
@@ -308,10 +306,6 @@ export function createCoordinatorClient(
       const data = (await res.json()) as BeaconStatusResponse;
       logger.info(`Beacon registered with status: ${data.status}`);
 
-      if (data.approvalToken) {
-        logger.info(`Approval token: ${data.approvalToken}`);
-      }
-
       // Compute the verification code locally from the same inputs the
       // coordinator uses. Both sides should produce the same code.
       const verificationCode = generateVerificationCode(
@@ -319,10 +313,13 @@ export function createCoordinatorClient(
         tlsFingerprint,
         getObservedCoordinatorFingerprint() ?? ''
       );
+      // Hold the code in memory so the compare-only /coordinator/trust
+      // endpoint can validate a code the user transcribes from the
+      // coordinator's web UI.
+      setBeaconVerificationCode(verificationCode);
 
       return {
         status: data.status,
-        approvalToken: data.approvalToken,
         verificationCode,
       };
     },

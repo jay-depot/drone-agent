@@ -251,7 +251,7 @@ describe('Beacon Routes', () => {
 
   // ── Approval Routes ──
 
-  it('POST /beacons/approve approves a pending beacon by token', async () => {
+  it('POST /beacons/trust/:id/approve approves a pending beacon by ID', async () => {
     const createRes = await app.inject({
       method: 'POST',
       url: '/api/beacons/trust',
@@ -263,32 +263,22 @@ describe('Beacon Routes', () => {
         publicKey: 'key1',
       },
     });
-    const { approvalToken } = JSON.parse(createRes.body);
-    expect(approvalToken).toBeTruthy();
+    const created = JSON.parse(createRes.body);
+    expect(created.status).toBe('pending');
+    expect(created.verificationCode).toBeTruthy();
 
     const res = await app.inject({
       method: 'POST',
-      url: '/api/beacons/approve',
-      payload: { approvalToken },
+      url: '/api/beacons/trust/b1/approve',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).success).toBe(true);
   });
 
-  it('POST /beacons/approve returns 400 without approvalToken', async () => {
+  it('POST /beacons/trust/:id/approve returns 404 for a non-pending beacon', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/api/beacons/approve',
-      payload: {},
-    });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it('POST /beacons/approve returns 404 for invalid token', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/beacons/approve',
-      payload: { approvalToken: 'invalid-token' },
+      url: '/api/beacons/trust/nonexistent/approve',
     });
     expect(res.statusCode).toBe(404);
   });

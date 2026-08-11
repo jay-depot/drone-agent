@@ -25,7 +25,6 @@ export default function TopologyPage() {
   >(null);
   const [dialogBeacon, setDialogBeacon] = useState<Beacon | null>(null);
   const [dialogLoading, setDialogLoading] = useState(false);
-  const [approvalToken, setApprovalToken] = useState('');
 
   useEffect(() => {
     const unsubInitial = subscribe('initial', msg => {
@@ -79,7 +78,6 @@ export default function TopologyPage() {
   ) => {
     setDialogAction(action);
     setDialogBeacon(beacon);
-    setApprovalToken('');
     setDialogOpen(true);
   };
 
@@ -89,11 +87,12 @@ export default function TopologyPage() {
     setDialogLoading(true);
     try {
       if (dialogAction === 'approve') {
-        const res = await authFetch('/api/beacons/approve', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ approvalToken }),
-        });
+        const res = await authFetch(
+          `/api/beacons/trust/${dialogBeacon.id}/approve`,
+          {
+            method: 'POST',
+          }
+        );
         if (res.ok) {
           // Refresh beacon list
           const beaconsRes = await authFetch('/api/beacons');
@@ -138,8 +137,7 @@ export default function TopologyPage() {
       case 'approve':
         return {
           title: `Approve Beacon: ${dialogBeacon.name}`,
-          description:
-            'Enter the approval token to approve this beacon. The token was shown on the beacon when it registered.',
+          description: `Approve beacon "${dialogBeacon.name}" (${dialogBeacon.id})? Before approving, verify the bidirectional verification code matches the one shown on the beacon to rule out a MitM attack.`,
         };
       case 'reject':
         return {
@@ -342,26 +340,7 @@ export default function TopologyPage() {
         }
         variant={dialogAction === 'approve' ? 'default' : 'destructive'}
         loading={dialogLoading}
-      >
-        {dialogAction === 'approve' && (
-          <div>
-            <label
-              htmlFor="approval-token"
-              className="block text-sm font-medium mb-1"
-            >
-              Approval Token
-            </label>
-            <input
-              id="approval-token"
-              type="text"
-              value={approvalToken}
-              onChange={e => setApprovalToken(e.target.value)}
-              placeholder="Paste the approval token..."
-              className="w-full px-3 py-2 border rounded-md text-sm bg-background"
-            />
-          </div>
-        )}
-      </Dialog>
+      ></Dialog>
     </div>
   );
 }

@@ -1,16 +1,20 @@
 /**
  * Coordinator trust handling for the swarm plugin.
  *
- * Surfaces a pending coordinator TLS fingerprint to the user when the beacon
- * reports one, and provides a `/trust-coordinator` slash command so the user
- * can confirm the fingerprint (human-only — no auto-confirm).
+ * Surfaces both halves of the coordinator trust gate to the user when the
+ * beacon reports them, and provides a `/trust-coordinator <code>` slash
+ * command so the user can confirm the coordinator fingerprint by transcribing
+ * the verification code from the coordinator's web UI. The beacon compares the
+ * transcribed code against its own in-memory copy (compare-only) — a match
+ * confirms the fingerprint (human-only, no auto-confirm).
  */
 
 import type { DronePluginRegistration, DroneSlashCommand } from 'drone-core';
 
 /**
  * Check the beacon's coordinator trust state and surface a prominent warning
- * to the user if a coordinator fingerprint is awaiting confirmation.
+ * to the user if either half of the both-sides gate is unmet, along with the
+ * verification code the user should compare against the coordinator's web UI.
  */
 export async function surfacePendingCoordinatorTrust(
   baseUrl: string,
@@ -22,19 +26,39 @@ export async function surfacePendingCoordinatorTrust(
       return;
     }
     const data = (await res.json()) as {
-      trusted: boolean;
+      fingerprintTrusted: boolean;
+      beaconApproved: boolean;
       pendingFingerprint: string | null;
+      verificationCode: string | null;
     };
-    if (!data.trusted && data.pendingFingerprint) {
-      registration.logger.warn(
-        `\n[SECURITY] The coordinator's TLS certificate fingerprint has not been confirmed.\n` +
-          `Observed fingerprint: ${data.pendingFingerprint}\n` +
-          `Verify this matches the coordinator's reported fingerprint (run ` +
-          `'drone-coordinator --show-fingerprint' on the coordinator host), then run ` +
-          `'/trust-coordinator ${data.pendingFingerprint}' to confirm. ` +
-          `Swarm sync with the coordinator is paused until confirmed.\n`
+    const ready = data.fingerprintTrusted && data.beaconApproved;
+    if (ready) {
+      return;
+    }
+
+    const lines: string[] = [
+      '\n[SECURITY] Swarm sync with the coordinator is not fully established.',
+    ];
+    if (!data.fingerprintTrusted) {
+      lines.push(
+        `- The coordinator's TLS certificate fingerprint has not been confirmed.`
       );
     }
+    if (!data.beaconApproved) {
+      lines.push(`- The coordinator has not yet approved this beacon.`);
+    }
+    if (data.verificationCode) {
+      lines.push(
+        `- Verify the coordinator is the one you expect: open the coordinator web UI ` +
+          `(beacon detail page), read its verification code, then run ` +
+          `'/trust-coordinator ${data.verificationCode}' here.`
+      );
+    } else {
+      lines.push(
+        `- No verification code is available yet; the beacon may not have registered with the coordinator.`
+      );
+    }
+    registration.logger.warn(lines.join('\n'));
   } catch (err) {
     registration.logger.warn(
       `Failed to check coordinator trust status: ${err}`
@@ -43,8 +67,9 @@ export async function surfacePendingCoordinatorTrust(
 }
 
 /**
- * Build the `/trust-coordinator` slash command. It confirms the pending
- * coordinator fingerprint via the beacon's confirmation endpoint.
+ * Build the `/trust-coordinator` slash command. It compares the verification
+ * code transcribed from the coordinator's web UI against the beacon's copy via
+ * the beacon's compare-only confirmation endpoint.
  */
 export function createTrustCoordinatorCommand(
   baseUrl: string
@@ -52,13 +77,15 @@ export function createTrustCoordinatorCommand(
   return {
     command: '/trust-coordinator',
     description:
-      'Confirm the coordinator TLS fingerprint (TOFU) to enable swarm sync',
+      'Confirm the coordinator identity by entering the verification code shown in the coordinator web UI (enables swarm sync)',
     handler: async ctx => {
-      const fingerprint = ctx.args[0];
-      if (!fingerprint) {
+      const verificationCode = ctx.args[0];
+      if (!verificationCode) {
         ctx.logger.info(
-          'Usage: /trust-coordinator <fingerprint>\n' +
-            'Provide the coordinator TLS fingerprint shown in the pending warning.'
+          'Usage: /trust-coordinator <verification-code>\n' +
+            'Open the coordinator web UI (beacon detail page) and enter the ' +
+            'verification code it displays here to confirm the coordinator ' +
+            'fingerprint.'
         );
         return true;
       }
@@ -66,22 +93,23 @@ export function createTrustCoordinatorCommand(
         const res = await fetch(`${baseUrl}/coordinator/trust`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fingerprint }),
+          body: JSON.stringify({ verificationCode }),
         });
         if (!res.ok) {
           const body = (await res.json().catch(() => ({}))) as {
             error?: string;
           };
           ctx.logger.warn(
-            `Failed to confirm coordinator fingerprint: ${body.error ?? res.status}`
+            `Failed to confirm coordinator: ${body.error ?? res.status}`
           );
           return true;
         }
         ctx.logger.info(
-          'Coordinator TLS fingerprint confirmed. Swarm sync with the coordinator is now enabled.'
+          'Verification code matched. Coordinator fingerprint confirmed. ' +
+            'Swarm sync with the coordinator is now enabled (pending beacon approval).'
         );
       } catch (err) {
-        ctx.logger.warn(`Failed to confirm coordinator fingerprint: ${err}`);
+        ctx.logger.warn(`Failed to confirm coordinator: ${err}`);
       }
       return true;
     },

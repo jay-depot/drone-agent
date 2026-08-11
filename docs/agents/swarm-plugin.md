@@ -14,21 +14,37 @@ The `swarm` plugin connects to a `drone-beacon` instance to provide swarm-wide p
 
 When the beacon connects to the coordinator over HTTPS, it pins the coordinator's TLS certificate fingerprint (Trust-On-First-Use). On the first connection the observed fingerprint is recorded as _pending_; the beacon does not trust the coordinator for swarm sync until the user confirms the fingerprint matches the coordinator's reported fingerprint. See the interactive confirmation flow below.
 
-### How the coordinator's fingerprint is reported
+### The both-sides trust gate
 
-The coordinator exposes its TLS certificate fingerprint two ways:
+Swarm sync with the coordinator starts only after **both** sides accept:
 
-- **CLI:** `drone-coordinator --show-fingerprint` prints the fingerprint of the on-disk certificate.
-- **API:** `GET /health` returns `tlsFingerprint` when HTTPS is enabled.
+1. **Coordinator fingerprint confirmed (half A)** — the beacon has confirmed the coordinator's TLS fingerprint via the verification code.
+2. **Coordinator approved the beacon (half B)** — the coordinator's operator has approved the beacon (by ID) in the web UI or via `drone-coordinator --approve-beacon <id>`.
+
+Either side can be satisfied first. Connecting agents surface **both** halves plus the beacon's verification code, so the user knows exactly which side is still outstanding.
+
+### The bidirectional verification code
+
+Both the beacon and the coordinator independently compute a human-readable 4-word **verification code** from the beacon's public key, its TLS fingerprint, and the coordinator's TLS fingerprint. Comparing the two codes verifies that no MitM attack occurred during key exchange — it proves both identities:
+
+- **Coordinator web UI (display-only):** the beacon detail page shows the coordinator's copy of the code. The coordinator's operator reads it and approves the beacon there (or via `--approve-beacon <id>`).
+- **Beacon/agent (compare-only):** the user transcribes that code into the agent with `/trust-coordinator <code>`. The beacon compares the transcribed code against its own in-memory copy; a match confirms the coordinator fingerprint. A mismatch is rejected with a MitM warning.
+
+Because one side is display-only and the other is compare-only, the user is naturally forced to compare the two codes to complete the handshake — there is no way to "skip" the comparison.
 
 ### Confirming the coordinator fingerprint (first connection)
 
 On first connection the beacon writes the observed fingerprint to a pending file and holds coordinator trust. Confirm it with either:
 
 - **CLI (primary):** `drone-beacon --confirm-coordinator-fingerprint <fp>` — promotes the pending fingerprint to trusted.
-- **Agent (human-only):** connecting agents display a `[SECURITY]` warning with the observed fingerprint; run `/trust-coordinator <fp>` in the agent to confirm via the beacon's `POST /coordinator/trust` endpoint.
+- **Agent (human-only):** connecting agents display a `[SECURITY]` warning with both gate halves and the beacon's verification code. Open the coordinator web UI (beacon detail page), read its verification code, and run `/trust-coordinator <code>` in the agent to confirm. The beacon compares the code against its own copy; a match confirms the fingerprint via its `POST /coordinator/trust` endpoint. No auto-confirm.
 
-Swarm sync with the coordinator starts only after **both** sides accept: the coordinator's TLS fingerprint is confirmed **and** the coordinator has approved the beacon.
+### Approving a pending beacon
+
+A non-local beacon registers as `pending` in the coordinator. Approve it by **ID** (there is no approval token) with either:
+
+- **Web UI:** on the beacon detail page or topology view, click **Approve**. Before approving, verify the bidirectional verification code shown in the UI matches the one on the beacon.
+- **CLI:** `drone-coordinator --approve-beacon <id>`.
 
 ### Rotating the coordinator's TLS certificate
 

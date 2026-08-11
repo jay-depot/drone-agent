@@ -13,6 +13,8 @@ import {
   getObservedCoordinatorFingerprint,
   setBeaconApproved,
   isBeaconApproved,
+  setBeaconVerificationCode,
+  getBeaconVerificationCode,
   isSwarmReady,
   resetCoordinatorTrust,
 } from '../src/coordinator-trust.js';
@@ -114,6 +116,12 @@ describe('Coordinator Trust', () => {
     // After confirmation, returns the trusted value
     confirmCoordinatorFingerprint(FP);
     expect(getObservedCoordinatorFingerprint()).toBe(FP);
+  });
+
+  it('stores and retrieves the beacon verification code in memory', () => {
+    expect(getBeaconVerificationCode()).toBeUndefined();
+    setBeaconVerificationCode('acorn-badge-cabin-daisy');
+    expect(getBeaconVerificationCode()).toBe('acorn-badge-cabin-daisy');
   });
 
   it('gates swarm readiness on both fingerprint confirmation and beacon approval', () => {

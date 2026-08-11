@@ -248,31 +248,25 @@ async function main() {
         setBeaconApproved(true);
       }
 
-      if (result.status === 'pending' && result.approvalToken) {
-        logger.info(`Beacon pending approval. Token: ${result.approvalToken}`);
-        logger.info('Run: drone-coordinator --approve <token> to approve');
-        logger.info('Also available via the web UI at the coordinator address');
-
+      if (result.status === 'pending') {
         if (result.verificationCode) {
           logger.info(`Verification code: ${result.verificationCode}`);
           logger.info(
             'Compare this code with the one shown in the coordinator web UI to verify no MitM attack occurred during key exchange.'
           );
         }
+        logger.info('Beacon pending approval.');
+        logger.info(
+          'Approve via the coordinator web UI (beacon detail page) or: drone-coordinator --approve-beacon <id>'
+        );
 
-        // Re-output the approval token periodically until approved
-        const tokenReminder = setInterval(() => {
+        // Re-output the verification code periodically until approved
+        const reminder = setInterval(() => {
           logger.info(
             `[REMINDER] Beacon still pending approval. Verification code: ${result.verificationCode}`
           );
           logger.info(
             'Compare this code with the one shown in the coordinator web UI to verify no MitM attack occurred during key exchange.'
-          );
-          logger.info(
-            `[REMINDER] Beacon still pending approval. Token: ${result.approvalToken}`
-          );
-          logger.info(
-            'Approve via: drone-coordinator --approve <token> or the coordinator web UI'
           );
         }, 60000);
 
@@ -283,12 +277,12 @@ async function main() {
             if (status.status === 'approved') {
               logger.info('Beacon approved!');
               setBeaconApproved(true);
-              clearInterval(tokenReminder);
+              clearInterval(reminder);
               clearInterval(pollInterval);
             } else if (status.status === 'rejected') {
               logger.error('Beacon rejected by coordinator');
               setBeaconApproved(false);
-              clearInterval(tokenReminder);
+              clearInterval(reminder);
               clearInterval(pollInterval);
             }
           } catch (err) {

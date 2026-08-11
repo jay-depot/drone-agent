@@ -10,7 +10,7 @@ import { existsSync } from 'fs';
 import {
   initDatabase,
   closeDatabase,
-  approveBeacon,
+  approveBeaconById,
   listBeaconTrust,
   listBeacons,
   listAllAgentLocations,
@@ -62,12 +62,12 @@ interface Config {
   useHttps: boolean;
   command:
     | 'serve'
-    | 'approve'
+    | 'approve-beacon'
     | 'list-beacons'
     | 'show-web-token'
     | 'generate-web-token'
     | 'show-fingerprint';
-  approvalToken?: string;
+  beaconId?: string;
 }
 
 function parseArgs(): Config {
@@ -102,11 +102,11 @@ function parseArgs(): Config {
       config.useHttps = true;
     } else if (arg === '--no-https') {
       config.useHttps = false;
-    } else if (arg === '--approve' && i + 1 < args.length) {
-      config.command = 'approve';
-      config.approvalToken = args[++i];
-    } else if (arg === 'approve') {
-      config.command = 'approve';
+    } else if (arg === '--approve-beacon' && i + 1 < args.length) {
+      config.command = 'approve-beacon';
+      config.beaconId = args[++i];
+    } else if (arg === 'approve-beacon') {
+      config.command = 'approve-beacon';
     } else if (arg === 'list-beacons') {
       config.command = 'list-beacons';
     } else if (arg === '--show-web-token') {
@@ -117,7 +117,7 @@ function parseArgs(): Config {
       config.command = 'show-fingerprint';
     } else if (arg === '--help' || arg === '-h') {
       console.log(
-        `\ndrone-coordinator [options]\n\nCommands:\n  serve              Start the coordinator server (default)\n  approve <token>   Approve a pending beacon by token\n  list-beacons       List all registered beacons and their trust status\n  --show-web-token   Print the current web UI access token\n  --generate-web-token Generate a new web UI access token\n  --show-fingerprint Print the coordinator's TLS certificate fingerprint\n\nOptions:\n  --port <n>         Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>         Host to bind to (default: ${DEFAULT_HOST})\n  --web-port <n>     HTTP port for web UI (default: ${DEFAULT_WEB_PORT})\n  --web-host <h>     Host for web UI port (default: ${DEFAULT_WEB_HOST})\n  --config-dir <dir> Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>       Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https            Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https         Disable HTTPS\n  --help             Show this help message\n      `
+        `\ndrone-coordinator [options]\n\nCommands:\n  serve                Start the coordinator server (default)\n  approve-beacon <id>  Approve a pending beacon by its ID\n  list-beacons         List all registered beacons and their trust status\n  --show-web-token     Print the current web UI access token\n  --generate-web-token Generate a new web UI access token\n  --show-fingerprint   Print the coordinator's TLS certificate fingerprint\n\nOptions:\n  --port <n>           Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>           Host to bind to (default: ${DEFAULT_HOST})\n  --web-port <n>       HTTP port for web UI (default: ${DEFAULT_WEB_PORT})\n  --web-host <h>       Host for web UI port (default: ${DEFAULT_WEB_HOST})\n  --config-dir <dir>   Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>          Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https              Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https           Disable HTTPS\n  --help               Show this help message\n      `
       );
       process.exit(0);
     }
@@ -135,18 +135,18 @@ async function handleShowFingerprint(config: Config) {
   process.exit(0);
 }
 
-async function handleApprove(config: Config) {
-  if (!config.approvalToken) {
-    console.error('Error: --approve requires a token argument');
-    console.log('Usage: drone-coordinator --approve <token>');
+async function handleApproveBeacon(config: Config) {
+  if (!config.beaconId) {
+    console.error('Error: --approve-beacon requires a beacon ID argument');
+    console.log('Usage: drone-coordinator --approve-beacon <id>');
     process.exit(1);
   }
 
   initDatabase(config.dbPath);
 
-  const trust = approveBeacon(config.approvalToken);
+  const trust = approveBeaconById(config.beaconId);
   if (!trust) {
-    console.error('Error: Invalid or expired approval token');
+    console.error('Error: Beacon trust not found or already approved');
     closeDatabase();
     process.exit(1);
   }
@@ -178,7 +178,6 @@ async function handleListBeacons(config: Config) {
       host: t.host,
       port: t.port,
       status: t.status,
-      approvalToken: t.approvalToken,
       approvedAt: t.approvedAt,
     })),
     ...beaconList
@@ -189,7 +188,6 @@ async function handleListBeacons(config: Config) {
         host: b.host,
         port: b.port,
         status: 'unknown' as const,
-        approvalToken: null,
         approvedAt: null,
       })),
   ];
@@ -200,9 +198,6 @@ async function handleListBeacons(config: Config) {
     console.log(`${beacon.name} (${beacon.beaconId})`);
     console.log(`  Host: ${beacon.host}:${beacon.port}`);
     console.log(`  Status: ${beacon.status}`);
-    if (beacon.status === 'pending' && beacon.approvalToken) {
-      console.log(`  Token: ${beacon.approvalToken}`);
-    }
     if (beacon.approvedAt) {
       console.log(`  Approved: ${new Date(beacon.approvedAt).toISOString()}`);
     }
@@ -413,8 +408,8 @@ async function attachUi(
 export async function main() {
   const config = parseArgs();
 
-  if (config.command === 'approve') {
-    await handleApprove(config);
+  if (config.command === 'approve-beacon') {
+    await handleApproveBeacon(config);
     return;
   }
 

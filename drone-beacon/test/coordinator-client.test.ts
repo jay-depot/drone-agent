@@ -10,6 +10,7 @@ import {
   setPendingCoordinatorFingerprint,
   confirmCoordinatorFingerprint,
   setBeaconApproved,
+  getBeaconVerificationCode,
   resetCoordinatorTrust,
 } from '../src/coordinator-trust.js';
 
@@ -237,6 +238,8 @@ describe('Coordinator Client', () => {
         TEST_FP
       );
       expect(result.verificationCode).toBe(expected);
+      // The code is stored in memory for the compare-only trust endpoint.
+      expect(getBeaconVerificationCode()).toBe(expected);
     });
 
     it('should throw on non-ok response', async () => {

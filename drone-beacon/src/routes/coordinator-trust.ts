@@ -1,34 +1,52 @@
 import type { FastifyInstance } from 'fastify';
 import {
   confirmCoordinatorFingerprint,
+  getBeaconVerificationCode,
   getPendingCoordinatorFingerprint,
+  isBeaconApproved,
   isCoordinatorTrusted,
 } from '../coordinator-trust.js';
 
 export default function coordinatorTrustRoutes(app: FastifyInstance) {
   // Report the current coordinator trust state (used by agents to surface
-  // a pending fingerprint to the user).
+  // both gate halves to the user). The verification code is the beacon's
+  // in-memory copy, which the user compares against the coordinator's web UI.
   app.get('/coordinator/trust', async () => {
     return {
-      trusted: isCoordinatorTrusted(),
+      fingerprintTrusted: isCoordinatorTrusted(),
+      beaconApproved: isBeaconApproved(),
       pendingFingerprint: getPendingCoordinatorFingerprint() ?? null,
+      verificationCode: getBeaconVerificationCode() ?? null,
     };
   });
 
-  // Confirm the pending coordinator fingerprint (human-only, via the agent).
-  app.post<{ Body: { fingerprint: string } }>(
+  // Compare the verification code transcribed from the coordinator's web UI
+  // against the beacon's locally-computed code. A match confirms the pending
+  // coordinator fingerprint (human-only, via the agent). This is the
+  // compare-only half of the bidirectional handshake.
+  app.post<{ Body: { verificationCode: string } }>(
     '/coordinator/trust',
     async (request, reply) => {
-      const { fingerprint } = request.body ?? {};
-      if (!fingerprint) {
-        return reply.code(400).send({ error: 'fingerprint required' });
+      const { verificationCode } = request.body ?? {};
+      if (!verificationCode) {
+        return reply.code(400).send({ error: 'verificationCode required' });
       }
-      const ok = confirmCoordinatorFingerprint(fingerprint);
-      if (!ok) {
+      const expected = getBeaconVerificationCode();
+      if (!expected) {
         return reply.code(400).send({
           error:
-            'Fingerprint does not match the pending coordinator fingerprint',
+            'Beacon has no verification code yet; has it registered with the coordinator?',
         });
+      }
+      if (verificationCode.trim() !== expected) {
+        return reply.code(400).send({
+          error:
+            'Verification code does not match the one the beacon computed. Check you transcribed the code from the coordinator web UI correctly — a mismatch may indicate a MitM attack.',
+        });
+      }
+      const fp = getPendingCoordinatorFingerprint();
+      if (fp) {
+        confirmCoordinatorFingerprint(fp);
       }
       return { success: true };
     }

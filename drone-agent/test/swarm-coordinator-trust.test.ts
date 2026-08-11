@@ -84,10 +84,10 @@ describe('swarm coordinator trust', () => {
       c => c.command === '/trust-coordinator'
     );
     expect(cmd).toBeDefined();
-    expect(cmd?.description).toContain('coordinator TLS fingerprint');
+    expect(cmd?.description).toContain('verification code');
   });
 
-  it('surfaces a pending coordinator fingerprint warning on connect', async () => {
+  it('surfaces pending gate halves on connect', async () => {
     const pendingFp =
       'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
     const mockFetch = vi
@@ -101,8 +101,10 @@ describe('swarm coordinator trust', () => {
             ok: true,
             json: async () => ({
               coordinatorTrust: {
-                trusted: false,
+                fingerprintTrusted: false,
+                beaconApproved: false,
                 pendingFingerprint: pendingFp,
+                verificationCode: 'acorn-badge-cabin-daisy',
               },
             }),
           });
@@ -111,8 +113,10 @@ describe('swarm coordinator trust', () => {
           return Promise.resolve({
             ok: true,
             json: async () => ({
-              trusted: false,
+              fingerprintTrusted: false,
+              beaconApproved: false,
               pendingFingerprint: pendingFp,
+              verificationCode: 'acorn-badge-cabin-daisy',
             }),
           });
         }
@@ -132,9 +136,7 @@ describe('swarm coordinator trust', () => {
     expect(trustCalls.length).toBeGreaterThan(0);
   });
 
-  it('confirms the coordinator fingerprint via the beacon endpoint', async () => {
-    const pendingFp =
-      'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
+  it('confirms the coordinator via the verification code endpoint', async () => {
     const mockFetch = vi
       .fn()
       .mockImplementation((url: string, options?: RequestInit) => {
@@ -171,8 +173,8 @@ describe('swarm coordinator trust', () => {
     const logger = silentLogger();
     const infoSpy = vi.spyOn(logger, 'info');
     const result = await cmd!.handler({
-      line: `/trust-coordinator ${pendingFp}`,
-      args: [pendingFp],
+      line: `/trust-coordinator acorn-badge-cabin-daisy`,
+      args: ['acorn-badge-cabin-daisy'],
       logger,
       engine: {} as any,
     });
@@ -184,5 +186,8 @@ describe('swarm coordinator trust', () => {
         opts?.method === 'POST'
     );
     expect(postCalls.length).toBe(1);
+    expect(JSON.parse(postCalls[0][1].body)).toEqual({
+      verificationCode: 'acorn-badge-cabin-daisy',
+    });
   });
 });
