@@ -122,12 +122,20 @@ describe('Coordinator Trust', () => {
     confirmCoordinatorFingerprint(FP);
     expect(isSwarmReady()).toBe(false);
 
-    // Beacon approved but fingerprint not confirmed
+    // Both satisfied
     setBeaconApproved(true);
     expect(isSwarmReady()).toBe(true);
 
-    // Reset and check the reverse order
-    setBeaconApproved(false);
+    // Beacon approved but fingerprint not confirmed
+    resetCoordinatorTrust();
+    initCoordinatorTrust(configDir);
+    setBeaconApproved(true);
     expect(isSwarmReady()).toBe(false);
+
+    // Reverse order (approve first, then confirm)
+    setPendingCoordinatorFingerprint(FP);
+    expect(isSwarmReady()).toBe(false);
+    confirmCoordinatorFingerprint(FP);
+    expect(isSwarmReady()).toBe(true);
   });
 });

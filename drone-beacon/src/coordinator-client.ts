@@ -11,18 +11,23 @@ import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
 
+let didWarnSwarmNotReady = false;
+
 /**
- * True when the coordinator's TLS fingerprint has been confirmed. Sync and
- * trust operations are gated behind this so the beacon does not exchange
- * swarm data with an unverified coordinator.
+ * True when swarm communications with the coordinator are allowed: the coordinator's
+ * TLS fingerprint has been confirmed AND the coordinator has approved this beacon.
  */
 function coordinatorTrusted(): boolean {
   if (isSwarmReady()) {
+    didWarnSwarmNotReady = false;
     return true;
   }
-  logger.warn(
-    'Swarm not ready (coordinator fingerprint not confirmed and/or beacon not approved); skipping coordinator sync.'
-  );
+  if (!didWarnSwarmNotReady) {
+    didWarnSwarmNotReady = true;
+    logger.warn(
+      'Swarm not ready (coordinator fingerprint not confirmed and/or beacon not approved); skipping coordinator sync.'
+    );
+  }
   return false;
 }
 
@@ -142,7 +147,7 @@ export interface CoordinatorClientOptions {
  * the caller can persist it.  In that case the connection is still accepted —
  * this is the intentional Trust-On-First-Use window.
  *
- * The function returns `undefined` (no error) when the check passes and throws
+ * The function returns `undefined` (no error) when the check passes and returns
  * an `Error` when the fingerprint does not match a known pinned value.
  */
 export function buildCheckServerIdentity(
