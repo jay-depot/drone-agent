@@ -170,17 +170,27 @@ function deepSet(
   keyPath: string,
   value: unknown
 ): void {
+  const blockedKeys = new Set(['__proto__', 'constructor', 'prototype']);
   const parts = keyPath.split('.');
   let current = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     const part = parts[i];
+    if (blockedKeys.has(part)) {
+      throw new Error(`Unsafe config key path segment: "${part}"`);
+    }
     if (typeof current[part] !== 'object' || current[part] === null) {
       current[part] = {};
     }
     current = current[part] as Record<string, unknown>;
   }
-  current[parts[parts.length - 1]] = value;
+  const finalPart = parts[parts.length - 1];
+  if (blockedKeys.has(finalPart)) {
+    throw new Error(`Unsafe config key path segment: "${finalPart}"`);
+  }
+  current[finalPart] = value;
 }
+
+export const __testing = { deepSet };
 
 /**
  * Validate that a dot-notation key path is a known config key.

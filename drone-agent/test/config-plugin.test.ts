@@ -6,6 +6,7 @@ import { createDefaultAgentConfig } from 'drone-core';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { configPlugin } from '../src/plugins/config/index.js';
 import type { DroneConfigCapability } from '../src/plugins/config/index.js';
+import { __testing as configTesting } from '../src/plugins/config/index.js';
 import { silentLogger } from './helpers.js';
 
 // ---------------------------------------------------------------------------
@@ -87,6 +88,14 @@ describe('config plugin', () => {
     expect(typeof cap!.getConfig).toBe('function');
     expect(typeof cap!.getLayers).toBe('function');
     expect(typeof cap!.setValue).toBe('function');
+  });
+
+  it('guards deepSet against prototype pollution path segments', () => {
+    const target: Record<string, unknown> = {};
+    expect(() =>
+      configTesting.deepSet(target, '__proto__.polluted', true)
+    ).toThrow(/Unsafe config key path segment/);
+    expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
   });
 
   describe('config__get', () => {
@@ -235,6 +244,26 @@ describe('config plugin', () => {
         engine.executeTool('config__set', {
           key: 'nonexistent.setting',
           value: 'foo',
+        })
+      ).rejects.toThrow(/Unknown config key/);
+    });
+
+    it('rejects prototype-pollution key paths', async () => {
+      const { projectDir } = await setupDirs();
+      process.chdir(projectDir);
+
+      const engine = createDronePluginEngine({
+        plugins: [configPlugin],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+
+      await engine.initialize();
+
+      await expect(
+        engine.executeTool('config__set', {
+          key: '__proto__.polluted',
+          value: true,
         })
       ).rejects.toThrow(/Unknown config key/);
     });
