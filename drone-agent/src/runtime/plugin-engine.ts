@@ -790,7 +790,23 @@ export function createDronePluginEngine({
     addExternalPlugin: doAddExternalPlugin,
     runHooks: async hookName => {
       for (const callback of hookBuckets[hookName]) {
-        await callback();
+        try {
+          await callback();
+        } catch (hookError) {
+          // A failure in onBeforePrompt must not abort the conversation
+          // turn or terminate the loop — log it and keep going so the
+          // user's message is still processed. Mirrors the non-fatal
+          // onAfterToolCall handling in the conversation service.
+          if (hookName === 'onBeforePrompt') {
+            const msg =
+              hookError instanceof Error
+                ? hookError.message
+                : String(hookError);
+            logger.warn(`onBeforePrompt hook error (non-fatal): ${msg}`);
+            continue;
+          }
+          throw hookError;
+        }
       }
     },
     runSessionSafetyTrimWillRunHooks: async payload => {
