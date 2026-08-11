@@ -1335,3 +1335,132 @@ describe('createConversationService — llm debug flag', () => {
     expect(chatInput.debug).toBe(true);
   });
 });
+
+describe('createConversationService — stopLoop signal', () => {
+  it('breaks the tool-call loop when a tool calls context.stopLoop()', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'subagent__return',
+          description: 'return to parent',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              result: { type: 'string' },
+            },
+          },
+        },
+      ],
+      executeToolImpl: async (name, input, onProgress, context) => {
+        // Simulate the subagent__return tool: signal the loop to stop
+        if (name === 'subagent__return') {
+          context?.stopLoop?.();
+          return JSON.stringify({ returned: true, result: input.result });
+        }
+        return 'ok';
+      },
+    });
+
+    const provider = makeProvider([
+      // First response: model calls the return tool
+      {
+        toolCalls: [
+          {
+            id: 'call-1',
+            name: 'subagent__return',
+            arguments: { result: 'done' },
+          },
+        ],
+      },
+      // Second response: model finishes the turn (should NOT be reached)
+      { message: 'should-not-be-reached' },
+    ]);
+
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    const result = await conversation.sendUserMessage('return');
+
+    // The loop should break after the return tool, returning the assistant message.
+    // The provider should only be called once (not twice for the second message).
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    // response.message is undefined when only toolCalls are present
+    expect(result).toBe('');
+  });
+});
+
+describe('createConversationService — subagent__return canonical naming', () => {
+  it('emits toolCallBatch with the canonical subagent__return name', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'subagent__return',
+          description: 'return to parent',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              result: { type: 'string' },
+            },
+          },
+        },
+      ],
+      executeToolImpl: async (name, input, onProgress, context) => {
+        if (name === 'subagent__return') {
+          context?.stopLoop?.();
+          return JSON.stringify({ returned: true, result: input.result });
+        }
+        return 'ok';
+      },
+    });
+
+    const provider = makeProvider([
+      {
+        toolCalls: [
+          {
+            id: 'call-1',
+            name: 'subagent__return',
+            arguments: { result: 'done' },
+          },
+        ],
+      },
+    ]);
+
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    const batchNames: string[] = [];
+    await conversation.sendUserMessage('return', evt => {
+      if (evt.kind === 'toolCallBatch') {
+        for (const tc of evt.toolCalls) {
+          batchNames.push(tc.name);
+        }
+      }
+    });
+
+    // The toolCallBatch event must expose the canonical name so that
+    // interactive.ts's hasExplicitReturn check (against 'subagent__return') matches.
+    expect(batchNames).toContain('subagent__return');
+  });
+});

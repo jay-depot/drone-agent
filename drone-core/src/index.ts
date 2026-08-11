@@ -183,6 +183,7 @@ export type {
 export type {
   DronePlugin,
   DroneToolDefinition,
+  DroneToolExecutionContext,
   DronePromptFragment,
   DronePluginHooks,
   DroneStandardHookName,
