@@ -33,6 +33,9 @@ function generateTlsCertificateWithOpenssl(
   configDir: string,
   commonName: string = 'localhost'
 ): { certPem: string; keyPem: string } {
+  if (/[/\\\0]/.test(commonName)) {
+    throw new Error(`Invalid commonName: must not contain '/', '\\', or null bytes`);
+  }
   const tempDir = configDir;
 
   try {
