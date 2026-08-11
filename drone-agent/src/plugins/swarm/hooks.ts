@@ -162,7 +162,19 @@ function registerStorageEngines(
       return data.map((d: any) => ({
         timestamp: d.timestamp,
         insight: d.insight,
+        lastExamined: d.lastExamined,
       }));
+    },
+    markInsightsExamined: async (targetType, targetId) => {
+      const res = await fetch(`${baseUrl}/insights/mark-examined`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetType, targetId }),
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to mark insights examined: ${res.status}`);
+      }
+      return (await res.json()) as { ok: boolean; markedCount: number };
     },
   };
 

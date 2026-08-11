@@ -9,6 +9,7 @@ export interface InsightRow {
   targetId: string;
   insight: string;
   timestamp: string;
+  lastExamined?: string;
   scope: string;
 }
 
@@ -61,6 +62,22 @@ export function listInsights(
 
 export function getInsight(id: string): InsightRow | undefined {
   return getRow<InsightRow>(getDatabase, 'insights', id);
+}
+
+export function markInsightsExamined(
+  targetType: string,
+  targetId: string
+): { ok: boolean; markedCount: number } {
+  const now = new Date().toISOString();
+  const result = getDatabase()
+    .prepare(
+      'UPDATE insights SET lastExamined = ? WHERE targetType = ? AND targetId = ?'
+    )
+    .run(now, targetType, targetId);
+  logger.info(
+    `Marked ${result.changes} insight(s) examined for ${targetType} "${targetId}"`
+  );
+  return { ok: true, markedCount: result.changes };
 }
 
 export function deleteInsight(id: string): boolean {

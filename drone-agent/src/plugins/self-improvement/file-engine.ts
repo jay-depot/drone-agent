@@ -118,6 +118,32 @@ export function createFileInsightEngine(
       );
       return readJsonArray<DroneInsightEntry>(filePath);
     },
+    markInsightsExamined: async (targetType, targetId) => {
+      const baseDir = resolveBaseDir(
+        targetType,
+        targetId,
+        projectDir,
+        personaCap(),
+        skillsCap()
+      );
+      const { filePath } = resolveInsightPaths(
+        targetType,
+        targetId,
+        baseDir,
+        skillsCap()
+      );
+      return withFileLock(filePath, async () => {
+        const now = new Date().toISOString();
+        const entries = await readJsonArray<DroneInsightEntry>(filePath);
+        for (const entry of entries) {
+          entry.lastExamined = now;
+        }
+        if (entries.length > 0) {
+          await writeJsonArrayAtomic(filePath, entries);
+        }
+        return { ok: true, markedCount: entries.length };
+      });
+    },
   };
 }
 

@@ -12,6 +12,7 @@ import { renderInsightTargetsFragment } from './prompt-fragment.js';
 import { renderPrinciplesFragment } from './principles-fragment.js';
 import { createInsightTool } from './tools/insight.js';
 import { createPrincipleTool } from './tools/principle.js';
+import { createMarkExaminedTool } from './tools/mark-examined.js';
 
 export const selfImprovementPlugin: DronePlugin = {
   metadata: {
@@ -72,6 +73,9 @@ export const selfImprovementPlugin: DronePlugin = {
     );
     registration.registerTool(
       createPrincipleTool(personaCap, skillsCap, defaultPrincipleEngine)
+    );
+    registration.registerTool(
+      createMarkExaminedTool(personaCap, skillsCap, defaultInsightEngine)
     );
 
     // ── Prompt fragment: principles (footer) ──────────────────────────
