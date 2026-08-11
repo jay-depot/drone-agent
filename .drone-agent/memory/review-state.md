@@ -14,6 +14,8 @@ updated: 2026-08-11T01:35:21.852Z
 
 ### 1. Subagent mode is never activated — `_runtime` capability set too late
 
+**Fix Merged**
+
 **File:** `drone-agent/src/runtime/plugin-engine.ts` (`initialize()`)
 
 The `_runtime` capability (carrying `isSubagent`, `subagentId`, `persona`) is set via `capabilities.set('_runtime', {...})` **after** the plugin registration loop completes. But the subagent plugin calls `ctx.request<RuntimeInfo>('runtime')` **synchronously at the top of its `register()`**. Since `_runtime` isn't set yet, `request('runtime')` returns `undefined` during registration, so `runtime?.isSubagent` is always falsy. **The subagent plugin always registers in main-agent mode** — the `subagent.return` tool and the subagent instruction prompt fragment are never registered. Subagents can never explicitly return; they rely entirely on the implicit-return fallback.
@@ -21,6 +23,8 @@ The `_runtime` capability (carrying `isSubagent`, `subagentId`, `persona`) is se
 **Fix:** Set `capabilities.set('_runtime', ...)` before the plugin registration loop in `initialize()`, or resolve `_runtime` lazily in the `request()` handler.
 
 ### 2. `hasExplicitReturn` detection is dead code — tool name mismatch + dot/pokemon naming
+
+**Fix Merged**
 
 **File:** `drone-agent/src/interactive.ts` (line 121)
 
