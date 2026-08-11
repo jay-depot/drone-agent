@@ -2,6 +2,27 @@ import type { FastifyInstance } from 'fastify';
 import * as db from '../db/index.js';
 import type { SpawnRequest } from '../types.js';
 
+function buildBeaconUrl(
+  beacon: { host: string; port: number },
+  pathname: string,
+  searchParams?: Record<string, string | undefined>
+) {
+  const url = new URL('http://127.0.0.1');
+  url.hostname = beacon.host;
+  url.port = String(beacon.port);
+  url.pathname = pathname;
+
+  if (searchParams) {
+    for (const [key, value] of Object.entries(searchParams)) {
+      if (value !== undefined) {
+        url.searchParams.set(key, value);
+      }
+    }
+  }
+
+  return url;
+}
+
 export default function spawnRoutes(app: FastifyInstance) {
   // ── Spawn an agent on a target beacon ──────────────────────────────
 
@@ -26,8 +47,7 @@ export default function spawnRoutes(app: FastifyInstance) {
 
     // Forward the spawn request to the beacon
     try {
-      const targetUrl = `http://${beacon.host}:${beacon.port}`;
-      const response = await fetch(`${targetUrl}/spawn`, {
+      const response = await fetch(buildBeaconUrl(beacon, '/spawn'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ personaId, task, config, spawnId }),
@@ -69,11 +89,8 @@ export default function spawnRoutes(app: FastifyInstance) {
     }
 
     try {
-      const query = request.query.status
-        ? `?status=${encodeURIComponent(request.query.status)}`
-        : '';
       const response = await fetch(
-        `http://${beacon.host}:${beacon.port}/spawn${query}`
+        buildBeaconUrl(beacon, '/spawn', { status: request.query.status })
       );
       if (!response.ok) {
         return reply
@@ -104,7 +121,7 @@ export default function spawnRoutes(app: FastifyInstance) {
 
       try {
         const response = await fetch(
-          `http://${beacon.host}:${beacon.port}/spawn/${request.params.spawnId}`
+          buildBeaconUrl(beacon, `/spawn/${request.params.spawnId}`)
         );
         if (!response.ok) {
           return reply
@@ -136,7 +153,7 @@ export default function spawnRoutes(app: FastifyInstance) {
 
       try {
         const response = await fetch(
-          `http://${beacon.host}:${beacon.port}/spawn/${request.params.spawnId}`,
+          buildBeaconUrl(beacon, `/spawn/${request.params.spawnId}`),
           { method: 'DELETE' }
         );
         if (!response.ok) {
