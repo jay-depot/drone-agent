@@ -213,7 +213,7 @@ describe('Coordinator Client', () => {
       const { generateVerificationCode } = await import('drone-swarm-common');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       setupMockHttpResponse(201, { status: 'approved' });
 

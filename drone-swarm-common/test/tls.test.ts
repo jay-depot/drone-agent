@@ -101,7 +101,10 @@ describe('TLS', () => {
   itIfOpenssl('should work with different service names', async () => {
     const { loadOrCreateTlsIdentity } = await import('../src/tls.js');
     const beaconIdentity = await loadOrCreateTlsIdentity(configDir, 'beacon');
-    const coordIdentity = await loadOrCreateTlsIdentity(configDir, 'coordinator');
+    const coordIdentity = await loadOrCreateTlsIdentity(
+      configDir,
+      'coordinator'
+    );
 
     // They should be different files
     expect(beaconIdentity.certPath).not.toBe(coordIdentity.certPath);
