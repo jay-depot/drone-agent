@@ -1,12 +1,27 @@
 [
   {
-    "principle": "Prefer listMountedTools() over a dedicated unmountAllNonRuntimeTools() as the engine primitive — it's more broadly reusable. Unmount-all logic belongs in the caller (e.g. the persona plugin), which iterates listMountedTools() and filters runtime__* tools itself.",
-    "source": "plan-persona-level-tool-premounting",
-    "createdAt": "2026-08-10T02:55:04.160Z"
+    "principle": "When a core developer tool fails repeatedly against its own domain, invest in fixing the tool rather than permanently routing around it. (Historical note: file__apply_diff reliability complaints fell off completely after the aggressive format-aware fuzz rewrite landed 2026-07-19/20; the remaining 08-01 concern is under-utilization, not failure.)",
+    "source": "Promoted from apply_diff reliability insights (item 1 of theme review)",
+    "createdAt": "2026-08-11T00:01:21.921Z"
   },
   {
-    "principle": "Tool-level autoMount on DroneToolDefinition is intentionally NOT introduced now; the \"none\" persona's automount list is just the runtime__* meta-tools. Revisit \"other auto-mount tools merge into the persona automount list\" if autoMount is ever added.",
-    "source": "plan-persona-level-tool-premounting",
-    "createdAt": "2026-08-10T02:55:13.288Z"
+    "principle": "When changing a shared interface, sweep every implementer, consumer, and test mock — not just the source files a plan lists. Adding a method to an engine/registration/context type routinely breaks typecheck/build via stale test mocks and overlooked dispatch sites. Use LSP find-references to enumerate all call sites and implementers (the connected typescript LSP makes this cheap), then grep for the identifier as a belt-and-suspenders cross-check before declaring a cross-cutting change complete.",
+    "source": "Promoted from mock/call-site sweeping insights (item 2 of theme review)",
+    "createdAt": "2026-08-11T00:05:22.223Z"
+  },
+  {
+    "principle": "In TUI/Ink tests, never use fixed-tick or setTimeout barriers before reading the render output — they race against rendering and flake in CI. Poll for the expected content instead (e.g. a waitUntilFrame(f => f.includes('...')) helper with a short poll interval and a timeout).",
+    "source": "Promoted from racy TUI test barrier insights (item 3 of theme review)",
+    "createdAt": "2026-08-11T00:06:25.709Z"
+  },
+  {
+    "principle": "Plugin tools that do read-modify-write on shared state (e.g. a JSON file) must defend against concurrent tool calls — the conversation service runs all tool calls in a turn in parallel via Promise.all. Serialize with an in-process per-key mutex AND use tmp+rename atomic writes, since .drone-agent files aren't always checked into VCS and there's no external safety net.",
+    "source": "Promoted from parallel tool-execution race insight (item 4 of theme review)",
+    "createdAt": "2026-08-11T00:08:08.008Z"
+  },
+  {
+    "principle": "After editing drone-core (or any dependency package) types, run `pnpm -r run build` before relying on LSP/typecheck in dependent packages — they resolve the dependency from its built dist/ (package.json \"types\": \"./dist/index.d.ts\"), not from source, so you'll otherwise chase stale diagnostics.",
+    "source": "Promoted from build/package-resolution insight (item 6 of theme review)",
+    "createdAt": "2026-08-11T00:12:10.002Z"
   }
 ]
