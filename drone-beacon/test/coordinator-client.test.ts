@@ -138,7 +138,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       const client = createCoordinatorClient(
         {
@@ -183,7 +183,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       setupMockHttpResponse(201, { status: 'approved' });
 
@@ -247,7 +247,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       const response = makeMockResponse(403, { error: 'Forbidden' });
       mockRequest.mockImplementation(
@@ -285,7 +285,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       const response = makeMockResponse(404, { error: 'Not found' });
       mockRequest.mockImplementation(
@@ -320,7 +320,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       setupMockHttpResponse(200, { status: 'approved' });
 
@@ -348,7 +348,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       setupMockHttpResponse(200, [
         {
@@ -387,7 +387,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       setupMockHttpResponse(200, [
         {
@@ -427,7 +427,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       setupMockHttpResponse(200, { messageId: 'msg-1' });
 
@@ -458,7 +458,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       const response = makeMockResponse(404, { error: 'Agent not found' });
       mockRequest.mockImplementation(
@@ -499,7 +499,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       setupMockHttpResponse(200, {});
 
@@ -538,7 +538,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       setupMockHttpResponse(200, [
         {
@@ -576,7 +576,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       // Simulate a request error by emitting 'error' on the req
       mockRequest.mockImplementation(
@@ -613,7 +613,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       setupMockHttpResponse(200, [
         {
@@ -653,7 +653,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       setupMockHttpResponse(201, {});
 
@@ -681,7 +681,7 @@ describe('Coordinator Client', () => {
         await import('../../drone-swarm-common/src/tls.js');
 
       const identity = loadOrCreateIdentity('test-beacon', configDir);
-      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
       setupMockHttpResponse(201, {});
 
