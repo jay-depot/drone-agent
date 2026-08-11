@@ -1,6 +1,8 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { setupDb, teardownDb } from '../setup.js';
 import { buildTestApp } from '../app-helper.js';
+import { setCoordinatorFingerprint } from '../../src/routes/health.js';
+import { generateVerificationCode } from 'drone-swarm-common';
 import type { FastifyInstance } from 'fastify';
 
 let app: FastifyInstance;
@@ -41,6 +43,33 @@ describe('Beacon Routes', () => {
     expect(res.statusCode).toBe(201);
     const body = JSON.parse(res.body);
     expect(body.status).toBe('approved');
+  });
+
+  it('computes the verification code with the coordinator fingerprint', async () => {
+    const coordinatorFp =
+      '112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
+    setCoordinatorFingerprint(coordinatorFp);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: {
+        id: 'b-fp',
+        name: 'B-FP',
+        host: 'localhost',
+        port: 3457,
+        publicKey: 'key-fp',
+        tlsFingerprint:
+          'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = JSON.parse(res.body);
+    const expected = generateVerificationCode(
+      'key-fp',
+      'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899',
+      coordinatorFp
+    );
+    expect(body.verificationCode).toBe(expected);
   });
 
   it('POST /beacons with publicKey mismatch returns 403', async () => {

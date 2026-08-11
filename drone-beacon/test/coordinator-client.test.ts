@@ -204,6 +204,41 @@ describe('Coordinator Client', () => {
       expect(result.status).toBe('approved');
     });
 
+    it('computes the verification code with the observed coordinator fingerprint', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+      const { generateVerificationCode } = await import('drone-swarm-common');
+
+      const identity = loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = loadOrCreateTlsIdentity(configDir);
+
+      setupMockHttpResponse(201, { status: 'approved' });
+
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+
+      const result = await client.registerBeacon(
+        identity,
+        tlsIdentity.fingerprint
+      );
+      const expected = generateVerificationCode(
+        identity.publicKey,
+        tlsIdentity.fingerprint,
+        TEST_FP
+      );
+      expect(result.verificationCode).toBe(expected);
+    });
+
     it('should throw on non-ok response', async () => {
       const { createCoordinatorClient } =
         await import('../src/coordinator-client.js');

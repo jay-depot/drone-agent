@@ -3,7 +3,10 @@ import http from 'http';
 import type { PeerCertificate } from 'tls';
 import { generateVerificationCode } from 'drone-swarm-common';
 import { logger } from './logger.js';
-import { isSwarmReady } from './coordinator-trust.js';
+import {
+  isSwarmReady,
+  getObservedCoordinatorFingerprint,
+} from './coordinator-trust.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
@@ -308,7 +311,8 @@ export function createCoordinatorClient(
       // coordinator uses. Both sides should produce the same code.
       const verificationCode = generateVerificationCode(
         identity.publicKey,
-        tlsFingerprint
+        tlsFingerprint,
+        getObservedCoordinatorFingerprint() ?? ''
       );
 
       return {

@@ -111,6 +111,15 @@ export function getPendingCoordinatorFingerprint(): string | undefined {
 }
 
 /**
+ * The coordinator TLS fingerprint observed during the most recent
+ * connection — the trusted value if confirmed, otherwise the pending value.
+ * Used to compute the bidirectional verification code.
+ */
+export function getObservedCoordinatorFingerprint(): string | undefined {
+  return trustedFingerprint ?? pendingFingerprint;
+}
+
+/**
  * Record that the coordinator has approved this beacon. Swarm sync is gated
  * on both this and the fingerprint being confirmed.
  */

@@ -10,6 +10,7 @@ import {
   isCoordinatorTrusted,
   getTrustedCoordinatorFingerprint,
   getPendingCoordinatorFingerprint,
+  getObservedCoordinatorFingerprint,
   setBeaconApproved,
   isBeaconApproved,
   isSwarmReady,
@@ -103,6 +104,16 @@ describe('Coordinator Trust', () => {
     initCoordinatorTrust(configDir);
     expect(isCoordinatorTrusted()).toBe(false);
     expect(getPendingCoordinatorFingerprint()).toBe(FP);
+  });
+
+  it('returns the observed fingerprint (trusted when confirmed, else pending)', () => {
+    // Pending only
+    setPendingCoordinatorFingerprint(FP);
+    expect(getObservedCoordinatorFingerprint()).toBe(FP);
+
+    // After confirmation, returns the trusted value
+    confirmCoordinatorFingerprint(FP);
+    expect(getObservedCoordinatorFingerprint()).toBe(FP);
   });
 
   it('gates swarm readiness on both fingerprint confirmation and beacon approval', () => {

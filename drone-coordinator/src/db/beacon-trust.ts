@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { getDatabase } from './init.js';
 import { generateVerificationCode } from 'drone-swarm-common';
 import { logger } from '../logger.js';
+import { getCoordinatorFingerprint } from '../routes/health.js';
 import type {
   BeaconTrust,
   BeaconTrustStatus,
@@ -68,7 +69,8 @@ export function registerBeaconTrust(
   // Auto-approve local beacons
   const verificationCode = generateVerificationCode(
     req.publicKey,
-    req.tlsFingerprint ?? ''
+    req.tlsFingerprint ?? '',
+    getCoordinatorFingerprint() ?? ''
   );
   const status: BeaconTrustStatus = isLocal ? 'approved' : 'pending';
   const approvalToken = isLocal ? null : generateApprovalToken();

@@ -10,6 +10,14 @@ export function setCoordinatorFingerprint(fp: string | undefined): void {
   coordinatorFingerprint = fp;
 }
 
+/**
+ * The coordinator's TLS certificate fingerprint, or undefined if HTTPS is
+ * not enabled. Used to compute the bidirectional verification code.
+ */
+export function getCoordinatorFingerprint(): string | undefined {
+  return coordinatorFingerprint;
+}
+
 export default function healthRoutes(app: FastifyInstance) {
   app.get('/health', async () => {
     return {
