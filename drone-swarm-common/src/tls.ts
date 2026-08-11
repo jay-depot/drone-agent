@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -36,25 +36,35 @@ function generateTlsCertificateWithOpenssl(
   const tempDir = configDir;
 
   try {
-    // Use -subj with just CN (no O= to avoid + being interpreted as RDN separator)
-    execSync(
-      `openssl req -x509 -newkey rsa:2048 -keyout "${tempDir}/temp-key.pem" -out "${tempDir}/temp-cert.pem" -days 365 -nodes -subj "/CN=${commonName}" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>/dev/null`,
+    // Use -subj with just CN (no O= to avoid + being interpreted as RDN separator).
+    // execFileSync with an explicit argv array avoids shell injection from commonName/tempDir.
+    execFileSync(
+      'openssl',
+      [
+        'req', '-x509', '-newkey', 'rsa:2048',
+        '-keyout', path.join(tempDir, 'temp-key.pem'),
+        '-out', path.join(tempDir, 'temp-cert.pem'),
+        '-days', '365',
+        '-nodes',
+        '-subj', `/CN=${commonName}`,
+        '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1',
+      ],
       { stdio: 'pipe' }
     );
 
-    const certPem = fs.readFileSync(`${tempDir}/temp-cert.pem`, 'utf-8');
-    const keyPem = fs.readFileSync(`${tempDir}/temp-key.pem`, 'utf-8');
+    const certPem = fs.readFileSync(path.join(tempDir, 'temp-cert.pem'), 'utf-8');
+    const keyPem = fs.readFileSync(path.join(tempDir, 'temp-key.pem'), 'utf-8');
 
-    fs.unlinkSync(`${tempDir}/temp-cert.pem`);
-    fs.unlinkSync(`${tempDir}/temp-key.pem`);
+    fs.unlinkSync(path.join(tempDir, 'temp-cert.pem'));
+    fs.unlinkSync(path.join(tempDir, 'temp-key.pem'));
 
     return { certPem, keyPem };
   } catch (err) {
     try {
-      if (fs.existsSync(`${tempDir}/temp-cert.pem`))
-        fs.unlinkSync(`${tempDir}/temp-cert.pem`);
-      if (fs.existsSync(`${tempDir}/temp-key.pem`))
-        fs.unlinkSync(`${tempDir}/temp-key.pem`);
+      if (fs.existsSync(path.join(tempDir, 'temp-cert.pem')))
+        fs.unlinkSync(path.join(tempDir, 'temp-cert.pem'));
+      if (fs.existsSync(path.join(tempDir, 'temp-key.pem')))
+        fs.unlinkSync(path.join(tempDir, 'temp-key.pem'));
     } catch {
       // Cleanup is best-effort — ignore failures
     }
