@@ -7,7 +7,7 @@ function buildBeaconUrl(
   pathname: string,
   searchParams?: Record<string, string | undefined>
 ) {
-  const url = new URL('http://127.0.0.1');
+  const url = new URL('http://beacon.invalid');
   url.hostname = beacon.host;
   url.port = String(beacon.port);
   url.pathname = pathname;
