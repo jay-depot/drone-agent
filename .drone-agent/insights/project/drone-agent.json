@@ -22,5 +22,13 @@
   {
     "timestamp": "2026-08-10T23:32:29.257Z",
     "insight": "The project wiki (Obsidian vault at /home/unleet/Obsidian/drone-agent-project) is a separate git repo from the codebase. When ingesting work into the wiki: (1) diff from meta.json's last_commit to HEAD to find new commits; (2) bug fixes with a design choice go in decisions/ as ADRs (per meta/decision-bug-fixes-go-in-decisions.md), not concepts/; (3) update the affected concept/module pages, index.md, log.md, and advance meta.json; (4) commit the wiki repo separately. The .obsidian/workspace.json UI-state churn is tracked and committed alongside wiki content. Completed plans are deleted from project memory and that deletion is committed in the codebase repo."
+  },
+  {
+    "timestamp": "2026-08-11T05:15:12.493Z",
+    "insight": "When threading a new optional parameter through a shared execution interface (e.g. DroneToolDefinition.execute gaining a `context` param), the parameter must be propagated through EVERY layer: the core type, the engine interface, the engine implementation, the conversation service's executeToolSafely wrapper, AND the DroneSlashCommandContext type. Missing any one layer causes a typecheck/build failure that's only caught when running `pnpm run typecheck` (root) — the `pnpm -r run typecheck` per-package check alone won't catch test-file type errors. Always run the ROOT `pnpm run typecheck` (which includes tsconfig.test.json) in addition to the per-package recursive check."
+  },
+  {
+    "timestamp": "2026-08-11T05:15:15.638Z",
+    "insight": "The file__apply_diff tool matched the wrong `continue;` statement when applying a diff near the end of the conversation-service tool-call block. The hunk context `\\n          continue;\\n        }` was too generic and matched an earlier occurrence. The fix: include MORE distinctive surrounding context (like the `[Image from ${result.name} tool]` block) in the diff hunk, or use file__read + file__write for surgical edits near ambiguous control-flow keywords."
   }
 ]

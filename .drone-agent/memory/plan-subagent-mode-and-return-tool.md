@@ -5,8 +5,9 @@ tags:
   - subagent
   - bugfix
   - review-state
+  - completed
 created: 2026-08-11T05:00:11.372Z
-updated: 2026-08-11T05:00:11.372Z
+updated: 2026-08-11T05:14:47.003Z
 ---
 
 # Plan: Fix Subagent Mode Activation + Return Tool (review-state items #1 + #2)
@@ -81,7 +82,6 @@ executeTool: (
 ```
 
 Implementation (line ~848):
-
 ```ts
 executeTool: async (canonicalName, input, onProgress, context) => {
   const tool = toolRegistry.get(canonicalName);
@@ -251,14 +251,14 @@ Also update the JSDoc comments on lines 80 and 198 to reference `subagent__retur
 
 Sweep all files referencing `subagent.return` and update to `subagent__return`:
 
-| File                                         | Line(s)  | Change                                                    |
-| -------------------------------------------- | -------- | --------------------------------------------------------- |
-| `drone-agent/src/output-handlers.ts`         | 83       | JSDoc comment: `subagent.return` → `subagent__return`     |
+| File | Line(s) | Change |
+|---|---|---|
+| `drone-agent/src/output-handlers.ts` | 83 | JSDoc comment: `subagent.return` → `subagent__return` |
 | `drone-agent/test/subagent/dispatch.test.ts` | 106, 118 | Test descriptions: `subagent.return` → `subagent__return` |
-| `drone-agent/test/subagent/dispatch.test.ts` | 309      | Task string: `subagent.return` → `subagent__return`       |
-| `drone-agent/test/fixtures/subagent.ts`      | 436      | Task string: `subagent.return` → `subagent__return`       |
-| `vitest.config.ts`                           | 48       | Skip comment: `subagent.return` → `subagent__return`      |
-| `vitest.integration.config.ts`               | 23       | Skip comment: `subagent.return` → `subagent__return`      |
+| `drone-agent/test/subagent/dispatch.test.ts` | 309 | Task string: `subagent.return` → `subagent__return` |
+| `drone-agent/test/fixtures/subagent.ts` | 436 | Task string: `subagent.return` → `subagent__return` |
+| `vitest.config.ts` | 48 | Skip comment: `subagent.return` → `subagent__return` |
+| `vitest.integration.config.ts` | 23 | Skip comment: `subagent.return` → `subagent__return` |
 
 ### Step 8: Update test mocks for new `executeTool` signature
 
@@ -300,17 +300,39 @@ Check all validation criteria (below) are met.
 
 ## Validation Criteria
 
-- [ ] `pnpm -r run build` passes with zero errors
-- [ ] `pnpm -r run lint` passes with zero errors
-- [ ] `pnpm -r run typecheck` passes with zero errors
-- [ ] `pnpm -r run test` (fast suite) passes with zero errors
-- [ ] LSP diagnostics show no new errors
-- [ ] The `_runtime` capability is set BEFORE the plugin registration loop in `initialize()`
-- [ ] The return tool is registered with `name: 'return'` (no dot, no doubled prefix)
-- [ ] The canonical name `subagent__return` is used consistently in all references
-- [ ] `process.exit(0)` is removed from the return tool's `execute` — replaced with `context.stopLoop()`
-- [ ] The conversation service breaks the tool-call loop when `stopLoop()` is called
-- [ ] `hasExplicitReturn` checks `toolCallBatch` events (not `toolCall`) and compares against `'subagent__return'`
-- [ ] The prompt fragment text references `subagent__return` (not `subagent.return`)
-- [ ] All test mocks updated for the new `executeTool` signature
-- [ ] New tests cover: \_runtime ordering, tool naming, stopLoop behavior, hasExplicitReturn
+- [x] `pnpm -r run build` passes with zero errors
+- [x] `pnpm -r run lint` passes with zero errors
+- [x] `pnpm -r run typecheck` passes with zero errors
+- [x] `pnpm -r run test` (fast suite) passes with zero errors
+- [x] LSP diagnostics show no new errors
+- [x] The `_runtime` capability is set BEFORE the plugin registration loop in `initialize()`
+- [x] The return tool is registered with `name: 'return'` (no dot, no doubled prefix)
+- [x] The canonical name `subagent__return` is used consistently in all references
+- [x] `process.exit(0)` is removed from the return tool's `execute` — replaced with `context.stopLoop()`
+- [x] The conversation service breaks the tool-call loop when `stopLoop()` is called
+- [x] `hasExplicitReturn` checks `toolCallBatch` events (not `toolCall`) and compares against `'subagent__return'`
+- [x] The prompt fragment text references `subagent__return` (not `subagent.return`)
+- [x] All test mocks updated for the new `executeTool` signature
+- [x] New tests cover: _runtime ordering, tool naming, stopLoop behavior, hasExplicitReturn
+
+## Implementation Summary (2026-08-11)
+
+All 11 steps completed and validated. Committed as `4f3e45b` on branch `fix/subagent-mode-and-return-tool`.
+
+**What changed:**
+- Added `DroneToolExecutionContext` type to drone-core (plugin-system.ts, index.ts)
+- Threaded `context?: DroneToolExecutionContext` through `DronePluginEngine.executeTool`, `DroneSlashCommandContext.engine.executeTool`, and conversation service's `executeToolSafely`
+- Added `shouldStopLoop` flag to conversation service's `sendUserMessage` loop; breaks the loop when any tool calls `context.stopLoop()`
+- Moved `capabilities.set('_runtime', ...)` before the plugin registration loop in `initialize()`
+- Renamed return tool `'subagent.return'` → `'return'` (canonical `subagent__return`); replaced `process.exit(0)` with `context?.stopLoop?.()`
+- Fixed `hasExplicitReturn` in `interactive.ts` to check `toolCallBatch` events against `'subagent__return'`
+- Updated all `subagent.return` references to `subagent__return` across 6 files
+- Added tests: `_runtime` ordering, subagent plugin tool naming + stopLoop, conversation service stopLoop break, and toolCallBatch canonical name emission
+
+**Files changed (17):**
+- drone-core/src/plugin-system.ts, drone-core/src/index.ts
+- drone-agent/src/runtime/plugin-engine.ts, drone-agent/src/runtime/conversation-service.ts
+- drone-agent/src/plugins/subagent/plugin.ts, drone-agent/src/interactive.ts, drone-agent/src/output-handlers.ts
+- drone-agent/test/subagent-plugin.test.ts (new), drone-agent/test/plugin-engine.test.ts, drone-agent/test/conversation-service.test.ts, drone-agent/test/helpers.ts, drone-agent/test/subagent/dispatch.test.ts, drone-agent/test/fixtures/subagent.ts
+- vitest.config.ts, vitest.integration.config.ts
+- .drone-agent/memory/review-state.md (prettier formatting only)
