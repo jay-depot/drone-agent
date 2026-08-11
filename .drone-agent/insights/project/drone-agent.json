@@ -34,5 +34,13 @@
   {
     "timestamp": "2026-08-11T15:41:58.974Z",
     "insight": "When an \"estimate\" function and an \"actual execution\" function must agree on the same semantics (e.g. evaluateSafetyTrim's drop-count estimate vs dropOldestNonSummaryTurns' actual drop), extract the shared logic into ONE pure helper used by both, rather than duplicating the rule in each. This is the review-state #8 fix: the estimate sliced turns from the front including summary turns while the actual drop stopped at the first summary turn, so the estimate overcounted droppable turns and the ensureSafeBudget while(true) loop could fail to converge and hard-fail with \"no turns could be dropped\". Extracting getDroppableTurnPrefix into turn-utils.ts and using it in both places guarantees they can never diverge again. General lesson: any time two code paths must stay in lockstep on a rule, a single shared pure function is the durable fix — not just patching one side to match the other."
+  },
+  {
+    "timestamp": "2026-08-11T17:52:51.207Z",
+    "insight": "When adding a trust gate to a shared client (e.g. gating coordinator-client sync methods behind a \"swarm ready\" flag), existing unit tests that exercise those methods will silently short-circuit and fail with \"spy not called\" unless the test setup establishes the trusted state. Sweep the test file's beforeEach and set up the gate state (e.g. confirm fingerprint + set beacon approved) so the gated methods actually run. This is the gap-1 TOFU fix: gating fetchPersonas/fetchSkills/pushEvents etc. broke 8 coordinator-client tests until the beforeEach was updated to mark the swarm ready."
+  },
+  {
+    "timestamp": "2026-08-11T17:52:54.614Z",
+    "insight": "When editing a single-line template literal that contains the CLI --help text (e.g. drone-coordinator/src/index.ts and drone-beacon/src/index.ts), inserting a new line via apply_diff can land the added text OUTSIDE the template literal (as a stray statement before console.log) rather than inside it. After any help-text edit, re-read the file to confirm the new line is actually inside the backtick string, and prefer replacing the whole template literal line in one hunk rather than inserting a separate line."
   }
 ]
