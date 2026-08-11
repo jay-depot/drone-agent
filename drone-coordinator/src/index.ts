@@ -442,7 +442,7 @@ export async function main() {
 
   let tlsOptions: { cert: Buffer; key: Buffer } | undefined;
   if (config.useHttps) {
-    const tlsIdentity = loadOrCreateTlsIdentity(
+    const tlsIdentity = await loadOrCreateTlsIdentity(
       config.configDir,
       'coordinator'
     );
