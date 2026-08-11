@@ -13,6 +13,7 @@ import type {
   DroneLogger,
   DroneSessionSafetyTrimPayload,
   DroneToolDescriptor,
+  DroneToolExecutionContext,
 } from 'drone-core';
 import { isRecord } from '../shared/type-guards.js';
 import type { DronePluginEngine } from './plugin-engine.js';
@@ -269,7 +270,8 @@ export function createConversationService({
   async function executeToolSafely(
     canonicalName: string,
     input: Record<string, unknown>,
-    onProgress?: (chunk: string) => void
+    onProgress?: (chunk: string) => void,
+    context?: DroneToolExecutionContext
   ): Promise<
     | { kind: 'ok'; content: string }
     | { kind: 'error'; content: string; code: string | null }
@@ -278,7 +280,8 @@ export function createConversationService({
       const content = await engine.executeTool(
         canonicalName,
         input,
-        onProgress
+        onProgress,
+        context
       );
       return { kind: 'ok', content };
     } catch (err) {
@@ -315,6 +318,7 @@ export function createConversationService({
       let iterationCount = 0;
       let lastBudgetKey: string | undefined;
       let stuckCount = 0;
+      let shouldStopLoop = false;
 
       const emit = (event: DroneConversationEvent): void => {
         if (onEvent) {
@@ -427,6 +431,11 @@ export function createConversationService({
                     name: toolCall.name,
                     content: chunk,
                   });
+                },
+                {
+                  stopLoop: () => {
+                    shouldStopLoop = true;
+                  },
                 }
               ).then(toolResult => ({
                 name: toolCall.name,
@@ -592,6 +601,12 @@ export function createConversationService({
                 );
               }
             }
+          }
+
+          // If a tool signaled the loop to stop (e.g. subagent__return),
+          // exit the conversation loop now instead of continuing to the LLM.
+          if (shouldStopLoop) {
+            return response.message ?? '';
           }
 
           continue;

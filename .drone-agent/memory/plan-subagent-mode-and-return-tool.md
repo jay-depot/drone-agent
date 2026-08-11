@@ -81,6 +81,7 @@ executeTool: (
 ```
 
 Implementation (line ~848):
+
 ```ts
 executeTool: async (canonicalName, input, onProgress, context) => {
   const tool = toolRegistry.get(canonicalName);
@@ -227,7 +228,9 @@ ctx.registerPromptFragment({
 Update the check to use the canonical name AND look inside `toolCallBatch` events:
 
 ```ts
-const conversationHandler: ConversationEventHandler = (event: ConversationEvent) => {
+const conversationHandler: ConversationEventHandler = (
+  event: ConversationEvent
+) => {
   // Track if an explicit return event was emitted
   if (event.kind === 'toolCallBatch') {
     for (const tc of event.toolCalls) {
@@ -248,14 +251,14 @@ Also update the JSDoc comments on lines 80 and 198 to reference `subagent__retur
 
 Sweep all files referencing `subagent.return` and update to `subagent__return`:
 
-| File | Line(s) | Change |
-|---|---|---|
-| `drone-agent/src/output-handlers.ts` | 83 | JSDoc comment: `subagent.return` → `subagent__return` |
+| File                                         | Line(s)  | Change                                                    |
+| -------------------------------------------- | -------- | --------------------------------------------------------- |
+| `drone-agent/src/output-handlers.ts`         | 83       | JSDoc comment: `subagent.return` → `subagent__return`     |
 | `drone-agent/test/subagent/dispatch.test.ts` | 106, 118 | Test descriptions: `subagent.return` → `subagent__return` |
-| `drone-agent/test/subagent/dispatch.test.ts` | 309 | Task string: `subagent.return` → `subagent__return` |
-| `drone-agent/test/fixtures/subagent.ts` | 436 | Task string: `subagent.return` → `subagent__return` |
-| `vitest.config.ts` | 48 | Skip comment: `subagent.return` → `subagent__return` |
-| `vitest.integration.config.ts` | 23 | Skip comment: `subagent.return` → `subagent__return` |
+| `drone-agent/test/subagent/dispatch.test.ts` | 309      | Task string: `subagent.return` → `subagent__return`       |
+| `drone-agent/test/fixtures/subagent.ts`      | 436      | Task string: `subagent.return` → `subagent__return`       |
+| `vitest.config.ts`                           | 48       | Skip comment: `subagent.return` → `subagent__return`      |
+| `vitest.integration.config.ts`               | 23       | Skip comment: `subagent.return` → `subagent__return`      |
 
 ### Step 8: Update test mocks for new `executeTool` signature
 
@@ -310,4 +313,4 @@ Check all validation criteria (below) are met.
 - [ ] `hasExplicitReturn` checks `toolCallBatch` events (not `toolCall`) and compares against `'subagent__return'`
 - [ ] The prompt fragment text references `subagent__return` (not `subagent.return`)
 - [ ] All test mocks updated for the new `executeTool` signature
-- [ ] New tests cover: _runtime ordering, tool naming, stopLoop behavior, hasExplicitReturn
+- [ ] New tests cover: \_runtime ordering, tool naming, stopLoop behavior, hasExplicitReturn

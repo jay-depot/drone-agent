@@ -238,7 +238,9 @@ export type MockEngineOptions = {
   tools: DroneToolDescriptor[];
   executeToolImpl: (
     name: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    onProgress?: (chunk: string) => void,
+    context?: import('drone-core').DroneToolExecutionContext
   ) => Promise<string>;
   promptFragments?: string[];
   /** Optional custom getCapability override. Defaults to returning {} for 'llm'. */

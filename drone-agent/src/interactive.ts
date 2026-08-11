@@ -77,7 +77,7 @@ export async function readNdjsonInput(): Promise<unknown[]> {
  * executes the task, and outputs NDJSON events.
  *
  * IMPORTANT: This function ensures a 'return' event is always emitted.
- * If the LLM completes without calling subagent.return, an implicit
+ * If the LLM completes without calling subagent__return, an implicit
  * return event is sent with the final assistant message as the result.
  */
 export async function runJsonMode(
@@ -117,8 +117,12 @@ export async function runJsonMode(
     event: ConversationEvent
   ) => {
     // Track if an explicit return event was emitted
-    if (event.kind === 'toolCall' && event.name === 'subagent.return') {
-      hasExplicitReturn = true;
+    if (event.kind === 'toolCallBatch') {
+      for (const tc of event.toolCalls) {
+        if (tc.name === 'subagent__return') {
+          hasExplicitReturn = true;
+        }
+      }
     }
     // Convert ConversationEvent to OutputEvent format
     switch (event.kind) {
@@ -195,7 +199,7 @@ export async function runJsonMode(
 
   // CRITICAL FIX: If no explicit return event was emitted, send an implicit one.
   // This ensures the parent always receives a result, even if the LLM
-  // didn't call the subagent.return tool.
+  // didn't call the subagent__return tool.
   if (!hasExplicitReturn) {
     ndjsonHandler({
       kind: 'return',

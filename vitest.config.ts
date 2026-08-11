@@ -45,7 +45,7 @@ export default defineConfig({
     ],
     // Exclude integration tests that require external services:
     // - Docker: e2e-swarm, coordinator-sync, spawn, inter-agent, agent-beacon
-    // - LLM: subagent/dispatch (requires LLM to follow subagent.return instruction)
+    // - LLM: subagent/dispatch (requires LLM to follow subagent__return instruction)
     exclude: [
       '**/e2e-swarm.test.ts',
       '**/coordinator-sync.test.ts',

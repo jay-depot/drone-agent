@@ -433,7 +433,7 @@ export async function launchErrorSubagent(
       break;
     case 'no-return':
       // Task that completes but doesn't use the return tool
-      task = 'Say "hello" directly without using subagent.return';
+      task = 'Say "hello" directly without using subagent__return';
       break;
     default:
       task = options.task ?? 'Fail with unknown error';

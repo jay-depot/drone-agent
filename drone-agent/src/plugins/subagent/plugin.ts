@@ -46,7 +46,7 @@ export const subagentPlugin: DronePlugin = {
       // === SUBAGENT MODE ===
       // Register the return tool and the instruction prompt
       ctx.registerTool({
-        name: 'subagent.return',
+        name: 'return',
         description: 'Return the result to the parent agent',
         inputSchema: {
           type: 'object',
@@ -57,8 +57,8 @@ export const subagentPlugin: DronePlugin = {
           required: ['result'],
           additionalProperties: false,
         },
-        execute: async input => {
-          // Output proper NDJSON return event and exit
+        execute: async (input, _onProgress, context) => {
+          // Write the NDJSON return event, then signal the loop to stop
           const returnEvent: OutputEvent = {
             kind: 'return',
             subagentId: runtime.subagentId,
@@ -66,7 +66,8 @@ export const subagentPlugin: DronePlugin = {
             error: input.error as string | undefined,
           };
           writeNdjsonEvent(returnEvent);
-          process.exit(0);
+          context?.stopLoop?.();
+          return JSON.stringify({ returned: true, result: input.result });
         },
       });
 
@@ -75,7 +76,7 @@ export const subagentPlugin: DronePlugin = {
         key: 'subagent-return-instruction',
         phase: 'header',
         render: async () =>
-          `# Subagent Instructions\n\nYou are a subagent. When you have completed your task, you MUST call the subagent.return tool with the result. Do NOT output the result as a message — use the tool to return it.`,
+          `# Subagent Instructions\n\nYou are a subagent. When you have completed your task, you MUST call the subagent__return tool with the result. Do NOT output the result as a message — use the tool to return it.`,
       });
 
       ctx.logger.info(`subagent mode: ${runtime.subagentId}`);

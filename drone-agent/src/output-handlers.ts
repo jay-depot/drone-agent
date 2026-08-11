@@ -80,7 +80,7 @@ export function makePlainOutputEventHandler() {
 
 /**
  * Write an NDJSON event directly to stdout (for use outside of
- * conversation.sendUserMessage, e.g., subagent.return).
+ * conversation.sendUserMessage, e.g., subagent__return).
  */
 export function writeNdjsonEvent(event: OutputEvent): void {
   output.write(JSON.stringify(event) + '\n');
