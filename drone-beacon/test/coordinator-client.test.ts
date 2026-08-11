@@ -59,6 +59,51 @@ describe('Coordinator Client', () => {
     });
   });
 
+  describe('buildCheckServerIdentity', () => {
+    it('accepts any cert and calls onFirstFingerprint when no expected fingerprint', async () => {
+      const { buildCheckServerIdentity } =
+        await import('../src/coordinator-client.js');
+      const seen: string[] = [];
+      const check = buildCheckServerIdentity(undefined, (fp) => seen.push(fp));
+      const fakeCert = {
+        fingerprint256: 'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99',
+      } as any;
+      const result = check('localhost', fakeCert);
+      expect(result).toBeUndefined();
+      expect(seen).toEqual(['aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899']);
+    });
+
+    it('accepts cert matching expected fingerprint', async () => {
+      const { buildCheckServerIdentity } =
+        await import('../src/coordinator-client.js');
+      const expected = 'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
+      const check = buildCheckServerIdentity(expected);
+      const fakeCert = {
+        fingerprint256: 'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99',
+      } as any;
+      expect(check('localhost', fakeCert)).toBeUndefined();
+    });
+
+    it('rejects cert not matching expected fingerprint', async () => {
+      const { buildCheckServerIdentity } =
+        await import('../src/coordinator-client.js');
+      const expected = 'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
+      const check = buildCheckServerIdentity(expected);
+      const fakeCert = { fingerprint256: 'FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE' } as any;
+      const err = check('localhost', fakeCert);
+      expect(err).toBeInstanceOf(Error);
+      expect(err?.message).toMatch(/fingerprint mismatch/);
+    });
+
+    it('returns error when cert has no fingerprint256', async () => {
+      const { buildCheckServerIdentity } =
+        await import('../src/coordinator-client.js');
+      const check = buildCheckServerIdentity(undefined);
+      const err = check('localhost', {} as any);
+      expect(err).toBeInstanceOf(Error);
+      expect(err?.message).toMatch(/no fingerprint/);
+    });
+  });
   describe('createCoordinatorClient', () => {
     it('should return a client with all required methods', async () => {
       const { createCoordinatorClient } =

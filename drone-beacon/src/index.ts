@@ -181,10 +181,31 @@ async function main() {
   // Set up coordinator client if configured
   let coordinatorClient: CoordinatorClient | undefined;
   if (config.coordinatorHost && config.coordinatorPort) {
+    const coordinatorFingerprintPath = path.join(
+      config.configDir,
+      'coordinator-tls-fingerprint.txt'
+    );
+    let coordinatorTlsFingerprint: string | undefined;
+    if (config.coordinatorUseHttps && fs.existsSync(coordinatorFingerprintPath)) {
+      coordinatorTlsFingerprint = fs
+        .readFileSync(coordinatorFingerprintPath, 'utf-8')
+        .trim();
+      logger.info(
+        `Pinned coordinator TLS fingerprint loaded: ${coordinatorTlsFingerprint}`
+      );
+    }
+
     const coordinatorClientOptions: CoordinatorClientOptions = {
       identity,
       tlsIdentity,
       useHttps: config.coordinatorUseHttps,
+      coordinatorTlsFingerprint,
+      onFirstCoordinatorFingerprint: (fp) => {
+        fs.writeFileSync(coordinatorFingerprintPath, fp, 'utf-8');
+        logger.info(
+          `Coordinator TLS fingerprint pinned (TOFU): ${fp}. Verify this matches the coordinator's reported fingerprint to confirm no MITM occurred.`
+        );
+      },
     };
 
     coordinatorClient = createCoordinatorClient(

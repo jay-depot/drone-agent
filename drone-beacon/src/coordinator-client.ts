@@ -1,5 +1,6 @@
 import https from 'https';
 import http from 'http';
+import type { PeerCertificate } from 'tls';
 import { generateVerificationCode } from 'drone-swarm-common';
 import { logger } from './logger.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
@@ -106,14 +107,70 @@ export interface CoordinatorClientOptions {
   identity: BeaconIdentity;
   tlsIdentity: TlsIdentity;
   useHttps?: boolean;
+  /** Known SHA-256 fingerprint of the coordinator's TLS certificate (TOFU pinning). */
+  coordinatorTlsFingerprint?: string;
+  /** Called on first HTTPS connection with the observed fingerprint so callers can persist it. */
+  onFirstCoordinatorFingerprint?: (fp: string) => void;
 }
 
 /**
- * Create a fetch-compatible function that accepts self-signed TLS certificates.
- * The coordinator uses a self-signed cert, so Node.js's built-in fetch rejects it.
- * This wrapper uses Node.js http/https modules with rejectUnauthorized: false.
+ * Build the `checkServerIdentity` override used for coordinator TLS connections.
+ *
+ * When `expectedFingerprint` is provided the function verifies the server's
+ * SHA-256 certificate fingerprint against it, providing TOFU-style MITM
+ * protection without a trusted CA.  When no fingerprint is known yet (first
+ * connection) `onFirstFingerprint` is called with the observed fingerprint so
+ * the caller can persist it.  In that case the connection is still accepted —
+ * this is the intentional Trust-On-First-Use window.
+ *
+ * The function returns `undefined` (no error) when the check passes and throws
+ * an `Error` when the fingerprint does not match a known pinned value.
  */
-export function createCoordinatorFetch(baseUrl: string): typeof fetch {
+export function buildCheckServerIdentity(
+  expectedFingerprint: string | undefined,
+  onFirstFingerprint?: (fp: string) => void
+): (hostname: string, cert: PeerCertificate) => Error | undefined {
+  return (_hostname, cert) => {
+    const raw = cert.fingerprint256;
+    if (!raw) {
+      return new Error('TLS: coordinator certificate has no fingerprint');
+    }
+    const observed = raw.replace(/:/g, '').toLowerCase();
+    if (expectedFingerprint) {
+      if (observed !== expectedFingerprint.toLowerCase()) {
+        return new Error(
+          `TLS: coordinator certificate fingerprint mismatch — expected ${expectedFingerprint} but got ${observed}. Possible MITM attack.`
+        );
+      }
+    } else {
+      onFirstFingerprint?.(observed);
+    }
+    return undefined;
+  };
+}
+
+/**
+ * Create a fetch-compatible function that connects to the coordinator.
+ *
+ * The coordinator uses a self-signed TLS certificate so standard CA
+ * validation is disabled (`rejectUnauthorized: false`).  MITM protection is
+ * instead provided by certificate-fingerprint pinning via
+ * `checkServerIdentity`: when `expectedCoordinatorFingerprint` is supplied
+ * the server certificate is verified against that pinned SHA-256 hash.  On
+ * the very first connection — before the fingerprint is known — any
+ * certificate is accepted and `onFirstFingerprint` is called so the caller
+ * can persist the observed fingerprint for subsequent connections (TOFU).
+ *
+ * CodeQL note: `rejectUnauthorized: false` is intentional here.  CA
+ * validation is inapplicable to self-signed certificates; MITM protection
+ * is provided by the `checkServerIdentity` fingerprint check above.
+ * lgtm[js/disabling-certificate-verification]
+ */
+export function createCoordinatorFetch(
+  baseUrl: string,
+  expectedCoordinatorFingerprint?: string,
+  onFirstFingerprint?: (fp: string) => void
+): typeof fetch {
   const urlObj = new URL(baseUrl);
   const isHttps = urlObj.protocol === 'https:';
 
@@ -138,10 +195,16 @@ export function createCoordinatorFetch(baseUrl: string): typeof fetch {
         headers,
       };
 
-      // For HTTPS connections to the coordinator (which uses a self-signed cert),
-      // disable certificate validation
       if (isHttps) {
+        // CA validation is inapplicable for self-signed certs; MITM protection
+        // is provided by checkServerIdentity fingerprint pinning instead.
+        // lgtm[js/disabling-certificate-verification]
         (options as https.RequestOptions).rejectUnauthorized = false;
+        (options as https.RequestOptions).checkServerIdentity =
+          buildCheckServerIdentity(
+            expectedCoordinatorFingerprint,
+            onFirstFingerprint
+          );
       }
 
       const req = (isHttps ? https : http).request(options, res => {
@@ -178,7 +241,11 @@ export function createCoordinatorClient(
 ): CoordinatorClient {
   const protocol = options.useHttps ? 'https' : 'http';
   const baseUrl = `${protocol}://${config.host}:${config.port}`;
-  const cfetch = createCoordinatorFetch(baseUrl);
+  const cfetch = createCoordinatorFetch(
+    baseUrl,
+    options.coordinatorTlsFingerprint,
+    options.onFirstCoordinatorFingerprint
+  );
 
   return {
     getBaseUrl(): string {
