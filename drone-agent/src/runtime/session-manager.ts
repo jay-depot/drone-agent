@@ -5,6 +5,7 @@ import type {
   DroneToolCall,
 } from 'drone-core';
 import { randomUUID } from 'node:crypto';
+import { getDroppableTurnPrefix } from './turn-utils.js';
 export type DroneSessionManager = {
   appendUserMessage: (content: string, images?: DroneImageContent[]) => void;
   appendAssistantMessage: (
@@ -119,12 +120,9 @@ export function createSessionManager(): DroneSessionManager {
         return [];
       }
 
+      const toDrop = getDroppableTurnPrefix(turns, count);
       const dropped: DroneSessionTurn[] = [];
-      while (dropped.length < count && turns.length > 0) {
-        const head = turns[0];
-        if (isSummaryTurn(head)) {
-          break;
-        }
+      for (const _ of toDrop) {
         dropped.push(turns.shift() as DroneSessionTurn);
       }
       return dropped;

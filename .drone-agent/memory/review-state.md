@@ -117,11 +117,15 @@ The `[llm:response]` debug log runs before `response` is assigned, so it always 
 
 ### 8. Safety-trim estimate vs. actual drop mismatch (potential non-convergence)
 
+**Fix Merged (2026-08-11)** — see plan `plan-review-state-8-safety-trim`.
+
 **Files:** `drone-core/src/context-budget-service.ts` + `drone-agent/src/runtime/session-manager.ts`
 
 `evaluateSafetyTrim` computes `requiredDropTurnCount` by slicing `input.turns.slice(dropCount)` — which drops **any** turns from the front, including summary turns. But `dropOldestNonSummaryTurns` in the session manager **stops at the first summary turn** and refuses to drop it. So the estimate can say "drop 3 turns" while the actual drop only removes fewer (or zero) non-summary turns. In a session where the oldest turns are summaries, this can loop without converging and eventually throw "no turns could be dropped" even though the estimate said dropping would work.
 
 **Fix:** Make `evaluateSafetyTrim` skip summary turns when computing the drop count, mirroring `dropOldestNonSummaryTurns` semantics.
+
+**Implemented:** Extracted the drop logic into a shared pure helper `getDroppableTurnPrefix` (`drone-agent/src/runtime/turn-utils.ts`) used by BOTH `dropOldestNonSummaryTurns` and `evaluateSafetyTrim`, so the estimate and the actual drop can never diverge again. `evaluateSafetyTrim` now breaks at the first summary turn and reports `requiredDropTurnCount` as the count of actually-droppable non-summary turns.
 
 ### 9. `runJsonMode` / `runJsonListenMode` emit the final assistant message twice
 
