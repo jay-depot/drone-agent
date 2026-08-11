@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, unlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -127,6 +127,7 @@ describe('Coordinator Trust', () => {
     expect(isSwarmReady()).toBe(true);
 
     // Beacon approved but fingerprint not confirmed
+    unlinkSync(path.join(configDir, 'coordinator-tls-fingerprint.txt'));
     resetCoordinatorTrust();
     initCoordinatorTrust(configDir);
     setBeaconApproved(true);
