@@ -18,6 +18,7 @@ import {
   findProjectConfigPath,
   loadConfigLayer,
 } from '../../runtime/config.js';
+import { deepSet } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -160,37 +161,6 @@ function getByPath(obj: Record<string, unknown>, keyPath: string): unknown {
   }
   return current;
 }
-
-/**
- * Set a value at a dot-notation path in a nested object, creating
- * intermediate objects as needed. Mutates the input object.
- */
-function deepSet(
-  obj: Record<string, unknown>,
-  keyPath: string,
-  value: unknown
-): void {
-  const blockedKeys = new Set(['__proto__', 'constructor', 'prototype']);
-  const parts = keyPath.split('.');
-  let current = obj;
-  for (let i = 0; i < parts.length - 1; i++) {
-    const part = parts[i];
-    if (blockedKeys.has(part)) {
-      throw new Error(`Unsafe config key path segment: "${part}"`);
-    }
-    if (typeof current[part] !== 'object' || current[part] === null) {
-      current[part] = {};
-    }
-    current = current[part] as Record<string, unknown>;
-  }
-  const finalPart = parts[parts.length - 1];
-  if (blockedKeys.has(finalPart)) {
-    throw new Error(`Unsafe config key path segment: "${finalPart}"`);
-  }
-  current[finalPart] = value;
-}
-
-export const __testing = { deepSet };
 
 /**
  * Validate that a dot-notation key path is a known config key.
