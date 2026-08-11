@@ -60,7 +60,11 @@ export async function collectWorkspaceFiles(
   const matches: string[] = [];
 
   async function visitDirectory(directoryPath: string): Promise<void> {
-    const entries = await readdir(directoryPath, { withFileTypes: true });
+    // Skip directories that are unreadable (e.g. permission-denied) instead
+    // of letting the scan throw and abort the whole conversation turn.
+    const entries = await readdir(directoryPath, { withFileTypes: true }).catch(
+      () => []
+    );
     for (const entry of entries) {
       const entryPath = path.join(directoryPath, entry.name);
       if (entry.isDirectory()) {
