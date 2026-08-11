@@ -137,7 +137,7 @@ export default function TopologyPage() {
       case 'approve':
         return {
           title: `Approve Beacon: ${dialogBeacon.name}`,
-          description: `Approve beacon "${dialogBeacon.name}" (${dialogBeacon.id})? Before approving, verify the bidirectional verification code matches the one shown on the beacon to rule out a MitM attack.`,
+          description: `Approve beacon "${dialogBeacon.name}" (${dialogBeacon.id})? Before approving, verify the bidirectional verification code below is the same one you entered on the beacon's agent with /trust-coordinator, to rule out a MitM attack.`,
         };
       case 'reject':
         return {
@@ -340,7 +340,19 @@ export default function TopologyPage() {
         }
         variant={dialogAction === 'approve' ? 'default' : 'destructive'}
         loading={dialogLoading}
-      ></Dialog>
+      >
+        {dialogAction === 'approve' && dialogBeacon && (
+          <div>
+            <span className="block text-sm font-medium mb-1">
+              Verification Code
+            </span>
+            <p className="font-mono text-base font-bold text-primary">
+              {dialogBeacon.verificationCode ||
+                'No verification code available'}
+            </p>
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }

@@ -14,7 +14,9 @@ import type { DronePluginRegistration, DroneSlashCommand } from 'drone-core';
 /**
  * Check the beacon's coordinator trust state and surface a prominent warning
  * to the user if either half of the both-sides gate is unmet, along with the
- * verification code the user should compare against the coordinator's web UI.
+ * guidance to read the verification code from the coordinator's web UI.
+ * The verification code itself is never surfaced here — it is display-only in
+ * the web UI and compare-only on the beacon side.
  */
 export async function surfacePendingCoordinatorTrust(
   baseUrl: string,
@@ -29,7 +31,6 @@ export async function surfacePendingCoordinatorTrust(
       fingerprintTrusted: boolean;
       beaconApproved: boolean;
       pendingFingerprint: string | null;
-      verificationCode: string | null;
     };
     const ready = data.fingerprintTrusted && data.beaconApproved;
     if (ready) {
@@ -47,17 +48,13 @@ export async function surfacePendingCoordinatorTrust(
     if (!data.beaconApproved) {
       lines.push(`- The coordinator has not yet approved this beacon.`);
     }
-    if (data.verificationCode) {
-      lines.push(
-        `- Verify the coordinator is the one you expect: open the coordinator web UI ` +
-          `(beacon detail page), read its verification code, then run ` +
-          `'/trust-coordinator ${data.verificationCode}' here.`
-      );
-    } else {
-      lines.push(
-        `- No verification code is available yet; the beacon may not have registered with the coordinator.`
-      );
-    }
+    lines.push(
+      `- Verify the coordinator is the one you expect: open the coordinator web UI ` +
+        `(beacon detail page), read the 4-word verification code it displays, then ` +
+        `run '/trust-coordinator <code>' here with that exact value. The beacon ` +
+        `compares your transcribed code against its own copy — it never displays ` +
+        `the code itself, so the comparison is meaningful.`
+    );
     registration.logger.warn(lines.join('\n'));
   } catch (err) {
     registration.logger.warn(

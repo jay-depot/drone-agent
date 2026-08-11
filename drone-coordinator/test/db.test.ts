@@ -358,6 +358,11 @@ describe('Beacon Trust', () => {
     expect(updated.host).toBe('10.0.0.2');
     expect(updated.port).toBe(3458);
     expect(updated.status).toBe('approved');
+    // The verification code must be recomputed and persisted on re-registration
+    // (re-registration runs on every restart, and existing rows may predate the
+    // verification_code column).
+    expect(updated.verificationCode).toBeTruthy();
+    expect(getBeaconTrust('b1')!.verificationCode).toBeTruthy();
   });
 
   it('should throw on public key mismatch', () => {

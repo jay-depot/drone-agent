@@ -56,10 +56,20 @@ export function registerBeaconTrust(
       );
     }
 
+    // Recompute the verification code from the same inputs used at first
+    // registration. Re-registration runs on every beacon/coordinator restart, so
+    // this keeps the persisted code fresh for beacons that predate the column
+    // or that re-registered before the code was persisted.
+    const verificationCode = generateVerificationCode(
+      req.publicKey,
+      req.tlsFingerprint ?? '',
+      getCoordinatorFingerprint() ?? ''
+    );
+
     // Update connection info but preserve status and public key
     const stmt = getDatabase().prepare(`
       UPDATE beacon_trust 
-      SET host = @host, port = @port, tls_fingerprint = @tlsFingerprint, updated_at = @updatedAt
+      SET host = @host, port = @port, tls_fingerprint = @tlsFingerprint, verification_code = @verificationCode, updated_at = @updatedAt
       WHERE beacon_id = @beaconId
     `);
 
@@ -68,6 +78,7 @@ export function registerBeaconTrust(
       host: req.host,
       port: req.port,
       tlsFingerprint: req.tlsFingerprint ?? null,
+      verificationCode,
       updatedAt: now,
     });
 
@@ -80,6 +91,7 @@ export function registerBeaconTrust(
       host: req.host,
       port: req.port,
       tlsFingerprint: req.tlsFingerprint ?? null,
+      verificationCode,
       updatedAt: now,
     };
   }

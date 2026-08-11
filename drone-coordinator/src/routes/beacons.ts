@@ -64,6 +64,7 @@ export default function beaconRoutes(app: FastifyInstance) {
         ...b,
         trustStatus: trust?.status ?? null,
         publicKey: trust?.publicKey ?? null,
+        verificationCode: trust?.verificationCode ?? null,
       };
     });
     return beaconsWithTrust;

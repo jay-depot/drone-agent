@@ -12,12 +12,13 @@ import type {
  * Creates a registration capture that records registered slash commands.
  */
 function createRegistrationCapture(
-  config: ReturnType<typeof createDefaultAgentConfig>
+  config: ReturnType<typeof createDefaultAgentConfig>,
+  logger: ReturnType<typeof silentLogger> = silentLogger()
 ) {
   const registeredSlashCommands: DroneSlashCommand[] = [];
 
   const registration: DronePluginRegistration = {
-    logger: silentLogger(),
+    logger,
     getConfig: () => config,
     registerTool: (_tool: DroneToolDefinition) => {},
     registerPromptFragment: () => {},
@@ -125,9 +126,20 @@ describe('swarm coordinator trust', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     const config = createDefaultAgentConfig({});
-    const { registration } = createRegistrationCapture(config);
+    const logger = silentLogger();
+    const warnSpy = vi.spyOn(logger, 'warn');
+    const { registration } = createRegistrationCapture(config, logger);
     const plugin = createSwarmPlugin({});
     await plugin.register(registration);
+
+    // The surfaced warning must reference opening the web UI but must NOT
+    // contain the beacon's verification code value or pre-fill
+    // /trust-coordinator <code> — otherwise the beacon would compare the code
+    // against itself and defeat the MITM protection.
+    const warning = warnSpy.mock.calls.map(call => String(call[0])).join('\n');
+    expect(warning).toContain('coordinator web UI');
+    expect(warning).not.toContain('acorn-badge-cabin-daisy');
+    expect(warning).not.toMatch(/\/trust-coordinator [a-z]/);
 
     // The plugin should have queried the coordinator trust endpoint
     const trustCalls = mockFetch.mock.calls.filter(

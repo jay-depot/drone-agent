@@ -112,6 +112,7 @@ describe('TopologyPage approve by beacon ID', () => {
                 connectedAt: Date.now(),
                 lastHeartbeat: Date.now(),
                 trustStatus: 'pending',
+                verificationCode: 'acorn-badge-cabin-daisy',
               },
             ])
           );
@@ -150,6 +151,11 @@ describe('TopologyPage approve by beacon ID', () => {
         within(dialog).getByText(/Approve beacon "B1"/)
       ).toBeInTheDocument();
     });
+    // The approve dialog must surface the bidirectional verification code inline
+    // so the operator can compare it against the value entered on the beacon.
+    expect(
+      within(dialog).getByText('acorn-badge-cabin-daisy')
+    ).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Approve' }));
 

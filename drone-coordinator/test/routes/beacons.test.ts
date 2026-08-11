@@ -104,12 +104,27 @@ describe('Beacon Routes', () => {
       url: '/api/beacons',
       payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
     });
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: {
+        id: 'b2',
+        name: 'B2',
+        host: '10.0.0.1',
+        port: 3457,
+        publicKey: 'key1',
+        tlsFingerprint: 'aabb',
+      },
+    });
     const res = await app.inject({ method: 'GET', url: '/api/beacons' });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(Array.isArray(body)).toBe(true);
-    expect(body.length).toBe(1);
+    expect(body.length).toBe(2);
     expect(body[0].trustStatus).toBeDefined();
+    const b2 = body.find((b: { id: string }) => b.id === 'b2');
+    expect(b2.trustStatus).toBe('pending');
+    expect(b2.verificationCode).toBeTruthy();
   });
 
   it('GET /beacons/:id returns beacon with trust info', async () => {

@@ -249,24 +249,15 @@ async function main() {
       }
 
       if (result.status === 'pending') {
-        if (result.verificationCode) {
-          logger.info(`Verification code: ${result.verificationCode}`);
-          logger.info(
-            'Compare this code with the one shown in the coordinator web UI to verify no MitM attack occurred during key exchange.'
-          );
-        }
         logger.info('Beacon pending approval.');
         logger.info(
           'Approve via the coordinator web UI (beacon detail page) or: drone-coordinator --approve-beacon <id>'
         );
 
-        // Re-output the verification code periodically until approved
+        // Remind the operator periodically until approved
         const reminder = setInterval(() => {
           logger.info(
-            `[REMINDER] Beacon still pending approval. Verification code: ${result.verificationCode}`
-          );
-          logger.info(
-            'Compare this code with the one shown in the coordinator web UI to verify no MitM attack occurred during key exchange.'
+            '[REMINDER] Beacon still pending approval. Approve via the coordinator web UI (beacon detail page) or: drone-coordinator --approve-beacon <id>'
           );
         }, 60000);
 

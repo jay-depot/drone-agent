@@ -9,6 +9,7 @@ export interface Beacon {
   lastHeartbeat: number;
   trustStatus?: 'pending' | 'approved' | 'rejected' | null;
   publicKey?: string | null;
+  verificationCode?: string | null;
 }
 
 export interface BeaconDetail extends Beacon {
