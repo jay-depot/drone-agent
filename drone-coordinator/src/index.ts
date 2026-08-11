@@ -127,7 +127,10 @@ function parseArgs(): Config {
 }
 
 async function handleShowFingerprint(config: Config) {
-  const tlsIdentity = loadOrCreateTlsIdentity(config.configDir, 'coordinator');
+  const tlsIdentity = await loadOrCreateTlsIdentity(
+    config.configDir,
+    'coordinator'
+  );
   console.log(tlsIdentity.fingerprint);
   process.exit(0);
 }
@@ -457,7 +460,7 @@ export async function main() {
 
   let tlsOptions: { cert: Buffer; key: Buffer } | undefined;
   if (config.useHttps) {
-    const tlsIdentity = loadOrCreateTlsIdentity(
+    const tlsIdentity = await loadOrCreateTlsIdentity(
       config.configDir,
       'coordinator'
     );

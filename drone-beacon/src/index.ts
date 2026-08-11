@@ -188,7 +188,7 @@ async function main() {
   setTlsLogger(logger);
 
   // Load or create TLS certificate
-  const tlsIdentity = loadOrCreateTlsIdentity(config.configDir);
+  const tlsIdentity = await loadOrCreateTlsIdentity(config.configDir);
   logger.info(`TLS certificate fingerprint: ${tlsIdentity.fingerprint}`);
 
   // Initialize spawner
