@@ -8,7 +8,7 @@ tags:
   - tls
   - swarm
 created: 2026-08-11T17:36:27.533Z
-updated: 2026-08-11T17:36:27.533Z
+updated: 2026-08-11T17:52:16.312Z
 ---
 
 # Sub-plan 1 — Gap 1: Interactive TOFU confirmation (SSH-style)
@@ -51,3 +51,32 @@ Close the unguarded first-connection window. The beacon must not trust the coord
 - drone-coordinator/src/index.ts, drone-coordinator/src/routes/health.ts
 - drone-agent/src/plugins/swarm/index.ts, context.ts
 - Tests: drone-beacon/test/coordinator-client.test.ts, drone-coordinator/test/routes/health.test.ts
+
+---
+
+## EXECUTION SUMMARY (2026-08-11)
+
+All 10 steps implemented and validated. Build, lint, and full test suite pass (1823 passed, 9 skipped).
+
+### What was built
+- **Coordinator CLI `--show-fingerprint`** (drone-coordinator/src/index.ts): new `show-fingerprint` command + `handleShowFingerprint()` that loads the TLS identity and prints the fingerprint. Added to command union, arg parsing, and --help.
+- **Coordinator API** (drone-coordinator/src/routes/health.ts): module-level `setCoordinatorFingerprint(fp)` setter; `GET /health` now returns `{status, timestamp, tlsFingerprint?}`. Wired into main() when HTTPS enabled.
+- **Beacon two-phase fingerprint state** (NEW drone-beacon/src/coordinator-trust.ts): `initCoordinatorTrust`, `setPendingCoordinatorFingerprint` (writes `.pending.txt`), `confirmCoordinatorFingerprint` (promotes pending->trusted, writes trusted file, removes pending), `isCoordinatorTrusted`, `getTrustedCoordinatorFingerprint`, `getPendingCoordinatorFingerprint`, `setBeaconApproved`, `isBeaconApproved`, `isSwarmReady`, `resetCoordinatorTrust` (test helper).
+- **Beacon holds trust until confirmed** (drone-beacon/src/coordinator-client.ts): added `coordinatorTrusted()` guard (uses `isSwarmReady()`); gated all sync/trust methods (fetchPersonas, fetchSkills, registerSession, endSession, registerAgentLocation, updateAgentLocationHeartbeat, unregisterAgentLocation, relayMessage, pushPersona, pushSkill, deletePersona, deleteSkill, pushKnowledge, pullKnowledge, searchKnowledge, registerSwarmSession, updateSwarmSessionPersona, endSwarmSession, pushEvents, pushToolDefinitions, getDefaultHiddenTools, getSessions, getSessionLog, processSession, completeSessionProcessing). registerBeacon + pollForApproval remain ungated (beacon still registers + polls).
+- **Beacon CLI `--confirm-coordinator-fingerprint <fp>`** (drone-beacon/src/index.ts): new `command` field + `confirmFingerprint`; handled in main() before server start; added to --help.
+- **Beacon confirmation endpoint** (NEW drone-beacon/src/routes/coordinator-trust.ts): `GET /coordinator/trust` (reports trusted + pendingFingerprint) and `POST /coordinator/trust` (body `{fingerprint}`, promotes pending->trusted). Registered in routes/index.ts.
+- **Beacon surfaces pending status to agents** (drone-beacon/src/routes/agents.ts): `POST /agents` response now includes `coordinatorTrust: {trusted, pendingFingerprint}`.
+- **Agent surfaces pending message + `/trust-coordinator`** (NEW drone-agent/src/plugins/swarm/tools-coordinator-trust.ts + index.ts): `surfacePendingCoordinatorTrust()` queries the beacon and logs a prominent [SECURITY] warning with the observed fingerprint + instructions; `createTrustCoordinatorCommand()` registers `/trust-coordinator <fp>` (human-only, calls POST /coordinator/trust). Wired into swarm plugin register().
+- **Both-sides gate** (coordinator-trust.ts + index.ts): `isSwarmReady()` = fingerprint confirmed AND beacon approved. `setBeaconApproved(true)` called on registerBeacon 'approved' and on pollForApproval 'approved'; false on 'rejected'.
+
+### Tests added
+- drone-beacon/test/coordinator-trust.test.ts (8 tests): pending state, confirm promote, mismatch reject, no-pending reject, disk persistence (trusted + pending), both-sides gate.
+- drone-coordinator/test/routes/health.test.ts (+2): /health returns tlsFingerprint when set, omits when not.
+- drone-beacon/test/routes.test.ts (+2): GET /coordinator/trust untrusted, POST requires fingerprint.
+- drone-agent/test/swarm-coordinator-trust.test.ts (3 tests): /trust-coordinator registered, pending warning surfaced on connect, confirm via beacon endpoint.
+- drone-beacon/test/coordinator-client.test.ts: updated beforeEach to set up swarm-ready state (fingerprint confirmed + beacon approved) so gated methods don't short-circuit.
+
+### Notes / decisions
+- Step 6 used **fingerprint-based** confirmation (agent passes the observed fingerprint). Token-based was considered but fingerprint-based is simpler and the agent only relays what the user sees; the human confirms the value matches the coordinator's reported fingerprint before running /trust-coordinator.
+- coordinator-client.ts is now 916 lines (was 826, already over the 750 guideline but under the 1000 hard limit). No split required.
+- The optional TTY prompt (design decision b) was NOT implemented — it was explicitly low priority and the CLI + agent paths cover the requirement.

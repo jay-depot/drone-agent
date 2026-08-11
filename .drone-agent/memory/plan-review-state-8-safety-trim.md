@@ -47,6 +47,7 @@ Extract drop logic into a single shared pure helper used by BOTH dropOldestNonSu
 Implemented on branch `fix/safety-trim-estimate-drop-mismatch`.
 
 ### What was done
+
 - Created `drone-agent/src/runtime/turn-utils.ts` exporting pure, non-mutating `getDroppableTurnPrefix(turns, count)` (leading non-summary prefix, stops at first summary turn).
 - `session-manager.ts` `dropOldestNonSummaryTurns` now delegates to the helper (behavior identical; existing tests pass unchanged).
 - `context-budget-service.ts` `evaluateSafetyTrim` now uses the helper: breaks when `droppable.length < dropCount` (hit a summary turn), reports `requiredDropTurnCount` as the count of actually-droppable non-summary turns, and returns `null` when all non-summary turns dropped still exceed budget. This eliminates the estimate-vs-actual divergence that caused non-convergence in `ensureSafeBudget`.
@@ -54,6 +55,7 @@ Implemented on branch `fix/safety-trim-estimate-drop-mismatch`.
 - Compaction plugin benefits automatically (no change needed).
 
 ### Verification (all passed)
+
 - `pnpm -r run typecheck` — zero errors
 - `pnpm lint` (eslint + prettier) — zero errors
 - `pnpm -r run build` — zero errors
@@ -61,4 +63,5 @@ Implemented on branch `fix/safety-trim-estimate-drop-mismatch`.
 - LSP diagnostics — zero errors/warnings on all touched files
 
 ### Validation criteria
+
 All 7 criteria satisfied. No dead code; `isSummaryTurn` still used by `getSummaryTurns`/`dropSummaryTurnById`.

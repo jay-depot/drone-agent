@@ -5,15 +5,30 @@ import path from 'node:path';
 import http from 'node:http';
 import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
+import {
+  initCoordinatorTrust,
+  setPendingCoordinatorFingerprint,
+  confirmCoordinatorFingerprint,
+  setBeaconApproved,
+  resetCoordinatorTrust,
+} from '../src/coordinator-trust.js';
+
+const TEST_FP =
+  'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
 
 describe('Coordinator Client', () => {
   let configDir: string;
   let mockRequest: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
+    resetCoordinatorTrust();
     configDir = await mkdtemp(
       path.join(os.tmpdir(), 'drone-beacon-coordinator-client-')
     );
+    initCoordinatorTrust(configDir);
+    setPendingCoordinatorFingerprint(TEST_FP);
+    confirmCoordinatorFingerprint(TEST_FP);
+    setBeaconApproved(true);
     // Mock http.request
     mockRequest = vi.fn();
     vi.spyOn(http, 'request').mockImplementation(mockRequest as any);
@@ -21,6 +36,7 @@ describe('Coordinator Client', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
+    resetCoordinatorTrust();
     await rm(configDir, { recursive: true, force: true });
   });
 
@@ -64,22 +80,27 @@ describe('Coordinator Client', () => {
       const { buildCheckServerIdentity } =
         await import('../src/coordinator-client.js');
       const seen: string[] = [];
-      const check = buildCheckServerIdentity(undefined, (fp) => seen.push(fp));
+      const check = buildCheckServerIdentity(undefined, fp => seen.push(fp));
       const fakeCert = {
-        fingerprint256: 'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99',
+        fingerprint256:
+          'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99',
       } as any;
       const result = check('localhost', fakeCert);
       expect(result).toBeUndefined();
-      expect(seen).toEqual(['aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899']);
+      expect(seen).toEqual([
+        'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899',
+      ]);
     });
 
     it('accepts cert matching expected fingerprint', async () => {
       const { buildCheckServerIdentity } =
         await import('../src/coordinator-client.js');
-      const expected = 'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
+      const expected =
+        'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
       const check = buildCheckServerIdentity(expected);
       const fakeCert = {
-        fingerprint256: 'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99',
+        fingerprint256:
+          'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99',
       } as any;
       expect(check('localhost', fakeCert)).toBeUndefined();
     });
@@ -87,9 +108,13 @@ describe('Coordinator Client', () => {
     it('rejects cert not matching expected fingerprint', async () => {
       const { buildCheckServerIdentity } =
         await import('../src/coordinator-client.js');
-      const expected = 'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
+      const expected =
+        'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
       const check = buildCheckServerIdentity(expected);
-      const fakeCert = { fingerprint256: 'FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE' } as any;
+      const fakeCert = {
+        fingerprint256:
+          'FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE',
+      } as any;
       const err = check('localhost', fakeCert);
       expect(err).toBeInstanceOf(Error);
       expect(err?.message).toMatch(/fingerprint mismatch/);

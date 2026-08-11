@@ -3,9 +3,25 @@ import http from 'http';
 import type { PeerCertificate } from 'tls';
 import { generateVerificationCode } from 'drone-swarm-common';
 import { logger } from './logger.js';
+import { isSwarmReady } from './coordinator-trust.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
+
+/**
+ * True when the coordinator's TLS fingerprint has been confirmed. Sync and
+ * trust operations are gated behind this so the beacon does not exchange
+ * swarm data with an unverified coordinator.
+ */
+function coordinatorTrusted(): boolean {
+  if (isSwarmReady()) {
+    return true;
+  }
+  logger.warn(
+    'Swarm not ready (coordinator fingerprint not confirmed and/or beacon not approved); skipping coordinator sync.'
+  );
+  return false;
+}
 
 export interface BeaconStatusResponse {
   status: 'pending' | 'approved' | 'rejected';
@@ -337,6 +353,9 @@ export function createCoordinatorClient(
     },
 
     async fetchPersonas(): Promise<Persona[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
       const res = await cfetch(`${baseUrl}/api/personas`);
       if (!res.ok) {
         throw new Error(`Failed to fetch personas: ${res.status}`);
@@ -348,6 +367,9 @@ export function createCoordinatorClient(
     },
 
     async fetchSkills(): Promise<Skill[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
       const res = await cfetch(`${baseUrl}/api/skills`);
       if (!res.ok) {
         throw new Error(`Failed to fetch skills: ${res.status}`);
@@ -363,6 +385,9 @@ export function createCoordinatorClient(
       agentId: string,
       personaId: string | null
     ): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(
           `${baseUrl}/api/beacons/${config.beaconId}/sessions`,
@@ -387,6 +412,9 @@ export function createCoordinatorClient(
     },
 
     async endSession(agentId: string, connectedAt: number): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const disconnectedAt = Date.now();
         const durationMs = disconnectedAt - connectedAt;
@@ -418,6 +446,9 @@ export function createCoordinatorClient(
       agentId: string,
       personaId?: string
     ): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/agents/location`, {
           method: 'POST',
@@ -439,6 +470,9 @@ export function createCoordinatorClient(
     },
 
     async updateAgentLocationHeartbeat(agentId: string): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(
           `${baseUrl}/api/agents/location/${agentId}/heartbeat`,
@@ -457,6 +491,9 @@ export function createCoordinatorClient(
     },
 
     async unregisterAgentLocation(agentId: string): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/agents/location/${agentId}`, {
           method: 'DELETE',
@@ -476,6 +513,9 @@ export function createCoordinatorClient(
       fromAgentId: string,
       body: string
     ): Promise<{ success: boolean; messageId?: string }> {
+      if (!coordinatorTrusted()) {
+        return { success: false };
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/messages/relay`, {
           method: 'POST',
@@ -504,6 +544,9 @@ export function createCoordinatorClient(
 
     // Knowledge push
     async pushPersona(persona: Persona): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/personas`, {
           method: 'POST',
@@ -521,6 +564,9 @@ export function createCoordinatorClient(
     },
 
     async pushSkill(skill: Skill): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/skills`, {
           method: 'POST',
@@ -538,6 +584,9 @@ export function createCoordinatorClient(
     },
 
     async deletePersona(id: string): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/personas/${id}`, {
           method: 'DELETE',
@@ -553,6 +602,9 @@ export function createCoordinatorClient(
     },
 
     async deleteSkill(id: string): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/skills/${id}`, {
           method: 'DELETE',
@@ -569,6 +621,9 @@ export function createCoordinatorClient(
 
     // Knowledge sync (global memory)
     async pushKnowledge(knowledge: Knowledge): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/sync/knowledge/push`, {
           method: 'POST',
@@ -586,6 +641,9 @@ export function createCoordinatorClient(
     },
 
     async pullKnowledge(since?: number): Promise<Knowledge[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
       try {
         let url = `${baseUrl}/api/sync/knowledge/pull`;
         if (since) {
@@ -604,6 +662,9 @@ export function createCoordinatorClient(
     },
 
     async searchKnowledge(query: string, type?: string): Promise<Knowledge[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
       try {
         let url = `${baseUrl}/api/knowledge/search?q=${encodeURIComponent(query)}`;
         if (type) {
@@ -626,6 +687,9 @@ export function createCoordinatorClient(
       sessionId: string,
       personaId: string | null
     ): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/sync/sessions/register`, {
           method: 'POST',
@@ -650,6 +714,9 @@ export function createCoordinatorClient(
       sessionId: string,
       personaId: string | null
     ): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(
           `${baseUrl}/api/sessions/${sessionId}/persona`,
@@ -668,6 +735,9 @@ export function createCoordinatorClient(
     },
 
     async endSwarmSession(sessionId: string): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/sync/sessions/${sessionId}`, {
           method: 'DELETE',
@@ -693,6 +763,9 @@ export function createCoordinatorClient(
         createdAt: number;
       }>
     ): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/sync/events/push`, {
           method: 'POST',
@@ -716,6 +789,9 @@ export function createCoordinatorClient(
         defaultHidden: boolean;
       }>
     ): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/sync/tools/push`, {
           method: 'POST',
@@ -735,6 +811,9 @@ export function createCoordinatorClient(
     },
 
     async getDefaultHiddenTools(): Promise<{ tools: string[] }> {
+      if (!coordinatorTrusted()) {
+        return { tools: [] };
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/tools/default-hidden`);
         if (!res.ok) {
@@ -751,6 +830,9 @@ export function createCoordinatorClient(
     async getSessions(
       query: Record<string, string>
     ): Promise<{ sessions: any[]; count: number }> {
+      if (!coordinatorTrusted()) {
+        return { sessions: [], count: 0 };
+      }
       try {
         const params = new URLSearchParams(query).toString();
         const res = await cfetch(`${baseUrl}/api/sessions?${params}`);
@@ -766,6 +848,9 @@ export function createCoordinatorClient(
     },
 
     async getSessionLog(sessionId: string): Promise<any> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/sessions/${sessionId}/log`);
         if (!res.ok) {
@@ -780,6 +865,9 @@ export function createCoordinatorClient(
     },
 
     async processSession(sessionId: string): Promise<any> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
       try {
         const res = await cfetch(
           `${baseUrl}/api/sessions/${sessionId}/process`,
@@ -802,6 +890,9 @@ export function createCoordinatorClient(
       sessionId: string,
       body: { summary?: string; notes?: string }
     ): Promise<any> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
       try {
         const res = await cfetch(
           `${baseUrl}/api/sessions/${sessionId}/processed`,

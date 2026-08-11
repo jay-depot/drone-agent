@@ -310,6 +310,30 @@ describe('Agent Routes', () => {
   });
 });
 
+// ── Coordinator Trust Routes ───────────────────────────────────────
+
+describe('Coordinator Trust Routes', () => {
+  it('GET /coordinator/trust reports untrusted with no pending fingerprint', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/coordinator/trust',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.trusted).toBe(false);
+    expect(body.pendingFingerprint).toBeNull();
+  });
+
+  it('POST /coordinator/trust requires a fingerprint', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/coordinator/trust',
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
 // ── Memory Routes ───────────────────────────────────────────────────
 
 describe('Memory Routes', () => {

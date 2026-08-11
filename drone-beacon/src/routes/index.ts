@@ -12,6 +12,7 @@ import insights from './insights.js';
 import principles from './principles.js';
 import wiki from './wiki.js';
 import sync from './sync.js';
+import coordinatorTrust from './coordinator-trust.js';
 
 // Re-export helpers from context for external use
 export {
@@ -34,4 +35,5 @@ export async function registerRoutes(app: FastifyInstance) {
   principles(app);
   wiki(app);
   sync(app);
+  coordinatorTrust(app);
 }

@@ -26,6 +26,7 @@ import {
 } from './db/index.js';
 import { initStorage } from './storage.js';
 import { registerRoutes } from './routes/index.js';
+import { setCoordinatorFingerprint } from './routes/health.js';
 import { logger } from './logger.js';
 import {
   loadOrCreateTlsIdentity,
@@ -64,7 +65,8 @@ interface Config {
     | 'approve'
     | 'list-beacons'
     | 'show-web-token'
-    | 'generate-web-token';
+    | 'generate-web-token'
+    | 'show-fingerprint';
   approvalToken?: string;
 }
 
@@ -111,15 +113,23 @@ function parseArgs(): Config {
       config.command = 'show-web-token';
     } else if (arg === '--generate-web-token') {
       config.command = 'generate-web-token';
+    } else if (arg === '--show-fingerprint') {
+      config.command = 'show-fingerprint';
     } else if (arg === '--help' || arg === '-h') {
       console.log(
-        `\ndrone-coordinator [options]\n\nCommands:\n  serve              Start the coordinator server (default)\n  approve <token>   Approve a pending beacon by token\n  list-beacons       List all registered beacons and their trust status\n  --show-web-token   Print the current web UI access token\n  --generate-web-token Generate a new web UI access token\n\nOptions:\n  --port <n>         Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>         Host to bind to (default: ${DEFAULT_HOST})\n  --web-port <n>     HTTP port for web UI (default: ${DEFAULT_WEB_PORT})\n  --web-host <h>     Host for web UI port (default: ${DEFAULT_WEB_HOST})\n  --config-dir <dir> Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>       Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https            Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https         Disable HTTPS\n  --help             Show this help message\n      `
+        `\ndrone-coordinator [options]\n\nCommands:\n  serve              Start the coordinator server (default)\n  approve <token>   Approve a pending beacon by token\n  list-beacons       List all registered beacons and their trust status\n  --show-web-token   Print the current web UI access token\n  --generate-web-token Generate a new web UI access token\n  --show-fingerprint Print the coordinator's TLS certificate fingerprint\n\nOptions:\n  --port <n>         Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>         Host to bind to (default: ${DEFAULT_HOST})\n  --web-port <n>     HTTP port for web UI (default: ${DEFAULT_WEB_PORT})\n  --web-host <h>     Host for web UI port (default: ${DEFAULT_WEB_HOST})\n  --config-dir <dir> Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>       Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https            Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https         Disable HTTPS\n  --help             Show this help message\n      `
       );
       process.exit(0);
     }
   }
 
   return config;
+}
+
+async function handleShowFingerprint(config: Config) {
+  const tlsIdentity = loadOrCreateTlsIdentity(config.configDir, 'coordinator');
+  console.log(tlsIdentity.fingerprint);
+  process.exit(0);
 }
 
 async function handleApprove(config: Config) {
@@ -420,6 +430,11 @@ export async function main() {
     return;
   }
 
+  if (config.command === 'show-fingerprint') {
+    await handleShowFingerprint(config);
+    return;
+  }
+
   const protocol = config.useHttps ? 'https' : 'http';
   logger.info(`Starting drone-coordinator on ${config.host}:${config.port}`);
   logger.info(`Web UI on ${config.webHost}:${config.webPort} (HTTP)`);
@@ -447,6 +462,7 @@ export async function main() {
       'coordinator'
     );
     tlsOptions = getTlsOptions(tlsIdentity);
+    setCoordinatorFingerprint(tlsIdentity.fingerprint);
     logger.info(`TLS certificate fingerprint: ${tlsIdentity.fingerprint}`);
   }
 

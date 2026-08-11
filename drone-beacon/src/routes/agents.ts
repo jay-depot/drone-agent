@@ -1,6 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { RegisterAgentRequest } from '../types.js';
 import { getCoordinatorClient } from './context.js';
+import {
+  getPendingCoordinatorFingerprint,
+  isCoordinatorTrusted,
+} from '../coordinator-trust.js';
 import * as db from '../db/index.js';
 
 import { logger } from '../logger.js';
@@ -39,7 +43,13 @@ export default function agentRoutes(app: FastifyInstance) {
         targetType: spawnRecord ? 'spawn' : null,
       });
 
-      return reply.code(201).send(session);
+      return reply.code(201).send({
+        ...session,
+        coordinatorTrust: {
+          trusted: isCoordinatorTrusted(),
+          pendingFingerprint: getPendingCoordinatorFingerprint() ?? null,
+        },
+      });
     }
   );
 
