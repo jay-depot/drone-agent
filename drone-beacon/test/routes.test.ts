@@ -813,6 +813,32 @@ describe('Insight Routes', () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  it("POST /insights/mark-examined marks a target's insights examined", async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/insights',
+      payload: { targetType: 'persona', targetId: 'p1', insight: 'i1' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/insights/mark-examined',
+      payload: { targetType: 'persona', targetId: 'p1' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.ok).toBe(true);
+    expect(body.markedCount).toBe(1);
+  });
+
+  it('POST /insights/mark-examined returns 400 without required fields', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/insights/mark-examined',
+      payload: { targetType: 'persona' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 // ── Principle Routes ────────────────────────────────────────────────

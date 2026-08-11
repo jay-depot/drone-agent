@@ -57,6 +57,7 @@ import {
   createInsight,
   listInsights,
   getInsight,
+  markInsightsExamined,
   deleteInsight,
   createPrinciple,
   listPrinciples,
@@ -782,6 +783,24 @@ describe('Beacon Insight CRUD', () => {
     const row = createInsight('persona', 'p1', 'i1');
     expect(deleteInsight(row.id)).toBe(true);
     expect(getInsight(row.id)).toBeUndefined();
+  });
+
+  it('should mark all insights for a target as examined', () => {
+    createInsight('persona', 'p1', 'i1');
+    createInsight('persona', 'p1', 'i2');
+    const result = markInsightsExamined('persona', 'p1');
+    expect(result.ok).toBe(true);
+    expect(result.markedCount).toBe(2);
+    const rows = listInsights('persona', 'p1');
+    for (const row of rows) {
+      expect(row.lastExamined).toBeDefined();
+    }
+  });
+
+  it('should return markedCount 0 when the target has no insights', () => {
+    const result = markInsightsExamined('persona', 'none');
+    expect(result.ok).toBe(true);
+    expect(result.markedCount).toBe(0);
   });
 });
 

@@ -129,6 +129,7 @@ export function initDatabase(dataPath: string): Database.Database {
       targetId TEXT NOT NULL,
       insight TEXT NOT NULL,
       timestamp TEXT NOT NULL,
+      lastExamined TEXT,
       scope TEXT NOT NULL DEFAULT 'coordinator'
     );
 
@@ -164,6 +165,14 @@ export function initDatabase(dataPath: string): Database.Database {
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_tool_definitions_name ON tool_definitions(name);
   `);
+
+  // Idempotent migration: add lastExamined to existing insights tables.
+  const insightCols = db.prepare('PRAGMA table_info(insights)').all() as Array<{
+    name: string;
+  }>;
+  if (!insightCols.some(c => c.name === 'lastExamined')) {
+    db.exec('ALTER TABLE insights ADD COLUMN lastExamined TEXT');
+  }
 
   // Seed built-in tool definitions
   seedBuiltinToolDefinitions();

@@ -77,6 +77,7 @@ export {
   createInsight,
   getInsight,
   listInsights,
+  markInsightsExamined,
   deleteInsight,
 } from './insights.js';
 export type { InsightRow } from './insights.js';

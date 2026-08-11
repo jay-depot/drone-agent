@@ -1,120 +1,206 @@
 ---
 key: review-state
-tags: []
+tags:
+  - review
+  - code-quality
+  - bugs
 created: 2026-06-26T01:58:17.133Z
-updated: 2026-07-06T22:31:39.739Z
+updated: 2026-08-11T01:35:21.852Z
 ---
 
-# Code Review Summary - drone-agent
+# Code Review Report — drone-agent monorepo (2026-08-10)
 
-## Overall State: Clean — actively maintained, significant tech debt paid down
+## Critical Bugs
 
-| Metric              | Previous (Jun 26) | Current (Jul 7) | Delta   |
-| ------------------- | ----------------- | --------------- | ------- |
-| Source files        | 155               | 294             | +139    |
-| Total lines         | ~42,000           | 72,536          | +30,536 |
-| Test files passing  | 65                | 65              | 0       |
-| Tests passing       | 1,213             | 1,213           | 0       |
-| TypeScript errors   | 0 (source)        | 0               | 0       |
-| Hints (unused code) | ~70               | ~5              | -65     |
-| Workspace packages  | 4                 | 8               | +4      |
+### 1. Subagent mode is never activated — `_runtime` capability set too late
+**File:** `drone-agent/src/runtime/plugin-engine.ts` (`initialize()`)
 
----
+The `_runtime` capability (carrying `isSubagent`, `subagentId`, `persona`) is set via `capabilities.set('_runtime', {...})` **after** the plugin registration loop completes. But the subagent plugin calls `ctx.request<RuntimeInfo>('runtime')` **synchronously at the top of its `register()`**. Since `_runtime` isn't set yet, `request('runtime')` returns `undefined` during registration, so `runtime?.isSubagent` is always falsy. **The subagent plugin always registers in main-agent mode** — the `subagent.return` tool and the subagent instruction prompt fragment are never registered. Subagents can never explicitly return; they rely entirely on the implicit-return fallback.
 
-## What Changed (New Since Last Scan)
+**Fix:** Set `capabilities.set('_runtime', ...)` before the plugin registration loop in `initialize()`, or resolve `_runtime` lazily in the `request()` handler.
 
-### New Workspace Packages (+4)
+### 2. `hasExplicitReturn` detection is dead code — tool name mismatch + dot/pokemon naming
+**File:** `drone-agent/src/interactive.ts` (line 121)
 
-| Package                  | Description                                       | Files | Lines |
-| ------------------------ | ------------------------------------------------- | ----- | ----- |
-| **drone-gateway**        | Chat API integration layer for the drone swarm    | 9 src | 1,826 |
-| **drone-swarm-common**   | Shared utilities for beacon/coordinator           | 5 src | 1,083 |
-| **drone-coordinator-ui** | Web UI for drone-coordinator (Vite + React)       | 20+   | 1,921 |
-| **docker/**              | Docker-based test infrastructure (echo-llm, etc.) | 5 src | 956   |
+```ts
+if (event.kind === 'toolCall' && event.name === 'subagent.return') {
+  hasExplicitReturn = true;
+}
+```
 
-### Major Refactors
+The tool is registered with name `'subagent.return'`, but the engine canonicalizes it to `subagent__subagent.return` via `getCanonicalToolName()`. The conversation service emits tool calls with the **canonical** name, so `event.name === 'subagent.return'` never matches. `hasExplicitReturn` stays `false` forever, and the implicit return is always emitted. (Compounded by bug #1 — the tool isn't even registered in subagent mode.)
 
-1. **drone-core/src/index.ts** — **Split from 1,269 → 224 lines** ✅ (was Priority 4)
-2. **TUI tail region refactor** — Live pre-rendering with atomic commit
-3. **Conversation event streaming unified** — Single entry point through engine hooks
-4. **Plugin-customizable tool render components** — TUI tail region supports custom renderers
+**This is a bigger issue than just the dead check.** The tool name `subagent.return` has **two** problems that must be fixed together:
 
-### Cleanup Completed (Jul 7)
+1. **Dot in the tool name** — `subagent.return` contains a dot, which breaks some Kimi models. Tool names must be dot-free.
+2. **Pokemon naming (doubled plugin prefix)** — because the tool is registered as `name: 'subagent.return'` inside the `subagent` plugin, the canonical name becomes `subagent__subagent.return` — the plugin id appears twice. This is the same "pokemon" pattern that was fixed in decision 071 (`subagent__subagent__dispatch` → `subagent__dispatch`), but it has regressed here.
 
-1. **Fixed 5 TS errors** in test mocks (missing `getTool` on mock engine objects) ✅
-2. **Removed ~80 unused declarations** across 47 files ✅
-   - Source code: 14 files (unused types, variables, params, imports)
-   - Test files: 20+ files (unused imports, variables, callback params)
-   - Beacon/coordinator/gateway/swarm-common: 13 files
-   - Net: 97 lines removed, 53 lines added (mostly `_` prefixes)
+**Fix (all together):**
+- Rename the tool to a dot-free, non-prefixed name, e.g. `name: 'return'` → canonical `subagent__return` (this fixes both the dot AND the doubled prefix in one move).
+- Update the `hasExplicitReturn` check in `interactive.ts` to compare against the new canonical name `'subagent__return'`.
+- Update the subagent instruction prompt fragment text (currently says "call the subagent.return tool") to reference the new name.
+- Update any other references to `subagent.return` (e.g. `output-handlers.ts` comment, `interactive.ts` comments).
 
----
+### 3. Skill insights never route to swarm engines — `scope` vs `source` mismatch
+**File:** `drone-agent/src/plugins/self-improvement/validation.ts` (`resolveTargetScope`)
 
-## Issues Found
+```ts
+} else if (targetType === 'skill') {
+  const skill = skillsCap.getSkill(targetId);
+  return (skill as any)?.scope;   // ← DroneSkillDefinition has `source`, not `scope`
+}
+```
 
-### 1. TypeScript Errors — ✅ FIXED (Jul 7)
+`DroneSkillDefinition` (in `drone-core/src/skill-types.ts`) has a `source` field (`'user' | 'project' | 'beacon' | 'coordinator'`), **not** `scope`. So `resolveTargetScope` always returns `undefined` for skills, and skill-scoped insights/principles are never routed to beacon/coordinator storage engines. Note `resolveBaseDir` in the same file correctly uses `skill?.source === 'user'` — the two functions are inconsistent.
 
-5 errors in test mocks (missing `getTool`). All resolved.
+**Fix:** Use `skill?.source` in `resolveTargetScope`.
 
-### 2. Unused Code — ✅ FIXED (Jul 7)
+### 4. `resolveInsightEngine`/`resolvePrincipleEngine` always return the first registered engine
+**File:** `drone-agent/src/plugins/self-improvement/capability.ts`
 
-~70+ hints reduced to ~5. Remaining hints are low-value:
+```ts
+if (scope === 'beacon' || scope === 'coordinator') {
+  for (const engine of insightEngines.values()) {
+    return engine;   // ← always the first, regardless of scope
+  }
+}
+```
 
-- `compaction/index.ts` (line 24) — "may be converted to async function" (suggestion, not a declaration)
-- `drone-coordinator-ui/src/pages/login.tsx` — `FormEvent` is deprecated
-- `drone-coordinator-ui/src/components/ui/scroll-area.tsx` — `React` import (might be needed for JSX)
+If both a beacon and a coordinator engine are registered, this always picks whichever was registered first, ignoring the actual target scope. Should select the engine matching the resolved scope.
 
-### 3. Large Files (Growing)
+### 5. `config.set` rejects scalar/array values — schema too restrictive
+**File:** `drone-agent/src/plugins/config/index.ts` (`configSetSchema`)
 
-| File                                                | Lines | Notes                      |
-| --------------------------------------------------- | ----- | -------------------------- |
-| `drone-coordinator/test/routes.test.ts`             | 2,096 | Integration test, large    |
-| `drone-coordinator/src/db.ts`                       | 1,707 | Database layer, large      |
-| `drone-agent/test/self-improvement.test.ts`         | 1,607 | Large test file            |
-| `drone-agent/src/plugins/swarm/index.ts`            | 1,386 | Swarm plugin, growing      |
-| `drone-beacon/src/db.ts`                            | 1,294 | Database layer, large      |
-| `drone-agent/src/plugins/lsp/tools.ts`              | 1,230 | LSP tools (unchanged)      |
-| `drone-agent/src/plugins/lsp/normalize.ts`          | 1,153 | LSP normalize (unchanged)  |
-| `drone-agent/src/runtime/migration-service.ts`      | 1,145 | Migration service          |
-| `drone-agent/src/plugins/self-improvement/index.ts` | 1,113 | Self-improvement (growing) |
-| `drone-agent/src/plugins/lsp/server.ts`             | 1,108 | LSP server (unchanged)     |
+```ts
+value: { type: 'object', description: 'Can be a primitive, object, or array...' }
+```
 
-**Old** `drone-core/src/index.ts` (1,269 lines) is now **fixed** ✅
+The description claims primitives and arrays are allowed, but `Type.Object` rejects them. Setting `ollama.model` to a string (the most common config operation) fails schema validation. The `value` field should be `Type.Unknown()` or a union.
 
-### 4. Type Duplication — Still Present
+### 6. `maxImageSizeBytes` missing from config schema and known-keys list
+**Files:** `drone-core/src/config-schema.ts`, `drone-agent/src/plugins/config/index.ts`
 
-Types duplicated across:
+`session.maxImageSizeBytes` exists in `config-types.ts` and is read by `file__read_image`, but it's absent from:
+- `PartialDroneAgentConfigSchema`'s `session` object → setting it via config fails validation
+- `KNOWN_CONFIG_KEYS` in the config plugin → `config.set` rejects it
 
-- `drone-beacon/src/types.ts`
-- `drone-coordinator/src/types.ts`
-- `drone-core/src/domain-types.ts`
-
-### 5. New Packages Need Test Coverage
-
-- **drone-coordinator-ui**: 22 files, 1,921 lines — **zero tests**
-- **docker/**: 5 files, 956 lines — **zero tests**
+Same gap applies to `session.maxToolResultTokensPercent`, `mcp.spawnTimeoutMs`, `mcp.maxResponseSizeBytes`, `mcp.roots`, and the entire `openai.*`, `anthropic.*`, `openrouter.*`, `swarm.*`, `tui.*`, `terminal.*` namespaces in `KNOWN_CONFIG_KEYS`.
 
 ---
 
-## What's Working Well
+## Logic Errors
 
-- **drone-core modularization** ✅
-- **Test coverage expansion** — beacon, coordinator, and gateway have test suites
-- **TUI architecture improvements** — Tail region refactor with plugin-customizable tool renders
-- **Event streaming unification** — Single entry point for conversation events
-- **All 1,213 tests pass** — No regressions
-- **TypeScript compilation** — Source code AND test code compile cleanly ✅
-- **Codebase cleaned up** — ~80 unused declarations removed, ~70 hints eliminated
+### 7. Ollama debug log references `response` before assignment
+**File:** `drone-agent/src/plugins/ollama.ts` (line 204)
+
+```ts
+let response;
+if (debug) { console.error(`[llm:request] ...`); }
+if (debug) { console.error(`[llm:response] ${JSON.stringify(response)}`); }  // ← undefined
+try { response = await client.chat(...) } ...
+```
+
+The `[llm:response]` debug log runs before `response` is assigned, so it always prints `undefined`. The actual response is only logged inside the `try` block's success path (which is correct). The pre-try log is dead/misleading.
+
+### 8. Safety-trim estimate vs. actual drop mismatch (potential non-convergence)
+**Files:** `drone-core/src/context-budget-service.ts` + `drone-agent/src/runtime/session-manager.ts`
+
+`evaluateSafetyTrim` computes `requiredDropTurnCount` by slicing `input.turns.slice(dropCount)` — which drops **any** turns from the front, including summary turns. But `dropOldestNonSummaryTurns` in the session manager **stops at the first summary turn** and refuses to drop it. So the estimate can say "drop 3 turns" while the actual drop only removes fewer (or zero) non-summary turns. In a session where the oldest turns are summaries, this can loop without converging and eventually throw "no turns could be dropped" even though the estimate said dropping would work.
+
+**Fix:** Make `evaluateSafetyTrim` skip summary turns when computing the drop count, mirroring `dropOldestNonSummaryTurns` semantics.
+
+### 9. `runJsonMode` / `runJsonListenMode` emit the final assistant message twice
+**File:** `drone-agent/src/interactive.ts`
+
+The NDJSON handler emits `assistantMessage` for every such event during the conversation, and then after `sendUserMessage` returns, the code emits `ndjsonHandler({ kind: 'assistantMessage', content: response })` **again**. The final reply is duplicated in the NDJSON stream. (The plain-output handler suppresses this correctly; the NDJSON handler does not.)
+
+### 10. `listPlugins()` omits externally-added plugins
+**File:** `drone-agent/src/runtime/plugin-engine.ts`
+
+`listPlugins` maps over the original `plugins` array, not `registeredPlugins`/`pluginMap`. Plugins added via `addExternalPlugin` (e.g. trusted project plugins) won't appear in `/plugins` or the status bar count.
+
+### 11. Beacon `isLocalConnection` misses part of the private range
+**File:** `drone-beacon/src/ws-server.ts`
+
+`ip.startsWith('172.16.')` only matches `172.16.x.x`, but the RFC1918 private range is `172.16.0.0/12` (172.16–172.31). A beacon on `172.20.x.x` would be rejected as non-local.
+
+### 12. Coordinator spawn proxy hardcodes `http://`
+**File:** `drone-coordinator/src/routes/spawn.ts`
+
+All beacon forwarding uses `http://${beacon.host}:${beacon.port}`. If the beacon runs HTTPS, spawn/list/terminate requests fail. Should respect the beacon's configured protocol.
+
+### 13. Gateway coordinator backend returns an object as a string
+**File:** `drone-gateway/src/coordinator-spawn-backend.ts`
+
+```ts
+const response = await this.coordinatorClient.sendMessage(session.processId, message);
+return response as string;   // ← response is a JSON object, not a string
+```
+
+`CoordinatorClient.sendMessage` returns `unknown` (a parsed JSON object). Casting it to `string` yields `"[object Object]"` when the caller uses it as a message. This is a real type lie.
 
 ---
 
-## Refactoring Priority
+## Code Quality / Maintainability
 
-| Priority | Issue                                        | Effort | Notes                                         |
-| -------- | -------------------------------------------- | ------ | --------------------------------------------- |
-| 1        | ~~Fix 5 TS errors in test mocks~~            | Done   | Resolved Jul 7                                |
-| 2        | ~~Remove unused code (~70 hints)~~           | Done   | Resolved Jul 7, ~5 hints remain               |
-| 3        | Split large files (swarm/index.ts, db.ts)    | Medium | Growing files                                 |
-| 4        | Consolidate duplicated types into drone-core | High   | domain-types, beacon types, coordinator types |
-| 5        | Add tests for drone-coordinator-ui           | Medium | UI coverage                                   |
-| 6        | Review migration-service.ts for splitting    | Medium | 1,145-line file                               |
+### 14. `KNOWN_CONFIG_KEYS` is a hand-maintained list that has drifted
+The config plugin's `KNOWN_CONFIG_KEYS` is a hardcoded array that's already out of sync with the actual schema (see #6). This is a maintenance trap — every new config key must be added in three places (types, schema, known-keys). Consider deriving the known keys from the TypeBox schema instead.
+
+### 15. `AGENTS.md` claims `enabledPlugins` is "additive at the project level" — code replaces it
+`CONFIG_MERGE_SPEC` has `enabledPlugins` in `replace`, not `mergeArrays`. The doc's claim of additive behavior is stale. Either the doc or the code is wrong; the code is the source of truth, so the doc should be updated.
+
+### 16. `subagent/plugin.ts` hardcodes the binary path
+```ts
+const execPath = resolve(process.cwd(), 'drone-agent', 'bin', 'drone-agent');
+```
+This assumes the binary lives at `<cwd>/drone-agent/bin/drone-agent`. The gateway's `LocalSpawnBackend` correctly uses `which()` to resolve from PATH. The subagent dispatch should do the same, or it will fail in any non-monorepo layout.
+
+### 17. `search.ts` `truncated` flag is misleading
+`--max-count=${maxResults}` limits matches **per file**, but `truncated: results.length >= maxResults` reports total-result truncation. With many files, `truncated` is almost always `true` even when nothing was cut. Also, `--max-count` is a GNU grep option not supported by BSD grep (macOS).
+
+### 18. `app.tsx` error detection is a fragile string heuristic
+```ts
+const isError = result.content.startsWith(result.name + ' failed');
+```
+This misclassifies any tool output that legitimately begins with `<name> failed`. The conversation service already knows whether a result was an error (`toolResult.kind === 'error'`) — that signal should be propagated to the TUI instead of re-derived from string matching.
+
+### 19. `doEnablePlugin`/`doAddExternalPlugin` re-run all lifecycle hooks
+Both re-invoke `onPluginsLoaded` and `onSessionStart` for **every** registered plugin, not just the newly added one. This can cause duplicate side effects (e.g. the swarm plugin re-registering sessions, compaction re-evaluating). Should only run catch-up hooks for the new plugin.
+
+### 20. `resolveInsightEngine`/`resolvePrincipleEngine` "first engine" pattern (see #4) is also a code smell
+The `for...return` over a `Map` to grab the first value is obscure. Use `insightEngines.values().next().value` or an explicit lookup.
+
+### 21. `memory/index.ts` cache keyed inconsistently
+`capability.store` does `cache.get(key)` with the raw key but `cache.set(entry.key, entry)` with the sanitized key. For keys containing `/` or other sanitized characters, the cache lookup misses and re-reads from disk every time. Minor, but the cache is effectively broken for non-trivial keys.
+
+### 22. `config-schema.ts` `Percent` type prevents disabling truncation
+`Type.Number({ exclusiveMinimum: 0, maximum: 100 })` rejects `0`, but the conversation service treats `maxToolResultTokensPercent: 0` as "disable truncation". You can't express "off" through config.
+
+### 23. `plugin-engine.ts` `renderPromptFragments` has no error isolation
+`Promise.all(promptFragments.map(f => f.render()))` — a single throwing fragment rejects the whole batch, breaking the system prompt. Each render should be wrapped in try/catch (the conversation service already does this pattern for hooks).
+
+---
+
+## What's Done Well
+
+- **The list/mount tool framework** (`ToolRegistry`, runtime meta-tools) is clean and well-documented.
+- **The `deepMerge` + `MergeSpec` refactor** is a good replacement for the old hand-rolled config merging.
+- **The `withFileLock` + atomic tmp+rename write** in self-improvement is a correct fix for the concurrent read-modify-write race.
+- **The patch-applier cascade** (exact → fuzz → context → heading) is well-structured and the failure reporting (cheat sheets, Levenshtein suggestions) is genuinely useful.
+- **The porcelain parser** correctly preserves leading whitespace and documents why.
+- **Error handling in `executeToolSafely`** and the stuck-detector are thoughtful.
+- **The TUI tail-region commit pattern** (live components → atomic commit to `<Static>`) is a solid design.
+
+---
+
+## Suggested Priority Order
+
+1. **#1 + #2** — subagent mode is fundamentally broken (registration ordering + name mismatch). This is the highest-impact bug. **#2's fix must also remove the dot from the tool name (Kimi compatibility) and fix the doubled-prefix "pokemon" naming** — rename `subagent.return` → `return` (canonical `subagent__return`), update the `hasExplicitReturn` check, the prompt fragment, and all references.
+2. **#3 + #4** — swarm insight/principle routing is broken for skills and ambiguous for multiple engines.
+3. **#5 + #6** — config schema/known-keys drift breaks common operations.
+4. **#8** — safety-trim non-convergence can hard-fail sessions.
+5. **#9** — duplicate NDJSON output breaks gateway/subagent consumers.
+6. **#13** — gateway coordinator backend returns garbage strings.
+7. The rest are correctness/robustness improvements.
+
+Recommend fixing the critical bugs (#1–#6) first, then the logic errors (#7–#13), then the quality items. The `KNOWN_CONFIG_KEYS` drift (#14) should be addressed structurally (derive from schema) rather than patched, or it will keep rotting.
