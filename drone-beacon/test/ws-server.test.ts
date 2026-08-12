@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { networkInterfaces } from 'os';
 import { setupDb, teardownDb } from './setup.js';
 import {
   isLocalConnection,
@@ -23,25 +24,26 @@ describe('WebSocket Server - IP Validation', () => {
     expect(isLocalConnection('::ffff:127.0.0.1')).toBe(true);
   });
 
-  it('should identify private 192.168.x.x', () => {
-    expect(isLocalConnection('192.168.1.1')).toBe(true);
-  });
-
-  it('should identify private 10.x.x.x', () => {
-    expect(isLocalConnection('10.0.0.1')).toBe(true);
-  });
-
-  it('should identify private 172.16.x.x', () => {
-    expect(isLocalConnection('172.16.0.1')).toBe(true);
-  });
-
-  it('should identify link-local 169.254.x.x', () => {
-    expect(isLocalConnection('169.254.1.1')).toBe(true);
+  it('should reject private-LAN IPs (remote beacons not supported)', () => {
+    expect(isLocalConnection('192.168.1.1')).toBe(false);
+    expect(isLocalConnection('10.0.0.1')).toBe(false);
+    expect(isLocalConnection('172.16.0.1')).toBe(false);
+    expect(isLocalConnection('169.254.1.1')).toBe(false);
   });
 
   it('should reject public IPs', () => {
     expect(isLocalConnection('8.8.8.8')).toBe(false);
     expect(isLocalConnection('203.0.113.1')).toBe(false);
+  });
+
+  it('should identify the machine\'s own interface addresses', () => {
+    const interfaces = networkInterfaces();
+    for (const [, addrs] of Object.entries(interfaces)) {
+      if (!addrs) continue;
+      for (const addr of addrs) {
+        expect(isLocalConnection(addr.address)).toBe(true);
+      }
+    }
   });
 
   it('should handle undefined IP', () => {

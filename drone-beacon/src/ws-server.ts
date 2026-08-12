@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
+import { networkInterfaces } from 'os';
 import * as db from './db/index.js';
 import { logger } from './logger.js';
 
@@ -10,18 +11,28 @@ export const ERROR_NON_LOCAL_CONNECTION = 4003;
 
 /**
  * Check if a connection is from a local address.
+ * Local sources are loopback addresses and the machine's own network
+ * interfaces. Remote beacons are not supported, so private-LAN ranges are
+ * not treated as local.
  */
 export function isLocalConnection(ip: string | undefined): boolean {
   if (!ip) return false;
-  return (
-    ip === '127.0.0.1' ||
-    ip === '::1' ||
-    ip === '::ffff:127.0.0.1' ||
-    ip.startsWith('192.168.') || // Local network
-    ip.startsWith('10.') || // Local network
-    ip.startsWith('172.16.') || // Private network
-    ip.startsWith('169.254.') // Link-local
-  );
+
+  // Loopback
+  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') {
+    return true;
+  }
+
+  // The machine's own network interfaces
+  const interfaces = networkInterfaces();
+  for (const [, addrs] of Object.entries(interfaces)) {
+    if (!addrs) continue;
+    for (const addr of addrs) {
+      if (addr.address === ip) return true;
+    }
+  }
+
+  return false;
 }
 
 interface WSConnection {

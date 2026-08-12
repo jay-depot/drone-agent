@@ -42,7 +42,7 @@ import {
 import { setKnowledgeBaseDir } from 'drone-swarm-common/wiki-storage';
 
 const DEFAULT_PORT = 3457;
-const DEFAULT_HOST = '0.0.0.0';
+const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_CONFIG_DIR = path.join(os.homedir(), '.drone-beacon');
 const DEFAULT_DB_FILENAME = 'drone-beacon.db';
 const DEFAULT_SPAWN_AGENT_PATH = 'drone-agent';

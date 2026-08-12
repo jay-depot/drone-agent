@@ -33,7 +33,7 @@ pnpm start
 | Option                    | Default                      | Description                                      |
 | ------------------------- | ---------------------------- | ------------------------------------------------ |
 | `--port`                  | 3457                         | Port to listen on                                |
-| `--host`                  | 0.0.0.0                      | Host to bind to                                  |
+| `--host`                  | 127.0.0.1                    | Host to bind to                                  |
 | `--config-dir`            | ~/.drone-beacon              | Configuration directory                          |
 | `--db`                    | <config-dir>/drone-beacon.db | Path to SQLite database                          |
 | `--coordinator-host`      | -                            | Coordinator host to connect to                   |
