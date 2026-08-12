@@ -1,6 +1,6 @@
 import https from 'https';
 import http from 'http';
-import type { PeerCertificate } from 'tls';
+import type { PeerCertificate, TLSSocket } from 'tls';
 import { generateVerificationCode } from 'drone-swarm-common';
 import { logger } from './logger.js';
 import {
@@ -244,6 +244,35 @@ export function createCoordinatorFetch(
           );
         });
       });
+
+      // `checkServerIdentity` is never invoked when `rejectUnauthorized` is
+      // false (Node skips server-identity verification), so observe the peer
+      // certificate ourselves once the TLS handshake completes. This both
+      // records the fingerprint on first contact (TOFU) and enforces the
+      // pinned fingerprint on subsequent connections.
+      if (isHttps) {
+        req.on('socket', socket => {
+          socket.on('secureConnect', () => {
+            const cert = (socket as TLSSocket).getPeerCertificate();
+            const raw = cert?.fingerprint256;
+            if (!raw) {
+              return;
+            }
+            const observed = raw.replace(/:/g, '').toLowerCase();
+            if (expectedCoordinatorFingerprint) {
+              if (observed !== expectedCoordinatorFingerprint.toLowerCase()) {
+                req.destroy(
+                  new Error(
+                    `TLS: coordinator certificate fingerprint mismatch — expected ${expectedCoordinatorFingerprint} but got ${observed}. Possible MITM attack.`
+                  )
+                );
+              }
+            } else {
+              onFirstFingerprint?.(observed);
+            }
+          });
+        });
+      }
 
       req.on('error', err => {
         reject(err);

@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import https from 'node:https';
 import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
 import {
@@ -67,12 +68,93 @@ describe('Coordinator Client', () => {
     );
   }
 
+  // Build a fake socket that can emit `secureConnect` with a fake peer cert,
+  // used to exercise the TOFU fingerprint observation in createCoordinatorFetch.
+  function makeHttpsRequestMock(cert: { fingerprint256?: string }) {
+    const httpsRequest = vi.fn();
+    httpsRequest.mockImplementation(
+      (_opts: any, callback: (res: any) => void) => {
+        const req = new EventEmitter() as any;
+        const socket = new EventEmitter() as any;
+        socket.getPeerCertificate = () => cert;
+        req.on = (event: string, listener: (...args: any[]) => void): any => {
+          if (event === 'socket') {
+            listener(socket);
+            return req;
+          }
+          return EventEmitter.prototype.on.call(req, event, listener);
+        };
+        req.write = vi.fn();
+        req.end = vi.fn();
+        req.destroy = vi.fn((err?: Error) => {
+          req.emit('error', err ?? new Error('destroyed'));
+        });
+        // Expose the socket so tests can emit `secureConnect` on it.
+        req.__socket = socket;
+        // Expose the response callback so tests can deliver the HTTP response
+        // after exercising the TOFU/pinning path deterministically.
+        req.__callback = callback;
+        return req;
+      }
+    );
+    vi.spyOn(https, 'request').mockImplementation(httpsRequest as any);
+    return {
+      httpsRequest,
+      getSocket: () => (httpsRequest.mock.results[0]?.value as any)?.__socket,
+      getCallback: () =>
+        (httpsRequest.mock.results[0]?.value as any)?.__callback,
+    };
+  }
+
   describe('createCoordinatorFetch', () => {
     it('should create a fetch wrapper', async () => {
       const { createCoordinatorFetch } =
         await import('../src/coordinator-client.js');
       const cfetch = createCoordinatorFetch('http://localhost:3456');
       expect(cfetch).toBeInstanceOf(Function);
+    });
+
+    it('observes the coordinator fingerprint via the socket secureConnect (TOFU)', async () => {
+      const { createCoordinatorFetch } =
+        await import('../src/coordinator-client.js');
+      const observed: string[] = [];
+      const { getSocket, getCallback } = makeHttpsRequestMock({
+        fingerprint256:
+          'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99',
+      });
+
+      const cfetch = createCoordinatorFetch(
+        'https://localhost:3456',
+        undefined,
+        fp => observed.push(fp)
+      );
+      const promise = cfetch('https://localhost:3456/health');
+
+      const socket = getSocket();
+      socket.emit('secureConnect');
+      getCallback()(makeMockResponse(200, { ok: true }));
+
+      expect(observed).toEqual([TEST_FP]);
+      await expect(promise).resolves.toBeInstanceOf(Response);
+    });
+
+    it('destroys the request when the observed fingerprint mismatches the pinned value', async () => {
+      const { createCoordinatorFetch } =
+        await import('../src/coordinator-client.js');
+      const pinned =
+        'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
+      const { getSocket } = makeHttpsRequestMock({
+        fingerprint256:
+          'FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE',
+      });
+
+      const cfetch = createCoordinatorFetch('https://localhost:3456', pinned);
+      const promise = cfetch('https://localhost:3456/health');
+
+      const socket = getSocket();
+      socket.emit('secureConnect');
+
+      await expect(promise).rejects.toThrow(/fingerprint mismatch/);
     });
   });
 

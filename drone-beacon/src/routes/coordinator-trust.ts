@@ -41,8 +41,6 @@ export default function coordinatorTrustRoutes(app: FastifyInstance) {
       if (verificationCode.trim() !== expected) {
         return reply.code(400).send({
           error:
-            expected + // Temporary debugging output. The verification codes aren't matching for some reason
-            ' ' +
             'Verification code does not match the one the beacon computed. Check you transcribed the code from the coordinator web UI correctly — a mismatch may indicate a MitM attack.',
         });
       }
