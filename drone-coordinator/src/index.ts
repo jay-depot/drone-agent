@@ -43,6 +43,7 @@ import {
 } from './ws-pubsub.js';
 import { createWebAuthMiddleware, isLocalRequest } from './web-auth.js';
 import { createMtlsMiddleware } from './mtls.js';
+import { registerBeaconWebSocket } from './beacon-ws.js';
 
 const DEFAULT_PORT = 3456;
 const DEFAULT_HOST = '0.0.0.0';
@@ -311,6 +312,10 @@ export async function buildApp(opts?: {
   // Register mTLS middleware for the primary (beacon-facing) port
   if (opts?.enableMtls) {
     app.addHook('onRequest', createMtlsMiddleware({ httpsEnabled: !!opts.https }));
+    // Register the WebSocket reverse channel used by beacons to receive
+    // spawn/message commands from the coordinator.
+    await app.register(import('@fastify/websocket'));
+    registerBeaconWebSocket(app);
   }
 
   // Register API routes

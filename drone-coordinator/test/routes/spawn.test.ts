@@ -2,8 +2,14 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { setupDb, teardownDb } from '../setup.js';
 import { buildTestApp } from '../app-helper.js';
 import type { FastifyInstance } from 'fastify';
+import { sendBeaconCommand } from '../../src/beacon-ws.js';
+
+vi.mock('../../src/beacon-ws.js', () => ({
+  sendBeaconCommand: vi.fn(),
+}));
 
 let app: FastifyInstance;
+const mockSend = vi.mocked(sendBeaconCommand);
 
 beforeEach(async () => {
   await setupDb();
@@ -16,22 +22,14 @@ afterEach(async () => {
 });
 
 describe('Spawn Route', () => {
-  beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn());
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  function expectFetchUrl(callIndex: number, expectedHref: string) {
-    const [url] = vi.mocked(fetch).mock.calls[callIndex] ?? [];
-    expect(url).toBeInstanceOf(URL);
-    expect((url as URL).href).toBe(expectedHref);
+  function mockResolve(value: { ok: boolean; status?: number; body?: unknown }) {
+    mockSend.mockResolvedValue(value);
+  }
+  function mockReject(err: Error) {
+    mockSend.mockRejectedValue(err);
   }
 
   it('POST /spawn forwards request to beacon and returns result', async () => {
-    // Register a beacon
     await app.inject({
       method: 'POST',
       url: '/api/beacons',
@@ -43,18 +41,16 @@ describe('Spawn Route', () => {
       },
     });
 
-    // Stub fetch to return a successful spawn response
-    const mockFetch = vi.fn().mockResolvedValue({
+    mockResolve({
       ok: true,
-      json: async () => ({
+      body: {
         spawnId: 'spawn-123',
         agentId: 'agent-abc',
         status: 'spawning',
         beaconUrl: 'http://localhost:3457',
         message: 'Agent spawned, waiting for connection',
-      }),
+      },
     });
-    vi.stubGlobal('fetch', mockFetch);
 
     const res = await app.inject({
       method: 'POST',
@@ -67,22 +63,17 @@ describe('Spawn Route', () => {
       },
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(201);
     const body = JSON.parse(res.body);
     expect(body.spawnId).toBe('spawn-123');
     expect(body.agentId).toBe('agent-abc');
     expect(body.status).toBe('spawning');
     expect(body.targetBeaconId).toBe('b-target');
 
-    // Verify fetch was called with the right URL and body
-    expectFetchUrl(0, 'http://localhost:3457/spawn');
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.any(URL),
-      expect.objectContaining({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: expect.stringContaining('"personaId":"test-persona"'),
-      })
+    expect(mockSend).toHaveBeenCalledWith(
+      'b-target',
+      'spawn',
+      expect.objectContaining({ personaId: 'test-persona' })
     );
   });
 
@@ -115,13 +106,11 @@ describe('Spawn Route', () => {
       payload: { id: 'b-error', name: 'Error', host: 'localhost', port: 3457 },
     });
 
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: false,
-        text: async () => 'Persona not found: bad-persona',
-      })
-    );
+    mockResolve({
+      ok: false,
+      status: 502,
+      body: { error: 'Persona not found: bad-persona' },
+    });
 
     const res = await app.inject({
       method: 'POST',
@@ -130,7 +119,7 @@ describe('Spawn Route', () => {
     });
     expect(res.statusCode).toBe(502);
     const body = JSON.parse(res.body);
-    expect(body.error).toContain('Failed to spawn agent');
+    expect(body.error).toContain('Beacon error');
     expect(body.details).toBe('Persona not found: bad-persona');
   });
 
@@ -141,10 +130,7 @@ describe('Spawn Route', () => {
       payload: { id: 'b-down', name: 'Down', host: 'localhost', port: 3457 },
     });
 
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockRejectedValue(new Error('Connection refused'))
-    );
+    mockReject(new Error('Beacon not connected via reverse channel'));
 
     const res = await app.inject({
       method: 'POST',
@@ -154,7 +140,6 @@ describe('Spawn Route', () => {
     expect(res.statusCode).toBe(503);
     const body = JSON.parse(res.body);
     expect(body.code).toBe('BEACON_UNAVAILABLE');
-    expect(body.details).toBe('Connection refused');
   });
 
   // ── GET /spawn/:beaconId ──────────────────────────────────────────
@@ -166,14 +151,13 @@ describe('Spawn Route', () => {
       payload: { id: 'b-list', name: 'List', host: 'localhost', port: 3457 },
     });
 
-    const mockFetch = vi.fn().mockResolvedValue({
+    mockResolve({
       ok: true,
-      json: async () => [
+      body: [
         { id: 's1', status: 'running' },
         { id: 's2', status: 'failed' },
       ],
     });
-    vi.stubGlobal('fetch', mockFetch);
 
     const res = await app.inject({
       method: 'GET',
@@ -197,18 +181,21 @@ describe('Spawn Route', () => {
       },
     });
 
-    const mockFetch = vi.fn().mockResolvedValue({
+    mockResolve({
       ok: true,
-      json: async () => [{ id: 's1', status: 'running' }],
+      body: [{ id: 's1', status: 'running' }],
     });
-    vi.stubGlobal('fetch', mockFetch);
 
     await app.inject({
       method: 'GET',
       url: '/api/spawn/b-filter?status=running',
     });
 
-    expectFetchUrl(0, 'http://localhost:3457/spawn?status=running');
+    expect(mockSend).toHaveBeenCalledWith(
+      'b-filter',
+      'listSpawns',
+      { status: 'running' }
+    );
   });
 
   it('GET /spawn/:beaconId returns 404 when beacon not found', async () => {
@@ -228,13 +215,7 @@ describe('Spawn Route', () => {
       payload: { id: 'b-err', name: 'Err', host: 'localhost', port: 3457 },
     });
 
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: false,
-        text: async () => 'Internal error',
-      })
-    );
+    mockResolve({ ok: false, status: 502, body: { error: 'Internal error' } });
 
     const res = await app.inject({
       method: 'GET',
@@ -250,7 +231,7 @@ describe('Spawn Route', () => {
       payload: { id: 'b-gone', name: 'Gone', host: 'localhost', port: 3457 },
     });
 
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('timeout')));
+    mockReject(new Error('timeout'));
 
     const res = await app.inject({
       method: 'GET',
@@ -275,15 +256,14 @@ describe('Spawn Route', () => {
       },
     });
 
-    const mockFetch = vi.fn().mockResolvedValue({
+    mockResolve({
       ok: true,
-      json: async () => ({
+      body: {
         spawnId: 's1',
         agentId: 'agent-abc',
         status: 'running',
-      }),
+      },
     });
-    vi.stubGlobal('fetch', mockFetch);
 
     const res = await app.inject({
       method: 'GET',
@@ -293,7 +273,11 @@ describe('Spawn Route', () => {
     const body = JSON.parse(res.body);
     expect(body.spawnId).toBe('s1');
     expect(body.status).toBe('running');
-    expectFetchUrl(0, 'http://localhost:3457/spawn/s1');
+    expect(mockSend).toHaveBeenCalledWith(
+      'b-status',
+      'getSpawn',
+      { spawnId: 's1' }
+    );
   });
 
   it('GET /spawn/:beaconId/:spawnId returns 404 when beacon not found', async () => {
@@ -314,11 +298,10 @@ describe('Spawn Route', () => {
       payload: { id: 'b-term', name: 'Term', host: 'localhost', port: 3457 },
     });
 
-    const mockFetch = vi.fn().mockResolvedValue({
+    mockResolve({
       ok: true,
-      json: async () => ({ success: true, message: 'Termination signal sent' }),
+      body: { success: true, message: 'Termination signal sent' },
     });
-    vi.stubGlobal('fetch', mockFetch);
 
     const res = await app.inject({
       method: 'DELETE',
@@ -327,7 +310,11 @@ describe('Spawn Route', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.success).toBe(true);
-    expectFetchUrl(0, 'http://localhost:3457/spawn/s1');
+    expect(mockSend).toHaveBeenCalledWith(
+      'b-term',
+      'terminateSpawn',
+      { spawnId: 's1' }
+    );
   });
 
   it('DELETE /spawn/:beaconId/:spawnId returns 404 when beacon not found', async () => {

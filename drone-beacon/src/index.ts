@@ -32,6 +32,7 @@ import {
   type SpawnerConfig,
 } from './spawner.js';
 import * as wsServer from './ws-server.js';
+import { startCoordinatorWsClient } from './coordinator-ws.js';
 import { logger } from './logger.js';
 import { loadOrCreateIdentity } from './identity.js';
 import {
@@ -247,6 +248,11 @@ async function main() {
     );
 
     setCoordinatorClient(coordinatorClient);
+
+    // Start the reverse-channel WebSocket client so the coordinator can push
+    // spawn/message commands to this beacon (instead of calling it inbound).
+    const coordinatorBase = `${config.coordinatorUseHttps ? 'https' : 'http'}://${config.coordinatorHost}:${config.coordinatorPort}`;
+    startCoordinatorWsClient(coordinatorBase, tlsIdentity);
 
     try {
       const result = await coordinatorClient.registerBeacon(

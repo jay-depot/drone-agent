@@ -80,7 +80,7 @@ function unsubscribeFromChannel(agentId: string, channel: string): void {
 
 export function sendToAgent(agentId: string, message: object): boolean {
   const conn = connections.get(agentId);
-  if (conn && conn.socket.readyState === 'OPEN') {
+  if (conn && conn.socket.readyState === 1 /* OPEN */) {
     conn.socket.send(JSON.stringify(message));
     return true;
   }
