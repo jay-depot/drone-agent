@@ -50,5 +50,9 @@
   {
     "timestamp": "2026-08-11T21:05:47.296Z",
     "insight": "A CI-only typecheck failure can be masked locally by stale dist/ artifacts. When a feature branch is based on an older commit, its drone-swarm-common/src/tls.ts may still be synchronous while main has since made loadOrCreateTlsIdentity async (openssl shell-injection fix #54). Locally, dependent packages (drone-coordinator, drone-beacon) resolve drone-swarm-common from its built dist/ (package.json \"types\": \"./dist/tls.d.ts\"), so a stale dist hides the mismatch and `pnpm typecheck` passes. CI does a fresh build and fails with \"Property 'fingerprint' does not exist on type 'Promise<TlsIdentity>'\". To reproduce locally, build drone-swarm-common from main's tls.ts (git show origin/main:... > src/tls.ts, rebuild, typecheck dependents), then restore. Lesson: when a branch predates a change to a shared dependency's signature, verify against the dependency's CURRENT (main) signature, not just the local dist."
+  },
+  {
+    "timestamp": "2026-08-12T19:16:12.397Z",
+    "insight": "Adding @types/ws as a direct dependency to drone-beacon surfaced a latent type bug in ws-server.ts: `conn.socket.readyState === 'OPEN'` was comparing a number (readyState) to a string. The @fastify/websocket types apparently didn't catch this, but @types/ws does. The fix is `readyState === 1 /* OPEN */`. When adding new type packages, sweep for comparison bugs in existing WebSocket code."
   }
 ]
