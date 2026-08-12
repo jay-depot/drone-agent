@@ -20,11 +20,12 @@
   "license": "MIT",
   "dependencies": {
     "@fastify/cors": "^11.2.0",
+    "@fastify/rate-limit": "^11.2.0",
     "@fastify/static": "^10.1.2",
     "@fastify/websocket": "^11.2.0",
     "better-sqlite3": "^11.8.1",
-    "drone-core": "workspace:*",
     "drone-coordinator-ui": "workspace:*",
+    "drone-core": "workspace:*",
     "drone-swarm-common": "workspace:*",
     "fastify": "^5.2.1",
     "pino": "^9.6.0"

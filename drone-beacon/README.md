@@ -47,6 +47,8 @@ pnpm start
 | `--spawn-timeout-ms`      | 30000                        | Agent connection timeout (ms)                    |
 | `--max-concurrent-spawns` | 10                           | Max concurrent spawned agents                    |
 | `--sync-interval-minutes` | 5                            | Interval for periodic coordinator sync (minutes) |
+| `--rate-limit-max`        | 1000                         | Max requests per IP per window                   |
+| `--rate-limit-window-ms`  | 60000                        | Rate limit window in milliseconds               |
 | `--help`                  | -                            | Show help message                                |
 
 ## API Endpoints

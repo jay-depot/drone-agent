@@ -19,10 +19,11 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/websocket": "^11.0.0",
+    "better-sqlite3": "^11.8.1",
     "drone-core": "workspace:*",
     "drone-swarm-common": "workspace:*",
-    "better-sqlite3": "^11.8.1",
-    "@fastify/websocket": "^11.0.0",
     "fastify": "^5.2.1",
     "pino": "^9.6.0"
   },

@@ -43,6 +43,8 @@ pnpm start
 | `--db`         | <config-dir>/drone-coordinator.db  | Path to SQLite database |
 | `--https`      | false (or `COORDINATOR_HTTPS` env) | Enable HTTPS server     |
 | `--no-https`   | -                                  | Disable HTTPS server    |
+| `--rate-limit-max` | 1000                            | Max requests per IP per window |
+| `--rate-limit-window-ms` | 60000                       | Rate limit window in ms |
 | `--help`       | -                                  | Show help message       |
 
 ### Commands

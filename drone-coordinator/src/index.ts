@@ -49,6 +49,8 @@ const DEFAULT_WEB_PORT = 8080;
 const DEFAULT_WEB_HOST = '127.0.0.1';
 const DEFAULT_CONFIG_DIR = path.join(os.homedir(), '.drone-coordinator');
 const DEFAULT_DB_FILENAME = 'drone-coordinator.db';
+const DEFAULT_RATE_LIMIT_MAX = 1000;
+const DEFAULT_RATE_LIMIT_WINDOW_MS = 60000;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -60,6 +62,8 @@ interface Config {
   configDir: string;
   dbPath: string;
   useHttps: boolean;
+  rateLimitMax: number;
+  rateLimitWindowMs: number;
   command:
     | 'serve'
     | 'approve-beacon'
@@ -80,6 +84,8 @@ function parseArgs(): Config {
     configDir: DEFAULT_CONFIG_DIR,
     dbPath: path.join(DEFAULT_CONFIG_DIR, DEFAULT_DB_FILENAME),
     useHttps: process.env.COORDINATOR_HTTPS === 'true',
+    rateLimitMax: DEFAULT_RATE_LIMIT_MAX,
+    rateLimitWindowMs: DEFAULT_RATE_LIMIT_WINDOW_MS,
     command: 'serve',
   };
 
@@ -102,6 +108,10 @@ function parseArgs(): Config {
       config.useHttps = true;
     } else if (arg === '--no-https') {
       config.useHttps = false;
+    } else if (arg === '--rate-limit-max' && i + 1 < args.length) {
+      config.rateLimitMax = parseInt(args[++i], 10);
+    } else if (arg === '--rate-limit-window-ms' && i + 1 < args.length) {
+      config.rateLimitWindowMs = parseInt(args[++i], 10);
     } else if (arg === '--approve-beacon' && i + 1 < args.length) {
       config.command = 'approve-beacon';
       config.beaconId = args[++i];
@@ -117,7 +127,7 @@ function parseArgs(): Config {
       config.command = 'show-fingerprint';
     } else if (arg === '--help' || arg === '-h') {
       console.log(
-        `\ndrone-coordinator [options]\n\nCommands:\n  serve                Start the coordinator server (default)\n  approve-beacon <id>  Approve a pending beacon by its ID\n  list-beacons         List all registered beacons and their trust status\n  --show-web-token     Print the current web UI access token\n  --generate-web-token Generate a new web UI access token\n  --show-fingerprint   Print the coordinator's TLS certificate fingerprint\n\nOptions:\n  --port <n>           Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>           Host to bind to (default: ${DEFAULT_HOST})\n  --web-port <n>       HTTP port for web UI (default: ${DEFAULT_WEB_PORT})\n  --web-host <h>       Host for web UI port (default: ${DEFAULT_WEB_HOST})\n  --config-dir <dir>   Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>          Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https              Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https           Disable HTTPS\n  --help               Show this help message\n      `
+        `\ndrone-coordinator [options]\n\nCommands:\n  serve                Start the coordinator server (default)\n  approve-beacon <id>  Approve a pending beacon by its ID\n  list-beacons         List all registered beacons and their trust status\n  --show-web-token     Print the current web UI access token\n  --generate-web-token Generate a new web UI access token\n  --show-fingerprint   Print the coordinator's TLS certificate fingerprint\n\nOptions:\n  --port <n>           Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>           Host to bind to (default: ${DEFAULT_HOST})\n  --web-port <n>       HTTP port for web UI (default: ${DEFAULT_WEB_PORT})\n  --web-host <h>       Host for web UI port (default: ${DEFAULT_WEB_HOST})\n  --config-dir <dir>   Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>          Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https              Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https           Disable HTTPS\n  --rate-limit-max <n> Max requests per IP per window (default: ${DEFAULT_RATE_LIMIT_MAX})\n  --rate-limit-window-ms <n> Rate limit window in ms (default: ${DEFAULT_RATE_LIMIT_WINDOW_MS})\n  --help               Show this help message\n      `
       );
       process.exit(0);
     }
@@ -259,6 +269,8 @@ function resolveUiDistPath(): string {
 export async function buildApp(opts?: {
   getToken?: () => string | null;
   https?: { cert: Buffer; key: Buffer };
+  rateLimitMax?: number;
+  rateLimitWindowMs?: number;
 }): Promise<FastifyInstance> {
   const app = fastify({
     logger: { level: process.env.LOG_LEVEL || 'info' },
@@ -267,6 +279,12 @@ export async function buildApp(opts?: {
 
   await app.register(fastifyCors, {
     origin: process.env.NODE_ENV === 'development' ? true : false,
+  });
+
+  // Register rate limiting (permissive defaults; configurable via CLI flags)
+  await app.register(import('@fastify/rate-limit'), {
+    max: opts?.rateLimitMax ?? DEFAULT_RATE_LIMIT_MAX,
+    timeWindow: opts?.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS,
   });
 
   // Register auth middleware for the web port
@@ -468,11 +486,19 @@ export async function main() {
   logger.info(`Serving UI from: ${uiDistPath}`);
 
   // Primary server (with TLS if configured)
-  const app = await buildApp(tlsOptions ? { https: tlsOptions } : undefined);
+  const app = await buildApp({
+    ...(tlsOptions ? { https: tlsOptions } : {}),
+    rateLimitMax: config.rateLimitMax,
+    rateLimitWindowMs: config.rateLimitWindowMs,
+  });
   await attachUi(app, uiDistPath);
 
   // Web server (HTTP only, no TLS, with auth for non-local connections)
-  const webApp = await buildApp({ getToken: () => getWebToken() });
+  const webApp = await buildApp({
+    getToken: () => getWebToken(),
+    rateLimitMax: config.rateLimitMax,
+    rateLimitWindowMs: config.rateLimitWindowMs,
+  });
   await attachUi(webApp, uiDistPath, { getToken: () => getWebToken() });
 
   // Check for stale sessions every hour (mark sessions inactive > 24 hours)
