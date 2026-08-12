@@ -32,11 +32,12 @@ export default function messageRoutes(app: FastifyInstance) {
         .send({ error: 'Target beacon not found', code: 'BEACON_NOT_FOUND' });
     }
     try {
-      const res = await sendBeaconCommand(
-        location.beaconId,
-        'deliverMessage',
-        { fromAgentId, fromBeaconId, toAgentId, body }
-      );
+      const res = await sendBeaconCommand(location.beaconId, 'deliverMessage', {
+        fromAgentId,
+        fromBeaconId,
+        toAgentId,
+        body,
+      });
       if (!res.ok) {
         return reply.code(502).send({
           error: 'Failed to deliver message to target beacon',
@@ -70,11 +71,11 @@ export default function messageRoutes(app: FastifyInstance) {
       let deliveredCount = 0;
       for (const beacon of beacons) {
         try {
-          const res = await sendBeaconCommand(
-            beacon.id,
-            'deliverMessage',
-            { fromAgentId, toChannel: channel, body }
-          );
+          const res = await sendBeaconCommand(beacon.id, 'deliverMessage', {
+            fromAgentId,
+            toChannel: channel,
+            body,
+          });
           if (res.ok) deliveredCount++;
         } catch {
           /* skip unreachable beacons */

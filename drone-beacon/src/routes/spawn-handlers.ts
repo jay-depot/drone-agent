@@ -46,7 +46,12 @@ export async function handleSpawnAgent(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    db.createSpawn(finalSpawnId, personaId ?? null, task ?? null, config ?? null);
+    db.createSpawn(
+      finalSpawnId,
+      personaId ?? null,
+      task ?? null,
+      config ?? null
+    );
     db.updateSpawnStatus(finalSpawnId, 'failed', null, message);
     return {
       status: 202,

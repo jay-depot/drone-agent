@@ -22,7 +22,11 @@ afterEach(async () => {
 });
 
 describe('Spawn Route', () => {
-  function mockResolve(value: { ok: boolean; status?: number; body?: unknown }) {
+  function mockResolve(value: {
+    ok: boolean;
+    status?: number;
+    body?: unknown;
+  }) {
     mockSend.mockResolvedValue(value);
   }
   function mockReject(err: Error) {
@@ -191,11 +195,9 @@ describe('Spawn Route', () => {
       url: '/api/spawn/b-filter?status=running',
     });
 
-    expect(mockSend).toHaveBeenCalledWith(
-      'b-filter',
-      'listSpawns',
-      { status: 'running' }
-    );
+    expect(mockSend).toHaveBeenCalledWith('b-filter', 'listSpawns', {
+      status: 'running',
+    });
   });
 
   it('GET /spawn/:beaconId returns 404 when beacon not found', async () => {
@@ -273,11 +275,9 @@ describe('Spawn Route', () => {
     const body = JSON.parse(res.body);
     expect(body.spawnId).toBe('s1');
     expect(body.status).toBe('running');
-    expect(mockSend).toHaveBeenCalledWith(
-      'b-status',
-      'getSpawn',
-      { spawnId: 's1' }
-    );
+    expect(mockSend).toHaveBeenCalledWith('b-status', 'getSpawn', {
+      spawnId: 's1',
+    });
   });
 
   it('GET /spawn/:beaconId/:spawnId returns 404 when beacon not found', async () => {
@@ -310,11 +310,9 @@ describe('Spawn Route', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.success).toBe(true);
-    expect(mockSend).toHaveBeenCalledWith(
-      'b-term',
-      'terminateSpawn',
-      { spawnId: 's1' }
-    );
+    expect(mockSend).toHaveBeenCalledWith('b-term', 'terminateSpawn', {
+      spawnId: 's1',
+    });
   });
 
   it('DELETE /spawn/:beaconId/:spawnId returns 404 when beacon not found', async () => {

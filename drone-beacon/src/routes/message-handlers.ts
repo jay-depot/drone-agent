@@ -6,9 +6,10 @@ import * as wsServer from '../ws-server.js';
  * Deliver a message to an agent or channel. Shared by the REST route and the
  * reverse-channel command handler so both paths behave identically.
  */
-export function handleDeliverMessage(
-  req: CreateMessageRequest
-): { status: number; body: unknown } {
+export function handleDeliverMessage(req: CreateMessageRequest): {
+  status: number;
+  body: unknown;
+} {
   const { fromAgentId, fromBeaconId, toAgentId, toChannel, body } = req;
 
   if (!fromAgentId) {
@@ -21,12 +22,18 @@ export function handleDeliverMessage(
   if (isLocalSender) {
     const sender = db.getAgent(fromAgentId);
     if (!sender) {
-      return { status: 403, body: { error: 'Sender agent not registered locally' } };
+      return {
+        status: 403,
+        body: { error: 'Sender agent not registered locally' },
+      };
     }
   }
 
   if (!toAgentId && !toChannel) {
-    return { status: 400, body: { error: 'Must specify toAgentId or toChannel' } };
+    return {
+      status: 400,
+      body: { error: 'Must specify toAgentId or toChannel' },
+    };
   }
 
   const message = db.createMessage(

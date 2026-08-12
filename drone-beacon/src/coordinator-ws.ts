@@ -92,7 +92,7 @@ function connect(): void {
     logger.info('Connected to coordinator reverse channel');
   });
 
-  ws.on('message', (data) => {
+  ws.on('message', data => {
     let msg: CommandMessage;
     try {
       msg = JSON.parse(data.toString());
@@ -163,7 +163,9 @@ async function handleCommand(msg: CommandMessage): Promise<void> {
       }
       case 'deliverMessage': {
         const result = handleDeliverMessage(
-          (msg.payload ?? {}) as unknown as Parameters<typeof handleDeliverMessage>[0]
+          (msg.payload ?? {}) as unknown as Parameters<
+            typeof handleDeliverMessage
+          >[0]
         );
         status = result.status;
         ok = result.status < 400;

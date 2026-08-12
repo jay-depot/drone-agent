@@ -311,7 +311,10 @@ export async function buildApp(opts?: {
 
   // Register mTLS middleware for the primary (beacon-facing) port
   if (opts?.enableMtls) {
-    app.addHook('onRequest', createMtlsMiddleware({ httpsEnabled: !!opts.https }));
+    app.addHook(
+      'onRequest',
+      createMtlsMiddleware({ httpsEnabled: !!opts.https })
+    );
     // Register the WebSocket reverse channel used by beacons to receive
     // spawn/message commands from the coordinator.
     await app.register(import('@fastify/websocket'));

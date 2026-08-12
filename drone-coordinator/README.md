@@ -33,19 +33,19 @@ pnpm start
 
 ## Command-Line Options
 
-| Option         | Default                            | Description             |
-| -------------- | ---------------------------------- | ----------------------- |
-| `--port`       | 3456                               | Port to listen on       |
-| `--host`       | 0.0.0.0                            | Host to bind to         |
-| `--web-port`   | 8080                               | HTTP port for web UI    |
-| `--web-host`   | 127.0.0.1                          | Host for web UI port    |
-| `--config-dir` | ~/.drone-coordinator               | Configuration directory |
-| `--db`         | <config-dir>/drone-coordinator.db  | Path to SQLite database |
-| `--https`      | true                                 | Enable HTTPS server     |
-| `--no-https`   | -                                  | Disable HTTPS server    |
-| `--rate-limit-max` | 1000                            | Max requests per IP per window |
-| `--rate-limit-window-ms` | 60000                       | Rate limit window in ms |
-| `--help`       | -                                  | Show help message       |
+| Option                   | Default                           | Description                    |
+| ------------------------ | --------------------------------- | ------------------------------ |
+| `--port`                 | 3456                              | Port to listen on              |
+| `--host`                 | 0.0.0.0                           | Host to bind to                |
+| `--web-port`             | 8080                              | HTTP port for web UI           |
+| `--web-host`             | 127.0.0.1                         | Host for web UI port           |
+| `--config-dir`           | ~/.drone-coordinator              | Configuration directory        |
+| `--db`                   | <config-dir>/drone-coordinator.db | Path to SQLite database        |
+| `--https`                | true                              | Enable HTTPS server            |
+| `--no-https`             | -                                 | Disable HTTPS server           |
+| `--rate-limit-max`       | 1000                              | Max requests per IP per window |
+| `--rate-limit-window-ms` | 60000                             | Rate limit window in ms        |
+| `--help`                 | -                                 | Show help message              |
 
 ### Commands
 

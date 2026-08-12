@@ -75,9 +75,8 @@ describe('sendBeaconCommand', () => {
 
   it('rejects when ws.send errors', async () => {
     const ws = makeFakeWs();
-    (ws.send as any) = vi.fn(
-      (_data: string, cb?: (err?: Error) => void) =>
-        cb?.(new Error('send failed'))
+    (ws.send as any) = vi.fn((_data: string, cb?: (err?: Error) => void) =>
+      cb?.(new Error('send failed'))
     );
     _registerTestConnection('b1', ws);
 

@@ -1,7 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
 import { randomUUID } from 'node:crypto';
-import { getClientCertFingerprint, resolveBeaconIdByFingerprint } from './mtls.js';
+import {
+  getClientCertFingerprint,
+  resolveBeaconIdByFingerprint,
+} from './mtls.js';
 import { logger } from './logger.js';
 
 /**
@@ -45,13 +48,18 @@ interface IncomingMessage {
 export function registerBeaconWebSocket(app: FastifyInstance): void {
   app.get('/ws/beacon', { websocket: true }, (socket, request) => {
     const fingerprint = getClientCertFingerprint(request as any);
-    const beaconId = fingerprint ? resolveBeaconIdByFingerprint(fingerprint) : undefined;
+    const beaconId = fingerprint
+      ? resolveBeaconIdByFingerprint(fingerprint)
+      : undefined;
 
     if (!beaconId) {
       logger.warn(
         'Rejected beacon WebSocket connection: client certificate not a registered beacon'
       );
-      socket.close(4001, 'Unauthorized: client certificate not a registered beacon');
+      socket.close(
+        4001,
+        'Unauthorized: client certificate not a registered beacon'
+      );
       return;
     }
 
@@ -82,7 +90,9 @@ export function registerBeaconWebSocket(app: FastifyInstance): void {
 
     socket.on('close', () => {
       connections.delete(beaconId);
-      logger.info(`Beacon ${beaconId} disconnected from reverse-channel WebSocket`);
+      logger.info(
+        `Beacon ${beaconId} disconnected from reverse-channel WebSocket`
+      );
     });
   });
 }
@@ -100,7 +110,9 @@ export function sendBeaconCommand(
 ): Promise<CommandResponse> {
   const conn = connections.get(beaconId);
   if (!conn) {
-    return Promise.reject(new Error('Beacon not connected via reverse channel'));
+    return Promise.reject(
+      new Error('Beacon not connected via reverse channel')
+    );
   }
 
   const id = randomUUID();

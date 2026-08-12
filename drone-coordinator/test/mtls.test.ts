@@ -7,7 +7,8 @@ import {
 } from '../src/mtls.js';
 import { registerBeaconTrust } from '../src/db/index.js';
 
-const TEST_FP = 'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
+const TEST_FP =
+  'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
 
 function makeReq(url: string, method = 'GET', certFingerprint?: string) {
   return {
@@ -15,9 +16,7 @@ function makeReq(url: string, method = 'GET', certFingerprint?: string) {
     method,
     socket: {
       getPeerCertificate: () =>
-        certFingerprint
-          ? { fingerprint256: certFingerprint }
-          : false,
+        certFingerprint ? { fingerprint256: certFingerprint } : false,
     },
   } as any;
 }

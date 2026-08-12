@@ -36,7 +36,7 @@ describe('WebSocket Server - IP Validation', () => {
     expect(isLocalConnection('203.0.113.1')).toBe(false);
   });
 
-  it('should identify the machine\'s own interface addresses', () => {
+  it("should identify the machine's own interface addresses", () => {
     const interfaces = networkInterfaces();
     for (const [, addrs] of Object.entries(interfaces)) {
       if (!addrs) continue;

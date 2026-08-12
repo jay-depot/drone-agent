@@ -28,7 +28,8 @@ export default function beaconRoutes(app: FastifyInstance) {
             request.body.tlsFingerprint.replace(/:/g, '').toLowerCase()
         ) {
           return reply.code(403).send({
-            error: 'Client certificate fingerprint does not match the claimed TLS fingerprint',
+            error:
+              'Client certificate fingerprint does not match the claimed TLS fingerprint',
           });
         }
         const trustReq: RegisterBeaconTrustRequest = {
