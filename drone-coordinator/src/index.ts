@@ -42,6 +42,7 @@ import {
   publishInitialState,
 } from './ws-pubsub.js';
 import { createWebAuthMiddleware, isLocalRequest } from './web-auth.js';
+import { createMtlsMiddleware } from './mtls.js';
 
 const DEFAULT_PORT = 3456;
 const DEFAULT_HOST = '0.0.0.0';
@@ -83,7 +84,7 @@ function parseArgs(): Config {
     webHost: DEFAULT_WEB_HOST,
     configDir: DEFAULT_CONFIG_DIR,
     dbPath: path.join(DEFAULT_CONFIG_DIR, DEFAULT_DB_FILENAME),
-    useHttps: process.env.COORDINATOR_HTTPS === 'true',
+    useHttps: true,
     rateLimitMax: DEFAULT_RATE_LIMIT_MAX,
     rateLimitWindowMs: DEFAULT_RATE_LIMIT_WINDOW_MS,
     command: 'serve',
@@ -127,7 +128,7 @@ function parseArgs(): Config {
       config.command = 'show-fingerprint';
     } else if (arg === '--help' || arg === '-h') {
       console.log(
-        `\ndrone-coordinator [options]\n\nCommands:\n  serve                Start the coordinator server (default)\n  approve-beacon <id>  Approve a pending beacon by its ID\n  list-beacons         List all registered beacons and their trust status\n  --show-web-token     Print the current web UI access token\n  --generate-web-token Generate a new web UI access token\n  --show-fingerprint   Print the coordinator's TLS certificate fingerprint\n\nOptions:\n  --port <n>           Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>           Host to bind to (default: ${DEFAULT_HOST})\n  --web-port <n>       HTTP port for web UI (default: ${DEFAULT_WEB_PORT})\n  --web-host <h>       Host for web UI port (default: ${DEFAULT_WEB_HOST})\n  --config-dir <dir>   Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>          Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https              Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https           Disable HTTPS\n  --rate-limit-max <n> Max requests per IP per window (default: ${DEFAULT_RATE_LIMIT_MAX})\n  --rate-limit-window-ms <n> Rate limit window in ms (default: ${DEFAULT_RATE_LIMIT_WINDOW_MS})\n  --help               Show this help message\n      `
+        `\ndrone-coordinator [options]\n\nCommands:\n  serve                Start the coordinator server (default)\n  approve-beacon <id>  Approve a pending beacon by its ID\n  list-beacons         List all registered beacons and their trust status\n  --show-web-token     Print the current web UI access token\n  --generate-web-token Generate a new web UI access token\n  --show-fingerprint   Print the coordinator's TLS certificate fingerprint\n\nOptions:\n  --port <n>           Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>           Host to bind to (default: ${DEFAULT_HOST})\n  --web-port <n>       HTTP port for web UI (default: ${DEFAULT_WEB_PORT})\n  --web-host <h>       Host for web UI port (default: ${DEFAULT_WEB_HOST})\n  --config-dir <dir>   Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>          Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https              Enable HTTPS (default: enabled)\n  --no-https           Disable HTTPS\n  --rate-limit-max <n> Max requests per IP per window (default: ${DEFAULT_RATE_LIMIT_MAX})\n  --rate-limit-window-ms <n> Rate limit window in ms (default: ${DEFAULT_RATE_LIMIT_WINDOW_MS})\n  --help               Show this help message\n      `
       );
       process.exit(0);
     }
@@ -268,13 +269,28 @@ function resolveUiDistPath(): string {
  */
 export async function buildApp(opts?: {
   getToken?: () => string | null;
-  https?: { cert: Buffer; key: Buffer };
+  enableMtls?: boolean;
+  https?: {
+    cert: Buffer;
+    key: Buffer;
+    requestCert?: boolean;
+    rejectUnauthorized?: boolean;
+  };
   rateLimitMax?: number;
   rateLimitWindowMs?: number;
 }): Promise<FastifyInstance> {
   const app = fastify({
     logger: { level: process.env.LOG_LEVEL || 'info' },
-    ...(opts?.https ? { https: { allowHTTP1: true, ...opts.https } } : {}),
+    ...(opts?.https
+      ? {
+          https: {
+            allowHTTP1: true,
+            requestCert: true,
+            rejectUnauthorized: false,
+            ...opts.https,
+          },
+        }
+      : {}),
   });
 
   await app.register(fastifyCors, {
@@ -290,6 +306,11 @@ export async function buildApp(opts?: {
   // Register auth middleware for the web port
   if (opts?.getToken) {
     app.addHook('onRequest', createWebAuthMiddleware(opts.getToken));
+  }
+
+  // Register mTLS middleware for the primary (beacon-facing) port
+  if (opts?.enableMtls) {
+    app.addHook('onRequest', createMtlsMiddleware({ httpsEnabled: !!opts.https }));
   }
 
   // Register API routes
@@ -488,6 +509,7 @@ export async function main() {
   // Primary server (with TLS if configured)
   const app = await buildApp({
     ...(tlsOptions ? { https: tlsOptions } : {}),
+    enableMtls: true,
     rateLimitMax: config.rateLimitMax,
     rateLimitWindowMs: config.rateLimitWindowMs,
   });

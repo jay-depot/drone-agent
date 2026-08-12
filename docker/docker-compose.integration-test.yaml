@@ -45,6 +45,7 @@ services:
     environment:
       - COORDINATOR_HOST=drone-coordinator
       - COORDINATOR_PORT=3456
+      - COORDINATOR_HTTPS=true
       - DB_PATH=/data/beacon.db
     volumes:
       - beacon-data:/data
@@ -84,7 +85,8 @@ services:
       dockerfile: docker/test-runner.Dockerfile
     container_name: test-runner
     environment:
-      - COORDINATOR_URL=http://drone-coordinator:3456
+      - COORDINATOR_URL=https://drone-coordinator:3456
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
       - BEACON_URL=http://drone-beacon:3457
       - AGENT_URL=http://dummy-agent:3459
       - ECHO_LLM_URL=http://echo-llm:3458

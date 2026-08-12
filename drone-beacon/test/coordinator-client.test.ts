@@ -156,6 +156,29 @@ describe('Coordinator Client', () => {
 
       await expect(promise).rejects.toThrow(/fingerprint mismatch/);
     });
+
+    it('passes the beacon client cert/key to https.request for mTLS', async () => {
+      const { createCoordinatorFetch } =
+        await import('../src/coordinator-client.js');
+      const { httpsRequest } = makeHttpsRequestMock({
+        fingerprint256: TEST_FP,
+      });
+
+      const cfetch = createCoordinatorFetch(
+        'https://localhost:3456',
+        undefined,
+        undefined,
+        {
+          certPem: 'CERT_PEM',
+          keyPem: 'KEY_PEM',
+        } as any
+      );
+      void cfetch('https://localhost:3456/health');
+
+      const opts = httpsRequest.mock.calls[0][0] as any;
+      expect(opts.cert).toBe('CERT_PEM');
+      expect(opts.key).toBe('KEY_PEM');
+    });
   });
 
   describe('buildCheckServerIdentity', () => {
