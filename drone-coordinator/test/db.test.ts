@@ -19,7 +19,7 @@ import {
   registerBeaconTrust,
   getBeaconTrust,
   listBeaconTrust,
-  approveBeacon,
+  approveBeaconById,
   rejectBeacon,
   deleteBeaconTrust,
   createBeaconSession,
@@ -313,7 +313,7 @@ describe('Beacon Trust', () => {
       publicKey: 'key1',
     });
     expect(trust.status).toBe('approved');
-    expect(trust.approvalToken).toBeNull();
+    expect(trust.verificationCode).toBeTruthy();
     expect(trust.approvedAt).not.toBeNull();
   });
 
@@ -328,7 +328,7 @@ describe('Beacon Trust', () => {
     expect(trust.status).toBe('approved');
   });
 
-  it('should create pending trust with token for remote beacons', () => {
+  it('should create pending trust with verification code for remote beacons', () => {
     const trust = registerBeaconTrust({
       id: 'b1',
       name: 'B1',
@@ -337,7 +337,7 @@ describe('Beacon Trust', () => {
       publicKey: 'key1',
     });
     expect(trust.status).toBe('pending');
-    expect(trust.approvalToken).toBeTruthy();
+    expect(trust.verificationCode).toBeTruthy();
   });
 
   it('should re-register with matching public key and update connection info', () => {
@@ -358,6 +358,11 @@ describe('Beacon Trust', () => {
     expect(updated.host).toBe('10.0.0.2');
     expect(updated.port).toBe(3458);
     expect(updated.status).toBe('approved');
+    // The verification code must be recomputed and persisted on re-registration
+    // (re-registration runs on every restart, and existing rows may predate the
+    // verification_code column).
+    expect(updated.verificationCode).toBeTruthy();
+    expect(getBeaconTrust('b1')!.verificationCode).toBeTruthy();
   });
 
   it('should throw on public key mismatch', () => {
@@ -390,6 +395,7 @@ describe('Beacon Trust', () => {
     const trust = getBeaconTrust('b1');
     expect(trust).toBeDefined();
     expect(trust!.beaconId).toBe('b1');
+    expect(trust!.verificationCode).toBeTruthy();
   });
 
   it('should return undefined for non-existent trust', () => {
@@ -414,7 +420,7 @@ describe('Beacon Trust', () => {
     expect(listBeaconTrust()).toHaveLength(2);
   });
 
-  it('should approve a pending beacon by token', () => {
+  it('should approve a pending beacon by ID', () => {
     const trust = registerBeaconTrust({
       id: 'b1',
       name: 'B1',
@@ -422,13 +428,13 @@ describe('Beacon Trust', () => {
       port: 3457,
       publicKey: 'key1',
     });
-    const approved = approveBeacon(trust.approvalToken!);
+    const approved = approveBeaconById(trust.beaconId);
     expect(approved).not.toBeNull();
     expect(approved!.status).toBe('approved');
   });
 
-  it('should return null for invalid approval token', () => {
-    expect(approveBeacon('invalid-token')).toBeNull();
+  it('should return null for a beacon that is not pending', () => {
+    expect(approveBeaconById('nonexistent')).toBeNull();
   });
 
   it('should reject a beacon', () => {

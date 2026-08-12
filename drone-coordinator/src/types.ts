@@ -37,12 +37,11 @@ export interface BeaconTrust {
   host: string;
   port: number;
   status: BeaconTrustStatus;
-  approvalToken: string | null;
   approvedAt: number | null;
   tlsFingerprint: string | null;
+  verificationCode: string;
   createdAt: number;
   updatedAt: number;
-  verificationCode?: string;
 }
 
 export interface RegisterBeaconTrustRequest {
@@ -56,7 +55,6 @@ export interface RegisterBeaconTrustRequest {
 
 export interface BeaconStatusResponse {
   status: BeaconTrustStatus;
-  approvalToken?: string; // Only provided when status is 'pending'
   verificationCode?: string; // Human-readable code for MitM verification
 }
 

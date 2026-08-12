@@ -273,22 +273,28 @@ const WORD_LIST: string[] = [
 ];
 
 /**
- * Generate a human-readable verification code from two pieces of shared
- * information. Both sides (beacon and coordinator) can independently compute
- * the same code, which the admin can compare to verify no MitM occurred
- * during key exchange.
+ * Generate a human-readable verification code from three pieces of shared
+ * information: the beacon's public key, the beacon's TLS fingerprint, and
+ * the coordinator's TLS fingerprint. Both sides (beacon and coordinator) can
+ * independently compute the same code, which the admin can compare to verify
+ * no MitM occurred during key exchange. Including the coordinator's
+ * fingerprint makes the code bidirectional — it proves both the beacon's
+ * identity to the coordinator's operator and the coordinator's identity to
+ * the beacon's operator.
  *
  * The code is 4 words from a 256-word list, encoding 32 bits of a SHA-256
  * hash of the concatenated inputs. 4 words × 8 bits/word = 32 bits.
  */
 export function generateVerificationCode(
-  inputA: string,
-  inputB: string
+  beaconPublicKey: string,
+  beaconTlsFingerprint: string,
+  coordinatorTlsFingerprint: string
 ): string {
   const hash = crypto
     .createHash('sha256')
-    .update(inputA)
-    .update(inputB)
+    .update(beaconPublicKey)
+    .update(beaconTlsFingerprint)
+    .update(coordinatorTlsFingerprint)
     .digest();
 
   // Take first 4 bytes, encode each as a word index

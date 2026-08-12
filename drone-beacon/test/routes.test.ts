@@ -236,6 +236,9 @@ describe('Agent Routes', () => {
     expect(res.statusCode).toBe(201);
     const body = JSON.parse(res.body);
     expect(body.id).toBe('agent-1');
+    expect(body.coordinatorTrust).toBeDefined();
+    expect(body.coordinatorTrust.fingerprintTrusted).toBe(false);
+    expect(body.coordinatorTrust.beaconApproved).toBe(false);
   });
 
   it('GET /agents lists agents', async () => {
@@ -307,6 +310,32 @@ describe('Agent Routes', () => {
       url: '/agents/nonexistent',
     });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+// ── Coordinator Trust Routes ───────────────────────────────────────
+
+describe('Coordinator Trust Routes', () => {
+  it('GET /coordinator/trust reports both gate halves and the verification code', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/coordinator/trust',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.fingerprintTrusted).toBe(false);
+    expect(body.beaconApproved).toBe(false);
+    expect(body.pendingFingerprint).toBeNull();
+    expect(body.verificationCode).toBeNull();
+  });
+
+  it('POST /coordinator/trust requires a verificationCode', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/coordinator/trust',
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
   });
 });
 

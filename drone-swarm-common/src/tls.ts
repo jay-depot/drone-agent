@@ -37,7 +37,9 @@ async function generateTlsCertificateWithOpenssl(
   commonName: string = 'localhost'
 ): Promise<{ certPem: string; keyPem: string }> {
   if (/[/\\\0]/.test(commonName)) {
-    throw new Error(`Invalid commonName: must not contain '/', '\\', or null bytes`);
+    throw new Error(
+      `Invalid commonName: must not contain '/', '\\', or null bytes`
+    );
   }
   const tempDir = configDir;
 
@@ -47,19 +49,33 @@ async function generateTlsCertificateWithOpenssl(
     await execFileAsync(
       'openssl',
       [
-        'req', '-x509', '-newkey', 'rsa:2048',
-        '-keyout', path.join(tempDir, 'temp-key.pem'),
-        '-out', path.join(tempDir, 'temp-cert.pem'),
-        '-days', '365',
+        'req',
+        '-x509',
+        '-newkey',
+        'rsa:2048',
+        '-keyout',
+        path.join(tempDir, 'temp-key.pem'),
+        '-out',
+        path.join(tempDir, 'temp-cert.pem'),
+        '-days',
+        '365',
         '-nodes',
-        '-subj', `/CN=${commonName}`,
-        '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1',
+        '-subj',
+        `/CN=${commonName}`,
+        '-addext',
+        'subjectAltName=DNS:localhost,IP:127.0.0.1',
       ],
       { encoding: 'buffer' }
     );
 
-    const certPem = await fs.promises.readFile(path.join(tempDir, 'temp-cert.pem'), 'utf-8');
-    const keyPem = await fs.promises.readFile(path.join(tempDir, 'temp-key.pem'), 'utf-8');
+    const certPem = await fs.promises.readFile(
+      path.join(tempDir, 'temp-cert.pem'),
+      'utf-8'
+    );
+    const keyPem = await fs.promises.readFile(
+      path.join(tempDir, 'temp-key.pem'),
+      'utf-8'
+    );
 
     await fs.promises.unlink(path.join(tempDir, 'temp-cert.pem'));
     await fs.promises.unlink(path.join(tempDir, 'temp-key.pem'));
@@ -112,7 +128,10 @@ export async function loadOrCreateTlsIdentity(
   let keyPem: string;
 
   try {
-    const result = await generateTlsCertificateWithOpenssl(configDir, commonName);
+    const result = await generateTlsCertificateWithOpenssl(
+      configDir,
+      commonName
+    );
     certPem = result.certPem;
     keyPem = result.keyPem;
   } catch {

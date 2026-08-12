@@ -63,9 +63,9 @@ export function initDatabase(dataPath: string): Database.Database {
       host TEXT NOT NULL,
       port INTEGER NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending',
-      approval_token TEXT,
       approved_at INTEGER,
       tls_fingerprint TEXT,
+      verification_code TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
@@ -172,6 +172,18 @@ export function initDatabase(dataPath: string): Database.Database {
   }>;
   if (!insightCols.some(c => c.name === 'lastExamined')) {
     db.exec('ALTER TABLE insights ADD COLUMN lastExamined TEXT');
+  }
+
+  // Idempotent migration for beacon_trust: add verification_code and drop
+  // the obsolete approval_token column.
+  const beaconTrustCols = db
+    .prepare('PRAGMA table_info(beacon_trust)')
+    .all() as Array<{ name: string }>;
+  if (!beaconTrustCols.some(c => c.name === 'verification_code')) {
+    db.exec('ALTER TABLE beacon_trust ADD COLUMN verification_code TEXT');
+  }
+  if (beaconTrustCols.some(c => c.name === 'approval_token')) {
+    db.exec('ALTER TABLE beacon_trust DROP COLUMN approval_token');
   }
 
   // Seed built-in tool definitions
