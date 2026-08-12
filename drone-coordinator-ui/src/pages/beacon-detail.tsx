@@ -134,7 +134,9 @@ export default function BeaconDetailPage() {
             <p className="text-xs text-muted-foreground mt-1">
               This is the coordinator's copy of the bidirectional verification
               code. Transcribe it into the beacon's agent with{' '}
-              <code className="bg-muted px-1 rounded">/trust-coordinator</code>{' '}
+              <code className="bg-muted px-1 rounded">
+                /trust-coordinator {beacon.verificationCode}
+              </code>{' '}
               to confirm no MitM attack occurred during key exchange.
             </p>
           )}
@@ -183,8 +185,12 @@ export default function BeaconDetailPage() {
                   {beacon.verificationCode}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Display-only. This value is meant to be read here and entered
-                  on the beacon side to complete the trust handshake.
+                  Enter this code into an instance of drone-agent running on the
+                  beacon's host with{' '}
+                  <code className="bg-muted px-1 rounded">
+                    /trust-coordinator {beacon.verificationCode}
+                  </code>
+                  .
                 </p>
               </div>
             )}
