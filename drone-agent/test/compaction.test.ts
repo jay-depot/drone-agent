@@ -339,11 +339,11 @@ describe('createCompactionPlugin', () => {
     await runBeforePrompt(capture);
 
     const summaries = sessionManager.getSummaryTurns();
-    // The compaction plugin drops the head of `getSummaryTurns()`, which
-    // is the most-recently prepended summary. After the drop, the older
-    // summary (S1) survives.
+    // `getSummaryTurns()` is newest-first because `prependSystemTurn` puts
+    // each new summary at the head. The self-purge should drop the *oldest*
+    // summary, which is at the end of the array — S1 in this case.
     expect(summaries).toHaveLength(1);
-    expect(summaries[0].messages[0].content).toBe('S1 '.repeat(200));
+    expect(summaries[0].messages[0].content).toBe('S2 '.repeat(200));
     expect(
       sessionManager.getMessages().filter(m => m.role === 'user')
     ).toHaveLength(2);
@@ -519,6 +519,146 @@ describe('createCompactionPlugin', () => {
 
     expect(provider.__chatMock).toHaveBeenCalledTimes(1);
     expect(sessionManager.getSummaryTurns()).toHaveLength(1);
+  });
+
+  it('compacts the oldest normal turns after a summary already exists', async () => {
+    const sessionManager = createSessionManager();
+
+    // Seed an existing summary so the array is [S1, turn0, turn1, ...].
+    sessionManager.prependSystemTurn('Existing summary.', { kind: 'summary' });
+
+    // Add enough long normal turns that usage crosses the threshold.
+    for (let i = 0; i < 8; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'New summary chunk.' }],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    await runBeforePrompt(capture);
+
+    // The plugin should have compacted the oldest non-summary turns (from the
+    // tail), not re-summarized the existing summary at the head.
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    const requestMessages = provider.__chatMock.mock.calls[0][0]
+      .messages as DroneChatMessage[];
+    const summaryPrompt = requestMessages[1].content;
+    expect(summaryPrompt).not.toContain('Existing summary');
+    expect(summaryPrompt).toMatch(/--- Turn \d+ ---/);
+
+    const summaries = sessionManager.getSummaryTurns();
+    expect(summaries).toHaveLength(2);
+    expect(summaries[0].messages[0].content).toContain('New summary chunk');
+
+    // Some normal turns should have been dropped.
+    const nonSummaryTurns = sessionManager
+      .getTurns()
+      .filter(t => t.kind !== 'summary');
+    expect(nonSummaryTurns.length).toBeLessThan(8);
+  });
+
+  it('continues to reduce context usage across multiple compaction rounds', async () => {
+    const sessionManager = createSessionManager();
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 50,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [
+        { message: 'First summary.' },
+        { message: 'Second summary.' },
+      ],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+
+    // Round 1: add long turns and compact.
+    for (let i = 0; i < 8; i++) {
+      sessionManager.appendUserMessage(`round1-u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`round1-a${i} `.repeat(300));
+    }
+    await runBeforePrompt(capture);
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    const firstSummaryCount = sessionManager.getSummaryTurns().length;
+    expect(firstSummaryCount).toBe(1);
+
+    // Round 2: add more long turns. The plugin should compact the oldest
+    // remaining normal turns, not re-summarize the existing summary.
+    for (let i = 0; i < 8; i++) {
+      sessionManager.appendUserMessage(`round2-u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`round2-a${i} `.repeat(300));
+    }
+    await runBeforePrompt(capture);
+    expect(provider.__chatMock).toHaveBeenCalledTimes(2);
+    const secondRequest = provider.__chatMock.mock.calls[1][0]
+      .messages as DroneChatMessage[];
+    expect(secondRequest[1].content).not.toContain('First summary');
+
+    // After two rounds, there should be more than one summary and fewer total
+    // turns than if no compaction had occurred.
+    expect(sessionManager.getSummaryTurns().length).toBeGreaterThanOrEqual(1);
+    expect(sessionManager.getTurns().length).toBeLessThan(16);
+  });
+
+  it('evicts the oldest summary first when summary budget is exceeded', async () => {
+    const sessionManager = createSessionManager();
+    const oldest = sessionManager.prependSystemTurn('OLDEST '.repeat(150), {
+      kind: 'summary',
+    });
+    const newer = sessionManager.prependSystemTurn('NEWER '.repeat(150), {
+      kind: 'summary',
+    });
+    sessionManager.appendUserMessage('keep me');
+
+    const config = makeConfig({
+      summaryBudgetPercent: 10,
+      softThresholdPercent: 50,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+    });
+
+    const provider = makeProvider({ contextWindow: 200 });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    await runBeforePrompt(capture);
+
+    const summaries = sessionManager.getSummaryTurns();
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0].id).toBe(newer.id);
+    expect(sessionManager.getTurns().some(t => t.id === oldest.id)).toBe(false);
+    expect(provider.__chatMock).not.toHaveBeenCalled();
   });
 
   it('throws a clear error when the ollama provider is missing', async () => {

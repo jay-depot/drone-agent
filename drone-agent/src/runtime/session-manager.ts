@@ -25,6 +25,7 @@ export type DroneSessionManager = {
   dropOldestNonSummaryTurns: (count: number) => DroneSessionTurn[];
   getSummaryTurns: () => DroneSessionTurn[];
   dropSummaryTurnById: (id: string) => DroneSessionTurn | null;
+  dropTurnsByIds: (ids: string[]) => DroneSessionTurn[];
   prependSystemTurn: (
     content: string,
     opts?: { kind?: 'summary' }
@@ -143,6 +144,20 @@ export function createSessionManager(): DroneSessionManager {
 
       const [dropped] = turns.splice(index, 1);
       return dropped;
+    },
+    dropTurnsByIds: ids => {
+      if (ids.length === 0) {
+        return [];
+      }
+
+      const idSet = new Set(ids);
+      const removed: DroneSessionTurn[] = [];
+      for (let i = turns.length - 1; i >= 0; i--) {
+        if (idSet.has(turns[i].id)) {
+          removed.unshift(turns.splice(i, 1)[0]);
+        }
+      }
+      return removed;
     },
     prependSystemTurn: (content, opts) => {
       const kind = opts?.kind;
