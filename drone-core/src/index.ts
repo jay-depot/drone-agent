@@ -130,6 +130,11 @@ export type {
   DroneLspInstallSpec,
 } from './lsp-types.js';
 export type { DroneLspPlatformKey, DroneLspPlatformSpec } from './lsp-types.js';
+export {
+  commandExistsOnPath,
+  resolveDroneExecutable,
+  type ResolveDroneExecutableOptions,
+} from './utils.js';
 
 // ── MCP types ───────────────────────────────────────────────────────
 

@@ -19,6 +19,7 @@ import {
   type CoordinatorClient,
   type CoordinatorClientOptions,
 } from './coordinator-client.js';
+import { resolveDroneExecutable } from 'drone-core';
 import {
   initCoordinatorTrust,
   setPendingCoordinatorFingerprint,
@@ -192,8 +193,12 @@ async function main() {
   logger.info(`TLS certificate fingerprint: ${tlsIdentity.fingerprint}`);
 
   // Initialize spawner
+  const resolvedSpawnAgentPath = await resolveDroneExecutable({
+    commandName: config.spawnAgentPath,
+  });
+
   const spawnerConfig: SpawnerConfig = {
-    agentPath: config.spawnAgentPath,
+    agentPath: resolvedSpawnAgentPath,
     timeoutMs: config.spawnTimeoutMs,
     maxConcurrentSpawns: config.maxConcurrentSpawns,
     beaconHost: config.host === '0.0.0.0' ? 'localhost' : config.host,
@@ -201,7 +206,7 @@ async function main() {
   };
   initSpawner(spawnerConfig);
   logger.info(
-    `Spawner configured: path=${config.spawnAgentPath}, timeout=${config.spawnTimeoutMs}ms, max=${config.maxConcurrentSpawns}`
+    `Spawner configured: path=${resolvedSpawnAgentPath}, timeout=${config.spawnTimeoutMs}ms, max=${config.maxConcurrentSpawns}`
   );
 
   // Set beacon address for routes
