@@ -335,7 +335,9 @@ async function attachUi(
   uiDistPath: string,
   opts?: { getToken?: () => string | null }
 ): Promise<void> {
-  await app.register(import('@fastify/websocket'));
+  if (!app.hasRequestDecorator('ws')) {
+    await app.register(import('@fastify/websocket'));
+  }
 
   // WebSocket endpoint for real-time events
   app.get('/ws', { websocket: true }, (socket, req) => {
