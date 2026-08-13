@@ -28,7 +28,7 @@ export type RuntimeFlagRegistry = {
 
 const TOOL_MANAGEMENT_EXPLAINER = `## Tool Management
 
-When you do not have the necessary tool to perform a task, check whether it is available by calling runtime__list_tools. If it is, call runtime__mount_tool to activate it, and it will then be available for you to call. It is strongly recommended to call runtime__unmount_tool when you are done using a tool to free up resources. runtime__list_tools can optionally be filtered by plugin ID. Use the list of enabled plugins given below for valid names to filter by.`;
+When you do not have the necessary tool to perform a task, check whether it is available by calling \`runtime__list_tools\`. If it is, call \`runtime__mount_tool\` to activate it, and it will then be available for you to call. It is strongly recommended to call \`runtime__unmount_tool\` when you are done using a tool to free up resources. \`runtime__list_tools\` can optionally be filtered by plugin ID. Use the list of enabled plugins given below for valid names to filter by.`;
 
 export function createRuntimeFlagRegistry(): RuntimeFlagRegistry {
   const flags = new Map<string, string>();
