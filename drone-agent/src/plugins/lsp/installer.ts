@@ -491,7 +491,7 @@ export async function ensureServerInstalled(
   );
 
   // 1. PATH probe — short-circuit before any disk activity.
-    if (await commandExistsOnPath(spec.command, process.env)) {
+  if (await commandExistsOnPath(spec.command, process.env)) {
     return { command: spec.command, args: spec.args, source: 'path' };
   }
 

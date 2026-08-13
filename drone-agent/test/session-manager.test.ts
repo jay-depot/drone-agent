@@ -181,7 +181,10 @@ describe('createSessionManager', () => {
     session.appendUserMessage('c');
     const summary = session.prependSystemTurn('summary', { kind: 'summary' });
 
-    const removed = session.dropTurnsByIds([summary.id, session.getTurns()[3].id]);
+    const removed = session.dropTurnsByIds([
+      summary.id,
+      session.getTurns()[3].id,
+    ]);
 
     expect(removed.map(t => t.messages[0].content)).toEqual(['summary', 'c']);
     expect(session.getTurns().map(t => t.messages[0].content)).toEqual([
