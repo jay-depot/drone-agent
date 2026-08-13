@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import { commandExistsOnPath } from 'drone-core';
 import type { DronePlugin } from 'drone-core';
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -89,42 +90,6 @@ function getDownloadUrl(): string | null {
   }
 
   return null;
-}
-
-async function commandExistsOnPath(command: string): Promise<boolean> {
-  if (!command) {
-    return false;
-  }
-  if (command.includes(path.sep) || command.includes('/')) {
-    try {
-      await access(command, fsConstants.X_OK);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  const pathEnv = process.env.PATH ?? '';
-  const pathSep = process.platform === 'win32' ? ';' : ':';
-  const exts =
-    process.platform === 'win32'
-      ? (process.env.PATHEXT ?? '.EXE;.CMD;.BAT;.COM')
-          .split(';')
-          .map(ext => ext.toLowerCase())
-      : [''];
-  const directories = pathEnv.split(pathSep).filter(Boolean);
-  for (const directory of directories) {
-    for (const ext of exts) {
-      const candidate = path.join(directory, command + ext);
-      try {
-        await access(candidate, fsConstants.X_OK);
-        return true;
-      } catch {
-        // continue
-      }
-    }
-  }
-  return false;
 }
 
 async function readManifest(

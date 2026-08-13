@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
 import type { DronePlugin } from 'drone-core';
 import { SubagentDispatchBlock } from '../../tui/components/SubagentDispatchBlock.js';
 import { writeNdjsonEvent, type OutputEvent } from '../../output-handlers.js';
+import { resolveDroneExecutable } from 'drone-core';
 
 type RuntimeInfo = {
   subagentId?: string;
@@ -132,30 +132,27 @@ export const subagentPlugin: DronePlugin = {
             args.push('--persona', input.persona as string);
           }
 
-          // Find the drone-agent executable
-          const execPath = resolve(
-            process.cwd(),
-            'drone-agent',
-            'bin',
-            'drone-agent'
-          );
+          // Find the drone-agent executable (PATH first, then current argv[1]).
+          const execPath = await resolveDroneExecutable({
+            fallbackArgv1: process.argv[1],
+          });
+
+          let timedOut = false;
+          const collectedOutput: string[] = [];
+          let exitCode: number | undefined;
+          let stderr = '';
+
+          // Spawn the subagent process
+          const child = spawn(execPath, args, {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            env: {
+              ...process.env,
+              DRONE_SUBAGENT_ID: subagentId,
+              DRONE_PERSONA: input.persona as string | undefined,
+            },
+          });
 
           return new Promise((resolvePromise, rejectPromise) => {
-            let timedOut = false;
-            const collectedOutput: string[] = [];
-            let exitCode: number | undefined;
-            let stderr = '';
-
-            // Spawn the subagent process
-            const child = spawn(execPath, args, {
-              stdio: ['pipe', 'pipe', 'pipe'],
-              env: {
-                ...process.env,
-                DRONE_SUBAGENT_ID: subagentId,
-                DRONE_PERSONA: input.persona as string | undefined,
-              },
-            });
-
             // Activity timeout — resets on any NDJSON event from subagent
             let activityTimer!: ReturnType<typeof setTimeout>;
             const startActivityTimer = () => {
@@ -223,7 +220,6 @@ export const subagentPlugin: DronePlugin = {
                   // Any valid NDJSON event resets the activity timer
                   clearTimeout(activityTimer);
                   startActivityTimer();
-
                   if (
                     event.kind === 'reasoning' &&
                     typeof event.content === 'string'
