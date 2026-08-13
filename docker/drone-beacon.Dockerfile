@@ -43,6 +43,8 @@ COPY --from=builder /app/node_modules ./node_modules
 RUN mkdir -p /config && chown -R node:node /config
 
 # Set working directory
+ENV PATH="/app/drone-agent/bin:${PATH}"
+
 WORKDIR /app/drone-beacon
 
 # Expose the port
