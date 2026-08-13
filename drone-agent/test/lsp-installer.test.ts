@@ -8,7 +8,6 @@ import { create as createTar } from 'tar';
 import {
   resolveTarballUrl,
   resolvePlatformSpec,
-  commandExistsOnPath,
   computeCacheKey,
   ensureServerInstalled,
   resolveCacheDir,
@@ -16,6 +15,7 @@ import {
   type InstallerSpec,
 } from '../src/plugins/lsp/installer.js';
 import type { DroneLspInstallSpec } from 'drone-core';
+import { commandExistsOnPath } from 'drone-core';
 
 const TEST_ENTRY_POINT = 'lib/cli.mjs';
 
