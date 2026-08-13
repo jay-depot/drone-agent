@@ -161,6 +161,42 @@ describe('createSessionManager', () => {
     expect(session.getTurns()).toHaveLength(1);
   });
 
+  it('drops turns by id, preserving order in the returned array', () => {
+    const session = createSessionManager();
+    session.appendUserMessage('a');
+    session.appendUserMessage('b');
+    session.appendUserMessage('c');
+
+    const turns = session.getTurns();
+    const removed = session.dropTurnsByIds([turns[0].id, turns[2].id]);
+
+    expect(removed.map(t => t.messages[0].content)).toEqual(['a', 'c']);
+    expect(session.getTurns().map(t => t.messages[0].content)).toEqual(['b']);
+  });
+
+  it('drops turns by id across mixed summary and normal turns', () => {
+    const session = createSessionManager();
+    session.appendUserMessage('a');
+    session.appendUserMessage('b');
+    session.appendUserMessage('c');
+    const summary = session.prependSystemTurn('summary', { kind: 'summary' });
+
+    const removed = session.dropTurnsByIds([summary.id, session.getTurns()[3].id]);
+
+    expect(removed.map(t => t.messages[0].content)).toEqual(['summary', 'c']);
+    expect(session.getTurns().map(t => t.messages[0].content)).toEqual([
+      'a',
+      'b',
+    ]);
+  });
+
+  it('returns an empty array when dropTurnsByIds receives no ids', () => {
+    const session = createSessionManager();
+    session.appendUserMessage('a');
+    expect(session.dropTurnsByIds([])).toEqual([]);
+    expect(session.getTurns()).toHaveLength(1);
+  });
+
   it('prepends system turns as the new head', () => {
     const session = createSessionManager();
     session.appendUserMessage('user');
