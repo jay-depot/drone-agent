@@ -3,6 +3,7 @@ import type {
   DronePluginRegistration,
   DroneSwarmCapability,
   DroneSearchPath,
+  DroneSlashCommandContext,
 } from 'drone-core';
 import { execFileAsync } from '../../shared/exec-async.js';
 import path from 'node:path';
@@ -90,6 +91,52 @@ export const searchPlugin: DronePlugin = {
         return handleRegexSearch(input);
       },
     });
+
+    // ── /search-files slash command ────────────────────────────────
+    registration.registerSlashCommand({
+      command: '/search-files',
+      description: 'Search files: regex (default) or semantic (--semantic)',
+      handler: async (ctx: DroneSlashCommandContext) => {
+        const parsed = parseSearchFilesArgs(ctx.args);
+        if (!parsed) {
+          ctx.logger.info(
+            'Usage: /search-files <pattern> [--semantic] [--path <dir>] [--limit N] [--glob <g>]'
+          );
+          return true;
+        }
+
+        const input: Record<string, unknown> = {
+          pattern: parsed.pattern,
+          mode: parsed.mode,
+          path: parsed.path,
+          maxResults: parsed.limit,
+        };
+        if (parsed.glob) input.glob = parsed.glob;
+
+        let raw: string;
+        try {
+          raw = await ctx.engine.executeTool('search__text', input);
+        } catch (err) {
+          ctx.logger.error(
+            `search failed: ${err instanceof Error ? err.message : String(err)}`
+          );
+          return true;
+        }
+
+        const data = JSON.parse(raw) as Record<string, unknown>;
+
+        if (parsed.mode === 'semantic') {
+          ctx.logger.info(formatSemanticResults(parsed.pattern, data));
+        } else {
+          ctx.logger.info(formatRegexResults(data));
+        }
+        return true;
+      },
+    });
+
+    registration.registerHelp(
+      '/search-files <pattern> [--semantic] [--path <dir>] [--limit N] [--glob <g>]'
+    );
 
     // ── Lifecycle ───────────────────────────────────────────────────
     registration.hooks.onPluginsLoaded(async () => {
@@ -387,4 +434,147 @@ async function handleRegexSearch(
     null,
     2
   );
+}
+
+// ── /search-files helpers ────────────────────────────────────────────
+
+type SearchFilesArgs = {
+  pattern: string;
+  mode: 'regex' | 'semantic';
+  path: string;
+  limit: number;
+  glob: string | null;
+};
+
+export function parseSearchFilesArgs(args: string[]): SearchFilesArgs | null {
+  let mode: 'regex' | 'semantic' = 'regex';
+  let pathArg = process.cwd();
+  let limit = 10;
+  let glob: string | null = null;
+  const positional: string[] = [];
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    switch (arg) {
+      case '--semantic':
+        mode = 'semantic';
+        break;
+      case '--path':
+        pathArg = args[++i];
+        if (pathArg === undefined) return null;
+        break;
+      case '--limit': {
+        const raw = args[++i];
+        if (raw === undefined) return null;
+        const n = Number(raw);
+        if (!Number.isFinite(n) || n < 1) return null;
+        limit = Math.floor(n);
+        break;
+      }
+      case '--glob':
+        glob = args[++i];
+        if (glob === undefined) return null;
+        break;
+      default:
+        if (arg.startsWith('--')) return null;
+        positional.push(arg);
+    }
+  }
+
+  const pattern = positional.join(' ').trim();
+  if (!pattern) return null;
+
+  return { pattern, mode, path: pathArg, limit, glob };
+}
+
+export function extractSnippet(
+  query: string,
+  chunkText: string,
+  maxLen = 200
+): string {
+  const terms = query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(t => t.length > 0);
+
+  const sentences = chunkText
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+
+  if (sentences.length === 0) return '';
+
+  let best = sentences[0];
+  let bestScore = -1;
+  for (const sentence of sentences) {
+    const lower = sentence.toLowerCase();
+    const score = terms.filter(t => lower.includes(t)).length;
+    if (score > bestScore) {
+      bestScore = score;
+      best = sentence;
+    }
+  }
+
+  if (best.length <= maxLen) return best;
+
+  // Trim to a window around the first matched term.
+  const lower = best.toLowerCase();
+  const firstMatch = terms.find(t => lower.includes(t));
+  if (firstMatch) {
+    const idx = lower.indexOf(firstMatch);
+    const start = Math.max(0, idx - Math.floor(maxLen / 3));
+    const end = Math.min(best.length, start + maxLen);
+    const prefix = start > 0 ? '…' : '';
+    const suffix = end < best.length ? '…' : '';
+    const budget = maxLen - prefix.length - suffix.length;
+    const trimmedStart = Math.max(0, idx - Math.floor(budget / 3));
+    const trimmedEnd = Math.min(best.length, trimmedStart + budget);
+    return prefix + best.slice(trimmedStart, trimmedEnd).trim() + suffix;
+  }
+
+  return best.slice(0, maxLen).trim() + '…';
+}
+
+function formatRegexResults(data: Record<string, unknown>): string {
+  const results = (data.results ?? []) as Array<{
+    file: string;
+    line: number;
+    content: string;
+  }>;
+  const count = (data.resultCount as number) ?? results.length;
+  const truncated = data.truncated === true;
+
+  const lines = results.map(r => `  ${r.file}:${r.line}   ${r.content}`);
+  return [
+    `${count} result${count === 1 ? '' : 's'}${truncated ? ' (truncated)' : ''}`,
+    ...lines,
+  ].join('\n');
+}
+
+function formatSemanticResults(
+  query: string,
+  data: Record<string, unknown>
+): string {
+  if (data.note) {
+    return String(data.note);
+  }
+
+  const results = (data.results ?? []) as Array<{
+    file: string;
+    score: number;
+    content: string;
+  }>;
+  const count = (data.resultCount as number) ?? results.length;
+  const truncated = data.truncated === true;
+
+  const lines: string[] = [];
+  for (const r of results) {
+    const snippet = extractSnippet(query, r.content);
+    lines.push(`  ${r.score.toFixed(2)}  ${r.file}`);
+    lines.push(`        ${snippet}`);
+  }
+  return [
+    `${count} result${count === 1 ? '' : 's'}${truncated ? ' (truncated)' : ''}`,
+    ...lines,
+  ].join('\n');
 }
