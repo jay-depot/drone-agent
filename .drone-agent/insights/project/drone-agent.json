@@ -170,5 +170,13 @@
   {
     "timestamp": "2026-08-14T15:59:42.289Z",
     "insight": "sqlite-vec's ESM entry (index.mjs) resolves its platform extension via `import.meta.resolve`, which under pnpm's store layout can double the `.so` suffix (vec0.so.so) and fail to load — this surfaced only in the Docker/CI beacon image, not locally. The CJS entry (index.cjs) uses `require.resolve` and resolves the correct path. Fix: load native-extension packages that ship both ESM+CJS entries via `createRequire(import.meta.url)` + `require(...)` in ESM code, rather than `import * as`. This is a general pattern for pnpm + native `.so`/`.dylib`/`.dll` packages."
+  },
+  {
+    "timestamp": "2026-08-14T18:22:49.442Z",
+    "insight": "Wiki lint (drone-swarm-common/src/wiki-storage.ts lintPages) has no \"warnings\" concept today — it returns only `{ issues }`. Future feature: add a warnings channel to wiki lint, including an \"excessively long page\" warning, which could optionally trigger an automatic page-splitting process. Deferred out of the CodeQL regex-length-guard branch deliberately."
+  },
+  {
+    "timestamp": "2026-08-14T18:57:16.308Z",
+    "insight": "CodeQL suppression: `// lgtm[rule-id]` comments do NOT suppress GitHub CodeQL/code-scanning alerts — `lgtm[...]` is LGTM.com-only syntax (LGTM.com shut down Dec 2022). The correct, currently-supported inline suppression is `// codeql[rule-id]`, placed on the sink line or the line immediately before it. The rule ID must match exactly including the `js/` prefix — TypeScript is analyzed by the JS query suite, so there is no `ts/` variant (e.g. `js/reflected-xss`, `js/disabling-certificate-verification`). Suppression targets the sink location, not the source/intermediate lines; a comment in a JSDoc block far from the sink is ineffective. One comment per alert location. `// nosemgrep` is Semgrep-only (irrelevant); `paths-ignore` config is too coarse (blinds whole files); UI/API dismissal is not durable/source-controlled."
   }
 ]
