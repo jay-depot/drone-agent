@@ -166,5 +166,9 @@
   {
     "timestamp": "2026-08-14T15:39:38.979Z",
     "insight": "CodeQL flags polynomial regexes (ReDoS) on config-sourced strings as \"uncontrolled data\" even when the value comes from a trusted config file. The minimal, behavior-preserving mitigation is a length cap on the input before the regex runs (e.g. reject hosts > 2048 chars before `replace(/\\/+$/, '')`), rather than rewriting the regex or adding a suppression comment. This bounds the polynomial match to a fixed-size input. Add a unit test for the guard."
+  },
+  {
+    "timestamp": "2026-08-14T15:59:42.289Z",
+    "insight": "sqlite-vec's ESM entry (index.mjs) resolves its platform extension via `import.meta.resolve`, which under pnpm's store layout can double the `.so` suffix (vec0.so.so) and fail to load — this surfaced only in the Docker/CI beacon image, not locally. The CJS entry (index.cjs) uses `require.resolve` and resolves the correct path. Fix: load native-extension packages that ship both ESM+CJS entries via `createRequire(import.meta.url)` + `require(...)` in ESM code, rather than `import * as`. This is a general pattern for pnpm + native `.so`/`.dylib`/`.dll` packages."
   }
 ]
