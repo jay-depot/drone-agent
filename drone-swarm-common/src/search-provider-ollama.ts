@@ -12,7 +12,16 @@ export type OllamaEmbeddingConfig = {
 export function createOllamaEmbeddingProvider(
   config: OllamaEmbeddingConfig
 ): DroneEmbeddingProvider {
-  const host = config.host.replace(/\/+$/, '');
+  // The host comes from config (user/project/beacon/coordinator layers), so
+  // bound its length before running the trailing-slash regex to keep the
+  // polynomial match from ever seeing unbounded input.
+  const rawHost = config.host.trim();
+  if (rawHost.length > 2048) {
+    throw new Error(
+      `Ollama host URL exceeds maximum length: ${rawHost.length}`
+    );
+  }
+  const host = rawHost.replace(/\/+$/, '');
   const model = config.model ?? 'nomic-embed-text:v1.5';
 
   return {
