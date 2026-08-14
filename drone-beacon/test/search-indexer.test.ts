@@ -9,9 +9,13 @@ import * as db from '../src/db/index.js';
 const mockProvider = {
   id: 'mock',
   name: 'Mock Provider',
-  dimensions: 4,
+  dimensions: 768,
   maxTokens: 8192,
-  getEmbedding: async () => new Float32Array([1, 0, 0, 0]),
+  getEmbedding: async () => {
+    const arr = new Float32Array(768);
+    arr[0] = 1;
+    return arr;
+  },
 };
 
 beforeEach(async () => {

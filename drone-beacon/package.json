@@ -26,6 +26,7 @@
     "fastify": "^5.2.1",
     "minimatch": "^10.2.5",
     "pino": "^9.6.0",
+    "sqlite-vec": "0.1.9",
     "tree-sitter-c": "^0.24.1",
     "tree-sitter-cpp": "^0.23.4",
     "tree-sitter-go": "^0.25.0",

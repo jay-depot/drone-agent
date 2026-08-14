@@ -1,16 +1,17 @@
 ---
 key: plan-sqlite-vec-semantic-search
-tags:
-  []
+tags: []
 created: 2026-08-14T06:41:52.571Z
 updated: 2026-08-14T06:41:52.571Z
 ---
 
 ---
+
 key: plan-sqlite-vec-semantic-search
 tags: [search, semantic-search, sqlite-vec, beacon, vector-search]
 created: 2026-08-14T00:00:00.000Z
 updated: 2026-08-14T00:00:00.000Z
+
 ---
 
 # Plan: Move Semantic Search to sqlite-vec (SIMD Brute-Force)
@@ -44,23 +45,28 @@ Replace the beacon's brute-force JS cosine loop with **sqlite-vec** — a pure-C
 
 ## Steps
 
-### Step 1 — Add sqlite-vec dependency to the beacon *(coder)*
+### Step 1 — Add sqlite-vec dependency to the beacon _(coder)_
+
 **File:** `drone-beacon/package.json`
 
 Add `sqlite-vec` (pin exact version, e.g. `0.1.9`). It's a native-extension package with prebuilt binaries.
 
-### Step 2 — Load the extension in DB init *(coder)*
+### Step 2 — Load the extension in DB init _(coder)_
+
 **File:** `drone-beacon/src/db/init.ts`
 
 In `initDatabase()`, after `new Database(dataPath)`, call `sqliteVec.load(db)`. Add the `vec_chunks` vec0 table to the schema:
+
 ```sql
 CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(
   embedding FLOAT[768] distance_metric=cosine
 );
 ```
+
 Note: verify sqlite-vec supports `CREATE VIRTUAL TABLE IF NOT EXISTS` (it should).
 
-### Step 3 — Add vec0 write helpers to `db/search.ts` *(coder)*
+### Step 3 — Add vec0 write helpers to `db/search.ts` _(coder)_
+
 **File:** `drone-beacon/src/db/search.ts`
 
 - `insertChunk`: after inserting into `search_chunks`, capture `lastInsertRowid` and mirror into `vec_chunks` with `BigInt(rowid)`.
@@ -68,37 +74,44 @@ Note: verify sqlite-vec supports `CREATE VIRTUAL TABLE IF NOT EXISTS` (it should
 - `removeFilesByDirectory`: same — delete vec0 rows for the directory's chunks.
 - Add a `searchChunksByVector(queryEmbedding, k)` helper that runs the vec0 KNN query and joins back to `search_chunks`.
 
-### Step 4 — Update the search route to use vec0 *(coder)*
+### Step 4 — Update the search route to use vec0 _(coder)_
+
 **File:** `drone-beacon/src/routes/search.ts`
 
 Replace the `getAllChunks` + JS cosine loop with:
+
 1. `provider.getEmbedding('search_query: ' + q)`.
 2. `db.searchChunksByVector(queryEmbedding, maxResults × OVERFETCH_FACTOR)` → returns `{ filePath, chunkIndex, text, score }` (score = `1 - distance`).
 3. Apply `isExcluded` globs.
 4. `dedupeAndCombineChunks(scored, { maxResults })`.
 5. Return the same response shape.
 
-### Step 5 — Backfill migration *(coder)*
+### Step 5 — Backfill migration _(coder)_
+
 **File:** `drone-beacon/src/db/search.ts` (or a migration helper)
 
 A one-time function that copies existing `search_chunks` embeddings into `vec_chunks` (using their implicit rowids), run in a transaction. Called on startup if `vec_chunks` is empty and `search_chunks` has rows.
 
-### Step 6 — Tests *(tester)*
+### Step 6 — Tests _(tester)_
+
 - `drone-beacon/test/db/search.test.ts` (new or extended): `insertChunk` mirrors into vec0; `deleteChunksForFile`/`removeFilesByDirectory` clean up vec0; `searchChunksByVector` returns correct results ordered by distance.
 - `drone-beacon/test/routes.test.ts`: update the search route tests to verify vec0-backed results (same response shape, dedup, exclude).
 - Verify the existing `semanticSearch`/`SearchStore` tests still pass (unchanged, test-only).
 
-### Step 7 — Remove dead code (`SearchStore`/`semanticSearch`/`cosineSimilarity`) *(coder)*
+### Step 7 — Remove dead code (`SearchStore`/`semanticSearch`/`cosineSimilarity`) _(coder)_
+
 - Delete `drone-swarm-common/src/search-store.ts`.
 - In `drone-swarm-common/src/search-searcher.ts`, remove `SearchStore` import, `SearchOptions`, `semanticSearch`, `cosineSimilarity`, and the `SearchChunkRow` usage. **Keep `ScoredChunk`, `dedupeAndCombineChunks`, `DedupeOptions`, `SearchResult`.**
 - Update `drone-swarm-common/src/index.ts` exports (remove `search-store.js`).
 - Delete `drone-swarm-common/test/search-searcher.test.ts` (only tests `dedupeAndCombineChunks` — move those cases into a new `dedupe` test file or keep a trimmed version).
 - Update `drone-agent/test/search.test.ts`: remove the `SearchStore`/`semanticSearch` describe blocks and the `SearchStore`/`semanticSearch` imports.
 
-### Step 8 — Review *(reviewer)*
+### Step 8 — Review _(reviewer)_
+
 Check correctness, dead code, and that all consumers of the beacon search route are covered (agent-side passes through the beacon response). Verify no remaining references to removed symbols.
 
-### Step 9 — Validation *(coder)*
+### Step 9 — Validation _(coder)_
+
 Run the full validation criteria below.
 
 ## Validation criteria
@@ -112,5 +125,6 @@ Run the full validation criteria below.
 7. No dead code / unused imports (including removed `SearchStore`/`semanticSearch`/`cosineSimilarity`).
 
 ## Future work (not in this plan)
+
 - If the index grows to millions of rows, consider partition keys or a dedicated ANN library.
 - Coordinator wiki semantic search (reuses `dedupeAndCombineChunks`).

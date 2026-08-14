@@ -106,6 +106,8 @@ export {
   deleteChunksForFile,
   getAllChunks,
   getChunkCount,
+  searchChunksByVector,
+  backfillVecChunks,
 } from './search.js';
 export type {
   SearchDirectoryRow,

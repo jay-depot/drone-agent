@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import * as sqliteVec from 'sqlite-vec';
 import path from 'path';
 import fs from 'fs';
 import { logger } from '../logger.js';
@@ -9,6 +10,7 @@ export function initDatabase(dataPath: string): Database.Database {
   logger.info(`Initializing database at: ${dataPath}`);
   fs.mkdirSync(path.dirname(dataPath), { recursive: true });
   db = new Database(dataPath);
+  sqliteVec.load(db);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS personas (
@@ -169,6 +171,10 @@ export function initDatabase(dataPath: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_search_files_dir ON search_files(directory_path);
     CREATE INDEX IF NOT EXISTS idx_search_chunks_dir ON search_chunks(directory_path);
     CREATE INDEX IF NOT EXISTS idx_search_directories_agent ON search_directories(agent_id);
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(
+      embedding FLOAT[768] distance_metric=cosine
+    );
 
     CREATE TABLE IF NOT EXISTS wiki_pages (
       id TEXT PRIMARY KEY,

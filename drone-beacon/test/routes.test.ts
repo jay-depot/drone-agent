@@ -1027,12 +1027,18 @@ describe('Sync Routes', () => {
 // ── Search Routes ───────────────────────────────────────────────────
 
 describe('Search Routes', () => {
+  // vec0 requires 768-dim embeddings (matching nomic-embed-text).
+  const emb = (v: number) => {
+    const arr = new Float32Array(768);
+    arr[0] = v;
+    return arr;
+  };
   const mockProvider = {
     id: 'mock',
     name: 'Mock Provider',
-    dimensions: 4,
+    dimensions: 768,
     maxTokens: 8192,
-    getEmbedding: async () => new Float32Array([1, 0, 0, 0]),
+    getEmbedding: async () => emb(1),
   };
 
   beforeEach(() => {
@@ -1052,20 +1058,8 @@ describe('Search Routes', () => {
     db.registerSearchPath('agent-1', '/proj');
 
     // Seed two chunks under /proj with distinct embeddings.
-    db.insertChunk(
-      '/proj',
-      '/proj/src/keep.ts',
-      0,
-      'keep me',
-      new Float32Array([1, 0, 0, 0])
-    );
-    db.insertChunk(
-      '/proj',
-      '/proj/src/skip.log',
-      0,
-      'skip me',
-      new Float32Array([1, 0, 0, 0])
-    );
+    db.insertChunk('/proj', '/proj/src/keep.ts', 0, 'keep me', emb(1));
+    db.insertChunk('/proj', '/proj/src/skip.log', 0, 'skip me', emb(1));
 
     // Without exclude, both chunks are returned.
     const all = await app.inject({
@@ -1100,14 +1094,14 @@ describe('Search Routes', () => {
       '/proj/src/dup.ts',
       0,
       'first matching chunk',
-      new Float32Array([1, 0, 0, 0])
+      emb(1)
     );
     db.insertChunk(
       '/proj',
       '/proj/src/dup.ts',
       1,
       'second matching chunk',
-      new Float32Array([1, 0, 0, 0])
+      emb(1)
     );
 
     const res = await app.inject({

@@ -9,6 +9,7 @@ import {
   initDatabase,
   closeDatabase,
   cleanupExpiredMemories,
+  backfillVecChunks,
 } from './db/index.js';
 import {
   registerRoutes,
@@ -178,6 +179,10 @@ async function main() {
 
   // Initialize database
   initDatabase(config.dbPath);
+  const backfilled = backfillVecChunks();
+  if (backfilled > 0) {
+    logger.info(`Search index: backfilled ${backfilled} chunk(s) into vec0`);
+  }
   // Initialize search indexer
   const ollamaHost = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
   let searchIndexer: SearchIndexer;

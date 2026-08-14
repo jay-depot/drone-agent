@@ -1,12 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import type { DroneSearchPath } from 'drone-core';
-import { cosineSimilarity, dedupeAndCombineChunks } from 'drone-swarm-common';
+import { dedupeAndCombineChunks } from 'drone-swarm-common';
 import { minimatch } from 'minimatch';
 import { getSearchIndexer } from './context.js';
 import { getAgent } from '../db/agents.js';
 import * as db from '../db/index.js';
 import { logger } from '../logger.js';
 import path from 'node:path';
+
+// Fetch this many times maxResults candidates from the vector index so that
+// exclude filtering and per-file dedup can still yield maxResults files.
+const OVERFETCH_FACTOR = 4;
 
 function isExcluded(
   filePath: string,
@@ -145,39 +149,19 @@ export default function searchRoutes(app: FastifyInstance) {
     // Get query embedding
     const queryEmbedding = await provider.getEmbedding(`search_query: ${q}`);
 
-    // Get all chunks (optionally scoped to directory)
-    const allChunks = db.getAllChunks(directoryPath);
-
-    // Compute similarity for each chunk
-    const scored: Array<{
-      filePath: string;
-      chunkIndex: number;
-      text: string;
-      score: number;
-    }> = [];
+    // Fetch a larger candidate set than maxResults so exclude filtering and
+    // dedup can still yield maxResults files.
+    const overFetch = (maxResults ?? 50) * OVERFETCH_FACTOR;
+    const candidates = db.searchChunksByVector(
+      queryEmbedding,
+      overFetch,
+      directoryPath
+    );
 
     const minScoreVal = minScore ?? 0.0;
-
-    for (const chunk of allChunks) {
-      const rootDir = directoryPath ?? chunk.directory_path;
-      if (isExcluded(chunk.file_path, rootDir, excludePatterns)) continue;
-
-      const chunkEmbedding = new Float32Array(
-        chunk.embedding.buffer,
-        chunk.embedding.byteOffset,
-        chunk.embedding.byteLength / Float32Array.BYTES_PER_ELEMENT
-      );
-      const score = cosineSimilarity(queryEmbedding, chunkEmbedding);
-
-      if (score < minScoreVal) continue;
-
-      scored.push({
-        filePath: chunk.file_path,
-        chunkIndex: chunk.chunk_index,
-        text: chunk.text,
-        score,
-      });
-    }
+    const scored = candidates
+      .filter(c => c.score >= minScoreVal)
+      .filter(c => !isExcluded(c.filePath, c.directoryPath, excludePatterns));
 
     // Deduplicate by file, keeping the best chunk's score and combining the
     // matching chunks' text (with gap markers for non-consecutive chunks).
