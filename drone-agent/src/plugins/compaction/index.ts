@@ -3,6 +3,7 @@ import {
   estimateTurnTokens,
   type DroneChatMessage,
   type DroneCompactionConfig,
+  type DroneConversationEvent,
   type DroneLlmProvider,
   type DroneLogger,
   type DronePlugin,
@@ -17,6 +18,7 @@ type RegistrationContext = {
   sessionManager: DroneSessionManager;
   logger: DroneLogger;
   compactionInFlight: { value: boolean };
+  emitEvent?: (event: DroneConversationEvent) => void;
 };
 
 const SUMMARY_PREFIX = 'Conversation summary (compacted):\n';
@@ -112,7 +114,7 @@ async function maybeCompact(input: {
   baseSystemMessages: DroneChatMessage[];
   fragmentMessages: DroneChatMessage[];
 }): Promise<void> {
-  const { config, sessionManager, getProvider, getModel, logger } =
+  const { config, sessionManager, getProvider, getModel, logger, emitEvent } =
     input.context;
 
   if (!config.enabled) {
@@ -173,6 +175,11 @@ async function maybeCompact(input: {
         logger.warn(
           `compaction: dropped oldest summary turn to keep summary region within ${(summaryBudget * 100).toFixed(0)}% of context window (was ${(metrics.summaryPercent * 100).toFixed(1)}%).`
         );
+        emitEvent?.({
+          kind: 'compaction',
+          message: 'Dropped oldest summary turn',
+          status: 'completed',
+        });
       }
     }
     input.context.compactionInFlight.value = false;
@@ -230,6 +237,12 @@ async function maybeCompact(input: {
       `Summarize the following ${slice.length} conversation turn(s) in at most ` +
       `${config.summaryMaxTokens} tokens:\n\n${transcript}`;
 
+    emitEvent?.({
+      kind: 'compaction',
+      message: `Compacting ${sliceSize} turn(s)...`,
+      status: 'started',
+    });
+
     try {
       const response = await provider.chat({
         model,
@@ -256,11 +269,23 @@ async function maybeCompact(input: {
       logger.info(
         `compaction: compacted ${slice.length} oldest turn(s) into a summary.`
       );
+      emitEvent?.({
+        kind: 'compaction',
+        message: `Compacted ${sliceSize} turn(s)`,
+        status: 'completed',
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const statusCode = (error as any)?.status_code;
+      const statusSuffix = statusCode ? ` (HTTP ${statusCode})` : '';
       logger.warn(
-        `compaction: summary failed; leaving session untouched: ${message}`
+        `compaction: summary failed; leaving session untouched: ${message}${statusSuffix}`
       );
+      emitEvent?.({
+        kind: 'compaction',
+        message: `Compaction failed: ${message}${statusSuffix}`,
+        status: 'failed',
+      });
     }
   }
 
@@ -290,6 +315,13 @@ export type CompactionPluginDeps = {
   sessionManager: DroneSessionManager;
   getModel: () => string;
   getProvider: () => DroneLlmProvider;
+  /**
+   * Optional callback to emit conversation events for TUI visibility.
+   * When provided, compaction will emit 'started', 'completed', and
+   * 'failed' events so the TUI can show compaction progress in the
+   * tail region and commit entries to scrollback.
+   */
+  emitEvent?: (event: DroneConversationEvent) => void;
 };
 export function createCompactionPlugin(
   deps: CompactionPluginDeps
@@ -317,6 +349,7 @@ export function createCompactionPlugin(
         sessionManager,
         logger: registration.logger,
         compactionInFlight: { value: false },
+        emitEvent: deps.emitEvent,
       };
 
       registration.registerHelp(

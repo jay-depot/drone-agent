@@ -6,10 +6,11 @@
  */
 
 import type {
-  DronePersonaCapability,
   DronePlugin,
+  DronePersonaCapability,
   DroneSkillsCapability,
   DroneToolDefinition,
+  DroneSwarmCapability,
 } from 'drone-core';
 import type { SwarmConfig } from './config.js';
 import {
@@ -109,6 +110,14 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
 
       // Create shared context
       const ctx = createSwarmContext(baseUrl, sessionId, registration, wsUrl);
+
+      // ── Offer swarm capability ─────────────────────────────────────────
+      const swarmCap: DroneSwarmCapability = {
+        getBeaconUrl: () => baseUrl,
+        getAgentId: () => sessionId,
+      };
+      registration.offer(swarmCap);
+      registration.logger.info('Offered DroneSwarmCapability');
 
       // ── Persona and skill providers ─────────────────────────────────────
       const personaCap =

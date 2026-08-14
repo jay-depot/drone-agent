@@ -12,7 +12,7 @@
 //
 // -----------------------------------------------------------------------
 
-import * as fs from 'node:fs';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import type { DroneLlmCapability, DroneLogger } from 'drone-core';
@@ -25,36 +25,41 @@ type DescriptionCache = Record<
   { description: string; generatedAt: string }
 >;
 
-function ensureCacheDir(): void {
-  fs.mkdirSync(CACHE_DIR, { recursive: true });
+async function ensureCacheDir(): Promise<void> {
+  await mkdir(CACHE_DIR, { recursive: true });
 }
 
-function readCache(): DescriptionCache {
+async function readCache(): Promise<DescriptionCache> {
   try {
-    const raw = fs.readFileSync(CACHE_FILE, 'utf-8');
+    const raw = await readFile(CACHE_FILE, 'utf-8');
     return JSON.parse(raw) as DescriptionCache;
   } catch {
     return {};
   }
 }
 
-function writeCache(cache: DescriptionCache): void {
-  ensureCacheDir();
-  fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2), 'utf-8');
+async function writeCache(cache: DescriptionCache): Promise<void> {
+  await ensureCacheDir();
+  await writeFile(CACHE_FILE, JSON.stringify(cache, null, 2), 'utf-8');
 }
 
-function readCachedDescription(serverId: string): string | undefined {
-  const cache = readCache();
+async function readCachedDescription(
+  serverId: string
+): Promise<string | undefined> {
+  const cache = await readCache();
   return cache[serverId]?.description;
 }
 
-function writeCachedDescription(serverId: string, description: string): void {
-  const cache = readCache();
+async function writeCachedDescription(
+  serverId: string,
+  description: string
+): Promise<void> {
+  const cache = await readCache();
   cache[serverId] = {
     description,
     generatedAt: new Date().toISOString(),
   };
-  writeCache(cache);
+  await writeCache(cache);
 }
 
 /**
@@ -72,7 +77,7 @@ export async function getOrCreateServerDescription(
   logger: DroneLogger
 ): Promise<string | undefined> {
   // 1. Try cache
-  const cached = readCachedDescription(serverId);
+  const cached = await readCachedDescription(serverId);
   if (cached) return cached;
 
   // 2. Generate via LLM
@@ -102,7 +107,7 @@ export async function getOrCreateServerDescription(
     });
     const description = response.message ?? '';
     if (description) {
-      writeCachedDescription(serverId, description);
+      await writeCachedDescription(serverId, description);
     }
     return description || undefined;
   } catch (error) {

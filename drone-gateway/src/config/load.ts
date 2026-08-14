@@ -1,4 +1,5 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { readFile, access } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { logger } from '../logger.js';
@@ -31,7 +32,9 @@ export async function loadGatewayConfig(
 ): Promise<GatewayConfig> {
   const configDir = path.dirname(configPath);
 
-  if (!existsSync(configPath)) {
+  try {
+    await access(configPath, fsConstants.F_OK);
+  } catch {
     logger.error(`Config file not found: ${configPath}`);
     throw new Error(
       `Config file not found: ${configPath}\n` +
@@ -41,7 +44,7 @@ export async function loadGatewayConfig(
   }
 
   // Read gateway-level config
-  const raw = readFileSync(configPath, 'utf-8');
+  const raw = await readFile(configPath, 'utf-8');
   let gatewayConfig: Record<string, unknown>;
   try {
     gatewayConfig = JSON.parse(raw);
@@ -79,7 +82,9 @@ export async function loadGatewayConfig(
 
   // Load adapters from the adapters/ directory
   const adaptersDir = path.join(configDir, 'adapters');
-  if (!existsSync(adaptersDir)) {
+  try {
+    await access(adaptersDir, fsConstants.F_OK);
+  } catch {
     logger.warn(`No adapters/ directory found at ${adaptersDir}`);
     return config;
   }
@@ -106,14 +111,16 @@ async function loadAdapter(
   const adapterDir = path.join(adaptersDir, adapterId);
   const adapterJsonPath = path.join(adapterDir, 'adapter.json');
 
-  if (!existsSync(adapterJsonPath)) {
+  try {
+    await access(adapterJsonPath, fsConstants.F_OK);
+  } catch {
     logger.warn(`Skipping adapter "${adapterId}": no adapter.json found`);
     return null;
   }
 
   let adapterData: Record<string, unknown>;
   try {
-    const raw = readFileSync(adapterJsonPath, 'utf-8');
+    const raw = await readFile(adapterJsonPath, 'utf-8');
     adapterData = JSON.parse(raw);
   } catch (err) {
     logger.error(
@@ -139,74 +146,83 @@ async function loadAdapter(
   const conversations = new Map<string, ControlSurfaceSpec[]>();
   const convDir = path.join(adapterDir, 'conversations');
 
-  if (existsSync(convDir)) {
-    const convFiles = await readdir(convDir);
-    for (const file of convFiles) {
-      if (!file.endsWith('.json')) continue;
+  try {
+    await access(convDir, fsConstants.F_OK);
+  } catch {
+    return {
+      id: adapterId,
+      type,
+      config: restConfig as Record<string, unknown>,
+      conversations,
+    };
+  }
 
-      const filePath = path.join(convDir, file);
-      let convData: Record<string, unknown>;
-      try {
-        const raw = readFileSync(filePath, 'utf-8');
-        convData = JSON.parse(raw);
-      } catch (err) {
-        logger.warn(
-          { adapterId, file, err },
-          `Failed to parse conversation file "${file}"`
-        );
-        continue;
-      }
+  const convFiles = await readdir(convDir);
+  for (const file of convFiles) {
+    if (!file.endsWith('.json')) continue;
 
-      // Read canonical conversationId from the file (not the filename)
-      const convId = convData.conversationId as string | undefined;
-      if (!convId || typeof convId !== 'string') {
-        logger.warn(
-          { adapterId, file },
-          `Conversation file "${file}" missing or invalid conversationId field`
-        );
-        continue;
-      }
+    const filePath = path.join(convDir, file);
+    let convData: Record<string, unknown>;
+    try {
+      const raw = await readFile(filePath, 'utf-8');
+      convData = JSON.parse(raw);
+    } catch (err) {
+      logger.warn(
+        { adapterId, file, err },
+        `Failed to parse conversation file "${file}"`
+      );
+      continue;
+    }
 
-      // Validate
-      const validationError = validateConversationId(convId);
-      if (validationError) {
-        logger.warn(
-          { adapterId, file, convId, validationError },
-          `Invalid conversationId in "${file}"`
-        );
-        continue;
-      }
+    // Read canonical conversationId from the file (not the filename)
+    const convId = convData.conversationId as string | undefined;
+    if (!convId || typeof convId !== 'string') {
+      logger.warn(
+        { adapterId, file },
+        `Conversation file "${file}" missing or invalid conversationId field`
+      );
+      continue;
+    }
 
-      // Read control surfaces
-      const rawSurfaces = convData.controlSurfaces as unknown[];
-      if (!Array.isArray(rawSurfaces) || rawSurfaces.length === 0) {
+    // Validate
+    const validationError = validateConversationId(convId);
+    if (validationError) {
+      logger.warn(
+        { adapterId, file, convId, validationError },
+        `Invalid conversationId in "${file}"`
+      );
+      continue;
+    }
+
+    // Read control surfaces
+    const rawSurfaces = convData.controlSurfaces as unknown[];
+    if (!Array.isArray(rawSurfaces) || rawSurfaces.length === 0) {
+      logger.warn(
+        { adapterId, file, convId },
+        `Conversation "${convId}" has no controlSurfaces array`
+      );
+      continue;
+    }
+
+    const specs: ControlSurfaceSpec[] = [];
+    for (const raw of rawSurfaces) {
+      const spec = raw as Record<string, unknown>;
+      if (!spec.type || typeof spec.type !== 'string') {
         logger.warn(
           { adapterId, file, convId },
-          `Conversation "${convId}" has no controlSurfaces array`
+          `Control surface in "${file}" missing type field`
         );
         continue;
       }
+      specs.push({
+        type: spec.type as string,
+        personaId: spec.personaId as string | undefined,
+        config: spec.config as Record<string, unknown> | undefined,
+      });
+    }
 
-      const specs: ControlSurfaceSpec[] = [];
-      for (const raw of rawSurfaces) {
-        const spec = raw as Record<string, unknown>;
-        if (!spec.type || typeof spec.type !== 'string') {
-          logger.warn(
-            { adapterId, file, convId },
-            `Control surface in "${file}" missing type field`
-          );
-          continue;
-        }
-        specs.push({
-          type: spec.type as string,
-          personaId: spec.personaId as string | undefined,
-          config: spec.config as Record<string, unknown> | undefined,
-        });
-      }
-
-      if (specs.length > 0) {
-        conversations.set(convId, specs);
-      }
+    if (specs.length > 0) {
+      conversations.set(convId, specs);
     }
   }
 

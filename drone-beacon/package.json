@@ -25,8 +25,19 @@
     "drone-core": "workspace:*",
     "drone-swarm-common": "workspace:*",
     "fastify": "^5.2.1",
+    "ws": "^8.21.3",
+    "minimatch": "^10.2.5",
     "pino": "^9.6.0",
-    "ws": "^8.21.3"
+    "sqlite-vec": "0.1.9",
+    "tree-sitter-c": "^0.24.1",
+    "tree-sitter-cpp": "^0.23.4",
+    "tree-sitter-go": "^0.25.0",
+    "tree-sitter-java": "^0.23.5",
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-python": "^0.25.0",
+    "tree-sitter-rust": "^0.24.0",
+    "tree-sitter-typescript": "^0.23.2",
+    "web-tree-sitter": "^0.26.12"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

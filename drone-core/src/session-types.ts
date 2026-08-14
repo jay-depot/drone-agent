@@ -158,4 +158,9 @@ export type DroneConversationEvent =
       }>;
     }
   | { kind: 'toolProgress'; name: string; content: string }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; message: string }
+  | {
+      kind: 'compaction';
+      message: string;
+      status: 'started' | 'completed' | 'failed';
+    };

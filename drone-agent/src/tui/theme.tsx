@@ -42,6 +42,8 @@ export type DroneColorScheme = {
   toolCall: string;
   /** Tool result indicator (`← …`). */
   toolResult: string;
+  /** Compaction messages (`📦`). */
+  compaction: string;
   /** Status bar background. */
   statusBg: string;
   /** Status bar foreground. */
@@ -67,6 +69,7 @@ export const DEFAULT_GRAYSCALE_SCHEME: DroneColorScheme = {
   reasoning: 'gray',
   toolCall: 'gray',
   toolResult: 'white',
+  compaction: 'cyan',
   statusBg: 'black',
   statusFg: 'white',
   inputBg: 'black',

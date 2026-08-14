@@ -34,9 +34,11 @@
   },
   "dependencies": {
     "drone-core": "workspace:*",
-    "pino": "^9.6.0"
+    "pino": "^9.6.0",
+    "better-sqlite3": "^11.8.1"
   },
   "devDependencies": {
-    "@types/node": "^24.0.10"
+    "@types/node": "^24.0.10",
+    "@types/better-sqlite3": "^7.6.13"
   }
 }

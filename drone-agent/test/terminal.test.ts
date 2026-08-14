@@ -440,6 +440,10 @@ describe('terminalPlugin', () => {
             pullIntervalMinutes: 60,
           },
         },
+        search: {
+          enabled: false,
+          paths: [],
+        },
         tui: {
           syntaxHighlighting: {
             colors: {

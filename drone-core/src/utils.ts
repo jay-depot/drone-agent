@@ -73,9 +73,16 @@ export function filterByGlobPatterns(
 
 // ── Logger factory ─────────────────────────────────────────────────
 
-export function createConsoleLogger(scope: string): DroneLogger {
+export function createConsoleLogger(
+  scope: string,
+  options: { toStderr?: boolean } = {}
+): DroneLogger {
+  const { toStderr = false } = options;
   return {
-    info: message => console.log(`[${scope}] ${message}`),
+    info: message =>
+      toStderr
+        ? console.error(`[${scope}] ${message}`)
+        : console.log(`[${scope}] ${message}`),
     warn: message => console.warn(`[${scope}] ${message}`),
     error: message => console.error(`[${scope}] ${message}`),
   };

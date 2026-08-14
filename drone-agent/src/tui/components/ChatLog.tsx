@@ -106,6 +106,12 @@ function renderEntry(
           <ColorTag color={scheme.success}>{entry.text}</ColorTag>
         </Text>
       );
+    case 'compaction':
+      return (
+        <Text>
+          <ColorTag color={scheme.compaction}>{entry.text}</ColorTag>
+        </Text>
+      );
     case 'markdown':
       return (
         <Markdown

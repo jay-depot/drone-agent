@@ -24,6 +24,7 @@ export function createPrincipleTool(
       'Manage self-improvement principles. ' +
       'Use action="store" to create, action="list" to browse files, ' +
       'action="recall" to read entries, action="delete" to remove by index.',
+    defaultHidden: true,
     inputSchema: {
       type: 'object',
       properties: {

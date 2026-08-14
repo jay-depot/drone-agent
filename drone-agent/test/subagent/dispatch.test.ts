@@ -172,7 +172,7 @@ describe('subagent lifecycle', () => {
 
       // Should be marked as timed out
       expect(result.timedOut).toBe(true);
-      expect(result.error).toContain('timeout');
+      expect(result.error).toContain('timed out');
     }, 10000); // Test timeout
   });
 
@@ -184,7 +184,7 @@ describe('subagent lifecycle', () => {
       });
 
       expect(result.timedOut).toBe(true);
-      expect(result.error).toContain('timeout');
+      expect(result.error).toContain('timed out');
     }, 10000);
   });
 
@@ -197,7 +197,7 @@ describe('subagent lifecycle', () => {
       });
 
       expect(result.timedOut).toBe(true);
-      expect(result.error).toContain('timeout');
+      expect(result.error).toContain('timed out');
     }, 10000);
   });
 

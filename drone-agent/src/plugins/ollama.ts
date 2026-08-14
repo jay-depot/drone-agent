@@ -225,6 +225,13 @@ export const ollamaPlugin: DronePlugin = {
 
           const message =
             error instanceof Error ? error.message : String(error);
+          const statusCode = (error as any)?.status_code;
+          const statusSuffix = statusCode ? ` (HTTP ${statusCode})` : '';
+
+          registration.logger.warn(
+            `Ollama chat request failed for model ${model}: ${message}${statusSuffix}`
+          );
+
           if (message.includes('not found')) {
             throw new Error(
               `Ollama model ${model} is not available at ${agentConfig.ollama.host}. Pull it with "ollama pull ${model}" or update .drone-agent/config.json to use an installed model.`,
@@ -233,7 +240,7 @@ export const ollamaPlugin: DronePlugin = {
           }
 
           throw new Error(
-            `Ollama chat request failed for model ${model} at ${agentConfig.ollama.host}: ${message}`,
+            `Ollama chat request failed for model ${model} at ${agentConfig.ollama.host}: ${message}${statusSuffix}`,
             { cause: error }
           );
         }
