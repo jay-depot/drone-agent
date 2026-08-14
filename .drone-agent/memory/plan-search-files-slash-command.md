@@ -3,14 +3,14 @@ key: plan-search-files-slash-command
 tags:
   []
 created: 2026-08-14T04:16:27.667Z
-updated: 2026-08-14T04:16:27.667Z
+updated: 2026-08-14T04:21:16.686Z
 ---
 
 ---
 key: plan-search-files-slash-command
 tags: []
 created: 2026-08-14T04:05:00.000Z
-updated: 2026-08-14T04:05:00.000Z
+updated: 2026-08-14T04:21:00.000Z
 ---
 
 # Plan: `/search-files` slash command (human-friendly search wrapper)
@@ -88,3 +88,16 @@ Also add `registration.registerHelp('/search-files <pattern> [--semantic] [--pat
 - Swap lancaster-stemmer into `extractSnippet` term matching.
 - A sibling `/search-wiki` (or `/search-memory`) command for the swarm-memory-wiki search.
 - `--min-score`/`--fixed` flags if needed later.
+
+---
+
+## Execution Summary (completed 2026-08-14 by code persona)
+
+All 4 steps implemented and validated. Commit: `60b59a5`.
+
+- **Step 1**: Added `extractSnippet(query, chunkText, maxLen=200)` and `parseSearchFilesArgs(args)` to `drone-agent/src/plugins/search/index.ts`, both exported for testing. `extractSnippet` tokenizes the query, splits the chunk into sentences, scores each by distinct query-term overlap, picks the best sentence, and trims to a ~200-char window around the first match (accounting for `…` ellipsis chars in the budget). `parseSearchFilesArgs` parses `--semantic`, `--path`, `--limit`, `--glob` with defaults (path=CWD, limit=10, glob=null); unknown flags/missing values/non-numeric-or-zero limit/empty pattern return `null`.
+- **Step 2**: Registered `/search-files` slash command in `register()` — parses args, builds the `search__text` tool input, calls `ctx.engine.executeTool('search__text', input)`, and formats output via `formatRegexResults` (file:line + content) or `formatSemanticResults` (score + file + query-aware snippet; surfaces the no-beacon note). Added `registerHelp` usage line.
+- **Step 3**: Added tests in `drone-agent/test/search.test.ts` — `parseSearchFilesArgs` (7 cases), `extractSnippet` (4 cases), and a `/search-files` slash command describe block (5 cases: registration, regex formatting, semantic formatting, no-beacon note, usage). Added a `captureSlashCommand` helper that captures registered slash commands.
+- **Step 4**: Validation all green — LSP zero errors on the source file (test file only has the pre-existing `drone-swarm-common` diagnostic + pre-existing `writeFileSync` hint, unchanged); `pnpm -r run build` ✓; `pnpm -r run typecheck` ✓; eslint ignores `drone-agent/src/**` and `**/test/**/*.ts` (prettier applied cleanly to both files); `pnpm test` ✓ (1883 passed, 9 skipped). One test initially failed (snippet 201 chars > 200 limit) — fixed by accounting for ellipsis chars in the window budget.
+
+**Note**: The plan file `plan-search-files-slash-command.md` remains in project memory (not deleted — the user may want to reference it; it was committed as `5352557`).
