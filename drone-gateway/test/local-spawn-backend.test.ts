@@ -3,9 +3,11 @@ import { EventEmitter } from 'node:events';
 import { Readable, Writable } from 'node:stream';
 import type { ChildProcess } from 'node:child_process';
 
-// Mock which to avoid PATH resolution
-vi.mock('../src/which.js', () => ({
-  which: vi.fn().mockResolvedValue('/usr/local/bin/drone-agent'),
+// Mock drone-core resolveDroneExecutable to avoid PATH resolution
+vi.mock('drone-core', () => ({
+  resolveDroneExecutable: vi
+    .fn()
+    .mockResolvedValue('/usr/local/bin/drone-agent'),
 }));
 
 // Mock child_process.spawn
@@ -16,6 +18,7 @@ vi.mock('node:child_process', () => ({
 
 // Import after mocks
 const { LocalSpawnBackend } = await import('../src/local-spawn-backend.js');
+const { resolveDroneExecutable } = await import('drone-core');
 
 function makeMockProcess(pid: number, stdoutData: string[]): ChildProcess {
   const stdout = Readable.from(stdoutData.map(d => d + '\n'));
@@ -68,6 +71,7 @@ describe('LocalSpawnBackend', () => {
     });
 
     it('returns existing session for same conversationId (idempotent)', async () => {
+      vi.mocked(resolveDroneExecutable).mockClear();
       const mockProc = makeMockProcess(12345, []);
       mockSpawn.mockReturnValue(mockProc);
 
@@ -76,6 +80,21 @@ describe('LocalSpawnBackend', () => {
 
       expect(session2).toBe(session1);
       expect(mockSpawn).toHaveBeenCalledTimes(1);
+      expect(resolveDroneExecutable).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to default name when constructed without path', async () => {
+      const mockProc = makeMockProcess(12345, []);
+      mockSpawn.mockReturnValue(mockProc);
+
+      const session1 = await backend.spawnSession('conv-1', 'coder');
+      const session2 = await backend.spawnSession('conv-1', 'coder');
+
+      expect(session2).toBe(session1);
+      expect(mockSpawn).toHaveBeenCalledTimes(1);
+      expect(resolveDroneExecutable).toHaveBeenCalledWith({
+        commandName: 'drone-agent',
+      });
     });
 
     it('cleans up session on process exit', async () => {
@@ -199,6 +218,18 @@ describe('LocalSpawnBackend', () => {
 
       // Should not throw
       await expect(backend.terminateSession(session)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('resolveDroneExecutable errors', () => {
+    it('throws a clear error when the agent binary cannot be resolved', async () => {
+      vi.mocked(resolveDroneExecutable).mockRejectedValueOnce(
+        new Error('Unable to resolve executable "drone-agent" from PATH.')
+      );
+
+      await expect(backend.spawnSession('conv-1', 'coder')).rejects.toThrow(
+        /Unable to resolve executable/
+      );
     });
   });
 });

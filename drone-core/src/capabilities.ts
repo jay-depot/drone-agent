@@ -206,6 +206,8 @@ export type DroneInsightEntry = {
   timestamp: string;
   /** The insight text (1-3 sentence observation). */
   insight: string;
+  /** ISO-8601 timestamp of the last time this insight was examined (e.g. by the promotion process). Undefined = never examined. */
+  lastExamined?: string;
 };
 
 /**
@@ -239,6 +241,11 @@ export type DroneInsightStorageEngine = {
     targetType: string,
     targetId: string
   ) => Promise<DroneInsightEntry[]>;
+  /** Mark all insights for a target as examined "as of now". */
+  markInsightsExamined: (
+    targetType: string,
+    targetId: string
+  ) => Promise<{ ok: boolean; markedCount: number }>;
 };
 
 /**

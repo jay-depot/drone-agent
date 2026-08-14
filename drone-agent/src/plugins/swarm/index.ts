@@ -26,6 +26,10 @@ import {
 import { createSwarmMessageTool } from './tools-message.js';
 import { createWikiTools } from './tools-wiki.js';
 import { createCoordinatorTools } from './tools-coordinator.js';
+import {
+  createTrustCoordinatorCommand,
+  surfacePendingCoordinatorTrust,
+} from './tools-coordinator-trust.js';
 import { registerHooks } from './hooks.js';
 import { startHeartbeat, registerShutdown } from './heartbeat.js';
 
@@ -77,11 +81,25 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
 
       // Register the agent session with the beacon
       try {
-        await fetch(`${baseUrl}/agents`, {
+        const regRes = await fetch(`${baseUrl}/agents`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: sessionId, personaId: null }),
         });
+        if (regRes.ok) {
+          const regData = (await regRes.json().catch(() => null)) as {
+            coordinatorTrust?: {
+              fingerprintTrusted: boolean;
+              beaconApproved: boolean;
+              pendingFingerprint: string | null;
+              verificationCode: string | null;
+            };
+          } | null;
+          const trust = regData?.coordinatorTrust;
+          if (trust && (!trust.fingerprintTrusted || !trust.beaconApproved)) {
+            await surfacePendingCoordinatorTrust(baseUrl, registration);
+          }
+        }
         registration.logger.info('Registered with beacon');
       } catch (err) {
         registration.logger.error(
@@ -157,6 +175,9 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
 
       // ── Lifecycle hooks ────────────────────────────────────────────────
       registerHooks(ctx, configCap, beaconConfigInjector);
+
+      // ── Coordinator trust (TOFU) ────────────────────────────────────────
+      registration.registerSlashCommand(createTrustCoordinatorCommand(baseUrl));
 
       // ── Tools ───────────────────────────────────────────────────────────
       const toolFactories: Array<() => DroneToolDefinition> = [

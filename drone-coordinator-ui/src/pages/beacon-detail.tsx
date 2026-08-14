@@ -132,8 +132,12 @@ export default function BeaconDetailPage() {
           <CardTitle className="text-base">Beacon Information</CardTitle>
           {beacon.verificationCode && (
             <p className="text-xs text-muted-foreground mt-1">
-              Compare this code with the one shown on the beacon to verify no
-              MitM attack occurred during key exchange.
+              This is the coordinator's copy of the bidirectional verification
+              code. Transcribe it into the beacon's agent with{' '}
+              <code className="bg-muted px-1 rounded">
+                /trust-coordinator {beacon.verificationCode}
+              </code>{' '}
+              to confirm no MitM attack occurred during key exchange.
             </p>
           )}
         </CardHeader>
@@ -179,6 +183,14 @@ export default function BeaconDetailPage() {
                 <span className="text-muted-foreground">Verification Code</span>
                 <p className="font-mono text-base mt-0.5 font-bold text-primary">
                   {beacon.verificationCode}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter this code into an instance of drone-agent running on the
+                  beacon's host with{' '}
+                  <code className="bg-muted px-1 rounded">
+                    /trust-coordinator {beacon.verificationCode}
+                  </code>
+                  .
                 </p>
               </div>
             )}

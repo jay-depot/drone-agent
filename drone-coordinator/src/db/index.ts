@@ -31,7 +31,7 @@ export {
   registerBeaconTrust,
   getBeaconTrust,
   listBeaconTrust,
-  approveBeacon,
+  approveBeaconById,
   rejectBeacon,
   deleteBeaconTrust,
 } from './beacon-trust.js';
@@ -80,6 +80,7 @@ export {
   createInsight,
   getInsight,
   listInsights,
+  markInsightsExamined,
   deleteInsight,
 } from './insights.js';
 export type { InsightRow } from './insights.js';

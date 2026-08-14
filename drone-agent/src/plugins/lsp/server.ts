@@ -12,8 +12,8 @@ import type {
   DroneLspServerState,
   DroneLogger,
 } from 'drone-core';
+import { commandExistsOnPath } from 'drone-core';
 import {
-  commandExistsOnPath,
   computeCacheKey,
   ensureServerInstalled,
   resolveCacheDir,

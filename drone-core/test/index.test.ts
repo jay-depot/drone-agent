@@ -9,6 +9,8 @@ import {
   matchGlob,
   type DroneAgentConfig,
   type PartialDroneAgentConfig,
+  commandExistsOnPath,
+  resolveDroneExecutable,
 } from '../src/index.js';
 
 describe('createConsoleLogger', () => {
@@ -362,5 +364,55 @@ describe('applyAgentConfigLayer — promptFile.files merge+dedup', () => {
       promptFile: { files: ['b.md', 'c.md'] },
     });
     expect(merged.promptFile.files).toEqual(['a.md', 'b.md', 'c.md']);
+  });
+});
+
+describe('commandExistsOnPath', () => {
+  it('returns false for an empty command', async () => {
+    expect(await commandExistsOnPath('')).toBe(false);
+  });
+
+  it('returns true for the current Node executable', async () => {
+    expect(await commandExistsOnPath(process.execPath)).toBe(true);
+  });
+
+  it('returns false for a non-existent absolute path', async () => {
+    expect(await commandExistsOnPath('/definitely/not/a/real/binary-xyz')).toBe(
+      false
+    );
+  });
+});
+
+describe('resolveDroneExecutable', () => {
+  it('resolves an explicit absolute command name', async () => {
+    const result = await resolveDroneExecutable({
+      commandName: process.execPath,
+    });
+    expect(result).toBe(process.execPath);
+  });
+
+  it('falls back to argv[1] when the command is not found', async () => {
+    const result = await resolveDroneExecutable({
+      commandName: '/definitely/not/a/real/binary-xyz',
+      fallbackArgv1: process.execPath,
+    });
+    expect(result).toBe(process.execPath);
+  });
+
+  it('throws when the command and fallback are both missing', async () => {
+    await expect(
+      resolveDroneExecutable({
+        commandName: '/definitely/not/a/real/binary-xyz',
+      })
+    ).rejects.toThrow(/Unable to resolve executable/);
+  });
+
+  it('throws when the command and fallback are both missing, including fallback in message', async () => {
+    await expect(
+      resolveDroneExecutable({
+        commandName: '/definitely/not/a/real/binary-xyz',
+        fallbackArgv1: '/also/definitely/not/real',
+      })
+    ).rejects.toThrow(/fallback path/);
   });
 });

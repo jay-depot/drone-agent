@@ -5,6 +5,7 @@ import type {
   DroneToolCall,
 } from 'drone-core';
 import { randomUUID } from 'node:crypto';
+import { getDroppableTurnPrefix } from './turn-utils.js';
 export type DroneSessionManager = {
   appendUserMessage: (content: string, images?: DroneImageContent[]) => void;
   appendAssistantMessage: (
@@ -24,6 +25,7 @@ export type DroneSessionManager = {
   dropOldestNonSummaryTurns: (count: number) => DroneSessionTurn[];
   getSummaryTurns: () => DroneSessionTurn[];
   dropSummaryTurnById: (id: string) => DroneSessionTurn | null;
+  dropTurnsByIds: (ids: string[]) => DroneSessionTurn[];
   prependSystemTurn: (
     content: string,
     opts?: { kind?: 'summary' }
@@ -119,12 +121,9 @@ export function createSessionManager(): DroneSessionManager {
         return [];
       }
 
+      const toDrop = getDroppableTurnPrefix(turns, count);
       const dropped: DroneSessionTurn[] = [];
-      while (dropped.length < count && turns.length > 0) {
-        const head = turns[0];
-        if (isSummaryTurn(head)) {
-          break;
-        }
+      for (const _ of toDrop) {
         dropped.push(turns.shift() as DroneSessionTurn);
       }
       return dropped;
@@ -145,6 +144,20 @@ export function createSessionManager(): DroneSessionManager {
 
       const [dropped] = turns.splice(index, 1);
       return dropped;
+    },
+    dropTurnsByIds: ids => {
+      if (ids.length === 0) {
+        return [];
+      }
+
+      const idSet = new Set(ids);
+      const removed: DroneSessionTurn[] = [];
+      for (let i = turns.length - 1; i >= 0; i--) {
+        if (idSet.has(turns[i].id)) {
+          removed.unshift(turns.splice(i, 1)[0]);
+        }
+      }
+      return removed;
     },
     prependSystemTurn: (content, opts) => {
       const kind = opts?.kind;

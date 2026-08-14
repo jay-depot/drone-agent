@@ -11,6 +11,11 @@ export type DronePlugin = {
   register: (registration: DronePluginRegistration) => Promise<void>;
 };
 
+export type DroneToolExecutionContext = {
+  /** Signal the conversation loop to stop after processing the current tool batch. */
+  stopLoop?: () => void;
+};
+
 export type DroneToolDefinition = {
   name: string;
   description: string;
@@ -28,7 +33,8 @@ export type DroneToolDefinition = {
   ) => unknown;
   execute: (
     input: Record<string, unknown>,
-    onProgress?: (chunk: string) => void
+    onProgress?: (chunk: string) => void,
+    context?: DroneToolExecutionContext
   ) => Promise<string>;
 };
 
@@ -268,7 +274,9 @@ export type DroneSlashCommandContext = {
   engine: {
     executeTool: (
       canonicalName: string,
-      input: Record<string, unknown>
+      input: Record<string, unknown>,
+      onProgress?: (chunk: string) => void,
+      context?: DroneToolExecutionContext
     ) => Promise<string>;
     /** Optional — may be absent in minimal hosts. */
     runWorkflow?: (

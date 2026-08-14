@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createGunzip } from 'node:zlib';
 import { execFile } from 'node:child_process';
+import { commandExistsOnPath } from 'drone-core';
 import type {
   DroneLspInstallSpec,
   DroneLspPlatformKey,
@@ -203,50 +204,6 @@ export function computeCacheKey(input: {
     nodeVersion,
   ].join('|');
   return createHash('sha256').update(material).digest('hex').slice(0, 16);
-}
-
-/**
- * Returns true when `command` resolves to an executable file on PATH.
- * Respects absolute/relative paths and (on Windows) `PATHEXT`. We avoid
- * shelling out so the result is deterministic in tests.
- */
-export async function commandExistsOnPath(
-  command: string,
-  env: NodeJS.ProcessEnv = process.env
-): Promise<boolean> {
-  if (!command) {
-    return false;
-  }
-  if (command.includes(path.sep) || command.includes('/')) {
-    try {
-      await access(command, fsConstants.X_OK);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  const pathEnv = env.PATH ?? '';
-  const pathSep = process.platform === 'win32' ? ';' : ':';
-  const exts =
-    process.platform === 'win32'
-      ? (env.PATHEXT ?? '.EXE;.CMD;.BAT;.COM')
-          .split(';')
-          .map(ext => ext.toLowerCase())
-      : [''];
-  const directories = pathEnv.split(pathSep).filter(Boolean);
-  for (const directory of directories) {
-    for (const ext of exts) {
-      const candidate = path.join(directory, command + ext);
-      try {
-        await access(candidate, fsConstants.X_OK);
-        return true;
-      } catch {
-        // continue
-      }
-    }
-  }
-  return false;
 }
 
 /**
@@ -534,7 +491,7 @@ export async function ensureServerInstalled(
   );
 
   // 1. PATH probe — short-circuit before any disk activity.
-  if (await commandExistsOnPath(spec.command)) {
+  if (await commandExistsOnPath(spec.command, process.env)) {
     return { command: spec.command, args: spec.args, source: 'path' };
   }
 

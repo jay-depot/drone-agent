@@ -18,6 +18,7 @@ import {
   findProjectConfigPath,
   loadConfigLayer,
 } from '../../runtime/config.js';
+import { deepSet } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -165,27 +166,6 @@ function getByPath(obj: Record<string, unknown>, keyPath: string): unknown {
     current = (current as Record<string, unknown>)[part];
   }
   return current;
-}
-
-/**
- * Set a value at a dot-notation path in a nested object, creating
- * intermediate objects as needed. Mutates the input object.
- */
-function deepSet(
-  obj: Record<string, unknown>,
-  keyPath: string,
-  value: unknown
-): void {
-  const parts = keyPath.split('.');
-  let current = obj;
-  for (let i = 0; i < parts.length - 1; i++) {
-    const part = parts[i];
-    if (typeof current[part] !== 'object' || current[part] === null) {
-      current[part] = {};
-    }
-    current = current[part] as Record<string, unknown>;
-  }
-  current[parts[parts.length - 1]] = value;
 }
 
 /**

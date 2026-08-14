@@ -20,6 +20,19 @@ export default function insightRoutes(app: FastifyInstance) {
     return reply.code(201).send(row);
   });
 
+  app.post<{ Body: { targetType: string; targetId: string } }>(
+    '/insights/mark-examined',
+    async (request, reply) => {
+      const { targetType, targetId } = request.body;
+      if (!targetType || !targetId) {
+        return reply
+          .code(400)
+          .send({ error: 'targetType and targetId are required' });
+      }
+      return db.markInsightsExamined(targetType, targetId);
+    }
+  );
+
   app.get<{ Querystring: { targetType?: string; targetId?: string } }>(
     '/insights',
     async request => {

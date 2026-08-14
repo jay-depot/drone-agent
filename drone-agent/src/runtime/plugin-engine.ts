@@ -18,6 +18,7 @@ import {
   type DroneStandardHookName,
   type DroneToolDescriptor,
   type DroneToolDefinition,
+  type DroneToolExecutionContext,
   type DroneWorkflow,
   type DroneWorkflowContext,
   type DroneWorkflowResult,
@@ -90,7 +91,8 @@ export type DronePluginEngine = {
   executeTool: (
     canonicalName: string,
     input: Record<string, unknown>,
-    onProgress?: (chunk: string) => void
+    onProgress?: (chunk: string) => void,
+    context?: DroneToolExecutionContext
   ) => Promise<string>;
   listTools: () => DroneToolDescriptor[];
   listAllTools: () => DroneToolDescriptor[];
@@ -760,6 +762,14 @@ export function createDronePluginEngine({
         builtInSlashCommands.push(cmd);
       }
 
+      // Set _runtime BEFORE plugin registration so plugins can request it during register()
+      capabilities.set('_runtime', {
+        subagentId: runtimeOptions?.subagentId,
+        persona: runtimeOptions?.persona,
+        isSubagent: !!runtimeOptions?.subagentId,
+        flags: runtimeFlagRegistry,
+      });
+
       logger.info(`initializing ${sortedPlugins.length} plugin(s)`);
       for (const plugin of sortedPlugins) {
         registeredPlugins.push(await registerPlugin(plugin));
@@ -767,15 +777,6 @@ export function createDronePluginEngine({
 
       // Register runtime meta-tools (always available)
       registerRuntimeMetaTools();
-
-      // Expose runtime options as a special '_runtime' capability
-      // that any plugin can request via 'runtime'
-      capabilities.set('_runtime', {
-        subagentId: runtimeOptions?.subagentId,
-        persona: runtimeOptions?.persona,
-        isSubagent: !!runtimeOptions?.subagentId,
-        flags: runtimeFlagRegistry,
-      });
 
       // Inject enabled plugin list into system prompt
       const enabledPluginList = Array.from(enabledPluginIds).sort().join(', ');
@@ -790,7 +791,23 @@ export function createDronePluginEngine({
     addExternalPlugin: doAddExternalPlugin,
     runHooks: async hookName => {
       for (const callback of hookBuckets[hookName]) {
-        await callback();
+        try {
+          await callback();
+        } catch (hookError) {
+          // A failure in onBeforePrompt must not abort the conversation
+          // turn or terminate the loop — log it and keep going so the
+          // user's message is still processed. Mirrors the non-fatal
+          // onAfterToolCall handling in the conversation service.
+          if (hookName === 'onBeforePrompt') {
+            const msg =
+              hookError instanceof Error
+                ? hookError.message
+                : String(hookError);
+            logger.warn(`onBeforePrompt hook error (non-fatal): ${msg}`);
+            continue;
+          }
+          throw hookError;
+        }
       }
     },
     runSessionSafetyTrimWillRunHooks: async payload => {
@@ -829,12 +846,12 @@ export function createDronePluginEngine({
       );
     },
     getTool: canonicalName => toolRegistry.get(canonicalName),
-    executeTool: async (canonicalName, input, onProgress) => {
+    executeTool: async (canonicalName, input, onProgress, context) => {
       const tool = toolRegistry.get(canonicalName);
       if (!tool) {
         throw new Error(`Unknown tool: ${canonicalName}`);
       }
-      return tool.execute(input, onProgress);
+      return tool.execute(input, onProgress, context);
     },
     listTools: () => toolRegistry.listMounted(),
     listAllTools: () => toolRegistry.listAll(),

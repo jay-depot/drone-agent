@@ -37,7 +37,10 @@ function resolveContextWindow(
     .catch(() => fallback);
 }
 
-function formatTurnsForSummary(turns: DroneSessionTurn[]): string {
+function formatTurnsForSummary(
+  turns: DroneSessionTurn[],
+  startIndex = 0
+): string {
   return turns
     .map((turn, index) => {
       const parts = turn.messages.map(message => {
@@ -56,7 +59,7 @@ function formatTurnsForSummary(turns: DroneSessionTurn[]): string {
         }
         return `${header} ${body}`;
       });
-      return `--- Turn ${index + 1} ---\n${parts.join('\n')}`;
+      return `--- Turn ${startIndex + index + 1} ---\n${parts.join('\n')}`;
     })
     .join('\n');
 }
@@ -165,7 +168,9 @@ async function maybeCompact(input: {
   if (metrics.summaryPercent > summaryBudget) {
     const summaryTurns = sessionManager.getSummaryTurns();
     if (summaryTurns.length > 0) {
-      const dropped = sessionManager.dropSummaryTurnById(summaryTurns[0].id);
+      const dropped = sessionManager.dropSummaryTurnById(
+        summaryTurns.at(-1)!.id
+      );
       if (dropped) {
         logger.warn(
           `compaction: dropped oldest summary turn to keep summary region within ${(summaryBudget * 100).toFixed(0)}% of context window (was ${(metrics.summaryPercent * 100).toFixed(1)}%).`
@@ -197,8 +202,16 @@ async function maybeCompact(input: {
       return;
     }
 
-    const slice = turns.slice(0, sliceSize);
-    const transcript = formatTurnsForSummary(slice);
+    // Normal turns age toward the tail; summaries are prepended at the head.
+    // Compaction must target the oldest non-summary turns, which live at the
+    // end of the array, not the head (where the newest summary sits).
+    const nonSummaryTurns = turns.filter(turn => turn.kind !== 'summary');
+    const sliceSizeCapped = Math.min(sliceSize, nonSummaryTurns.length);
+    const slice = nonSummaryTurns.slice(-sliceSizeCapped);
+    const transcript = formatTurnsForSummary(
+      slice,
+      nonSummaryTurns.length - slice.length
+    );
 
     const summarySystemPrompt =
       'You are a conversation summarizer. Produce a concise summary of the ' +
@@ -221,7 +234,7 @@ async function maybeCompact(input: {
       `skip it. If you can't just skip it, note it.`;
 
     const summaryUserPrompt =
-      `Summarize the following ${sliceSize} conversation turn(s) in at most ` +
+      `Summarize the following ${slice.length} conversation turn(s) in at most ` +
       `${config.summaryMaxTokens} tokens:\n\n${transcript}`;
 
     emitEvent?.({
@@ -245,13 +258,16 @@ async function maybeCompact(input: {
         throw new Error('LLM Provider returned an empty summary.');
       }
 
-      sessionManager.dropOldestNonSummaryTurns(sliceSize);
+      const dropped = sessionManager.dropTurnsByIds(slice.map(t => t.id));
+      if (dropped.length !== slice.length) {
+        throw new Error('Failed to drop the intended turns for summarization.');
+      }
       sessionManager.prependSystemTurn(SUMMARY_PREFIX + summaryText, {
         kind: 'summary',
       });
 
       logger.info(
-        `compaction: compacted ${sliceSize} oldest turn(s) into a summary.`
+        `compaction: compacted ${slice.length} oldest turn(s) into a summary.`
       );
       emitEvent?.({
         kind: 'compaction',

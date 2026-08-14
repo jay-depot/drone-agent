@@ -969,4 +969,44 @@ describe('--debug tools — tool surface change logging', () => {
     expect(lines).toContain('[tools:enable-plugin] late');
     expect(lines).toContain('[tools:add-external-plugin] ext');
   });
+
+  it('exposes _runtime capability during plugin registration', async () => {
+    const capturedRuntime: Array<{
+      isSubagent: boolean;
+      subagentId?: string;
+    }> = [];
+
+    const plugin = createTestPlugin({
+      id: 'runtime-probe',
+      register: registration => {
+        capturedRuntime.push(
+          registration.request<{ isSubagent: boolean; subagentId?: string }>(
+            'runtime'
+          )!
+        );
+      },
+    });
+
+    // Main-agent mode (no subagentId)
+    const engine = createDronePluginEngine({
+      plugins: [plugin],
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+    });
+    await engine.initialize();
+    expect(capturedRuntime[0]).toBeDefined();
+    expect(capturedRuntime[0].isSubagent).toBe(false);
+
+    // Subagent mode (with subagentId)
+    const subagentEngine = createDronePluginEngine({
+      plugins: [plugin],
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+      runtimeOptions: { subagentId: 'subagent-test-123' },
+    });
+    await subagentEngine.initialize();
+    expect(capturedRuntime[1]).toBeDefined();
+    expect(capturedRuntime[1].isSubagent).toBe(true);
+    expect(capturedRuntime[1].subagentId).toBe('subagent-test-123');
+  });
 });

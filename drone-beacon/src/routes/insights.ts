@@ -37,6 +37,34 @@ export default function insightRoutes(app: FastifyInstance) {
     return reply.code(201).send(row);
   });
 
+  // Mark all insights for a target as examined (local or coordinator)
+  app.post<{
+    Body: { targetType: string; targetId: string; scope?: string };
+  }>('/insights/mark-examined', async (request, reply) => {
+    const { targetType, targetId, scope } = request.body;
+    if (!targetType || !targetId) {
+      return reply
+        .code(400)
+        .send({ error: 'targetType and targetId are required' });
+    }
+
+    if (scope === 'coordinator') {
+      const result = await proxyToCoordinator(
+        'POST',
+        '/insights/mark-examined',
+        request.body
+      );
+      if (!result) {
+        return reply
+          .code(502)
+          .send({ error: 'Failed to proxy to coordinator' });
+      }
+      return reply.send(result);
+    }
+
+    return db.markInsightsExamined(targetType, targetId);
+  });
+
   // List insights (with optional targetType, targetId, and scope filters)
   app.get<{
     Querystring: { targetType?: string; targetId?: string; scope?: string };

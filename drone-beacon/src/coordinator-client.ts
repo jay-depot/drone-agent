@@ -1,14 +1,39 @@
 import https from 'https';
 import http from 'http';
+import type { PeerCertificate, TLSSocket } from 'tls';
 import { generateVerificationCode } from 'drone-swarm-common';
 import { logger } from './logger.js';
+import {
+  isSwarmReady,
+  getObservedCoordinatorFingerprint,
+  setBeaconVerificationCode,
+} from './coordinator-trust.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
 
+let didWarnSwarmNotReady = false;
+
+/**
+ * True when swarm communications with the coordinator are allowed: the coordinator's
+ * TLS fingerprint has been confirmed AND the coordinator has approved this beacon.
+ */
+function coordinatorTrusted(): boolean {
+  if (isSwarmReady()) {
+    didWarnSwarmNotReady = false;
+    return true;
+  }
+  if (!didWarnSwarmNotReady) {
+    didWarnSwarmNotReady = true;
+    logger.warn(
+      'Swarm not ready (coordinator fingerprint not confirmed and/or beacon not approved); skipping coordinator sync.'
+    );
+  }
+  return false;
+}
+
 export interface BeaconStatusResponse {
   status: 'pending' | 'approved' | 'rejected';
-  approvalToken?: string;
 }
 
 export interface CoordinatorClient {
@@ -17,7 +42,6 @@ export interface CoordinatorClient {
     tlsFingerprint: string
   ): Promise<{
     status: 'pending' | 'approved' | 'rejected';
-    approvalToken?: string;
     verificationCode?: string;
   }>;
   pollForApproval(): Promise<BeaconStatusResponse>;
@@ -106,14 +130,70 @@ export interface CoordinatorClientOptions {
   identity: BeaconIdentity;
   tlsIdentity: TlsIdentity;
   useHttps?: boolean;
+  /** Known SHA-256 fingerprint of the coordinator's TLS certificate (TOFU pinning). */
+  coordinatorTlsFingerprint?: string;
+  /** Called on first HTTPS connection with the observed fingerprint so callers can persist it. */
+  onFirstCoordinatorFingerprint?: (fp: string) => void;
 }
 
 /**
- * Create a fetch-compatible function that accepts self-signed TLS certificates.
- * The coordinator uses a self-signed cert, so Node.js's built-in fetch rejects it.
- * This wrapper uses Node.js http/https modules with rejectUnauthorized: false.
+ * Build the `checkServerIdentity` override used for coordinator TLS connections.
+ *
+ * When `expectedFingerprint` is provided the function verifies the server's
+ * SHA-256 certificate fingerprint against it, providing TOFU-style MITM
+ * protection without a trusted CA.  When no fingerprint is known yet (first
+ * connection) `onFirstFingerprint` is called with the observed fingerprint so
+ * the caller can persist it.  In that case the connection is still accepted —
+ * this is the intentional Trust-On-First-Use window.
+ *
+ * The function returns `undefined` (no error) when the check passes and returns
+ * an `Error` when the fingerprint does not match a known pinned value.
  */
-export function createCoordinatorFetch(baseUrl: string): typeof fetch {
+export function buildCheckServerIdentity(
+  expectedFingerprint: string | undefined,
+  onFirstFingerprint?: (fp: string) => void
+): (hostname: string, cert: PeerCertificate) => Error | undefined {
+  return (_hostname, cert) => {
+    const raw = cert.fingerprint256;
+    if (!raw) {
+      return new Error('TLS: coordinator certificate has no fingerprint');
+    }
+    const observed = raw.replace(/:/g, '').toLowerCase();
+    if (expectedFingerprint) {
+      if (observed !== expectedFingerprint.toLowerCase()) {
+        return new Error(
+          `TLS: coordinator certificate fingerprint mismatch — expected ${expectedFingerprint} but got ${observed}. Possible MITM attack.`
+        );
+      }
+    } else {
+      onFirstFingerprint?.(observed);
+    }
+    return undefined;
+  };
+}
+
+/**
+ * Create a fetch-compatible function that connects to the coordinator.
+ *
+ * The coordinator uses a self-signed TLS certificate so standard CA
+ * validation is disabled (`rejectUnauthorized: false`).  MITM protection is
+ * instead provided by certificate-fingerprint pinning via
+ * `checkServerIdentity`: when `expectedCoordinatorFingerprint` is supplied
+ * the server certificate is verified against that pinned SHA-256 hash.  On
+ * the very first connection — before the fingerprint is known — any
+ * certificate is accepted and `onFirstFingerprint` is called so the caller
+ * can persist the observed fingerprint for subsequent connections (TOFU).
+ *
+ * CodeQL note: `rejectUnauthorized: false` is intentional here.  CA
+ * validation is inapplicable to self-signed certificates; MITM protection
+ * is provided by the `checkServerIdentity` fingerprint check above.
+ * lgtm[js/disabling-certificate-verification]
+ */
+export function createCoordinatorFetch(
+  baseUrl: string,
+  expectedCoordinatorFingerprint?: string,
+  onFirstFingerprint?: (fp: string) => void
+): typeof fetch {
   const urlObj = new URL(baseUrl);
   const isHttps = urlObj.protocol === 'https:';
 
@@ -138,10 +218,16 @@ export function createCoordinatorFetch(baseUrl: string): typeof fetch {
         headers,
       };
 
-      // For HTTPS connections to the coordinator (which uses a self-signed cert),
-      // disable certificate validation
       if (isHttps) {
+        // CA validation is inapplicable for self-signed certs; MITM protection
+        // is provided by checkServerIdentity fingerprint pinning instead.
+        // lgtm[js/disabling-certificate-verification]
         (options as https.RequestOptions).rejectUnauthorized = false;
+        (options as https.RequestOptions).checkServerIdentity =
+          buildCheckServerIdentity(
+            expectedCoordinatorFingerprint,
+            onFirstFingerprint
+          );
       }
 
       const req = (isHttps ? https : http).request(options, res => {
@@ -158,6 +244,35 @@ export function createCoordinatorFetch(baseUrl: string): typeof fetch {
           );
         });
       });
+
+      // `checkServerIdentity` is never invoked when `rejectUnauthorized` is
+      // false (Node skips server-identity verification), so observe the peer
+      // certificate ourselves once the TLS handshake completes. This both
+      // records the fingerprint on first contact (TOFU) and enforces the
+      // pinned fingerprint on subsequent connections.
+      if (isHttps) {
+        req.on('socket', socket => {
+          socket.on('secureConnect', () => {
+            const cert = (socket as TLSSocket).getPeerCertificate();
+            const raw = cert?.fingerprint256;
+            if (!raw) {
+              return;
+            }
+            const observed = raw.replace(/:/g, '').toLowerCase();
+            if (expectedCoordinatorFingerprint) {
+              if (observed !== expectedCoordinatorFingerprint.toLowerCase()) {
+                req.destroy(
+                  new Error(
+                    `TLS: coordinator certificate fingerprint mismatch — expected ${expectedCoordinatorFingerprint} but got ${observed}. Possible MITM attack.`
+                  )
+                );
+              }
+            } else {
+              onFirstFingerprint?.(observed);
+            }
+          });
+        });
+      }
 
       req.on('error', err => {
         reject(err);
@@ -178,7 +293,11 @@ export function createCoordinatorClient(
 ): CoordinatorClient {
   const protocol = options.useHttps ? 'https' : 'http';
   const baseUrl = `${protocol}://${config.host}:${config.port}`;
-  const cfetch = createCoordinatorFetch(baseUrl);
+  const cfetch = createCoordinatorFetch(
+    baseUrl,
+    options.coordinatorTlsFingerprint,
+    options.onFirstCoordinatorFingerprint
+  );
 
   return {
     getBaseUrl(): string {
@@ -190,7 +309,6 @@ export function createCoordinatorClient(
       tlsFingerprint: string
     ): Promise<{
       status: 'pending' | 'approved' | 'rejected';
-      approvalToken?: string;
       verificationCode?: string;
     }> {
       logger.info(`Registering beacon with coordinator at ${baseUrl}`);
@@ -217,20 +335,20 @@ export function createCoordinatorClient(
       const data = (await res.json()) as BeaconStatusResponse;
       logger.info(`Beacon registered with status: ${data.status}`);
 
-      if (data.approvalToken) {
-        logger.info(`Approval token: ${data.approvalToken}`);
-      }
-
       // Compute the verification code locally from the same inputs the
       // coordinator uses. Both sides should produce the same code.
       const verificationCode = generateVerificationCode(
         identity.publicKey,
-        tlsFingerprint
+        tlsFingerprint,
+        getObservedCoordinatorFingerprint() ?? ''
       );
+      // Hold the code in memory so the compare-only /coordinator/trust
+      // endpoint can validate a code the user transcribes from the
+      // coordinator's web UI.
+      setBeaconVerificationCode(verificationCode);
 
       return {
         status: data.status,
-        approvalToken: data.approvalToken,
         verificationCode,
       };
     },
@@ -270,6 +388,9 @@ export function createCoordinatorClient(
     },
 
     async fetchPersonas(): Promise<Persona[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
       const res = await cfetch(`${baseUrl}/api/personas`);
       if (!res.ok) {
         throw new Error(`Failed to fetch personas: ${res.status}`);
@@ -281,6 +402,9 @@ export function createCoordinatorClient(
     },
 
     async fetchSkills(): Promise<Skill[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
       const res = await cfetch(`${baseUrl}/api/skills`);
       if (!res.ok) {
         throw new Error(`Failed to fetch skills: ${res.status}`);
@@ -296,6 +420,9 @@ export function createCoordinatorClient(
       agentId: string,
       personaId: string | null
     ): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(
           `${baseUrl}/api/beacons/${config.beaconId}/sessions`,
@@ -320,6 +447,9 @@ export function createCoordinatorClient(
     },
 
     async endSession(agentId: string, connectedAt: number): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const disconnectedAt = Date.now();
         const durationMs = disconnectedAt - connectedAt;
@@ -351,6 +481,9 @@ export function createCoordinatorClient(
       agentId: string,
       personaId?: string
     ): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/agents/location`, {
           method: 'POST',
@@ -372,6 +505,9 @@ export function createCoordinatorClient(
     },
 
     async updateAgentLocationHeartbeat(agentId: string): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(
           `${baseUrl}/api/agents/location/${agentId}/heartbeat`,
@@ -390,6 +526,9 @@ export function createCoordinatorClient(
     },
 
     async unregisterAgentLocation(agentId: string): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/agents/location/${agentId}`, {
           method: 'DELETE',
@@ -409,6 +548,9 @@ export function createCoordinatorClient(
       fromAgentId: string,
       body: string
     ): Promise<{ success: boolean; messageId?: string }> {
+      if (!coordinatorTrusted()) {
+        return { success: false };
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/messages/relay`, {
           method: 'POST',
@@ -437,6 +579,9 @@ export function createCoordinatorClient(
 
     // Knowledge push
     async pushPersona(persona: Persona): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/personas`, {
           method: 'POST',
@@ -454,6 +599,9 @@ export function createCoordinatorClient(
     },
 
     async pushSkill(skill: Skill): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/skills`, {
           method: 'POST',
@@ -471,6 +619,9 @@ export function createCoordinatorClient(
     },
 
     async deletePersona(id: string): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/personas/${id}`, {
           method: 'DELETE',
@@ -486,6 +637,9 @@ export function createCoordinatorClient(
     },
 
     async deleteSkill(id: string): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/skills/${id}`, {
           method: 'DELETE',
@@ -502,6 +656,9 @@ export function createCoordinatorClient(
 
     // Knowledge sync (global memory)
     async pushKnowledge(knowledge: Knowledge): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/sync/knowledge/push`, {
           method: 'POST',
@@ -519,6 +676,9 @@ export function createCoordinatorClient(
     },
 
     async pullKnowledge(since?: number): Promise<Knowledge[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
       try {
         let url = `${baseUrl}/api/sync/knowledge/pull`;
         if (since) {
@@ -537,6 +697,9 @@ export function createCoordinatorClient(
     },
 
     async searchKnowledge(query: string, type?: string): Promise<Knowledge[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
       try {
         let url = `${baseUrl}/api/knowledge/search?q=${encodeURIComponent(query)}`;
         if (type) {
@@ -559,6 +722,9 @@ export function createCoordinatorClient(
       sessionId: string,
       personaId: string | null
     ): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/sync/sessions/register`, {
           method: 'POST',
@@ -583,6 +749,9 @@ export function createCoordinatorClient(
       sessionId: string,
       personaId: string | null
     ): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(
           `${baseUrl}/api/sessions/${sessionId}/persona`,
@@ -601,6 +770,9 @@ export function createCoordinatorClient(
     },
 
     async endSwarmSession(sessionId: string): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/sync/sessions/${sessionId}`, {
           method: 'DELETE',
@@ -626,6 +798,9 @@ export function createCoordinatorClient(
         createdAt: number;
       }>
     ): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/sync/events/push`, {
           method: 'POST',
@@ -649,6 +824,9 @@ export function createCoordinatorClient(
         defaultHidden: boolean;
       }>
     ): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/sync/tools/push`, {
           method: 'POST',
@@ -668,6 +846,9 @@ export function createCoordinatorClient(
     },
 
     async getDefaultHiddenTools(): Promise<{ tools: string[] }> {
+      if (!coordinatorTrusted()) {
+        return { tools: [] };
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/tools/default-hidden`);
         if (!res.ok) {
@@ -684,6 +865,9 @@ export function createCoordinatorClient(
     async getSessions(
       query: Record<string, string>
     ): Promise<{ sessions: any[]; count: number }> {
+      if (!coordinatorTrusted()) {
+        return { sessions: [], count: 0 };
+      }
       try {
         const params = new URLSearchParams(query).toString();
         const res = await cfetch(`${baseUrl}/api/sessions?${params}`);
@@ -699,6 +883,9 @@ export function createCoordinatorClient(
     },
 
     async getSessionLog(sessionId: string): Promise<any> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/sessions/${sessionId}/log`);
         if (!res.ok) {
@@ -713,6 +900,9 @@ export function createCoordinatorClient(
     },
 
     async processSession(sessionId: string): Promise<any> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
       try {
         const res = await cfetch(
           `${baseUrl}/api/sessions/${sessionId}/process`,
@@ -735,6 +925,9 @@ export function createCoordinatorClient(
       sessionId: string,
       body: { summary?: string; notes?: string }
     ): Promise<any> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
       try {
         const res = await cfetch(
           `${baseUrl}/api/sessions/${sessionId}/processed`,

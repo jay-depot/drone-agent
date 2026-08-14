@@ -34,9 +34,6 @@ export default function beaconRoutes(app: FastifyInstance) {
             port: request.body.port,
           });
           const response: BeaconStatusResponse = { status: trust.status };
-          if (trust.approvalToken) {
-            response.approvalToken = trust.approvalToken;
-          }
           if (trust.verificationCode) {
             response.verificationCode = trust.verificationCode;
           }
@@ -67,6 +64,7 @@ export default function beaconRoutes(app: FastifyInstance) {
         ...b,
         trustStatus: trust?.status ?? null,
         publicKey: trust?.publicKey ?? null,
+        verificationCode: trust?.verificationCode ?? null,
       };
     });
     return beaconsWithTrust;
@@ -90,7 +88,6 @@ export default function beaconRoutes(app: FastifyInstance) {
         lastHeartbeat: beacon?.lastHeartbeat,
         trustStatus: trust?.status ?? null,
         publicKey: trust?.publicKey ?? null,
-        approvalToken: trust?.approvalToken ?? null,
         verificationCode: trust?.verificationCode ?? null,
       };
     }
@@ -104,8 +101,8 @@ export default function beaconRoutes(app: FastifyInstance) {
       try {
         const trust = db.registerBeaconTrust(request.body);
         const response: BeaconStatusResponse = { status: trust.status };
-        if (trust.approvalToken) {
-          response.approvalToken = trust.approvalToken;
+        if (trust.verificationCode) {
+          response.verificationCode = trust.verificationCode;
         }
         return reply.code(201).send(response);
       } catch (err) {
@@ -130,9 +127,6 @@ export default function beaconRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: 'Beacon trust not found' });
       }
       const response: BeaconStatusResponse = { status: trust.status };
-      if (trust.status === 'pending' && trust.approvalToken) {
-        response.approvalToken = trust.approvalToken;
-      }
       return response;
     }
   );
@@ -153,19 +147,18 @@ export default function beaconRoutes(app: FastifyInstance) {
   );
 
   // === Approval Routes ===
-  app.post<{ Body: { approvalToken: string } }>(
-    '/beacons/approve',
+  app.post<{ Params: { id: string } }>(
+    '/beacons/trust/:id/approve',
     async (request, reply) => {
-      const { approvalToken } = request.body;
-      if (!approvalToken) {
-        return reply.code(400).send({ error: 'approvalToken required' });
-      }
-      const trust = db.approveBeacon(approvalToken);
+      const trust = db.approveBeaconById(request.params.id);
       if (!trust) {
-        return reply
-          .code(404)
-          .send({ error: 'Invalid or expired approval token' });
+        return reply.code(404).send({ error: 'Beacon trust not found' });
       }
+      publishMutationEvent({
+        sessionId: trust.beaconId,
+        eventType: 'beacon.approved',
+        payload: { beaconId: trust.beaconId },
+      });
       return { success: true, beacon: trust };
     }
   );

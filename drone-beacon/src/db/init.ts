@@ -123,6 +123,7 @@ export function initDatabase(dataPath: string): Database.Database {
       targetId TEXT NOT NULL,
       insight TEXT NOT NULL,
       timestamp TEXT NOT NULL,
+      lastExamined TEXT,
       scope TEXT NOT NULL DEFAULT 'local'
     );
 
@@ -181,6 +182,14 @@ export function initDatabase(dataPath: string): Database.Database {
 
     CREATE INDEX IF NOT EXISTS idx_wiki_pages_scope ON wiki_pages(scope);
   `);
+
+  // Idempotent migration: add lastExamined to existing insights tables.
+  const insightCols = db.prepare('PRAGMA table_info(insights)').all() as Array<{
+    name: string;
+  }>;
+  if (!insightCols.some(c => c.name === 'lastExamined')) {
+    db.exec('ALTER TABLE insights ADD COLUMN lastExamined TEXT');
+  }
 
   logger.info('Beacon database initialized successfully');
   return db;

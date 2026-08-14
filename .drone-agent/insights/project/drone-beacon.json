@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-08-12T00:41:52.982Z",
+    "insight": "Node.js trap: setting `rejectUnauthorized: false` in an https request causes Node to skip server-identity verification entirely, so `checkServerIdentity` is NEVER invoked. Any TLS fingerprint pinning or TOFU observation wired through `checkServerIdentity` is therefore dead code in that configuration. To observe/enforce the peer certificate when `rejectUnauthorized` is false, attach a `req.on('socket')` → `socket.on('secureConnect')` handler and read `(socket as TLSSocket).getPeerCertificate().fingerprint256`. This caused the beacon↔coordinator verification codes to never match (beacon hashed with an empty coordinator fingerprint while the coordinator used its real one)."
+  }
+]

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import { resolveDroneExecutable } from 'drone-core';
 
 export interface SubagentResult {
   /**
@@ -140,10 +140,12 @@ export async function launchSubagent(
     ? generateSubagentId()
     : `test-subagent-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-  // Find the drone-agent executable
+  // Find the drone-agent executable, preferring an explicit test path.
   const execPath =
     providedExecPath ??
-    resolve(process.cwd(), 'drone-agent', 'bin', 'drone-agent');
+    (await resolveDroneExecutable({
+      fallbackArgv1: process.argv[1],
+    }));
 
   // Build command args
   const args = ['--subagent-id', subagentId, '--output-json', '--once'];
@@ -433,7 +435,7 @@ export async function launchErrorSubagent(
       break;
     case 'no-return':
       // Task that completes but doesn't use the return tool
-      task = 'Say "hello" directly without using subagent.return';
+      task = 'Say "hello" directly without using subagent__return';
       break;
     default:
       task = options.task ?? 'Fail with unknown error';

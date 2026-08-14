@@ -103,7 +103,7 @@ describe('subagent communication', () => {
   });
 
   describe('return-tool-result', () => {
-    it('should capture result from subagent.return tool', async () => {
+    it('should capture result from subagent__return tool', async () => {
       const result = await launchSubagent({
         task: 'Return the exact string: return-result-test',
         timeout: 60000,
@@ -115,7 +115,7 @@ describe('subagent communication', () => {
   });
 
   describe('return-tool-error', () => {
-    it('should capture error from subagent.return tool', async () => {
+    it('should capture error from subagent__return tool', async () => {
       const result = await launchSubagent({
         task: 'Return with error: test-error-message',
         timeout: 60000,
@@ -306,7 +306,7 @@ describe('subagent error handling', () => {
   describe('no-return-tool-call', () => {
     it('should handle subagent that never calls return tool', async () => {
       const result = await launchSubagent({
-        task: 'Just say "hello" without using subagent.return',
+        task: 'Just say "hello" without using subagent__return',
         timeout: 15000,
       });
 
