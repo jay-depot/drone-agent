@@ -4,11 +4,16 @@ import type { Dirent } from 'node:fs';
 import path from 'node:path';
 import type { DroneEmbeddingProvider } from 'drone-core';
 import type { IndexResult } from 'drone-core';
-import { chunkText } from 'drone-swarm-common';
+import { chunkFile } from './file-chunker.js';
 import { logger } from './logger.js';
 import * as db from './db/index.js';
 
 // ── SearchIndexer ───────────────────────────────────────────────────
+
+// Opinionated chunk-size target (tokens). The chunker treats this as a bias,
+// not a hard limit: it merges small units up to 0.5× and splits oversized
+// units above 2×, keeping everything in between whole.
+const CHUNK_TARGET_TOKENS = 480;
 
 export class SearchIndexer {
   private provider: DroneEmbeddingProvider | null;
@@ -102,7 +107,11 @@ export class SearchIndexer {
 
           // Read and chunk the file
           const content = await readFile(filePath, 'utf-8');
-          const chunks = chunkText(content, provider.maxTokens);
+          const chunks = await chunkFile(
+            filePath,
+            content,
+            Math.min(CHUNK_TARGET_TOKENS, provider.maxTokens)
+          );
 
           // Delete old chunks and update file metadata
           db.deleteChunksForFile(absDir, filePath);

@@ -1,16 +1,17 @@
 ---
 key: plan-search-files-slash-command
-tags:
-  []
+tags: []
 created: 2026-08-14T04:16:27.667Z
 updated: 2026-08-14T04:21:16.686Z
 ---
 
 ---
+
 key: plan-search-files-slash-command
 tags: []
 created: 2026-08-14T04:05:00.000Z
 updated: 2026-08-14T04:21:00.000Z
+
 ---
 
 # Plan: `/search-files` slash command (human-friendly search wrapper)
@@ -44,17 +45,20 @@ The command is a thin wrapper: it parses flags, calls `ctx.engine.executeTool('s
 ## Steps
 
 ### Step 1 — Add snippet helper + flag parser to the search plugin
+
 **File:** `drone-agent/src/plugins/search/index.ts`
 
 - Add a pure `extractSnippet(query: string, chunkText: string, maxLen = 200): string` function (query-aware sentence selection + windowing).
 - Add a `parseSearchFilesArgs(args: string[])` helper that parses `--semantic`, `--path <dir>`, `--limit N`, `--glob <g>` from `ctx.args`, returning `{ pattern, mode, path, limit, glob }` with defaults (`path`=CWD, `limit`=10, `glob`=null). Unknown flags → usage error.
 
 ### Step 2 — Register the `/search-files` slash command
+
 **File:** `drone-agent/src/plugins/search/index.ts`
 
 In `register()`, add `registration.registerSlashCommand({ command: '/search-files', description: 'Search files: regex (default) or semantic (--semantic)', handler })`.
 
 Handler logic:
+
 1. Parse args via `parseSearchFilesArgs(ctx.args)`. If no pattern or bad flags, print usage and return `true`.
 2. Build the tool input: `{ pattern, mode, path, maxResults: limit, glob }` (omit `glob` when null).
 3. Call `ctx.engine.executeTool('search__text', input)`.
@@ -66,6 +70,7 @@ Handler logic:
 Also add `registration.registerHelp('/search-files <pattern> [--semantic] [--path <dir>] [--limit N] [--glob <g>]')`.
 
 ### Step 3 — Tests
+
 **File:** `drone-agent/test/search.test.ts`
 
 - **Flag parser:** `parseSearchFilesArgs` handles `--semantic`, `--path`, `--limit`, `--glob`, defaults, and unknown-flag errors.
@@ -75,6 +80,7 @@ Also add `registration.registerHelp('/search-files <pattern> [--semantic] [--pat
 - **No-beacon semantic:** mock `executeTool` returning the no-beacon note; assert friendly message.
 
 ### Step 4 — Validation
+
 1. LSP diagnostics clean for all touched files (note pre-existing branch diagnostics: `drone-agent/test/search.test.ts` `Cannot find module 'drone-swarm-common'`, `prompt-file.test.ts` config-type error — do not introduce NEW diagnostics).
 2. `pnpm -r run build` passes.
 3. `pnpm -r run typecheck` passes.
@@ -85,6 +91,7 @@ Also add `registration.registerHelp('/search-files <pattern> [--semantic] [--pat
 **Validation criteria:** all six checks green, no new LSP errors in touched files.
 
 ## Future work (not in this plan)
+
 - Swap lancaster-stemmer into `extractSnippet` term matching.
 - A sibling `/search-wiki` (or `/search-memory`) command for the swarm-memory-wiki search.
 - `--min-score`/`--fixed` flags if needed later.

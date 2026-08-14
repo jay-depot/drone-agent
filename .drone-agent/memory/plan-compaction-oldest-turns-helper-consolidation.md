@@ -14,11 +14,13 @@ updated: 2026-08-14T03:39:16.452Z
 # Plan: Fix compaction removing newest turns; consolidate "oldest non-summary turns" helper
 
 ## Summary
-Compaction currently summarizes/drops the *newest* non-summary turns instead of the *oldest*. Root cause in `drone-agent/src/plugins/compaction/index.ts` (~L198-205): `nonSummaryTurns.slice(-sliceSizeCapped)` slices the array tail. Because `appendUserMessage` pushes to the tail (newest last) while `prependSystemTurn` unshifts summaries to the head, the array is `[S_newest…S_oldest, normal_oldest…normal_newest]`, so slicing the tail grabs the newest normal turns. Regression introduced in commit c29bd93a.
+
+Compaction currently summarizes/drops the _newest_ non-summary turns instead of the _oldest_. Root cause in `drone-agent/src/plugins/compaction/index.ts` (~L198-205): `nonSummaryTurns.slice(-sliceSizeCapped)` slices the array tail. Because `appendUserMessage` pushes to the tail (newest last) while `prependSystemTurn` unshifts summaries to the head, the array is `[S_newest…S_oldest, normal_oldest…normal_newest]`, so slicing the tail grabs the newest normal turns. Regression introduced in commit c29bd93a.
 
 Additionally, the safety-trim helper `getDroppableTurnPrefix` has "stop at first summary" semantics that diverge from compaction's "skip summaries" intent. We consolidate to ONE helper with "oldest non-summary turns, skipping summaries" semantics used by both paths, and remove the dead `dropOldestTurns` variant.
 
 ## Array-ordering facts (source of truth: session-manager.ts)
+
 - `appendUserMessage` → `turns.push(...)` (newest at tail).
 - `appendAssistantMessage`/`appendToolResult` → append to the last turn (no new turn).
 - `prependSystemTurn` → `turns.unshift(...)` (newest summary at head).
@@ -26,6 +28,7 @@ Additionally, the safety-trim helper `getDroppableTurnPrefix` has "stop at first
 - "Oldest non-summary turn" = first non-summary turn scanning from index 0, skipping any summary turns.
 
 ## Steps
+
 1. turn-utils.ts — rename `getDroppableTurnPrefix` → `getOldestNonSummaryTurns(turns, count)`. Pure; iterate forward, skip `kind === 'summary'`, collect up to `count` non-summary turns in chronological order; return fewer when insufficient; empty for count <= 0; never mutate.
 2. session-manager.ts — rework `dropOldestNonSummaryTurns` to select via the helper then drop BY ID (reuse `dropTurnsByIds` id-set logic), so head summaries are preserved. Remove `dropOldestTurns` method + its type signature.
 3. context-budget-service.ts `evaluateSafetyTrim` — replace the leading-prefix loop: for each dropCount, `droppable = getOldestNonSummaryTurns(input.turns, dropCount)`; break if `droppable.length < dropCount`; remaining turns = `input.turns.filter(t => !idSet(droppable).has(t.id))`; evaluate budget on remaining. Keeps predicted drop count aligned with what `dropOldestNonSummaryTurns` actually drops (guards the non-convergence class at context-budget-service.test.ts:129).
@@ -38,6 +41,7 @@ Additionally, the safety-trim helper `getDroppableTurnPrefix` has "stop at first
 6. Validation: LSP zero errors; `pnpm -r run lint` zero errors; `pnpm -r run build` zero errors; fast test suite passes.
 
 ## Files touched
+
 - drone-agent/src/runtime/turn-utils.ts
 - drone-agent/src/runtime/session-manager.ts
 - drone-agent/src/runtime/context-budget-service.ts
@@ -48,5 +52,6 @@ Additionally, the safety-trim helper `getDroppableTurnPrefix` has "stop at first
 - drone-agent/test/compaction.test.ts
 
 ## Notes
+
 - No drone-core changes → no cross-package rebuild needed before typecheck, but run `pnpm -r run build` as part of validation anyway.
 - `dropOldestTurns` has no production callers (only its own test) → remove as dead code.
