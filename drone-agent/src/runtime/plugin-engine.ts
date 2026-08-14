@@ -171,6 +171,7 @@ type CreateDronePluginEngineOptions = {
   plugins: DronePlugin[];
   config: DroneAgentConfig;
   logger?: DroneLogger;
+  logToStderr?: boolean;
   debugFlags?: DebugFlagRegistry;
   // NEW:
   runtimeOptions?: {
@@ -289,6 +290,7 @@ export function createDronePluginEngine({
   plugins,
   config,
   logger = createConsoleLogger('plugin-engine'),
+  logToStderr = false,
   debugFlags = createDebugFlagRegistry(),
   runtimeOptions,
   buildSystemMessages: buildSystemMessagesFromHost,
@@ -454,7 +456,9 @@ export function createDronePluginEngine({
   async function registerPlugin(
     plugin: DronePlugin
   ): Promise<RegisteredPluginState> {
-    const pluginLogger = createConsoleLogger(plugin.metadata.id);
+    const pluginLogger = createConsoleLogger(plugin.metadata.id, {
+      toStderr: logToStderr,
+    });
     const pluginTools: DroneToolDefinition[] = [];
     const pluginPrompts: DronePromptFragment[] = [];
     const dependencyIds = new Set<string>();
