@@ -1,17 +1,16 @@
 ---
 key: plan-structure-aware-chunking
-tags: []
+tags:
+  []
 created: 2026-08-14T04:56:31.461Z
-updated: 2026-08-14T04:59:05.948Z
+updated: 2026-08-14T05:12:49.496Z
 ---
 
 ---
-
 key: plan-structure-aware-chunking
 tags: [search, semantic-search, chunking, beacon, tree-sitter]
 created: 2026-08-14T00:00:00.000Z
 updated: 2026-08-14T00:00:00.000Z
-
 ---
 
 # Plan: Structure-Aware Chunking for Semantic Search (web-tree-sitter)
@@ -41,8 +40,7 @@ Derived char bounds use the ~4 chars/token estimate: `minChars = 240 * 4 = 960 c
 
 ## Steps
 
-### Step 1 — Add prose chunkers to `drone-swarm-common` _(coder)_
-
+### Step 1 — Add prose chunkers to `drone-swarm-common` *(coder)*
 **File:** `drone-swarm-common/src/search-chunker.ts` (+ `index.ts`)
 
 Keep `chunkText` (paragraph fallback). Add two pure, dependency-free functions, exported from `index.ts`:
@@ -50,14 +48,12 @@ Keep `chunkText` (paragraph fallback). Add two pure, dependency-free functions, 
 - `chunkMarkdown(text, maxTokens): string[]` — split on `^#{1,6} ` headings, group each heading + following paragraphs into a section, respect `maxChars = maxTokens * 4`, split oversized sections at paragraph boundaries.
 - `chunkLines(text, maxTokens, linesPerChunk = 15, overlap = 3): string[]` — sliding window over lines for JSON/YAML.
 
-### Step 2 — Add web-tree-sitter + grammar deps to the beacon _(coder)_
-
+### Step 2 — Add web-tree-sitter + grammar deps to the beacon *(coder)*
 **File:** `drone-beacon/package.json`
 
 Add `web-tree-sitter` plus grammars: `tree-sitter-typescript`, `tree-sitter-javascript`, `tree-sitter-python`, `tree-sitter-c`, `tree-sitter-cpp`, `tree-sitter-rust`, `tree-sitter-go`, `tree-sitter-java`. **Pin `web-tree-sitter` and grammar versions together** (they track the tree-sitter runtime).
 
-### Step 3 — Implement the AST chunker _(coder)_
-
+### Step 3 — Implement the AST chunker *(coder)*
 **File:** `drone-beacon/src/code-chunker.ts` (new)
 
 - A `GRAMMAR_REGISTRY: Record<string, string>` mapping extension → grammar wasm path (`.ts`/`.tsx` → `tree-sitter-tsx.wasm`, `.js`/`.jsx` → javascript, `.py`, `.c`/`.h`, `.cpp`, `.rs`, `.go`, `.java`). Adding a language = one registry line + one dep.
@@ -68,38 +64,32 @@ Add `web-tree-sitter` plus grammars: `tree-sitter-typescript`, `tree-sitter-java
   3. Merge adjacent small units up to `minChars` (0.5× target); split oversized units at inner statement boundaries (`node.namedChildren`) above `maxChars` (2× target); never mid-statement.
   4. Return chunk texts (the indexer adds the `search_document:` prefix).
 
-### Step 4 — Implement the file-type router _(coder)_
-
+### Step 4 — Implement the file-type router *(coder)*
 **File:** `drone-beacon/src/file-chunker.ts` (new)
 
 `chunkFile(filePath, content, maxTokens): Promise<string[]>` dispatching by extension:
-
 - Markdown (`.md`, `.markdown`, `.mdx`) → `chunkMarkdown`
 - JSON/YAML (`.json`, `.yaml`, `.yml`) → `chunkLines`
 - Templates (`.hbs`, `.handlebars`, `.gradle`, `.tmpl`) → whole-file
 - Else → `chunkCode`; if it returns `null`, fall back to `chunkText`
 
-### Step 5 — Wire the router into the indexer _(coder)_
-
+### Step 5 — Wire the router into the indexer *(coder)*
 **File:** `drone-beacon/src/search-indexer.ts`
 
 - Add `const CHUNK_TARGET_TOKENS = 480;` (hardcoded, opinionated).
 - Replace line 105 `const chunks = chunkText(content, provider.maxTokens);` with `const chunks = await chunkFile(filePath, content, Math.min(CHUNK_TARGET_TOKENS, provider.maxTokens));`
 - Remove the now-unused `chunkText` import.
 
-### Step 6 — Tests _(tester)_
-
+### Step 6 — Tests *(tester)*
 - `drone-swarm-common/test/search-chunker.test.ts` (new): `chunkMarkdown` heading-aware grouping; `chunkLines` overlap; `chunkText` unchanged behavior.
 - `drone-beacon/test/code-chunker.test.ts` (new): parses TS, splits at function boundaries, merges small functions, splits oversized functions, handles parse errors gracefully, supports multiple languages (TS, Python, Rust, Go, C).
 - `drone-beacon/test/file-chunker.test.ts` (new): router dispatches `.ts` → code, `.md` → markdown, `.json` → lines, `.hbs` → whole-file, `.txt` → paragraph.
 - `drone-beacon/test/search-indexer.test.ts`: add a test that the indexer routes through `chunkFile`.
 
-### Step 7 — Review _(reviewer)_
-
+### Step 7 — Review *(reviewer)*
 Check correctness, dead code, duplication, and that the shared-interface change (chunker call site) swept all consumers (only `search-indexer.ts:105`).
 
-### Step 8 — Validation _(coder)_
-
+### Step 8 — Validation *(coder)*
 Run the full validation criteria below.
 
 ## Validation criteria
@@ -113,9 +103,28 @@ Run the full validation criteria below.
 7. No dead code / unused imports (e.g., `chunkText` import removed from indexer).
 
 ## Future work (not in this plan)
-
 - Make the grammar set configurable (web-tree-sitter is extensible — one registry line + one dep per language).
 - Contextual-enrichment header (file path, scope, signature) prepended to chunks before embedding.
 - Small-to-big / parent-document retrieval (embed small units, expand to enclosing class/file for the model).
 - Hybrid retrieval (semantic + BM25 via RRF) + code-aware reranking.
 - A chunking evaluation harness (MRR@k + recall@k + concept-split diagnostics) if empirical validation is ever wanted.
+
+---
+
+## Execution Summary (completed 2026-08-14 by code persona)
+
+All 8 steps implemented and validated. Commit: `ce6750c`.
+
+- **Step 1**: Added `chunkMarkdown` (heading/paragraph grouping) and `chunkLines` (line-window with overlap) to `drone-swarm-common/src/search-chunker.ts`, extracted a shared `splitBySentences` helper, kept `chunkText` as paragraph fallback. Exported via the existing `export * from './search-chunker.js'`.
+- **Step 2**: Added `web-tree-sitter@^0.26.12` + 8 grammar deps to `drone-beacon/package.json`. Set `allowBuilds: false` for the tree-sitter grammars in `pnpm-workspace.yaml` (used via WASM only; native bindings not needed — this also fixed the `pnpm -r run build` failure from ignored native build scripts).
+- **Step 3**: Implemented `drone-beacon/src/code-chunker.ts` — `GRAMMAR_REGISTRY` (ext → wasm path), lazy cached `getParser()`/`getLanguage()` (wasm via `createRequire` + `node:fs/promises`), `chunkCode()` that collects top-level units (attaching leading comments/docstrings), merges small units up to 0.5× target, splits oversized units at statement boundaries above 2× target, keeps function signatures attached to bodies (avoids header orphaning), and treats ERROR nodes as units so syntax-error files still get indexed.
+- **Step 4**: Implemented `drone-beacon/src/file-chunker.ts` — `chunkFile()` routes by extension: markdown → `chunkMarkdown`, JSON/YAML → `chunkLines`, templates → whole-file, else → `chunkCode` (fallback `chunkText`).
+- **Step 5**: Wired `chunkFile` into `SearchIndexer.indexDirectory` with `CHUNK_TARGET_TOKENS = 480`, capped at `provider.maxTokens`; removed the unused `chunkText` import.
+- **Step 6**: Added tests — `drone-swarm-common/test/search-chunker.test.ts` (8), `drone-beacon/test/code-chunker.test.ts` (7), `drone-beacon/test/file-chunker.test.ts` (5), and an indexer-routing test in `drone-beacon/test/search-indexer.test.ts`.
+- **Step 7**: Review — swept all `chunkText` consumers (only `search-indexer.ts` used it, now routed through `chunkFile`); no dead code; the `chunkText` refs in `drone-agent/src/plugins/search/index.ts` are a local param in `extractSnippet`, not the chunker.
+- **Step 8**: Validation all green — LSP clean on all touched files; `pnpm -r run build` ✓; `pnpm -r run typecheck` ✓; `pnpm lint` ✓; `pnpm test` ✓ (1904 passed, 9 skipped).
+
+**Notable implementation details / deviations:**
+- The `splitOversized` grouping must measure the actual text span (first-child start to last-child end), not the sum of child sizes, because inter-statement whitespace inflates the span — otherwise chunks come out tiny.
+- ERROR nodes in tree-sitter are marked `isExtra: true` but must be kept as units (not treated as comments) so a file with a syntax error still gets indexed rather than silently dropped.
+- The `code-chunker.test.ts` needed a `chunkOrThrow` helper to narrow the `string[] | null` return type for LSP cleanliness.
