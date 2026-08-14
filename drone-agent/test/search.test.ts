@@ -283,9 +283,13 @@ describe('semanticSearch', () => {
       maxResults: 10,
     });
 
-    expect(results).toHaveLength(3);
-    // First result should be the cat chunk (score ~1.0)
+    // Deduped to one result per file (animals.txt + vehicles.txt).
+    expect(results).toHaveLength(2);
+    // First result should be animals.txt (cat chunk, score ~1.0), with the
+    // matching chunks' text combined.
+    expect(results[0].filePath).toBe('animals.txt');
     expect(results[0].text).toContain('cat');
+    expect(results[0].text).toContain('dog');
     expect(results[0].score).toBeGreaterThan(0.9);
   });
 

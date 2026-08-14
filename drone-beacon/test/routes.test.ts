@@ -1085,4 +1085,42 @@ describe('Search Routes', () => {
     expect(body.resultCount).toBe(1);
     expect(body.results[0].file).toBe('/proj/src/keep.ts');
   });
+
+  it('GET /agents/:id/search dedupes chunks from the same file', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/agents',
+      payload: { id: 'agent-2', personaId: null },
+    });
+    db.registerSearchPath('agent-2', '/proj');
+
+    // Seed two chunks from the same file with matching embeddings.
+    db.insertChunk(
+      '/proj',
+      '/proj/src/dup.ts',
+      0,
+      'first matching chunk',
+      new Float32Array([1, 0, 0, 0])
+    );
+    db.insertChunk(
+      '/proj',
+      '/proj/src/dup.ts',
+      1,
+      'second matching chunk',
+      new Float32Array([1, 0, 0, 0])
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/agents/agent-2/search?q=test',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    // One result per file, with both chunks' text combined.
+    expect(body.resultCount).toBe(1);
+    expect(body.results).toHaveLength(1);
+    expect(body.results[0].file).toBe('/proj/src/dup.ts');
+    expect(body.results[0].content).toContain('first matching chunk');
+    expect(body.results[0].content).toContain('second matching chunk');
+  });
 });

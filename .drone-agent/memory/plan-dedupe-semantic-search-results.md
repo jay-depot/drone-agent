@@ -1,16 +1,17 @@
 ---
 key: plan-dedupe-semantic-search-results
-tags:
-  []
+tags: []
 created: 2026-08-14T05:39:27.021Z
 updated: 2026-08-14T05:39:27.021Z
 ---
 
 ---
+
 key: plan-dedupe-semantic-search-results
 tags: [search, semantic-search, dedup, beacon, drone-swarm-common]
 created: 2026-08-14T00:00:00.000Z
 updated: 2026-08-14T00:00:00.000Z
+
 ---
 
 # Plan: Deduplicate Semantic Search Results by File
@@ -35,33 +36,40 @@ With structure-aware chunking (plan-structure-aware-chunking), a single file now
 
 ## Steps
 
-### Step 1 — Add `dedupeAndCombineChunks` to `drone-swarm-common` *(coder)*
+### Step 1 — Add `dedupeAndCombineChunks` to `drone-swarm-common` _(coder)_
+
 **File:** `drone-swarm-common/src/search-searcher.ts`
 
 Add a `ScoredChunk` type (`{ filePath, chunkIndex, text, score }`) and a pure `dedupeAndCombineChunks(scored, { maxResults, maxCombinedChars = 8000 })`:
+
 - Group by `filePath`.
 - Per file: sort chunks by `chunkIndex`; find best (highest `score`); combine texts — join consecutive chunks with `\n\n`, insert `\n\n[...]\n\n` between non-consecutive chunks; cap combined text at `maxCombinedChars` (append `\n…` if truncated).
 - Return one entry per file (`{ filePath, chunkIndex: best.chunkIndex, text: combined, score: best.score }`), sorted by score desc, sliced to `maxResults`.
 
-### Step 2 — Update `semanticSearch` to use it *(coder)*
+### Step 2 — Update `semanticSearch` to use it _(coder)_
+
 **File:** `drone-swarm-common/src/search-searcher.ts`
 
 After scoring + sorting, call `dedupeAndCombineChunks(scored, { maxResults })` instead of the current `slice(0, maxResults)` + map.
 
-### Step 3 — Update the beacon route to use it *(coder)*
+### Step 3 — Update the beacon route to use it _(coder)_
+
 **File:** `drone-beacon/src/routes/search.ts`
 
 After the exclude-filtered scoring loop, map rows to `ScoredChunk`, call `dedupeAndCombineChunks`, then map back to the response shape. Update `resultCount` to `top.length` (unique files) and `truncated` to `top.length >= maxResults`.
 
-### Step 4 — Tests *(tester)*
+### Step 4 — Tests _(tester)_
+
 - `drone-swarm-common/test/search-searcher.test.ts` (new): `dedupeAndCombineChunks` dedups by file, keeps best score, combines consecutive chunks without gap marker, inserts `[...]` for non-consecutive chunks, caps combined size, respects `maxResults`.
 - Update `drone-agent/test/search.test.ts` `semanticSearch` tests: the "returns results sorted" test currently expects 3 results (2 files) — after dedup it should expect 2 (one per file). Verify the combined text and best-score behavior.
 - `drone-beacon/test/routes.test.ts`: add a test that `GET /agents/:id/search` returns one result per file (seed two chunks from the same file, assert one entry with combined content).
 
-### Step 5 — Review *(reviewer)*
+### Step 5 — Review _(reviewer)_
+
 Check correctness, dead code, and that all consumers of `semanticSearch` and the beacon search route are covered (agent-side `handleSemanticSearch` and `/search-files` pass through the beacon response, so no change needed there).
 
-### Step 6 — Validation *(coder)*
+### Step 6 — Validation _(coder)_
+
 Run the full validation criteria below.
 
 ## Validation criteria
@@ -75,5 +83,6 @@ Run the full validation criteria below.
 7. No dead code / unused imports.
 
 ## Future work (not in this plan)
+
 - Coordinator wiki semantic search (reuses `semanticSearch` + `dedupeAndCombineChunks`).
 - Small-to-big / parent-document retrieval (embed small units, expand to enclosing class/file for the model).

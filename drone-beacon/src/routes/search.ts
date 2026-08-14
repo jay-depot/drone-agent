@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { DroneSearchPath } from 'drone-core';
-import { cosineSimilarity } from 'drone-swarm-common';
+import { cosineSimilarity, dedupeAndCombineChunks } from 'drone-swarm-common';
 import { minimatch } from 'minimatch';
 import { getSearchIndexer } from './context.js';
 import { getAgent } from '../db/agents.js';
@@ -150,8 +150,8 @@ export default function searchRoutes(app: FastifyInstance) {
 
     // Compute similarity for each chunk
     const scored: Array<{
-      file_path: string;
-      chunk_index: number;
+      filePath: string;
+      chunkIndex: number;
       text: string;
       score: number;
     }> = [];
@@ -172,24 +172,26 @@ export default function searchRoutes(app: FastifyInstance) {
       if (score < minScoreVal) continue;
 
       scored.push({
-        file_path: chunk.file_path,
-        chunk_index: chunk.chunk_index,
+        filePath: chunk.file_path,
+        chunkIndex: chunk.chunk_index,
         text: chunk.text,
         score,
       });
     }
 
-    // Sort by score descending, take top results
-    scored.sort((a, b) => b.score - a.score);
-    const top = scored.slice(0, maxResults ?? 50);
+    // Deduplicate by file, keeping the best chunk's score and combining the
+    // matching chunks' text (with gap markers for non-consecutive chunks).
+    const top = dedupeAndCombineChunks(scored, {
+      maxResults: maxResults ?? 50,
+    });
 
     return {
       query: q,
       resultCount: top.length,
       truncated: top.length >= (maxResults ?? 50),
       results: top.map(r => ({
-        file: r.file_path,
-        chunkIndex: r.chunk_index,
+        file: r.filePath,
+        chunkIndex: r.chunkIndex,
         content: r.text,
         score: r.score,
       })),
