@@ -45,13 +45,13 @@ export const startupPlugin: DronePlugin = {
       render: async () =>
         `# Workspace
 
-WORKSPACE ROOT: ${cwd}
-All file paths in this session should be relative to this directory.
-Do NOT assume paths outside this workspace (e.g., do not use paths like /workspace/... or /home/... unless explicitly provided).
+**Root Directory:** ${cwd}
+**Path Rule:** All file paths in this session should be relative to this directory.
+**Boundary:** Do not assume or use paths outside this workspace (e.g., /workspace/... or /home/...) unless specifically instructed to do so by the user or unless accessing the User Home Directory listed below.
 
-User's home directory: ${homeDir}
-Operating system: ${osInfo}
-Current date, time and timezone: ${dateTime}`,
+**User Home:** ${homeDir}
+**OS:** ${osInfo}
+**Current Time:** ${dateTime}`,
     });
 
     registration.registerTool({
