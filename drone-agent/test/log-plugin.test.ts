@@ -368,6 +368,10 @@ async function getCapability(
           pullIntervalMinutes: 60,
         },
       },
+      search: {
+        enabled: false,
+        paths: [],
+      },
       tui: {
         syntaxHighlighting: {
           colors: {

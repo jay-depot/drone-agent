@@ -55,6 +55,8 @@ export type {
   DronePromptFileConfig,
   DroneKnowledgeSyncConfig,
   DroneSwarmConfig,
+  DroneSearchPath,
+  DroneSearchConfig,
   DroneLspSpawnServerConfig,
   DroneLspExternalServerConfig,
   DroneLspServerConfig,
@@ -173,6 +175,11 @@ export type {
   DroneInsightStorageEngine,
   DronePrincipleStorageEngine,
   DroneSelfImprovementCapability,
+  DroneEmbeddingProvider,
+  DroneSearchCapability,
+  SearchResult,
+  IndexResult,
+  DroneSwarmCapability,
 } from './capabilities.js';
 
 // ── Wiki types ────────────────────────────────────────────────────────

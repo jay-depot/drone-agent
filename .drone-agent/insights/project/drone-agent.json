@@ -12,8 +12,104 @@
     "insight": "When adding a new debug subsystem that must be consumed by the plugin engine (e.g. `--debug tools`), the debug set cannot live privately in the conversation service because the engine is constructed before the conversation service in index.tsx. Extract a shared `DebugFlagRegistry` in drone-core (mirroring `RuntimeFlagRegistry`), created once in index.tsx and passed to both the engine and conversation service. This makes runtime toggling via `/debug` take effect in both layers and makes future debug flags trivial to add."
   },
   {
+    "timestamp": "2026-07-14T20:58:46.803Z",
+    "insight": "The `file__write` tool has a bug where it truncates files when writing content that contains template literal backticks or certain special characters. This happened multiple times when writing TypeScript files with template literals (e.g., `Safety trim: dropping ${turnsToDrop} turn(s)`). The workaround is to use `git checkout` to restore the file, then use `sed` or Python scripts for surgical edits instead of `file__write` for files with complex template literals."
+  },
+  {
+    "timestamp": "2026-07-14T21:34:07.117Z",
+    "insight": "When using sed to insert multi-line blocks after a pattern, the approach of matching a closing brace pattern like `/^        },/` is fragile because it matches the first closing brace after the opening pattern, not the correct one. For inserting new config fields into test files that construct DroneAgentConfig objects, it's safer to either write the whole file or use a more targeted approach like matching the specific closing brace of the swarm block. The sed command corrupted two test files (log-plugin.test.ts and prompt-file.test.ts) by inserting the search config block multiple times inside the swarm block instead of after it."
+  },
+  {
+    "timestamp": "2026-07-19T18:04:08.795Z",
+    "insight": "The file__apply_diff tool consistently fails on files with certain content patterns (e.g., when context lines contain only whitespace or the @@ heading doesn't match exactly). For multi-line code insertions in TypeScript files, using a Python script with string replacement and assertions is more reliable than the diff tool. This was observed during the MCP roots capability implementation where all 13+ edits to client.ts were applied via Python instead of file__apply_diff."
+  },
+  {
+    "timestamp": "2026-07-21T18:08:06.455Z",
+    "insight": "Planned syntax highlighting fixes: (1) background width padding in renderHighlightedTree(), (2) configurable syntax colors via new DroneTuiConfig type in drone-core. Config threads through App → ChatLog/AssistantMessageBlock → Markdown. Plan saved as project memory 'tui-issue2-syntax-highlighting-fix'."
+  },
+  {
+    "timestamp": "2026-07-21T18:15:57.386Z",
+    "insight": "When threading new props through App.tsx's conversation event listener, use refs (like syntaxColorsRef) to avoid stale closure issues. The event listener is a useEffect that captures variables at setup time; refs let it read the latest values without re-registering the listener on every change."
+  },
+  {
+    "timestamp": "2026-07-21T18:23:13.103Z",
+    "insight": "Ingested the entire fix/tui-syntax-highlighting branch (7 commits) into the project wiki. Created ADR 077 covering all three bug fixes (ANSI escape codes for Yoga layout, proper lowlight AST traversal for stray undefined/missing colors, flat AST line splitting) and two enhancements (background width padding, configurable DroneTuiConfig). Updated modules/drone-agent-tui.md with a Syntax Highlighting section, entities/DroneAgentConfig.md with the tui section, and index.md. Also incidentally updated the MCP client gaps memory to mark all 14 items complete with a summary table."
+  },
+  {
+    "timestamp": "2026-07-21T19:20:26.208Z",
+    "insight": "The `file__apply_diff` tool's `renderComponent` registration was tricky because all 5 file tool registrations have identical context lines (`additionalProperties: false,\\n      },\\n      execute: async input => {`), causing `file__apply_diff` patches to land in the wrong spot. Had to rewrite the entire file to fix it. Lesson: when patching files with identical context blocks, use more unique context or write the whole file."
+  },
+  {
+    "timestamp": "2026-07-21T20:40:12.220Z",
+    "insight": "The subagent dispatch tool now has real-time NDJSON event streaming from the subagent's stdout. Each NDJSON event (reasoning, toolCall, assistantMessage, return) is parsed as it arrives and emitted via onProgress() with a prefixed string format (reasoning:, tool:, msg:, done:). This pattern is reusable for any future feature that needs to monitor subagent progress in real time — the infrastructure (onProgress callback, outputLines accumulation in app.tsx, custom renderComponent) is already in place."
+  },
+  {
+    "timestamp": "2026-07-21T20:52:29.107Z",
+    "insight": "Meta-tool pretty output plan: The list_tools/mount_tool/unmount_tool meta-tools across git, swarm, and MCP plugins are structurally identical but return slightly different JSON shapes (MCP includes serverId, uses different field names). A single set of 3 reusable components (ListToolsBlock, MountToolBlock, UnmountToolBlock) can serve all three plugins if we normalize the MCP result shapes. The plan is saved as project memory 'meta-tool-pretty-output'."
+  },
+  {
+    "timestamp": "2026-07-21T21:01:54.360Z",
+    "insight": "The file__apply_diff tool struggles with multi-hunk patches on files that have already been partially patched. When applying multiple changes to the same file, it's more reliable to write the complete file with file__write than to apply sequential patches. The patch tool also has issues with indentation-sensitive patches where the context lines have different indentation than expected — it can insert lines at wrong positions or create duplicate properties."
+  },
+  {
+    "timestamp": "2026-07-21T21:23:30.451Z",
+    "insight": "OpenAI and OpenRouter use different JSON formats for reasoning effort in their API requests. OpenAI uses a top-level `reasoning_effort` (snake_case string), while OpenRouter uses a nested `reasoning: { effort: string }` object. The solution was to add both fields to the shared `OpenAiChatRequest` type and let each plugin set the field its API expects. The API ignores fields it doesn't understand, so this is safe and avoids conditional logic."
+  },
+  {
+    "timestamp": "2026-07-21T22:26:35.605Z",
+    "insight": "OpenRouter returns `reasoning` inside `choice.message.reasoning` (as a field on the message object), not at `choice.reasoning` like OpenAI does. The shared `fromOpenAiResponse` adapter only checked `choice.reasoning`, so OpenRouter reasoning was silently dropped. Fixed by adding `reasoning?: string` to `OpenAiMessage` type and adding a fallback check in `fromOpenAiResponse` that checks `choice.message.reasoning` when `choice.reasoning` is absent. Choice-level still takes precedence when both are present."
+  },
+  {
+    "timestamp": "2026-07-22T01:07:27.030Z",
+    "insight": "When using file__apply_diff on multiple files in a session, some patches may silently fail to apply (e.g., when the file content has changed since the patch was generated). Always verify patches were applied by checking git diff or running typecheck after each batch of changes. In this session, several core type patches were lost and had to be re-applied manually."
+  },
+  {
+    "timestamp": "2026-07-28T17:07:27.429Z",
+    "insight": "Coordinator UI has a dual-session-table problem: `beacon_sessions` tracks per-beacon agent connections (with disconnected_at), while `swarm_sessions` tracks the overall session lifecycle (with status field). The terminate flow only touched beacon_sessions, leaving swarm_sessions stuck on 'active'. The fix adds a POST /sessions/:id/end endpoint that updates swarm_sessions, and the UI calls it after the beacon DELETE regardless of whether the beacon session was already ended."
+  },
+  {
+    "timestamp": "2026-07-28T17:24:22.835Z",
+    "insight": "The coordinator has two separate session tables (beacon_sessions and swarm_sessions) that can get out of sync. The terminate flow only updated beacon_sessions, leaving swarm_sessions stuck on 'active'. The fix adds a POST /sessions/:id/end endpoint that directly updates swarm_sessions, and the UI calls it after the beacon DELETE regardless of whether the beacon session was already ended. This pattern should be kept in mind for future session lifecycle work."
+  },
+  {
+    "timestamp": "2026-07-28T17:43:27.691Z",
+    "insight": "The /api prefix migration touched more files than initially scoped. The drone-gateway package also has a CoordinatorClient class that calls coordinator API routes directly, and its tests needed updating too. When doing cross-package API path changes, always search for all consumers of the API across the entire monorepo, not just the obvious ones (coordinator + UI + beacon)."
+  },
+  {
+    "timestamp": "2026-07-28T19:11:07.841Z",
+    "insight": "Coordinator UI active persona bug fix: The root cause was that the swarm plugin registers the agent session with the beacon at `onPluginsLoaded` (with `personaId: null`), but the persona plugin activates the persona at `onSessionStart` (which fires later). The fix adds a complete pipeline: (1) a PATCH endpoint on the coordinator for updating session persona, (2) a PATCH endpoint on the beacon for updating agent persona, (3) a coordinator client method on the beacon, (4) a hook function in the swarm plugin, and (5) a subscription to persona changes in the swarm plugin's index. Also added `activePersona` to event metadata for audit trail."
+  },
+  {
+    "timestamp": "2026-07-28T19:52:42.717Z",
+    "insight": "The mid-panel widget system in tui/app.tsx uses a hardcoded list of known plugin IDs and a useRef that doesn't trigger re-renders. This should be rearchitected to support dynamic registration from any plugin (including external/user plugins) with custom React components. Punted to roadmap — needs its own planning session."
+  },
+  {
+    "timestamp": "2026-07-28T20:47:19.039Z",
+    "insight": "When removing a dependency from a plugin's deps type (like budgetService from CompactionPluginDeps), the test file must also be updated. The initial code-quality-cleanup commit missed updating compaction.test.ts, which caused 15 LSP errors. Always grep for the removed field name in test files as part of the validation step."
+  },
+  {
+    "timestamp": "2026-07-28T21:19:30.041Z",
+    "insight": "The plan persona sometimes slips into implementation mode for trivial fixes. The project workflow accepts this — it's not worth fighting. The important thing is the fix is correct, not which persona wrote it. This is a pragmatic design choice: the workflow is resilient to role bleed."
+  },
+  {
+    "timestamp": "2026-07-28T21:27:30.375Z",
+    "insight": "Wiki ingest for 12 commits on feature/web-ui-management-console branch completed. Created 8 new wiki pages (7 decisions + 1 concept) and updated 7 module pages. The commits spanned 5 major features: Web UI Management Console (5.5), MitM verification, approval token improvements, live event streaming + /api prefix, active persona propagation, and code quality cleanup. All 1632 tests pass."
+  },
+  {
+    "timestamp": "2026-07-29T03:16:00.772Z",
+    "insight": "Planned the \"Move Semantic Search to Beacon\" feature. Key architectural decisions: (1) search paths via separate beacon endpoint (not in agent registration), (2) single SQLite DB with directory_path column for dedup, (3) regex stays local, semantic goes to beacon, (4) shared code in drone-swarm-common for future coordinator reuse, (5) reindexing via two-pronged approach: agent-side onAfterToolCall hook + beacon-side periodic hash sweep. Plan saved to project memory as plan-semantic-search."
+  },
+  {
+    "timestamp": "2026-07-29T03:35:08.010Z",
+    "insight": "Pre-existing test failures discovered during plan-semantic-search validation: (1) compaction.test.ts has 3 tests failing because `makeBudgetService` helper function is missing (the tests call it but it was never defined in that file), (2) coordinator-client.test.ts has 1 test failing because `generateVerificationCode` receives undefined inputA (the test passes a Promise<BeaconIdentity> instead of awaiting it). These failures exist on the base commit too and are not related to the semantic search changes."
+  },
+  {
     "timestamp": "2026-08-10T05:01:49.627Z",
     "insight": "The drone-agent package resolves drone-core from its built dist/ (package.json \"types\": \"./dist/index.d.ts\"), not from source. So after editing drone-core types, you MUST run `pnpm -r run build` before LSP/typecheck in dependent packages reflects the change; otherwise you'll chase stale diagnostics."
+  },
+  {
+    "timestamp": "2026-08-10T22:44:20.231Z",
+    "insight": "The beacon's coordinator-client (drone-beacon/src/coordinator-client.ts) is entirely fire-and-forget: pushEvents, endSwarmSession, pushPersona, etc. all just fetch() and log a warning on failure. There is NO durable write-behind queue today. The spawn path is the exception that must NOT be queued — a deferred spawn is a surprising side effect; spawn should drop + return an error when the coordinator is unreachable. Also, createCoordinatorFetch (self-signed-TLS-tolerant fetch) already exists in coordinator-client.ts and should be extracted into drone-swarm-common for reuse by any new CLI, since both beacon and coordinator use self-signed certs."
   },
   {
     "timestamp": "2026-08-10T23:09:18.343Z",
@@ -50,5 +146,29 @@
   {
     "timestamp": "2026-08-11T21:05:47.296Z",
     "insight": "A CI-only typecheck failure can be masked locally by stale dist/ artifacts. When a feature branch is based on an older commit, its drone-swarm-common/src/tls.ts may still be synchronous while main has since made loadOrCreateTlsIdentity async (openssl shell-injection fix #54). Locally, dependent packages (drone-coordinator, drone-beacon) resolve drone-swarm-common from its built dist/ (package.json \"types\": \"./dist/tls.d.ts\"), so a stale dist hides the mismatch and `pnpm typecheck` passes. CI does a fresh build and fails with \"Property 'fingerprint' does not exist on type 'Promise<TlsIdentity>'\". To reproduce locally, build drone-swarm-common from main's tls.ts (git show origin/main:... > src/tls.ts, rebuild, typecheck dependents), then restore. Lesson: when a branch predates a change to a shared dependency's signature, verify against the dependency's CURRENT (main) signature, not just the local dist."
+  },
+  {
+    "timestamp": "2026-08-14T03:39:26.096Z",
+    "insight": "Compaction regression (c29bd93a) slices the *tail* of the non-summary turn array, but the session array is `[S_newest…S_oldest, normal_oldest…normal_newest]` because appendUserMessage pushes (newest last) while prependSystemTurn unshifts summaries (newest summary first). So `slice(-n)` grabs the newest normal turns — the inverse of intent. The existing compaction tests only assert that *some* summary is created and *some* turns dropped, so they cannot distinguish head-slicing from tail-slicing; a correct regression test must pin BOTH ends (transcript contains oldest & excludes newest; survivors are newest). Also: the safety-trim helper getDroppableTurnPrefix and compaction's slice had divergent \"oldest non-summary\" semantics (stop-at-summary vs skip-summaries); they should share ONE pure helper that skips summaries, and dropping must be done by id (not shift/slice) since summaries live at the head."
+  },
+  {
+    "timestamp": "2026-08-14T14:53:33.881Z",
+    "insight": "When a new required config section (e.g. `search`) is added to `DroneAgentConfig` in drone-core, every test mock that constructs a full `DroneAgentConfig` (via `getConfig: () => ({...})`) must be updated or typecheck fails and blocks the whole CI unit-tests job. The `prompt-file.test.ts` mock was missing `search`, which broke `pnpm typecheck` and prevented `pnpm test` from running on CI. Sweep all test mocks that build full config objects (grep for `tui:` or `getConfig: () => ({`) when adding a config section."
+  },
+  {
+    "timestamp": "2026-08-14T14:53:37.930Z",
+    "insight": "In `--output-json` subagent mode, the console logger wrote `[scope]` lines to stdout via `console.log`, polluting the NDJSON protocol stream and breaking the `dispatch-output-json` integration test (and any real subagent consumer). Fix: add a `toStderr` option to `createConsoleLogger` and thread a `logToStderr` flag through the plugin engine, set when `--output-json` is active. This keeps stdout pure NDJSON while logs go to stderr. When a process emits a structured protocol on stdout, all diagnostics/logging must be routed to stderr."
+  },
+  {
+    "timestamp": "2026-08-14T14:53:44.956Z",
+    "insight": "The subagent dispatch integration test fixture had two deterministic bugs: (1) on spawn failure (e.g. missing executable) it `reject`ed the promise instead of resolving with a `SubagentResult`, so tests asserting `result.error` got an unhandled rejection; (2) the timeout error string `'Subagent timed out'` does not contain the substring `'timeout'` (there's a space), so `toContain('timeout')` assertions always failed. Fix the fixture to resolve with an error result on spawn error, and assert on `'timed out'` instead. When writing test fixtures that wrap child processes, resolve with a result object (never reject) so callers can assert on error fields."
+  },
+  {
+    "timestamp": "2026-08-14T15:39:38.979Z",
+    "insight": "CodeQL flags polynomial regexes (ReDoS) on config-sourced strings as \"uncontrolled data\" even when the value comes from a trusted config file. The minimal, behavior-preserving mitigation is a length cap on the input before the regex runs (e.g. reject hosts > 2048 chars before `replace(/\\/+$/, '')`), rather than rewriting the regex or adding a suppression comment. This bounds the polynomial match to a fixed-size input. Add a unit test for the guard."
+  },
+  {
+    "timestamp": "2026-08-14T15:59:42.289Z",
+    "insight": "sqlite-vec's ESM entry (index.mjs) resolves its platform extension via `import.meta.resolve`, which under pnpm's store layout can double the `.so` suffix (vec0.so.so) and fail to load — this surfaced only in the Docker/CI beacon image, not locally. The CJS entry (index.cjs) uses `require.resolve` and resolves the correct path. Fix: load native-extension packages that ship both ESM+CJS entries via `createRequire(import.meta.url)` + `require(...)` in ESM code, rather than `import * as`. This is a general pattern for pnpm + native `.so`/`.dylib`/`.dll` packages."
   }
 ]

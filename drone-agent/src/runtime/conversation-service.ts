@@ -231,6 +231,12 @@ export function createConversationService({
 
       await engine.runSessionSafetyTrimAppliedHooks(payload);
 
+      logger.warn(
+        `Safety trim: dropping ${turnsToDrop} turn(s) to stay under budget ` +
+          `(model=${currentModel}, ctx=${contextWindow.contextWindowTokens}, ` +
+          `usage=${snapshot.budget.estimatedPromptTokens}/${contextWindow.contextWindowTokens})`
+      );
+
       if (!hasWarnedAboutSafetyTrim) {
         logger.warn(payload.warningMessage);
         hasWarnedAboutSafetyTrim = true;

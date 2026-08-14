@@ -15,7 +15,7 @@ let baseDir: string;
 
 beforeEach(async () => {
   baseDir = await mkdtemp(path.join(os.tmpdir(), 'drone-coordinator-storage-'));
-  initStorage(baseDir);
+  await initStorage(baseDir);
 });
 
 afterEach(async () => {
@@ -43,60 +43,60 @@ describe('Storage Engine', () => {
     expect(isLargePayload(exact)).toBe(false);
   });
 
-  it('should store a large payload and return a reference', () => {
+  it('should store a large payload and return a reference', async () => {
     const content = 'x'.repeat(11 * 1024);
-    const ref = storeLargePayload('session-1', 'event-1', content);
+    const ref = await storeLargePayload('session-1', 'event-1', content);
     expect(ref).toMatch(/^blob:session-1\/event-1\/[a-f0-9]+$/);
   });
 
-  it('should retrieve a stored payload by reference', () => {
+  it('should retrieve a stored payload by reference', async () => {
     const content = 'y'.repeat(11 * 1024);
-    const ref = storeLargePayload('session-1', 'event-1', content);
-    const retrieved = retrieveLargePayload(ref);
+    const ref = await storeLargePayload('session-1', 'event-1', content);
+    const retrieved = await retrieveLargePayload(ref);
     expect(retrieved).toBe(content);
   });
 
-  it('should return null for invalid blob reference', () => {
-    expect(retrieveLargePayload('blob:invalid/ref/1234')).toBeNull();
+  it('should return null for invalid blob reference', async () => {
+    expect(await retrieveLargePayload('blob:invalid/ref/1234')).toBeNull();
   });
 
-  it('should return null for malformed reference', () => {
-    expect(retrieveLargePayload('not-a-blob-ref')).toBeNull();
+  it('should return null for malformed reference', async () => {
+    expect(await retrieveLargePayload('not-a-blob-ref')).toBeNull();
   });
 
-  it('should store small payloads (under threshold)', () => {
+  it('should store small payloads (under threshold)', async () => {
     const content = 'small payload';
-    const ref = storeLargePayload('session-1', 'event-2', content);
-    const retrieved = retrieveLargePayload(ref);
+    const ref = await storeLargePayload('session-1', 'event-2', content);
+    const retrieved = await retrieveLargePayload(ref);
     expect(retrieved).toBe(content);
   });
 
-  it('should handle special characters in content', () => {
+  it('should handle special characters in content', async () => {
     const content = JSON.stringify({
       text: 'hello\nworld\twith\0null',
       unicode: '🚀🔥',
     });
-    const ref = storeLargePayload('session-1', 'event-3', content);
-    const retrieved = retrieveLargePayload(ref);
+    const ref = await storeLargePayload('session-1', 'event-3', content);
+    const retrieved = await retrieveLargePayload(ref);
     expect(retrieved).toBe(content);
   });
 
-  it('should delete session blobs', () => {
-    storeLargePayload('session-1', 'event-1', 'x'.repeat(11 * 1024));
-    storeLargePayload('session-1', 'event-2', 'y'.repeat(11 * 1024));
-    storeLargePayload('session-2', 'event-1', 'z'.repeat(11 * 1024));
+  it('should delete session blobs', async () => {
+    await storeLargePayload('session-1', 'event-1', 'x'.repeat(11 * 1024));
+    await storeLargePayload('session-1', 'event-2', 'y'.repeat(11 * 1024));
+    await storeLargePayload('session-2', 'event-1', 'z'.repeat(11 * 1024));
 
-    deleteSessionBlobs('session-1');
+    await deleteSessionBlobs('session-1');
 
     // session-1 blobs should be gone
     const ref1 = 'blob:session-1/event-1/xxxx';
-    expect(retrieveLargePayload(ref1)).toBeNull();
+    expect(await retrieveLargePayload(ref1)).toBeNull();
 
     // session-2 blobs should still exist
     // We can't easily verify this without knowing the hash, but the function shouldn't throw
   });
 
-  it('should handle deleting non-existent session', () => {
-    expect(() => deleteSessionBlobs('nonexistent')).not.toThrow();
+  it('should handle deleting non-existent session', async () => {
+    await expect(deleteSessionBlobs('nonexistent')).resolves.toBeUndefined();
   });
 });

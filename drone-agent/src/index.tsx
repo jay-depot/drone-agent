@@ -33,8 +33,10 @@ import {
 import { runMigrate } from './migrate.js';
 
 async function main(): Promise<void> {
-  const logger = createConsoleLogger('drone-agent');
   const invocation = parseCliArgs(process.argv.slice(2));
+  const logger = createConsoleLogger('drone-agent', {
+    toStderr: invocation.options.outputJson,
+  });
   function createLlmGetters(engineRef: {
     current: ReturnType<typeof createDronePluginEngine> | undefined;
   }) {
@@ -153,6 +155,7 @@ async function main(): Promise<void> {
     plugins: allPlugins,
     config: resolvedConfig.config,
     logger,
+    logToStderr: invocation.options.outputJson,
     debugFlags,
     runtimeOptions: {
       subagentId: invocation.options.subagentId,

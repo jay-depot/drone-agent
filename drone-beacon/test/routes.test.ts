@@ -3,6 +3,8 @@ import { setupDb, teardownDb } from './setup.js';
 import { buildTestApp } from './app-helper.js';
 import type { FastifyInstance } from 'fastify';
 import * as db from '../src/db/index.js';
+import { SearchIndexer } from '../src/search-indexer.js';
+import { setSearchIndexer } from '../src/routes/context.js';
 
 // Mock ws-server to avoid WebSocket dependency
 vi.mock('../src/ws-server.js', () => ({
@@ -1019,5 +1021,100 @@ describe('Sync Routes', () => {
       url: '/sync/sessions/ss1',
     });
     expect(res.statusCode).toBe(502);
+  });
+});
+
+// ── Search Routes ───────────────────────────────────────────────────
+
+describe('Search Routes', () => {
+  // vec0 requires 768-dim embeddings (matching nomic-embed-text).
+  const emb = (v: number) => {
+    const arr = new Float32Array(768);
+    arr[0] = v;
+    return arr;
+  };
+  const mockProvider = {
+    id: 'mock',
+    name: 'Mock Provider',
+    dimensions: 768,
+    maxTokens: 8192,
+    getEmbedding: async () => emb(1),
+  };
+
+  beforeEach(() => {
+    setSearchIndexer(new SearchIndexer(mockProvider));
+  });
+
+  afterEach(() => {
+    setSearchIndexer(undefined);
+  });
+
+  it('GET /agents/:id/search excludes files matching the exclude glob', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/agents',
+      payload: { id: 'agent-1', personaId: null },
+    });
+    db.registerSearchPath('agent-1', '/proj');
+
+    // Seed two chunks under /proj with distinct embeddings.
+    db.insertChunk('/proj', '/proj/src/keep.ts', 0, 'keep me', emb(1));
+    db.insertChunk('/proj', '/proj/src/skip.log', 0, 'skip me', emb(1));
+
+    // Without exclude, both chunks are returned.
+    const all = await app.inject({
+      method: 'GET',
+      url: '/agents/agent-1/search?q=test',
+    });
+    expect(all.statusCode).toBe(200);
+    expect(JSON.parse(all.body).resultCount).toBe(2);
+
+    // With exclude, the .log file's chunk is filtered out.
+    const filtered = await app.inject({
+      method: 'GET',
+      url: '/agents/agent-1/search?q=test&exclude=**/*.log',
+    });
+    expect(filtered.statusCode).toBe(200);
+    const body = JSON.parse(filtered.body);
+    expect(body.resultCount).toBe(1);
+    expect(body.results[0].file).toBe('/proj/src/keep.ts');
+  });
+
+  it('GET /agents/:id/search dedupes chunks from the same file', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/agents',
+      payload: { id: 'agent-2', personaId: null },
+    });
+    db.registerSearchPath('agent-2', '/proj');
+
+    // Seed two chunks from the same file with matching embeddings.
+    db.insertChunk(
+      '/proj',
+      '/proj/src/dup.ts',
+      0,
+      'first matching chunk',
+      emb(1)
+    );
+    db.insertChunk(
+      '/proj',
+      '/proj/src/dup.ts',
+      1,
+      'second matching chunk',
+      emb(1)
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/agents/agent-2/search?q=test',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    // One result per file, with both chunks' text combined.
+    expect(body.resultCount).toBe(1);
+    expect(body.results).toHaveLength(1);
+    expect(body.results[0].file).toBe('/proj/src/dup.ts');
+    expect(body.results[0].content).toContain('first matching chunk');
+    expect(body.results[0].content).toContain('second matching chunk');
   });
 });

@@ -24,7 +24,7 @@ import { openrouterPlugin } from './openrouter/index.js';
 import { personaPlugin } from './persona/index.js';
 import { personaProviderProjectPlugin } from './persona-provider-project/index.js';
 import { personaProviderUserPlugin } from './persona-provider-user/index.js';
-import { searchPlugin } from './search.js';
+import { searchPlugin } from './search/index.js';
 import { macrosPlugin } from './macros/index.js';
 import { selfImprovementPlugin } from './self-improvement/index.js';
 import { skillsPlugin } from './skills/index.js';

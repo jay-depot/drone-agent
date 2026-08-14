@@ -74,7 +74,7 @@ export default function swarmRoutes(app: FastifyInstance) {
       let payload = evt.payload ?? null;
       let metadata = evt.metadata ?? null;
       if (payload && isLargePayload(payload)) {
-        const ref = storeLargePayload(evt.sessionId, evt.id, payload);
+        const ref = await storeLargePayload(evt.sessionId, evt.id, payload);
         payload = ref;
       }
       const event = db.createSwarmEvent({
@@ -165,17 +165,19 @@ export default function swarmRoutes(app: FastifyInstance) {
         return reply.code(404).send({ error: 'Session not found' });
       }
       const events = db.getSwarmEvents(request.params.id);
-      const resolvedEvents = events.map(evt => {
-        let payload = evt.payload;
-        if (payload && payload.startsWith('blob:')) {
-          try {
-            payload = retrieveLargePayload(payload);
-          } catch {
-            payload = null;
+      const resolvedEvents = await Promise.all(
+        events.map(async evt => {
+          let payload = evt.payload;
+          if (payload && payload.startsWith('blob:')) {
+            try {
+              payload = await retrieveLargePayload(payload);
+            } catch {
+              payload = null;
+            }
           }
-        }
-        return { ...evt, payload };
-      });
+          return { ...evt, payload };
+        })
+      );
       return reply.send({
         session: {
           id: session.id,
@@ -203,17 +205,19 @@ export default function swarmRoutes(app: FastifyInstance) {
         return reply.code(statusCode).send(result);
       }
       const events = db.getSwarmEvents(request.params.id);
-      const resolvedEvents = events.map(evt => {
-        let payload = evt.payload;
-        if (payload && payload.startsWith('blob:')) {
-          try {
-            payload = retrieveLargePayload(payload);
-          } catch {
-            payload = null;
+      const resolvedEvents = await Promise.all(
+        events.map(async evt => {
+          let payload = evt.payload;
+          if (payload && payload.startsWith('blob:')) {
+            try {
+              payload = await retrieveLargePayload(payload);
+            } catch {
+              payload = null;
+            }
           }
-        }
-        return { ...evt, payload };
-      });
+          return { ...evt, payload };
+        })
+      );
       publishMutationEvent({
         sessionId: request.params.id,
         eventType: 'session.processing',

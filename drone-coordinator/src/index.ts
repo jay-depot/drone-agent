@@ -442,7 +442,7 @@ export async function main() {
   // Seed default personas and skills (only if they don't exist)
   initDatabase(config.dbPath);
   seedDefaults();
-  initStorage(config.configDir);
+  await initStorage(config.configDir);
 
   // Initialize wiki storage under config dir
   setKnowledgeBaseDir(path.join(config.configDir, 'knowledge-base'));

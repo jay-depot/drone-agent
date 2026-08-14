@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises';
-import { accessSync, constants as fsConstants } from 'node:fs';
+import { readFile, access } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import type { DronePlugin } from 'drone-core';
@@ -16,11 +16,13 @@ import type { DronePlugin } from 'drone-core';
  *
  * Returns the resolved absolute path if the file exists, or null.
  */
-export function resolvePromptFilePath(filePattern: string): string | null {
+export async function resolvePromptFilePath(
+  filePattern: string
+): Promise<string | null> {
   if (filePattern.startsWith('~/')) {
     const resolved = path.join(os.homedir(), filePattern.slice(2));
     try {
-      accessSync(resolved, fsConstants.F_OK);
+      await access(resolved, fsConstants.F_OK);
       return resolved;
     } catch {
       return null;
@@ -30,7 +32,7 @@ export function resolvePromptFilePath(filePattern: string): string | null {
   if (filePattern.startsWith('./')) {
     const resolved = path.join(process.cwd(), filePattern.slice(2));
     try {
-      accessSync(resolved, fsConstants.F_OK);
+      await access(resolved, fsConstants.F_OK);
       return resolved;
     } catch {
       return null;
@@ -43,7 +45,7 @@ export function resolvePromptFilePath(filePattern: string): string | null {
     while (true) {
       const candidate = path.join(currentDir, relativePath);
       try {
-        accessSync(candidate, fsConstants.F_OK);
+        await access(candidate, fsConstants.F_OK);
         return candidate;
       } catch {
         const parent = path.dirname(currentDir);
@@ -58,7 +60,7 @@ export function resolvePromptFilePath(filePattern: string): string | null {
   // No prefix — treat as relative to CWD
   const resolved = path.resolve(process.cwd(), filePattern);
   try {
-    accessSync(resolved, fsConstants.F_OK);
+    await access(resolved, fsConstants.F_OK);
     return resolved;
   } catch {
     return null;
@@ -97,7 +99,7 @@ export const promptFilePlugin: DronePlugin = {
 
       const resolvedPaths: string[] = [];
       for (const pattern of config.files) {
-        const resolvedPath = resolvePromptFilePath(pattern);
+        const resolvedPath = await resolvePromptFilePath(pattern);
         if (!resolvedPath) {
           registration.logger.warn(
             `prompt-file: could not resolve path pattern "${pattern}"`

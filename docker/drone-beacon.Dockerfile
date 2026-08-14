@@ -2,10 +2,12 @@
 # Uses multi-stage build: first build with pnpm, then copy artifacts
 
 # Stage 1: Build all packages
-FROM node:22-alpine AS builder
+# Use Debian-based image to match the runtime (node:22-slim), so native modules
+# compiled here (better-sqlite3, sqlite-vec) are compatible with glibc at runtime.
+FROM node:22-slim AS builder
 
 # Install build dependencies for native Node.js modules (node-pty, better-sqlite3)
-RUN apk add --no-cache python3 make g++
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -24,10 +26,12 @@ COPY drone-agent ./drone-agent
 RUN corepack enable pnpm && pnpm install --frozen-lockfile && pnpm build
 
 # Stage 2: Runtime
-FROM node:22-alpine
+# Use Debian-based image: sqlite-vec-linux-x64 ships a glibc-compiled .so
+# that cannot be loaded on Alpine (musl libc).
+FROM node:22-slim
 
 # Install openssl for TLS certificate generation
-RUN apk add --no-cache openssl
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

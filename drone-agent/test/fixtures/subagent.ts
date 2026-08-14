@@ -302,7 +302,18 @@ export async function launchSubagent(
       clearTimeout(activityTimer);
       clearTimeout(hardCapTimer);
       pendingSubagents.delete(subagentId);
-      rejectPromise(err);
+      // Resolve with an error result rather than rejecting, so callers can
+      // assert on `result.error`. Spawn failures (e.g. missing executable)
+      // surface here; rejecting the promise leaks an unhandled rejection
+      // into tests that expect a SubagentResult.
+      resolvePromise({
+        error: err.message,
+        timedOut: false,
+        exitCode: undefined,
+        stdout: '',
+        stderr: '',
+        subagentId,
+      });
     });
   });
 }

@@ -1,3 +1,33 @@
+// ── Search config types ─────────────────────────────────────────────
+
+export type DroneSearchPath = {
+  path: string;
+  embeddingProvider?: string;
+  /**
+   * Intended future functionality — not yet honored. `.git` and `node_modules`
+   * are always excluded from indexing regardless of this flag.
+   */
+  includeHidden?: boolean;
+  /**
+   * Intended future functionality — not yet honored. `.git` and `node_modules`
+   * are always excluded from indexing regardless of this flag.
+   */
+  includeNodeModules?: boolean;
+  /**
+   * Glob patterns (matched with `minimatch`) applied to each file path
+   * relative to this search root. Files matching any pattern are excluded
+   * from semantic search results. Applied at query time, so changes take
+   * effect immediately without reindexing.
+   */
+  exclude?: string[];
+};
+
+export type DroneSearchConfig = {
+  enabled: boolean;
+  paths: DroneSearchPath[];
+  userEmbeddingProvider?: string;
+  projectEmbeddingProvider?: string;
+};
 import { deepMerge, type MergeSpec } from './deep-merge.js';
 
 // ── Precedence constants for skill/persona/provider plugins ──────────
@@ -320,6 +350,7 @@ export type DroneAgentConfig = {
   terminal: DroneTerminalConfig;
   promptFile: DronePromptFileConfig;
   swarm: DroneSwarmConfig;
+  search: DroneSearchConfig;
   tui: DroneTuiConfig;
 };
 
@@ -343,6 +374,7 @@ export type PartialDroneAgentConfig = Partial<{
   promptFile: Partial<DronePromptFileConfig>;
   terminal: Partial<DroneTerminalConfig>;
   swarm: Partial<DroneSwarmConfig>;
+  search: Partial<DroneSearchConfig>;
   tui?: Partial<DroneTuiConfig>;
 }>;
 
@@ -373,6 +405,7 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
     'memory',
     'log',
     'terminal',
+    'search',
   ],
   deepMerge: {
     openai: { replace: ['models'] },
@@ -503,6 +536,10 @@ export function createDefaultAgentConfig(
         pullOnStartup: true,
         pullIntervalMinutes: 60,
       },
+    },
+    search: {
+      enabled: false,
+      paths: [],
     },
     tui: {
       syntaxHighlighting: {
