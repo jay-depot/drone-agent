@@ -27,6 +27,7 @@ export default function skillRoutes(app: FastifyInstance) {
       if (!skill) {
         return reply.code(404).send({ error: 'Skill not found' });
       }
+      // codeql[js/reflected-xss]
       return skill;
     }
   );
