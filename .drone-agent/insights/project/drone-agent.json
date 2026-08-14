@@ -162,5 +162,9 @@
   {
     "timestamp": "2026-08-14T14:53:44.956Z",
     "insight": "The subagent dispatch integration test fixture had two deterministic bugs: (1) on spawn failure (e.g. missing executable) it `reject`ed the promise instead of resolving with a `SubagentResult`, so tests asserting `result.error` got an unhandled rejection; (2) the timeout error string `'Subagent timed out'` does not contain the substring `'timeout'` (there's a space), so `toContain('timeout')` assertions always failed. Fix the fixture to resolve with an error result on spawn error, and assert on `'timed out'` instead. When writing test fixtures that wrap child processes, resolve with a result object (never reject) so callers can assert on error fields."
+  },
+  {
+    "timestamp": "2026-08-14T15:39:38.979Z",
+    "insight": "CodeQL flags polynomial regexes (ReDoS) on config-sourced strings as \"uncontrolled data\" even when the value comes from a trusted config file. The minimal, behavior-preserving mitigation is a length cap on the input before the regex runs (e.g. reject hosts > 2048 chars before `replace(/\\/+$/, '')`), rather than rewriting the regex or adding a suppression comment. This bounds the polynomial match to a fixed-size input. Add a unit test for the guard."
   }
 ]
