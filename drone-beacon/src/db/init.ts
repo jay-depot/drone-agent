@@ -1,8 +1,17 @@
 import Database from 'better-sqlite3';
-import * as sqliteVec from 'sqlite-vec';
+import { createRequire } from 'node:module';
 import path from 'path';
 import fs from 'fs';
 import { logger } from '../logger.js';
+
+// Load sqlite-vec via its CJS entry. The ESM entry resolves the platform
+// extension with `import.meta.resolve`, which under pnpm's store layout can
+// double the `.so` suffix (vec0.so.so) and fail to load. The CJS entry uses
+// `require.resolve`, which resolves the correct path.
+const require = createRequire(import.meta.url);
+const sqliteVec = require('sqlite-vec') as {
+  load: (db: Database.Database) => void;
+};
 
 let db: Database.Database | null = null;
 
