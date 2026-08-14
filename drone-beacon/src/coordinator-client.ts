@@ -187,7 +187,6 @@ export function buildCheckServerIdentity(
  * CodeQL note: `rejectUnauthorized: false` is intentional here.  CA
  * validation is inapplicable to self-signed certificates; MITM protection
  * is provided by the `checkServerIdentity` fingerprint check above.
- * lgtm[js/disabling-certificate-verification]
  */
 export function createCoordinatorFetch(
   baseUrl: string,
@@ -221,7 +220,7 @@ export function createCoordinatorFetch(
       if (isHttps) {
         // CA validation is inapplicable for self-signed certs; MITM protection
         // is provided by checkServerIdentity fingerprint pinning instead.
-        // lgtm[js/disabling-certificate-verification]
+        // codeql[js/disabling-certificate-verification]
         (options as https.RequestOptions).rejectUnauthorized = false;
         (options as https.RequestOptions).checkServerIdentity =
           buildCheckServerIdentity(

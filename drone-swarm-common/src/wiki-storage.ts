@@ -88,10 +88,23 @@ function pagePath(pageId: string): string {
 }
 
 /**
+ * Maximum allowed wiki content length (1MB) to prevent polynomial regex
+ * execution on uncontrolled input. This is a safety bound; real wiki pages
+ * are far smaller.
+ */
+const MAX_WIKI_CONTENT_LENGTH = 1_000_000;
+
+/**
  * Extract [[wiki links]] from markdown content.
  * Returns a list of linked page IDs.
  */
 function extractWikiLinks(content: string): string[] {
+  if (content.length > MAX_WIKI_CONTENT_LENGTH) {
+    throw new Error(
+      `Wiki content exceeds maximum allowed length of ${MAX_WIKI_CONTENT_LENGTH} characters`
+    );
+  }
+
   const links: string[] = [];
   const regex = /\[\[([^\]]+)\]\]/g;
   let match;
@@ -328,7 +341,14 @@ export async function lintPages(): Promise<{
     const page = await readPage(meta.id);
     if (!page) continue;
 
-    const links = extractWikiLinks(page.content);
+    let links: string[];
+    try {
+      links = extractWikiLinks(page.content);
+    } catch {
+      // Skip link extraction for oversized pages (graceful degradation)
+      // NOTE: Future enhancement could add a "page too long" warning here
+      continue;
+    }
 
     for (const linkId of links) {
       // Check for broken links

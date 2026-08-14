@@ -206,4 +206,51 @@ describe('Wiki Storage', () => {
     expect(second.createdAt).toBe(first.createdAt);
     expect(second.updatedAt).not.toBe(first.updatedAt);
   });
+
+  it('should reject writePage with content exceeding 1MB limit', async () => {
+    const { writePage } = await import('../src/wiki-storage.js');
+    const oversizedContent = 'x'.repeat(1_000_001); // 1 char over limit
+    await expect(
+      writePage('oversized', 'Oversized', 'beacon', oversizedContent)
+    ).rejects.toThrow('Wiki content exceeds maximum allowed length');
+  });
+
+  it('should accept writePage with content at the 1MB limit', async () => {
+    const { writePage, readPage } = await import('../src/wiki-storage.js');
+    const atLimitContent = 'x'.repeat(1_000_000); // exactly at limit
+    const page = await writePage(
+      'at-limit',
+      'At Limit',
+      'beacon',
+      atLimitContent
+    );
+    expect(page.id).toBe('at-limit');
+    expect(page.content).toBe(atLimitContent);
+
+    const read = await readPage('at-limit');
+    expect(read).not.toBeNull();
+    expect(read!.content).toBe(atLimitContent);
+  });
+
+  it('should gracefully handle oversized pages in lintPages (skip link extraction)', async () => {
+    const { writePage, lintPages } = await import('../src/wiki-storage.js');
+    // Create a normal page
+    await writePage('normal', 'Normal Page', 'beacon', 'See [[other-page]]');
+    // Create an oversized page directly on disk (bypassing writePage which throws)
+    const oversizedContent = 'x'.repeat(1_000_001);
+    const { writeFile } = await import('node:fs/promises');
+    const path = await import('node:path');
+    // Use the local kbDir variable from the test setup (outer scope)
+    const fullContent = `---\nid: oversized\ntitle: Oversized Page\nscope: beacon\ntags: []\nsources: []\ncreatedAt: ${new Date().toISOString()}\nupdatedAt: ${new Date().toISOString()}\n---\n${oversizedContent}`;
+    await writeFile(path.join(kbDir, 'oversized.md'), fullContent, 'utf-8');
+
+    // lintPages should NOT throw and should still return issues for the normal page
+    const result = await lintPages();
+    // Should have orphan issue for 'other-page' (broken link from normal page)
+    expect(result.issues.some(i => i.type === 'broken-link')).toBe(true);
+    // Should have orphan issue for 'oversized' (no inbound links)
+    expect(
+      result.issues.some(i => i.type === 'orphan' && i.pageId === 'oversized')
+    ).toBe(true);
+  });
 });

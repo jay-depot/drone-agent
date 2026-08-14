@@ -36,9 +36,7 @@ describe('nameStatusToItems', () => {
   });
 
   it('handles a mixed rename + modified batch', () => {
-    const out = nameStatusToItems(
-      'M\ta.ts\nR100\tb.ts\tc.ts\nA\td.ts\n'.replace(/\t/g, '\t')
-    );
+    const out = nameStatusToItems('M\ta.ts\nR100\tb.ts\tc.ts\nA\td.ts\n');
     expect(out).toEqual([
       { kind: 'modified', path: 'a.ts' },
       { kind: 'removed', path: 'b.ts' },
