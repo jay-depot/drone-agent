@@ -150,5 +150,17 @@
   {
     "timestamp": "2026-08-14T03:39:26.096Z",
     "insight": "Compaction regression (c29bd93a) slices the *tail* of the non-summary turn array, but the session array is `[S_newest…S_oldest, normal_oldest…normal_newest]` because appendUserMessage pushes (newest last) while prependSystemTurn unshifts summaries (newest summary first). So `slice(-n)` grabs the newest normal turns — the inverse of intent. The existing compaction tests only assert that *some* summary is created and *some* turns dropped, so they cannot distinguish head-slicing from tail-slicing; a correct regression test must pin BOTH ends (transcript contains oldest & excludes newest; survivors are newest). Also: the safety-trim helper getDroppableTurnPrefix and compaction's slice had divergent \"oldest non-summary\" semantics (stop-at-summary vs skip-summaries); they should share ONE pure helper that skips summaries, and dropping must be done by id (not shift/slice) since summaries live at the head."
+  },
+  {
+    "timestamp": "2026-08-14T14:53:33.881Z",
+    "insight": "When a new required config section (e.g. `search`) is added to `DroneAgentConfig` in drone-core, every test mock that constructs a full `DroneAgentConfig` (via `getConfig: () => ({...})`) must be updated or typecheck fails and blocks the whole CI unit-tests job. The `prompt-file.test.ts` mock was missing `search`, which broke `pnpm typecheck` and prevented `pnpm test` from running on CI. Sweep all test mocks that build full config objects (grep for `tui:` or `getConfig: () => ({`) when adding a config section."
+  },
+  {
+    "timestamp": "2026-08-14T14:53:37.930Z",
+    "insight": "In `--output-json` subagent mode, the console logger wrote `[scope]` lines to stdout via `console.log`, polluting the NDJSON protocol stream and breaking the `dispatch-output-json` integration test (and any real subagent consumer). Fix: add a `toStderr` option to `createConsoleLogger` and thread a `logToStderr` flag through the plugin engine, set when `--output-json` is active. This keeps stdout pure NDJSON while logs go to stderr. When a process emits a structured protocol on stdout, all diagnostics/logging must be routed to stderr."
+  },
+  {
+    "timestamp": "2026-08-14T14:53:44.956Z",
+    "insight": "The subagent dispatch integration test fixture had two deterministic bugs: (1) on spawn failure (e.g. missing executable) it `reject`ed the promise instead of resolving with a `SubagentResult`, so tests asserting `result.error` got an unhandled rejection; (2) the timeout error string `'Subagent timed out'` does not contain the substring `'timeout'` (there's a space), so `toContain('timeout')` assertions always failed. Fix the fixture to resolve with an error result on spawn error, and assert on `'timed out'` instead. When writing test fixtures that wrap child processes, resolve with a result object (never reject) so callers can assert on error fields."
   }
 ]
