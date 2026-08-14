@@ -1,9 +1,13 @@
 ---
 key: plan-codeql-reflected-xss-suppression
 tags:
-  []
+  - codeql
+  - security
+  - suppression
+  - xss
+  - complete
 created: 2026-08-14T18:42:52.383Z
-updated: 2026-08-14T18:42:52.383Z
+updated: 2026-08-14T19:10:44.755Z
 ---
 
 # Plan: CodeQL — Reflected XSS suppression (4 alerts)
@@ -32,7 +36,7 @@ CodeQL flags "Reflected cross site scripting" at 4 `return skill;` / `return per
    return skill;
    ```
 2. No behavior change, no tests needed (comment-only change).
-3. Validation: LSP zero errors; `pnpm -r run lint` zero errors; `pnpm -r run build` zero errors; fast test suite passes. (Comment-only, but run the standard gates.)
+3. Validation: LSP zero errors; `pnpm lint` zero errors; `pnpm -r run build` zero errors; fast test suite passes. (Comment-only, but run the standard gates.)
 4. After commit, re-run code scanning; the 4 alerts will be marked suppressed. Optionally dismiss the 4 existing alerts in the GitHub UI to close them immediately.
 
 ## Files touched
@@ -44,3 +48,10 @@ CodeQL flags "Reflected cross site scripting" at 4 `return skill;` / `return per
 ## Notes
 - No drone-core changes → no cross-package rebuild needed before typecheck, but run `pnpm -r run build` as part of validation anyway.
 - Do NOT use `// lgtm[...]` (unsupported), `// nosemgrep` (wrong tool), or `paths-ignore` (too coarse).
+
+## Completed (2026-08-14)
+All 4 suppressions added and committed in commit b740c63. Validation passed:
+- LSP: zero errors (only pre-existing warnings for CSS @rules and unused variables)
+- `pnpm lint`: zero errors
+- `pnpm -r run build`: zero errors  
+- `pnpm test` (fast test suite): all tests passed
