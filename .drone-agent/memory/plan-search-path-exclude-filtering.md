@@ -3,7 +3,7 @@ key: plan-search-path-exclude-filtering
 tags:
   []
 created: 2026-08-14T03:01:48.649Z
-updated: 2026-08-14T03:01:48.649Z
+updated: 2026-08-14T03:09:55.230Z
 ---
 
 # Plan: Honor search-path `exclude` globs (query-time filtering)
@@ -97,3 +97,22 @@ This approach:
 
 ## OPEN QUESTION (resolve before/at execution)
 Step 4 unscoped-query behavior: when query has no `path`, agent sends ALL configured excludes and beacon matches each glob relative to each chunk's own root. So `["**/dist/**"]` from path A also excludes `**/dist/**` under path B. If strict per-directory scoping is desired even for unscoped queries, would need a structured param (e.g. `excludesByDir`), which the current plan does NOT do. Default chosen: send all excludes, match per-chunk-root.
+
+---
+
+## Execution Summary (completed 2026-08-14 by code persona)
+
+All 7 steps implemented and validated. Commit: `a2c4237` (initial plan commit) + feature commit (see git log).
+
+- **Step 1**: Added `minimatch@^10.2.5` to `drone-beacon/package.json`; `pnpm install` resolved to 10.2.6 and updated lockfile (also deduped brace-expansion/minimatch versions).
+- **Step 2**: `search-indexer.ts` — added `const ALWAYS_SKIP_DIRS = new Set(['.git', 'node_modules'])`; directory branch now skips `ALWAYS_SKIP_DIRS.has(name) || name.startsWith('.')`; exported `collectFiles` for direct unit testing. Behavior identical to before (`.git` was already skipped via dotfile check).
+- **Step 3**: `routes/search.ts` — added `import { minimatch } from 'minimatch'`; added `isExcluded(filePath, rootDir, patterns)` helper (matches `path.relative(rootDir, filePath)` against each pattern); extended GET Querystring with `exclude?: string | string[]`; normalized to `excludePatterns`; in the chunk loop, `const rootDir = directoryPath ?? chunk.directory_path; if (isExcluded(chunk.file_path, rootDir, excludePatterns)) continue;` before cosine similarity.
+- **Step 4**: `drone-agent/src/plugins/search/index.ts` — added `path` import + `DroneSearchPath` type; added `collectExcludes(paths, queryPath)` helper (when `queryPath` given, only excludes for matching registered roots; when unscoped, all configured excludes); in `handleSemanticSearch`, appends each exclude as a repeated `params.append('exclude', e)`.
+- **Step 5**: `config-types.ts` — jsdoc on `includeHidden`/`includeNodeModules` (intended future, `.git`/`node_modules` always excluded) and `exclude` (minimatch, root-relative, query-time). `config-schema.ts` — added `description` strings to the three fields for parity.
+- **Step 6**: Tests added:
+  - **6a** `drone-beacon/test/search-indexer.test.ts` (new): `collectFiles` skips `.git`, `node_modules`, hidden dirs/files, and binary files (used `.png` as the binary ext since `.bin` isn't in the code's binary list); empty-set case.
+  - **6b** `drone-beacon/test/routes.test.ts`: new `Search Routes` describe block — `setSearchIndexer(new SearchIndexer(mockProvider))` in beforeEach, `setSearchIndexer(undefined)` in afterEach; seeds two chunks under `/proj`, asserts both returned without `exclude`, only the non-excluded file returned with `exclude=**/*.log`.
+  - **6c** `drone-agent/test/search.test.ts`: new describe block — mocks swarm capability + `getConfig` with `search.paths=[{path:'/proj',exclude:['*.log','**/dist/**']}]`, stubs global `fetch` to capture URL, asserts URL contains `exclude=*.log` and `exclude=**%2Fdist%2F**`.
+- **Step 7**: Validation all green — LSP zero errors on all touched files (only pre-existing `drone-swarm-common` diagnostic in `search.test.ts` remains, unchanged); `pnpm -r run build` ✓; `pnpm -r run typecheck` ✓; `pnpm lint` ✓ (eslint + prettier); `pnpm test` ✓ (1867 passed, 9 skipped). Note: prettier reformatted several unrelated files (notepad.ts, other memory files) as collateral — these were reverted via `git checkout` to keep the commit focused.
+
+**OPEN QUESTION resolution**: Default chosen (send all excludes, match per-chunk-root) was implemented as planned. No structured `excludesByDir` param added.

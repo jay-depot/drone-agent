@@ -199,7 +199,10 @@ async function computeFileHash(filePath: string): Promise<string> {
   return createHash('sha256').update(content).digest('hex');
 }
 
-async function collectFiles(
+// Never index these directories, regardless of any include flag.
+const ALWAYS_SKIP_DIRS = new Set(['.git', 'node_modules']);
+
+export async function collectFiles(
   dir: string,
   result: Set<string>,
   depth = 0
@@ -217,7 +220,7 @@ async function collectFiles(
     const fullPath = path.join(dir, entry.name);
 
     if (entry.isDirectory()) {
-      if (entry.name.startsWith('.') || entry.name === 'node_modules') {
+      if (ALWAYS_SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) {
         continue;
       }
       await collectFiles(fullPath, result, depth + 1);

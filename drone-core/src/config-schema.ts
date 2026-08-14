@@ -204,9 +204,24 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
           Type.Object({
             path: Type.String(),
             embeddingProvider: Type.Optional(Type.String()),
-            includeHidden: Type.Optional(Type.Boolean()),
-            includeNodeModules: Type.Optional(Type.Boolean()),
-            exclude: Type.Optional(Type.Array(Type.String())),
+            includeHidden: Type.Optional(
+              Type.Boolean({
+                description:
+                  'Intended future functionality — not yet honored. .git and node_modules are always excluded.',
+              })
+            ),
+            includeNodeModules: Type.Optional(
+              Type.Boolean({
+                description:
+                  'Intended future functionality — not yet honored. .git and node_modules are always excluded.',
+              })
+            ),
+            exclude: Type.Optional(
+              Type.Array(Type.String(), {
+                description:
+                  'Glob patterns (minimatch) applied to each file path relative to this search root, excluding matches from semantic search results. Applied at query time.',
+              })
+            ),
           })
         )
       ),

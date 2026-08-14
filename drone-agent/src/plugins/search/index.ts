@@ -2,8 +2,10 @@ import type {
   DronePlugin,
   DronePluginRegistration,
   DroneSwarmCapability,
+  DroneSearchPath,
 } from 'drone-core';
 import { execFileAsync } from '../../shared/exec-async.js';
+import path from 'node:path';
 
 // ── Ripgrep detection (cached) ──────────────────────────────────────
 
@@ -174,6 +176,20 @@ export const searchPlugin: DronePlugin = {
 
 // ── Search handlers ───────────────────────────────────────────────────
 
+function collectExcludes(
+  paths: DroneSearchPath[],
+  queryPath: string | undefined
+): string[] {
+  const out = new Set<string>();
+  const target = queryPath ? path.resolve(queryPath) : undefined;
+  for (const p of paths) {
+    const abs = path.resolve(p.path);
+    const applies = target === undefined || target.startsWith(abs);
+    if (applies) p.exclude?.forEach(e => out.add(e));
+  }
+  return [...out];
+}
+
 async function handleSemanticSearch(
   input: Record<string, unknown>,
   registration: DronePluginRegistration
@@ -226,6 +242,9 @@ async function handleSemanticSearch(
   params.set('maxResults', String(maxResults));
   params.set('minScore', String(minScore));
   if (searchPath) params.set('path', searchPath);
+  const searchConfig = registration.getConfig().search;
+  const excludes = collectExcludes(searchConfig?.paths ?? [], searchPath);
+  for (const e of excludes) params.append('exclude', e);
 
   try {
     const response = await fetch(

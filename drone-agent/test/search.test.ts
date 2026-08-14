@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeAll, afterAll } from 'vitest';
+import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
@@ -322,5 +322,84 @@ describe('semanticSearch', () => {
     });
 
     expect(results).toHaveLength(0);
+  });
+});
+
+// ── Semantic search exclude passthrough ─────────────────────────────
+
+describe('search plugin — semantic exclude passthrough', () => {
+  it('sends configured exclude patterns as query params', async () => {
+    const tools = new Map<
+      string,
+      (input: Record<string, unknown>) => Promise<string>
+    >();
+    const config = createDefaultAgentConfig();
+    config.search = {
+      enabled: true,
+      paths: [{ path: '/proj', exclude: ['*.log', '**/dist/**'] }],
+    };
+
+    const registration: DronePluginRegistration = {
+      logger: silentLogger(),
+      getConfig: () => config,
+      registerTool: tool => {
+        tools.set(tool.name, tool.execute);
+      },
+      registerPromptFragment: () => {},
+      registerHelp: () => {},
+      registerSlashCommand: () => {},
+      registerWorkflow: () => {},
+      unregisterPluginTools: () => {},
+      unregisterTool: () => {},
+      mountTool: () => undefined,
+      unmountTool: () => {},
+      listMountedTools: () => [],
+      hooks: {
+        onPluginsLoaded: () => {},
+        onSessionStart: () => {},
+        onBeforePrompt: () => {},
+        onAfterToolCall: () => {},
+        onConversationEvent: () => {},
+        onSessionClear: () => {},
+        onShutdown: () => {},
+        onSessionSafetyTrimWillRun: () => {},
+        onSessionSafetyTrimApplied: () => {},
+      },
+      offer: () => {},
+      request: <T>() =>
+        ({
+          getBeaconUrl: () => 'http://beacon:3457',
+          getAgentId: () => 'agent-1',
+        }) as T,
+      runWorkflow: async () => ({ toolResult: '{}' }),
+      requestElicitation: () => undefined,
+    };
+
+    await searchPlugin.register(registration);
+    const text = tools.get('text');
+    expect(text).toBeDefined();
+
+    let capturedUrl = '';
+    const fetchMock = vi.fn(async (url: string) => {
+      capturedUrl = String(url);
+      return new Response(
+        JSON.stringify({
+          query: 'q',
+          resultCount: 0,
+          truncated: false,
+          results: [],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      await text!({ pattern: 'foo', mode: 'semantic' });
+      expect(capturedUrl).toContain('exclude=*.log');
+      expect(capturedUrl).toContain('exclude=**%2Fdist%2F**');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -1,11 +1,22 @@
 import type { FastifyInstance } from 'fastify';
 import type { DroneSearchPath } from 'drone-core';
 import { cosineSimilarity } from 'drone-swarm-common';
+import { minimatch } from 'minimatch';
 import { getSearchIndexer } from './context.js';
 import { getAgent } from '../db/agents.js';
 import * as db from '../db/index.js';
 import { logger } from '../logger.js';
 import path from 'node:path';
+
+function isExcluded(
+  filePath: string,
+  rootDir: string,
+  patterns: string[]
+): boolean {
+  if (patterns.length === 0) return false;
+  const rel = path.relative(rootDir, filePath);
+  return patterns.some(p => minimatch(rel, p));
+}
 
 export default function searchRoutes(app: FastifyInstance) {
   // ── Set search paths for an agent ────────────────────────────────
@@ -78,10 +89,22 @@ export default function searchRoutes(app: FastifyInstance) {
       maxResults?: number;
       minScore?: number;
       path?: string;
+      exclude?: string | string[];
     };
   }>('/agents/:id/search', async (request, reply) => {
     const { id } = request.params;
-    const { q, maxResults, minScore, path: searchPath } = request.query;
+    const {
+      q,
+      maxResults,
+      minScore,
+      path: searchPath,
+      exclude,
+    } = request.query;
+    const excludePatterns = Array.isArray(exclude)
+      ? exclude
+      : exclude
+        ? [exclude]
+        : [];
 
     // Validate agent exists
     const agent = getAgent(id);
@@ -136,6 +159,9 @@ export default function searchRoutes(app: FastifyInstance) {
     const minScoreVal = minScore ?? 0.0;
 
     for (const chunk of allChunks) {
+      const rootDir = directoryPath ?? chunk.directory_path;
+      if (isExcluded(chunk.file_path, rootDir, excludePatterns)) continue;
+
       const chunkEmbedding = new Float32Array(
         chunk.embedding.buffer,
         chunk.embedding.byteOffset,

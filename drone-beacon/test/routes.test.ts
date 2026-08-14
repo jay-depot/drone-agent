@@ -3,6 +3,8 @@ import { setupDb, teardownDb } from './setup.js';
 import { buildTestApp } from './app-helper.js';
 import type { FastifyInstance } from 'fastify';
 import * as db from '../src/db/index.js';
+import { SearchIndexer } from '../src/search-indexer.js';
+import { setSearchIndexer } from '../src/routes/context.js';
 
 // Mock ws-server to avoid WebSocket dependency
 vi.mock('../src/ws-server.js', () => ({
@@ -1019,5 +1021,68 @@ describe('Sync Routes', () => {
       url: '/sync/sessions/ss1',
     });
     expect(res.statusCode).toBe(502);
+  });
+});
+
+// ── Search Routes ───────────────────────────────────────────────────
+
+describe('Search Routes', () => {
+  const mockProvider = {
+    id: 'mock',
+    name: 'Mock Provider',
+    dimensions: 4,
+    maxTokens: 8192,
+    getEmbedding: async () => new Float32Array([1, 0, 0, 0]),
+  };
+
+  beforeEach(() => {
+    setSearchIndexer(new SearchIndexer(mockProvider));
+  });
+
+  afterEach(() => {
+    setSearchIndexer(undefined);
+  });
+
+  it('GET /agents/:id/search excludes files matching the exclude glob', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/agents',
+      payload: { id: 'agent-1', personaId: null },
+    });
+    db.registerSearchPath('agent-1', '/proj');
+
+    // Seed two chunks under /proj with distinct embeddings.
+    db.insertChunk(
+      '/proj',
+      '/proj/src/keep.ts',
+      0,
+      'keep me',
+      new Float32Array([1, 0, 0, 0])
+    );
+    db.insertChunk(
+      '/proj',
+      '/proj/src/skip.log',
+      0,
+      'skip me',
+      new Float32Array([1, 0, 0, 0])
+    );
+
+    // Without exclude, both chunks are returned.
+    const all = await app.inject({
+      method: 'GET',
+      url: '/agents/agent-1/search?q=test',
+    });
+    expect(all.statusCode).toBe(200);
+    expect(JSON.parse(all.body).resultCount).toBe(2);
+
+    // With exclude, the .log file's chunk is filtered out.
+    const filtered = await app.inject({
+      method: 'GET',
+      url: '/agents/agent-1/search?q=test&exclude=**/*.log',
+    });
+    expect(filtered.statusCode).toBe(200);
+    const body = JSON.parse(filtered.body);
+    expect(body.resultCount).toBe(1);
+    expect(body.results[0].file).toBe('/proj/src/keep.ts');
   });
 });

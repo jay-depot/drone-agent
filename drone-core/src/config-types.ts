@@ -3,8 +3,22 @@
 export type DroneSearchPath = {
   path: string;
   embeddingProvider?: string;
+  /**
+   * Intended future functionality — not yet honored. `.git` and `node_modules`
+   * are always excluded from indexing regardless of this flag.
+   */
   includeHidden?: boolean;
+  /**
+   * Intended future functionality — not yet honored. `.git` and `node_modules`
+   * are always excluded from indexing regardless of this flag.
+   */
   includeNodeModules?: boolean;
+  /**
+   * Glob patterns (matched with `minimatch`) applied to each file path
+   * relative to this search root. Files matching any pattern are excluded
+   * from semantic search results. Applied at query time, so changes take
+   * effect immediately without reindexing.
+   */
   exclude?: string[];
 };
 
