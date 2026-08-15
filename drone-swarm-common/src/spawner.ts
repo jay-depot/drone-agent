@@ -148,7 +148,9 @@ export async function spawnAgent(
       ...process.env,
       ...(override?.env || {}),
     },
-    cwd: workingDir, // codeql[js/path-injection] Coordinator-provided workingDir is intentional and length-bounded above.
+    // Coordinator-provided workingDir is intentional and length-bounded above.
+    // codeql[js/path-injection]
+    cwd: workingDir,
   });
 
   // Track the process
