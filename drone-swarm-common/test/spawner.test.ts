@@ -91,4 +91,29 @@ describe('spawner workingDir guard', () => {
     expect(args).toContain(workingDir);
     expect(options.cwd).toBe(workingDir);
   });
+
+  it('uses process cwd when workingDir override is not provided', async () => {
+    const { initSpawner, spawnAgent } = await import('../src/spawner.js');
+    initSpawner(
+      {
+        agentPath: 'drone-agent',
+        timeoutMs: 60_000,
+        maxConcurrentSpawns: 2,
+        beaconHost: '127.0.0.1',
+        beaconPort: 4000,
+      },
+      db
+    );
+    spawnMock.mockReturnValue(createMockChildProcess());
+
+    await spawnAgent('spawn-1', 'agent-1', null, null, {});
+
+    const [, args, options] = spawnMock.mock.calls[0] as [
+      string,
+      string[],
+      { cwd: string }
+    ];
+    expect(args).not.toContain('--working-dir');
+    expect(options.cwd).toBe(process.cwd());
+  });
 });
