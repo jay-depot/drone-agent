@@ -20,7 +20,7 @@ COPY drone-gateway ./drone-gateway
 COPY docker ./docker
 COPY vitest.config.ts vitest.integration.config.ts eslint.config.mjs ./
 
-RUN corepack enable pnpm && pnpm install --frozen-lockfile
+RUN corepack enable pnpm && pnpm install --frozen-lockfile && pnpm build
 
 # The subagent fixture resolves the drone-agent executable from PATH.
 ENV PATH="/app/drone-agent/bin:${PATH}"
