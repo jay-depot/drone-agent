@@ -73,6 +73,8 @@ function connect(): void {
   const wsUrl = protocol + coordinatorUrl.slice(coordinatorUrl.indexOf('//'));
 
   const options: WebSocket.ClientOptions = {
+    // Certificate is verified externally against pinned fingerprint
+    // codeql[js/disabling-certificate-verification]
     rejectUnauthorized: false, // self-signed coordinator cert; verified via fingerprint pinning elsewhere
   };
   if (tlsIdentity) {
