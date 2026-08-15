@@ -43,6 +43,7 @@ export interface SpawnDb {
 const activeSpawns = new Map<string, ManagedProcess>();
 let spawnerConfig: SpawnerConfig | null = null;
 let spawnDb: SpawnDb | null = null;
+const MAX_WORKING_DIR_LENGTH = 4096;
 
 // === Initialization ===
 
@@ -78,6 +79,15 @@ export async function spawnAgent(
     throw new Error('Spawner not initialized. Call initSpawner() first.');
   }
 
+  const workingDirOverride = (configOverride as { workingDir?: string })
+    ?.workingDir;
+  const workingDir = workingDirOverride || process.cwd();
+  if (workingDir.length > MAX_WORKING_DIR_LENGTH) {
+    throw new Error(
+      `Working directory exceeds maximum length: ${workingDir.length}`
+    );
+  }
+
   // Check max concurrent spawns
   if (getActiveSpawnCount() >= spawnerConfig.maxConcurrentSpawns) {
     throw new Error('Max concurrent spawns reached');
@@ -108,8 +118,8 @@ export async function spawnAgent(
     if (cfg.model) {
       args.push('--model', String(cfg.model));
     }
-    if (cfg.workingDir) {
-      args.push('--working-dir', String(cfg.workingDir));
+    if (workingDirOverride) {
+      args.push('--working-dir', workingDirOverride);
     }
   }
 
@@ -130,8 +140,7 @@ export async function spawnAgent(
       ...process.env,
       ...((configOverride as { env?: Record<string, string> })?.env || {}),
     },
-    cwd:
-      (configOverride as { workingDir?: string })?.workingDir || process.cwd(),
+    cwd: workingDir,
   });
 
   // Track the process
