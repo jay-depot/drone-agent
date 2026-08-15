@@ -8,23 +8,39 @@
  * - persona-propagation: Create persona, agents see it
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, test } from 'vitest';
 import {
   getBeaconAgents,
   getBeaconPersonas,
   createBeaconPersona,
   sendBeaconMessage,
   getBeaconMessages,
-  waitForService,
+  getRequiredIntegrationEnv,
+  requireProvisionedSwarm,
 } from './fixtures/index.js';
 
-const BEACON_URL = process.env.BEACON_URL || 'http://localhost:3457';
-const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3456';
+const DEFAULT_BEACON_URL = 'http://localhost:3457';
+const DEFAULT_COORDINATOR_URL = 'http://localhost:3456';
+const BEACON_URL = getRequiredIntegrationEnv('BEACON_URL', DEFAULT_BEACON_URL);
+const COORDINATOR_URL = getRequiredIntegrationEnv(
+  'COORDINATOR_URL',
+  DEFAULT_COORDINATOR_URL
+);
 
 describe('E2E Swarm Flows', () => {
   beforeAll(async () => {
-    await waitForService(BEACON_URL, 30, 1000);
-    await waitForService(COORDINATOR_URL, 30, 1000);
+    await requireProvisionedSwarm(test, [
+      {
+        envName: 'BEACON_URL',
+        url: BEACON_URL,
+        fallbackUrl: DEFAULT_BEACON_URL,
+      },
+      {
+        envName: 'COORDINATOR_URL',
+        url: COORDINATOR_URL,
+        fallbackUrl: DEFAULT_COORDINATOR_URL,
+      },
+    ]);
   });
 
   describe('full-agent-lifecycle', () => {

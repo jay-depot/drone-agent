@@ -13,6 +13,7 @@ import type {
   Persona,
   RequestOptions,
 } from './index.js';
+import type { TestAPI } from 'vitest';
 
 /**
  * Wait for a service to be available
@@ -34,6 +35,54 @@ export async function waitForService(
     await new Promise(resolve => setTimeout(resolve, intervalMs));
   }
   return false;
+}
+
+export function getRequiredIntegrationEnv(
+  envName: string,
+  fallbackUrl: string
+): string {
+  const configured = process.env[envName]?.trim();
+  if (configured) {
+    return configured;
+  }
+  return fallbackUrl;
+}
+
+function usesUnsafeLocalFallback(url: string, fallbackUrl: string): boolean {
+  return url === fallbackUrl && !process.env.RUN_INTEGRATION_TESTS;
+}
+
+export async function requireProvisionedSwarm(
+  test: Pick<TestAPI, 'skip'>,
+  targets: Array<{ envName: string; url: string; fallbackUrl: string }>
+): Promise<void> {
+  if (process.env.RUN_INTEGRATION_TESTS !== 'true') {
+    test.skip(
+      'Integration test swarm not provisioned. Run via `pnpm test:integration`.'
+    );
+  }
+
+  const unsafeTarget = targets.find(target =>
+    usesUnsafeLocalFallback(target.url, target.fallbackUrl)
+  );
+  if (unsafeTarget) {
+    test.skip(
+      `Refusing to use unsafe fallback ${unsafeTarget.fallbackUrl}. Run via the provisioned integration swarm.`
+    );
+  }
+
+  const unreachable = await Promise.all(
+    targets.map(async target => ({
+      ...target,
+      reachable: await waitForService(target.url, 5, 1000),
+    }))
+  );
+  const missing = unreachable.find(target => !target.reachable);
+  if (missing) {
+    test.skip(
+      `Provisioned integration swarm is not reachable at ${missing.url}. Run via \`pnpm test:integration\`.`
+    );
+  }
 }
 
 /**

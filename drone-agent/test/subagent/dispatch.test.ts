@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeAll, test } from 'vitest';
 import {
   launchSubagent,
   launchParallelSubagents,
@@ -6,6 +6,19 @@ import {
   launchErrorSubagent,
   cancelAllSubagents,
 } from '../fixtures/subagent.js';
+import { requireProvisionedSwarm } from '../fixtures/swarm.js';
+
+const RUNNER_SENTINEL_URL = 'http://localhost:3458';
+
+beforeAll(async () => {
+  await requireProvisionedSwarm(test, [
+    {
+      envName: 'ECHO_LLM_URL',
+      url: process.env.ECHO_LLM_URL?.trim() || RUNNER_SENTINEL_URL,
+      fallbackUrl: RUNNER_SENTINEL_URL,
+    },
+  ]);
+});
 
 describe('subagent dispatch', () => {
   afterEach(() => {

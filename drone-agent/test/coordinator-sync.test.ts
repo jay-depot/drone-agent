@@ -8,7 +8,7 @@
  * - bi-directional-sync: Create in beacon, verify in coordinator
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, test } from 'vitest';
 import {
   getCoordinatorPersonas,
   getBeaconPersonas,
@@ -17,16 +17,32 @@ import {
   createBeaconPersona,
   pushPersonaToCoordinator,
   pushSkillToCoordinator,
-  waitForService,
+  getRequiredIntegrationEnv,
+  requireProvisionedSwarm,
 } from './fixtures/index.js';
 
-const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3456';
-const BEACON_URL = process.env.BEACON_URL || 'http://localhost:3457';
+const DEFAULT_COORDINATOR_URL = 'http://localhost:3456';
+const DEFAULT_BEACON_URL = 'http://localhost:3457';
+const COORDINATOR_URL = getRequiredIntegrationEnv(
+  'COORDINATOR_URL',
+  DEFAULT_COORDINATOR_URL
+);
+const BEACON_URL = getRequiredIntegrationEnv('BEACON_URL', DEFAULT_BEACON_URL);
 
 describe('Beacon ↔ Coordinator Sync', () => {
   beforeAll(async () => {
-    await waitForService(COORDINATOR_URL, 30, 1000);
-    await waitForService(BEACON_URL, 30, 1000);
+    await requireProvisionedSwarm(test, [
+      {
+        envName: 'COORDINATOR_URL',
+        url: COORDINATOR_URL,
+        fallbackUrl: DEFAULT_COORDINATOR_URL,
+      },
+      {
+        envName: 'BEACON_URL',
+        url: BEACON_URL,
+        fallbackUrl: DEFAULT_BEACON_URL,
+      },
+    ]);
   });
 
   describe('persona-push-to-coordinator', () => {

@@ -9,26 +9,38 @@
  * - agent-cleanup: Agent shuts down cleanly
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, test } from 'vitest';
 import {
   getBeaconAgents,
   getBeaconAgent,
   getBeaconPersonas,
   getBeaconSkills,
   createBeaconPersona,
-  waitForService,
+  getRequiredIntegrationEnv,
+  requireProvisionedSwarm,
 } from './fixtures/index.js';
 
-const BEACON_URL = process.env.BEACON_URL || 'http://localhost:3457';
-const AGENT_URL = process.env.AGENT_URL || 'http://localhost:3459';
+const DEFAULT_BEACON_URL = 'http://localhost:3457';
+const DEFAULT_AGENT_URL = 'http://localhost:3459';
+const BEACON_URL = getRequiredIntegrationEnv('BEACON_URL', DEFAULT_BEACON_URL);
+const AGENT_URL = getRequiredIntegrationEnv('AGENT_URL', DEFAULT_AGENT_URL);
 
 describe('Agent ↔ Beacon', () => {
   const agentId = 'test-agent-1';
 
   beforeAll(async () => {
-    // Wait for services to be ready
-    await waitForService(BEACON_URL, 30, 1000);
-    await waitForService(AGENT_URL, 30, 1000);
+    await requireProvisionedSwarm(test, [
+      {
+        envName: 'BEACON_URL',
+        url: BEACON_URL,
+        fallbackUrl: DEFAULT_BEACON_URL,
+      },
+      {
+        envName: 'AGENT_URL',
+        url: AGENT_URL,
+        fallbackUrl: DEFAULT_AGENT_URL,
+      },
+    ]);
   });
 
   describe('agent-registers', () => {
