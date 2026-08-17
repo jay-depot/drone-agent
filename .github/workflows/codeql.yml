@@ -1,4 +1,5 @@
 # CodeQL advanced configuration with suppression-comment support (dismiss-alerts).
+# Re-trigger: verify advanced config uploads SARIF after disabling default setup.
 name: 'CodeQL Advanced'
 
 on:
