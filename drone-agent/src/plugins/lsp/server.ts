@@ -904,6 +904,14 @@ export function createServerManager(
           context: contextLines.join('\n'),
         });
       }
+
+  // Backwards compatibility wrapper
+  async function resolveTextPosition(
+    filePath: string,
+    text: string
+  ): Promise<{ line: number; column: number }> {
+    return resolveTextPositionWithContext(filePath, text);
+  }
     }
 
     // Fall back to case-insensitive if no exact matches
@@ -925,6 +933,13 @@ export function createServerManager(
       }
     }
 
+    // Backwards compatibility wrapper
+    async function resolveTextPosition(
+      filePath: string,
+      text: string
+    ): Promise<{ line: number; column: number }> {
+      return resolveTextPositionWithContext(filePath, text);
+    }
     if (matches.length === 0) {
       throw new Error(`Text "${text}" not found in ${absolutePath}.`);
     }
@@ -941,6 +956,105 @@ export function createServerManager(
         .join('\n');
       throw new Error(
         `Text "${text}" is ambiguous — found ${matches.length} matches in ${absolutePath}:\n${details}`
+      );
+    }
+
+    return { line: matches[0].line, column: matches[0].column };
+  }
+
+  /**
+   * Search file content for a text snippet and return its 1-based position.
+   * Supports surroundingText for disambiguation.
+   *
+   * 1. Exact match (case-sensitive) first
+   * 2. Fall back to case-insensitive if no exact match
+   * 3. If surroundingText is provided, filter matches by context
+   * 4. If exactly one match, return `{ line, column }` (1-based)
+   * 5. If multiple matches, throw with each position + 2 lines of context
+   * 6. If no matches, throw
+   */
+  async function resolveTextPositionWithContext(
+    filePath: string,
+    text: string,
+    surroundingText?: string
+  ): Promise<{ line: number; column: number }> {
+    const absolutePath = path.resolve(filePath);
+    const snapshot = await readDocumentSnapshot(absolutePath);
+    if (!snapshot) {
+      throw new Error(`Could not read file: ${absolutePath}`);
+    }
+
+    const lines = snapshot.text.split('\\n');
+    const matches: Array<{
+      line: number;
+      column: number;
+      context: string;
+    }> = [];
+
+    // Case-sensitive search
+    for (let i = 0; i < lines.length; i++) {
+      const col = lines[i].indexOf(text);
+      if (col !== -1) {
+        const contextLines = lines.slice(
+          Math.max(0, i - 2),
+          Math.min(lines.length, i + 3)
+        );
+        matches.push({
+          line: i + 1,
+          column: col + 1,
+          context: contextLines.join('\\n'),
+        });
+      }
+    }
+
+    // Fall back to case-insensitive if no exact matches
+    if (matches.length === 0) {
+      const lowerText = text.toLowerCase();
+      for (let i = 0; i < lines.length; i++) {
+        const col = lines[i].toLowerCase().indexOf(lowerText);
+        if (col !== -1) {
+          const contextLines = lines.slice(
+            Math.max(0, i - 2),
+            Math.min(lines.length, i + 3)
+          );
+          matches.push({
+            line: i + 1,
+            column: col + 1,
+            context: contextLines.join('\\n'),
+          });
+        }
+      }
+    }
+
+    if (matches.length === 0) {
+      throw new Error(`Text \"${text}\" not found in ${absolutePath}.`);
+    }
+
+    // If surroundingText is provided, filter matches by context
+    if (surroundingText && matches.length > 1) {
+      const filteredMatches = matches.filter(m => {
+        // Check if surroundingText appears in the context (previous/next lines)
+        const contextWindow = m.context.toLowerCase();
+        return contextWindow.includes(surroundingText.toLowerCase());
+      });
+      if (filteredMatches.length === 1) {
+        return { line: filteredMatches[0].line, column: filteredMatches[0].column };
+      }
+      // If filtering doesn't yield a unique match, continue with original matches
+    }
+
+    if (matches.length > 1) {
+      const details = matches
+        .map(
+          (m, idx) =>
+            `  ${idx + 1}. Line ${m.line}, column ${m.column}:\\n${m.context
+              .split('\\n')
+              .map(l => `     ${l}`)
+              .join('\\n')}`
+        )
+        .join('\\n');
+      throw new Error(
+        `Text \"${text}\" is ambiguous — found ${matches.length} matches in ${absolutePath}:\\n${details}`
       );
     }
 

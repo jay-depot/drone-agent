@@ -60,6 +60,11 @@ export function createCodeActionTool(
           description:
             'Symbol name to target code actions at (alternative to range).',
         },
+        surroundingText: {
+          type: 'string',
+          description:
+            'Surrounding context text to disambiguate between multiple matches (e.g., "class User {"). Works with text and symbol.',
+        },
         only: {
           type: 'array',
           items: { type: 'string' },
@@ -269,6 +274,11 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
         symbol: {
           type: 'string',
           description: 'Symbol name to resolve (alternative to line/column).',
+        },
+        surroundingText: {
+          type: 'string',
+          description:
+            'Surrounding context text to disambiguate between multiple matches (e.g., "class User {"). Works with text and symbol.',
         },
         newName: {
           type: 'string',
