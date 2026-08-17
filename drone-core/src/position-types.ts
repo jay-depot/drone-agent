@@ -55,13 +55,13 @@ export class AmbiguousPositionError extends Error {
 }
 
 /**
- * Find a dense, contiguous context block centered on a match that does not
- * appear in any other match's context window. Expands the window from the
- * soft limit up to the hard limit, 5 lines at a time. When a unique line is
- * found at window `w`, returns the contiguous slice `[line-1-w, line+w]`
- * joined by newlines — the same window that made the line unique — so the
- * caller can hand the block back to a filter that sizes its search window to
- * the block's line count.
+ * Find a minimal, contiguous context block that disambiguates a match from
+ * all others. Expands the search window from the soft limit up to the hard
+ * limit, 5 lines at a time. When a unique line is found at window `w`,
+ * anchors on the unique line nearest the match and returns the contiguous
+ * block from that line to the match line (inclusive) — the smallest block
+ * that still disambiguates, since any block containing a unique line cannot
+ * appear in another match's window.
  */
 async function suggestContext(
   match: { filePath: string; line: number },
@@ -82,9 +82,9 @@ async function suggestContext(
     const end = Math.min(lines.length, match.line + window);
     const windowLines = lines.slice(start, end);
 
-    const uniqueLines: string[] = [];
-    for (const line of windowLines) {
-      const trimmed = line.trim();
+    const uniqueLines: Array<{ index: number }> = [];
+    for (let i = 0; i < windowLines.length; i++) {
+      const trimmed = windowLines[i].trim();
       if (!trimmed) {
         continue;
       }
@@ -108,13 +108,28 @@ async function suggestContext(
         }
       }
       if (isUnique) {
-        uniqueLines.push(trimmed);
+        uniqueLines.push({ index: i });
       }
     }
 
     if (uniqueLines.length > 0) {
-      // Return the dense block at the window that made a line unique.
-      return windowLines.join('\n');
+      // Anchor on the unique line nearest the match and return the minimal
+      // contiguous block from that line to the match line (inclusive). Any
+      // block containing a unique line cannot appear in another match's
+      // window, so this is guaranteed to disambiguate, and it is the smallest
+      // such block.
+      const matchIndex = match.line - 1 - start;
+      let nearest = uniqueLines[0];
+      for (const u of uniqueLines) {
+        if (
+          Math.abs(u.index - matchIndex) < Math.abs(nearest.index - matchIndex)
+        ) {
+          nearest = u;
+        }
+      }
+      const blockStart = Math.min(nearest.index, matchIndex);
+      const blockEnd = Math.max(nearest.index, matchIndex) + 1;
+      return windowLines.slice(blockStart, blockEnd).join('\n');
     }
   }
 

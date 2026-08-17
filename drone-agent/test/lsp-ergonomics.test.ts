@@ -506,7 +506,7 @@ describe('surroundingText disambiguation', () => {
 });
 
 describe('suggestedContext', () => {
-  it('suggests a unique dense block for each ambiguous match', async () => {
+  it('suggests a minimal block for each ambiguous match', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
     try {
       const filePath = await createTempFile(
@@ -542,10 +542,65 @@ describe('suggestedContext', () => {
       const match2 = ambErr.matches.find(m => m.line === 11);
       expect(match1).toBeDefined();
       expect(match2).toBeDefined();
-      expect(match1!.suggestedContext).toContain('FIRST');
-      expect(match2!.suggestedContext).toBeDefined();
-      // The suggested block is dense and multi-line, centered on the match.
-      expect(match1!.suggestedContext!.split('\n').length).toBeGreaterThan(1);
+      // The match lines themselves are unique, so the minimal block collapses
+      // to just the match line.
+      expect(match1!.suggestedContext).toBe('const value = 1;');
+      expect(match2!.suggestedContext).toBe('const value = 2;');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('anchors on the nearest unique line when the match line is not unique', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      // Both matches share the SAME target line, so the match line is not
+      // unique. The nearest unique line to match1 is '// FIRST BLOCK' (2 lines
+      // above); to match2 it is '// SECOND BLOCK' (1 line below). The minimal
+      // block must anchor on those nearest unique lines.
+      const filePath = await createTempFile(
+        dir,
+        'test.ts',
+        [
+          '// FIRST BLOCK',
+          'const filler = 0;',
+          'const value = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const value = 0;',
+          '// SECOND BLOCK',
+        ].join('\n')
+      );
+      const server = await createTestServerManager(dir);
+
+      const err = await server
+        .parsePositionInput('lsp__test', {
+          filePath,
+          text: 'const value',
+        })
+        .catch(e => e);
+
+      expect(err).toBeInstanceOf(AmbiguousPositionError);
+      const ambErr = err as AmbiguousPositionError;
+      const match1 = ambErr.matches.find(m => m.line === 3);
+      const match2 = ambErr.matches.find(m => m.line === 11);
+      expect(match1).toBeDefined();
+      expect(match2).toBeDefined();
+      // match1 anchors on '// FIRST BLOCK' (2 lines above) → block is
+      // ['// FIRST BLOCK', 'const filler = 0;', 'const value = 0;'].
+      expect(match1!.suggestedContext).toBe(
+        ['// FIRST BLOCK', 'const filler = 0;', 'const value = 0;'].join('\n')
+      );
+      // match2 anchors on '// SECOND BLOCK' (1 line below) → block is
+      // ['const value = 0;', '// SECOND BLOCK'].
+      expect(match2!.suggestedContext).toBe(
+        ['const value = 0;', '// SECOND BLOCK'].join('\n')
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -935,8 +990,8 @@ describe('rename/code_action ambiguity returns reference IDs', () => {
       expect(parsed.ambiguous).toBe(true);
       expect(parsed.matches).toHaveLength(2);
       expect(parsed.matches[0].referenceId).toMatch(/^ref_\d+$/);
-      expect(parsed.matches[0].suggestedContext).toContain('FIRST');
-      expect(parsed.matches[1].suggestedContext).toBeDefined();
+      expect(parsed.matches[0].suggestedContext).toBe('const value = 1;');
+      expect(parsed.matches[1].suggestedContext).toBe('const value = 2;');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -1262,8 +1317,8 @@ describe('rename/code_action ambiguity returns reference IDs', () => {
       expect(parsed.ambiguous).toBe(true);
       expect(parsed.matches).toHaveLength(2);
       expect(parsed.matches[0].referenceId).toMatch(/^ref_\d+$/);
-      expect(parsed.matches[0].suggestedContext).toContain('FIRST');
-      expect(parsed.matches[1].suggestedContext).toBeDefined();
+      expect(parsed.matches[0].suggestedContext).toBe('const value = 1;');
+      expect(parsed.matches[1].suggestedContext).toBe('const value = 2;');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -1321,7 +1321,11 @@ export function createServerManager(
   let referenceCounter = 0;
   // Serialize cache mutations: the conversation service runs tool calls in a
   // turn in parallel (Promise.all), so storeReferences/resolveReference must
-  // not interleave their read-modify-write on the shared Map/counter.
+  // not interleave their read-modify-write on the shared Map/counter. The lock
+  // is held across the disk read in resolveReference (readLineFingerprint),
+  // which serializes reference resolution behind a stat+readFile. This is an
+  // accepted tradeoff: concurrency in these tools is rare, and correctness of
+  // the shared cache is more important than the small serialization cost.
   let cacheLock: Promise<void> = Promise.resolve();
   function withCacheLock<T>(fn: () => Promise<T>): Promise<T> {
     const run = cacheLock.then(fn);

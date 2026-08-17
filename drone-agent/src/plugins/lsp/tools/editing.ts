@@ -219,13 +219,7 @@ export function createCodeActionTool(
         }
         const ref = resolution.location;
         targetFilePath = ref.filePath;
-        range = {
-          start: ref.range.start,
-          end: {
-            line: ref.range.start.line,
-            character: ref.range.start.character + 1,
-          },
-        };
+        range = ref.range;
         diagnostics = server.getDiagnostics().filter(d => {
           if (d.filePath !== targetFilePath) return false;
           const ds = d.range.start;
@@ -394,7 +388,7 @@ export function createCodeActionTool(
       });
       return JSON.stringify(
         {
-          query: { filePath, range },
+          query: { filePath: targetFilePath, range },
           actions: result,
         },
         null,
