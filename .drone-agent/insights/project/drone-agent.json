@@ -178,5 +178,9 @@
   {
     "timestamp": "2026-08-14T18:57:16.308Z",
     "insight": "CodeQL suppression: `// lgtm[rule-id]` comments do NOT suppress GitHub CodeQL/code-scanning alerts — `lgtm[...]` is LGTM.com-only syntax (LGTM.com shut down Dec 2022). The correct, currently-supported inline suppression is `// codeql[rule-id]`, placed on the sink line or the line immediately before it. The rule ID must match exactly including the `js/` prefix — TypeScript is analyzed by the JS query suite, so there is no `ts/` variant (e.g. `js/reflected-xss`, `js/disabling-certificate-verification`). Suppression targets the sink location, not the source/intermediate lines; a comment in a JSDoc block far from the sink is ineffective. One comment per alert location. `// nosemgrep` is Semgrep-only (irrelevant); `paths-ignore` config is too coarse (blinds whole files); UI/API dismissal is not durable/source-controlled."
+  },
+  {
+    "timestamp": "2026-08-17T01:58:36.202Z",
+    "insight": "When renaming fields on a shared test-fixture type (e.g. Message.from/to → fromAgentId/toAgentId), sweep every consumer of that type — including assertion helpers that may have no callers. assertMessageExists in fixtures/assertions.ts referenced the old field names but had zero call sites, so it was missed by the rename and broke `pnpm typecheck` (TS2339). The `tsc -p tsconfig.test.json` step in the root typecheck script is what catches test-fixture type errors that the per-package `tsc -b` misses. Grep for the old field names across the whole test tree as a belt-and-suspenders check after any fixture type change."
   }
 ]
