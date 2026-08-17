@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import type { DroneToolDefinition } from 'drone-core';
 import type { DroneLspDiagnostic } from 'drone-core';
-import type { ServerManager } from '../server.js';
+import type { ServerManager, ResolvedPosition } from '../server.js';
 import {
   normalizeTextEdits,
   normalizeWorkspaceEdit,
@@ -22,7 +22,7 @@ export function createCodeActionTool(
   return {
     name: 'code_action',
     description:
-      'Return LSP code actions (quick fixes, refactorings, source actions) for a file and range. When no range is specified, returns all actions for the file. Use text or symbol to target a specific position.',
+      'Return LSP code actions (quick fixes, refactorings, source actions) for a file and range. When no range is specified, returns all actions for the file. Use text or symbol to target a specific position. If text/symbol resolution is ambiguous, use surroundingText to disambiguate, or provide a referenceId from a previous ambiguous resolution.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -33,22 +33,22 @@ export function createCodeActionTool(
         startLine: {
           type: 'integer',
           description:
-            '1-based start line of the range (optional if text/symbol is provided, or to get all actions).',
+            '1-based start line of the range (optional if text/symbol/referenceId is provided, or to get all actions).',
         },
         startColumn: {
           type: 'integer',
           description:
-            '1-based start column of the range (optional if text/symbol is provided, or to get all actions).',
+            '1-based start column of the range (optional if text/symbol/referenceId is provided, or to get all actions).',
         },
         endLine: {
           type: 'integer',
           description:
-            '1-based end line of the range (optional if text/symbol is provided, or to get all actions).',
+            '1-based end line of the range (optional if text/symbol/referenceId is provided, or to get all actions).',
         },
         endColumn: {
           type: 'integer',
           description:
-            '1-based end column of the range (optional if text/symbol is provided, or to get all actions).',
+            '1-based end column of the range (optional if text/symbol/referenceId is provided, or to get all actions).',
         },
         text: {
           type: 'string',
@@ -64,6 +64,11 @@ export function createCodeActionTool(
           type: 'string',
           description:
             'Surrounding context text to disambiguate between multiple matches (e.g., "class User {"). Works with text and symbol.',
+        },
+        referenceId: {
+          type: 'string',
+          description:
+            'A reference ID from a previous ambiguous resolution. Use this to confirm which match to target after receiving reference IDs.',
         },
         only: {
           type: 'array',
@@ -107,7 +112,44 @@ export function createCodeActionTool(
         | undefined;
       let diagnostics: DroneLspDiagnostic[];
 
-      if (typeof input.text === 'string' || typeof input.symbol === 'string') {
+      if (typeof input.referenceId === 'string') {
+        // Resolve from reference ID
+        const ref = server.resolveReference(input.referenceId);
+        if (!ref) {
+          throw new Error(
+            `Reference ID "${input.referenceId}" not found. It may have expired. Please resolve the position again.`
+          );
+        }
+        range = {
+          start: ref.range.start,
+          end: {
+            line: ref.range.start.line,
+            character: ref.range.start.character + 1,
+          },
+        };
+        diagnostics = server.getDiagnostics().filter(d => {
+          if (d.filePath !== filePath) return false;
+          const ds = d.range.start;
+          const de = d.range.end;
+          if (
+            ds.line > range!.end.line ||
+            (ds.line === range!.end.line && ds.character > range!.end.character)
+          ) {
+            return false;
+          }
+          if (
+            de.line < range!.start.line ||
+            (de.line === range!.start.line &&
+              de.character < range!.start.character)
+          ) {
+            return false;
+          }
+          return true;
+        });
+      } else if (
+        typeof input.text === 'string' ||
+        typeof input.symbol === 'string'
+      ) {
         // Resolve position from text/symbol, build a single-character range
         const pos = await server.parsePositionInput('lsp__code_action', input);
         range = {
@@ -248,7 +290,7 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
   return {
     name: 'rename',
     description:
-      'Rename a symbol across the workspace. Returns the workspace edit as JSON by default. When apply is true, applies the rename directly.',
+      'Rename a symbol across the workspace. Returns the workspace edit as JSON by default. When apply is true, applies the rename directly. If text/symbol resolution is ambiguous, use surroundingText to disambiguate, or provide a referenceId from a previous ambiguous resolution.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -259,12 +301,12 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
         line: {
           type: 'integer',
           description:
-            '1-based line number (optional if text or symbol is provided).',
+            '1-based line number (optional if text, symbol, or referenceId is provided).',
         },
         column: {
           type: 'integer',
           description:
-            '1-based column number (optional if text or symbol is provided).',
+            '1-based column number (optional if text, symbol, or referenceId is provided).',
         },
         text: {
           type: 'string',
@@ -279,6 +321,11 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
           type: 'string',
           description:
             'Surrounding context text to disambiguate between multiple matches (e.g., "class User {"). Works with text and symbol.',
+        },
+        referenceId: {
+          type: 'string',
+          description:
+            'A reference ID from a previous ambiguous resolution. Use this to confirm which match to rename after receiving reference IDs.',
         },
         newName: {
           type: 'string',
@@ -297,13 +344,40 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
       if (typeof input.newName !== 'string' || input.newName.length === 0) {
         throw new Error('lsp.rename requires a non-empty newName.');
       }
-      const { runtime, document, line, column } =
-        await server.resolveAtPosition('lsp__rename', input);
-      const response = await runtime.client.request<LspWorkspaceEdit>(
+
+      // If referenceId is provided, resolve it directly
+      let resolved: ResolvedPosition;
+      if (typeof input.referenceId === 'string') {
+        const ref = server.resolveReference(input.referenceId);
+        if (!ref) {
+          throw new Error(
+            `Reference ID "${input.referenceId}" not found. It may have expired. Please resolve the position again.`
+          );
+        }
+        const filePath = ref.filePath;
+        const runtime = server.findRuntimeForFile(filePath);
+        if (!runtime) {
+          throw new Error(
+            `No connected LSP server is available for ${filePath}.`
+          );
+        }
+        const document = await server.ensureDocumentLoaded(runtime, filePath);
+        resolved = {
+          runtime: runtime!,
+          document,
+          line: ref.line,
+          column: ref.column,
+        };
+      } else {
+        // Try to resolve position normally
+        resolved = await server.resolveAtPosition('lsp__rename', input);
+      }
+
+      const response = await resolved.runtime.client.request<LspWorkspaceEdit>(
         'textDocument/rename',
         {
-          textDocument: { uri: document.uri },
-          position: { line: line - 1, character: column - 1 },
+          textDocument: { uri: resolved.document.uri },
+          position: { line: resolved.line - 1, character: resolved.column - 1 },
           newName: input.newName,
         }
       );
@@ -357,9 +431,9 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
       return JSON.stringify(
         {
           query: {
-            filePath: document.uri,
-            line,
-            column,
+            filePath: resolved.document.uri,
+            line: resolved.line,
+            column: resolved.column,
             newName: input.newName,
           },
           edit: truncated,

@@ -225,6 +225,206 @@ describe('resolveTextPosition (via parsePositionInput)', () => {
   });
 });
 
+describe('surroundingText disambiguation', () => {
+  it('disambiguates multiple text matches with surroundingText', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const filePath = await createTempFile(
+        dir,
+        'test.ts',
+        [
+          'class User {',
+          '  id: number;',
+          '  name: string;',
+          '}',
+          '',
+          'const id = "different";',
+        ].join('\n')
+      );
+      const server = await createTestServerManager(dir);
+
+      // Without surroundingText, "id" is ambiguous (appears on lines 2 and 6)
+      const err = await server
+        .parsePositionInput('lsp__test', {
+          filePath,
+          text: 'id',
+        })
+        .catch(e => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toContain('ambiguous');
+
+      // With surroundingText "class User", it resolves to line 2
+      const result = await server.parsePositionInput('lsp__test', {
+        filePath,
+        text: 'id',
+        surroundingText: 'class User',
+      });
+
+      expect(result.line).toBe(2);
+      expect(result.column).toBe(3);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('disambiguates via surroundingText parameter (not input field)', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const filePath = await createTempFile(
+        dir,
+        'test.ts',
+        ['// FIRST SECTION', 'const x = 1;', '// END FIRST', '', '// SECOND SECTION', 'const x = 2;', '// END SECOND'].join('\n')
+      );
+      const server = await createTestServerManager(dir);
+
+      // Using surroundingText as a parameter
+      const result = await server.parsePositionInput(
+        'lsp__test',
+        { filePath, text: 'const x' },
+        'SECOND SECTION'
+      );
+
+      expect(result.line).toBe(6);
+      expect(result.column).toBe(1);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('disambiguates via surroundingText from input field', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const filePath = await createTempFile(
+        dir,
+        'test.ts',
+        ['// FIRST SECTION', 'const x = 1;', '// END FIRST', '', '// SECOND SECTION', 'const x = 2;', '// END SECOND'].join('\n')
+      );
+      const server = await createTestServerManager(dir);
+
+      // Using surroundingText from input.surroundingText
+      const result = await server.parsePositionInput('lsp__test', {
+        filePath,
+        text: 'const x',
+        surroundingText: 'FIRST SECTION',
+      });
+
+      expect(result.line).toBe(2);
+      expect(result.column).toBe(1);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('reference ID storage and retrieval', () => {
+  it('stores and resolves reference IDs', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const server = await createTestServerManager(dir);
+
+      const ids = server.storeReferences([
+        {
+          filePath: '/foo/bar.ts',
+          line: 10,
+          column: 5,
+          range: {
+            start: { line: 9, character: 4 },
+            end: { line: 9, character: 15 },
+          },
+        },
+        {
+          filePath: '/baz/qux.ts',
+          line: 20,
+          column: 8,
+          range: {
+            start: { line: 19, character: 7 },
+            end: { line: 19, character: 18 },
+          },
+        },
+      ]);
+
+      expect(ids).toHaveLength(2);
+      expect(ids[0]).toMatch(/^ref_\d+$/);
+      expect(ids[1]).toMatch(/^ref_\d+$/);
+
+      const ref1 = server.resolveReference(ids[0]);
+      expect(ref1).toBeDefined();
+      expect(ref1!.filePath).toBe('/foo/bar.ts');
+      expect(ref1!.line).toBe(10);
+      expect(ref1!.column).toBe(5);
+
+      const ref2 = server.resolveReference(ids[1]);
+      expect(ref2).toBeDefined();
+      expect(ref2!.filePath).toBe('/baz/qux.ts');
+      expect(ref2!.line).toBe(20);
+      expect(ref2!.column).toBe(8);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns undefined for unknown reference IDs', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const server = await createTestServerManager(dir);
+      const ref = server.resolveReference('ref_999');
+      expect(ref).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('readFileSnippet', () => {
+  it('returns code snippet around a position', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const filePath = await createTempFile(
+        dir,
+        'test.ts',
+        [
+          'line 1',
+          'line 2',
+          'line 3',
+          'line 4',
+          'line 5',
+          'line 6',
+          'line 7',
+          'line 8',
+          'line 9',
+          'line 10',
+          'line 11',
+        ].join('\n')
+      );
+      const server = await createTestServerManager(dir);
+
+      const snippet = await server.readFileSnippet(filePath, 5, 1, 2);
+      expect(snippet).toContain('line 3');
+      expect(snippet).toContain('line 5');
+      expect(snippet).toContain('line 7');
+      expect(snippet).toContain('>');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns empty string for non-existent file', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const server = await createTestServerManager(dir);
+      // Use a path that doesn't exist and won't throw — the method returns ''
+      const result = await server.readFileSnippet(
+        '/nonexistent/file.ts',
+        1,
+        1
+      );
+      expect(result).toBe('');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('tool input schemas accept text/symbol parameters', () => {
   function expectTextSymbolParams(tool: DroneToolDefinition, _name: string) {
     const schema = tool.inputSchema;
@@ -254,6 +454,9 @@ describe('tool input schemas accept text/symbol parameters', () => {
       resolveAtPosition: async () => {
         throw new Error('not connected');
       },
+      readFileSnippet: async () => '',
+      storeReferences: () => [],
+      resolveReference: () => undefined,
       locationToAgentShape: (_l: unknown[]) => [],
       initialize: async () => {},
       shutdown: async () => {},
@@ -289,7 +492,7 @@ describe('tool input schemas accept text/symbol parameters', () => {
     expectTextSymbolParams(tool, 'call_hierarchy');
   });
 
-  it('rename accepts text/symbol and apply', () => {
+  it('rename accepts text/symbol, apply, and referenceId', () => {
     const tool = createRenameTool(server);
     const schema = tool.inputSchema!;
     const props = schema.properties ?? {};
@@ -297,28 +500,31 @@ describe('tool input schemas accept text/symbol parameters', () => {
     expect(props.symbol).toBeDefined();
     expect(props.apply).toBeDefined();
     expect((props.apply as { type: string }).type).toBe('boolean');
+    expect(props.referenceId).toBeDefined();
     expect(schema.required).not.toContain('line');
     expect(schema.required).not.toContain('column');
     expect(schema.required).toContain('newName');
   });
 
-  it('code_action accepts text/symbol and optional range', () => {
+  it('code_action accepts text/symbol, optional range, and referenceId', () => {
     const tool = createCodeActionTool(server);
     const schema = tool.inputSchema!;
     const props = schema.properties ?? {};
     expect(props.text).toBeDefined();
     expect(props.symbol).toBeDefined();
+    expect(props.referenceId).toBeDefined();
     expect(schema.required).not.toContain('startLine');
     expect(schema.required).not.toContain('startColumn');
     expect(schema.required).not.toContain('endLine');
     expect(schema.required).not.toContain('endColumn');
   });
 
-  it('get_diagnostics accepts text/symbol', () => {
+  it('get_diagnostics accepts text/symbol and surroundingText', () => {
     const tool = createGetDiagnosticsTool(server);
     const props = tool.inputSchema!.properties ?? {};
     expect(props.text).toBeDefined();
     expect(props.symbol).toBeDefined();
+    expect(props.surroundingText).toBeDefined();
   });
 
   it('formatting does not have text/symbol (file-level tool)', () => {
@@ -326,6 +532,60 @@ describe('tool input schemas accept text/symbol parameters', () => {
     const props = tool.inputSchema!.properties ?? {};
     expect(props.text).toBeUndefined();
     expect(props.symbol).toBeUndefined();
+  });
+});
+
+describe('tool descriptions mention new features', () => {
+  function createMockServer() {
+    return {
+      refreshIfNeeded: async () => {},
+      markDirty: () => {},
+      getDiagnostics: () => [],
+      getServerStates: () => [],
+      renderDiagnosticsPrompt: () => false,
+      findRuntimeForFile: () => undefined,
+      ensureDocumentLoaded: async () => {
+        throw new Error('not connected');
+      },
+      resolveTargetFilePath: (p: string) => p,
+      parsePositionInput: async () => ({ filePath: '', line: 1, column: 1 }),
+      resolveAtPosition: async () => {
+        throw new Error('not connected');
+      },
+      readFileSnippet: async () => '',
+      storeReferences: () => [],
+      resolveReference: () => undefined,
+      locationToAgentShape: (_l: unknown[]) => [],
+      initialize: async () => {},
+      shutdown: async () => {},
+      getAvailableServers: () => [],
+      startServerForFile: async () => false,
+    } as Parameters<typeof createRenameTool>[0];
+  }
+
+  it('go_to mentions auto-expansion', () => {
+    const tool = createGoToTool(createMockServer());
+    expect(tool.description.toLowerCase()).toContain('snippet');
+  });
+
+  it('find_references mentions auto-expansion', () => {
+    const tool = createFindReferencesTool(createMockServer());
+    expect(tool.description.toLowerCase()).toContain('snippet');
+  });
+
+  it('inspect mentions snippet', () => {
+    const tool = createInspectTool(createMockServer());
+    expect(tool.description.toLowerCase()).toContain('snippet');
+  });
+
+  it('rename mentions referenceId', () => {
+    const tool = createRenameTool(createMockServer());
+    expect(tool.description.toLowerCase()).toContain('referenceid');
+  });
+
+  it('code_action mentions referenceId', () => {
+    const tool = createCodeActionTool(createMockServer());
+    expect(tool.description.toLowerCase()).toContain('referenceid');
   });
 });
 
@@ -346,6 +606,9 @@ describe('rename tool description mentions apply', () => {
       resolveAtPosition: async () => {
         throw new Error('not connected');
       },
+      readFileSnippet: async () => '',
+      storeReferences: () => [],
+      resolveReference: () => undefined,
       locationToAgentShape: (_l: unknown[]) => [],
       initialize: async () => {},
       shutdown: async () => {},
@@ -375,6 +638,9 @@ describe('formatting tool description mentions auto-apply', () => {
       resolveAtPosition: async () => {
         throw new Error('not connected');
       },
+      readFileSnippet: async () => '',
+      storeReferences: () => [],
+      resolveReference: () => undefined,
       locationToAgentShape: (_l: unknown[]) => [],
       initialize: async () => {},
       shutdown: async () => {},

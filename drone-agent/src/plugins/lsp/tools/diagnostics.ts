@@ -7,7 +7,7 @@ export function createGetDiagnosticsTool(
   return {
     name: 'get_diagnostics',
     description:
-      'Return the current LSP diagnostics for the workspace or a specific file. Use text or symbol to filter diagnostics near a specific position.',
+      'Return the current LSP diagnostics for the workspace or a specific file. Use text, symbol, or surroundingText to filter diagnostics near a specific position.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -30,6 +30,11 @@ export function createGetDiagnosticsTool(
           type: 'string',
           description:
             'Symbol name to find diagnostics near (alternative to filePath-only filtering).',
+        },
+        surroundingText: {
+          type: 'string',
+          description:
+            'Surrounding context text to disambiguate between multiple matches. Works with text and symbol.',
         },
       },
       additionalProperties: false,

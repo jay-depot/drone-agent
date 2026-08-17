@@ -11,6 +11,8 @@ import {
   type LspCompletionListResponse,
 } from '../normalize/index.js';
 
+const SNIPPET_CONTEXT_LINES = 5;
+
 const POSITION_PROPERTIES = {
   filePath: {
     type: 'string',
@@ -42,11 +44,18 @@ const POSITION_PROPERTIES = {
   },
 } as const;
 
+function filePathFromUri(uri: string): string {
+  if (uri.startsWith('file://')) {
+    return decodeURIComponent(uri.replace('file://', ''));
+  }
+  return uri;
+}
+
 export function createInspectTool(server: ServerManager): DroneToolDefinition {
   return {
     name: 'inspect',
     description:
-      'Inspect a symbol at a position. Returns hover information (type, documentation) and signature help (active parameter info for function calls) in a single response. Use this to understand what a symbol is, its type, or what parameters a function expects. Supports `text` and `symbol` parameters for position resolution.',
+      'Inspect a symbol at a position. Returns hover information (type, documentation) and signature help (active parameter info for function calls) in a single response. Use this to understand what a symbol is, its type, or what parameters a function expects. Supports `text` and `symbol` parameters for position resolution. Includes a code snippet of the surrounding context.',
     inputSchema: {
       type: 'object',
       properties: POSITION_PROPERTIES,
@@ -74,20 +83,33 @@ export function createInspectTool(server: ServerManager): DroneToolDefinition {
       const contents = normalizeHoverContents(hoverResponse?.contents);
       const signatures = normalizeSignatureHelp(signatureResponse);
 
-      return JSON.stringify(
-        {
-          query: { filePath: document.uri, line, column },
-          hover: {
-            contents,
-            range: hoverResponse?.range
-              ? normalizeLspRange(hoverResponse.range)
-              : undefined,
-          },
-          signatures,
+      const result: Record<string, unknown> = {
+        query: { filePath: document.uri, line, column },
+        hover: {
+          contents,
+          range: hoverResponse?.range
+            ? normalizeLspRange(hoverResponse.range)
+            : undefined,
         },
-        null,
-        2
-      );
+        signatures,
+      };
+
+      // Auto-expand: include a code snippet for the inspected position
+      try {
+        const snippet = await server.readFileSnippet(
+          filePathFromUri(document.uri),
+          line,
+          column,
+          SNIPPET_CONTEXT_LINES
+        );
+        if (snippet) {
+          result.snippet = snippet;
+        }
+      } catch {
+        // Skip snippet if file can't be read
+      }
+
+      return JSON.stringify(result, null, 2);
     },
   };
 }

@@ -126,12 +126,42 @@ export type ServerManager = {
   resolveTargetFilePath: (inputPath: string) => string;
   parsePositionInput: (
     toolName: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    surroundingText?: string
   ) => Promise<{ filePath: string; line: number; column: number }>;
   resolveAtPosition: (
     toolName: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    surroundingText?: string
   ) => Promise<ResolvedPosition>;
+  readFileSnippet: (
+    filePath: string,
+    line: number,
+    column: number,
+    contextLines?: number
+  ) => Promise<string>;
+  storeReferences: (
+    locations: Array<{
+      filePath: string;
+      line: number;
+      column: number;
+      range: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+      };
+    }>
+  ) => string[];
+  resolveReference: (referenceId: string) =>
+    | {
+        filePath: string;
+        line: number;
+        column: number;
+        range: {
+          start: { line: number; character: number };
+          end: { line: number; character: number };
+        };
+      }
+    | undefined;
   locationToAgentShape: (
     locations: Array<{
       filePath: string;
@@ -866,16 +896,19 @@ export function createServerManager(
 
   /**
    * Search file content for a text snippet and return its 1-based position.
+   * Supports surroundingText for disambiguation when multiple matches exist.
    *
    * 1. Exact match (case-sensitive) first
    * 2. Fall back to case-insensitive if no exact match
-   * 3. If exactly one match, return `{ line, column }` (1-based)
-   * 4. If multiple matches, throw with each position + 2 lines of context
-   * 5. If no matches, throw
+   * 3. If surroundingText is provided, filter matches by context
+   * 4. If exactly one match (after filtering), return `{ line, column }` (1-based)
+   * 5. If multiple matches, throw with each position + 2 lines of context
+   * 6. If no matches, throw
    */
   async function resolveTextPosition(
     filePath: string,
-    text: string
+    text: string,
+    surroundingText?: string
   ): Promise<{ line: number; column: number }> {
     const absolutePath = path.resolve(filePath);
     const snapshot = await readDocumentSnapshot(absolutePath);
@@ -904,14 +937,6 @@ export function createServerManager(
           context: contextLines.join('\n'),
         });
       }
-
-  // Backwards compatibility wrapper
-  async function resolveTextPosition(
-    filePath: string,
-    text: string
-  ): Promise<{ line: number; column: number }> {
-    return resolveTextPositionWithContext(filePath, text);
-  }
     }
 
     // Fall back to case-insensitive if no exact matches
@@ -933,15 +958,28 @@ export function createServerManager(
       }
     }
 
-    // Backwards compatibility wrapper
-    async function resolveTextPosition(
-      filePath: string,
-      text: string
-    ): Promise<{ line: number; column: number }> {
-      return resolveTextPositionWithContext(filePath, text);
-    }
     if (matches.length === 0) {
       throw new Error(`Text "${text}" not found in ${absolutePath}.`);
+    }
+
+    // If surroundingText is provided, filter matches by context
+    if (surroundingText && matches.length > 1) {
+      const filteredMatches = matches.filter(m => {
+        const contextWindow = m.context.toLowerCase();
+        return contextWindow.includes(surroundingText.toLowerCase());
+      });
+      if (filteredMatches.length === 1) {
+        return {
+          line: filteredMatches[0].line,
+          column: filteredMatches[0].column,
+        };
+      }
+      // If filtering narrows but doesn't yield a unique match, use filtered set
+      if (filteredMatches.length > 1) {
+        matches.length = 0;
+        matches.push(...filteredMatches);
+      }
+      // If filtering yields zero matches, fall through to error with original matches
     }
 
     if (matches.length > 1) {
@@ -963,105 +1001,6 @@ export function createServerManager(
   }
 
   /**
-   * Search file content for a text snippet and return its 1-based position.
-   * Supports surroundingText for disambiguation.
-   *
-   * 1. Exact match (case-sensitive) first
-   * 2. Fall back to case-insensitive if no exact match
-   * 3. If surroundingText is provided, filter matches by context
-   * 4. If exactly one match, return `{ line, column }` (1-based)
-   * 5. If multiple matches, throw with each position + 2 lines of context
-   * 6. If no matches, throw
-   */
-  async function resolveTextPositionWithContext(
-    filePath: string,
-    text: string,
-    surroundingText?: string
-  ): Promise<{ line: number; column: number }> {
-    const absolutePath = path.resolve(filePath);
-    const snapshot = await readDocumentSnapshot(absolutePath);
-    if (!snapshot) {
-      throw new Error(`Could not read file: ${absolutePath}`);
-    }
-
-    const lines = snapshot.text.split('\\n');
-    const matches: Array<{
-      line: number;
-      column: number;
-      context: string;
-    }> = [];
-
-    // Case-sensitive search
-    for (let i = 0; i < lines.length; i++) {
-      const col = lines[i].indexOf(text);
-      if (col !== -1) {
-        const contextLines = lines.slice(
-          Math.max(0, i - 2),
-          Math.min(lines.length, i + 3)
-        );
-        matches.push({
-          line: i + 1,
-          column: col + 1,
-          context: contextLines.join('\\n'),
-        });
-      }
-    }
-
-    // Fall back to case-insensitive if no exact matches
-    if (matches.length === 0) {
-      const lowerText = text.toLowerCase();
-      for (let i = 0; i < lines.length; i++) {
-        const col = lines[i].toLowerCase().indexOf(lowerText);
-        if (col !== -1) {
-          const contextLines = lines.slice(
-            Math.max(0, i - 2),
-            Math.min(lines.length, i + 3)
-          );
-          matches.push({
-            line: i + 1,
-            column: col + 1,
-            context: contextLines.join('\\n'),
-          });
-        }
-      }
-    }
-
-    if (matches.length === 0) {
-      throw new Error(`Text \"${text}\" not found in ${absolutePath}.`);
-    }
-
-    // If surroundingText is provided, filter matches by context
-    if (surroundingText && matches.length > 1) {
-      const filteredMatches = matches.filter(m => {
-        // Check if surroundingText appears in the context (previous/next lines)
-        const contextWindow = m.context.toLowerCase();
-        return contextWindow.includes(surroundingText.toLowerCase());
-      });
-      if (filteredMatches.length === 1) {
-        return { line: filteredMatches[0].line, column: filteredMatches[0].column };
-      }
-      // If filtering doesn't yield a unique match, continue with original matches
-    }
-
-    if (matches.length > 1) {
-      const details = matches
-        .map(
-          (m, idx) =>
-            `  ${idx + 1}. Line ${m.line}, column ${m.column}:\\n${m.context
-              .split('\\n')
-              .map(l => `     ${l}`)
-              .join('\\n')}`
-        )
-        .join('\\n');
-      throw new Error(
-        `Text \"${text}\" is ambiguous — found ${matches.length} matches in ${absolutePath}:\\n${details}`
-      );
-    }
-
-    return { line: matches[0].line, column: matches[0].column };
-  }
-
-  /**
    * Search for a symbol by name and return its 1-based position.
    *
    * 1. Try `textDocument/documentSymbol` on the file's runtime
@@ -1074,7 +1013,8 @@ export function createServerManager(
    */
   async function resolveSymbolPosition(
     filePath: string,
-    symbol: string
+    symbol: string,
+    surroundingText?: string
   ): Promise<{ line: number; column: number }> {
     const absolutePath = path.resolve(filePath);
     const runtime = findRuntimeForFile(absolutePath);
@@ -1103,6 +1043,29 @@ export function createServerManager(
 
     if (withPosition.length === 1) {
       return { line: withPosition[0].line, column: withPosition[0].column };
+    }
+    // If surroundingText provided and multiple document symbol matches, filter by context
+    if (surroundingText && withPosition.length > 1) {
+      const snapshot = await readDocumentSnapshot(absolutePath);
+      if (snapshot) {
+        const lines = snapshot.text.split('\n');
+        const filtered = withPosition.filter(s => {
+          const contextLines = lines.slice(
+            Math.max(0, s.line - 3),
+            Math.min(lines.length, s.line + 2)
+          );
+          return contextLines.some(l =>
+            l.toLowerCase().includes(surroundingText.toLowerCase())
+          );
+        });
+        if (filtered.length === 1) {
+          return { line: filtered[0].line, column: filtered[0].column };
+        }
+        if (filtered.length > 1) {
+          withPosition.length = 0;
+          withPosition.push(...filtered);
+        }
+      }
     }
 
     if (withPosition.length > 1) {
@@ -1165,7 +1128,8 @@ export function createServerManager(
    */
   async function parsePositionInput(
     toolName: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    surroundingText?: string
   ): Promise<{ filePath: string; line: number; column: number }> {
     if (
       typeof input.filePath !== 'string' ||
@@ -1174,21 +1138,33 @@ export function createServerManager(
       throw new Error(`${toolName} requires a non-empty filePath string.`);
     }
     const filePath = path.resolve(workspaceRoot, input.filePath);
+    const effectiveSurroundingText =
+      surroundingText ??
+      (typeof input.surroundingText === 'string'
+        ? input.surroundingText
+        : undefined);
 
     // If text or symbol is provided, resolve from that
     if (typeof input.text === 'string' && input.text.length > 0) {
       await syncFileIfNeeded(filePath);
       return {
         filePath,
-        ...(await resolveTextPosition(filePath, input.text)),
+        ...(await resolveTextPosition(
+          filePath,
+          input.text,
+          effectiveSurroundingText
+        )),
       };
     }
-
     if (typeof input.symbol === 'string' && input.symbol.length > 0) {
       await syncFileIfNeeded(filePath);
       return {
         filePath,
-        ...(await resolveSymbolPosition(filePath, input.symbol)),
+        ...(await resolveSymbolPosition(
+          filePath,
+          input.symbol,
+          effectiveSurroundingText
+        )),
       };
     }
 
@@ -1213,11 +1189,13 @@ export function createServerManager(
 
   async function resolveAtPosition(
     toolName: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    surroundingText?: string
   ): Promise<ResolvedPosition> {
     const { filePath, line, column } = await parsePositionInput(
       toolName,
-      input
+      input,
+      surroundingText
     );
     const runtime = findRuntimeForFile(filePath);
     if (!runtime) {
@@ -1225,6 +1203,83 @@ export function createServerManager(
     }
     const document = await ensureDocumentLoaded(runtime, filePath);
     return { runtime, document, line, column };
+  }
+
+  // ── Reference ID cache for destructive edit disambiguation ──────────
+
+  const referenceCache = new Map<
+    string,
+    {
+      filePath: string;
+      line: number;
+      column: number;
+      range: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+      };
+    }
+  >();
+  let referenceCounter = 0;
+
+  function storeReferences(
+    locations: Array<{
+      filePath: string;
+      line: number;
+      column: number;
+      range: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+      };
+    }>
+  ): string[] {
+    return locations.map(location => {
+      referenceCounter++;
+      const id = `ref_${referenceCounter}`;
+      referenceCache.set(id, location);
+      return id;
+    });
+  }
+
+  function resolveReference(referenceId: string):
+    | {
+        filePath: string;
+        line: number;
+        column: number;
+        range: {
+          start: { line: number; character: number };
+          end: { line: number; character: number };
+        };
+      }
+    | undefined {
+    return referenceCache.get(referenceId);
+  }
+
+  async function readFileSnippet(
+    filePath: string,
+    line: number,
+    column: number,
+    contextLines: number = 5
+  ): Promise<string> {
+    const absolutePath = path.resolve(filePath);
+    let snapshot: { text: string; mtimeMs: number; size: number } | null;
+    try {
+      snapshot = await readDocumentSnapshot(absolutePath);
+    } catch {
+      return '';
+    }
+    if (!snapshot) {
+      return '';
+    }
+    const lines = snapshot.text.split('\n');
+    const startLine = Math.max(0, line - 1 - contextLines);
+    const endLine = Math.min(lines.length, line + contextLines);
+    const snippetLines = lines.slice(startLine, endLine);
+    const lineNumbers = snippetLines.map((l, i) => {
+      const lineNum = startLine + i + 1;
+      const marker = lineNum === line ? '>' : ' ';
+      return `${marker}${String(lineNum).padStart(4)} | ${l}`;
+    });
+    return lineNumbers.join('\n');
   }
 
   // ── Public API ────────────────────────────────────────────────────
@@ -1389,6 +1444,10 @@ export function createServerManager(
 
     parsePositionInput,
     resolveAtPosition,
+
+    readFileSnippet,
+    storeReferences,
+    resolveReference,
 
     locationToAgentShape: (
       locations: Array<{

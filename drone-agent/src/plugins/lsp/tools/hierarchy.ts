@@ -45,7 +45,7 @@ export function createCallHierarchyTool(
   return {
     name: 'call_hierarchy',
     description:
-      'Get the call hierarchy for a symbol. Use `direction: "incoming"` to see callers leading to this symbol, or `direction: "outgoing"` to see callees invoked by this symbol. Supports `text` and `symbol` parameters for position resolution.',
+      'Get the call hierarchy for a symbol. Use `direction: "incoming"` to see callers leading to this symbol, or `direction: "outgoing"` to see callees invoked by this symbol. Supports `text`, `symbol`, and `surroundingText` parameters for position resolution.',
     inputSchema: {
       type: 'object',
       properties: {

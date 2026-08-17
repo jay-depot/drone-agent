@@ -6,6 +6,9 @@ import {
   type ReferencesResponse,
 } from '../normalize/index.js';
 
+const AUTO_EXPANSION_LIMIT = 5;
+const SNIPPET_CONTEXT_LINES = 5;
+
 const POSITION_PROPERTIES = {
   filePath: {
     type: 'string',
@@ -37,11 +40,47 @@ const POSITION_PROPERTIES = {
   },
 } as const;
 
+async function buildAutoExpansion(
+  server: ServerManager,
+  locations: Array<{
+    filePath: string;
+    line: number;
+    column: number;
+  }>
+): Promise<Record<string, string>> {
+  if (locations.length === 0 || locations.length > AUTO_EXPANSION_LIMIT) {
+    return {};
+  }
+  const snippets: Record<string, string> = {};
+  const seenFiles = new Set<string>();
+  for (const loc of locations) {
+    const key = `${loc.filePath}:${loc.line}:${loc.column}`;
+    if (seenFiles.has(loc.filePath)) {
+      continue;
+    }
+    seenFiles.add(loc.filePath);
+    try {
+      const snippet = await server.readFileSnippet(
+        loc.filePath,
+        loc.line,
+        loc.column,
+        SNIPPET_CONTEXT_LINES
+      );
+      if (snippet) {
+        snippets[key] = snippet;
+      }
+    } catch {
+      // Skip files that can't be read
+    }
+  }
+  return snippets;
+}
+
 export function createGoToTool(server: ServerManager): DroneToolDefinition {
   return {
     name: 'go_to',
     description:
-      'Navigate to a symbol\'s definition, type definition, or implementation. Use `kind: "definition"` (default) to find where a symbol is defined, `kind: "type"` to find its type definition, or `kind: "implementation"` to find implementations of an interface or method. Supports `text` and `symbol` parameters for position resolution.',
+      'Navigate to a symbol\'s definition, type definition, or implementation. Use `kind: "definition"` (default) to find where a symbol is defined, `kind: "type"` to find its type definition, or `kind: "implementation"` to find implementations of an interface or method. Supports `text` and `symbol` parameters for position resolution. When the result set is small (≤5 locations), code snippets are automatically included.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -84,14 +123,19 @@ export function createGoToTool(server: ServerManager): DroneToolDefinition {
       const locations = rawLocations
         .map(loc => normalizeLspLocation(loc))
         .filter((loc): loc is NonNullable<typeof loc> => Boolean(loc));
-      return JSON.stringify(
-        {
-          query: { filePath: document.uri, line, column, kind },
-          locations: server.locationToAgentShape(locations),
-        },
-        null,
-        2
-      );
+      const agentLocations = server.locationToAgentShape(locations);
+
+      const result: Record<string, unknown> = {
+        query: { filePath: document.uri, line, column, kind },
+        locations: agentLocations,
+      };
+
+      const snippets = await buildAutoExpansion(server, agentLocations);
+      if (Object.keys(snippets).length > 0) {
+        result.snippets = snippets;
+      }
+
+      return JSON.stringify(result, null, 2);
     },
   };
 }
@@ -102,7 +146,7 @@ export function createFindReferencesTool(
   return {
     name: 'find_references',
     description:
-      'Find all references to a symbol across the workspace. Use this to see everywhere a symbol is used. Supports `text` and `symbol` parameters for position resolution.',
+      'Find all references to a symbol across the workspace. Use this to see everywhere a symbol is used. Supports `text` and `symbol` parameters for position resolution. When the result set is small (≤5 locations), code snippets are automatically included.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -157,19 +201,24 @@ export function createFindReferencesTool(
           Boolean(location)
         );
 
-      return JSON.stringify(
-        {
-          query: {
-            filePath,
-            line,
-            column,
-            includeDeclaration,
-          },
-          locations: server.locationToAgentShape(locations),
+      const agentLocations = server.locationToAgentShape(locations);
+
+      const result: Record<string, unknown> = {
+        query: {
+          filePath,
+          line,
+          column,
+          includeDeclaration,
         },
-        null,
-        2
-      );
+        locations: agentLocations,
+      };
+
+      const snippets = await buildAutoExpansion(server, agentLocations);
+      if (Object.keys(snippets).length > 0) {
+        result.snippets = snippets;
+      }
+
+      return JSON.stringify(result, null, 2);
     },
   };
 }
