@@ -64,7 +64,7 @@ async function buildAmbiguousResponse(
       fingerprint: (await server.readLineFingerprint(m.filePath, m.line)) ?? '',
     }))
   );
-  const referenceIds = server.storeReferences(locations);
+  const referenceIds = await server.storeReferences(locations);
   const cribSheet = await Promise.all(
     error.matches.map((m, i) => buildCribSheetEntry(server, m, referenceIds[i]))
   );
@@ -171,10 +171,15 @@ export function createCodeActionTool(
       await server.refreshIfNeeded();
       const filePath = server.resolveTargetFilePath(input.filePath);
 
-      // If text/symbol is provided, attempt position resolution first so
-      // ambiguity can be reported with reference IDs even without a
-      // connected runtime (parsePositionInput only reads files).
-      if (typeof input.text === 'string' || typeof input.symbol === 'string') {
+      // If text/symbol is provided (and no referenceId), attempt position
+      // resolution first so ambiguity can be reported with reference IDs even
+      // without a connected runtime (parsePositionInput only reads files).
+      // When a referenceId is present it takes precedence, so skip the pre-pass
+      // to avoid an ambiguous text parse overriding the caller's explicit choice.
+      if (
+        !input.referenceId &&
+        (typeof input.text === 'string' || typeof input.symbol === 'string')
+      ) {
         try {
           await server.parsePositionInput('lsp__code_action', input);
         } catch (error) {

@@ -79,7 +79,7 @@ function createMockServer() {
     },
     readFileSnippet: async (_filePath: string, _line: number) => '',
     readLineFingerprint: async () => undefined,
-    storeReferences: () => [],
+    storeReferences: async () => [],
     resolveReference: async () => undefined,
     locationToAgentShape: (_l: unknown[]) => [],
     initialize: async () => {},
@@ -428,6 +428,46 @@ describe('surroundingText disambiguation', () => {
     }
   });
 
+  it('resolves a block near the hard context limit (round-trip at the cap)', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      // Two matches far apart. The first match's block spans ~30 lines (the
+      // hard context limit). The filter window is fixed at HARD_CONTEXT_LINES,
+      // so a block at the cap must still be found for the first match and not
+      // bleed into the second match's window.
+      const lines: string[] = [];
+      lines.push('// FIRST BLOCK');
+      lines.push('const value = 1;');
+      // Fill out the block to ~30 lines (lines 3-30).
+      for (let i = 0; i < 28; i++) {
+        lines.push('const filler = 0;');
+      }
+      // Gap so the second match is well outside the first block's window.
+      for (let i = 0; i < 70; i++) {
+        lines.push('const gap = 0;');
+      }
+      lines.push('const value = 2;');
+      lines.push('// SECOND BLOCK');
+
+      const filePath = await createTempFile(dir, 'test.ts', lines.join('\n'));
+      const server = await createTestServerManager(dir);
+
+      // Hand back a dense, contiguous block near the hard limit that includes
+      // the unique marker line ("// FIRST BLOCK") at the top.
+      const block = lines.slice(0, 30).join('\n');
+
+      const result = await server.parsePositionInput('lsp__test', {
+        filePath,
+        text: 'const value',
+        surroundingText: block,
+      });
+
+      expect(result.line).toBe(2);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('uses exact match (trim-only), not substring, for disambiguation', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
     try {
@@ -579,7 +619,7 @@ describe('reference ID storage and retrieval', () => {
         ['line one', 'line two', 'line three'].join('\n')
       );
 
-      const ids = server.storeReferences([
+      const ids = await server.storeReferences([
         {
           filePath,
           line: 2,
@@ -645,7 +685,7 @@ describe('reference ID storage and retrieval', () => {
         ['line one', 'line two', 'line three'].join('\n')
       );
 
-      const ids = server.storeReferences([
+      const ids = await server.storeReferences([
         {
           filePath,
           line: 2,
@@ -683,7 +723,7 @@ describe('reference ID storage and retrieval', () => {
         ['line one', 'line two'].join('\n')
       );
 
-      const ids = server.storeReferences([
+      const ids = await server.storeReferences([
         {
           filePath,
           line: 2,
@@ -717,7 +757,7 @@ describe('reference ID storage and retrieval', () => {
         ['line one', 'line two'].join('\n')
       );
 
-      const ids = server.storeReferences([
+      const ids = await server.storeReferences([
         {
           filePath,
           line: 2,
@@ -757,7 +797,7 @@ describe('reference ID storage and retrieval', () => {
       );
 
       // Insert 101 references (cap is 100). The first should be evicted.
-      const ids = server.storeReferences(
+      const ids = await server.storeReferences(
         Array.from({ length: 101 }, () => ({
           filePath,
           line: 2,
@@ -776,6 +816,39 @@ describe('reference ID storage and retrieval', () => {
       const last = await server.resolveReference(ids[100]);
       expect(last).toBeDefined();
       expect(last!.stale).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('assigns unique IDs under concurrent storeReferences calls', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const server = await createTestServerManager(dir);
+      const filePath = await createTempFile(
+        dir,
+        'concurrent.ts',
+        ['line one', 'line two'].join('\n')
+      );
+      const location = {
+        filePath,
+        line: 2,
+        column: 5,
+        range: {
+          start: { line: 1, character: 4 },
+          end: { line: 1, character: 15 },
+        },
+        fingerprint: 'line two',
+      };
+
+      // Fire many storeReferences calls in parallel (as the conversation
+      // service does via Promise.all) and assert no counter collision.
+      const results = await Promise.all(
+        Array.from({ length: 50 }, () => server.storeReferences([location]))
+      );
+      const allIds = results.flat();
+      expect(allIds).toHaveLength(50);
+      expect(new Set(allIds).size).toBe(50);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -914,7 +987,7 @@ describe('rename/code_action ambiguity returns reference IDs', () => {
         },
         readFileSnippet: async () => '',
         readLineFingerprint: async () => undefined,
-        storeReferences: () => [],
+        storeReferences: async () => [],
         resolveReference: async () => ({
           location: {
             filePath: refFilePath,
@@ -944,6 +1017,213 @@ describe('rename/code_action ambiguity returns reference IDs', () => {
       // The tool must target the reference's file, not the input file.
       expect(loadedFiles).toContain(refFilePath);
       expect(loadedFiles).not.toContain(inputFilePath);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('code_action with both referenceId and ambiguous text prefers the referenceId', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const refFilePath = await createTempFile(
+        dir,
+        'ref.ts',
+        ['const y = 2;'].join('\n')
+      );
+
+      let parseCalled = false;
+      const runtime = {
+        client: {
+          request: async () => [],
+        },
+      };
+      const server = {
+        refreshIfNeeded: async () => {},
+        markDirty: () => {},
+        getDiagnostics: () => [],
+        getServerStates: () => [],
+        renderDiagnosticsPrompt: () => false,
+        findRuntimeForFile: () => runtime,
+        ensureDocumentLoaded: async () => ({
+          uri: `file://${refFilePath}`,
+          languageId: 'typescript',
+          version: 1,
+          text: '',
+          mtimeMs: 0,
+          size: 0,
+        }),
+        resolveTargetFilePath: (p: string) => p,
+        // If the pre-pass runs on the ambiguous text, it throws — proving the
+        // referenceId must short-circuit before any text parse.
+        parsePositionInput: async () => {
+          parseCalled = true;
+          throw new AmbiguousPositionError(
+            refFilePath,
+            [],
+            'Text "const value" is ambiguous'
+          );
+        },
+        resolveAtPosition: async () => {
+          throw new Error('not connected');
+        },
+        readFileSnippet: async () => '',
+        readLineFingerprint: async () => undefined,
+        storeReferences: async () => [],
+        resolveReference: async () => ({
+          location: {
+            filePath: refFilePath,
+            line: 1,
+            column: 1,
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: 1 },
+            },
+            fingerprint: 'const y = 2;',
+          },
+          stale: false,
+        }),
+        locationToAgentShape: (_l: unknown[]) => [],
+        initialize: async () => {},
+        shutdown: async () => {},
+        getAvailableServers: () => [],
+        startServerForFile: async () => false,
+      } as unknown as Parameters<typeof createCodeActionTool>[0];
+
+      const tool = createCodeActionTool(server);
+      const result = await tool.execute({
+        filePath: refFilePath,
+        referenceId: 'ref_1',
+        text: 'const value',
+      });
+
+      // The referenceId must win: no ambiguous response, and the text was
+      // never parsed (the pre-pass is skipped when referenceId is present).
+      const parsed = JSON.parse(result as string);
+      expect(parsed.ambiguous).toBeUndefined();
+      expect(parseCalled).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rename returns a stale response when the referenceId is stale', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const refFilePath = await createTempFile(
+        dir,
+        'ref.ts',
+        ['const y = 2;'].join('\n')
+      );
+      const server = {
+        refreshIfNeeded: async () => {},
+        markDirty: () => {},
+        getDiagnostics: () => [],
+        getServerStates: () => [],
+        renderDiagnosticsPrompt: () => false,
+        findRuntimeForFile: () => undefined,
+        ensureDocumentLoaded: async () => {
+          throw new Error('not connected');
+        },
+        resolveTargetFilePath: (p: string) => p,
+        parsePositionInput: async () => ({ filePath: '', line: 1, column: 1 }),
+        resolveAtPosition: async () => {
+          throw new Error('not connected');
+        },
+        readFileSnippet: async () => '',
+        readLineFingerprint: async () => undefined,
+        storeReferences: async () => [],
+        resolveReference: async () => ({
+          location: {
+            filePath: refFilePath,
+            line: 1,
+            column: 1,
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: 1 },
+            },
+            fingerprint: 'const y = 2;',
+          },
+          stale: true,
+        }),
+        locationToAgentShape: (_l: unknown[]) => [],
+        initialize: async () => {},
+        shutdown: async () => {},
+        getAvailableServers: () => [],
+        startServerForFile: async () => false,
+      } as unknown as Parameters<typeof createRenameTool>[0];
+
+      const tool = createRenameTool(server);
+      const result = await tool.execute({
+        filePath: refFilePath,
+        referenceId: 'ref_1',
+        newName: 'renamed',
+      });
+
+      const parsed = JSON.parse(result as string);
+      expect(parsed.stale).toBe(true);
+      expect(parsed.referenceId).toBe('ref_1');
+      expect(parsed.hint).toContain('Re-resolve');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('code_action returns a stale response when the referenceId is stale', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const refFilePath = await createTempFile(
+        dir,
+        'ref.ts',
+        ['const y = 2;'].join('\n')
+      );
+      const server = {
+        refreshIfNeeded: async () => {},
+        markDirty: () => {},
+        getDiagnostics: () => [],
+        getServerStates: () => [],
+        renderDiagnosticsPrompt: () => false,
+        findRuntimeForFile: () => undefined,
+        ensureDocumentLoaded: async () => {
+          throw new Error('not connected');
+        },
+        resolveTargetFilePath: (p: string) => p,
+        parsePositionInput: async () => ({ filePath: '', line: 1, column: 1 }),
+        resolveAtPosition: async () => {
+          throw new Error('not connected');
+        },
+        readFileSnippet: async () => '',
+        readLineFingerprint: async () => undefined,
+        storeReferences: async () => [],
+        resolveReference: async () => ({
+          location: {
+            filePath: refFilePath,
+            line: 1,
+            column: 1,
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: 1 },
+            },
+            fingerprint: 'const y = 2;',
+          },
+          stale: true,
+        }),
+        locationToAgentShape: (_l: unknown[]) => [],
+        initialize: async () => {},
+        shutdown: async () => {},
+        getAvailableServers: () => [],
+        startServerForFile: async () => false,
+      } as unknown as Parameters<typeof createCodeActionTool>[0];
+
+      const tool = createCodeActionTool(server);
+      const result = await tool.execute({
+        filePath: refFilePath,
+        referenceId: 'ref_1',
+      });
+
+      const parsed = JSON.parse(result as string);
+      expect(parsed.stale).toBe(true);
+      expect(parsed.referenceId).toBe('ref_1');
+      expect(parsed.hint).toContain('Re-resolve');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

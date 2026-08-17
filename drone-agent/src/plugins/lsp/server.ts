@@ -195,7 +195,7 @@ export type ServerManager = {
     filePath: string,
     line: number
   ) => Promise<string | undefined>;
-  storeReferences: (locations: ReferenceLocation[]) => string[];
+  storeReferences: (locations: ReferenceLocation[]) => Promise<string[]>;
   resolveReference: (
     referenceId: string
   ) => Promise<ReferenceResolution | undefined>;
@@ -1319,6 +1319,18 @@ export function createServerManager(
     { location: ReferenceLocation; createdAt: number }
   >();
   let referenceCounter = 0;
+  // Serialize cache mutations: the conversation service runs tool calls in a
+  // turn in parallel (Promise.all), so storeReferences/resolveReference must
+  // not interleave their read-modify-write on the shared Map/counter.
+  let cacheLock: Promise<void> = Promise.resolve();
+  function withCacheLock<T>(fn: () => Promise<T>): Promise<T> {
+    const run = cacheLock.then(fn);
+    cacheLock = run.then(
+      () => {},
+      () => {}
+    );
+    return run;
+  }
 
   async function readLineFingerprint(
     filePath: string,
@@ -1339,44 +1351,48 @@ export function createServerManager(
     return target === undefined ? undefined : target.trim();
   }
 
-  function storeReferences(locations: ReferenceLocation[]): string[] {
-    return locations.map(location => {
-      referenceCounter++;
-      const id = `ref_${referenceCounter}`;
-      referenceCache.set(id, { location, createdAt: Date.now() });
-      // FIFO eviction: Map preserves insertion order, so the first key is oldest.
-      while (referenceCache.size > REFERENCE_CACHE_CAP) {
-        const oldestKey = referenceCache.keys().next().value;
-        if (oldestKey === undefined) break;
-        referenceCache.delete(oldestKey);
-      }
-      return id;
+  function storeReferences(locations: ReferenceLocation[]): Promise<string[]> {
+    return withCacheLock(async () => {
+      return locations.map(location => {
+        referenceCounter++;
+        const id = `ref_${referenceCounter}`;
+        referenceCache.set(id, { location, createdAt: Date.now() });
+        // FIFO eviction: Map preserves insertion order, so the first key is oldest.
+        while (referenceCache.size > REFERENCE_CACHE_CAP) {
+          const oldestKey = referenceCache.keys().next().value;
+          if (oldestKey === undefined) break;
+          referenceCache.delete(oldestKey);
+        }
+        return id;
+      });
     });
   }
 
   async function resolveReference(
     referenceId: string
   ): Promise<ReferenceResolution | undefined> {
-    const entry = referenceCache.get(referenceId);
-    if (!entry) {
-      return undefined;
-    }
-    // TTL expiry
-    if (Date.now() - entry.createdAt > REFERENCE_TTL_MS) {
-      referenceCache.delete(referenceId);
-      return undefined;
-    }
-    // Staleness: re-read the line fingerprint; if the file is gone or the
-    // line changed, invalidate and signal the caller to re-resolve.
-    const current = await readLineFingerprint(
-      entry.location.filePath,
-      entry.location.line
-    );
-    if (current === undefined || current !== entry.location.fingerprint) {
-      referenceCache.delete(referenceId);
-      return { location: entry.location, stale: true };
-    }
-    return { location: entry.location, stale: false };
+    return withCacheLock(async () => {
+      const entry = referenceCache.get(referenceId);
+      if (!entry) {
+        return undefined;
+      }
+      // TTL expiry
+      if (Date.now() - entry.createdAt > REFERENCE_TTL_MS) {
+        referenceCache.delete(referenceId);
+        return undefined;
+      }
+      // Staleness: re-read the line fingerprint; if the file is gone or the
+      // line changed, invalidate and signal the caller to re-resolve.
+      const current = await readLineFingerprint(
+        entry.location.filePath,
+        entry.location.line
+      );
+      if (current === undefined || current !== entry.location.fingerprint) {
+        referenceCache.delete(referenceId);
+        return { location: entry.location, stale: true };
+      }
+      return { location: entry.location, stale: false };
+    });
   }
 
   async function readFileSnippet(
