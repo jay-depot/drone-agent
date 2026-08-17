@@ -125,6 +125,24 @@ export function flattenDocumentSymbols(
   return out;
 }
 
+/**
+ * Filter normalized symbols by a query using exact-match-first semantics:
+ * exact `name === query` matches win; prefix (`name.startsWith(query)`)
+ * matches are only used when there are no exact matches. This keeps near
+ * matches (e.g. `registeredTools` for query `registerTool`) from drowning
+ * out the exact hits.
+ */
+export function filterSymbolsByQuery(
+  symbols: NormalizedSymbol[],
+  query: string
+): NormalizedSymbol[] {
+  const exact = symbols.filter(symbol => symbol.name === query);
+  if (exact.length > 0) {
+    return exact;
+  }
+  return symbols.filter(symbol => symbol.name.startsWith(query));
+}
+
 export function normalizeWorkspaceSymbols(
   symbols: LspWorkspaceSymbolResponse[] | null | undefined
 ): NormalizedSymbol[] {

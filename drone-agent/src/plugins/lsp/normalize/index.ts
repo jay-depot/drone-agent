@@ -36,6 +36,7 @@ export {
   formatCompletionKind,
   flattenDocumentSymbols,
   normalizeWorkspaceSymbols,
+  filterSymbolsByQuery,
 } from './symbols.js';
 export { normalizeSignatureHelp } from './signature-help.js';
 export { normalizeCompletionItems } from './completion.js';

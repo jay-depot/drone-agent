@@ -55,6 +55,7 @@ import {
   type PublishDiagnosticsParams,
 } from './server/helpers.js';
 import {
+  filterSymbolsByQuery,
   flattenDocumentSymbols,
   normalizeWorkspaceSymbols,
   type LspDocumentSymbolResponse,
@@ -1080,9 +1081,7 @@ export function createServerManager(
       LspDocumentSymbolResponse[]
     >('textDocument/documentSymbol', { textDocument: { uri: document.uri } });
     const flat = flattenDocumentSymbols(docSymbols);
-    const exact = flat.filter(s => s.name === symbol);
-    const candidates =
-      exact.length > 0 ? exact : flat.filter(s => s.name.startsWith(symbol));
+    const candidates = filterSymbolsByQuery(flat, symbol);
 
     // Filter out symbols without position info
     const withPosition = candidates.filter(
@@ -1143,11 +1142,7 @@ export function createServerManager(
       LspWorkspaceSymbolResponse[]
     >('workspace/symbol', { query: symbol });
     const wsFlat = normalizeWorkspaceSymbols(wsSymbols);
-    const wsExact = wsFlat.filter(s => s.name === symbol);
-    const wsCandidates =
-      wsExact.length > 0
-        ? wsExact
-        : wsFlat.filter(s => s.name.startsWith(symbol));
+    const wsCandidates = filterSymbolsByQuery(wsFlat, symbol);
 
     // Filter out workspace symbols without position info
     const wsWithPosition = wsCandidates.filter(

@@ -20,6 +20,7 @@ import {
 } from '../src/plugins/lsp/tools/completion.js';
 import { createCallHierarchyTool } from '../src/plugins/lsp/tools/hierarchy.js';
 import { createGetDiagnosticsTool } from '../src/plugins/lsp/tools/diagnostics.js';
+import { createSymbolsTool } from '../src/plugins/lsp/tools/symbols.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1648,5 +1649,316 @@ describe('buildAutoExpansion dedups by file (one snippet per file)', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('call_hierarchy cross-checks empty results against references', () => {
+  function makeHierarchyServer(options: {
+    incomingCalls: unknown[];
+    references: unknown[];
+  }) {
+    const requestedMethods: string[] = [];
+    const runtime = {
+      client: {
+        request: async (method: string) => {
+          requestedMethods.push(method);
+          if (method === 'textDocument/prepareCallHierarchy') {
+            return [
+              {
+                name: 'target',
+                kind: 12,
+                uri: 'file:///tmp/target.ts',
+                range: {
+                  start: { line: 0, character: 0 },
+                  end: { line: 0, character: 6 },
+                },
+                selectionRange: {
+                  start: { line: 0, character: 0 },
+                  end: { line: 0, character: 6 },
+                },
+              },
+            ];
+          }
+          if (method === 'callHierarchy/incomingCalls') {
+            return options.incomingCalls;
+          }
+          if (method === 'textDocument/references') {
+            return options.references;
+          }
+          return [];
+        },
+      },
+    };
+    const server = {
+      refreshIfNeeded: async () => {},
+      markDirty: () => {},
+      getDiagnostics: () => [],
+      getServerStates: () => [],
+      renderDiagnosticsPrompt: () => false,
+      findRuntimeForFile: () => runtime,
+      ensureDocumentLoaded: async () => ({
+        uri: 'file:///tmp/target.ts',
+        languageId: 'typescript',
+        version: 1,
+        text: '',
+        mtimeMs: 0,
+        size: 0,
+      }),
+      resolveTargetFilePath: (p: string) => p,
+      parsePositionInput: async () => ({
+        filePath: '/tmp/target.ts',
+        line: 1,
+        column: 1,
+      }),
+      resolveAtPosition: async () => ({
+        runtime,
+        document: {
+          uri: 'file:///tmp/target.ts',
+          languageId: 'typescript',
+          version: 1,
+          text: '',
+          mtimeMs: 0,
+          size: 0,
+        },
+        line: 1,
+        column: 1,
+      }),
+      readFileSnippet: async () => '',
+      readLineFingerprint: async () => undefined,
+      storeReferences: async () => [],
+      resolveReference: async () => undefined,
+      locationToAgentShape: (l: unknown[]) =>
+        (
+          l as Array<{
+            filePath: string;
+            range: { start: { line: number; character: number } };
+          }>
+        ).map(loc => ({
+          filePath: loc.filePath,
+          line: loc.range.start.line + 1,
+          column: loc.range.start.character + 1,
+          range: loc.range,
+        })),
+      initialize: async () => {},
+      shutdown: async () => {},
+      getAvailableServers: () => [],
+      startServerForFile: async () => false,
+    } as unknown as Parameters<typeof createCallHierarchyTool>[0];
+    return { server, requestedMethods };
+  }
+
+  it('adds warning + references when hierarchy is empty but references exist', async () => {
+    const { server } = makeHierarchyServer({
+      incomingCalls: [],
+      references: [
+        {
+          uri: 'file:///tmp/caller.ts',
+          range: {
+            start: { line: 2, character: 4 },
+            end: { line: 2, character: 10 },
+          },
+        },
+      ],
+    });
+    const tool = createCallHierarchyTool(server);
+    const result = await tool.execute({
+      filePath: '/tmp/target.ts',
+      direction: 'incoming',
+    });
+    const parsed = JSON.parse(result as string);
+    expect(parsed.warning).toContain('textDocument/references');
+    expect(parsed.references).toHaveLength(1);
+    expect(parsed.references[0]).toMatchObject({
+      filePath: '/tmp/caller.ts',
+      line: 3,
+      column: 5,
+    });
+  });
+
+  it('does not cross-check when the hierarchy result is non-empty', async () => {
+    const { server, requestedMethods } = makeHierarchyServer({
+      incomingCalls: [
+        {
+          from: [
+            {
+              name: 'caller',
+              kind: 12,
+              uri: 'file:///tmp/caller.ts',
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 6 },
+              },
+              selectionRange: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 6 },
+              },
+            },
+          ],
+          to: [],
+        },
+      ],
+      references: [],
+    });
+    const tool = createCallHierarchyTool(server);
+    const result = await tool.execute({
+      filePath: '/tmp/target.ts',
+      direction: 'incoming',
+    });
+    const parsed = JSON.parse(result as string);
+    expect(parsed.from).toHaveLength(1);
+    expect(parsed.warning).toBeUndefined();
+    expect(parsed.references).toBeUndefined();
+    expect(requestedMethods).not.toContain('textDocument/references');
+  });
+});
+
+describe('symbols workspace search is exact-first and deduplicated', () => {
+  function makeSymbolsServer(workspaceSymbols: unknown[]) {
+    const runtime = {
+      client: {
+        request: async () => workspaceSymbols,
+      },
+    };
+    const server = {
+      refreshIfNeeded: async () => {},
+      markDirty: () => {},
+      getDiagnostics: () => [],
+      getServerStates: () => [
+        {
+          id: 'typescript',
+          language: 'typescript',
+          status: 'connected',
+        },
+      ],
+      renderDiagnosticsPrompt: () => false,
+      findRuntimeForFile: () => runtime,
+      ensureDocumentLoaded: async () => {
+        throw new Error('not connected');
+      },
+      resolveTargetFilePath: (p: string) => p,
+      parsePositionInput: async () => ({ filePath: '', line: 1, column: 1 }),
+      resolveAtPosition: async () => {
+        throw new Error('not connected');
+      },
+      readFileSnippet: async () => '',
+      readLineFingerprint: async () => undefined,
+      storeReferences: async () => [],
+      resolveReference: async () => undefined,
+      locationToAgentShape: (_l: unknown[]) => [],
+      initialize: async () => {},
+      shutdown: async () => {},
+      getAvailableServers: () => [],
+      startServerForFile: async () => false,
+    } as unknown as Parameters<typeof createSymbolsTool>[0];
+    return server;
+  }
+
+  it('returns only exact matches when exact matches exist', async () => {
+    const server = makeSymbolsServer([
+      {
+        name: 'registerTool',
+        kind: 12,
+        location: {
+          uri: 'file:///tmp/a.ts',
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 1 },
+          },
+        },
+      },
+      {
+        name: 'registeredTools',
+        kind: 13,
+        location: {
+          uri: 'file:///tmp/b.ts',
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 1 },
+          },
+        },
+      },
+    ]);
+    const tool = createSymbolsTool(server);
+    const result = await tool.execute({
+      scope: 'workspace',
+      query: 'registerTool',
+    });
+    const parsed = JSON.parse(result as string);
+    expect(parsed.symbols).toHaveLength(1);
+    expect(parsed.symbols[0].name).toBe('registerTool');
+    expect(parsed.totalMatches).toBe(1);
+  });
+
+  it('falls back to prefix matches when no exact matches exist', async () => {
+    const server = makeSymbolsServer([
+      {
+        name: 'registerToolHelper',
+        kind: 12,
+        location: {
+          uri: 'file:///tmp/a.ts',
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 1 },
+          },
+        },
+      },
+      {
+        name: 'registerToolImpl',
+        kind: 12,
+        location: {
+          uri: 'file:///tmp/b.ts',
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 1 },
+          },
+        },
+      },
+    ]);
+    const tool = createSymbolsTool(server);
+    const result = await tool.execute({
+      scope: 'workspace',
+      query: 'registerTool',
+    });
+    const parsed = JSON.parse(result as string);
+    expect(parsed.symbols).toHaveLength(2);
+    expect(parsed.symbols.map((s: { name: string }) => s.name).sort()).toEqual([
+      'registerToolHelper',
+      'registerToolImpl',
+    ]);
+  });
+
+  it('deduplicates identical locations', async () => {
+    const server = makeSymbolsServer([
+      {
+        name: 'registerTool',
+        kind: 12,
+        location: {
+          uri: 'file:///tmp/a.ts',
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 1 },
+          },
+        },
+      },
+      {
+        name: 'registerTool',
+        kind: 12,
+        location: {
+          uri: 'file:///tmp/a.ts',
+          range: {
+            start: { line: 0, character: 0 },
+            end: { line: 0, character: 1 },
+          },
+        },
+      },
+    ]);
+    const tool = createSymbolsTool(server);
+    const result = await tool.execute({
+      scope: 'workspace',
+      query: 'registerTool',
+    });
+    const parsed = JSON.parse(result as string);
+    expect(parsed.symbols).toHaveLength(1);
+    expect(parsed.totalMatches).toBe(1);
   });
 });

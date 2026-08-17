@@ -1,6 +1,7 @@
 import type { DroneToolDefinition } from 'drone-core';
 import type { ServerManager } from '../server.js';
 import {
+  filterSymbolsByQuery,
   flattenDocumentSymbols,
   normalizeWorkspaceSymbols,
   type LspDocumentSymbolResponse,
@@ -12,7 +13,7 @@ export function createSymbolsTool(server: ServerManager): DroneToolDefinition {
   return {
     name: 'symbols',
     description:
-      'List symbols in a file or search across the workspace. Use `scope: "document"` to list all symbols in a specific file (functions, classes, variables), or `scope: "workspace"` to search for symbols by name across the entire workspace with fuzzy matching.',
+      'List symbols in a file or search across the workspace. Use `scope: "document"` to list all symbols in a specific file (functions, classes, variables), or `scope: "workspace"` to search for symbols by name across the entire workspace. Workspace search is exact-match-first (prefix matches only when no exact matches exist) and results are deduplicated by location.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -29,12 +30,12 @@ export function createSymbolsTool(server: ServerManager): DroneToolDefinition {
         query: {
           type: 'string',
           description:
-            'Symbol name or substring to search for (required when scope is "workspace"). Empty string returns all symbols.',
+            'Symbol name to search for (required when scope is "workspace"). Exact matches win; prefix matches are used only when no exact matches exist. Empty string returns all symbols.',
         },
         limit: {
           type: 'integer',
           description:
-            'Optional max results (workspace scope only, default 200).',
+            'Optional max results (workspace scope only, ignored in document scope; default 200).',
         },
       },
       required: ['scope'],
@@ -137,19 +138,35 @@ async function executeWorkspaceSymbols(
       serverId: group.serverId,
     }))
   );
-  flat.sort((left, right) => left.name.localeCompare(right.name));
-  const truncated = flat.length > limit;
-  const symbols = truncated ? flat.slice(0, limit) : flat;
+  const filtered = filterSymbolsByQuery(flat, input.query);
+  const deduped = dedupeSymbols(filtered);
+  deduped.sort((left, right) => left.name.localeCompare(right.name));
+  const truncated = deduped.length > limit;
+  const symbols = truncated ? deduped.slice(0, limit) : deduped;
   return JSON.stringify(
     {
       query: input.query,
       scope: 'workspace',
       symbols,
       truncated,
-      totalMatches: flat.length,
+      totalMatches: deduped.length,
       serverStates,
     },
     null,
     2
   );
+}
+
+function dedupeSymbols(symbols: NormalizedSymbol[]): NormalizedSymbol[] {
+  const seen = new Set<string>();
+  const out: NormalizedSymbol[] = [];
+  for (const symbol of symbols) {
+    const key = `${symbol.filePath ?? ''}:${symbol.line ?? ''}:${symbol.column ?? ''}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(symbol);
+  }
+  return out;
 }
