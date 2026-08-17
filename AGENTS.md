@@ -90,6 +90,47 @@ Inside the conversation service's tool-call loop, the order of operations per it
 5. Run `onAfterToolCall` hooks (compaction, logging, etc.)
 6. Continue to next iteration
 
+### Plugin Observability — Emit Events for Background Work
+
+Any plugin that performs background maintenance (compaction, safety trimming, index refresh, cache eviction, sync pulls, etc.) **must emit `DroneConversationEvent` events** so the TUI can surface progress in the tail region and commit entries to scrollback. Silent background work is indistinguishable from broken background work.
+
+The compaction plugin demonstrates the pattern:
+
+```typescript
+// In plugin registration, receive the optional emitter:
+const emitEvent = deps.emitEvent;
+
+// Emit at each phase of a background operation:
+emitEvent?.({
+  kind: 'compaction',
+  message: 'Compacting 4 turn(s)...',
+  status: 'started',
+});
+
+try {
+  await doCompaction();
+  emitEvent?.({
+    kind: 'compaction',
+    message: 'Compacted 4 turn(s)',
+    status: 'completed',
+  });
+} catch (error) {
+  emitEvent?.({
+    kind: 'compaction',
+    message: `Compaction failed: ${error.message}`,
+    status: 'failed',
+  });
+  throw error;
+}
+```
+
+The TUI (`src/tui/app.tsx`) renders any `DroneConversationEvent` with a recognized `kind` in both the live tail region and the committed scrollback. Adding a new event kind requires:
+1. Add the kind to the `DroneConversationEvent` union in `drone-core/src/index.ts`
+2. Add a color in `src/tui/theme.tsx` (e.g., `compaction: 'cyan'`)
+3. Add a case in `src/tui/app.tsx` to render the message
+
+**Rule of thumb**: If a plugin mutates session state without a user command, it must emit at least `started` and `completed`/`failed` events. The latch bug in compaction (Decision 053) went undetected for weeks partly because the plugin was observability-free — no events meant no visible signal that it had stopped firing.
+
 ### Broker + Provider Pattern (Skills & Personas)
 
 Skills and personas use a two-layer architecture:
