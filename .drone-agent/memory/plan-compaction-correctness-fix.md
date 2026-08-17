@@ -5,7 +5,7 @@ tags:
   - bugfix
   - plan
 created: 2026-08-17T01:44:40.204Z
-updated: 2026-08-17T01:44:40.204Z
+updated: 2026-08-17T02:10:00.000Z
 ---
 
 # Plan: Compaction Correctness Fix
@@ -18,7 +18,7 @@ The compaction plugin has five correctness bugs that together cause context usag
 
 ### Bug #1 (High): `sliceSize` computed against `turns.length` — includes summaries
 
-`turns.length` includes summary turns. When `slicePercent=25` and the array is `[S1, S2, u0..u17]` (20 turns), `desiredSlice = floor(20 * 0.25) = 5`. But 2 of those 20 turns are summaries that can't be compacted, so only `5/18 = 28%` of the *actual* conversation content gets compacted. As summaries accumulate, the fraction shrinks further — compaction falls behind and context usage climbs.
+`turns.length` includes summary turns. When `slicePercent=25` and the array is `[S1, S2, u0..u17]` (20 turns), `desiredSlice = floor(20 * 0.25) = 5`. But 2 of those 20 turns are summaries that can't be compacted, so only `5/18 = 28%` of the _actual_ conversation content gets compacted. As summaries accumulate, the fraction shrinks further — compaction falls behind and context usage climbs.
 
 **Fix:** Compute `sliceSize` against the count of non-summary turns.
 
@@ -53,34 +53,43 @@ The assertion `if (dropped.length !== slice.length) throw ...` will throw if any
 **File:** `drone-agent/src/plugins/compaction/index.ts`
 
 Change the function signature from:
+
 ```ts
 function formatTurnsForSummary(
   turns: DroneSessionTurn[],
   startIndex = 0
 ): string {
 ```
+
 to:
+
 ```ts
 function formatTurnsForSummary(turns: DroneSessionTurn[]): string {
 ```
 
 Change the template string from:
+
 ```ts
 return `--- Turn ${startIndex + index + 1} ---\n${parts.join('\n')}`;
 ```
+
 to:
+
 ```ts
 return `--- Turn ${index + 1} ---\n${parts.join('\n')}`;
 ```
 
 Update the call site from:
+
 ```ts
 const transcript = formatTurnsForSummary(
   slice,
   turns.filter(turn => turn.kind !== 'summary').length - slice.length
 );
 ```
+
 to:
+
 ```ts
 const transcript = formatTurnsForSummary(slice);
 ```
@@ -90,6 +99,7 @@ const transcript = formatTurnsForSummary(slice);
 **File:** `drone-agent/src/plugins/compaction/index.ts`
 
 Replace:
+
 ```ts
 const desiredSlice = Math.floor((turns.length * config.slicePercent) / 100);
 const sliceSize = Math.max(
@@ -99,6 +109,7 @@ const sliceSize = Math.max(
 ```
 
 With:
+
 ```ts
 const nonSummaryCount = turns.filter(turn => turn.kind !== 'summary').length;
 const desiredSlice = Math.floor((nonSummaryCount * config.slicePercent) / 100);
@@ -115,6 +126,7 @@ Also add a guard: if `nonSummaryCount < config.minTurnsToCompact`, bail out of c
 **File:** `drone-agent/src/plugins/compaction/index.ts`
 
 Replace:
+
 ```ts
 // Normal turns age toward the tail; summaries are prepended at the head.
 // Compaction must target the oldest non-summary turns, which live at the
@@ -122,6 +134,7 @@ Replace:
 ```
 
 With:
+
 ```ts
 // Summaries are prepended at the head; normal turns are appended at the tail.
 // The oldest non-summary turns sit right after the summary region.
@@ -136,6 +149,7 @@ With:
 Refactor `maybeCompact` so that both the summary self-purge and the slice-and-summarize paths loop until usage is below the soft threshold or no more progress can be made.
 
 Pseudocode for the new flow:
+
 ```
 while usage > softThreshold:
   if summaryPercent > summaryBudget:
@@ -156,6 +170,7 @@ while usage > softThreshold:
 ```
 
 Key implementation details:
+
 - Recalculate `turns` and `metrics` at the top of each loop iteration (the session state changed).
 - The `compactionInFlight` guard is already set by the caller and cleared after `maybeCompact` returns — the loop is internal, so this is fine.
 - Each LLM call for summarization is awaited; this means the loop may take multiple round-trips but guarantees convergence.
@@ -166,6 +181,7 @@ Key implementation details:
 **File:** `drone-agent/src/plugins/compaction/index.ts`
 
 Replace:
+
 ```ts
 const dropped = sessionManager.dropTurnsByIds(slice.map(t => t.id));
 if (dropped.length !== slice.length) {
@@ -174,6 +190,7 @@ if (dropped.length !== slice.length) {
 ```
 
 With:
+
 ```ts
 const dropped = sessionManager.dropTurnsByIds(slice.map(t => t.id));
 if (dropped.length !== slice.length) {
@@ -228,3 +245,45 @@ Run the full validation pipeline:
 - [ ] `dropTurnsByIds` length mismatch logs a warning, not a throw
 - [ ] The misleading comment about "end of the array" is corrected
 - [ ] New tests cover: convergence loop, death spiral fix, max iteration cap
+
+## Implementation summary (completed 2026-08-17)
+
+All five bugs were fixed in `drone-agent/src/plugins/compaction/index.ts` and the
+test suite was updated in `drone-agent/test/compaction.test.ts`.
+
+### Changes made
+
+1. **Bug #1 (sliceSize vs non-summary count):** `sliceSize` is now computed
+   against `nonSummaryCount` (turns filtered to `kind !== 'summary'`) instead of
+   `turns.length`. Added an explicit guard that bails out when
+   `nonSummaryCount < config.minTurnsToCompact`.
+2. **Bug #2 (misleading comment):** Replaced the "end of the array" comment with
+   an accurate one describing that the oldest non-summary turns sit right after
+   the summary region.
+3. **Bug #3 (startIndex in formatTurnsForSummary):** Removed the `startIndex`
+   parameter entirely; slice turns are now numbered Turn 1, Turn 2, ... The call
+   site passes only the slice.
+4. **Bug #4 (single-shot compaction):** `maybeCompact` now wraps both the
+   self-purge and slice-and-summarize paths in a convergence loop
+   (`MAX_COMPACTION_ITERATIONS = 5`). Each iteration recalculates metrics from
+   the current session state. The loop breaks when usage is below the soft
+   threshold, no progress is possible, or the iteration cap is hit.
+5. **Bug #5 (race-prone assertion):** `dropTurnsByIds` length mismatch now logs
+   a `logger.warn` and continues with the partial drop instead of throwing.
+
+### Test updates
+
+- Updated existing tests to reflect the convergence-loop behavior (multiple
+  chat calls per `maybeCompact` invocation, summaries dropped until under
+  budget, etc.).
+- Added three new tests:
+  - `converges to below the soft threshold in a single maybeCompact call`
+  - `computes sliceSize against the non-summary turn count (death spiral fix)`
+  - `caps the convergence loop at a bounded number of iterations`
+
+### Validation
+
+- LSP diagnostics: zero errors in changed files.
+- `pnpm -r run build`: passes.
+- `pnpm lint` (eslint + prettier): passes.
+- `pnpm test`: 1917 passed, 9 skipped, 0 failures.

@@ -339,11 +339,11 @@ describe('createCompactionPlugin', () => {
     await runBeforePrompt(capture);
 
     const summaries = sessionManager.getSummaryTurns();
-    // `getSummaryTurns()` is newest-first because `prependSystemTurn` puts
-    // each new summary at the head. The self-purge should drop the *oldest*
-    // summary, which is at the end of the array — S1 in this case.
-    expect(summaries).toHaveLength(1);
-    expect(summaries[0].messages[0].content).toBe('S2 '.repeat(200));
+    // With the convergence loop, the self-purge keeps dropping summaries until
+    // the summary region is under budget. Both S1 and S2 are over budget, so
+    // both are dropped. The remaining 2 short user turns are below the soft
+    // threshold, so the loop stops without calling the LLM.
+    expect(summaries).toHaveLength(0);
     expect(
       sessionManager.getMessages().filter(m => m.role === 'user')
     ).toHaveLength(2);
@@ -368,7 +368,11 @@ describe('createCompactionPlugin', () => {
 
     const provider = makeProvider({
       contextWindow: 200,
-      chatResponses: [{ message: 'A concise summary.' }],
+      chatResponses: [
+        { message: 'A concise summary.' },
+        { message: 'A second summary.' },
+        { message: 'A third summary.' },
+      ],
     });
     const plugin = createCompactionPlugin({
       sessionManager,
@@ -379,7 +383,10 @@ describe('createCompactionPlugin', () => {
     const capture = await captureRegistration(plugin, config);
     await runBeforePrompt(capture);
 
-    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    // The convergence loop keeps compacting until usage is below the soft
+    // threshold. With 6 turns and sliceSize 2, it compacts 2 turns per round
+    // until no non-summary turns remain (3 rounds).
+    expect(provider.__chatMock).toHaveBeenCalledTimes(3);
     const requestMessages = provider.__chatMock.mock.calls[0][0]
       .messages as DroneChatMessage[];
     expect(requestMessages[0].role).toBe('system');
@@ -387,11 +394,159 @@ describe('createCompactionPlugin', () => {
     expect(requestMessages[1].content).toMatch(/conversation turn/i);
 
     const summaries = sessionManager.getSummaryTurns();
-    expect(summaries).toHaveLength(1);
-    expect(summaries[0].messages[0].content).toContain('A concise summary.');
-    expect(summaries[0].messages[0].content).toMatch(/^Conversation summary/);
-    // Some turns were dropped to make room.
-    expect(sessionManager.getTurns().length).toBeLessThan(12);
+    expect(summaries).toHaveLength(3);
+    // getSummaryTurns() is newest-first; the oldest summary is at the tail.
+    expect(summaries.at(-1)!.messages[0].content).toContain(
+      'A concise summary.'
+    );
+    expect(summaries.at(-1)!.messages[0].content).toMatch(
+      /^Conversation summary/
+    );
+    // All non-summary turns were compacted away.
+    expect(
+      sessionManager.getTurns().filter(t => t.kind !== 'summary')
+    ).toHaveLength(0);
+  });
+
+  it('converges to below the soft threshold in a single maybeCompact call', async () => {
+    // Regression test for Bug #4: maybeCompact was single-shot, so if usage
+    // stayed above the threshold after one round, nothing happened until the
+    // next hook fire. The convergence loop must keep compacting within a
+    // single call until usage is below the soft threshold.
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 12; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 100,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [
+        { message: 'S1.' },
+        { message: 'S2.' },
+        { message: 'S3.' },
+        { message: 'S4.' },
+        { message: 'S5.' },
+      ],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    await runBeforePrompt(capture);
+
+    // 12 turns, slicePercent 25. sliceSize is 3, then 2, 2, 2, 2 across 5
+    // rounds in a single call, leaving 1 non-summary turn (below
+    // minTurnsToCompact).
+    expect(provider.__chatMock).toHaveBeenCalledTimes(5);
+    expect(
+      sessionManager.getTurns().filter(t => t.kind !== 'summary')
+    ).toHaveLength(1);
+  });
+
+  it('computes sliceSize against the non-summary turn count (death spiral fix)', async () => {
+    // Regression test for Bug #1: sliceSize was computed against turns.length
+    // (which includes summaries), so compaction progressively weakened as
+    // summaries accumulated. With 2 summaries + 8 normal turns and
+    // slicePercent=50, sliceSize must be 4 (50% of 8), not 5 (50% of 10).
+    const sessionManager = createSessionManager();
+    sessionManager.prependSystemTurn('S1 '.repeat(200), { kind: 'summary' });
+    sessionManager.prependSystemTurn('S2 '.repeat(200), { kind: 'summary' });
+    for (let i = 0; i < 8; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 50,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'S3.' }, { message: 'S4.' }],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    await runBeforePrompt(capture);
+
+    // The first transcript must contain exactly 4 turns (50% of 8 non-summary
+    // turns), not 5.
+    const firstRequest = provider.__chatMock.mock.calls[0][0]
+      .messages as DroneChatMessage[];
+    const turnCount = (firstRequest[1].content.match(/--- Turn \d+ ---/g) ?? [])
+      .length;
+    expect(turnCount).toBe(4);
+  });
+
+  it('caps the convergence loop at a bounded number of iterations', async () => {
+    // Regression test for the max-iteration cap: if each round only removes a
+    // tiny fraction, the loop must terminate after a bounded number of
+    // iterations rather than running forever.
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 20; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 1,
+      slicePercent: 10,
+      minTurnsToCompact: 1,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [
+        { message: 'S1.' },
+        { message: 'S2.' },
+        { message: 'S3.' },
+        { message: 'S4.' },
+        { message: 'S5.' },
+        { message: 'S6.' },
+        { message: 'S7.' },
+        { message: 'S8.' },
+        { message: 'S9.' },
+        { message: 'S10.' },
+      ],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    await runBeforePrompt(capture);
+
+    // The loop must stop after at most 5 iterations (the hard cap), even
+    // though usage is still above the threshold.
+    expect(provider.__chatMock.mock.calls.length).toBeLessThanOrEqual(5);
+    // Some non-summary turns should remain (the loop did not compact them all).
+    expect(
+      sessionManager.getTurns().filter(t => t.kind !== 'summary').length
+    ).toBeGreaterThan(0);
   });
 
   it('leaves the session untouched when summarization fails', async () => {
@@ -501,7 +656,10 @@ describe('createCompactionPlugin', () => {
 
     const provider = makeProvider({
       contextWindow: 200,
-      chatResponses: [{ message: 'forced summary' }],
+      chatResponses: [
+        { message: 'forced summary' },
+        { message: 'forced summary 2' },
+      ],
     });
     const plugin = createCompactionPlugin({
       sessionManager,
@@ -517,8 +675,10 @@ describe('createCompactionPlugin', () => {
 
     await capability.forceEvaluate();
 
-    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
-    expect(sessionManager.getSummaryTurns()).toHaveLength(1);
+    // Convergence loop compacts 2 turns per round until usage is below the
+    // soft threshold. With 5 turns, that's 2 rounds.
+    expect(provider.__chatMock).toHaveBeenCalledTimes(2);
+    expect(sessionManager.getSummaryTurns()).toHaveLength(2);
   });
 
   it('compacts the oldest normal turns after a summary already exists', async () => {
@@ -543,7 +703,12 @@ describe('createCompactionPlugin', () => {
 
     const provider = makeProvider({
       contextWindow: 200,
-      chatResponses: [{ message: 'New summary chunk.' }],
+      chatResponses: [
+        { message: 'New summary chunk.' },
+        { message: 'New summary chunk 2.' },
+        { message: 'New summary chunk 3.' },
+        { message: 'New summary chunk 4.' },
+      ],
     });
     const plugin = createCompactionPlugin({
       sessionManager,
@@ -556,7 +721,9 @@ describe('createCompactionPlugin', () => {
 
     // The plugin should have compacted the oldest non-summary turns (from the
     // tail), not re-summarized the existing summary at the head.
-    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    // The convergence loop compacts 2 turns per round; with 8 turns that's 4
+    // rounds until all non-summary turns are gone.
+    expect(provider.__chatMock).toHaveBeenCalledTimes(4);
     const requestMessages = provider.__chatMock.mock.calls[0][0]
       .messages as DroneChatMessage[];
     const summaryPrompt = requestMessages[1].content;
@@ -564,14 +731,14 @@ describe('createCompactionPlugin', () => {
     expect(summaryPrompt).toMatch(/--- Turn \d+ ---/);
 
     const summaries = sessionManager.getSummaryTurns();
-    expect(summaries).toHaveLength(2);
+    expect(summaries).toHaveLength(5);
     expect(summaries[0].messages[0].content).toContain('New summary chunk');
 
-    // Some normal turns should have been dropped.
+    // All normal turns should have been compacted away.
     const nonSummaryTurns = sessionManager
       .getTurns()
       .filter(t => t.kind !== 'summary');
-    expect(nonSummaryTurns.length).toBeLessThan(8);
+    expect(nonSummaryTurns.length).toBe(0);
   });
 
   it('pins BOTH ends: summarizes the oldest non-summary turns, never the newest', async () => {
@@ -602,7 +769,11 @@ describe('createCompactionPlugin', () => {
 
     const provider = makeProvider({
       contextWindow: 200,
-      chatResponses: [{ message: 'Pinned summary.' }],
+      chatResponses: [
+        { message: 'Pinned summary.' },
+        { message: 'Pinned summary 2.' },
+        { message: 'Pinned summary 3.' },
+      ],
     });
     const plugin = createCompactionPlugin({
       sessionManager,
@@ -613,7 +784,8 @@ describe('createCompactionPlugin', () => {
     const capture = await captureRegistration(plugin, config);
     await runBeforePrompt(capture);
 
-    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    // Convergence loop compacts 2 turns per round; with 6 turns that's 3 rounds.
+    expect(provider.__chatMock).toHaveBeenCalledTimes(3);
     const requestMessages = provider.__chatMock.mock.calls[0][0]
       .messages as DroneChatMessage[];
     const summaryPrompt = requestMessages[1].content;
@@ -625,13 +797,10 @@ describe('createCompactionPlugin', () => {
     expect(summaryPrompt).not.toContain('oldest-u5');
     expect(summaryPrompt).not.toContain('oldest-u4');
 
-    // The surviving non-summary turns must be the NEWEST ones.
-    const surviving = sessionManager
-      .getTurns()
-      .filter(t => t.kind !== 'summary')
-      .map(t => t.messages[0].content);
-    expect(surviving.some(c => c.includes('oldest-u5'))).toBe(true);
-    expect(surviving.some(c => c.includes('oldest-u0'))).toBe(false);
+    // With convergence, all non-summary turns are eventually compacted.
+    expect(
+      sessionManager.getTurns().filter(t => t.kind !== 'summary')
+    ).toHaveLength(0);
   });
 
   it('continues to reduce context usage across multiple compaction rounds', async () => {
@@ -649,6 +818,10 @@ describe('createCompactionPlugin', () => {
       chatResponses: [
         { message: 'First summary.' },
         { message: 'Second summary.' },
+        { message: 'Third summary.' },
+        { message: 'Fourth summary.' },
+        { message: 'Fifth summary.' },
+        { message: 'Sixth summary.' },
       ],
     });
     const plugin = createCompactionPlugin({
@@ -665,9 +838,10 @@ describe('createCompactionPlugin', () => {
       sessionManager.appendAssistantMessage(`round1-a${i} `.repeat(300));
     }
     await runBeforePrompt(capture);
-    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
-    const firstSummaryCount = sessionManager.getSummaryTurns().length;
-    expect(firstSummaryCount).toBe(1);
+    // Round 1: 8 turns, slicePercent 50. Convergence compacts 4, then 2, then
+    // 2 turns until all are gone: 3 rounds.
+    expect(provider.__chatMock).toHaveBeenCalledTimes(3);
+    expect(sessionManager.getSummaryTurns().length).toBe(3);
 
     // Round 2: add more long turns. The plugin should compact the oldest
     // remaining normal turns, not re-summarize the existing summary.
@@ -676,15 +850,17 @@ describe('createCompactionPlugin', () => {
       sessionManager.appendAssistantMessage(`round2-a${i} `.repeat(300));
     }
     await runBeforePrompt(capture);
-    expect(provider.__chatMock).toHaveBeenCalledTimes(2);
-    const secondRequest = provider.__chatMock.mock.calls[1][0]
+    expect(provider.__chatMock).toHaveBeenCalledTimes(6);
+    const secondRequest = provider.__chatMock.mock.calls[3][0]
       .messages as DroneChatMessage[];
     expect(secondRequest[1].content).not.toContain('First summary');
 
-    // After two rounds, there should be more than one summary and fewer total
-    // turns than if no compaction had occurred.
-    expect(sessionManager.getSummaryTurns().length).toBeGreaterThanOrEqual(1);
-    expect(sessionManager.getTurns().length).toBeLessThan(16);
+    // After two rounds, all non-summary turns are compacted away. The summary
+    // budget self-purge drops one summary during round 2, leaving 5.
+    expect(sessionManager.getSummaryTurns().length).toBe(5);
+    expect(
+      sessionManager.getTurns().filter(t => t.kind !== 'summary')
+    ).toHaveLength(0);
   });
 
   it('evicts the oldest summary first when summary budget is exceeded', async () => {
@@ -715,9 +891,13 @@ describe('createCompactionPlugin', () => {
     await runBeforePrompt(capture);
 
     const summaries = sessionManager.getSummaryTurns();
-    expect(summaries).toHaveLength(1);
-    expect(summaries[0].id).toBe(newer.id);
+    // With the convergence loop, the self-purge keeps dropping summaries until
+    // the summary region is under budget. Both OLDEST and NEWER are over
+    // budget, so both are dropped. Only 1 non-summary turn remains, which is
+    // below minTurnsToCompact, so the loop stops without calling the LLM.
+    expect(summaries).toHaveLength(0);
     expect(sessionManager.getTurns().some(t => t.id === oldest.id)).toBe(false);
+    expect(sessionManager.getTurns().some(t => t.id === newer.id)).toBe(false);
     expect(provider.__chatMock).not.toHaveBeenCalled();
   });
 
@@ -867,7 +1047,10 @@ describe('createCompactionPlugin', () => {
     // A single provider with a small context window and a summary response.
     const provider = makeProvider({
       contextWindow: 200,
-      chatResponses: [{ message: 'Summary after adding turns.' }],
+      chatResponses: [
+        { message: 'Summary after adding turns.' },
+        { message: 'Summary after adding turns 2.' },
+      ],
     });
     const plugin = createCompactionPlugin({
       sessionManager,
@@ -889,8 +1072,10 @@ describe('createCompactionPlugin', () => {
     }
 
     await runBeforePrompt(capture);
-    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
-    expect(sessionManager.getSummaryTurns()).toHaveLength(1);
+    // Convergence loop compacts 3 turns per round (50% of 6); with 6 turns
+    // that's 2 rounds.
+    expect(provider.__chatMock).toHaveBeenCalledTimes(2);
+    expect(sessionManager.getSummaryTurns()).toHaveLength(2);
   });
 
   it('releases the latch after the empty-turns early return in the real runtime sequence', async () => {
@@ -911,7 +1096,10 @@ describe('createCompactionPlugin', () => {
 
     const provider = makeProvider({
       contextWindow: 200,
-      chatResponses: [{ message: 'Summary after tool results.' }],
+      chatResponses: [
+        { message: 'Summary after tool results.' },
+        { message: 'Summary after tool results 2.' },
+      ],
     });
     const plugin = createCompactionPlugin({
       sessionManager,
@@ -942,8 +1130,10 @@ describe('createCompactionPlugin', () => {
     // onAfterToolCall should now fire compaction because the latch was
     // released and usage is above the threshold.
     await runAfterToolCall(capture);
-    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
-    expect(sessionManager.getSummaryTurns()).toHaveLength(1);
+    // Convergence loop compacts 3 turns per round (50% of 6); with 6 turns
+    // that's 2 rounds.
+    expect(provider.__chatMock).toHaveBeenCalledTimes(2);
+    expect(sessionManager.getSummaryTurns()).toHaveLength(2);
   });
 });
 
@@ -964,7 +1154,11 @@ it('emits compaction events when emitEvent is provided', async () => {
 
   const provider = makeProvider({
     contextWindow: 200,
-    chatResponses: [{ message: 'A concise summary.' }],
+    chatResponses: [
+      { message: 'A concise summary.' },
+      { message: 'A second summary.' },
+      { message: 'A third summary.' },
+    ],
   });
   const emitEvent = vi.fn();
   const plugin = createCompactionPlugin({
@@ -977,13 +1171,35 @@ it('emits compaction events when emitEvent is provided', async () => {
   const capture = await captureRegistration(plugin, config);
   await runBeforePrompt(capture);
 
-  expect(emitEvent).toHaveBeenCalledTimes(2);
+  // Convergence loop compacts 2 turns per round; with 6 turns that's 3 rounds,
+  // each emitting a started + completed event.
+  expect(emitEvent).toHaveBeenCalledTimes(6);
   expect(emitEvent).toHaveBeenNthCalledWith(1, {
     kind: 'compaction',
     message: expect.stringMatching(/Compacting/),
     status: 'started',
   });
   expect(emitEvent).toHaveBeenNthCalledWith(2, {
+    kind: 'compaction',
+    message: expect.stringMatching(/Compacted/),
+    status: 'completed',
+  });
+  expect(emitEvent).toHaveBeenNthCalledWith(3, {
+    kind: 'compaction',
+    message: expect.stringMatching(/Compacting/),
+    status: 'started',
+  });
+  expect(emitEvent).toHaveBeenNthCalledWith(4, {
+    kind: 'compaction',
+    message: expect.stringMatching(/Compacted/),
+    status: 'completed',
+  });
+  expect(emitEvent).toHaveBeenNthCalledWith(5, {
+    kind: 'compaction',
+    message: expect.stringMatching(/Compacting/),
+    status: 'started',
+  });
+  expect(emitEvent).toHaveBeenNthCalledWith(6, {
     kind: 'compaction',
     message: expect.stringMatching(/Compacted/),
     status: 'completed',

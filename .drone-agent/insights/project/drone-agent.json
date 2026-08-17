@@ -182,5 +182,13 @@
   {
     "timestamp": "2026-08-17T00:08:28.077Z",
     "insight": "drone-coordinator/test/routes/messages.test.ts \"POST /messages/broadcast with mixed fetch results\" is flaky: it failed once in a full `pnpm test` run (deliveredCount expected 1, got 0) but passed in isolation and on a second full-suite run. Unrelated to compaction work. Worth investigating as a timing/ordering flake in the broadcast route test."
+  },
+  {
+    "timestamp": "2026-08-17T02:08:37.100Z",
+    "insight": "When adding a convergence loop to a compaction/summarization routine, existing tests that assert exact LLM chat-call counts will break because the loop makes multiple calls per invocation. Update those tests to provide enough chat responses for the loop to converge (or to fail deterministically), and assert the convergence outcome (e.g. all non-summary turns compacted) rather than a single-shot call count. Also beware the summary-budget self-purge interacting with the loop: it can drop summaries mid-loop, changing the final summary count — set summaryBudgetPercent high (e.g. 100) in tests that only care about slice-and-summarize convergence to keep them deterministic."
+  },
+  {
+    "timestamp": "2026-08-17T02:08:43.727Z",
+    "insight": "The compaction plugin's `maybeCompact` convergence loop recomputes `sessionManager.getTurns()` at the top of each iteration because compaction mutates the session (drops turns, prepends summaries). When refactoring a single-shot routine into a loop, always re-read the shared state inside the loop rather than hoisting it — otherwise the loop operates on stale snapshots and can't converge. Also keep the empty-turns early return BEFORE the context-window probe (resolveContextWindow) so a no-op session doesn't trigger an LLM provider call."
   }
 ]

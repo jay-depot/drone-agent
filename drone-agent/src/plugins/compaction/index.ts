@@ -38,10 +38,7 @@ function resolveContextWindow(
     .catch(() => fallback);
 }
 
-function formatTurnsForSummary(
-  turns: DroneSessionTurn[],
-  startIndex = 0
-): string {
+function formatTurnsForSummary(turns: DroneSessionTurn[]): string {
   return turns
     .map((turn, index) => {
       const parts = turn.messages.map(message => {
@@ -60,7 +57,7 @@ function formatTurnsForSummary(
         }
         return `${header} ${body}`;
       });
-      return `--- Turn ${startIndex + index + 1} ---\n${parts.join('\n')}`;
+      return `--- Turn ${index + 1} ---\n${parts.join('\n')}`;
     })
     .join('\n');
 }
@@ -122,9 +119,7 @@ async function maybeCompact(input: {
     return;
   }
 
-  const turns = sessionManager.getTurns();
-
-  if (turns.length === 0) {
+  if (sessionManager.getTurns().length === 0) {
     return;
   }
 
@@ -155,82 +150,99 @@ async function maybeCompact(input: {
     fallbackContextWindow
   );
 
-  const metrics = summarizeTokenCounts({
-    turns,
-    baseSystemMessages: input.baseSystemMessages,
-    fragmentMessages: input.fragmentMessages,
-    contextWindowTokens,
-  });
-
   const softThreshold = config.softThresholdPercent / 100;
   const summaryBudget = config.summaryBudgetPercent / 100;
 
-  // Self-purge: drop oldest summary until summary region is under budget.
-  if (metrics.summaryPercent > summaryBudget) {
-    const summaryTurns = sessionManager.getSummaryTurns();
-    if (summaryTurns.length > 0) {
+  const summarySystemPrompt =
+    'You are a conversation summarizer. Produce a concise summary of the ' +
+    'transcript below. Aim for a brief bullet list. Do not include greetings or ' +
+    'pleasantries. Stay under the requested token budget. Prioritize ' +
+    'including information in the summary according to the following ' +
+    'order from most to least important:\n' +
+    '1. User input, instruction, questions, and decisions. Preserve these ' +
+    'verbatim.\n' +
+    "2. Any context needed to understand the user's input, instructions, " +
+    'questions, and decisions. For instance, if the user says "Yes, like that," ' +
+    'whatever "that" refers to needs to be included in the summary, if ' +
+    'it is available.\n' +
+    '3. Architectural or design information.\n' +
+    '4. Any other relevant information.\n\n' +
+    'Detailed tool calls and results should be discarded. Provide a summary ' +
+    'of what was done if it is relevant and only if space allows.\n\n' +
+    `If any information is missing or ambiguous, note that in the summary. ` +
+    `Do not make anything up. If information is not in the transcript, ` +
+    `skip it. If you can't just skip it, note it.`;
+
+  // Convergence loop: keep compacting until usage is below the soft threshold
+  // or no more progress can be made. Each iteration recalculates metrics from
+  // the current session state, since compaction mutates the session.
+  const MAX_COMPACTION_ITERATIONS = 5;
+  for (let iteration = 0; iteration < MAX_COMPACTION_ITERATIONS; iteration++) {
+    const turns = sessionManager.getTurns();
+    if (turns.length === 0) {
+      break;
+    }
+
+    const metrics = summarizeTokenCounts({
+      turns,
+      baseSystemMessages: input.baseSystemMessages,
+      fragmentMessages: input.fragmentMessages,
+      contextWindowTokens,
+    });
+
+    if (metrics.usagePercent <= softThreshold) {
+      break;
+    }
+
+    // Self-purge: drop oldest summary until summary region is under budget.
+    if (metrics.summaryPercent > summaryBudget) {
+      const summaryTurns = sessionManager.getSummaryTurns();
+      if (summaryTurns.length === 0) {
+        break; // no progress possible
+      }
       const dropped = sessionManager.dropSummaryTurnById(
         summaryTurns.at(-1)!.id
       );
-      if (dropped) {
-        logger.warn(
-          `compaction: dropped oldest summary turn to keep summary region within ${(summaryBudget * 100).toFixed(0)}% of context window (was ${(metrics.summaryPercent * 100).toFixed(1)}%).`
-        );
-        emitEvent?.({
-          kind: 'compaction',
-          message: 'Dropped oldest summary turn',
-          status: 'completed',
-        });
+      if (!dropped) {
+        break; // no progress possible
       }
+      logger.warn(
+        `compaction: dropped oldest summary turn to keep summary region within ${(summaryBudget * 100).toFixed(0)}% of context window (was ${(metrics.summaryPercent * 100).toFixed(1)}%).`
+      );
+      emitEvent?.({
+        kind: 'compaction',
+        message: 'Dropped oldest summary turn',
+        status: 'completed',
+      });
+      continue; // recalculate metrics and try again
     }
-    input.context.compactionInFlight.value = false;
-    return;
-  }
 
-  // Slice-and-summarize: usage above threshold and enough turns to compact.
-  if (
-    metrics.usagePercent > softThreshold &&
-    turns.length >= config.minTurnsToCompact
-  ) {
-    const desiredSlice = Math.floor((turns.length * config.slicePercent) / 100);
+    // Slice-and-summarize: usage above threshold and enough turns to compact.
+    const nonSummaryCount = turns.filter(
+      turn => turn.kind !== 'summary'
+    ).length;
+    if (nonSummaryCount < config.minTurnsToCompact) {
+      break; // not enough non-summary turns to compact
+    }
+
+    const desiredSlice = Math.floor(
+      (nonSummaryCount * config.slicePercent) / 100
+    );
     const sliceSize = Math.max(
       config.minTurnsToCompact,
-      Math.min(desiredSlice, turns.length - 1)
+      Math.min(desiredSlice, nonSummaryCount)
     );
 
     if (sliceSize <= 0) {
-      input.context.compactionInFlight.value = false;
-      return;
+      break;
     }
 
-    // Normal turns age toward the tail; summaries are prepended at the head.
-    // Compaction must target the oldest non-summary turns, which live at the
-    // end of the array, not the head (where the newest summary sits).
+    // Summaries are prepended at the head; normal turns are appended at the
+    // tail. The oldest non-summary turns sit right after the summary region.
+    // getOldestNonSummaryTurns iterates forward, skipping summaries, to
+    // collect exactly these turns.
     const slice = getOldestNonSummaryTurns(turns, sliceSize);
-    const transcript = formatTurnsForSummary(
-      slice,
-      turns.filter(turn => turn.kind !== 'summary').length - slice.length
-    );
-
-    const summarySystemPrompt =
-      'You are a conversation summarizer. Produce a concise summary of the ' +
-      'transcript below. Aim for a brief bullet list. Do not include greetings or ' +
-      'pleasantries. Stay under the requested token budget. Prioritize ' +
-      'including information in the summary according to the following ' +
-      'order from most to least important:\n' +
-      '1. User input, instruction, questions, and decisions. Preserve these ' +
-      'verbatim.\n' +
-      "2. Any context needed to understand the user's input, instructions, " +
-      'questions, and decisions. For instance, if the user says "Yes, like that," ' +
-      'whatever "that" refers to needs to be included in the summary, if ' +
-      'it is available.\n' +
-      '3. Architectural or design information.\n' +
-      '4. Any other relevant information.\n\n' +
-      'Detailed tool calls and results should be discarded. Provide a summary ' +
-      'of what was done if it is relevant and only if space allows.\n\n' +
-      `If any information is missing or ambiguous, note that in the summary. ` +
-      `Do not make anything up. If information is not in the transcript, ` +
-      `skip it. If you can't just skip it, note it.`;
+    const transcript = formatTurnsForSummary(slice);
 
     const summaryUserPrompt =
       `Summarize the following ${slice.length} conversation turn(s) in at most ` +
@@ -259,7 +271,9 @@ async function maybeCompact(input: {
 
       const dropped = sessionManager.dropTurnsByIds(slice.map(t => t.id));
       if (dropped.length !== slice.length) {
-        throw new Error('Failed to drop the intended turns for summarization.');
+        logger.warn(
+          `compaction: expected to drop ${slice.length} turns but dropped ${dropped.length}; proceeding with partial drop`
+        );
       }
       sessionManager.prependSystemTurn(SUMMARY_PREFIX + summaryText, {
         kind: 'summary',
@@ -285,6 +299,7 @@ async function maybeCompact(input: {
         message: `Compaction failed: ${message}${statusSuffix}`,
         status: 'failed',
       });
+      break; // a failed summary means no progress this round; stop
     }
   }
 
