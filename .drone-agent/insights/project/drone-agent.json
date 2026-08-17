@@ -22,5 +22,77 @@
   {
     "timestamp": "2026-08-10T23:32:29.257Z",
     "insight": "The project wiki (Obsidian vault at /home/unleet/Obsidian/drone-agent-project) is a separate git repo from the codebase. When ingesting work into the wiki: (1) diff from meta.json's last_commit to HEAD to find new commits; (2) bug fixes with a design choice go in decisions/ as ADRs (per meta/decision-bug-fixes-go-in-decisions.md), not concepts/; (3) update the affected concept/module pages, index.md, log.md, and advance meta.json; (4) commit the wiki repo separately. The .obsidian/workspace.json UI-state churn is tracked and committed alongside wiki content. Completed plans are deleted from project memory and that deletion is committed in the codebase repo."
+  },
+  {
+    "timestamp": "2026-08-11T05:15:12.493Z",
+    "insight": "When threading a new optional parameter through a shared execution interface (e.g. DroneToolDefinition.execute gaining a `context` param), the parameter must be propagated through EVERY layer: the core type, the engine interface, the engine implementation, the conversation service's executeToolSafely wrapper, AND the DroneSlashCommandContext type. Missing any one layer causes a typecheck/build failure that's only caught when running `pnpm run typecheck` (root) — the `pnpm -r run typecheck` per-package check alone won't catch test-file type errors. Always run the ROOT `pnpm run typecheck` (which includes tsconfig.test.json) in addition to the per-package recursive check."
+  },
+  {
+    "timestamp": "2026-08-11T05:15:15.638Z",
+    "insight": "The file__apply_diff tool matched the wrong `continue;` statement when applying a diff near the end of the conversation-service tool-call block. The hunk context `\\n          continue;\\n        }` was too generic and matched an earlier occurrence. The fix: include MORE distinctive surrounding context (like the `[Image from ${result.name} tool]` block) in the diff hunk, or use file__read + file__write for surgical edits near ambiguous control-flow keywords."
+  },
+  {
+    "timestamp": "2026-08-11T15:41:58.974Z",
+    "insight": "When an \"estimate\" function and an \"actual execution\" function must agree on the same semantics (e.g. evaluateSafetyTrim's drop-count estimate vs dropOldestNonSummaryTurns' actual drop), extract the shared logic into ONE pure helper used by both, rather than duplicating the rule in each. This is the review-state #8 fix: the estimate sliced turns from the front including summary turns while the actual drop stopped at the first summary turn, so the estimate overcounted droppable turns and the ensureSafeBudget while(true) loop could fail to converge and hard-fail with \"no turns could be dropped\". Extracting getDroppableTurnPrefix into turn-utils.ts and using it in both places guarantees they can never diverge again. General lesson: any time two code paths must stay in lockstep on a rule, a single shared pure function is the durable fix — not just patching one side to match the other."
+  },
+  {
+    "timestamp": "2026-08-11T17:52:51.207Z",
+    "insight": "When adding a trust gate to a shared client (e.g. gating coordinator-client sync methods behind a \"swarm ready\" flag), existing unit tests that exercise those methods will silently short-circuit and fail with \"spy not called\" unless the test setup establishes the trusted state. Sweep the test file's beforeEach and set up the gate state (e.g. confirm fingerprint + set beacon approved) so the gated methods actually run. This is the gap-1 TOFU fix: gating fetchPersonas/fetchSkills/pushEvents etc. broke 8 coordinator-client tests until the beforeEach was updated to mark the swarm ready."
+  },
+  {
+    "timestamp": "2026-08-11T17:52:54.614Z",
+    "insight": "When editing a single-line template literal that contains the CLI --help text (e.g. drone-coordinator/src/index.ts and drone-beacon/src/index.ts), inserting a new line via apply_diff can land the added text OUTSIDE the template literal (as a stray statement before console.log) rather than inside it. After any help-text edit, re-read the file to confirm the new line is actually inside the backtick string, and prefer replacing the whole template literal line in one hunk rather than inserting a separate line."
+  },
+  {
+    "timestamp": "2026-08-11T18:03:44.143Z",
+    "insight": "When extending a shared pure function's signature (e.g. generateVerificationCode from 2 to 3 inputs), the coordinator and beacon packages resolve drone-swarm-common from its built dist/ (package.json \"types\": \"./dist/index.d.ts\"), not from source. After editing drone-swarm-common/src, run `pnpm --filter drone-swarm-common run build` BEFORE running dependent-package tests (drone-coordinator, drone-beacon), or the tests will use the stale 2-arg dist and fail with type errors. This is the gap-2 bidirectional verification change."
+  },
+  {
+    "timestamp": "2026-08-11T21:05:47.296Z",
+    "insight": "A CI-only typecheck failure can be masked locally by stale dist/ artifacts. When a feature branch is based on an older commit, its drone-swarm-common/src/tls.ts may still be synchronous while main has since made loadOrCreateTlsIdentity async (openssl shell-injection fix #54). Locally, dependent packages (drone-coordinator, drone-beacon) resolve drone-swarm-common from its built dist/ (package.json \"types\": \"./dist/tls.d.ts\"), so a stale dist hides the mismatch and `pnpm typecheck` passes. CI does a fresh build and fails with \"Property 'fingerprint' does not exist on type 'Promise<TlsIdentity>'\". To reproduce locally, build drone-swarm-common from main's tls.ts (git show origin/main:... > src/tls.ts, rebuild, typecheck dependents), then restore. Lesson: when a branch predates a change to a shared dependency's signature, verify against the dependency's CURRENT (main) signature, not just the local dist."
+  },
+  {
+    "timestamp": "2026-08-12T19:16:12.397Z",
+    "insight": "Adding @types/ws as a direct dependency to drone-beacon surfaced a latent type bug in ws-server.ts: `conn.socket.readyState === 'OPEN'` was comparing a number (readyState) to a string. The @fastify/websocket types apparently didn't catch this, but @types/ws does. The fix is `readyState === 1 /* OPEN */`. When adding new type packages, sweep for comparison bugs in existing WebSocket code."
+  },
+  {
+    "timestamp": "2026-08-14T03:39:26.096Z",
+    "insight": "Compaction regression (c29bd93a) slices the *tail* of the non-summary turn array, but the session array is `[S_newest…S_oldest, normal_oldest…normal_newest]` because appendUserMessage pushes (newest last) while prependSystemTurn unshifts summaries (newest summary first). So `slice(-n)` grabs the newest normal turns — the inverse of intent. The existing compaction tests only assert that *some* summary is created and *some* turns dropped, so they cannot distinguish head-slicing from tail-slicing; a correct regression test must pin BOTH ends (transcript contains oldest & excludes newest; survivors are newest). Also: the safety-trim helper getDroppableTurnPrefix and compaction's slice had divergent \"oldest non-summary\" semantics (stop-at-summary vs skip-summaries); they should share ONE pure helper that skips summaries, and dropping must be done by id (not shift/slice) since summaries live at the head."
+  },
+  {
+    "timestamp": "2026-08-14T14:53:33.881Z",
+    "insight": "When a new required config section (e.g. `search`) is added to `DroneAgentConfig` in drone-core, every test mock that constructs a full `DroneAgentConfig` (via `getConfig: () => ({...})`) must be updated or typecheck fails and blocks the whole CI unit-tests job. The `prompt-file.test.ts` mock was missing `search`, which broke `pnpm typecheck` and prevented `pnpm test` from running on CI. Sweep all test mocks that build full config objects (grep for `tui:` or `getConfig: () => ({`) when adding a config section."
+  },
+  {
+    "timestamp": "2026-08-14T14:53:37.930Z",
+    "insight": "In `--output-json` subagent mode, the console logger wrote `[scope]` lines to stdout via `console.log`, polluting the NDJSON protocol stream and breaking the `dispatch-output-json` integration test (and any real subagent consumer). Fix: add a `toStderr` option to `createConsoleLogger` and thread a `logToStderr` flag through the plugin engine, set when `--output-json` is active. This keeps stdout pure NDJSON while logs go to stderr. When a process emits a structured protocol on stdout, all diagnostics/logging must be routed to stderr."
+  },
+  {
+    "timestamp": "2026-08-14T14:53:44.956Z",
+    "insight": "The subagent dispatch integration test fixture had two deterministic bugs: (1) on spawn failure (e.g. missing executable) it `reject`ed the promise instead of resolving with a `SubagentResult`, so tests asserting `result.error` got an unhandled rejection; (2) the timeout error string `'Subagent timed out'` does not contain the substring `'timeout'` (there's a space), so `toContain('timeout')` assertions always failed. Fix the fixture to resolve with an error result on spawn error, and assert on `'timed out'` instead. When writing test fixtures that wrap child processes, resolve with a result object (never reject) so callers can assert on error fields."
+  },
+  {
+    "timestamp": "2026-08-14T15:39:38.979Z",
+    "insight": "CodeQL flags polynomial regexes (ReDoS) on config-sourced strings as \"uncontrolled data\" even when the value comes from a trusted config file. The minimal, behavior-preserving mitigation is a length cap on the input before the regex runs (e.g. reject hosts > 2048 chars before `replace(/\\/+$/, '')`), rather than rewriting the regex or adding a suppression comment. This bounds the polynomial match to a fixed-size input. Add a unit test for the guard."
+  },
+  {
+    "timestamp": "2026-08-14T15:59:42.289Z",
+    "insight": "sqlite-vec's ESM entry (index.mjs) resolves its platform extension via `import.meta.resolve`, which under pnpm's store layout can double the `.so` suffix (vec0.so.so) and fail to load — this surfaced only in the Docker/CI beacon image, not locally. The CJS entry (index.cjs) uses `require.resolve` and resolves the correct path. Fix: load native-extension packages that ship both ESM+CJS entries via `createRequire(import.meta.url)` + `require(...)` in ESM code, rather than `import * as`. This is a general pattern for pnpm + native `.so`/`.dylib`/`.dll` packages."
+  },
+  {
+    "timestamp": "2026-08-14T18:22:49.442Z",
+    "insight": "Wiki lint (drone-swarm-common/src/wiki-storage.ts lintPages) has no \"warnings\" concept today — it returns only `{ issues }`. Future feature: add a warnings channel to wiki lint, including an \"excessively long page\" warning, which could optionally trigger an automatic page-splitting process. Deferred out of the CodeQL regex-length-guard branch deliberately."
+  },
+  {
+    "timestamp": "2026-08-14T18:57:16.308Z",
+    "insight": "CodeQL suppression: `// lgtm[rule-id]` comments do NOT suppress GitHub CodeQL/code-scanning alerts — `lgtm[...]` is LGTM.com-only syntax (LGTM.com shut down Dec 2022). The correct, currently-supported inline suppression is `// codeql[rule-id]`, placed on the sink line or the line immediately before it. The rule ID must match exactly including the `js/` prefix — TypeScript is analyzed by the JS query suite, so there is no `ts/` variant (e.g. `js/reflected-xss`, `js/disabling-certificate-verification`). Suppression targets the sink location, not the source/intermediate lines; a comment in a JSDoc block far from the sink is ineffective. One comment per alert location. `// nosemgrep` is Semgrep-only (irrelevant); `paths-ignore` config is too coarse (blinds whole files); UI/API dismissal is not durable/source-controlled."
+  },
+  {
+    "timestamp": "2026-08-17T00:40:40.413Z",
+    "insight": "GitHub CodeQL does not honor `// codeql[...]` suppression comments by default (github/codeql#11427). To make them work you must add the `advanced-security/dismiss-alerts` action to the CodeQL workflow, which runs the `AlertSuppression` query and dismisses matching alerts. Critical setup details that are easy to get wrong: (1) the AlertSuppression query pack is `codeql/javascript-queries:AlertSuppression.ql` passed via the `packs:` input on the `init` step — NOT as a `language`; (2) the `dismiss-alerts` step MUST run AFTER `github/codeql-action/analyze` and consume its SARIF output (`id: analyze` + `output: sarif-results`, then `sarif-id: ${{ steps.analyze.outputs.sarif-id }}` and `sarif-file: sarif-results/${{ matrix.language }}.sarif`); (3) the suppression comment must be on the sink line or the line immediately before it, with the rule ID matching exactly including the `js/` prefix (TypeScript is analyzed by the JS query suite — no `ts/` variant); (4) dismissal works on PRs too if you omit the `if: github.ref == 'refs/heads/main'` gate, but it will NOT work on PRs from forks (fork's GITHUB_TOKEN lacks permission to dismiss alerts on the base repo)."
+  },
+  {
+    "timestamp": "2026-08-17T00:44:35.894Z",
+    "insight": "In the drone-agent monorepo, `pnpm -r run test` fails on the drone-core package with \"No test files found\" even though drone-core/test/ has test files. Root cause: drone-core has no local vitest config, so running `vitest run` from within its directory resolves the root config's include patterns incorrectly. This is a pre-existing quirk, NOT a regression. The canonical command per AGENTS.md is `pnpm test` from the repo root (which uses the root vitest.config.ts and passes — 1935 tests). When validating, use `pnpm test` from root, not `pnpm -r run test`. Similarly, `pnpm -r run lint` fails with \"None of the selected packages has a lint script\" — the lint script is root-only; use `pnpm lint` from root."
   }
 ]
