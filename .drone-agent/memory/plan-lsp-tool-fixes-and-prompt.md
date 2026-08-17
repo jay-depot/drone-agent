@@ -3,7 +3,7 @@ key: plan-lsp-tool-fixes-and-prompt
 tags:
   []
 created: 2026-08-17T22:40:03.284Z
-updated: 2026-08-17T22:40:03.284Z
+updated: 2026-08-17T22:47:35.286Z
 ---
 
 # Plan: LSP tool reliability fixes + usage prompt fragment
@@ -67,3 +67,28 @@ Register a separate header-phase fragment (key `lsp-usage`) alongside `lsp-statu
 - New behavior verified: call_hierarchy returns `warning`+`references` on empty-but-referenced results; symbols returns exact-first, deduped results.
 - No dead code, no unused vars, no fluff comments. Comments only for complex logic or TODO/FIXME.
 - Files stay under 750 lines (hierarchy.ts ~117 → fine; symbols.ts ~156 → fine; server.ts is 1665 but not being split in this plan).
+
+---
+
+## EXECUTION SUMMARY (2026-08-17)
+
+All steps completed and committed (commit `0fc6d5c`).
+
+### What was done
+- **Step 1 (call_hierarchy cross-check):** In `hierarchy.ts`, when the requested direction's result array is empty, issue `textDocument/references` with `includeDeclaration: false`, normalize via `normalizeLspLocation` + `server.locationToAgentShape`, dedup by `(filePath, line, column)` capped at 50 (`REFERENCES_CAP`). On found references, add `warning` (human-readable string) + `references` (agent-shaped locations). Both directions; happy path unchanged (no extra round-trip).
+- **Step 2 (description):** `call_hierarchy` description now mentions the cross-check and the `warning`/`references` fields.
+- **Step 3 (symbols exact-first + dedup):** Added shared `filterSymbolsByQuery(symbols, query)` helper in `normalize/symbols.ts` (exact `name === query` wins; prefix `startsWith` fallback only when zero exacts). Reused in both `tools/symbols.ts` `executeWorkspaceSymbols` and `server.ts` `resolveSymbolPosition` (both document-symbol and workspace-symbol paths). Added `dedupeSymbols` in `tools/symbols.ts` keyed on `(filePath, line, column)`.
+- **Step 4 (description):** `symbols` description now says exact-match-first + prefix fallback, deduped by location; `limit` clarified as workspace-only.
+- **Step 5 (prompt fragment):** Added `lsp-usage` header-phase fragment in `plugin.ts` with the text-vs-symbol guidance, call_hierarchy reliability caveat, and symbols noise warning.
+- **Step 6 (tests):** Added 5 tests in `lsp-ergonomics.test.ts`: call_hierarchy adds warning+references when empty-but-referenced; call_hierarchy does NOT cross-check on non-empty; symbols exact-first; symbols prefix fallback; symbols dedup.
+
+### Verification
+- LSP (typescript) clean — zero errors on all touched files and workspace-wide.
+- `pnpm -r run build` passes.
+- `pnpm lint` (eslint + prettier) passes.
+- `pnpm test` passes: 1954 passed, 9 skipped (integration-gated), including the 5 new tests (55 total in lsp-ergonomics.test.ts).
+
+### Notes / deviations
+- The plan's "optional wire-level test" (lsp-fake-server.ts) was NOT added — the mock-server tests in lsp-ergonomics.test.ts cover the behavior adequately and the plan marked it optional.
+- A stale/broken `filterSymbolsByQuery` import from `drone-core` was found in `server.ts` (pre-existing, surfaced as LSP errors) and removed; the correct import is from `./normalize/index.js`.
+- Prettier reformatted the plan memory markdown (cosmetic only).
