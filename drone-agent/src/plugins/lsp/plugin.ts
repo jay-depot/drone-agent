@@ -65,6 +65,29 @@ export const lspPlugin: DronePlugin = {
       },
     });
 
+    // Static usage guidance for the LSP tools
+    registration.registerPromptFragment({
+      key: 'lsp-usage',
+      phase: 'header',
+      render: async () => `# LSP Usage
+
+When resolving a symbol with the LSP tools, prefer the \`symbol\` parameter over
+\`text\`. \`text\` is a raw substring search and will match call sites, so it is
+ambiguous for any symbol used more than once; \`symbol\` resolves semantically via
+document/workspace symbols. If \`symbol\` is ambiguous, pass \`surroundingText\` (a
+few lines of surrounding context) to disambiguate.
+
+\`call_hierarchy\` can return empty \`from\`/\`to\` arrays even when callers/callees
+exist (a known LSP limitation for local functions). If a hierarchy result looks
+suspiciously empty, check the \`warning\`/\`references\` fields or verify with
+\`find_references\`.
+
+Prefer \`symbols\` with \`scope: "document"\` when the target file is known.
+Workspace-scope symbol search is exact-match-first (prefix matches only when no
+exact matches exist) and deduplicated by location — set \`limit\` and expect to
+filter.`,
+    });
+
     // Build all tool definitions and register them directly
     const toolFactories: Array<() => DroneToolDefinition> = [
       () => createGetDiagnosticsTool(server),

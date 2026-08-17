@@ -12,6 +12,11 @@ import type {
   DroneLspServerState,
   DroneLogger,
 } from 'drone-core';
+import {
+  AmbiguousPositionError,
+  buildAmbiguousMatches,
+  HARD_CONTEXT_LINES,
+} from 'drone-core';
 import { commandExistsOnPath } from 'drone-core';
 import {
   computeCacheKey,
@@ -40,7 +45,6 @@ import {
   type KnownServerSpec,
 } from './known-servers.js';
 import {
-  pathExists,
   workspaceHasMarkers,
   hasMatchingFiles,
   collectWorkspaceFiles,
@@ -51,6 +55,7 @@ import {
   type PublishDiagnosticsParams,
 } from './server/helpers.js';
 import {
+  filterSymbolsByQuery,
   flattenDocumentSymbols,
   normalizeWorkspaceSymbols,
   type LspDocumentSymbolResponse,
@@ -93,6 +98,37 @@ type ResolvedSpawn = {
   installStatus: DroneLspServerState['installStatus'];
 };
 
+/**
+ * Check whether a handed-back surroundingText block appears as a contiguous
+ * run of trimmed lines within a window around a 1-based line. The window is
+ * sized to the block's line count (capped at HARD_CONTEXT_LINES), so a
+ * suggested block is always found when passed back. Matching is exact,
+ * modulo leading/trailing whitespace (trim only).
+ */
+function matchesSurroundingBlock(
+  lines: string[],
+  line: number,
+  surroundingText: string
+): boolean {
+  const blockLines = surroundingText.split('\n').map(l => l.trim());
+  if (blockLines.length === 0) {
+    return false;
+  }
+  const window = Math.min(blockLines.length, HARD_CONTEXT_LINES);
+  const start = Math.max(0, line - 1 - window);
+  const end = Math.min(lines.length, line + window);
+  const windowLines = lines.slice(start, end).map(l => l.trim());
+  outer: for (let i = 0; i + blockLines.length <= windowLines.length; i++) {
+    for (let j = 0; j < blockLines.length; j++) {
+      if (windowLines[i + j] !== blockLines[j]) {
+        continue outer;
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -102,6 +138,23 @@ export type ResolvedPosition = {
   document: DocumentState;
   line: number;
   column: number;
+};
+
+export type ReferenceLocation = {
+  filePath: string;
+  line: number;
+  column: number;
+  range: {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+  };
+  /** Trimmed line text at `line` at store time, used for staleness checks. */
+  fingerprint: string;
+};
+
+export type ReferenceResolution = {
+  location: ReferenceLocation;
+  stale: boolean;
 };
 
 export type ServerManager = {
@@ -126,12 +179,27 @@ export type ServerManager = {
   resolveTargetFilePath: (inputPath: string) => string;
   parsePositionInput: (
     toolName: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    surroundingText?: string
   ) => Promise<{ filePath: string; line: number; column: number }>;
   resolveAtPosition: (
     toolName: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    surroundingText?: string
   ) => Promise<ResolvedPosition>;
+  readFileSnippet: (
+    filePath: string,
+    line: number,
+    contextLines?: number
+  ) => Promise<string>;
+  readLineFingerprint: (
+    filePath: string,
+    line: number
+  ) => Promise<string | undefined>;
+  storeReferences: (locations: ReferenceLocation[]) => Promise<string[]>;
+  resolveReference: (
+    referenceId: string
+  ) => Promise<ReferenceResolution | undefined>;
   locationToAgentShape: (
     locations: Array<{
       filePath: string;
@@ -866,16 +934,19 @@ export function createServerManager(
 
   /**
    * Search file content for a text snippet and return its 1-based position.
+   * Supports surroundingText for disambiguation when multiple matches exist.
    *
    * 1. Exact match (case-sensitive) first
    * 2. Fall back to case-insensitive if no exact match
-   * 3. If exactly one match, return `{ line, column }` (1-based)
-   * 4. If multiple matches, throw with each position + 2 lines of context
-   * 5. If no matches, throw
+   * 3. If surroundingText is provided, filter matches by context
+   * 4. If exactly one match (after filtering), return `{ line, column }` (1-based)
+   * 5. If multiple matches, throw with each position + 2 lines of context
+   * 6. If no matches, throw
    */
   async function resolveTextPosition(
     filePath: string,
-    text: string
+    text: string,
+    surroundingText?: string
   ): Promise<{ line: number; column: number }> {
     const absolutePath = path.resolve(filePath);
     const snapshot = await readDocumentSnapshot(absolutePath);
@@ -929,8 +1000,38 @@ export function createServerManager(
       throw new Error(`Text "${text}" not found in ${absolutePath}.`);
     }
 
+    // If surroundingText is provided, filter matches by exact block match
+    if (surroundingText && matches.length > 1) {
+      const filteredMatches = matches.filter(m =>
+        matchesSurroundingBlock(lines, m.line, surroundingText)
+      );
+      if (filteredMatches.length === 1) {
+        return {
+          line: filteredMatches[0].line,
+          column: filteredMatches[0].column,
+        };
+      }
+      // If filtering narrows but doesn't yield a unique match, use filtered set
+      if (filteredMatches.length > 1) {
+        matches.length = 0;
+        matches.push(...filteredMatches);
+      }
+      // If filtering yields zero matches, fall through to error with original matches
+    }
+
     if (matches.length > 1) {
-      const details = matches
+      const ambiguousMatches = await buildAmbiguousMatches(
+        matches.map(m => ({
+          filePath: absolutePath,
+          line: m.line,
+          column: m.column,
+        })),
+        async filePath => {
+          const snap = filePath === absolutePath ? snapshot : undefined;
+          return snap ? snap.text.split('\n') : undefined;
+        }
+      );
+      const details = ambiguousMatches
         .map(
           (m, idx) =>
             `  ${idx + 1}. Line ${m.line}, column ${m.column}:\n${m.context
@@ -939,7 +1040,9 @@ export function createServerManager(
               .join('\n')}`
         )
         .join('\n');
-      throw new Error(
+      throw new AmbiguousPositionError(
+        absolutePath,
+        ambiguousMatches,
         `Text "${text}" is ambiguous — found ${matches.length} matches in ${absolutePath}:\n${details}`
       );
     }
@@ -960,7 +1063,8 @@ export function createServerManager(
    */
   async function resolveSymbolPosition(
     filePath: string,
-    symbol: string
+    symbol: string,
+    surroundingText?: string
   ): Promise<{ line: number; column: number }> {
     const absolutePath = path.resolve(filePath);
     const runtime = findRuntimeForFile(absolutePath);
@@ -977,9 +1081,7 @@ export function createServerManager(
       LspDocumentSymbolResponse[]
     >('textDocument/documentSymbol', { textDocument: { uri: document.uri } });
     const flat = flattenDocumentSymbols(docSymbols);
-    const exact = flat.filter(s => s.name === symbol);
-    const candidates =
-      exact.length > 0 ? exact : flat.filter(s => s.name.startsWith(symbol));
+    const candidates = filterSymbolsByQuery(flat, symbol);
 
     // Filter out symbols without position info
     const withPosition = candidates.filter(
@@ -990,15 +1092,47 @@ export function createServerManager(
     if (withPosition.length === 1) {
       return { line: withPosition[0].line, column: withPosition[0].column };
     }
+    // Read the file once for context-based disambiguation and error reporting
+    const snapshot = await readDocumentSnapshot(absolutePath);
+
+    // If surroundingText provided and multiple document symbol matches, filter by exact block match
+    if (surroundingText && withPosition.length > 1) {
+      if (snapshot) {
+        const lines = snapshot.text.split('\n');
+        const filtered = withPosition.filter(s =>
+          matchesSurroundingBlock(lines, s.line, surroundingText)
+        );
+        if (filtered.length === 1) {
+          return { line: filtered[0].line, column: filtered[0].column };
+        }
+        if (filtered.length > 1) {
+          withPosition.length = 0;
+          withPosition.push(...filtered);
+        }
+      }
+    }
 
     if (withPosition.length > 1) {
-      const details = withPosition
-        .map(
-          (s, idx) =>
-            `  ${idx + 1}. Line ${s.line}, column ${s.column} — ${s.name}`
-        )
+      const ambiguousMatches = await buildAmbiguousMatches(
+        withPosition.map(s => ({
+          filePath: absolutePath,
+          line: s.line,
+          column: s.column,
+        })),
+        async filePath => {
+          if (filePath !== absolutePath) return undefined;
+          return snapshot ? snapshot.text.split('\n') : undefined;
+        }
+      );
+      const details = ambiguousMatches
+        .map((m, idx) => {
+          const orig = withPosition[idx];
+          return `  ${idx + 1}. Line ${m.line}, column ${m.column} — ${orig?.name ?? ''}`;
+        })
         .join('\n');
-      throw new Error(
+      throw new AmbiguousPositionError(
+        absolutePath,
+        ambiguousMatches,
         `Symbol "${symbol}" is ambiguous — found ${withPosition.length} matches in ${absolutePath}:\n${details}`
       );
     }
@@ -1008,16 +1142,20 @@ export function createServerManager(
       LspWorkspaceSymbolResponse[]
     >('workspace/symbol', { query: symbol });
     const wsFlat = normalizeWorkspaceSymbols(wsSymbols);
-    const wsExact = wsFlat.filter(s => s.name === symbol);
-    const wsCandidates =
-      wsExact.length > 0
-        ? wsExact
-        : wsFlat.filter(s => s.name.startsWith(symbol));
+    const wsCandidates = filterSymbolsByQuery(wsFlat, symbol);
 
     // Filter out workspace symbols without position info
     const wsWithPosition = wsCandidates.filter(
-      (s): s is NormalizedSymbol & { line: number; column: number } =>
-        s.line !== undefined && s.column !== undefined
+      (
+        s
+      ): s is NormalizedSymbol & {
+        filePath: string;
+        line: number;
+        column: number;
+      } =>
+        s.line !== undefined &&
+        s.column !== undefined &&
+        s.filePath !== undefined
     );
 
     if (wsWithPosition.length === 0) {
@@ -1031,14 +1169,52 @@ export function createServerManager(
       };
     }
 
+    // If surroundingText provided, filter workspace matches by exact block match
+    if (surroundingText && wsWithPosition.length > 1) {
+      const filtered: Array<
+        NormalizedSymbol & { filePath: string; line: number; column: number }
+      > = [];
+      for (const s of wsWithPosition) {
+        const snap = await readDocumentSnapshot(s.filePath);
+        if (!snap) continue;
+        const lines = snap.text.split('\n');
+        if (matchesSurroundingBlock(lines, s.line, surroundingText)) {
+          filtered.push(s);
+        }
+      }
+      if (filtered.length === 1) {
+        return {
+          line: filtered[0].line,
+          column: filtered[0].column,
+        };
+      }
+      if (filtered.length > 1) {
+        wsWithPosition.length = 0;
+        wsWithPosition.push(...filtered);
+      }
+    }
+
     // Multiple workspace matches
+    const ambiguousMatches = await buildAmbiguousMatches(
+      wsWithPosition.map(s => ({
+        filePath: s.filePath,
+        line: s.line,
+        column: s.column,
+      })),
+      async filePath => {
+        const snap = await readDocumentSnapshot(filePath);
+        return snap ? snap.text.split('\n') : undefined;
+      }
+    );
     const details = wsWithPosition
       .map(
         (s, idx) =>
           `  ${idx + 1}. ${s.filePath}:${s.line}:${s.column} — ${s.name}`
       )
       .join('\n');
-    throw new Error(
+    throw new AmbiguousPositionError(
+      undefined, // Workspace ambiguity has no single file
+      ambiguousMatches,
       `Symbol "${symbol}" is ambiguous across the workspace — found ${wsWithPosition.length} matches:\n${details}`
     );
   }
@@ -1051,7 +1227,8 @@ export function createServerManager(
    */
   async function parsePositionInput(
     toolName: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    surroundingText?: string
   ): Promise<{ filePath: string; line: number; column: number }> {
     if (
       typeof input.filePath !== 'string' ||
@@ -1060,21 +1237,33 @@ export function createServerManager(
       throw new Error(`${toolName} requires a non-empty filePath string.`);
     }
     const filePath = path.resolve(workspaceRoot, input.filePath);
+    const effectiveSurroundingText =
+      surroundingText ??
+      (typeof input.surroundingText === 'string'
+        ? input.surroundingText
+        : undefined);
 
     // If text or symbol is provided, resolve from that
     if (typeof input.text === 'string' && input.text.length > 0) {
       await syncFileIfNeeded(filePath);
       return {
         filePath,
-        ...(await resolveTextPosition(filePath, input.text)),
+        ...(await resolveTextPosition(
+          filePath,
+          input.text,
+          effectiveSurroundingText
+        )),
       };
     }
-
     if (typeof input.symbol === 'string' && input.symbol.length > 0) {
       await syncFileIfNeeded(filePath);
       return {
         filePath,
-        ...(await resolveSymbolPosition(filePath, input.symbol)),
+        ...(await resolveSymbolPosition(
+          filePath,
+          input.symbol,
+          effectiveSurroundingText
+        )),
       };
     }
 
@@ -1099,11 +1288,13 @@ export function createServerManager(
 
   async function resolveAtPosition(
     toolName: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    surroundingText?: string
   ): Promise<ResolvedPosition> {
     const { filePath, line, column } = await parsePositionInput(
       toolName,
-      input
+      input,
+      surroundingText
     );
     const runtime = findRuntimeForFile(filePath);
     if (!runtime) {
@@ -1111,6 +1302,136 @@ export function createServerManager(
     }
     const document = await ensureDocumentLoaded(runtime, filePath);
     return { runtime, document, line, column };
+  }
+
+  // ── Reference ID cache for destructive edit disambiguation ──────────
+
+  const REFERENCE_CACHE_CAP = 100;
+  const REFERENCE_TTL_MS = 10 * 60 * 1000;
+
+  const referenceCache = new Map<
+    string,
+    { location: ReferenceLocation; createdAt: number }
+  >();
+  let referenceCounter = 0;
+  // Serialize cache mutations: the conversation service runs tool calls in a
+  // turn in parallel (Promise.all), so storeReferences/resolveReference must
+  // not interleave their read-modify-write on the shared Map/counter. The lock
+  // is held only around the fast Map mutations (counter increment, set, FIFO
+  // eviction, TTL/stale delete) — NOT across the disk read in resolveReference
+  // (readLineFingerprint), which happens before acquiring the lock so unrelated
+  // references resolve concurrently. A strict per-referenceId lock is not used
+  // because storeReferences' FIFO eviction can delete any key, so all Map
+  // mutations must share one lock.
+  let cacheLock: Promise<void> = Promise.resolve();
+  function withCacheLock<T>(fn: () => Promise<T>): Promise<T> {
+    const run = cacheLock.then(fn);
+    cacheLock = run.then(
+      () => {},
+      () => {}
+    );
+    return run;
+  }
+
+  async function readLineFingerprint(
+    filePath: string,
+    line: number
+  ): Promise<string | undefined> {
+    const absolutePath = path.resolve(filePath);
+    let snapshot: { text: string; mtimeMs: number; size: number } | null;
+    try {
+      snapshot = await readDocumentSnapshot(absolutePath);
+    } catch {
+      return undefined;
+    }
+    if (!snapshot) {
+      return undefined;
+    }
+    const lines = snapshot.text.split('\n');
+    const target = lines[line - 1];
+    return target === undefined ? undefined : target.trim();
+  }
+
+  function storeReferences(locations: ReferenceLocation[]): Promise<string[]> {
+    return withCacheLock(async () => {
+      return locations.map(location => {
+        referenceCounter++;
+        const id = `ref_${referenceCounter}`;
+        referenceCache.set(id, { location, createdAt: Date.now() });
+        // FIFO eviction: Map preserves insertion order, so the first key is oldest.
+        while (referenceCache.size > REFERENCE_CACHE_CAP) {
+          const oldestKey = referenceCache.keys().next().value;
+          if (oldestKey === undefined) break;
+          referenceCache.delete(oldestKey);
+        }
+        return id;
+      });
+    });
+  }
+
+  async function resolveReference(
+    referenceId: string
+  ): Promise<ReferenceResolution | undefined> {
+    // Read the fingerprint outside the lock so unrelated references resolve
+    // concurrently — the disk read (stat+readFile) is the slow part, and
+    // serializing it behind a single session-global lock would block every
+    // other reference operation. The location is immutable once stored, so
+    // reading it here is safe; the entry is re-checked under the lock below.
+    const entry = referenceCache.get(referenceId);
+    if (!entry) {
+      return undefined;
+    }
+    const current = await readLineFingerprint(
+      entry.location.filePath,
+      entry.location.line
+    );
+    return withCacheLock(async () => {
+      // Re-check under the lock: a concurrent storeReferences FIFO eviction
+      // may have removed the entry while we were reading the fingerprint.
+      const fresh = referenceCache.get(referenceId);
+      if (!fresh) {
+        return undefined;
+      }
+      // TTL expiry
+      if (Date.now() - fresh.createdAt > REFERENCE_TTL_MS) {
+        referenceCache.delete(referenceId);
+        return undefined;
+      }
+      // Staleness: if the file is gone or the line changed, invalidate and
+      // signal the caller to re-resolve.
+      if (current === undefined || current !== fresh.location.fingerprint) {
+        referenceCache.delete(referenceId);
+        return { location: fresh.location, stale: true };
+      }
+      return { location: fresh.location, stale: false };
+    });
+  }
+
+  async function readFileSnippet(
+    filePath: string,
+    line: number,
+    contextLines: number = 5
+  ): Promise<string> {
+    const absolutePath = path.resolve(filePath);
+    let snapshot: { text: string; mtimeMs: number; size: number } | null;
+    try {
+      snapshot = await readDocumentSnapshot(absolutePath);
+    } catch {
+      return '';
+    }
+    if (!snapshot) {
+      return '';
+    }
+    const lines = snapshot.text.split('\n');
+    const startLine = Math.max(0, line - 1 - contextLines);
+    const endLine = Math.min(lines.length, line + contextLines);
+    const snippetLines = lines.slice(startLine, endLine);
+    const lineNumbers = snippetLines.map((l, i) => {
+      const lineNum = startLine + i + 1;
+      const marker = lineNum === line ? '>' : ' ';
+      return `${marker}${String(lineNum).padStart(4)} | ${l}`;
+    });
+    return lineNumbers.join('\n');
   }
 
   // ── Public API ────────────────────────────────────────────────────
@@ -1276,6 +1597,11 @@ export function createServerManager(
     parsePositionInput,
     resolveAtPosition,
 
+    readFileSnippet,
+    readLineFingerprint,
+    storeReferences,
+    resolveReference,
+
     locationToAgentShape: (
       locations: Array<{
         filePath: string;
@@ -1289,7 +1615,16 @@ export function createServerManager(
         filePath: location.filePath,
         line: location.range.start.line + 1,
         column: location.range.start.character + 1,
-        range: location.range,
+        range: {
+          start: {
+            line: location.range.start.line + 1,
+            character: location.range.start.character + 1,
+          },
+          end: {
+            line: location.range.end.line + 1,
+            character: location.range.end.character + 1,
+          },
+        },
       }));
     },
 
