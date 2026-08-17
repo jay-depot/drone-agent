@@ -7,7 +7,7 @@
  * - message-delivery-status: Read receipts work
  */
 
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import {
   getBeaconAgents,
   getBeaconMessages,
@@ -16,6 +16,7 @@ import {
   leaveChannel,
   sendChannelMessage,
   getRequiredIntegrationEnv,
+  waitForService,
   shouldSkipIntegrationSuite,
 } from './fixtures/index.js';
 
@@ -27,6 +28,22 @@ describe.skipIf(
     { url: BEACON_URL, fallbackUrl: DEFAULT_BEACON_URL },
   ])
 )('Inter-Agent Communication', () => {
+  beforeAll(async () => {
+    const beaconReady = await waitForService(BEACON_URL);
+    if (!beaconReady) {
+      throw new Error(`Beacon service not available at ${BEACON_URL}`);
+    }
+
+    // Wait for at least one agent to register with the beacon
+    // (the dummy-agent container retries registration)
+    const maxAgentWait = 30;
+    for (let i = 0; i < maxAgentWait; i++) {
+      const agents = await getBeaconAgents(BEACON_URL);
+      if (agents.length > 0) break;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  });
+
   describe('send-message-to-agent', () => {
     it('should send a message between agents', async () => {
       const agents = await getBeaconAgents(BEACON_URL);
@@ -47,8 +64,8 @@ describe.skipIf(
       );
 
       expect(message).toBeDefined();
-      expect(message.from).toBe(sender.id);
-      expect(message.to).toBe(recipient.id);
+      expect(message.fromAgentId).toBe(sender.id);
+      expect(message.toAgentId).toBe(recipient.id);
     });
 
     it('should retrieve messages for an agent', async () => {

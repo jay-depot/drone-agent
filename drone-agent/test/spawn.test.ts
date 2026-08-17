@@ -8,12 +8,13 @@
  * - terminate-spawn: DELETE /spawn/:id stops agent
  */
 
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import {
   getBeaconAgents,
   spawnAgent,
   terminateAgent,
   getRequiredIntegrationEnv,
+  waitForService,
   shouldSkipIntegrationSuite,
 } from './fixtures/index.js';
 
@@ -25,6 +26,13 @@ describe.skipIf(
     { url: BEACON_URL, fallbackUrl: DEFAULT_BEACON_URL },
   ])
 )('Agent Spawning', () => {
+  beforeAll(async () => {
+    const beaconReady = await waitForService(BEACON_URL);
+    if (!beaconReady) {
+      throw new Error(`Beacon service not available at ${BEACON_URL}`);
+    }
+  });
+
   describe('spawn-agent-via-api', () => {
     it('should spawn a new agent via API', async () => {
       const initialAgents = await getBeaconAgents(BEACON_URL);

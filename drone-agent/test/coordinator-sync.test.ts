@@ -8,7 +8,7 @@
  * - bi-directional-sync: Create in beacon, verify in coordinator
  */
 
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import {
   getCoordinatorPersonas,
   getBeaconPersonas,
@@ -18,6 +18,7 @@ import {
   pushPersonaToCoordinator,
   pushSkillToCoordinator,
   getRequiredIntegrationEnv,
+  waitForService,
   shouldSkipIntegrationSuite,
 } from './fixtures/index.js';
 
@@ -35,6 +36,19 @@ describe.skipIf(
     { url: BEACON_URL, fallbackUrl: DEFAULT_BEACON_URL },
   ])
 )('Beacon ↔ Coordinator Sync', () => {
+  beforeAll(async () => {
+    const coordinatorReady = await waitForService(COORDINATOR_URL);
+    const beaconReady = await waitForService(BEACON_URL);
+    if (!coordinatorReady) {
+      throw new Error(
+        `Coordinator service not available at ${COORDINATOR_URL}`
+      );
+    }
+    if (!beaconReady) {
+      throw new Error(`Beacon service not available at ${BEACON_URL}`);
+    }
+  });
+
   describe('persona-push-to-coordinator', () => {
     it('should get personas from coordinator', async () => {
       const personas = await getCoordinatorPersonas(COORDINATOR_URL);
@@ -75,7 +89,9 @@ describe.skipIf(
       const testSkill = {
         id: `sync-test-skill-${Date.now()}`,
         name: 'Sync Test Skill',
-        content: 'Test skill content for sync testing.',
+        description: 'A test skill for coordinator sync testing',
+        trigger: 'test-skill-trigger',
+        body: 'Test skill content for sync testing.',
       };
 
       try {

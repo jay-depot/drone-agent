@@ -9,7 +9,7 @@
  * - agent-cleanup: Agent shuts down cleanly
  */
 
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import {
   getBeaconAgents,
   getBeaconAgent,
@@ -17,6 +17,7 @@ import {
   getBeaconSkills,
   createBeaconPersona,
   getRequiredIntegrationEnv,
+  waitForService,
   shouldSkipIntegrationSuite,
 } from './fixtures/index.js';
 
@@ -31,6 +32,21 @@ describe.skipIf(
     { url: AGENT_URL, fallbackUrl: DEFAULT_AGENT_URL },
   ])
 )('Agent ↔ Beacon', () => {
+  beforeAll(async () => {
+    const beaconReady = await waitForService(BEACON_URL);
+    if (!beaconReady) {
+      throw new Error(`Beacon service not available at ${BEACON_URL}`);
+    }
+
+    // Wait for the dummy-agent to register with the beacon
+    const maxAgentWait = 30;
+    for (let i = 0; i < maxAgentWait; i++) {
+      const agents = await getBeaconAgents(BEACON_URL);
+      if (agents.length > 0) break;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  });
+
   const agentId = 'test-agent-1';
 
   describe('agent-registers', () => {

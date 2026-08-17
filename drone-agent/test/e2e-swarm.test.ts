@@ -8,7 +8,7 @@
  * - persona-propagation: Create persona, agents see it
  */
 
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import {
   getBeaconAgents,
   getBeaconPersonas,
@@ -16,6 +16,7 @@ import {
   sendBeaconMessage,
   getBeaconMessages,
   getRequiredIntegrationEnv,
+  waitForService,
   shouldSkipIntegrationSuite,
 } from './fixtures/index.js';
 
@@ -33,6 +34,19 @@ describe.skipIf(
     { url: COORDINATOR_URL, fallbackUrl: DEFAULT_COORDINATOR_URL },
   ])
 )('E2E Swarm Flows', () => {
+  beforeAll(async () => {
+    const beaconReady = await waitForService(BEACON_URL);
+    const coordinatorReady = await waitForService(COORDINATOR_URL);
+    if (!beaconReady) {
+      throw new Error(`Beacon service not available at ${BEACON_URL}`);
+    }
+    if (!coordinatorReady) {
+      throw new Error(
+        `Coordinator service not available at ${COORDINATOR_URL}`
+      );
+    }
+  });
+
   describe('full-agent-lifecycle', () => {
     it('should complete full agent lifecycle', async () => {
       // Get initial agent state
@@ -80,8 +94,8 @@ describe.skipIf(
       );
 
       expect(message).toBeDefined();
-      expect(message.from).toBe(agentA.id);
-      expect(message.to).toBe(agentB.id);
+      expect(message.fromAgentId).toBe(agentA.id);
+      expect(message.toAgentId).toBe(agentB.id);
 
       // Verify recipient received message
       const messages = await getBeaconMessages(BEACON_URL, agentB.id);

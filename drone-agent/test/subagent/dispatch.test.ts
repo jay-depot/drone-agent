@@ -10,6 +10,10 @@ import { shouldSkipIntegrationSuite } from '../fixtures/swarm.js';
 
 const RUNNER_SENTINEL_URL = 'http://localhost:3458';
 
+// When LLM_PROVIDER=echo, the echo LLM responds instantly and never crashes,
+// so timeout and crash-handling tests cannot exercise those code paths.
+const usingEchoLlm = process.env.LLM_PROVIDER === 'echo';
+
 describe.skipIf(
   shouldSkipIntegrationSuite([
     {
@@ -173,54 +177,73 @@ line three`,
     });
 
     describe('timeout-completion', () => {
-      it('should handle timeout gracefully', async () => {
-        // Launch a subagent with a very short timeout that will definitely expire
-        // Using a task that would take forever to complete
-        const result = await launchSubagent({
-          task: 'Calculate the sum of all prime numbers forever',
-          timeout: 500, // 500ms - very short
-        });
+      // Echo LLM responds instantly, so timeout tests can't work with it
+      it.skipIf(usingEchoLlm)(
+        'should handle timeout gracefully',
+        async () => {
+          // Launch a subagent with a very short timeout that will definitely expire
+          // Using a task that would take forever to complete
+          const result = await launchSubagent({
+            task: 'Calculate the sum of all prime numbers forever',
+            timeout: 500, // 500ms - very short
+          });
 
-        // Should be marked as timed out
-        expect(result.timedOut).toBe(true);
-        expect(result.error).toContain('timed out');
-      }, 10000); // Test timeout
+          // Should be marked as timed out
+          expect(result.timedOut).toBe(true);
+          expect(result.error).toContain('timed out');
+        },
+        10000
+      ); // Test timeout
     });
 
     describe('activity-timeout', () => {
-      it('should time out when subagent is idle beyond activity timeout', async () => {
-        const result = await launchSubagent({
-          task: 'Calculate the sum of all prime numbers forever',
-          timeout: 500, // 500ms - very short activity timeout
-        });
+      // Echo LLM responds instantly, so timeout tests can't work with it
+      it.skipIf(usingEchoLlm)(
+        'should time out when subagent is idle beyond activity timeout',
+        async () => {
+          const result = await launchSubagent({
+            task: 'Calculate the sum of all prime numbers forever',
+            timeout: 500, // 500ms - very short activity timeout
+          });
 
-        expect(result.timedOut).toBe(true);
-        expect(result.error).toContain('timed out');
-      }, 10000);
+          expect(result.timedOut).toBe(true);
+          expect(result.error).toContain('timed out');
+        },
+        10000
+      );
     });
 
     describe('hard-cap-timeout', () => {
-      it('should time out via hard cap even with long activity timeout', async () => {
-        const result = await launchSubagent({
-          task: 'Calculate the sum of all prime numbers forever',
-          timeout: 60000, // Long activity timeout (won't fire)
-          hardCap: 500, // Very short hard cap (will fire first)
-        });
+      // Echo LLM responds instantly, so timeout tests can't work with it
+      it.skipIf(usingEchoLlm)(
+        'should time out via hard cap even with long activity timeout',
+        async () => {
+          const result = await launchSubagent({
+            task: 'Calculate the sum of all prime numbers forever',
+            timeout: 60000, // Long activity timeout (won't fire)
+            hardCap: 500, // Very short hard cap (will fire first)
+          });
 
-        expect(result.timedOut).toBe(true);
-        expect(result.error).toContain('timed out');
-      }, 10000);
+          expect(result.timedOut).toBe(true);
+          expect(result.error).toContain('timed out');
+        },
+        10000
+      );
     });
 
     describe('crash-handling', () => {
-      it('should propagate crash errors to parent', async () => {
-        const result = await launchErrorSubagent('crash', {
-          timeout: 10000,
-        });
+      // Echo LLM doesn't crash, so crash tests can't work with it
+      it.skipIf(usingEchoLlm)(
+        'should propagate crash errors to parent',
+        async () => {
+          const result = await launchErrorSubagent('crash', {
+            timeout: 10000,
+          });
 
-        // The process should have non-zero exit code
-        expect(result.exitCode).not.toBe(0);
-      });
+          // The process should have non-zero exit code
+          expect(result.exitCode).not.toBe(0);
+        }
+      );
     });
   });
 

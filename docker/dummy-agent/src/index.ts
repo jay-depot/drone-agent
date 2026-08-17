@@ -59,6 +59,9 @@ const logger = {
  * Register this agent with the beacon
  */
 async function registerWithBeacon(): Promise<void> {
+  const maxRetries = 10;
+  const retryDelayMs = 2000;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
   try {
     const response = await fetch(
       `http://${BEACON_HOST}:${BEACON_PORT}/agents`,
@@ -77,12 +80,18 @@ async function registerWithBeacon(): Promise<void> {
       state.status = 'connected';
       state.lastActivity = new Date();
       logger.info(`Registered with beacon as ${AGENT_ID}`);
+      return;
     } else {
-      logger.error(`Failed to register with beacon: ${response.status}`);
+      logger.error(`Failed to register with beacon: ${response.status} (attempt ${attempt}/${maxRetries})`);
     }
   } catch (error) {
-    logger.error(`Failed to register with beacon:`, error);
+    logger.error(`Failed to register with beacon (attempt ${attempt}/${maxRetries}):`, error);
+    if (attempt < maxRetries) {
+      await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+    }
   }
+  }
+  logger.error(`Failed to register with beacon after ${maxRetries} attempts`);
 }
 
 /**

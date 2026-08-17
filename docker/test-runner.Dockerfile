@@ -25,5 +25,9 @@ RUN corepack enable pnpm && pnpm install --frozen-lockfile && pnpm build
 # The subagent fixture resolves the drone-agent executable from PATH.
 ENV PATH="/app/drone-agent/bin:${PATH}"
 
+# Configure drone-agent to use the echo LLM provider for integration tests.
+# This ensures spawned subagents use the echo-llm service rather than ollama.
+RUN mkdir -p /root/.drone-agent && \
+    echo '{"llm":{"provider":"echo"},"enabledPlugins":["llm","echo"]}' > /root/.drone-agent/config.json
 # Run the real integration suite inside the isolated docker network.
 CMD ["pnpm", "exec", "vitest", "run", "-c", "vitest.integration.config.ts"]

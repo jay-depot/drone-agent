@@ -154,6 +154,11 @@ export async function launchSubagent(
     args.push('--persona', persona);
   }
 
+  // When LLM_PROVIDER=echo, enable the echo and llm plugins
+  if (process.env.LLM_PROVIDER === 'echo') {
+    args.push('--plugin', 'echo', '--plugin', 'llm');
+  }
+
   return new Promise((resolvePromise, rejectPromise) => {
     let timedOut = false;
     const collectedOutput: string[] = [];

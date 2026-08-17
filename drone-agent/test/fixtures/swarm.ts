@@ -213,7 +213,10 @@ export async function getBeaconMessages(
   beaconUrl: string,
   agentId: string
 ): Promise<Message[]> {
-  return swarmRequest<Message[]>(beaconUrl, `/agents/${agentId}/messages`);
+  return swarmRequest<Message[]>(
+    beaconUrl,
+    `/messages?agentId=${encodeURIComponent(agentId)}`
+  );
 }
 
 /**
@@ -228,9 +231,9 @@ export async function sendBeaconMessage(
   return swarmRequest<Message>(beaconUrl, `/messages`, {
     method: 'POST',
     body: {
-      from: fromAgentId,
-      to: toAgentId,
-      body,
+      fromAgentId,
+      toAgentId,
+      body: JSON.stringify(body),
     },
   });
 }
@@ -247,8 +250,8 @@ export async function sendChannelMessage(
   return swarmRequest<Message>(beaconUrl, `/channels/${channel}/messages`, {
     method: 'POST',
     body: {
-      from: fromAgentId,
-      body,
+      fromAgentId,
+      body: JSON.stringify(body),
     },
   });
 }
@@ -371,7 +374,7 @@ export async function pushPersonaToCoordinator(
   coordinatorUrl: string,
   persona: CreatePersonaRequest
 ): Promise<void> {
-  await swarmRequest(coordinatorUrl, `/personas`, {
+  await swarmRequest(coordinatorUrl, `/api/personas`, {
     method: 'POST',
     body: persona,
   });
@@ -383,7 +386,7 @@ export async function pushPersonaToCoordinator(
 export async function getCoordinatorPersonas(
   coordinatorUrl: string
 ): Promise<Persona[]> {
-  return swarmRequest<Persona[]>(coordinatorUrl, '/personas');
+  return swarmRequest<Persona[]>(coordinatorUrl, '/api/personas');
 }
 
 /**
@@ -391,11 +394,17 @@ export async function getCoordinatorPersonas(
  */
 export async function pushSkillToCoordinator(
   coordinatorUrl: string,
-  skill: { id: string; name: string; content: string }
+  skill: { id: string; name: string; description: string; trigger: string; body: string }
 ): Promise<void> {
-  await swarmRequest(coordinatorUrl, `/skills`, {
+  await swarmRequest(coordinatorUrl, `/api/skills`, {
     method: 'POST',
-    body: skill,
+    body: {
+      id: skill.id,
+      name: skill.name,
+      description: skill.description,
+      trigger: skill.trigger,
+      body: skill.body,
+    },
   });
 }
 
@@ -405,5 +414,5 @@ export async function pushSkillToCoordinator(
 export async function getCoordinatorSkills(
   coordinatorUrl: string
 ): Promise<{ id: string; name: string }[]> {
-  return swarmRequest(coordinatorUrl, '/skills');
+  return swarmRequest(coordinatorUrl, '/api/skills');
 }
