@@ -8,7 +8,7 @@ tags:
   - docker
   - beacon
 created: 2026-08-14T21:23:53.070Z
-updated: 2026-08-17T01:32:03.463Z
+updated: 2026-08-17T01:58:14.422Z
 ---
 
 # Plan: Isolate integration tests from the live local beacon
@@ -70,3 +70,6 @@ Fix: Updated `http.ts` request helper to only send `Content-Type: application/js
 ### Remaining work
 - The integration test still has some failures (inter-agent channel tests need at least 2 agents registered, subagent dispatch tests need echo LLM configuration to take effect after Docker rebuild)
 - These require a Docker rebuild and re-run to verify fully.
+
+## COMPLETED (2026-08-17) - Typecheck fix (leftover from Category 3)
+The Category 3 fix renamed the test `Message` interface fields from `from`/`to` to `fromAgentId`/`toAgentId` in `fixtures/index.ts`, but `assertMessageExists` in `fixtures/assertions.ts` was not updated and still referenced `m.from`/`m.to`, breaking `pnpm typecheck` (TS2339 on lines 225-226). Fixed by renaming the assertion options to `fromAgentId`/`toAgentId` and updating the field access. `assertMessageExists` has no callers, so no other call sites needed updating. Verified: `pnpm typecheck`, `pnpm build`, `pnpm test` (1913 passed, 9 skipped), and `pnpm lint:eslint` all pass. Committed as 30b5ceb.
