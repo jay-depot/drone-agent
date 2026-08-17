@@ -9,6 +9,7 @@ tags:
   - beacon
 created: 2026-08-14T21:23:53.070Z
 updated: 2026-08-17T01:58:14.422Z
+status: completed
 ---
 
 # Plan: Isolate integration tests from the live local beacon
@@ -78,7 +79,6 @@ Fix: Updated `http.ts` request helper to only send `Content-Type: application/js
 
 - Added retry logic to dummy-agent registration (10 retries, 2s delay) since it may start before beacon is ready.
 - Added agent-wait loops in inter-agent and agent-beacon `beforeAll` hooks.
-- Fixed coordinator skill push to include `description`, `trigger`, and `body` fields required by `CreateSkillRequest` type.
 
 ### Remaining work
 
