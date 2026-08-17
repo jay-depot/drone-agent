@@ -10,6 +10,7 @@ import {
   type DroneSessionTurn,
 } from 'drone-core';
 import type { DroneSessionManager } from '../../runtime/session-manager.js';
+import { getOldestNonSummaryTurns } from '../../runtime/turn-utils.js';
 
 type RegistrationContext = {
   config: DroneCompactionConfig;
@@ -205,12 +206,10 @@ async function maybeCompact(input: {
     // Normal turns age toward the tail; summaries are prepended at the head.
     // Compaction must target the oldest non-summary turns, which live at the
     // end of the array, not the head (where the newest summary sits).
-    const nonSummaryTurns = turns.filter(turn => turn.kind !== 'summary');
-    const sliceSizeCapped = Math.min(sliceSize, nonSummaryTurns.length);
-    const slice = nonSummaryTurns.slice(-sliceSizeCapped);
+    const slice = getOldestNonSummaryTurns(turns, sliceSize);
     const transcript = formatTurnsForSummary(
       slice,
-      nonSummaryTurns.length - slice.length
+      turns.filter(turn => turn.kind !== 'summary').length - slice.length
     );
 
     const summarySystemPrompt =

@@ -574,6 +574,66 @@ describe('createCompactionPlugin', () => {
     expect(nonSummaryTurns.length).toBeLessThan(8);
   });
 
+  it('pins BOTH ends: summarizes the oldest non-summary turns, never the newest', async () => {
+    // Regression test for the bug where compaction sliced the array tail and
+    // summarized the NEWEST non-summary turns instead of the OLDEST. The array
+    // is [S, u0, u1, ..., u5] (summary prepended at head, normal turns appended
+    // at tail). Compaction must drop the oldest normal turns (u0, u1, ...) and
+    // leave the newest (u5) intact.
+    const sessionManager = createSessionManager();
+
+    // Seed a summary so the head is a summary turn.
+    sessionManager.prependSystemTurn('Seeded summary.', { kind: 'summary' });
+
+    // Distinct, identifiable content per turn so we can assert exactly which
+    // turns were summarized and which survived.
+    for (let i = 0; i < 6; i++) {
+      sessionManager.appendUserMessage(`oldest-u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`oldest-a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'Pinned summary.' }],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    await runBeforePrompt(capture);
+
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    const requestMessages = provider.__chatMock.mock.calls[0][0]
+      .messages as DroneChatMessage[];
+    const summaryPrompt = requestMessages[1].content;
+
+    // The summary transcript must contain the OLDEST non-summary turns...
+    expect(summaryPrompt).toContain('oldest-u0');
+    expect(summaryPrompt).toContain('oldest-u1');
+    // ...and must NOT contain the NEWEST non-summary turns.
+    expect(summaryPrompt).not.toContain('oldest-u5');
+    expect(summaryPrompt).not.toContain('oldest-u4');
+
+    // The surviving non-summary turns must be the NEWEST ones.
+    const surviving = sessionManager
+      .getTurns()
+      .filter(t => t.kind !== 'summary')
+      .map(t => t.messages[0].content);
+    expect(surviving.some(c => c.includes('oldest-u5'))).toBe(true);
+    expect(surviving.some(c => c.includes('oldest-u0'))).toBe(false);
+  });
+
   it('continues to reduce context usage across multiple compaction rounds', async () => {
     const sessionManager = createSessionManager();
     const config = makeConfig({
