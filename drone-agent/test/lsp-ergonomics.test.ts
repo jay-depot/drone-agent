@@ -1453,3 +1453,200 @@ describe('formatting tool description mentions auto-apply', () => {
     expect(tool.description.toLowerCase()).toContain('applies');
   });
 });
+
+describe('locationToAgentShape normalizes range to 1-based', () => {
+  it('returns 1-based line/column and 1-based range', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const server = await createTestServerManager(dir);
+      const shaped = server.locationToAgentShape([
+        {
+          filePath: '/foo/bar.ts',
+          range: {
+            start: { line: 4, character: 7 },
+            end: { line: 6, character: 12 },
+          },
+        },
+      ]);
+      expect(shaped).toHaveLength(1);
+      expect(shaped[0]).toEqual({
+        filePath: '/foo/bar.ts',
+        line: 5,
+        column: 8,
+        range: {
+          start: { line: 5, character: 8 },
+          end: { line: 7, character: 13 },
+        },
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('code_action query.range is 1-based', () => {
+  it('reports a 1-based range in the query when a range is provided', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const filePath = await createTempFile(
+        dir,
+        'test.ts',
+        ['const x = 1;'].join('\n')
+      );
+      const runtime = {
+        client: {
+          request: async () => [],
+        },
+      };
+      const server = {
+        refreshIfNeeded: async () => {},
+        markDirty: () => {},
+        getDiagnostics: () => [],
+        getServerStates: () => [],
+        renderDiagnosticsPrompt: () => false,
+        findRuntimeForFile: () => runtime,
+        ensureDocumentLoaded: async () => ({
+          uri: `file://${filePath}`,
+          languageId: 'typescript',
+          version: 1,
+          text: '',
+          mtimeMs: 0,
+          size: 0,
+        }),
+        resolveTargetFilePath: (p: string) => p,
+        parsePositionInput: async () => ({ filePath, line: 1, column: 1 }),
+        resolveAtPosition: async () => {
+          throw new Error('not connected');
+        },
+        readFileSnippet: async () => '',
+        readLineFingerprint: async () => undefined,
+        storeReferences: async () => [],
+        resolveReference: async () => undefined,
+        locationToAgentShape: (_l: unknown[]) => [],
+        initialize: async () => {},
+        shutdown: async () => {},
+        getAvailableServers: () => [],
+        startServerForFile: async () => false,
+      } as unknown as Parameters<typeof createCodeActionTool>[0];
+
+      const tool = createCodeActionTool(server);
+      const result = await tool.execute({
+        filePath,
+        startLine: 1,
+        startColumn: 1,
+        endLine: 1,
+        endColumn: 5,
+      });
+      const parsed = JSON.parse(result as string);
+      expect(parsed.query.range).toEqual({
+        start: { line: 1, character: 1 },
+        end: { line: 1, character: 5 },
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('buildAutoExpansion dedups by file (one snippet per file)', () => {
+  it('find_references returns exactly one snippet per file', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const filePath = await createTempFile(
+        dir,
+        'test.ts',
+        [
+          'const a = 1;',
+          'const b = 2;',
+          'const c = 3;',
+          'const d = 4;',
+          'const e = 5;',
+          'const f = 6;',
+        ].join('\n')
+      );
+      const runtime = {
+        client: {
+          request: async () => [
+            {
+              uri: `file://${filePath}`,
+              range: {
+                start: { line: 0, character: 0 },
+                end: { line: 0, character: 1 },
+              },
+            },
+            {
+              uri: `file://${filePath}`,
+              range: {
+                start: { line: 1, character: 0 },
+                end: { line: 1, character: 1 },
+              },
+            },
+            {
+              uri: `file://${filePath}`,
+              range: {
+                start: { line: 2, character: 0 },
+                end: { line: 2, character: 1 },
+              },
+            },
+          ],
+        },
+      };
+      const server = {
+        refreshIfNeeded: async () => {},
+        markDirty: () => {},
+        getDiagnostics: () => [],
+        getServerStates: () => [],
+        renderDiagnosticsPrompt: () => false,
+        findRuntimeForFile: () => runtime,
+        ensureDocumentLoaded: async () => ({
+          uri: `file://${filePath}`,
+          languageId: 'typescript',
+          version: 1,
+          text: '',
+          mtimeMs: 0,
+          size: 0,
+        }),
+        resolveTargetFilePath: (p: string) => p,
+        parsePositionInput: async () => ({ filePath, line: 1, column: 1 }),
+        resolveAtPosition: async () => {
+          throw new Error('not connected');
+        },
+        readFileSnippet: async () => 'snippet',
+        readLineFingerprint: async () => undefined,
+        storeReferences: async () => [],
+        resolveReference: async () => undefined,
+        locationToAgentShape: (l: unknown[]) =>
+          (
+            l as Array<{
+              filePath: string;
+              range: { start: { line: number; character: number } };
+            }>
+          ).map(loc => ({
+            filePath: loc.filePath,
+            line: loc.range.start.line + 1,
+            column: loc.range.start.character + 1,
+            range: loc.range,
+          })),
+        initialize: async () => {},
+        shutdown: async () => {},
+        getAvailableServers: () => [],
+        startServerForFile: async () => false,
+      } as unknown as Parameters<typeof createFindReferencesTool>[0];
+
+      const tool = createFindReferencesTool(server);
+      const result = await tool.execute({
+        filePath,
+        line: 1,
+        column: 1,
+      });
+      const parsed = JSON.parse(result as string);
+      const snippetKeys = Object.keys(parsed.snippets ?? {});
+      // All three locations are in the same file, so exactly one snippet.
+      expect(snippetKeys).toHaveLength(1);
+      const filePaths = snippetKeys.map(k => k.split(':')[0]);
+      expect(new Set(filePaths).size).toBe(1);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});

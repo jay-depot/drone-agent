@@ -1322,10 +1322,12 @@ export function createServerManager(
   // Serialize cache mutations: the conversation service runs tool calls in a
   // turn in parallel (Promise.all), so storeReferences/resolveReference must
   // not interleave their read-modify-write on the shared Map/counter. The lock
-  // is held across the disk read in resolveReference (readLineFingerprint),
-  // which serializes reference resolution behind a stat+readFile. This is an
-  // accepted tradeoff: concurrency in these tools is rare, and correctness of
-  // the shared cache is more important than the small serialization cost.
+  // is held only around the fast Map mutations (counter increment, set, FIFO
+  // eviction, TTL/stale delete) — NOT across the disk read in resolveReference
+  // (readLineFingerprint), which happens before acquiring the lock so unrelated
+  // references resolve concurrently. A strict per-referenceId lock is not used
+  // because storeReferences' FIFO eviction can delete any key, so all Map
+  // mutations must share one lock.
   let cacheLock: Promise<void> = Promise.resolve();
   function withCacheLock<T>(fn: () => Promise<T>): Promise<T> {
     const run = cacheLock.then(fn);
@@ -1375,27 +1377,38 @@ export function createServerManager(
   async function resolveReference(
     referenceId: string
   ): Promise<ReferenceResolution | undefined> {
+    // Read the fingerprint outside the lock so unrelated references resolve
+    // concurrently — the disk read (stat+readFile) is the slow part, and
+    // serializing it behind a single session-global lock would block every
+    // other reference operation. The location is immutable once stored, so
+    // reading it here is safe; the entry is re-checked under the lock below.
+    const entry = referenceCache.get(referenceId);
+    if (!entry) {
+      return undefined;
+    }
+    const current = await readLineFingerprint(
+      entry.location.filePath,
+      entry.location.line
+    );
     return withCacheLock(async () => {
-      const entry = referenceCache.get(referenceId);
-      if (!entry) {
+      // Re-check under the lock: a concurrent storeReferences FIFO eviction
+      // may have removed the entry while we were reading the fingerprint.
+      const fresh = referenceCache.get(referenceId);
+      if (!fresh) {
         return undefined;
       }
       // TTL expiry
-      if (Date.now() - entry.createdAt > REFERENCE_TTL_MS) {
+      if (Date.now() - fresh.createdAt > REFERENCE_TTL_MS) {
         referenceCache.delete(referenceId);
         return undefined;
       }
-      // Staleness: re-read the line fingerprint; if the file is gone or the
-      // line changed, invalidate and signal the caller to re-resolve.
-      const current = await readLineFingerprint(
-        entry.location.filePath,
-        entry.location.line
-      );
-      if (current === undefined || current !== entry.location.fingerprint) {
+      // Staleness: if the file is gone or the line changed, invalidate and
+      // signal the caller to re-resolve.
+      if (current === undefined || current !== fresh.location.fingerprint) {
         referenceCache.delete(referenceId);
-        return { location: entry.location, stale: true };
+        return { location: fresh.location, stale: true };
       }
-      return { location: entry.location, stale: false };
+      return { location: fresh.location, stale: false };
     });
   }
 
@@ -1607,7 +1620,16 @@ export function createServerManager(
         filePath: location.filePath,
         line: location.range.start.line + 1,
         column: location.range.start.character + 1,
-        range: location.range,
+        range: {
+          start: {
+            line: location.range.start.line + 1,
+            character: location.range.start.character + 1,
+          },
+          end: {
+            line: location.range.end.line + 1,
+            character: location.range.end.character + 1,
+          },
+        },
       }));
     },
 

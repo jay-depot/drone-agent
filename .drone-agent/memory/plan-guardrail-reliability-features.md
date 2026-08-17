@@ -12,12 +12,15 @@ updated: 2026-08-17T21:19:39.487Z
 # Plan: Guardrail & Reliability Features (retry broken responses, identical-tool-call nudge, show assistant text with tool calls)
 
 ## Summary
+
 Three reliability/guardrail features in the drone-agent conversation loop (`drone-agent/src/runtime/conversation-service.ts`):
+
 1. **Retry "broken" LLM responses** — a response with no tool calls and no assistant message is retried (tiered: truly-empty vs reasoning-only), with a non-persisted hint escalation, then a user prompt at the hard limit.
 2. **Identical tool-call nudge** — detect a degenerate loop where the model emits the same single tool call (name+params) repeatedly; nudge at threshold, prompt user at higher threshold. Distinct from the existing fail-chain detector.
 3. **Show assistant text when it accompanies tool calls** — currently the text is added to context but never displayed in the TUI.
 
 ## Key files
+
 - `drone-agent/src/runtime/conversation-service.ts` (704 lines) — the tool-call loop in `sendUserMessage` (lines 300-630). Reasoning emit at 387-390. Tool-call branch at 391+. Empty/assistant-only branch at 621-627. `ConversationService` type at 33-60. `CreateConversationServiceOptions` at 62-97.
 - `drone-agent/src/index.tsx` — wires `createConversationService` (line 167), `onToolIterationLimitReached` (178-198), `onStuckErrorThresholdReached` (199-216). `_runtime` capability set in engine.initialize().
 - `drone-agent/src/runtime/plugin-engine.ts` — `_runtime` capability (line 770), `getCapability` (865), `request('runtime')` special-case (541-543).
@@ -29,6 +32,7 @@ Three reliability/guardrail features in the drone-agent conversation loop (`dron
 - Tests: `drone-agent/test/conversation-service.test.ts`, `drone-agent/test/conversation-service-events.test.ts`.
 
 ## Config (uniform `{ hintAfter, maxHints }` shape under `session`)
+
 ```ts
 session: {
   brokenResponses: { hintAfter: 2, maxHints: 2 },
@@ -36,14 +40,17 @@ session: {
   identicalToolCalls: { hintAfter: 2, maxHints: 3 },
 }
 ```
+
 - `hintAfter` = retries with identical context before injecting the non-persisted hint.
 - `maxHints` = retries with the hint before the hard-limit user prompt.
 - All three trigger the "continue or stop" elicitation prompt at their hard limit in the TUI. Non-interactive modes (NDJSON/--once) fall through to current behavior (return empty / let loop end) — no prompt.
 
 ## New event kind
+
 `{ kind: 'notice', content: string }` added to `DroneConversationEvent`. Rendered by TUI as a single dim/italic line. NDJSON/plain consumers render or ignore. (Compaction refactor to use `notice` deferred to later scope.)
 
 ## Feature 1 — Retry broken responses
+
 - In the non-tool-call branch (621-627), detect degenerate: no `message` and no `toolCalls`. Two tiers: truly-empty (no reasoning) vs reasoning-only (has reasoning).
 - Retry with IDENTICAL context up to `hintAfter` times (do NOT append the degenerate response to the session — avoids polluting context).
 - Then inject a non-persisted system-role hint at the END of the messages sent to the LLM, retry up to `maxHints` more times. Hint is NOT persisted to the session.
@@ -52,15 +59,18 @@ session: {
 - Reasoning deferral: move the reasoning emit (387-390) so it only fires for a KEPT response. Degenerate responses show no reasoning, just the marker.
 
 ## Feature 2 — Identical tool-call nudge
+
 - New detector in the tool-call branch. Streak advances only when a response contains EXACTLY ONE tool call identical (name + params) to the previous response's single call. Any different call, multiple calls, or no calls resets the streak. A user turn resets it.
 - At `hintAfter` (2): inject a non-persisted system-role nudge at the end of context. Nudge does NOT reset the counter.
 - At `maxHints` (3): invoke a new `onIdenticalToolCallLimitReached` callback (wired in index.tsx to elicit "continue or stop"); if true, reset streak and continue; else throw/abort.
 - `resetStuckDetectors()` API on `ConversationService` resets BOTH the identical-call streak AND the fail-chain stuck counter. Exposed to plugins via the `_runtime` capability (wired in index.tsx after engine.initialize()).
 
 ## Feature 3 — Show assistant text with tool calls
+
 - In the tool-call branch (411-427), emit `assistantMessage`/`assistantMessageComplete` BEFORE `toolCallBatch` so the text commits above the tool calls. Text is already appended to context (line 412-415); this just surfaces it in the TUI.
 
 ## Implementation steps
+
 1. **drone-core config types** (`config-types.ts`): add `brokenResponses`, `reasoningOnlyResponses`, `identicalToolCalls` to `session` config type + defaults.
 2. **drone-core config schema** (`config-schema.ts`): add the three nested objects to the `session` schema.
 3. **drone-core event type** (`session-types.ts`): add `{ kind: 'notice'; content: string }` to `DroneConversationEvent`.
@@ -72,6 +82,7 @@ session: {
 9. **Docs**: update AGENTS.md if needed; add wiki decision page.
 
 ## Validation criteria
+
 - LSP passes (typescript) with zero errors.
 - `pnpm -r run lint` passes (eslint + prettier).
 - `pnpm -r run build` passes.

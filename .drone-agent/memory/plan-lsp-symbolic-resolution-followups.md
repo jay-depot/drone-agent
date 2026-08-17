@@ -3,7 +3,7 @@ key: plan-lsp-symbolic-resolution-followups
 tags:
   []
 created: 2026-08-17T22:04:29.158Z
-updated: 2026-08-17T22:08:39.517Z
+updated: 2026-08-17T22:14:59.426Z
 ---
 
 # Plan: LSP symbolic-resolution follow-up fixes
@@ -77,3 +77,39 @@ File: drone-agent/src/plugins/lsp/server.ts
 - New tests: locationToAgentShape 1-based range; code_action query.range 1-based; buildAutoExpansion one-snippet-per-file.
 - Settled decision (one-snippet-per-file) logged in project wiki.
 - No dead code or unused variables; new code covered by unit tests.
+
+## COMPLETED (2026-08-17) — All steps implemented and verified
+
+### Step 1 (delete code_action pre-pass) — DONE
+- editing.ts: removed the `if (!input.referenceId && (text || symbol))` pre-pass block. The text/symbol branch already handles ambiguity identically (catches AmbiguousPositionError → buildAmbiguousResponse). No behavior change; verified AmbiguousPositionError/buildAmbiguousResponse still used in the text/symbol branch and rename.
+
+### Step 2 (1-based range at agent boundary) — DONE
+- server.ts `locationToAgentShape`: range now normalized to 1-based (start/end line+1, character+1). line/column already 1-based.
+- editing.ts code_action query: `query.range` normalized to 1-based (with `: undefined` when no range).
+- ReferenceLocation.range left 0-based internally (code_action referenceId branch feeds it to the LSP server).
+- Tests added: "locationToAgentShape normalizes range to 1-based" and "code_action query.range is 1-based".
+
+### Step 3 (buildAutoExpansion file-level dedup) — DONE
+- navigation.ts: `seenKeys` → `seenFiles` (keyed on filePath). One snippet per file.
+- Regression test added: "buildAutoExpansion dedups by file (one snippet per file)" — 3 locations in the same file yield exactly 1 snippet.
+- Settled decision (one-snippet-per-file) logged in project wiki (decision 141).
+
+### Step 4 (per-key reference lock) — DONE (re-scoped, not strict per-key)
+- server.ts `resolveReference`: reads the line fingerprint OUTSIDE the lock (location is immutable once stored), then acquires the lock only for the fast Map mutations (re-check, TTL expiry, stale delete). Unrelated references now resolve concurrently.
+- A strict per-referenceId lock is NOT used: storeReferences' FIFO eviction can delete any key, so all Map mutations must share one lock. Documented in the withCacheLock comment.
+
+### Step 5 (validation) — DONE
+- LSP diagnostics clean on all 4 touched files.
+- pnpm -r run build: pass. pnpm lint: pass.
+- pnpm test: 1949 passed | 9 skipped (was 1946 before; +3 new tests). lsp-ergonomics.test.ts: 50/50 pass.
+- No dead code; AmbiguousPositionError/buildAmbiguousResponse still used.
+
+### Project wiki
+- Created decision 141 (decisions/141-lsp-symbolic-resolution-followups.md) documenting all four fixes + the settled one-snippet-per-file decision.
+- Updated concepts/lsp-symbolic-resolution.md (pre-pass removal, file-level dedup, new "Agent-Facing Coordinate Convention" section).
+- Updated index.md (decision 141 in Decisions table + related frontmatter).
+- Appended to log.md.
+
+### Final state
+- All 4 fixes implemented and validated. 3 new tests added. Settled decision logged in wiki.
+- Commit: fbeadae (plan file) + working-tree changes to be committed.

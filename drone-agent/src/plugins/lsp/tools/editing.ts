@@ -171,25 +171,6 @@ export function createCodeActionTool(
       await server.refreshIfNeeded();
       const filePath = server.resolveTargetFilePath(input.filePath);
 
-      // If text/symbol is provided (and no referenceId), attempt position
-      // resolution first so ambiguity can be reported with reference IDs even
-      // without a connected runtime (parsePositionInput only reads files).
-      // When a referenceId is present it takes precedence, so skip the pre-pass
-      // to avoid an ambiguous text parse overriding the caller's explicit choice.
-      if (
-        !input.referenceId &&
-        (typeof input.text === 'string' || typeof input.symbol === 'string')
-      ) {
-        try {
-          await server.parsePositionInput('lsp__code_action', input);
-        } catch (error) {
-          if (error instanceof AmbiguousPositionError) {
-            return buildAmbiguousResponse(server, error);
-          }
-          throw error;
-        }
-      }
-
       const only = Array.isArray(input.only)
         ? input.only.filter(
             (value): value is string => typeof value === 'string'
@@ -388,7 +369,21 @@ export function createCodeActionTool(
       });
       return JSON.stringify(
         {
-          query: { filePath: targetFilePath, range },
+          query: {
+            filePath: targetFilePath,
+            range: range
+              ? {
+                  start: {
+                    line: range.start.line + 1,
+                    character: range.start.character + 1,
+                  },
+                  end: {
+                    line: range.end.line + 1,
+                    character: range.end.character + 1,
+                  },
+                }
+              : undefined,
+          },
           actions: result,
         },
         null,

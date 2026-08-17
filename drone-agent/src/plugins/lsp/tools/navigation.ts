@@ -52,13 +52,13 @@ async function buildAutoExpansion(
     return {};
   }
   const snippets: Record<string, string> = {};
-  const seenKeys = new Set<string>();
+  const seenFiles = new Set<string>();
   for (const loc of locations) {
     const key = `${loc.filePath}:${loc.line}:${loc.column}`;
-    if (seenKeys.has(key)) {
+    if (seenFiles.has(loc.filePath)) {
       continue;
     }
-    seenKeys.add(key);
+    seenFiles.add(loc.filePath);
     try {
       const snippet = await server.readFileSnippet(
         loc.filePath,
