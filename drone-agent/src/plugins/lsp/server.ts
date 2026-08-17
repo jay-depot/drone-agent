@@ -12,6 +12,7 @@ import type {
   DroneLspServerState,
   DroneLogger,
 } from 'drone-core';
+import { AmbiguousPositionError, buildAmbiguousMatches } from 'drone-core';
 import { commandExistsOnPath } from 'drone-core';
 import {
   computeCacheKey,
@@ -40,7 +41,6 @@ import {
   type KnownServerSpec,
 } from './known-servers.js';
 import {
-  pathExists,
   workspaceHasMarkers,
   hasMatchingFiles,
   collectWorkspaceFiles,
@@ -137,7 +137,6 @@ export type ServerManager = {
   readFileSnippet: (
     filePath: string,
     line: number,
-    column: number,
     contextLines?: number
   ) => Promise<string>;
   storeReferences: (
@@ -983,7 +982,18 @@ export function createServerManager(
     }
 
     if (matches.length > 1) {
-      const details = matches
+      const ambiguousMatches = await buildAmbiguousMatches(
+        matches.map(m => ({
+          filePath: absolutePath,
+          line: m.line,
+          column: m.column,
+        })),
+        async filePath => {
+          const snap = filePath === absolutePath ? snapshot : undefined;
+          return snap ? snap.text.split('\n') : undefined;
+        }
+      );
+      const details = ambiguousMatches
         .map(
           (m, idx) =>
             `  ${idx + 1}. Line ${m.line}, column ${m.column}:\n${m.context
@@ -992,7 +1002,9 @@ export function createServerManager(
               .join('\n')}`
         )
         .join('\n');
-      throw new Error(
+      throw new AmbiguousPositionError(
+        absolutePath,
+        ambiguousMatches,
         `Text "${text}" is ambiguous — found ${matches.length} matches in ${absolutePath}:\n${details}`
       );
     }
@@ -1044,9 +1056,11 @@ export function createServerManager(
     if (withPosition.length === 1) {
       return { line: withPosition[0].line, column: withPosition[0].column };
     }
+    // Read the file once for context-based disambiguation and error reporting
+    const snapshot = await readDocumentSnapshot(absolutePath);
+
     // If surroundingText provided and multiple document symbol matches, filter by context
     if (surroundingText && withPosition.length > 1) {
-      const snapshot = await readDocumentSnapshot(absolutePath);
       if (snapshot) {
         const lines = snapshot.text.split('\n');
         const filtered = withPosition.filter(s => {
@@ -1069,13 +1083,26 @@ export function createServerManager(
     }
 
     if (withPosition.length > 1) {
-      const details = withPosition
-        .map(
-          (s, idx) =>
-            `  ${idx + 1}. Line ${s.line}, column ${s.column} — ${s.name}`
-        )
+      const ambiguousMatches = await buildAmbiguousMatches(
+        withPosition.map(s => ({
+          filePath: absolutePath,
+          line: s.line,
+          column: s.column,
+        })),
+        async filePath => {
+          if (filePath !== absolutePath) return undefined;
+          return snapshot ? snapshot.text.split('\n') : undefined;
+        }
+      );
+      const details = ambiguousMatches
+        .map((m, idx) => {
+          const orig = withPosition[idx];
+          return `  ${idx + 1}. Line ${m.line}, column ${m.column} — ${orig?.name ?? ''}`;
+        })
         .join('\n');
-      throw new Error(
+      throw new AmbiguousPositionError(
+        absolutePath,
+        ambiguousMatches,
         `Symbol "${symbol}" is ambiguous — found ${withPosition.length} matches in ${absolutePath}:\n${details}`
       );
     }
@@ -1093,8 +1120,16 @@ export function createServerManager(
 
     // Filter out workspace symbols without position info
     const wsWithPosition = wsCandidates.filter(
-      (s): s is NormalizedSymbol & { line: number; column: number } =>
-        s.line !== undefined && s.column !== undefined
+      (
+        s
+      ): s is NormalizedSymbol & {
+        filePath: string;
+        line: number;
+        column: number;
+      } =>
+        s.line !== undefined &&
+        s.column !== undefined &&
+        s.filePath !== undefined
     );
 
     if (wsWithPosition.length === 0) {
@@ -1108,14 +1143,60 @@ export function createServerManager(
       };
     }
 
+    // If surroundingText provided, filter workspace matches by reading each file's context
+    if (surroundingText && wsWithPosition.length > 1) {
+      const filtered: Array<
+        NormalizedSymbol & { filePath: string; line: number; column: number }
+      > = [];
+      for (const s of wsWithPosition) {
+        const snap = await readDocumentSnapshot(s.filePath);
+        if (!snap) continue;
+        const lines = snap.text.split('\n');
+        const contextLines = lines.slice(
+          Math.max(0, s.line - 3),
+          Math.min(lines.length, s.line + 2)
+        );
+        if (
+          contextLines.some(l =>
+            l.toLowerCase().includes(surroundingText.toLowerCase())
+          )
+        ) {
+          filtered.push(s);
+        }
+      }
+      if (filtered.length === 1) {
+        return {
+          line: filtered[0].line,
+          column: filtered[0].column,
+        };
+      }
+      if (filtered.length > 1) {
+        wsWithPosition.length = 0;
+        wsWithPosition.push(...filtered);
+      }
+    }
+
     // Multiple workspace matches
+    const ambiguousMatches = await buildAmbiguousMatches(
+      wsWithPosition.map(s => ({
+        filePath: s.filePath,
+        line: s.line,
+        column: s.column,
+      })),
+      async filePath => {
+        const snap = await readDocumentSnapshot(filePath);
+        return snap ? snap.text.split('\n') : undefined;
+      }
+    );
     const details = wsWithPosition
       .map(
         (s, idx) =>
           `  ${idx + 1}. ${s.filePath}:${s.line}:${s.column} — ${s.name}`
       )
       .join('\n');
-    throw new Error(
+    throw new AmbiguousPositionError(
+      undefined, // Workspace ambiguity has no single file
+      ambiguousMatches,
       `Symbol "${symbol}" is ambiguous across the workspace — found ${wsWithPosition.length} matches:\n${details}`
     );
   }
@@ -1257,7 +1338,6 @@ export function createServerManager(
   async function readFileSnippet(
     filePath: string,
     line: number,
-    column: number,
     contextLines: number = 5
   ): Promise<string> {
     const absolutePath = path.resolve(filePath);

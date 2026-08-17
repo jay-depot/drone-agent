@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import type { DroneToolDefinition } from 'drone-core';
 import type { DroneLspDiagnostic } from 'drone-core';
+import { AmbiguousPositionError, type AmbiguousMatch } from 'drone-core';
 import type { ServerManager, ResolvedPosition } from '../server.js';
 import {
   normalizeTextEdits,
@@ -11,10 +12,70 @@ import {
   severityToLsp,
   type LspCodeActionResponse,
   type LspWorkspaceEdit,
-  type NormalizedWorkspaceEdit,
 } from '../normalize/index.js';
 
 const HEAVY_EDIT_BUDGET = 3000;
+const CRIB_SHEET_CONTEXT_LINES = 5;
+
+/**
+ * Build a crib-sheet entry for an ambiguous match: the reference ID,
+ * position, context snippet, and suggested surroundingText that would
+ * uniquely target this match.
+ */
+async function buildCribSheetEntry(
+  server: ServerManager,
+  match: AmbiguousMatch,
+  referenceId: string
+): Promise<Record<string, unknown>> {
+  const snippet = await server.readFileSnippet(
+    match.filePath,
+    match.line,
+    CRIB_SHEET_CONTEXT_LINES
+  );
+  return {
+    referenceId,
+    filePath: match.filePath,
+    line: match.line,
+    column: match.column,
+    suggestedSurroundingText: match.suggestedSurroundingText,
+    snippet: snippet || undefined,
+    context: match.context,
+  };
+}
+
+/**
+ * Convert an AmbiguousPositionError into a response that returns
+ * reference IDs paired with crib sheets so the LLM can confirm which
+ * match to target.
+ */
+async function buildAmbiguousResponse(
+  server: ServerManager,
+  error: AmbiguousPositionError
+): Promise<string> {
+  const locations = error.matches.map(m => ({
+    filePath: m.filePath,
+    line: m.line,
+    column: m.column,
+    range: {
+      start: { line: m.line - 1, character: m.column - 1 },
+      end: { line: m.line - 1, character: m.column },
+    },
+  }));
+  const referenceIds = server.storeReferences(locations);
+  const cribSheet = await Promise.all(
+    error.matches.map((m, i) => buildCribSheetEntry(server, m, referenceIds[i]))
+  );
+  return JSON.stringify(
+    {
+      error: error.message,
+      ambiguous: true,
+      hint: 'Provide a referenceId from the list below to confirm which match to target.',
+      matches: cribSheet,
+    },
+    null,
+    2
+  );
+}
 
 export function createCodeActionTool(
   server: ServerManager
@@ -22,7 +83,7 @@ export function createCodeActionTool(
   return {
     name: 'code_action',
     description:
-      'Return LSP code actions (quick fixes, refactorings, source actions) for a file and range. When no range is specified, returns all actions for the file. Use text or symbol to target a specific position. If text/symbol resolution is ambiguous, use surroundingText to disambiguate, or provide a referenceId from a previous ambiguous resolution.',
+      'Return LSP code actions (quick fixes, refactorings, source actions) for a file and range. When no range is specified, returns all actions for the file. Use text or symbol to target a specific position. If text/symbol resolution is ambiguous, a list of reference IDs with code snippets will be returned — re-invoke with a referenceId to confirm the target.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -89,6 +150,21 @@ export function createCodeActionTool(
       }
       await server.refreshIfNeeded();
       const filePath = server.resolveTargetFilePath(input.filePath);
+
+      // If text/symbol is provided, attempt position resolution first so
+      // ambiguity can be reported with reference IDs even without a
+      // connected runtime (parsePositionInput only reads files).
+      if (typeof input.text === 'string' || typeof input.symbol === 'string') {
+        try {
+          await server.parsePositionInput('lsp__code_action', input);
+        } catch (error) {
+          if (error instanceof AmbiguousPositionError) {
+            return buildAmbiguousResponse(server, error);
+          }
+          throw error;
+        }
+      }
+
       const runtime = server.findRuntimeForFile(filePath);
       if (!runtime) {
         throw new Error(
@@ -151,7 +227,15 @@ export function createCodeActionTool(
         typeof input.symbol === 'string'
       ) {
         // Resolve position from text/symbol, build a single-character range
-        const pos = await server.parsePositionInput('lsp__code_action', input);
+        let pos: { filePath: string; line: number; column: number };
+        try {
+          pos = await server.parsePositionInput('lsp__code_action', input);
+        } catch (error) {
+          if (error instanceof AmbiguousPositionError) {
+            return buildAmbiguousResponse(server, error);
+          }
+          throw error;
+        }
         range = {
           start: { line: pos.line - 1, character: pos.column - 1 },
           end: { line: pos.line - 1, character: pos.column },
@@ -290,7 +374,7 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
   return {
     name: 'rename',
     description:
-      'Rename a symbol across the workspace. Returns the workspace edit as JSON by default. When apply is true, applies the rename directly. If text/symbol resolution is ambiguous, use surroundingText to disambiguate, or provide a referenceId from a previous ambiguous resolution.',
+      'Rename a symbol across the workspace. Returns the workspace edit as JSON by default. When apply is true, applies the rename directly. If text/symbol resolution is ambiguous, a list of reference IDs with code snippets will be returned — re-invoke with a referenceId to confirm the target.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -344,6 +428,7 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
       if (typeof input.newName !== 'string' || input.newName.length === 0) {
         throw new Error('lsp.rename requires a non-empty newName.');
       }
+      await server.refreshIfNeeded();
 
       // If referenceId is provided, resolve it directly
       let resolved: ResolvedPosition;
@@ -369,8 +454,15 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
           column: ref.column,
         };
       } else {
-        // Try to resolve position normally
-        resolved = await server.resolveAtPosition('lsp__rename', input);
+        // Try to resolve position normally; if ambiguous, return reference IDs
+        try {
+          resolved = await server.resolveAtPosition('lsp__rename', input);
+        } catch (error) {
+          if (error instanceof AmbiguousPositionError) {
+            return buildAmbiguousResponse(server, error);
+          }
+          throw error;
+        }
       }
 
       const response = await resolved.runtime.client.request<LspWorkspaceEdit>(

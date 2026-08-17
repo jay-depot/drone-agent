@@ -52,18 +52,17 @@ async function buildAutoExpansion(
     return {};
   }
   const snippets: Record<string, string> = {};
-  const seenFiles = new Set<string>();
+  const seenKeys = new Set<string>();
   for (const loc of locations) {
     const key = `${loc.filePath}:${loc.line}:${loc.column}`;
-    if (seenFiles.has(loc.filePath)) {
+    if (seenKeys.has(key)) {
       continue;
     }
-    seenFiles.add(loc.filePath);
+    seenKeys.add(key);
     try {
       const snippet = await server.readFileSnippet(
         loc.filePath,
         loc.line,
-        loc.column,
         SNIPPET_CONTEXT_LINES
       );
       if (snippet) {
@@ -96,6 +95,7 @@ export function createGoToTool(server: ServerManager): DroneToolDefinition {
       additionalProperties: false,
     },
     execute: async input => {
+      await server.refreshIfNeeded();
       const kind = typeof input.kind === 'string' ? input.kind : 'definition';
       const toolName = `lsp__go_to(${kind})`;
       const { runtime, document, line, column } =

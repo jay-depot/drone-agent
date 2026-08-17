@@ -61,6 +61,7 @@ export function createCallHierarchyTool(
       additionalProperties: false,
     },
     execute: async input => {
+      await server.refreshIfNeeded();
       const direction = input.direction;
       if (direction !== 'incoming' && direction !== 'outgoing') {
         throw new Error(

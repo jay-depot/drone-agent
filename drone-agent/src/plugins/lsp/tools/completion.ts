@@ -63,6 +63,7 @@ export function createInspectTool(server: ServerManager): DroneToolDefinition {
       additionalProperties: false,
     },
     execute: async input => {
+      await server.refreshIfNeeded();
       const { runtime, document, line, column } =
         await server.resolveAtPosition('lsp__inspect', input);
 
@@ -99,7 +100,6 @@ export function createInspectTool(server: ServerManager): DroneToolDefinition {
         const snippet = await server.readFileSnippet(
           filePathFromUri(document.uri),
           line,
-          column,
           SNIPPET_CONTEXT_LINES
         );
         if (snippet) {
@@ -120,7 +120,7 @@ export function createCompletionTool(
   return {
     name: 'completion',
     description:
-      'Get completion suggestions at a position. Includes kind, detail, and documentation. Use this to see what identifiers, methods, or properties are available at a cursor position. Supports `text` and `symbol` parameters for position resolution.',
+      'Get completion suggestions at a position. Includes kind, detail, and documentation. Use this to see what identifiers, methods, or properties are available at a cursor position. Supports `text` and `symbol` parameters for position resolution. Includes a code snippet of the surrounding context.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -135,6 +135,7 @@ export function createCompletionTool(
       additionalProperties: false,
     },
     execute: async input => {
+      await server.refreshIfNeeded();
       const { runtime, document, line, column } =
         await server.resolveAtPosition('lsp__completion', input);
       const limit =
@@ -152,17 +153,30 @@ export function createCompletionTool(
       const { isIncomplete, items } = normalizeCompletionItems(response);
       const truncated = items.length > limit;
       const resultItems = truncated ? items.slice(0, limit) : items;
-      return JSON.stringify(
-        {
-          query: { filePath: document.uri, line, column },
-          isIncomplete,
-          items: resultItems,
-          truncated,
-          totalItems: items.length,
-        },
-        null,
-        2
-      );
+
+      const result: Record<string, unknown> = {
+        query: { filePath: document.uri, line, column },
+        isIncomplete,
+        items: resultItems,
+        truncated,
+        totalItems: items.length,
+      };
+
+      // Auto-expand: include a code snippet for the query position
+      try {
+        const snippet = await server.readFileSnippet(
+          filePathFromUri(document.uri),
+          line,
+          SNIPPET_CONTEXT_LINES
+        );
+        if (snippet) {
+          result.snippet = snippet;
+        }
+      } catch {
+        // Skip snippet if file can't be read
+      }
+
+      return JSON.stringify(result, null, 2);
     },
   };
 }

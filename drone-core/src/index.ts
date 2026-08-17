@@ -3,6 +3,7 @@
 // This file re-exports all public types and utilities from the drone-core
 // library. The implementation is split across multiple modules:
 //
+//   - position-types.ts  : Position resolution types (AmbiguousPositionError)
 //   - config-types.ts     : Configuration types and helpers
 //   - session-types.ts    : Session, message, tool, and token types
 //   - lsp-types.ts        : LSP server types
@@ -21,6 +22,14 @@
 //   - wiki-types.ts       : Wiki page types for swarm knowledge base
 //
 // -----------------------------------------------------------------------
+
+// ── Position types ──────────────────────────────────────────────────
+
+export type { AmbiguousMatch } from './position-types.js';
+export {
+  AmbiguousPositionError,
+  buildAmbiguousMatches,
+} from './position-types.js';
 
 // ── Config types ────────────────────────────────────────────────────
 

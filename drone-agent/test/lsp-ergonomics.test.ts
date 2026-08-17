@@ -3,6 +3,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { DroneToolDefinition } from 'drone-core';
+import { AmbiguousPositionError, type AmbiguousMatch } from 'drone-core';
 import { createServerManager } from '../src/plugins/lsp/server.js';
 import {
   createGoToTool,
@@ -58,6 +59,33 @@ async function createTempFile(
   const filePath = path.join(dir, name);
   await writeFile(filePath, content, 'utf-8');
   return filePath;
+}
+
+function createMockServer() {
+  return {
+    refreshIfNeeded: async () => {},
+    markDirty: () => {},
+    getDiagnostics: () => [],
+    getServerStates: () => [],
+    renderDiagnosticsPrompt: () => false,
+    findRuntimeForFile: () => undefined,
+    ensureDocumentLoaded: async () => {
+      throw new Error('not connected');
+    },
+    resolveTargetFilePath: (p: string) => p,
+    parsePositionInput: async () => ({ filePath: '', line: 1, column: 1 }),
+    resolveAtPosition: async () => {
+      throw new Error('not connected');
+    },
+    readFileSnippet: async (_filePath: string, _line: number) => '',
+    storeReferences: () => [],
+    resolveReference: () => undefined,
+    locationToAgentShape: (_l: unknown[]) => [],
+    initialize: async () => {},
+    shutdown: async () => {},
+    getAvailableServers: () => [],
+    startServerForFile: async () => false,
+  } as Parameters<typeof createInspectTool>[0];
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +170,7 @@ describe('resolveTextPosition (via parsePositionInput)', () => {
     }
   });
 
-  it('throws on ambiguous text with context in error message', async () => {
+  it('throws AmbiguousPositionError on ambiguous text with structured data', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
     try {
       const filePath = await createTempFile(
@@ -150,8 +178,16 @@ describe('resolveTextPosition (via parsePositionInput)', () => {
         'test.ts',
         [
           'const x = 1;',
-          'const y = 2;',
-          'const x = 3; // duplicate',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const x = 2;',
           'const z = 4;',
         ].join('\n')
       );
@@ -164,13 +200,23 @@ describe('resolveTextPosition (via parsePositionInput)', () => {
         })
         .catch(e => e);
 
-      expect(err).toBeInstanceOf(Error);
-      expect(err.message).toContain('ambiguous');
-      expect(err.message).toContain('2 matches');
-      expect(err.message).toContain('Line 1');
-      expect(err.message).toContain('Line 3');
-      expect(err.message).toContain('const x = 1');
-      expect(err.message).toContain('const x = 3');
+      expect(err).toBeInstanceOf(AmbiguousPositionError);
+      const ambErr = err as AmbiguousPositionError;
+      expect(ambErr.matches).toHaveLength(2);
+      expect(ambErr.matches[0]).toMatchObject({
+        filePath,
+        line: 1,
+        column: 1,
+      });
+      expect(ambErr.matches[1]).toMatchObject({
+        filePath,
+        line: 11,
+        column: 1,
+      });
+      expect(ambErr.matches[0].context).toContain('const x = 1');
+      expect(ambErr.matches[1].context).toContain('const x = 2');
+      expect(ambErr.matches[0].suggestedSurroundingText).toBeDefined();
+      expect(ambErr.matches[1].suggestedSurroundingText).toBeDefined();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -273,7 +319,15 @@ describe('surroundingText disambiguation', () => {
       const filePath = await createTempFile(
         dir,
         'test.ts',
-        ['// FIRST SECTION', 'const x = 1;', '// END FIRST', '', '// SECOND SECTION', 'const x = 2;', '// END SECOND'].join('\n')
+        [
+          '// FIRST SECTION',
+          'const x = 1;',
+          '// END FIRST',
+          '',
+          '// SECOND SECTION',
+          'const x = 2;',
+          '// END SECOND',
+        ].join('\n')
       );
       const server = await createTestServerManager(dir);
 
@@ -297,7 +351,15 @@ describe('surroundingText disambiguation', () => {
       const filePath = await createTempFile(
         dir,
         'test.ts',
-        ['// FIRST SECTION', 'const x = 1;', '// END FIRST', '', '// SECOND SECTION', 'const x = 2;', '// END SECOND'].join('\n')
+        [
+          '// FIRST SECTION',
+          'const x = 1;',
+          '// END FIRST',
+          '',
+          '// SECOND SECTION',
+          'const x = 2;',
+          '// END SECOND',
+        ].join('\n')
       );
       const server = await createTestServerManager(dir);
 
@@ -310,6 +372,107 @@ describe('surroundingText disambiguation', () => {
 
       expect(result.line).toBe(2);
       expect(result.column).toBe(1);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('suggestedSurroundingText', () => {
+  it('suggests a unique line for each ambiguous match', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const filePath = await createTempFile(
+        dir,
+        'test.ts',
+        [
+          '// FIRST BLOCK',
+          'const value = 1;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const value = 2;',
+          '// SECOND BLOCK',
+        ].join('\n')
+      );
+      const server = await createTestServerManager(dir);
+
+      const err = await server
+        .parsePositionInput('lsp__test', {
+          filePath,
+          text: 'const value',
+        })
+        .catch(e => e);
+
+      expect(err).toBeInstanceOf(AmbiguousPositionError);
+      const ambErr = err as AmbiguousPositionError;
+      const match1 = ambErr.matches.find(m => m.line === 2);
+      const match2 = ambErr.matches.find(m => m.line === 11);
+      expect(match1).toBeDefined();
+      expect(match2).toBeDefined();
+      expect(match1!.suggestedSurroundingText).toContain('FIRST');
+      expect(match2!.suggestedSurroundingText).toBeDefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns undefined when no unique context exists', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      // Matches so close together that every line appears in other windows
+      // even at the 30-line hard limit.
+      const filePath = await createTempFile(
+        dir,
+        'test.ts',
+        [
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+          'const repeated = 0;',
+        ].join('\n')
+      );
+      const server = await createTestServerManager(dir);
+
+      // Query "const repeated" for many matches
+      const err = await server
+        .parsePositionInput('lsp__test', {
+          filePath,
+          text: 'const repeated',
+        })
+        .catch(e2 => e2);
+      expect(err).toBeInstanceOf(AmbiguousPositionError);
+      const ambErr = err as AmbiguousPositionError;
+      expect(ambErr.matches.length).toBeGreaterThan(1);
+      // Every line is "const repeated = 0;" — no unique context exists.
+      for (const m of ambErr.matches) {
+        expect(m.suggestedSurroundingText).toBeUndefined();
+      }
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -398,7 +561,7 @@ describe('readFileSnippet', () => {
       );
       const server = await createTestServerManager(dir);
 
-      const snippet = await server.readFileSnippet(filePath, 5, 1, 2);
+      const snippet = await server.readFileSnippet(filePath, 5, 2);
       expect(snippet).toContain('line 3');
       expect(snippet).toContain('line 5');
       expect(snippet).toContain('line 7');
@@ -412,13 +575,91 @@ describe('readFileSnippet', () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
     try {
       const server = await createTestServerManager(dir);
-      // Use a path that doesn't exist and won't throw — the method returns ''
-      const result = await server.readFileSnippet(
-        '/nonexistent/file.ts',
-        1,
-        1
-      );
+      const result = await server.readFileSnippet('/nonexistent/file.ts', 1);
       expect(result).toBe('');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('rename/code_action ambiguity returns reference IDs', () => {
+  it('rename returns reference IDs when text is ambiguous', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const filePath = await createTempFile(
+        dir,
+        'test.ts',
+        [
+          '// FIRST BLOCK',
+          'const value = 1;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const value = 2;',
+          '// SECOND BLOCK',
+        ].join('\n')
+      );
+      const server = await createTestServerManager(dir);
+      const tool = createRenameTool(server);
+
+      const result = await tool.execute({
+        filePath,
+        text: 'const value',
+        newName: 'renamed',
+      });
+
+      const parsed = JSON.parse(result as string);
+      expect(parsed.ambiguous).toBe(true);
+      expect(parsed.matches).toHaveLength(2);
+      expect(parsed.matches[0].referenceId).toMatch(/^ref_\d+$/);
+      expect(parsed.matches[0].suggestedSurroundingText).toContain('FIRST');
+      expect(parsed.matches[1].suggestedSurroundingText).toBeDefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('code_action returns reference IDs when text is ambiguous', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const filePath = await createTempFile(
+        dir,
+        'test.ts',
+        [
+          '// FIRST BLOCK',
+          'const value = 1;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const value = 2;',
+          '// SECOND BLOCK',
+        ].join('\n')
+      );
+      const server = await createTestServerManager(dir);
+      const tool = createCodeActionTool(server);
+
+      const result = await tool.execute({
+        filePath,
+        text: 'const value',
+      });
+
+      const parsed = JSON.parse(result as string);
+      expect(parsed.ambiguous).toBe(true);
+      expect(parsed.matches).toHaveLength(2);
+      expect(parsed.matches[0].referenceId).toMatch(/^ref_\d+$/);
+      expect(parsed.matches[0].suggestedSurroundingText).toContain('FIRST');
+      expect(parsed.matches[1].suggestedSurroundingText).toBeDefined();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -436,33 +677,6 @@ describe('tool input schemas accept text/symbol parameters', () => {
     expect(props.column).toBeDefined();
     expect(schema!.required).not.toContain('line');
     expect(schema!.required).not.toContain('column');
-  }
-
-  function createMockServer() {
-    return {
-      refreshIfNeeded: async () => {},
-      markDirty: () => {},
-      getDiagnostics: () => [],
-      getServerStates: () => [],
-      renderDiagnosticsPrompt: () => false,
-      findRuntimeForFile: () => undefined,
-      ensureDocumentLoaded: async () => {
-        throw new Error('not connected');
-      },
-      resolveTargetFilePath: (p: string) => p,
-      parsePositionInput: async () => ({ filePath: '', line: 1, column: 1 }),
-      resolveAtPosition: async () => {
-        throw new Error('not connected');
-      },
-      readFileSnippet: async () => '',
-      storeReferences: () => [],
-      resolveReference: () => undefined,
-      locationToAgentShape: (_l: unknown[]) => [],
-      initialize: async () => {},
-      shutdown: async () => {},
-      getAvailableServers: () => [],
-      startServerForFile: async () => false,
-    } as Parameters<typeof createInspectTool>[0];
   }
 
   const server = createMockServer();
@@ -519,12 +733,12 @@ describe('tool input schemas accept text/symbol parameters', () => {
     expect(schema.required).not.toContain('endColumn');
   });
 
-  it('get_diagnostics accepts text/symbol and surroundingText', () => {
+  it('get_diagnostics accepts text/symbol but no surroundingText', () => {
     const tool = createGetDiagnosticsTool(server);
     const props = tool.inputSchema!.properties ?? {};
     expect(props.text).toBeDefined();
     expect(props.symbol).toBeDefined();
-    expect(props.surroundingText).toBeDefined();
+    expect(props.surroundingText).toBeUndefined();
   });
 
   it('formatting does not have text/symbol (file-level tool)', () => {
@@ -536,33 +750,6 @@ describe('tool input schemas accept text/symbol parameters', () => {
 });
 
 describe('tool descriptions mention new features', () => {
-  function createMockServer() {
-    return {
-      refreshIfNeeded: async () => {},
-      markDirty: () => {},
-      getDiagnostics: () => [],
-      getServerStates: () => [],
-      renderDiagnosticsPrompt: () => false,
-      findRuntimeForFile: () => undefined,
-      ensureDocumentLoaded: async () => {
-        throw new Error('not connected');
-      },
-      resolveTargetFilePath: (p: string) => p,
-      parsePositionInput: async () => ({ filePath: '', line: 1, column: 1 }),
-      resolveAtPosition: async () => {
-        throw new Error('not connected');
-      },
-      readFileSnippet: async () => '',
-      storeReferences: () => [],
-      resolveReference: () => undefined,
-      locationToAgentShape: (_l: unknown[]) => [],
-      initialize: async () => {},
-      shutdown: async () => {},
-      getAvailableServers: () => [],
-      startServerForFile: async () => false,
-    } as Parameters<typeof createRenameTool>[0];
-  }
-
   it('go_to mentions auto-expansion', () => {
     const tool = createGoToTool(createMockServer());
     expect(tool.description.toLowerCase()).toContain('snippet');
@@ -575,6 +762,11 @@ describe('tool descriptions mention new features', () => {
 
   it('inspect mentions snippet', () => {
     const tool = createInspectTool(createMockServer());
+    expect(tool.description.toLowerCase()).toContain('snippet');
+  });
+
+  it('completion mentions snippet', () => {
+    const tool = createCompletionTool(createMockServer());
     expect(tool.description.toLowerCase()).toContain('snippet');
   });
 
@@ -591,64 +783,14 @@ describe('tool descriptions mention new features', () => {
 
 describe('rename tool description mentions apply', () => {
   it('rename description mentions apply parameter', () => {
-    const server = {
-      refreshIfNeeded: async () => {},
-      markDirty: () => {},
-      getDiagnostics: () => [],
-      getServerStates: () => [],
-      renderDiagnosticsPrompt: () => false,
-      findRuntimeForFile: () => undefined,
-      ensureDocumentLoaded: async () => {
-        throw new Error('not connected');
-      },
-      resolveTargetFilePath: (p: string) => p,
-      parsePositionInput: async () => ({ filePath: '', line: 1, column: 1 }),
-      resolveAtPosition: async () => {
-        throw new Error('not connected');
-      },
-      readFileSnippet: async () => '',
-      storeReferences: () => [],
-      resolveReference: () => undefined,
-      locationToAgentShape: (_l: unknown[]) => [],
-      initialize: async () => {},
-      shutdown: async () => {},
-      getAvailableServers: () => [],
-      startServerForFile: async () => false,
-    } as Parameters<typeof createRenameTool>[0];
-
-    const tool = createRenameTool(server);
+    const tool = createRenameTool(createMockServer());
     expect(tool.description.toLowerCase()).toContain('apply');
   });
 });
 
 describe('formatting tool description mentions auto-apply', () => {
   it('formatting description mentions applying edits', () => {
-    const server = {
-      refreshIfNeeded: async () => {},
-      markDirty: () => {},
-      getDiagnostics: () => [],
-      getServerStates: () => [],
-      renderDiagnosticsPrompt: () => false,
-      findRuntimeForFile: () => undefined,
-      ensureDocumentLoaded: async () => {
-        throw new Error('not connected');
-      },
-      resolveTargetFilePath: (p: string) => p,
-      parsePositionInput: async () => ({ filePath: '', line: 1, column: 1 }),
-      resolveAtPosition: async () => {
-        throw new Error('not connected');
-      },
-      readFileSnippet: async () => '',
-      storeReferences: () => [],
-      resolveReference: () => undefined,
-      locationToAgentShape: (_l: unknown[]) => [],
-      initialize: async () => {},
-      shutdown: async () => {},
-      getAvailableServers: () => [],
-      startServerForFile: async () => false,
-    } as Parameters<typeof createFormattingTool>[0];
-
-    const tool = createFormattingTool(server);
+    const tool = createFormattingTool(createMockServer());
     expect(tool.description.toLowerCase()).toContain('applies');
   });
 });
