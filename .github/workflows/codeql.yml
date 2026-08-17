@@ -1,3 +1,4 @@
+# CodeQL advanced configuration with suppression-comment support (dismiss-alerts).
 name: 'CodeQL Advanced'
 
 on:
