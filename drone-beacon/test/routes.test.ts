@@ -238,6 +238,7 @@ describe('Agent Routes', () => {
     expect(res.statusCode).toBe(201);
     const body = JSON.parse(res.body);
     expect(body.id).toBe('agent-1');
+    expect(body.status).toBe('connected');
     expect(body.coordinatorTrust).toBeDefined();
     expect(body.coordinatorTrust.fingerprintTrusted).toBe(false);
     expect(body.coordinatorTrust.beaconApproved).toBe(false);
@@ -251,7 +252,9 @@ describe('Agent Routes', () => {
     });
     const res = await app.inject({ method: 'GET', url: '/agents' });
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body).length).toBe(1);
+    const agents = JSON.parse(res.body);
+    expect(agents.length).toBe(1);
+    expect(agents[0].status).toBe('connected');
   });
 
   it('GET /agents/:id gets an agent', async () => {

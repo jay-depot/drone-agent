@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import Database from 'better-sqlite3';
 import { setupDb, teardownDb } from './setup.js';
 import {
   createPersona,
@@ -279,19 +280,64 @@ describe('Beacon Agent Session CRUD', () => {
   it('should register an agent', () => {
     const session = registerAgent({ id: 'agent-1', personaId: null });
     expect(session.id).toBe('agent-1');
+    expect(session.status).toBe('connected');
     expect(session.connectedAt).toBeGreaterThan(0);
     expect(session.lastActivity).toBeGreaterThan(0);
   });
 
+  it('migrates an existing agent_sessions table to add the status column', async () => {
+    // Simulate a pre-existing DB whose agent_sessions table predates the
+    // `status` column (e.g. a persisted beacon-data volume from an older
+    // build). initDatabase must add the column idempotently.
+    const { mkdtemp, rm } = await import('node:fs/promises');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'drone-beacon-migrate-'));
+    const dbFile = path.join(dir, 'test.db');
+
+    // Create a legacy agent_sessions table without the status column.
+    const legacy = new Database(dbFile);
+    legacy.exec(`
+      CREATE TABLE agent_sessions (
+        id TEXT PRIMARY KEY,
+        personaId TEXT,
+        connectedAt INTEGER NOT NULL,
+        lastActivity INTEGER NOT NULL
+      );
+    `);
+    legacy.close();
+
+    // Re-init the DB — the migration should add the status column.
+    const { initDatabase, closeDatabase, getDatabase } =
+      await import('../src/db/index.js');
+    initDatabase(dbFile);
+    const cols = getDatabase()
+      .prepare('PRAGMA table_info(agent_sessions)')
+      .all() as Array<{ name: string }>;
+    expect(cols.some(c => c.name === 'status')).toBe(true);
+
+    // registerAgent should now succeed against the migrated table.
+    const { registerAgent } = await import('../src/db/index.js');
+    const session = registerAgent({ id: 'migrated-agent', personaId: null });
+    expect(session.status).toBe('connected');
+
+    closeDatabase();
+    await rm(dir, { recursive: true, force: true });
+  });
+
   it('should get an agent by id', () => {
     registerAgent({ id: 'agent-1', personaId: null });
-    expect(getAgent('agent-1')).toBeDefined();
+    const agent = getAgent('agent-1');
+    expect(agent).toBeDefined();
+    expect(agent!.status).toBe('connected');
   });
 
   it('should list all agents', () => {
     registerAgent({ id: 'a1', personaId: null });
     registerAgent({ id: 'a2', personaId: null });
-    expect(listAgents()).toHaveLength(2);
+    const agents = listAgents();
+    expect(agents).toHaveLength(2);
+    expect(agents.every(a => a.status === 'connected')).toBe(true);
   });
 
   it('should update agent activity', () => {

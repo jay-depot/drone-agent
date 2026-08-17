@@ -7,22 +7,47 @@
  * - message-delivery-status: Read receipts work
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import {
   getBeaconAgents,
   getBeaconMessages,
   sendBeaconMessage,
+  registerBeaconAgent,
   joinChannel,
   leaveChannel,
   sendChannelMessage,
+  getRequiredIntegrationEnv,
   waitForService,
+  shouldSkipIntegrationSuite,
 } from './fixtures/index.js';
 
-const BEACON_URL = process.env.BEACON_URL || 'http://localhost:3457';
+const DEFAULT_BEACON_URL = 'http://localhost:3457';
+const BEACON_URL = getRequiredIntegrationEnv('BEACON_URL', DEFAULT_BEACON_URL);
 
-describe('Inter-Agent Communication', () => {
+describe.skipIf(
+  shouldSkipIntegrationSuite([
+    { url: BEACON_URL, fallbackUrl: DEFAULT_BEACON_URL },
+  ])
+)('Inter-Agent Communication', () => {
   beforeAll(async () => {
-    await waitForService(BEACON_URL, 30, 1000);
+    const beaconReady = await waitForService(BEACON_URL);
+    if (!beaconReady) {
+      throw new Error(`Beacon service not available at ${BEACON_URL}`);
+    }
+
+    // Wait for at least one agent to register with the beacon
+    // (the dummy-agent container retries registration)
+    const maxAgentWait = 30;
+    for (let i = 0; i < maxAgentWait; i++) {
+      const agents = await getBeaconAgents(BEACON_URL);
+      if (agents.length > 0) break;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    // Register a second agent so inter-agent messaging tests have a recipient.
+    // The dummy-agent container provides the first; this registers a second
+    // directly via the beacon REST API (self-contained, no extra container).
+    await registerBeaconAgent(BEACON_URL, 'test-agent-2');
   });
 
   describe('send-message-to-agent', () => {
@@ -45,8 +70,8 @@ describe('Inter-Agent Communication', () => {
       );
 
       expect(message).toBeDefined();
-      expect(message.from).toBe(sender.id);
-      expect(message.to).toBe(recipient.id);
+      expect(message.fromAgentId).toBe(sender.id);
+      expect(message.toAgentId).toBe(recipient.id);
     });
 
     it('should retrieve messages for an agent', async () => {

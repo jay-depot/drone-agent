@@ -9,8 +9,6 @@ services:
       context: ..
       dockerfile: docker/echo-llm.Dockerfile
     container_name: echo-llm
-    ports:
-      - '3458:3458'
     environment:
       - PORT=3458
     networks:
@@ -22,8 +20,6 @@ services:
       context: ..
       dockerfile: docker/drone-coordinator.Dockerfile
     container_name: drone-coordinator
-    ports:
-      - '3456:3456'
     environment:
       - DB_PATH=/data/coordinator.db
     volumes:
@@ -40,8 +36,6 @@ services:
       context: ..
       dockerfile: docker/drone-beacon.Dockerfile
     container_name: drone-beacon
-    ports:
-      - '3457:3457'
     environment:
       - COORDINATOR_HOST=drone-coordinator
       - COORDINATOR_PORT=3456
@@ -62,8 +56,6 @@ services:
       context: ..
       dockerfile: docker/dummy-agent.Dockerfile
     container_name: dummy-agent
-    ports:
-      - '3459:3459'
     environment:
       - BEACON_HOST=drone-beacon
       - BEACON_PORT=3457
@@ -88,11 +80,16 @@ services:
       - BEACON_URL=http://drone-beacon:3457
       - AGENT_URL=http://dummy-agent:3459
       - ECHO_LLM_URL=http://echo-llm:3458
+      - RUN_INTEGRATION_TESTS=true
+      - RUN_LSP_SMOKE_TESTS=true
+      - LLM_PROVIDER=echo
+      - LLM_ECHO_URL=http://echo-llm:3458
     volumes:
       - test-results:/results
     networks:
       - test-swarm
     depends_on:
+      - echo-llm
       - drone-coordinator
       - drone-beacon
       - dummy-agent
