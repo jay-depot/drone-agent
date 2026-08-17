@@ -1,24 +1,22 @@
 ---
 key: plan-lsp-symbolic-resolution-fixes-round-2
-tags: []
+tags:
+  []
 created: 2026-08-17T18:16:47.706Z
-updated: 2026-08-17T18:16:47.706Z
+updated: 2026-08-17T18:40:15.543Z
 ---
 
 ---
-
 key: plan-lsp-symbolic-resolution-fixes-round-2
 tags:
-
-- plan
-- lsp
-- symbolic-resolution
-- surroundingText
-- reference-id
-- drone-core
-  created: 2026-08-17T17:45:00.000Z
-  updated: 2026-08-17T17:45:00.000Z
-
+  - plan
+  - lsp
+  - symbolic-resolution
+  - surroundingText
+  - reference-id
+  - drone-core
+created: 2026-08-17T17:45:00.000Z
+updated: 2026-08-17T18:40:00.000Z
 ---
 
 # Plan: Fix 4 issues in LSP symbolic-resolution improvements (round 2)
@@ -29,7 +27,7 @@ The LSP symbolic-resolution improvements (surroundingText disambiguation, auto-e
 
 ## Issues & agreed fixes
 
-1. **`code_action` cross-file bug** — the `referenceId` branch uses the _input_ `filePath` for runtime/document/diagnostics, but the range comes from `ref.filePath`. For workspace ambiguity (matches spanning files), re-invoking with a referenceId targets the wrong file. Fix: when a referenceId is supplied, target using `ref.filePath` (runtime, document, diagnostics filter). `rename` already does this correctly — mirror it.
+1. **`code_action` cross-file bug** — the `referenceId` branch uses the *input* `filePath` for runtime/document/diagnostics, but the range comes from `ref.filePath`. For workspace ambiguity (matches spanning files), re-invoking with a referenceId targets the wrong file. Fix: when a referenceId is supplied, target using `ref.filePath` (runtime, document, diagnostics filter). `rename` already does this correctly — mirror it.
 
 2. **Window mismatch between suggestion and filter** — `suggestSurroundingText` expands 5→30 lines, but the filter only searches a fixed 2/3 (or 3/2) window, so suggested lines far from the match are never found. Fix (per user direction):
    - The suggestion returns a **dense, contiguous context block** (unique line + neighbors, centered on the match) rather than a single line.
@@ -52,9 +50,7 @@ The LSP symbolic-resolution improvements (surroundingText disambiguation, auto-e
 ## Steps
 
 ### Step 1 — drone-core: `AmbiguousMatch.suggestedSurroundingText` → dense block `suggestedContext`
-
 File: `drone-core/src/position-types.ts`
-
 - Rename field `suggestedSurroundingText: string | undefined` → `suggestedContext: string | undefined`. Update jsdoc: "Dense, contiguous context block (unique line + neighbors, centered on the match) that would disambiguate this match from all others, or undefined if no unique block exists within the hard context limit (30 lines before/after)."
 - `suggestSurroundingText` → rename to `suggestContext`. Change return to a **block**: when a unique line is found at window `w`, return the contiguous slice `[line-1-w, line+w]` joined by `\n` (the same window that made the line unique), NOT just the single line. Keep the uniqueness check on exact trimmed-line equality.
 - `buildAmbiguousMatches`: pass through the new field name.
@@ -62,9 +58,7 @@ File: `drone-core/src/position-types.ts`
 - Tests: `drone-agent/test/lsp-ergonomics.test.ts` — update assertions that reference `suggestedSurroundingText` to `suggestedContext`; assert the block is multi-line and contains the unique line.
 
 ### Step 2 — drone-agent server: filter window sized to handed-back context + exact-match
-
 File: `drone-agent/src/plugins/lsp/server.ts`
-
 - `resolveTextPosition`: replace the substring filter with:
   - Compute `blockLineCount = surroundingText.split('\n').length`.
   - `window = Math.min(blockLineCount, HARD_CONTEXT_LINES)` (import/define HARD_CONTEXT_LINES = 30, or reuse from drone-core — export a constant from position-types).
@@ -75,37 +69,29 @@ File: `drone-agent/src/plugins/lsp/server.ts`
 - Export `HARD_CONTEXT_LINES` (and `SOFT_CONTEXT_LINES`) from `drone-core/src/position-types.ts` so server.ts and the suggestion share one source of truth.
 
 ### Step 3 — drone-agent server: reference cache cap + TTL + staleness
-
 File: `drone-agent/src/plugins/lsp/server.ts`
-
 - Change `referenceCache` value to `{ location, fingerprint, createdAt }`.
 - Add `readLineFingerprint(filePath, line): Promise<string | undefined>` — reads the file line (trimmed) or undefined if file missing.
-- `storeReferences(locations)` stays sync; each location payload gains a `fingerprint` field (computed by caller). On insert: set `createdAt = Date.now()`; if cache size >= 100, evict oldest (FIFO by insertion order — use a Map which preserves insertion order, delete first key).
+- `storeReferences(locations)` stays sync; each location payload gains a `fingerprint` field (computed by caller). On insert: set `createdAt = Date.now()`; if cache size >= 100, evict oldest (FIFO by insertion order — use a Map which preserves insertion order, delete first key). 
 - `resolveReference(referenceId)` becomes async: on access, if entry missing → undefined; if `Date.now() - createdAt > 10*60*1000` → delete, return undefined; else re-read fingerprint via `readLineFingerprint`; if file missing or fingerprint differs → delete, return `{ stale: true }`; else return `{ location, stale: false }` (or return the location and signal staleness via a sentinel). Define a return type: `{ location, stale: boolean } | undefined`.
 - Update `ServerManager` type signatures for `storeReferences` (location payload gains `fingerprint`) and `resolveReference` (async, new return shape).
 
 ### Step 4 — drone-agent editing tools: referenceId targeting + stale handshake
-
 File: `drone-agent/src/plugins/lsp/tools/editing.ts`
-
 - `buildAmbiguousResponse`: before `storeReferences`, compute each match's fingerprint via `server.readLineFingerprint(match.filePath, match.line)` and pass it in the location payload. (Add `readLineFingerprint` to `ServerManager`.)
 - `createCodeActionTool` referenceId branch: use `ref.filePath` (not input `filePath`) for `findRuntimeForFile`, `ensureDocumentLoaded`, and the diagnostics filter. Handle stale: if `resolveReference` returns `{ stale: true }`, return a structured `{ stale: true, referenceId, hint: 'Re-resolve the position to get fresh reference IDs.' }` JSON response (mirror `buildAmbiguousResponse` shape). If undefined → keep the existing "not found" error.
 - `createRenameTool` referenceId branch: same stale handling (it already uses `ref.filePath` correctly). Add the stale structured response.
 - Update tool descriptions to mention the stale handshake.
 
 ### Step 5 — drone-agent: `get_diagnostics` file/severity-only
-
 File: `drone-agent/src/plugins/lsp/tools/diagnostics.ts`
-
 - Remove `text` and `symbol` from the input schema and from the description.
 - Remove the `parsePositionInput` call and `targetPosition` logic entirely.
 - Keep `filePath` + `severity` filtering.
 - Update `drone-agent/test/lsp-ergonomics.test.ts`: the `get_diagnostics accepts text/symbol but no surroundingText` test → assert `text`/`symbol` are now absent; add a test that `get_diagnostics` with `text` no longer throws ambiguity (it ignores text).
 
 ### Step 6 — tests
-
 File: `drone-agent/test/lsp-ergonomics.test.ts` (+ `drone-core` tests if any)
-
 - Update all `suggestedSurroundingText` references → `suggestedContext`.
 - Add tests:
   - Filter window grows to match a multi-line handed-back block (suggest a block 5+ lines away, pass it back, assert it resolves).
@@ -118,14 +104,12 @@ File: `drone-agent/test/lsp-ergonomics.test.ts` (+ `drone-core` tests if any)
 - Update mock `ServerManager` in tests to include `readLineFingerprint` and the new `resolveReference`/`storeReferences` signatures.
 
 ### Step 7 — validation
-
 - LSP zero errors across all touched files.
 - `pnpm -r run build` (drone-core types changed → rebuild before relying on dependent typecheck).
 - `pnpm -r run lint` zero errors.
 - Fast test suite passes (`pnpm test`), especially `lsp-ergonomics.test.ts` (34+ tests).
 
 ## Files touched
-
 - drone-core/src/position-types.ts
 - drone-core/src/index.ts (if re-export changes)
 - drone-agent/src/plugins/lsp/server.ts
@@ -134,7 +118,21 @@ File: `drone-agent/test/lsp-ergonomics.test.ts` (+ `drone-core` tests if any)
 - drone-agent/test/lsp-ergonomics.test.ts
 
 ## Notes
-
 - drone-core types change → run `pnpm -r run build` before typecheck in drone-agent (per project principle: dependent packages resolve drone-core from dist/).
 - `resolveReference` becoming async ripples to `rename`/`code_action` and test mocks — sweep all implementers/consumers (LSP find-references + grep for `resolveReference`/`storeReferences`).
 - The stale handshake mirrors the existing `ambiguous: true` response shape for LLM ergonomics.
+
+## COMPLETED (2026-08-17) — All steps implemented and verified
+
+All 7 steps implemented. Validation passed: LSP clean on all touched files, `pnpm -r run build` passes, `pnpm lint` passes, fast test suite passes (1940 passed | 9 skipped, including 41 lsp-ergonomics tests).
+
+### Implementation notes
+- `suggestContext` returns the contiguous block `[line-1-w, line+w]` at the window that made a line unique (dense block, not single line).
+- New `matchesSurroundingBlock(lines, line, surroundingText)` helper in server.ts: sizes window to `min(blockLineCount, HARD_CONTEXT_LINES)`, exact-match (trim-only) contiguous-subsequence comparison.
+- `ReferenceLocation` type gains `fingerprint`; `ReferenceResolution = { location, stale }`. `resolveReference` is async.
+- `readLineFingerprint` added to ServerManager; `storeReferences` stays sync (fingerprint passed in by caller).
+- `code_action` referenceId branch now resolves runtime/document/diagnostics from `ref.filePath` via a `targetFilePath` variable.
+- `buildStaleResponse(referenceId)` returns `{ stale: true, referenceId, hint }` for both rename and code_action.
+- `get_diagnostics` is now file/severity-only.
+- Tests: 41 in lsp-ergonomics (was 34). Added window-growth, exact-match, cross-file referenceId, stale (line-changed + file-deleted), cache cap, TTL (fake timers), and diagnostics schema tests. Removed pre-existing unused `AmbiguousMatch` import.
+- Note: `pnpm -r run lint` is not a valid command (packages lack lint scripts); use root `pnpm lint`.
