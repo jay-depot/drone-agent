@@ -37,7 +37,7 @@ async function buildCribSheetEntry(
     filePath: match.filePath,
     line: match.line,
     column: match.column,
-    suggestedSurroundingText: match.suggestedSurroundingText,
+    suggestedContext: match.suggestedContext,
     snippet: snippet || undefined,
     context: match.context,
   };
@@ -52,15 +52,18 @@ async function buildAmbiguousResponse(
   server: ServerManager,
   error: AmbiguousPositionError
 ): Promise<string> {
-  const locations = error.matches.map(m => ({
-    filePath: m.filePath,
-    line: m.line,
-    column: m.column,
-    range: {
-      start: { line: m.line - 1, character: m.column - 1 },
-      end: { line: m.line - 1, character: m.column },
-    },
-  }));
+  const locations = await Promise.all(
+    error.matches.map(async m => ({
+      filePath: m.filePath,
+      line: m.line,
+      column: m.column,
+      range: {
+        start: { line: m.line - 1, character: m.column - 1 },
+        end: { line: m.line - 1, character: m.column },
+      },
+      fingerprint: (await server.readLineFingerprint(m.filePath, m.line)) ?? '',
+    }))
+  );
   const referenceIds = server.storeReferences(locations);
   const cribSheet = await Promise.all(
     error.matches.map((m, i) => buildCribSheetEntry(server, m, referenceIds[i]))
@@ -77,13 +80,30 @@ async function buildAmbiguousResponse(
   );
 }
 
+/**
+ * Build a structured response telling the LLM that a reference ID is stale
+ * (the underlying file line changed or the file is gone) and it should
+ * re-resolve the position to get fresh reference IDs.
+ */
+function buildStaleResponse(referenceId: string): string {
+  return JSON.stringify(
+    {
+      stale: true,
+      referenceId,
+      hint: 'Re-resolve the position to get fresh reference IDs.',
+    },
+    null,
+    2
+  );
+}
+
 export function createCodeActionTool(
   server: ServerManager
 ): DroneToolDefinition {
   return {
     name: 'code_action',
     description:
-      'Return LSP code actions (quick fixes, refactorings, source actions) for a file and range. When no range is specified, returns all actions for the file. Use text or symbol to target a specific position. If text/symbol resolution is ambiguous, a list of reference IDs with code snippets will be returned — re-invoke with a referenceId to confirm the target.',
+      'Return LSP code actions (quick fixes, refactorings, source actions) for a file and range. When no range is specified, returns all actions for the file. Use text or symbol to target a specific position. If text/symbol resolution is ambiguous, a list of reference IDs with code snippets will be returned — re-invoke with a referenceId to confirm the target. If a referenceId is stale (the file changed), a stale response is returned — re-resolve the position for fresh reference IDs.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -165,14 +185,6 @@ export function createCodeActionTool(
         }
       }
 
-      const runtime = server.findRuntimeForFile(filePath);
-      if (!runtime) {
-        throw new Error(
-          `No connected LSP server is available for ${filePath}.`
-        );
-      }
-      const document = await server.ensureDocumentLoaded(runtime, filePath);
-
       const only = Array.isArray(input.only)
         ? input.only.filter(
             (value): value is string => typeof value === 'string'
@@ -187,15 +199,21 @@ export function createCodeActionTool(
           }
         | undefined;
       let diagnostics: DroneLspDiagnostic[];
+      let targetFilePath = filePath;
 
       if (typeof input.referenceId === 'string') {
         // Resolve from reference ID
-        const ref = server.resolveReference(input.referenceId);
-        if (!ref) {
+        const resolution = await server.resolveReference(input.referenceId);
+        if (!resolution) {
           throw new Error(
             `Reference ID "${input.referenceId}" not found. It may have expired. Please resolve the position again.`
           );
         }
+        if (resolution.stale) {
+          return buildStaleResponse(input.referenceId);
+        }
+        const ref = resolution.location;
+        targetFilePath = ref.filePath;
         range = {
           start: ref.range.start,
           end: {
@@ -204,7 +222,7 @@ export function createCodeActionTool(
           },
         };
         diagnostics = server.getDiagnostics().filter(d => {
-          if (d.filePath !== filePath) return false;
+          if (d.filePath !== targetFilePath) return false;
           const ds = d.range.start;
           const de = d.range.end;
           if (
@@ -315,6 +333,17 @@ export function createCodeActionTool(
           .filter(d => d.filePath === filePath);
       }
 
+      const runtime = server.findRuntimeForFile(targetFilePath);
+      if (!runtime) {
+        throw new Error(
+          `No connected LSP server is available for ${targetFilePath}.`
+        );
+      }
+      const document = await server.ensureDocumentLoaded(
+        runtime,
+        targetFilePath
+      );
+
       const response = await runtime.client.request<LspCodeActionResponse[]>(
         'textDocument/codeAction',
         {
@@ -374,7 +403,7 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
   return {
     name: 'rename',
     description:
-      'Rename a symbol across the workspace. Returns the workspace edit as JSON by default. When apply is true, applies the rename directly. If text/symbol resolution is ambiguous, a list of reference IDs with code snippets will be returned — re-invoke with a referenceId to confirm the target.',
+      'Rename a symbol across the workspace. Returns the workspace edit as JSON by default. When apply is true, applies the rename directly. If text/symbol resolution is ambiguous, a list of reference IDs with code snippets will be returned — re-invoke with a referenceId to confirm the target. If a referenceId is stale (the file changed), a stale response is returned — re-resolve the position for fresh reference IDs.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -433,12 +462,16 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
       // If referenceId is provided, resolve it directly
       let resolved: ResolvedPosition;
       if (typeof input.referenceId === 'string') {
-        const ref = server.resolveReference(input.referenceId);
-        if (!ref) {
+        const resolution = await server.resolveReference(input.referenceId);
+        if (!resolution) {
           throw new Error(
             `Reference ID "${input.referenceId}" not found. It may have expired. Please resolve the position again.`
           );
         }
+        if (resolution.stale) {
+          return buildStaleResponse(input.referenceId);
+        }
+        const ref = resolution.location;
         const filePath = ref.filePath;
         const runtime = server.findRuntimeForFile(filePath);
         if (!runtime) {
@@ -448,7 +481,7 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
         }
         const document = await server.ensureDocumentLoaded(runtime, filePath);
         resolved = {
-          runtime: runtime!,
+          runtime,
           document,
           line: ref.line,
           column: ref.column,

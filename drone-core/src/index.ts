@@ -29,6 +29,8 @@ export type { AmbiguousMatch } from './position-types.js';
 export {
   AmbiguousPositionError,
   buildAmbiguousMatches,
+  HARD_CONTEXT_LINES,
+  SOFT_CONTEXT_LINES,
 } from './position-types.js';
 
 // ── Config types ────────────────────────────────────────────────────

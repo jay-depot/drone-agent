@@ -12,7 +12,11 @@ import type {
   DroneLspServerState,
   DroneLogger,
 } from 'drone-core';
-import { AmbiguousPositionError, buildAmbiguousMatches } from 'drone-core';
+import {
+  AmbiguousPositionError,
+  buildAmbiguousMatches,
+  HARD_CONTEXT_LINES,
+} from 'drone-core';
 import { commandExistsOnPath } from 'drone-core';
 import {
   computeCacheKey,
@@ -93,6 +97,37 @@ type ResolvedSpawn = {
   installStatus: DroneLspServerState['installStatus'];
 };
 
+/**
+ * Check whether a handed-back surroundingText block appears as a contiguous
+ * run of trimmed lines within a window around a 1-based line. The window is
+ * sized to the block's line count (capped at HARD_CONTEXT_LINES), so a
+ * suggested block is always found when passed back. Matching is exact,
+ * modulo leading/trailing whitespace (trim only).
+ */
+function matchesSurroundingBlock(
+  lines: string[],
+  line: number,
+  surroundingText: string
+): boolean {
+  const blockLines = surroundingText.split('\n').map(l => l.trim());
+  if (blockLines.length === 0) {
+    return false;
+  }
+  const window = Math.min(blockLines.length, HARD_CONTEXT_LINES);
+  const start = Math.max(0, line - 1 - window);
+  const end = Math.min(lines.length, line + window);
+  const windowLines = lines.slice(start, end).map(l => l.trim());
+  outer: for (let i = 0; i + blockLines.length <= windowLines.length; i++) {
+    for (let j = 0; j < blockLines.length; j++) {
+      if (windowLines[i + j] !== blockLines[j]) {
+        continue outer;
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -102,6 +137,23 @@ export type ResolvedPosition = {
   document: DocumentState;
   line: number;
   column: number;
+};
+
+export type ReferenceLocation = {
+  filePath: string;
+  line: number;
+  column: number;
+  range: {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+  };
+  /** Trimmed line text at `line` at store time, used for staleness checks. */
+  fingerprint: string;
+};
+
+export type ReferenceResolution = {
+  location: ReferenceLocation;
+  stale: boolean;
 };
 
 export type ServerManager = {
@@ -139,28 +191,14 @@ export type ServerManager = {
     line: number,
     contextLines?: number
   ) => Promise<string>;
-  storeReferences: (
-    locations: Array<{
-      filePath: string;
-      line: number;
-      column: number;
-      range: {
-        start: { line: number; character: number };
-        end: { line: number; character: number };
-      };
-    }>
-  ) => string[];
-  resolveReference: (referenceId: string) =>
-    | {
-        filePath: string;
-        line: number;
-        column: number;
-        range: {
-          start: { line: number; character: number };
-          end: { line: number; character: number };
-        };
-      }
-    | undefined;
+  readLineFingerprint: (
+    filePath: string,
+    line: number
+  ) => Promise<string | undefined>;
+  storeReferences: (locations: ReferenceLocation[]) => string[];
+  resolveReference: (
+    referenceId: string
+  ) => Promise<ReferenceResolution | undefined>;
   locationToAgentShape: (
     locations: Array<{
       filePath: string;
@@ -961,12 +999,11 @@ export function createServerManager(
       throw new Error(`Text "${text}" not found in ${absolutePath}.`);
     }
 
-    // If surroundingText is provided, filter matches by context
+    // If surroundingText is provided, filter matches by exact block match
     if (surroundingText && matches.length > 1) {
-      const filteredMatches = matches.filter(m => {
-        const contextWindow = m.context.toLowerCase();
-        return contextWindow.includes(surroundingText.toLowerCase());
-      });
+      const filteredMatches = matches.filter(m =>
+        matchesSurroundingBlock(lines, m.line, surroundingText)
+      );
       if (filteredMatches.length === 1) {
         return {
           line: filteredMatches[0].line,
@@ -1059,19 +1096,13 @@ export function createServerManager(
     // Read the file once for context-based disambiguation and error reporting
     const snapshot = await readDocumentSnapshot(absolutePath);
 
-    // If surroundingText provided and multiple document symbol matches, filter by context
+    // If surroundingText provided and multiple document symbol matches, filter by exact block match
     if (surroundingText && withPosition.length > 1) {
       if (snapshot) {
         const lines = snapshot.text.split('\n');
-        const filtered = withPosition.filter(s => {
-          const contextLines = lines.slice(
-            Math.max(0, s.line - 3),
-            Math.min(lines.length, s.line + 2)
-          );
-          return contextLines.some(l =>
-            l.toLowerCase().includes(surroundingText.toLowerCase())
-          );
-        });
+        const filtered = withPosition.filter(s =>
+          matchesSurroundingBlock(lines, s.line, surroundingText)
+        );
         if (filtered.length === 1) {
           return { line: filtered[0].line, column: filtered[0].column };
         }
@@ -1143,7 +1174,7 @@ export function createServerManager(
       };
     }
 
-    // If surroundingText provided, filter workspace matches by reading each file's context
+    // If surroundingText provided, filter workspace matches by exact block match
     if (surroundingText && wsWithPosition.length > 1) {
       const filtered: Array<
         NormalizedSymbol & { filePath: string; line: number; column: number }
@@ -1152,15 +1183,7 @@ export function createServerManager(
         const snap = await readDocumentSnapshot(s.filePath);
         if (!snap) continue;
         const lines = snap.text.split('\n');
-        const contextLines = lines.slice(
-          Math.max(0, s.line - 3),
-          Math.min(lines.length, s.line + 2)
-        );
-        if (
-          contextLines.some(l =>
-            l.toLowerCase().includes(surroundingText.toLowerCase())
-          )
-        ) {
+        if (matchesSurroundingBlock(lines, s.line, surroundingText)) {
           filtered.push(s);
         }
       }
@@ -1288,51 +1311,72 @@ export function createServerManager(
 
   // ── Reference ID cache for destructive edit disambiguation ──────────
 
+  const REFERENCE_CACHE_CAP = 100;
+  const REFERENCE_TTL_MS = 10 * 60 * 1000;
+
   const referenceCache = new Map<
     string,
-    {
-      filePath: string;
-      line: number;
-      column: number;
-      range: {
-        start: { line: number; character: number };
-        end: { line: number; character: number };
-      };
-    }
+    { location: ReferenceLocation; createdAt: number }
   >();
   let referenceCounter = 0;
 
-  function storeReferences(
-    locations: Array<{
-      filePath: string;
-      line: number;
-      column: number;
-      range: {
-        start: { line: number; character: number };
-        end: { line: number; character: number };
-      };
-    }>
-  ): string[] {
+  async function readLineFingerprint(
+    filePath: string,
+    line: number
+  ): Promise<string | undefined> {
+    const absolutePath = path.resolve(filePath);
+    let snapshot: { text: string; mtimeMs: number; size: number } | null;
+    try {
+      snapshot = await readDocumentSnapshot(absolutePath);
+    } catch {
+      return undefined;
+    }
+    if (!snapshot) {
+      return undefined;
+    }
+    const lines = snapshot.text.split('\n');
+    const target = lines[line - 1];
+    return target === undefined ? undefined : target.trim();
+  }
+
+  function storeReferences(locations: ReferenceLocation[]): string[] {
     return locations.map(location => {
       referenceCounter++;
       const id = `ref_${referenceCounter}`;
-      referenceCache.set(id, location);
+      referenceCache.set(id, { location, createdAt: Date.now() });
+      // FIFO eviction: Map preserves insertion order, so the first key is oldest.
+      while (referenceCache.size > REFERENCE_CACHE_CAP) {
+        const oldestKey = referenceCache.keys().next().value;
+        if (oldestKey === undefined) break;
+        referenceCache.delete(oldestKey);
+      }
       return id;
     });
   }
 
-  function resolveReference(referenceId: string):
-    | {
-        filePath: string;
-        line: number;
-        column: number;
-        range: {
-          start: { line: number; character: number };
-          end: { line: number; character: number };
-        };
-      }
-    | undefined {
-    return referenceCache.get(referenceId);
+  async function resolveReference(
+    referenceId: string
+  ): Promise<ReferenceResolution | undefined> {
+    const entry = referenceCache.get(referenceId);
+    if (!entry) {
+      return undefined;
+    }
+    // TTL expiry
+    if (Date.now() - entry.createdAt > REFERENCE_TTL_MS) {
+      referenceCache.delete(referenceId);
+      return undefined;
+    }
+    // Staleness: re-read the line fingerprint; if the file is gone or the
+    // line changed, invalidate and signal the caller to re-resolve.
+    const current = await readLineFingerprint(
+      entry.location.filePath,
+      entry.location.line
+    );
+    if (current === undefined || current !== entry.location.fingerprint) {
+      referenceCache.delete(referenceId);
+      return { location: entry.location, stale: true };
+    }
+    return { location: entry.location, stale: false };
   }
 
   async function readFileSnippet(
@@ -1526,6 +1570,7 @@ export function createServerManager(
     resolveAtPosition,
 
     readFileSnippet,
+    readLineFingerprint,
     storeReferences,
     resolveReference,
 

@@ -6,9 +6,9 @@
 // matches in a file (or across files) can use these types.
 
 /** Soft context window (lines before/after) used for the `context` field. */
-const SOFT_CONTEXT_LINES = 5;
+export const SOFT_CONTEXT_LINES = 5;
 /** Hard limit for the surrounding-text suggestion search window. */
-const HARD_CONTEXT_LINES = 30;
+export const HARD_CONTEXT_LINES = 30;
 /** How many lines to expand the search window by on each retry. */
 const EXPANSION_STEP = 5;
 
@@ -25,11 +25,12 @@ export type AmbiguousMatch = {
   /** Surrounding lines (soft context window, 5 lines before/after). */
   context: string;
   /**
-   * Minimal unique line from the context that would disambiguate this
-   * match from all others, or `undefined` if no unique line exists
-   * within the hard context limit (30 lines before/after).
+   * Dense, contiguous context block (unique line + neighbors, centered on
+   * the match) that would disambiguate this match from all others, or
+   * `undefined` if no unique block exists within the hard context limit
+   * (30 lines before/after).
    */
-  suggestedSurroundingText: string | undefined;
+  suggestedContext: string | undefined;
 };
 
 /**
@@ -54,11 +55,15 @@ export class AmbiguousPositionError extends Error {
 }
 
 /**
- * Find the shortest line in a match's context window that does not appear
- * in any other match's context window. Expands the window from the soft
- * limit up to the hard limit, 5 lines at a time.
+ * Find a dense, contiguous context block centered on a match that does not
+ * appear in any other match's context window. Expands the window from the
+ * soft limit up to the hard limit, 5 lines at a time. When a unique line is
+ * found at window `w`, returns the contiguous slice `[line-1-w, line+w]`
+ * joined by newlines — the same window that made the line unique — so the
+ * caller can hand the block back to a filter that sizes its search window to
+ * the block's line count.
  */
-async function suggestSurroundingText(
+async function suggestContext(
   match: { filePath: string; line: number },
   allMatches: Array<{ filePath: string; line: number }>,
   getLines: (filePath: string) => Promise<string[] | undefined>
@@ -108,8 +113,8 @@ async function suggestSurroundingText(
     }
 
     if (uniqueLines.length > 0) {
-      // Return the shortest unique line
-      return uniqueLines.sort((a, b) => a.length - b.length)[0];
+      // Return the dense block at the window that made a line unique.
+      return windowLines.join('\n');
     }
   }
 
@@ -118,7 +123,7 @@ async function suggestSurroundingText(
 
 /**
  * Build `AmbiguousMatch` objects from raw position data, computing the
- * context window and suggested surrounding text for each match.
+ * context window and suggested context block for each match.
  *
  * @param rawMatches  Raw match positions (1-based line/column).
  * @param getLines    Async function that returns the lines of a file, or
@@ -139,13 +144,13 @@ export async function buildAmbiguousMatches(
             )
             .join('\n')
         : '';
-      const suggested = await suggestSurroundingText(m, rawMatches, getLines);
+      const suggested = await suggestContext(m, rawMatches, getLines);
       return {
         filePath: m.filePath,
         line: m.line,
         column: m.column,
         context,
-        suggestedSurroundingText: suggested,
+        suggestedContext: suggested,
       };
     })
   );

@@ -7,7 +7,7 @@ export function createGetDiagnosticsTool(
   return {
     name: 'get_diagnostics',
     description:
-      'Return the current LSP diagnostics for the workspace or a specific file. Use text or symbol to filter diagnostics near a specific position.',
+      'Return the current LSP diagnostics for the workspace or a specific file.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -20,16 +20,6 @@ export function createGetDiagnosticsTool(
           type: 'string',
           description:
             'Optional severity filter: error, warning, information, hint, or all.',
-        },
-        text: {
-          type: 'string',
-          description:
-            'Text content to find diagnostics near (alternative to filePath-only filtering).',
-        },
-        symbol: {
-          type: 'string',
-          description:
-            'Symbol name to find diagnostics near (alternative to filePath-only filtering).',
         },
       },
       additionalProperties: false,
@@ -53,41 +43,12 @@ export function createGetDiagnosticsTool(
           ? server.resolveTargetFilePath(input.filePath)
           : undefined;
 
-      // Resolve target position from text/symbol if provided
-      let targetPosition: { line: number; column: number } | undefined;
-      if (typeof input.text === 'string' || typeof input.symbol === 'string') {
-        const resolved = await server.parsePositionInput(
-          'lsp__get_diagnostics',
-          input
-        );
-        targetPosition = { line: resolved.line, column: resolved.column };
-      }
-
       const diagnostics = server.getDiagnostics().filter(diagnostic => {
         if (filePath && diagnostic.filePath !== filePath) {
           return false;
         }
         if (severity !== 'all' && diagnostic.severity !== severity) {
           return false;
-        }
-        if (targetPosition) {
-          // Only include diagnostics whose range contains the target position
-          const ds = diagnostic.range.start;
-          const de = diagnostic.range.end;
-          if (
-            targetPosition.line - 1 < ds.line ||
-            (targetPosition.line - 1 === ds.line &&
-              targetPosition.column - 1 < ds.character)
-          ) {
-            return false;
-          }
-          if (
-            targetPosition.line - 1 > de.line ||
-            (targetPosition.line - 1 === de.line &&
-              targetPosition.column - 1 > de.character)
-          ) {
-            return false;
-          }
         }
         return true;
       });

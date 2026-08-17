@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { DroneToolDefinition } from 'drone-core';
-import { AmbiguousPositionError, type AmbiguousMatch } from 'drone-core';
+import { AmbiguousPositionError } from 'drone-core';
 import { createServerManager } from '../src/plugins/lsp/server.js';
 import {
   createGoToTool,
@@ -78,8 +78,9 @@ function createMockServer() {
       throw new Error('not connected');
     },
     readFileSnippet: async (_filePath: string, _line: number) => '',
+    readLineFingerprint: async () => undefined,
     storeReferences: () => [],
-    resolveReference: () => undefined,
+    resolveReference: async () => undefined,
     locationToAgentShape: (_l: unknown[]) => [],
     initialize: async () => {},
     shutdown: async () => {},
@@ -215,8 +216,8 @@ describe('resolveTextPosition (via parsePositionInput)', () => {
       });
       expect(ambErr.matches[0].context).toContain('const x = 1');
       expect(ambErr.matches[1].context).toContain('const x = 2');
-      expect(ambErr.matches[0].suggestedSurroundingText).toBeDefined();
-      expect(ambErr.matches[1].suggestedSurroundingText).toBeDefined();
+      expect(ambErr.matches[0].suggestedContext).toBeDefined();
+      expect(ambErr.matches[1].suggestedContext).toBeDefined();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -299,11 +300,11 @@ describe('surroundingText disambiguation', () => {
       expect(err).toBeInstanceOf(Error);
       expect(err.message).toContain('ambiguous');
 
-      // With surroundingText "class User", it resolves to line 2
+      // With surroundingText "class User {", it resolves to line 2
       const result = await server.parsePositionInput('lsp__test', {
         filePath,
         text: 'id',
-        surroundingText: 'class User',
+        surroundingText: 'class User {',
       });
 
       expect(result.line).toBe(2);
@@ -335,7 +336,7 @@ describe('surroundingText disambiguation', () => {
       const result = await server.parsePositionInput(
         'lsp__test',
         { filePath, text: 'const x' },
-        'SECOND SECTION'
+        '// SECOND SECTION'
       );
 
       expect(result.line).toBe(6);
@@ -367,7 +368,7 @@ describe('surroundingText disambiguation', () => {
       const result = await server.parsePositionInput('lsp__test', {
         filePath,
         text: 'const x',
-        surroundingText: 'FIRST SECTION',
+        surroundingText: '// FIRST SECTION',
       });
 
       expect(result.line).toBe(2);
@@ -376,10 +377,96 @@ describe('surroundingText disambiguation', () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it('grows the filter window to match a multi-line handed-back block', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      // The unique marker line is 5+ lines away from the match, so a
+      // single-line surroundingText would not find it — only a multi-line
+      // block (which sizes the window to its line count) can disambiguate.
+      const filePath = await createTempFile(
+        dir,
+        'test.ts',
+        [
+          '// FIRST BLOCK',
+          'const value = 1;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const filler = 0;',
+          'const value = 2;',
+          '// SECOND BLOCK',
+        ].join('\n')
+      );
+      const server = await createTestServerManager(dir);
+
+      // Hand back a dense, contiguous block that includes the unique marker
+      // line ("// FIRST BLOCK") several lines away from the match.
+      const block = [
+        '// FIRST BLOCK',
+        'const value = 1;',
+        'const filler = 0;',
+        'const filler = 0;',
+        'const filler = 0;',
+        'const filler = 0;',
+        'const filler = 0;',
+      ].join('\n');
+
+      const result = await server.parsePositionInput('lsp__test', {
+        filePath,
+        text: 'const value',
+        surroundingText: block,
+      });
+
+      expect(result.line).toBe(2);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('uses exact match (trim-only), not substring, for disambiguation', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      // A commented variant of the target line appears in the second match's
+      // window. Substring matching would wrongly disambiguate; exact match
+      // must not.
+      const filePath = await createTempFile(
+        dir,
+        'test.ts',
+        [
+          '// FIRST BLOCK',
+          'const value = 1;',
+          '// END FIRST',
+          '',
+          '// SECOND BLOCK',
+          '// const value = 1;',
+          '// END SECOND',
+        ].join('\n')
+      );
+      const server = await createTestServerManager(dir);
+
+      const result = await server.parsePositionInput('lsp__test', {
+        filePath,
+        text: 'const value',
+        surroundingText: 'const value = 1;',
+      });
+
+      // The commented variant is not an exact line match, so only the real
+      // line matches — exact match correctly disambiguates to line 2, where
+      // substring matching would have matched both and stayed ambiguous.
+      expect(result.line).toBe(2);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
-describe('suggestedSurroundingText', () => {
-  it('suggests a unique line for each ambiguous match', async () => {
+describe('suggestedContext', () => {
+  it('suggests a unique dense block for each ambiguous match', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
     try {
       const filePath = await createTempFile(
@@ -415,8 +502,10 @@ describe('suggestedSurroundingText', () => {
       const match2 = ambErr.matches.find(m => m.line === 11);
       expect(match1).toBeDefined();
       expect(match2).toBeDefined();
-      expect(match1!.suggestedSurroundingText).toContain('FIRST');
-      expect(match2!.suggestedSurroundingText).toBeDefined();
+      expect(match1!.suggestedContext).toContain('FIRST');
+      expect(match2!.suggestedContext).toBeDefined();
+      // The suggested block is dense and multi-line, centered on the match.
+      expect(match1!.suggestedContext!.split('\n').length).toBeGreaterThan(1);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -471,7 +560,7 @@ describe('suggestedSurroundingText', () => {
       expect(ambErr.matches.length).toBeGreaterThan(1);
       // Every line is "const repeated = 0;" — no unique context exists.
       for (const m of ambErr.matches) {
-        expect(m.suggestedSurroundingText).toBeUndefined();
+        expect(m.suggestedContext).toBeUndefined();
       }
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -484,25 +573,32 @@ describe('reference ID storage and retrieval', () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
     try {
       const server = await createTestServerManager(dir);
+      const filePath = await createTempFile(
+        dir,
+        'ref.ts',
+        ['line one', 'line two', 'line three'].join('\n')
+      );
 
       const ids = server.storeReferences([
         {
-          filePath: '/foo/bar.ts',
-          line: 10,
+          filePath,
+          line: 2,
           column: 5,
           range: {
-            start: { line: 9, character: 4 },
-            end: { line: 9, character: 15 },
+            start: { line: 1, character: 4 },
+            end: { line: 1, character: 15 },
           },
+          fingerprint: 'line two',
         },
         {
-          filePath: '/baz/qux.ts',
-          line: 20,
+          filePath,
+          line: 3,
           column: 8,
           range: {
-            start: { line: 19, character: 7 },
-            end: { line: 19, character: 18 },
+            start: { line: 2, character: 7 },
+            end: { line: 2, character: 18 },
           },
+          fingerprint: 'line three',
         },
       ]);
 
@@ -510,17 +606,19 @@ describe('reference ID storage and retrieval', () => {
       expect(ids[0]).toMatch(/^ref_\d+$/);
       expect(ids[1]).toMatch(/^ref_\d+$/);
 
-      const ref1 = server.resolveReference(ids[0]);
+      const ref1 = await server.resolveReference(ids[0]);
       expect(ref1).toBeDefined();
-      expect(ref1!.filePath).toBe('/foo/bar.ts');
-      expect(ref1!.line).toBe(10);
-      expect(ref1!.column).toBe(5);
+      expect(ref1!.stale).toBe(false);
+      expect(ref1!.location.filePath).toBe(filePath);
+      expect(ref1!.location.line).toBe(2);
+      expect(ref1!.location.column).toBe(5);
 
-      const ref2 = server.resolveReference(ids[1]);
+      const ref2 = await server.resolveReference(ids[1]);
       expect(ref2).toBeDefined();
-      expect(ref2!.filePath).toBe('/baz/qux.ts');
-      expect(ref2!.line).toBe(20);
-      expect(ref2!.column).toBe(8);
+      expect(ref2!.stale).toBe(false);
+      expect(ref2!.location.filePath).toBe(filePath);
+      expect(ref2!.location.line).toBe(3);
+      expect(ref2!.location.column).toBe(8);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -530,8 +628,154 @@ describe('reference ID storage and retrieval', () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
     try {
       const server = await createTestServerManager(dir);
-      const ref = server.resolveReference('ref_999');
+      const ref = await server.resolveReference('ref_999');
       expect(ref).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns stale when the file line changes', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const server = await createTestServerManager(dir);
+      const filePath = await createTempFile(
+        dir,
+        'stale.ts',
+        ['line one', 'line two', 'line three'].join('\n')
+      );
+
+      const ids = server.storeReferences([
+        {
+          filePath,
+          line: 2,
+          column: 5,
+          range: {
+            start: { line: 1, character: 4 },
+            end: { line: 1, character: 15 },
+          },
+          fingerprint: 'line two',
+        },
+      ]);
+
+      // Modify the file so the fingerprint no longer matches.
+      await writeFile(filePath, 'line one\nCHANGED\nline three', 'utf-8');
+
+      const ref = await server.resolveReference(ids[0]);
+      expect(ref).toBeDefined();
+      expect(ref!.stale).toBe(true);
+
+      // The stale entry is removed from the cache.
+      const again = await server.resolveReference(ids[0]);
+      expect(again).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns stale when the file is deleted', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const server = await createTestServerManager(dir);
+      const filePath = await createTempFile(
+        dir,
+        'gone.ts',
+        ['line one', 'line two'].join('\n')
+      );
+
+      const ids = server.storeReferences([
+        {
+          filePath,
+          line: 2,
+          column: 5,
+          range: {
+            start: { line: 1, character: 4 },
+            end: { line: 1, character: 15 },
+          },
+          fingerprint: 'line two',
+        },
+      ]);
+
+      await rm(filePath);
+
+      const ref = await server.resolveReference(ids[0]);
+      expect(ref).toBeDefined();
+      expect(ref!.stale).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('expires entries after the TTL', async () => {
+    vi.useFakeTimers();
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const server = await createTestServerManager(dir);
+      const filePath = await createTempFile(
+        dir,
+        'ttl.ts',
+        ['line one', 'line two'].join('\n')
+      );
+
+      const ids = server.storeReferences([
+        {
+          filePath,
+          line: 2,
+          column: 5,
+          range: {
+            start: { line: 1, character: 4 },
+            end: { line: 1, character: 15 },
+          },
+          fingerprint: 'line two',
+        },
+      ]);
+
+      // Before TTL, resolves fine.
+      const before = await server.resolveReference(ids[0]);
+      expect(before).toBeDefined();
+      expect(before!.stale).toBe(false);
+
+      // Advance past the 10-minute TTL.
+      vi.advanceTimersByTime(10 * 60 * 1000 + 1);
+
+      const after = await server.resolveReference(ids[0]);
+      expect(after).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('evicts the oldest entry when the cache exceeds the cap', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const server = await createTestServerManager(dir);
+      const filePath = await createTempFile(
+        dir,
+        'cap.ts',
+        ['line one', 'line two'].join('\n')
+      );
+
+      // Insert 101 references (cap is 100). The first should be evicted.
+      const ids = server.storeReferences(
+        Array.from({ length: 101 }, () => ({
+          filePath,
+          line: 2,
+          column: 5,
+          range: {
+            start: { line: 1, character: 4 },
+            end: { line: 1, character: 15 },
+          },
+          fingerprint: 'line two',
+        }))
+      );
+
+      expect(ids).toHaveLength(101);
+      const first = await server.resolveReference(ids[0]);
+      expect(first).toBeUndefined();
+      const last = await server.resolveReference(ids[100]);
+      expect(last).toBeDefined();
+      expect(last!.stale).toBe(false);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -618,8 +862,88 @@ describe('rename/code_action ambiguity returns reference IDs', () => {
       expect(parsed.ambiguous).toBe(true);
       expect(parsed.matches).toHaveLength(2);
       expect(parsed.matches[0].referenceId).toMatch(/^ref_\d+$/);
-      expect(parsed.matches[0].suggestedSurroundingText).toContain('FIRST');
-      expect(parsed.matches[1].suggestedSurroundingText).toBeDefined();
+      expect(parsed.matches[0].suggestedContext).toContain('FIRST');
+      expect(parsed.matches[1].suggestedContext).toBeDefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('code_action with a referenceId targets ref.filePath, not the input filePath', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'lsp-test-'));
+    try {
+      const inputFilePath = await createTempFile(
+        dir,
+        'input.ts',
+        ['const x = 1;'].join('\n')
+      );
+      const refFilePath = await createTempFile(
+        dir,
+        'ref.ts',
+        ['const y = 2;'].join('\n')
+      );
+
+      const loadedFiles: string[] = [];
+      const runtime = {
+        client: {
+          request: async () => [],
+        },
+      };
+      const server = {
+        refreshIfNeeded: async () => {},
+        markDirty: () => {},
+        getDiagnostics: () => [],
+        getServerStates: () => [],
+        renderDiagnosticsPrompt: () => false,
+        findRuntimeForFile: () => runtime,
+        ensureDocumentLoaded: async (_r: unknown, filePath: string) => {
+          loadedFiles.push(filePath);
+          return {
+            uri: `file://${filePath}`,
+            languageId: 'typescript',
+            version: 1,
+            text: '',
+            mtimeMs: 0,
+            size: 0,
+          };
+        },
+        resolveTargetFilePath: (p: string) => p,
+        parsePositionInput: async () => ({ filePath: '', line: 1, column: 1 }),
+        resolveAtPosition: async () => {
+          throw new Error('not connected');
+        },
+        readFileSnippet: async () => '',
+        readLineFingerprint: async () => undefined,
+        storeReferences: () => [],
+        resolveReference: async () => ({
+          location: {
+            filePath: refFilePath,
+            line: 1,
+            column: 1,
+            range: {
+              start: { line: 0, character: 0 },
+              end: { line: 0, character: 1 },
+            },
+            fingerprint: 'const y = 2;',
+          },
+          stale: false,
+        }),
+        locationToAgentShape: (_l: unknown[]) => [],
+        initialize: async () => {},
+        shutdown: async () => {},
+        getAvailableServers: () => [],
+        startServerForFile: async () => false,
+      } as unknown as Parameters<typeof createCodeActionTool>[0];
+
+      const tool = createCodeActionTool(server);
+      await tool.execute({
+        filePath: inputFilePath,
+        referenceId: 'ref_1',
+      });
+
+      // The tool must target the reference's file, not the input file.
+      expect(loadedFiles).toContain(refFilePath);
+      expect(loadedFiles).not.toContain(inputFilePath);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -658,8 +982,8 @@ describe('rename/code_action ambiguity returns reference IDs', () => {
       expect(parsed.ambiguous).toBe(true);
       expect(parsed.matches).toHaveLength(2);
       expect(parsed.matches[0].referenceId).toMatch(/^ref_\d+$/);
-      expect(parsed.matches[0].suggestedSurroundingText).toContain('FIRST');
-      expect(parsed.matches[1].suggestedSurroundingText).toBeDefined();
+      expect(parsed.matches[0].suggestedContext).toContain('FIRST');
+      expect(parsed.matches[1].suggestedContext).toBeDefined();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -733,11 +1057,11 @@ describe('tool input schemas accept text/symbol parameters', () => {
     expect(schema.required).not.toContain('endColumn');
   });
 
-  it('get_diagnostics accepts text/symbol but no surroundingText', () => {
+  it('get_diagnostics is file/severity-only (no text/symbol)', () => {
     const tool = createGetDiagnosticsTool(server);
     const props = tool.inputSchema!.properties ?? {};
-    expect(props.text).toBeDefined();
-    expect(props.symbol).toBeDefined();
+    expect(props.text).toBeUndefined();
+    expect(props.symbol).toBeUndefined();
     expect(props.surroundingText).toBeUndefined();
   });
 
