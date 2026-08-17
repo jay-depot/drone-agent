@@ -178,5 +178,9 @@
   {
     "timestamp": "2026-08-14T18:57:16.308Z",
     "insight": "CodeQL suppression: `// lgtm[rule-id]` comments do NOT suppress GitHub CodeQL/code-scanning alerts — `lgtm[...]` is LGTM.com-only syntax (LGTM.com shut down Dec 2022). The correct, currently-supported inline suppression is `// codeql[rule-id]`, placed on the sink line or the line immediately before it. The rule ID must match exactly including the `js/` prefix — TypeScript is analyzed by the JS query suite, so there is no `ts/` variant (e.g. `js/reflected-xss`, `js/disabling-certificate-verification`). Suppression targets the sink location, not the source/intermediate lines; a comment in a JSDoc block far from the sink is ineffective. One comment per alert location. `// nosemgrep` is Semgrep-only (irrelevant); `paths-ignore` config is too coarse (blinds whole files); UI/API dismissal is not durable/source-controlled."
+  },
+  {
+    "timestamp": "2026-08-17T00:08:28.077Z",
+    "insight": "drone-coordinator/test/routes/messages.test.ts \"POST /messages/broadcast with mixed fetch results\" is flaky: it failed once in a full `pnpm test` run (deliveredCount expected 1, got 0) but passed in isolation and on a second full-suite run. Unrelated to compaction work. Worth investigating as a timing/ordering flake in the broadcast route test."
   }
 ]

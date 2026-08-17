@@ -1,14 +1,9 @@
 ---
 key: plan-compaction-oldest-turns-helper-consolidation
 tags:
-  - plan
-  - compaction
-  - safety-trim
-  - turn-utils
-  - session-manager
-  - context-budget
+  []
 created: 2026-08-14T03:39:16.452Z
-updated: 2026-08-14T03:39:16.452Z
+updated: 2026-08-17T00:08:17.052Z
 ---
 
 # Plan: Fix compaction removing newest turns; consolidate "oldest non-summary turns" helper
@@ -55,3 +50,21 @@ Additionally, the safety-trim helper `getDroppableTurnPrefix` has "stop at first
 
 - No drone-core changes → no cross-package rebuild needed before typecheck, but run `pnpm -r run build` as part of validation anyway.
 - `dropOldestTurns` has no production callers (only its own test) → remove as dead code.
+
+---
+
+## COMPLETED 2026-08-16 (commit 0ffb865 on fix/compaction-turn-ordering)
+
+All steps executed and validated. Summary of what was done:
+
+- **turn-utils.ts**: Renamed `getDroppableTurnPrefix` → `getOldestNonSummaryTurns(turns, count)`. Now iterates forward, `continue`s past `kind === 'summary'` turns, collects up to `count` non-summary turns in chronological order, returns fewer when insufficient, empty for count <= 0, never mutates.
+- **session-manager.ts**: Extracted the drop-by-ids logic into an internal `dropTurnsByIdsInternal` function (shared by `dropTurnsByIds` and `dropOldestNonSummaryTurns`). `dropOldestNonSummaryTurns` now selects via `getOldestNonSummaryTurns` then drops by id, so head summaries are preserved. Removed the `dropOldestTurns` method and its type signature (dead code).
+- **context-budget-service.ts**: `evaluateSafetyTrim` now uses `getOldestNonSummaryTurns` per dropCount and filters remaining turns by id-set (`input.turns.filter(t => !droppableIds.has(t.id))`) instead of `slice(droppable.length)`, keeping the predicted drop count aligned with what `dropOldestNonSummaryTurns` actually drops.
+- **compaction/index.ts**: Replaced `nonSummaryTurns.slice(-sliceSizeCapped)` with `getOldestNonSummaryTurns(turns, sliceSize)`; startIndex computed as `turns.filter(t => t.kind !== 'summary').length - slice.length`.
+- **Tests**: Rewrote turn-utils tests for the new helper (skip summaries, order, count<=0, no mutation, insufficient, all-summaries). Updated session-manager tests to skip-summaries semantics (head summary now skipped, non-summary after dropped; summaries preserved) and removed dropOldestTurns tests. Updated context-budget-service tests: the 'between' test now expects `requiredDropTurnCount: 2` (dropping a,b gets under budget; summary S is skipped, not counted); the 'head is summary' test now expects `requiredDropTurnCount: 1` (dropping 'a' gets under budget) instead of null. Added a compaction regression test pinning BOTH ends: seeds `[S, u0..u5]`, asserts the summary transcript contains oldest (u0,u1) and NOT newest (u4,u5), and surviving non-summary turns are the newest.
+- **Validation**: LSP zero errors on all 8 touched files; `pnpm -r run build` passes; `pnpm typecheck` passes; prettier clean; full fast test suite passes (1914 passed, 9 skipped). One flaky pre-existing failure in `drone-coordinator/test/routes/messages.test.ts` (message broadcast) passed on re-run in isolation and on the second full-suite run — unrelated to these changes.
+
+### Notes / deviations
+- The plan's step-3 note referenced "context-budget-service.test.ts:129" for the non-convergence guard; that test was updated to reflect the new skip-summaries semantics (no longer returns null for a head summary).
+- The plan's step-5 context-budget-service test expectations were refined during implementation based on actual token math (maxPromptTokens 400; each 800-char turn ≈ 206 tokens; summary ≈ 7 tokens): the 'between' test needs 2 drops, the 'head summary' test needs 1 drop.
+- eslint config ignores `drone-agent/src/**` and `**/test/**/*.ts`, so eslint reports no errors on these files; prettier formatting was verified separately and is clean.
