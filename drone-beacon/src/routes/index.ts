@@ -4,6 +4,7 @@ import search from './search.js';
 import personas from './personas.js';
 import skills from './skills.js';
 import agents from './agents.js';
+import channels from './channels.js';
 import memory from './memory.js';
 import messages from './messages.js';
 import spawn from './spawn.js';
@@ -27,6 +28,7 @@ export async function registerRoutes(app: FastifyInstance) {
   health(app);
   personas(app);
   skills(app);
+  channels(app);
   search(app);
   agents(app);
   memory(app);

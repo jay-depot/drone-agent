@@ -46,11 +46,19 @@ Key source directories within `drone-agent/`:
 | `pnpm test`              | Run all tests (vitest)              |
 | `pnpm test:watch`        | Watch mode                          |
 | `pnpm test:coverage`     | Run tests with coverage             |
-| `pnpm test:integration`  | Run integration tests               |
+| `pnpm test:integration`  | Run integration tests in Docker     |
 | `pnpm lint`              | ESLint + Prettier                   |
 | `pnpm clean`             | Remove all dist/ directories        |
 | `pnpm docker:build`      | Build Docker images for smoke test  |
 | `pnpm docker:smoke-test` | Run full smoke test suite in Docker |
+
+Integration tests that talk to the beacon/coordinator are expected to run only inside the isolated Docker swarm provisioned by `pnpm test:integration`. Running the integration Vitest config directly on the host is not the supported path for swarm tests.
+
+The swarm integration tests and `drone-agent/test/subagent/dispatch.test.ts` include provisioning guards:
+
+- They require `RUN_INTEGRATION_TESTS=true`
+- They refuse unsafe `localhost:3457` / `localhost:3456` fallbacks outside the provisioned environment
+- If the provisioned test swarm is unreachable, they skip rather than touching a user's real local beacon/coordinator
 
 ## Architecture Overview
 

@@ -47,6 +47,21 @@ export function isAgentConnected(agentId: string): boolean {
   return connections.has(agentId);
 }
 
+/**
+ * Subscribe an agent to a channel via REST API.
+ * This is a convenience wrapper that can be called from the REST routes.
+ */
+export function restSubscribeToChannel(agentId: string, channel: string): void {
+  subscribeToChannel(agentId, channel);
+}
+
+export function restUnsubscribeFromChannel(
+  agentId: string,
+  channel: string
+): void {
+  unsubscribeFromChannel(agentId, channel);
+}
+
 function subscribeToChannel(agentId: string, channel: string): void {
   let subs = channelSubscriptions.get(channel);
   if (!subs) {
