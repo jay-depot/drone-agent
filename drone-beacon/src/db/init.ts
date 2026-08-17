@@ -46,6 +46,7 @@ export function initDatabase(dataPath: string): Database.Database {
     CREATE TABLE IF NOT EXISTS agent_sessions (
       id TEXT PRIMARY KEY,
       personaId TEXT,
+      status TEXT NOT NULL DEFAULT 'connected',
       connectedAt INTEGER NOT NULL,
       lastActivity INTEGER NOT NULL
     );
@@ -204,6 +205,18 @@ export function initDatabase(dataPath: string): Database.Database {
   }>;
   if (!insightCols.some(c => c.name === 'lastExamined')) {
     db.exec('ALTER TABLE insights ADD COLUMN lastExamined TEXT');
+  }
+
+  // Idempotent migration: add status to existing agent_sessions tables.
+  const agentCols = db
+    .prepare('PRAGMA table_info(agent_sessions)')
+    .all() as Array<{
+    name: string;
+  }>;
+  if (!agentCols.some(c => c.name === 'status')) {
+    db.exec(
+      "ALTER TABLE agent_sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'connected'"
+    );
   }
 
   logger.info('Beacon database initialized successfully');

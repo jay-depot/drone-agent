@@ -8,7 +8,7 @@
  * - bi-directional-sync: Create in beacon, verify in coordinator
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import {
   getCoordinatorPersonas,
   getBeaconPersonas,
@@ -17,16 +17,36 @@ import {
   createBeaconPersona,
   pushPersonaToCoordinator,
   pushSkillToCoordinator,
+  getRequiredIntegrationEnv,
   waitForService,
+  shouldSkipIntegrationSuite,
 } from './fixtures/index.js';
 
-const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3456';
-const BEACON_URL = process.env.BEACON_URL || 'http://localhost:3457';
+const DEFAULT_COORDINATOR_URL = 'http://localhost:3456';
+const DEFAULT_BEACON_URL = 'http://localhost:3457';
+const COORDINATOR_URL = getRequiredIntegrationEnv(
+  'COORDINATOR_URL',
+  DEFAULT_COORDINATOR_URL
+);
+const BEACON_URL = getRequiredIntegrationEnv('BEACON_URL', DEFAULT_BEACON_URL);
 
-describe('Beacon ↔ Coordinator Sync', () => {
+describe.skipIf(
+  shouldSkipIntegrationSuite([
+    { url: COORDINATOR_URL, fallbackUrl: DEFAULT_COORDINATOR_URL },
+    { url: BEACON_URL, fallbackUrl: DEFAULT_BEACON_URL },
+  ])
+)('Beacon ↔ Coordinator Sync', () => {
   beforeAll(async () => {
-    await waitForService(COORDINATOR_URL, 30, 1000);
-    await waitForService(BEACON_URL, 30, 1000);
+    const coordinatorReady = await waitForService(COORDINATOR_URL);
+    const beaconReady = await waitForService(BEACON_URL);
+    if (!coordinatorReady) {
+      throw new Error(
+        `Coordinator service not available at ${COORDINATOR_URL}`
+      );
+    }
+    if (!beaconReady) {
+      throw new Error(`Beacon service not available at ${BEACON_URL}`);
+    }
   });
 
   describe('persona-push-to-coordinator', () => {
@@ -69,7 +89,9 @@ describe('Beacon ↔ Coordinator Sync', () => {
       const testSkill = {
         id: `sync-test-skill-${Date.now()}`,
         name: 'Sync Test Skill',
-        content: 'Test skill content for sync testing.',
+        description: 'A test skill for coordinator sync testing',
+        trigger: 'test-skill-trigger',
+        body: 'Test skill content for sync testing.',
       };
 
       try {
