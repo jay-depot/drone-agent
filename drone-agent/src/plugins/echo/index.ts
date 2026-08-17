@@ -118,10 +118,12 @@ export const echoPlugin: DronePlugin = {
       },
 
       async getContextWindowInfo() {
-        // Echo provider doesn't report context window, use defaults
+        // Echo provider doesn't report a real context window. Report a
+        // generous default (matching the config default) so the safety-trim
+        // budget doesn't trip on the system prompt alone.
         return {
           model: model,
-          contextWindowTokens: 4096,
+          contextWindowTokens: 32768,
           source: 'default' as const,
         } as DroneContextWindowInfo;
       },

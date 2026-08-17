@@ -152,6 +152,21 @@ export async function getBeaconAgent(
 }
 
 /**
+ * Register an agent with the beacon directly (REST fallback for tests that
+ * need more than the dummy-agent container, e.g. inter-agent messaging).
+ */
+export async function registerBeaconAgent(
+  beaconUrl: string,
+  agentId: string,
+  personaId: string | null = null
+): Promise<Agent> {
+  return swarmRequest<Agent>(beaconUrl, '/agents', {
+    method: 'POST',
+    body: { id: agentId, personaId },
+  });
+}
+
+/**
  * Get all personas from beacon
  */
 export async function getBeaconPersonas(beaconUrl: string): Promise<Persona[]> {
@@ -394,7 +409,13 @@ export async function getCoordinatorPersonas(
  */
 export async function pushSkillToCoordinator(
   coordinatorUrl: string,
-  skill: { id: string; name: string; description: string; trigger: string; body: string }
+  skill: {
+    id: string;
+    name: string;
+    description: string;
+    trigger: string;
+    body: string;
+  }
 ): Promise<void> {
   await swarmRequest(coordinatorUrl, `/api/skills`, {
     method: 'POST',

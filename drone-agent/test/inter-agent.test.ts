@@ -12,6 +12,7 @@ import {
   getBeaconAgents,
   getBeaconMessages,
   sendBeaconMessage,
+  registerBeaconAgent,
   joinChannel,
   leaveChannel,
   sendChannelMessage,
@@ -42,6 +43,11 @@ describe.skipIf(
       if (agents.length > 0) break;
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
+
+    // Register a second agent so inter-agent messaging tests have a recipient.
+    // The dummy-agent container provides the first; this registers a second
+    // directly via the beacon REST API (self-contained, no extra container).
+    await registerBeaconAgent(BEACON_URL, 'test-agent-2');
   });
 
   describe('send-message-to-agent', () => {

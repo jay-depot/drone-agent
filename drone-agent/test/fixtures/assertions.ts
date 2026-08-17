@@ -222,7 +222,8 @@ export function assertMessageExists(
   options: { fromAgentId?: string; toAgentId?: string; channel?: string }
 ): void {
   const message = messages.find(m => {
-    if (options.fromAgentId && m.fromAgentId !== options.fromAgentId) return false;
+    if (options.fromAgentId && m.fromAgentId !== options.fromAgentId)
+      return false;
     if (options.toAgentId && m.toAgentId !== options.toAgentId) return false;
     if (options.channel && m.channel !== options.channel) return false;
     return true;

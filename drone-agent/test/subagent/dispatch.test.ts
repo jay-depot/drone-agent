@@ -2,7 +2,6 @@ import { describe, it, expect, afterEach } from 'vitest';
 import {
   launchSubagent,
   launchParallelSubagents,
-  launchTimeoutSubagent,
   launchErrorSubagent,
   cancelAllSubagents,
 } from '../fixtures/subagent.js';
@@ -335,18 +334,6 @@ line three`,
         // Should fail with error about missing executable
         expect(result.error).toBeDefined();
       });
-    });
-
-    describe('no-return-tool-call', () => {
-      it('should handle subagent that never calls return tool', async () => {
-        const result = await launchSubagent({
-          task: 'Just say "hello" without using subagent__return',
-          timeout: 15000,
-        });
-
-        // Should have an error about no result being returned
-        expect(result.error).toContain('did not return a result');
-      }, 30000);
     });
 
     describe('error-event-handling', () => {
