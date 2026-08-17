@@ -7,7 +7,7 @@
  * - message-delivery-status: Read receipts work
  */
 
-import { describe, it, expect, beforeAll, test } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   getBeaconAgents,
   getBeaconMessages,
@@ -16,23 +16,17 @@ import {
   leaveChannel,
   sendChannelMessage,
   getRequiredIntegrationEnv,
-  requireProvisionedSwarm,
+  shouldSkipIntegrationSuite,
 } from './fixtures/index.js';
 
 const DEFAULT_BEACON_URL = 'http://localhost:3457';
 const BEACON_URL = getRequiredIntegrationEnv('BEACON_URL', DEFAULT_BEACON_URL);
 
-describe('Inter-Agent Communication', () => {
-  beforeAll(async () => {
-    await requireProvisionedSwarm(test, [
-      {
-        envName: 'BEACON_URL',
-        url: BEACON_URL,
-        fallbackUrl: DEFAULT_BEACON_URL,
-      },
-    ]);
-  });
-
+describe.skipIf(
+  shouldSkipIntegrationSuite([
+    { url: BEACON_URL, fallbackUrl: DEFAULT_BEACON_URL },
+  ])
+)('Inter-Agent Communication', () => {
   describe('send-message-to-agent', () => {
     it('should send a message between agents', async () => {
       const agents = await getBeaconAgents(BEACON_URL);

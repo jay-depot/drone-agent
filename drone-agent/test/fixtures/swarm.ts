@@ -13,7 +13,6 @@ import type {
   Persona,
   RequestOptions,
 } from './index.js';
-import type { TestAPI } from 'vitest';
 
 /**
  * Wait for a service to be available
@@ -48,41 +47,21 @@ export function getRequiredIntegrationEnv(
   return fallbackUrl;
 }
 
-function usesUnsafeLocalFallback(url: string, fallbackUrl: string): boolean {
-  return url === fallbackUrl && !process.env.RUN_INTEGRATION_TESTS;
-}
-
-export async function requireProvisionedSwarm(
-  test: Pick<TestAPI, 'skip'>,
-  targets: Array<{ envName: string; url: string; fallbackUrl: string }>
-): Promise<void> {
+/**
+ * Synchronous guard for swarm integration suites. Returns true when the suite
+ * must be skipped to avoid touching a user's real local beacon/coordinator:
+ * - RUN_INTEGRATION_TESTS is not set (not running under `pnpm test:integration`)
+ * - A target resolved to its unsafe `localhost` fallback (env not provided)
+ *
+ * Use with `describe.skipIf(shouldSkipIntegrationSuite([...]))`.
+ */
+export function shouldSkipIntegrationSuite(
+  targets: Array<{ url: string; fallbackUrl: string }>
+): boolean {
   if (process.env.RUN_INTEGRATION_TESTS !== 'true') {
-    test.skip(
-      'Integration test swarm not provisioned. Run via `pnpm test:integration`.'
-    );
+    return true;
   }
-
-  const unsafeTarget = targets.find(target =>
-    usesUnsafeLocalFallback(target.url, target.fallbackUrl)
-  );
-  if (unsafeTarget) {
-    test.skip(
-      `Refusing to use unsafe fallback ${unsafeTarget.fallbackUrl}. Run via the provisioned integration swarm.`
-    );
-  }
-
-  const unreachable = await Promise.all(
-    targets.map(async target => ({
-      ...target,
-      reachable: await waitForService(target.url, 5, 1000),
-    }))
-  );
-  const missing = unreachable.find(target => !target.reachable);
-  if (missing) {
-    test.skip(
-      `Provisioned integration swarm is not reachable at ${missing.url}. Run via \`pnpm test:integration\`.`
-    );
-  }
+  return targets.some(target => target.url === target.fallbackUrl);
 }
 
 /**

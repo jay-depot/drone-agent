@@ -8,29 +8,23 @@
  * - terminate-spawn: DELETE /spawn/:id stops agent
  */
 
-import { describe, it, expect, beforeAll, test } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   getBeaconAgents,
   spawnAgent,
   terminateAgent,
   getRequiredIntegrationEnv,
-  requireProvisionedSwarm,
+  shouldSkipIntegrationSuite,
 } from './fixtures/index.js';
 
 const DEFAULT_BEACON_URL = 'http://localhost:3457';
 const BEACON_URL = getRequiredIntegrationEnv('BEACON_URL', DEFAULT_BEACON_URL);
 
-describe('Agent Spawning', () => {
-  beforeAll(async () => {
-    await requireProvisionedSwarm(test, [
-      {
-        envName: 'BEACON_URL',
-        url: BEACON_URL,
-        fallbackUrl: DEFAULT_BEACON_URL,
-      },
-    ]);
-  });
-
+describe.skipIf(
+  shouldSkipIntegrationSuite([
+    { url: BEACON_URL, fallbackUrl: DEFAULT_BEACON_URL },
+  ])
+)('Agent Spawning', () => {
   describe('spawn-agent-via-api', () => {
     it('should spawn a new agent via API', async () => {
       const initialAgents = await getBeaconAgents(BEACON_URL);
