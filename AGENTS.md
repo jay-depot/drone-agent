@@ -125,6 +125,7 @@ try {
 ```
 
 The TUI (`src/tui/app.tsx`) renders any `DroneConversationEvent` with a recognized `kind` in both the live tail region and the committed scrollback. Adding a new event kind requires:
+
 1. Add the kind to the `DroneConversationEvent` union in `drone-core/src/index.ts`
 2. Add a color in `src/tui/theme.tsx` (e.g., `compaction: 'cyan'`)
 3. Add a case in `src/tui/app.tsx` to render the message

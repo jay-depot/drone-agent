@@ -7,6 +7,7 @@ import {
   type DroneLlmProvider,
   type DroneLogger,
   type DronePlugin,
+  type DroneSlashCommandContext,
   type DroneSessionTurn,
 } from 'drone-core';
 import type { DroneSessionManager } from '../../runtime/session-manager.js';
@@ -321,9 +322,122 @@ async function runCompaction(
   });
 }
 
+export type CompactionStatus = {
+  enabled: boolean;
+  config: DroneCompactionConfig;
+  turns: {
+    total: number;
+    nonSummary: number;
+    summary: number;
+    oldestNonSummaryIndex: number | null;
+  };
+  contextWindow: {
+    softThresholdPercent: number;
+    currentUsagePercent: number;
+    summaryBudgetPercent: number;
+    currentSummaryPercent: number;
+  };
+  summaries: Array<{
+    id: string;
+    preview: string;
+    tokenCount: number;
+  }>;
+};
+
 export type CompactionCapability = {
   forceEvaluate: () => Promise<void>;
+  forceEvaluateAll: () => Promise<void>;
+  getStatus: () => Promise<CompactionStatus>;
+  dropSummary: (id: string) => Promise<boolean>;
+  dropAllSummaries: () => Promise<number>;
+  dropOldestSummaries: (count: number) => Promise<number>;
 };
+
+async function handleCompact(
+  cap: CompactionCapability,
+  ctx: DroneSlashCommandContext,
+  { all }: { all: boolean }
+): Promise<boolean> {
+  const status = await cap.getStatus();
+
+  if (!status.enabled) {
+    // Decision #1: user intent overrides config. Warn but still allow manual
+    // invocation.
+    ctx.logger.warn(
+      'Compaction is disabled in config; forcing manual compaction.'
+    );
+  }
+
+  if (status.turns.nonSummary < status.config.minTurnsToCompact) {
+    ctx.logger.warn(
+      `Only ${status.turns.nonSummary} non-summary turn(s); need at least ${status.config.minTurnsToCompact} to compact`
+    );
+    return true;
+  }
+
+  if (all) {
+    await cap.forceEvaluateAll();
+    ctx.logger.info('Compacted ALL non-summary turns');
+  } else {
+    await cap.forceEvaluate();
+    ctx.logger.info('Compacted oldest non-summary turns');
+  }
+  return true;
+}
+
+async function handleShow(
+  cap: CompactionCapability,
+  ctx: DroneSlashCommandContext
+): Promise<boolean> {
+  const status = await cap.getStatus();
+  if (status.summaries.length === 0) {
+    ctx.logger.info('No compaction summaries in current context');
+    return true;
+  }
+
+  ctx.logger.info('Compaction summaries (newest first):');
+  for (const s of status.summaries) {
+    ctx.logger.info(
+      `  ${s.id.slice(0, 8)}  ${s.tokenCount} tokens  ${s.preview}`
+    );
+  }
+  ctx.logger.info(
+    `Total: ${status.summaries.length} summary turn(s), ${(
+      status.contextWindow.currentSummaryPercent * 100
+    ).toFixed(1)}% of budget`
+  );
+  return true;
+}
+
+async function handleDrop(
+  cap: CompactionCapability,
+  ctx: DroneSlashCommandContext,
+  args: string[]
+): Promise<boolean> {
+  if (args.length === 0) {
+    ctx.logger.warn('Usage: /compact drop <id|all|N>');
+    return true;
+  }
+
+  const target = args[0].toLowerCase();
+  let dropped = 0;
+
+  if (target === 'all') {
+    dropped = await cap.dropAllSummaries();
+    ctx.logger.info(`Dropped ${dropped} summary turn(s)`);
+  } else if (/^\d+$/.test(target)) {
+    dropped = await cap.dropOldestSummaries(parseInt(target, 10));
+    ctx.logger.info(`Dropped ${dropped} oldest summary turn(s)`);
+  } else {
+    const ok = await cap.dropSummary(target);
+    if (ok) {
+      ctx.logger.info(`Dropped summary ${target}`);
+    } else {
+      ctx.logger.warn(`Summary not found: ${target}`);
+    }
+  }
+  return true;
+}
 
 export type CompactionPluginDeps = {
   sessionManager: DroneSessionManager;
@@ -397,18 +511,136 @@ export function createCompactionPlugin(
 
       const capability: CompactionCapability = {
         forceEvaluate: async () => {
-          if (!config.enabled || context.compactionInFlight.value) {
+          if (context.compactionInFlight.value) {
             return;
           }
           context.compactionInFlight.value = true;
+          const originalEnabled = context.config.enabled;
+          context.config.enabled = true;
           try {
             await runCompaction(context, registration.getConfig().systemPrompt);
           } finally {
+            context.config.enabled = originalEnabled;
             context.compactionInFlight.value = false;
           }
         },
+        forceEvaluateAll: async () => {
+          if (context.compactionInFlight.value) {
+            return;
+          }
+          context.compactionInFlight.value = true;
+          const originalEnabled = context.config.enabled;
+          const originalSlice = context.config.slicePercent;
+          context.config.enabled = true;
+          context.config.slicePercent = 100;
+          try {
+            await runCompaction(context, registration.getConfig().systemPrompt);
+          } finally {
+            context.config.enabled = originalEnabled;
+            context.config.slicePercent = originalSlice;
+            context.compactionInFlight.value = false;
+          }
+        },
+        getStatus: async () => {
+          const turns = sessionManager.getTurns();
+          const summaryTurns = turns.filter(t => t.kind === 'summary');
+          const nonSummaryTurns = turns.filter(t => t.kind !== 'summary');
+
+          const provider = getProvider();
+          const model = getModel();
+          const fallbackContextWindow = Math.max(
+            1,
+            Math.round(
+              estimateMessageTokens({
+                role: 'system',
+                content: registration.getConfig().systemPrompt,
+              }) / Math.max(0.01, config.softThresholdPercent / 100)
+            )
+          );
+          const contextWindowTokens = await resolveContextWindow(
+            provider,
+            model,
+            fallbackContextWindow
+          );
+          const counts = summarizeTokenCounts({
+            turns,
+            baseSystemMessages: [
+              {
+                role: 'system',
+                content: registration.getConfig().systemPrompt,
+              },
+            ],
+            fragmentMessages: [],
+            contextWindowTokens,
+          });
+
+          return {
+            enabled: config.enabled,
+            config,
+            turns: {
+              total: turns.length,
+              nonSummary: nonSummaryTurns.length,
+              summary: summaryTurns.length,
+              oldestNonSummaryIndex: nonSummaryTurns[0]
+                ? turns.indexOf(nonSummaryTurns[0])
+                : null,
+            },
+            contextWindow: {
+              softThresholdPercent: config.softThresholdPercent,
+              currentUsagePercent: counts.usagePercent,
+              summaryBudgetPercent: config.summaryBudgetPercent,
+              currentSummaryPercent: counts.summaryPercent,
+            },
+            summaries: summaryTurns.map(t => ({
+              id: t.id,
+              preview: t.messages[0]?.content?.slice(0, 80) ?? '',
+              tokenCount: estimateTurnTokens(t),
+            })),
+          };
+        },
+        dropSummary: async id =>
+          sessionManager.dropSummaryTurnById(id) !== null,
+        dropAllSummaries: async () => {
+          const ids = sessionManager.getSummaryTurns().map(t => t.id);
+          return ids.length > 0 ? sessionManager.dropTurnsByIds(ids).length : 0;
+        },
+        dropOldestSummaries: async count => {
+          if (count <= 0) {
+            return 0;
+          }
+          const ids = sessionManager
+            .getSummaryTurns()
+            .slice(-count)
+            .map(t => t.id);
+          return ids.length > 0 ? sessionManager.dropTurnsByIds(ids).length : 0;
+        },
       };
       registration.offer(capability);
+
+      registration.registerSlashCommand({
+        command: '/compact',
+        description: 'Manage context compaction: show, drop, or force compact',
+        handler: async (ctx: DroneSlashCommandContext) => {
+          const sub = ctx.args[0]?.toLowerCase();
+
+          switch (sub) {
+            case 'show':
+              return handleShow(capability, ctx);
+            case 'drop':
+              return handleDrop(capability, ctx, ctx.args.slice(1));
+            case undefined:
+            case '':
+            case '--all':
+              return handleCompact(capability, ctx, {
+                all: ctx.args.includes('--all'),
+              });
+            default:
+              ctx.logger.warn(`Unknown compact subcommand: ${sub}`);
+              ctx.printHelp?.();
+              return true;
+          }
+        },
+      });
 
       registration.hooks.onPluginsLoaded(async () => {
         registration.logger.info(

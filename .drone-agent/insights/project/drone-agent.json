@@ -190,5 +190,17 @@
   {
     "timestamp": "2026-08-17T02:08:43.727Z",
     "insight": "The compaction plugin's `maybeCompact` convergence loop recomputes `sessionManager.getTurns()` at the top of each iteration because compaction mutates the session (drops turns, prepends summaries). When refactoring a single-shot routine into a loop, always re-read the shared state inside the loop rather than hoisting it — otherwise the loop operates on stale snapshots and can't converge. Also keep the empty-turns early return BEFORE the context-window probe (resolveContextWindow) so a no-op session doesn't trigger an LLM provider call."
+  },
+  {
+    "timestamp": "2026-08-17T03:37:33.632Z",
+    "insight": "The compaction plugin's \"user intent overrides config\" decision (manual `/compact` when `enabled: false`) requires more than just skipping the `config.enabled` check in the capability method — `maybeCompact` itself checks `config.enabled` internally. The fix is to temporarily set `context.config.enabled = true` (and restore it in `finally`) around the `runCompaction` call. When a plan says \"user intent overrides config,\" trace the full call chain to find every internal config gate, not just the entry point."
+  },
+  {
+    "timestamp": "2026-08-17T03:37:33.633Z",
+    "insight": "When implementing a plan that sketches a slash command handler, verify the actual `DroneSlashCommand.handler` signature before coding. The plan sketch used `{ exit, clearSession, printHelp }` return values, but the real handler returns `Promise<boolean>`. Also `ctx.args` is already a `string[]` (split by whitespace by the engine), not a raw string. Plans written from memory of an older API surface will silently diverge — always read the current `DroneSlashCommandContext` type and an existing slash command implementation (e.g. `/focus`, `/todo`) first."
+  },
+  {
+    "timestamp": "2026-08-17T03:37:33.634Z",
+    "insight": "A slash command flag like `--all` that appears as the FIRST argument needs its own `case` in the subcommand switch — it's not a trailing flag. `/compact --all` has `ctx.args[0] === '--all'`, which the plan's sketch routed to the `default` case (unknown subcommand). When a command supports both a subcommand and a leading flag, handle the flag explicitly in the switch before falling through to the default."
   }
 ]

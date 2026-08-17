@@ -5,8 +5,9 @@ tags:
   - compaction
   - slash-command
   - plugin
+  - completed
 created: 2026-08-17T03:23:02.094Z
-updated: 2026-08-17T03:23:02.094Z
+updated: 2026-08-17T03:37:16.515Z
 ---
 
 # Compaction Slash Command Plan
@@ -30,21 +31,21 @@ The plugin already offers `forceEvaluate()` — extend it to support new modes:
 type CompactionCapability = {
   forceEvaluate: () => Promise<void>;
   // NEW:
-  forceEvaluateAll: () => Promise<void>;        // for --all
-  getStatus: () => CompactionStatus;             // for show + dry-run info
+  forceEvaluateAll: () => Promise<void>; // for --all
+  getStatus: () => CompactionStatus; // for show + dry-run info
   dropSummary: (id: string) => Promise<boolean>; // for drop <id>
-  dropAllSummaries: () => Promise<number>;       // for drop all
+  dropAllSummaries: () => Promise<number>; // for drop all
   dropOldestSummaries: (count: number) => Promise<number>; // for drop N
 };
 
 type CompactionStatus = {
   enabled: boolean;
-  config: DroneCompactionConfig;  // current effective config
+  config: DroneCompactionConfig; // current effective config
   turns: {
     total: number;
     nonSummary: number;
     summary: number;
-    oldestNonSummaryIndex: number | null;  // index of oldest non-summary turn
+    oldestNonSummaryIndex: number | null; // index of oldest non-summary turn
   };
   contextWindow: {
     softThresholdPercent: number;
@@ -57,6 +58,7 @@ type CompactionStatus = {
 ```
 
 **Why extend the capability (not call internals directly):**
+
 - Keeps the plugin's internal `compactionInFlight` latch respected
 - Reuses `maybeCompact` logic (config checks, LLM calls, event emission)
 - Slash command stays thin — just UI + capability calls
@@ -71,7 +73,7 @@ type CompactionStatus = {
 registration.registerSlashCommand({
   command: 'compact',
   description: 'Manage context compaction',
-  handler: async (ctx) => {
+  handler: async ctx => {
     const cap = ctx.engine.getCapability<CompactionCapability>('compaction');
     if (!cap) return { exit: false, clearSession: false, printHelp: false };
 
@@ -99,10 +101,11 @@ registration.registerSlashCommand({
 ### 3. Subcommand Implementations
 
 #### `handleCompact` (no args / `--all`)
+
 ```typescript
 async function handleCompact(cap, ctx, { all }) {
   const status = cap.getStatus();
-  
+
   if (!status.enabled) {
     ctx.logger.warn('Compaction is disabled in config');
     return { exit: false, clearSession: false, printHelp: false };
@@ -119,7 +122,7 @@ async function handleCompact(cap, ctx, { all }) {
     await cap.forceEvaluateAll();
     ctx.logger.info('Compacted ALL non-summary turns');
   } else {
-    await cap.forceEvaluate();  // existing: compacts slicePercent (default 25%)
+    await cap.forceEvaluate(); // existing: compacts slicePercent (default 25%)
     ctx.logger.info('Compacted oldest non-summary turns');
   }
   return { exit: false, clearSession: false, printHelp: false };
@@ -127,6 +130,7 @@ async function handleCompact(cap, ctx, { all }) {
 ```
 
 #### `handleShow`
+
 ```typescript
 function handleShow(cap, ctx) {
   const status = cap.getStatus();
@@ -134,10 +138,10 @@ function handleShow(cap, ctx) {
     ctx.logger.info('No compaction summaries in current context');
     return { exit: false, clearSession: false, printHelp: false };
   }
-  
+
   ctx.logger.info('Compaction summaries (newest first):');
   for (const s of status.summaries) {
-    ctx.logger.info(`  ${s.id.slice(0,8)}  ${s.tokenCount} tokens  ${s.preview}`);
+    ctx.logger.info(`  ${s.id.slice(0, 8)}  ${s.tokenCount} tokens  ${s.preview}`);
   }
   ctx.logger.info(`Total: ${status.summaries.length} summary turn(s), ${status.contextWindow.currentSummaryPercent}% of budget`);
   return { exit: false, clearSession: false, printHelp: false };
@@ -145,16 +149,17 @@ function handleShow(cap, ctx) {
 ```
 
 #### `handleDrop`
+
 ```typescript
 async function handleDrop(cap, ctx, args) {
   if (args.length === 0) {
     ctx.logger.warn('Usage: /compact drop <id|all|N>');
     return { exit: false, clearSession: false, printHelp: true };
   }
-  
+
   const target = args[0].toLowerCase();
   let dropped = 0;
-  
+
   if (target === 'all') {
     dropped = await cap.dropAllSummaries();
     ctx.logger.info(`Dropped ${dropped} summary turn(s)`);
@@ -179,7 +184,7 @@ Inside `createCompactionPlugin`, after the existing `forceEvaluate`:
 ```typescript
 const capability: CompactionCapability = {
   forceEvaluate: async () => { /* existing */ },
-  
+
   forceEvaluateAll: async () => {
     // Temporarily override slicePercent to 100 for one shot
     const originalSlice = context.config.slicePercent;
@@ -190,13 +195,13 @@ const capability: CompactionCapability = {
       context.config.slicePercent = originalSlice;
     }
   },
-  
+
   getStatus: () => {
     const turns = sessionManager.getTurns();
     const summaryTurns = turns.filter(t => t.kind === 'summary');
     const nonSummaryTurns = turns.filter(t => t.kind !== 'summary');
     const counts = summarizeTokenCounts(turns, systemPrompt, config, provider);
-    
+
     return {
       enabled: config.enabled,
       config,
@@ -219,14 +224,14 @@ const capability: CompactionCapability = {
       })),
     };
   },
-  
+
   dropSummary: async (id) => sessionManager.dropSummaryTurnById(id) !== null,
-  
+
   dropAllSummaries: async () => {
     const ids = sessionManager.getSummaryTurns().map(t => t.id);
     return ids.length > 0 ? sessionManager.dropTurnsByIds(ids) : 0;
   },
-  
+
   dropOldestSummaries: async (count) => {
     const ids = sessionManager.getSummaryTurns()
       .slice(-count)  // oldest are at end (prepended at head)
@@ -280,9 +285,68 @@ Add to `test/compaction.test.ts`:
 
 ### Validation Criteria
 
-- [ ] LSP passes (`pnpm -r run typecheck`)
-- [ ] Build passes (`pnpm -r run build`)
-- [ ] Lint passes (`pnpm -r run lint`)
-- [ ] Fast tests pass (`pnpm -r run test`)
-- [ ] New tests cover: capability extensions, slash command routing, drop operations, status reporting
-- [ ] Manual testing: `/compact`, `/compact --all`, `/compact show`, `/compact drop <id>`, `/compact drop all`, `/compact drop N`
+- [x] LSP passes (`pnpm -r run typecheck`)
+- [x] Build passes (`pnpm -r run build`)
+- [x] Lint passes (`pnpm -r run lint`)
+- [x] Fast tests pass (`pnpm -r run test`)
+- [x] New tests cover: capability extensions, slash command routing, drop operations, status reporting
+- [x] Manual testing: `/compact`, `/compact --all`, `/compact show`, `/compact drop <id>`, `/compact drop all`, `/compact drop N`
+
+---
+
+## Implementation Summary (2026-08-17)
+
+**Status: COMPLETE**
+
+All steps of the plan were executed. The `/compact` slash command and extended `CompactionCapability` are implemented and tested.
+
+### What was done
+
+1. **Extended `CompactionCapability`** in `drone-agent/src/plugins/compaction/index.ts` with:
+   - `forceEvaluateAll()` — compacts ALL non-summary turns by temporarily overriding `slicePercent` to 100
+   - `getStatus()` — returns `CompactionStatus` with turn counts, context-window usage, and summary previews
+   - `dropSummary(id)` — drops a specific summary turn by id
+   - `dropAllSummaries()` — drops all summary turns
+   - `dropOldestSummaries(count)` — drops the N oldest summary turns
+
+2. **Added `CompactionStatus` type** — a public type describing the current compaction state (enabled, config, turn counts, context-window usage, summary list).
+
+3. **Registered `/compact` slash command** with subcommands:
+   - `/compact` — compacts oldest non-summary turns (respects `minTurnsToCompact` gate)
+   - `/compact --all` — compacts ALL non-summary turns
+   - `/compact show` — lists summary turns with previews and token counts
+   - `/compact drop <id|all|N>` — drops summary turn(s) by id, all, or oldest N
+
+4. **Re-exported `CompactionStatus`** from `drone-agent/src/plugins/index.ts`.
+
+5. **Added 20 new tests** to `drone-agent/test/compaction.test.ts` covering:
+   - `forceEvaluateAll` compacts all non-summary turns in one call
+   - `getStatus` returns correct counts and summary previews
+   - `dropSummary` / `dropAllSummaries` / `dropOldestSummaries` mutate session correctly
+   - Slash command routing for all subcommands
+   - `--all` respects `minTurnsToCompact` gate
+   - Warns but still compacts when `enabled: false` (Decision #1: user intent overrides config)
+
+### Deviations from plan sketch
+
+- **Slash command handler return type**: The plan sketch used `{ exit, clearSession, printHelp }` but the actual `DroneSlashCommand.handler` returns `Promise<boolean>`. Implemented with `boolean` returns.
+- **`ctx.args`**: Already a `string[]` (split by whitespace by the engine), not a raw string. Used `ctx.args[0]` directly.
+- **`getStatus` is async**: The plan sketch showed a sync `getStatus()`, but it needs to resolve the context window (async provider probe), so it's `Promise<CompactionStatus>`.
+- **`estimateTurnTokens(turn)`**: Takes only a turn (no provider arg) in the actual code.
+- **`summarizeTokenCounts`**: Takes an object `{ turns, baseSystemMessages, fragmentMessages, contextWindowTokens }`, not positional args.
+- **`--all` handling**: The plan sketch routed `--all` through the default case, but `--all` is the first arg so it needs its own case. Added `case '--all'` to the switch.
+- **Manual invoke when disabled**: Both `forceEvaluate` and `forceEvaluateAll` now temporarily set `config.enabled = true` during manual invocation (restoring it in `finally`), so the "user intent overrides config" decision actually works — `maybeCompact` checks `config.enabled` internally.
+
+### Validation
+
+- `pnpm typecheck` — PASS
+- `pnpm build` — PASS
+- `pnpm lint` — PASS
+- `pnpm test` — PASS (1933 passed, 9 skipped)
+- LSP diagnostics — clean (only pre-existing hint on `resolveContextWindow`)
+
+### Files changed
+
+- `drone-agent/src/plugins/compaction/index.ts` — extended capability, added handlers, registered slash command
+- `drone-agent/src/plugins/index.ts` — re-exported `CompactionStatus`
+- `drone-agent/test/compaction.test.ts` — 20 new tests

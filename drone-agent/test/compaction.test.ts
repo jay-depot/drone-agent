@@ -11,6 +11,8 @@ import {
   type DroneLogger,
   type DronePluginRegistration,
   type DroneSessionSafetyTrimPayload,
+  type DroneSlashCommand,
+  type DroneSlashCommandContext,
 } from 'drone-core';
 import { createCompactionPlugin } from '../src/plugins/compaction/index.js';
 import { createSessionManager } from '../src/runtime/session-manager.js';
@@ -86,6 +88,7 @@ type RegistrationCapture = {
   registration: DronePluginRegistration;
   hooks: HookBucket;
   capability: { value: unknown };
+  slashCommands: DroneSlashCommand[];
   logger: DroneLogger;
 };
 
@@ -105,6 +108,7 @@ async function captureRegistration(
     onConversationEvent: [],
   };
   const capability: { value: unknown } = { value: undefined };
+  const slashCommands: DroneSlashCommand[] = [];
 
   const logger: DroneLogger = {
     info: vi.fn(),
@@ -117,7 +121,9 @@ async function captureRegistration(
     registerTool: () => {},
     registerPromptFragment: () => {},
     registerHelp: () => {},
-    registerSlashCommand: () => {},
+    registerSlashCommand: cmd => {
+      slashCommands.push(cmd);
+    },
     registerWorkflow: () => {},
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
@@ -147,7 +153,7 @@ async function captureRegistration(
 
   await plugin.register(registration);
 
-  return { registration, hooks, capability, logger };
+  return { registration, hooks, capability, slashCommands, logger };
 }
 
 async function runBeforePrompt(capture: RegistrationCapture): Promise<void> {
@@ -160,6 +166,35 @@ async function runAfterToolCall(capture: RegistrationCapture): Promise<void> {
   for (const cb of capture.hooks.onAfterToolCall) {
     await cb();
   }
+}
+
+async function runSlashCommand(
+  capture: RegistrationCapture,
+  line: string
+): Promise<boolean> {
+  const cmd = capture.slashCommands.find(
+    c => line === c.command || line.startsWith(c.command + ' ')
+  );
+  if (!cmd) {
+    throw new Error(`No slash command registered for: ${line}`);
+  }
+  const args = line
+    .slice(cmd.command.length)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const ctx: DroneSlashCommandContext = {
+    line,
+    args,
+    logger: capture.logger,
+    engine: {
+      executeTool: async () => '',
+      runHooks: async () => {},
+      getCapability: <T>() => undefined as T | undefined,
+    },
+    printHelp: () => {},
+  };
+  return cmd.handler(ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -1277,5 +1312,489 @@ it('emits a compaction event when self-purging old summaries', async () => {
     kind: 'compaction',
     message: 'Dropped oldest summary turn',
     status: 'completed',
+  });
+});
+
+describe('CompactionCapability extensions', () => {
+  it('forceEvaluateAll compacts all non-summary turns in one call', async () => {
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 6; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [
+        { message: 'S1.' },
+        { message: 'S2.' },
+        { message: 'S3.' },
+      ],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const capability = capture.capability.value as {
+      forceEvaluateAll: () => Promise<void>;
+    };
+
+    await capability.forceEvaluateAll();
+
+    // With slicePercent overridden to 100, all 6 non-summary turns are
+    // compacted in a single round.
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    expect(sessionManager.getSummaryTurns()).toHaveLength(1);
+    expect(
+      sessionManager.getTurns().filter(t => t.kind !== 'summary')
+    ).toHaveLength(0);
+  });
+
+  it('getStatus returns correct counts and summary previews', async () => {
+    const sessionManager = createSessionManager();
+    sessionManager.prependSystemTurn('Summary one content.', {
+      kind: 'summary',
+    });
+    sessionManager.prependSystemTurn('Summary two content.', {
+      kind: 'summary',
+    });
+    sessionManager.appendUserMessage('hello');
+    sessionManager.appendUserMessage('world');
+
+    const config = makeConfig({
+      softThresholdPercent: 50,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+    });
+
+    const provider = makeProvider({ contextWindow: 4096 });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const capability = capture.capability.value as {
+      getStatus: () => Promise<{
+        enabled: boolean;
+        config: DroneCompactionConfig;
+        turns: {
+          total: number;
+          nonSummary: number;
+          summary: number;
+          oldestNonSummaryIndex: number | null;
+        };
+        contextWindow: {
+          softThresholdPercent: number;
+          currentUsagePercent: number;
+          summaryBudgetPercent: number;
+          currentSummaryPercent: number;
+        };
+        summaries: Array<{
+          id: string;
+          preview: string;
+          tokenCount: number;
+        }>;
+      }>;
+    };
+
+    const status = await capability.getStatus();
+    expect(status.enabled).toBe(true);
+    expect(status.turns.total).toBe(4);
+    expect(status.turns.nonSummary).toBe(2);
+    expect(status.turns.summary).toBe(2);
+    expect(status.turns.oldestNonSummaryIndex).toBe(2);
+    expect(status.contextWindow.softThresholdPercent).toBe(50);
+    expect(status.summaries).toHaveLength(2);
+    expect(status.summaries[0].preview).toContain('Summary two content');
+    expect(status.summaries[0].tokenCount).toBeGreaterThan(0);
+  });
+
+  it('dropSummary removes a specific summary turn by id', async () => {
+    const sessionManager = createSessionManager();
+    const s1 = sessionManager.prependSystemTurn('Summary one.', {
+      kind: 'summary',
+    });
+    const s2 = sessionManager.prependSystemTurn('Summary two.', {
+      kind: 'summary',
+    });
+    sessionManager.appendUserMessage('hello');
+
+    const config = makeConfig();
+    const provider = makeProvider();
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const capability = capture.capability.value as {
+      dropSummary: (id: string) => Promise<boolean>;
+    };
+
+    const ok = await capability.dropSummary(s1.id);
+    expect(ok).toBe(true);
+    expect(sessionManager.getSummaryTurns()).toHaveLength(1);
+    expect(sessionManager.getSummaryTurns()[0].id).toBe(s2.id);
+
+    const notFound = await capability.dropSummary('nonexistent');
+    expect(notFound).toBe(false);
+  });
+
+  it('dropAllSummaries removes all summary turns', async () => {
+    const sessionManager = createSessionManager();
+    sessionManager.prependSystemTurn('Summary one.', { kind: 'summary' });
+    sessionManager.prependSystemTurn('Summary two.', { kind: 'summary' });
+    sessionManager.appendUserMessage('hello');
+
+    const config = makeConfig();
+    const provider = makeProvider();
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const capability = capture.capability.value as {
+      dropAllSummaries: () => Promise<number>;
+    };
+
+    const dropped = await capability.dropAllSummaries();
+    expect(dropped).toBe(2);
+    expect(sessionManager.getSummaryTurns()).toHaveLength(0);
+    expect(sessionManager.getTurns()).toHaveLength(1);
+  });
+
+  it('dropOldestSummaries removes the oldest N summary turns', async () => {
+    const sessionManager = createSessionManager();
+    const s1 = sessionManager.prependSystemTurn('Oldest summary.', {
+      kind: 'summary',
+    });
+    const s2 = sessionManager.prependSystemTurn('Middle summary.', {
+      kind: 'summary',
+    });
+    const s3 = sessionManager.prependSystemTurn('Newest summary.', {
+      kind: 'summary',
+    });
+    sessionManager.appendUserMessage('hello');
+
+    const config = makeConfig();
+    const provider = makeProvider();
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const capability = capture.capability.value as {
+      dropOldestSummaries: (count: number) => Promise<number>;
+    };
+
+    const dropped = await capability.dropOldestSummaries(2);
+    expect(dropped).toBe(2);
+    const remaining = sessionManager.getSummaryTurns();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe(s3.id);
+    expect(sessionManager.getTurns().some(t => t.id === s1.id)).toBe(false);
+    expect(sessionManager.getTurns().some(t => t.id === s2.id)).toBe(false);
+  });
+});
+
+describe('/compact slash command', () => {
+  it('registers a /compact slash command', async () => {
+    const config = makeConfig();
+    const provider = makeProvider();
+    const plugin = createCompactionPlugin({
+      sessionManager: createSessionManager(),
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    expect(capture.slashCommands.some(c => c.command === '/compact')).toBe(
+      true
+    );
+  });
+
+  it('shows a warning when there are not enough non-summary turns', async () => {
+    const sessionManager = createSessionManager();
+    sessionManager.appendUserMessage('hello');
+
+    const config = makeConfig({
+      minTurnsToCompact: 2,
+    });
+    const provider = makeProvider();
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const handled = await runSlashCommand(capture, '/compact');
+    expect(handled).toBe(true);
+    expect(capture.logger.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/Only 1 non-summary turn/)
+    );
+  });
+
+  it('compacts via /compact', async () => {
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 6; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [
+        { message: 'S1.' },
+        { message: 'S2.' },
+        { message: 'S3.' },
+      ],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const handled = await runSlashCommand(capture, '/compact');
+    expect(handled).toBe(true);
+    expect(provider.__chatMock).toHaveBeenCalled();
+    expect(sessionManager.getSummaryTurns().length).toBeGreaterThan(0);
+    expect(capture.logger.info).toHaveBeenCalledWith(
+      expect.stringMatching(/Compacted oldest non-summary turns/)
+    );
+  });
+
+  it('compacts all via /compact --all', async () => {
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 6; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'S1.' }],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const handled = await runSlashCommand(capture, '/compact --all');
+    expect(handled).toBe(true);
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    expect(
+      sessionManager.getTurns().filter(t => t.kind !== 'summary')
+    ).toHaveLength(0);
+    expect(capture.logger.info).toHaveBeenCalledWith(
+      expect.stringMatching(/Compacted ALL non-summary turns/)
+    );
+  });
+
+  it('shows summaries via /compact show', async () => {
+    const sessionManager = createSessionManager();
+    sessionManager.prependSystemTurn('Summary one content.', {
+      kind: 'summary',
+    });
+    sessionManager.appendUserMessage('hello');
+
+    const config = makeConfig();
+    const provider = makeProvider();
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const handled = await runSlashCommand(capture, '/compact show');
+    expect(handled).toBe(true);
+    expect(capture.logger.info).toHaveBeenCalledWith(
+      expect.stringMatching(/Compaction summaries/)
+    );
+    expect(capture.logger.info).toHaveBeenCalledWith(
+      expect.stringMatching(/Summary one content/)
+    );
+  });
+
+  it('shows a message when there are no summaries via /compact show', async () => {
+    const sessionManager = createSessionManager();
+    sessionManager.appendUserMessage('hello');
+
+    const config = makeConfig();
+    const provider = makeProvider();
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const handled = await runSlashCommand(capture, '/compact show');
+    expect(handled).toBe(true);
+    expect(capture.logger.info).toHaveBeenCalledWith(
+      'No compaction summaries in current context'
+    );
+  });
+
+  it('drops a summary by id via /compact drop <id>', async () => {
+    const sessionManager = createSessionManager();
+    const s1 = sessionManager.prependSystemTurn('Summary one.', {
+      kind: 'summary',
+    });
+    sessionManager.appendUserMessage('hello');
+
+    const config = makeConfig();
+    const provider = makeProvider();
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const handled = await runSlashCommand(capture, `/compact drop ${s1.id}`);
+    expect(handled).toBe(true);
+    expect(sessionManager.getSummaryTurns()).toHaveLength(0);
+    expect(capture.logger.info).toHaveBeenCalledWith(
+      expect.stringMatching(/Dropped summary/)
+    );
+  });
+
+  it('drops all summaries via /compact drop all', async () => {
+    const sessionManager = createSessionManager();
+    sessionManager.prependSystemTurn('Summary one.', { kind: 'summary' });
+    sessionManager.prependSystemTurn('Summary two.', { kind: 'summary' });
+    sessionManager.appendUserMessage('hello');
+
+    const config = makeConfig();
+    const provider = makeProvider();
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const handled = await runSlashCommand(capture, '/compact drop all');
+    expect(handled).toBe(true);
+    expect(sessionManager.getSummaryTurns()).toHaveLength(0);
+    expect(capture.logger.info).toHaveBeenCalledWith(
+      'Dropped 2 summary turn(s)'
+    );
+  });
+
+  it('drops N oldest summaries via /compact drop N', async () => {
+    const sessionManager = createSessionManager();
+    sessionManager.prependSystemTurn('Summary one.', { kind: 'summary' });
+    sessionManager.prependSystemTurn('Summary two.', { kind: 'summary' });
+    sessionManager.prependSystemTurn('Summary three.', { kind: 'summary' });
+    sessionManager.appendUserMessage('hello');
+
+    const config = makeConfig();
+    const provider = makeProvider();
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const handled = await runSlashCommand(capture, '/compact drop 2');
+    expect(handled).toBe(true);
+    expect(sessionManager.getSummaryTurns()).toHaveLength(1);
+    expect(capture.logger.info).toHaveBeenCalledWith(
+      'Dropped 2 oldest summary turn(s)'
+    );
+  });
+
+  it('warns on unknown subcommand', async () => {
+    const config = makeConfig();
+    const provider = makeProvider();
+    const plugin = createCompactionPlugin({
+      sessionManager: createSessionManager(),
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const handled = await runSlashCommand(capture, '/compact bogus');
+    expect(handled).toBe(true);
+    expect(capture.logger.warn).toHaveBeenCalledWith(
+      'Unknown compact subcommand: bogus'
+    );
+  });
+
+  it('warns but still compacts when compaction is disabled in config', async () => {
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 6; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      enabled: false,
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'S1.' }],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const handled = await runSlashCommand(capture, '/compact');
+    expect(handled).toBe(true);
+    expect(capture.logger.warn).toHaveBeenCalledWith(
+      expect.stringMatching(/Compaction is disabled in config/)
+    );
+    expect(provider.__chatMock).toHaveBeenCalled();
   });
 });
