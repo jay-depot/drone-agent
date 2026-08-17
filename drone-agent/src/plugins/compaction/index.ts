@@ -23,7 +23,28 @@ type RegistrationContext = {
   emitEvent?: (event: DroneConversationEvent) => void;
 };
 
-const SUMMARY_PREFIX = 'Conversation summary (compacted):\n';
+const SUMMARY_PREFIX = 'Conversation summary (compacted):\\n';
+
+type CompactionOptions = {
+  force?: boolean;
+  slicePercentOverride?: number;
+};
+
+function calculateFallbackContextWindow(
+  baseSystemMessages: DroneChatMessage[],
+  fragmentMessages: DroneChatMessage[],
+  softThresholdPercent: number
+): number {
+  const totalSystemTokens = [...baseSystemMessages, ...fragmentMessages].reduce(
+    (sum, m) => sum + estimateMessageTokens(m),
+    0
+  );
+
+  return Math.max(
+    1,
+    Math.round(totalSystemTokens / Math.max(0.01, softThresholdPercent / 100))
+  );
+}
 
 function resolveContextWindow(
   provider: DroneLlmProvider,
@@ -50,17 +71,17 @@ function formatTurnsForSummary(turns: DroneSessionTurn[]): string {
             .map(
               tc => `  tool_call: ${tc.name}(${JSON.stringify(tc.arguments)})`
             )
-            .join('\n');
-          return `${header} ${body}\n${toolSummary}`;
+            .join('\\n');
+          return `${header} ${body}\\n${toolSummary}`;
         }
         if (message.toolName) {
           return `${header} (tool=${message.toolName}) ${body}`;
         }
         return `${header} ${body}`;
       });
-      return `--- Turn ${index + 1} ---\n${parts.join('\n')}`;
+      return `--- Turn ${index + 1} ---\\n${parts.join('\\n')}`;
     })
-    .join('\n');
+    .join('\\n');
 }
 
 function summarizeTokenCounts(input: {
@@ -112,11 +133,12 @@ async function maybeCompact(input: {
   context: RegistrationContext;
   baseSystemMessages: DroneChatMessage[];
   fragmentMessages: DroneChatMessage[];
+  options: CompactionOptions;
 }): Promise<void> {
   const { config, sessionManager, getProvider, getModel, logger, emitEvent } =
     input.context;
 
-  if (!config.enabled) {
+  if (!config.enabled && !input.options.force) {
     return;
   }
 
@@ -127,22 +149,10 @@ async function maybeCompact(input: {
   const provider = getProvider();
   const model = getModel();
 
-  // Conservative fallback: derive a context-window estimate from the static
-  // system + fragment tokens and the configured soft threshold, so we can
-  // reason about usage even when Ollama's probe is unavailable.
-  const fallbackContextWindow = Math.max(
-    1,
-    Math.round(
-      (input.baseSystemMessages.reduce(
-        (sum, m) => sum + estimateMessageTokens(m),
-        0
-      ) +
-        input.fragmentMessages.reduce(
-          (sum, m) => sum + estimateMessageTokens(m),
-          0
-        )) /
-        Math.max(0.01, config.softThresholdPercent / 100)
-    )
+  const fallbackContextWindow = calculateFallbackContextWindow(
+    input.baseSystemMessages,
+    input.fragmentMessages,
+    config.softThresholdPercent
   );
 
   const contextWindowTokens = await resolveContextWindow(
@@ -159,24 +169,21 @@ async function maybeCompact(input: {
     'transcript below. Aim for a brief bullet list. Do not include greetings or ' +
     'pleasantries. Stay under the requested token budget. Prioritize ' +
     'including information in the summary according to the following ' +
-    'order from most to least important:\n' +
+    'order from most to least important:\\n' +
     '1. User input, instruction, questions, and decisions. Preserve these ' +
-    'verbatim.\n' +
+    'verbatim.\\n' +
     "2. Any context needed to understand the user's input, instructions, " +
     'questions, and decisions. For instance, if the user says "Yes, like that," ' +
     'whatever "that" refers to needs to be included in the summary, if ' +
-    'it is available.\n' +
-    '3. Architectural or design information.\n' +
-    '4. Any other relevant information.\n\n' +
+    'it is available.\\n' +
+    '3. Architectural or design information.\\n' +
+    '4. Any other relevant information.\\n\\n' +
     'Detailed tool calls and results should be discarded. Provide a summary ' +
-    'of what was done if it is relevant and only if space allows.\n\n' +
+    'of what was done if it is relevant and only if space allows.\\n\\n' +
     `If any information is missing or ambiguous, note that in the summary. ` +
     `Do not make anything up. If information is not in the transcript, ` +
     `skip it. If you can't just skip it, note it.`;
 
-  // Convergence loop: keep compacting until usage is below the soft threshold
-  // or no more progress can be made. Each iteration recalculates metrics from
-  // the current session state, since compaction mutates the session.
   const MAX_COMPACTION_ITERATIONS = 5;
   for (let iteration = 0; iteration < MAX_COMPACTION_ITERATIONS; iteration++) {
     const turns = sessionManager.getTurns();
@@ -195,17 +202,16 @@ async function maybeCompact(input: {
       break;
     }
 
-    // Self-purge: drop oldest summary until summary region is under budget.
     if (metrics.summaryPercent > summaryBudget) {
       const summaryTurns = sessionManager.getSummaryTurns();
       if (summaryTurns.length === 0) {
-        break; // no progress possible
+        break;
       }
       const dropped = sessionManager.dropSummaryTurnById(
         summaryTurns.at(-1)!.id
       );
       if (!dropped) {
-        break; // no progress possible
+        break;
       }
       logger.warn(
         `compaction: dropped oldest summary turn to keep summary region within ${(summaryBudget * 100).toFixed(0)}% of context window (was ${(metrics.summaryPercent * 100).toFixed(1)}%).`
@@ -215,20 +221,19 @@ async function maybeCompact(input: {
         message: 'Dropped oldest summary turn',
         status: 'completed',
       });
-      continue; // recalculate metrics and try again
+      continue;
     }
 
-    // Slice-and-summarize: usage above threshold and enough turns to compact.
     const nonSummaryCount = turns.filter(
       turn => turn.kind !== 'summary'
     ).length;
     if (nonSummaryCount < config.minTurnsToCompact) {
-      break; // not enough non-summary turns to compact
+      break;
     }
 
-    const desiredSlice = Math.floor(
-      (nonSummaryCount * config.slicePercent) / 100
-    );
+    const slicePercent =
+      input.options.slicePercentOverride ?? config.slicePercent;
+    const desiredSlice = Math.floor((nonSummaryCount * slicePercent) / 100);
     const sliceSize = Math.max(
       config.minTurnsToCompact,
       Math.min(desiredSlice, nonSummaryCount)
@@ -238,16 +243,12 @@ async function maybeCompact(input: {
       break;
     }
 
-    // Summaries are prepended at the head; normal turns are appended at the
-    // tail. The oldest non-summary turns sit right after the summary region.
-    // getOldestNonSummaryTurns iterates forward, skipping summaries, to
-    // collect exactly these turns.
     const slice = getOldestNonSummaryTurns(turns, sliceSize);
     const transcript = formatTurnsForSummary(slice);
 
     const summaryUserPrompt =
       `Summarize the following ${slice.length} conversation turn(s) in at most ` +
-      `${config.summaryMaxTokens} tokens:\n\n${transcript}`;
+      `${config.summaryMaxTokens} tokens:\\n\\n${transcript}`;
 
     emitEvent?.({
       kind: 'compaction',
@@ -300,25 +301,25 @@ async function maybeCompact(input: {
         message: `Compaction failed: ${message}${statusSuffix}`,
         status: 'failed',
       });
-      break; // a failed summary means no progress this round; stop
+      break;
     }
   }
-
-  input.context.compactionInFlight.value = false;
 }
 
 async function runCompaction(
   context: RegistrationContext,
-  systemPrompt: string
+  systemPrompt: string,
+  options: CompactionOptions = {}
 ): Promise<void> {
   const baseSystemMessages: DroneChatMessage[] = [
     { role: 'system', content: systemPrompt },
   ];
-  const fragmentMessages: DroneChatMessage[] = [];
+  const fragmentMessages: DroneChatMessage[] = []; // TODO: integrate actual fragments
   await maybeCompact({
     context,
     baseSystemMessages,
     fragmentMessages,
+    options,
   });
 }
 
@@ -361,8 +362,6 @@ async function handleCompact(
   const status = await cap.getStatus();
 
   if (!status.enabled) {
-    // Decision #1: user intent overrides config. Warn but still allow manual
-    // invocation.
     ctx.logger.warn(
       'Compaction is disabled in config; forcing manual compaction.'
     );
@@ -425,7 +424,7 @@ async function handleDrop(
   if (target === 'all') {
     dropped = await cap.dropAllSummaries();
     ctx.logger.info(`Dropped ${dropped} summary turn(s)`);
-  } else if (/^\d+$/.test(target)) {
+  } else if (/^\\d+$/.test(target)) {
     dropped = await cap.dropOldestSummaries(parseInt(target, 10));
     ctx.logger.info(`Dropped ${dropped} oldest summary turn(s)`);
   } else {
@@ -443,12 +442,6 @@ export type CompactionPluginDeps = {
   sessionManager: DroneSessionManager;
   getModel: () => string;
   getProvider: () => DroneLlmProvider;
-  /**
-   * Optional callback to emit conversation events for TUI visibility.
-   * When provided, compaction will emit 'started', 'completed', and
-   * 'failed' events so the TUI can show compaction progress in the
-   * tail region and commit entries to scrollback.
-   */
   emitEvent?: (event: DroneConversationEvent) => void;
 };
 export function createCompactionPlugin(
@@ -481,7 +474,7 @@ export function createCompactionPlugin(
       };
 
       registration.registerHelp(
-        'Context Compaction: proactively summarizes oldest conversation turns when usage exceeds the configured soft threshold. Set compaction.enabled=false in .drone-agent/config.json to disable.'
+        'Context Comp compaction: proactively summarizes oldest conversation turns when usage exceeds the configured soft threshold. Set compaction.enabled=false in .drone-agent/config.json to disable.'
       );
 
       const hookBody = async (): Promise<void> => {
@@ -515,12 +508,13 @@ export function createCompactionPlugin(
             return;
           }
           context.compactionInFlight.value = true;
-          const originalEnabled = context.config.enabled;
-          context.config.enabled = true;
           try {
-            await runCompaction(context, registration.getConfig().systemPrompt);
+            await runCompaction(
+              context,
+              registration.getConfig().systemPrompt,
+              { force: true }
+            );
           } finally {
-            context.config.enabled = originalEnabled;
             context.compactionInFlight.value = false;
           }
         },
@@ -529,15 +523,13 @@ export function createCompactionPlugin(
             return;
           }
           context.compactionInFlight.value = true;
-          const originalEnabled = context.config.enabled;
-          const originalSlice = context.config.slicePercent;
-          context.config.enabled = true;
-          context.config.slicePercent = 100;
           try {
-            await runCompaction(context, registration.getConfig().systemPrompt);
+            await runCompaction(
+              context,
+              registration.getConfig().systemPrompt,
+              { force: true, slicePercentOverride: 100 }
+            );
           } finally {
-            context.config.enabled = originalEnabled;
-            context.config.slicePercent = originalSlice;
             context.compactionInFlight.value = false;
           }
         },
