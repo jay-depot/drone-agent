@@ -58,6 +58,8 @@ export type {
   DroneOpenRouterModelConfig,
   DroneOpenRouterConfig,
   DroneSessionConfig,
+  DroneGuardrailThresholdConfig,
+  DroneGuardrailConfig,
   DroneCompactionStrategy,
   DroneCompactionConfig,
   DroneMemoryConfig,

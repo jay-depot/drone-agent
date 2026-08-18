@@ -74,6 +74,9 @@ export function makePlainOutputEventHandler() {
       case 'assistantMessageComplete':
         // No-op
         break;
+     case 'notice':
+       output.write(`\x1b[33m⚠ ${event.content}\x1b[0m\n`);
+       break;
     }
   };
 }

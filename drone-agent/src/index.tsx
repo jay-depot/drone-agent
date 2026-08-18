@@ -219,6 +219,43 @@ async function main(): Promise<void> {
       ]);
       return answers.continue === 'yes';
     },
+   // When degenerate responses (empty or reasoning-only) exceed the
+   // retry limit, ask the user whether to continue or stop.
+   onBrokenResponseLimitReached: async (type) => {
+     const elicit = engine.getElicitation();
+     if (!elicit) return false;
+     const label = type === 'reasoning-only' ? 'reasoning-only' : 'empty';
+     const answers = await elicit.ask([
+       {
+         id: 'continue',
+         prompt: `The model produced ${label} responses repeatedly. Continue anyway?`,
+         choices: [
+           { value: 'yes', label: 'Yes, continue' },
+           { value: 'no', label: 'No, stop' },
+         ],
+         defaultValue: 'no',
+       },
+     ]);
+     return answers.continue === 'yes';
+   },
+   // When an identical tool call is repeated beyond the nudge limit,
+   // ask the user whether to continue or stop.
+   onIdenticalToolCallLimitReached: async (toolName, args, count) => {
+     const elicit = engine.getElicitation();
+     if (!elicit) return false;
+     const answers = await elicit.ask([
+       {
+         id: 'continue',
+         prompt: `The model appears stuck: repeated call to ${toolName} ${count} times. Continue?`,
+         choices: [
+           { value: 'yes', label: 'Yes, continue' },
+           { value: 'no', label: 'No, stop' },
+         ],
+         defaultValue: 'no',
+       },
+     ]);
+     return answers.continue === 'yes';
+   },
   });
   const registeredPlugins = await engine.initialize();
 

@@ -135,10 +135,36 @@ try {
 The TUI (`src/tui/app.tsx`) renders any `DroneConversationEvent` with a recognized `kind` in both the live tail region and the committed scrollback. Adding a new event kind requires:
 
 1. Add the kind to the `DroneConversationEvent` union in `drone-core/src/index.ts`
-2. Add a color in `src/tui/theme.tsx` (e.g., `compaction: 'cyan'`)
+2. Add a color in `src/tui/theme.tsx` (e.g., `compaction: 'cyan'`, `notice: 'yellow'`)
 3. Add a case in `src/tui/app.tsx` to render the message
 
 **Rule of thumb**: If a plugin mutates session state without a user command, it must emit at least `started` and `completed`/`failed` events. The latch bug in compaction (Decision 053) went undetected for weeks partly because the plugin was observability-free — no events meant no visible signal that it had stopped firing.
+### Guardrail System
+
+The conversation service includes built-in guardrails that detect and mitigate common LLM reliability issues. These are configured under `session.guardrail` in the config:
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `brokenResponses.hintAfter` | 2 | Number of empty/reasoning-only responses before phase 1 retries |
+| `brokenResponses.maxHints` | 2 | Max number of system-hint retries (phase 2) before hard limit |
+| `reasoningOnlyResponses.hintAfter` | 4 | Same as `brokenResponses` but for reasoning-only responses |
+| `reasoningOnlyResponses.maxHints` | 2 | Same as `brokenResponses` but for reasoning-only responses |
+| `identicalToolCalls.hintAfter` | 2 | Number of identical single-tool-call iterations before nudging |
+| `identicalToolCalls.maxHints` | 3 | Max nudges before hard limit (total iterations = hintAfter + maxHints) |
+
+**Broken responses** (Feature 1): When the LLM produces an empty response or a reasoning-only response, the conversation service retries without appending the degenerate response to the session. After `hintAfter` silent retries, it injects a non-persisted system hint. After `hintAfter + maxHints` total attempts, it prompts the user via `onBrokenResponseLimitReached`.
+
+**Identical tool-call streak** (Feature 2): When the LLM repeatedly makes the exact same single tool call (same name and arguments), the service tracks a streak counter. After `hintAfter` repetitions, it injects a non-persisted nudge message. After `hintAfter + maxHints` total repetitions, it prompts the user via `onIdenticalToolCallLimitReached` or throws an error.
+
+**Assistant text before tool calls** (Feature 3): When an LLM response includes both text and tool calls, the `assistantMessage` and `assistantMessageComplete` events are emitted before the `toolCallBatch` event, so the TUI can show the text immediately.
+
+All guardrail state (broken-response counter, identical-call streak, nudge flags) is reset when:
+- A new user message enters the conversation loop
+- `conversation.resetStuckDetectors()` is called
+- `conversation.clearSession()` is called
+
+Guardrail events use the `notice` event kind (rendered in yellow/italic in the TUI, and prefixed with ⚠ in plain-text mode).
+
 
 ### Broker + Provider Pattern (Skills & Personas)
 
