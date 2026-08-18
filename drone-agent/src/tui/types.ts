@@ -69,7 +69,8 @@ export type ChatEntry = {
     | 'plain'
     | 'success'
     | 'markdown'
-    | 'compaction';
+    | 'compaction'
+    | 'notice';
   /** Primary text. Multi-line strings render with hard newlines. */
   text: string;
   /**

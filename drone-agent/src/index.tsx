@@ -1,7 +1,6 @@
 import {
   createConsoleLogger,
   createDebugFlagRegistry,
-  type DroneChatMessage,
   type DroneLlmCapability,
   type DroneLlmProvider,
 } from 'drone-core';
@@ -157,6 +156,9 @@ async function main(): Promise<void> {
   const debugFlags = createDebugFlagRegistry(
     invocation.options.debugSubsystems
   );
+  // The conversation is created after the engine, so expose a mutable ref that
+  // the engine's `_runtime` capability closure reads at call time.
+  let resetStuckDetectorsRef: (() => void) | undefined;
   const engine = createDronePluginEngine({
     plugins: allPlugins,
     config: resolvedConfig.config,
@@ -168,6 +170,7 @@ async function main(): Promise<void> {
       persona: invocation.options.persona,
     },
     buildSystemMessages: () => budgetService.buildSystemMessages(),
+    resetStuckDetectors: () => resetStuckDetectorsRef?.(),
   });
   engineRef.current = engine;
   const conversation = createConversationService({
@@ -219,7 +222,51 @@ async function main(): Promise<void> {
       ]);
       return answers.continue === 'yes';
     },
+    // When degenerate responses (empty or reasoning-only) exceed the
+    // retry limit, ask the user whether to continue or stop.
+    onBrokenResponseLimitReached: async type => {
+      const elicit = engine.getElicitation();
+      if (!elicit) return false;
+      const label = type === 'reasoning-only' ? 'reasoning-only' : 'empty';
+      const answers = await elicit.ask([
+        {
+          id: 'continue',
+          prompt: `The model produced ${label} responses repeatedly. Continue anyway?`,
+          choices: [
+            { value: 'yes', label: 'Yes, continue' },
+            { value: 'no', label: 'No, stop' },
+          ],
+          defaultValue: 'no',
+        },
+      ]);
+      return answers.continue === 'yes';
+    },
+    // When an identical tool call is repeated beyond the nudge limit,
+    // ask the user whether to continue or stop.
+    onIdenticalToolCallLimitReached: async (toolName, args, count) => {
+      const elicit = engine.getElicitation();
+      if (!elicit) return false;
+      let argsSummary = '{}';
+      try {
+        argsSummary = JSON.stringify(args);
+      } catch {
+        // Non-serializable args — fall back to an empty object marker.
+      }
+      const answers = await elicit.ask([
+        {
+          id: 'continue',
+          prompt: `The model appears stuck: repeated call to ${toolName}(${argsSummary}) ${count} times. Continue?`,
+          choices: [
+            { value: 'yes', label: 'Yes, continue' },
+            { value: 'no', label: 'No, stop' },
+          ],
+          defaultValue: 'no',
+        },
+      ]);
+      return answers.continue === 'yes';
+    },
   });
+  resetStuckDetectorsRef = conversation.resetStuckDetectors;
   const registeredPlugins = await engine.initialize();
 
   // ── Elicitation wiring ──────────────────────────────────────────────

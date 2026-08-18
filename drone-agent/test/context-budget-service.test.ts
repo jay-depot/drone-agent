@@ -86,6 +86,11 @@ describe('context-budget-service evaluateSafetyTrim', () => {
       maxImageSizeBytes: 20 * 1024 * 1024,
       promptOnToolIterationLimit: false,
       maxToolResultTokensPercent: 15,
+      guardrail: {
+        brokenResponses: { hintAfter: 2, maxHints: 2 },
+        reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },
+        identicalToolCalls: { hintAfter: 2, maxHints: 3 },
+      },
     },
   });
   const contextWindow: DroneContextWindowInfo = {

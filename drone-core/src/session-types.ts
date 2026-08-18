@@ -163,4 +163,8 @@ export type DroneConversationEvent =
       kind: 'compaction';
       message: string;
       status: 'started' | 'completed' | 'failed';
+    }
+  | {
+      kind: 'notice';
+      content: string;
     };

@@ -19,6 +19,17 @@ const NonNegativeInteger = Type.Integer({ minimum: 0 });
 const NonNegativeNumber = Type.Number({ minimum: 0 });
 const Percent = Type.Number({ exclusiveMinimum: 0, maximum: 100 });
 
+const GuardrailThresholdSchema = Type.Object({
+  hintAfter: Type.Optional(NonNegativeInteger),
+  maxHints: Type.Optional(NonNegativeInteger),
+});
+
+const GuardrailSchema = Type.Object({
+  brokenResponses: Type.Optional(GuardrailThresholdSchema),
+  reasoningOnlyResponses: Type.Optional(GuardrailThresholdSchema),
+  identicalToolCalls: Type.Optional(GuardrailThresholdSchema),
+});
+
 // ── OpenRouter model config (used in both standalone and nested) ─────
 
 const OpenRouterModelConfigSchema = Type.Object({
@@ -150,6 +161,7 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       maxToolIterations: Type.Optional(PositiveInteger),
       promptOnToolIterationLimit: Type.Optional(Type.Boolean()),
       maxToolResultTokensPercent: Type.Optional(Percent),
+      guardrail: Type.Optional(GuardrailSchema),
     }),
     lsp: Type.Object({
       enabled: Type.Optional(Type.Boolean()),

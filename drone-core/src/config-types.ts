@@ -153,6 +153,27 @@ export type DroneSessionConfig = {
    * Default is 15.
    */
   maxToolResultTokensPercent?: number;
+  /** Guardrail thresholds for broken responses, reasoning-only responses, and identical tool calls. */
+  guardrail: DroneGuardrailConfig;
+};
+
+/** Threshold values are optional to match the config schema, which lets users
+ * override a single field (e.g. only `hintAfter`). The resolved config always
+ * populates both via defaults. */
+export type DroneGuardrailThresholdConfig = {
+  /** Number of retries with identical context before injecting a hint. */
+  hintAfter?: number;
+  /** Number of retries with the hint before the hard-limit prompt. */
+  maxHints?: number;
+};
+
+/** Guardrail thresholds. Fields are optional to match the config schema, which
+ * lets users override only the thresholds they care about. The resolved config
+ * (createDefaultAgentConfig + layer merge) always populates all three defaults. */
+export type DroneGuardrailConfig = {
+  brokenResponses?: DroneGuardrailThresholdConfig;
+  reasoningOnlyResponses?: DroneGuardrailThresholdConfig;
+  identicalToolCalls?: DroneGuardrailThresholdConfig;
 };
 
 export type DroneCompactionStrategy = 'summary-drop';
@@ -400,7 +421,6 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
     'trustedPlugins',
     'llm',
     'ollama',
-    'session',
     'compaction',
     'memory',
     'log',
@@ -414,6 +434,9 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
     lsp: { replace: ['servers'] },
     mcp: { replace: ['servers'] },
     promptFile: { mergeArrays: ['files'] },
+    session: {
+      deepMerge: { guardrail: { deepMerge: {} } },
+    },
     swarm: { deepMerge: { knowledgeSync: {} } },
     tui: {
       deepMerge: {
@@ -482,6 +505,11 @@ export function createDefaultAgentConfig(
       maxImageSizeBytes: 20 * 1024 * 1024,
       promptOnToolIterationLimit: false,
       maxToolResultTokensPercent: 15,
+      guardrail: {
+        brokenResponses: { hintAfter: 2, maxHints: 2 },
+        reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },
+        identicalToolCalls: { hintAfter: 2, maxHints: 3 },
+      },
     },
     lsp: {
       enabled: true,
