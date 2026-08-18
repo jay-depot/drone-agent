@@ -179,6 +179,13 @@ type CreateDronePluginEngineOptions = {
     persona?: string;
   };
   buildSystemMessages?: () => Promise<DroneChatMessage[]>;
+  /**
+   * Optional callback to reset the conversation's stuck-detector state
+   * (identical-tool-call streak, broken-response counter). Exposed to
+   * plugins via the `_runtime` capability so e.g. a subagent return or a
+   * user-visible recovery path can clear guardrail detectors.
+   */
+  resetStuckDetectors?: () => void;
 };
 
 function createHookBuckets(): HookBuckets {
@@ -294,6 +301,7 @@ export function createDronePluginEngine({
   debugFlags = createDebugFlagRegistry(),
   runtimeOptions,
   buildSystemMessages: buildSystemMessagesFromHost,
+  resetStuckDetectors: resetStuckDetectorsFromHost,
 }: CreateDronePluginEngineOptions): DronePluginEngine {
   const pluginMap = validatePluginRegistry(plugins);
   const enabledPluginIds = resolveEnabledPluginIds(plugins, config);
@@ -772,6 +780,7 @@ export function createDronePluginEngine({
         persona: runtimeOptions?.persona,
         isSubagent: !!runtimeOptions?.subagentId,
         flags: runtimeFlagRegistry,
+        resetStuckDetectors: resetStuckDetectorsFromHost,
       });
 
       logger.info(`initializing ${sortedPlugins.length} plugin(s)`);

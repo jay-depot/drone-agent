@@ -392,6 +392,11 @@ describe('terminalPlugin', () => {
           responseReserveTokens: 4096,
           maxToolIterations: 50,
           promptOnToolIterationLimit: false,
+          guardrail: {
+            brokenResponses: { hintAfter: 2, maxHints: 2 },
+            reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },
+            identicalToolCalls: { hintAfter: 2, maxHints: 3 },
+          },
         },
         lsp: {
           enabled: false,

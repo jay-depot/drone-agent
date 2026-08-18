@@ -471,10 +471,10 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           logFn(`Error: ${event.message}`, 'error');
           break;
         }
-       case 'notice': {
-         logFn(event.content, 'notice');
-         break;
-       }
+        case 'notice': {
+          logFn(event.content, 'notice');
+          break;
+        }
       }
     });
     return () => unregister?.();

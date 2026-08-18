@@ -377,6 +377,11 @@ describe('promptFilePlugin', () => {
           contextWindowTokens: 32768,
           responseReserveTokens: 4096,
           maxToolIterations: 50,
+          guardrail: {
+            brokenResponses: { hintAfter: 2, maxHints: 2 },
+            reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },
+            identicalToolCalls: { hintAfter: 2, maxHints: 3 },
+          },
         },
         lsp: {
           enabled: false,

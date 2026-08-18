@@ -157,17 +157,23 @@ export type DroneSessionConfig = {
   guardrail: DroneGuardrailConfig;
 };
 
+/** Threshold values are optional to match the config schema, which lets users
+ * override a single field (e.g. only `hintAfter`). The resolved config always
+ * populates both via defaults. */
 export type DroneGuardrailThresholdConfig = {
   /** Number of retries with identical context before injecting a hint. */
-  hintAfter: number;
+  hintAfter?: number;
   /** Number of retries with the hint before the hard-limit prompt. */
-  maxHints: number;
+  maxHints?: number;
 };
 
+/** Guardrail thresholds. Fields are optional to match the config schema, which
+ * lets users override only the thresholds they care about. The resolved config
+ * (createDefaultAgentConfig + layer merge) always populates all three defaults. */
 export type DroneGuardrailConfig = {
-  brokenResponses: DroneGuardrailThresholdConfig;
-  reasoningOnlyResponses: DroneGuardrailThresholdConfig;
-  identicalToolCalls: DroneGuardrailThresholdConfig;
+  brokenResponses?: DroneGuardrailThresholdConfig;
+  reasoningOnlyResponses?: DroneGuardrailThresholdConfig;
+  identicalToolCalls?: DroneGuardrailThresholdConfig;
 };
 
 export type DroneCompactionStrategy = 'summary-drop';

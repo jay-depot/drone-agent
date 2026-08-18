@@ -14,6 +14,7 @@ import type {
   DroneLlmCapability,
   DroneLogger,
   DroneSessionSafetyTrimPayload,
+  DroneToolCall,
   DroneToolDescriptor,
   DroneToolExecutionContext,
 } from 'drone-core';
@@ -108,7 +109,9 @@ type CreateConversationServiceOptions = {
    * to return an empty string. When omitted, the limit returns an empty
    * string.
    */
-  onBrokenResponseLimitReached?: (type: 'empty' | 'reasoning-only') => Promise<boolean>;
+  onBrokenResponseLimitReached?: (
+    type: 'empty' | 'reasoning-only'
+  ) => Promise<boolean>;
   /**
    * Optional callback invoked when the identical tool-call streak limit
    * is reached. The host can prompt the user to continue. Return `true`
@@ -142,10 +145,61 @@ export function createConversationService({
   // ── Guardrail config ───────────────────────────────────────────────────
   const guardrail: DroneGuardrailConfig = config.session.guardrail;
 
+  /** Fully-resolved threshold with no optional fields. */
+  type ResolvedGuardrailThreshold = {
+    hintAfter: number;
+    maxHints: number;
+  };
+
+  const DEFAULT_GUARDRAIL: {
+    brokenResponses: ResolvedGuardrailThreshold;
+    reasoningOnlyResponses: ResolvedGuardrailThreshold;
+    identicalToolCalls: ResolvedGuardrailThreshold;
+  } = {
+    brokenResponses: { hintAfter: 2, maxHints: 2 },
+    reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },
+    identicalToolCalls: { hintAfter: 2, maxHints: 3 },
+  };
+
+  /** Resolve a threshold config, filling in any missing field with its default
+   * so callers never have to null-check optional schema fields. */
+  function resolveThreshold(
+    threshold: DroneGuardrailThresholdConfig | undefined,
+    defaults: ResolvedGuardrailThreshold
+  ): ResolvedGuardrailThreshold {
+    return {
+      hintAfter: threshold?.hintAfter ?? defaults.hintAfter,
+      maxHints: threshold?.maxHints ?? defaults.maxHints,
+    };
+  }
+
+  /** Fully-resolved guardrail thresholds, with defaults for any missing fields. */
+  const resolvedGuardrail = {
+    brokenResponses: resolveThreshold(
+      guardrail.brokenResponses,
+      DEFAULT_GUARDRAIL.brokenResponses
+    ),
+    reasoningOnlyResponses: resolveThreshold(
+      guardrail.reasoningOnlyResponses,
+      DEFAULT_GUARDRAIL.reasoningOnlyResponses
+    ),
+    identicalToolCalls: resolveThreshold(
+      guardrail.identicalToolCalls,
+      DEFAULT_GUARDRAIL.identicalToolCalls
+    ),
+  };
+
   // ── Streak / broken-response state (reset by resetStuckDetectors) ────
   let identicalToolCallStreak = 0;
-  let lastIdenticalToolCall: { name: string; arguments: Record<string, unknown> } | null = null;
-  let brokenResponseCount = 0;
+  let lastIdenticalToolCall: {
+    name: string;
+    arguments: Record<string, unknown>;
+  } | null = null;
+  // Per-tier degenerate-response counters: truly-empty and reasoning-only use
+  // independent thresholds, so they are counted separately (otherwise a model
+  // alternating between the two could conflate their hintAfter/maxHints limits).
+  let emptyResponseCount = 0;
+  let reasoningOnlyResponseCount = 0;
   let stuckCount = 0;
   let identicalCallNudgeActive = false;
   let brokenResponseHintActive = false;
@@ -349,13 +403,14 @@ export function createConversationService({
 
       sessionManager.appendUserMessage(prompt);
 
-     // A new user message resets the identical-tool-call streak and
-     // the broken-response counter (this is a fresh turn).
-     identicalToolCallStreak = 0;
-     lastIdenticalToolCall = null;
-     brokenResponseCount = 0;
-     identicalCallNudgeActive = false;
-     brokenResponseHintActive = false;
+      // A new user message resets the identical-tool-call streak and
+      // the broken-response counter (this is a fresh turn).
+      identicalToolCallStreak = 0;
+      lastIdenticalToolCall = null;
+      emptyResponseCount = 0;
+      reasoningOnlyResponseCount = 0;
+      identicalCallNudgeActive = false;
+      brokenResponseHintActive = false;
 
       // Fire the user message event through the engine hook
       engine
@@ -387,6 +442,181 @@ export function createConversationService({
           logger.warn(`Conversation event hook threw: ${err}`);
         });
       };
+
+      // Shared tool-execution pipeline used by both the primary tool-call path
+      // and the Feature-1 hint-recovery path: execute all tool calls in
+      // parallel, truncate results, buffer them, emit batch/error events,
+      // append results to the session, run onAfterToolCall hooks, and extract
+      // images. Returns the buffered results plus stuck-detector info so the
+      // caller can make its own loop decisions (iteration limit, stop, throw).
+      async function executeToolCalls(toolCalls: DroneToolCall[]): Promise<{
+        bufferedResults: Array<{
+          name: string;
+          content: string;
+          toolCallId: string | undefined;
+        }>;
+        allErrors: boolean;
+        firstErrorSignature: {
+          name: string;
+          code: string | null;
+        } | null;
+        allSameSignature: boolean;
+      }> {
+        // Execute all tool calls in parallel.
+        const rawResults = await Promise.all(
+          toolCalls.map(toolCall =>
+            executeToolSafely(
+              toolCall.name,
+              toolCall.arguments,
+              (chunk: string) => {
+                emit({
+                  kind: 'toolProgress',
+                  name: toolCall.name,
+                  content: chunk,
+                });
+              },
+              {
+                stopLoop: () => {
+                  shouldStopLoop = true;
+                },
+              }
+            ).then(toolResult => ({
+              name: toolCall.name,
+              toolResult,
+              toolCallId: toolCall.id,
+            }))
+          )
+        );
+
+        // ── Tool result truncation ──────────────────────────────────────
+        // Cap each successful tool result to a percentage of the context
+        // window to prevent a single large result from consuming a
+        // disproportionate share of the budget.
+        const maxToolResultPct =
+          config.session.maxToolResultTokensPercent ?? 15;
+        if (maxToolResultPct > 0) {
+          const ctxWindow = await budgetService.resolveContextWindow();
+          const maxToolResultTokens = Math.max(
+            1,
+            Math.floor(ctxWindow.contextWindowTokens * (maxToolResultPct / 100))
+          );
+          for (const r of rawResults) {
+            if (r.toolResult.kind === 'ok') {
+              r.toolResult.content = truncateToolResult(
+                r.toolResult.content,
+                maxToolResultTokens
+              );
+            }
+          }
+        }
+
+        // Collect results in order (the map preserves the array order).
+        const bufferedResults: Array<{
+          name: string;
+          content: string;
+          toolCallId: string | undefined;
+        }> = [];
+        for (const result of rawResults) {
+          bufferedResults.push({
+            name: result.name,
+            content: result.toolResult.content,
+            toolCallId: result.toolCallId,
+          });
+        }
+
+        // Stuck detector: check all results. If all errors with the same
+        // signature, increment stuckCount; otherwise reset. (Both callers
+        // compute this harmlessly; only the primary path acts on it.)
+        const allErrors = rawResults.every(r => r.toolResult.kind === 'error');
+        const firstErrorSignature =
+          allErrors && rawResults.length > 0
+            ? {
+                name: rawResults[0].name,
+                code:
+                  rawResults[0].toolResult.kind === 'error'
+                    ? rawResults[0].toolResult.code
+                    : null,
+              }
+            : null;
+        const allSameSignature =
+          allErrors &&
+          firstErrorSignature !== null &&
+          rawResults.every(
+            r =>
+              r.toolResult.kind === 'error' &&
+              r.name === firstErrorSignature.name &&
+              r.toolResult.code === firstErrorSignature.code
+          );
+
+        if (allSameSignature) {
+          stuckCount += 1;
+        } else {
+          // Any successful tool call or mixed errors resets the stuck detector.
+          stuckCount = 0;
+        }
+
+        // Emit the batch result so the TUI can commit all TailItems at once.
+        emit({
+          kind: 'toolResultBatch',
+          results: rawResults.map(r => ({
+            name: r.name,
+            content: r.toolResult.content,
+            arguments:
+              toolCalls.find(tc => tc.id === r.toolCallId)?.arguments ?? {},
+          })),
+        });
+
+        // Emit individual error events for any failed tool calls (for
+        // non-TUI consumers that pattern-match on individual events).
+        for (const result of rawResults) {
+          if (result.toolResult.kind === 'error') {
+            emit({ kind: 'error', message: result.toolResult.content });
+          }
+        }
+
+        // Tool results are appended before onAfterToolCall hooks run, so that
+        // hooks observe the full session state including the latest tool
+        // results. This is critical for plugins like compaction, which need
+        // an accurate view of context usage to decide whether to summarize.
+        for (const result of bufferedResults) {
+          sessionManager.appendToolResult(
+            result.name,
+            result.content,
+            result.toolCallId
+          );
+        }
+
+        try {
+          await engine.runHooks('onAfterToolCall');
+        } catch (hookError) {
+          const msg =
+            hookError instanceof Error ? hookError.message : String(hookError);
+          logger.warn(`onAfterToolCall hook error (non-fatal): ${msg}`);
+        }
+
+        // After appending tool results, check for image data in tool results.
+        for (const result of bufferedResults) {
+          const imageContent = extractImageFromToolResult(result.content);
+          if (imageContent) {
+            const activeProvider = llm.getActiveProvider();
+            if (activeProvider.supportsImagesInToolResults) {
+              sessionManager.updateLastToolResultImages([imageContent]);
+            } else {
+              sessionManager.appendUserMessage(
+                `[Image from ${result.name} tool]`,
+                [imageContent]
+              );
+            }
+          }
+        }
+
+        return {
+          bufferedResults,
+          allErrors,
+          firstErrorSignature,
+          allSameSignature,
+        };
+      }
 
       while (true) {
         const activeProviderId = llm.getActiveProviderId();
@@ -431,242 +661,97 @@ export function createConversationService({
             if (identicalCallNudgeActive) {
               base.push({
                 role: 'system',
-                content: 'You appear to be stuck in a loop, making the same tool call repeatedly. Try a different approach, use different arguments, or explain why you cannot proceed differently.',
+                content:
+                  'You appear to be stuck in a loop, making the same tool call repeatedly. Try a different approach, use different arguments, or explain why you cannot proceed differently.',
+              });
+            }
+            if (brokenResponseHintActive) {
+              base.push({
+                role: 'system',
+                content:
+                  'Your last response was empty (no text and no tool calls). Please respond to the user. If you have nothing to say, provide a brief acknowledgment.',
               });
             }
             return base;
           })(),
-         tools,
-         reasoningLevel: effectiveReasoningLevel,
-         debug: debugFlags.isEnabled('llm'),
-       });
+          tools,
+          reasoningLevel: effectiveReasoningLevel,
+          debug: debugFlags.isEnabled('llm'),
+        });
 
-       const toolCalls = response.toolCalls ?? [];
-       const assistantText = response.message ?? '';
-       const isBrokenResponse = toolCalls.length === 0 && assistantText.length === 0;
-       const isReasoningOnlyResponse =
-         toolCalls.length === 0 &&
-         assistantText.length === 0 &&
-         (response.reasoning?.length ?? 0) > 0;
+        const toolCalls = response.toolCalls ?? [];
+        const assistantText = response.message ?? '';
+        const isBrokenResponse =
+          toolCalls.length === 0 && assistantText.length === 0;
+        const isReasoningOnlyResponse =
+          toolCalls.length === 0 &&
+          assistantText.length === 0 &&
+          (response.reasoning?.length ?? 0) > 0;
 
-       // ── Feature 1: Broken response detection & retry ──────────────
-       // A degenerate response has no tool calls and no assistant message.
-       // Truly-empty: no reasoning either. Reasoning-only: has reasoning text
-       // but nothing else. We retry with progressively stronger hints rather
-       // than polluting the session with useless turns.
-       if (isBrokenResponse) {
-         brokenResponseCount += 1;
-         const tier: DroneGuardrailThresholdConfig = isReasoningOnlyResponse
-           ? guardrail.reasoningOnlyResponses
-           : guardrail.brokenResponses;
-         const label = isReasoningOnlyResponse
-           ? 'reasoning-only'
-           : 'empty';
+        // ── Feature 1: Broken response detection & retry ──────────────
+        // A degenerate response has no tool calls and no assistant message.
+        // Truly-empty: no reasoning either. Reasoning-only: has reasoning text
+        // but nothing else. We retry with progressively stronger hints rather
+        // than polluting the session with useless turns.
+        if (isBrokenResponse) {
+          const tier: ResolvedGuardrailThreshold = isReasoningOnlyResponse
+            ? resolvedGuardrail.reasoningOnlyResponses
+            : resolvedGuardrail.brokenResponses;
+          const label = isReasoningOnlyResponse ? 'reasoning-only' : 'empty';
+          const tierCount = isReasoningOnlyResponse
+            ? ++reasoningOnlyResponseCount
+            : ++emptyResponseCount;
 
-         if (brokenResponseCount <= tier.hintAfter) {
-           // Phase 1: retry with identical context (no hint, no session mutation)
-           emit({
-             kind: 'notice',
-             content: `Degenerate response (${label}), retrying (${brokenResponseCount}/${tier.hintAfter})`,
-           });
-           continue;
-         }
+          if (tierCount <= tier.hintAfter) {
+            // Phase 1: retry with identical context (no hint, no session mutation)
+            emit({
+              kind: 'notice',
+              content: `Degenerate response (${label}), retrying (${tierCount}/${tier.hintAfter})`,
+            });
+            continue;
+          }
 
-         if (brokenResponseCount <= tier.hintAfter + tier.maxHints) {
-           // Phase 2: inject a non-persisted system hint and retry
-           emit({
-             kind: 'notice',
-             content: `Degenerate response (${label}), retrying with hint (${brokenResponseCount - tier.hintAfter}/${tier.maxHints})`,
-           });
-           const hintMessage: DroneChatMessage = {
-             role: 'system',
-             content: isReasoningOnlyResponse
-               ? 'You produced reasoning/thinking but no visible response. Please provide a complete response to the user, including any text the user can see. Your reasoning alone is not visible to the user.'
-               : 'Your last response was empty (no text and no tool calls). Please respond to the user. If you have nothing to say, provide a brief acknowledgment.',
-           };
-           const hintResponse = await provider.chat({
-             model: currentModel,
-             messages: [...systemMessages, ...sessionManager.getMessages(), hintMessage],
-             tools,
-             reasoningLevel: effectiveReasoningLevel,
-             debug: debugFlags.isEnabled('llm'),
-           });
+          if (tierCount < tier.hintAfter + tier.maxHints) {
+            // Phase 2: set the hint flag so the next iteration injects a
+            // non-persisted system hint (mirrors the identical-call nudge).
+            emit({
+              kind: 'notice',
+              content: `Degenerate response (${label}), retrying with hint (${tierCount - tier.hintAfter}/${tier.maxHints})`,
+            });
+            brokenResponseHintActive = true;
+            continue;
+          }
 
-           const hintToolCalls = hintResponse.toolCalls ?? [];
-           const hintAssistantText = hintResponse.message ?? '';
-           const hintIsBroken = hintToolCalls.length === 0 && hintAssistantText.length === 0;
+          // Hard limit reached
+          emit({
+            kind: 'notice',
+            content: `Degenerate response (${label}) retry limit reached after ${tierCount} attempts.`,
+          });
+          if (onBrokenResponseLimitReached) {
+            const shouldContinue = await onBrokenResponseLimitReached(label);
+            if (shouldContinue) {
+              if (isReasoningOnlyResponse) {
+                reasoningOnlyResponseCount = 0;
+              } else {
+                emptyResponseCount = 0;
+              }
+              brokenResponseHintActive = false;
+              continue;
+            }
+          }
+          return '';
+        }
 
-           if (hintIsBroken) {
-             // Hint didn't help — continue to next iteration (will count up again)
-             continue;
-           }
+        // ── Non-broken response: reset broken-response counter ───────
+        emptyResponseCount = 0;
+        reasoningOnlyResponseCount = 0;
+        brokenResponseHintActive = false;
 
-           // Hint worked — process the response normally, resetting broken count
-           brokenResponseCount = 0;
-           // Emit reasoning from the hint response (if any)
-           if (hintResponse.reasoning && hintResponse.reasoning.length > 0) {
-             emit({ kind: 'reasoning', content: hintResponse.reasoning });
-             emit({ kind: 'reasoningComplete' });
-           }
-
-           // Re-route: process the hint response as if it were the original
-           if (hintToolCalls.length > 0) {
-             // Iteration-limit check
-             iterationCount += 1;
-             const effectiveMax = resolveEffectiveMaxToolIterations();
-             if (iterationCount > effectiveMax) {
-               if (onToolIterationLimitReached) {
-                 const shouldContinue = await onToolIterationLimitReached(
-                   iterationCount,
-                   effectiveMax
-                 );
-                 if (shouldContinue) {
-                   iterationCount = 0;
-                   continue;
-                 }
-               }
-               throw new Error(
-                 `Tool call depth exceeded the configured session limit of ${effectiveMax}. Use /clear to reset the session.`
-               );
-             }
-
-             sessionManager.appendAssistantMessage(
-               hintAssistantText,
-               hintToolCalls
-             );
-
-             // Feature 3: emit assistant text before tool call batch
-             if (hintAssistantText.length > 0) {
-               emit({ kind: 'assistantMessage', content: hintAssistantText });
-               emit({ kind: 'assistantMessageComplete' });
-             }
-
-             emit({
-               kind: 'toolCallBatch',
-               toolCalls: hintToolCalls.map(tc => ({
-                 name: tc.name,
-                 arguments: tc.arguments,
-               })),
-             });
-
-             // Execute the tool calls from the hint response
-             // (fall through to the existing tool-call execution path)
-             // We'll re-assign `response` and `toolCalls` for the rest of the loop
-             // to process. This requires restructuring to handle inline.
-             // For now, process tool calls inline and continue the loop.
-             const hintRawResults = await Promise.all(
-               hintToolCalls.map(toolCall =>
-                 executeToolSafely(
-                   toolCall.name,
-                   toolCall.arguments,
-                   (chunk: string) => {
-                     emit({ kind: 'toolProgress', name: toolCall.name, content: chunk });
-                   },
-                   { stopLoop: () => { shouldStopLoop = true; } }
-                 ).then(toolResult => ({
-                   name: toolCall.name,
-                   toolResult,
-                   toolCallId: toolCall.id,
-                 }))
-               )
-             );
-
-             const maxToolResultPct = config.session.maxToolResultTokensPercent ?? 15;
-             if (maxToolResultPct > 0) {
-               const ctxWindow = await budgetService.resolveContextWindow();
-               const maxToolResultTokens = Math.max(1, Math.floor(ctxWindow.contextWindowTokens * (maxToolResultPct / 100)));
-               for (const r of hintRawResults) {
-                 if (r.toolResult.kind === 'ok') {
-                   r.toolResult.content = truncateToolResult(r.toolResult.content, maxToolResultTokens);
-                 }
-               }
-             }
-
-             const hintBufferedResults: Array<{ name: string; content: string; toolCallId: string | undefined }> = [];
-             for (const result of hintRawResults) {
-               hintBufferedResults.push({
-                 name: result.name,
-                 content: result.toolResult.content,
-                 toolCallId: result.toolCallId,
-               });
-             }
-
-             emit({
-               kind: 'toolResultBatch',
-               results: hintRawResults.map(r => ({
-                 name: r.name,
-                 content: r.toolResult.content,
-                 arguments: hintToolCalls.find(tc => tc.id === r.toolCallId)?.arguments ?? {},
-               })),
-             });
-
-             for (const result of hintRawResults) {
-               if (result.toolResult.kind === 'error') {
-                 emit({ kind: 'error', message: result.toolResult.content });
-               }
-             }
-
-             for (const result of hintBufferedResults) {
-               sessionManager.appendToolResult(result.name, result.content, result.toolCallId);
-             }
-
-             try {
-               await engine.runHooks('onAfterToolCall');
-             } catch (hookError) {
-               const msg = hookError instanceof Error ? hookError.message : String(hookError);
-               logger.warn(`onAfterToolCall hook error (non-fatal): ${msg}`);
-             }
-
-             for (const result of hintBufferedResults) {
-               const imageContent = extractImageFromToolResult(result.content);
-               if (imageContent) {
-                 const activeProvider = llm.getActiveProvider();
-                 if (activeProvider.supportsImagesInToolResults) {
-                   sessionManager.updateLastToolResultImages([imageContent]);
-                 } else {
-                   sessionManager.appendUserMessage(`[Image from ${result.name} tool]`, [imageContent]);
-                 }
-               }
-             }
-
-             if (shouldStopLoop) {
-               return hintAssistantText;
-             }
-             continue;
-           }
-
-           // Hint response has text but no tool calls — final reply
-           sessionManager.appendAssistantMessage(hintAssistantText);
-           if (hintAssistantText.length > 0) {
-             emit({ kind: 'assistantMessage', content: hintAssistantText });
-             emit({ kind: 'assistantMessageComplete' });
-           }
-           return hintAssistantText;
-         }
-
-         // Hard limit reached
-         emit({
-           kind: 'notice',
-           content: `Degenerate response (${label}) retry limit reached after ${brokenResponseCount} attempts.`,
-         });
-         if (onBrokenResponseLimitReached) {
-           const shouldContinue = await onBrokenResponseLimitReached(label);
-           if (shouldContinue) {
-             brokenResponseCount = 0;
-             continue;
-           }
-         }
-         return '';
-       }
-
-       // ── Non-broken response: reset broken-response counter ───────
-       brokenResponseCount = 0;
-
-       // Reasoning is only emitted for KEPT responses.
-       if (response.reasoning && response.reasoning.length > 0) {
-         emit({ kind: 'reasoning', content: response.reasoning });
-         emit({ kind: 'reasoningComplete' });
-       }
+        // Reasoning is only emitted for KEPT responses.
+        if (response.reasoning && response.reasoning.length > 0) {
+          emit({ kind: 'reasoning', content: response.reasoning });
+          emit({ kind: 'reasoningComplete' });
+        }
 
         // Iteration-limit check for tool-call rounds. Runs before the
         // assistant append so a limit hit doesn't leave a dangling turn.
@@ -700,21 +785,54 @@ export function createConversationService({
           }
 
           // Check identical tool-call nudge/limit thresholds
-          const itcConfig = guardrail.identicalToolCalls;
-         // Reset nudge flag — it will be set again if the streak persists
-         identicalCallNudgeActive = false;
-         if (
-           identicalToolCallStreak > itcConfig.hintAfter &&
-           identicalToolCallStreak <= itcConfig.hintAfter + itcConfig.maxHints
-         ) {
-           emit({
-             kind: 'notice',
-             content: `Detected repeated identical tool call (${lastIdenticalToolCall?.name}), injecting nudge.`,
-           });
-           // Inject a non-persisted system nudge on the next LLM call.
-           identicalCallNudgeActive = true;
+          const itcConfig = resolvedGuardrail.identicalToolCalls;
+          // Reset nudge flag — it will be set again if the streak persists
+          identicalCallNudgeActive = false;
+          if (
+            identicalToolCallStreak > itcConfig.hintAfter &&
+            identicalToolCallStreak <= itcConfig.hintAfter + itcConfig.maxHints
+          ) {
+            emit({
+              kind: 'notice',
+              content: `Detected repeated identical tool call (${lastIdenticalToolCall?.name}), injecting nudge.`,
+            });
+            // Inject a non-persisted system nudge on the next LLM call.
+            identicalCallNudgeActive = true;
           }
-          if (identicalToolCallStreak > itcConfig.hintAfter + itcConfig.maxHints) {
+
+          // Iteration-limit check runs BEFORE the identical-call hard limit
+          // so a repeated tool call that also exceeds the configured session
+          // depth trips the depth limit (which the host can prompt on) rather
+          // than the "model appears stuck" abort.
+          iterationCount += 1;
+          const effectiveMax = resolveEffectiveMaxToolIterations();
+          if (iterationCount > effectiveMax) {
+            if (onToolIterationLimitReached) {
+              const shouldContinue = await onToolIterationLimitReached(
+                iterationCount,
+                effectiveMax
+              );
+              if (shouldContinue) {
+                iterationCount = 0;
+                // A fresh run — reset the identical-call streak too so the
+                // same tool call after a user-acknowledged continue doesn't
+                // immediately hit the identical-call limit.
+                identicalToolCallStreak = 0;
+                lastIdenticalToolCall = null;
+                identicalCallNudgeActive = false;
+                continue;
+              }
+            }
+            throw new Error(
+              `Tool call depth exceeded the configured session limit of ${effectiveMax}. ` +
+                'Use /clear to reset the session, or raise session.maxToolIterations in your config.'
+            );
+          }
+
+          if (
+            identicalToolCallStreak >
+            itcConfig.hintAfter + itcConfig.maxHints
+          ) {
             // Hard limit reached
             if (onIdenticalToolCallLimitReached) {
               const shouldContinue = await onIdenticalToolCallLimitReached(
@@ -732,25 +850,6 @@ export function createConversationService({
                   `${identicalToolCallStreak} times. Aborting.`
               );
             }
-          }
-
-          iterationCount += 1;
-          const effectiveMax = resolveEffectiveMaxToolIterations();
-          if (iterationCount > effectiveMax) {
-            if (onToolIterationLimitReached) {
-              const shouldContinue = await onToolIterationLimitReached(
-                iterationCount,
-                effectiveMax
-              );
-              if (shouldContinue) {
-                iterationCount = 0;
-                continue;
-              }
-            }
-            throw new Error(
-              `Tool call depth exceeded the configured session limit of ${effectiveMax}. ` +
-                'Use /clear to reset the session, or raise session.maxToolIterations in your config.'
-            );
           }
         }
 
@@ -770,121 +869,9 @@ export function createConversationService({
             })),
           });
 
-          // Execute all tool calls in parallel.
-          const rawResults = await Promise.all(
-            toolCalls.map(toolCall =>
-              executeToolSafely(
-                toolCall.name,
-                toolCall.arguments,
-                (chunk: string) => {
-                  emit({
-                    kind: 'toolProgress',
-                    name: toolCall.name,
-                    content: chunk,
-                  });
-                },
-                {
-                  stopLoop: () => {
-                    shouldStopLoop = true;
-                  },
-                }
-              ).then(toolResult => ({
-                name: toolCall.name,
-                toolResult,
-                toolCallId: toolCall.id,
-              }))
-            )
-          );
-
-          // ── Tool result truncation ──────────────────────────────────────
-          // Cap each successful tool result to a percentage of the context
-          // window to prevent a single large result from consuming a
-          // disproportionate share of the budget.
-          const maxToolResultPct =
-            config.session.maxToolResultTokensPercent ?? 15;
-          if (maxToolResultPct > 0) {
-            const ctxWindow = await budgetService.resolveContextWindow();
-            const maxToolResultTokens = Math.max(
-              1,
-              Math.floor(
-                ctxWindow.contextWindowTokens * (maxToolResultPct / 100)
-              )
-            );
-            for (const r of rawResults) {
-              if (r.toolResult.kind === 'ok') {
-                r.toolResult.content = truncateToolResult(
-                  r.toolResult.content,
-                  maxToolResultTokens
-                );
-              }
-            }
-          }
-
-          // Collect results in order (the map preserves the array order).
-          const bufferedResults: Array<{
-            name: string;
-            content: string;
-            toolCallId: string | undefined;
-          }> = [];
-
-          // Stuck detector: check all results. If all errors with the same
-          // signature, increment stuckCount; otherwise reset.
-          const allErrors = rawResults.every(
-            r => r.toolResult.kind === 'error'
-          );
-          const firstErrorSignature =
-            allErrors && rawResults.length > 0
-              ? {
-                  name: rawResults[0].name,
-                  code:
-                    rawResults[0].toolResult.kind === 'error'
-                      ? rawResults[0].toolResult.code
-                      : null,
-                }
-              : null;
-          const allSameSignature =
-            allErrors &&
-            firstErrorSignature !== null &&
-            rawResults.every(
-              r =>
-                r.toolResult.kind === 'error' &&
-                r.name === firstErrorSignature.name &&
-                r.toolResult.code === firstErrorSignature.code
-            );
-
-          if (allSameSignature) {
-            stuckCount += 1;
-          } else {
-            // Any successful tool call or mixed errors resets the stuck detector.
-            stuckCount = 0;
-          }
-
-          for (const result of rawResults) {
-            bufferedResults.push({
-              name: result.name,
-              content: result.toolResult.content,
-              toolCallId: result.toolCallId,
-            });
-          }
-
-          // Emit the batch result so the TUI can commit all TailItems at once.
-          emit({
-            kind: 'toolResultBatch',
-            results: rawResults.map(r => ({
-              name: r.name,
-              content: r.toolResult.content,
-              arguments:
-                toolCalls.find(tc => tc.id === r.toolCallId)?.arguments ?? {},
-            })),
-          });
-
-          // Emit individual error events for any failed tool calls (for
-          // non-TUI consumers that pattern-match on individual events).
-          for (const result of rawResults) {
-            if (result.toolResult.kind === 'error') {
-              emit({ kind: 'error', message: result.toolResult.content });
-            }
-          }
+          // Execute all tool calls through the shared pipeline.
+          const { firstErrorSignature, allSameSignature, allErrors } =
+            await executeToolCalls(toolCalls);
 
           if (
             firstErrorSignature &&
@@ -914,46 +901,6 @@ export function createConversationService({
             );
           }
 
-          // Tool results are appended before onAfterToolCall hooks run, so that
-          // hooks observe the full session state including the latest tool
-          // results. This is critical for plugins like compaction, which need
-          // an accurate view of context usage to decide whether to summarize.
-          for (const result of bufferedResults) {
-            sessionManager.appendToolResult(
-              result.name,
-              result.content,
-              result.toolCallId
-            );
-          }
-
-          try {
-            await engine.runHooks('onAfterToolCall');
-          } catch (hookError) {
-            const msg =
-              hookError instanceof Error
-                ? hookError.message
-                : String(hookError);
-            logger.warn(`onAfterToolCall hook error (non-fatal): ${msg}`);
-          }
-
-          // After appending tool results, check for image data in tool results
-          for (const result of bufferedResults) {
-            const imageContent = extractImageFromToolResult(result.content);
-            if (imageContent) {
-              const provider = llm.getActiveProvider();
-              if (provider.supportsImagesInToolResults) {
-                // Anthropic: update the tool result message to include images inline
-                sessionManager.updateLastToolResultImages([imageContent]);
-              } else {
-                // OpenAI/OpenRouter/Ollama: inject synthetic user message
-                sessionManager.appendUserMessage(
-                  `[Image from ${result.name} tool]`,
-                  [imageContent]
-                );
-              }
-            }
-          }
-
           // If a tool signaled the loop to stop (e.g. subagent__return),
           // exit the conversation loop now instead of continuing to the LLM.
           if (shouldStopLoop) {
@@ -977,12 +924,13 @@ export function createConversationService({
       hasWarnedAboutSafetyTrim = false;
       pendingMessages.length = 0;
       cancelled = false;
-     stuckCount = 0;
-     identicalToolCallStreak = 0;
-     lastIdenticalToolCall = null;
-     brokenResponseCount = 0;
-     identicalCallNudgeActive = false;
-     brokenResponseHintActive = false;
+      stuckCount = 0;
+      identicalToolCallStreak = 0;
+      lastIdenticalToolCall = null;
+      emptyResponseCount = 0;
+      reasoningOnlyResponseCount = 0;
+      identicalCallNudgeActive = false;
+      brokenResponseHintActive = false;
       sessionManager.clearSession();
     },
     getMessages: () => sessionManager.getMessages(),
@@ -1002,13 +950,15 @@ export function createConversationService({
     cancelCurrentRequest: () => {
       cancelled = true;
     },
-   resetStuckDetectors: () => {
-     stuckCount = 0;
-     identicalToolCallStreak = 0;
-     lastIdenticalToolCall = null;
-     identicalCallNudgeActive = false;
-     brokenResponseHintActive = false;
-   },
+    resetStuckDetectors: () => {
+      stuckCount = 0;
+      identicalToolCallStreak = 0;
+      lastIdenticalToolCall = null;
+      emptyResponseCount = 0;
+      reasoningOnlyResponseCount = 0;
+      identicalCallNudgeActive = false;
+      brokenResponseHintActive = false;
+    },
     getDebugSubsystems: () => debugFlags.list(),
     enableDebugSubsystem: (name: string) => {
       debugFlags.enable(name);

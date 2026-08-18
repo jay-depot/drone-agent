@@ -79,7 +79,10 @@ const defaultGuardrail: DroneGuardrailConfig = {
 
 describe('createConversationService — broken response guardrails', () => {
   it('retries truly-empty responses up to hintAfter before injecting hints', async () => {
-    const engine = createMockEngine({ tools: [], executeToolImpl: async () => '' });
+    const engine = createMockEngine({
+      tools: [],
+      executeToolImpl: async () => '',
+    });
     const provider = makeProvider([
       // First two: empty responses (phase 1, no hint)
       { message: '' },
@@ -125,7 +128,10 @@ describe('createConversationService — broken response guardrails', () => {
   });
 
   it('emits a notice for reasoning-only responses', async () => {
-    const engine = createMockEngine({ tools: [], executeToolImpl: async () => '' });
+    const engine = createMockEngine({
+      tools: [],
+      executeToolImpl: async () => '',
+    });
     const provider = makeProvider([
       // Reasoning-only response (has reasoning but no message, no tool calls)
       { message: '', reasoning: 'Let me think about this...' },
@@ -163,7 +169,10 @@ describe('createConversationService — broken response guardrails', () => {
   });
 
   it('returns empty string when broken-response limit is reached without callback', async () => {
-    const engine = createMockEngine({ tools: [], executeToolImpl: async () => '' });
+    const engine = createMockEngine({
+      tools: [],
+      executeToolImpl: async () => '',
+    });
     // 2 phase 1 + 2 phase 2 + limit = 4 total empty responses, then hard limit
     const provider = makeProvider([
       { message: '' },
@@ -196,7 +205,10 @@ describe('createConversationService — broken response guardrails', () => {
   });
 
   it('calls onBrokenResponseLimitReached when hard limit is reached', async () => {
-    const engine = createMockEngine({ tools: [], executeToolImpl: async () => '' });
+    const engine = createMockEngine({
+      tools: [],
+      executeToolImpl: async () => '',
+    });
     const provider = makeProvider([
       { message: '' },
       { message: '' },
@@ -242,7 +254,10 @@ describe('createConversationService — identical tool-call streak detection', (
         {
           name: 'file__read',
           description: 'read a file',
-          inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+          },
         },
       ],
       executeToolImpl: async () => 'content',
@@ -297,7 +312,10 @@ describe('createConversationService — identical tool-call streak detection', (
         {
           name: 'file__read',
           description: 'read a file',
-          inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+          },
         },
       ],
       executeToolImpl: async () => 'content',
@@ -352,7 +370,10 @@ describe('createConversationService — identical tool-call streak detection', (
   });
 
   it('resets stuck detectors via resetStuckDetectors()', async () => {
-    const engine = createMockEngine({ tools: [], executeToolImpl: async () => '' });
+    const engine = createMockEngine({
+      tools: [],
+      executeToolImpl: async () => '',
+    });
     const provider = makeProvider([{ message: 'hello' }]);
     const llm = makeLlmCapability(provider);
     const config = createDefaultAgentConfig();
@@ -380,7 +401,10 @@ describe('createConversationService — identical tool-call streak detection', (
         {
           name: 'file__read',
           description: 'read a file',
-          inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+          },
         },
       ],
       executeToolImpl: async () => 'content',
@@ -415,9 +439,9 @@ describe('createConversationService — identical tool-call streak detection', (
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    await expect(
-      conversation.sendUserMessage('test')
-    ).rejects.toThrow('appears stuck');
+    await expect(conversation.sendUserMessage('test')).rejects.toThrow(
+      'appears stuck'
+    );
   });
 });
 
@@ -432,7 +456,10 @@ describe('createConversationService — assistant text emitted before toolCallBa
         {
           name: 'file__read',
           description: 'read a file',
-          inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+          },
         },
       ],
       executeToolImpl: async () => 'content',
@@ -467,7 +494,9 @@ describe('createConversationService — assistant text emitted before toolCallBa
     });
 
     // Find the indices of assistantMessage and toolCallBatch
-    const assistantMsgIdx = events.findIndex(e => e.kind === 'assistantMessage');
+    const assistantMsgIdx = events.findIndex(
+      e => e.kind === 'assistantMessage'
+    );
     const toolCallBatchIdx = events.findIndex(e => e.kind === 'toolCallBatch');
 
     expect(assistantMsgIdx).toBeGreaterThanOrEqual(0);
@@ -483,13 +512,14 @@ describe('createConversationService — assistant text emitted before toolCallBa
 describe('guardrail config defaults', () => {
   it('includes default guardrail config in createDefaultAgentConfig', () => {
     const config = createDefaultAgentConfig();
-    expect(config.session.guardrail).toBeDefined();
-    expect(config.session.guardrail.brokenResponses.hintAfter).toBe(2);
-    expect(config.session.guardrail.brokenResponses.maxHints).toBe(2);
-    expect(config.session.guardrail.reasoningOnlyResponses.hintAfter).toBe(4);
-    expect(config.session.guardrail.reasoningOnlyResponses.maxHints).toBe(2);
-    expect(config.session.guardrail.identicalToolCalls.hintAfter).toBe(2);
-    expect(config.session.guardrail.identicalToolCalls.maxHints).toBe(3);
+    const guardrail = config.session.guardrail;
+    expect(guardrail).toBeDefined();
+    expect(guardrail?.brokenResponses?.hintAfter).toBe(2);
+    expect(guardrail?.brokenResponses?.maxHints).toBe(2);
+    expect(guardrail?.reasoningOnlyResponses?.hintAfter).toBe(4);
+    expect(guardrail?.reasoningOnlyResponses?.maxHints).toBe(2);
+    expect(guardrail?.identicalToolCalls?.hintAfter).toBe(2);
+    expect(guardrail?.identicalToolCalls?.maxHints).toBe(3);
   });
 });
 
@@ -499,11 +529,11 @@ describe('guardrail config defaults', () => {
 
 describe('createConversationService — notice event emission', () => {
   it('emits notice events with kind "notice" and content string', async () => {
-    const engine = createMockEngine({ tools: [], executeToolImpl: async () => '' });
-    const provider = makeProvider([
-      { message: '' },
-      { message: 'got it' },
-    ]);
+    const engine = createMockEngine({
+      tools: [],
+      executeToolImpl: async () => '',
+    });
+    const provider = makeProvider([{ message: '' }, { message: 'got it' }]);
     const llm = makeLlmCapability(provider);
     const config = createDefaultAgentConfig();
     config.session.guardrail = {
