@@ -420,6 +420,7 @@ async function main(): Promise<void> {
       const tui = createTui({
         engine,
         conversation,
+        sessionManager,
         model,
         logger,
       });

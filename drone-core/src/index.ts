@@ -67,6 +67,7 @@ export type {
   DroneTerminalConfig,
   DronePromptFileConfig,
   DroneKnowledgeSyncConfig,
+  DroneSessionImportConfig,
   DroneSwarmConfig,
   DroneSearchPath,
   DroneSearchConfig,

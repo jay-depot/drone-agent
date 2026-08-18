@@ -249,6 +249,12 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
           pullIntervalMinutes: Type.Optional(PositiveInteger),
         })
       ),
+      sessionImport: Type.Optional(
+        Type.Object({
+          maxChunks: Type.Optional(PositiveInteger),
+          chunkTokenBudgetPercent: Type.Optional(Percent),
+        })
+      ),
       beaconHost: Type.Optional(Type.String()),
       beaconPort: Type.Optional(PositiveInteger),
       beaconUseHttps: Type.Optional(Type.Boolean()),

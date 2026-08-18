@@ -143,6 +143,22 @@ export type DroneTuiOptions = {
     enableDebugSubsystem: (name: string) => void;
     disableDebugSubsystem: (name: string) => void;
   };
+  sessionManager: {
+    appendUserMessage: (message: string) => void;
+    appendAssistantMessage: (
+      content: string,
+      toolCalls?: Array<{
+        id?: string;
+        name: string;
+        arguments: Record<string, unknown>;
+      }>
+    ) => void;
+    appendToolResult: (
+      toolName: string,
+      content: string,
+      toolCallId?: string
+    ) => void;
+  };
   model: string;
   logger: {
     info: (message: string) => void;

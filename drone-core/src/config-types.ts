@@ -216,8 +216,23 @@ export type DroneKnowledgeSyncConfig = {
   pullIntervalMinutes?: number;
 };
 
+/**
+ * Configuration for the `/swarm-session import` command, which recreates
+ * the context of an old swarm session into the current session.
+ */
+export type DroneSessionImportConfig = {
+  /** Maximum number of chunks the imported session is split into. */
+  maxChunks?: number;
+  /**
+   * Per-chunk token budget as a percentage of the resolved context window.
+   * Larger models (bigger context windows) get more detailed summaries.
+   */
+  chunkTokenBudgetPercent?: number;
+};
+
 export type DroneSwarmConfig = {
   knowledgeSync?: DroneKnowledgeSyncConfig;
+  sessionImport?: DroneSessionImportConfig;
   /** Hostname of the drone-beacon instance for swarm operations. */
   beaconHost?: string;
   /** Port of the drone-beacon instance for swarm operations. */
@@ -437,7 +452,7 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
     session: {
       deepMerge: { guardrail: { deepMerge: {} } },
     },
-    swarm: { deepMerge: { knowledgeSync: {} } },
+    swarm: { deepMerge: { knowledgeSync: {}, sessionImport: {} } },
     tui: {
       deepMerge: {
         syntaxHighlighting: { deepMerge: { colors: {} } },
@@ -563,6 +578,10 @@ export function createDefaultAgentConfig(
         pushInsights: true,
         pullOnStartup: true,
         pullIntervalMinutes: 60,
+      },
+      sessionImport: {
+        maxChunks: 5,
+        chunkTokenBudgetPercent: 12,
       },
     },
     search: {

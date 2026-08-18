@@ -366,6 +366,59 @@ describe('Swarm Routes', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('GET /sessions/:id/transcript returns a transcript', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss1', beaconId: 'b1' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/events/push',
+      payload: {
+        events: [
+          {
+            id: 'e1',
+            sessionId: 'ss1',
+            correlationId: 'c1',
+            type: 'userMessage',
+            payload: JSON.stringify({ kind: 'userMessage', content: 'hello' }),
+            createdAt: 1,
+          },
+          {
+            id: 'e2',
+            sessionId: 'ss1',
+            correlationId: 'c1',
+            type: 'assistantMessage',
+            payload: JSON.stringify({
+              kind: 'assistantMessage',
+              content: 'hi there',
+            }),
+            createdAt: 2,
+          },
+        ],
+      },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/sessions/ss1/transcript',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.session.id).toBe('ss1');
+    expect(body.transcript).toContain('# Session ss1');
+    expect(body.transcript).toContain('[user] hello');
+    expect(body.transcript).toContain('[assistant] hi there');
+  });
+
+  it('GET /sessions/:id/transcript returns 404 for missing session', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/sessions/nonexistent/transcript',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
   it('POST /sessions/:id/process transitions to processing', async () => {
     await app.inject({
       method: 'POST',

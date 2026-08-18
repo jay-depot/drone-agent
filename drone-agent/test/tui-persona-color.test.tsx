@@ -80,6 +80,11 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
       enableDebugSubsystem: () => {},
       disableDebugSubsystem: () => {},
     },
+    sessionManager: {
+      appendUserMessage: () => {},
+      appendAssistantMessage: () => {},
+      appendToolResult: () => {},
+    },
   };
 }
 

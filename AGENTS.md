@@ -220,6 +220,7 @@ The following subsystems have dedicated documentation in `docs/agents/`:
 
 - **Bootstrap Plugin** (`docs/agents/bootstrap-plugin.md`) — Setup workflows for new projects and users
 - **Swarm Plugin** (`docs/agents/swarm-plugin.md`) — Beacon/coordinator integration for swarm-wide personas, skills, and config
+- **Session Import** (`docs/agents/session-import.md`) — `/swarm-session` command for recreating an old session's context
 - **External Plugin Loading** (`docs/agents/external-plugin-loading.md`) — User and project-scope plugin discovery, trust model, engine integration
 - **MCP Plugin** (`docs/agents/mcp-plugin.md`) — Deferred list/mount pattern for tool loading, `ToolMountingCache`, server descriptions, persona filtering
 

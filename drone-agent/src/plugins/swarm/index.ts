@@ -30,6 +30,7 @@ import {
   createTrustCoordinatorCommand,
   surfacePendingCoordinatorTrust,
 } from './tools-coordinator-trust.js';
+import { createSwarmSessionCommand } from './session-command.js';
 import { registerHooks } from './hooks.js';
 import { startHeartbeat, registerShutdown } from './heartbeat.js';
 
@@ -53,6 +54,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       dependencies: [
         { id: 'persona' },
         { id: 'config' },
+        { id: 'llm' },
         { id: 'skills', optional: true },
         { id: 'self-improvement', optional: true },
       ],
@@ -178,6 +180,20 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
 
       // ── Coordinator trust (TOFU) ────────────────────────────────────────
       registration.registerSlashCommand(createTrustCoordinatorCommand(baseUrl));
+
+      // ── Session import command ───────────────────────────────────────────
+      const sessionImportConfig = registration.getConfig().swarm
+        .sessionImport ?? {
+        maxChunks: 5,
+        chunkTokenBudgetPercent: 12,
+      };
+      registration.registerSlashCommand(
+        createSwarmSessionCommand(
+          coordinatorUrl,
+          sessionId,
+          sessionImportConfig
+        )
+      );
 
       // ── Tools ───────────────────────────────────────────────────────────
       const toolFactories: Array<() => DroneToolDefinition> = [

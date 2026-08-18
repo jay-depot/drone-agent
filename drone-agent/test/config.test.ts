@@ -333,4 +333,25 @@ describe('loadAgentConfig', () => {
     );
     await expect(loadAgentConfig(projectDir)).rejects.toThrow();
   });
+
+  it('applies default swarm.sessionImport config', async () => {
+    const { projectDir } = await setupDirs();
+    const resolved = await loadAgentConfig(projectDir);
+    expect(resolved.config.swarm.sessionImport).toEqual({
+      maxChunks: 5,
+      chunkTokenBudgetPercent: 12,
+    });
+  });
+
+  it('accepts a custom swarm.sessionImport config', async () => {
+    const { projectDir } = await setupDirs();
+    await writeJson(path.join(projectDir, '.drone-agent/config.json'), {
+      swarm: { sessionImport: { maxChunks: 3, chunkTokenBudgetPercent: 20 } },
+    });
+    const resolved = await loadAgentConfig(projectDir);
+    expect(resolved.config.swarm.sessionImport).toEqual({
+      maxChunks: 3,
+      chunkTokenBudgetPercent: 20,
+    });
+  });
 });

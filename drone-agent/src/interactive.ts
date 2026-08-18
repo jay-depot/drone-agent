@@ -394,6 +394,8 @@ export async function runInteractiveLoop(
           },
           sessionManager: {
             appendUserMessage: m => sessionManager.appendUserMessage(m),
+            appendAssistantMessage: (content, toolCalls) =>
+              sessionManager.appendAssistantMessage(content, toolCalls),
             appendToolResult: (name, content, id) =>
               sessionManager.appendToolResult(name, content, id),
           },

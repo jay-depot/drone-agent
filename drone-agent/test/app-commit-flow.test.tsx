@@ -102,6 +102,11 @@ describe('App commit flow', () => {
         enableDebugSubsystem: () => {},
         disableDebugSubsystem: () => {},
       },
+      sessionManager: {
+        appendUserMessage: () => {},
+        appendAssistantMessage: () => {},
+        appendToolResult: () => {},
+      },
     };
     instance = render(<App {...opts} />);
   }

@@ -1,7 +1,7 @@
 // ── Plugin system types ────────────────────────────────────────────
 
 import type { DroneReasoningLevel } from './config-types.js';
-import type { DroneToolJsonSchema } from './session-types.js';
+import type { DroneToolCall, DroneToolJsonSchema } from './session-types.js';
 import type { DroneAgentConfig } from './config-types.js';
 
 // ── Plugin infrastructure ─────────────────────────────────────────
@@ -362,6 +362,10 @@ export type DroneSlashCommandContext = {
   /** Session manager for appending synthetic messages. */
   sessionManager?: {
     appendUserMessage: (message: string) => void;
+    appendAssistantMessage: (
+      content: string,
+      toolCalls?: DroneToolCall[]
+    ) => void;
     appendToolResult: (
       toolName: string,
       content: string,

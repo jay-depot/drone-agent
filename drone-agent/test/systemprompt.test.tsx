@@ -109,6 +109,11 @@ function makeOptions(
       enableDebugSubsystem: () => {},
       disableDebugSubsystem: () => {},
     },
+    sessionManager: {
+      appendUserMessage: () => {},
+      appendAssistantMessage: () => {},
+      appendToolResult: () => {},
+    },
     ...overrides,
   };
 }
