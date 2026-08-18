@@ -214,5 +214,13 @@
   {
     "timestamp": "2026-08-17T02:58:19.841Z",
     "insight": "The echo LLM provider's getContextWindowInfo() hardcoded contextWindowTokens:4096, which equals the default responseReserveTokens:4096, so maxPromptTokens = 4096-4096 = 1 and ANY system prompt tripped ensureSafeBudget() before a single turn was added — breaking all subagent dispatch tests with \"Session exceeds the safe context budget for echo-model\". The fix was to raise the reported window to 32768 (matching the config default). Lesson: a mock LLM provider's reported context window must be large enough to accommodate the system prompt + reserve, or the safety-trim budget fails before any real work happens."
+  },
+  {
+    "timestamp": "2026-08-18T01:44:04.276Z",
+    "insight": "The session turn model conflated \"conversation round\" with \"turn\". appendUserMessage() creates a turn, but appendAssistantMessage()/appendToolResult() append to the current turn, so an entire agentic tool-call round collapses into a single turn. Any turn-count-based gating (compaction's nonSummaryCount < minTurnsToCompact, safety-trim drop granularity) then becomes meaningless for tool-heavy sessions — 300 tool iterations register as 1 turn. The fix (every assistant message = its own turn) is purely granularity; getMessages() flattening order is unchanged, so LLM-visible context is identical. Lesson: when a system has both \"rounds\" and \"turns\", pin down which one gates behavior, and make the gating unit reflect real work."
+  },
+  {
+    "timestamp": "2026-08-18T01:44:04.280Z",
+    "insight": "Ollama (unlike other providers) refuses a chat request with no user message, even when the context is purely system instructions (observed in alice-assistant). When a fix causes the last user turn to be compacted away (e.g. turn-granularity change), the conversation loop can assemble a user-less context. The robust place to handle provider quirks is the provider's chat() itself (defense in depth covering ALL callers), not each call site. For Ollama, prepend a neutral placeholder user message like '(Continuing from summaries)' — an empty string works but a slightly informative placeholder is safer across models."
   }
 ]
