@@ -222,5 +222,13 @@
   {
     "timestamp": "2026-08-18T01:44:04.280Z",
     "insight": "Ollama (unlike other providers) refuses a chat request with no user message, even when the context is purely system instructions (observed in alice-assistant). When a fix causes the last user turn to be compacted away (e.g. turn-granularity change), the conversation loop can assemble a user-less context. The robust place to handle provider quirks is the provider's chat() itself (defense in depth covering ALL callers), not each call site. For Ollama, prepend a neutral placeholder user message like '(Continuing from summaries)' — an empty string works but a slightly informative placeholder is safer across models."
+  },
+  {
+    "timestamp": "2026-08-18T02:02:17.707Z",
+    "insight": "When a compaction/summarization convergence loop's turn granularity doubles (each user+assistant round becomes 2 turns), the sliceSize recomputed each round shrinks fast enough that 6-8 rounds of turns can exceed the 5-iteration hard cap before converging. Compaction tests asserting \"all non-summary turns compacted away\" then fail silently unless the test seeds a small enough turn count OR provides enough chat responses. Fix: keep convergence-loop tests at a small turn count (4 rounds = 8 turns compacts fully in 4 iterations), and provide exactly enough summary responses to cover the expected rounds; a short chatResponses array makes a later round return an empty summary and `break` the loop, which is itself a valid (if implicit) test expectation."
+  },
+  {
+    "timestamp": "2026-08-18T02:02:30.221Z",
+    "insight": "The ollama plugin constructs `new Ollama(...)` internally and offers the provider via `registration.offer`, so testing provider-level behavior (like the user-message injection) requires `vi.resetModules()` + `vi.doMock('ollama')` and re-importing the plugin via dynamic `import()`, then capturing the offered provider from the `offer` callback. The `offer` callback receives a `DroneLlmProvider` OBJECT (with a `.chat` method) — not a function — so the mock must capture `cap.provider` and call `provider.chat(...)`, not invoke `provider(...)` directly."
   }
 ]
