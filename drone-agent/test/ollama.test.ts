@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { ShowResponse } from 'ollama';
 import { __testing } from '../src/plugins/ollama.js';
 
@@ -80,5 +80,130 @@ describe('extractContextWindowTokens', () => {
   it('returns null when model_info is missing entirely', () => {
     const show = { model_info: undefined } as unknown as ShowResponse;
     expect(extractContextWindowTokens(show)).toBeNull();
+  });
+});
+
+describe('ollama chat user-message injection', () => {
+  let chatCalls: Array<{ model: string; messages: unknown[] }>;
+
+  beforeEach(() => {
+    chatCalls = [];
+    vi.resetModules();
+    vi.doMock('ollama', () => ({
+      Ollama: vi.fn().mockImplementation(() => ({
+        chat: vi.fn(
+          async ({
+            model,
+            messages,
+          }: {
+            model: string;
+            messages: unknown[];
+          }) => {
+            chatCalls.push({ model, messages });
+            return { message: { content: 'ok', thinking: '' } };
+          }
+        ),
+        show: vi.fn(async () => ({
+          model_info: { 'general.context_length': 4096 },
+        })),
+        list: vi.fn(async () => ({ models: [] })),
+      })),
+      ShowResponse: class {},
+      ToolCall: class {},
+    }));
+  });
+
+  async function captureProvider() {
+    const { ollamaPlugin } = await import('../src/plugins/ollama.js');
+    let provider: { chat: (input: unknown) => Promise<unknown> } | undefined;
+    await ollamaPlugin.register({
+      logger: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+      },
+      getConfig: () => ({
+        ollama: { host: 'http://localhost:11434', model: 'fake' },
+        session: { contextWindowTokens: 4096 },
+      }),
+      registerTool: () => {},
+      registerPromptFragment: () => {},
+      registerHelp: () => {},
+      registerSlashCommand: () => {},
+      registerWorkflow: () => {},
+      unregisterPluginTools: () => {},
+      unregisterTool: () => {},
+      mountTool: () => undefined,
+      unmountTool: () => {},
+      listMountedTools: () => [],
+      hooks: {
+        onPluginsLoaded: () => {},
+        onSessionStart: () => {},
+        onBeforePrompt: () => {},
+        onAfterToolCall: () => {},
+        onConversationEvent: () => {},
+        onSessionClear: () => {},
+        onShutdown: () => {},
+        onSessionSafetyTrimWillRun: () => {},
+        onSessionSafetyTrimApplied: () => {},
+      },
+      offer: (cap: { provider: unknown }) => {
+        provider = cap.provider as {
+          chat: (input: unknown) => Promise<unknown>;
+        };
+      },
+      request: () => undefined,
+      runWorkflow: async () => ({ toolResult: '{}' }),
+      requestElicitation: () => undefined,
+    } as never);
+    if (!provider) {
+      throw new Error('provider not offered');
+    }
+    return provider;
+  }
+
+  it('prepends a placeholder user message when no user role is present', async () => {
+    const provider = await captureProvider();
+    await provider.chat({
+      model: 'fake',
+      messages: [
+        { role: 'system', content: 'greet the user' },
+        { role: 'assistant', content: 'hi' },
+      ],
+    });
+
+    expect(chatCalls).toHaveLength(1);
+    const sent = chatCalls[0].messages as Array<{
+      role: string;
+      content: string;
+    }>;
+    expect(sent[0]).toEqual({
+      role: 'user',
+      content: '(Continuing from summaries)',
+    });
+    expect(sent.map(m => m.role)).toEqual(['user', 'system', 'assistant']);
+  });
+
+  it('does not inject a placeholder when a user message already exists', async () => {
+    const provider = await captureProvider();
+    await provider.chat({
+      model: 'fake',
+      messages: [
+        { role: 'system', content: 'sys' },
+        { role: 'user', content: 'hello' },
+        { role: 'assistant', content: 'hi' },
+      ],
+    });
+
+    expect(chatCalls).toHaveLength(1);
+    const sent = chatCalls[0].messages as Array<{
+      role: string;
+      content: string;
+    }>;
+    expect(sent.map(m => m.role)).toEqual(['system', 'user', 'assistant']);
+    expect(sent[0]).not.toHaveProperty(
+      'content',
+      '(Continuing from summaries)'
+    );
   });
 });

@@ -424,10 +424,13 @@ describe('createConversationService — tool error handling', () => {
 
     await conversation.sendUserMessage('go');
 
-    // User / assistant-with-tool / tool / assistant-final all live in the
-    // same turn (see session-manager.appendToCurrentTurn).
+    // Each assistant message is its own turn: [user], [assistant+tool],
+    // [assistant-final].
     const turns: DroneSessionTurn[] = sessionManager.getTurns();
-    expect(turns.length).toBeGreaterThanOrEqual(1);
+    expect(turns).toHaveLength(3);
+    expect(turns[0].messages.map(m => m.role)).toEqual(['user']);
+    expect(turns[1].messages.map(m => m.role)).toEqual(['assistant', 'tool']);
+    expect(turns[2].messages.map(m => m.role)).toEqual(['assistant']);
     const allMessages = turns.flatMap(t => t.messages);
     const assistantWithToolCall = allMessages.find(
       m => m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0

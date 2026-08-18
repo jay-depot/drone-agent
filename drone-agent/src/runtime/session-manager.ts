@@ -90,11 +90,13 @@ export function createSessionManager(): DroneSessionManager {
       );
     },
     appendAssistantMessage: (content, toolCalls) => {
-      appendToCurrentTurn({
-        role: 'assistant',
-        content,
-        toolCalls,
-      });
+      turns.push(
+        createTurn({
+          role: 'assistant',
+          content,
+          toolCalls,
+        })
+      );
     },
     appendToolResult: (toolName, content, toolCallId, images) => {
       appendToCurrentTurn({

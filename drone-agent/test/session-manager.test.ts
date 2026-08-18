@@ -19,7 +19,7 @@ describe('createSessionManager', () => {
     expect(turns[1].messages).toEqual([{ role: 'user', content: 'world' }]);
   });
 
-  it('groups assistant + tool results into the latest user turn', () => {
+  it('gives each assistant message its own turn, with tool results attached', () => {
     const session = createSessionManager();
     session.appendUserMessage('do the thing');
     session.appendAssistantMessage('working...', [
@@ -29,14 +29,11 @@ describe('createSessionManager', () => {
     session.appendAssistantMessage('all set');
 
     const turns = session.getTurns();
-    expect(turns).toHaveLength(1);
-    expect(turns[0].messages.map(m => m.role)).toEqual([
-      'user',
-      'assistant',
-      'tool',
-      'assistant',
-    ]);
-    expect(turns[0].messages[2]).toMatchObject({
+    expect(turns).toHaveLength(3);
+    expect(turns[0].messages.map(m => m.role)).toEqual(['user']);
+    expect(turns[1].messages.map(m => m.role)).toEqual(['assistant', 'tool']);
+    expect(turns[2].messages.map(m => m.role)).toEqual(['assistant']);
+    expect(turns[1].messages[1]).toMatchObject({
       role: 'tool',
       content: 'done',
       toolName: 'noop',
@@ -44,10 +41,8 @@ describe('createSessionManager', () => {
     });
   });
 
-  it('starts a new turn when no current turn exists', () => {
+  it('starts a new turn even without a prior user message', () => {
     const session = createSessionManager();
-    // Force the internal empty state; appendAssistantMessage without a user
-    // message should still create a turn.
     session.appendAssistantMessage('orphan?');
     expect(session.getTurns()).toHaveLength(1);
     expect(session.getMessages()[0]).toEqual({
