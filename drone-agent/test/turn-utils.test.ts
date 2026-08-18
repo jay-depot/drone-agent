@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DroneSessionTurn } from 'drone-core';
-import { getDroppableTurnPrefix } from '../src/runtime/turn-utils.js';
+import { getOldestNonSummaryTurns } from '../src/runtime/turn-utils.js';
 
 function makeTurn(content: string, kind?: 'summary'): DroneSessionTurn {
   return {
@@ -10,34 +10,45 @@ function makeTurn(content: string, kind?: 'summary'): DroneSessionTurn {
   };
 }
 
-describe('getDroppableTurnPrefix', () => {
-  it('returns an empty prefix for count <= 0', () => {
+describe('getOldestNonSummaryTurns', () => {
+  it('returns an empty array for count <= 0', () => {
     const turns = [makeTurn('a'), makeTurn('b')];
-    expect(getDroppableTurnPrefix(turns, 0)).toEqual([]);
-    expect(getDroppableTurnPrefix(turns, -3)).toEqual([]);
+    expect(getOldestNonSummaryTurns(turns, 0)).toEqual([]);
+    expect(getOldestNonSummaryTurns(turns, -3)).toEqual([]);
   });
 
-  it('returns leading non-summary turns up to count', () => {
+  it('returns the oldest non-summary turns in chronological order up to count', () => {
     const turns = [makeTurn('a'), makeTurn('b'), makeTurn('c')];
-    const dropped = getDroppableTurnPrefix(turns, 2);
+    const dropped = getOldestNonSummaryTurns(turns, 2);
     expect(dropped.map(t => t.id)).toEqual(['a', 'b']);
   });
 
-  it('stops at the first summary turn and returns fewer than count', () => {
-    const turns = [makeTurn('a'), makeTurn('S', 'summary'), makeTurn('b')];
-    const dropped = getDroppableTurnPrefix(turns, 5);
+  it('skips summary turns and continues past them', () => {
+    const turns = [
+      makeTurn('S', 'summary'),
+      makeTurn('a'),
+      makeTurn('S2', 'summary'),
+      makeTurn('b'),
+    ];
+    const dropped = getOldestNonSummaryTurns(turns, 2);
+    expect(dropped.map(t => t.id)).toEqual(['a', 'b']);
+  });
+
+  it('returns fewer than count when there are not enough non-summary turns', () => {
+    const turns = [makeTurn('S', 'summary'), makeTurn('a')];
+    const dropped = getOldestNonSummaryTurns(turns, 5);
     expect(dropped.map(t => t.id)).toEqual(['a']);
   });
 
-  it('returns nothing when the head is a summary turn', () => {
-    const turns = [makeTurn('S', 'summary'), makeTurn('a')];
-    expect(getDroppableTurnPrefix(turns, 5)).toEqual([]);
+  it('returns an empty array when all turns are summaries', () => {
+    const turns = [makeTurn('S1', 'summary'), makeTurn('S2', 'summary')];
+    expect(getOldestNonSummaryTurns(turns, 5)).toEqual([]);
   });
 
   it('does not mutate the input array', () => {
     const turns = [makeTurn('a'), makeTurn('b'), makeTurn('c')];
     const snapshot = turns.map(t => t.id);
-    getDroppableTurnPrefix(turns, 2);
+    getOldestNonSummaryTurns(turns, 2);
     expect(turns.map(t => t.id)).toEqual(snapshot);
   });
 });

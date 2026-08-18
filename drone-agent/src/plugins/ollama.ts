@@ -194,10 +194,21 @@ export const ollamaPlugin: DronePlugin = {
         const client = new Ollama({ host: agentConfig.ollama.host });
         let response;
 
+        // Ollama requires at least one user message in the chat context. When
+        // a session contains no user-role message (e.g. all the user turns
+        // have been compacted into summaries), prepend a neutral placeholder
+        // so the request is still valid.
+        const outboundMessages = messages.some(m => m.role === 'user')
+          ? messages.map(toOllamaMessage)
+          : [
+              { role: 'user', content: '(Continuing from summaries)' },
+              ...messages.map(toOllamaMessage),
+            ];
+
         if (debug) {
           console.error(`[llm:request] ollama.chat({ model: ${model}, ... })`);
           console.error(
-            `[llm:request] messages: ${JSON.stringify(messages.map(toOllamaMessage))}`
+            `[llm:request] messages: ${JSON.stringify(outboundMessages)}`
           );
         }
         if (debug) {
@@ -207,7 +218,7 @@ export const ollamaPlugin: DronePlugin = {
         try {
           response = await client.chat({
             model,
-            messages: messages.map(toOllamaMessage),
+            messages: outboundMessages,
             tools: tools && tools.length > 0 ? toOllamaTools(tools) : undefined,
             think: mapReasoningLevel(reasoningLevel) as
               | boolean

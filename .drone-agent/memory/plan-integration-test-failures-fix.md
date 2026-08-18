@@ -9,6 +9,7 @@ tags:
   - docker
 created: 2026-08-17T02:35:36.059Z
 updated: 2026-08-17T02:57:54.030Z
+status: completed
 ---
 
 # Plan: Fix the 12 failing integration tests

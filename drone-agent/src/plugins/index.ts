@@ -99,6 +99,7 @@ export const builtInPlugins: DronePlugin[] = staticBuiltInPlugins;
 
 export type { CompactionPluginDeps } from './compaction/index.js';
 export type { CompactionCapability } from './compaction/index.js';
+export type { CompactionStatus } from './compaction/index.js';
 export { createCompactionPlugin } from './compaction/index.js';
 export { createLogPlugin } from './log/index.js';
 export { createSwarmPlugin, type SwarmConfig } from './swarm/index.js';

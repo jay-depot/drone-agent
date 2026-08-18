@@ -19,7 +19,7 @@ describe('createSessionManager', () => {
     expect(turns[1].messages).toEqual([{ role: 'user', content: 'world' }]);
   });
 
-  it('groups assistant + tool results into the latest user turn', () => {
+  it('gives each assistant message its own turn, with tool results attached', () => {
     const session = createSessionManager();
     session.appendUserMessage('do the thing');
     session.appendAssistantMessage('working...', [
@@ -29,14 +29,11 @@ describe('createSessionManager', () => {
     session.appendAssistantMessage('all set');
 
     const turns = session.getTurns();
-    expect(turns).toHaveLength(1);
-    expect(turns[0].messages.map(m => m.role)).toEqual([
-      'user',
-      'assistant',
-      'tool',
-      'assistant',
-    ]);
-    expect(turns[0].messages[2]).toMatchObject({
+    expect(turns).toHaveLength(3);
+    expect(turns[0].messages.map(m => m.role)).toEqual(['user']);
+    expect(turns[1].messages.map(m => m.role)).toEqual(['assistant', 'tool']);
+    expect(turns[2].messages.map(m => m.role)).toEqual(['assistant']);
+    expect(turns[1].messages[1]).toMatchObject({
       role: 'tool',
       content: 'done',
       toolName: 'noop',
@@ -44,10 +41,8 @@ describe('createSessionManager', () => {
     });
   });
 
-  it('starts a new turn when no current turn exists', () => {
+  it('starts a new turn even without a prior user message', () => {
     const session = createSessionManager();
-    // Force the internal empty state; appendAssistantMessage without a user
-    // message should still create a turn.
     session.appendAssistantMessage('orphan?');
     expect(session.getTurns()).toHaveLength(1);
     expect(session.getMessages()[0]).toEqual({
@@ -80,26 +75,6 @@ describe('createSessionManager', () => {
     expect(session.getTurns()[0].messages).toHaveLength(1);
   });
 
-  it('drops the oldest turns from the head', () => {
-    const session = createSessionManager();
-    session.appendUserMessage('a');
-    session.appendUserMessage('b');
-    session.appendUserMessage('c');
-
-    const dropped = session.dropOldestTurns(2);
-    expect(dropped).toHaveLength(2);
-    expect(dropped.map(t => t.messages[0].content)).toEqual(['a', 'b']);
-    expect(session.getMessages().map(m => m.content)).toEqual(['c']);
-  });
-
-  it('returns no turns when asked to drop <= 0', () => {
-    const session = createSessionManager();
-    session.appendUserMessage('a');
-    expect(session.dropOldestTurns(0)).toEqual([]);
-    expect(session.dropOldestTurns(-3)).toEqual([]);
-    expect(session.getMessages()).toHaveLength(1);
-  });
-
   it('drops oldest non-summary turns while head is not a summary', () => {
     const session = createSessionManager();
     // Order: [a, b, c]
@@ -112,17 +87,29 @@ describe('createSessionManager', () => {
     expect(session.getTurns().map(t => t.messages[0].content)).toEqual(['c']);
   });
 
-  it('drops nothing when a summary is the head turn', () => {
+  it('skips a head summary and drops the oldest non-summary turns after it', () => {
     const session = createSessionManager();
     session.appendUserMessage('a');
     session.prependSystemTurn('S', { kind: 'summary' });
     // Order is now [S, a] — summary is the head.
 
     const dropped = session.dropOldestNonSummaryTurns(5);
-    expect(dropped).toEqual([]);
+    expect(dropped.map(t => t.messages[0].content)).toEqual(['a']);
+    expect(session.getTurns().map(t => t.messages[0].content)).toEqual(['S']);
+  });
+
+  it('preserves summary turns when dropping oldest non-summary turns', () => {
+    const session = createSessionManager();
+    session.appendUserMessage('a');
+    session.appendUserMessage('b');
+    session.prependSystemTurn('S', { kind: 'summary' });
+    // Order is now [S, a, b].
+
+    const dropped = session.dropOldestNonSummaryTurns(1);
+    expect(dropped.map(t => t.messages[0].content)).toEqual(['a']);
     expect(session.getTurns().map(t => t.messages[0].content)).toEqual([
       'S',
-      'a',
+      'b',
     ]);
   });
 

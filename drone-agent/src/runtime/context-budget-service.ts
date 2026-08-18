@@ -9,7 +9,7 @@ import {
   type DroneTokenEstimate,
   type DroneToolDescriptor,
 } from 'drone-core';
-import { getDroppableTurnPrefix } from './turn-utils.js';
+import { getOldestNonSummaryTurns } from './turn-utils.js';
 
 /**
  * A snapshot of the current context budget, including system messages,
@@ -216,17 +216,18 @@ export function createContextBudgetService({
     }
 
     // Compute the minimum number of oldest non-summary turns to drop,
-    // mirroring dropOldestNonSummaryTurns semantics (stop at summary turns).
+    // mirroring dropOldestNonSummaryTurns semantics (skip summary turns).
     for (let dropCount = 1; dropCount <= input.turns.length; dropCount += 1) {
-      const droppable = getDroppableTurnPrefix(input.turns, dropCount);
+      const droppable = getOldestNonSummaryTurns(input.turns, dropCount);
       if (droppable.length < dropCount) {
-        // Hit the first summary turn — no more non-summary turns to drop.
+        // No more non-summary turns to drop.
         break;
       }
 
+      const droppableIds = new Set(droppable.map(turn => turn.id));
       const candidateBudget = estimateSessionBudget({
         systemMessages: input.systemMessages,
-        turns: input.turns.slice(droppable.length),
+        turns: input.turns.filter(turn => !droppableIds.has(turn.id)),
         tools: input.tools,
         sessionConfig: config.session,
         contextWindowTokens: input.contextWindow.contextWindowTokens,

@@ -106,7 +106,7 @@ describe('context-budget-service evaluateSafetyTrim', () => {
     expect(evaluation).toEqual({ requiresTrim: false });
   });
 
-  it('counts only non-summary turns when a summary sits between them', () => {
+  it('skips a summary between non-summary turns when counting droppable turns', () => {
     const svc = makeBudgetService(undefined, config);
     const turns = [
       makeTurn('a'.repeat(800)),
@@ -126,7 +126,7 @@ describe('context-budget-service evaluateSafetyTrim', () => {
     });
   });
 
-  it('returns null when the head is a summary turn (no non-summary turns droppable)', () => {
+  it('skips a head summary and counts the non-summary turns after it as droppable', () => {
     const svc = makeBudgetService(undefined, config);
     const turns = [
       makeTurn('S', 'summary'),
@@ -139,10 +139,10 @@ describe('context-budget-service evaluateSafetyTrim', () => {
       turns,
       tools: [],
     });
-    // The estimate must not claim a drop count that dropOldestNonSummaryTurns
-    // cannot satisfy (it stops at the head summary), which previously caused
-    // non-convergence in ensureSafeBudget.
-    expect(evaluation).toBeNull();
+    expect(evaluation).toEqual({
+      requiresTrim: true,
+      requiredDropTurnCount: 1,
+    });
   });
 
   it('returns null when dropping all non-summary turns still exceeds the budget', () => {

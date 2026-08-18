@@ -388,7 +388,11 @@ export function createConversationService({
           emit({ kind: 'reasoningComplete' });
         }
 
-        if (response.toolCalls && response.toolCalls.length > 0) {
+        const toolCalls = response.toolCalls ?? [];
+
+        // Iteration-limit check for tool-call rounds. Runs before the
+        // assistant append so a limit hit doesn't leave a dangling turn.
+        if (toolCalls.length > 0) {
           iterationCount += 1;
           const effectiveMax = resolveEffectiveMaxToolIterations();
           if (iterationCount > effectiveMax) {
@@ -407,15 +411,15 @@ export function createConversationService({
                 'Use /clear to reset the session, or raise session.maxToolIterations in your config.'
             );
           }
+        }
 
-          sessionManager.appendAssistantMessage(
-            response.message ?? '',
-            response.toolCalls
-          );
+        // Every assistant message is its own turn.
+        sessionManager.appendAssistantMessage(
+          response.message ?? '',
+          toolCalls.length > 0 ? toolCalls : undefined
+        );
 
-          // Capture toolCalls in a local so TypeScript can narrow it.
-          const toolCalls = response.toolCalls;
-
+        if (toolCalls.length > 0) {
           // Emit the batch start so the TUI can create one TailItem per tool call.
           emit({
             kind: 'toolCallBatch',
@@ -618,8 +622,9 @@ export function createConversationService({
           continue;
         }
 
+        // No tool calls — this is the final assistant reply (already appended
+        // above as its own turn).
         const assistantMessage = response.message ?? '';
-        sessionManager.appendAssistantMessage(assistantMessage);
         if (assistantMessage.length > 0) {
           emit({ kind: 'assistantMessage', content: assistantMessage });
           emit({ kind: 'assistantMessageComplete' });
