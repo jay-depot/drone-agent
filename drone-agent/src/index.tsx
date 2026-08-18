@@ -1,6 +1,7 @@
 import {
   createConsoleLogger,
   createDebugFlagRegistry,
+  type DroneChatMessage,
   type DroneLlmCapability,
   type DroneLlmProvider,
 } from 'drone-core';
@@ -99,6 +100,11 @@ async function main(): Promise<void> {
   const builtInPlugins = createBuiltInPlugins({
     sessionManager,
     ...createLlmGetters(engineRef),
+    buildFragmentMessages: async () => {
+      const engine = getEngine();
+      const fragments = await engine.renderPromptFragments();
+      return fragments.map(content => ({ role: 'system' as const, content }));
+    },
   });
 
   // ── External plugin discovery ───────────────────────────────────────
