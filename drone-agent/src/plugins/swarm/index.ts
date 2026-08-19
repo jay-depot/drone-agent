@@ -71,8 +71,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       const sessionId =
         userSwarmConfig.sessionId ?? config.sessionId ?? `agent-${Date.now()}`;
       const protocol = beaconUseHttps ? 'https' : 'http';
-      const coordinatorUrl =
-        userSwarmConfig.coordinatorUrl ?? config.coordinatorUrl;
       const baseUrl = `${protocol}://${beaconHost}:${beaconPort}`;
       const wsProtocol = beaconUseHttps ? 'wss' : 'ws';
       const wsUrl = `${wsProtocol}://${beaconHost}:${beaconPort}/ws?agentId=${sessionId}`;
@@ -195,7 +193,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       const toolFactories: Array<() => DroneToolDefinition> = [
         () => createSwarmMessageTool(ctx),
         ...createWikiTools(ctx).map(t => () => t),
-        ...createCoordinatorTools(coordinatorUrl).map(t => () => t),
+        ...createCoordinatorTools(baseUrl).map(t => () => t),
       ];
 
       for (const factory of toolFactories) {

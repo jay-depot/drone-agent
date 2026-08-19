@@ -9,7 +9,6 @@ export interface SwarmConfig {
   beaconHost?: string;
   beaconPort?: number;
   beaconUseHttps?: boolean;
-  coordinatorUrl?: string;
   sessionId?: string;
 }
 

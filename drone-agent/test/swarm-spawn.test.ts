@@ -64,6 +64,14 @@ function createRegistrationCapture(
   return { registration, registeredTools };
 }
 
+/** Default agent config without any coordinatorUrl (it no longer exists). */
+function defaultConfig() {
+  return createDefaultAgentConfig({});
+}
+
+/** The beacon base URL the swarm plugin connects to by default. */
+const BEACON_BASE = 'http://localhost:3457';
+
 describe('swarm spawn tools', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
@@ -79,13 +87,9 @@ describe('swarm spawn tools', () => {
     );
     vi.stubGlobal('fetch', mockFetch);
 
-    const config = createDefaultAgentConfig({
-      swarm: { coordinatorUrl: 'http://localhost:3456' },
-    });
-    const { registration, registeredTools } = createRegistrationCapture(config);
-    const plugin = createSwarmPlugin({
-      coordinatorUrl: 'http://localhost:3456',
-    });
+    const { registration, registeredTools } =
+      createRegistrationCapture(defaultConfig());
+    const plugin = createSwarmPlugin({});
     await plugin.register(registration);
 
     const expected = [
@@ -110,7 +114,7 @@ describe('swarm spawn tools', () => {
   });
 
   describe('swarm_list_beacons', () => {
-    it('returns list of beacons from coordinator', async () => {
+    it('returns list of beacons from the beacon proxy', async () => {
       const mockFetch = mockFetchWithBeaconRegistration(() =>
         Promise.resolve({
           ok: true,
@@ -121,14 +125,9 @@ describe('swarm spawn tools', () => {
       );
       vi.stubGlobal('fetch', mockFetch);
 
-      const config = createDefaultAgentConfig({
-        swarm: { coordinatorUrl: 'http://localhost:3456' },
-      });
       const { registration, registeredTools } =
-        createRegistrationCapture(config);
-      const plugin = createSwarmPlugin({
-        coordinatorUrl: 'http://localhost:3456',
-      });
+        createRegistrationCapture(defaultConfig());
+      const plugin = createSwarmPlugin({});
       await plugin.register(registration);
 
       const tool = registeredTools.get('swarm_list_beacons')!;
@@ -139,15 +138,33 @@ describe('swarm spawn tools', () => {
       expect(parsed[0].id).toBe('b1');
     });
 
-    it('returns error when coordinatorUrl not configured', async () => {
+    it('hits the beacon /coordinator/beacons route', async () => {
       const mockFetch = mockFetchWithBeaconRegistration(() =>
         Promise.resolve({ ok: true, json: async () => [] })
       );
       vi.stubGlobal('fetch', mockFetch);
 
-      const config = createDefaultAgentConfig({});
       const { registration, registeredTools } =
-        createRegistrationCapture(config);
+        createRegistrationCapture(defaultConfig());
+      const plugin = createSwarmPlugin({});
+      await plugin.register(registration);
+
+      const tool = registeredTools.get('swarm_list_beacons')!;
+      await tool.execute({});
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${BEACON_BASE}/coordinator/beacons`,
+        expect.any(Object)
+      );
+    });
+
+    it('returns error when the beacon proxy returns 503 (coordinator unavailable)', async () => {
+      const mockFetch = mockFetchWithBeaconRegistration(() =>
+        Promise.resolve({ ok: false, status: 503, json: async () => ({}) })
+      );
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { registration, registeredTools } =
+        createRegistrationCapture(defaultConfig());
       const plugin = createSwarmPlugin({});
       await plugin.register(registration);
 
@@ -156,23 +173,18 @@ describe('swarm spawn tools', () => {
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
       expect(parsed.success).toBe(false);
-      expect(parsed.details.error).toContain('coordinatorUrl');
+      expect(parsed.error).toContain('Coordinator proxy returned 503');
     });
 
-    it('returns error when coordinator is unreachable', async () => {
+    it('returns error when the beacon is unreachable', async () => {
       const mockFetch = mockFetchWithBeaconRegistration(() =>
         Promise.reject(new Error('Connection refused'))
       );
       vi.stubGlobal('fetch', mockFetch);
 
-      const config = createDefaultAgentConfig({
-        swarm: { coordinatorUrl: 'http://localhost:3456' },
-      });
       const { registration, registeredTools } =
-        createRegistrationCapture(config);
-      const plugin = createSwarmPlugin({
-        coordinatorUrl: 'http://localhost:3456',
-      });
+        createRegistrationCapture(defaultConfig());
+      const plugin = createSwarmPlugin({});
       await plugin.register(registration);
 
       const tool = registeredTools.get('swarm_list_beacons')!;
@@ -196,14 +208,9 @@ describe('swarm spawn tools', () => {
       );
       vi.stubGlobal('fetch', mockFetch);
 
-      const config = createDefaultAgentConfig({
-        swarm: { coordinatorUrl: 'http://localhost:3456' },
-      });
       const { registration, registeredTools } =
-        createRegistrationCapture(config);
-      const plugin = createSwarmPlugin({
-        coordinatorUrl: 'http://localhost:3456',
-      });
+        createRegistrationCapture(defaultConfig());
+      const plugin = createSwarmPlugin({});
       await plugin.register(registration);
 
       const tool = registeredTools.get('swarm_list_agents')!;
@@ -214,34 +221,29 @@ describe('swarm spawn tools', () => {
       expect(parsed[0].agentId).toBe('a1');
     });
 
-    it('passes beaconId filter to coordinator', async () => {
+    it('passes beaconId filter to the beacon proxy', async () => {
       const mockFetch = mockFetchWithBeaconRegistration(() =>
         Promise.resolve({ ok: true, json: async () => [] })
       );
       vi.stubGlobal('fetch', mockFetch);
 
-      const config = createDefaultAgentConfig({
-        swarm: { coordinatorUrl: 'http://localhost:3456' },
-      });
       const { registration, registeredTools } =
-        createRegistrationCapture(config);
-      const plugin = createSwarmPlugin({
-        coordinatorUrl: 'http://localhost:3456',
-      });
+        createRegistrationCapture(defaultConfig());
+      const plugin = createSwarmPlugin({});
       await plugin.register(registration);
 
       const tool = registeredTools.get('swarm_list_agents')!;
       expect(tool).toBeDefined();
       await tool.execute({ beaconId: 'b1' });
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:3456/agents/location?beaconId=b1',
+        `${BEACON_BASE}/coordinator/agents/location?beaconId=b1`,
         expect.any(Object)
       );
     });
   });
 
   describe('swarm_spawn', () => {
-    it('spawns an agent on a target beacon', async () => {
+    it('spawns an agent on a target beacon via the proxy', async () => {
       const mockFetch = mockFetchWithBeaconRegistration(() =>
         Promise.resolve({
           ok: true,
@@ -255,14 +257,9 @@ describe('swarm spawn tools', () => {
       );
       vi.stubGlobal('fetch', mockFetch);
 
-      const config = createDefaultAgentConfig({
-        swarm: { coordinatorUrl: 'http://localhost:3456' },
-      });
       const { registration, registeredTools } =
-        createRegistrationCapture(config);
-      const plugin = createSwarmPlugin({
-        coordinatorUrl: 'http://localhost:3456',
-      });
+        createRegistrationCapture(defaultConfig());
+      const plugin = createSwarmPlugin({});
       await plugin.register(registration);
 
       const tool = registeredTools.get('swarm_spawn')!;
@@ -278,15 +275,33 @@ describe('swarm spawn tools', () => {
       expect(parsed.status).toBe('spawning');
     });
 
-    it('returns error when coordinatorUrl not configured', async () => {
+    it('posts to the beacon /coordinator/spawn route', async () => {
       const mockFetch = mockFetchWithBeaconRegistration(() =>
         Promise.resolve({ ok: true, json: async () => ({}) })
       );
       vi.stubGlobal('fetch', mockFetch);
 
-      const config = createDefaultAgentConfig({});
       const { registration, registeredTools } =
-        createRegistrationCapture(config);
+        createRegistrationCapture(defaultConfig());
+      const plugin = createSwarmPlugin({});
+      await plugin.register(registration);
+
+      const tool = registeredTools.get('swarm_spawn')!;
+      await tool.execute({ targetBeaconId: 'b-target' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        `${BEACON_BASE}/coordinator/spawn`,
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    it('returns error when the beacon proxy returns 503', async () => {
+      const mockFetch = mockFetchWithBeaconRegistration(() =>
+        Promise.resolve({ ok: false, status: 503, json: async () => ({}) })
+      );
+      vi.stubGlobal('fetch', mockFetch);
+
+      const { registration, registeredTools } =
+        createRegistrationCapture(defaultConfig());
       const plugin = createSwarmPlugin({});
       await plugin.register(registration);
 
@@ -295,12 +310,12 @@ describe('swarm spawn tools', () => {
       const result = await tool.execute({ targetBeaconId: 'b-target' });
       const parsed = JSON.parse(result);
       expect(parsed.success).toBe(false);
-      expect(parsed.details.error).toContain('coordinatorUrl');
+      expect(parsed.error).toContain('Coordinator proxy returned 503');
     });
   });
 
   describe('swarm_get_spawn', () => {
-    it('returns spawn status from beacon', async () => {
+    it('returns spawn status from the proxy', async () => {
       const mockFetch = mockFetchWithBeaconRegistration(() =>
         Promise.resolve({
           ok: true,
@@ -313,14 +328,9 @@ describe('swarm spawn tools', () => {
       );
       vi.stubGlobal('fetch', mockFetch);
 
-      const config = createDefaultAgentConfig({
-        swarm: { coordinatorUrl: 'http://localhost:3456' },
-      });
       const { registration, registeredTools } =
-        createRegistrationCapture(config);
-      const plugin = createSwarmPlugin({
-        coordinatorUrl: 'http://localhost:3456',
-      });
+        createRegistrationCapture(defaultConfig());
+      const plugin = createSwarmPlugin({});
       await plugin.register(registration);
 
       const tool = registeredTools.get('swarm_get_spawn')!;
@@ -342,14 +352,9 @@ describe('swarm spawn tools', () => {
       );
       vi.stubGlobal('fetch', mockFetch);
 
-      const config = createDefaultAgentConfig({
-        swarm: { coordinatorUrl: 'http://localhost:3456' },
-      });
       const { registration, registeredTools } =
-        createRegistrationCapture(config);
-      const plugin = createSwarmPlugin({
-        coordinatorUrl: 'http://localhost:3456',
-      });
+        createRegistrationCapture(defaultConfig());
+      const plugin = createSwarmPlugin({});
       await plugin.register(registration);
 
       const tool = registeredTools.get('swarm_list_spawns')!;
@@ -360,27 +365,22 @@ describe('swarm spawn tools', () => {
       expect(parsed[0].id).toBe('s1');
     });
 
-    it('passes status filter to coordinator', async () => {
+    it('passes status filter to the beacon proxy', async () => {
       const mockFetch = mockFetchWithBeaconRegistration(() =>
         Promise.resolve({ ok: true, json: async () => [] })
       );
       vi.stubGlobal('fetch', mockFetch);
 
-      const config = createDefaultAgentConfig({
-        swarm: { coordinatorUrl: 'http://localhost:3456' },
-      });
       const { registration, registeredTools } =
-        createRegistrationCapture(config);
-      const plugin = createSwarmPlugin({
-        coordinatorUrl: 'http://localhost:3456',
-      });
+        createRegistrationCapture(defaultConfig());
+      const plugin = createSwarmPlugin({});
       await plugin.register(registration);
 
       const tool = registeredTools.get('swarm_list_spawns')!;
       expect(tool).toBeDefined();
       await tool.execute({ beaconId: 'b1', status: 'running' });
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:3456/spawn/b1?status=running',
+        `${BEACON_BASE}/coordinator/spawn/b1?status=running`,
         expect.any(Object)
       );
     });
@@ -399,14 +399,9 @@ describe('swarm spawn tools', () => {
       );
       vi.stubGlobal('fetch', mockFetch);
 
-      const config = createDefaultAgentConfig({
-        swarm: { coordinatorUrl: 'http://localhost:3456' },
-      });
       const { registration, registeredTools } =
-        createRegistrationCapture(config);
-      const plugin = createSwarmPlugin({
-        coordinatorUrl: 'http://localhost:3456',
-      });
+        createRegistrationCapture(defaultConfig());
+      const plugin = createSwarmPlugin({});
       await plugin.register(registration);
 
       const tool = registeredTools.get('swarm_terminate_spawn')!;
@@ -416,27 +411,22 @@ describe('swarm spawn tools', () => {
       expect(parsed.success).toBe(true);
     });
 
-    it('sends DELETE request to coordinator', async () => {
+    it('sends DELETE request to the beacon proxy', async () => {
       const mockFetch = mockFetchWithBeaconRegistration(() =>
         Promise.resolve({ ok: true, json: async () => ({ success: true }) })
       );
       vi.stubGlobal('fetch', mockFetch);
 
-      const config = createDefaultAgentConfig({
-        swarm: { coordinatorUrl: 'http://localhost:3456' },
-      });
       const { registration, registeredTools } =
-        createRegistrationCapture(config);
-      const plugin = createSwarmPlugin({
-        coordinatorUrl: 'http://localhost:3456',
-      });
+        createRegistrationCapture(defaultConfig());
+      const plugin = createSwarmPlugin({});
       await plugin.register(registration);
 
       const tool = registeredTools.get('swarm_terminate_spawn')!;
       expect(tool).toBeDefined();
       await tool.execute({ beaconId: 'b1', spawnId: 's1' });
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:3456/spawn/b1/s1',
+        `${BEACON_BASE}/coordinator/spawn/b1/s1`,
         expect.objectContaining({ method: 'DELETE' })
       );
     });

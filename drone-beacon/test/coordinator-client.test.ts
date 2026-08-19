@@ -855,4 +855,106 @@ describe('Coordinator Client', () => {
       expect(result).toBeNull();
     });
   });
+
+  describe('coordinator proxy methods', () => {
+    async function makeClient() {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+
+      return createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+    }
+
+    it('listBeacons fetches /api/beacons', async () => {
+      setupMockHttpResponse(200, [{ id: 'b1', name: 'Beacon 1' }]);
+      const client = await makeClient();
+      const result = await client.listBeacons();
+      expect(result).toHaveLength(1);
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ path: '/api/beacons' }),
+        expect.any(Function)
+      );
+    });
+
+    it('listAgentLocations passes beaconId query', async () => {
+      setupMockHttpResponse(200, []);
+      const client = await makeClient();
+      await client.listAgentLocations('b1');
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: '/api/agents/location?beaconId=b1',
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('spawnSpawn posts to /api/spawn', async () => {
+      setupMockHttpResponse(200, { spawnId: 's1', status: 'spawning' });
+      const client = await makeClient();
+      const result = await client.spawnSpawn({ targetBeaconId: 'b1' });
+      expect(result.spawnId).toBe('s1');
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ path: '/api/spawn', method: 'POST' }),
+        expect.any(Function)
+      );
+    });
+
+    it('getSpawn fetches /api/spawn/:beaconId/:spawnId', async () => {
+      setupMockHttpResponse(200, { spawnId: 's1', status: 'running' });
+      const client = await makeClient();
+      const result = await client.getSpawn('b1', 's1');
+      expect(result.status).toBe('running');
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ path: '/api/spawn/b1/s1' }),
+        expect.any(Function)
+      );
+    });
+
+    it('listSpawns passes status query', async () => {
+      setupMockHttpResponse(200, []);
+      const client = await makeClient();
+      await client.listSpawns('b1', 'running');
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ path: '/api/spawn/b1?status=running' }),
+        expect.any(Function)
+      );
+    });
+
+    it('terminateSpawn sends DELETE to /api/spawn/:beaconId/:spawnId', async () => {
+      setupMockHttpResponse(200, { success: true });
+      const client = await makeClient();
+      await client.terminateSpawn('b1', 's1');
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: '/api/spawn/b1/s1',
+          method: 'DELETE',
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('returns empty/null when coordinator is not trusted', async () => {
+      resetCoordinatorTrust();
+      const client = await makeClient();
+      expect(await client.listBeacons()).toEqual([]);
+      expect(await client.listAgentLocations('b1')).toEqual([]);
+      expect(await client.spawnSpawn({ targetBeaconId: 'b1' })).toBeNull();
+      expect(await client.getSpawn('b1', 's1')).toBeNull();
+      expect(await client.listSpawns('b1')).toEqual([]);
+      expect(await client.terminateSpawn('b1', 's1')).toBeNull();
+    });
+  });
 });

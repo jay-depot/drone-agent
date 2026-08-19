@@ -96,3 +96,23 @@ Phase 1 (client methods) → Phase 2 (beacon routes) → Phase 4 (agent tools) �
 
 - `drone-gateway` `coordinatorUrl` — separate legitimate config, untouched.
 - `drone-agent/test/fixtures/swarm.ts` `coordinatorUrl` — integration-test harness hitting the coordinator directly in the isolated Docker swarm; fine as-is.
+
+## Status — COMPLETE (executed 2026-08-19)
+
+All six phases implemented and validated.
+
+### What was done
+- **Phase 1** — Added 6 typed, trust-gated methods to `CoordinatorClient`: `listBeacons`, `listAgentLocations`, `spawnSpawn`, `getSpawn`, `listSpawns`, `terminateSpawn`. Each calls the coordinator via the TLS-aware `cfetch` wrapper and gates on `coordinatorTrusted()`.
+- **Phase 2** — New `drone-beacon/src/routes/coordinator.ts` with `/coordinator/*` proxy routes: `GET /coordinator/beacons`, `GET /coordinator/agents/location?beaconId=`, `POST /coordinator/spawn`, `GET /coordinator/spawn/:beaconId/:spawnId`, `GET /coordinator/spawn/:beaconId?status=`, `DELETE /coordinator/spawn/:beaconId/:spawnId`. Pure pass-through (no reshaping). 503 when no CoordinatorClient or coordinator unavailable; the beacon is the sole trust gate. Registered in `routes/index.ts`.
+- **Phase 3** — Removed the dead `coordinatorUrl` from `SwarmConfig` (swarm/config.ts) and `DroneSwarmConfig` (drone-core/config-types.ts); swarm plugin stopped reading it. Confirmed it was never in the config schema. No remaining references in the swarm plugin.
+- **Phase 4** — Retargeted the 6 agent coordinator tools (`tools-coordinator.ts`) from `coordinatorUrl` to the beacon `baseUrl`, hitting `${baseUrl}/coordinator/...`. `handleCoordinatorResponse`/`handleCoordinatorError` wrappers kept.
+- **Phase 5** — Updated `swarm-spawn.test.ts` (removed `coordinatorUrl`, asserted beacon `/coordinator/*` URLs + 503 mapping). New `drone-beacon/test/coordinator-proxy.test.ts` (beacon route pass-through, 503). Added CoordinatorClient proxy-method tests (correct `/api/*` paths, trust-gated empty/null).
+- **Phase 6** — Added a note to `docs/agents/swarm-plugin.md` that all coordinator traffic now proxies through the beacon and `coordinatorUrl` is gone.
+
+### Validation
+- `pnpm -r run build`, `pnpm typecheck`, `pnpm lint:eslint`, `pnpm lint:prettier` all pass.
+- Fast test suite: 134 files / 2044 tests passed (9 skipped, LSP smoke).
+- No remaining `coordinatorUrl` references in the swarm plugin (gateway + integration-test fixtures untouched, as planned).
+
+### Deferred / out of scope (unchanged)
+- Gateway `coordinatorUrl` (separate legitimate config) and integration-test fixtures remain as-is.

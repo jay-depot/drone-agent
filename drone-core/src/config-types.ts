@@ -239,8 +239,6 @@ export type DroneSwarmConfig = {
   beaconPort?: number;
   /** Whether to use HTTPS when connecting to the beacon. */
   beaconUseHttps?: boolean;
-  /** URL of the drone-coordinator instance for remote spawn and info tools. */
-  coordinatorUrl?: string;
   /** Optional session ID override for this agent. */
   sessionId?: string;
 };

@@ -10,6 +10,8 @@ The `swarm` plugin connects to a `drone-beacon` instance to provide swarm-wide p
 - Registers wiki and coordinator tools using the list/mount pattern (3 meta-tools: `list_tools`, `mount_tool`, `unmount_tool`)
 - Pushes conversation events to the coordinator
 
+> **Coordinator traffic proxies through the beacon.** The agent never talks to the coordinator directly. All coordinator reads and mutations (session import/list, spawn, list beacons/agents, terminate spawn) hit the **beacon's** `/coordinator/*` proxy routes, which forward to the coordinator via the beacon's trust-gated `CoordinatorClient`. This keeps the beacon as the sole coordinator-facing trust gate (TOFU fingerprint + beacon approval). The now-removed `coordinatorUrl` agent config is gone — the swarm plugin only needs `beaconHost`/`beaconPort`.
+
 ## Coordinator TLS trust and certificate rotation
 
 When the beacon connects to the coordinator over HTTPS, it pins the coordinator's TLS certificate fingerprint (Trust-On-First-Use). On the first connection the observed fingerprint is recorded as _pending_; the beacon does not trust the coordinator for swarm sync until the user confirms the fingerprint matches the coordinator's reported fingerprint. See the interactive confirmation flow below.
