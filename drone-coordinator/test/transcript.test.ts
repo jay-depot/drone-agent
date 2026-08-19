@@ -229,6 +229,36 @@ describe('buildSessionTranscript', () => {
     expect(transcript).toContain('[user] from blob');
   });
 
+  it('resolves every blob payload (not just the first)', async () => {
+    const events = [1, 2, 3].map(n => ({
+      id: `e${n}`,
+      sessionId: 'ss1',
+      correlationId: `c${n}`,
+      type: 'userMessage',
+      payload: `blob:ss1/e${n}/abc`,
+      metadata: null,
+      createdAt: n,
+    }));
+    const resolved: string[] = [];
+    const transcript = await buildSessionTranscript(
+      session,
+      events,
+      async ref => {
+        resolved.push(ref);
+        return JSON.stringify({
+          kind: 'userMessage',
+          content: `from ${ref}`,
+        });
+      }
+    );
+    expect(resolved).toHaveLength(3);
+    expect(resolved).toContain('blob:ss1/e1/abc');
+    expect(resolved).toContain('blob:ss1/e2/abc');
+    expect(resolved).toContain('blob:ss1/e3/abc');
+    expect(transcript).toContain('[user] from blob:ss1/e1/abc');
+    expect(transcript).toContain('[user] from blob:ss1/e3/abc');
+  });
+
   it('skips events with unparseable payloads', async () => {
     const events = [
       {

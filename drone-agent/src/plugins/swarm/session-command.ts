@@ -50,7 +50,7 @@ async function resolveContextWindowTokens(
  */
 async function handleList(
   ctx: DroneSlashCommandContext,
-  coordinatorUrl: string | undefined,
+  baseUrl: string | undefined,
   currentSessionId: string
 ): Promise<boolean> {
   const args = ctx.args.slice(1);
@@ -69,10 +69,8 @@ async function handleList(
     }
   }
 
-  if (!coordinatorUrl) {
-    ctx.logger.warn(
-      'coordinatorUrl not configured. Set swarm.coordinatorUrl in your config.'
-    );
+  if (!baseUrl) {
+    ctx.logger.warn('Beacon URL not configured.');
     return true;
   }
 
@@ -81,9 +79,7 @@ async function handleList(
   if (status) params.set('status', status);
 
   try {
-    const res = await fetch(
-      `${coordinatorUrl}/api/sessions?${params.toString()}`
-    );
+    const res = await fetch(`${baseUrl}/sessions?${params.toString()}`);
     if (!res.ok) {
       ctx.logger.warn(`Failed to list sessions: ${res.status}`);
       return true;
@@ -104,7 +100,8 @@ async function handleList(
     }
     const lines = sessions.map(s => {
       const created = new Date(s.createdAt).toISOString();
-      return `${s.id.padEnd(24)} ${(s.personaId ?? 'none').padEnd(16)} ${s.status.padEnd(10)} ${created}`;
+      const updated = new Date(s.updatedAt).toISOString();
+      return `${s.id.padEnd(24)} ${(s.personaId ?? 'none').padEnd(16)} ${s.status.padEnd(10)} ${created} ${updated}`;
     });
     ctx.logger.info(`Sessions (excluding current):\n${lines.join('\n')}`);
   } catch (err) {
@@ -122,7 +119,7 @@ async function handleList(
  */
 async function handleImport(
   ctx: DroneSlashCommandContext,
-  coordinatorUrl: string | undefined,
+  baseUrl: string | undefined,
   currentSessionId: string,
   config: DroneSessionImportConfig
 ): Promise<boolean> {
@@ -137,6 +134,16 @@ async function handleImport(
     return true;
   }
 
+  // Parse `--from N` (1-indexed resume point) from the trailing args.
+  let from = 1;
+  for (let i = 2; i < ctx.args.length; i++) {
+    if (ctx.args[i] === '--from') {
+      const value = Number(ctx.args[i + 1]);
+      if (Number.isFinite(value) && value > 0) from = Math.floor(value);
+      i++;
+    }
+  }
+
   const llm = ctx.engine.getCapability<DroneLlmCapability>('llm');
   if (!llm) {
     ctx.logger.warn('LLM provider broker is not available.');
@@ -149,7 +156,7 @@ async function handleImport(
 
   let transcript: string;
   try {
-    transcript = await fetchTranscript(coordinatorUrl, sessionId);
+    transcript = await fetchTranscript(baseUrl, sessionId);
   } catch (err) {
     ctx.logger.warn(`Failed to fetch transcript: ${err}`);
     return true;
@@ -165,16 +172,28 @@ async function handleImport(
   const provider = llm.getActiveProvider();
   const model = llm.getModel();
 
+  if (from > chunks.length) {
+    ctx.logger.warn(
+      `--from ${from} is out of range: session ${sessionId} was split into ${chunks.length} chunk(s).`
+    );
+    return true;
+  }
+
   ctx.logger.info(
-    `Importing session ${sessionId} in ${chunks.length} chunk(s) (${tokenBudget} tokens each)...`
+    `Importing session ${sessionId} in ${chunks.length} chunk(s) (${tokenBudget} tokens each), resuming from chunk ${from}...`
   );
 
-  for (let i = 0; i < chunks.length; i++) {
+  for (let i = from - 1; i < chunks.length; i++) {
     let summary: string;
     try {
       summary = await summarizeChunk(provider, model, chunks[i], tokenBudget);
     } catch (err) {
-      ctx.logger.warn(`Failed to summarize chunk ${i + 1}: ${err}`);
+      ctx.logger.warn(
+        `Failed to summarize chunk ${i + 1}: ${err}\n` +
+          `Import aborted: imported chunks ${from}..${i} of ${chunks.length}. ` +
+          `Chunks ${i + 1}..${chunks.length} were NOT imported.\n` +
+          `Resume with: /swarm-session import ${sessionId} --from ${i + 1}`
+      );
       return true;
     }
     injectChunk(ctx.sessionManager, summary, sessionId, i, chunks.length);
@@ -192,7 +211,7 @@ async function handleImport(
   }
 
   ctx.logger.info(
-    `Imported ${chunks.length} chunk(s) from session ${sessionId}.`
+    `Imported chunks ${from}..${chunks.length} from session ${sessionId}.`
   );
   return true;
 }
@@ -201,7 +220,7 @@ async function handleImport(
  * Create the `/swarm-session` slash command.
  */
 export function createSwarmSessionCommand(
-  coordinatorUrl: string | undefined,
+  baseUrl: string | undefined,
   currentSessionId: string,
   config: DroneSessionImportConfig
 ): DroneSlashCommand {
@@ -212,10 +231,10 @@ export function createSwarmSessionCommand(
     handler: async ctx => {
       const subcommand = ctx.args[0] ?? '';
       if (subcommand === 'list') {
-        return handleList(ctx, coordinatorUrl, currentSessionId);
+        return handleList(ctx, baseUrl, currentSessionId);
       }
       if (subcommand === 'import') {
-        return handleImport(ctx, coordinatorUrl, currentSessionId, config);
+        return handleImport(ctx, baseUrl, currentSessionId, config);
       }
       ctx.logger.warn(
         'Unknown swarm-session command. Try: /swarm-session list, /swarm-session import <sessionId>'

@@ -222,6 +222,7 @@ export type {
   DroneWorkflowResult,
   DroneWorkflowRunReturn,
   DroneWorkflow,
+  DroneSlashCommandSessionManager,
   DroneSlashCommandContext,
   DroneSlashCommand,
 } from './plugin-system.js';

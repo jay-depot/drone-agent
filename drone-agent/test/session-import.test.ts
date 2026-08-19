@@ -142,22 +142,22 @@ describe('fetchTranscript', () => {
     vi.unstubAllGlobals();
   });
 
-  it('fetches the transcript from the coordinator', async () => {
+  it('fetches the transcript from the beacon', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ transcript: '--- Turn 1 ---\n[user] hi' }),
     });
     vi.stubGlobal('fetch', mockFetch);
-    const result = await fetchTranscript('http://localhost:3456', 'ss1');
+    const result = await fetchTranscript('http://localhost:3457', 'ss1');
     expect(result).toContain('[user] hi');
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:3456/api/sessions/ss1/transcript'
+      'http://localhost:3457/sessions/ss1/transcript'
     );
   });
 
-  it('throws when coordinatorUrl is not configured', async () => {
+  it('throws when baseUrl is not configured', async () => {
     await expect(fetchTranscript(undefined, 'ss1')).rejects.toThrow(
-      'coordinatorUrl not configured'
+      'Beacon URL not configured'
     );
   });
 
@@ -167,7 +167,7 @@ describe('fetchTranscript', () => {
       vi.fn().mockResolvedValue({ ok: false, status: 404 })
     );
     await expect(
-      fetchTranscript('http://localhost:3456', 'ss1')
+      fetchTranscript('http://localhost:3457', 'ss1')
     ).rejects.toThrow('Failed to fetch transcript: 404');
   });
 
@@ -179,7 +179,7 @@ describe('fetchTranscript', () => {
         .mockResolvedValue({ ok: true, json: async () => ({ transcript: '' }) })
     );
     await expect(
-      fetchTranscript('http://localhost:3456', 'ss1')
+      fetchTranscript('http://localhost:3457', 'ss1')
     ).rejects.toThrow('Session has no transcript to import.');
   });
 });

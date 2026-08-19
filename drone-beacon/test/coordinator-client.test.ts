@@ -791,4 +791,68 @@ describe('Coordinator Client', () => {
       expect(mockRequest).toHaveBeenCalled();
     });
   });
+
+  describe('getSessionTranscript', () => {
+    it('should fetch a session transcript from the coordinator', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+
+      setupMockHttpResponse(200, {
+        session: { id: 'ss1', personaId: 'coder', status: 'ended' },
+        transcript: '# Session ss1\n\n--- Turn 1 ---\n[user] hello',
+      });
+
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+
+      const result = await client.getSessionTranscript('ss1');
+      expect(result?.session.id).toBe('ss1');
+      expect(result?.transcript).toContain('[user] hello');
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: '/api/sessions/ss1/transcript',
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('should return null when the transcript endpoint errors', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+
+      setupMockHttpResponse(404, {});
+
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+
+      const result = await client.getSessionTranscript('missing');
+      expect(result).toBeNull();
+    });
+  });
 });

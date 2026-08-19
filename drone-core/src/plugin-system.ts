@@ -256,6 +256,25 @@ export type DroneWorkflow = {
 // ── Slash command types ────────────────────────────────────────────
 
 /**
+ * The subset of the session manager a slash-command handler receives.
+ * Enough to inject synthetic messages, tool-call/result pairs, and read
+ * the current user message. Used by `DroneSlashCommandContext` and the TUI
+ * host so both construct the same contract.
+ */
+export type DroneSlashCommandSessionManager = {
+  appendUserMessage: (message: string) => void;
+  appendAssistantMessage: (
+    content: string,
+    toolCalls?: DroneToolCall[]
+  ) => void;
+  appendToolResult: (
+    toolName: string,
+    content: string,
+    toolCallId?: string
+  ) => void;
+};
+
+/**
  * Context passed to a slash command handler. Bundles the host-side
  * services a handler needs (engine for tool execution/capabilities,
  * conversation for model switching, session manager, and a logger)
@@ -360,18 +379,7 @@ export type DroneSlashCommandContext = {
     disableDebugSubsystem: (name: string) => void;
   };
   /** Session manager for appending synthetic messages. */
-  sessionManager?: {
-    appendUserMessage: (message: string) => void;
-    appendAssistantMessage: (
-      content: string,
-      toolCalls?: DroneToolCall[]
-    ) => void;
-    appendToolResult: (
-      toolName: string,
-      content: string,
-      toolCallId?: string
-    ) => void;
-  };
+  sessionManager?: DroneSlashCommandSessionManager;
   /** Request the host to exit (for /exit, /quit). */
   exit?: () => void;
   /** Host-provided help display function (TUI passes its printHelp, CLI passes its own). */

@@ -1,24 +1,8 @@
-import type { DroneChatMessage, DroneLlmProvider } from 'drone-core';
-
-/**
- * The subset of the session manager a slash-command handler receives.
- * Enough to inject a synthetic tool-call/result pair.
- */
-export type SessionImportSessionManager = {
-  appendAssistantMessage: (
-    content: string,
-    toolCalls?: Array<{
-      id?: string;
-      name: string;
-      arguments: Record<string, unknown>;
-    }>
-  ) => void;
-  appendToolResult: (
-    toolName: string,
-    content: string,
-    toolCallId?: string
-  ) => void;
-};
+import type {
+  DroneChatMessage,
+  DroneLlmProvider,
+  DroneSlashCommandSessionManager,
+} from 'drone-core';
 
 /**
  * System prompt for summarizing an imported session chunk. Unlike
@@ -55,16 +39,14 @@ export const SESSION_IMPORT_TOOL = 'session_import';
  * Returns the transcript string, or throws on failure.
  */
 export async function fetchTranscript(
-  coordinatorUrl: string | undefined,
+  baseUrl: string | undefined,
   sessionId: string
 ): Promise<string> {
-  if (!coordinatorUrl) {
-    throw new Error(
-      'coordinatorUrl not configured. Set swarm.coordinatorUrl in your config.'
-    );
+  if (!baseUrl) {
+    throw new Error('Beacon URL not configured.');
   }
   const res = await fetch(
-    `${coordinatorUrl}/api/sessions/${encodeURIComponent(sessionId)}/transcript`
+    `${baseUrl}/sessions/${encodeURIComponent(sessionId)}/transcript`
   );
   if (!res.ok) {
     throw new Error(`Failed to fetch transcript: ${res.status}`);
@@ -156,7 +138,7 @@ export async function summarizeChunk(
  * first) and letting compaction re-summarize them as the session grows.
  */
 export function injectChunk(
-  sessionManager: SessionImportSessionManager,
+  sessionManager: DroneSlashCommandSessionManager,
   summary: string,
   sessionId: string,
   index: number,

@@ -18,6 +18,7 @@ Address seven issues found while reviewing the `feat/swarm-session-import` branc
 ## Items
 
 ### Item 1 — Proxy session data through the beacon (LOCKED)
+
 - Rework the session-import path so the AGENT never talks directly to the coordinator; it proxies through the beacon, as everything else does.
 - Transcript building STAYS in the coordinator (the existing `GET /api/sessions/:id/transcript` endpoint). The beacon just forwards raw JSON.
 - `coordinatorUrl` direct usage by the session feature goes away.
@@ -34,11 +35,13 @@ Address seven issues found while reviewing the `feat/swarm-session-import` branc
 - **Note for later (OUT OF SCOPE for this branch):** the pre-existing direct-coordinator tools in `tools-coordinator.ts` (spawn, list beacons, list agents, terminate spawn) still hit `coordinatorUrl` directly — they should also be proxied through the beacon in a later refactor.
 
 ### Item 2 — Make `llm` an optional dependency of the swarm plugin
+
 - `swarm/index.ts:57` currently declares `{ id: 'llm' }` as REQUIRED. The plugin engine throws at enable time if a required dependency is disabled, which means the entire swarm plugin fails to load — even for `/swarm-session list` (which needs no LLM).
 - The `import` handler resolves the LLM via `ctx.engine.getCapability('llm')` (session-command.ts:140), NOT `registration.request('llm')`. `getCapability` is not gated on declared deps, and the handler already guards `if (!llm)`.
 - **Fix:** change `{ id: 'llm' }` → `{ id: 'llm', optional: true }`. `list` works without the LLM broker; `import` degrades gracefully via the existing guard.
 
 ### Item 3 — Test the import success path
+
 - `session-command.test.ts` only covers error/guard paths; the success path of `handleImport` (chunk loop, per-chunk `runHooks('onAfterToolCall')`, final success log) is untested. The test harness's `getCapability` returns `undefined`, so import bails at the LLM guard.
 - **Add tests in `session-command.test.ts`:**
   - Extend `makeContext` to inject a mock `DroneLlmCapability` (getActiveProvider → provider with getContextWindowInfo, getModel → 'model-x').
@@ -52,6 +55,7 @@ Address seven issues found while reviewing the `feat/swarm-session-import` branc
   - Fold in item 1 change: pass `baseUrl` not `coordinatorUrl`; assert fetch URLs are `${baseUrl}/sessions...` and `${baseUrl}/sessions/:id/transcript` (verifies proxying end-to-end).
 
 ### Item 4 — Interface duplication (3 copies of the sessionManager subset shape)
+
 - Three structurally-identical-but-unrelated definitions of the slash-command sessionManager subset:
   1. `DroneSlashCommandContext.sessionManager` (drone-core/plugin-system.ts:363-371) — uses `DroneToolCall[]`.
   2. `SessionImportSessionManager` (drone-agent/src/plugins/swarm/session-import.ts:7-17) — hand-rolled toolCalls shape.
@@ -60,11 +64,13 @@ Address seven issues found while reviewing the `feat/swarm-session-import` branc
 - **Fix (Option A):** extract a single named exported type `DroneSlashCommandSessionManager` in `drone-core/src/plugin-system.ts`, use it for `DroneSlashCommandContext.sessionManager`, re-export it; update `session-import.ts` and `tui/types.ts` to reference it. `interactive.ts`/`app.tsx` wiring unchanged (structural typing).
 
 ### Item 5 — Sequential blob resolution in the coordinator transcript builder
+
 - `transcript.ts:158-163` serializes `parseEvent`/`resolveBlob` per event with `await` in a for loop. The `/log` endpoint (`swarm.ts:173-182`) already parallelizes with `Promise.all`.
 - **Fix:** parallelize the parse loop with `Promise.all(events.map(evt => parseEvent(evt, resolveBlob)))` + filter nulls. `Promise.all` preserves order; grouping assigns turn numbers so transcript order is unchanged. Behavior-neutral latency win.
 - **Tests:** existing `transcript.test.ts` passes unchanged. Add a small test asserting all blob events resolve (resolver called for each).
 
 ### Item 6 — `handleImport` partial-import on mid-loop failure
+
 - Currently: `summarizeChunk` throw on chunk k → warn "Failed to summarize chunk k" + `return true`, leaving chunks 1..k-1 silently injected, no resume hint, and the success line never fires.
 - **Fix (stop + tell user what got in + stateless resume):**
   - Add `--from N` (1-indexed) to `/swarm-session import <sessionId> [--from N]`.
@@ -77,17 +83,20 @@ Address seven issues found while reviewing the `feat/swarm-session-import` branc
   - Tests (fold into item 3): assert the resume hint in the failure message; assert `--from N` skips the first N-1 chunks and `injectChunk` gets original indices.
 
 ### Item 7 — List output omits `updatedAt`
+
 - `handleList` (session-command.ts:93-99) prints id, persona, status, createdAt only — omits updatedAt. The plan intended (id, persona, status, createdAt/updatedAt). The doc's list section doesn't enumerate columns (no active doc/code mismatch, but intent was updatedAt).
 - **Fix:** add `updatedAt` to the list output (after createdAt), and update `docs/agents/session-import.md` list section to explicitly enumerate the columns (id, persona, status, createdAt, updatedAt) so it can't drift again.
 - `updatedAt` is useful: shows when last touched, more actionable than createdAt for deciding what to resume.
 
 ## Execution order
+
 1. Item 4 first (type extraction — foundation others reference).
 2. Item 1 (beacon proxy + agent URL source change) — touches the command signature used by items 3 and 6.
 3. Items 2, 5, 7 (independent small fixes).
 4. Items 6 (logic) and 3 (tests, folding in 1 & 6 URL/flag behavior).
 
 ## Validation criteria
+
 - LSP passes (typescript, yaml, json, dockerfile, css, html) with zero errors.
 - `pnpm -r run lint`, `pnpm -r run build`, `pnpm -r run typecheck` all pass with zero errors.
 - Fast test suite (`pnpm -r run test`) passes.
@@ -95,4 +104,26 @@ Address seven issues found while reviewing the `feat/swarm-session-import` branc
 - Manual smoke: `/swarm-session list` shows both timestamps and excludes the current session; `/swarm-session import <id>` injects N chunks as N separate turns; a failed chunk produces the abort + resume message and `--from k` resumes.
 
 ## Deferred (explicitly)
+
 - Proxying the pre-existing `tools-coordinator.ts` direct-coordinator tools through the beacon (separate refactor).
+
+## Status — COMPLETE (executed 2026-08-19)
+
+All seven items implemented and validated.
+
+### What was done
+- **Item 4** — Extracted `DroneSlashCommandSessionManager` type in `drone-core/src/plugin-system.ts`, re-exported from `index.ts`, referenced by `DroneSlashCommandContext`, `session-import.ts`, and `tui/types.ts`. Removed the duplicated `SessionImportSessionManager` and the inline TUI shape.
+- **Item 1** — Agent session-import path now proxies through the beacon: new `drone-beacon/src/routes/sessions.ts` with `GET /sessions?limit=&status=` and `GET /sessions/:id/transcript`; added trust-gated `CoordinatorClient.getSessionTranscript`; `createSwarmSessionCommand`/`fetchTranscript`/`handleList` now take the beacon `baseUrl` and hit `${baseUrl}/sessions...` (not `coordinatorUrl`). Transcript building stays in the coordinator.
+- **Item 2** — `{ id: 'llm' }` → `{ id: 'llm', optional: true }` in swarm plugin deps.
+- **Item 5** — Parallelized blob resolution in `buildSessionTranscript` with `Promise.all` + filter; added a test asserting all blobs resolve.
+- **Item 7** — `handleList` now prints `updatedAt` (id, persona, status, createdAt, updatedAt); doc updated to enumerate the columns.
+- **Item 6** — Added `--from N` (1-indexed, stateless) resume to `/swarm-session import`; abort message reports imported/not-imported chunk ranges and the exact resume command; out-of-range `--from` rejected; loop keeps original chunk indices.
+- **Item 3** — Added import success-path tests (N chunks → N turns, `onAfterToolCall` N-1 between chunks, LLM-broker bail, mid-loop abort with resume hint, `--from` resume/out-of-range). Updated `session-import.test.ts` for the baseUrl behavior. Added beacon `/sessions` route tests and `CoordinatorClient.getSessionTranscript` tests.
+
+### Validation
+- `pnpm -r run build`, `pnpm typecheck`, `pnpm lint:eslint`, `pnpm lint:prettier` all pass.
+- Fast test suite: 133 files / 2026 tests passed (9 skipped, LSP smoke).
+- LSP: zero errors on changed files (remaining workspace hints are pre-existing).
+
+### Out of scope (unchanged)
+- The pre-existing `tools-coordinator.ts` direct-coordinator tools (spawn, list beacons, list agents, terminate) still hit `coordinatorUrl` directly — planned in `plan-swarm-tools-coordinator-refactor`.

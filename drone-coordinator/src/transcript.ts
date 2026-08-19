@@ -138,11 +138,11 @@ export async function buildSessionTranscript(
   events: SwarmEvent[],
   resolveBlob: (ref: string) => Promise<string | null>
 ): Promise<string> {
-  const parsed: ParsedEvent[] = [];
-  for (const evt of events) {
-    const event = await parseEvent(evt, resolveBlob);
-    if (event) parsed.push(event);
-  }
+  // Resolve blob payloads in parallel; Promise.all preserves input order so
+  // the turn grouping below stays chronological.
+  const parsed = (
+    await Promise.all(events.map(evt => parseEvent(evt, resolveBlob)))
+  ).filter((event): event is ParsedEvent => event !== null);
 
   // Group by correlationId, preserving chronological order. Events without
   // a correlationId each become their own turn.

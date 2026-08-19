@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
-import type { DroneReasoningLevel } from 'drone-core';
+import type {
+  DroneReasoningLevel,
+  DroneSlashCommandSessionManager,
+} from 'drone-core';
 /**
  * Shared types for the Ink-based TUI.
  */
@@ -143,22 +146,7 @@ export type DroneTuiOptions = {
     enableDebugSubsystem: (name: string) => void;
     disableDebugSubsystem: (name: string) => void;
   };
-  sessionManager: {
-    appendUserMessage: (message: string) => void;
-    appendAssistantMessage: (
-      content: string,
-      toolCalls?: Array<{
-        id?: string;
-        name: string;
-        arguments: Record<string, unknown>;
-      }>
-    ) => void;
-    appendToolResult: (
-      toolName: string,
-      content: string,
-      toolCallId?: string
-    ) => void;
-  };
+  sessionManager: DroneSlashCommandSessionManager;
   model: string;
   logger: {
     info: (message: string) => void;

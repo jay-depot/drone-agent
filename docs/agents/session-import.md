@@ -6,12 +6,12 @@ The `swarm` plugin provides a `/swarm-session` slash command for recreating the 
 
 ```
 /swarm-session list [--limit N] [--status S]
-/swarm-session import <sessionId>
+/swarm-session import <sessionId> [--from N]
 ```
 
 ### `/swarm-session list`
 
-Lists recent swarm sessions from the coordinator, **excluding the current session**. Defaults to 10 sessions across all statuses.
+Lists recent swarm sessions from the coordinator, **excluding the current session**. Defaults to 10 sessions across all statuses. Each line shows `id`, `persona`, `status`, `createdAt`, and `updatedAt`.
 
 - `--limit N` — number of sessions to show (default 10)
 - `--status S` — filter by status (`active`, `stale`, `ended`, `processing`, `processed`)
@@ -25,6 +25,7 @@ Key behaviors:
 - **Each chunk is its own turn**, tail-inserted, and unprotected — so as the current session grows, safety-trim drops the oldest imported chunks first, and compaction can re-summarize them like any other content.
 - **Compaction fires between chunks** (`onAfterToolCall` runs after each chunk), so the imported context stays under the safety-trim budget as much as possible.
 - **Self-import guard**: importing the current session into itself is rejected.
+- **`--from N` stateless resume**: if a chunk fails to summarize mid-import, the import aborts and prints which chunks were imported plus a `--from N` resume command. Because chunking is deterministic, re-running with `--from N` skips the already-imported chunks and resumes from the failed one. If `N` is out of range the import is rejected.
 - **Larger models get more detailed summaries**: the per-chunk token budget is a percentage of the resolved context window.
 
 ## Transcript format

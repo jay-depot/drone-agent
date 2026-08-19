@@ -54,7 +54,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       dependencies: [
         { id: 'persona' },
         { id: 'config' },
-        { id: 'llm' },
+        { id: 'llm', optional: true },
         { id: 'skills', optional: true },
         { id: 'self-improvement', optional: true },
       ],
@@ -188,11 +188,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
         chunkTokenBudgetPercent: 12,
       };
       registration.registerSlashCommand(
-        createSwarmSessionCommand(
-          coordinatorUrl,
-          sessionId,
-          sessionImportConfig
-        )
+        createSwarmSessionCommand(baseUrl, sessionId, sessionImportConfig)
       );
 
       // ── Tools ───────────────────────────────────────────────────────────

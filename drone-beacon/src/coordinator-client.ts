@@ -113,6 +113,10 @@ export interface CoordinatorClient {
     query: Record<string, string>
   ): Promise<{ sessions: any[]; count: number }>;
   getSessionLog(sessionId: string): Promise<any>;
+  getSessionTranscript(sessionId: string): Promise<{
+    session: any;
+    transcript: string;
+  } | null>;
   processSession(sessionId: string): Promise<any>;
   completeSessionProcessing(
     sessionId: string,
@@ -894,6 +898,28 @@ export function createCoordinatorClient(
         return await res.json();
       } catch (err) {
         logger.warn(`Failed to get session log: ${err}`);
+        return null;
+      }
+    },
+
+    async getSessionTranscript(sessionId: string): Promise<{
+      session: any;
+      transcript: string;
+    } | null> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
+      try {
+        const res = await cfetch(
+          `${baseUrl}/api/sessions/${sessionId}/transcript`
+        );
+        if (!res.ok) {
+          logger.warn(`Failed to get session transcript: ${res.status}`);
+          return null;
+        }
+        return (await res.json()) as { session: any; transcript: string };
+      } catch (err) {
+        logger.warn(`Failed to get session transcript: ${err}`);
         return null;
       }
     },
