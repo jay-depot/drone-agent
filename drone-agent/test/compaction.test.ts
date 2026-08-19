@@ -1600,6 +1600,45 @@ describe('/compact slash command', () => {
     );
   });
 
+  it('compacts via /compact even when usage is below the soft threshold', async () => {
+    // Regression test for the manual-force bug: `maybeCompact` broke early on
+    // `usagePercent <= softThreshold` even when `force: true`, so `/compact`
+    // printed success but never compacted a session already under the soft
+    // threshold. Manual compaction must proceed regardless of current usage.
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 4; i++) {
+      sessionManager.appendUserMessage(`u${i}`);
+      sessionManager.appendAssistantMessage(`a${i}`);
+    }
+
+    // Very high soft threshold + large context window ⇒ usage stays well
+    // below the threshold, which is the exact condition that previously
+    // caused `/compact` to bail out before compacting anything.
+    const config = makeConfig({
+      softThresholdPercent: 99,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 4096,
+      chatResponses: [{ message: 'S1.' }, { message: 'S2.' }],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const handled = await runSlashCommand(capture, '/compact');
+    expect(handled).toBe(true);
+    expect(provider.__chatMock).toHaveBeenCalled();
+    expect(sessionManager.getSummaryTurns().length).toBeGreaterThan(0);
+  });
+
   it('compacts all via /compact --all', async () => {
     const sessionManager = createSessionManager();
     for (let i = 0; i < 6; i++) {

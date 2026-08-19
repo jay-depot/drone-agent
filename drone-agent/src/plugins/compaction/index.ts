@@ -204,7 +204,7 @@ async function maybeCompact(input: {
       contextWindowTokens,
     });
 
-    if (metrics.usagePercent <= softThreshold) {
+    if (!input.options.force && metrics.usagePercent <= softThreshold) {
       break;
     }
 
