@@ -713,11 +713,14 @@ describe('createCompactionPlugin', () => {
 
     await capability.forceEvaluate();
 
-    // 5 rounds = 10 non-summary turns. sliceSize 2 compacts 2 per round. With
-    // only 2 summary responses queued, the 3rd round gets an empty summary and
-    // breaks the loop.
-    expect(provider.__chatMock).toHaveBeenCalledTimes(3);
-    expect(sessionManager.getSummaryTurns()).toHaveLength(2);
+    // forceEvaluate caps at a single forced round (maxIterations: 1), so it
+    // compacts one slice and stops even though non-summary turns remain above
+    // the soft threshold.
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    expect(sessionManager.getSummaryTurns()).toHaveLength(1);
+    expect(
+      sessionManager.getTurns().filter(t => t.kind !== 'summary').length
+    ).toBeGreaterThan(0);
   });
 
   it('compacts the oldest normal turns after a summary already exists', async () => {
@@ -1598,6 +1601,56 @@ describe('/compact slash command', () => {
     expect(capture.logger.info).toHaveBeenCalledWith(
       expect.stringMatching(/Compacted oldest non-summary turns/)
     );
+  });
+
+  it('compacts via /compact exactly one full round', async () => {
+    // Regression test: /compact (forceEvaluate) must stop after exactly one
+    // forced slice instead of running the full convergence loop (which would
+    // slice-and-summarize until every non-summary turn was consumed).
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 10; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    // Enough responses that any full convergence run would eat far more than
+    // one round; we assert only one was used.
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [
+        { message: 'S1.' },
+        { message: 'S2.' },
+        { message: 'S3.' },
+        { message: 'S4.' },
+        { message: 'S5.' },
+      ],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const handled = await runSlashCommand(capture, '/compact');
+    expect(handled).toBe(true);
+
+    // /compact performs exactly one forced round.
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    // A summary was created, but non-summary turns remain (it did NOT converge
+    // to zero).
+    expect(sessionManager.getSummaryTurns()).toHaveLength(1);
+    expect(
+      sessionManager.getTurns().filter(t => t.kind !== 'summary').length
+    ).toBeGreaterThan(0);
   });
 
   it('compacts via /compact even when usage is below the soft threshold', async () => {

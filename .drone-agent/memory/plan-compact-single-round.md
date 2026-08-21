@@ -1,7 +1,6 @@
 ---
 key: plan-compact-single-round
-tags:
-  []
+tags: []
 created: 2026-08-19T03:27:52.501Z
 updated: 2026-08-19T03:27:52.501Z
 ---
@@ -17,6 +16,7 @@ After commit 2abaaf34 ("fix(compaction): /compact now forces compaction below th
 But plain `/compact` now over-compacts, looping through every slice until no non-summary turns remain. It must stop after exactly one forced slice. Any still-over-threshold remainder is left for automatic compaction (onBeforePrompt / onAfterToolCall hooks) on subsequent fires.
 
 ## Design
+
 Generalize `CompactionOptions` (drone-agent/src/plugins/compaction/index.ts) with `maxIterations?: number`:
 
 - Automatic hooks (`hookBody` for onBeforePrompt/onAfterToolCall) omit it -> loop bound stays MAX_COMPACTION_ITERATIONS = 5 (convergence loop behavior preserved).
@@ -29,30 +29,37 @@ Corner that is intentionally left as-is: if the single allowed iteration lands o
 ## Steps
 
 ### Step 1 — Add maxIterations option + cap the convergence loop
+
 File: drone-agent/src/plugins/compaction/index.ts
+
 - Extend `type CompactionOptions` with `maxIterations?: number;`
 - In `maybeCompact`, replace the fixed `iteration < MAX_COMPACTION_ITERATIONS` bound with `iteration < (input.options.maxIterations ?? MAX_COMPACTION_ITERATIONS)`.
 - `forceEvaluate` (inside createCompactionPlugin capability): pass `{ force: true, maxIterations: 1 }`.
 - `forceEvaluateAll`: pass `{ force: true, slicePercentOverride: 100, maxIterations: 1 }`.
-Dependency: none. Agent: coder.
+  Dependency: none. Agent: coder.
 
 ### Step 2 — Update existing forceEvaluate test + add regression test
+
 File: drone-agent/test/compaction.test.ts
-- Update test "exposes a forceEvaluate capability that triggers compaction" (currently expects provider.__chatMock called 3 times with 10 non-summary turns and 2 summaries). Now forceEvaluate caps at 1 → expect provider.__chatMock toHaveBeenCalledTimes(1), sessionManager.getSummaryTurns() toHaveLength(1), and non-summary turns remaining > 0.
-- Add new regression test: "/compact performs exactly one round" — seed many non-summary turns above threshold, run plain /compact, assert provider.__chatMock.toHaveBeenCalledTimes(1) and that non-summary turns remain afterward (i.e. it did NOT converge to zero).
+
+- Update test "exposes a forceEvaluate capability that triggers compaction" (currently expects provider.**chatMock called 3 times with 10 non-summary turns and 2 summaries). Now forceEvaluate caps at 1 → expect provider.**chatMock toHaveBeenCalledTimes(1), sessionManager.getSummaryTurns() toHaveLength(1), and non-summary turns remaining > 0.
+- Add new regression test: "/compact performs exactly one round" — seed many non-summary turns above threshold, run plain /compact, assert provider.\_\_chatMock.toHaveBeenCalledTimes(1) and that non-summary turns remain afterward (i.e. it did NOT converge to zero).
 - Verify existing tests still hold: /compact (called >0, summary created), /compact --all (exactly 1 call, 0 non-summary remaining), below-threshold /compact regression, and all convergence-loop tests (which use runBeforePrompt / automatic hooks and must still cap at 5).
-Dependency: Step 1. Agent: coder.
+  Dependency: Step 1. Agent: coder.
 
 ### Step 3 — Verification
+
 Run (from repo root):
+
 - pnpm build
 - pnpm typecheck
 - pnpm lint (eslint + prettier)
 - pnpm test (fast suite) — specifically drone-agent/test/compaction.test.ts
-All must pass with zero failures. No dead code / unused vars; new behavior covered by unit tests.
-Dependency: Steps 1-2. Agent: tester.
+  All must pass with zero failures. No dead code / unused vars; new behavior covered by unit tests.
+  Dependency: Steps 1-2. Agent: tester.
 
 ## Validation criteria
+
 - drone-agent/test/compaction.test.ts passes 0 failures, including:
   - updated forceEvaluate test expecting exactly 1 chat call + remaining non-summary turns
   - new "/compact performs exactly one full round" regression test
@@ -63,3 +70,13 @@ Dependency: Steps 1-2. Agent: tester.
 - pnpm -r run build passes.
 - pnpm test passes.
 - No dead code, no unused variables; comments only where they explain a non-obvious process (the maxIterations intent).
+
+## Execution summary (2026-08-21)
+
+Completed all three steps on branch `fix/compact-manual-force`.
+
+- **Step 1** — Added `maxIterations?: number` to `CompactionOptions` in `drone-agent/src/plugins/compaction/index.ts`. `maybeCompact` now bounds its convergence loop with `input.options.maxIterations ?? MAX_COMPACTION_ITERATIONS`. `forceEvaluate` passes `{ force: true, maxIterations: 1 }`; `forceEvaluateAll` passes `{ force: true, slicePercentOverride: 100, maxIterations: 1 }`. Automatic hooks (onBeforePrompt / onAfterToolCall) omit the option and keep the 5-iteration convergence behavior.
+- **Step 2** — Updated the `"exposes a forceEvaluate capability that triggers compaction"` test to expect exactly 1 chat call, 1 summary, and non-summary turns remaining. Added a new regression test `/compact performs exactly one full round` (seeds 20 non-summary turns above threshold, asserts `__chatMock` called exactly once and non-summary turns remain — i.e. no convergence to zero).
+- **Step 3** — Verified all pass with zero failures: `pnpm build`, `pnpm typecheck`, root `pnpm lint` (`pnpm -r run lint` is unavailable because no package defines a `lint` script), `pnpm test` (1989 passed, 9 integration tests skipped as designed), and specifically `drone-agent/test/compaction.test.ts` (43 tests passed). LSP diagnostics clean on both modified files (only a pre-existing hint in index.ts).
+
+All validation criteria met. Changes committed to `fix/compact-manual-force` branch.

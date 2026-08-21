@@ -230,5 +230,13 @@
   {
     "timestamp": "2026-08-18T02:02:30.221Z",
     "insight": "The ollama plugin constructs `new Ollama(...)` internally and offers the provider via `registration.offer`, so testing provider-level behavior (like the user-message injection) requires `vi.resetModules()` + `vi.doMock('ollama')` and re-importing the plugin via dynamic `import()`, then capturing the offered provider from the `offer` callback. The `offer` callback receives a `DroneLlmProvider` OBJECT (with a `.chat` method) — not a function — so the mock must capture `cap.provider` and call `provider.chat(...)`, not invoke `provider(...)` directly."
+  },
+  {
+    "timestamp": "2026-08-21T15:31:15.607Z",
+    "insight": "`pnpm -r run lint` is not available for the drone-agent monorepo: none of the workspace packages defines a `lint` script, so the recursive run fails with ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT. Use root `pnpm lint` instead (runs eslint + prettier across all packages, exit 0 on success). Similarly, `pnpm -r run test` fails on drone-core (no local test files); the correct entry point is root `pnpm test`."
+  },
+  {
+    "timestamp": "2026-08-21T15:31:15.609Z",
+    "insight": "When the compaction `force` option bypasses the soft-threshold early-bail, it also unintentionally inherits the full auto-convergence loop (up to 5 iterations), causing manual `/compact` to over-compact by slicing-and-summarizing until zero non-summary turns remain. Fix: add a `maxIterations?: number` option to CompactionOptions and default the loop bound to `maxIterations ?? MAX_COMPACTION_ITERATIONS`. Manual `forceEvaluate` and `forceEvaluateAll` pass `maxIterations: 1` so they perform exactly one forced slice; automatic hooks omit it to preserve convergence. `slicePercentOverride: 100` on forceEvaluateAll already makes a single round equivalent, so the maxIterations cap there is behaviorally neutral but makes intent explicit."
   }
 ]
