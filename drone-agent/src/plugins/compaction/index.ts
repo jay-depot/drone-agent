@@ -29,6 +29,8 @@ const SUMMARY_PREFIX = 'Conversation summary (compacted):\n';
 type CompactionOptions = {
   force?: boolean;
   slicePercentOverride?: number;
+  /** Cap on the number of slice-and-summarize rounds in a single maybeCompact call. */
+  maxIterations?: number;
 };
 
 function calculateFallbackContextWindow(
@@ -191,7 +193,9 @@ async function maybeCompact(input: {
   // Convergence loop: keep compacting until usage is below the soft threshold
   // or no more progress can be made.
   const MAX_COMPACTION_ITERATIONS = 5;
-  for (let iteration = 0; iteration < MAX_COMPACTION_ITERATIONS; iteration++) {
+  const maxIterations =
+    input.options.maxIterations ?? MAX_COMPACTION_ITERATIONS;
+  for (let iteration = 0; iteration < maxIterations; iteration++) {
     const turns = sessionManager.getTurns();
     if (turns.length === 0) {
       break;
@@ -204,7 +208,7 @@ async function maybeCompact(input: {
       contextWindowTokens,
     });
 
-    if (metrics.usagePercent <= softThreshold) {
+    if (!input.options.force && metrics.usagePercent <= softThreshold) {
       break;
     }
 
@@ -535,7 +539,7 @@ export function createCompactionPlugin(
             await runCompaction(
               context,
               registration.getConfig().systemPrompt,
-              { force: true }
+              { force: true, maxIterations: 1 }
             );
           } finally {
             context.compactionInFlight.value = false;
@@ -550,7 +554,11 @@ export function createCompactionPlugin(
             await runCompaction(
               context,
               registration.getConfig().systemPrompt,
-              { force: true, slicePercentOverride: 100 }
+              {
+                force: true,
+                slicePercentOverride: 100,
+                maxIterations: 1,
+              }
             );
           } finally {
             context.compactionInFlight.value = false;
