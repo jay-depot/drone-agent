@@ -41,9 +41,13 @@ export const searchPlugin: DronePlugin = {
     registration.registerTool({
       name: 'text',
       description:
-        'Regex/fixed-string search via ripgrep (falls back to grep). ' +
-        'Returns file, line, content. ' +
-        'Use mode="semantic" for semantic (vector) search when a beacon connection is available.',
+        'Workspace text search with two modes. ' +
+        'mode="regex" (default): literal/regex match via ripgrep — best when you know the exact identifier, string, or pattern. ' +
+        'mode="semantic": vector similarity search via the beacon — best when searching by concept or intent ' +
+        '(e.g. "where is rate limiting implemented?"), when you don\'t know the exact wording, ' +
+        'or when a regex search returned zero or too many matches. ' +
+        'Semantic results are file + score + snippet (no line numbers); follow up with file__read. ' +
+        'Semantic mode requires a beacon connection; without one it returns an explanatory note.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -207,10 +211,20 @@ export const searchPlugin: DronePlugin = {
           phase: 'header',
           render: async () =>
             `# Search Index\n` +
-            `The following directories are indexed for semantic search. ` +
-            `Use \`search__text\` with \`mode: "semantic"\` to query them ` +
-            `by meaning rather than regex.\n` +
-            `${dirList}\n`,
+            `The following directories are indexed for semantic (vector) search — query them by\n` +
+            `meaning rather than exact text:\n` +
+            `${dirList}\n` +
+            `\n` +
+            `When to use \`search__text\` with \`mode: "semantic"\` vs regex:\n` +
+            `- Use semantic when searching by concept, behavior, or intent (e.g. "where is\n` +
+            `  session expiry handled", "code that validates config") or when you don't know\n` +
+            `  the exact identifier/wording used in the code.\n` +
+            `- Use regex (default) when you know the exact symbol, string, or pattern.\n` +
+            `- If a regex search returns zero results or an overwhelming number, retry the\n` +
+            `  intent semantically.\n` +
+            `Semantic results return file, score, and a content snippet (no line numbers);\n` +
+            `read the file with \`file__read\` for full context. Lower \`minScore\` (e.g. 0.3) if\n` +
+            `too few results; raise it to filter noise.\n`,
         });
       } catch (err) {
         registration.logger.warn(

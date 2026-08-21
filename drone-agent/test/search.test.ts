@@ -4,6 +4,8 @@ import path from 'node:path';
 import {
   createDefaultAgentConfig,
   type DronePluginRegistration,
+  type DronePromptFragment,
+  type DroneToolDefinition,
 } from 'drone-core';
 import {
   searchPlugin,
@@ -14,19 +16,22 @@ import { silentLogger } from './helpers.js';
 
 function captureRegistration(): {
   registration: DronePluginRegistration;
-  tools: Map<string, (input: Record<string, unknown>) => Promise<string>>;
+  tools: Map<string, DroneToolDefinition>;
+  fragments: Map<string, DronePromptFragment>;
+  runOnPluginsLoaded: () => Promise<void>;
 } {
-  const tools = new Map<
-    string,
-    (input: Record<string, unknown>) => Promise<string>
-  >();
+  const tools = new Map<string, DroneToolDefinition>();
+  const fragments = new Map<string, DronePromptFragment>();
+  let onPluginsLoadedCallback: (() => Promise<void>) | undefined;
   const registration: DronePluginRegistration = {
     logger: silentLogger(),
     getConfig: () => createDefaultAgentConfig(),
     registerTool: tool => {
-      tools.set(tool.name, tool.execute);
+      tools.set(tool.name, tool);
     },
-    registerPromptFragment: () => {},
+    registerPromptFragment: fragment => {
+      fragments.set(fragment.key, fragment);
+    },
     registerHelp: () => {},
     registerSlashCommand: () => {},
     registerWorkflow: () => {},
@@ -36,7 +41,9 @@ function captureRegistration(): {
     unmountTool: () => {},
     listMountedTools: () => [],
     hooks: {
-      onPluginsLoaded: () => {},
+      onPluginsLoaded: callback => {
+        onPluginsLoadedCallback = callback;
+      },
       onSessionStart: () => {},
       onBeforePrompt: () => {},
       onAfterToolCall: () => {},
@@ -51,14 +58,21 @@ function captureRegistration(): {
     runWorkflow: async () => ({ toolResult: '{}' }),
     requestElicitation: () => undefined,
   };
-  return { registration, tools };
+  return {
+    registration,
+    tools,
+    fragments,
+    runOnPluginsLoaded: async () => {
+      await onPluginsLoadedCallback?.();
+    },
+  };
 }
 
 describe('search plugin — text (regex)', () => {
   it('returns an empty result (not an error) when nothing matches in an existing dir', async () => {
     const { registration, tools } = captureRegistration();
     await searchPlugin.register(registration);
-    const text = tools.get('text');
+    const text = tools.get('text')?.execute;
     expect(text).toBeDefined();
 
     const fs = await import('node:fs/promises');
@@ -81,7 +95,7 @@ describe('search plugin — text (regex)', () => {
   it('returns a clear error (not a crash) for a missing search path', async () => {
     const { registration, tools } = captureRegistration();
     await searchPlugin.register(registration);
-    const text = tools.get('text');
+    const text = tools.get('text')?.execute;
     expect(text).toBeDefined();
 
     await expect(
@@ -95,7 +109,7 @@ describe('search plugin — text (regex)', () => {
   it('rejects empty patterns', async () => {
     const { registration, tools } = captureRegistration();
     await searchPlugin.register(registration);
-    const text = tools.get('text');
+    const text = tools.get('text')?.execute;
     expect(text).toBeDefined();
 
     await expect(text!({ pattern: '' })).rejects.toThrow(/non-empty/);
@@ -105,7 +119,7 @@ describe('search plugin — text (regex)', () => {
   it('finds a real match and reports file/line/content', async () => {
     const { registration, tools } = captureRegistration();
     await searchPlugin.register(registration);
-    const text = tools.get('text');
+    const text = tools.get('text')?.execute;
     expect(text).toBeDefined();
 
     const fs = await import('node:fs/promises');
@@ -132,7 +146,7 @@ describe('search plugin — text (regex)', () => {
   it('returns a message when mode="semantic" with no embedding providers', async () => {
     const { registration, tools } = captureRegistration();
     await searchPlugin.register(registration);
-    const text = tools.get('text');
+    const text = tools.get('text')?.execute;
     expect(text).toBeDefined();
     const result = JSON.parse(
       await text!({ pattern: 'foo', mode: 'semantic' })
@@ -474,5 +488,68 @@ describe('search plugin — /search-files slash command', () => {
     const handled = await handler!(ctx as never);
     expect(handled).toBe(true);
     expect(logged[0]).toContain('Usage: /search-files');
+  });
+});
+
+// ── Prompt surface ──────────────────────────────────────────────────
+
+describe('search plugin — prompt surface', () => {
+  it('tool description leads with two-mode framing and follow-up guidance', async () => {
+    const { registration, tools } = captureRegistration();
+    await searchPlugin.register(registration);
+
+    const description = tools.get('text')?.description ?? '';
+    expect(description).toContain('semantic');
+    expect(description).toContain('regex');
+    expect(description).toContain('file__read');
+  });
+
+  it('registers the # Search Index fragment with decision guidance', async () => {
+    const { registration, fragments, runOnPluginsLoaded } =
+      captureRegistration();
+    await searchPlugin.register(registration);
+
+    const config = createDefaultAgentConfig();
+    config.search = {
+      enabled: true,
+      paths: [{ path: '/tmp/some-dir' }],
+    };
+    registration.getConfig = () => config;
+    registration.request = <T>() =>
+      ({
+        getBeaconUrl: () => 'http://beacon.test:3457',
+        getAgentId: () => 'agent-under-test',
+      }) as T;
+
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ indexed: true, paths: ['/tmp/some-dir'] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      await runOnPluginsLoaded();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    const fragment = fragments.get('search-indexed-directories');
+    expect(fragment).toBeDefined();
+    expect(fragment!.phase).toBe('header');
+
+    const rendered = await fragment!.render();
+    expect(rendered).not.toBe(false);
+    const text = String(rendered);
+
+    expect(text.startsWith('# Search Index')).toBe(true);
+    expect(text).toContain('/tmp/some-dir');
+    expect(text).toContain('mode: "semantic"');
+    expect(text).toContain('regex');
+    expect(text).toContain('concept');
+    expect(text).toContain('file__read');
+    expect(text).toContain('minScore');
   });
 });

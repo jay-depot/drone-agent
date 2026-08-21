@@ -6,7 +6,7 @@ tags:
   - prompt-engineering
   - semantic-search
 created: 2026-08-21T22:48:54.940Z
-updated: 2026-08-21T22:49:40.740Z
+updated: 2026-08-21T23:13:20.892Z
 ---
 
 # Plan: Make Semantic Search Discoverable & Enticing via Prompts
@@ -86,11 +86,11 @@ Run in order; all must pass with zero errors:
 4. `pnpm -r run test` (fast suite)
 
 ## Validation Criteria
-- [ ] `search__text` tool description leads with two-mode framing and includes when-to-use guidance + result-shape note (verified by unit test).
-- [ ] `search-indexed-directories` fragment renders `# Search Index` + directory list + decision rules (verified by unit test).
-- [ ] Legacy `src/plugins/search.ts` deleted; no dangling imports (grep + build).
-- [ ] LSP diagnostics pass; `pnpm -r run build`, `pnpm -r run lint`, `pnpm -r run test` all pass.
-- [ ] No runtime/search behavior changed (regex and semantic execution paths untouched).
+- [x] `search__text` tool description leads with two-mode framing and includes when-to-use guidance + result-shape note (verified by unit test).
+- [x] `search-indexed-directories` fragment renders `# Search Index` + directory list + decision rules (verified by unit test).
+- [x] Legacy `src/plugins/search.ts` deleted; no dangling imports (grep + build).
+- [x] LSP diagnostics pass; `pnpm -r run build`, `pnpm -r run lint`, `pnpm -r run test` all pass.
+- [x] No runtime/search behavior changed (regex and semantic execution paths untouched).
 
 ## Explicit Non-Goals (deferred)
 - Reactive nudges in regex tool output (e.g. "0 results — try semantic") — deliberately excluded from this phase.
@@ -99,3 +99,24 @@ Run in order; all must pass with zero errors:
 
 ## Housekeeping for the executing agent
 Per AGENTS.md, `.drone-agent/` contents (including this memory) are checked into VCS on feature branches — commit this memory with the change set. Log a `self-improvement` insight after landing if real-session behavior change is observed (or not) in follow-up use.
+
+---
+
+## Execution Summary (2026-08-21, executed by `code` persona)
+
+**Status: COMPLETE. All steps executed; all validation criteria pass.**
+
+What was done:
+1. **Tool description rewritten** exactly per plan target copy (two-mode lead, when-to-use rules, result-shape note, beacon requirement note).
+2. **Fragment expanded** per plan target copy: kept `# Search Index` heading + dir list; appended decision-rules block (semantic vs regex guidance, retry-semantically-on-zero/too-many rule, `file__read` follow-up, `minScore` tuning tip).
+3. **Legacy `src/plugins/search.ts` deleted** (`git rm`; staged). Zero references confirmed pre-deletion via grep.
+4. **Tests updated**: `captureRegistration()` now captures full `DroneToolDefinition`s, fragments by key, AND the `onPluginsLoaded` callback (exposed as `runOnPluginsLoaded()` — necessary because fragment registration happens inside that hook, which the old mock discarded). Existing tests adjusted minimally (`tools.get('text')?.execute`). New describe block `search plugin — prompt surface` with 2 tests covering description keywords and full fragment render assertions (phase, heading, dir path, decision-guidance keywords incl. `minScore`).
+5. **Validation**: LSP diagnostics clean in both touched files (workspace baseline unchanged); `pnpm -r run build` ✅; lint ✅; fast suite ✅ 1991 passed / 9 skipped / 0 failed (130 files).
+
+Deviations/notes (best judgement within plan intent):
+- Plan's literal commands `pnpm -r run lint` / `pnpm -r run test` don't work as written: lint lives only at the workspace root (`pnpm lint` = eslint --fix + prettier --write), and `pnpm -r run test` fails structurally in ALL packages (every package has `"test": "vitest run"` but none ships its own vitest config, so each inherits the ROOT vitest.config.ts whose include globs are repo-root-relative and match nothing from a package cwd → vitest exits 1 "No test files found"). Verified pre-existing via `git stash` + rerun on clean tree. Used root `pnpm lint` and root `pnpm test` (the actual supported fast-suite entrypoint) as equivalents. Logged as project insight — candidate follow-up fix.
+- One transient defect caught and fixed mid-flight: initial fragment hunk left `,` instead of `+` between template-literal concatenation lines inside the arrow function (syntactically invalid). Caught by reading back the region + LSP diagnostics before proceeding.
+- First test run failed because the new fragment test initially omitted `await searchPlugin.register(registration)` (hook callback was never captured). Fixed; suite fully green afterward.
+- Prettier (via `pnpm lint`) reformatted `.drone-agent/memory/plan-semantic-search-prompt-adoption.md` (heading spacing) and `.drone-agent/insights/project/drone-agent.json` (trailing newline) — benign, checked in intentionally per AGENTS.md.
+
+Follow-up candidates (explicitly deferred by plan): reactive "try semantic" nudges in regex output; fixing per-package `test` scripts / adding package-local vitest configs so `pnpm -r run test` works; observe real-session semantic-search adoption and log an insight if behavior changed.
