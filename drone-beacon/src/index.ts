@@ -1,6 +1,13 @@
+  --config-file <path>         Load settings from a JSON config file (flags override file values)
 import fastify from 'fastify';
 import '@fastify/websocket';
-import { createOllamaEmbeddingProvider } from 'drone-swarm-common';
+import {
+  createOllamaEmbeddingProvider,
+  loadConfigFile,
+  mergeConfig,
+  type ServerConfigFile,
+  type SessionEndTrigger,
+} from 'drone-swarm-common';
 import { SearchIndexer } from './search-indexer.js';
 import os from 'node:os';
 import path from 'path';
@@ -39,6 +46,7 @@ import {
 import * as wsServer from './ws-server.js';
 import { logger } from './logger.js';
 import { loadOrCreateIdentity } from './identity.js';
+import { configureSessionEndHook } from './session-end.js';
 import {
   loadOrCreateTlsIdentity,
   getTlsOptions,
@@ -54,6 +62,7 @@ const DEFAULT_SPAWN_AGENT_PATH = 'drone-agent';
 const DEFAULT_SPAWN_TIMEOUT_MS = 30000;
 const DEFAULT_MAX_CONCURRENT_SPAWNS = 10;
 const DEFAULT_SYNC_INTERVAL_MINUTES = 5;
+const DEFAULT_COMMAND_TIMEOUT_MS = 30000;
 
 interface Config {
   port: number;
@@ -72,10 +81,13 @@ interface Config {
   spawnTimeoutMs: number;
   maxConcurrentSpawns: number;
   syncIntervalMinutes: number;
+  sessionEnd?: SessionEndTrigger;
 }
 
-function parseArgs(): Config {
+async function parseArgs(): Promise<Config> {
   const args = process.argv.slice(2);
+  let fileConfig: ServerConfigFile | undefined;
+  const flagOverrides: { port?: number; host?: string; dbPath?: string } = {};
   const config: Config = {
     port: DEFAULT_PORT,
     host: DEFAULT_HOST,
@@ -96,13 +108,25 @@ function parseArgs(): Config {
     const arg = args[i];
     if (arg === '--port' && i + 1 < args.length) {
       config.port = parseInt(args[++i], 10);
+      flagOverrides.port = config.port;
+    } else if (arg === '--config-file' && i + 1 < args.length) {
+      const filePath = args[++i];
+      try {
+        fileConfig = await loadConfigFile(filePath);
+      } catch (err) {
+        console.error(String(err));
+        process.exit(1);
+      }
     } else if (arg === '--host' && i + 1 < args.length) {
       config.host = args[++i];
+      flagOverrides.host = config.host;
     } else if (arg === '--db' && i + 1 < args.length) {
       config.dbPath = args[++i];
+      flagOverrides.dbPath = config.dbPath;
     } else if (arg === '--config-dir' && i + 1 < args.length) {
       config.configDir = args[++i];
       config.dbPath = path.join(config.configDir, DEFAULT_DB_FILENAME);
+      flagOverrides.dbPath = config.dbPath;
     } else if (arg === '--coordinator-host' && i + 1 < args.length) {
       config.coordinatorHost = args[++i];
     } else if (arg === '--coordinator-port' && i + 1 < args.length) {
@@ -139,6 +163,19 @@ function parseArgs(): Config {
     }
   }
 
+  if (fileConfig) {
+    const merged = mergeConfig<ServerConfigFile>(
+      fileConfig,
+      flagOverrides
+    );
+    config.port = (merged.port as number) ?? config.port;
+    config.host = (merged.host as string) ?? config.host;
+    config.dbPath = (merged.dbPath as string) ?? config.dbPath;
+    if (merged.sessionEnd !== undefined) {
+      config.sessionEnd = merged.sessionEnd as SessionEndTrigger;
+    }
+  }
+
   if (config.coordinatorHost && !config.coordinatorPort) {
     config.coordinatorPort = DEFAULT_PORT + 1;
   }
@@ -147,7 +184,7 @@ function parseArgs(): Config {
 }
 
 async function main() {
-  const config = parseArgs();
+  const config = await parseArgs();
 
   if (config.command === 'confirm-coordinator-fingerprint') {
     if (!config.confirmFingerprint) {
@@ -163,6 +200,15 @@ async function main() {
       process.exit(1);
     }
     process.exit(0);
+  }
+
+  if (config.sessionEnd) {
+    configureSessionEndHook({
+      trigger: config.sessionEnd,
+      beaconId: config.beaconId,
+      commandTimeoutMs: DEFAULT_COMMAND_TIMEOUT_MS,
+    });
+    logger.info('Session-end hook configured');
   }
 
   const beaconProtocol = config.useHttps ? 'https' : 'http';
