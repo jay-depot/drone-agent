@@ -250,5 +250,9 @@
   {
     "timestamp": "2026-08-22T07:09:26.184Z",
     "insight": "LSP diagnostics in this workspace can be stale in BOTH directions: they persisted after files were fixed (cache lag), which tempts you to dismiss real errors as stale. Ground truth hierarchy: (1) `pnpm -r run build` (fresh tsc) is authoritative; (2) direct file__read of the suspected lines beats cached diagnostics; (3) only after a clean build should remaining LSP errors be trusted as real. During the drone-swarm pipeline work, a 'stale diagnostics' assumption was wrong twice — the errors were real stray-line corruption — and also right once (errors outliving a fix). Verify before either fixing or dismissing."
+  },
+  {
+    "timestamp": "2026-08-22T21:16:49.701Z",
+    "insight": "AGENTS.md standards table says `pnpm -r run lint` must pass, but NO workspace package defines a \"lint\" script (pnpm -r lint fails with ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT) — linting only exists at the repo root as plain `pnpm lint`. Per AGENTS.md's own rule (code is source of truth, document should be updated), the standards section should say `pnpm lint` at repo root, or packages should gain lint scripts. Discovered 2026-08-22 during fix-drone-swarm-bin-symlink validation; agents executing plans that specify `pnpm -r lint` will hit a spurious failure until fixed."
   }
 ]

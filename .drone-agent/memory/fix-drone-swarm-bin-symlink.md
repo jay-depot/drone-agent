@@ -4,8 +4,9 @@ tags:
   - plan
   - bugfix
   - drone-swarm
+  - completed
 created: 2026-08-22T21:04:42.504Z
-updated: 2026-08-22T21:04:42.504Z
+updated: 2026-08-22T21:16:02.858Z
 ---
 
 # Plan: Fix drone-swarm silent no-op when linked into $PATH (+ dead entry-gate cleanup)
@@ -52,24 +53,6 @@ Simulates the link layout: temp dir + symlink named `drone-swarm` → real `<rep
 - Assert exit code 0 and stdout contains help banner ("Usage:" / "drone-swarm").
 - Guard: `it.skipIf(!existsSync(<repo>/drone-swarm/dist/index.js))(...)` — root vitest runs from TS source without requiring builds; this test is only meaningful post-build (same provisioning-guard philosophy as integration tests).
 - Use `mkdtemp(tmpdir())` + `symlink` from `node:fs/promises`; clean up with `rm(..., { recursive: true })` in afterAll.
-- Rough shape:
-
-```ts
-const pkgDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const realShim = path.join(pkgDir, 'bin', 'drone-swarm');
-const distIndex = path.join(pkgDir, 'dist', 'index.js');
-
-describe('drone-swarm bin shim (symlinked invocation)', () => {
-  let linkDir: string;
-  beforeAll(async () => { linkDir = await mkdtemp(path.join(tmpdir(), 'ds-bin-')); await symlink(realShim, path.join(linkDir, 'drone-swarm')); });
-  afterAll(async () => { await rm(linkDir, { recursive: true, force: true }); });
-
-  it.skipIf(!existsSync(distIndex))('runs main() through the link symlink', async () => {
-    const { stdout } = await execFileAsync(process.execPath, [path.join(linkDir, 'drone-swarm'), '--help']);
-    expect(stdout).toContain('Usage:');
-  });
-});
-```
 
 ### Step 7 — Validation (final step; check ALL before done)
 1. `pnpm -r build` — all packages pass (required for the regression test to actually run rather than skip).
@@ -87,3 +70,22 @@ describe('drone-swarm bin shim (symlinked invocation)', () => {
 ## Follow-up notes (out of scope)
 - Report's Option B (realpath comparison) rejected in favor of structural fix; documented rationale above.
 - Gateway/coordinator gates were effectively dead already (their shims call main() unconditionally); deletion is pure cleanup with zero behavior change.
+
+---
+
+# ✅ COMPLETION SUMMARY (executed 2026-08-22)
+
+All steps executed and validated on `feature/drone-swarm-pipeline-infra`. Plan kept for reference; status: COMPLETE.
+
+- **Steps 1–2**: Shim created at `drone-swarm/bin/drone-swarm` (mode 100755, exit-code propagating). package.json: bin → `./bin/drone-swarm`, files `["dist","bin"]`, `scripts.start` added. Deviation note: an initial textual diff misplaced `"start"` at package.json top level; corrected by rewriting via `JSON.parse`/`stringify` — structural JSON edits are safer done programmatically than as line diffs.
+- **Step 3**: Gate + shebang removed from `drone-swarm/src/index.ts`; module now side-effect-free on import (safe for `cli.test.ts`).
+- **Step 4**: Dead gate removed from `drone-gateway/src/index.ts` (no imports affected).
+- **Step 5**: Dead gate removed from `drone-coordinator/src/index.ts`; also dropped now-unused `pathToFileURL` import (kept `fileURLToPath`, still used for `__dirname`).
+- **Step 6**: `drone-swarm/test/bin-shim.test.ts` — two tests: (a) symlinked-invocation spawn via `execFile(process.execPath, [<tmpdir symlink> , '--help'])` guarded by `it.skipIf(!existsSync(dist/index.js))`; (b) shebang + executable-bit assertion (runs pre-build too).
+- **Step 7 validation results**:
+  1. `pnpm -r build`: all 7 packages green.
+  2. LSP: zero errors/warnings on all four touched files.
+  3. Lint: **plan correction — lint only exists at repo ROOT (`pnpm lint`); `pnpm -r lint` fails with ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT because no workspace package defines a lint script.** Root `pnpm lint` green; prettier reformatted only bin-shim.test.ts (cosmetic).
+  4. Root `pnpm test`: **2049 passed / 0 failed**, `bin-shim.test.ts` RAN (2 tests, 28ms — not skipped, post-build).
+  5. Manual smoke via temp PATH symlink: `--help` prints banner exit 0 (original repro path FIXED), unknown command exit 1, direct shim exec exit 0, `pnpm --filter drone-swarm start -- --help` exit 0.
+- Net effect: drone-swarm works through npm/pnpm link symlinks; entry-gate dead code eliminated repo-wide; no behavior change for non-linked invocations.
