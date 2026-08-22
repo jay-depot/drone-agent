@@ -1,0 +1,27 @@
+{
+  "name": "drone-swarm",
+  "version": "1.0.0",
+  "description": "Standalone REST CLI for the drone swarm (session pipeline + wiki)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "drone-swarm": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "private": true,
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "echo 'drone-swarm tests run via root vitest (pnpm test at repo root)'"
+  },
+  "dependencies": {
+    "drone-swarm-common": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.10"
+  }
+}
