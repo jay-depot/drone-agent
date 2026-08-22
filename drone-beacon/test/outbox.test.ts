@@ -80,9 +80,9 @@ describe('outbox db', () => {
     ).toHaveLength(1);
 
     markOutboxFailed(entry.id, 'status 500');
-    expect(dequeueDueOutbox(10, Date.now() + OUTBOX_RETRY_BASE_MS)).toHaveLength(
-      0
-    );
+    expect(
+      dequeueDueOutbox(10, Date.now() + OUTBOX_RETRY_BASE_MS)
+    ).toHaveLength(0);
     expect(
       dequeueDueOutbox(10, Date.now() + 3 * OUTBOX_RETRY_BASE_MS)
     ).toHaveLength(1);

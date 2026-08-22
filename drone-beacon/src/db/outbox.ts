@@ -59,9 +59,14 @@ export function enqueueOutbox(entry: {
  * First attempts (attempts = 0) are always due; retries wait
  * OUTBOX_RETRY_BASE_MS * 2^(attempts-1) after the previous attempt.
  */
-export function dequeueDueOutbox(limit: number, now = Date.now()): OutboxEntry[] {
+export function dequeueDueOutbox(
+  limit: number,
+  now = Date.now()
+): OutboxEntry[] {
   const rows = getDatabase()
-    .prepare('SELECT * FROM outbox WHERE deliveredAt IS NULL ORDER BY createdAt ASC')
+    .prepare(
+      'SELECT * FROM outbox WHERE deliveredAt IS NULL ORDER BY createdAt ASC'
+    )
     .all() as OutboxRow[];
   const due = rows.filter(row => {
     if (row.attempts === 0) {

@@ -48,15 +48,22 @@ describe('coordinator runSessionEndHook', () => {
       trigger: { type: 'command', command: 'exit 5' },
     });
     const result = await runSessionEndHook('session-a');
-    expect(result).toEqual({ ran: true, kind: 'command', error: 'exit code 5' });
+    expect(result).toEqual({
+      ran: true,
+      kind: 'command',
+      error: 'exit code 5',
+    });
   });
 
   it('forwards spawn triggers to the configured beacon', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(JSON.stringify({ status: 'spawning' }), {
-        status: 202,
-      }))
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ status: 'spawning' }), {
+            status: 202,
+          })
+      )
     );
     configureSessionEndHook({
       trigger: { type: 'spawn', persona: 'librarian', beaconId: 'b-1' },

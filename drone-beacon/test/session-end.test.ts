@@ -61,7 +61,11 @@ describe('runSessionEndHook', () => {
       trigger: { type: 'command', command: 'exit 3' },
     });
     const result = await runSessionEndHook('session-a');
-    expect(result).toEqual({ ran: true, kind: 'command', error: 'exit code 3' });
+    expect(result).toEqual({
+      ran: true,
+      kind: 'command',
+      error: 'exit code 3',
+    });
   });
 
   it('times out long-running commands', async () => {
@@ -110,6 +114,10 @@ describe('runSessionEndHook', () => {
       trigger: { type: 'spawn', persona: 'librarian' },
     });
     const result = await runSessionEndHook('session-a');
-    expect(result).toEqual({ ran: true, kind: 'spawn', error: String(new Error('boom')) });
+    expect(result).toEqual({
+      ran: true,
+      kind: 'spawn',
+      error: String(new Error('boom')),
+    });
   });
 });

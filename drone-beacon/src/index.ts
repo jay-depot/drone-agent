@@ -165,10 +165,7 @@ async function parseArgs(): Promise<Config> {
   }
 
   if (fileConfig) {
-    const merged = mergeConfig<ServerConfigFile>(
-      fileConfig,
-      flagOverrides
-    );
+    const merged = mergeConfig<ServerConfigFile>(fileConfig, flagOverrides);
     config.port = (merged.port as number) ?? config.port;
     config.host = (merged.host as string) ?? config.host;
     config.dbPath = (merged.dbPath as string) ?? config.dbPath;

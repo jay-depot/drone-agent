@@ -75,9 +75,9 @@ describe('validateConfigFile', () => {
     expect(validateConfigFile({ sessionEnd: {} })).toEqual([
       '"sessionEnd.type" must be "command" or "spawn"',
     ]);
-    expect(
-      validateConfigFile({ sessionEnd: { type: 'nope' } })
-    ).toEqual(['"sessionEnd.type" must be "command" or "spawn"']);
+    expect(validateConfigFile({ sessionEnd: { type: 'nope' } })).toEqual([
+      '"sessionEnd.type" must be "command" or "spawn"',
+    ]);
     expect(
       validateConfigFile({ sessionEnd: { type: 'command', command: '' } })
     ).toEqual(['"sessionEnd.command" must be a non-empty string']);
@@ -111,7 +111,9 @@ describe('validateConfigFile', () => {
       })
     ).toEqual([]);
     expect(
-      validateConfigFile({ sessionEnd: { type: 'spawn', persona: 'librarian' } })
+      validateConfigFile({
+        sessionEnd: { type: 'spawn', persona: 'librarian' },
+      })
     ).toEqual([]);
     expect(
       validateConfigFile({
@@ -190,7 +192,11 @@ describe('mergeConfig', () => {
       { port: 3457, host: 'a', sessionEnd: { type: 'command' } },
       { port: 4000 }
     );
-    expect(merged).toEqual({ port: 4000, host: 'a', sessionEnd: { type: 'command' } });
+    expect(merged).toEqual({
+      port: 4000,
+      host: 'a',
+      sessionEnd: { type: 'command' },
+    });
   });
 
   it('skips undefined sources and undefined values', () => {

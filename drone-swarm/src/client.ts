@@ -31,7 +31,9 @@ export interface WikiSearchResult {
 export class SwarmClient {
   constructor(
     readonly target: SwarmTarget,
-    private readonly baseUrl: string
+    private readonly baseUrl: string,
+    private readonly fetchImpl: typeof fetch = (...args) =>
+      fetch(...(args as Parameters<typeof fetch>))
   ) {}
 
   private url(path: string): string {
@@ -44,7 +46,7 @@ export class SwarmClient {
     path: string,
     body?: unknown
   ): Promise<{ status: number; data: T }> {
-    const response = await fetch(this.url(path), {
+    const response = await this.fetchImpl(this.url(path), {
       method,
       headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
       body: body !== undefined ? JSON.stringify(body) : undefined,

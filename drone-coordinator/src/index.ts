@@ -477,10 +477,7 @@ export async function main() {
   }
 
   if (config.sessionEnd) {
-    if (
-      config.sessionEnd.type === 'spawn' &&
-      !config.sessionEnd.beaconId
-    ) {
+    if (config.sessionEnd.type === 'spawn' && !config.sessionEnd.beaconId) {
       console.error(
         'Config error: sessionEnd spawn trigger requires "beaconId" at the coordinator layer'
       );

@@ -182,7 +182,8 @@ async function runWikiCommand(
 }
 
 export async function main(
-  argv: string[] = process.argv.slice(2)
+  argv: string[] = process.argv.slice(2),
+  fetchImpl?: typeof fetch
 ): Promise<number> {
   const args = parseArgs(argv);
   if (args.flags.help || args.flags.h || args.positional.length === 0) {
@@ -195,7 +196,7 @@ export async function main(
       beacon: args.beacon,
       coordinator: args.coordinator,
     });
-    const client = new SwarmClient(address.target, address.baseUrl);
+    const client = new SwarmClient(address.target, address.baseUrl, fetchImpl);
 
     const [group, action] = args.positional;
     switch (group) {

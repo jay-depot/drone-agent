@@ -620,47 +620,59 @@ export function createCoordinatorClient(
 
     // Knowledge push
     async pushPersona(persona: Persona): Promise<void> {
-      await sendFireAndForget('pushPersona', '/api/personas', 'POST', persona, async () => {
-        if (!coordinatorTrusted()) {
-          return;
-        }
-        try {
-          const res = await cfetch(`${baseUrl}/api/personas`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(persona),
-          });
-          if (!res.ok) {
-            logger.warn(`Failed to push persona: ${res.status}`);
-          } else {
-            logger.info(`Pushed persona ${persona.id} to coordinator`);
+      await sendFireAndForget(
+        'pushPersona',
+        '/api/personas',
+        'POST',
+        persona,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
           }
-        } catch (err) {
-          logger.warn(`Failed to push persona: ${err}`);
+          try {
+            const res = await cfetch(`${baseUrl}/api/personas`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(persona),
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to push persona: ${res.status}`);
+            } else {
+              logger.info(`Pushed persona ${persona.id} to coordinator`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to push persona: ${err}`);
+          }
         }
-      });
+      );
     },
 
     async pushSkill(skill: Skill): Promise<void> {
-      await sendFireAndForget('pushSkill', '/api/skills', 'POST', skill, async () => {
-        if (!coordinatorTrusted()) {
-          return;
-        }
-        try {
-          const res = await cfetch(`${baseUrl}/api/skills`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(skill),
-          });
-          if (!res.ok) {
-            logger.warn(`Failed to push skill: ${res.status}`);
-          } else {
-            logger.info(`Pushed skill ${skill.id} to coordinator`);
+      await sendFireAndForget(
+        'pushSkill',
+        '/api/skills',
+        'POST',
+        skill,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
           }
-        } catch (err) {
-          logger.warn(`Failed to push skill: ${err}`);
+          try {
+            const res = await cfetch(`${baseUrl}/api/skills`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(skill),
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to push skill: ${res.status}`);
+            } else {
+              logger.info(`Pushed skill ${skill.id} to coordinator`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to push skill: ${err}`);
+          }
         }
-      });
+      );
     },
 
     async deletePersona(id: string): Promise<void> {
