@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  AddressError,
-  defaultUrlFor,
-  resolveAddress,
-} from '../src/address.js';
+import { AddressError, defaultUrlFor, resolveAddress } from '../src/address.js';
 
 describe('resolveAddress', () => {
   afterEach(() => {

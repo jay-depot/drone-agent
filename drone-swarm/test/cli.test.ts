@@ -46,7 +46,11 @@ async function startFixture(port: number): Promise<Server> {
       url === '/wiki/search?q=pipeline'
     ) {
       return sendJson(200, [
-        { id: 'memory-pipeline', title: 'Memory Pipeline', snippet: 'pipeline' },
+        {
+          id: 'memory-pipeline',
+          title: 'Memory Pipeline',
+          snippet: 'pipeline',
+        },
       ]);
     }
     if (url === '/api/wiki/my-page' || url === '/wiki/my-page') {
@@ -281,7 +285,13 @@ describe('drone-swarm CLI against a beacon-dialect fixture', () => {
     };
     try {
       expect(
-        await main(['--beacon', `http://127.0.0.1:${port}`, 'wiki', 'read', 'my-page'])
+        await main([
+          '--beacon',
+          `http://127.0.0.1:${port}`,
+          'wiki',
+          'read',
+          'my-page',
+        ])
       ).toBe(0);
       expect(JSON.parse(out[0]).id).toBe('my-page');
 
@@ -302,7 +312,9 @@ describe('drone-swarm CLI against a beacon-dialect fixture', () => {
   });
 
   it('rejects --beacon and --coordinator together', async () => {
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const errSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
     try {
       const code = await main([
         '--beacon',

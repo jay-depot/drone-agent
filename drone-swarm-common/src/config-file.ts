@@ -59,10 +59,7 @@ function validateSessionEnd(
     return { type: 'command', command: sessionEnd.command as string };
   }
   if (type === 'spawn') {
-    if (
-      typeof sessionEnd.persona !== 'string' ||
-      !sessionEnd.persona.trim()
-    ) {
+    if (typeof sessionEnd.persona !== 'string' || !sessionEnd.persona.trim()) {
       errors.push('"sessionEnd.persona" must be a non-empty string');
     }
     if (
@@ -130,19 +127,24 @@ export function validateConfigFile(value: unknown): string[] {
  * validation problems are collected via {@link validateConfigFile} and
  * reported as a single error listing every problem.
  */
-export async function loadConfigFile(filePath: string): Promise<ServerConfigFile> {
+export async function loadConfigFile(
+  filePath: string
+): Promise<ServerConfigFile> {
   let raw: string;
   try {
     raw = await fs.readFile(filePath, 'utf8');
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code === 'ENOENT') {
-      throw new Error(`Config file ${filePath} does not exist`);
+      throw new Error(`Config file ${filePath} does not exist`, { cause: err });
     }
     if (code === 'EISDIR') {
-      throw new Error(`Config file ${filePath} is a directory`);
+      throw new Error(`Config file ${filePath} is a directory`, { cause: err });
     }
-    throw new Error(`Config file ${filePath} could not be read: ${code ?? err}`);
+    throw new Error(
+      `Config file ${filePath} could not be read: ${code ?? err}`,
+      { cause: err }
+    );
   }
 
   let parsed: unknown;
@@ -150,7 +152,8 @@ export async function loadConfigFile(filePath: string): Promise<ServerConfigFile
     parsed = JSON.parse(raw);
   } catch (err) {
     throw new Error(
-      `Config file ${filePath} is not valid JSON: ${(err as Error).message}`
+      `Config file ${filePath} is not valid JSON: ${(err as Error).message}`,
+      { cause: err }
     );
   }
 

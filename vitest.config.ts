@@ -74,7 +74,7 @@ export default defineConfig({
         'drone-beacon/src/**/*.ts',
         'drone-coordinator/src/**/*.ts',
         'drone-swarm-common/src/**/*.ts',
-      'drone-swarm/src/**/*.ts',
+        'drone-swarm/src/**/*.ts',
         'drone-gateway/src/**/*.ts',
       ],
       exclude: [

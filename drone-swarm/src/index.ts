@@ -181,7 +181,9 @@ async function runWikiCommand(
   }
 }
 
-export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
+export async function main(
+  argv: string[] = process.argv.slice(2)
+): Promise<number> {
   const args = parseArgs(argv);
   if (args.flags.help || args.flags.h || args.positional.length === 0) {
     console.log(HELP);

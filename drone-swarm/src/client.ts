@@ -103,7 +103,9 @@ export class SwarmClient {
     return { status, log: data };
   }
 
-  async processSession(sessionId: string): Promise<{ status: number; result: unknown }> {
+  async processSession(
+    sessionId: string
+  ): Promise<{ status: number; result: unknown }> {
     const { status, data } = await this.request<unknown>(
       'POST',
       `/sessions/${encodeURIComponent(sessionId)}/process`
@@ -131,7 +133,9 @@ export class SwarmClient {
 
   // === Wiki (available at both layers; route dialect handled in url()) ===
 
-  async readWikiPage(pageId: string): Promise<{ status: number; page: unknown }> {
+  async readWikiPage(
+    pageId: string
+  ): Promise<{ status: number; page: unknown }> {
     const { status, data } = await this.request<unknown>(
       'GET',
       `/wiki/${encodeURIComponent(pageId)}`
