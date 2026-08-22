@@ -11,15 +11,18 @@ updated: 2026-08-22T19:33:16.108Z
 ---
 
 ---
+
 key: plan-pre-compaction-nudge
 tags:
-  - plan
-  - compaction
-  - plugin-engine
-  - conversation-service
-  - guardrails
-created: 2026-08-22T06:45:00.000Z
-updated: 2026-08-22T06:45:00.000Z
+
+- plan
+- compaction
+- plugin-engine
+- conversation-service
+- guardrails
+  created: 2026-08-22T06:45:00.000Z
+  updated: 2026-08-22T06:45:00.000Z
+
 ---
 
 # Plan: Pre-Compaction State-Preservation Nudge
@@ -32,18 +35,18 @@ The threshold math is owned by the **compaction plugin** (its estimator is the s
 
 ## Design decisions (locked in planning session)
 
-| # | Decision | Outcome |
-|---|----------|---------|
-| 1 | Purpose | (a) state-preservation prompt to the model + (c) human token-countdown notice. (b) loss-preview content explicitly rejected. |
-| 2 | Architecture | Compaction plugin computes crossing; generalized reminder API instead of purpose-built signal ref (precedent principle: prefer narrow, reusable engine primitives — cf. `listMountedTools` over `unmountAllNonRuntimeTools`). |
-| 3a | API home | `queueSystemReminder(content: string)` exposed via the `_runtime` capability (precedent: `resetStuckDetectors` threaded through `CreateDronePluginEngineOptions`). NOT on DronePluginRegistration. |
-| 3b | Structure | Engine-owned bounded queue, cap 8 entries, drain-all-on-next-call. Conversation service appends each as non-persisted system message then empties queue. Cleared on session clear. |
-| 3c | Guardrails | Existing hardcoded guardrail nudges are NOT migrated onto the primitive in v1 (additive only). Follow-up logged. |
-| 4a | Margin | New config `compaction.nudgeMarginPercent`, default 10. Band = `[softThreshold − margin, softThreshold]`. |
-| 4b | Trigger semantics | Edge-triggered, one fire per excursion into the band; `armed` flag re-set only when usage falls below band floor (i.e., after compaction shrinks usage). No reset on new user message (cumulative-growth state, unlike guardrail streaks). Skip fire if usage overshot clean past soft threshold between evaluations (compaction fires same evaluation anyway). Skip entirely when `compaction.enabled === false`. Single tier only (no stronger second warning). |
-| 5a | Reminder text | Names concrete tools (`notepad__manage`, `todo__manage_list`); includes rounded tokens-remaining figure; tool clause omitted when neither plugin is enabled. |
-| 5b | Human notice | Reuse existing event `kind: 'notice'` (yellow TUI rendering exists). No new DroneConversationEvent union member. Message format `[Compaction in ~X tokens]`. |
-| 5c | Number formatting | Stable rounding shared by both channels: nearest 100 below ~2000 remaining, else nearest 1000 (e.g. `~4k`, `~850`). |
+| #   | Decision          | Outcome                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Purpose           | (a) state-preservation prompt to the model + (c) human token-countdown notice. (b) loss-preview content explicitly rejected.                                                                                                                                                                                                                                                                                                                                      |
+| 2   | Architecture      | Compaction plugin computes crossing; generalized reminder API instead of purpose-built signal ref (precedent principle: prefer narrow, reusable engine primitives — cf. `listMountedTools` over `unmountAllNonRuntimeTools`).                                                                                                                                                                                                                                     |
+| 3a  | API home          | `queueSystemReminder(content: string)` exposed via the `_runtime` capability (precedent: `resetStuckDetectors` threaded through `CreateDronePluginEngineOptions`). NOT on DronePluginRegistration.                                                                                                                                                                                                                                                                |
+| 3b  | Structure         | Engine-owned bounded queue, cap 8 entries, drain-all-on-next-call. Conversation service appends each as non-persisted system message then empties queue. Cleared on session clear.                                                                                                                                                                                                                                                                                |
+| 3c  | Guardrails        | Existing hardcoded guardrail nudges are NOT migrated onto the primitive in v1 (additive only). Follow-up logged.                                                                                                                                                                                                                                                                                                                                                  |
+| 4a  | Margin            | New config `compaction.nudgeMarginPercent`, default 10. Band = `[softThreshold − margin, softThreshold]`.                                                                                                                                                                                                                                                                                                                                                         |
+| 4b  | Trigger semantics | Edge-triggered, one fire per excursion into the band; `armed` flag re-set only when usage falls below band floor (i.e., after compaction shrinks usage). No reset on new user message (cumulative-growth state, unlike guardrail streaks). Skip fire if usage overshot clean past soft threshold between evaluations (compaction fires same evaluation anyway). Skip entirely when `compaction.enabled === false`. Single tier only (no stronger second warning). |
+| 5a  | Reminder text     | Names concrete tools (`notepad__manage`, `todo__manage_list`); includes rounded tokens-remaining figure; tool clause omitted when neither plugin is enabled.                                                                                                                                                                                                                                                                                                      |
+| 5b  | Human notice      | Reuse existing event `kind: 'notice'` (yellow TUI rendering exists). No new DroneConversationEvent union member. Message format `[Compaction in ~X tokens]`.                                                                                                                                                                                                                                                                                                      |
+| 5c  | Number formatting | Stable rounding shared by both channels: nearest 100 below ~2000 remaining, else nearest 1000 (e.g. `~4k`, `~850`).                                                                                                                                                                                                                                                                                                                                               |
 
 ## Current state (facts verified 2026-08-22)
 
@@ -77,7 +80,9 @@ export class SystemReminderQueue {
     this.items = [];
     return out;
   }
-  clear(): void { this.items = []; }
+  clear(): void {
+    this.items = [];
+  }
 }
 ```
 
@@ -141,7 +146,10 @@ if (!input.options.force && armed && config.enabled) {
     armed = false;
     const rounded = formatTokensRemaining(tokensUntilSoft);
     runtime?.queueSystemReminder(buildReminderText(rounded));
-    emitEvent?.({ kind: 'notice', message: `[Compaction in ${rounded} tokens]` });
+    emitEvent?.({
+      kind: 'notice',
+      message: `[Compaction in ${rounded} tokens]`,
+    });
   }
 }
 if (metrics.usagePercent < softFrac - marginFrac) armed = true;
@@ -153,7 +161,9 @@ Helpers:
 
 ```typescript
 function formatTokensRemaining(n: number): string {
-  return n < 2000 ? String(Math.round(n / 100) * 100) : `~${Math.round(n / 1000)}k`;
+  return n < 2000
+    ? String(Math.round(n / 100) * 100)
+    : `~${Math.round(n / 1000)}k`;
 }
 
 function buildReminderText(fig: string): string {
@@ -162,6 +172,7 @@ function buildReminderText(fig: string): string {
 ```
 
 Plugin needs two new things in its registration context:
+
 1. Access to `_runtime` for `queueSystemReminder`: `registration.request<{ queueSystemReminder(c: string): void }>('runtime')` (optional — degrade silently if absent).
 2. Enabled-tool check for the text builder: `registration.listMountedTools()` returns canonical names; look for prefixes `notepad__` and `todo__`.
 
@@ -216,3 +227,18 @@ Run in order; all must pass with zero errors:
 - Work happens on branch `feat/pre-compaction-nudge` (created from main @ 96b68dda).
 - Per AGENTS.md: commit `.drone-agent/` contents (including this memory file) with the change set on this feature branch. Final commit only AFTER insights/project memories are logged.
 - After landing: log follow-up self-improvement insight proposing guardrail migration onto SystemReminderQueue; consider updating project wiki (`concepts/session-management`, ADR) describing the nudge band semantics.
+
+
+## Execution Summary (completed 2026-08-22)
+
+All 7 steps executed on branch `feat/pre-compaction-nudge`; validation fully green (`pnpm -r run build`, `pnpm typecheck`, `tsc -p tsconfig.test.json`, root `pnpm test` 2006 passed / 0 failed, `pnpm lint` eslint+prettier).
+
+**Shipped:**
+- `drone-agent/src/runtime/system-reminders.ts` — `SystemReminderQueue` (cap 8, FIFO drain, clear) + unit tests.
+- Plugin engine: queue instantiated in `createDronePluginEngine`; `queueSystemReminder(content)` on the `_runtime` capability; `drainSystemReminders`/`clearSystemReminders` added to the public `DronePluginEngine` type (plan step 2.2's host-callback threading was dropped as circular indirection — the queue lives engine-side, so the engine owns drain/clear directly).
+- Conversation service: drains the queue into outgoing messages after guardrail nudges (one-shot per LLM call, non-persisted); clears on `clearSession` only — NOT on new user message (an initial misfire that cleared per-turn was caught by the service-level test and fixed).
+- drone-core: `compaction.nudgeMarginPercent` (type + `Type.Optional(Percent)` schema + default 10); merge unchanged.
+- Compaction plugin: edge-triggered crossing in `maybeCompact` before the soft-threshold early-bail; skips force/disabled/overshoot; re-arms below band floor; **new guard: stays quiet for the rest of an evaluation once compaction has acted** (`compactedDuringThisCall`) — discovered via the legacy self-purge test, warning right after compaction is wrong; reminder names `notepad__manage`/`todo__manage_list` conditionally on mounted tools; human notice via existing `kind: 'notice'` event (`content` field, not `message` — build caught it).
+- Tests: 6 queue unit tests; 8-case nudge matrix in `compaction.test.ts` (exact estimator math against a 10k window: band [4000,5000] tokens, 6+ceil(chars/4) per message); 2 service-level delivery/clear tests; drone-core round-trip assertions; `nudgeMarginPercent` added to 4 hand-built config literals in legacy tests (log-plugin, prompt-file ×2, terminal).
+
+**Key lessons for future plans:** (1) pure-addition diff hunks with generic anchors can be silently misplaced by the patch fuzzer — verify hunk locations by reading the file after multi-hunk patches; (2) the `notice` event variant uses `content`, unlike `compaction`'s `message`; (3) re-arm semantics need an explicit sub-floor evaluation between compaction and the next band entry — in production the per-tool-call hooks provide this, but tests must simulate it.

@@ -27,6 +27,7 @@ import {
 } from 'drone-core';
 
 import { BUILT_IN_SLASH_COMMANDS } from './builtin-commands.js';
+import { SystemReminderQueue } from './system-reminders.js';
 
 export type RegisteredPluginState = {
   plugin: DronePlugin;
@@ -128,6 +129,17 @@ export type DronePluginEngine = {
   getRuntimeFlags: () => RuntimeFlagRegistry;
   /** Build the full system messages as sent to the LLM (config prompt + runtime flags + prompt fragments). */
   buildSystemMessages: () => Promise<DroneChatMessage[]>;
+  /**
+   * Drain queued one-shot system reminders for inclusion in the next LLM
+   * call as non-persisted system messages. The conversation service calls
+   * this when assembling outgoing messages.
+   */
+  drainSystemReminders: () => string[];
+  /**
+   * Clear any queued system reminders without delivering them. Called on
+   * session clear so stale reminders never leak into a fresh session.
+   */
+  clearSystemReminders: () => void;
   /**
    * Set the host's elicitation capability. Must be called by the CLI shell
    * or TUI App BEFORE any workflow runs (and before `onSessionStart` if
@@ -303,6 +315,7 @@ export function createDronePluginEngine({
   buildSystemMessages: buildSystemMessagesFromHost,
   resetStuckDetectors: resetStuckDetectorsFromHost,
 }: CreateDronePluginEngineOptions): DronePluginEngine {
+  const systemReminders = new SystemReminderQueue();
   const pluginMap = validatePluginRegistry(plugins);
   const enabledPluginIds = resolveEnabledPluginIds(plugins, config);
   validateKnownEnabledPlugins(enabledPluginIds, pluginMap);
@@ -781,6 +794,8 @@ export function createDronePluginEngine({
         isSubagent: !!runtimeOptions?.subagentId,
         flags: runtimeFlagRegistry,
         resetStuckDetectors: resetStuckDetectorsFromHost,
+        queueSystemReminder: (content: string) =>
+          systemReminders.queue(content),
       });
 
       logger.info(`initializing ${sortedPlugins.length} plugin(s)`);
@@ -907,6 +922,8 @@ export function createDronePluginEngine({
     unregisterPluginTools: (pluginId: string) => {
       unregisterPluginToolsImpl(pluginId);
     },
+    drainSystemReminders: () => systemReminders.drainAll(),
+    clearSystemReminders: () => systemReminders.clear(),
     unregisterTool: (canonicalName: string) => {
       unregisterToolImpl(canonicalName);
     },
