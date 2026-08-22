@@ -238,5 +238,9 @@
   {
     "timestamp": "2026-08-21T15:31:15.609Z",
     "insight": "When the compaction `force` option bypasses the soft-threshold early-bail, it also unintentionally inherits the full auto-convergence loop (up to 5 iterations), causing manual `/compact` to over-compact by slicing-and-summarizing until zero non-summary turns remain. Fix: add a `maxIterations?: number` option to CompactionOptions and default the loop bound to `maxIterations ?? MAX_COMPACTION_ITERATIONS`. Manual `forceEvaluate` and `forceEvaluateAll` pass `maxIterations: 1` so they perform exactly one forced slice; automatic hooks omit it to preserve convergence. `slicePercentOverride: 100` on forceEvaluateAll already makes a single round equivalent, so the maxIterations cap there is behaviorally neutral but makes intent explicit."
+  },
+  {
+    "timestamp": "2026-08-21T23:14:26.401Z",
+    "insight": "`pnpm -r run test` is structurally broken for every workspace package: all 7 packages define `\"test\": \"vitest run\"` but none ships a package-local vitest config, so each inherits the ROOT vitest.config.ts whose `include` globs (e.g. `drone-core/test/**`) are repo-root-relative and match zero files when vitest runs from a package cwd — vitest exits 1 with \"No test files found\" (drone-core fails first, aborting the recursive run). Verified pre-existing on a clean tree via git stash. The actual supported fast-suite entrypoint is root `pnpm test`. Candidate fix: give each package its own minimal vitest config (or a `--root`/`--config` pointing at the root config), or drop per-package test scripts. Until fixed, plans that say \"run pnpm -r run test\" should be executed as root `pnpm test`."
   }
 ]
