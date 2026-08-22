@@ -1,6 +1,66 @@
-import { createServer, type Server } from 'node:http';
+/**
+ * Capture pristine globals at module-collection time, before any other
+ * suite's hooks can replace them. Some suites (e.g. MCP unit tests) install
+ * throwing guards into globalThis.fetch in afterEach and never restore it;
+ * under the single-fork pool that poisons every later suite. Reinstalling
+ * the pristine references in beforeAll makes this suite order-independent.
+ */
+const pristineFetch = globalThis.fetch;
+const pristineResponse = globalThis.Response;
+import {
+  createServer,
+  request as httpRequest,
+  Agent,
+  type Server,
+} from 'node:http';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { main } from '../src/index.js';
+
+/**
+ * A fetch implementation that bypasses globalThis.fetch entirely (node:http
+ * under the hood), so the tests stay immune to other suites stubbing or
+ * poisoning the global.
+ */
+function makeDirectFetch(): typeof fetch {
+  const agent = new Agent({ keepAlive: false });
+  return ((input: string | URL | Request, init?: RequestInit) =>
+    new Promise<Response>((resolve, reject) => {
+      const url = new URL(typeof input === 'string' ? input : input.toString());
+      const req = httpRequest(
+        {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname + url.search,
+          method: init?.method ?? 'GET',
+          headers: init?.headers as Record<string, string> | undefined,
+          agent,
+        },
+        res => {
+          const chunks: Buffer[] = [];
+          res.on('data', chunk => chunks.push(chunk as Buffer));
+          res.on('end', () => {
+            const bodyText = Buffer.concat(chunks).toString('utf8');
+            const status = res.statusCode ?? 500;
+            // Minimal Response stand-in built from scratch so the test does
+            // not depend on globalThis.Response, which other suites replace.
+            const response = {
+              ok: status >= 200 && status < 300,
+              status,
+              statusText: res.statusMessage ?? '',
+              text: async () => bodyText,
+              json: async () => JSON.parse(bodyText),
+            };
+            resolve(response as unknown as Response);
+          });
+        }
+      );
+      req.on('error', reject);
+      if (init?.body) {
+        req.write(init.body);
+      }
+      req.end();
+    })) as typeof fetch;
+}
 
 /**
  * Fixture server implementing both route dialects:
@@ -77,16 +137,32 @@ async function startFixture(port: number): Promise<Server> {
     sendJson(404, { error: `no fixture for ${req.method} ${url}` });
   });
 
-  await new Promise<void>(resolve => server.listen(port, '127.0.0.1', resolve));
+  await new Promise<void>(resolve =>
+    server.listen(port === -1 ? 0 : port, '127.0.0.1', resolve)
+  );
   return server;
+}
+
+function listeningPort(server: Server): number {
+  const addr = server.address();
+  if (!addr || typeof addr !== 'object') {
+    throw new Error('fixture server has no address');
+  }
+  return addr.port;
 }
 
 describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
   let server: Server;
-  const port = 4573;
+  let port = -1;
+  const directFetch = makeDirectFetch();
 
   beforeAll(async () => {
+    globalThis.fetch = pristineFetch;
+    (globalThis as { Response: unknown }).Response = pristineResponse;
+    globalThis.fetch = pristineFetch;
+    (globalThis as { Response: unknown }).Response = pristineResponse;
     server = await startFixture(port);
+    port = listeningPort(server);
   });
 
   afterAll(async () => {
@@ -100,14 +176,17 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
       out.push(msgs.map(String).join(' '));
     };
     try {
-      const code = await main([
-        '--coordinator',
-        `http://127.0.0.1:${port}`,
-        'session',
-        'list',
-        '--status',
-        'ended',
-      ]);
+      const code = await main(
+        [
+          '--coordinator',
+          `http://127.0.0.1:${port}`,
+          'session',
+          'list',
+          '--status',
+          'ended',
+        ],
+        directFetch
+      );
       expect(code).toBe(0);
       const parsed = JSON.parse(out.join('\n'));
       expect(parsed.count).toBe(1);
@@ -124,13 +203,10 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
       out.push(msgs.map(String).join(' '));
     };
     try {
-      const code = await main([
-        '--coordinator',
-        `http://127.0.0.1:${port}`,
-        'session',
-        'log',
-        's-1',
-      ]);
+      const code = await main(
+        ['--coordinator', `http://127.0.0.1:${port}`, 'session', 'log', 's-1'],
+        directFetch
+      );
       expect(code).toBe(0);
       const parsed = JSON.parse(out.join('\n'));
       expect(parsed.session.id).toBe('s-1');
@@ -147,13 +223,16 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
       out.push(msgs.map(String).join(' '));
     };
     try {
-      const code = await main([
-        '--coordinator',
-        `http://127.0.0.1:${port}`,
-        'session',
-        'process',
-        's-1',
-      ]);
+      const code = await main(
+        [
+          '--coordinator',
+          `http://127.0.0.1:${port}`,
+          'session',
+          'process',
+          's-1',
+        ],
+        directFetch
+      );
       expect(code).toBe(0);
       const parsed = JSON.parse(out.join('\n'));
       expect(parsed.session.status).toBe('processing');
@@ -169,17 +248,20 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
       out.push(msgs.map(String).join(' '));
     };
     try {
-      const code = await main([
-        '--coordinator',
-        `http://127.0.0.1:${port}`,
-        'session',
-        'processed',
-        's-1',
-        '--summary',
-        'done',
-        '--notes',
-        'ok',
-      ]);
+      const code = await main(
+        [
+          '--coordinator',
+          `http://127.0.0.1:${port}`,
+          'session',
+          'processed',
+          's-1',
+          '--summary',
+          'done',
+          '--notes',
+          'ok',
+        ],
+        directFetch
+      );
       expect(code).toBe(0);
       const parsed = JSON.parse(out.join('\n'));
       expect(parsed.session.status).toBe('processed');
@@ -199,31 +281,37 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
     };
     try {
       expect(
-        await main([
-          '--coordinator',
-          `http://127.0.0.1:${port}`,
-          'wiki',
-          'read',
-          'my-page',
-        ])
+        await main(
+          [
+            '--coordinator',
+            `http://127.0.0.1:${port}`,
+            'wiki',
+            'read',
+            'my-page',
+          ],
+          directFetch
+        )
       ).toBe(0);
       expect(JSON.parse(out[0]).title).toBe('My Page');
 
       out.length = 0;
       expect(
-        await main([
-          '--coordinator',
-          `http://127.0.0.1:${port}`,
-          'wiki',
-          'write',
-          'my-page',
-          '--title',
-          'T',
-          '--content',
-          'C',
-          '--tags',
-          'a,b',
-        ])
+        await main(
+          [
+            '--coordinator',
+            `http://127.0.0.1:${port}`,
+            'wiki',
+            'write',
+            'my-page',
+            '--title',
+            'T',
+            '--content',
+            'C',
+            '--tags',
+            'a,b',
+          ],
+          directFetch
+        )
       ).toBe(0);
       const written = JSON.parse(out[0]);
       expect(written.written.title).toBe('T');
@@ -231,13 +319,16 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
 
       out.length = 0;
       expect(
-        await main([
-          '--coordinator',
-          `http://127.0.0.1:${port}`,
-          'wiki',
-          'search',
-          'pipeline',
-        ])
+        await main(
+          [
+            '--coordinator',
+            `http://127.0.0.1:${port}`,
+            'wiki',
+            'search',
+            'pipeline',
+          ],
+          directFetch
+        )
       ).toBe(0);
       expect(JSON.parse(out[0]).results).toHaveLength(1);
 
@@ -247,13 +338,16 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
         .mockImplementation(() => undefined);
       try {
         expect(
-          await main([
-            '--coordinator',
-            `http://127.0.0.1:${port}`,
-            'wiki',
-            'read',
-            'missing',
-          ])
+          await main(
+            [
+              '--coordinator',
+              `http://127.0.0.1:${port}`,
+              'wiki',
+              'read',
+              'missing',
+            ],
+            directFetch
+          )
         ).toBe(1);
         expect(errSpy).toHaveBeenCalled();
       } finally {
@@ -267,10 +361,12 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
 
 describe('drone-swarm CLI against a beacon-dialect fixture', () => {
   let server: Server;
-  const port = 4574;
+  let port = -1;
+  const directFetch = makeDirectFetch();
 
   beforeAll(async () => {
     server = await startFixture(port);
+    port = listeningPort(server);
   });
 
   afterAll(async () => {
@@ -285,25 +381,25 @@ describe('drone-swarm CLI against a beacon-dialect fixture', () => {
     };
     try {
       expect(
-        await main([
-          '--beacon',
-          `http://127.0.0.1:${port}`,
-          'wiki',
-          'read',
-          'my-page',
-        ])
+        await main(
+          ['--beacon', `http://127.0.0.1:${port}`, 'wiki', 'read', 'my-page'],
+          directFetch
+        )
       ).toBe(0);
       expect(JSON.parse(out[0]).id).toBe('my-page');
 
       out.length = 0;
       expect(
-        await main([
-          '--beacon',
-          `http://127.0.0.1:${port}`,
-          'wiki',
-          'search',
-          'pipeline',
-        ])
+        await main(
+          [
+            '--beacon',
+            `http://127.0.0.1:${port}`,
+            'wiki',
+            'search',
+            'pipeline',
+          ],
+          directFetch
+        )
       ).toBe(0);
       expect(JSON.parse(out[0]).results).toHaveLength(1);
     } finally {

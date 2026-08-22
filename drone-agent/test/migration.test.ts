@@ -110,6 +110,7 @@ async function createPrincipleFile(
 // ── Mock fetch ─────────────────────────────────────────────────────────
 
 const mockServerData = new Map<string, Record<string, unknown>[]>();
+const ORIGINAL_FETCH = globalThis.fetch;
 
 function setupMockFetch() {
   mockServerData.clear();
@@ -211,7 +212,7 @@ function setupMockFetch() {
 }
 
 function teardownMockFetch() {
-  delete (globalThis as any).fetch;
+  globalThis.fetch = ORIGINAL_FETCH;
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────
