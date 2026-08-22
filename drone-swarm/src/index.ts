@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { resolveAddress, AddressError } from './address.js';
 import { ApiError, SwarmClient } from './client.js';
 
@@ -217,14 +216,4 @@ export async function main(
     }
     return 1;
   }
-}
-
-const invokedDirectly =
-  typeof process.argv[1] === 'string' &&
-  import.meta.url.endsWith(process.argv[1].split('/').pop() ?? '');
-
-if (invokedDirectly) {
-  main().then(code => {
-    process.exit(code);
-  });
 }

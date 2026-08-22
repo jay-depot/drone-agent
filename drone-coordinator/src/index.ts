@@ -11,7 +11,6 @@ import {
 import os from 'node:os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { pathToFileURL } from 'url';
 import { existsSync } from 'fs';
 import {
   initDatabase,
@@ -785,11 +784,4 @@ Pages support [[wiki links]] for cross-references. The wiki enforces a "no downw
     });
     logger.info('Seeded default skill: memory-wiki');
   }
-}
-
-// Entry guard: only run main() if invoked directly
-const invokedDirectly =
-  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
-if (invokedDirectly) {
-  void main();
 }

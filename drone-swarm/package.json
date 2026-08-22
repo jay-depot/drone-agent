@@ -6,17 +6,19 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "drone-swarm": "./dist/index.js"
+    "drone-swarm": "./bin/drone-swarm"
   },
   "files": [
-    "dist"
+    "dist",
+    "bin"
   ],
   "private": true,
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
-    "test": "echo 'drone-swarm tests run via root vitest (pnpm test at repo root)'"
+    "test": "echo 'drone-swarm tests run via root vitest (pnpm test at repo root)'",
+    "start": "node ./bin/drone-swarm"
   },
   "dependencies": {
     "drone-swarm-common": "workspace:*"
