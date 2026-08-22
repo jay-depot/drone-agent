@@ -238,5 +238,17 @@
   {
     "timestamp": "2026-08-21T15:31:15.609Z",
     "insight": "When the compaction `force` option bypasses the soft-threshold early-bail, it also unintentionally inherits the full auto-convergence loop (up to 5 iterations), causing manual `/compact` to over-compact by slicing-and-summarizing until zero non-summary turns remain. Fix: add a `maxIterations?: number` option to CompactionOptions and default the loop bound to `maxIterations ?? MAX_COMPACTION_ITERATIONS`. Manual `forceEvaluate` and `forceEvaluateAll` pass `maxIterations: 1` so they perform exactly one forced slice; automatic hooks omit it to preserve convergence. `slicePercentOverride: 100` on forceEvaluateAll already makes a single round equivalent, so the maxIterations cap there is behaviorally neutral but makes intent explicit."
+  },
+  {
+    "timestamp": "2026-08-22T07:09:26.184Z",
+    "insight": "Recurring file__apply_diff failure mode (third occurrence): patches whose added lines belong INSIDE a single-line template literal (CLI help text with literal \\n escapes) or inside a SQL template literal instead landed at the top of the file as stray statements, silently breaking the build. The anchor matcher treats the file as line-based and the template literal is one giant line, so 'insert after line X' semantics do not exist. Reliable workaround: perform such insertions with a byte-exact scripted edit (node script via subagent; note perl -0pi with \\Q...\\E fails when the pattern contains ${VAR} because perl interpolates it as a variable even inside quotemeta). After ANY apply_diff, verify placement with a targeted grep before building."
+  },
+  {
+    "timestamp": "2026-08-22T07:09:26.184Z",
+    "insight": "Root cause of intermittent cross-suite test failures under vitest's single-fork pool: suites that mutate globalThis.fetch without restoring it poison every suite that runs after them (file order is nondeterministic, so failures look flaky). Two offenders found and fixed: mcp-client.test.ts installed a permanent throwing GUARD_FETCH in afterEach; migration.test.ts deleted globalThis.fetch in teardown ('fetch is not a function' for later suites). Rule: any test that replaces a global must save the original at module scope and restore it in afterAll (not just afterEach teardown-by-delete). Symptom fingerprint: a suite fails only in full runs with 'real fetch must not be called' or 'fetch is not a function' on stderr, passes in isolation, and failure correlates with another suite completing first."
+  },
+  {
+    "timestamp": "2026-08-22T07:09:26.184Z",
+    "insight": "LSP diagnostics in this workspace can be stale in BOTH directions: they persisted after files were fixed (cache lag), which tempts you to dismiss real errors as stale. Ground truth hierarchy: (1) `pnpm -r run build` (fresh tsc) is authoritative; (2) direct file__read of the suspected lines beats cached diagnostics; (3) only after a clean build should remaining LSP errors be trusted as real. During the drone-swarm pipeline work, a 'stale diagnostics' assumption was wrong twice — the errors were real stray-line corruption — and also right once (errors outliving a fix). Verify before either fixing or dismissing."
   }
 ]
