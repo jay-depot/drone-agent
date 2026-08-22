@@ -29,7 +29,9 @@ import {
   createCoordinatorClient,
   type CoordinatorClient,
   type CoordinatorClientOptions,
+  setOutboxEnabled,
 } from './coordinator-client.js';
+import { createOutboxFlusher } from './outbox-flusher.js';
 import { resolveDroneExecutable } from 'drone-core';
 import {
   initCoordinatorTrust,
@@ -398,6 +400,7 @@ async function main() {
 
   // Start periodic coordinator sync if configured
   let syncInterval: NodeJS.Timeout | undefined;
+  let outboxFlusher: ReturnType<typeof createOutboxFlusher> | undefined;
   if (coordinatorClient) {
     const syncIntervalMs = config.syncIntervalMinutes * 60 * 1000;
     logger.info(
@@ -419,6 +422,16 @@ async function main() {
     }, syncIntervalMs);
   }
 
+  if (coordinatorClient) {
+    setOutboxEnabled(true);
+    outboxFlusher = createOutboxFlusher({
+      getBaseUrl: () => coordinatorClient?.getBaseUrl(),
+      intervalMs: Math.min(syncIntervalMs, 60000),
+    });
+    outboxFlusher.start();
+    logger.info('Outbox flusher started');
+  }
+
   // Graceful shutdown
   const shutdown = async () => {
     logger.info('Shutting down...');
@@ -427,6 +440,7 @@ async function main() {
     if (syncInterval) {
       clearInterval(syncInterval);
     }
+    outboxFlusher?.stop();
 
     cleanupAllSpawns();
     await app.close();
