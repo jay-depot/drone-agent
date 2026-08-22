@@ -9,7 +9,7 @@ tags:
   - outbox
   - memory-pipeline
 created: 2026-08-10T22:44:00.439Z
-updated: 2026-08-10T22:44:00.439Z
+updated: 2026-08-22T06:55:15.173Z
 ---
 
 # Plan: drone-swarm CLI, JSON config files, session-end triggers, beacon outbox
@@ -75,3 +75,27 @@ Proactive RAG/retrieval injection (future), real-time streaming, drone-agent run
 ## Commits/notes
 
 Monorepo pnpm workspace: drone-agent, drone-core, drone-beacon, drone-coordinator, drone-coordinator-ui, drone-swarm-common, drone-gateway, skill-library. NEW package: drone-swarm.
+
+---
+
+# ✅ EXECUTED 2026-08-21/22 on branch feature/drone-swarm-pipeline-infra
+
+All 7 phases complete. Commits: d52ffca (config-file loader), 2d154cb (beacon config+hook), 107258d (coordinator config+hook), ad23ab4 (drone-swarm package), 24ac364 (outbox), 2f840fa (docs), 3735e6c (help-text repair + flusher scope fix), abf7e29 (cause chaining + prettier), 12c4015 (global fetch pollution fixes).
+
+Implementation deltas vs plan:
+- mergeConfig deep-merges sessionEnd ONLY within a matching trigger type; differing shapes replace wholesale (prevents invalid unions like {type:'spawn',command:'x'}).
+- Beacon/coordinator parseArgs track explicit flag overrides in a separate object merged AFTER the file so unset flags never beat file values.
+- Coordinator spawn trigger REQUIRES beaconId at startup (exit 1 if missing); forwards POST http://<beacon>/spawn with AbortSignal.timeout(10s); unknown beacon → contained error result.
+- Outbox schema adds lastAttemptAt column; first attempts are due immediately, retries back off OUTBOX_RETRY_BASE_MS(1s) * 2^(attempts-1); flusher treats 404 as delivered (routes replay-idempotent), drops after maxAttempts (default 10) with error log; injectable clock (`now` option / flushOnce(now)) for tests; interval = min(syncIntervalMinutes*60s, 60s).
+- createCoordinatorFetch was NOT moved to drone-swarm-common (Phase 4 delta): drone-swarm targets plain HTTP REST and uses plain fetch (with injectable fetchImpl for tests); the TLS-tolerant fetch stays beacon-local since only beacon↔coordinator traffic is self-signed.
+- drone-swarm main(argv, fetchImpl?) exported for testability; entry guard prevents auto-run on import.
+
+Validation results:
+- LSP zero errors; pnpm lint/typecheck/build all exit 0 (8 packages).
+- Fast suite: 2047 passed | 9 skipped (2056), verified stable across 6 consecutive full runs.
+- Smoke A: live coordinator with --config-file command hook fired on DELETE /api/sync/sessions/:id (marker file captured substituted session id); drone-swarm session list/log/process/processed + wiki write/read/search all worked against it.
+- Smoke B: outbox held 2 writes while coordinator down (flush → 0 attempted), then delivered both after coordinator up (correct endpoints, 0 pending).
+
+Also fixed en route (pre-existing bugs): mcp-client.test.ts leaked a permanent throwing GUARD_FETCH into globalThis.fetch (now restored in afterAll); migration.test.ts deleted globalThis.fetch in teardown (now saves/restores). Both poisoned every later suite under vitest's single-fork pool — this was the root cause of intermittent drone-swarm cli.test failures ("real fetch must not be called" / "fetch is not a function").
+
+Docs: docs/agents/memory-pipeline.md; AGENTS.md package table (8 packages); project wiki modules/drone-swarm + concepts/memory-pipeline + index entries.

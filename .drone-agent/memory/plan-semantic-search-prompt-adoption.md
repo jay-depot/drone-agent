@@ -26,6 +26,7 @@ The beacon-backed semantic search (`search__text` with `mode: "semantic"`) is fu
 ## Steps
 
 ### Step 1 — Rewrite the `search__text` tool description
+
 File: `drone-agent/src/plugins/search/index.ts` (the `description` field of the `registerTool` call, ~line 44).
 
 Replace with copy that (a) leads with the two-mode framing, (b) gives concrete when-to-use-which rules, (c) explains the result shape difference (regex → file/line/content; semantic → file/score/snippet, follow up with `file__read`). Rough target:
@@ -42,6 +43,7 @@ description:
 ```
 
 ### Step 2 — Expand the `# Search Index` prompt fragment into real usage guidance
+
 File: `drone-agent/src/plugins/search/index.ts`, the `render` of fragment key `search-indexed-directories` (~lines 209–216). Keep the top-level `# Search Index` heading and directory list; add a decision-rules section modeled on `# LSP Usage`. Rough target:
 
 ```
@@ -65,9 +67,11 @@ too few results; raise it to filter noise.
 Note: the tool description (Step 1) and this fragment intentionally reinforce each other — description = always visible; fragment = visible only when semantic is actually wired to indexed dirs.
 
 ### Step 3 — Delete the dead legacy plugin file (user-approved)
+
 Delete `drone-agent/src/plugins/search.ts` (placeholder, unreferenced — verified zero imports, not registered in `plugins/index.ts`). Required housekeeping per project standards ("dead code must be removed").
 
 ### Step 4 — Update tests (`drone-agent/test/search.test.ts`)
+
 - Extend `captureRegistration()` to capture fragments: add a `fragments` map and implement `registerPromptFragment: fragment => fragments.set(fragment.key, fragment)`.
 - New describe block "search plugin — prompt surface":
   - Tool description test: register plugin with the default mock config; assert the registered `text` tool's description mentions `semantic`, `regex`, and `file__read`. (Requires capturing the full tool object, not just `execute` — adjust the map value type or add a second map.)
@@ -79,13 +83,16 @@ Delete `drone-agent/src/plugins/search.ts` (placeholder, unreferenced — verifi
 - All existing tests in the file must still pass unchanged (they use default config → no fragment registered → unaffected).
 
 ### Step 5 — Validation
+
 Run in order; all must pass with zero errors:
+
 1. LSP diagnostics clean across the workspace (no new errors/warnings in touched files)
 2. `pnpm -r run build`
 3. `pnpm -r run lint`
 4. `pnpm -r run test` (fast suite)
 
 ## Validation Criteria
+
 - [ ] `search__text` tool description leads with two-mode framing and includes when-to-use guidance + result-shape note (verified by unit test).
 - [ ] `search-indexed-directories` fragment renders `# Search Index` + directory list + decision rules (verified by unit test).
 - [ ] Legacy `src/plugins/search.ts` deleted; no dangling imports (grep + build).
@@ -93,9 +100,11 @@ Run in order; all must pass with zero errors:
 - [ ] No runtime/search behavior changed (regex and semantic execution paths untouched).
 
 ## Explicit Non-Goals (deferred)
+
 - Reactive nudges in regex tool output (e.g. "0 results — try semantic") — deliberately excluded from this phase.
 - Any changes to beacon, indexing, chunking, or config.
 - Per-persona prompt tuning.
 
 ## Housekeeping for the executing agent
+
 Per AGENTS.md, `.drone-agent/` contents (including this memory) are checked into VCS on feature branches — commit this memory with the change set. Log a `self-improvement` insight after landing if real-session behavior change is observed (or not) in follow-up use.

@@ -58,7 +58,7 @@ Example `~/.drone-coordinator/config.json`:
 }
 ```
 
-Recognized top-level keys: `port`, `host`, `webPort`, `webHost` (coordinator
+Recognized top-level keys: `port`, `host`, `webPort`/`webHost` (coordinator
 only), `dbPath`, `useHttps`, `sessionEnd`. Unknown keys are rejected at startup
 with every problem listed at once.
 
@@ -75,7 +75,7 @@ A discriminated union — strictly one variant or the other:
 { "type": "spawn", "persona": "coordinator-wiki-librarian", "beaconId": "beacon-123" }
 ```
 
-- **Beacon layer**: `spawn` without `beaconId` defaults to *this* beacon. A
+- **Beacon layer**: `spawn` without `beaconId` defaults to _this_ beacon. A
   `beaconId` naming a different beacon is skipped with a warning.
 - **Coordinator layer**: `spawn` requires `beaconId` — startup fails with a
   config error if it is missing. The spawn is forwarded to that beacon's
@@ -90,11 +90,11 @@ pipeline scripts. It prints JSON to stdout and errors to stderr (exit code 1).
 
 Address selection (mutually exclusive):
 
-| Source | Form |
-| ------ | ---- |
-| Flag | `--coordinator <url>` or `--beacon <url>` |
+| Source      | Form                                         |
+| ----------- | -------------------------------------------- |
+| Flag        | `--coordinator <url>` or `--beacon <url>`    |
 | Environment | `DRONE_COORDINATOR_URL` / `DRONE_BEACON_URL` |
-| Default | local coordinator on `http://localhost:3456` |
+| Default     | local coordinator on `http://localhost:3456` |
 
 The target picks both address **and route dialect** — the coordinator serves
 everything under `/api/...`, while the beacon serves wiki routes flat
