@@ -14,6 +14,7 @@ import {
   formatMigrationNotice,
   migrateLegacyProviderConfig,
 } from './provider-migration.js';
+import { persistLegacyProviderMigration } from './provider-migration-persist.js';
 import { enforceProviderScopePolicy } from './provider-scope-policy.js';
 
 export const CONFIG_DIRECTORY_NAME = '.drone-agent';
@@ -137,6 +138,13 @@ export async function loadAgentConfig(
   const migration = migrateLegacyProviderConfig(mergedConfig);
   mergedConfig = migration.config;
 
+  // Persist the migration to the file-backed layers so it happens exactly
+  // once. Derived from the raw files (not this merged object) so ${VAR}
+  // templates stay templates on disk.
+  const persisted = await persistLegacyProviderMigration(
+    layers.map(layer => ({ scope: layer.scope, path: layer.path }))
+  );
+
   const scopePolicy = enforceProviderScopePolicy(layers);
   if (scopePolicy.errors.length > 0) {
     throw new Error(
@@ -154,7 +162,13 @@ export async function loadAgentConfig(
   return {
     config: mergedConfig,
     layers,
-    migrationNotice: formatMigrationNotice(migration),
-    warnings: [...scopePolicy.warnings, ...validation.warnings],
+    migrationNotice: formatMigrationNotice(migration, {
+      backupPaths: persisted.backupPaths,
+    }),
+    warnings: [
+      ...persisted.warnings,
+      ...scopePolicy.warnings,
+      ...validation.warnings,
+    ],
   };
 }

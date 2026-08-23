@@ -87,10 +87,16 @@ export type DroneChatResponse = {
   toolCalls?: DroneToolCall[];
 };
 
+/**
+ * Provenance of a context-window size. `provider` = live probe against the
+ * provider (e.g. ollama `client.show()`), `metadata` = declared or discovered
+ * catalog data resolved broker-side, `config` = session fallback
+ * (`session.contextWindowTokens`), `default` = driver hardcoded default.
+ */
 export type DroneContextWindowInfo = {
   model: string;
   contextWindowTokens: number;
-  source: 'provider' | 'config' | 'default';
+  source: 'provider' | 'config' | 'default' | 'metadata';
 };
 
 export type DroneTokenEstimate = {

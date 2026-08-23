@@ -1,16 +1,14 @@
-import type {
-  DroneAgentConfig,
-  DroneModelEntryConfig,
-  DroneProviderConfig,
-} from 'drone-core';
+import type { DroneAgentConfig, DroneProviderConfig } from 'drone-core';
 
 /**
  * Legacy → providers migration.
  *
  * Self-contained and deletable: when the migration window closes, delete
- * this file and its tests. Everything here operates on an already-merged
- * config object (defaults → user → project → swarm underlays) and returns
- * a migrated copy plus a human-readable report of what changed.
+ * this file and its tests. One structural transform backs two entry points:
+ * `migrateLegacyProviderConfig` operates on the decoded config (runtime
+ * merge path, unchanged public behavior); `migrateLegacyProviderConfigRaw`
+ * operates on raw parsed JSON (persistence path — `${VAR}` templates stay
+ * templates because env interpolation never ran on this shape).
  */
 
 export type MigrationResult = {
@@ -22,15 +20,233 @@ export type MigrationResult = {
   changed: boolean;
 };
 
+export type RawMigrationResult = {
+  /** The transformed raw object (new container; nested inputs untouched). */
+  raw: Record<string, unknown>;
+  /** Legacy section names that produced synthetic providers entries. */
+  migratedSections: string[];
+  /**
+   * Sections relocated with a literal (non-template) apiKey — surfaced by
+   * the persistence layer as an advisory `${VAR}` nudge, never rewritten.
+   */
+  inlineKeySections: string[];
+  /** Seeded `<providerId>/<modelLocalId>` selection, when one was set. */
+  seededActive?: string;
+  /** True when the transform changed anything (including strip-only). */
+  changed: boolean;
+};
+
 /** Legacy section names consulted during migration. */
-const LEGACY_SECTIONS = [
+export const LEGACY_SECTIONS = [
   'ollama',
   'openai',
   'anthropic',
   'openrouter',
 ] as const;
 
-type LegacyModelList = Array<{ id: string; contextWindow: number }>;
+type RawShape = Record<string, unknown>;
+
+export type MigrateRawOptions = {
+  /**
+   * Remove all four legacy sections from the output regardless of whether
+   * they contributed synthetic entries (mixed-format cleanup policy).
+   */
+  stripLegacy?: boolean;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function sectionOf(raw: RawShape, name: string): Record<string, unknown> {
+  const value = raw[name];
+  return isRecord(value) ? value : {};
+}
+
+function isVarTemplate(value: unknown): boolean {
+  return typeof value === 'string' && value.trimStart().startsWith('${');
+}
+
+/** Legacy `{ id, contextWindow }[]` → declared models map (contextWindow only). */
+function toRawModelMap(
+  models: unknown
+): Record<string, { contextWindow?: number }> {
+  const map: Record<string, { contextWindow?: number }> = {};
+  if (!Array.isArray(models)) {
+    return map;
+  }
+  for (const item of models) {
+    if (!isRecord(item)) {
+      continue;
+    }
+    const id = item['id'];
+    if (typeof id !== 'string' || id.length === 0) {
+      continue;
+    }
+    const contextWindow = item['contextWindow'];
+    map[id] = typeof contextWindow === 'number' ? { contextWindow } : {};
+  }
+  return map;
+}
+
+/** Which legacy sections carry meaningful configuration in a raw shape. */
+export function listRawLegacySections(raw: RawShape): string[] {
+  const present: string[] = [];
+  for (const name of LEGACY_SECTIONS) {
+    const legacy = sectionOf(raw, name);
+    if (name === 'ollama') {
+      if (isNonEmptyString(legacy['model'])) {
+        present.push(name);
+      }
+    } else if (legacy['apiKey']) {
+      present.push(name);
+    }
+  }
+  return present;
+}
+
+/**
+ * Apply the legacy→providers structural transform to a raw parsed JSON
+ * object. Never mutates the input or its nested objects; returns a fresh
+ * container. With `stripLegacy`, all four legacy sections are removed
+ * unconditionally (the persistence layer's mixed-format cleanup policy).
+ */
+export function migrateLegacyProviderConfigRaw(
+  input: RawShape,
+  options: MigrateRawOptions = {}
+): RawMigrationResult {
+  const raw: RawShape = { ...input };
+  const migratedSections: string[] = [];
+  const inlineKeySections: string[] = [];
+
+  const existingProviders = isRecord(raw['providers']) ? raw['providers'] : {};
+  const providers: Record<string, unknown> = { ...existingProviders };
+  const hasSynthetic = Object.keys(existingProviders).length > 0;
+
+  if (!hasSynthetic) {
+    const ollama = sectionOf(raw, 'ollama');
+    if (isNonEmptyString(ollama['model'])) {
+      providers['ollama'] = {
+        protocol: 'ollama',
+        baseUrl: ollama['host'],
+        models: { [ollama['model']]: {} },
+      };
+      migratedSections.push('ollama');
+    }
+
+    const openai = sectionOf(raw, 'openai');
+    if (openai['apiKey']) {
+      providers['openai'] = {
+        protocol: 'openai',
+        baseUrl: openai['baseUrl'],
+        apiKey: openai['apiKey'],
+        orgId: openai['orgId'],
+        models: toRawModelMap(openai['models']),
+      };
+      migratedSections.push('openai');
+      if (!isVarTemplate(openai['apiKey'])) {
+        inlineKeySections.push('openai');
+      }
+    }
+
+    const anthropic = sectionOf(raw, 'anthropic');
+    if (anthropic['apiKey']) {
+      providers['anthropic'] = {
+        protocol: 'anthropic',
+        baseUrl: anthropic['baseUrl'],
+        apiKey: anthropic['apiKey'],
+        apiVersion: anthropic['apiVersion'],
+        models: toRawModelMap(anthropic['models']),
+      };
+      migratedSections.push('anthropic');
+      if (!isVarTemplate(anthropic['apiKey'])) {
+        inlineKeySections.push('anthropic');
+      }
+    }
+
+    const openrouter = sectionOf(raw, 'openrouter');
+    if (openrouter['apiKey']) {
+      providers['openrouter'] = {
+        protocol: 'openrouter',
+        baseUrl: openrouter['baseUrl'],
+        apiKey: openrouter['apiKey'],
+        models: toRawModelMap(openrouter['models']),
+      };
+      migratedSections.push('openrouter');
+      if (!isVarTemplate(openrouter['apiKey'])) {
+        inlineKeySections.push('openrouter');
+      }
+    }
+  }
+
+  const seededActive = seedRawActiveModel(raw, providers);
+
+  const strippedAny =
+    options.stripLegacy === true && LEGACY_SECTIONS.some(name => name in input);
+  if (options.stripLegacy) {
+    for (const name of LEGACY_SECTIONS) {
+      delete raw[name];
+    }
+  }
+
+  raw['providers'] = providers;
+
+  return {
+    raw,
+    migratedSections,
+    inlineKeySections,
+    ...(seededActive !== undefined ? { seededActive } : {}),
+    changed:
+      migratedSections.length > 0 || seededActive !== undefined || strippedAny,
+  };
+}
+
+/**
+ * Seed `llm.active` from the legacy provider selection. Returns undefined
+ * when there is nothing to seed (already set, or no usable selection).
+ */
+function seedRawActiveModel(
+  raw: RawShape,
+  providers: Record<string, unknown>
+): string | undefined {
+  const llm = sectionOf(raw, 'llm');
+  if (llm['active'] || !isNonEmptyString(llm['provider'])) {
+    return undefined;
+  }
+  const providerId = llm['provider'];
+  const provider = providers[providerId];
+  if (!isRecord(provider)) {
+    return undefined;
+  }
+
+  let modelId: string | undefined;
+  if (providerId === 'ollama') {
+    modelId = sectionOf(raw, 'ollama')['model'] as string | undefined;
+  } else {
+    modelId = sectionOf(raw, providerId)['defaultModel'] as string | undefined;
+  }
+
+  const models = isRecord(provider['models']) ? provider['models'] : {};
+  if (!isNonEmptyString(modelId)) {
+    const first = Object.keys(models)[0];
+    if (!first) {
+      return undefined;
+    }
+    modelId = first;
+  }
+
+  if (!(modelId in models)) {
+    provider['models'] = { ...models, [modelId]: {} };
+  }
+
+  const active = `${providerId}/${modelId}`;
+  raw['llm'] = { ...llm, active };
+  return active;
+}
 
 /**
  * Migrate legacy `llm`/`ollama`/`openai`/`anthropic`/`openrouter` sections
@@ -43,157 +259,44 @@ type LegacyModelList = Array<{ id: string; contextWindow: number }>;
 export function migrateLegacyProviderConfig(
   config: DroneAgentConfig
 ): MigrationResult {
-  const migratedSections: string[] = [];
-  const providers: Record<string, DroneProviderConfig> = {
-    ...config.providers,
-  };
-
-  const hasSynthetic = Object.keys(config.providers).length > 0;
-
-  if (!hasSynthetic) {
-    if (looksConfigured(config.ollama)) {
-      providers['ollama'] = {
-        protocol: 'ollama',
-        baseUrl: config.ollama.host,
-        models: {
-          [config.ollama.model]: {},
-        },
-      };
-      migratedSections.push('ollama');
-    }
-
-    if (config.openai.apiKey) {
-      providers['openai'] = {
-        protocol: 'openai',
-        baseUrl: config.openai.baseUrl,
-        apiKey: config.openai.apiKey,
-        orgId: config.openai.orgId,
-        models: toModelMap(config.openai.models),
-      };
-      migratedSections.push('openai');
-    }
-
-    if (config.anthropic.apiKey) {
-      providers['anthropic'] = {
-        protocol: 'anthropic',
-        baseUrl: config.anthropic.baseUrl,
-        apiKey: config.anthropic.apiKey,
-        apiVersion: config.anthropic.apiVersion,
-        models: toModelMap(config.anthropic.models),
-      };
-      migratedSections.push('anthropic');
-    }
-
-    if (config.openrouter.apiKey) {
-      providers['openrouter'] = {
-        protocol: 'openrouter',
-        baseUrl: config.openrouter.baseUrl,
-        apiKey: config.openrouter.apiKey,
-        models: toModelMap(config.openrouter.models),
-      };
-      migratedSections.push('openrouter');
-    }
-  }
-
-  const active = seedActiveModel(config, providers);
-  const changed = migratedSections.length > 0 || active !== undefined;
-
+  const result = migrateLegacyProviderConfigRaw(config as unknown as RawShape);
   return {
-    config: {
-      ...config,
-      providers,
-      ...(active !== undefined ? { llm: { ...config.llm, active } } : {}),
-    },
-    migratedSections,
-    changed,
+    config: result.raw as unknown as DroneAgentConfig,
+    migratedSections: result.migratedSections,
+    changed: result.changed,
   };
-}
-
-/** The ollama section is "configured" when a model is set (host defaults). */
-function looksConfigured(ollama: { host: string; model: string }): boolean {
-  return ollama.model.trim().length > 0;
-}
-
-function toModelMap(
-  models: LegacyModelList
-): Record<string, DroneModelEntryConfig> {
-  const map: Record<string, DroneModelEntryConfig> = {};
-  for (const model of models) {
-    map[model.id] = { contextWindow: model.contextWindow };
-  }
-  return map;
-}
-
-/**
- * Seed llm.active from the legacy provider selection. Returns undefined
- * when there is nothing to seed (already set, or no legacy selection).
- */
-function seedActiveModel(
-  config: DroneAgentConfig,
-  providers: Record<string, DroneProviderConfig>
-): string | undefined {
-  if (config.llm.active) {
-    return undefined;
-  }
-  const providerId = config.llm.provider;
-  const provider = providers[providerId];
-  if (!provider) {
-    return undefined;
-  }
-
-  let modelId: string | undefined;
-  if (providerId === 'ollama') {
-    modelId = config.ollama.model;
-  } else if (providerId === 'openai') {
-    modelId = config.openai.defaultModel;
-  } else if (providerId === 'anthropic') {
-    modelId = config.anthropic.defaultModel;
-  } else if (providerId === 'openrouter') {
-    modelId = config.openrouter.defaultModel;
-  }
-
-  if (!modelId) {
-    const first = Object.keys(provider.models ?? {})[0];
-    if (!first) {
-      return undefined;
-    }
-    modelId = first;
-  }
-
-  const models = provider.models ?? {};
-  if (models[modelId] === undefined) {
-    models[modelId] = {};
-  }
-
-  return `${providerId}/${modelId}`;
 }
 
 /**
  * Build the one-time deprecation notice body. Empty when nothing migrated.
+ * When persistence outcomes are supplied, the notice reflects the saved
+ * state and points at the backups.
  */
 export function formatMigrationNotice(
-  result: MigrationResult
+  result: MigrationResult,
+  persisted?: { backupPaths: string[] }
 ): string | undefined {
   if (result.migratedSections.length === 0) {
     return undefined;
   }
-  return (
+  let notice =
     'Migrated legacy LLM config sections to providers: ' +
     result.migratedSections.join(', ') +
-    '. Update .drone-agent/config.json to the providers format; the legacy ' +
-    'sections are deprecated and will stop being read in a future release.'
-  );
+    '.';
+  if (persisted && persisted.backupPaths.length > 0) {
+    notice +=
+      ' Changes were saved automatically; pre-migration backups: ' +
+      persisted.backupPaths.join(', ') +
+      '.';
+  } else {
+    notice +=
+      ' Update .drone-agent/config.json to the providers format; the legacy ' +
+      'sections are deprecated and will stop being read in a future release.';
+  }
+  return notice;
 }
 
 /** Which legacy sections exist in a config (used by tests and the notice). */
 export function listLegacySections(config: DroneAgentConfig): string[] {
-  const present: string[] = [];
-  for (const section of LEGACY_SECTIONS) {
-    if (section === 'ollama') {
-      if (looksConfigured(config.ollama)) present.push(section);
-    } else if (config[section].apiKey) {
-      present.push(section);
-    }
-  }
-  return present;
+  return listRawLegacySections(config as unknown as RawShape);
 }

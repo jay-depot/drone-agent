@@ -1,6 +1,7 @@
 import {
   parseModelSelection,
   type DiscoveredModel,
+  type DroneContextWindowInfo,
   type DroneLlmCapability,
   type DroneLlmProvider,
   type DronePlugin,
@@ -173,6 +174,52 @@ export const llmPlugin: DronePlugin = {
       };
     }
 
+    const contextWindowProvenanceLogged = new Set<string>();
+
+    /**
+     * Resolve the context window for a provider instance using the same
+     * precedence as every other model attribute: declared ⊕ discovered
+     * catalog data first (`source: 'metadata'`), then the driver's live
+     * probe (`'provider'`/`'default'`), finally the session-config fallback
+     * (`'config'`). Provenance is logged once per model so mis-sized windows
+     * are diagnosable from the log alone.
+     */
+    async function resolveActiveContextWindow(
+      instance: ProviderInstance,
+      requestedModel?: string
+    ): Promise<DroneContextWindowInfo> {
+      const localModel = requestedModel || currentModel;
+      const fullId = `${instance.providerId}/${localModel}`;
+      const metadata = resolveModelMetadata(fullId);
+      let resolved: DroneContextWindowInfo;
+      if (metadata.contextWindow !== undefined) {
+        resolved = {
+          model: fullId,
+          contextWindowTokens: metadata.contextWindow,
+          source: 'metadata',
+        };
+      } else {
+        const probed = await instance.provider.getContextWindowInfo?.({
+          model: metadata.model ?? localModel,
+        });
+        resolved = probed
+          ? { ...probed, model: fullId }
+          : {
+              model: fullId,
+              contextWindowTokens:
+                registration.getConfig().session.contextWindowTokens,
+              source: 'config',
+            };
+      }
+      if (!contextWindowProvenanceLogged.has(fullId)) {
+        contextWindowProvenanceLogged.add(fullId);
+        registration.logger.info(
+          `Context window for ${fullId}: ${resolved.contextWindowTokens} tokens (source: ${resolved.source})`
+        );
+      }
+      return resolved;
+    }
+
     /**
      * Known keys (driver parameterSchema) pass silently; unknown keys are
      * warned about once per request but still sent.
@@ -300,7 +347,8 @@ export const llmPlugin: DronePlugin = {
               hasVision: request.hasVision ?? metadata.hasVision,
             });
           },
-          getContextWindowInfo: inner.getContextWindowInfo?.bind(inner),
+          getContextWindowInfo: ({ model }) =>
+            resolveActiveContextWindow(instance, model),
           supportsImagesInToolResults: inner.supportsImagesInToolResults,
         };
       },
