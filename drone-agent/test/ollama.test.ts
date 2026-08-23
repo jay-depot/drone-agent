@@ -245,15 +245,16 @@ async function buildProviderWithClient(client: Record<string, unknown>) {
   }));
   const module = await import('../src/plugins/ollama/driver.js');
   const warns: string[] = [];
-  const provider = (module as typeof import('../src/plugins/ollama/driver.js'))
-    .createOllamaProvider({
-      baseUrl: 'http://localhost:11434',
-      logger: {
-        info: () => {},
-        warn: (msg: string) => warns.push(msg),
-        error: () => {},
-      },
-    });
+  const provider = (
+    module as typeof import('../src/plugins/ollama/driver.js')
+  ).createOllamaProvider({
+    baseUrl: 'http://localhost:11434',
+    logger: {
+      info: () => {},
+      warn: (msg: string) => warns.push(msg),
+      error: () => {},
+    },
+  });
   return { provider, client, warns };
 }
 
@@ -289,9 +290,9 @@ describe('isCloudModel', () => {
   });
 
   it('detects locals with parameters even without a modelfile', () => {
-    expect(isCloudModel({ modelfile: '', parameters: 'num_ctx 8192' }, 'm')).toBe(
-      false
-    );
+    expect(
+      isCloudModel({ modelfile: '', parameters: 'num_ctx 8192' }, 'm')
+    ).toBe(false);
   });
 
   it('detects cloud models by absence of both local artifacts', () => {

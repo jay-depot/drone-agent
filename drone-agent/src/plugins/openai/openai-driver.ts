@@ -283,9 +283,7 @@ export function createOpenAiProvider(
       };
       return (data.data ?? [])
         .filter(
-          (
-            entry
-          ): entry is Record<string, unknown> & { id: string } =>
+          (entry): entry is Record<string, unknown> & { id: string } =>
             typeof entry.id === 'string'
         )
         .map(entry => mapDiscoveredModel(entry));

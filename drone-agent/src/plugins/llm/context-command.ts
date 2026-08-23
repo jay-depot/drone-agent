@@ -1,7 +1,4 @@
-import type {
-  DroneLlmCapability,
-  DronePlugin,
-} from 'drone-core';
+import type { DroneLlmCapability, DronePlugin } from 'drone-core';
 
 /**
  * `/context` — the inspectable surface for context-window resolution.

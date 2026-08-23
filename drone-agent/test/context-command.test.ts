@@ -92,9 +92,7 @@ async function captureContextCommand(options?: {
 function makeCommandContext(
   config: ReturnType<typeof createDefaultAgentConfig>
 ): {
-  ctx: Parameters<
-    DroneSlashCommand['handler']
-  >[0];
+  ctx: Parameters<DroneSlashCommand['handler']>[0];
   infos: string[];
   warns: string[];
 } {

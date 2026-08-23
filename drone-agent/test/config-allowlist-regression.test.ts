@@ -35,9 +35,7 @@ describe('config setValue real write path (llm.active regression)', () => {
   });
 
   it('persists llm.active to user-scope config.json and stays idempotent', async () => {
-    const { configPlugin } = await import(
-      '../src/plugins/config/index.js'
-    );
+    const { configPlugin } = await import('../src/plugins/config/index.js');
 
     let capability: unknown;
     const registration = {
@@ -84,9 +82,9 @@ describe('config setValue real write path (llm.active regression)', () => {
     };
 
     // The config plugin registers its capability during register().
-    await (
-      configPlugin as { register: (r: never) => Promise<void> }
-    ).register(registration as never);
+    await (configPlugin as { register: (r: never) => Promise<void> }).register(
+      registration as never
+    );
 
     const setValue = (
       capability as {
