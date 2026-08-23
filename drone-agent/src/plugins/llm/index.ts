@@ -152,6 +152,47 @@ export const llmPlugin: DronePlugin = {
       discoveryCache = undefined;
     }
 
+    /**
+     * Effective parameters = provider.parameters ⊕ model.parameters,
+     * shallow (model wins per key). Aliased entries inherit the base
+     * entry's parameters first. Caller-supplied request parameters
+     * (currently none — future session knobs) win over both.
+     */
+    function mergeEffectiveParameters(
+      providerId: string,
+      fullId: string,
+      requestParameters?: Record<string, unknown>
+    ): Record<string, unknown> {
+      const config = registration.getConfig();
+      const providerEntry = config.providers[providerId];
+      const metadata = resolveModelMetadata(fullId);
+      return {
+        ...(providerEntry?.parameters ?? {}),
+        ...(metadata.parameters ?? {}),
+        ...(requestParameters ?? {}),
+      };
+    }
+
+    /**
+     * Known keys (driver parameterSchema) pass silently; unknown keys are
+     * warned about once per request but still sent.
+     */
+    function warnUnknownParameters(
+      instance: ProviderInstance,
+      effective: Record<string, unknown>
+    ): void {
+      const known = new Set(
+        Object.keys(instance.driver.parameterSchema?.parameters ?? {})
+      );
+      for (const key of Object.keys(effective)) {
+        if (!known.has(key)) {
+          registration.logger.warn(
+            `Provider "${instance.providerId}": parameter "${key}" is not in the ${instance.driver.protocolId} schema; sending it anyway.`
+          );
+        }
+      }
+    }
+
     /** Resolve metadata for a full-form selection: declared > discovered > undefined. */
     function resolveModelMetadata(fullId: string): {
       contextWindow?: number;
@@ -233,7 +274,35 @@ export const llmPlugin: DronePlugin = {
             'No active LLM provider. Ensure a providers config entry exists and its protocol plugin is enabled.'
           );
         }
-        return instance.provider;
+        // Broker-enriched view of the provider: chat() fills the additive
+        // DroneChatRequest fields (effective parameters, resolved metadata)
+        // before delegating. Single interception point — wire contract intact.
+        const inner = instance.provider;
+        return {
+          chat: async request => {
+            const fullId = `${instance.providerId}/${request.model}`;
+            const metadata = resolveModelMetadata(fullId);
+            const effectiveParameters = mergeEffectiveParameters(
+              instance.providerId,
+              fullId,
+              request.parameters
+            );
+            warnUnknownParameters(instance, effectiveParameters);
+            return inner.chat({
+              ...request,
+              parameters: effectiveParameters,
+              extra: {
+                ...(registration.getConfig().providers[instance.providerId]
+                  ?.extra ?? {}),
+              },
+              maxOutputTokens:
+                request.maxOutputTokens ?? metadata.maxOutputTokens,
+              hasVision: request.hasVision ?? metadata.hasVision,
+            });
+          },
+          getContextWindowInfo: inner.getContextWindowInfo?.bind(inner),
+          supportsImagesInToolResults: inner.supportsImagesInToolResults,
+        };
       },
       getActiveProviderId: () => activeProviderId,
       getAvailableProviders: () =>
