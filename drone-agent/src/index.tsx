@@ -68,8 +68,13 @@ async function main(): Promise<void> {
     return;
   }
 
+  // --model is an invocation-scoped override of llm.active (never persisted).
+  // The fallback reads the migrated config so the initial display matches
+  // what the broker will activate; the broker itself re-reads llm.active.
   const model =
-    invocation.options.modelOverride ?? resolvedConfig.config.ollama.model;
+    invocation.options.modelOverride ??
+    resolvedConfig.config.llm.active ??
+    resolvedConfig.config.ollama.model;
   const sessionManager = createSessionManager();
 
   // The budget service needs renderPromptFragments from the engine, but the
@@ -284,6 +289,24 @@ async function main(): Promise<void> {
 
   await engine.runHooks('onPluginsLoaded');
   await engine.runHooks('onSessionStart');
+
+  // ── --model invocation-scoped override ─────────────────────────────
+  // Applied AFTER onPluginsLoaded so the broker has already activated from
+  // llm.active; the override wins for this invocation and is never persisted.
+  if (invocation.options.modelOverride) {
+    const llm = getLlmCapability(engine);
+    if (llm) {
+      try {
+        conversation.setModel(invocation.options.modelOverride);
+        logger.info(
+          `model override (this invocation): ${invocation.options.modelOverride}`
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.warn(`Failed to apply --model override: ${message}`);
+      }
+    }
+  }
 
   // ── Deferred project plugin trust prompting ──────────────────────────
   // After elicitation is set up, prompt the user for any project-scope
