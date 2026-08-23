@@ -32,6 +32,7 @@ export const ollamaPlugin: DronePlugin = {
         createOllamaProvider({
           baseUrl: providerConfig.baseUrl,
           apiKey: providerConfig.apiKey,
+          logger: registration.logger,
         }),
       discoverModels: async providerConfig =>
         discoverOllamaModels(providerConfig.baseUrl),

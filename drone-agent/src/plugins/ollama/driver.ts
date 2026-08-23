@@ -1,6 +1,8 @@
 import type {
   DiscoveredModel,
   DroneChatRequest,
+  DroneContextWindowInfo,
+  DroneLogger,
   DroneLlmProvider,
 } from 'drone-core';
 import { Ollama, type ShowResponse } from 'ollama';
@@ -41,6 +43,93 @@ export function buildOllamaOptions(input: {
     options[key] = value;
   }
   return options;
+}
+
+/**
+ * Window size pinned for LOCAL models when nothing else constrains num_ctx
+ * (no resident ps entry, no request parameter, no Modelfile directive).
+ * Ollama's own default is VRAM-probed and unpredictable across hosts, and a
+ * bare 4096 cannot run a coding agent workload — so we pin our own and make
+ * what we send identical to what we report.
+ */
+export const OLLAMA_LOCAL_NUM_CTX_PIN = 16384;
+
+/** Fallback window when /api/show itself fails (pre-existing behavior). */
+const OLLAMA_SHOW_FAILURE_FALLBACK_TOKENS = 32768;
+
+/**
+ * Extract `num_ctx <n>` from an ollama Modelfile PARAMETERS blob
+ * (`/api/show`.parameters, newline-separated PARAMETER directives).
+ */
+export function parseModelfileNumCtx(parameters?: string): number | null {
+  if (typeof parameters !== 'string') {
+    return null;
+  }
+  for (const line of parameters.split('\n')) {
+    const match = /^\s*num_ctx\s+(\d+)\s*$/i.exec(line);
+    if (match) {
+      const parsed = Number(match[1]);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Cloud models are hosted by ollama.com: nothing local constrains their
+ * context, and the advertised training length IS the enforced window.
+ * Signal: name suffix (`:cloud` / `-cloud`) or absence of local artifacts
+ * (clouds carry neither a Modelfile nor a parameters blob).
+ */
+export function isCloudModel(
+  show: Pick<ShowResponse, 'modelfile' | 'parameters'>,
+  modelName: string
+): boolean {
+  const name = modelName.toLowerCase();
+  if (name.endsWith(':cloud') || name.endsWith('-cloud')) {
+    return true;
+  }
+  const hasModelfile =
+    typeof show.modelfile === 'string' && show.modelfile.trim().length > 0;
+  const hasParameters =
+    typeof show.parameters === 'string' && show.parameters.trim().length > 0;
+  return !hasModelfile && !hasParameters;
+}
+
+/**
+ * Read the runtime-enforced context length for a RESIDENT model from
+ * `/api/ps`. Never triggers a load: absent/stale entries yield null.
+ * The server reports `context_length` per entry; the installed client's
+ * types predate that field, hence the defensive access.
+ */
+export async function fetchPsContextLength(
+  client: Ollama,
+  model: string
+): Promise<number | null> {
+  try {
+    const ps = await client.ps();
+    const entry = ps.models.find(
+      candidate => candidate.name === model || candidate.model === model
+    );
+    const raw = (entry as { context_length?: unknown } | undefined)?.[
+      'context_length'
+    ];
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+      return raw;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function coercePositiveNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+  return null;
 }
 
 export function extractContextWindowTokens(
@@ -171,8 +260,10 @@ export const ollamaParameterSchema = {
 export function createOllamaProvider(providerConfig: {
   baseUrl?: string;
   apiKey?: string;
+  logger?: DroneLogger;
 }): DroneLlmProvider {
   const host = providerConfig.baseUrl ?? 'http://127.0.0.1:11434';
+  const logger = providerConfig.logger;
   const client = new Ollama({
     host,
     ...(providerConfig.apiKey
@@ -180,18 +271,98 @@ export function createOllamaProvider(providerConfig: {
       : {}),
   });
 
+  const warnedExceedsAdvertised = new Set<string>();
+
   return {
-    getContextWindowInfo: async ({ model }) => {
+    getContextWindowInfo: async ({ model, parameters, extra }) => {
+      let result: DroneContextWindowInfo;
+      let advertised: number | null = null;
       try {
         const showResponse = await client.show({ model });
-        const contextWindowTokens = extractContextWindowTokens(showResponse);
-        if (contextWindowTokens) {
-          return { model, contextWindowTokens, source: 'provider' as const };
+        advertised = extractContextWindowTokens(showResponse);
+
+        if (isCloudModel(showResponse, model)) {
+          // Cloud models run at their advertised training length: nothing
+          // local constrains them, so the catalog number IS enforcement.
+          result = advertised
+            ? {
+                model,
+                contextWindowTokens: advertised,
+                source: 'provider',
+                detail: 'advertised (cloud)',
+              }
+            : {
+                model,
+                contextWindowTokens: OLLAMA_SHOW_FAILURE_FALLBACK_TOKENS,
+                source: 'default',
+                detail: 'show fallback (cloud)',
+              };
+        } else {
+          // Local models: report what will actually be enforced. The
+          // resident ps entry wins even over our own request value because
+          // ollama may have clamped it (VRAM); over-reporting causes
+          // hard request rejections, under-reporting only wastes headroom.
+          const psTokens = await fetchPsContextLength(client, model);
+          const requestTokens = coercePositiveNumber(
+            buildOllamaOptions({ parameters, extra }).num_ctx
+          );
+          const modelfileTokens = parseModelfileNumCtx(
+            typeof showResponse.parameters === 'string'
+              ? showResponse.parameters
+              : undefined
+          );
+
+          if (psTokens !== null) {
+            result = {
+              model,
+              contextWindowTokens: psTokens,
+              source: 'provider',
+              detail: 'ps-resident',
+            };
+          } else if (requestTokens !== null) {
+            result = {
+              model,
+              contextWindowTokens: requestTokens,
+              source: 'provider',
+              detail: 'request num_ctx',
+            };
+          } else if (modelfileTokens !== null) {
+            result = {
+              model,
+              contextWindowTokens: modelfileTokens,
+              source: 'provider',
+              detail: 'modelfile num_ctx',
+            };
+          } else {
+            result = {
+              model,
+              contextWindowTokens: OLLAMA_LOCAL_NUM_CTX_PIN,
+              source: 'provider',
+              detail: `driver pin ${OLLAMA_LOCAL_NUM_CTX_PIN}`,
+            };
+          }
         }
       } catch {
-        // Fall through to the default-budget fallback below.
+        result = {
+          model,
+          contextWindowTokens: OLLAMA_SHOW_FAILURE_FALLBACK_TOKENS,
+          source: 'default',
+        };
       }
-      return { model, contextWindowTokens: 32768, source: 'default' as const };
+
+      if (
+        logger &&
+        advertised !== null &&
+        result.contextWindowTokens > advertised &&
+        !warnedExceedsAdvertised.has(model)
+      ) {
+        warnedExceedsAdvertised.add(model);
+        logger.warn(
+          `ollama: resolved context window for ${model} (${result.contextWindowTokens}) exceeds the advertised training length (${advertised}); assuming rope scaling. Verify num_ctx if you see truncation.`
+        );
+      }
+
+      return result;
     },
     chat: async ({
       model,
@@ -310,9 +481,16 @@ export async function discoverOllamaModels(
       const discovered: DiscoveredModel = { id: entry.name };
       try {
         const show = await client.show({ model: entry.name });
-        const contextWindow = extractContextWindowTokens(show);
-        if (contextWindow) {
-          discovered.contextWindow = contextWindow;
+        if (isCloudModel(show, entry.name)) {
+          // Catalog data outranks the live probe broker-side, so publishing
+          // a contextWindow here for LOCAL models would permanently mask
+          // the probe's runtime resolution with the training max. Cloud
+          // models have no local num_ctx concept — their advertised length
+          // IS the enforced window, so it is safe to publish.
+          const contextWindow = extractContextWindowTokens(show);
+          if (contextWindow) {
+            discovered.contextWindow = contextWindow;
+          }
         }
         const flags = readCapabilityFlags(show);
         discovered.hasVision = flags.hasVision;
