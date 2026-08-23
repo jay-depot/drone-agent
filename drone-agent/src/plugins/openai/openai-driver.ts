@@ -65,6 +65,51 @@ export function applyOpenAiParameters(
   }
 }
 
+function coercePositiveNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+  return null;
+}
+
+/**
+ * Take-if-present mapping of an OpenAI-compatible /models entry into
+ * DiscoveredModel metadata. OpenRouter's catalog carries context_length,
+ * top_provider.max_completion_tokens (nullable), and architecture modality
+ * info; vanilla OpenAI returns bare ids and degrades to id-only entries.
+ * Anything absent or non-numeric is simply omitted.
+ */
+export function mapDiscoveredModel(entry: {
+  id: string;
+  context_length?: unknown;
+  top_provider?: { max_completion_tokens?: unknown } | null;
+  architecture?: { input_modalities?: unknown } | null;
+}): DiscoveredModel {
+  const discovered: DiscoveredModel = { id: entry.id };
+
+  const contextLength = coercePositiveNumber(entry.context_length);
+  if (contextLength !== null) {
+    discovered.contextWindow = contextLength;
+  }
+
+  const maxCompletion = coercePositiveNumber(
+    entry.top_provider?.max_completion_tokens
+  );
+  if (maxCompletion !== null) {
+    discovered.maxOutputTokens = maxCompletion;
+  }
+
+  const inputModalities = entry.architecture?.input_modalities;
+  if (
+    Array.isArray(inputModalities) &&
+    inputModalities.map(modality => String(modality)).includes('image')
+  ) {
+    discovered.hasVision = true;
+  }
+
+  return discovered;
+}
+
 export type OpenAiDriverConfig = {
   baseUrl?: string;
   apiKey?: string;
@@ -234,13 +279,16 @@ export function createOpenAiProvider(
         );
       }
       const data = (await response.json()) as {
-        data?: Array<{ id?: string }>;
+        data?: Array<Record<string, unknown>>;
       };
       return (data.data ?? [])
         .filter(
-          (entry): entry is { id: string } => typeof entry.id === 'string'
+          (
+            entry
+          ): entry is Record<string, unknown> & { id: string } =>
+            typeof entry.id === 'string'
         )
-        .map(entry => ({ id: entry.id }));
+        .map(entry => mapDiscoveredModel(entry));
     },
   };
 }
