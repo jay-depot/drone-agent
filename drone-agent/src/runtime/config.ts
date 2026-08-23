@@ -3,12 +3,17 @@ import { constants as fsConstants } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {
+  validateProviders,
   applyAgentConfigLayer,
   createDefaultAgentConfig,
   parseConfigWithSchema,
   type DroneConfigLayer,
   type DroneResolvedConfig,
 } from 'drone-core';
+import {
+  formatMigrationNotice,
+  migrateLegacyProviderConfig,
+} from './provider-migration.js';
 
 export const CONFIG_DIRECTORY_NAME = '.drone-agent';
 export const CONFIG_FILE_NAME = 'config.json';
@@ -124,8 +129,30 @@ export async function loadAgentConfig(
     mergedConfig = applyAgentConfigLayer(mergedConfig, layer.config);
   }
 
+  // Legacy section → providers migration runs after the full merge so
+  // swarm-injected legacy sections are migrated too. Interpolation already
+  // happened per-layer at parse time (env is node-local, so per-layer and
+  // post-merge interpolation are equivalent).
+  const migration = migrateLegacyProviderConfig(mergedConfig);
+  mergedConfig = migration.config;
+
+  const validation = validateProviders(mergedConfig.providers);
+  if (validation.errors.length > 0) {
+    throw new Error(
+      `Invalid providers config:\n  - ${[...validation.errors].join('\n  - ')}`
+    );
+  }
+
   return {
     config: mergedConfig,
     layers,
+    ...(formatMigrationNotice(migration)
+      ? {
+          migrationNotice: formatMigrationNotice(migration),
+          validationWarnings: validation.warnings,
+        }
+      : validation.warnings.length > 0
+        ? { validationWarnings: validation.warnings }
+        : {}),
   };
 }
