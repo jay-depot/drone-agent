@@ -64,11 +64,21 @@ alias-base entry > discovered > defaults.
 
 The context window follows this same chain and feeds the status-bar usage
 percentage and safety trimming. When a declared or discovered value exists,
-it wins outright (`source: 'metadata'`); the driver's live probe (ollama's
-`show`, for example) only runs when no catalog data exists, and the session
-fallback (`session.contextWindowTokens`) is the last resort. Each model's
-resolved window and its source are logged once per session, so a wrong
-denominator is diagnosable from the log alone.
+it wins outright (`source: 'metadata'`); the driver's live probe only runs
+when no catalog data exists, and the session fallback
+(`session.contextWindowTokens`) is the last resort. Each model's resolved
+window and its source are logged once per session, and the `/context`
+command prints them on demand: model identity, resolved window +
+provenance slot, response reserve, and estimated usage.
+
+For ollama, local models resolve through runtime enforcement truth rather
+than advertised training lengths: a resident `/api/ps` entry wins (it
+reflects VRAM clamping), then effective `numCtx` request parameters, then
+the Modelfile's `num_ctx`, then a driver pin of 16384. Cloud models
+(`:cloud`) run at their advertised length. Discovery therefore publishes
+catalog context windows for cloud models only — catalog data outranks the
+live probe broker-side, so publishing locals' training maxes would mask
+runtime resolution permanently.
 
 ### Parameters
 
@@ -90,7 +100,9 @@ Hybrid model sourcing merges declared ⊕ discovered models (declared wins
 key-for-key) behind a ~60s TTL cache; discovery failures fall back to
 declared-only with a warning. Per-provider `autoImport` controls whether
 discovered models persist into config as empty `{}` stubs (pinning
-existence, never snapshotting metadata):
+existence, never snapshotting metadata). **Status: the field is accepted
+in schema and parsed into provider entries, but has no behavioral wiring
+yet — discovered-stub persistence is planned:**
 
 - `off` — never persist.
 - `onSelect` (default) — reserved for explicit `/model <pick>` selections.
