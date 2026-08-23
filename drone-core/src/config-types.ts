@@ -186,6 +186,12 @@ export type DroneCompactionConfig = {
   minTurnsToCompact: number;
   summaryMaxTokens: number;
   summaryBudgetPercent: number;
+  /**
+   * Lead margin (percentage points) before the compaction soft threshold at
+   * which the one-shot pre-compaction nudge fires. The nudge band is
+   * `[softThresholdPercent - nudgeMarginPercent, softThresholdPercent]`.
+   */
+  nudgeMarginPercent: number;
 };
 
 export type DroneMemoryConfig = {
@@ -539,6 +545,7 @@ export function createDefaultAgentConfig(
       minTurnsToCompact: 4,
       summaryMaxTokens: 800,
       summaryBudgetPercent: 20,
+      nudgeMarginPercent: 10,
     },
     memory: {
       enabled: true,
