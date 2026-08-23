@@ -18,7 +18,15 @@ async function captureWindowCapability(options: {
     string,
     {
       protocol: string;
-      models: Record<string, { contextWindow?: number; model?: string }>;
+      extra?: Record<string, unknown>;
+      models: Record<
+        string,
+        {
+          contextWindow?: number;
+          model?: string;
+          parameters?: Record<string, unknown>;
+        }
+      >;
     }
   >;
   llmActive?: string;
@@ -32,6 +40,7 @@ async function captureWindowCapability(options: {
       id,
       {
         protocol: spec.protocol,
+        ...(spec.extra ? { extra: spec.extra } : {}),
         models: Object.fromEntries(
           Object.entries(spec.models).map(([modelId, meta]) => [modelId, meta])
         ),
@@ -97,10 +106,15 @@ async function captureWindowCapability(options: {
 
 function makeDriverWithProbe(
   protocolId: string,
-  probe: (args: { model: string }) => Promise<{
+  probe: (args: {
+    model: string;
+    parameters?: Record<string, unknown>;
+    extra?: Record<string, unknown>;
+  }) => Promise<{
     model: string;
     contextWindowTokens: number;
     source: 'provider' | 'default';
+    detail?: string;
   } | null>
 ): LlmProtocolDriver {
   return {
@@ -196,7 +210,9 @@ describe('broker context-window resolution', () => {
       contextWindowTokens: 8192,
       source: 'default',
     });
-    expect(probe).toHaveBeenCalledWith({ model: 'llama3.1' });
+    expect(probe).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'llama3.1' })
+    );
   });
 
   it('honors one-level alias base metadata', async () => {
@@ -352,5 +368,85 @@ describe('broker context-window resolution', () => {
     expect(windowLines[0]).toContain('ollama/llama3.1');
     expect(windowLines[0]).toContain('131072');
     expect(windowLines[0]).toContain('metadata');
+  });
+
+  it('forwards merged effective parameters to the driver probe', async () => {
+    const probe = vi.fn(async () => null);
+    const { capability } = await captureWindowCapability({
+      providers: {
+        ollama: {
+          protocol: 'ollama',
+          models: { m: { parameters: { numCtx: 8192 } } },
+        },
+      },
+      llmActive: 'ollama/m',
+      driver: makeDriverWithProbe('ollama', probe),
+    });
+
+    await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
+    expect(probe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'm',
+        parameters: { numCtx: 8192 },
+        extra: {},
+      })
+    );
+  });
+
+  it('forwards provider-level extra and merges model-level parameter wins', async () => {
+    const probe = vi.fn(async () => null);
+    const { capability } = await captureWindowCapability({
+      providers: {
+        ollama: {
+          protocol: 'ollama',
+          extra: { seed: 42 },
+          models: {
+            base: { parameters: { numCtx: 4096 } },
+            alias: { model: 'base', parameters: { numCtx: 8192 } },
+          },
+        },
+      },
+      llmActive: 'ollama/alias',
+      driver: makeDriverWithProbe('ollama', probe),
+    });
+
+    await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
+    expect(probe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'base',
+        parameters: { numCtx: 8192 },
+        extra: { seed: 42 },
+      })
+    );
+  });
+
+  it('spreads probe detail through without adding it on metadata paths', async () => {
+    const probe = vi.fn(async () => ({
+      model: 'llama3.1',
+      contextWindowTokens: 16384,
+      source: 'provider' as const,
+      detail: 'driver pin 16384',
+    }));
+    const { capability } = await captureWindowCapability({
+      providers: {
+        ollama: { protocol: 'ollama', models: {} },
+      },
+      llmActive: 'ollama/llama3.1',
+      driver: makeDriverWithProbe('ollama', probe),
+    });
+
+    const info = await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
+    expect(info).toMatchObject({
+      model: 'ollama/llama3.1',
+      contextWindowTokens: 16384,
+      source: 'provider',
+      detail: 'driver pin 16384',
+    });
   });
 });

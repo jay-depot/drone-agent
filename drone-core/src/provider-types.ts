@@ -109,8 +109,17 @@ export type DroneChatRequest = {
 
 export type DroneLlmProvider = {
   chat: (input: DroneChatRequest) => Promise<DroneChatResponse>;
+  /**
+   * Probe the provider for a model's context window. The trailing optional
+   * fields (`parameters`, `extra`) are broker-forwarded effective request
+   * values — identical to what the next chat() will send — so drivers whose
+   * wire protocol constrains the window (e.g. ollama's num_ctx) can resolve
+   * the enforced size. Additive: existing providers may ignore them.
+   */
   getContextWindowInfo?: (input: {
     model: string;
+    parameters?: Record<string, unknown>;
+    extra?: Record<string, unknown>;
   }) => Promise<DroneContextWindowInfo | null>;
   supportsImagesInToolResults?: boolean;
 };

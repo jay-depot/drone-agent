@@ -199,8 +199,16 @@ export const llmPlugin: DronePlugin = {
           source: 'metadata',
         };
       } else {
+        const effective = mergeEffectiveParameters(
+          instance.providerId,
+          fullId
+        );
         const probed = await instance.provider.getContextWindowInfo?.({
           model: metadata.model ?? localModel,
+          parameters: effective,
+          extra:
+            registration.getConfig().providers[instance.providerId]?.extra ??
+            {},
         });
         resolved = probed
           ? { ...probed, model: fullId }
