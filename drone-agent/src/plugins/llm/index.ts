@@ -1,3 +1,4 @@
+import { registerContextCommand } from './context-command.js';
 import {
   parseModelSelection,
   type DiscoveredModel,
@@ -519,6 +520,9 @@ export const llmPlugin: DronePlugin = {
     // ── /reasoning slash command ──────────────────────────────────────
     registerReasoningCommand(registration, capability);
 
+    // ── /context slash command ────────────────────────────────────────
+    registerContextCommand(registration, capability);
+
     // ── Help snippets ─────────────────────────────────────────────────
     registration.registerHelp(
       '/model [provider/model]  List models or switch (bare id = active provider)'
@@ -531,6 +535,9 @@ export const llmPlugin: DronePlugin = {
     );
     registration.registerHelp(
       '/reasoning --raw <v>  Set reasoning level to a provider-specific raw value'
+    );
+    registration.registerHelp(
+      '/context              Show resolved context window, provenance, and usage'
     );
   },
 };
