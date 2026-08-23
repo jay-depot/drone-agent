@@ -100,6 +100,22 @@ export function initDatabase(dataPath: string): Database.Database {
       updatedAt INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS outbox (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      endpoint TEXT NOT NULL,
+      method TEXT NOT NULL,
+      body TEXT,
+      createdAt INTEGER NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      lastAttemptAt INTEGER,
+      lastError TEXT,
+      deliveredAt INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_outbox_undelivered ON outbox (createdAt)
+      WHERE deliveredAt IS NULL;
+
     CREATE TABLE IF NOT EXISTS event_log (
       id TEXT PRIMARY KEY,
       event_type TEXT NOT NULL,

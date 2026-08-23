@@ -289,6 +289,16 @@ importers:
         specifier: ^24.0.10
         version: 24.13.2
 
+  drone-swarm:
+    dependencies:
+      drone-swarm-common:
+        specifier: workspace:*
+        version: link:../drone-swarm-common
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.10
+        version: 24.13.2
+
   drone-swarm-common:
     dependencies:
       better-sqlite3:
@@ -307,6 +317,9 @@ importers:
       '@types/node':
         specifier: ^24.0.10
         version: 24.13.2
+      vitest:
+        specifier: ^3.2.6
+        version: 3.2.6(@types/node@24.13.2)(jiti@2.7.0)(jsdom@29.1.1)(lightningcss@1.32.0)
 
 packages:
   '@adobe/css-tools@4.5.0':

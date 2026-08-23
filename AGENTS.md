@@ -1,6 +1,6 @@
 # AGENTS.md — drone-agent
 
-This file describes how to work on the `drone-agent` project itself. The project is a monorepo (pnpm workspace) with seven packages.
+This file describes how to work on the `drone-agent` project itself. The project is a monorepo (pnpm workspace) with eight packages.
 
 **If you encounter any discrepancy between this document and the code, the code is the source of truth, and this document should be updated.**
 
@@ -26,6 +26,7 @@ The project is a pnpm workspace with seven packages:
 | `drone-coordinator/`    | Global hub for swarm coordination (Fastify + SQLite).                              |
 | `drone-coordinator-ui/` | Web UI for the coordinator (React + Vite + Tailwind).                              |
 | `drone-swarm-common/`   | Shared utilities for beacon and coordinator.                                       |
+| `drone-swarm/`          | `drone-swarm` CLI: standalone REST client for session pipeline + wiki.             |
 | `drone-gateway/`        | Chat API gateway (Matrix, Discord, Slack).                                         |
 | `skill-library/`        | Reusable skill `.md` files (not a workspace package).                              |
 
@@ -220,6 +221,7 @@ The following subsystems have dedicated documentation in `docs/agents/`:
 
 - **Bootstrap Plugin** (`docs/agents/bootstrap-plugin.md`) — Setup workflows for new projects and users
 - **Swarm Plugin** (`docs/agents/swarm-plugin.md`) — Beacon/coordinator integration for swarm-wide personas, skills, and config
+- **Memory Pipeline** (`docs/agents/memory-pipeline.md`) — Config files, session-end triggers, drone-swarm CLI, beacon outbox
 - **External Plugin Loading** (`docs/agents/external-plugin-loading.md`) — User and project-scope plugin discovery, trust model, engine integration
 - **MCP Plugin** (`docs/agents/mcp-plugin.md`) — Deferred list/mount pattern for tool loading, `ToolMountingCache`, server descriptions, persona filtering
 
