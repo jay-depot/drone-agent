@@ -61,6 +61,12 @@ async function main(): Promise<void> {
   const resolvedConfig = await loadAgentConfig(process.cwd(), {
     configDir: invocation.options.configDir,
   });
+  if (resolvedConfig.migrationNotice) {
+    logger.warn(resolvedConfig.migrationNotice);
+  }
+  for (const warning of resolvedConfig.warnings ?? []) {
+    logger.warn(warning);
+  }
 
   // Handle migrate subcommand early (no engine needed)
   if (invocation.kind === 'migrate') {

@@ -14,6 +14,7 @@ import {
   formatMigrationNotice,
   migrateLegacyProviderConfig,
 } from './provider-migration.js';
+import { enforceProviderScopePolicy } from './provider-scope-policy.js';
 
 export const CONFIG_DIRECTORY_NAME = '.drone-agent';
 export const CONFIG_FILE_NAME = 'config.json';
@@ -136,6 +137,13 @@ export async function loadAgentConfig(
   const migration = migrateLegacyProviderConfig(mergedConfig);
   mergedConfig = migration.config;
 
+  const scopePolicy = enforceProviderScopePolicy(layers);
+  if (scopePolicy.errors.length > 0) {
+    throw new Error(
+      `Provider config scope violations:\n  - ${scopePolicy.errors.join('\n  - ')}`
+    );
+  }
+
   const validation = validateProviders(mergedConfig.providers);
   if (validation.errors.length > 0) {
     throw new Error(
@@ -146,13 +154,7 @@ export async function loadAgentConfig(
   return {
     config: mergedConfig,
     layers,
-    ...(formatMigrationNotice(migration)
-      ? {
-          migrationNotice: formatMigrationNotice(migration),
-          validationWarnings: validation.warnings,
-        }
-      : validation.warnings.length > 0
-        ? { validationWarnings: validation.warnings }
-        : {}),
+    migrationNotice: formatMigrationNotice(migration),
+    warnings: [...scopePolicy.warnings, ...validation.warnings],
   };
 }

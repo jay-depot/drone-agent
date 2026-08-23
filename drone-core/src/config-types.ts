@@ -427,6 +427,15 @@ export type DroneConfigLayer = {
 export type DroneResolvedConfig = {
   config: DroneAgentConfig;
   layers: DroneConfigLayer[];
+  /**
+   * Present when legacy LLM sections were migrated to providers entries —
+   * surface as a deprecation notice at startup.
+   */
+  migrationNotice?: string;
+  /**
+   * Non-fatal provider-config warnings (scope policy, alias chains, …).
+   */
+  warnings?: string[];
 };
 
 // ── Config helper functions ─────────────────────────────────────────
