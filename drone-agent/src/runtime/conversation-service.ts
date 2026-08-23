@@ -672,6 +672,9 @@ export function createConversationService({
                   'Your last response was empty (no text and no tool calls). Please respond to the user. If you have nothing to say, provide a brief acknowledgment.',
               });
             }
+            for (const reminder of engine.drainSystemReminders()) {
+              base.push({ role: 'system', content: reminder });
+            }
             return base;
           })(),
           tools,
@@ -931,6 +934,7 @@ export function createConversationService({
       reasoningOnlyResponseCount = 0;
       identicalCallNudgeActive = false;
       brokenResponseHintActive = false;
+      engine.clearSystemReminders();
       sessionManager.clearSession();
     },
     getMessages: () => sessionManager.getMessages(),

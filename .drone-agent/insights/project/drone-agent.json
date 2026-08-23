@@ -242,5 +242,9 @@
   {
     "timestamp": "2026-08-21T23:14:26.401Z",
     "insight": "`pnpm -r run test` is structurally broken for every workspace package: all 7 packages define `\"test\": \"vitest run\"` but none ships a package-local vitest config, so each inherits the ROOT vitest.config.ts whose `include` globs (e.g. `drone-core/test/**`) are repo-root-relative and match zero files when vitest runs from a package cwd — vitest exits 1 with \"No test files found\" (drone-core fails first, aborting the recursive run). Verified pre-existing on a clean tree via git stash. The actual supported fast-suite entrypoint is root `pnpm test`. Candidate fix: give each package its own minimal vitest config (or a `--root`/`--config` pointing at the root config), or drop per-package test scripts. Until fixed, plans that say \"run pnpm -r run test\" should be executed as root `pnpm test`."
+  },
+  {
+    "timestamp": "2026-08-22T20:29:04.683Z",
+    "insight": "Follow-up from plan-pre-compaction-nudge: migrate the two hardcoded guardrail nudges (identicalCallNudgeActive / brokenResponseHintActive in conversation-service.ts) onto the new SystemReminderQueue primitive. Both now coexist as parallel one-shot non-persisted system-message mechanisms; the queue generalizes exactly what they do inline, so consolidating them would remove the duplication permanently. Deferred per plan decision 3c to keep v1 additive — the retry-path state machines around those flags make the migration riskier than the feature warranted."
   }
 ]

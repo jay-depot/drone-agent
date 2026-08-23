@@ -191,6 +191,7 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       minTurnsToCompact: Type.Optional(PositiveInteger),
       summaryMaxTokens: Type.Optional(PositiveNumber),
       summaryBudgetPercent: Type.Optional(Percent),
+      nudgeMarginPercent: Type.Optional(Percent),
     }),
     memory: Type.Object({
       enabled: Type.Optional(Type.Boolean()),
