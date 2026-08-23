@@ -183,7 +183,7 @@ Config cascades: **Default → User → Project** (last-write-wins per key, exce
 
 Config files live in `.drone-agent/config.json` at each scope. The config loader (`runtime/config.ts`) walks up the directory tree looking for `.drone-agent/` directories.
 
-Key config sections: `enabledPlugins`, `systemPrompt`, `activePersona`, `providers` (user-defined LLM providers; banned at project scope), `llm` (active selection + reasoning), legacy `ollama`/`openai`/`anthropic`/`openrouter` (migration window only — auto-migrated into `providers` on load), `session`, `lsp`, `mcp`, `compaction`, `memory`, `log`, `promptFile`, `swarm`.
+Key config sections: `enabledPlugins`, `systemPrompt`, `activePersona`, `providers` (user-defined LLM providers; banned at project scope), `llm` (active selection + reasoning), legacy `ollama`/`openai`/`anthropic`/`openrouter` (migration window only — migrated into `providers` and persisted to the file on first load), `session`, `lsp`, `mcp`, `compaction`, `memory`, `log`, `promptFile`, `swarm`.
 
 → See `docs/agents/provider-model-config.md` for the provider/protocol/model model, parameters, secrets, scopes, and migration.
 

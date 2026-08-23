@@ -127,9 +127,9 @@ describe('broker context-window resolution', () => {
       driver: makeDriverWithProbe('anthropic', probe),
     });
 
-    const info = await capability
-      .getActiveProvider()
-      .getContextWindowInfo?.({});
+    const info = await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
     expect(info).toEqual({
       model: 'anthropic/claude-sonnet-4-6',
       contextWindowTokens: 1_000_000,
@@ -163,9 +163,9 @@ describe('broker context-window resolution', () => {
     // Populate the discovery cache via listModels().
     await capability.listModels();
 
-    const info = await capability
-      .getActiveProvider()
-      .getContextWindowInfo?.({});
+    const info = await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
     expect(info).toEqual({
       model: 'ollama/llama3.1',
       contextWindowTokens: 131072,
@@ -188,9 +188,9 @@ describe('broker context-window resolution', () => {
       driver: makeDriverWithProbe('ollama', probe),
     });
 
-    const info = await capability
-      .getActiveProvider()
-      .getContextWindowInfo?.({});
+    const info = await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
     expect(info).toMatchObject({
       model: 'ollama/llama3.1',
       contextWindowTokens: 8192,
@@ -215,9 +215,9 @@ describe('broker context-window resolution', () => {
       driver: makeDriverWithProbe('openai', probe),
     });
 
-    const info = await capability
-      .getActiveProvider()
-      .getContextWindowInfo?.({});
+    const info = await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
     expect(info).toEqual({
       model: 'openai/fast',
       contextWindowTokens: 1_047_576,
@@ -235,9 +235,9 @@ describe('broker context-window resolution', () => {
       driver: makeDriverWithProbe('ollama', async () => null),
     });
 
-    const info = await capability
-      .getActiveProvider()
-      .getContextWindowInfo?.({});
+    const info = await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
     expect(info).toMatchObject({
       model: 'ollama/llama3.1',
       source: 'config',
@@ -260,19 +260,23 @@ describe('broker context-window resolution', () => {
       driver: makeDriverWithProbe('ollama', async () => null),
     });
 
-    const small = await capability
-      .getActiveProvider()
-      .getContextWindowInfo?.({});
+    const small = await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
     expect(small?.contextWindowTokens).toBe(8192);
 
     capability.setModel('big');
-    const big = await capability.getActiveProvider().getContextWindowInfo?.({});
+    const big = await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
     expect(big?.contextWindowTokens).toBe(1_000_000);
 
     capability.setModel('small');
     const backToSmall = await capability
       .getActiveProvider()
-      .getContextWindowInfo?.({});
+      .getContextWindowInfo?.({
+        model: capability.getModel().split('/').pop() ?? '',
+      });
     expect(backToSmall?.contextWindowTokens).toBe(8192);
   });
 
@@ -334,8 +338,12 @@ describe('broker context-window resolution', () => {
       await hook();
     }
 
-    await capability.getActiveProvider().getContextWindowInfo?.({});
-    await capability.getActiveProvider().getContextWindowInfo?.({});
+    await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
+    await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
 
     const windowLines = logLines.filter(line =>
       line.includes('Context window for')

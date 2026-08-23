@@ -62,6 +62,14 @@ Optional per-model metadata: `contextWindow`, `maxOutputTokens`,
 `reasoningLevel`. Resolution order for every field: declared entry >
 alias-base entry > discovered > defaults.
 
+The context window follows this same chain and feeds the status-bar usage
+percentage and safety trimming. When a declared or discovered value exists,
+it wins outright (`source: 'metadata'`); the driver's live probe (ollama's
+`show`, for example) only runs when no catalog data exists, and the session
+fallback (`session.contextWindowTokens`) is the last resort. Each model's
+resolved window and its source are logged once per session, so a wrong
+denominator is diagnosable from the log alone.
+
 ### Parameters
 
 Flat camelCase maps at provider and model level, shallow-merged with the
@@ -137,14 +145,25 @@ See `docs/agents/swarm-plugin.md` for the swarm-underlay contract.
 
 ## Migration from legacy sections
 
-On load, if `providers` is empty and legacy sections exist
-(`llm.provider`, `ollama`, `openai`, `anthropic`, `openrouter`),
-drone-agent synthesizes providers named after each section and seeds
-`llm.active`. This is automatic, idempotent, and announced with a
-deprecation notice. New config writers (bootstrap, first-run,
-`/model`) emit the new format only. The legacy sections remain readable
-through the migration module during the deprecation window and will stop
-being read in a future release — move your config to `providers`.
+On load, if legacy sections exist (`llm.provider`, `ollama`, `openai`,
+`anthropic`, `openrouter`), drone-agent synthesizes providers named after
+each section and seeds `llm.active`. This is automatic, idempotent, and
+announced with a notice. New config writers (bootstrap, first-run,
+`/model`) emit the new format only.
+
+The migration **persists**: the first load that sees legacy sections in a
+user-scope `config.json` rewrites that file in canonical form. Each rewrite
+is preceded by a timestamped backup (`config.json.<timestamp>.old`) holding
+the original bytes, and is written atomically (tmp file + rename). Persisted
+content is derived from the raw file, so `${VAR}` API-key templates stay
+templates on disk; literal keys are relocated unchanged with an advisory
+suggestion to switch to templates. Legacy sections are stripped whenever a
+migration write touches a file — including sections already shadowed by an
+existing `providers` block. Project-scope files never receive `providers`
+(they are banned there); legacy sections at project scope apply in memory
+for the session and produce a warning directing you to user scope.
+
+The migration module remains deletable once the deprecation window closes.
 
 ## Intentional behavior change (anthropic max_tokens)
 
