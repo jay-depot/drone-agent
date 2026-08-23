@@ -4,6 +4,8 @@ import { logger } from './logger.js';
 import * as db from './db/index.js';
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 30000;
+const ESCALATION_KILL_GRACE_MS = 200;
+const FALLBACK_SETTLE_GRACE_MS = 1000;
 
 export interface SessionEndHookConfig {
   trigger?: SessionEndTrigger;
@@ -37,9 +39,6 @@ async function runCommandTrigger(
 ): Promise<SessionEndHookResult> {
   const finalCommand = substituteSessionId(command, sessionId);
   return new Promise(resolve => {
-    const child = spawn('/bin/sh', ['-c', finalCommand], {
-      timeout: timeoutMs,
-    });
     let settled = false;
     const settle = (result: SessionEndHookResult) => {
       if (!settled) {
@@ -47,6 +46,15 @@ async function runCommandTrigger(
         resolve(result);
       }
     };
+
+    // detached:true makes the shell a process-group leader so a timeout can
+    // kill the whole tree; without it, forked grandchildren inherit the stdio
+    // pipes and hold the close event (and this promise) hostage.
+    const child = spawn('/bin/sh', ['-c', finalCommand], {
+      timeout: timeoutMs,
+      detached: true,
+    });
+
     child.stdout?.on('data', (chunk: Buffer) => {
       logger.info(`[session-end:${sessionId}] ${chunk.toString().trim()}`);
     });
@@ -61,13 +69,35 @@ async function runCommandTrigger(
     });
     child.on('timeout', () => {
       logger.warn(
-        `Session-end command timed out after ${timeoutMs}ms for session ${sessionId}`
+        `Session-end command timed out after ${timeoutMs}ms for session ${sessionId}; killing process group`
       );
+      try {
+        process.kill(-child.pid!, 'SIGTERM');
+      } catch {
+        // Group already gone; the close handler will settle.
+      }
+      setTimeout(() => {
+        try {
+          process.kill(-child.pid!, 'SIGKILL');
+        } catch {
+          // Already dead.
+        }
+      }, ESCALATION_KILL_GRACE_MS).unref();
     });
-    child.on('close', code => {
+
+    child.on('close', (code, signal) => {
       if (code === 0) {
         logger.info(`Session-end command completed for session ${sessionId}`);
         settle({ ran: true, kind: 'command' });
+      } else if (code === null && signal !== null) {
+        logger.warn(
+          `Session-end command terminated by ${signal} after ${timeoutMs}ms for session ${sessionId}`
+        );
+        settle({
+          ran: true,
+          kind: 'command',
+          error: `terminated by ${signal} after ${timeoutMs}ms`,
+        });
       } else {
         logger.warn(
           `Session-end command exited with code ${code} for session ${sessionId}`
@@ -75,6 +105,18 @@ async function runCommandTrigger(
         settle({ ran: true, kind: 'command', error: `exit code ${code}` });
       }
     });
+
+    // Last-resort settlement: covers processes that escaped the group via
+    // setsid(2). Unref'd so it never holds the event loop open.
+    setTimeout(
+      () =>
+        settle({
+          ran: true,
+          kind: 'command',
+          error: `timed out after ${timeoutMs}ms`,
+        }),
+      timeoutMs + FALLBACK_SETTLE_GRACE_MS
+    ).unref();
   });
 }
 

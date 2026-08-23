@@ -262,5 +262,9 @@
   {
     "timestamp": "2026-08-22T20:29:04.683Z",
     "insight": "Follow-up from plan-pre-compaction-nudge: migrate the two hardcoded guardrail nudges (identicalCallNudgeActive / brokenResponseHintActive in conversation-service.ts) onto the new SystemReminderQueue primitive. Both now coexist as parallel one-shot non-persisted system-message mechanisms; the queue generalizes exactly what they do inline, so consolidating them would remove the duplication permanently. Deferred per plan decision 3c to keep v1 additive — the retry-path state machines around those flags make the migration riskier than the feature warranted."
+  },
+  {
+    "timestamp": "2026-08-23T15:25:27.614Z",
+    "insight": "Node's child_process spawn {timeout} SIGTERMs only the direct child. When /bin/sh forks instead of exec-ing (compound commands always fork; dash frequently forks single commands where bash would implicit-exec), the forked grandchild inherits the piped stdio and keeps the 'close' event — and any promise awaiting it — open indefinitely. This made drone-beacon/drone-coordinator session-end timeout tests shell-build-dependent (pass on Arch bash, hang on CI dash). Fix pattern: spawn with detached:true to make the shell a process-group leader, kill(-pid) on the timeout event with a short SIGKILL escalation, settle via an unref'd fallback timer so even setsid escapees can't hang the caller, and report signal-based termination distinctly from exit codes. Follow-up: runCommandTrigger is duplicated near-identically in drone-beacon/src/session-end.ts and drone-coordinator/src/session-end.ts — extract into drone-swarm-common per the deduplication standard; both copies must be patched in lockstep until then."
   }
 ]

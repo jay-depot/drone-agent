@@ -55,6 +55,22 @@ describe('coordinator runSessionEndHook', () => {
     });
   });
 
+  it('kills forked children so the hook settles at the timeout', async () => {
+    // A compound command forces the shell down the fork path even where
+    // implicit-exec would normally avoid it; the grandchild inherits the
+    // stdio pipes and previously held the close event open.
+    configureSessionEndHook({
+      commandTimeoutMs: 150,
+      trigger: { type: 'command', command: 'sleep 10; true' },
+    });
+    const startedAt = Date.now();
+    const result = await runSessionEndHook('session-a');
+    expect(Date.now() - startedAt).toBeLessThan(3000);
+    expect(result.ran).toBe(true);
+    expect(result.kind).toBe('command');
+    expect(result.error).toMatch(/terminated by|timed out/);
+  }, 5000);
+
   it('forwards spawn triggers to the configured beacon', async () => {
     vi.stubGlobal(
       'fetch',
