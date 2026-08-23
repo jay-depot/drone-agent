@@ -31,44 +31,63 @@ This refactor introduces: **protocol plugins** (code: ollama, openai, openrouter
 8. **Secrets** — `${VAR}` interpolation anywhere in provider config + literal keys allowed; unresolved var = validation error; project-scope literal keys warn loudly; user-scope plaintext OK.
 9. **Scopes/swarm** — `providers` BANNED in project-scope files (startup error); legacy sections grandfathered during migration window; projects may pin `llm.active`/`llm.reasoningLevel`; beacon/coordinator underlays fully supported; interpolation+validation AFTER full merge (each node resolves env locally). User instruction: relax incrementally if friction arises — INFORM THE USER when it does.
 10. **Reasoning** — chain: session (/reasoning) > selected model entry `reasoningLevel` > `llm.reasoningLevel`; cross-wired legacy fallbacks die; driver-owned mapping tables (ollama `think` levels/false; openai-family `reasoning_effort` off→minimal; anthropic `budget_tokens` fractions of maxOutputTokens); raw passthrough w/ warning.
-11a. **Non-goals**: streaming, usage accounting, per-role/persona bindings, bundled metadata registry, unified error/retry, session sampling knobs, Gemini/Responses plugins, echo enhancements. Backlog: project memory `llm-provider-future-work`.
-11b. **OpenRouter = own protocolId** sharing the openai-family wire library (5 protocol plugins total). One PR at the end.
+    11a. **Non-goals**: streaming, usage accounting, per-role/persona bindings, bundled metadata registry, unified error/retry, session sampling knobs, Gemini/Responses plugins, echo enhancements. Backlog: project memory `llm-provider-future-work`.
+    11b. **OpenRouter = own protocolId** sharing the openai-family wire library (5 protocol plugins total). One PR at the end.
 
 ---
 
 ## Phase 1 — Foundation types, schema, validation (drone-core)
-*Files: `drone-core/src/config-types.ts`, `drone-core/src/config-schema.ts`, `drone-core/src/provider-types.ts`, `drone-core/src/session-types.ts` (types may go in new `drone-core/src/provider-config-types.ts` if cleaner)*
+
+_Files: `drone-core/src/config-types.ts`, `drone-core/src/config-schema.ts`, `drone-core/src/provider-types.ts`, `drone-core/src/session-types.ts` (types may go in new `drone-core/src/provider-config-types.ts` if cleaner)_
 
 1.1 Types:
+
 ```ts
 interface DroneProviderConfig {
-  protocol: string;                       // 'ollama' | 'openai' | 'openrouter' | 'anthropic'
+  protocol: string; // 'ollama' | 'openai' | 'openrouter' | 'anthropic'
   baseUrl?: string;
-  apiKey?: string;                        // literal OR ${VAR} template
-  apiVersion?: string; orgId?: string;    // protocol-specific, validated by driver
+  apiKey?: string; // literal OR ${VAR} template
+  apiVersion?: string;
+  orgId?: string; // protocol-specific, validated by driver
   headers?: Record<string, string>;
   parameters?: Record<string, unknown>;
-  extra?: Record<string, unknown>;        // silent raw passthrough bag
+  extra?: Record<string, unknown>; // silent raw passthrough bag
   autoImport?: 'off' | 'onSelect' | 'all'; // default 'onSelect'
   models?: Record<string, DroneModelEntryConfig>;
 }
 interface DroneModelEntryConfig {
-  model?: string;                          // upstream ID; defaults to key; one-level alias
+  model?: string; // upstream ID; defaults to key; one-level alias
   parameters?: Record<string, unknown>;
-  contextWindow?: number; maxOutputTokens?: number;
-  hasVision?: boolean; supportsTools?: boolean;
+  contextWindow?: number;
+  maxOutputTokens?: number;
+  hasVision?: boolean;
+  supportsTools?: boolean;
   reasoningLevel?: DroneReasoningLevel;
 }
-interface DiscoveredModel { id: string; contextWindow?: number; maxOutputTokens?: number; hasVision?: boolean; supportsTools?: boolean }
-interface LlmParameterSpec { type: 'number'|'string'|'boolean'|'string[]'; description?: string }
-interface LlmParameterSchema { parameters: Record<string, LlmParameterSchema>; }
+interface DiscoveredModel {
+  id: string;
+  contextWindow?: number;
+  maxOutputTokens?: number;
+  hasVision?: boolean;
+  supportsTools?: boolean;
+}
+interface LlmParameterSpec {
+  type: 'number' | 'string' | 'boolean' | 'string[]';
+  description?: string;
+}
+interface LlmParameterSchema {
+  parameters: Record<string, LlmParameterSchema>;
+}
 interface LlmProtocolDriver {
   protocolId: string;
   createProvider(providerConfig: ResolvedProviderConfig): DroneLlmProvider;
-  discoverModels?(providerConfig: DroneProviderConfig): Promise<DiscoveredModel[]>;
+  discoverModels?(
+    providerConfig: DroneProviderConfig
+  ): Promise<DiscoveredModel[]>;
   parameterSchema: LlmParameterSchema;
 }
 ```
+
 `ResolvedProviderConfig` = provider config with interpolated values. Extend `DroneChatRequest` ADDITIVELY: optional `parameters?`, `extra?`, `maxOutputTokens?`, `hasVision?` (existing consumers unaffected).
 
 1.2 Config surface: add `providers: Record<string, DroneProviderConfig>` (default `{}`) and `llm.active?: string` to `DroneAgentConfig` + `createDefaultAgentConfig`. Keep legacy sections typed during migration window.
@@ -80,38 +99,44 @@ interface LlmProtocolDriver {
 Tests: type/schema units, merge-spec entry-replace case, validation rule cases.
 
 ## Phase 2 — Driver conversion (drone-agent plugins)
-*Files: `plugins/ollama.ts`, `plugins/openai/index.ts`, `plugins/openrouter/index.ts`, `plugins/anthropic/index.ts`+`anthropic-adapter.ts`, `plugins/echo/index.ts`, `shared/openai-compatible.ts`*
+
+_Files: `plugins/ollama.ts`, `plugins/openai/index.ts`, `plugins/openrouter/index.ts`, `plugins/anthropic/index.ts`+`anthropic-adapter.ts`, `plugins/echo/index.ts`, `shared/openai-compatible.ts`_
 
 2.1 Export pattern: each protocol plugin additionally `registration.offer({ id: 'llm-driver.<protocolId>', value: driver })`. Broker consumes via optional `requestCapability`. Plugin IDs UNCHANGED (existing enabledPlugins keep working).
 
 2.2 Move wire logic into drivers:
+
 - **ollama**: SDK-based provider becomes `createProvider` product; add `discoverModels` via `/api/tags` + `/api/show` (capability flags → hasVision/supportsTools; model_info → contextWindow). Reasoning table: off→`think:false`, levels→`think:'low'|'medium'|'high'|'max'`. Parameter normalization → `options{}` envelope (`temperature`,`top_p`,`top_k`,`min_p`,`repeat_penalty`,`num_ctx`→`numCtx`,`num_predict`,`seed`,`stop`,`keep_alive`→`keepAlive`). Kill name-substring vision heuristic.
 - **openai**: generic Chat Completions driver over shared wire module. Reasoning: `reasoning_effort` (off→`minimal`). Parameters top-level. No discovery (bare `/v1/models` IDs acceptable later — optional minimal impl returning IDs only is fine).
 - **openrouter**: thin shell reusing openai-family wire lib; `discoverModels` hits `/api/v1/models` (context_length, pricing ignored this round, supported_parameters informs nothing dynamic yet); reasoning → `body.reasoning={effort}`; keep bespoke require_parameters retry.
 - **anthropic**: SSE-less request/response adapter unchanged mechanically; thinking budget now computed from `maxOutputTokens` metadata fractions (low≈10%, high≈50%, capped) — full switch in Phase 5; supplies `hasVision:true` via discovery stub (static list).
 - **echo**: trivial driver wrapping existing mock; test-only.
 
-2.3 Each driver: `parameterSchema` static export + unit tests for normalization tables and reasoning mappings.
+  2.3 Each driver: `parameterSchema` static export + unit tests for normalization tables and reasoning mappings.
 
 ## Phase 3 — Broker cutover + migration module (the big flip)
-*Files: `plugins/llm/index.ts` (rewrite), new `src/runtime/provider-migration.ts`, `runtime/conversation-service.ts` (fallback removal), `drone-core/src/capabilities.ts` (capability shape evolves)*
+
+_Files: `plugins/llm/index.ts` (rewrite), new `src/runtime/provider-migration.ts`, `runtime/conversation-service.ts` (fallback removal), `drone-core/src/capabilities.ts` (capability shape evolves)_
 
 3.1 Migration module (self-contained, deletable):
+
 - Input: merged config. If `providers` absent/empty AND legacy sections exist → synthesize entries named exactly `ollama`, `openai`, `anthropic`, `openrouter` from them (host/baseUrl/apiKey/models[]→models map with localId keys, hasVision passthrough, contextWindow passthrough).
 - Seed `llm.active` from legacy `llm.provider`+section defaultModel/model (e.g. `ollama`+`llama3.1` → `"ollama/llama3.1"`). Never overwrite an existing `llm.active`.
 - Emit one-time deprecation notice (notice event kind) listing migrated sections. Idempotent: running against already-migrated config is a no-op. Unit-test: every legacy shape, seeding, idempotency, interaction with beacon-injected legacy sections.
 
-3.2 Broker rewrite:
+  3.2 Broker rewrite:
+
 - Read `config.providers` (post-migration view), resolve drivers via offered capabilities, `createProvider()` per entry. Wrap each created provider: broker-enriched `chat()` fills additive fields (effective parameters after Phase 5; resolved metadata; reasoning per chain) before delegating — single interception point, wire contract intact.
 - Activation: `llm.active` parse (first-slash split) → activate matching provider; fallback = first provider; late driver arrivals handled as today. `listModels()` returns merged declared ⊕ discovered (TTL cache ~60s; failure → declared-only + notice). `hasVision`/context-window queries resolve through the metadata chain.
 - Budget cache key in conversation-service (`:622–627`) → `` `${activeProviderId}/${currentModel}` ``.
 - Remove cross-wired reasoning fallbacks (`conversation-service.ts:646–652`): chain becomes session > model entry > `llm.reasoningLevel` only.
 - Capability surface (`DroneLlmCapability`): swap `getModel/setModel` strings for full-form identity; keep method names where possible to limit blast radius; LSP find-references sweep ALL consumers + test mocks.
 
-3.3 End-of-phase gate: existing user configs produce identical behavior end-to-end (mock-fetch e2e test comparing request payloads pre/post migration for ollama + one cloud provider), EXCEPT documented anthropic delta which lands Phase 5.
+  3.3 End-of-phase gate: existing user configs produce identical behavior end-to-end (mock-fetch e2e test comparing request payloads pre/post migration for ollama + one cloud provider), EXCEPT documented anthropic delta which lands Phase 5.
 
 ## Phase 4 — Selection UX
-*Files: `plugins/llm/index.ts` (slash commands), `cli.ts`, `tui/status-bar` (display), new small `selection-identity` util (drone-core)*
+
+_Files: `plugins/llm/index.ts` (slash commands), `cli.ts`, `tui/status-bar` (display), new small `selection-identity` util (drone-core)_
 
 4.1 Util: `parseModelSelection('p/rest/of/model') → {providerId:'p', modelLocalId:'rest/of/model'}`, `formatModelSelection`, strict config-form validation vs lenient interactive form.
 4.2 `/model` rewrite: bare = read-only browse (merged list w/ provider grouping); `/model <full|bare>` selects: persist `llm.active` to USER-scope config + onSelect stub write when policy applies and model undeclared&undiscovered-persisted-yet; `--once` flag performs neither write. Status bar shows `<provider>/<model>`.
@@ -119,25 +144,29 @@ Tests: type/schema units, merge-spec entry-replace case, validation rule cases.
 4.4 Tests: parse edge cases (multi-slash OpenRouter IDs), persistence on/off paths, stub-write policy truth table, flag override.
 
 ## Phase 5 — Parameters end-to-end
-*Files: broker enrichment wrapper (from 3.2), all four drivers, `shared/openai-compatible.ts`*
+
+_Files: broker enrichment wrapper (from 3.2), all four drivers, `shared/openai-compatible.ts`_
 
 5.1 Resolution: `provider.parameters ⊕ model.parameters` shallow (model wins per-key); aliased entries inherit base entry params first (own > base). Enriched chat request carries result.
 5.2 Drivers apply normalization into native payloads; unknown-but-schema-absent keys → warning event, still sent; `extra:{}` merged silently. Anthropic: `max_tokens` ← `maxOutputTokens` (driver default when absent — pick sensible default, e.g. 8192); thinking budgets = calibrated fractions OF maxOutputTokens; `session.responseReserveTokens` returns to pure budgeting duty. This is the ONE intended behavior change — call it out in the PR body.
 5.3 Tests: precedence matrix (provider-only, model-only, both, alias-inherited), typo-warning emission, extra passthrough, per-driver payload snapshots including num_ctx reaching ollama `options`.
 
 ## Phase 6 — Secrets & swarm/scope policy
-*Files: `runtime/config.ts` (post-merge pipeline), `config-schema.ts`, swarm docs*
+
+_Files: `runtime/config.ts` (post-merge pipeline), `config-schema.ts`, swarm docs_
 
 6.1 After FULL merge (defaults→user→project→beacon→coordinator underlays): interpolate `${VAR}` across provider config values; unresolved → validation error naming var + provider path. Literal-key detection: project-scope file contributing a plaintext `apiKey` → loud warning. Project-scope `providers` presence → startup error (carve-out: none needed for legacy since those aren't `providers`).
 6.2 Docs: swarm plugin doc section stating LLM sections are valid underlay content + interpolation runs receiver-side. Tests: interpolation success/failure, scope warnings/errors, injected-provider + local-env resolution.
 
 ## Phase 7 — Cleanup & docs
-7.1 Rewire stragglers to new format ONLY: `plugins/persona/wizard.ts:337` (reads `ctx.config.ollama.model`), `plugins/bootstrap/index.ts:321,347,400,460,527` (writes ollama-flavored picks). 
-7.2 Delete dead code: legacy section *reads* outside migration module, ollama vision heuristic remnants, dead `--model` stub, superseded types (`DroneOpenRouterModelConfig.hasVision` etc.), unused imports. Legacy TYPES stay (migration input) until deletion release — mark `@deprecated` pointing at migration module.
+
+7.1 Rewire stragglers to new format ONLY: `plugins/persona/wizard.ts:337` (reads `ctx.config.ollama.model`), `plugins/bootstrap/index.ts:321,347,400,460,527` (writes ollama-flavored picks).
+7.2 Delete dead code: legacy section _reads_ outside migration module, ollama vision heuristic remnants, dead `--model` stub, superseded types (`DroneOpenRouterModelConfig.hasVision` etc.), unused imports. Legacy TYPES stay (migration input) until deletion release — mark `@deprecated` pointing at migration module.
 7.3 Docs: new `docs/agents/provider-model-config.md` (concepts: providers, protocols, models, aliases, parameters, autoImport, secrets, scopes); update AGENTS.md config-section list + wiki pages later per convention.
 7.4 Full LSP find-references sweep over `DroneLlmProvider`, `DroneLlmProviderRegistration`, `DroneLlmCapability`, driver interface + grep cross-check, INCLUDING test mocks (per project principle).
 
 ## Execution notes for coding agents
+
 - After ANY drone-core edit: `pnpm -r run build` BEFORE trusting dependent-package LSP (deps resolve from dist/).
 - Root commands: `pnpm lint`, `pnpm build`, `pnpm test` (fast suite). Integration suite not required for this plan.
 - One commit per phase minimum; tree green before every commit; `.drone-agent/` memory/plan changes committed alongside (we're on a feature branch).
@@ -145,6 +174,7 @@ Tests: type/schema units, merge-spec entry-replace case, validation rule cases.
 - Prettier reformats on lint — re-read files after running linters before further edits.
 
 ## Validation criteria (final step — verify ALL before PR)
+
 1. LSP diagnostics clean workspace-wide.
 2. `pnpm -r run build` — all packages, zero errors.
 3. Root `pnpm lint` (ESLint+Prettier) zero errors.

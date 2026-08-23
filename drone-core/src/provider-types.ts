@@ -85,14 +85,30 @@ export type DronePersonaProvider = {
   reloadPersonas: () => Promise<void>;
 };
 
+/**
+ * Input to DroneLlmProvider.chat(). The leading fields are the stable wire
+ * contract; the trailing optional fields are broker-enriched additions
+ * (parameters/extra passthrough, resolved metadata) that drivers may
+ * consume but existing providers can ignore.
+ */
+export type DroneChatRequest = {
+  model: string;
+  messages: DroneChatMessage[];
+  tools?: DroneToolDescriptor[];
+  reasoningLevel?: DroneReasoningLevel;
+  debug?: boolean;
+  /** Effective sampling parameters (provider ⊕ model shallow merge). */
+  parameters?: Record<string, unknown>;
+  /** Silent raw passthrough bag merged into native request payloads. */
+  extra?: Record<string, unknown>;
+  /** Resolved max output tokens for this model. */
+  maxOutputTokens?: number;
+  /** Resolved vision capability for this model. */
+  hasVision?: boolean;
+};
+
 export type DroneLlmProvider = {
-  chat: (input: {
-    model: string;
-    messages: DroneChatMessage[];
-    tools?: DroneToolDescriptor[];
-    reasoningLevel?: DroneReasoningLevel;
-    debug?: boolean;
-  }) => Promise<DroneChatResponse>;
+  chat: (input: DroneChatRequest) => Promise<DroneChatResponse>;
   getContextWindowInfo?: (input: {
     model: string;
   }) => Promise<DroneContextWindowInfo | null>;
