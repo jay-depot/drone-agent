@@ -89,6 +89,13 @@ export const llmPlugin: DronePlugin = {
       },
       getActiveProviderId: () => activeProviderId,
       getAvailableProviders,
+      registerDriver: driver => {
+        // Full driver-based instantiation arrives with the Phase 3 broker
+        // cutover; Phase 2 only collects registrations.
+        registration.logger.info(
+          `driver registered: ${driver.protocolId} (broker cutover pending)`
+        );
+      },
       activateProvider: (providerId: string) => {
         activateProvider(providerId);
       },

@@ -1,8 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { ShowResponse } from 'ollama';
-import { __testing } from '../src/plugins/ollama.js';
-
-const { extractContextWindowTokens } = __testing;
+import { extractContextWindowTokens } from '../src/plugins/ollama/driver.js';
 
 function makeShowResponse(
   modelInfo: Record<string, unknown> | Map<string, unknown>
@@ -114,8 +112,8 @@ describe('ollama chat user-message injection', () => {
   });
 
   async function captureProvider() {
-    const { ollamaPlugin } = await import('../src/plugins/ollama.js');
-    let provider: { chat: (input: unknown) => Promise<unknown> } | undefined;
+    const { ollamaPlugin } = await import('../src/plugins/ollama/index.js');
+    let driver: import('drone-core').LlmProtocolDriver | undefined;
     await ollamaPlugin.register({
       logger: {
         info: vi.fn(),
@@ -147,19 +145,21 @@ describe('ollama chat user-message injection', () => {
         onSessionSafetyTrimWillRun: () => {},
         onSessionSafetyTrimApplied: () => {},
       },
-      offer: (cap: { provider: unknown }) => {
-        provider = cap.provider as {
-          chat: (input: unknown) => Promise<unknown>;
-        };
+      offer: (cap: unknown) => {
+        driver = (cap as { driver: import('drone-core').LlmProtocolDriver })
+          .driver;
       },
       request: () => undefined,
       runWorkflow: async () => ({ toolResult: '{}' }),
       requestElicitation: () => undefined,
     } as never);
-    if (!provider) {
-      throw new Error('provider not offered');
+    if (!driver) {
+      throw new Error('driver not offered');
     }
-    return provider;
+    return driver.createProvider({
+      protocol: 'ollama',
+      baseUrl: 'http://localhost:11434',
+    });
   }
 
   it('prepends a placeholder user message when no user role is present', async () => {

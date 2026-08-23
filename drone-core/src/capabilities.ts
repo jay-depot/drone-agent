@@ -75,6 +75,7 @@ import type {
   DroneLlmProvider,
   DroneLlmProviderRegistration,
 } from './provider-types.js';
+import type { LlmProtocolDriver } from './provider-config-types.js';
 
 // ── Config capability ──────────────────────────────────────────────
 
@@ -145,6 +146,11 @@ export type DroneSkillsCapability = {
 export type DroneLlmCapability = {
   /** Get the active DroneLlmProvider implementation. */
   getActiveProvider: () => DroneLlmProvider;
+  /**
+   * Register a protocol driver factory. The broker instantiates one
+   * provider per matching `config.providers` entry using these drivers.
+   */
+  registerDriver: (driver: LlmProtocolDriver) => void;
   /** Get the id of the active provider (e.g. 'ollama', 'openrouter'). */
   getActiveProviderId: () => string;
   /** List all registered provider ids in precedence order. */

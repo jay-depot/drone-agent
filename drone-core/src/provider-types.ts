@@ -124,6 +124,10 @@ export type DroneLlmProviderRegistration = {
   /** Unique id for this provider (e.g. 'ollama', 'openrouter'). */
   id: string;
   /** Precedence value. Lower number = higher priority. */
+  /**
+   * @deprecated Legacy registration path retained for the migration window.
+   * Protocol plugins now register drivers via DroneLlmCapability.registerDriver.
+   */
   precedence: number;
   /** Get the DroneLlmProvider implementation. */
   getProvider: () => DroneLlmProvider;
@@ -133,3 +137,5 @@ export type DroneLlmProviderRegistration = {
   getDefaultModel: () => string;
   hasVision?: (model: string) => boolean | Promise<boolean>;
 };
+
+export type { LlmProtocolDriver as DroneLlmProtocolDriver } from './provider-config-types.js';
