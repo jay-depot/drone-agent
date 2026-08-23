@@ -325,16 +325,17 @@ export const personaCreateWorkflow: DroneWorkflow = {
     );
 
     // 5. LLM call (fresh — no tools, no conversation history).
-    const ollama = ctx.requestCapability<{
-      provider: DroneLlmProvider;
-    }>('ollama');
-    if (!ollama) {
+    const llm = ctx.requestCapability<{
+      getActiveProvider: () => DroneLlmProvider;
+      getModel: () => string;
+    }>('llm');
+    if (!llm) {
       throw new Error(
-        'persona.create workflow requires the Ollama provider; enable the ollama plugin.'
+        'persona.create workflow requires an active LLM provider; configure a providers entry and its protocol plugin.'
       );
     }
-    const candidate = await ollama.provider.chat({
-      model: ctx.config.ollama.model,
+    const candidate = await llm.getActiveProvider().chat({
+      model: llm.getModel(),
       tools: [],
       messages: [
         { role: 'system', content: buildPersonaSystemPrompt() },

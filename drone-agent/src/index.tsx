@@ -75,12 +75,11 @@ async function main(): Promise<void> {
   }
 
   // --model is an invocation-scoped override of llm.active (never persisted).
-  // The fallback reads the migrated config so the initial display matches
-  // what the broker will activate; the broker itself re-reads llm.active.
+  // The override wins; otherwise llm.active from the migrated config. This
+  // value only feeds the createLlmGetters fallback used before the engine
+  // exists — once initialized, the broker is the single source of truth.
   const model =
-    invocation.options.modelOverride ??
-    resolvedConfig.config.llm.active ??
-    resolvedConfig.config.ollama.model;
+    invocation.options.modelOverride ?? resolvedConfig.config.llm.active ?? '';
   const sessionManager = createSessionManager();
 
   // The budget service needs renderPromptFragments from the engine, but the
