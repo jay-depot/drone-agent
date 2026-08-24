@@ -28,6 +28,6 @@ ENV PATH="/app/drone-agent/bin:${PATH}"
 # Configure drone-agent to use the echo LLM provider for integration tests.
 # This ensures spawned subagents use the echo-llm service rather than ollama.
 RUN mkdir -p /root/.drone-agent && \
-    echo '{"llm":{"provider":"echo"},"enabledPlugins":["llm","echo"]}' > /root/.drone-agent/config.json
+    echo '{"providers":{"echo":{"protocol":"echo","baseUrl":"http://echo-llm:3458","models":{"echo-model":{}}}},"llm":{"active":"echo/echo-model"},"enabledPlugins":["llm","echo"]}' > /root/.drone-agent/config.json
 # Run the real integration suite inside the isolated docker network.
 CMD ["pnpm", "exec", "vitest", "run", "-c", "vitest.integration.config.ts"]

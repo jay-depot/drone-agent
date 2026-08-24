@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type {
   DroneLlmCapability,
-  DroneLlmProviderRegistration,
   DronePluginRegistration,
+  LlmProtocolDriver,
 } from 'drone-core';
 import { createDefaultAgentConfig } from 'drone-core';
 import { echoPlugin } from '../src/plugins/echo/index.js';
@@ -10,9 +10,9 @@ import { silentLogger } from './helpers.js';
 
 function createMockRegistration(): {
   registration: DronePluginRegistration;
-  getRegisteredProvider: () => DroneLlmProviderRegistration | undefined;
+  getRegisteredDriver: () => LlmProtocolDriver | undefined;
 } {
-  const holder: { provider?: DroneLlmProviderRegistration } = {};
+  const holder: { driver?: LlmProtocolDriver } = {};
   const llmCapability: DroneLlmCapability = {
     getActiveProvider: () => {
       throw new Error('not used in test');
@@ -25,9 +25,10 @@ function createMockRegistration(): {
     getReasoningLevel: () => undefined,
     setReasoningLevel: () => {},
     listModels: async () => [],
-    registerProvider: registration => {
-      holder.provider = registration;
+    registerDriver: driver => {
+      holder.driver = driver;
     },
+    registerProvider: () => {},
     unregisterProvider: () => {},
   };
 
@@ -67,24 +68,25 @@ function createMockRegistration(): {
   };
   return {
     registration,
-    getRegisteredProvider: () => holder.provider,
+    getRegisteredDriver: () => holder.driver,
   };
 }
 
 describe('echoPlugin', () => {
   it('registers a provider with the LLM broker', async () => {
-    const { registration, getRegisteredProvider } = createMockRegistration();
+    const { registration, getRegisteredDriver } = createMockRegistration();
     await echoPlugin.register(registration);
-    const provider = getRegisteredProvider();
-    expect(provider).toBeDefined();
-    expect(provider?.id).toBe('echo');
-    expect(provider?.getDefaultModel()).toBe('echo-model');
+    const driver = getRegisteredDriver();
+    expect(driver).toBeDefined();
+    expect(driver?.protocolId).toBe('echo');
   });
 
   it('reports a context window large enough for the system prompt', async () => {
-    const { registration, getRegisteredProvider } = createMockRegistration();
+    const { registration, getRegisteredDriver } = createMockRegistration();
     await echoPlugin.register(registration);
-    const provider = getRegisteredProvider()!.getProvider();
+    const provider = getRegisteredDriver()!.createProvider({
+      protocol: 'echo',
+    });
     const info = await provider.getContextWindowInfo?.({ model: 'echo-model' });
     expect(info).toBeDefined();
     // Must be at least the config default so the safety-trim budget doesn't

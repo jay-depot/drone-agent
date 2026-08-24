@@ -61,13 +61,17 @@ export async function runFirstRunSetup(
   // Probe for available providers
   const availableProviders: { id: string; label: string }[] = [];
 
-  // Check if Ollama is reachable
-  const ollamaCap = engine.getCapability<{
-    listModels: () => Promise<string[]>;
-  }>('ollama');
-  if (ollamaCap) {
+  // Check if Ollama is reachable via its driver's discovery.
+  const ollamaDriver = engine.getCapability<{
+    driver: {
+      discoverModels?: (config: {
+        baseUrl?: string;
+      }) => Promise<Array<{ id: string }>>;
+    };
+  }>('ollama')?.driver;
+  if (ollamaDriver?.discoverModels) {
     try {
-      const models = await ollamaCap.listModels();
+      const models = (await ollamaDriver.discoverModels({})).map(m => m.id);
       if (models.length > 0) {
         availableProviders.push({ id: 'ollama', label: 'Ollama (local)' });
       }
@@ -116,14 +120,11 @@ export async function runFirstRunSetup(
     if (chosenProvider === 'ollama') {
       // Ollama flow: pick a model
       try {
-        const ollamaCap2 = engine.getCapability<{
-          listModels: () => Promise<string[]>;
-        }>('ollama');
-        if (!ollamaCap2) {
+        if (!ollamaDriver?.discoverModels) {
           logger.warn('Ollama capability not available.');
           continue;
         }
-        const models = await ollamaCap2.listModels();
+        const models = (await ollamaDriver.discoverModels({})).map(m => m.id);
         if (models.length === 0) {
           logger.warn(
             'No Ollama models found. Pull a model first (e.g. "ollama pull llama3.1").'
@@ -133,7 +134,9 @@ export async function runFirstRunSetup(
 
         const selectedModel = await pickModelInteractive(
           models,
-          config.ollama.model
+          // Current selection for the picker highlight (may be empty on
+          // first run — the config has no providers yet).
+          ''
         );
 
         await mkdir(userConfigDir, { recursive: true });
@@ -142,8 +145,14 @@ export async function runFirstRunSetup(
           JSON.stringify(
             {
               enabledPlugins: withProviderEnabled('ollama'),
-              llm: { provider: 'ollama' },
-              ollama: { model: selectedModel },
+              llm: { active: `ollama/${selectedModel}` },
+              providers: {
+                ollama: {
+                  protocol: 'ollama',
+                  baseUrl: 'http://127.0.0.1:11434',
+                  models: { [selectedModel]: {} },
+                },
+              },
             },
             null,
             2
@@ -210,12 +219,19 @@ export async function runFirstRunSetup(
         JSON.stringify(
           {
             enabledPlugins: withProviderEnabled('openrouter'),
-            llm: { provider: 'openrouter' },
-            openrouter: {
-              apiKey: '${OPENROUTER_API_KEY}',
-              defaultModel: selectedModel,
-              baseUrl: 'https://openrouter.ai/api/v1',
-              models: defaultModels,
+            llm: { active: `openrouter/${selectedModel}` },
+            providers: {
+              openrouter: {
+                protocol: 'openrouter',
+                apiKey: '${OPENROUTER_API_KEY}',
+                baseUrl: 'https://openrouter.ai/api/v1',
+                models: Object.fromEntries(
+                  defaultModels.map(m => [
+                    m.id,
+                    { contextWindow: m.contextWindow },
+                  ])
+                ),
+              },
             },
           },
           null,
@@ -280,12 +296,19 @@ export async function runFirstRunSetup(
         JSON.stringify(
           {
             enabledPlugins: withProviderEnabled('openai'),
-            llm: { provider: 'openai' },
-            openai: {
-              apiKey: '${OPENAI_API_KEY}',
-              defaultModel: selectedModel,
-              baseUrl: 'https://api.openai.com/v1',
-              models: defaultModels,
+            llm: { active: `openai/${selectedModel}` },
+            providers: {
+              openai: {
+                protocol: 'openai',
+                apiKey: '${OPENAI_API_KEY}',
+                baseUrl: 'https://api.openai.com/v1',
+                models: Object.fromEntries(
+                  defaultModels.map(m => [
+                    m.id,
+                    { contextWindow: m.contextWindow },
+                  ])
+                ),
+              },
             },
           },
           null,
@@ -349,13 +372,20 @@ export async function runFirstRunSetup(
         JSON.stringify(
           {
             enabledPlugins: withProviderEnabled('anthropic'),
-            llm: { provider: 'anthropic' },
-            anthropic: {
-              apiKey: '${ANTHROPIC_API_KEY}',
-              defaultModel: selectedModel,
-              baseUrl: 'https://api.anthropic.com',
-              apiVersion: '2023-06-01',
-              models: defaultModels,
+            llm: { active: `anthropic/${selectedModel}` },
+            providers: {
+              anthropic: {
+                protocol: 'anthropic',
+                apiKey: '${ANTHROPIC_API_KEY}',
+                baseUrl: 'https://api.anthropic.com',
+                apiVersion: '2023-06-01',
+                models: Object.fromEntries(
+                  defaultModels.map(m => [
+                    m.id,
+                    { contextWindow: m.contextWindow },
+                  ])
+                ),
+              },
             },
           },
           null,

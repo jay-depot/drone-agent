@@ -274,5 +274,13 @@
   {
     "timestamp": "2026-08-24T00:35:33.808Z",
     "insight": "Executing an ordering-invariant inversion (compaction summaries newest-first -> chronological) revealed that most pre-existing seeded fixtures need NO edits: assertions keyed off variable identity (s1.id, oldest.id via .some()) survive any storage order; only genuinely positional assertions ([0]/.at(-1) on getSummaryTurns()/status.summaries) required flipping. Plan accordingly: enumerate positional accessors during planning (they are the real edit set), not all fixture sites. Also: content-anchored apply_diff absorbed ~4 lines of plan-vs-reality drift without re-measuring, and the two intentional newest-at-tail test asserts (.at(-1)) will trip naive greps for residual reversed-order accessors — whitelist deliberate ones when validating."
+  },
+  {
+    "timestamp": "2026-08-23T18:51:34.791Z",
+    "insight": "Two validation-layer lessons from the context-window fix: (1) pnpm lint (prettier) reformatted test files mid-run, so LSP diagnostics pointed at PRE-EDIT positions and showed errors that no longer existed — ground truth required grep -c of the old pattern plus a fresh tsc -p tsconfig.test.json --noEmit, both of which were clean. Trust hierarchy confirmed again: fresh tsc > grep > cached LSP. (2) Vitest passing does NOT mean LSP-clean: esbuild strips types without checking, so my tests called getContextWindowInfo({}) where the wire contract requires {model: string} and only tsc caught it. AGENTS.md is right to demand zero LSP errors with no exceptions for tests."
+  },
+  {
+    "timestamp": "2026-08-23T21:45:01.311Z",
+    "insight": "vi.doMock('node:os') with a factory that spreads importOriginal only replaces NAMESPACE exports; modules using `import os from 'node:os'` (default import) keep the ORIGINAL default object including real homedir. The mock must also override `default`: `const mocked = {...actual, homedir: () => tmp}; return {...mocked, default: mocked}`. Symptom when missed: tests silently write to the REAL user home. Always verify no real-home pollution after homedir-mocked filesystem tests. Also: vi.spyOn cannot redefine ESM namespace exports ('Module namespace is not configurable') — use doMock factories, not spies, for ESM builtins. And vitest run must be invoked from the workspace root (config-rooted include patterns), not package subdirectories."
   }
 ]

@@ -61,6 +61,12 @@ async function main(): Promise<void> {
   const resolvedConfig = await loadAgentConfig(process.cwd(), {
     configDir: invocation.options.configDir,
   });
+  if (resolvedConfig.migrationNotice) {
+    logger.warn(resolvedConfig.migrationNotice);
+  }
+  for (const warning of resolvedConfig.warnings ?? []) {
+    logger.warn(warning);
+  }
 
   // Handle migrate subcommand early (no engine needed)
   if (invocation.kind === 'migrate') {
@@ -68,8 +74,12 @@ async function main(): Promise<void> {
     return;
   }
 
+  // --model is an invocation-scoped override of llm.active (never persisted).
+  // The override wins; otherwise llm.active from the migrated config. This
+  // value only feeds the createLlmGetters fallback used before the engine
+  // exists — once initialized, the broker is the single source of truth.
   const model =
-    invocation.options.modelOverride ?? resolvedConfig.config.ollama.model;
+    invocation.options.modelOverride ?? resolvedConfig.config.llm.active ?? '';
   const sessionManager = createSessionManager();
 
   // The budget service needs renderPromptFragments from the engine, but the
@@ -284,6 +294,24 @@ async function main(): Promise<void> {
 
   await engine.runHooks('onPluginsLoaded');
   await engine.runHooks('onSessionStart');
+
+  // ── --model invocation-scoped override ─────────────────────────────
+  // Applied AFTER onPluginsLoaded so the broker has already activated from
+  // llm.active; the override wins for this invocation and is never persisted.
+  if (invocation.options.modelOverride) {
+    const llm = getLlmCapability(engine);
+    if (llm) {
+      try {
+        conversation.setModel(invocation.options.modelOverride);
+        logger.info(
+          `model override (this invocation): ${invocation.options.modelOverride}`
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.warn(`Failed to apply --model override: ${message}`);
+      }
+    }
+  }
 
   // ── Deferred project plugin trust prompting ──────────────────────────
   // After elicitation is set up, prompt the user for any project-scope

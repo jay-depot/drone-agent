@@ -172,8 +172,30 @@ export type {
   DronePersonaWriter,
   DroneSkillWriter,
   DroneLlmProvider,
+  DroneChatRequest,
   DroneLlmProviderRegistration,
 } from './provider-types.js';
+
+// ── Provider/protocol/model config types ─────────────────────────────
+
+export type {
+  DroneAutoImportMode,
+  DroneModelEntryConfig,
+  DroneProviderConfig,
+  ResolvedProviderConfig,
+  DiscoveredModel,
+  LlmParameterSpec,
+  LlmParameterSchema,
+  LlmProtocolDriver,
+} from './provider-config-types.js';
+
+export type { ModelSelection } from './model-selection.js';
+export {
+  parseModelSelection,
+  formatModelSelection,
+  isValidFullModelSelection,
+  resolveInteractiveSelection,
+} from './model-selection.js';
 
 // ── Capability types ─────────────────────────────────────────────────
 
@@ -264,6 +286,7 @@ export {
   PartialDroneAgentConfigSchema,
   parseConfigWithSchema,
   transformEnvVars,
+  validateProviders,
 } from './config-schema.js';
 export type { PartialDroneAgentConfigDecoded } from './config-schema.js';
 

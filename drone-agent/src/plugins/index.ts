@@ -17,7 +17,7 @@ import { lspPlugin } from './lsp/plugin.js';
 import { mcpPlugin } from './mcp/index.js';
 import { memoryPlugin } from './memory/index.js';
 import { notepadPlugin } from './notepad.js';
-import { ollamaPlugin } from './ollama.js';
+import { ollamaPlugin } from './ollama/index.js';
 import { anthropicPlugin } from './anthropic/index.js';
 import { openaiPlugin } from './openai/index.js';
 import { openrouterPlugin } from './openrouter/index.js';

@@ -40,11 +40,12 @@ function createRegistrationCapture() {
     onSessionSafetyTrimApplied: [],
   };
 
-  let registeredProvider: DroneLlmProviderRegistration | undefined;
+  let registeredDriver: import('drone-core').LlmProtocolDriver | undefined;
   const llmCap: DroneLlmCapability = {
-    registerProvider: provider => {
-      registeredProvider = provider;
+    registerDriver: driver => {
+      registeredDriver = driver;
     },
+    registerProvider: () => {},
     unregisterProvider: () => {},
     getActiveProvider: () => ({
       chat: async () => ({ message: 'ok' }),
@@ -58,11 +59,7 @@ function createRegistrationCapture() {
     getReasoningLevel: () => undefined,
     setReasoningLevel: (_level: any) => {},
     listModels: async () => {
-      const provider = registeredProvider;
-      if (!provider) {
-        return [];
-      }
-      return provider.listModels();
+      return [];
     },
   };
 
@@ -102,7 +99,17 @@ function createRegistrationCapture() {
   return {
     config,
     registration,
-    getRegisteredProvider: () => registeredProvider,
+    getRegisteredDriver: () => registeredDriver,
+    getProviderViaDriver: () => {
+      const driver = registeredDriver;
+      if (!driver) throw new Error('driver not registered');
+      return driver.createProvider({
+        protocol: 'anthropic',
+        baseUrl: config.anthropic.baseUrl,
+        apiKey: config.anthropic.apiKey,
+        apiVersion: config.anthropic.apiVersion,
+      });
+    },
   };
 }
 
@@ -112,37 +119,19 @@ describe('anthropic plugin', () => {
     vi.restoreAllMocks();
   });
 
-  it('registers with llm broker and exposes configured models', async () => {
+  it('registers its driver with the llm broker', async () => {
     const capture = createRegistrationCapture();
-    capture.config.anthropic.models = [
-      { id: 'claude-haiku-4-5', contextWindow: 200000 },
-      { id: 'claude-sonnet-4-6', contextWindow: 1000000 },
-      { id: 'claude-opus-4-8', contextWindow: 1000000 },
-    ];
-    capture.config.anthropic.defaultModel = 'claude-sonnet-4-6';
 
     await anthropicPlugin.register(capture.registration);
 
-    const providerReg = capture.getRegisteredProvider();
-    expect(providerReg).toBeDefined();
-    expect(providerReg?.id).toBe('anthropic');
-    await expect(providerReg?.listModels()).resolves.toEqual([
-      'claude-haiku-4-5',
-      'claude-sonnet-4-6',
-      'claude-opus-4-8',
-    ]);
-    expect(providerReg?.getDefaultModel()).toBe('claude-sonnet-4-6');
+    expect(capture.getRegisteredDriver()).toBeDefined();
   });
 
   it('errors clearly when api key is missing', async () => {
     const capture = createRegistrationCapture();
-    capture.config.anthropic.apiKey = '';
 
     await anthropicPlugin.register(capture.registration);
-    const providerReg = capture.getRegisteredProvider();
-    expect(providerReg).toBeDefined();
-
-    const provider = providerReg!.getProvider();
+    const provider = capture.getProviderViaDriver();
     await expect(
       provider.chat({
         model: 'claude-sonnet-4-6',
@@ -178,7 +167,7 @@ describe('anthropic plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await anthropicPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'claude-sonnet-4-6',
@@ -222,7 +211,6 @@ describe('anthropic plugin', () => {
     capture.config.anthropic.apiKey = 'test-anthropic-key';
     capture.config.anthropic.baseUrl = 'https://api.anthropic.com';
     capture.config.anthropic.apiVersion = '2023-06-01';
-    capture.config.session.responseReserveTokens = 4000;
 
     const fetchMock = vi.fn(async () => {
       return new Response(
@@ -238,12 +226,13 @@ describe('anthropic plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await anthropicPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     await provider.chat({
       model: 'claude-sonnet-4-6',
       messages: [{ role: 'user', content: 'think' }],
       reasoningLevel: 'high',
+      maxOutputTokens: 8000,
     });
 
     const [, init] = fetchMock.mock.calls[0] as unknown as [
@@ -251,9 +240,10 @@ describe('anthropic plugin', () => {
       RequestInit & { body?: string },
     ];
     const body = JSON.parse(init.body ?? '{}') as Record<string, unknown>;
+    expect(body.max_tokens).toBe(8000);
     expect(body.thinking).toEqual({
       type: 'enabled',
-      budget_tokens: 2000, // 50% of responseReserveTokens (4000)
+      budget_tokens: 4000, // 50% of resolved maxOutputTokens
     });
   });
 
@@ -277,7 +267,7 @@ describe('anthropic plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await anthropicPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     await provider.chat({
       model: 'claude-sonnet-4-6',
@@ -316,7 +306,7 @@ describe('anthropic plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await anthropicPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'claude-sonnet-4-6',
@@ -351,7 +341,7 @@ describe('anthropic plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await anthropicPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'claude-sonnet-4-6',

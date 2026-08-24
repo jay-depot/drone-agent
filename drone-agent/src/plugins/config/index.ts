@@ -112,6 +112,10 @@ const KNOWN_CONFIG_KEYS: string[] = [
   'session.responseReserveTokens',
   'session.maxToolIterations',
   'session.promptOnToolIterationLimit',
+  // llm.*
+  'llm.active',
+  'llm.reasoningLevel',
+  // lsp.*
   // lsp.*
   'lsp.enabled',
   'lsp.diagnosticTokenBudget',
