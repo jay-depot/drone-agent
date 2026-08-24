@@ -40,11 +40,12 @@ function createRegistrationCapture() {
     onSessionSafetyTrimApplied: [],
   };
 
-  let registeredProvider: DroneLlmProviderRegistration | undefined;
+  let registeredDriver: import('drone-core').LlmProtocolDriver | undefined;
   const llmCap: DroneLlmCapability = {
-    registerProvider: provider => {
-      registeredProvider = provider;
+    registerDriver: driver => {
+      registeredDriver = driver;
     },
+    registerProvider: () => {},
     unregisterProvider: () => {},
     getActiveProvider: () => ({
       chat: async () => ({ message: 'ok' }),
@@ -58,11 +59,7 @@ function createRegistrationCapture() {
     getReasoningLevel: () => undefined,
     setReasoningLevel: (_level: any) => {},
     listModels: async () => {
-      const provider = registeredProvider;
-      if (!provider) {
-        return [];
-      }
-      return provider.listModels();
+      return [];
     },
   };
 
@@ -102,7 +99,17 @@ function createRegistrationCapture() {
   return {
     config,
     registration,
-    getRegisteredProvider: () => registeredProvider,
+    getRegisteredDriver: () => registeredDriver,
+    getProviderViaDriver: () => {
+      const driver = registeredDriver;
+      if (!driver) throw new Error('driver not registered');
+      return driver.createProvider({
+        protocol: 'openai',
+        baseUrl: config.openai.baseUrl,
+        apiKey: config.openai.apiKey,
+        orgId: config.openai.orgId,
+      });
+    },
   };
 }
 
@@ -112,35 +119,19 @@ describe('openai plugin', () => {
     vi.restoreAllMocks();
   });
 
-  it('registers with llm broker and exposes configured models', async () => {
+  it('registers its driver with the llm broker', async () => {
     const capture = createRegistrationCapture();
-    capture.config.openai.models = [
-      { id: 'gpt-4o', contextWindow: 128000 },
-      { id: 'gpt-4.1', contextWindow: 1047576 },
-    ];
-    capture.config.openai.defaultModel = 'gpt-4o';
 
     await openaiPlugin.register(capture.registration);
 
-    const providerReg = capture.getRegisteredProvider();
-    expect(providerReg).toBeDefined();
-    expect(providerReg?.id).toBe('openai');
-    await expect(providerReg?.listModels()).resolves.toEqual([
-      'gpt-4o',
-      'gpt-4.1',
-    ]);
-    expect(providerReg?.getDefaultModel()).toBe('gpt-4o');
+    expect(capture.getRegisteredDriver()).toBeDefined();
   });
 
   it('errors clearly when api key is missing', async () => {
     const capture = createRegistrationCapture();
-    capture.config.openai.apiKey = '';
 
     await openaiPlugin.register(capture.registration);
-    const providerReg = capture.getRegisteredProvider();
-    expect(providerReg).toBeDefined();
-
-    const provider = providerReg!.getProvider();
+    const provider = capture.getProviderViaDriver();
     await expect(
       provider.chat({
         model: 'gpt-4o',
@@ -185,7 +176,7 @@ describe('openai plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openaiPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'gpt-4o',
@@ -259,7 +250,7 @@ describe('openai plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openaiPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'gpt-4o',
@@ -316,7 +307,7 @@ describe('openai plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openaiPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     await provider.chat({
       model: 'gpt-4o',
@@ -355,7 +346,7 @@ describe('openai plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openaiPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'gpt-4o',
@@ -388,7 +379,7 @@ describe('openai plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openaiPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'gpt-4o',
@@ -425,7 +416,7 @@ describe('openai plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openaiPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'gpt-4o',

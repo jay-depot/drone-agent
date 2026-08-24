@@ -350,6 +350,7 @@ describe('promptFilePlugin', () => {
         systemPrompt: '',
         activePersona: null,
         llm: { provider: 'ollama' },
+        providers: {},
         ollama: { host: '', model: '' },
         openai: {
           apiKey: '',

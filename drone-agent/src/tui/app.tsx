@@ -616,7 +616,18 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   }, [opts.engine, pushColorOverride, popColorOverride]);
 
   // ── Status bar content ─────────────────────────────────────────────
-  const model = opts.conversation.getModel();
+  // Full-form identity: <providerId>/<modelLocalId>. The conversation's
+  // getModel() may already return the full form (after /model) or a bare
+  // local id (initial activation); normalize for display.
+  const llmCapForStatus = opts.engine.getCapability<{
+    getActiveProviderId: () => string;
+  }>('llm');
+  const model = (() => {
+    const raw = opts.conversation.getModel();
+    const providerId = llmCapForStatus?.getActiveProviderId();
+    if (!providerId || raw.includes('/')) return raw;
+    return `${providerId}/${raw}`;
+  })();
   const pluginCount = opts.engine.getRegisteredPluginCount();
   const totalTools = opts.engine.getRegisteredToolCount();
   const allToolsDescs = opts.engine.listTools();

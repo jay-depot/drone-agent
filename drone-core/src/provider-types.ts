@@ -85,16 +85,41 @@ export type DronePersonaProvider = {
   reloadPersonas: () => Promise<void>;
 };
 
+/**
+ * Input to DroneLlmProvider.chat(). The leading fields are the stable wire
+ * contract; the trailing optional fields are broker-enriched additions
+ * (parameters/extra passthrough, resolved metadata) that drivers may
+ * consume but existing providers can ignore.
+ */
+export type DroneChatRequest = {
+  model: string;
+  messages: DroneChatMessage[];
+  tools?: DroneToolDescriptor[];
+  reasoningLevel?: DroneReasoningLevel;
+  debug?: boolean;
+  /** Effective sampling parameters (provider ⊕ model shallow merge). */
+  parameters?: Record<string, unknown>;
+  /** Silent raw passthrough bag merged into native request payloads. */
+  extra?: Record<string, unknown>;
+  /** Resolved max output tokens for this model. */
+  maxOutputTokens?: number;
+  /** Resolved vision capability for this model. */
+  hasVision?: boolean;
+};
+
 export type DroneLlmProvider = {
-  chat: (input: {
-    model: string;
-    messages: DroneChatMessage[];
-    tools?: DroneToolDescriptor[];
-    reasoningLevel?: DroneReasoningLevel;
-    debug?: boolean;
-  }) => Promise<DroneChatResponse>;
+  chat: (input: DroneChatRequest) => Promise<DroneChatResponse>;
+  /**
+   * Probe the provider for a model's context window. The trailing optional
+   * fields (`parameters`, `extra`) are broker-forwarded effective request
+   * values — identical to what the next chat() will send — so drivers whose
+   * wire protocol constrains the window (e.g. ollama's num_ctx) can resolve
+   * the enforced size. Additive: existing providers may ignore them.
+   */
   getContextWindowInfo?: (input: {
     model: string;
+    parameters?: Record<string, unknown>;
+    extra?: Record<string, unknown>;
   }) => Promise<DroneContextWindowInfo | null>;
   supportsImagesInToolResults?: boolean;
 };
@@ -108,6 +133,10 @@ export type DroneLlmProviderRegistration = {
   /** Unique id for this provider (e.g. 'ollama', 'openrouter'). */
   id: string;
   /** Precedence value. Lower number = higher priority. */
+  /**
+   * @deprecated Legacy registration path retained for the migration window.
+   * Protocol plugins now register drivers via DroneLlmCapability.registerDriver.
+   */
   precedence: number;
   /** Get the DroneLlmProvider implementation. */
   getProvider: () => DroneLlmProvider;
@@ -117,3 +146,5 @@ export type DroneLlmProviderRegistration = {
   getDefaultModel: () => string;
   hasVision?: (model: string) => boolean | Promise<boolean>;
 };
+
+export type { LlmProtocolDriver as DroneLlmProtocolDriver } from './provider-config-types.js';

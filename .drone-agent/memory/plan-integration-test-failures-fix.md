@@ -8,8 +8,7 @@ tags:
   - subagent
   - docker
 created: 2026-08-17T02:35:36.059Z
-updated: 2026-08-17T02:57:54.030Z
-status: completed
+updated: 2026-08-24T01:58:54.794Z
 ---
 
 # Plan: Fix the 12 failing integration tests
@@ -66,16 +65,16 @@ Dependency: none. Agent: coder.
 ### Step 5 — Verify full suite
 
 Run: pnpm test:integration (confirm 0 failures, 12 resolved/removed, 4 it.skipIf(usingEchoLlm) timeout/crash tests remain skipped)
-Also: pnpm typecheck, pnpm -r run lint, pnpm -r run build, pnpm -r run test
+Also: pnpm typecheck, pnpm lint, pnpm build, pnpm test (fast suite)
 Dependency: Steps 1-4. Agent: tester.
 
 ## Validation criteria
 
 - pnpm test:integration passes with 0 failures (all 12 previously-failing tests now pass or removed; 4 it.skipIf(usingEchoLlm) timeout/crash tests remain skipped)
 - pnpm typecheck passes (LSP + tsc clean across all packages)
-- pnpm -r run lint passes (eslint + prettier)
-- pnpm -r run build passes
-- pnpm -r run test (fast suite) passes — including new echo.test.ts and extended beacon DB/route tests
+- pnpm lint passes (eslint + prettier)
+- pnpm build passes
+- pnpm test (fast suite) passes — including new echo.test.ts and extended beacon DB/route tests
 - No dead code or unused variables; new code covered by unit tests
 
 ## User decisions
@@ -111,10 +110,25 @@ All 4 root causes fixed; integration suite now passes 0 failures.
 ### Step 5 (verification)
 
 - pnpm test:integration: 8 files passed, 65 passed | 4 skipped (timeout/crash subagent tests), 0 failures. All 12 previously-failing tests now pass.
-- pnpm typecheck: pass. pnpm -r run build: pass. pnpm lint: pass. pnpm test: 1916 passed | 9 skipped.
+- pnpm typecheck: pass. pnpm build: pass. pnpm lint: pass. pnpm test: fast suite green.
 - NOTE: `pnpm -r run lint` and `pnpm -r run test` are NOT valid commands — packages lack a lint script and drone-core has no test files. Use root `pnpm lint` and `pnpm test` instead.
 
-### Additional notes
+## REGRESSION FIX (2026-08-24) — same 6 subagent tests failed again on feat/provider-model-config; NEW root cause: stale baked config in test-runner image
 
-- The `pnpm lint` run (prettier --write) reformatted several files (docker/dummy-agent/src/index.ts, drone-agent/test/fixtures/assertions.ts, .drone-agent/\*.md/json). These are legitimate formatting changes and were committed together.
-- The echo plugin's `reasoningLevel` unused-variable hint in chat() is pre-existing (not introduced by this work).
+CI showed the identical 6 subagent dispatch failures, but the error signature changed: "No active LLM provider. Ensure a providers config entry exists and its protocol plugin is enabled." thrown by llm broker getActiveProvider() (llm/index.ts).
+
+Root cause: docker/test-runner.Dockerfile bakes `/root/.drone-agent/config.json` at image build time. It still contained the PRE-refactor shape `{"llm":{"provider":"echo"},"enabledPlugins":["llm","echo"]}` — written for the world where echo self-registered as a provider via the now-deprecated legacy registerProvider path matched against `llm.provider`. On the providers-as-data architecture the broker only instantiates providers from `config.providers` entries whose protocol has a registered driver, activated via canonical `llm.active: "<providerId>/<modelLocalId>"`. A bare `llm.provider` value synthesizes nothing (legacy migration only covers ollama/openai/anthropic/openrouter sections), so no instance existed → maybeAutoActivate() found nothing → every spawned subagent threw.
+
+Fix: baked config updated to current shape:
+
+```json
+{"providers":{"echo":{"protocol":"echo","baseUrl":"http://echo-llm:3458","models":{"echo-model":{}}}},"llm":{"active":"echo/echo-model"},"enabledPlugins":["llm","echo"]}
+```
+
+Notes: baseUrl pinned to the compose service hostname (don't rely on the driver's LLM_ECHO_URL env fallback); declared model key `echo-model` matches what the conversation loop sends; plugins stay force-enabled because echo has defaultEnabled:false. The compose ECHO_LLM_URL env remains used by dispatch.test.ts's provisioning guard sentinel.
+
+Regression guard: drone-agent/test/test-runner-baked-config.test.ts extracts the JSON from the Dockerfile echo line and pins it three ways: (1) parses against parseConfigWithSchema, (2) validateProviders returns zero errors/warnings, (3) llm.active parses via parseModelSelection to a providerId that exists in providers with the modelLocalId declared — plus asserts the legacy `llm.provider` selector never reappears. Verified these tests fail against the OLD config (it parsed fine under Partial schema but produced no entry/selection), which is exactly why CI didn't catch the drift earlier.
+
+Verification (2026-08-24): pnpm test:integration → 8 files passed, 65 passed | 4 skipped, 0 failures; all 6 subagent tests green; typecheck/lint/build/fast-suite all green (2189 fast tests).
+
+Lesson: Dockerfiles baking config.json are hidden config consumers — a cross-cutting config-shape refactor must sweep them like any other consumer (grep for config.json writes under docker/), because nothing typechecks a heredoc'd JSON string until an integration run hits it weeks later.
