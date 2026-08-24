@@ -15,14 +15,17 @@ updated: 2026-08-23T23:57:26.942Z
 Branch: `fix/compaction-summary-order` (created off main, clean tree)
 
 ## Summary
+
 Compaction summaries reach the LLM newest-first. Root cause: `prependSystemTurn()` (`drone-agent/src/runtime/session-manager.ts`) does `turns.unshift()`, so each new summary lands IN FRONT of prior ones; storage order flows untouched into `getMessages()` (LLM context) and the log plugin snapshots. No consumer reorders; no prior decision chose this (emergent artifact enshrined by test comments).
 
 ## Decisions (user-approved)
+
 1. Fix at the source: chronological storage, not per-consumer sorting.
 2. Keep API name/signature `prependSystemTurn(content, opts)`; redefine insertion = immediately AFTER the leading run of summary-kind turns. New invariant: summaries form one contiguous chronological block at array head `[S1, S2, S3, ...live...]`. Uniform rule regardless of new turn kind (only prod caller is compaction; two kind-less test call sites unaffected).
 3. Scope: code + tests ONLY. No ADR/vault steps (user handles docs in separate workflow).
 
 ## Forced consequences (mechanical)
+
 - Self-purge (`compaction/index.ts:~311`): drop target flips `summaryTurns.at(-1)!` -> `summaryTurns[0]!`.
 - Capability `dropOldestSummaries` (`compaction/index.ts:~734`): `.slice(-count)` -> `.slice(0, count)` (otherwise silently drops NEWEST after flip).
 - `/compact status.summaries[]` display order flips to oldest-first (no code change; map over getSummaryTurns()).
@@ -30,6 +33,7 @@ Compaction summaries reach the LLM newest-first. Root cause: `prependSystemTurn(
 - drone-core types carry NO ordering claims — untouched.
 
 ## Steps
+
 1. **[coder]** `src/runtime/session-manager.ts` — rewrite `prependSystemTurn`: compute `insertIndex` by advancing past `turns[i].kind === 'summary'` from 0, then `turns.splice(insertIndex, 0, turn)`. Return turn as before.
 2. **[coder]** `src/plugins/compaction/index.ts` — self-purge target `.at(-1)!` -> `[0]!`; update stale head/tail comment (~347).
 3. **[coder]** same file — `dropOldestSummaries`: `.slice(-count)` -> `.slice(0, count)`.
@@ -39,6 +43,7 @@ Compaction summaries reach the LLM newest-first. Root cause: `prependSystemTurn(
 7. **[validator]** Validation criteria below.
 
 ## Validation Criteria
+
 - [ ] Zero LSP errors/warnings workspace-wide (incl. test files)
 - [ ] `pnpm -r run build` passes
 - [ ] `pnpm -r run lint` passes (eslint + prettier)
