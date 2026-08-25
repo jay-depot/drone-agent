@@ -24,10 +24,10 @@ Collected during planning of the provider/protocol/model config refactor (2026-0
 
 ## Later / on demand
 
-7. **Streaming responses** — primary motivation: detect degenerate thought loops early and bail; streaming-token UI is secondary. Requires touching DroneLlmProvider.chat() wire contract.
-8. **Bundled model-metadata registry** (models.dev-style snapshot) — declared > discovered > defaults suffices for now; revisit much later.
+7. **Streaming responses** — primary motivation: detect degenerate thought loops early and bail; streaming-token UI is secondary. Requires touching DroneLlmProvider.chat() wire contract. Only do this if an actual issue it fixes ever comes up. Token streaming is otherwise not a priority for this project.
+8. **Bundled model-metadata registry** (models.dev-style snapshot) — declared > discovered > defaults suffices for now; revisit much later. As with streaming, if a protocol/provider is broken without this, we'll add it, otherwise ignore it.
 9. **Gemini / OpenAI Responses protocol plugins** — driver interface must not preclude them; add only when a real user needs them (Gemini mid-transition to Interactions API; Responses conflicts with client-owned sessions).
-10. **Echo provider enhancements** — scripted/hard-coded responses that trigger specific tool calls for testing (out of scope of refactor; noted by user).
+10. **Echo provider enhancements** — scripted/hard-coded responses that trigger specific tool calls for testing (out of scope of refactor; noted by user). We will implement this whenever we implement an integration test that requires a specific sequence of conversation turns. At that point, this will also likely be renamed to the "dummy" LLM driver, or the "mock" llm driver to better reflect the purpose and new functionality.
 
 ## Context
 
