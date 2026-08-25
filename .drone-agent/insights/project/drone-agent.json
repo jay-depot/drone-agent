@@ -282,5 +282,13 @@
   {
     "timestamp": "2026-08-23T21:45:01.311Z",
     "insight": "vi.doMock('node:os') with a factory that spreads importOriginal only replaces NAMESPACE exports; modules using `import os from 'node:os'` (default import) keep the ORIGINAL default object including real homedir. The mock must also override `default`: `const mocked = {...actual, homedir: () => tmp}; return {...mocked, default: mocked}`. Symptom when missed: tests silently write to the REAL user home. Always verify no real-home pollution after homedir-mocked filesystem tests. Also: vi.spyOn cannot redefine ESM namespace exports ('Module namespace is not configurable') — use doMock factories, not spies, for ESM builtins. And vitest run must be invoked from the workspace root (config-rooted include patterns), not package subdirectories."
+  },
+  {
+    "timestamp": "2026-08-25T15:14:45.227Z",
+    "insight": "drone-agent plugin wiring has two registration tiers: static singletons in staticBuiltInPlugins (plugins/index.ts) vs funnel-created plugins receiving host deps via createBuiltInPlugins(deps) (compaction, log). A plugin needing engine-adjacent services that exist before the engine (e.g. ContextBudgetService built in index.tsx with deferred getters) must convert to the funnel tier; deps type is extended as an intersection on CompactionPluginDeps rather than editing it. Cost: signature change ripples to every direct createXPlugin() test construction site (~12 for swarm) and embedding consumers of the raw builtInPlugins array lose that plugin unless they switch to the funnel. Prefer optional deps object (deps?) so existing constructions stay valid and behavior degrades gracefully."
+  },
+  {
+    "timestamp": "2026-08-25T15:57:17.983Z",
+    "insight": "The git__commit tool rejects multi-line commit messages with an opaque \"Command failed\" and no stderr. Worse, the failed commit leaves its files STAGED, so an immediately following placeholder commit silently sweeps them up under the wrong message. Recovery: exec `git commit --amend -m ...`. Rules going forward: git__commit takes single-line messages only; use exec for multi-line messages or amends; never parallel-call todo__manage_list updates alongside git__commit (the race caused the probe commit)."
   }
 ]
