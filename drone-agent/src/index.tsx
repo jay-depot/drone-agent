@@ -109,6 +109,7 @@ async function main(): Promise<void> {
   const builtInPlugins = createBuiltInPlugins({
     sessionManager,
     ...createLlmGetters(engineRef),
+    resolveContextWindow: () => budgetService.resolveContextWindow(),
     buildFragmentMessages: async () => {
       const engine = getEngine();
       const fragments = await engine.renderPromptFragments();

@@ -205,8 +205,7 @@ export function createSwarmPlugin(
           sessionId,
           sessionImportConfig,
           resolveContextWindow
-            ? async () =>
-                (await resolveContextWindow()).contextWindowTokens
+            ? async () => (await resolveContextWindow()).contextWindowTokens
             : undefined
         )
       );
@@ -229,4 +228,3 @@ export function createSwarmPlugin(
     },
   };
 }
-

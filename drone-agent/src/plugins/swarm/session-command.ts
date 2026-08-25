@@ -158,8 +158,9 @@ async function handleImport(
   }
 
   const chunks = splitTranscriptIntoChunks(transcript, maxChunks);
-  const contextWindowTokens = await (getContextWindowTokens ??
-    defaultGetContextWindowTokens)(ctx);
+  const contextWindowTokens = await (
+    getContextWindowTokens ?? defaultGetContextWindowTokens
+  )(ctx);
   const tokenBudget = Math.max(
     1,
     Math.floor(contextWindowTokens * (chunkTokenBudgetPercent / 100))

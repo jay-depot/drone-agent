@@ -1,4 +1,4 @@
-import type { DronePlugin } from 'drone-core';
+import type { DroneContextWindowInfo, DronePlugin } from 'drone-core';
 import { bootstrapPlugin } from './bootstrap/index.js';
 import { configPlugin } from './config/index.js';
 import {
@@ -35,7 +35,7 @@ import { lightpandaPlugin } from './lightpanda/index.js';
 import { startupPlugin } from './startup.js';
 // NEW:
 import { subagentPlugin } from './subagent/index.js';
-import { swarmPlugin } from './swarm/index.js';
+import { createSwarmPlugin } from './swarm/index.js';
 import { todoPlugin } from './todo/index.js';
 import { utilsPlugin } from './utils.js';
 import { focusPlugin } from './focus.js';
@@ -43,7 +43,8 @@ import { focusPlugin } from './focus.js';
 // Static built-ins — everything except the compaction plugin, which needs
 // access to the live engine and session manager. The CLI calls
 // createBuiltInPlugins() to assemble the full list with the compaction plugin
-// wired in.
+// wired in. The swarm plugin is also created in the funnel because it needs
+// an optional host-provided context-window resolver.
 const staticBuiltInPlugins: DronePlugin[] = [
   notepadPlugin,
   subagentPlugin, // NEW
@@ -78,14 +79,22 @@ const staticBuiltInPlugins: DronePlugin[] = [
   selfImprovementPlugin,
   memoryPlugin,
   promptFilePlugin,
-  swarmPlugin,
 ];
 
 export function createBuiltInPlugins(
-  compactionDeps: CompactionPluginDeps
+  compactionDeps: CompactionPluginDeps & {
+    /** Host context-window resolver shared with the conversation service. */
+    resolveContextWindow?: () => Promise<DroneContextWindowInfo>;
+  }
 ): DronePlugin[] {
   return [
     ...staticBuiltInPlugins,
+    createSwarmPlugin(
+      {},
+      {
+        resolveContextWindow: compactionDeps.resolveContextWindow,
+      }
+    ),
     createCompactionPlugin(compactionDeps),
     createLogPlugin(compactionDeps),
   ];
@@ -94,7 +103,7 @@ export function createBuiltInPlugins(
 // Convenience for external consumers (and lib.ts) that want the list without
 // wiring compaction — for example, an embedding harness that only registers
 // tools and never starts a chat session. Pass createBuiltInPlugins(...) to
-// get the full list with the compaction plugin wired.
+// get the full list with the compaction and swarm plugins wired.
 export const builtInPlugins: DronePlugin[] = staticBuiltInPlugins;
 
 export type { CompactionPluginDeps } from './compaction/index.js';
