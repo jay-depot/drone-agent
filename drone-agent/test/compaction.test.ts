@@ -90,6 +90,10 @@ type RegistrationCapture = {
   capability: { value: unknown };
   slashCommands: DroneSlashCommand[];
   logger: DroneLogger;
+  /** Contents queued via `_runtime.queueSystemReminder`, in order. */
+  queuedReminders: string[];
+  /** Mutable list of canonical tool names returned by listMountedTools(). */
+  mountedToolNames: string[];
 };
 
 async function captureRegistration(
@@ -109,6 +113,8 @@ async function captureRegistration(
   };
   const capability: { value: unknown } = { value: undefined };
   const slashCommands: DroneSlashCommand[] = [];
+  const queuedReminders: string[] = [];
+  const mountedToolNames: string[] = [];
 
   const logger: DroneLogger = {
     info: vi.fn(),
@@ -129,7 +135,11 @@ async function captureRegistration(
     unregisterTool: () => {},
     mountTool: () => undefined,
     unmountTool: () => {},
-    listMountedTools: () => [],
+    listMountedTools: () =>
+      mountedToolNames.map(name => ({
+        name,
+        description: 'test tool',
+      })),
     hooks: {
       onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
       onSessionStart: cb => hooks.onSessionStart.push(cb),
@@ -146,14 +156,29 @@ async function captureRegistration(
     offer: cap => {
       capability.value = cap;
     },
-    request: <T>() => undefined as T | undefined,
+    request: <T>(pluginId: string) =>
+      pluginId === 'runtime'
+        ? ({
+            queueSystemReminder: (content: string) => {
+              queuedReminders.push(content);
+            },
+          } as T)
+        : (undefined as T | undefined),
     runWorkflow: async () => ({ toolResult: '{}' }),
     requestElicitation: () => undefined,
   };
 
   await plugin.register(registration);
 
-  return { registration, hooks, capability, slashCommands, logger };
+  return {
+    registration,
+    hooks,
+    capability,
+    slashCommands,
+    logger,
+    queuedReminders,
+    mountedToolNames,
+  };
 }
 
 async function runBeforePrompt(capture: RegistrationCapture): Promise<void> {
@@ -433,17 +458,60 @@ describe('createCompactionPlugin', () => {
     // Four rounds compact all 8 non-summary turns into 4 small summaries,
     // which stay within the 50% summary budget.
     expect(summaries).toHaveLength(4);
-    // getSummaryTurns() is newest-first; the oldest summary is at the tail.
-    expect(summaries.at(-1)!.messages[0].content).toContain(
-      'A concise summary.'
-    );
-    expect(summaries.at(-1)!.messages[0].content).toMatch(
-      /^Conversation summary/
-    );
+    // getSummaryTurns() is oldest-first: summaries appear chronologically.
+    expect(summaries[0]!.messages[0].content).toContain('A concise summary.');
+    expect(summaries[0]!.messages[0].content).toMatch(/^Conversation summary/);
     // All non-summary turns were compacted away.
     expect(
       sessionManager.getTurns().filter(t => t.kind !== 'summary')
     ).toHaveLength(0);
+  });
+
+  it('keeps summaries in chronological order in the message stream', async () => {
+    // Regression test: summaries used to reach the LLM newest-first because
+    // prependSystemTurn unshifted each summary in front of the previous ones.
+    // getMessages() must present the summary block oldest-first.
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 4; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [
+        { message: 'Chrono first.' },
+        { message: 'Chrono second.' },
+        { message: 'Chrono third.' },
+        { message: 'Chrono fourth.' },
+      ],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    await runBeforePrompt(capture);
+
+    const summaryContents = sessionManager
+      .getMessages()
+      .map(m => m.content)
+      .filter(content => content.startsWith('Conversation summary'));
+    expect(summaryContents).toHaveLength(4);
+    expect(summaryContents[0]).toContain('Chrono first.');
+    expect(summaryContents[1]).toContain('Chrono second.');
+    expect(summaryContents[2]).toContain('Chrono third.');
+    expect(summaryContents[3]).toContain('Chrono fourth.');
   });
 
   it('converges to below the soft threshold in a single maybeCompact call', async () => {
@@ -713,11 +781,14 @@ describe('createCompactionPlugin', () => {
 
     await capability.forceEvaluate();
 
-    // 5 rounds = 10 non-summary turns. sliceSize 2 compacts 2 per round. With
-    // only 2 summary responses queued, the 3rd round gets an empty summary and
-    // breaks the loop.
-    expect(provider.__chatMock).toHaveBeenCalledTimes(3);
-    expect(sessionManager.getSummaryTurns()).toHaveLength(2);
+    // forceEvaluate caps at a single forced round (maxIterations: 1), so it
+    // compacts one slice and stops even though non-summary turns remain above
+    // the soft threshold.
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    expect(sessionManager.getSummaryTurns()).toHaveLength(1);
+    expect(
+      sessionManager.getTurns().filter(t => t.kind !== 'summary').length
+    ).toBeGreaterThan(0);
   });
 
   it('compacts the oldest normal turns after a summary already exists', async () => {
@@ -770,7 +841,11 @@ describe('createCompactionPlugin', () => {
 
     const summaries = sessionManager.getSummaryTurns();
     expect(summaries).toHaveLength(5);
-    expect(summaries[0].messages[0].content).toContain('New summary chunk');
+    // Oldest-first: the seeded summary stays at index 0; new chunks append.
+    expect(summaries[0].messages[0].content).toContain('Existing summary.');
+    expect(summaries.at(-1)!.messages[0].content).toContain(
+      'New summary chunk'
+    );
 
     // All normal turns should have been compacted away.
     const nonSummaryTurns = sessionManager
@@ -1426,8 +1501,10 @@ describe('CompactionCapability extensions', () => {
     expect(status.turns.oldestNonSummaryIndex).toBe(2);
     expect(status.contextWindow.softThresholdPercent).toBe(50);
     expect(status.summaries).toHaveLength(2);
-    expect(status.summaries[0].preview).toContain('Summary two content');
+    // Oldest-first: the first-prepended summary is listed first.
+    expect(status.summaries[0].preview).toContain('Summary one content');
     expect(status.summaries[0].tokenCount).toBeGreaterThan(0);
+    expect(status.summaries.at(-1)!.preview).toContain('Summary two content');
   });
 
   it('dropSummary removes a specific summary turn by id', async () => {
@@ -1517,6 +1594,7 @@ describe('CompactionCapability extensions', () => {
     expect(dropped).toBe(2);
     const remaining = sessionManager.getSummaryTurns();
     expect(remaining).toHaveLength(1);
+    // Oldest-first: dropping the 2 oldest leaves the newest at index 0.
     expect(remaining[0].id).toBe(s3.id);
     expect(sessionManager.getTurns().some(t => t.id === s1.id)).toBe(false);
     expect(sessionManager.getTurns().some(t => t.id === s2.id)).toBe(false);
@@ -1598,6 +1676,95 @@ describe('/compact slash command', () => {
     expect(capture.logger.info).toHaveBeenCalledWith(
       expect.stringMatching(/Compacted oldest non-summary turns/)
     );
+  });
+
+  it('compacts via /compact exactly one full round', async () => {
+    // Regression test: /compact (forceEvaluate) must stop after exactly one
+    // forced slice instead of running the full convergence loop (which would
+    // slice-and-summarize until every non-summary turn was consumed).
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 10; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    // Enough responses that any full convergence run would eat far more than
+    // one round; we assert only one was used.
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [
+        { message: 'S1.' },
+        { message: 'S2.' },
+        { message: 'S3.' },
+        { message: 'S4.' },
+        { message: 'S5.' },
+      ],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const handled = await runSlashCommand(capture, '/compact');
+    expect(handled).toBe(true);
+
+    // /compact performs exactly one forced round.
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    // A summary was created, but non-summary turns remain (it did NOT converge
+    // to zero).
+    expect(sessionManager.getSummaryTurns()).toHaveLength(1);
+    expect(
+      sessionManager.getTurns().filter(t => t.kind !== 'summary').length
+    ).toBeGreaterThan(0);
+  });
+
+  it('compacts via /compact even when usage is below the soft threshold', async () => {
+    // Regression test for the manual-force bug: `maybeCompact` broke early on
+    // `usagePercent <= softThreshold` even when `force: true`, so `/compact`
+    // printed success but never compacted a session already under the soft
+    // threshold. Manual compaction must proceed regardless of current usage.
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 4; i++) {
+      sessionManager.appendUserMessage(`u${i}`);
+      sessionManager.appendAssistantMessage(`a${i}`);
+    }
+
+    // Very high soft threshold + large context window ⇒ usage stays well
+    // below the threshold, which is the exact condition that previously
+    // caused `/compact` to bail out before compacting anything.
+    const config = makeConfig({
+      softThresholdPercent: 99,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 4096,
+      chatResponses: [{ message: 'S1.' }, { message: 'S2.' }],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    const handled = await runSlashCommand(capture, '/compact');
+    expect(handled).toBe(true);
+    expect(provider.__chatMock).toHaveBeenCalled();
+    expect(sessionManager.getSummaryTurns().length).toBeGreaterThan(0);
   });
 
   it('compacts all via /compact --all', async () => {
@@ -1804,5 +1971,320 @@ describe('/compact slash command', () => {
       expect.stringMatching(/Compaction is disabled in config/)
     );
     expect(provider.__chatMock).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pre-compaction nudge
+// ---------------------------------------------------------------------------
+
+describe('pre-compaction nudge', () => {
+  const WINDOW = 10000;
+  const SOFT = 50;
+  const MARGIN = 10;
+  // Band in absolute tokens against a 10k window: [4000, 5000].
+  const BAND_FLOOR_TOKENS = ((SOFT - MARGIN) * WINDOW) / 100;
+
+  function makeNudgeConfig(
+    overrides: Partial<DroneCompactionConfig> = {}
+  ): DroneAgentConfig {
+    return makeConfig({
+      softThresholdPercent: SOFT,
+      nudgeMarginPercent: MARGIN,
+      minTurnsToCompact: 2,
+      slicePercent: 25,
+      summaryBudgetPercent: 50,
+      ...overrides,
+    });
+  }
+
+  function systemPromptTokens(config: DroneAgentConfig): number {
+    // Mirrors estimateMessageTokens: 6 overhead + ceil(chars / 4).
+    return 6 + Math.ceil(config.systemPrompt.length / 4);
+  }
+
+  /** Tracks estimated session-token growth using the estimator's formula. */
+  function makeTracker(config: DroneAgentConfig): {
+    total: number;
+    add: (chars: number) => void;
+    resetTo: (tokens: number) => void;
+  } {
+    let total = systemPromptTokens(config);
+    return {
+      get total() {
+        return total;
+      },
+      add(chars: number) {
+        total += 6 + Math.ceil(chars / 4);
+      },
+      resetTo(tokens: number) {
+        total = tokens;
+      },
+    };
+  }
+
+  function noticeEvents(emitEvent: ReturnType<typeof vi.fn>): unknown[] {
+    return emitEvent.mock.calls
+      .map(([event]) => event)
+      .filter(event => event.kind === 'notice');
+  }
+
+  it('fires once when usage enters the band, stays quiet inside it', async () => {
+    const config = makeNudgeConfig();
+    const tracker = makeTracker(config);
+    const sessionManager = createSessionManager();
+    const emitEvent = vi.fn();
+    const provider = makeProvider({ contextWindow: WINDOW });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+      emitEvent,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+
+    // Grow to just below the band floor and evaluate: nothing yet.
+    while (tracker.total < BAND_FLOOR_TOKENS - 260) {
+      sessionManager.appendUserMessage('x'.repeat(960));
+      tracker.add(960);
+    }
+    await runBeforePrompt(capture);
+    expect(capture.queuedReminders).toHaveLength(0);
+    expect(noticeEvents(emitEvent)).toHaveLength(0);
+
+    // Cross into the band with one more chunk: exactly one fire.
+    sessionManager.appendUserMessage('x'.repeat(1200));
+    tracker.add(1200);
+    expect(tracker.total).toBeGreaterThanOrEqual(BAND_FLOOR_TOKENS);
+    expect(tracker.total).toBeLessThanOrEqual((SOFT * WINDOW) / 100);
+    await runBeforePrompt(capture);
+    expect(capture.queuedReminders).toHaveLength(1);
+    expect(noticeEvents(emitEvent)).toHaveLength(1);
+
+    // Further growth inside the band: still exactly one.
+    sessionManager.appendUserMessage('x'.repeat(1200));
+    await runBeforePrompt(capture);
+    await runAfterToolCall(capture);
+    expect(capture.queuedReminders).toHaveLength(1);
+    expect(noticeEvents(emitEvent)).toHaveLength(1);
+  });
+
+  it('does not warn on overshoot: usage beyond the soft threshold skips the nudge', async () => {
+    const config = makeNudgeConfig();
+    const tracker = makeTracker(config);
+    const sessionManager = createSessionManager();
+    const emitEvent = vi.fn();
+    // Empty summary responses make every summarization attempt fail, so
+    // usage stays above the soft threshold and no later convergence
+    // iteration can re-enter the band during this evaluation.
+    const provider = makeProvider({ contextWindow: WINDOW });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+      emitEvent,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+
+    while (tracker.total < BAND_FLOOR_TOKENS - 260) {
+      sessionManager.appendUserMessage('x'.repeat(960));
+      tracker.add(960);
+    }
+    // One giant jump clean past the soft threshold.
+    sessionManager.appendUserMessage('x'.repeat(8000));
+    tracker.add(8000);
+    expect(tracker.total).toBeGreaterThan((SOFT * WINDOW) / 100);
+
+    await runBeforePrompt(capture);
+    expect(capture.queuedReminders).toHaveLength(0);
+    expect(noticeEvents(emitEvent)).toHaveLength(0);
+  });
+
+  it('re-arms after usage falls below the band floor and fires again', async () => {
+    const config = makeNudgeConfig();
+    const tracker = makeTracker(config);
+    const sessionManager = createSessionManager();
+    const emitEvent = vi.fn();
+    const provider = makeProvider({
+      contextWindow: WINDOW,
+      chatResponses: [{ message: 'Summary 11.' }],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+      emitEvent,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+
+    // First excursion: fire once. (No auto-compaction runs here — usage
+    // stays inside the band, below the soft threshold.)
+    while (tracker.total < BAND_FLOOR_TOKENS - 260) {
+      sessionManager.appendUserMessage('x'.repeat(960));
+      tracker.add(960);
+    }
+    sessionManager.appendUserMessage('x'.repeat(1200));
+    tracker.add(1200);
+    await runBeforePrompt(capture);
+    expect(capture.queuedReminders).toHaveLength(1);
+    expect(provider.__chatMock).not.toHaveBeenCalled();
+
+    // Force a full compaction: usage collapses far below the band floor
+    // into a known end state — exactly one small summary turn. The force
+    // path itself must never queue a reminder.
+    const handled = await runSlashCommand(capture, '/compact --all');
+    expect(handled).toBe(true);
+    expect(capture.queuedReminders).toHaveLength(1);
+    expect(
+      sessionManager.getTurns().filter(t => t.kind !== 'summary')
+    ).toHaveLength(0);
+
+    // Reset the token baseline to the exact post-compaction state:
+    // system prompt + the single 'Summary 11.' turn.
+    const postCompactionBaseline =
+      systemPromptTokens(config) +
+      (6 +
+        Math.ceil('Conversation summary (compacted):\nSummary 11.'.length / 4));
+    tracker.resetTo(postCompactionBaseline);
+
+    // An evaluation at the collapsed usage level re-arms the nudge —
+    // usage sits far below the band floor here.
+    await runBeforePrompt(capture);
+    expect(capture.queuedReminders).toHaveLength(1);
+
+    // Rise into the band a second time: the nudge fires again.
+    while (tracker.total < BAND_FLOOR_TOKENS - 260) {
+      sessionManager.appendUserMessage('z'.repeat(960));
+      tracker.add(960);
+    }
+    sessionManager.appendUserMessage('w'.repeat(1200));
+    tracker.add(1200);
+    await runBeforePrompt(capture);
+    expect(capture.queuedReminders).toHaveLength(2);
+    expect(noticeEvents(emitEvent)).toHaveLength(2);
+  });
+
+  it('never warns when compaction is disabled', async () => {
+    const config = makeNudgeConfig({ enabled: false });
+    const sessionManager = createSessionManager();
+    const emitEvent = vi.fn();
+    const provider = makeProvider({ contextWindow: WINDOW });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+      emitEvent,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+
+    for (let i = 0; i < 20; i++) {
+      sessionManager.appendUserMessage('x'.repeat(960));
+    }
+    await runBeforePrompt(capture);
+    await runBeforePrompt(capture);
+    await runAfterToolCall(capture);
+    expect(capture.queuedReminders).toHaveLength(0);
+    expect(noticeEvents(emitEvent)).toHaveLength(0);
+    expect(provider.__contextMock).not.toHaveBeenCalled();
+  });
+
+  it('manual /compact never queues a reminder', async () => {
+    const config = makeNudgeConfig();
+    const sessionManager = createSessionManager();
+    const emitEvent = vi.fn();
+    const provider = makeProvider({
+      contextWindow: WINDOW,
+      chatResponses: [{ message: 'Manual summary.' }],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+      emitEvent,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+
+    for (let i = 0; i < 18; i++) {
+      sessionManager.appendUserMessage('x'.repeat(960));
+    }
+    await runSlashCommand(capture, '/compact');
+    expect(provider.__chatMock).toHaveBeenCalled();
+    expect(capture.queuedReminders).toHaveLength(0);
+    expect(noticeEvents(emitEvent)).toHaveLength(0);
+  });
+
+  it('reminder text names mounted tools and carries the rounded figure', async () => {
+    const config = makeNudgeConfig();
+    const tracker = makeTracker(config);
+    const sessionManager = createSessionManager();
+    const emitEvent = vi.fn();
+    const provider = makeProvider({ contextWindow: WINDOW });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+      emitEvent,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    capture.mountedToolNames.push(
+      'file__read',
+      'notepad__manage',
+      'todo__manage_list'
+    );
+
+    while (tracker.total < BAND_FLOOR_TOKENS - 260) {
+      sessionManager.appendUserMessage('x'.repeat(960));
+      tracker.add(960);
+    }
+    sessionManager.appendUserMessage('x'.repeat(1200));
+    await runBeforePrompt(capture);
+
+    expect(capture.queuedReminders).toHaveLength(1);
+    const reminder = capture.queuedReminders[0];
+    expect(reminder).toMatch(/approaching the compaction threshold/);
+    expect(reminder).toMatch(/\d[\dk]* tokens before older conversation turns/);
+    expect(reminder).toContain('`notepad__manage`');
+    expect(reminder).toContain('`todo__manage_list`');
+    expect(reminder).not.toContain('`file__read`');
+
+    const [notice] = noticeEvents(emitEvent);
+    expect(notice).toMatchObject({ kind: 'notice' });
+    expect(String((notice as { content: string }).content)).toMatch(
+      /^\[Compaction in \d[\dk]* tokens\]$/
+    );
+  });
+
+  it('omits the tool clause when neither notepad nor todo tools are mounted', async () => {
+    const config = makeNudgeConfig();
+    const sessionManager = createSessionManager();
+    const emitEvent = vi.fn();
+    const provider = makeProvider({ contextWindow: WINDOW });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+      emitEvent,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    capture.mountedToolNames.push('file__read');
+
+    for (let i = 0; i < 18; i++) {
+      sessionManager.appendUserMessage('x'.repeat(960));
+    }
+    await runBeforePrompt(capture);
+
+    expect(capture.queuedReminders).toHaveLength(1);
+    expect(capture.queuedReminders[0]).toMatch(
+      /approaching the compaction threshold/
+    );
+    expect(capture.queuedReminders[0]).not.toContain('notepad__manage');
+    expect(capture.queuedReminders[0]).not.toContain('todo__manage_list');
   });
 });

@@ -154,7 +154,13 @@ export function createSessionManager(): DroneSessionManager {
     prependSystemTurn: (content, opts) => {
       const kind = opts?.kind;
       const turn = createTurn({ role: 'system', content }, kind);
-      turns.unshift(turn);
+      // Summaries form a single contiguous chronological block at the head:
+      // insert after any leading summary turns instead of at index 0.
+      let insertIndex = 0;
+      while (insertIndex < turns.length && isSummaryTurn(turns[insertIndex])) {
+        insertIndex++;
+      }
+      turns.splice(insertIndex, 0, turn);
       return turn;
     },
     clearSession: () => {

@@ -290,6 +290,7 @@ async function getCapability(
       systemPrompt: '',
       activePersona: null,
       llm: { provider: 'ollama' },
+      providers: {},
       ollama: { host: '', model: '' },
       openai: {
         apiKey: '',
@@ -352,6 +353,7 @@ async function getCapability(
         minTurnsToCompact: 4,
         summaryMaxTokens: 800,
         summaryBudgetPercent: 20,
+        nudgeMarginPercent: 10,
       },
       memory: { enabled: false },
       log: { enabled: false },

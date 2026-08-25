@@ -2,10 +2,15 @@ import fastify, { type FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyCors from '@fastify/cors';
 import '@fastify/websocket';
+import {
+  loadConfigFile,
+  mergeConfig,
+  type ServerConfigFile,
+  type SessionEndTrigger,
+} from 'drone-swarm-common';
 import os from 'node:os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { pathToFileURL } from 'url';
 import { existsSync } from 'fs';
 import {
   initDatabase,
@@ -42,11 +47,13 @@ import {
   publishInitialState,
 } from './ws-pubsub.js';
 import { createWebAuthMiddleware, isLocalRequest } from './web-auth.js';
+import { configureSessionEndHook } from './session-end.js';
 
 const DEFAULT_PORT = 3456;
 const DEFAULT_HOST = '0.0.0.0';
 const DEFAULT_WEB_PORT = 8080;
 const DEFAULT_WEB_HOST = '127.0.0.1';
+const DEFAULT_COMMAND_TIMEOUT_MS = 30000;
 const DEFAULT_CONFIG_DIR = path.join(os.homedir(), '.drone-coordinator');
 const DEFAULT_DB_FILENAME = 'drone-coordinator.db';
 
@@ -60,6 +67,7 @@ interface Config {
   configDir: string;
   dbPath: string;
   useHttps: boolean;
+  sessionEnd?: SessionEndTrigger;
   command:
     | 'serve'
     | 'approve-beacon'
@@ -70,8 +78,16 @@ interface Config {
   beaconId?: string;
 }
 
-function parseArgs(): Config {
+async function parseArgs(): Promise<Config> {
   const args = process.argv.slice(2);
+  let fileConfig: ServerConfigFile | undefined;
+  const flagOverrides: {
+    port?: number;
+    host?: string;
+    webPort?: number;
+    webHost?: string;
+    dbPath?: string;
+  } = {};
   const config: Config = {
     port: DEFAULT_PORT,
     host: DEFAULT_HOST,
@@ -87,17 +103,31 @@ function parseArgs(): Config {
     const arg = args[i];
     if (arg === '--port' && i + 1 < args.length) {
       config.port = parseInt(args[++i], 10);
+      flagOverrides.port = config.port;
     } else if (arg === '--host' && i + 1 < args.length) {
       config.host = args[++i];
+      flagOverrides.host = config.host;
     } else if (arg === '--web-port' && i + 1 < args.length) {
       config.webPort = parseInt(args[++i], 10);
+      flagOverrides.webPort = config.webPort;
     } else if (arg === '--web-host' && i + 1 < args.length) {
       config.webHost = args[++i];
+      flagOverrides.webHost = config.webHost;
     } else if (arg === '--db' && i + 1 < args.length) {
       config.dbPath = args[++i];
+      flagOverrides.dbPath = config.dbPath;
     } else if (arg === '--config-dir' && i + 1 < args.length) {
       config.configDir = args[++i];
       config.dbPath = path.join(config.configDir, DEFAULT_DB_FILENAME);
+      flagOverrides.dbPath = config.dbPath;
+    } else if (arg === '--config-file' && i + 1 < args.length) {
+      const filePath = args[++i];
+      try {
+        fileConfig = await loadConfigFile(filePath);
+      } catch (err) {
+        console.error(String(err));
+        process.exit(1);
+      }
     } else if (arg === '--https') {
       config.useHttps = true;
     } else if (arg === '--no-https') {
@@ -117,9 +147,21 @@ function parseArgs(): Config {
       config.command = 'show-fingerprint';
     } else if (arg === '--help' || arg === '-h') {
       console.log(
-        `\ndrone-coordinator [options]\n\nCommands:\n  serve                Start the coordinator server (default)\n  approve-beacon <id>  Approve a pending beacon by its ID\n  list-beacons         List all registered beacons and their trust status\n  --show-web-token     Print the current web UI access token\n  --generate-web-token Generate a new web UI access token\n  --show-fingerprint   Print the coordinator's TLS certificate fingerprint\n\nOptions:\n  --port <n>           Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>           Host to bind to (default: ${DEFAULT_HOST})\n  --web-port <n>       HTTP port for web UI (default: ${DEFAULT_WEB_PORT})\n  --web-host <h>       Host for web UI port (default: ${DEFAULT_WEB_HOST})\n  --config-dir <dir>   Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>          Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https              Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https           Disable HTTPS\n  --help               Show this help message\n      `
+        `\ndrone-coordinator [options]\n\nCommands:\n  serve                Start the coordinator server (default)\n  approve-beacon <id>  Approve a pending beacon by its ID\n  list-beacons         List all registered beacons and their trust status\n  --show-web-token     Print the current web UI access token\n  --generate-web-token Generate a new web UI access token\n  --show-fingerprint   Print the coordinator's TLS certificate fingerprint\n\nOptions:\n  --port <n>           Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>           Host to bind to (default: ${DEFAULT_HOST})\n  --web-port <n>       HTTP port for web UI (default: ${DEFAULT_WEB_PORT})\n  --web-host <h>       Host for web UI port (default: ${DEFAULT_WEB_HOST})\n\n  --config-file <path> Load settings from a JSON config file (flags override file values)\n  --config-dir <dir>   Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>          Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https              Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https           Disable HTTPS\n  --help               Show this help message\n      `
       );
       process.exit(0);
+    }
+  }
+
+  if (fileConfig) {
+    const merged = mergeConfig<ServerConfigFile>(fileConfig, flagOverrides);
+    config.port = (merged.port as number) ?? config.port;
+    config.host = (merged.host as string) ?? config.host;
+    config.webPort = (merged.webPort as number) ?? config.webPort;
+    config.webHost = (merged.webHost as string) ?? config.webHost;
+    config.dbPath = (merged.dbPath as string) ?? config.dbPath;
+    if (merged.sessionEnd !== undefined) {
+      config.sessionEnd = merged.sessionEnd as SessionEndTrigger;
     }
   }
 
@@ -406,7 +448,7 @@ async function attachUi(
 }
 
 export async function main() {
-  const config = parseArgs();
+  const config = await parseArgs();
 
   if (config.command === 'approve-beacon') {
     await handleApproveBeacon(config);
@@ -431,6 +473,20 @@ export async function main() {
   if (config.command === 'show-fingerprint') {
     await handleShowFingerprint(config);
     return;
+  }
+
+  if (config.sessionEnd) {
+    if (config.sessionEnd.type === 'spawn' && !config.sessionEnd.beaconId) {
+      console.error(
+        'Config error: sessionEnd spawn trigger requires "beaconId" at the coordinator layer'
+      );
+      process.exit(1);
+    }
+    configureSessionEndHook({
+      trigger: config.sessionEnd,
+      commandTimeoutMs: DEFAULT_COMMAND_TIMEOUT_MS,
+    });
+    logger.info('Session-end hook configured');
   }
 
   const protocol = config.useHttps ? 'https' : 'http';
@@ -728,11 +784,4 @@ Pages support [[wiki links]] for cross-references. The wiki enforces a "no downw
     });
     logger.info('Seeded default skill: memory-wiki');
   }
-}
-
-// Entry guard: only run main() if invoked directly
-const invokedDirectly =
-  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
-if (invokedDirectly) {
-  void main();
 }

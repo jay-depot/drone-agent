@@ -5,6 +5,7 @@ import type {
   DroneToolCall,
   DroneToolDescriptor,
 } from 'drone-core';
+import { anthropicThinkingBudget } from './anthropic-driver.js';
 
 export type AnthropicTextBlock = {
   type: 'text';
@@ -65,6 +66,10 @@ export type AnthropicTool = {
 export type AnthropicChatRequest = {
   model: string;
   max_tokens: number;
+  temperature?: number;
+  top_p?: number;
+  top_k?: number;
+  stop_sequences?: string[];
   system?: string;
   messages: AnthropicMessage[];
   tools?: AnthropicTool[];
@@ -92,6 +97,8 @@ export function toAnthropicRequestParts(input: {
   maxTokens: number;
   model: string;
   reasoningLevel?: DroneReasoningLevel;
+  parameters?: Record<string, unknown>;
+  extra?: Record<string, unknown>;
 }): AnthropicChatRequest {
   const systemMessages = input.messages
     .filter(message => message.role === 'system')
@@ -115,11 +122,32 @@ export function toAnthropicRequestParts(input: {
   if (input.tools && input.tools.length > 0) {
     request.tools = toAnthropicTools(input.tools);
   }
+
+  const wireNames: Record<string, string> = {
+    topP: 'top_p',
+    topK: 'top_k',
+    stopSequences: 'stop_sequences',
+    temperature: 'temperature',
+  };
+  for (const [key, value] of Object.entries(input.parameters ?? {})) {
+    if (value === undefined || value === null) continue;
+    (request as Record<string, unknown>)[wireNames[key] ?? key] = value;
+  }
+  for (const [key, value] of Object.entries(input.extra ?? {})) {
+    (request as Record<string, unknown>)[key] = value;
+  }
+
   if (input.reasoningLevel && input.reasoningLevel !== 'off') {
-    request.thinking = {
-      type: 'enabled',
-      budget_tokens: Math.floor(input.maxTokens * 0.5),
-    };
+    const budget = anthropicThinkingBudget(
+      input.reasoningLevel,
+      input.maxTokens
+    );
+    if (budget !== undefined) {
+      request.thinking = {
+        type: 'enabled',
+        budget_tokens: budget,
+      };
+    }
   }
 
   return request;

@@ -57,6 +57,7 @@ describe('createDefaultAgentConfig', () => {
     expect(config.lsp.servers).toEqual({});
     expect(config.mcp.servers).toEqual({});
     expect(config.compaction.strategy).toBe('summary-drop');
+    expect(config.compaction.nudgeMarginPercent).toBe(10);
   });
 
   it('returns a fresh object each call', () => {
@@ -108,6 +109,9 @@ describe('applyAgentConfigLayer', () => {
     });
     expect(merged.compaction.softThresholdPercent).toBe(50);
     expect(merged.compaction.enabled).toBe(base.compaction.enabled);
+    expect(merged.compaction.nudgeMarginPercent).toBe(
+      base.compaction.nudgeMarginPercent
+    );
   });
 
   it('replaces LSP server map but merges LSP scalar fields', () => {

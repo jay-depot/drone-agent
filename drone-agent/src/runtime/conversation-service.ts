@@ -1,6 +1,7 @@
 import {
   createDebugFlagRegistry,
   estimateTextTokens,
+  parseModelSelection,
   type DroneGuardrailConfig,
   type DroneGuardrailThresholdConfig,
   type DebugFlagRegistry,
@@ -621,7 +622,7 @@ export function createConversationService({
       while (true) {
         const activeProviderId = llm.getActiveProviderId();
         const currentModel = llm.getModel();
-        const budgetKey = `${activeProviderId}:${currentModel}`;
+        const budgetKey = `${activeProviderId}/${currentModel}`;
         if (budgetKey !== lastBudgetKey) {
           budgetService.resetContextWindowCache();
           lastBudgetKey = budgetKey;
@@ -644,12 +645,24 @@ export function createConversationService({
 
         const provider = llm.getActiveProvider();
 
-        // Resolve reasoning level: session override → config → undefined
+        // Resolve reasoning level: session override → selected model entry →
+        // llm-level config. Cross-wired legacy fallbacks to inactive
+        // providers' sections are gone.
         const effectiveReasoningLevel =
           reasoningLevel ??
+          (() => {
+            const selection = parseModelSelection(
+              `${activeProviderId}/${currentModel}`
+            );
+            if (!selection) return undefined;
+            const entry =
+              config.providers[selection.providerId]?.models?.[
+                selection.modelLocalId
+              ];
+            return entry?.reasoningLevel;
+          })() ??
           config.llm.reasoningLevel ??
-          config.ollama.reasoningLevel ??
-          config.openrouter.reasoningLevel;
+          undefined;
 
         const response = await provider.chat({
           model: currentModel,
@@ -671,6 +684,9 @@ export function createConversationService({
                 content:
                   'Your last response was empty (no text and no tool calls). Please respond to the user. If you have nothing to say, provide a brief acknowledgment.',
               });
+            }
+            for (const reminder of engine.drainSystemReminders()) {
+              base.push({ role: 'system', content: reminder });
             }
             return base;
           })(),
@@ -931,12 +947,27 @@ export function createConversationService({
       reasoningOnlyResponseCount = 0;
       identicalCallNudgeActive = false;
       brokenResponseHintActive = false;
+      engine.clearSystemReminders();
       sessionManager.clearSession();
     },
     getMessages: () => sessionManager.getMessages(),
     getEstimatedContextUsagePercent: () => estimateCurrentContextUsagePercent(),
     setModel: (newModel: string) => {
-      getLlmCapability().setModel(newModel);
+      // Accept canonical full-form selections (<provider>/<model>) by
+      // switching providers when needed; bare ids set within the active
+      // provider as before.
+      const llm = getLlmCapability();
+      if (newModel.includes('/')) {
+        const selection = parseModelSelection(newModel);
+        if (selection) {
+          if (selection.providerId !== llm.getActiveProviderId()) {
+            llm.activateProvider(selection.providerId);
+          }
+          llm.setModel(selection.modelLocalId);
+          return;
+        }
+      }
+      llm.setModel(newModel);
       budgetService.resetContextWindowCache();
     },
     getModel: () => getLlmCapability().getModel(),

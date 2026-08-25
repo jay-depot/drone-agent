@@ -21,14 +21,67 @@ type RegistrationContext = {
   logger: DroneLogger;
   compactionInFlight: { value: boolean };
   emitEvent?: (event: DroneConversationEvent) => void;
+  /** Queues a one-shot, non-persisted system reminder for the next LLM call. */
+  queueSystemReminder: (content: string) => void;
+  /** Canonical names of currently-mounted tools (for reminder copy). */
+  listMountedToolNames: () => string[];
+  /**
+   * Edge-trigger state for the pre-compaction nudge: fires once per excursion
+   * into the warning band, re-arms when usage falls below the band floor.
+   */
+  nudgeArmed: { value: boolean };
   buildFragmentMessages: () => Promise<DroneChatMessage[]>;
 };
 
 const SUMMARY_PREFIX = 'Conversation summary (compacted):\n';
 
+function formatTokensRemaining(tokens: number): string {
+  if (tokens < 2000) {
+    return String(Math.round(tokens / 100) * 100);
+  }
+  return `~${Math.round(tokens / 1000)}k`;
+}
+
+function detectMountedToolPrefixes(names: string[]): {
+  notepad: boolean;
+  todo: boolean;
+} {
+  let notepad = false;
+  let todo = false;
+  for (const name of names) {
+    if (!notepad && name.startsWith('notepad__')) notepad = true;
+    if (!todo && name.startsWith('todo__')) todo = true;
+  }
+  return { notepad, todo };
+}
+
+function buildReminderText(
+  figure: string,
+  mounted: { notepad: boolean; todo: boolean }
+): string {
+  const options: string[] = [];
+  if (mounted.notepad) {
+    options.push('`notepad__manage` (working notes)');
+  }
+  if (mounted.todo) {
+    options.push('`todo__manage_list` (task state)');
+  }
+  const toolClause =
+    options.length > 0
+      ? ` If there are constraints, decisions, discoveries, or next steps you will need later, persist them now using ${options.join(' or ')}.`
+      : '';
+  return (
+    'Context is approaching the compaction threshold (' +
+    `${figure} tokens before older conversation turns are summarized).` +
+    toolClause
+  );
+}
+
 type CompactionOptions = {
   force?: boolean;
   slicePercentOverride?: number;
+  /** Cap on the number of slice-and-summarize rounds in a single maybeCompact call. */
+  maxIterations?: number;
 };
 
 function calculateFallbackContextWindow(
@@ -191,7 +244,13 @@ async function maybeCompact(input: {
   // Convergence loop: keep compacting until usage is below the soft threshold
   // or no more progress can be made.
   const MAX_COMPACTION_ITERATIONS = 5;
-  for (let iteration = 0; iteration < MAX_COMPACTION_ITERATIONS; iteration++) {
+  const maxIterations =
+    input.options.maxIterations ?? MAX_COMPACTION_ITERATIONS;
+  // Set once compaction acts (purge or summarize) during this call, so the
+  // nudge stays quiet for the rest of the evaluation — right after
+  // compaction is the wrong moment to warn. The next hook fire re-checks.
+  let compactedDuringThisCall = false;
+  for (let iteration = 0; iteration < maxIterations; iteration++) {
     const turns = sessionManager.getTurns();
     if (turns.length === 0) {
       break;
@@ -204,7 +263,41 @@ async function maybeCompact(input: {
       contextWindowTokens,
     });
 
-    if (metrics.usagePercent <= softThreshold) {
+    // Pre-compaction nudge: fire once per excursion into the warning band
+    // [soft - margin, soft]. Must run before the soft-threshold early-bail
+    // so a sub-threshold evaluation still delivers the reminder. Overshoot
+    // (usage past the soft threshold) never warns — compaction handles it on
+    // this same evaluation.
+    const marginFraction = Math.max(0, config.nudgeMarginPercent) / 100;
+    if (
+      !input.options.force &&
+      input.context.nudgeArmed.value &&
+      !compactedDuringThisCall &&
+      metrics.usagePercent >= softThreshold - marginFraction &&
+      metrics.usagePercent <= softThreshold
+    ) {
+      input.context.nudgeArmed.value = false;
+      const tokensUntilSoft = Math.max(
+        0,
+        Math.round((softThreshold - metrics.usagePercent) * contextWindowTokens)
+      );
+      const figure = formatTokensRemaining(tokensUntilSoft);
+      input.context.queueSystemReminder(
+        buildReminderText(
+          figure,
+          detectMountedToolPrefixes(input.context.listMountedToolNames())
+        )
+      );
+      emitEvent?.({
+        kind: 'notice',
+        content: `[Compaction in ${figure} tokens]`,
+      });
+    }
+    if (metrics.usagePercent < softThreshold - marginFraction) {
+      input.context.nudgeArmed.value = true;
+    }
+
+    if (!input.options.force && metrics.usagePercent <= softThreshold) {
       break;
     }
 
@@ -214,15 +307,14 @@ async function maybeCompact(input: {
       if (summaryTurns.length === 0) {
         break;
       }
-      const dropped = sessionManager.dropSummaryTurnById(
-        summaryTurns.at(-1)!.id
-      );
+      const dropped = sessionManager.dropSummaryTurnById(summaryTurns[0]!.id);
       if (!dropped) {
         break;
       }
       logger.warn(
         `compaction: dropped oldest summary turn to keep summary region within ${(summaryBudget * 100).toFixed(0)}% of context window (was ${(metrics.summaryPercent * 100).toFixed(1)}%).`
       );
+      compactedDuringThisCall = true;
       emitEvent?.({
         kind: 'compaction',
         message: 'Dropped oldest summary turn',
@@ -251,9 +343,9 @@ async function maybeCompact(input: {
       break;
     }
 
-    // Summaries are prepended at the head; normal turns are appended at the
-    // tail. getOldestNonSummaryTurns iterates forward, skipping summaries, to
-    // collect exactly these turns.
+    // Summaries form a chronological block at the head; normal turns are
+    // appended at the tail. getOldestNonSummaryTurns iterates forward,
+    // skipping summaries, to collect exactly these turns.
     const slice = getOldestNonSummaryTurns(turns, sliceSize);
     const transcript = formatTurnsForSummary(slice);
 
@@ -295,6 +387,7 @@ async function maybeCompact(input: {
       logger.info(
         `compaction: compacted ${slice.length} oldest turn(s) into a summary.`
       );
+      compactedDuringThisCall = true;
       emitEvent?.({
         kind: 'compaction',
         message: `Compacted ${sliceSize} turn(s)`,
@@ -485,6 +578,10 @@ export function createCompactionPlugin(
     register: async registration => {
       const config = registration.getConfig().compaction;
 
+      const runtime = registration.request<{
+        queueSystemReminder?: (content: string) => void;
+      }>('runtime');
+
       const context: RegistrationContext = {
         config,
         getProvider,
@@ -493,6 +590,12 @@ export function createCompactionPlugin(
         logger: registration.logger,
         compactionInFlight: { value: false },
         emitEvent: deps.emitEvent,
+        queueSystemReminder: content => {
+          runtime?.queueSystemReminder?.(content);
+        },
+        nudgeArmed: { value: true },
+        listMountedToolNames: () =>
+          registration.listMountedTools().map(tool => tool.name),
         buildFragmentMessages: deps.buildFragmentMessages ?? (async () => []),
       };
 
@@ -535,7 +638,7 @@ export function createCompactionPlugin(
             await runCompaction(
               context,
               registration.getConfig().systemPrompt,
-              { force: true }
+              { force: true, maxIterations: 1 }
             );
           } finally {
             context.compactionInFlight.value = false;
@@ -550,7 +653,11 @@ export function createCompactionPlugin(
             await runCompaction(
               context,
               registration.getConfig().systemPrompt,
-              { force: true, slicePercentOverride: 100 }
+              {
+                force: true,
+                slicePercentOverride: 100,
+                maxIterations: 1,
+              }
             );
           } finally {
             context.compactionInFlight.value = false;
@@ -625,7 +732,7 @@ export function createCompactionPlugin(
           }
           const ids = sessionManager
             .getSummaryTurns()
-            .slice(-count)
+            .slice(0, count)
             .map(t => t.id);
           return ids.length > 0 ? sessionManager.dropTurnsByIds(ids).length : 0;
         },

@@ -377,6 +377,8 @@ export type DroneSlashCommandContext = {
     enableDebugSubsystem: (name: string) => void;
     /** Disable a debug subsystem by name (e.g. "llm"). */
     disableDebugSubsystem: (name: string) => void;
+    /** Estimated context usage percent (0-100) for /context-style displays. */
+    getEstimatedContextUsagePercent?: () => Promise<number>;
   };
   /** Session manager for appending synthetic messages. */
   sessionManager?: DroneSlashCommandSessionManager;

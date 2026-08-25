@@ -1,180 +1,60 @@
-import type { DroneReasoningLevel } from 'drone-core';
 import type {
-  DroneContextWindowInfo,
   DroneLlmCapability,
-  DroneLlmProvider,
-  DroneLlmProviderRegistration,
+  LlmProtocolDriver,
   DronePlugin,
 } from 'drone-core';
-import { PRECEDENCE_LLM_PROVIDER } from 'drone-core';
 import {
-  fromOpenAiResponse,
-  toOpenAiMessage,
-  toOpenAiTools,
-  type OpenAiChatRequest,
-  type OpenAiChatResponse,
-} from '../../shared/openai-compatible.js';
-/**
- * Map a normalized reasoning level to the OpenAI `reasoning_effort` value.
- * - `undefined` → omit (use provider default)
- * - `off` → `"none"`
- * - `low` → `"low"`
- * - `medium` → `"medium"`
- * - `high` → `"high"`
- * - `max` → `"max"`
- * - Any other string (raw pass-through) → pass as-is
- */
-function mapReasoningLevel(
-  level: DroneReasoningLevel | undefined
-): string | undefined {
-  if (level === undefined) return undefined;
-  if (level === 'off') return 'none';
-  if (level === 'low') return 'low';
-  if (level === 'medium') return 'medium';
-  if (level === 'high') return 'high';
-  if (level === 'max') return 'max';
-  return level;
-}
+  createOpenAiProvider,
+  openAiParameterSchema,
+} from './openai-driver.js';
 
 export const openaiPlugin: DronePlugin = {
   metadata: {
     id: 'openai',
     name: 'OpenAI',
-    version: '0.1.0',
-    description: 'Provides cloud chat completion through OpenAI API.',
+    version: '0.2.0',
+    description:
+      'OpenAI Chat Completions protocol driver. Inert until a providers config entry selects the "openai" protocol.',
     defaultEnabled: false,
     dependencies: [{ id: 'llm' }],
   },
   register: async registration => {
-    const provider: DroneLlmProvider = {
-      getContextWindowInfo: async ({
-        model,
-      }): Promise<DroneContextWindowInfo | null> => {
-        const config = registration.getConfig();
-        const modelEntry = config.openai.models.find(m => m.id === model);
-        if (modelEntry) {
-          return {
-            model,
-            contextWindowTokens: modelEntry.contextWindow,
-            source: 'config',
-          };
-        }
-        return {
-          model,
-          contextWindowTokens: config.session.contextWindowTokens,
-          source: 'config',
-        };
+    const driver: LlmProtocolDriver = {
+      protocolId: 'openai',
+      createProvider: providerConfig => ({
+        chat: createOpenAiProvider('OpenAI', {
+          baseUrl: providerConfig.baseUrl ?? 'https://api.openai.com/v1',
+          apiKey: providerConfig.apiKey,
+          orgId: providerConfig.orgId,
+          headers: providerConfig.headers,
+        }).chat,
+      }),
+      discoverModels: async providerConfig => {
+        const { discoverModels } = createOpenAiProvider('OpenAI', {
+          baseUrl: providerConfig.baseUrl ?? 'https://api.openai.com/v1',
+          apiKey: providerConfig.apiKey,
+          orgId: providerConfig.orgId,
+          headers: providerConfig.headers,
+        });
+        return discoverModels();
       },
-      chat: async ({ model, messages, tools, reasoningLevel, debug }) => {
-        const config = registration.getConfig();
-        const apiKey = config.openai.apiKey;
-
-        if (!apiKey) {
-          throw new Error(
-            'OpenAI API key is not configured. Set openai.apiKey in your config or use ${OPENAI_API_KEY} environment variable.'
-          );
-        }
-
-        const body: OpenAiChatRequest = {
-          model,
-          messages: messages.map(toOpenAiMessage),
-        };
-
-        if (debug) {
-          console.error(
-            `[llm:request] POST ${config.openai.baseUrl}/chat/completions`
-          );
-          console.error(`[llm:request] ${JSON.stringify(body)}`);
-        }
-
-        const reasoningEffort = mapReasoningLevel(reasoningLevel);
-        if (reasoningEffort) {
-          body.reasoning_effort = reasoningEffort;
-        }
-
-        if (tools && tools.length > 0) {
-          body.tools = toOpenAiTools(tools);
-        }
-
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        };
-        if (config.openai.orgId) {
-          headers['OpenAI-Organization'] = config.openai.orgId;
-        }
-
-        let response: Response;
-        try {
-          response = await fetch(config.openai.baseUrl + '/chat/completions', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body),
-          });
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          throw new Error(
-            `OpenAI request failed for model ${model}: ${message}`,
-            {
-              cause: error,
-            }
-          );
-        }
-
-        if (!response.ok) {
-          let errorBody = '';
-          try {
-            errorBody = await response.text();
-          } catch {
-            errorBody = '(could not read response body)';
-          }
-          throw new Error(
-            `OpenAI API error (${response.status}): ${errorBody}`
-          );
-        }
-
-        let data: OpenAiChatResponse;
-        try {
-          const responseText = await response.text();
-          if (debug) {
-            console.error(
-              `[llm:response] ${response.status} ${response.statusText}`
-            );
-            console.error(`[llm:response] ${responseText}`);
-          }
-          data = JSON.parse(responseText) as OpenAiChatResponse;
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          throw new Error(`OpenAI returned invalid JSON: ${message}`);
-        }
-
-        return fromOpenAiResponse(data);
-      },
+      parameterSchema: openAiParameterSchema,
     };
+
+    registration.offer({ driver });
 
     const llmCap = registration.request<DroneLlmCapability>('llm');
     if (llmCap) {
-      const llmRegistration: DroneLlmProviderRegistration = {
-        id: 'openai',
-        precedence: PRECEDENCE_LLM_PROVIDER,
-        getProvider: () => provider,
-        listModels: async () => {
-          const config = registration.getConfig();
-          return config.openai.models.map(m => m.id);
-        },
-        getDefaultModel: () => registration.getConfig().openai.defaultModel,
-      };
-      llmCap.registerProvider(llmRegistration);
+      llmCap.registerDriver(driver);
+      registration.logger.info('openai protocol driver registered');
     } else {
       registration.logger.warn(
-        'LLM broker not available; openai will not be registered as a provider'
+        'LLM broker not available; openai driver not registered'
       );
     }
 
     registration.hooks.onPluginsLoaded(async () => {
-      registration.logger.info('openai provider ready');
+      registration.logger.info('openai protocol driver ready');
     });
   },
 };

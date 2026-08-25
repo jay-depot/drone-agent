@@ -157,8 +157,11 @@ function makeContext(input: {
 }): DroneWorkflowContext {
   const config = createDefaultAgentConfig();
   const caps = input.capabilities ?? new Map<string, unknown>();
-  if (!caps.has('ollama')) {
-    caps.set('ollama', { provider: input.provider });
+  if (!caps.has('llm')) {
+    caps.set('llm', {
+      getActiveProvider: () => input.provider,
+      getModel: () => 'test-model',
+    });
   }
   // Add persona capability with writers if not already set
   if (!caps.has('persona')) {
@@ -538,8 +541,9 @@ describe('personaCreateWorkflow — missing prerequisites', () => {
     await withProjectDir(async projectDir => {
       const config = createDefaultAgentConfig();
       const caps = new Map<string, unknown>();
-      caps.set('ollama', {
-        provider: makeProvider(PERSONA_MD('reviewer')).provider,
+      caps.set('llm', {
+        getActiveProvider: () => makeProvider(PERSONA_MD('reviewer')).provider,
+        getModel: () => 'test-model',
       });
       // No 'persona' key
       await expect(
@@ -558,7 +562,7 @@ describe('personaCreateWorkflow — missing prerequisites', () => {
     });
   });
 
-  it('throws when the ollama capability is unavailable', async () => {
+  it('throws when the llm capability is unavailable', async () => {
     await withProjectDir(async projectDir => {
       const config = createDefaultAgentConfig();
       const caps = new Map<string, unknown>();
@@ -586,7 +590,7 @@ describe('personaCreateWorkflow — missing prerequisites', () => {
             enablePlugin: async (_pluginId: string) => false,
           }
         )
-      ).rejects.toThrow(/requires the Ollama provider/);
+      ).rejects.toThrow(/requires an active LLM provider/);
     });
   });
 

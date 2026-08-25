@@ -230,5 +230,57 @@
   {
     "timestamp": "2026-08-18T02:02:30.221Z",
     "insight": "The ollama plugin constructs `new Ollama(...)` internally and offers the provider via `registration.offer`, so testing provider-level behavior (like the user-message injection) requires `vi.resetModules()` + `vi.doMock('ollama')` and re-importing the plugin via dynamic `import()`, then capturing the offered provider from the `offer` callback. The `offer` callback receives a `DroneLlmProvider` OBJECT (with a `.chat` method) — not a function — so the mock must capture `cap.provider` and call `provider.chat(...)`, not invoke `provider(...)` directly."
+  },
+  {
+    "timestamp": "2026-08-21T15:31:15.607Z",
+    "insight": "`pnpm -r run lint` is not available for the drone-agent monorepo: none of the workspace packages defines a `lint` script, so the recursive run fails with ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT. Use root `pnpm lint` instead (runs eslint + prettier across all packages, exit 0 on success). Similarly, `pnpm -r run test` fails on drone-core (no local test files); the correct entry point is root `pnpm test`."
+  },
+  {
+    "timestamp": "2026-08-21T15:31:15.609Z",
+    "insight": "When the compaction `force` option bypasses the soft-threshold early-bail, it also unintentionally inherits the full auto-convergence loop (up to 5 iterations), causing manual `/compact` to over-compact by slicing-and-summarizing until zero non-summary turns remain. Fix: add a `maxIterations?: number` option to CompactionOptions and default the loop bound to `maxIterations ?? MAX_COMPACTION_ITERATIONS`. Manual `forceEvaluate` and `forceEvaluateAll` pass `maxIterations: 1` so they perform exactly one forced slice; automatic hooks omit it to preserve convergence. `slicePercentOverride: 100` on forceEvaluateAll already makes a single round equivalent, so the maxIterations cap there is behaviorally neutral but makes intent explicit."
+  },
+  {
+    "timestamp": "2026-08-22T07:09:26.184Z",
+    "insight": "Recurring file__apply_diff failure mode (third occurrence): patches whose added lines belong INSIDE a single-line template literal (CLI help text with literal \\n escapes) or inside a SQL template literal instead landed at the top of the file as stray statements, silently breaking the build. The anchor matcher treats the file as line-based and the template literal is one giant line, so 'insert after line X' semantics do not exist. Reliable workaround: perform such insertions with a byte-exact scripted edit (node script via subagent; note perl -0pi with \\Q...\\E fails when the pattern contains ${VAR} because perl interpolates it as a variable even inside quotemeta). After ANY apply_diff, verify placement with a targeted grep before building."
+  },
+  {
+    "timestamp": "2026-08-22T07:09:26.184Z",
+    "insight": "Root cause of intermittent cross-suite test failures under vitest's single-fork pool: suites that mutate globalThis.fetch without restoring it poison every suite that runs after them (file order is nondeterministic, so failures look flaky). Two offenders found and fixed: mcp-client.test.ts installed a permanent throwing GUARD_FETCH in afterEach; migration.test.ts deleted globalThis.fetch in teardown ('fetch is not a function' for later suites). Rule: any test that replaces a global must save the original at module scope and restore it in afterAll (not just afterEach teardown-by-delete). Symptom fingerprint: a suite fails only in full runs with 'real fetch must not be called' or 'fetch is not a function' on stderr, passes in isolation, and failure correlates with another suite completing first."
+  },
+  {
+    "timestamp": "2026-08-22T07:09:26.184Z",
+    "insight": "LSP diagnostics in this workspace can be stale in BOTH directions: they persisted after files were fixed (cache lag), which tempts you to dismiss real errors as stale. Ground truth hierarchy: (1) `pnpm -r run build` (fresh tsc) is authoritative; (2) direct file__read of the suspected lines beats cached diagnostics; (3) only after a clean build should remaining LSP errors be trusted as real. During the drone-swarm pipeline work, a 'stale diagnostics' assumption was wrong twice — the errors were real stray-line corruption — and also right once (errors outliving a fix). Verify before either fixing or dismissing."
+  },
+  {
+    "timestamp": "2026-08-22T21:16:49.701Z",
+    "insight": "AGENTS.md standards table says `pnpm -r run lint` must pass, but NO workspace package defines a \"lint\" script (pnpm -r lint fails with ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT) — linting only exists at the repo root as plain `pnpm lint`. Per AGENTS.md's own rule (code is source of truth, document should be updated), the standards section should say `pnpm lint` at repo root, or packages should gain lint scripts. Discovered 2026-08-22 during fix-drone-swarm-bin-symlink validation; agents executing plans that specify `pnpm -r lint` will hit a spurious failure until fixed."
+  },
+  {
+    "timestamp": "2026-08-21T23:14:26.401Z",
+    "insight": "`pnpm -r run test` is structurally broken for every workspace package: all 7 packages define `\"test\": \"vitest run\"` but none ships a package-local vitest config, so each inherits the ROOT vitest.config.ts whose `include` globs (e.g. `drone-core/test/**`) are repo-root-relative and match zero files when vitest runs from a package cwd — vitest exits 1 with \"No test files found\" (drone-core fails first, aborting the recursive run). Verified pre-existing on a clean tree via git stash. The actual supported fast-suite entrypoint is root `pnpm test`. Candidate fix: give each package its own minimal vitest config (or a `--root`/`--config` pointing at the root config), or drop per-package test scripts. Until fixed, plans that say \"run pnpm -r run test\" should be executed as root `pnpm test`."
+  },
+  {
+    "timestamp": "2026-08-22T20:29:04.683Z",
+    "insight": "Follow-up from plan-pre-compaction-nudge: migrate the two hardcoded guardrail nudges (identicalCallNudgeActive / brokenResponseHintActive in conversation-service.ts) onto the new SystemReminderQueue primitive. Both now coexist as parallel one-shot non-persisted system-message mechanisms; the queue generalizes exactly what they do inline, so consolidating them would remove the duplication permanently. Deferred per plan decision 3c to keep v1 additive — the retry-path state machines around those flags make the migration riskier than the feature warranted."
+  },
+  {
+    "timestamp": "2026-08-23T15:25:27.614Z",
+    "insight": "Node's child_process spawn {timeout} SIGTERMs only the direct child. When /bin/sh forks instead of exec-ing (compound commands always fork; dash frequently forks single commands where bash would implicit-exec), the forked grandchild inherits the piped stdio and keeps the 'close' event — and any promise awaiting it — open indefinitely. This made drone-beacon/drone-coordinator session-end timeout tests shell-build-dependent (pass on Arch bash, hang on CI dash). Fix pattern: spawn with detached:true to make the shell a process-group leader, kill(-pid) on the timeout event with a short SIGKILL escalation, settle via an unref'd fallback timer so even setsid escapees can't hang the caller, and report signal-based termination distinctly from exit codes. Follow-up: runCommandTrigger is duplicated near-identically in drone-beacon/src/session-end.ts and drone-coordinator/src/session-end.ts — extract into drone-swarm-common per the deduplication standard; both copies must be patched in lockstep until then."
+  },
+  {
+    "timestamp": "2026-08-23T15:59:04.308Z",
+    "insight": "Deleting an entry-point invocation gate can silently kill a service on a different launch surface than the one you tested. The bin-shim refactor (8618235) removed coordinator's invokedDirectly gate AND its top-level main() call — correct for npm-shim launches, fatal for direct `node dist/index.js` launches like Dockerfile CMDs: module loads, nothing runs, exit 0 in ~450ms with no output. With compose --abort-on-container-exit this SIGKILLed the whole integration suite mid-run (exit 137s), vitest never printed a summary, and interleaved container logs buried the fragments. Rules of thumb: (1) when removing a guard or gate, enumerate every launch surface (npm bin shim, pnpm exec, direct node, Docker CMD, smoke-test harness) and verify each; (2) Docker-based suites are the ONLY coverage of Docker launch surfaces — fast-suite green proves nothing about them; (3) CI observability gap made this opaque: vitest.integration.config.ts writes no result files yet the workflow uploads test-results/ from the workspace (a named volume nobody populates). Follow-ups: gateway has the identical missing-invocation latent break (no image consumes it today); consider adding a JSON/file reporter to the integration config so future failures produce greppable artifacts instead of log soup."
+  },
+  {
+    "timestamp": "2026-08-24T00:35:33.808Z",
+    "insight": "Executing an ordering-invariant inversion (compaction summaries newest-first -> chronological) revealed that most pre-existing seeded fixtures need NO edits: assertions keyed off variable identity (s1.id, oldest.id via .some()) survive any storage order; only genuinely positional assertions ([0]/.at(-1) on getSummaryTurns()/status.summaries) required flipping. Plan accordingly: enumerate positional accessors during planning (they are the real edit set), not all fixture sites. Also: content-anchored apply_diff absorbed ~4 lines of plan-vs-reality drift without re-measuring, and the two intentional newest-at-tail test asserts (.at(-1)) will trip naive greps for residual reversed-order accessors — whitelist deliberate ones when validating."
+  },
+  {
+    "timestamp": "2026-08-23T18:51:34.791Z",
+    "insight": "Two validation-layer lessons from the context-window fix: (1) pnpm lint (prettier) reformatted test files mid-run, so LSP diagnostics pointed at PRE-EDIT positions and showed errors that no longer existed — ground truth required grep -c of the old pattern plus a fresh tsc -p tsconfig.test.json --noEmit, both of which were clean. Trust hierarchy confirmed again: fresh tsc > grep > cached LSP. (2) Vitest passing does NOT mean LSP-clean: esbuild strips types without checking, so my tests called getContextWindowInfo({}) where the wire contract requires {model: string} and only tsc caught it. AGENTS.md is right to demand zero LSP errors with no exceptions for tests."
+  },
+  {
+    "timestamp": "2026-08-23T21:45:01.311Z",
+    "insight": "vi.doMock('node:os') with a factory that spreads importOriginal only replaces NAMESPACE exports; modules using `import os from 'node:os'` (default import) keep the ORIGINAL default object including real homedir. The mock must also override `default`: `const mocked = {...actual, homedir: () => tmp}; return {...mocked, default: mocked}`. Symptom when missed: tests silently write to the REAL user home. Always verify no real-home pollution after homedir-mocked filesystem tests. Also: vi.spyOn cannot redefine ESM namespace exports ('Module namespace is not configurable') — use doMock factories, not spies, for ESM builtins. And vitest run must be invoked from the workspace root (config-rooted include patterns), not package subdirectories."
   }
 ]

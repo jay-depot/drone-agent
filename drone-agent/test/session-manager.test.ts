@@ -123,6 +123,40 @@ describe('createSessionManager', () => {
     expect(session.getTurns()).toHaveLength(3);
   });
 
+  it('stores consecutive summary turns chronologically, oldest first', () => {
+    const session = createSessionManager();
+    session.prependSystemTurn('first summary', { kind: 'summary' });
+    session.prependSystemTurn('second summary', { kind: 'summary' });
+
+    expect(session.getTurns().map(t => t.messages[0].content)).toEqual([
+      'first summary',
+      'second summary',
+    ]);
+    expect(session.getSummaryTurns().map(t => t.messages[0].content)).toEqual([
+      'first summary',
+      'second summary',
+    ]);
+  });
+
+  it('keeps the summary block contiguous at the head across appends', () => {
+    const session = createSessionManager();
+    session.appendUserMessage('u1');
+    session.prependSystemTurn('S1', { kind: 'summary' });
+    session.appendUserMessage('u2');
+    session.prependSystemTurn('S2', { kind: 'summary' });
+    session.appendUserMessage('u3');
+
+    // Summaries form one contiguous chronological block ahead of live turns,
+    // regardless of when each prepend happened relative to appends.
+    expect(session.getTurns().map(t => t.messages[0].content)).toEqual([
+      'S1',
+      'S2',
+      'u1',
+      'u2',
+      'u3',
+    ]);
+  });
+
   it('drops a summary turn by id and returns it', () => {
     const session = createSessionManager();
     const summary = session.prependSystemTurn('summary', { kind: 'summary' });

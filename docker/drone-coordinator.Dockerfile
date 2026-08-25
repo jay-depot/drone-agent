@@ -48,5 +48,6 @@ WORKDIR /app/drone-coordinator
 # Expose the port
 EXPOSE 3456
 
-# Run the coordinator
-CMD ["node", "dist/index.js", "--config-dir", "/config"]
+# Run the coordinator via the bin shim (ADR 154: shims are the canonical
+# entry point; the module itself does not self-invoke).
+CMD ["node", "bin/drone-coordinator", "--config-dir", "/config"]

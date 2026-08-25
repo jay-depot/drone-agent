@@ -1,3 +1,21 @@
+## LLM provider config via swarm underlays
+
+The beacon/coordinator config underlays are sanctioned channels for LLM
+provider configuration. Valid underlay content includes:
+
+- `providers` — full provider entries (protocol, baseUrl, `${VAR}`-templated
+  apiKey, parameters, models). Entries merge by key with whole-entry
+  replacement: any scope defining `providers.<id>` replaces that entire
+  entry, so a swarm-distributed entry cannot be partially overridden by
+  local config (define a different id instead).
+- `llm.active` / `llm.reasoningLevel` — selection pins.
+
+`${VAR}` interpolation runs receiver-side at layer parse time (each node
+resolves against its own environment), so a swarm-distributed template like
+`"apiKey": "${OPENROUTER_API_KEY}"` resolves per-agent. Plaintext keys in
+underlays are allowed (swarm is a trusted channel); project-scope files may
+NOT define `providers` at all — that combination fails startup validation.
+
 # Swarm Plugin
 
 The `swarm` plugin connects to a `drone-beacon` instance to provide swarm-wide personas, skills, and config injection. It is not enabled by default.

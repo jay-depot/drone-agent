@@ -30,6 +30,8 @@ export type DroneSearchConfig = {
 };
 import { deepMerge, type MergeSpec } from './deep-merge.js';
 
+import type { DroneProviderConfig } from './provider-config-types.js';
+
 // ── Precedence constants for skill/persona/provider plugins ──────────
 /** Precedence for swarm-level providers (highest priority — lowest number). */
 export const PRECEDENCE_SWARM = 5000;
@@ -77,6 +79,12 @@ export type DroneOllamaConfig = {
 export type DroneLlmConfig = {
   /** The id of the active LLM provider plugin (e.g. 'ollama', 'openrouter'). */
   provider: string;
+  /**
+   * Canonical selected model identity `<providerId>/<modelLocalId>`.
+   * Migration seeds this from the legacy sections; selection UX persists
+   * here. When absent the broker falls back to the first provider's default.
+   */
+  active?: string;
   reasoningLevel?: DroneReasoningLevel;
 };
 
@@ -186,6 +194,12 @@ export type DroneCompactionConfig = {
   minTurnsToCompact: number;
   summaryMaxTokens: number;
   summaryBudgetPercent: number;
+  /**
+   * Lead margin (percentage points) before the compaction soft threshold at
+   * which the one-shot pre-compaction nudge fires. The nudge band is
+   * `[softThresholdPercent - nudgeMarginPercent, softThresholdPercent]`.
+   */
+  nudgeMarginPercent: number;
 };
 
 export type DroneMemoryConfig = {
@@ -371,6 +385,8 @@ export type DroneAgentConfig = {
   systemPrompt: string;
   activePersona: string | null;
   llm: DroneLlmConfig;
+  /** User-defined provider entries (providers = data, protocols = code). */
+  providers: Record<string, DroneProviderConfig>;
   ollama: DroneOllamaConfig;
   openai: DroneOpenAiConfig;
   anthropic: DroneAnthropicConfig;
@@ -395,6 +411,7 @@ export type PartialDroneAgentConfig = Partial<{
   systemPrompt: string;
   activePersona: string | null;
   llm: Partial<DroneLlmConfig>;
+  providers: Partial<Record<string, DroneProviderConfig>>;
   ollama: Partial<DroneOllamaConfig>;
   openai: Partial<DroneOpenAiConfig>;
   anthropic: Partial<DroneAnthropicConfig>;
@@ -423,6 +440,15 @@ export type DroneConfigLayer = {
 export type DroneResolvedConfig = {
   config: DroneAgentConfig;
   layers: DroneConfigLayer[];
+  /**
+   * Present when legacy LLM sections were migrated to providers entries —
+   * surface as a deprecation notice at startup.
+   */
+  migrationNotice?: string;
+  /**
+   * Non-fatal provider-config warnings (scope policy, alias chains, …).
+   */
+  warnings?: string[];
 };
 
 // ── Config helper functions ─────────────────────────────────────────
@@ -433,6 +459,10 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
   merge: [
     'trustedPlugins',
     'llm',
+    // Entry-level replace: maps merge by key, but any scope defining
+    // `providers.<id>` replaces that whole entry (no intra-entry deep merge —
+    // prevents beacon/local frankensteins).
+    'providers',
     'ollama',
     'compaction',
     'memory',
@@ -476,6 +506,7 @@ export function createDefaultAgentConfig(
     llm: {
       provider: 'ollama',
     },
+    providers: {},
     ollama: {
       host: 'http://127.0.0.1:11434',
       model: 'llama3.1',
@@ -552,6 +583,7 @@ export function createDefaultAgentConfig(
       minTurnsToCompact: 4,
       summaryMaxTokens: 800,
       summaryBudgetPercent: 20,
+      nudgeMarginPercent: 10,
     },
     memory: {
       enabled: true,

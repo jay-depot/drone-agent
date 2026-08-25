@@ -1,6 +1,6 @@
 # AGENTS.md — drone-agent
 
-This file describes how to work on the `drone-agent` project itself. The project is a monorepo (pnpm workspace) with seven packages.
+This file describes how to work on the `drone-agent` project itself. The project is a monorepo (pnpm workspace) with eight packages.
 
 **If you encounter any discrepancy between this document and the code, the code is the source of truth, and this document should be updated.**
 
@@ -26,6 +26,7 @@ The project is a pnpm workspace with seven packages:
 | `drone-coordinator/`    | Global hub for swarm coordination (Fastify + SQLite).                              |
 | `drone-coordinator-ui/` | Web UI for the coordinator (React + Vite + Tailwind).                              |
 | `drone-swarm-common/`   | Shared utilities for beacon and coordinator.                                       |
+| `drone-swarm/`          | `drone-swarm` CLI: standalone REST client for session pipeline + wiki.             |
 | `drone-gateway/`        | Chat API gateway (Matrix, Discord, Slack).                                         |
 | `skill-library/`        | Reusable skill `.md` files (not a workspace package).                              |
 
@@ -182,7 +183,9 @@ Config cascades: **Default → User → Project** (last-write-wins per key, exce
 
 Config files live in `.drone-agent/config.json` at each scope. The config loader (`runtime/config.ts`) walks up the directory tree looking for `.drone-agent/` directories.
 
-Key config sections: `enabledPlugins`, `systemPrompt`, `activePersona`, `llm`, `ollama`, `openrouter`, `session`, `lsp`, `mcp`, `compaction`, `memory`, `log`, `promptFile`, `swarm`.
+Key config sections: `enabledPlugins`, `systemPrompt`, `activePersona`, `providers` (user-defined LLM providers; banned at project scope), `llm` (active selection + reasoning), legacy `ollama`/`openai`/`anthropic`/`openrouter` (migration window only — migrated into `providers` and persisted to the file on first load), `session`, `lsp`, `mcp`, `compaction`, `memory`, `log`, `promptFile`, `swarm`.
+
+→ See `docs/agents/provider-model-config.md` for the provider/protocol/model model, parameters, secrets, scopes, and migration.
 
 ### TUI Architecture
 
@@ -221,6 +224,7 @@ The following subsystems have dedicated documentation in `docs/agents/`:
 - **Bootstrap Plugin** (`docs/agents/bootstrap-plugin.md`) — Setup workflows for new projects and users
 - **Swarm Plugin** (`docs/agents/swarm-plugin.md`) — Beacon/coordinator integration for swarm-wide personas, skills, and config
 - **Session Import** (`docs/agents/session-import.md`) — `/swarm-session` command for recreating an old session's context
+- **Memory Pipeline** (`docs/agents/memory-pipeline.md`) — Config files, session-end triggers, drone-swarm CLI, beacon outbox
 - **External Plugin Loading** (`docs/agents/external-plugin-loading.md`) — User and project-scope plugin discovery, trust model, engine integration
 - **MCP Plugin** (`docs/agents/mcp-plugin.md`) — Deferred list/mount pattern for tool loading, `ToolMountingCache`, server descriptions, persona filtering
 
@@ -283,11 +287,11 @@ When working on the project, proactively log insights using `self-improvement.in
 **Ensure the following standards are met before you consider a job "done"**
 
 - LSP must pass. No exceptions for tests, no exceptions for code you're not working on.
-- `pnpm -r run lint` and `pnpm -r run build` must pass with zero errors.
-- `pnpm -r run lint` will run prettier by default, whenever eslint succeeds. Keep two things in mind about this:
+- `pnpm lint` (root-level script) and `pnpm -r run build` must pass with zero errors.
+- `pnpm lint` will run prettier by default, whenever eslint succeeds. Keep two things in mind about this:
   1. **If you run the linter, you will need to re-read all files before attempting to modify them again**, because prettier will reformat them.
   2. You don't need to worry about matching the formatting rules of the project in your changes. Worry about making LSP, typecheck, eslint, and build pass, then prettier will handle the formatting for you.
-- The "fast" test suite (`pnpm -r run test`) must pass. Check the "slow" test suite at your discretion (immediately before opening a pull request is a good time to check it, for example), or when you are told to do so.
+- The "fast" test suite (`pnpm test`) must pass. Check the "slow" test suite at your discretion (immediately before opening a pull request is a good time to check it, for example), or when you are told to do so.
 - All new code must be covered by unit tests. If you are adding a new feature, you must add tests for it. If you are fixing a bug, you must add a test that reproduces the bug and then fixes it.
 - Dead code must be removed. Unused variables must be removed. "Fluff" comments must be removed.
 - If a comment isn't jsdoc, then it needs to be explaining a complex process or algorithm. If it is not explaining a complex process or algorithm either, then the only other kind of comment that is allowed is a TODO/FIXME comment. All other comments must be removed.

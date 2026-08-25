@@ -1,4 +1,6 @@
 import type { FastifyInstance } from 'fastify';
+import { logger } from '../logger.js';
+import { runSessionEndHook } from '../session-end.js';
 import { publishMutationEvent } from '../ws-pubsub.js';
 import {
   isLargePayload,
@@ -48,6 +50,13 @@ export default function swarmRoutes(app: FastifyInstance) {
         sessionId: request.params.id,
         eventType: 'session.ended',
         payload: { sessionId: request.params.id, status: 'ended' },
+      });
+      // Fire the configured session-end hook after the session is marked
+      // ended and published; failures are contained and non-blocking.
+      void runSessionEndHook(request.params.id).catch(err => {
+        logger.warn(
+          `Session-end hook error for session ${request.params.id}: ${err}`
+        );
       });
       return session;
     }

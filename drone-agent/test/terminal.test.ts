@@ -363,6 +363,7 @@ describe('terminalPlugin', () => {
         systemPrompt: '',
         activePersona: null,
         llm: { provider: 'ollama' },
+        providers: {},
         ollama: { host: 'http://127.0.0.1:11434', model: 'llama3.1' },
         openai: {
           apiKey: '',
@@ -426,6 +427,7 @@ describe('terminalPlugin', () => {
           minTurnsToCompact: 4,
           summaryMaxTokens: 800,
           summaryBudgetPercent: 20,
+          nudgeMarginPercent: 10,
         },
         memory: { enabled: false },
         log: { enabled: false },
