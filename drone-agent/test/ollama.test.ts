@@ -484,3 +484,127 @@ describe('ollama discovery catalog policy', () => {
     expect(local?.supportsTools).toBeDefined();
   });
 });
+
+describe('ollama DroneLlmError conversion', () => {
+  async function captureProvider() {
+    const { ollamaPlugin } = await import('../src/plugins/ollama/index.js');
+    let driver: import('drone-core').LlmProtocolDriver | undefined;
+    await ollamaPlugin.register({
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      getConfig: () => ({
+        ollama: { host: 'http://localhost:11434', model: 'fake' },
+        session: { contextWindowTokens: 4096 },
+      }),
+      registerTool: () => {},
+      registerPromptFragment: () => {},
+      registerHelp: () => {},
+      registerSlashCommand: () => {},
+      registerWorkflow: () => {},
+      unregisterPluginTools: () => {},
+      unregisterTool: () => {},
+      mountTool: () => undefined,
+      unmountTool: () => {},
+      listMountedTools: () => [],
+      hooks: {
+        onPluginsLoaded: () => {},
+        onSessionStart: () => {},
+        onBeforePrompt: () => {},
+        onAfterToolCall: () => {},
+        onConversationEvent: () => {},
+        onSessionClear: () => {},
+        onShutdown: () => {},
+        onSessionSafetyTrimWillRun: () => {},
+        onSessionSafetyTrimApplied: () => {},
+      },
+      offer: (cap: unknown) => {
+        driver = (cap as { driver: import('drone-core').LlmProtocolDriver })
+          .driver;
+      },
+      request: () => undefined,
+      runWorkflow: async () => ({ toolResult: '{}' }),
+      requestElicitation: () => undefined,
+    } as never);
+    if (!driver) {
+      throw new Error('driver not offered');
+    }
+    return driver.createProvider({
+      protocol: 'ollama',
+      baseUrl: 'http://localhost:11434',
+    });
+  }
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.doMock('ollama', () => ({
+      Ollama: vi.fn().mockImplementation(() => ({
+        chat: vi.fn(async () => {
+          const err = new Error('model "nope" not found, try pulling it first');
+          (err as { status_code?: number }).status_code = 404;
+          throw err;
+        }),
+        show: vi.fn(async () => ({
+          model_info: { 'general.context_length': 4096 },
+        })),
+        list: vi.fn(async () => ({ models: [] })),
+        ps: vi.fn(async () => ({ models: [] })),
+      })),
+      ShowResponse: class {},
+      ToolCall: class {},
+    }));
+  });
+
+  afterEach(() => {
+    vi.unmock('ollama');
+  });
+
+  it('maps a not-found model to a 404 DroneLlmError with a pull hint', async () => {
+    const provider = await captureProvider();
+    const err = await provider
+      .chat({
+        model: 'nope',
+        messages: [{ role: 'user', content: 'hello' }],
+      })
+      .then(
+        () => null,
+        e => e
+      );
+
+    expect(err?.name).toBe('DroneLlmError');
+    expect(err.status).toBe(404);
+    expect(err.retryable).toBe(false);
+    expect(err.message).toContain('ollama pull nope');
+  });
+
+  it('marks transient ollama status codes retryable', async () => {
+    vi.doMock('ollama', () => ({
+      Ollama: vi.fn().mockImplementation(() => ({
+        chat: vi.fn(async () => {
+          const err = new Error('server overloaded');
+          (err as { status_code?: number }).status_code = 503;
+          throw err;
+        }),
+        show: vi.fn(async () => ({
+          model_info: { 'general.context_length': 4096 },
+        })),
+        list: vi.fn(async () => ({ models: [] })),
+        ps: vi.fn(async () => ({ models: [] })),
+      })),
+      ShowResponse: class {},
+      ToolCall: class {},
+    }));
+    const provider = await captureProvider();
+    const err = await provider
+      .chat({
+        model: 'nope',
+        messages: [{ role: 'user', content: 'hello' }],
+      })
+      .then(
+        () => null,
+        e => e
+      );
+
+    expect(err?.name).toBe('DroneLlmError');
+    expect(err.status).toBe(503);
+    expect(err.retryable).toBe(true);
+  });
+});

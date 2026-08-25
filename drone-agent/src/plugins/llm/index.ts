@@ -1,5 +1,6 @@
 import { registerContextCommand } from './context-command.js';
 import {
+  DroneLlmError,
   parseModelSelection,
   type DiscoveredModel,
   type DroneContextWindowInfo,
@@ -341,17 +342,24 @@ export const llmPlugin: DronePlugin = {
               request.parameters
             );
             warnUnknownParameters(instance, effectiveParameters);
-            return inner.chat({
-              ...request,
-              parameters: effectiveParameters,
-              extra: {
-                ...(registration.getConfig().providers[instance.providerId]
-                  ?.extra ?? {}),
-              },
-              maxOutputTokens:
-                request.maxOutputTokens ?? metadata.maxOutputTokens,
-              hasVision: request.hasVision ?? metadata.hasVision,
-            });
+            try {
+              return await inner.chat({
+                ...request,
+                parameters: effectiveParameters,
+                extra: {
+                  ...(registration.getConfig().providers[instance.providerId]
+                    ?.extra ?? {}),
+                },
+                maxOutputTokens:
+                  request.maxOutputTokens ?? metadata.maxOutputTokens,
+                hasVision: request.hasVision ?? metadata.hasVision,
+              });
+            } catch (error) {
+              if (error instanceof DroneLlmError && !error.providerId) {
+                error.providerId = instance.providerId;
+              }
+              throw error;
+            }
           },
           getContextWindowInfo: ({ model }) =>
             resolveActiveContextWindow(instance, model),

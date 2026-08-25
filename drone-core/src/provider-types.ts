@@ -148,3 +148,45 @@ export type DroneLlmProviderRegistration = {
 };
 
 export type { LlmProtocolDriver as DroneLlmProtocolDriver } from './provider-config-types.js';
+
+/**
+ * Structured error thrown by LLM providers/drivers when a chat() call fails.
+ * The conversation service classifies these into a retry policy:
+ *   - T1  bounded silent auto-retry on transient HTTP statuses
+ *   - T2  prompt the user to retry on most other HTTP statuses
+ *   - T3  fail fast on transport errors (no status)
+ *
+ * Thrown (not returned) so that a failure in the retry/prompt handling
+ * surfaces as an uncaught error rather than silently swallowing the failure.
+ */
+export class DroneLlmError extends Error {
+  /** HTTP status code when the failure was an HTTP error. */
+  status?: number;
+  /** Parsed Retry-After delay in milliseconds, if the server supplied one. */
+  retryAfterMs?: number;
+  /** Whether this error is considered transient and safe to auto-retry. */
+  readonly retryable: boolean;
+  /** The provider id (e.g. 'openai', 'ollama') that raised the error. */
+  providerId?: string;
+  /** Optional raw response body from the failed request. */
+  body?: string;
+
+  constructor(
+    message: string,
+    opts: {
+      status?: number;
+      retryAfterMs?: number;
+      retryable: boolean;
+      providerId?: string;
+      body?: string;
+    } = { retryable: false }
+  ) {
+    super(message);
+    this.name = 'DroneLlmError';
+    this.status = opts.status;
+    this.retryAfterMs = opts.retryAfterMs;
+    this.retryable = opts.retryable;
+    this.providerId = opts.providerId;
+    this.body = opts.body;
+  }
+}

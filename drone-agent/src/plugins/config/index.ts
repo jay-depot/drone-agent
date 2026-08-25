@@ -112,6 +112,12 @@ const KNOWN_CONFIG_KEYS: string[] = [
   'session.responseReserveTokens',
   'session.maxToolIterations',
   'session.promptOnToolIterationLimit',
+  'session.maxToolResultTokensPercent',
+  'session.retry.maxRetries',
+  'session.retry.maxWaitMs',
+  'session.retry.promptOnError',
+  'session.retry.backoffBaseMs',
+  'session.retry.backoffFactor',
   // llm.*
   'llm.active',
   'llm.reasoningLevel',

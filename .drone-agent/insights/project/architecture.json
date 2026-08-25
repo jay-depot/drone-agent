@@ -34,5 +34,9 @@
   {
     "timestamp": "2026-07-29T04:04:52.518Z",
     "insight": "Tool result truncation was added at the conversation-service layer (after executeToolSafely returns, before session append) rather than at individual tool level. This is the right pattern because it covers all tools generically with a single config key (session.maxToolResultTokensPercent, default 15%). The token estimation uses the same estimateTextTokens function (chars/4) used elsewhere in the project, keeping the estimation consistent. The truncation note includes guidance for both file__read (request smaller window) and exec__run (pipe to temp file) to help the LLM recover from truncation."
+  },
+  {
+    "timestamp": "2026-08-25T17:26:05.205Z",
+    "insight": "Adding a required field (e.g. session.retry) to a DroneSessionConfig-like type in drone-core propagates typecheck failures to EVERY hand-rolled session literal across all test files (drone-agent and drone-core). The pattern to expect and sweep: createDefaultAgentConfig-override blocks, getConfig() mocks, and inline sessionConfig literals in estimate tests. Use `pnpm typecheck` (which surfaces all of them) plus grep for the parent key to find every site; LSP diagnostics can lag behind rapid apply_diff and serve stale errors, so trust typecheck over the LSP once a file is verified. The conversation-service retry wrapper (`runWithRetry`) closure-captures `emit`/`retryConfig`/`onRetryPrompt` from the enclosing sendUserMessage scope, avoiding parameter threading — a clean pattern for adding policy that the loop owns."
   }
 ]

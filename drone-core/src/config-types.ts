@@ -163,6 +163,30 @@ export type DroneSessionConfig = {
   maxToolResultTokensPercent?: number;
   /** Guardrail thresholds for broken responses, reasoning-only responses, and identical tool calls. */
   guardrail: DroneGuardrailConfig;
+  /** Unified retry/classification policy for LLM chat() failures. */
+  retry: DroneSessionRetryConfig;
+};
+
+/**
+ * Bounded retry policy for LLM chat() failures, applied by the conversation
+ * service. Tiered classification:
+ *   - T1  bounded silent auto-retry on transient HTTP statuses
+ *   - T2  prompt the user to retry on most other HTTP statuses
+ *   - T3  fail fast on transport errors
+ * All fields optional to match the config schema (users override only what
+ * they care about); the resolved config always populates all defaults.
+ */
+export type DroneSessionRetryConfig = {
+  /** Max silent auto-retries on transient statuses (429/5xx). Default 3. */
+  maxRetries?: number;
+  /** Cap (ms) on a single silent wait; beyond → prompt. Default 30000. */
+  maxWaitMs?: number;
+  /** When true, prompt the user to retry on non-transient HTTP statuses. */
+  promptOnError?: boolean;
+  /** Exponential backoff base delay in ms. Default 1000. */
+  backoffBaseMs?: number;
+  /** Exponential backoff multiplier. Default 2. */
+  backoffFactor?: number;
 };
 
 /** Threshold values are optional to match the config schema, which lets users
@@ -465,7 +489,10 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
     mcp: { replace: ['servers'] },
     promptFile: { mergeArrays: ['files'] },
     session: {
-      deepMerge: { guardrail: { deepMerge: {} } },
+      deepMerge: {
+        guardrail: { deepMerge: {} },
+        retry: { deepMerge: {} },
+      },
     },
     swarm: { deepMerge: { knowledgeSync: {} } },
     tui: {
@@ -540,6 +567,13 @@ export function createDefaultAgentConfig(
         brokenResponses: { hintAfter: 2, maxHints: 2 },
         reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },
         identicalToolCalls: { hintAfter: 2, maxHints: 3 },
+      },
+      retry: {
+        maxRetries: 3,
+        maxWaitMs: 30000,
+        promptOnError: true,
+        backoffBaseMs: 1000,
+        backoffFactor: 2,
       },
     },
     lsp: {

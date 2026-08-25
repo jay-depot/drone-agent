@@ -1,13 +1,9 @@
 ---
 key: plan-llm-provider-unified-retry
 tags:
-  - plan
-  - llm
-  - providers
-  - retry
-  - error-handling
+  []
 created: 2026-08-25T16:47:47.934Z
-updated: 2026-08-25T16:47:47.934Z
+updated: 2026-08-25T17:25:24.409Z
 ---
 
 # Plan: Unified error/retry semantics across providers
@@ -34,34 +30,37 @@ Why: today a 429/5xx just surfaces as an unhandled Error that crashes plain mode
 
 ## IMPLEMENTATION SURFACES (verified)
 - drone-core/src/provider-types.ts — add DroneLlmError; export from index.ts.
-- Drivers: openai-driver.ts (chat error ~242 + doFetch/discovery), anthropic-driver.ts (~131), echo-driver.ts (~59), ollama-driver.ts (chat catch + not-found). Parse status + Retry-After.
+- Drivers: openai-driver.ts (chat error + doFetch/discovery), anthropic-driver.ts, echo-driver.ts, ollama-driver.ts (chat catch + not-found). Parse status + Retry-After.
 - Broker: plugins/llm/index.ts getActiveProvider().chat() — catch DroneLlmError, tag providerId, rethrow.
-- Conversation-service: sendMessage loop around provider.chat() (~660). Add config.session.retry resolution + classify(retry/prompt/throw). Add onRetryPrompt callback (mirrors onBrokenResponseLimitReached). Emit error event before prompt.
+- Conversation-service: sendMessage loop around provider.chat(). Add config.session.retry resolution + classify(retry/prompt/throw). Add onRetryPrompt callback (mirrors onBrokenResponseLimitReached). Emit error event before prompt.
 - Config: config-types.ts (DroneSessionConfig + DroneSessionRetryConfig + defaults), config-schema.ts (SessionSchema + RetrySchema), plugins/config/index.ts KNOWN_CONFIG_KEYS add session.retry.*.
 - CLI: cli.ts CliOptions + parseCliArgs add --retry-max-retries / --retry-max-wait-ms; index.tsx apply onto resolvedConfig.config.session.retry before createConversationService.
 - index.tsx: wire onRetryPrompt → engine.getElicitation() yes/no (default no), non-interactive → false (fail fast).
 - Retry-after parsing: integer seconds + HTTP-date (Date.parse fallback).
 - Backoff: delay = backoffBaseMs * backoffFactor^(attempt-1), capped at maxWaitMs; Retry-After honored if ≤ cap.
-- Context-window detection helper (status 400/413/429 + provider string/regex match) in loop or driver.
+- Context-window detection helper (status 400/413/429 + provider string/regex match) in loop.
 
-## STEPS
-1. **DroneLlmError in drone-core** — class + export from index.ts. Verify pnpm -r run build.
-2. **Retry helper module** — `drone-agent/src/runtime/llm-retry.ts`: parseRetryAfterMs(header), computeBackoffDelay(attempt, cfg, retryAfterMs), isTransientStatus(status), isContextWindowExceeded(status, message). Unit tests both Retry-After forms + backoff capping.
-3. **Convert drivers** to throw DroneLlmError (openai/anthropic/echo/ollama). Read retry-after header, set retryable=isTransientStatus. Ollama not-found → 404 DroneLlmError + "pull it with ollama pull <model>" hint. Keep openrouter require_parameters internal. Update driver tests.
-4. **Broker wrapper tags providerId** — plugins/llm/index.ts getActiveProvider().chat() try/catch, set providerId, rethrow. Test.
-5. **Config session.retry** — config-types (DroneSessionRetryConfig + DroneSessionConfig.retry + defaults), config-schema RetrySchema, KNOWN_CONFIG_KEYS. Schema/known-keys tests.
-6. **Conversation-service policy** — add onRetryPrompt callback to options; wrap provider.chat() in classify: T1 bounded silent retry (emit notice, wait computeBackoffDelay), T2 (emit error event + onRetryPrompt yes/no; no → rethrow), non-interactive/!promptOnError → rethrow, context-window → rethrow with /compact hint, non-DroneLlmError → rethrow. Tests for 429/500 retry-then-prompt, 401 prompt, network throw, context-window hint, non-interactive throw, promptOnError:false throw.
-7. **Wire onRetryPrompt in index.tsx** — engine.getElicitation() yes/no default no, non-interactive false.
-8. **CLI override flags** — cli.ts CliOptions + parse (--retry-max-retries, --retry-max-wait-ms), index.tsx apply to session.retry before createConversationService. cli parse test.
-9. **Full sweep** — pnpm -r build, typecheck, lint, test; LSP zero errors; integration at discretion.
+## STEPS (all completed ✅)
+1. **DroneLlmError in drone-core** — class + export from index.ts. pnpm -r run build ✓.
+2. **Retry helper module** — `drone-agent/src/runtime/llm-retry.ts`: parseRetryAfterMs(header), computeBackoffDelay(attempt, cfg, retryAfterMs), isTransientStatus(status), isContextWindowExceeded(status, message). Unit tests both Retry-After forms + backoff capping ✓.
+3. **Convert drivers** to throw DroneLlmError (openai/anthropic/echo/ollama). Read retry-after header, set retryable=isTransientStatus. Ollama not-found → 404 DroneLlmError + "pull it with ollama pull <model>" hint. Keep openrouter require_parameters internal. Update driver tests ✓.
+4. **Broker wrapper tags providerId** — plugins/llm/index.ts getActiveProvider().chat() try/catch, set providerId, rethrow. Test ✓.
+5. **Config session.retry** — config-types (DroneSessionRetryConfig + DroneSessionConfig.retry + defaults), config-schema RetrySchema, KNOWN_CONFIG_KEYS. Schema/known-keys tests ✓.
+6. **Conversation-service policy** — add onRetryPrompt callback to options; wrap provider.chat() in classify (T1/T2/T3). Tests for 429/500 retry-then-prompt, 401 prompt, network throw, context-window hint, non-interactive throw, promptOnError:false throw ✓.
+7. **Wire onRetryPrompt in index.tsx** — engine.getElicitation() yes/no default no, non-interactive false ✓.
+8. **CLI override flags** — cli.ts CliOptions + parse (--retry-max-retries, --retry-max-wait-ms), index.tsx apply to session.retry before createConversationService. cli parse test ✓.
+9. **Full sweep** — pnpm -r build, typecheck, lint, test; LSP zero errors ✓.
 
-## VALIDATION CRITERIA
-- LSP zero errors (typescript connected).
-- pnpm -r run build exits 0.
-- pnpm typecheck exits 0.
-- pnpm lint (eslint + prettier) passes.
-- pnpm test fast suite passes, including new: driver DroneLlmError fields, Retry-After parsing, conversation-service classification (T1/T2/T3, non-interactive fail-fast, context-window hint), config schema/known-keys, CLI parse.
-- Existing guardrail tests (broken-response, identical-tool-call, stuck-error, tool-iteration) still pass.
+## VALIDATION CRITERIA (all met)
+- LSP zero errors (typescript connected). ✅
+- pnpm -r run build exits 0. ✅
+- pnpm typecheck exits 0. ✅
+- pnpm lint (eslint + prettier) passes. ✅
+- pnpm test fast suite passes (2226 passed / 9 skipped on re-run; the first run's single failure was a pre-existing flaky coordinator messages.test.ts that passes in isolation). ✅
+- Existing guardrail tests (broken-response, identical-tool-call, stuck-error, tool-iteration) still pass. ✅
+
+## COMPLETION NOTES
+Implemented and validated end-to-end. The 9-step plan is fully executed; all validation criteria pass. The one test-suite flake observed during the sweep (drone-coordinator/test/routes/messages.test.ts "POST /messages/broadcast with mixed fetch results") is unrelated to this plan and passes in isolation; it is a pre-existing flaky coordinator broadcast test.
 
 ## NOTES
 - Degenerate-response guardrails out of scope (separate feature).

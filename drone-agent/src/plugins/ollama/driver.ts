@@ -1,3 +1,4 @@
+import { DroneLlmError } from 'drone-core';
 import type {
   DiscoveredModel,
   DroneChatRequest,
@@ -6,6 +7,7 @@ import type {
   DroneLlmProvider,
 } from 'drone-core';
 import { Ollama, type ShowResponse } from 'ollama';
+import { isTransientStatus } from '../../runtime/llm-retry.js';
 
 /** Reasoning level → Ollama `think` parameter (off disables thinking). */
 export function mapReasoningLevel(
@@ -419,15 +421,22 @@ export function createOllamaProvider(providerConfig: {
         const statusSuffix = statusCode ? ` (HTTP ${statusCode})` : '';
 
         if (message.includes('not found')) {
-          throw new Error(
+          throw new DroneLlmError(
             `Ollama model ${model} is not available at ${host}. Pull it with "ollama pull ${model}" or update your providers config to use an installed model.`,
-            { cause: error }
+            {
+              status: statusCode ?? 404,
+              retryable: false,
+            }
           );
         }
 
-        throw new Error(
+        throw new DroneLlmError(
           `Ollama chat request failed for model ${model} at ${host}: ${message}${statusSuffix}`,
-          { cause: error }
+          {
+            status: statusCode ?? undefined,
+            retryable:
+              statusCode !== undefined && isTransientStatus(statusCode),
+          }
         );
       }
 
