@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -331,6 +331,64 @@ describe('config plugin', () => {
       const written = JSON.parse(await readFile(parsed.filePath, 'utf-8'));
       expect(written.ollama.host).toBe('http://localhost:11435');
       expect(written.ollama.model).toBe('nested-model');
+    });
+
+    it('refuses project-scope writes when launched from home with no distinct project', async () => {
+      const { homeDir, projectDir } = await setupDirs();
+      const userConfigPath = path.join(
+        testHomeDir,
+        '.drone-agent',
+        'config.json'
+      );
+      await writeJson(userConfigPath, { ollama: { model: 'user-model' } });
+      const userConfigBefore = await readFile(userConfigPath, 'utf-8');
+
+      process.chdir(homeDir);
+
+      const engine = createDronePluginEngine({
+        plugins: [configPlugin],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+
+      await engine.initialize();
+
+      await expect(
+        engine.executeTool('config__set', {
+          key: 'session.contextWindowTokens',
+          value: 64000,
+        })
+      ).rejects.toThrow(/no distinct project/);
+
+      expect(await readFile(userConfigPath, 'utf-8')).toBe(userConfigBefore);
+      process.chdir(projectDir);
+    });
+
+    it('creates the project config file for a genuine no-config project', async () => {
+      const { projectDir } = await setupDirs();
+      process.chdir(projectDir);
+
+      const engine = createDronePluginEngine({
+        plugins: [configPlugin],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+
+      await engine.initialize();
+
+      const result = await engine.executeTool('config__set', {
+        key: 'ollama.model',
+        value: 'created-model',
+      });
+      const parsed = JSON.parse(result);
+
+      expect(parsed.ok).toBe(true);
+      expect(parsed.filePath).toBe(
+        path.join(projectDir, '.drone-agent', 'config.json')
+      );
+
+      const written = JSON.parse(await readFile(parsed.filePath, 'utf-8'));
+      expect(written.ollama.model).toBe('created-model');
     });
   });
 
