@@ -6,6 +6,7 @@
  */
 
 import type {
+  DroneContextWindowInfo,
   DronePlugin,
   DronePersonaCapability,
   DroneSkillsCapability,
@@ -37,12 +38,24 @@ import { startHeartbeat, registerShutdown } from './heartbeat.js';
 export type { SwarmConfig } from './config.js';
 
 /**
+ * Optional host-provided dependencies for the swarm plugin. When
+ * `resolveContextWindow` is not provided, `/swarm-session import` falls back
+ * to the configured `session.contextWindowTokens`.
+ */
+export type SwarmPluginDeps = {
+  resolveContextWindow?: () => Promise<DroneContextWindowInfo>;
+};
+
+/**
  * The swarm plugin connects to a drone-beacon and provides
  * personas and skills from the beacon's aggregated store.
  * It also implements a push-through mechanism that records
  * all conversation events to the coordinator via the beacon.
  */
-export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
+export function createSwarmPlugin(
+  config: SwarmConfig,
+  deps?: SwarmPluginDeps
+): DronePlugin {
   return {
     metadata: {
       id: 'swarm',
@@ -180,13 +193,22 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       registration.registerSlashCommand(createTrustCoordinatorCommand(baseUrl));
 
       // ── Session import command ───────────────────────────────────────────
+      const resolveContextWindow = deps?.resolveContextWindow;
       const sessionImportConfig = registration.getConfig().swarm
         .sessionImport ?? {
         maxChunks: 5,
         chunkTokenBudgetPercent: 12,
       };
       registration.registerSlashCommand(
-        createSwarmSessionCommand(baseUrl, sessionId, sessionImportConfig)
+        createSwarmSessionCommand(
+          baseUrl,
+          sessionId,
+          sessionImportConfig,
+          resolveContextWindow
+            ? async () =>
+                (await resolveContextWindow()).contextWindowTokens
+            : undefined
+        )
       );
 
       // ── Tools ───────────────────────────────────────────────────────────
@@ -208,5 +230,3 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
   };
 }
 
-// Default instance for easy configuration
-export const swarmPlugin = createSwarmPlugin({});

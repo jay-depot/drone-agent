@@ -1,7 +1,7 @@
 import type {
-  DroneLlmCapability,
   DroneSessionImportConfig,
   DroneSlashCommand,
+  DroneLlmCapability,
   DroneSlashCommandContext,
 } from 'drone-core';
 import {
@@ -27,19 +27,13 @@ function normalizeConfig(config: DroneSessionImportConfig): {
 }
 
 /**
- * Resolve the context window token count for the active provider/model,
- * falling back to the configured session context window.
+ * Config-only fallback when no host resolver was injected. Mirrors the
+ * budget service's own fallback semantics: assume the configured session
+ * context window.
  */
-async function resolveContextWindowTokens(
-  ctx: DroneSlashCommandContext,
-  llm: DroneLlmCapability
+async function defaultGetContextWindowTokens(
+  ctx: DroneSlashCommandContext
 ): Promise<number> {
-  const provider = llm.getActiveProvider();
-  const model = llm.getModel();
-  const probed = await provider.getContextWindowInfo?.({ model });
-  if (probed?.contextWindowTokens) {
-    return probed.contextWindowTokens;
-  }
   return ctx.engine.getConfig?.()?.session.contextWindowTokens ?? 32768;
 }
 
@@ -121,7 +115,8 @@ async function handleImport(
   ctx: DroneSlashCommandContext,
   baseUrl: string | undefined,
   currentSessionId: string,
-  config: DroneSessionImportConfig
+  config: DroneSessionImportConfig,
+  getContextWindowTokens?: () => Promise<number>
 ): Promise<boolean> {
   const { maxChunks, chunkTokenBudgetPercent } = normalizeConfig(config);
   const sessionId = ctx.args[1];
@@ -163,7 +158,8 @@ async function handleImport(
   }
 
   const chunks = splitTranscriptIntoChunks(transcript, maxChunks);
-  const contextWindowTokens = await resolveContextWindowTokens(ctx, llm);
+  const contextWindowTokens = await (getContextWindowTokens ??
+    defaultGetContextWindowTokens)(ctx);
   const tokenBudget = Math.max(
     1,
     Math.floor(contextWindowTokens * (chunkTokenBudgetPercent / 100))
@@ -222,7 +218,8 @@ async function handleImport(
 export function createSwarmSessionCommand(
   baseUrl: string | undefined,
   currentSessionId: string,
-  config: DroneSessionImportConfig
+  config: DroneSessionImportConfig,
+  getContextWindowTokens?: () => Promise<number>
 ): DroneSlashCommand {
   return {
     command: '/swarm-session',
@@ -234,7 +231,13 @@ export function createSwarmSessionCommand(
         return handleList(ctx, baseUrl, currentSessionId);
       }
       if (subcommand === 'import') {
-        return handleImport(ctx, baseUrl, currentSessionId, config);
+        return handleImport(
+          ctx,
+          baseUrl,
+          currentSessionId,
+          config,
+          getContextWindowTokens
+        );
       }
       ctx.logger.warn(
         'Unknown swarm-session command. Try: /swarm-session list, /swarm-session import <sessionId>'
