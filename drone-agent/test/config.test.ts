@@ -393,7 +393,7 @@ describe('loadAgentConfig', () => {
     ]);
     expect(resolved.config.ollama.model).toBe('project-model');
     expect(
-      resolved.warnings.some(warning =>
+      resolved.warnings?.some(warning =>
         warning.includes('same file as the user config')
       )
     ).toBe(false);
