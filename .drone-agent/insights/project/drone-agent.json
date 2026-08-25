@@ -290,5 +290,9 @@
   {
     "timestamp": "2026-08-25T18:42:59.808Z",
     "insight": "Error-surface conventions in drone-agent plugins are NOT uniform, and validation fixes must match local style per family: memory + subagent tools throw Error with friendly messages (executeToolSafely wraps into 'failed:' strings); swarm tools return JSON.stringify({success:false, error}) instead of throwing; notepad returns {success:false, error}. A cross-plugin validation sweep must enumerate the convention per touched file BEFORE writing steps — a uniform 'always throw' fix would break swarm tools' result-shape contract with calling LLMs."
+  },
+  {
+    "timestamp": "2026-08-25T19:16:13.990Z",
+    "insight": "When validating guard-style fixes, the stash-dance (git stash push -- <source files> -> run new tests -> git stash pop) cleanly proves criterion 'new cases fail pre-fix': it isolates ONLY source changes while keeping new test files in the tree, avoiding a full revert dance. Also: vitest's failure taxonomy matters — assertion failures show as failed tests, but syntax/transform errors in imported source show as FAILED SUITES with all individual tests passing; grep for 'Transform failed' / 'already been declared' when suites fail but tests pass."
   }
 ]

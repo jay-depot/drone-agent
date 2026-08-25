@@ -10,19 +10,19 @@ updated: 2026-08-25T18:54:21.579Z
 
 ## Summary
 
-The `self-improvement` plugin's tools blindly cast-and-trim LLM-supplied input fields (`(input.x as string).trim()`) BEFORE `validateTarget()` runs its friendly null-guard. Since `plugin-engine.ts` `executeTool()` dispatches straight to `tool.execute()` with NO JSON-schema validation layer, an omitted `targetId` (schema only requires `['action']`) crashes with `TypeError: Cannot read properties of undefined (reading 'trim')` instead of the intended `"targetId must be a non-empty string."` error. Existing tests missed this because they only tested `targetId: ''` (empty string survives `.trim()`) — never *omitted* `targetId`.
+The `self-improvement` plugin's tools blindly cast-and-trim LLM-supplied input fields (`(input.x as string).trim()`) BEFORE `validateTarget()` runs its friendly null-guard. Since `plugin-engine.ts` `executeTool()` dispatches straight to `tool.execute()` with NO JSON-schema validation layer, an omitted `targetId` (schema only requires `['action']`) crashes with `TypeError: Cannot read properties of undefined (reading 'trim')` instead of the intended `"targetId must be a non-empty string."` error. Existing tests missed this because they only tested `targetId: ''` (empty string survives `.trim()`) — never _omitted_ `targetId`.
 
 Scope confirmed with user: plugin-wide fix ONLY (`insight`, `principle`, `mark_examined` tools). Cross-plugin sweep (`memory/index.ts:166`, `bootstrap/index.ts:81` flagged by regex) is deferred to a follow-up plan.
 
 ## Failure sites
 
-| # | File | Line | Expression | Trigger |
-|---|------|------|-----------|---------|
-| 1 | src/plugins/self-improvement/tools/insight.ts | ~84 | `(input.targetId as string).trim().toLowerCase()` | record/recall without targetId (THE reported bug) |
-| 2 | src/plugins/self-improvement/tools/insight.ts | ~87 | `(input.insight as string).trim()` | record without insight |
-| 3 | src/plugins/self-improvement/tools/principle.ts | ~91 | `(input.targetId as string).trim().toLowerCase()` | store/recall/delete without targetId |
-| 4 | src/plugins/self-improvement/tools/principle.ts | ~94 | `(input.principle as string).trim()` | store without principle |
-| 5 | src/plugins/self-improvement/tools/mark-examined.ts | ~39 | `(input.targetId as string).trim().toLowerCase()` | defense-in-depth only (schema requires both fields, but nothing enforces that) |
+| #   | File                                                | Line | Expression                                        | Trigger                                                                        |
+| --- | --------------------------------------------------- | ---- | ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 1   | src/plugins/self-improvement/tools/insight.ts       | ~84  | `(input.targetId as string).trim().toLowerCase()` | record/recall without targetId (THE reported bug)                              |
+| 2   | src/plugins/self-improvement/tools/insight.ts       | ~87  | `(input.insight as string).trim()`                | record without insight                                                         |
+| 3   | src/plugins/self-improvement/tools/principle.ts     | ~91  | `(input.targetId as string).trim().toLowerCase()` | store/recall/delete without targetId                                           |
+| 4   | src/plugins/self-improvement/tools/principle.ts     | ~94  | `(input.principle as string).trim()`              | store without principle                                                        |
+| 5   | src/plugins/self-improvement/tools/mark-examined.ts | ~39  | `(input.targetId as string).trim().toLowerCase()` | defense-in-depth only (schema requires both fields, but nothing enforces that) |
 
 Do NOT touch `(input.source as string | undefined)?.trim() || undefined` in principle.ts (~line 96) — already null-safe via optional chaining.
 
@@ -36,6 +36,7 @@ Do NOT touch `(input.source as string | undefined)?.trim() || undefined` in prin
 ## Implementation steps
 
 ### Step 1 — coder: add normalization helpers to validation.ts
+
 In `drone-agent/src/plugins/self-improvement/validation.ts` add:
 
 ```ts
@@ -51,17 +52,22 @@ export function trimOrEmpty(value: unknown): string {
 (One helper covers both targetId and text fields; callers append `.toLowerCase()` themselves where the old code did.)
 
 ### Step 2 — coder: fix insight.ts
+
 - `const targetId = (input.targetId as string).trim().toLowerCase();` → `const targetId = trimOrEmpty(input.targetId).toLowerCase();` (add `trimOrEmpty` to the existing import from `'../validation.js'`)
 - Same for `const insight = trimOrEmpty(input.insight);`
 
 ### Step 3 — coder: fix principle.ts (depends on step 1)
+
 Same transformation at both sites (lines ~91, ~94).
 
 ### Step 4 — coder: fix mark-examined.ts (depends on step 1)
+
 Same transformation at line ~39.
 
 ### Step 5 — tester: regression tests, insight.test.ts
+
 In `drone-agent/test/self-improvement/insight.test.ts`, next to the existing "rejects empty targetId" / "rejects empty insight" cases (~line 288+), add three cases calling `engine.executeTool('self-improvement__insight', ...)` with the field OMITTED entirely:
+
 - `{ action: 'record', targetType: 'persona', insight: 'Some insight.' }` → `.rejects.toThrow(/targetId must be a non-empty string/)`
 - `{ action: 'recall', targetType: 'persona' }` → same assertion
 - `{ action: 'record', targetType: 'persona', targetId: 'foo' }` → `.rejects.toThrow(/insight must be a non-empty string/)`
@@ -69,13 +75,17 @@ In `drone-agent/test/self-improvement/insight.test.ts`, next to the existing "re
 These reproduce the exact reported crash pre-fix (executeTool has no schema enforcement, so the test hits the same unprotected path as production).
 
 ### Step 6 — tester: regression tests, principles.test.ts
+
 In `drone-agent/test/self-improvement/principles.test.ts` (836 lines), locate the existing rejects-cases via grep for `must be a non-empty string` and add omitted-field mirrors:
+
 - store without `targetId` → `/targetId must be a non-empty string/`
 - store without `principle` → `/principle must be a non-empty string/`
 - delete without `targetId` → `/targetId must be a non-empty string/`
 
 ### Step 7 — tester: regression test, mark-examined.test.ts
+
 In `drone-agent/test/self-improvement/mark-examined.test.ts` add:
+
 - `engine.executeTool('self-improvement__mark_examined', { targetType: 'persona' })` → `.rejects.toThrow(/target id must be a non-empty string/)` (regex tolerant to spacing)
 
 ### Step 8 — reviewer: check against validation criteria below

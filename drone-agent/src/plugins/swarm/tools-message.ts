@@ -59,6 +59,12 @@ export function createSwarmMessageTool(ctx: SwarmContext): DroneToolDefinition {
               error: 'Must specify toAgentId or toChannel',
             });
           }
+          if (typeof body !== 'string' || body.length === 0) {
+            return JSON.stringify({
+              success: false,
+              error: 'send requires a non-empty body.',
+            });
+          }
           sendMessage(ctx, toAgentId, toChannel, body);
           return JSON.stringify({ success: true, message: 'Message sent' });
         }

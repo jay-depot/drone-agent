@@ -214,6 +214,45 @@ describe('memoryPlugin', () => {
     expect(parsed.entry).toBeNull();
   });
 
+  it('manage tool rejects omitted key with friendly error', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const manageTool = captured.tools.find(t => t.name === 'manage')!;
+    await expect(manageTool.execute({ action: 'recall' })).rejects.toThrow(
+      /requires a non-empty key/
+    );
+  });
+
+  it('manage tool rejects mistyped key with friendly error', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const manageTool = captured.tools.find(t => t.name === 'manage')!;
+    await expect(
+      manageTool.execute({ action: 'recall', key: 42 })
+    ).rejects.toThrow(/requires a non-empty key/);
+  });
+
+  it('manage tool rejects unknown action', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const manageTool = captured.tools.find(t => t.name === 'manage')!;
+    await expect(
+      manageTool.execute({ action: 'bogus', key: 'k' })
+    ).rejects.toThrow(/action must be store, recall, or delete/);
+  });
+
+  it('browse tool rejects unknown action', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const browseTool = captured.tools.find(t => t.name === 'browse')!;
+    await expect(browseTool.execute({ action: 'bogus' })).rejects.toThrow(
+      /action must be list or search/
+    );
+  });
   it('browse tool with list action accepts optional prefix', async () => {
     const { registration, captured } = createMockRegistration();
     await memoryPlugin.register(registration);
