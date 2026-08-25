@@ -153,6 +153,14 @@ underlays are sanctioned distribution channels; entries merge by key with
 whole-entry replacement (a scope defining `providers.<id>` replaces that
 entire entry — no partial overrides across scopes).
 
+Project-scope discovery dedupes against the effective user config by file
+identity: launching from the home directory would otherwise rediscover
+`~/.drone-agent/config.json` and load it a second time as project scope,
+tripping the ban above. When the walked-to file _is_ the user config it is
+skipped, a one-time notice is logged at startup, and the session runs with
+no project layer. Project-scope writes (`config.set` with scope `project`)
+refuse in that situation — use user scope instead.
+
 See `docs/agents/swarm-plugin.md` for the swarm-underlay contract.
 
 ## Migration from legacy sections

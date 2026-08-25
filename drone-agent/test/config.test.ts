@@ -333,4 +333,121 @@ describe('loadAgentConfig', () => {
     );
     await expect(loadAgentConfig(projectDir)).rejects.toThrow();
   });
+
+  it('skips loading the user config again as project scope when launched from home', async () => {
+    const { homeDir } = await setupDirs();
+    await writeJson(path.join(testHomeDir, '.drone-agent/config.json'), {
+      providers: { anthropic: { protocol: 'anthropic', apiKey: '${K}' } },
+    });
+    process.env.K = 'test-key';
+
+    try {
+      const resolved = await loadAgentConfig(homeDir);
+      expect(resolved.layers.map(layer => layer.scope)).toEqual([
+        'default',
+        'user',
+      ]);
+      expect(resolved.config.providers).toMatchObject({
+        anthropic: { protocol: 'anthropic' },
+      });
+      expect(resolved.warnings).toContainEqual(
+        expect.stringContaining('skipping redundant project-scope load.')
+      );
+    } finally {
+      delete process.env.K;
+    }
+  });
+
+  it('behaves identically to a projectless launch when started from home', async () => {
+    const { homeDir, projectDir } = await setupDirs();
+    await writeJson(path.join(testHomeDir, '.drone-agent/config.json'), {
+      session: { contextWindowTokens: 65536 },
+    });
+
+    const fromHome = await loadAgentConfig(homeDir);
+    const fromProject = await loadAgentConfig(projectDir);
+
+    expect(fromHome.layers.map(layer => layer.scope)).toEqual([
+      'default',
+      'user',
+    ]);
+    expect(fromHome.config).toEqual(fromProject.config);
+  });
+
+  it('loads a distinct project config below home without a dedupe warning', async () => {
+    const { homeDir } = await setupDirs();
+    const nestedProject = path.join(homeDir, 'work', 'app');
+    await mkdir(nestedProject, { recursive: true });
+    await writeJson(path.join(testHomeDir, '.drone-agent/config.json'), {
+      ollama: { host: 'http://user-host:11434' },
+    });
+    await writeJson(path.join(nestedProject, '.drone-agent/config.json'), {
+      ollama: { model: 'project-model' },
+    });
+
+    const resolved = await loadAgentConfig(nestedProject);
+    expect(resolved.layers.map(layer => layer.scope)).toEqual([
+      'default',
+      'user',
+      'project',
+    ]);
+    expect(resolved.config.ollama.model).toBe('project-model');
+    expect(
+      resolved.warnings?.some(warning =>
+        warning.includes('same file as the user config')
+      )
+    ).toBe(false);
+  });
+
+  it('compares against the effective user config path when configDir overrides home', async () => {
+    const { homeDir } = await setupDirs();
+    const externalConfigDir = await mkdtemp(
+      path.join(os.tmpdir(), 'drone-agent-extcfg-')
+    );
+    try {
+      await writeJson(
+        path.join(externalConfigDir, '.drone-agent', 'config.json'),
+        {
+          ollama: { model: 'external-user-model' },
+        }
+      );
+      await writeJson(path.join(testHomeDir, '.drone-agent/config.json'), {
+        ollama: { host: 'http://home-file-host:11434' },
+      });
+
+      const resolved = await loadAgentConfig(homeDir, {
+        configDir: externalConfigDir,
+      });
+
+      expect(resolved.layers.map(layer => layer.scope)).toEqual([
+        'default',
+        'user',
+        'project',
+      ]);
+      expect(resolved.config.ollama.host).toBe('http://home-file-host:11434');
+      expect(resolved.config.ollama.model).toBe('external-user-model');
+    } finally {
+      await rm(externalConfigDir, { recursive: true, force: true });
+    }
+  });
+
+  it('prefers the nearest project config over the home-level file', async () => {
+    const { homeDir } = await setupDirs();
+    const nestedProject = path.join(homeDir, 'work', 'app');
+    await mkdir(nestedProject, { recursive: true });
+    await writeJson(path.join(testHomeDir, '.drone-agent/config.json'), {
+      session: { contextWindowTokens: 4096 },
+      ollama: { model: 'home-model' },
+    });
+    await writeJson(path.join(nestedProject, '.drone-agent/config.json'), {
+      ollama: { model: 'nearest-project-model' },
+    });
+
+    const resolved = await loadAgentConfig(nestedProject);
+    expect(
+      resolved.layers.filter(layer => layer.scope === 'project')
+    ).toHaveLength(1);
+    expect(resolved.config.ollama.model).toBe('nearest-project-model');
+    expect(resolved.config.session.contextWindowTokens).toBe(4096);
+  });
 });

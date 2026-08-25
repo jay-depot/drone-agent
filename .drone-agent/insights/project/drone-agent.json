@@ -284,6 +284,18 @@
     "insight": "vi.doMock('node:os') with a factory that spreads importOriginal only replaces NAMESPACE exports; modules using `import os from 'node:os'` (default import) keep the ORIGINAL default object including real homedir. The mock must also override `default`: `const mocked = {...actual, homedir: () => tmp}; return {...mocked, default: mocked}`. Symptom when missed: tests silently write to the REAL user home. Always verify no real-home pollution after homedir-mocked filesystem tests. Also: vi.spyOn cannot redefine ESM namespace exports ('Module namespace is not configurable') — use doMock factories, not spies, for ESM builtins. And vitest run must be invoked from the workspace root (config-rooted include patterns), not package subdirectories."
   },
   {
+    "timestamp": "2026-08-25T21:07:27.027Z",
+    "insight": "Config discovery pattern hazard (config.ts): findProjectConfigPath walks ancestor directories with no boundary while the user layer is pinned at ~/.drone-agent/config.json — so any launch from under $HOME rediscovers the user file as \"project\" scope and trips scope-policy fatals. Convention decided 2026-08-25: project-config discovery must dedupe by lexical path identity against the effective user config path (path.resolve equality; no home-boundary rule because network mounts/external media make \"home is never a project\" ambiguous). Project-scope writes that resolve to the shared file must refuse loudly rather than silently mutating user config (or worse, recreating it via the create-fresh fallback). First-class \"no-project mode\" remains future work — see memory key plan-home-dir-project-config-dedupe."
+  },
+  {
+    "timestamp": "2026-08-25T21:57:42.014Z",
+    "insight": "Root-level vitest.config.ts includes all workspace test globs, so `pnpm vitest run <path>` must be run from the repo ROOT with root-relative paths — running it from inside a package directory (cd drone-agent && pnpm vitest run test/...) fails with \"No test files found\" because the include globs are all root-relative."
+  },
+  {
+    "timestamp": "2026-08-25T22:16:56.927Z",
+    "insight": "When CI fails on jay-depot/drone-agent without admin rights: job logs download returns 403, but check-run ANNOTATIONS via GET /repos/{owner}/{repo}/check-runs/{id}/annotations are readable anonymously and usually contain the failure reason. Also, two consecutive failures on this repo (2026-08-25) were pure infra flake: (1) runner couldn't resolve internal-api.service.iad.github.net while fetching pnpm/action-setup, (2) a 5000ms timeout in lsp-installer.test.ts under runner load (passes locally in ~700ms). Empty-commit push (`git commit --allow-empty`) is the reliable way to retrigger workflows since `gh` CLI isn't installed on this host. Always compare against the same-code prior commit's check-runs before assuming a failure is real."
+  },
+  {
     "timestamp": "2026-08-25T18:10:19.841Z",
     "insight": "Recurring bug class found in drone-agent plugin tools: `(input.field as string).trim()` executed before validation guards, crashing with opaque TypeErrors when LLM callers omit fields — because executeTool() dispatches straight to tool.execute() with no JSON-schema enforcement, so `required` arrays are only hints to the LLM. Fixed in self-improvement tools via a shared trimOrEmpty(value: unknown): string helper funneling into existing non-empty guards (plan-self-improvement-trim-before-validate). KNOWN UNFIXED SITES for follow-up sweep: memory/index.ts:166 `(input.key as string).trim()` and bootstrap/index.ts:81-82 `(input.path as string).trim()` — audit these plus any new registerTool sites for the same pattern."
   },
