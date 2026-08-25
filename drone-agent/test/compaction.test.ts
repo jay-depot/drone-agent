@@ -458,17 +458,60 @@ describe('createCompactionPlugin', () => {
     // Four rounds compact all 8 non-summary turns into 4 small summaries,
     // which stay within the 50% summary budget.
     expect(summaries).toHaveLength(4);
-    // getSummaryTurns() is newest-first; the oldest summary is at the tail.
-    expect(summaries.at(-1)!.messages[0].content).toContain(
-      'A concise summary.'
-    );
-    expect(summaries.at(-1)!.messages[0].content).toMatch(
-      /^Conversation summary/
-    );
+    // getSummaryTurns() is oldest-first: summaries appear chronologically.
+    expect(summaries[0]!.messages[0].content).toContain('A concise summary.');
+    expect(summaries[0]!.messages[0].content).toMatch(/^Conversation summary/);
     // All non-summary turns were compacted away.
     expect(
       sessionManager.getTurns().filter(t => t.kind !== 'summary')
     ).toHaveLength(0);
+  });
+
+  it('keeps summaries in chronological order in the message stream', async () => {
+    // Regression test: summaries used to reach the LLM newest-first because
+    // prependSystemTurn unshifted each summary in front of the previous ones.
+    // getMessages() must present the summary block oldest-first.
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 4; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [
+        { message: 'Chrono first.' },
+        { message: 'Chrono second.' },
+        { message: 'Chrono third.' },
+        { message: 'Chrono fourth.' },
+      ],
+    });
+    const plugin = createCompactionPlugin({
+      sessionManager,
+      getModel: () => 'fake',
+      getProvider: () => provider,
+    });
+
+    const capture = await captureRegistration(plugin, config);
+    await runBeforePrompt(capture);
+
+    const summaryContents = sessionManager
+      .getMessages()
+      .map(m => m.content)
+      .filter(content => content.startsWith('Conversation summary'));
+    expect(summaryContents).toHaveLength(4);
+    expect(summaryContents[0]).toContain('Chrono first.');
+    expect(summaryContents[1]).toContain('Chrono second.');
+    expect(summaryContents[2]).toContain('Chrono third.');
+    expect(summaryContents[3]).toContain('Chrono fourth.');
   });
 
   it('converges to below the soft threshold in a single maybeCompact call', async () => {
@@ -798,7 +841,11 @@ describe('createCompactionPlugin', () => {
 
     const summaries = sessionManager.getSummaryTurns();
     expect(summaries).toHaveLength(5);
-    expect(summaries[0].messages[0].content).toContain('New summary chunk');
+    // Oldest-first: the seeded summary stays at index 0; new chunks append.
+    expect(summaries[0].messages[0].content).toContain('Existing summary.');
+    expect(summaries.at(-1)!.messages[0].content).toContain(
+      'New summary chunk'
+    );
 
     // All normal turns should have been compacted away.
     const nonSummaryTurns = sessionManager
@@ -1454,8 +1501,10 @@ describe('CompactionCapability extensions', () => {
     expect(status.turns.oldestNonSummaryIndex).toBe(2);
     expect(status.contextWindow.softThresholdPercent).toBe(50);
     expect(status.summaries).toHaveLength(2);
-    expect(status.summaries[0].preview).toContain('Summary two content');
+    // Oldest-first: the first-prepended summary is listed first.
+    expect(status.summaries[0].preview).toContain('Summary one content');
     expect(status.summaries[0].tokenCount).toBeGreaterThan(0);
+    expect(status.summaries.at(-1)!.preview).toContain('Summary two content');
   });
 
   it('dropSummary removes a specific summary turn by id', async () => {
@@ -1545,6 +1594,7 @@ describe('CompactionCapability extensions', () => {
     expect(dropped).toBe(2);
     const remaining = sessionManager.getSummaryTurns();
     expect(remaining).toHaveLength(1);
+    // Oldest-first: dropping the 2 oldest leaves the newest at index 0.
     expect(remaining[0].id).toBe(s3.id);
     expect(sessionManager.getTurns().some(t => t.id === s1.id)).toBe(false);
     expect(sessionManager.getTurns().some(t => t.id === s2.id)).toBe(false);

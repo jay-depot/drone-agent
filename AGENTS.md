@@ -286,11 +286,11 @@ When working on the project, proactively log insights using `self-improvement.in
 **Ensure the following standards are met before you consider a job "done"**
 
 - LSP must pass. No exceptions for tests, no exceptions for code you're not working on.
-- `pnpm -r run lint` and `pnpm -r run build` must pass with zero errors.
-- `pnpm -r run lint` will run prettier by default, whenever eslint succeeds. Keep two things in mind about this:
+- `pnpm lint` (root-level script) and `pnpm -r run build` must pass with zero errors.
+- `pnpm lint` will run prettier by default, whenever eslint succeeds. Keep two things in mind about this:
   1. **If you run the linter, you will need to re-read all files before attempting to modify them again**, because prettier will reformat them.
   2. You don't need to worry about matching the formatting rules of the project in your changes. Worry about making LSP, typecheck, eslint, and build pass, then prettier will handle the formatting for you.
-- The "fast" test suite (`pnpm -r run test`) must pass. Check the "slow" test suite at your discretion (immediately before opening a pull request is a good time to check it, for example), or when you are told to do so.
+- The "fast" test suite (`pnpm test`) must pass. Check the "slow" test suite at your discretion (immediately before opening a pull request is a good time to check it, for example), or when you are told to do so.
 - All new code must be covered by unit tests. If you are adding a new feature, you must add tests for it. If you are fixing a bug, you must add a test that reproduces the bug and then fixes it.
 - Dead code must be removed. Unused variables must be removed. "Fluff" comments must be removed.
 - If a comment isn't jsdoc, then it needs to be explaining a complex process or algorithm. If it is not explaining a complex process or algorithm either, then the only other kind of comment that is allowed is a TODO/FIXME comment. All other comments must be removed.

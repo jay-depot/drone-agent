@@ -307,9 +307,7 @@ async function maybeCompact(input: {
       if (summaryTurns.length === 0) {
         break;
       }
-      const dropped = sessionManager.dropSummaryTurnById(
-        summaryTurns.at(-1)!.id
-      );
+      const dropped = sessionManager.dropSummaryTurnById(summaryTurns[0]!.id);
       if (!dropped) {
         break;
       }
@@ -345,9 +343,9 @@ async function maybeCompact(input: {
       break;
     }
 
-    // Summaries are prepended at the head; normal turns are appended at the
-    // tail. getOldestNonSummaryTurns iterates forward, skipping summaries, to
-    // collect exactly these turns.
+    // Summaries form a chronological block at the head; normal turns are
+    // appended at the tail. getOldestNonSummaryTurns iterates forward,
+    // skipping summaries, to collect exactly these turns.
     const slice = getOldestNonSummaryTurns(turns, sliceSize);
     const transcript = formatTurnsForSummary(slice);
 
@@ -734,7 +732,7 @@ export function createCompactionPlugin(
           }
           const ids = sessionManager
             .getSummaryTurns()
-            .slice(-count)
+            .slice(0, count)
             .map(t => t.id);
           return ids.length > 0 ? sessionManager.dropTurnsByIds(ids).length : 0;
         },
