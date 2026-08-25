@@ -1,9 +1,9 @@
 ---
 key: plan-self-improvement-trim-before-validate
 tags:
-  []
+  - completed
 created: 2026-08-25T18:10:06.333Z
-updated: 2026-08-25T18:10:06.333Z
+updated: 2026-08-25T18:54:21.579Z
 ---
 
 # Plan: Fix opaque TypeError crashes in self-improvement tools (trim-before-validate)
@@ -76,7 +76,7 @@ In `drone-agent/test/self-improvement/principles.test.ts` (836 lines), locate th
 
 ### Step 7 — tester: regression test, mark-examined.test.ts
 In `drone-agent/test/self-improvement/mark-examined.test.ts` add:
-- `engine.executeTool('self-improvement__mark_examined', { targetType: 'persona' })` → `.rejects.toThrow(/targetId must be a non-empty string/)`
+- `engine.executeTool('self-improvement__mark_examined', { targetType: 'persona' })` → `.rejects.toThrow(/target id must be a non-empty string/)` (regex tolerant to spacing)
 
 ### Step 8 — reviewer: check against validation criteria below
 
@@ -91,3 +91,22 @@ Execution order: 1 → (2, 3, 4 in parallel or sequence) → (5, 6, 7 in paralle
 5. Full fast suite `pnpm test` passes.
 6. Grep confirms zero remaining `(input.<field> as string).trim(` occurrences under `src/plugins/self-improvement/`.
 7. Error messages unchanged: existing tests asserting exact messages still pass untouched.
+
+---
+
+# COMPLETION SUMMARY (executed 2026-08-25)
+
+All steps executed and ALL validation criteria met:
+
+- Steps 1–4: `trimOrEmpty(value: unknown): string` added to validation.ts; all five sites converted (`insight.ts:85,88`, `principle.ts:92,95`, `mark-examined.ts:39`). Null-safe `input.source` line left untouched per plan.
+- Steps 5–7: 7 regression tests added (3 in insight.test.ts, 3 in principles.test.ts incl. the delete-action case requiring valid `index` so control reaches the targetId guard before the index check, 1 in mark-examined.test.ts). Test diff = 81 insertions, 0 deletions — every existing exact-message assertion byte-intact and passing.
+- Validation results:
+  1. Targeted suite: 73/73 green across 8 self-improvement test files. NOTE: vitest must run from workspace ROOT (`pnpm vitest run drone-agent/test/self-improvement`) — the config lives there; from inside drone-agent/ it finds no test files.
+  2. LSP: zero errors/warnings in touched files AND workspace. Three PRE-EXISTING errors (context-budget-service.test.ts / log-plugin.test.ts / prompt-file.test.ts, missing-'retry'-property) were PHANTOMS from a stale drone-core dist/ built AHEAD of source — dist contained a since-reverted `retry: DroneSessionRetryConfig` that src never defined. Running `pnpm -r run build` regenerated dist from real source and the errors vanished WITHOUT editing any mock. Diagnosis-first avoided a drive-by "fix" that would have introduced excess-property errors post-rebuild.
+  3. `pnpm -r run build`: exit 0, all packages.
+  4. `pnpm lint`: exit 0; prettier reported every file unchanged (no reformat needed).
+  5. Full fast suite: 2199 passed / 9 skipped (env-gated smoke suite), 152 test files passed + 1 skipped.
+  6. Grep: zero remaining cast-trim sites under src/plugins/self-improvement/.
+  7. Existing exact-message tests untouched and passing.
+
+Committed on branch fix/insight-logging-hints together with .drone-agent memory/insight artifacts per repo convention. Follow-up work remains planned in memory: plan-input-validation-sweep-fixes (memory manage CRASH site + swarm/notepad/subagent latents; bootstrap elicitation hardening explicitly deferred by user decision).

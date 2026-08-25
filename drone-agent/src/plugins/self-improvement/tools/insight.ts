@@ -8,6 +8,7 @@ import type {
 import {
   VALID_TARGET_TYPES,
   isValidTargetType,
+  trimOrEmpty,
   validateTarget,
   type TargetType,
 } from '../validation.js';
@@ -81,10 +82,10 @@ export function createInsightTool(
       }
 
       const targetType = input.targetType as string;
-      const targetId = (input.targetId as string).trim().toLowerCase();
+      const targetId = trimOrEmpty(input.targetId).toLowerCase();
 
       if (action === 'record') {
-        const insight = (input.insight as string).trim();
+        const insight = trimOrEmpty(input.insight);
 
         if (!insight) {
           throw new Error('insight must be a non-empty string.');

@@ -133,6 +133,30 @@ describe('self-improvement__principle (store action)', () => {
     ).rejects.toThrow(/principle must be a non-empty string/);
   });
 
+  it('rejects omitted targetId on store', async () => {
+    const engine = await createEngine();
+
+    await expect(
+      engine.executeTool('self-improvement__principle', {
+        action: 'store',
+        targetType: 'project',
+        principle: 'A principle.',
+      })
+    ).rejects.toThrow(/targetId must be a non-empty string/);
+  });
+
+  it('rejects omitted principle on store', async () => {
+    const engine = await createEngine();
+
+    await expect(
+      engine.executeTool('self-improvement__principle', {
+        action: 'store',
+        targetType: 'project',
+        targetId: 'test',
+      })
+    ).rejects.toThrow(/principle must be a non-empty string/);
+  });
+
   it('rejects invalid targetType', async () => {
     const engine = await createEngine();
 
@@ -391,6 +415,18 @@ describe('self-improvement__principle (delete action)', () => {
         index: -1,
       })
     ).rejects.toThrow(/index must be a non-negative integer/);
+  });
+
+  it('rejects omitted targetId on delete', async () => {
+    const engine = await createEngine();
+
+    await expect(
+      engine.executeTool('self-improvement__principle', {
+        action: 'delete',
+        targetType: 'project',
+        index: 0,
+      })
+    ).rejects.toThrow(/targetId must be a non-empty string/);
   });
 
   it('removes the file when last principle is deleted', async () => {
