@@ -286,5 +286,9 @@
   {
     "timestamp": "2026-08-25T21:07:27.027Z",
     "insight": "Config discovery pattern hazard (config.ts): findProjectConfigPath walks ancestor directories with no boundary while the user layer is pinned at ~/.drone-agent/config.json — so any launch from under $HOME rediscovers the user file as \"project\" scope and trips scope-policy fatals. Convention decided 2026-08-25: project-config discovery must dedupe by lexical path identity against the effective user config path (path.resolve equality; no home-boundary rule because network mounts/external media make \"home is never a project\" ambiguous). Project-scope writes that resolve to the shared file must refuse loudly rather than silently mutating user config (or worse, recreating it via the create-fresh fallback). First-class \"no-project mode\" remains future work — see memory key plan-home-dir-project-config-dedupe."
+  },
+  {
+    "timestamp": "2026-08-25T21:57:42.014Z",
+    "insight": "Root-level vitest.config.ts includes all workspace test globs, so `pnpm vitest run <path>` must be run from the repo ROOT with root-relative paths — running it from inside a package directory (cd drone-agent && pnpm vitest run test/...) fails with \"No test files found\" because the include globs are all root-relative."
   }
 ]
