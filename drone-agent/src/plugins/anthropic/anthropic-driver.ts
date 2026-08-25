@@ -1,9 +1,16 @@
-import type { DiscoveredModel } from 'drone-core';
-import type { DroneLlmProvider } from 'drone-core';
+import {
+  DroneLlmError,
+  type DiscoveredModel,
+  type DroneLlmProvider,
+} from 'drone-core';
 import {
   fromAnthropicResponse,
   toAnthropicRequestParts,
 } from './anthropic-adapter.js';
+import {
+  isTransientStatus,
+  parseRetryAfterMs,
+} from '../../runtime/llm-retry.js';
 
 /** Driver default when a provider/model declares no maxOutputTokens. */
 export const ANTHROPIC_DEFAULT_MAX_OUTPUT_TOKENS = 8192;
@@ -66,7 +73,7 @@ export function createAnthropicProvider(
       hasVision,
     }) => {
       if (!config.apiKey) {
-        throw new Error(
+        throw new DroneLlmError(
           'Anthropic API key is not configured. Set providers.<id>.apiKey in your config or use a ${VAR} environment reference.'
         );
       }
@@ -106,11 +113,9 @@ export function createAnthropicProvider(
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(
+        throw new DroneLlmError(
           `Anthropic request failed for model ${model}: ${message}`,
-          {
-            cause: error,
-          }
+          { retryable: false }
         );
       }
 
@@ -127,8 +132,17 @@ export function createAnthropicProvider(
           );
           console.error(`[llm:response] ${errorBody}`);
         }
-        throw new Error(
-          `Anthropic API error (${response.status}): ${errorBody}`
+        const retryAfterMs = parseRetryAfterMs(
+          response.headers.get('retry-after') ?? undefined
+        );
+        throw new DroneLlmError(
+          `Anthropic API error (${response.status}): ${errorBody}`,
+          {
+            status: response.status,
+            retryAfterMs,
+            retryable: isTransientStatus(response.status),
+            body: errorBody,
+          }
         );
       }
 
@@ -144,7 +158,9 @@ export function createAnthropicProvider(
         data = JSON.parse(responseText);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`Anthropic returned invalid JSON: ${message}`);
+        throw new DroneLlmError(`Anthropic returned invalid JSON: ${message}`, {
+          retryable: false,
+        });
       }
 
       return fromAnthropicResponse(data);

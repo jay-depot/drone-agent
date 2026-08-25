@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-08-25T16:57:38.468Z",
+    "insight": "When planning the unified LLM retry policy, I found that the plain readline interactive loop (interactive.ts runInteractiveLoop, ~line 427) has NO try/catch around conversation.sendUserMessage — an unhandled LLM error would crash plain-output mode outright, whereas the TUI (app.tsx) and --once/NDJSON paths catch it. The unified retry/classification work (plan-llm-provider-unified-retry) will make structured errors retryable/promptable, but the plain interactive loop's missing error guard is a latent crash surface worth hardening independently of that feature (a bare provider error today dumps the process in plain mode)."
+  }
+]

@@ -58,6 +58,7 @@ export type {
   DroneOpenRouterModelConfig,
   DroneOpenRouterConfig,
   DroneSessionConfig,
+  DroneSessionRetryConfig,
   DroneGuardrailThresholdConfig,
   DroneGuardrailConfig,
   DroneCompactionStrategy,
@@ -175,6 +176,7 @@ export type {
   DroneChatRequest,
   DroneLlmProviderRegistration,
 } from './provider-types.js';
+export { DroneLlmError } from './provider-types.js';
 
 // ── Provider/protocol/model config types ─────────────────────────────
 

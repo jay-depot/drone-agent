@@ -6,7 +6,7 @@ import type {
   DroneSlashCommandContext,
   LlmProtocolDriver,
 } from 'drone-core';
-import { createDefaultAgentConfig } from 'drone-core';
+import { createDefaultAgentConfig, DroneLlmError } from 'drone-core';
 import { llmPlugin } from '../src/plugins/llm/index.js';
 import { silentLogger } from './helpers.js';
 
@@ -297,5 +297,46 @@ describe('llm plugin provider switching', () => {
     expect(handled).toBe(true);
     expect(capability.getModel()).toBe('llama3.1');
     expect(ctx.logger.warn).toHaveBeenCalled();
+  });
+
+  it('broker tags providerId on DroneLlmError from chat()', async () => {
+    const { capability, runLoadedHooks } = await captureLlmPlugin(
+      {
+        ollama: { protocol: 'ollama', models: ['llama3.1'] },
+      },
+      'ollama/llama3.1'
+    );
+
+    const throwingDriver: LlmProtocolDriver = {
+      protocolId: 'ollama',
+      createProvider: () => ({
+        chat: async () => {
+          throw new DroneLlmError('boom', {
+            status: 500,
+            retryable: true,
+          });
+        },
+        getContextWindowInfo: async () => null,
+      }),
+      parameterSchema: { parameters: {} },
+    };
+    capability.registerDriver(throwingDriver);
+    await runLoadedHooks();
+
+    const provider = capability.getActiveProvider();
+    const err = await provider
+      .chat({
+        model: 'llama3.1',
+        messages: [{ role: 'user', content: 'hi' }],
+      })
+      .then(
+        () => null,
+        e => e
+      );
+
+    expect(err).toBeInstanceOf(DroneLlmError);
+    expect(err.providerId).toBe('ollama');
+    expect(err.status).toBe(500);
+    expect(err.retryable).toBe(true);
   });
 });

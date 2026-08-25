@@ -1,10 +1,13 @@
 import {
+  DroneLlmError,
   createDebugFlagRegistry,
   estimateTextTokens,
   parseModelSelection,
   type DroneGuardrailConfig,
   type DroneGuardrailThresholdConfig,
   type DebugFlagRegistry,
+  type DroneChatRequest,
+  type DroneChatResponse,
   type DroneReasoningLevel,
 } from 'drone-core';
 import type {
@@ -13,12 +16,20 @@ import type {
   DroneConversationEvent,
   DroneImageContent,
   DroneLlmCapability,
+  DroneLlmProvider,
   DroneLogger,
   DroneSessionSafetyTrimPayload,
   DroneToolCall,
   DroneToolDescriptor,
   DroneToolExecutionContext,
 } from 'drone-core';
+import {
+  computeBackoffDelay,
+  DEFAULT_RETRY_CONFIG,
+  isContextWindowExceeded,
+  isTransientStatus,
+  type RetryPolicyConfig,
+} from './llm-retry.js';
 import { isRecord } from '../shared/type-guards.js';
 import type { DronePluginEngine } from './plugin-engine.js';
 import type { DroneSessionManager } from './session-manager.js';
@@ -124,6 +135,15 @@ type CreateConversationServiceOptions = {
     args: Record<string, unknown>,
     count: number
   ) => Promise<boolean>;
+  /**
+   * Optional callback invoked when an LLM chat() failure warrants prompting
+   * the user to retry (Tier 2: non-transient HTTP statuses, or Tier 1
+   * auto-retries exhausted). The host should present a terse yes/no question
+   * (default no). Return `true` to retry, `false` to rethrow the underlying
+   * error. When omitted, the conversation service fails fast (rethrows)
+   * instead of prompting — this is the non-interactive behavior.
+   */
+  onRetryPrompt?: (error: DroneLlmError, attempt: number) => Promise<boolean>;
 };
 
 export function createConversationService({
@@ -139,12 +159,27 @@ export function createConversationService({
   onStuckErrorThresholdReached,
   onBrokenResponseLimitReached,
   onIdenticalToolCallLimitReached,
+  onRetryPrompt,
 }: CreateConversationServiceOptions): ConversationService {
   let hasWarnedAboutSafetyTrim = false;
   let reasoningLevel: DroneReasoningLevel | undefined;
 
   // ── Guardrail config ───────────────────────────────────────────────────
   const guardrail: DroneGuardrailConfig = config.session.guardrail;
+
+  // ── Retry policy ──────────────────────────────────────────────────────
+  const retryConfig: RetryPolicyConfig = {
+    maxRetries:
+      config.session.retry?.maxRetries ?? DEFAULT_RETRY_CONFIG.maxRetries,
+    maxWaitMs:
+      config.session.retry?.maxWaitMs ?? DEFAULT_RETRY_CONFIG.maxWaitMs,
+    promptOnError:
+      config.session.retry?.promptOnError ?? DEFAULT_RETRY_CONFIG.promptOnError,
+    backoffBaseMs:
+      config.session.retry?.backoffBaseMs ?? DEFAULT_RETRY_CONFIG.backoffBaseMs,
+    backoffFactor:
+      config.session.retry?.backoffFactor ?? DEFAULT_RETRY_CONFIG.backoffFactor,
+  };
 
   /** Fully-resolved threshold with no optional fields. */
   type ResolvedGuardrailThreshold = {
@@ -444,6 +479,81 @@ export function createConversationService({
         });
       };
 
+      /**
+       * Run a chat() call with the unified error/retry classification:
+       *   T1  bounded silent auto-retry on transient statuses (429/5xx),
+       *       honoring Retry-After / exponential backoff, capped at
+       *       `retryConfig.maxRetries` attempts.
+       *   T2  prompt the user to retry (via onRetryPrompt) on other HTTP
+       *       statuses or after T1 is exhausted — unless promptOnError is
+       *       false or no callback is wired (non-interactive → fail fast).
+       *   T3  fail fast on transport errors and context-window overflow.
+       */
+      async function runWithRetry(
+        provider: DroneLlmProvider,
+        request: DroneChatRequest
+      ): Promise<DroneChatResponse> {
+        let failureCount = 0;
+        while (true) {
+          try {
+            return await provider.chat(request);
+          } catch (error) {
+            if (!(error instanceof DroneLlmError)) {
+              // T3: transport/network/bad-shape — not classifiable, throw.
+              throw error;
+            }
+            const llmErr = error;
+
+            // Context-window overflow → fail fast with guidance. This happens
+            // when compaction failed AND the token estimate undercounts the
+            // window; retrying would never succeed.
+            if (isContextWindowExceeded(llmErr.status, llmErr.message)) {
+              emit({
+                kind: 'error',
+                message: `LLM context window exceeded: ${llmErr.message}`,
+              });
+              throw new Error(
+                'The LLM context window was exceeded, but compaction did not reclaim enough space (or the token estimate undercounts it). Enable compaction and run /compact to reset the session.'
+              );
+            }
+
+            const transient =
+              llmErr.retryable ||
+              (llmErr.status !== undefined && isTransientStatus(llmErr.status));
+
+            // T1: bounded silent auto-retry.
+            if (transient && failureCount < retryConfig.maxRetries) {
+              failureCount += 1;
+              const delay = computeBackoffDelay(
+                failureCount,
+                retryConfig,
+                llmErr.retryAfterMs
+              );
+              emit({
+                kind: 'notice',
+                content: `LLM API error (${llmErr.status ?? '?'}), retrying in ${Math.round(delay / 1000)}s (${failureCount}/${retryConfig.maxRetries})`,
+              });
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+
+            // T2: prompt the user to retry, or fail fast.
+            emit({
+              kind: 'error',
+              message: `LLM request failed: ${llmErr.message}`,
+            });
+            if (retryConfig.promptOnError && onRetryPrompt) {
+              const shouldRetry = await onRetryPrompt(llmErr, failureCount + 1);
+              if (shouldRetry) {
+                failureCount += 1;
+                continue;
+              }
+            }
+            throw llmErr;
+          }
+        }
+      }
+
       // Shared tool-execution pipeline used by both the primary tool-call path
       // and the Feature-1 hint-recovery path: execute all tool calls in
       // parallel, truncate results, buffer them, emit batch/error events,
@@ -664,7 +774,7 @@ export function createConversationService({
           config.llm.reasoningLevel ??
           undefined;
 
-        const response = await provider.chat({
+        const chatRequest: DroneChatRequest = {
           model: currentModel,
           messages: (() => {
             const base: DroneChatMessage[] = [
@@ -693,7 +803,15 @@ export function createConversationService({
           tools,
           reasoningLevel: effectiveReasoningLevel,
           debug: debugFlags.isEnabled('llm'),
-        });
+        };
+
+        // ── Unified error/retry classification ─────────────────────────
+        // T1  bounded silent auto-retry on transient statuses (429/5xx),
+        //     honoring Retry-After / exponential backoff.
+        // T2  prompt the user to retry on other HTTP statuses (auth too)
+        //     after T1 is exhausted.
+        // T3  fail fast on transport errors and context-window overflow.
+        const response = await runWithRetry(provider, chatRequest);
 
         const toolCalls = response.toolCalls ?? [];
         const assistantText = response.message ?? '';
