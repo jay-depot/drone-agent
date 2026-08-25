@@ -282,5 +282,9 @@
   {
     "timestamp": "2026-08-23T21:45:01.311Z",
     "insight": "vi.doMock('node:os') with a factory that spreads importOriginal only replaces NAMESPACE exports; modules using `import os from 'node:os'` (default import) keep the ORIGINAL default object including real homedir. The mock must also override `default`: `const mocked = {...actual, homedir: () => tmp}; return {...mocked, default: mocked}`. Symptom when missed: tests silently write to the REAL user home. Always verify no real-home pollution after homedir-mocked filesystem tests. Also: vi.spyOn cannot redefine ESM namespace exports ('Module namespace is not configurable') — use doMock factories, not spies, for ESM builtins. And vitest run must be invoked from the workspace root (config-rooted include patterns), not package subdirectories."
+  },
+  {
+    "timestamp": "2026-08-25T21:07:27.027Z",
+    "insight": "Config discovery pattern hazard (config.ts): findProjectConfigPath walks ancestor directories with no boundary while the user layer is pinned at ~/.drone-agent/config.json — so any launch from under $HOME rediscovers the user file as \"project\" scope and trips scope-policy fatals. Convention decided 2026-08-25: project-config discovery must dedupe by lexical path identity against the effective user config path (path.resolve equality; no home-boundary rule because network mounts/external media make \"home is never a project\" ambiguous). Project-scope writes that resolve to the shared file must refuse loudly rather than silently mutating user config (or worse, recreating it via the create-fresh fallback). First-class \"no-project mode\" remains future work — see memory key plan-home-dir-project-config-dedupe."
   }
 ]
