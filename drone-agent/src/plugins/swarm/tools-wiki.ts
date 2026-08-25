@@ -7,6 +7,7 @@
 
 import type { DroneToolDefinition } from 'drone-core';
 import type { SwarmContext } from './context.js';
+import { firstMissingString } from './string-params.js';
 
 function createWikiReadTool(ctx: SwarmContext): DroneToolDefinition {
   return {
@@ -28,6 +29,13 @@ function createWikiReadTool(ctx: SwarmContext): DroneToolDefinition {
       required: ['pageId'],
     },
     execute: async params => {
+      const missing = firstMissingString(params, ['pageId']);
+      if (missing) {
+        return JSON.stringify({
+          success: false,
+          error: `wiki_read requires a non-empty ${missing}.`,
+        });
+      }
       const pageId = params.pageId as string;
       const scope = params.scope as string | undefined;
       let url = `${ctx.baseUrl}/wiki/${encodeURIComponent(pageId)}`;
@@ -89,6 +97,17 @@ function createWikiWriteTool(ctx: SwarmContext): DroneToolDefinition {
       required: ['pageId', 'title', 'content'],
     },
     execute: async params => {
+      const missing = firstMissingString(params, [
+        'pageId',
+        'title',
+        'content',
+      ]);
+      if (missing) {
+        return JSON.stringify({
+          success: false,
+          error: `wiki_write requires a non-empty ${missing}.`,
+        });
+      }
       const { pageId, title, content, scope, tags, sources } = params;
       try {
         const res = await fetch(
@@ -138,6 +157,13 @@ function createWikiSearchTool(ctx: SwarmContext): DroneToolDefinition {
       required: ['query'],
     },
     execute: async params => {
+      const missing = firstMissingString(params, ['query']);
+      if (missing) {
+        return JSON.stringify({
+          success: false,
+          error: `wiki_search requires a non-empty ${missing}.`,
+        });
+      }
       const query = params.query as string;
       try {
         const res = await fetch(
@@ -205,6 +231,13 @@ function createWikiDeleteTool(ctx: SwarmContext): DroneToolDefinition {
       required: ['pageId'],
     },
     execute: async params => {
+      const missing = firstMissingString(params, ['pageId']);
+      if (missing) {
+        return JSON.stringify({
+          success: false,
+          error: `wiki_delete requires a non-empty ${missing}.`,
+        });
+      }
       const pageId = params.pageId as string;
       const scope = params.scope as string | undefined;
       let url = `${ctx.baseUrl}/wiki/${encodeURIComponent(pageId)}`;

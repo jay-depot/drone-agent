@@ -282,5 +282,17 @@
   {
     "timestamp": "2026-08-23T21:45:01.311Z",
     "insight": "vi.doMock('node:os') with a factory that spreads importOriginal only replaces NAMESPACE exports; modules using `import os from 'node:os'` (default import) keep the ORIGINAL default object including real homedir. The mock must also override `default`: `const mocked = {...actual, homedir: () => tmp}; return {...mocked, default: mocked}`. Symptom when missed: tests silently write to the REAL user home. Always verify no real-home pollution after homedir-mocked filesystem tests. Also: vi.spyOn cannot redefine ESM namespace exports ('Module namespace is not configurable') — use doMock factories, not spies, for ESM builtins. And vitest run must be invoked from the workspace root (config-rooted include patterns), not package subdirectories."
+  },
+  {
+    "timestamp": "2026-08-25T18:10:19.841Z",
+    "insight": "Recurring bug class found in drone-agent plugin tools: `(input.field as string).trim()` executed before validation guards, crashing with opaque TypeErrors when LLM callers omit fields — because executeTool() dispatches straight to tool.execute() with no JSON-schema enforcement, so `required` arrays are only hints to the LLM. Fixed in self-improvement tools via a shared trimOrEmpty(value: unknown): string helper funneling into existing non-empty guards (plan-self-improvement-trim-before-validate). KNOWN UNFIXED SITES for follow-up sweep: memory/index.ts:166 `(input.key as string).trim()` and bootstrap/index.ts:81-82 `(input.path as string).trim()` — audit these plus any new registerTool sites for the same pattern."
+  },
+  {
+    "timestamp": "2026-08-25T18:42:59.808Z",
+    "insight": "Error-surface conventions in drone-agent plugins are NOT uniform, and validation fixes must match local style per family: memory + subagent tools throw Error with friendly messages (executeToolSafely wraps into 'failed:' strings); swarm tools return JSON.stringify({success:false, error}) instead of throwing; notepad returns {success:false, error}. A cross-plugin validation sweep must enumerate the convention per touched file BEFORE writing steps — a uniform 'always throw' fix would break swarm tools' result-shape contract with calling LLMs."
+  },
+  {
+    "timestamp": "2026-08-25T19:16:13.990Z",
+    "insight": "When validating guard-style fixes, the stash-dance (git stash push -- <source files> -> run new tests -> git stash pop) cleanly proves criterion 'new cases fail pre-fix': it isolates ONLY source changes while keeping new test files in the tree, avoiding a full revert dance. Also: vitest's failure taxonomy matters — assertion failures show as failed tests, but syntax/transform errors in imported source show as FAILED SUITES with all individual tests passing; grep for 'Transform failed' / 'already been declared' when suites fail but tests pass."
   }
 ]

@@ -109,7 +109,38 @@ describe('subagentPlugin', () => {
     expect(parsed.returned).toBe(true);
     expect(parsed.result).toBe('test-result');
   });
+  it('return tool rejects omitted result with friendly error', async () => {
+    const { registration, tools } = createMockRegistration({
+      isSubagent: true,
+      subagentId: 'subagent-test-123',
+    });
 
+    await subagentPlugin.register(registration);
+    const returnTool = tools.find(t => t.name === 'return');
+
+    const stopLoop = vi.fn();
+    await expect(
+      returnTool!.execute({}, undefined, { stopLoop })
+    ).rejects.toThrow(/non-empty result/);
+    expect(stopLoop).not.toHaveBeenCalled();
+  });
+
+  it('return tool rejects mistyped or blank result', async () => {
+    const { registration, tools } = createMockRegistration({
+      isSubagent: true,
+      subagentId: 'subagent-test-123',
+    });
+
+    await subagentPlugin.register(registration);
+    const returnTool = tools.find(t => t.name === 'return');
+
+    await expect(
+      returnTool!.execute({ result: 42 }, undefined, undefined)
+    ).rejects.toThrow(/non-empty result/);
+    await expect(
+      returnTool!.execute({ result: '   ' }, undefined, undefined)
+    ).rejects.toThrow(/non-empty result/);
+  });
   it('registers the dispatch tool in main-agent mode (no return tool)', async () => {
     const { registration, tools } = createMockRegistration({
       isSubagent: false,

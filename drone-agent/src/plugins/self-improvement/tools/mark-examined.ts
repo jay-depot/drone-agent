@@ -4,7 +4,7 @@ import type {
   DroneSkillsCapability,
   DroneToolDefinition,
 } from 'drone-core';
-import { validateTarget } from '../validation.js';
+import { trimOrEmpty, validateTarget } from '../validation.js';
 import { resolveInsightEngine } from '../capability.js';
 
 export function createMarkExaminedTool(
@@ -36,7 +36,7 @@ export function createMarkExaminedTool(
     },
     execute: async input => {
       const targetType = input.targetType as string;
-      const targetId = (input.targetId as string).trim().toLowerCase();
+      const targetId = trimOrEmpty(input.targetId).toLowerCase();
 
       validateTarget(targetType, targetId, personaCap(), skillsCap());
 
