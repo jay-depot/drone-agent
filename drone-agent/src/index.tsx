@@ -183,6 +183,22 @@ async function main(): Promise<void> {
     resetStuckDetectors: () => resetStuckDetectorsRef?.(),
   });
   engineRef.current = engine;
+
+  // Apply CLI retry overrides onto the resolved config (long-running headless
+  // agents may want more silent retries than the interactive default).
+  if (invocation.options.retryMaxRetries !== undefined) {
+    resolvedConfig.config.session.retry = {
+      ...resolvedConfig.config.session.retry,
+      maxRetries: invocation.options.retryMaxRetries,
+    };
+  }
+  if (invocation.options.retryMaxWaitMs !== undefined) {
+    resolvedConfig.config.session.retry = {
+      ...resolvedConfig.config.session.retry,
+      maxWaitMs: invocation.options.retryMaxWaitMs,
+    };
+  }
+
   const conversation = createConversationService({
     engine,
     config: resolvedConfig.config,
@@ -231,6 +247,27 @@ async function main(): Promise<void> {
         },
       ]);
       return answers.continue === 'yes';
+    },
+    // When an LLM chat() failure warrants a retry decision (Tier 2:
+    // non-transient HTTP statuses, or transient retries exhausted), ask
+    // the user whether to retry. Non-interactive → fail fast (false).
+    onRetryPrompt: async (error, attempt) => {
+      const elicit = engine.getElicitation();
+      if (!elicit) return false;
+      const statusSuffix = error.status ? ` (HTTP ${error.status})` : '';
+      const providerPrefix = error.providerId ? `[${error.providerId}] ` : '';
+      const answers = await elicit.ask([
+        {
+          id: 'retry',
+          prompt: `${providerPrefix}LLM request failed${statusSuffix} (attempt ${attempt}). Retry?`,
+          choices: [
+            { value: 'yes', label: 'Yes, retry' },
+            { value: 'no', label: 'No, stop' },
+          ],
+          defaultValue: 'no',
+        },
+      ]);
+      return answers.retry === 'yes';
     },
     // When degenerate responses (empty or reasoning-only) exceed the
     // retry limit, ask the user whether to continue or stop.

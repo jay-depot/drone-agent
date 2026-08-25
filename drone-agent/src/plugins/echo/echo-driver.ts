@@ -1,4 +1,8 @@
-import type { DroneChatResponse } from 'drone-core';
+import { DroneLlmError, type DroneChatResponse } from 'drone-core';
+import {
+  isTransientStatus,
+  parseRetryAfterMs,
+} from '../../runtime/llm-retry.js';
 
 export type EchoDriverConfig = {
   baseUrl?: string;
@@ -45,18 +49,36 @@ export function createEchoProvider(config: EchoDriverConfig) {
           : {}),
       };
 
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new DroneLlmError(
+          `Echo request failed for model ${request.model}: ${message}`,
+          { retryable: false }
+        );
+      }
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(
-          `Echo provider API error (${response.status}): ${errorBody}`
+        const retryAfterMs = parseRetryAfterMs(
+          response.headers.get('retry-after') ?? undefined
+        );
+        throw new DroneLlmError(
+          `Echo provider API error (${response.status}): ${errorBody}`,
+          {
+            status: response.status,
+            retryAfterMs,
+            retryable: isTransientStatus(response.status),
+            body: errorBody,
+          }
         );
       }
 
@@ -65,7 +87,9 @@ export function createEchoProvider(config: EchoDriverConfig) {
       };
       const choice = data.choices[0];
       if (!choice) {
-        throw new Error('Echo provider returned no choices');
+        throw new DroneLlmError('Echo provider returned no choices', {
+          retryable: false,
+        });
       }
 
       return {

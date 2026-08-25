@@ -83,6 +83,39 @@ describe('providers config schema', () => {
       temperature: 'hot',
     });
   });
+
+  it('accepts session.retry overrides', () => {
+    const parsed = parseConfigWithSchema(
+      {
+        session: {
+          retry: {
+            maxRetries: 5,
+            maxWaitMs: 60000,
+            promptOnError: false,
+            backoffBaseMs: 500,
+            backoffFactor: 3,
+          },
+        },
+      },
+      'test'
+    );
+    expect(parsed.session?.retry).toEqual({
+      maxRetries: 5,
+      maxWaitMs: 60000,
+      promptOnError: false,
+      backoffBaseMs: 500,
+      backoffFactor: 3,
+    });
+  });
+
+  it('rejects non-numeric session.retry.maxRetries', () => {
+    expect(() =>
+      parseConfigWithSchema(
+        { session: { retry: { maxRetries: 'lots' } } },
+        'test'
+      )
+    ).toThrow();
+  });
 });
 
 describe('validateProviders semantic rules', () => {

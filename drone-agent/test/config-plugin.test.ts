@@ -266,6 +266,27 @@ describe('config plugin', () => {
       ).rejects.toThrow(/Unknown config key/);
     });
 
+    it('accepts session.retry.* keys', async () => {
+      const { projectDir } = await setupDirs();
+      process.chdir(projectDir);
+
+      const engine = createDronePluginEngine({
+        plugins: [configPlugin],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+
+      await engine.initialize();
+
+      const result = await engine.executeTool('config__set', {
+        key: 'session.retry.maxRetries',
+        value: 5,
+      });
+      const parsed = JSON.parse(result);
+      expect(parsed.ok).toBe(true);
+      expect(parsed.key).toBe('session.retry.maxRetries');
+    });
+
     it('rejects invalid scope values', async () => {
       const { projectDir } = await setupDirs();
       process.chdir(projectDir);

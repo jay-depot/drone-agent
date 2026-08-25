@@ -36,6 +36,14 @@ const GuardrailSchema = Type.Object({
   identicalToolCalls: Type.Optional(GuardrailThresholdSchema),
 });
 
+const RetrySchema = Type.Object({
+  maxRetries: Type.Optional(NonNegativeInteger),
+  maxWaitMs: Type.Optional(PositiveNumber),
+  promptOnError: Type.Optional(Type.Boolean()),
+  backoffBaseMs: Type.Optional(PositiveNumber),
+  backoffFactor: Type.Optional(PositiveNumber),
+});
+
 // ── OpenRouter model config (used in both standalone and nested) ─────
 
 const OpenRouterModelConfigSchema = Type.Object({
@@ -222,6 +230,7 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       promptOnToolIterationLimit: Type.Optional(Type.Boolean()),
       maxToolResultTokensPercent: Type.Optional(Percent),
       guardrail: Type.Optional(GuardrailSchema),
+      retry: Type.Optional(RetrySchema),
     }),
     lsp: Type.Object({
       enabled: Type.Optional(Type.Boolean()),
