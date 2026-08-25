@@ -6,7 +6,7 @@
  */
 
 import type { DroneToolDefinition } from 'drone-core';
-import type { SwarmContext } from './context.js';
+import { firstMissingString } from './string-params.js';
 
 /**
  * Fetch from the coordinator API.
@@ -161,6 +161,13 @@ function createSwarmSpawnTool(
       required: ['targetBeaconId'],
     },
     execute: async params => {
+      const missing = firstMissingString(params, ['targetBeaconId']);
+      if (missing) {
+        return JSON.stringify({
+          success: false,
+          error: `swarm_spawn requires a non-empty ${missing}.`,
+        });
+      }
       try {
         const response = await coordinatorFetch(coordinatorUrl, '/spawn', {
           method: 'POST',
@@ -201,6 +208,13 @@ function createSwarmGetSpawnTool(
       required: ['beaconId', 'spawnId'],
     },
     execute: async params => {
+      const missing = firstMissingString(params, ['beaconId', 'spawnId']);
+      if (missing) {
+        return JSON.stringify({
+          success: false,
+          error: `swarm_get_spawn requires a non-empty ${missing}.`,
+        });
+      }
       try {
         const response = await coordinatorFetch(
           coordinatorUrl,
@@ -237,6 +251,13 @@ function createSwarmListSpawnsTool(
       required: ['beaconId'],
     },
     execute: async params => {
+      const missing = firstMissingString(params, ['beaconId']);
+      if (missing) {
+        return JSON.stringify({
+          success: false,
+          error: `swarm_list_spawns requires a non-empty ${missing}.`,
+        });
+      }
       try {
         const query = params.status
           ? `?status=${encodeURIComponent(params.status as string)}`
@@ -274,6 +295,13 @@ function createSwarmTerminateSpawnTool(
       required: ['beaconId', 'spawnId'],
     },
     execute: async params => {
+      const missing = firstMissingString(params, ['beaconId', 'spawnId']);
+      if (missing) {
+        return JSON.stringify({
+          success: false,
+          error: `swarm_terminate_spawn requires a non-empty ${missing}.`,
+        });
+      }
       try {
         const response = await coordinatorFetch(
           coordinatorUrl,

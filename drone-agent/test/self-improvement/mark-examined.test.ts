@@ -152,4 +152,14 @@ describe('self-improvement mark_examined tool', () => {
     const parsed = JSON.parse(result);
     expect(parsed.entries[0].lastExamined).toBeDefined();
   });
+
+  it('rejects omitted targetId', async () => {
+    const engine = await createEngine();
+
+    await expect(
+      engine.executeTool('self-improvement__mark_examined', {
+        targetType: 'persona',
+      })
+    ).rejects.toThrow(/targetId must be a non-empty string/);
+  });
 });

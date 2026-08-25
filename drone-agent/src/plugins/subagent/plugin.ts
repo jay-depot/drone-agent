@@ -58,6 +58,12 @@ export const subagentPlugin: DronePlugin = {
           additionalProperties: false,
         },
         execute: async (input, _onProgress, context) => {
+          if (
+            typeof input.result !== 'string' ||
+            input.result.trim().length === 0
+          ) {
+            throw new Error('return requires a non-empty result string.');
+          }
           // Write the NDJSON return event, then signal the loop to stop
           const returnEvent: OutputEvent = {
             kind: 'return',
