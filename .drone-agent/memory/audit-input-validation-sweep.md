@@ -15,6 +15,7 @@ updated: 2026-08-25T23:27:37.397Z
 Items 1-7 are FIXED in commit 43276bf ("fix(plugins): enforce required tool inputs at runtime across memory, swarm, notepad, subagent"), executed via plan plan-input-validation-sweep-fixes (marked completed). Verification performed on the working tree (clean, post-merge): every guard read in source at its expected site, grep sweep confirms remaining casts sit BELOW their guards, and the four touched spec files pass 38/38. Item 8 (bootstrap elicitation answers) remains DEFERRED by recorded user decision — bootstrap/index.ts confirmed untouched.
 
 Fix shape per family convention:
+
 - #1 memory manage: key typeof-guard + action-membership throw (memory/index.ts ~166-171); #7 browse: action-membership throw (~246).
 - #2/#3 swarm: new string-params.ts firstMissingString(); guard-first {success:false} in wiki_read/write/search/delete + swarm_spawn/get_spawn/list_spawns/terminate_spawn BEFORE any network call; old casts remain below guards (unreachable for non-strings).
 - #4 tools-message send: plain typeof+length check on body (no trim), after existing toAgentId/toChannel guard.
@@ -54,8 +55,8 @@ Two read-only subagent audits covered every .ts file under drone-agent/src/plugi
 ## Verified clean patterns worth reusing
 
 - persona/skills select/recall: `typeof input.id === 'string' ? input.id.trim().toLowerCase() : ''` + empty-check — exactly the correct pattern.
-- git/tools/* uniformly via requireString/resolveCwd/asPaths helpers (run-git.ts:59-78).
-- lsp/tools/* funnel into server.resolveAtPosition/parsePositionInput which typeof-validates first.
+- git/tools/\* uniformly via requireString/resolveCwd/asPaths helpers (run-git.ts:59-78).
+- lsp/tools/\* funnel into server.resolveAtPosition/parsePositionInput which typeof-validates first.
 - exec.ts parseExecInput validates everything pre-spawn.
 - todo/index.ts validation-first parseManageInput().
 - builtin-commands.ts /tool JSON path fully try/catch'd.

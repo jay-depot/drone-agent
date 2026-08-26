@@ -12,13 +12,7 @@ import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import React from 'react';
 import { marked } from 'marked';
-import {
-  lowlight,
-  SYNTAX_COLORS,
-  renderHighlightedTree,
-  extractTokenText,
-  getTokenColor,
-} from '../shared/syntax-highlight.js';
+import { lowlight, renderHighlightedTree } from '../shared/syntax-highlight.js';
 
 interface MarkdownProps {
   /** Markdown content to render */
@@ -27,7 +21,9 @@ interface MarkdownProps {
   color?: string;
   /** Optional background for inline code */
   codeBackground?: string;
-  /** Optional syntax highlighting color overrides (defaults to SYNTAX_COLORS) */
+  /** Optional syntax highlighting overrides; omitted keys (or the whole
+   * prop) fall back to DEFAULT_SYNTAX_THEME, whose attribute-only comment
+   * style cannot collide with the code background. */
   syntaxColors?: Record<string, string>;
 }
 
@@ -38,7 +34,7 @@ export function Markdown({
   children,
   color = 'white',
   codeBackground = 'gray',
-  syntaxColors = SYNTAX_COLORS,
+  syntaxColors,
 }: MarkdownProps): React.JSX.Element {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tokens = marked.lexer(children) as unknown as any[];
@@ -67,31 +63,36 @@ function renderToken(
   token: any,
   color: string,
   codeBackground: string,
-  syntaxColors: Record<string, string>,
+  syntaxColors: Record<string, string> | undefined,
   keyPrefix: string
 ): ReactNode {
   const textColor = token.type === 'paragraph' ? color : undefined;
 
   switch (token.type) {
     case 'heading':
-      return renderHeading(token, textColor ?? color, keyPrefix);
+      return renderHeading(
+        token,
+        textColor ?? color,
+        codeBackground,
+        keyPrefix
+      );
 
     case 'paragraph':
       return (
         <Text color={textColor}>
           {token.tokens
             ?.map((t: any, i: number) =>
-              renderInlineToken(t, color, `${keyPrefix}-p-${i}`)
+              renderInlineToken(t, color, codeBackground, `${keyPrefix}-p-${i}`)
             )
             .flat()}
         </Text>
       );
 
     case 'blockquote':
-      return renderBlockquote(token, textColor ?? color, keyPrefix);
+      return renderBlockquote(token, textColor ?? color);
 
     case 'list':
-      return renderList(token, textColor ?? color, keyPrefix);
+      return renderList(token, textColor ?? color, codeBackground, keyPrefix);
 
     case 'code':
       return renderCodeBlock(token, codeBackground, syntaxColors);
@@ -114,11 +115,18 @@ function renderToken(
 
 /**
  * Render inline tokens (strong, em, codespan, link, etc.)
+ *
+ * `codeBackground` rides along so nested codespans (e.g. inside bold or
+ * emphasis) can draw their background without forcing a foreground color:
+ * a hardcoded foreground here collides with terminal bold-promotion (fg
+ * black renders as bright black — the same palette slot as the gray
+ * background) and made text invisible.
  */
 function renderInlineToken(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   token: any,
   defaultColor: string,
+  codeBackground: string,
   keyPrefix: string
 ): ReactNode[] {
   const key = `${keyPrefix}-${token.type ?? 'inline'}`;
@@ -128,7 +136,12 @@ function renderInlineToken(
       return [
         <Text bold key={key}>
           {token.tokens?.flatMap((t: any, i: number) =>
-            renderInlineToken(t, defaultColor, `${keyPrefix}-strong-${i}`)
+            renderInlineToken(
+              t,
+              defaultColor,
+              codeBackground,
+              `${keyPrefix}-strong-${i}`
+            )
           )}
         </Text>,
       ];
@@ -137,14 +150,19 @@ function renderInlineToken(
       return [
         <Text italic key={key}>
           {token.tokens?.flatMap((t: any, i: number) =>
-            renderInlineToken(t, defaultColor, `${keyPrefix}-em-${i}`)
+            renderInlineToken(
+              t,
+              defaultColor,
+              codeBackground,
+              `${keyPrefix}-em-${i}`
+            )
           )}
         </Text>,
       ];
 
     case 'codespan':
       return [
-        <Text key={key} backgroundColor="gray" color="black">
+        <Text key={key} backgroundColor={codeBackground}>
           {token.text}
         </Text>,
       ];
@@ -153,7 +171,12 @@ function renderInlineToken(
       return [
         <Text key={key} color="cyan" underline>
           {token.tokens?.flatMap((t: any, i: number) =>
-            renderInlineToken(t, 'cyan', `${keyPrefix}-link-${i}`)
+            renderInlineToken(
+              t,
+              'cyan',
+              codeBackground,
+              `${keyPrefix}-link-${i}`
+            )
           )}
           {token.href && <Text color="gray"> ({token.href})</Text>}
         </Text>,
@@ -169,7 +192,12 @@ function renderInlineToken(
       return [
         <Text strikethrough key={key}>
           {token.tokens?.flatMap((t: any, i: number) =>
-            renderInlineToken(t, defaultColor, `${keyPrefix}-del-${i}`)
+            renderInlineToken(
+              t,
+              defaultColor,
+              codeBackground,
+              `${keyPrefix}-del-${i}`
+            )
           )}
         </Text>,
       ];
@@ -186,6 +214,7 @@ function renderHeading(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   token: any,
   color: string,
+  codeBackground: string,
   keyPrefix: string
 ): ReactNode {
   const depth = token.depth ?? 1;
@@ -194,7 +223,7 @@ function renderHeading(
     <Text bold color={color} wrap="wrap">
       <Text bold>{'#'.repeat(depth)} </Text>
       {token.tokens?.flatMap((t: any, i: number) =>
-        renderInlineToken(t, color, `${keyPrefix}-h-${i}`)
+        renderInlineToken(t, color, codeBackground, `${keyPrefix}-h-${i}`)
       )}
     </Text>
   );
@@ -202,21 +231,17 @@ function renderHeading(
 
 /**
  * Render a blockquote with a left border.
+ *
+ * Blockquote content uses `token.text` (marked's raw text form); joining
+ * rendered inline nodes into a string instead would stringify React
+ * elements to "[object Object]".
  */
 function renderBlockquote(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   token: any,
-  color: string,
-  keyPrefix: string
+  color: string
 ): ReactNode {
-  const content =
-    token.text ||
-    token.tokens
-      ?.flatMap((t: any, i: number) =>
-        renderInlineToken(t, color, `${keyPrefix}-bq-${i}`)
-      )
-      .join('') ||
-    '';
+  const content = token.text ?? '';
 
   return (
     <Box flexDirection="row">
@@ -237,6 +262,7 @@ function renderList(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   token: any,
   color: string,
+  codeBackground: string,
   keyPrefix: string
 ): ReactNode {
   const isOrdered = token.ordered ?? false;
@@ -247,7 +273,12 @@ function renderList(
       {items.map((item: any, index: number) => (
         <Text key={`${keyPrefix}-li-${index}`} color={color}>
           {isOrdered ? `${index + 1}. ` : '• '}
-          {renderListItemContent(item, color, `${keyPrefix}-li-${index}`)}
+          {renderListItemContent(
+            item,
+            color,
+            codeBackground,
+            `${keyPrefix}-li-${index}`
+          )}
         </Text>
       ))}
     </Box>
@@ -262,17 +293,18 @@ function renderListItemContent(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   item: any,
   color: string,
+  codeBackground: string,
   keyPrefix: string
 ): ReactNode {
   if (Array.isArray(item)) {
     return item.flatMap((t: any, i: number) =>
-      renderInlineToken(t, color, `${keyPrefix}-arr-${i}`)
+      renderInlineToken(t, color, codeBackground, `${keyPrefix}-arr-${i}`)
     );
   }
 
   if (item?.tokens) {
     return item.tokens.flatMap((t: any, i: number) =>
-      renderInlineToken(t, color, `${keyPrefix}-tok-${i}`)
+      renderInlineToken(t, color, codeBackground, `${keyPrefix}-tok-${i}`)
     );
   }
 
@@ -286,7 +318,7 @@ function renderCodeBlock(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   token: any,
   codeBackground: string,
-  syntaxColors: Record<string, string>
+  syntaxColors: Record<string, string> | undefined
 ): ReactNode {
   const code = token.text ?? '';
   const lang = token.lang ?? 'plaintext';

@@ -1,7 +1,6 @@
 ---
 key: llm-provider-future-work
-tags:
-  []
+tags: []
 created: 2026-08-23T00:19:03.784Z
 updated: 2026-08-25T17:25:40.101Z
 ---
