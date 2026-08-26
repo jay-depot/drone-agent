@@ -25,10 +25,9 @@ import type {
   DroneToolExecutionContext,
 } from 'drone-core';
 import {
-  computeBackoffDelay,
   DEFAULT_RETRY_CONFIG,
   isContextWindowExceeded,
-  isTransientStatus,
+  withBoundedSilentRetry,
   type RetryPolicyConfig,
 } from './llm-retry.js';
 import { isRecord } from '../shared/type-guards.js';
@@ -497,7 +496,41 @@ export function createConversationService({
         let failureCount = 0;
         while (true) {
           try {
-            return await provider.chat(request);
+            return await withBoundedSilentRetry(
+              async () => {
+                try {
+                  return await provider.chat(request);
+                } catch (error) {
+                  if (!(error instanceof DroneLlmError)) {
+                    // T3: transport/network/bad-shape — not classifiable.
+                    throw error;
+                  }
+                  // Context-window overflow → fail fast with guidance. This
+                  // happens when compaction failed AND the token estimate
+                  // undercounts the window; retrying would never succeed.
+                  // Convert to a non-transient error so the shared helper
+                  // throws it immediately (no auto-retry).
+                  if (isContextWindowExceeded(error.status, error.message)) {
+                    throw new DroneLlmError(error.message, {
+                      status: error.status,
+                      retryable: false,
+                      retryAfterMs: error.retryAfterMs,
+                      providerId: error.providerId,
+                      body: error.body,
+                    });
+                  }
+                  throw error;
+                }
+              },
+              retryConfig,
+              (llmErr, attempt, delay) => {
+                failureCount = attempt;
+                emit({
+                  kind: 'notice',
+                  content: `LLM API error (${llmErr.status ?? '?'}), retrying in ${Math.round(delay / 1000)}s (${attempt}/${retryConfig.maxRetries})`,
+                });
+              }
+            );
           } catch (error) {
             if (!(error instanceof DroneLlmError)) {
               // T3: transport/network/bad-shape — not classifiable, throw.
@@ -516,26 +549,6 @@ export function createConversationService({
               throw new Error(
                 'The LLM context window was exceeded, but compaction did not reclaim enough space (or the token estimate undercounts it). Enable compaction and run /compact to reset the session.'
               );
-            }
-
-            const transient =
-              llmErr.retryable ||
-              (llmErr.status !== undefined && isTransientStatus(llmErr.status));
-
-            // T1: bounded silent auto-retry.
-            if (transient && failureCount < retryConfig.maxRetries) {
-              failureCount += 1;
-              const delay = computeBackoffDelay(
-                failureCount,
-                retryConfig,
-                llmErr.retryAfterMs
-              );
-              emit({
-                kind: 'notice',
-                content: `LLM API error (${llmErr.status ?? '?'}), retrying in ${Math.round(delay / 1000)}s (${failureCount}/${retryConfig.maxRetries})`,
-              });
-              await new Promise(resolve => setTimeout(resolve, delay));
-              continue;
             }
 
             // T2: prompt the user to retry, or fail fast.

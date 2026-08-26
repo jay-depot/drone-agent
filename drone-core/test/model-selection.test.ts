@@ -81,6 +81,7 @@ describe('WELL_KNOWN_MODEL_ROLES', () => {
   it('lists the built-in plugin roles', () => {
     expect([...WELL_KNOWN_MODEL_ROLES].sort()).toEqual([
       'describer',
+      'image_describer',
       'summarizer',
       'wizard',
     ]);

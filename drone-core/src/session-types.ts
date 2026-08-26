@@ -44,6 +44,12 @@ export type DroneImageContent = {
   mimeType: string;
   /** Base64-encoded image data (without the data: URI prefix). */
   data: string;
+  /**
+   * Model-generated description of the image, used as the wire representation
+   * when the target model is not vision-capable. Stored as part of the
+   * abstract context.
+   */
+  description?: string;
 };
 
 export type DroneChatMessage = {

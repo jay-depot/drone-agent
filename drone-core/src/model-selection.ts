@@ -22,6 +22,7 @@ export const WELL_KNOWN_MODEL_ROLES = [
   'summarizer',
   'wizard',
   'describer',
+  'image_describer',
 ] as const;
 
 /** Any well-known role name, or an arbitrary plugin-defined role. */

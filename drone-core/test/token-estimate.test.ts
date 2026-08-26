@@ -126,6 +126,38 @@ describe('estimateMessageTokens', () => {
     };
     expect(estimateMessageTokens(withTwoImages)).toBe(baseTokens + 512);
   });
+
+  it('uses max(256, description tokens) per image when a description is present', () => {
+    const base: DroneChatMessage = { role: 'user', content: 'hello' };
+    const baseTokens = estimateMessageTokens(base);
+
+    // A short description estimates to fewer than 256 tokens, so the floor
+    // of 256 still applies.
+    const shortDesc: DroneChatMessage = {
+      role: 'user',
+      content: 'hello',
+      images: [
+        { mimeType: 'image/png', data: 'abc', description: 'a cat' },
+      ],
+    };
+    expect(estimateMessageTokens(shortDesc)).toBe(baseTokens + 256);
+
+    // A long description (> 1024 chars -> > 256 tokens) raises the charge.
+    const longDesc: DroneChatMessage = {
+      role: 'user',
+      content: 'hello',
+      images: [
+        {
+          mimeType: 'image/png',
+          data: 'abc',
+          description: 'x'.repeat(1100),
+        },
+      ],
+    };
+    const longDescTokens = estimateTextTokens('x'.repeat(1100));
+    expect(longDescTokens).toBeGreaterThan(256);
+    expect(estimateMessageTokens(longDesc)).toBe(baseTokens + longDescTokens);
+  });
 });
 
 describe('estimateToolDescriptorTokens', () => {

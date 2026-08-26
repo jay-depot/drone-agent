@@ -8,10 +8,36 @@ import {
   getCanonicalToolName,
   matchGlob,
   type DroneAgentConfig,
+  type DroneImageContent,
   type PartialDroneAgentConfig,
   commandExistsOnPath,
   resolveDroneExecutable,
 } from '../src/index.js';
+
+describe('DroneImageContent', () => {
+  it('accepts an optional description and persists it unchanged through JSON round-trip', () => {
+    const image: DroneImageContent = {
+      mimeType: 'image/png',
+      data: 'aGVsbG8=',
+      description: 'A screenshot of a terminal window.',
+    };
+    const roundTripped = JSON.parse(JSON.stringify(image)) as DroneImageContent;
+    expect(roundTripped).toEqual(image);
+    expect(roundTripped.description).toBe(
+      'A screenshot of a terminal window.'
+    );
+  });
+
+  it('omits description when absent', () => {
+    const image: DroneImageContent = {
+      mimeType: 'image/jpeg',
+      data: 'YWJj',
+    };
+    expect(image.description).toBeUndefined();
+    const roundTripped = JSON.parse(JSON.stringify(image)) as DroneImageContent;
+    expect(roundTripped.description).toBeUndefined();
+  });
+});
 
 describe('createConsoleLogger', () => {
   it('prefixes messages with the scope', () => {
