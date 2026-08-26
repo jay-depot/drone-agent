@@ -3,6 +3,7 @@ import {
   applyAgentConfigLayer,
   createDefaultAgentConfig,
   parseConfigWithSchema,
+  validateModelRoles,
   validateProviders,
 } from '../src/index.js';
 import type { DroneProviderConfig } from '../src/index.js';
@@ -171,6 +172,79 @@ describe('validateProviders semantic rules', () => {
     });
     expect(result.errors).toHaveLength(0);
     expect(result.warnings).toHaveLength(0);
+  });
+});
+
+describe('llm.modelRoles', () => {
+  it('accepts full-form role values in the schema', () => {
+    const parsed = parseConfigWithSchema(
+      {
+        llm: {
+          modelRoles: {
+            summarizer: 'ollama/llama3.1',
+            wizard: 'anthropic/claude-haiku-4-5',
+          },
+        },
+      },
+      'test'
+    );
+    expect(parsed.llm?.modelRoles?.['summarizer']).toBe('ollama/llama3.1');
+  });
+
+  it('rejects bare (slash-less) role values', () => {
+    expect(() =>
+      parseConfigWithSchema(
+        { llm: { modelRoles: { summarizer: 'justamodel' } } },
+        'test'
+      )
+    ).toThrow();
+  });
+
+  it('merges modelRoles per-key across layers', () => {
+    const base = createDefaultAgentConfig();
+    const user = applyAgentConfigLayer(base, {
+      llm: { modelRoles: { summarizer: 'ollama/llama3.1' } },
+    });
+    const withSwarm = applyAgentConfigLayer(user, {
+      llm: { modelRoles: { wizard: 'anthropic/claude-haiku-4-5' } },
+    });
+    expect(withSwarm.llm.modelRoles).toEqual({
+      summarizer: 'ollama/llama3.1',
+      wizard: 'anthropic/claude-haiku-4-5',
+    });
+  });
+});
+
+describe('validateModelRoles', () => {
+  it('returns no warnings when roles are well-known and providers exist', () => {
+    const providers = {
+      ollama: { protocol: 'ollama' } as DroneProviderConfig,
+    };
+    expect(
+      validateModelRoles(providers, { summarizer: 'ollama/llama3.1' })
+    ).toEqual([]);
+  });
+
+  it('warns on a role name outside the well-known list', () => {
+    const warnings = validateModelRoles(
+      { ollama: { protocol: 'ollama' } },
+      { 'typo-role': 'ollama/llama3.1' }
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('not a well-known role');
+  });
+
+  it('warns when a role references a provider with no entry', () => {
+    const warnings = validateModelRoles(
+      {},
+      { summarizer: 'missing-provider/llama3.1' }
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('missing-provider');
+  });
+
+  it('handles undefined modelRoles as no-op', () => {
+    expect(validateModelRoles({}, undefined)).toEqual([]);
   });
 });
 

@@ -64,6 +64,11 @@ function makeBudgetService(
 function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
   return {
     getActiveProvider: () => provider,
+    resolveModelForRole: () => ({
+      provider,
+      providerId: 'test-provider',
+      model: 'fake',
+    }),
     getActiveProviderId: () => 'test-provider',
     getAvailableProviders: () => [{ id: 'test-provider', precedence: 1000 }],
     activateProvider: () => {},
@@ -116,6 +121,11 @@ it('uses the newly active provider on the next loop iteration', async () => {
 
   const llm: DroneLlmCapability = {
     getActiveProvider: () => providers[activeProviderId],
+    resolveModelForRole: () => ({
+      provider: providers[activeProviderId],
+      providerId: activeProviderId,
+      model,
+    }),
     getActiveProviderId: () => activeProviderId,
     getAvailableProviders: () => [
       { id: 'provider-a', precedence: 1000 },

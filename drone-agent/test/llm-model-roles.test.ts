@@ -1,0 +1,208 @@
+import { describe, expect, it } from 'vitest';
+import type {
+  DroneLlmCapability,
+  DroneLogger,
+  DronePluginRegistration,
+  DroneReasoningLevel,
+  LlmProtocolDriver,
+} from 'drone-core';
+import { createDefaultAgentConfig } from 'drone-core';
+import { llmPlugin } from '../src/plugins/llm/index.js';
+import { silentLogger } from './helpers.js';
+
+/**
+ * Harness for exercising the broker's resolveModelForRole. Registers the llm
+ * plugin with a config whose providers/models can be pinned via `modelRoles`,
+ * runs the onPluginsLoaded activation, and returns the offered capability.
+ */
+async function setupBroker(options: {
+  providers: Record<
+    string,
+    { protocol: string; models: Record<string, unknown> }
+  >;
+  llmActive?: string;
+  modelRoles?: Record<string, string>;
+  drivers?: Record<string, LlmProtocolDriver>;
+  logger?: DroneLogger;
+}): Promise<{
+  capability: DroneLlmCapability;
+  config: ReturnType<typeof createDefaultAgentConfig>;
+}> {
+  const config = createDefaultAgentConfig();
+  config.providers = Object.fromEntries(
+    Object.entries(options.providers).map(([id, spec]) => [id, spec])
+  );
+  if (options.llmActive) config.llm.active = options.llmActive;
+  if (options.modelRoles) config.llm.modelRoles = options.modelRoles;
+
+  let offeredCapability: DroneLlmCapability | undefined;
+  const loadedHooks: Array<() => Promise<void>> = [];
+
+  const registration: DronePluginRegistration = {
+    logger: options.logger ?? silentLogger(),
+    getConfig: () => config,
+    registerTool: () => {},
+    registerPromptFragment: () => {},
+    registerHelp: () => {},
+    registerWorkflow: () => {},
+    registerSlashCommand: () => {},
+    unregisterPluginTools: () => {},
+    unregisterTool: () => {},
+    mountTool: () => undefined,
+    unmountTool: () => {},
+    listMountedTools: () => [],
+    hooks: {
+      onPluginsLoaded: cb => {
+        loadedHooks.push(cb);
+      },
+      onSessionStart: () => {},
+      onBeforePrompt: () => {},
+      onAfterToolCall: () => {},
+      onConversationEvent: () => {},
+      onSessionClear: () => {},
+      onShutdown: () => {},
+      onSessionSafetyTrimWillRun: () => {},
+      onSessionSafetyTrimApplied: () => {},
+    },
+    offer: cap => {
+      offeredCapability = cap as DroneLlmCapability;
+    },
+    request: <T>() => undefined as T | undefined,
+    runWorkflow: async () => ({ toolResult: '{}' }),
+    requestElicitation: () => undefined,
+  };
+
+  await llmPlugin.register(registration);
+  if (!offeredCapability) throw new Error('Expected llm capability.');
+  for (const [protocolId, driver] of Object.entries(options.drivers ?? {})) {
+    offeredCapability.registerDriver(driver);
+  }
+  // Ensure any ollama-provider tests have a driver so auto-activation works.
+  if (!options.drivers?.ollama) {
+    offeredCapability.registerDriver({
+      protocolId: 'ollama',
+      createProvider: () => ({
+        chat: async () => ({ message: 'ok' }),
+        getContextWindowInfo: async () => null,
+      }),
+      parameterSchema: { parameters: {} },
+    });
+  }
+  for (const hook of loadedHooks) await hook();
+
+  return { capability: offeredCapability, config };
+}
+
+/** A driver that records the chat requests it receives, for enrichment parity checks. */
+function makeRecordingDriver(protocolId: string) {
+  const calls: Array<Record<string, unknown>> = [];
+  const driver: LlmProtocolDriver = {
+    protocolId,
+    createProvider: () => ({
+      chat: async request => {
+        calls.push(request as unknown as Record<string, unknown>);
+        return { message: 'ok' };
+      },
+    }),
+    parameterSchema: { parameters: {} },
+  };
+  return { driver, calls };
+}
+
+const baseProviders = {
+  ollama: {
+    protocol: 'ollama',
+    models: {
+      'llama3.1': { contextWindow: 131072 },
+      'vision-model': { contextWindow: 131072, hasVision: true },
+    },
+  },
+};
+
+describe('broker resolveModelForRole', () => {
+  it('falls back to the active selection when the role is unset', async () => {
+    const { capability } = await setupBroker({
+      providers: baseProviders,
+      llmActive: 'ollama/llama3.1',
+    });
+    const resolved = capability.resolveModelForRole('summarizer');
+    expect(resolved.providerId).toBe('ollama');
+    expect(resolved.model).toBe('llama3.1');
+    expect(resolved.reasoningLevel).toBeUndefined();
+  });
+
+  it('resolves a configured role to its provider/model', async () => {
+    const { capability } = await setupBroker({
+      providers: baseProviders,
+      llmActive: 'ollama/llama3.1',
+      modelRoles: { summarizer: 'ollama/vision-model' },
+    });
+    const resolved = capability.resolveModelForRole('summarizer');
+    expect(resolved.providerId).toBe('ollama');
+    expect(resolved.model).toBe('vision-model');
+  });
+
+  it('falls back (warn-once) when the role references an unknown provider', async () => {
+    const warnings: string[] = [];
+    const logger: DroneLogger = {
+      info: () => {},
+      warn: m => warnings.push(String(m)),
+      error: () => {},
+    };
+    const { capability } = await setupBroker({
+      providers: baseProviders,
+      llmActive: 'ollama/llama3.1',
+      modelRoles: { summarizer: 'missing-provider/whatever' },
+      logger,
+    });
+    capability.resolveModelForRole('summarizer');
+    capability.resolveModelForRole('summarizer');
+    expect(warnings).toHaveLength(1);
+  });
+
+  it('is stateless: never mutates the active selection', async () => {
+    const { capability } = await setupBroker({
+      providers: baseProviders,
+      llmActive: 'ollama/llama3.1',
+      modelRoles: { summarizer: 'ollama/vision-model' },
+    });
+    capability.resolveModelForRole('summarizer');
+    expect(capability.getActiveProviderId()).toBe('ollama');
+    expect(capability.getModel()).toBe('llama3.1');
+  });
+
+  it('returns the reasoning level from the resolved model entry', async () => {
+    const { capability } = await setupBroker({
+      providers: {
+        ollama: {
+          protocol: 'ollama',
+          models: {
+            'llama3.1': {},
+            'thinking-model': { reasoningLevel: 'high' as DroneReasoningLevel },
+          },
+        },
+      },
+      llmActive: 'ollama/llama3.1',
+      modelRoles: { summarizer: 'ollama/thinking-model' },
+    });
+    const resolved = capability.resolveModelForRole('summarizer');
+    expect(resolved.reasoningLevel).toBe('high');
+  });
+
+  it('role-resolved provider.chat receives merged parameters/metadata', async () => {
+    const recording = makeRecordingDriver('ollama');
+    const { capability } = await setupBroker({
+      providers: baseProviders,
+      llmActive: 'ollama/llama3.1',
+      modelRoles: { summarizer: 'ollama/vision-model' },
+      drivers: { ollama: recording.driver },
+    });
+    const resolved = capability.resolveModelForRole('summarizer');
+    await resolved.provider.chat({ model: 'vision-model', messages: [] });
+    expect(recording.calls).toHaveLength(1);
+    const sent = recording.calls[0];
+    // Broker enrichment fills parameters and the declared hasVision metadata.
+    expect(sent.parameters).toBeDefined();
+    expect(sent.hasVision).toBe(true);
+  });
+});

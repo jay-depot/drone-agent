@@ -193,10 +193,13 @@ export type {
 
 export type { ModelSelection } from './model-selection.js';
 export {
+  WELL_KNOWN_MODEL_ROLES,
   parseModelSelection,
   formatModelSelection,
   isValidFullModelSelection,
   resolveInteractiveSelection,
+  resolveConfiguredReasoningLevel,
+  type DroneModelRole,
 } from './model-selection.js';
 
 // ── Capability types ─────────────────────────────────────────────────
@@ -206,6 +209,7 @@ export type {
   DroneConfigCapability,
   DroneSkillsCapability,
   DroneLlmCapability,
+  DroneResolvedModelRole,
   DronePrincipleEntry,
   DronePrinciplesCapability,
   DroneInsightEntry,
@@ -289,6 +293,7 @@ export {
   parseConfigWithSchema,
   transformEnvVars,
   validateProviders,
+  validateModelRoles,
 } from './config-schema.js';
 export type { PartialDroneAgentConfigDecoded } from './config-schema.js';
 

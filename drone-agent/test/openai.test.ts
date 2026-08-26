@@ -51,6 +51,11 @@ function createRegistrationCapture() {
       chat: async () => ({ message: 'ok' }),
       getContextWindowInfo: async () => null,
     }),
+    resolveModelForRole: () => ({
+      provider: { chat: async () => ({ message: 'ok' }) },
+      providerId: 'openai',
+      model: 'gpt-4o',
+    }),
     getActiveProviderId: () => 'openai',
     getAvailableProviders: () => [{ id: 'openai', precedence: 1000 }],
     activateProvider: () => {},

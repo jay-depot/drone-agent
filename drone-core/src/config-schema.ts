@@ -14,6 +14,7 @@ import type {
   DroneProviderConfig,
   ProviderConfigValidationResult,
 } from './provider-config-types.js';
+import { WELL_KNOWN_MODEL_ROLES } from './model-selection.js';
 export type { ProviderConfigValidationResult };
 
 // ── Helper schemas ───────────────────────────────────────────────────
@@ -191,6 +192,14 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
         Type.String({
           pattern: '^[^/]+/.+',
         })
+      ),
+      modelRoles: Type.Optional(
+        Type.Record(
+          Type.String(),
+          Type.String({
+            pattern: '^[^/]+/.+',
+          })
+        )
       ),
       reasoningLevel: Type.Optional(
         Type.Union([
@@ -454,4 +463,42 @@ export function validateProviders(
   }
 
   return { errors, warnings };
+}
+
+/**
+ * Semantic validation for `llm.modelRoles`, run after the full config merge.
+ * Structural shape (full `<providerId>/<modelLocalId>` values) is enforced by
+ * the schema at parse time; these are the cross-cutting warnings:
+ *
+ * - a role value references a provider id with no configured entry
+ * - a role name is not in the well-known list (catches typos like
+ *   `summarizer` silently falling back to the active selection)
+ *
+ * Never fatal — an unset/misconfigured role simply falls back to the active
+ * selection at resolution time.
+ */
+export function validateModelRoles(
+  providers: Record<string, DroneProviderConfig>,
+  modelRoles: Record<string, string> | undefined
+): string[] {
+  const warnings: string[] = [];
+  if (!modelRoles) return warnings;
+
+  for (const [role, selection] of Object.entries(modelRoles)) {
+    if (!(WELL_KNOWN_MODEL_ROLES as readonly string[]).includes(role)) {
+      warnings.push(
+        `Model role "${role}" is not a well-known role (known: ${WELL_KNOWN_MODEL_ROLES.join(
+          ', '
+        )}). It will fall back to the active selection unless a plugin defines it.`
+      );
+    }
+    const providerId = selection.slice(0, selection.indexOf('/'));
+    if (!providers[providerId]) {
+      warnings.push(
+        `Model role "${role}" references provider "${providerId}", which has no configured entry. The role will fall back to the active selection.`
+      );
+    }
+  }
+
+  return warnings;
 }

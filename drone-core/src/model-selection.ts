@@ -1,3 +1,8 @@
+import type {
+  DroneAgentConfig,
+  DroneReasoningLevel,
+} from './config-types.js';
+
 // ── Canonical model selection identity ─────────────────────────────
 //
 // A selected model is canonically `<providerId>/<modelLocalId>`, split on
@@ -9,6 +14,23 @@ export type ModelSelection = {
   providerId: string;
   modelLocalId: string;
 };
+
+/**
+ * Well-known model-role names that built-in plugins bind via
+ * `llm.modelRoles`. The namespace is open — any plugin may mint additional
+ * roles — but these names are recognized by the startup validator (unknown
+ * names warn to catch typos) and documented for shared use.
+ */
+export const WELL_KNOWN_MODEL_ROLES = [
+  'summarizer',
+  'wizard',
+  'describer',
+] as const;
+
+/** Any well-known role name, or an arbitrary plugin-defined role. */
+export type DroneModelRole =
+  | (typeof WELL_KNOWN_MODEL_ROLES)[number]
+  | (string & {});
 
 /**
  * Parse a canonical `<providerId>/<modelLocalId>` string, splitting on the
@@ -39,6 +61,22 @@ export function formatModelSelection(selection: ModelSelection): string {
  */
 export function isValidFullModelSelection(selection: string): boolean {
   return parseModelSelection(selection) !== undefined;
+}
+
+/**
+ * Resolve the configured reasoning level for a model selection: the selected
+ * model entry's `reasoningLevel`, else the `llm.reasoningLevel` fallback. The
+ * conversation service keeps its session-level override AHEAD of this helper;
+ * role-bound callers use it directly (no session override exists for them).
+ */
+export function resolveConfiguredReasoningLevel(
+  config: Pick<DroneAgentConfig, 'providers' | 'llm'>,
+  selection: { providerId: string; modelLocalId: string }
+): DroneReasoningLevel | undefined {
+  return (
+    config.providers[selection.providerId]?.models?.[selection.modelLocalId]
+      ?.reasoningLevel ?? config.llm.reasoningLevel
+  );
 }
 
 /**

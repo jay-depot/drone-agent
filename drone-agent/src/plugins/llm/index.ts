@@ -2,12 +2,14 @@ import { registerContextCommand } from './context-command.js';
 import {
   DroneLlmError,
   parseModelSelection,
+  resolveConfiguredReasoningLevel,
   type DiscoveredModel,
   type DroneContextWindowInfo,
   type DroneLlmCapability,
   type DroneLlmProvider,
   type DronePlugin,
   type DroneReasoningLevel,
+  type DroneResolvedModelRole,
   type DroneSlashCommandContext,
   type LlmProtocolDriver,
 } from 'drone-core';
@@ -97,6 +99,108 @@ export const llmPlugin: DronePlugin = {
 
     function getInstance(providerId: string): ProviderInstance | undefined {
       return instances.get(providerId) ?? instantiateProvider(providerId);
+    }
+
+    // Broker-enriched view of a provider instance: chat() fills the additive
+    // DroneChatRequest fields (effective parameters, resolved metadata) before
+    // delegating. Single interception point — wire contract intact. Used by the
+    // active provider AND any model-role-resolved provider.
+    function enrichProvider(instance: ProviderInstance): DroneLlmProvider {
+      const inner = instance.provider;
+      return {
+        chat: async request => {
+          const fullId = `${instance.providerId}/${request.model}`;
+          const metadata = resolveModelMetadata(fullId);
+          const effectiveParameters = mergeEffectiveParameters(
+            instance.providerId,
+            fullId,
+            request.parameters
+          );
+          warnUnknownParameters(instance, effectiveParameters);
+          try {
+            return await inner.chat({
+              ...request,
+              parameters: effectiveParameters,
+              extra: {
+                ...(registration.getConfig().providers[instance.providerId]
+                  ?.extra ?? {}),
+              },
+              maxOutputTokens:
+                request.maxOutputTokens ?? metadata.maxOutputTokens,
+              hasVision: request.hasVision ?? metadata.hasVision,
+            });
+          } catch (error) {
+            if (error instanceof DroneLlmError && !error.providerId) {
+              error.providerId = instance.providerId;
+            }
+            throw error;
+          }
+        },
+        getContextWindowInfo: ({ model }) =>
+          resolveActiveContextWindow(instance, model),
+        supportsImagesInToolResults: inner.supportsImagesInToolResults,
+      };
+    }
+
+    // Session-lifetime dedup for role-resolution warnings/announcements, so a
+    // broken role (or a role that diverges from active) is logged once, not on
+    // every call.
+    const warnedFallbackRoles = new Set<string>();
+    const announcedRoleDivergence = new Set<string>();
+
+    function activeFallback(): DroneResolvedModelRole {
+      const instance = getInstance(activeProviderId);
+      if (!instance) {
+        throw new Error(
+          'No active LLM provider. Ensure a providers config entry exists and its protocol plugin is enabled.'
+        );
+      }
+      return {
+        provider: enrichProvider(instance),
+        providerId: activeProviderId,
+        model: currentModel,
+      };
+    }
+
+    /**
+     * Resolve a named model role per `llm.modelRoles`. Stateless: never mutates
+     * the active selection and emits no events. Unset/unknown/broken roles fall
+     * back to the active selection with a one-time-per-role warning.
+     */
+    function resolveModelForRoleImpl(role: string): DroneResolvedModelRole {
+      const config = registration.getConfig();
+      const raw = config.llm?.modelRoles?.[role];
+      if (!raw) {
+        return activeFallback();
+      }
+      const selection = parseModelSelection(raw);
+      const instance = selection && getInstance(selection.providerId);
+      if (!selection || !instance) {
+        if (!warnedFallbackRoles.has(role)) {
+          warnedFallbackRoles.add(role);
+          registration.logger.warn(
+            `Model role "${role}" (${raw}) could not be resolved; falling back to the active selection.`
+          );
+        }
+        return activeFallback();
+      }
+      if (
+        instance.providerId !== activeProviderId ||
+        selection.modelLocalId !== currentModel
+      ) {
+        if (!announcedRoleDivergence.has(role)) {
+          announcedRoleDivergence.add(role);
+          registration.logger.info(
+            `Model role "${role}" resolved to ${instance.providerId}/${selection.modelLocalId} (differs from active ${activeProviderId}/${currentModel}).`
+          );
+        }
+      }
+      return {
+        provider: enrichProvider(instance),
+        providerId: instance.providerId,
+        model: selection.modelLocalId,
+        reasoningLevel: resolveConfiguredReasoningLevel(config, selection),
+      };
     }
 
     // ── Hybrid model listing: declared ⊕ discovered, declared wins ──
@@ -328,44 +432,9 @@ export const llmPlugin: DronePlugin = {
             'No active LLM provider. Ensure a providers config entry exists and its protocol plugin is enabled.'
           );
         }
-        // Broker-enriched view of the provider: chat() fills the additive
-        // DroneChatRequest fields (effective parameters, resolved metadata)
-        // before delegating. Single interception point — wire contract intact.
-        const inner = instance.provider;
-        return {
-          chat: async request => {
-            const fullId = `${instance.providerId}/${request.model}`;
-            const metadata = resolveModelMetadata(fullId);
-            const effectiveParameters = mergeEffectiveParameters(
-              instance.providerId,
-              fullId,
-              request.parameters
-            );
-            warnUnknownParameters(instance, effectiveParameters);
-            try {
-              return await inner.chat({
-                ...request,
-                parameters: effectiveParameters,
-                extra: {
-                  ...(registration.getConfig().providers[instance.providerId]
-                    ?.extra ?? {}),
-                },
-                maxOutputTokens:
-                  request.maxOutputTokens ?? metadata.maxOutputTokens,
-                hasVision: request.hasVision ?? metadata.hasVision,
-              });
-            } catch (error) {
-              if (error instanceof DroneLlmError && !error.providerId) {
-                error.providerId = instance.providerId;
-              }
-              throw error;
-            }
-          },
-          getContextWindowInfo: ({ model }) =>
-            resolveActiveContextWindow(instance, model),
-          supportsImagesInToolResults: inner.supportsImagesInToolResults,
-        };
+        return enrichProvider(instance);
       },
+      resolveModelForRole: resolveModelForRoleImpl,
       getActiveProviderId: () => activeProviderId,
       getAvailableProviders: () =>
         Object.entries(registration.getConfig().providers).map(

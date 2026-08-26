@@ -140,12 +140,34 @@ export type DroneSkillsCapability = {
 // ── LLM capability ─────────────────────────────────────────────────
 
 /**
+ * A resolved model-role binding: a ready-to-call provider (broker-enriched,
+ * same parameter/metadata path as the active provider), its id, and the model
+ * local id. `reasoningLevel` is present only when the role resolved to a
+ * non-active selection with a configured level; the active-selection fallback
+ * omits it so callers preserve today's exact behavior.
+ */
+export type DroneResolvedModelRole = {
+  provider: DroneLlmProvider;
+  providerId: string;
+  model: string;
+  reasoningLevel?: DroneReasoningLevel;
+};
+
+/**
  * Capability offered by the LLM broker plugin. Lets other plugins and
  * the host resolve the active LLM provider and manage model selection.
  */
 export type DroneLlmCapability = {
   /** Get the active DroneLlmProvider implementation. */
   getActiveProvider: () => DroneLlmProvider;
+  /**
+   * Resolve a named model role (e.g. 'summarizer') to a ready-to-call
+   * provider/model pair, per `llm.modelRoles`. Stateless: never mutates the
+   * active selection and emits no events. Falls back to the active selection
+   * (with a one-time-per-role warning) when the role is unset, unknown, or
+   * references a provider that is not instantiated.
+   */
+  resolveModelForRole: (role: string) => DroneResolvedModelRole;
   /**
    * Register a protocol driver factory. The broker instantiates one
    * provider per matching `config.providers` entry using these drivers.
