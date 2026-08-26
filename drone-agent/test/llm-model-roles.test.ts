@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type {
   DroneLlmCapability,
   DroneLogger,
+  DroneModelEntryConfig,
   DronePluginRegistration,
   DroneReasoningLevel,
   LlmProtocolDriver,
@@ -18,7 +19,7 @@ import { silentLogger } from './helpers.js';
 async function setupBroker(options: {
   providers: Record<
     string,
-    { protocol: string; models: Record<string, unknown> }
+    { protocol: string; models: Record<string, DroneModelEntryConfig> }
   >;
   llmActive?: string;
   modelRoles?: Record<string, string>;
