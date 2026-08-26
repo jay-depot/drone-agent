@@ -3,6 +3,7 @@ import {
   createDebugFlagRegistry,
   estimateTextTokens,
   parseModelSelection,
+  resolveConfiguredReasoningLevel,
   type DroneGuardrailConfig,
   type DroneGuardrailThresholdConfig,
   type DebugFlagRegistry,
@@ -756,23 +757,14 @@ export function createConversationService({
         const provider = llm.getActiveProvider();
 
         // Resolve reasoning level: session override → selected model entry →
-        // llm-level config. Cross-wired legacy fallbacks to inactive
-        // providers' sections are gone.
+        // llm-level config (shared helper). Cross-wired legacy fallbacks to
+        // inactive providers' sections are gone.
+        const selection = parseModelSelection(
+          `${activeProviderId}/${currentModel}`
+        );
         const effectiveReasoningLevel =
           reasoningLevel ??
-          (() => {
-            const selection = parseModelSelection(
-              `${activeProviderId}/${currentModel}`
-            );
-            if (!selection) return undefined;
-            const entry =
-              config.providers[selection.providerId]?.models?.[
-                selection.modelLocalId
-              ];
-            return entry?.reasoningLevel;
-          })() ??
-          config.llm.reasoningLevel ??
-          undefined;
+          (selection ? resolveConfiguredReasoningLevel(config, selection) : undefined);
 
         const chatRequest: DroneChatRequest = {
           model: currentModel,
