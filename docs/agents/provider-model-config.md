@@ -124,10 +124,59 @@ FIRST slash so multi-slash upstream ids survive
   invocation only (never persisted).
 - The status bar shows the full-form identity.
 
+## Model roles
+
+Some built-in plugins make their own LLM calls (compaction summarization,
+persona creation, MCP server-description generation) rather than riding the
+main chat loop. By default those calls reuse the session's active selection
+(`llm.active`). **Model roles** let you pin a different provider/model for a
+specific purpose via the user-scope `llm.modelRoles` map:
+
+```json
+{
+  "llm": {
+    "modelRoles": {
+      "summarizer": "ollama/llama3.1",
+      "wizard": "anthropic/claude-haiku-4-5",
+      "describer": "openrouter/openai/gpt-5.3-codex"
+    }
+  }
+}
+```
+
+Each role maps to a canonical `<providerId>/<modelLocalId>` selection (same
+strict form as `llm.active`; bare ids are rejected). Unset or misconfigured
+roles fall back to the active selection, so omitting the map changes nothing.
+Resolution is stateless — it never mutates the active selection — and the
+resolved provider is broker-enriched exactly like the active one (effective
+parameters, resolved context window, error tagging).
+
+Well-known roles (the startup validator warns on role names outside this
+list, catching typos like `summarizer` that would otherwise silently fall
+back):
+
+| role         | consumer                                              |
+| ------------ | ----------------------------------------------------- |
+| `summarizer` | Compaction (`/compact`) summary generation            |
+| `wizard`     | `persona.create` wizard persona-draft generation      |
+| `describer`  | MCP server-description generation                     |
+
+The role namespace is open — plugins may mint additional roles, though only
+the well-known list above is recognized by the validator.
+
+**Scopes:** `llm.modelRoles` is **banned in project-scope config** (startup
+error), same class as `providers`: role values reference providers that may
+not exist in a freshly-cloned environment. Define them in user config or
+distribute via swarm underlays. `llm.modelRoles` merges per-key across
+layers, so distinct roles from different scopes combine.
+
 ## Reasoning
 
 Chain: session (`/reasoning`) > selected model entry `reasoningLevel` >
-`llm.reasoningLevel`. Drivers own the mapping tables:
+`llm.reasoningLevel`. Drivers own the mapping tables. A role-bound model
+honors its model-entry `reasoningLevel` (then `llm.reasoningLevel`); there
+is no session-level tier for role calls:
+
 
 | protocol   | off                           | low                            | medium/high/max         |
 | ---------- | ----------------------------- | ------------------------------ | ----------------------- |
@@ -147,11 +196,12 @@ keys (loud warning); user scope and swarm underlays may.
 
 ## Scopes
 
-`providers` entries are **banned in project-scope config** (startup error).
-Projects may pin `llm.active` / `llm.reasoningLevel`. Beacon/coordinator
-underlays are sanctioned distribution channels; entries merge by key with
-whole-entry replacement (a scope defining `providers.<id>` replaces that
-entire entry — no partial overrides across scopes).
+`providers` entries and `llm.modelRoles` are **banned in project-scope
+config** (startup error). Projects may pin `llm.active` /
+`llm.reasoningLevel`. Beacon/coordinator underlays are sanctioned
+distribution channels; entries merge by key with whole-entry replacement (a
+scope defining `providers.<id>` replaces that entire entry — no partial
+overrides across scopes). `llm.modelRoles` merges per-key.
 
 Project-scope discovery dedupes against the effective user config by file
 identity: launching from the home directory would otherwise rediscover
