@@ -578,6 +578,7 @@ export function createCompactionPlugin(
       description:
         'Proactively summarizes oldest conversation turns to keep usage below the configured soft threshold.',
       defaultEnabled: true,
+      dependencies: [{ id: 'llm', optional: true }],
     },
     register: async registration => {
       const config = registration.getConfig().compaction;
