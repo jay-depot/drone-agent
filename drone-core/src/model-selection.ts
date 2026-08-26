@@ -1,7 +1,4 @@
-import type {
-  DroneAgentConfig,
-  DroneReasoningLevel,
-} from './config-types.js';
+import type { DroneAgentConfig, DroneReasoningLevel } from './config-types.js';
 
 // ── Canonical model selection identity ─────────────────────────────
 //

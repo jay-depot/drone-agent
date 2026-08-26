@@ -147,7 +147,9 @@ async function captureRegistration(
                 provider: role.provider,
                 providerId: role.providerId,
                 model: role.model,
-                ...(role.reasoningLevel ? { reasoningLevel: role.reasoningLevel } : {}),
+                ...(role.reasoningLevel
+                  ? { reasoningLevel: role.reasoningLevel }
+                  : {}),
               }
             : {
                 provider,
@@ -201,12 +203,12 @@ async function captureRegistration(
       pluginId === 'llm' && llmCapability
         ? (llmCapability as T)
         : pluginId === 'runtime'
-        ? ({
-            queueSystemReminder: (content: string) => {
-              queuedReminders.push(content);
-            },
-          } as T)
-        : (undefined as T | undefined),
+          ? ({
+              queueSystemReminder: (content: string) => {
+                queuedReminders.push(content);
+              },
+            } as T)
+          : (undefined as T | undefined),
     runWorkflow: async () => ({ toolResult: '{}' }),
     requestElicitation: () => undefined,
   };

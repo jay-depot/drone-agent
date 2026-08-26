@@ -155,11 +155,11 @@ Well-known roles (the startup validator warns on role names outside this
 list, catching typos like `summarizer` that would otherwise silently fall
 back):
 
-| role         | consumer                                              |
-| ------------ | ----------------------------------------------------- |
-| `summarizer` | Compaction (`/compact`) summary generation            |
-| `wizard`     | `persona.create` wizard persona-draft generation      |
-| `describer`  | MCP server-description generation                     |
+| role         | consumer                                         |
+| ------------ | ------------------------------------------------ |
+| `summarizer` | Compaction (`/compact`) summary generation       |
+| `wizard`     | `persona.create` wizard persona-draft generation |
+| `describer`  | MCP server-description generation                |
 
 The role namespace is open — plugins may mint additional roles, though only
 the well-known list above is recognized by the validator.
@@ -176,7 +176,6 @@ Chain: session (`/reasoning`) > selected model entry `reasoningLevel` >
 `llm.reasoningLevel`. Drivers own the mapping tables. A role-bound model
 honors its model-entry `reasoningLevel` (then `llm.reasoningLevel`); there
 is no session-level tier for role calls:
-
 
 | protocol   | off                           | low                            | medium/high/max         |
 | ---------- | ----------------------------- | ------------------------------ | ----------------------- |

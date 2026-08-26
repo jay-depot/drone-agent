@@ -764,7 +764,9 @@ export function createConversationService({
         );
         const effectiveReasoningLevel =
           reasoningLevel ??
-          (selection ? resolveConfiguredReasoningLevel(config, selection) : undefined);
+          (selection
+            ? resolveConfiguredReasoningLevel(config, selection)
+            : undefined);
 
         const chatRequest: DroneChatRequest = {
           model: currentModel,
