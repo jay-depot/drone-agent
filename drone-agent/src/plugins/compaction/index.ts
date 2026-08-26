@@ -4,6 +4,7 @@ import {
   type DroneChatMessage,
   type DroneCompactionConfig,
   type DroneConversationEvent,
+  type DroneLlmCapability,
   type DroneLlmProvider,
   type DroneLogger,
   type DronePlugin,
@@ -15,8 +16,8 @@ import { getOldestNonSummaryTurns } from '../../runtime/turn-utils.js';
 
 type RegistrationContext = {
   config: DroneCompactionConfig;
-  getProvider: () => DroneLlmProvider;
-  getModel: () => string;
+  /** LLM broker capability used to resolve the summarizer role per round. */
+  llm: DroneLlmCapability | undefined;
   sessionManager: DroneSessionManager;
   logger: DroneLogger;
   compactionInFlight: { value: boolean };
@@ -192,8 +193,7 @@ async function maybeCompact(input: {
   fragmentMessages: DroneChatMessage[];
   options: CompactionOptions;
 }): Promise<void> {
-  const { config, sessionManager, getProvider, getModel, logger, emitEvent } =
-    input.context;
+  const { config, sessionManager, llm, logger, emitEvent } = input.context;
 
   if (!config.enabled && !input.options.force) {
     return;
@@ -203,19 +203,17 @@ async function maybeCompact(input: {
     return;
   }
 
-  const provider = getProvider();
-  const model = getModel();
+  if (!llm) {
+    logger.warn(
+      'compaction: LLM broker capability unavailable; skipping summarization.'
+    );
+    return;
+  }
 
   const fallbackContextWindow = calculateFallbackContextWindow(
     input.baseSystemMessages,
     input.fragmentMessages,
     config.softThresholdPercent
-  );
-
-  const contextWindowTokens = await resolveContextWindow(
-    provider,
-    model,
-    fallbackContextWindow
   );
 
   const softThreshold = config.softThresholdPercent / 100;
@@ -251,6 +249,15 @@ async function maybeCompact(input: {
   // compaction is the wrong moment to warn. The next hook fire re-checks.
   let compactedDuringThisCall = false;
   for (let iteration = 0; iteration < maxIterations; iteration++) {
+    // Resolve the summarizer role fresh each round so a mid-loop model change
+    // (or a role that only becomes available later) is picked up.
+    const resolved = llm.resolveModelForRole('summarizer');
+    const contextWindowTokens = await resolveContextWindow(
+      resolved.provider,
+      resolved.model,
+      fallbackContextWindow
+    );
+
     const turns = sessionManager.getTurns();
     if (turns.length === 0) {
       break;
@@ -355,13 +362,14 @@ async function maybeCompact(input: {
 
     emitEvent?.({
       kind: 'compaction',
-      message: `Compacting ${sliceSize} turn(s)...`,
+      message: `Compacting ${sliceSize} turn(s) with ${resolved.providerId}/${resolved.model}...`,
       status: 'started',
     });
 
     try {
-      const response = await provider.chat({
-        model,
+      const response = await resolved.provider.chat({
+        model: resolved.model,
+        reasoningLevel: resolved.reasoningLevel,
         tools: [],
         messages: [
           { role: 'system', content: summarySystemPrompt },
@@ -390,7 +398,7 @@ async function maybeCompact(input: {
       compactedDuringThisCall = true;
       emitEvent?.({
         kind: 'compaction',
-        message: `Compacted ${sliceSize} turn(s)`,
+        message: `Compacted ${sliceSize} turn(s) with ${resolved.providerId}/${resolved.model}`,
         status: 'completed',
       });
     } catch (error) {
@@ -543,8 +551,6 @@ async function handleDrop(
 
 export type CompactionPluginDeps = {
   sessionManager: DroneSessionManager;
-  getModel: () => string;
-  getProvider: () => DroneLlmProvider;
   /**
    * Optional callback to emit conversation events for TUI visibility.
    * When provided, compaction will emit 'started', 'completed', and
@@ -563,8 +569,6 @@ export function createCompactionPlugin(
   deps: CompactionPluginDeps
 ): DronePlugin {
   const sessionManager = deps.sessionManager;
-  const getModel = deps.getModel;
-  const getProvider = deps.getProvider;
 
   return {
     metadata: {
@@ -577,6 +581,7 @@ export function createCompactionPlugin(
     },
     register: async registration => {
       const config = registration.getConfig().compaction;
+      const llm = registration.request<DroneLlmCapability>('llm');
 
       const runtime = registration.request<{
         queueSystemReminder?: (content: string) => void;
@@ -584,8 +589,7 @@ export function createCompactionPlugin(
 
       const context: RegistrationContext = {
         config,
-        getProvider,
-        getModel,
+        llm,
         sessionManager,
         logger: registration.logger,
         compactionInFlight: { value: false },
@@ -668,9 +672,6 @@ export function createCompactionPlugin(
           const summaryTurns = turns.filter(t => t.kind === 'summary');
           const nonSummaryTurns = turns.filter(t => t.kind !== 'summary');
 
-          const provider = getProvider();
-          const model = getModel();
-
           const baseSystemMessages: DroneChatMessage[] = [
             {
               role: 'system',
@@ -684,11 +685,13 @@ export function createCompactionPlugin(
             config.softThresholdPercent
           );
 
-          const contextWindowTokens = await resolveContextWindow(
-            provider,
-            model,
-            fallbackContextWindow
-          );
+          const contextWindowTokens = llm
+            ? await resolveContextWindow(
+                llm.getActiveProvider(),
+                llm.getModel(),
+                fallbackContextWindow
+              )
+            : fallbackContextWindow;
           const counts = summarizeTokenCounts({
             turns,
             baseSystemMessages,

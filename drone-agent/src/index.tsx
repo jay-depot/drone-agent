@@ -108,7 +108,6 @@ async function main(): Promise<void> {
   });
   const builtInPlugins = createBuiltInPlugins({
     sessionManager,
-    ...createLlmGetters(engineRef),
     buildFragmentMessages: async () => {
       const engine = getEngine();
       const fragments = await engine.renderPromptFragments();
