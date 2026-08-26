@@ -306,5 +306,13 @@
   {
     "timestamp": "2026-08-25T19:16:13.990Z",
     "insight": "When validating guard-style fixes, the stash-dance (git stash push -- <source files> -> run new tests -> git stash pop) cleanly proves criterion 'new cases fail pre-fix': it isolates ONLY source changes while keeping new test files in the tree, avoiding a full revert dance. Also: vitest's failure taxonomy matters — assertion failures show as failed tests, but syntax/transform errors in imported source show as FAILED SUITES with all individual tests passing; grep for 'Transform failed' / 'already been declared' when suites fail but tests pass."
+  },
+  {
+    "timestamp": "2026-08-26T00:09:33.925Z",
+    "insight": "In Ink, a parent <Text bold> leaves SGR 1 active when nested <Text> children open their own SGR runs — children do NOT inherit the parent's color props, but they DO inherit its active attribute state in the squashed output. Consequence: hardcoded fg colors on nested elements (e.g. color='black' inside bold) collide with terminal bold-promotion (fg black→bright black) and can equal common background palette slots (gray=bright black=90/100). Rule for this codebase: never hardcode a foreground on a child <Text> that sits inside an attribute-bearing parent; let it inherit, or model attributes explicitly (SyntaxStyle) instead of encoding them in color strings."
+  },
+  {
+    "timestamp": "2026-08-26T00:40:32.501Z",
+    "insight": "The drone-agent git plugin (git__commit/git__status cwd default) reported branch \"main\" while the repository was actually on feat/display-fixes; `git -C <repo> branch --show-current` via shell showed the truth. The plugin also failed to distinguish \"nothing to commit\" from other commit failures (bare \"Command failed\" with no stderr). Until fixed: verify branch state with an exec git command before trusting plugin-reported branch info, especially before deciding whether .drone-agent memory/insight files may be committed."
   }
 ]
