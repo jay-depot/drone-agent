@@ -6,6 +6,9 @@ import type { DroneConfigLayer } from 'drone-core';
  * - `providers` entries are BANNED from project-scope config files.
  *   Providers are machine/user-level infrastructure; projects may pin
  *   `llm.active`/`llm.reasoningLevel` but never define providers.
+ * - `llm.modelRoles` are BANNED from project-scope config files. Role values
+ *   reference providers that may not exist in a freshly-cloned environment;
+ *   projects may pin `llm.active` but not role-model bindings.
  *   Legacy sections (ollama/openai/anthropic/openrouter) are NOT banned —
  *   they are grandfathered during the migration window.
  * - A plaintext (non-`${VAR}`) apiKey contributed by a PROJECT-scope file
@@ -39,6 +42,17 @@ export function enforceProviderScopePolicy(
         `Project-scope config ${
           layer.path ? `(${layer.path}) ` : ''
         }defines "providers" entries [${Object.keys(providers).join(', ')}]. Providers are banned at project scope — define them in user config (~/.drone-agent/config.json) or distribute them via swarm underlays. Projects may pin llm.active instead.`
+      );
+    }
+
+    const modelRoles = layer.config.llm?.modelRoles;
+    if (modelRoles && Object.keys(modelRoles).length > 0) {
+      errors.push(
+        `Project-scope config ${
+          layer.path ? `(${layer.path}) ` : ''
+        }defines "llm.modelRoles" [${Object.keys(modelRoles).join(
+          ', '
+        )}]. Role-model bindings are banned at project scope — define them in user config (~/.drone-agent/config.json) or distribute them via swarm underlays. Projects may pin llm.active instead.`
       );
     }
 
