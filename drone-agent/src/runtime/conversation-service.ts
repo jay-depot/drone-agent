@@ -4,6 +4,7 @@ import {
   estimateTextTokens,
   parseModelSelection,
   resolveConfiguredReasoningLevel,
+  toToolResultContent,
   type DroneGuardrailConfig,
   type DroneGuardrailThresholdConfig,
   type DebugFlagRegistry,
@@ -30,7 +31,6 @@ import {
   withBoundedSilentRetry,
   type RetryPolicyConfig,
 } from './llm-retry.js';
-import { isRecord } from '../shared/type-guards.js';
 import type { DronePluginEngine } from './plugin-engine.js';
 import type { DroneSessionManager } from './session-manager.js';
 import type { ContextBudgetService } from './context-budget-service.js';
@@ -408,17 +408,21 @@ export function createConversationService({
     onProgress?: (chunk: string) => void,
     context?: DroneToolExecutionContext
   ): Promise<
-    | { kind: 'ok'; content: string }
+    | { kind: 'ok'; content: string; images?: DroneImageContent[] }
     | { kind: 'error'; content: string; code: string | null }
   > {
     try {
-      const content = await engine.executeTool(
+      const result = await engine.executeTool(
         canonicalName,
         input,
         onProgress,
         context
       );
-      return { kind: 'ok', content };
+      return {
+        kind: 'ok',
+        content: toToolResultContent(result),
+        images: typeof result === 'string' ? undefined : result.images,
+      };
     } catch (err) {
       const rawMessage = err instanceof Error ? err.message : String(err);
       const code = (err as NodeJS.ErrnoException)?.code ?? null;
@@ -571,14 +575,16 @@ export function createConversationService({
       // Shared tool-execution pipeline used by both the primary tool-call path
       // and the Feature-1 hint-recovery path: execute all tool calls in
       // parallel, truncate results, buffer them, emit batch/error events,
-      // append results to the session, run onAfterToolCall hooks, and extract
-      // images. Returns the buffered results plus stuck-detector info so the
-      // caller can make its own loop decisions (iteration limit, stop, throw).
+      // append results to the session, run onAfterToolCall hooks, and carry
+      // structured images. Returns the buffered results plus stuck-detector
+      // info so the caller can make its own loop decisions (iteration limit,
+      // stop, throw).
       async function executeToolCalls(toolCalls: DroneToolCall[]): Promise<{
         bufferedResults: Array<{
           name: string;
           content: string;
           toolCallId: string | undefined;
+          images?: DroneImageContent[];
         }>;
         allErrors: boolean;
         firstErrorSignature: {
@@ -635,17 +641,33 @@ export function createConversationService({
           }
         }
 
-        // Collect results in order (the map preserves the array order).
+        // Collect results in order (the map preserves the array order),
+        // enforcing the per-message image count cap so the images channel
+        // stays bounded. Over-cap images are dropped (kept-first-N) and a
+        // marker is appended to content telling the model how to retrieve
+        // the rest.
+        const maxImagesPerMessage = config.session.maxImagesPerMessage ?? 20;
         const bufferedResults: Array<{
           name: string;
           content: string;
           toolCallId: string | undefined;
+          images?: DroneImageContent[];
         }> = [];
         for (const result of rawResults) {
+          const toolResult = result.toolResult;
+          let content = toolResult.content;
+          let images = toolResult.kind === 'ok' ? toolResult.images : undefined;
+          if (images && images.length > maxImagesPerMessage) {
+            const kept = images.slice(0, maxImagesPerMessage);
+            const omitted = images.length - kept.length;
+            images = kept;
+            content = `${content}\n\n[${omitted} additional images omitted. Request a narrower/range selection to retrieve them.]`;
+          }
           bufferedResults.push({
             name: result.name,
-            content: result.toolResult.content,
+            content,
             toolCallId: result.toolCallId,
+            images,
           });
         }
 
@@ -719,13 +741,12 @@ export function createConversationService({
           logger.warn(`onAfterToolCall hook error (non-fatal): ${msg}`);
         }
 
-        // After appending tool results, check for image data in tool results.
-        // Per-tool structured extractors (D11) produce DroneImageContent[]
-        // directly; unregistered tools fall back to the content-scan heuristic.
-        // When the durability gate is on (log enabled or swarm active) we
-        // eagerly describe images so the description lands in the persisted
-        // store (D5). Otherwise we describe lazily at the request seam when a
-        // non-vision model is about to receive the image (D3).
+        // After appending tool results, carry the structured images (already
+        // capped to maxImagesPerMessage) out of the content string and into
+        // the session. When the durability gate is on (log enabled or swarm
+        // active) we eagerly describe images so the description lands in the
+        // persisted store (D5). Otherwise we describe lazily at the request
+        // seam when a non-vision model is about to receive the image (D3).
         const durabilityGate =
           config.log.enabled || engine.getCapability('swarm') !== undefined;
         // D1: describe across the batch in parallel (Promise.all), then apply
@@ -738,10 +759,7 @@ export function createConversationService({
           described: Promise<DroneImageContent[]>;
         }> = [];
         for (const result of bufferedResults) {
-          const images = extractImagesFromToolResult(
-            result.name,
-            result.content
-          );
+          const images = result.images ?? [];
           if (images.length === 0) continue;
           const described = durabilityGate
             ? describeImagesSafely(llm, images)
@@ -1165,54 +1183,6 @@ export function createConversationService({
   };
 }
 
-// ── Per-tool image extractor registry (D11) ─────────────────────────────
-// Tools that know their own return shape register a structured extractor
-// producing DroneImageContent[] directly. Unregistered tools fall back to the
-// content-scan heuristic (extractImageFromToolResult / findDataUri).
-type ImageExtractor = (content: string) => DroneImageContent[];
-
-const imageExtractors = new Map<string, ImageExtractor>();
-
-/** Register a structured image extractor for a tool name. */
-export function registerImageExtractor(
-  toolName: string,
-  extractor: ImageExtractor
-): void {
-  imageExtractors.set(toolName, extractor);
-}
-
-/** Extract images from a tool result, using the structured extractor when registered. */
-function extractImagesFromToolResult(
-  toolName: string,
-  content: string
-): DroneImageContent[] {
-  const structured = imageExtractors.get(toolName);
-  if (structured) {
-    try {
-      const images = structured(content);
-      if (images.length > 0) return images;
-    } catch {
-      // Fall through to the heuristic on malformed structured output.
-    }
-  }
-  const single = extractImageFromToolResult(content);
-  return single ? [single] : [];
-}
-
-// file__read_image returns JSON `{ path, mimeType, data, size }`.
-registerImageExtractor('file__read_image', content => {
-  const parsed = JSON.parse(content);
-  if (
-    isRecord(parsed) &&
-    typeof parsed.mimeType === 'string' &&
-    parsed.mimeType.startsWith('image/') &&
-    typeof parsed.data === 'string'
-  ) {
-    return [{ mimeType: parsed.mimeType, data: parsed.data }];
-  }
-  return [];
-});
-
 /**
  * Describe images via the broker's describeImages capability, guarded by a
  * ~60s timeout (aligned with retry maxWaitMs). Fails open: on timeout or
@@ -1279,48 +1249,6 @@ async function describeUndescribedImages(
     const desc = described[i]?.description;
     if (desc) undescribed[i].description = desc;
   }
-}
-
-function extractImageFromToolResult(content: string): DroneImageContent | null {
-  try {
-    const parsed = JSON.parse(content);
-    if (isRecord(parsed)) {
-      // Check for file__read_image format
-      if (
-        typeof parsed.mimeType === 'string' &&
-        parsed.mimeType.startsWith('image/') &&
-        typeof parsed.data === 'string'
-      ) {
-        return { mimeType: parsed.mimeType, data: parsed.data };
-      }
-      // Check for MCP data URI in any string field
-      const dataUri = findDataUri(parsed);
-      if (dataUri) return dataUri;
-    }
-  } catch {
-    // Not JSON — skip
-  }
-  return null;
-}
-
-function findDataUri(obj: unknown): DroneImageContent | null {
-  if (typeof obj === 'string') {
-    const match = obj.match(/^data:(image\/\w+);base64,(.+)$/);
-    if (match) return { mimeType: match[1], data: match[2] };
-  }
-  if (Array.isArray(obj)) {
-    for (const item of obj) {
-      const result = findDataUri(item);
-      if (result) return result;
-    }
-  }
-  if (isRecord(obj)) {
-    for (const val of Object.values(obj)) {
-      const result = findDataUri(val);
-      if (result) return result;
-    }
-  }
-  return null;
 }
 
 /**

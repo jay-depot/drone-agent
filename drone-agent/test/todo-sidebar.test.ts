@@ -24,7 +24,7 @@ async function createEngineWithTodo(): Promise<{
   executeTool: (
     name: string,
     input: Record<string, unknown>
-  ) => Promise<string>;
+  ) => Promise<string | import('drone-core').DroneToolResult>;
 }> {
   const engine = createDronePluginEngine({
     plugins: [todoPlugin],

@@ -52,6 +52,24 @@ export type DroneImageContent = {
   description?: string;
 };
 
+/**
+ * Structured result a tool may return in place of a plain string. When a tool
+ * returns a `DroneToolResult`, the base64 image data must live ONLY in
+ * `images[]` (never in `content`), so the images channel is the single source
+ * of truth and the content string stays small enough for token estimation and
+ * wire transmission.
+ *
+ * The string form of a tool result is a first-class "text-only" equivalent of
+ * this type with no images. Tools may keep returning plain strings; only
+ * image-producing tools need the structured form.
+ */
+export type DroneToolResult = {
+  /** Human-readable text for the LLM. Must NOT contain base64 image data. */
+  content: string;
+  /** Structured images carried out-of-band from the content string. */
+  images?: DroneImageContent[];
+};
+
 export type DroneChatMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;

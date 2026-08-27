@@ -3,6 +3,7 @@ import path from 'node:path';
 import fg from 'fast-glob';
 import type { DronePlugin, DroneToolDefinition } from 'drone-core';
 import { FileReadBlock } from '../tui/components/FileReadBlock.js';
+import { FileReadImageBlock } from '../tui/components/FileReadImageBlock.js';
 import { FileWriteBlock } from '../tui/components/FileWriteBlock.js';
 import { FileApplyDiffBlock } from '../tui/components/FileApplyDiffBlock.js';
 import { FileListBlock } from '../tui/components/FileListBlock.js';
@@ -567,11 +568,14 @@ export const filePlugin: DronePlugin = {
         }
 
         const data = buffer.toString('base64');
-        return JSON.stringify(
-          { path: filePath, mimeType, data, size: buffer.length },
-          null,
-          2
-        );
+        return {
+          content: JSON.stringify(
+            { path: filePath, mimeType, size: buffer.length },
+            null,
+            2
+          ),
+          images: [{ mimeType, data }],
+        };
       },
     });
   },

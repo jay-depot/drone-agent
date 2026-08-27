@@ -1,6 +1,8 @@
 import { isRecord } from '../../shared/type-guards.js';
 import type {
   DroneLogger,
+  DroneToolResult,
+  DroneImageContent,
   DroneMcpStreamableHttpServerConfig,
   DroneMcpResourceMeta,
   DroneMcpResourceTemplateMeta,
@@ -83,6 +85,40 @@ function extractToolErrorText(result: unknown): string {
     .map(c => (typeof c.text === 'string' ? c.text : ''))
     .join('\n')
     .trim();
+}
+
+/**
+ * Split a successful MCP `tools/call` result into its text and image lanes.
+ * - `text` content blocks are joined into the content string (mirrors
+ *   `extractToolErrorText`).
+ * - `image` content blocks (MCP protocol shape `{ type:'image', data,
+ *   mimeType }`) become structured `DroneImageContent[]`.
+ * - Any other content block type (e.g. `resource`) is currently dropped; this
+ *   helper is intentionally minimal so it can be extended with a `resource`
+ *   lane later without touching callers.
+ */
+export function splitToolResultBlocks(result: unknown): DroneToolResult {
+  const textParts: string[] = [];
+  const images: DroneImageContent[] = [];
+  if (isRecord(result) && Array.isArray(result.content)) {
+    for (const block of result.content) {
+      if (!isRecord(block)) continue;
+      if (typeof block.text === 'string') {
+        textParts.push(block.text);
+      } else if (
+        block.type === 'image' &&
+        typeof block.data === 'string' &&
+        typeof block.mimeType === 'string'
+      ) {
+        images.push({ mimeType: block.mimeType, data: block.data });
+      }
+      // Other block types (e.g. resource) are dropped for now.
+    }
+  }
+  return {
+    content: textParts.join('\n').trim(),
+    images: images.length > 0 ? images : undefined,
+  };
 }
 
 function sleep(milliseconds: number): Promise<void> {

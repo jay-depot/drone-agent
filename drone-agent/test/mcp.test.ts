@@ -24,7 +24,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ChildProcess } from 'node:child_process';
-import { type DroneAgentConfig } from 'drone-core';
+import { toToolResultContent, type DroneAgentConfig } from 'drone-core';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { mcpPlugin } from '../src/plugins/mcp/index.js';
 import { startFakeMcpServer } from './mcp-fake-server.js';
@@ -102,7 +102,7 @@ function statusOf(
   id: string
 ): Promise<Record<string, unknown>> {
   return engine.executeTool('mcp__server_status', {}).then(raw => {
-    const parsed = JSON.parse(raw) as {
+    const parsed = JSON.parse(toToolResultContent(raw)) as {
       servers: Array<Record<string, unknown>>;
     };
     return parsed.servers.find(s => s.id === id) as Record<string, unknown>;
@@ -172,7 +172,9 @@ describe('mcp plugin integration (stdio child)', () => {
     });
 
     const result = JSON.parse(
-      await engine.executeTool('runtime__list_tools', { plugin: 'mcp' })
+      toToolResultContent(
+        await engine.executeTool('runtime__list_tools', { plugin: 'mcp' })
+      )
     );
     expect(result.toolCount).toBeGreaterThanOrEqual(2);
     const toolList = result.tools as Array<{
@@ -194,9 +196,11 @@ describe('mcp plugin integration (stdio child)', () => {
 
     // Mount it via runtime__mount_tool.
     const mountResult = JSON.parse(
-      await engine.executeTool('runtime__mount_tool', {
-        tool: 'mcp__demo__echo',
-      })
+      toToolResultContent(
+        await engine.executeTool('runtime__mount_tool', {
+          tool: 'mcp__demo__echo',
+        })
+      )
     );
     expect(mountResult.success).toBe(true);
     expect(mountResult.tool).toBe('mcp__demo__echo');
@@ -205,10 +209,8 @@ describe('mcp plugin integration (stdio child)', () => {
     expect(toolNames(engine)).toContain('mcp__demo__echo');
 
     // And it is callable.
-    const callResult = JSON.parse(
-      await engine.executeTool('mcp__demo__echo', {})
-    );
-    expect(callResult.tool).toBe('echo');
+    const callResult = await engine.executeTool('mcp__demo__echo', {});
+    expect(toToolResultContent(callResult)).toBe('called echo with {}');
   });
 
   it('runtime__mount_tool is idempotent', async () => {
@@ -221,9 +223,11 @@ describe('mcp plugin integration (stdio child)', () => {
       tool: 'mcp__demo__echo',
     });
     const result = JSON.parse(
-      await engine.executeTool('runtime__mount_tool', {
-        tool: 'mcp__demo__echo',
-      })
+      toToolResultContent(
+        await engine.executeTool('runtime__mount_tool', {
+          tool: 'mcp__demo__echo',
+        })
+      )
     );
     expect(result.success).toBe(false);
     expect(result.error).toContain('already mounted');
@@ -236,9 +240,11 @@ describe('mcp plugin integration (stdio child)', () => {
     });
 
     const result = JSON.parse(
-      await engine.executeTool('runtime__mount_tool', {
-        tool: 'mcp__demo__nonexistent',
-      })
+      toToolResultContent(
+        await engine.executeTool('runtime__mount_tool', {
+          tool: 'mcp__demo__nonexistent',
+        })
+      )
     );
     expect(result.success).toBe(false);
     expect(result.error).toContain('Unknown');
@@ -258,9 +264,11 @@ describe('mcp plugin integration (stdio child)', () => {
 
     // Unmount it
     const result = JSON.parse(
-      await engine.executeTool('runtime__unmount_tool', {
-        tool: 'mcp__demo__echo',
-      })
+      toToolResultContent(
+        await engine.executeTool('runtime__unmount_tool', {
+          tool: 'mcp__demo__echo',
+        })
+      )
     );
     expect(result.success).toBe(true);
     expect(result.tool).toBe('mcp__demo__echo');
@@ -276,9 +284,11 @@ describe('mcp plugin integration (stdio child)', () => {
     await mountMcpResourceTools(engine, 'demo');
 
     const listed = JSON.parse(
-      await engine.executeTool('mcp__demo__list', {
-        type: 'resource_templates',
-      })
+      toToolResultContent(
+        await engine.executeTool('mcp__demo__list', {
+          type: 'resource_templates',
+        })
+      )
     );
     expect(Array.isArray(listed.templates)).toBe(true);
     expect(
@@ -288,10 +298,12 @@ describe('mcp plugin integration (stdio child)', () => {
     // A URI formed by substituting the template variable must be readable via
     // the shared __get tool with type="resource".
     const read = JSON.parse(
-      await engine.executeTool('mcp__demo__get', {
-        type: 'resource',
-        uri: 'file:///etc/hostname',
-      })
+      toToolResultContent(
+        await engine.executeTool('mcp__demo__get', {
+          type: 'resource',
+          uri: 'file:///etc/hostname',
+        })
+      )
     );
     expect(read.uri).toBe('file:///etc/hostname');
   });
@@ -377,7 +389,7 @@ describe('mcp plugin integration (stdio child)', () => {
     // with level: 'warning', logger: 'fake-server', data: 'log from log-trigger'
     // before responding. The notification handler should dispatch to the logger.
     const result = await engine.executeTool('mcp__demo__log-trigger', {});
-    expect(result).toContain('called log-trigger');
+    expect(toToolResultContent(result)).toContain('called log-trigger');
 
     // Give the notification handler a tick to process.
     await new Promise(resolve => setTimeout(resolve, 50));
@@ -398,7 +410,9 @@ describe('mcp plugin integration (stdio child)', () => {
 
     // List all MCP tools
     const result = JSON.parse(
-      await engine.executeTool('runtime__list_tools', { plugin: 'mcp' })
+      toToolResultContent(
+        await engine.executeTool('runtime__list_tools', { plugin: 'mcp' })
+      )
     );
     const names = result.tools.map((t: { name: string }) => t.name);
 

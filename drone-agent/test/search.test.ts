@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   createDefaultAgentConfig,
+  toToolResultContent,
   type DronePluginRegistration,
   type DronePromptFragment,
   type DroneToolDefinition,
@@ -16,18 +17,34 @@ import { silentLogger } from './helpers.js';
 
 function captureRegistration(): {
   registration: DronePluginRegistration;
-  tools: Map<string, DroneToolDefinition>;
+  tools: Map<
+    string,
+    {
+      execute: (input: Record<string, unknown>) => Promise<string>;
+      description?: string;
+    }
+  >;
   fragments: Map<string, DronePromptFragment>;
   runOnPluginsLoaded: () => Promise<void>;
 } {
-  const tools = new Map<string, DroneToolDefinition>();
+  const tools = new Map<
+    string,
+    {
+      execute: (input: Record<string, unknown>) => Promise<string>;
+      description?: string;
+    }
+  >();
   const fragments = new Map<string, DronePromptFragment>();
   let onPluginsLoadedCallback: (() => Promise<void>) | undefined;
   const registration: DronePluginRegistration = {
     logger: silentLogger(),
     getConfig: () => createDefaultAgentConfig(),
     registerTool: tool => {
-      tools.set(tool.name, tool);
+      tools.set(tool.name, {
+        execute: async (input: Record<string, unknown>) =>
+          toToolResultContent(await tool.execute(input)),
+        description: tool.description,
+      });
     },
     registerPromptFragment: fragment => {
       fragments.set(fragment.key, fragment);
@@ -173,7 +190,9 @@ describe('search plugin — semantic exclude passthrough', () => {
       logger: silentLogger(),
       getConfig: () => config,
       registerTool: tool => {
-        tools.set(tool.name, tool.execute);
+        tools.set(tool.name, async (input: Record<string, unknown>) =>
+          toToolResultContent(await tool.execute(input))
+        );
       },
       registerPromptFragment: () => {},
       registerHelp: () => {},

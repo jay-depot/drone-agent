@@ -1,6 +1,7 @@
 import {
   createConsoleLogger,
   createDebugFlagRegistry,
+  toToolResultContent,
   type DroneLlmCapability,
   type DroneLlmProvider,
 } from 'drone-core';
@@ -467,7 +468,7 @@ async function main(): Promise<void> {
       }
       await engine.runHooks('onBeforePrompt');
       const result = await selectedTool.execute({});
-      logger.info(result);
+      logger.info(toToolResultContent(result));
       await engine.runHooks('onAfterToolCall');
     }
   } else if (invocation.kind === 'default' && !invocation.options.once) {
@@ -507,7 +508,7 @@ async function main(): Promise<void> {
       invocation.kind === 'tool'
         ? await engine.executeTool(invocation.toolName, invocation.input)
         : await selectedTool.execute({});
-    logger.info(result);
+    logger.info(toToolResultContent(result));
     await engine.runHooks('onAfterToolCall');
   }
 

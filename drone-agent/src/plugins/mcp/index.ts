@@ -12,6 +12,7 @@ import type {
 } from 'drone-core';
 import {
   createMcpClientConnection,
+  splitToolResultBlocks,
   type McpClientConnection,
   type McpToolMeta,
 } from './client.js';
@@ -309,11 +310,7 @@ export const mcpPlugin: DronePlugin = {
           inputSchema: toDroneInputSchema(tool.inputSchema),
           execute: async toolInput => {
             const result = await connection.callTool(tool.name, toolInput);
-            return JSON.stringify(
-              { serverId, tool: tool.name, result },
-              null,
-              2
-            );
+            return splitToolResultBlocks(result);
           },
         };
         toolMap.set(tool.name, { definition: toolDef, mounted: false });

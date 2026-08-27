@@ -7,6 +7,7 @@ import {
   type DroneImageContent,
   type DroneLlmCapability,
   type DroneLlmProvider,
+  type DroneToolResult,
 } from 'drone-core';
 import { createConversationService } from '../src/runtime/conversation-service.js';
 import { createContextBudgetService } from '../src/runtime/context-budget-service.js';
@@ -94,6 +95,8 @@ async function setup(options: {
   llmOverrides?: LlmOverrides;
   logEnabled?: boolean;
   swarmActive?: boolean;
+  maxImagesPerMessage?: number;
+  executeToolImpl?: () => Promise<string | DroneToolResult>;
 }): Promise<Harness> {
   const engine = createMockEngine({
     tools: [
@@ -108,18 +111,25 @@ async function setup(options: {
         },
       },
     ],
-    executeToolImpl: async () =>
-      JSON.stringify({
-        path: '/tmp/test.png',
-        mimeType: 'image/png',
-        data: 'base64data',
-        size: 100,
-      }),
+    executeToolImpl:
+      options.executeToolImpl ??
+      (async () =>
+        ({
+          content: JSON.stringify({
+            path: '/tmp/test.png',
+            mimeType: 'image/png',
+            size: 100,
+          }),
+          images: [{ mimeType: 'image/png', data: 'base64data' }],
+        }) satisfies DroneToolResult),
   });
   const provider = makeProvider(options.chatResponses);
   const llm = makeLlmCapability(provider, options.llmOverrides);
   const config = createDefaultAgentConfig();
   if (options.logEnabled !== undefined) config.log.enabled = options.logEnabled;
+  if (options.maxImagesPerMessage !== undefined) {
+    config.session.maxImagesPerMessage = options.maxImagesPerMessage;
+  }
   const sessionManager = createSessionManager();
   const budgetService = makeBudgetService(provider);
   const conversation = createConversationService({
@@ -400,5 +410,71 @@ describe('conversation-service presentation stripping (D11)', () => {
     expect(userMsg.images).toHaveLength(1);
     // The base64 blob should be stripped from content (marker left).
     expect(userMsg.content).not.toContain('base64data');
+  });
+});
+
+describe('conversation-service per-message image count cap', () => {
+  it('keeps first-N images and appends an omission marker over the cap', async () => {
+    const images = Array.from({ length: 25 }, (_, i) => ({
+      mimeType: 'image/png',
+      data: `img-${i}`,
+    }));
+    const h = await setup({
+      chatResponses: [
+        {
+          toolCalls: [
+            {
+              id: 'call-1',
+              name: 'read_image',
+              arguments: { path: '/tmp/test.png' },
+            },
+          ],
+        },
+        { message: 'done' },
+      ],
+      llmOverrides: { hasVision: true },
+      logEnabled: false,
+      maxImagesPerMessage: 20,
+      executeToolImpl: async () => ({ content: 'many images', images }),
+    });
+    await h.send('look at this');
+    // The stored tool result message should carry only the first 20 images.
+    const messages = h.sessionManager.getMessages();
+    const userMsg = messages.find(m => m.role === 'user' && m.images);
+    expect(userMsg?.images).toHaveLength(20);
+    expect(userMsg?.images?.[0].data).toBe('img-0');
+    expect(userMsg?.images?.[19].data).toBe('img-19');
+  });
+
+  it('appends the omission marker to the tool result content', async () => {
+    const images = Array.from({ length: 23 }, (_, i) => ({
+      mimeType: 'image/png',
+      data: `img-${i}`,
+    }));
+    const h = await setup({
+      chatResponses: [
+        {
+          toolCalls: [
+            {
+              id: 'call-1',
+              name: 'read_image',
+              arguments: { path: '/tmp/test.png' },
+            },
+          ],
+        },
+        { message: 'done' },
+      ],
+      llmOverrides: { hasVision: false },
+      logEnabled: true,
+      maxImagesPerMessage: 20,
+      executeToolImpl: async () => ({ content: 'many images', images }),
+    });
+    await h.send('look at this');
+    // The tool result content should carry the omission marker (23 - 20 = 3).
+    const messages = h.sessionManager.getMessages();
+    const toolMsg = messages.find(m => m.role === 'tool');
+    expect(toolMsg?.content).toContain(
+      '[3 additional images omitted. Request a narrower/range selection to retrieve them.]'
+    );
   });
 });

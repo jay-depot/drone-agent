@@ -97,6 +97,7 @@ export {
 export type {
   DroneLogger,
   DroneImageContent,
+  DroneToolResult,
   DroneToolJsonSchemaProperty,
   DroneToolJsonSchema,
   DroneChatMessage,
@@ -263,6 +264,7 @@ export {
   filterByGlobPatterns,
   createConsoleLogger,
   getCanonicalToolName,
+  toToolResultContent,
 } from './utils.js';
 
 // ── ToolRegistry ──────────────────────────────────────────────────────

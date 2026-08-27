@@ -163,6 +163,13 @@ export type DroneSessionConfig = {
    */
   maxImageSizeBytes?: number;
   /**
+   * Maximum number of images that may attach to a single tool-result message.
+   * Images beyond this count are dropped (kept-first-N) and a marker is
+   * appended to the result content telling the model how to retrieve the rest.
+   * Default is 20.
+   */
+  maxImagesPerMessage?: number;
+  /**
    * Maximum percentage of the context window that a single tool result
    * may consume. Results exceeding this threshold are truncated with a
    * note indicating the original size. Set to 0 to disable.
@@ -573,6 +580,7 @@ export function createDefaultAgentConfig(
       responseReserveTokens: 4096,
       maxToolIterations: 50,
       maxImageSizeBytes: 20 * 1024 * 1024,
+      maxImagesPerMessage: 20,
       promptOnToolIterationLimit: false,
       maxToolResultTokensPercent: 15,
       guardrail: {
