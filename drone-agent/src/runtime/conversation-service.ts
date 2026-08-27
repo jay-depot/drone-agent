@@ -720,18 +720,33 @@ export function createConversationService({
         }
 
         // After appending tool results, check for image data in tool results.
+        // Per-tool structured extractors (D11) produce DroneImageContent[]
+        // directly; unregistered tools fall back to the content-scan heuristic.
+        // When the durability gate is on (log enabled or swarm active) we
+        // eagerly describe images so the description lands in the persisted
+        // store (D5). Otherwise we describe lazily at the request seam when a
+        // non-vision model is about to receive the image (D3).
+        const durabilityGate =
+          config.log.enabled || engine.getCapability('swarm') !== undefined;
         for (const result of bufferedResults) {
-          const imageContent = extractImageFromToolResult(result.content);
-          if (imageContent) {
-            const activeProvider = llm.getActiveProvider();
-            if (activeProvider.supportsImagesInToolResults) {
-              sessionManager.updateLastToolResultImages([imageContent]);
+          const images = extractImagesFromToolResult(result.name, result.content);
+          if (images.length === 0) continue;
+          const activeProvider = llm.getActiveProvider();
+          if (activeProvider.supportsImagesInToolResults) {
+            if (durabilityGate) {
+              const described = await describeImagesSafely(llm, images);
+              sessionManager.updateLastToolResultImages(described);
             } else {
-              sessionManager.appendUserMessage(
-                `[Image from ${result.name} tool]`,
-                [imageContent]
-              );
+              sessionManager.updateLastToolResultImages(images);
             }
+          } else {
+            const described = durabilityGate
+              ? await describeImagesSafely(llm, images)
+              : images;
+            sessionManager.appendUserMessage(
+              `[Image from ${result.name} tool]`,
+              described
+            );
           }
         }
 
@@ -781,9 +796,11 @@ export function createConversationService({
             ? resolveConfiguredReasoningLevel(config, selection)
             : undefined);
 
+        const targetHasVision =
+          (await llm.hasVision?.(currentModel)) ?? false;
         const chatRequest: DroneChatRequest = {
           model: currentModel,
-          messages: (() => {
+          messages: await (async () => {
             const base: DroneChatMessage[] = [
               ...systemMessages,
               ...sessionManager.getMessages(),
@@ -805,7 +822,17 @@ export function createConversationService({
             for (const reminder of engine.drainSystemReminders()) {
               base.push({ role: 'system', content: reminder });
             }
-            return base;
+            // Lazy description (D3): when a non-vision model is about to
+            // receive an undescribed image, describe it now (once-cached into
+            // the stored message). Vision-capable targets skip generation.
+            if (!targetHasVision) {
+              await describeUndescribedImages(base, llm);
+            }
+            // Presentation stripping (D11): derive the wire representation
+            // per target model. Vision-capable target → image via images[]
+            // (base64 blob stripped from content, marker left). Non-vision
+            // target → description substituted into content, image omitted.
+            return prepareRequestMessages(base, targetHasVision);
           })(),
           tools,
           reasoningLevel: effectiveReasoningLevel,
@@ -1125,6 +1152,122 @@ export function createConversationService({
   };
 }
 
+// ── Per-tool image extractor registry (D11) ─────────────────────────────
+// Tools that know their own return shape register a structured extractor
+// producing DroneImageContent[] directly. Unregistered tools fall back to the
+// content-scan heuristic (extractImageFromToolResult / findDataUri).
+type ImageExtractor = (content: string) => DroneImageContent[];
+
+const imageExtractors = new Map<string, ImageExtractor>();
+
+/** Register a structured image extractor for a tool name. */
+export function registerImageExtractor(
+  toolName: string,
+  extractor: ImageExtractor
+): void {
+  imageExtractors.set(toolName, extractor);
+}
+
+/** Extract images from a tool result, using the structured extractor when registered. */
+function extractImagesFromToolResult(
+  toolName: string,
+  content: string
+): DroneImageContent[] {
+  const structured = imageExtractors.get(toolName);
+  if (structured) {
+    try {
+      const images = structured(content);
+      if (images.length > 0) return images;
+    } catch {
+      // Fall through to the heuristic on malformed structured output.
+    }
+  }
+  const single = extractImageFromToolResult(content);
+  return single ? [single] : [];
+}
+
+// file__read_image returns JSON `{ path, mimeType, data, size }`.
+registerImageExtractor('file__read_image', content => {
+  const parsed = JSON.parse(content);
+  if (
+    isRecord(parsed) &&
+    typeof parsed.mimeType === 'string' &&
+    parsed.mimeType.startsWith('image/') &&
+    typeof parsed.data === 'string'
+  ) {
+    return [{ mimeType: parsed.mimeType, data: parsed.data }];
+  }
+  return [];
+});
+
+/**
+ * Describe images via the broker's describeImages capability, guarded by a
+ * ~60s timeout (aligned with retry maxWaitMs). Fails open: on timeout or
+ * describer failure, images are returned unchanged (idempotent — a later
+ * call can retry). Never hard-errors on describer failure (D9).
+ */
+async function describeImagesSafely(
+  llm: DroneLlmCapability,
+  images: DroneImageContent[]
+): Promise<DroneImageContent[]> {
+  try {
+    return await withTimeout(
+      llm.describeImages(images),
+      60_000,
+      'image description timed out'
+    );
+  } catch {
+    // Fail open: return images unchanged. The broker already warns on
+    // describer failure; this guard covers the timeout path.
+    return images;
+  }
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
+/**
+ * Describe any undescribed images across the given messages, writing the
+ * descriptions back onto the stored image objects in place (the messages are
+ * references into the session store, so mutation persists). Idempotent —
+ * already-described images are skipped. Fails open (D9).
+ */
+async function describeUndescribedImages(
+  messages: DroneChatMessage[],
+  llm: DroneLlmCapability
+): Promise<void> {
+  const undescribed: DroneImageContent[] = [];
+  for (const message of messages) {
+    for (const img of message.images ?? []) {
+      if (!img.description) undescribed.push(img);
+    }
+  }
+  if (undescribed.length === 0) return;
+  const described = await describeImagesSafely(llm, undescribed);
+  // Write descriptions back onto the original image objects in place.
+  for (let i = 0; i < undescribed.length; i++) {
+    const desc = described[i]?.description;
+    if (desc) undescribed[i].description = desc;
+  }
+}
+
 function extractImageFromToolResult(content: string): DroneImageContent | null {
   try {
     const parsed = JSON.parse(content);
@@ -1165,4 +1308,53 @@ function findDataUri(obj: unknown): DroneImageContent | null {
     }
   }
   return null;
+}
+
+/**
+ * Derive the wire representation of each message for the target model (D11).
+ * - Vision-capable target: image carried via `images[]`; the redundant base64
+ *   blob is stripped from the content string, leaving a marker.
+ * - Non-vision target: the image is omitted and its description (if present)
+ *   is substituted into the content; if no description exists, the image is
+ *   sent as-is (today's behavior — fail open).
+ * Storage/estimator are untouched; this is presentation-only.
+ */
+function prepareRequestMessages(
+  messages: DroneChatMessage[],
+  targetHasVision: boolean
+): DroneChatMessage[] {
+  return messages.map(message => {
+    if (!message.images || message.images.length === 0) {
+      return message;
+    }
+    if (targetHasVision) {
+      // Strip the base64 blob from content, leaving a marker. The image is
+      // carried via images[].
+      const stripped = stripBase64Blobs(message.content);
+      return stripped === message.content
+        ? message
+        : { ...message, content: stripped };
+    }
+    // Non-vision target: substitute descriptions into content, omit images.
+    const described = message.images.filter(img => img.description);
+    if (described.length === 0) {
+      // No descriptions available — send as-is (fail open).
+      return message;
+    }
+    const descriptionText = described
+      .map(img => img.description)
+      .join('\n');
+    const content = message.content
+      ? `${message.content}\n\n[Image description]\n${descriptionText}`
+      : `[Image description]\n${descriptionText}`;
+    return { ...message, content, images: undefined };
+  });
+}
+
+/** Strip base64 image blobs from a content string, leaving a marker. */
+function stripBase64Blobs(content: string): string {
+  return content.replace(
+    /data:image\/\w+;base64,[A-Za-z0-9+/=]+/g,
+    '[Image attached]'
+  );
 }
