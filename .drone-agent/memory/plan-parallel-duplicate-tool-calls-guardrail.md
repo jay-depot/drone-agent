@@ -36,6 +36,7 @@ New `session.guardrail.deduplicateToolCalls` guardrail that collapses parallel i
 ## Steps
 
 ### Step 1 — drone-core config (types + schema + defaults)
+
 - `drone-core/src/config-types.ts`:
   - New type `DroneToolCallDedupConfig = { enabled?: boolean }`.
   - Add `deduplicateToolCalls?: DroneToolCallDedupConfig;` to `DroneGuardrailConfig`.
@@ -44,20 +45,28 @@ New `session.guardrail.deduplicateToolCalls` guardrail that collapses parallel i
 - Run `pnpm -r run build` (deps resolve from dist).
 
 ### Step 2 — shared helper module `runtime/tool-call-utils.ts`
+
 New pure module (imports `DroneToolCall` type from drone-core). Export:
+
 1. `toolCallSignature(call: { name: string; arguments: Record<string, unknown> }): string` — returns `name + ':' + JSON.stringify(arguments)`. THE single identity definition.
 2. `deduplicateToolCalls(toolCalls: DroneToolCall[]): { deduped: DroneToolCall[]; collapsedGroups: { name: string; removed: number }[] }` — pure transform: preserves order, keeps first occurrence per signature, returns deduped list + per-group collapse counts (removed = count-1 per group, only groups with removed > 0).
 
 ### Step 3 — refactor streak guardrail onto shared helper
+
 In `conversation-service.ts`, replace the inline identity check in the identical-call streak block (~line 900-910):
+
 ```ts
 lastIdenticalToolCall.name === call.name &&
-JSON.stringify(lastIdenticalToolCall.arguments) === JSON.stringify(call.arguments)
+  JSON.stringify(lastIdenticalToolCall.arguments) ===
+    JSON.stringify(call.arguments);
 ```
+
 with `toolCallSignature(lastIdenticalToolCall) === toolCallSignature(call)`. Import `toolCallSignature` from `./tool-call-utils.js`.
 
 ### Step 4 — wire dedup into conversation loop
+
 In `conversation-service.ts`:
+
 - Import `deduplicateToolCalls` from `./tool-call-utils.js`.
 - Resolve the toggle: `const dedupEnabled = guardrail.deduplicateToolCalls?.enabled ?? true;` (near the other resolved guardrail config; note this is not a threshold, so it stays a simple boolean — no `resolveThreshold`).
 - Immediately after `const toolCalls = response.toolCalls ?? [];` (line ~816), BEFORE broken-response detection:
@@ -66,7 +75,10 @@ In `conversation-service.ts`:
   if (dedupEnabled && toolCalls.length > 1) {
     const { deduped, collapsedGroups } = deduplicateToolCalls(toolCalls);
     for (const g of collapsedGroups) {
-      emit({ kind: 'notice', content: `Deduplicated ${g.removed} identical parallel tool call(s) to 1 (${g.name})` });
+      emit({
+        kind: 'notice',
+        content: `Deduplicated ${g.removed} identical parallel tool call(s) to 1 (${g.name})`,
+      });
     }
     toolCalls = deduped;
   }
@@ -74,6 +86,7 @@ In `conversation-service.ts`:
   (Change `const toolCalls` → `let toolCalls`.) The deduped `toolCalls` then flows through the existing broken-response detection, append, `toolCallBatch` event, and `executeToolCalls` unchanged.
 
 ### Step 5 — tests
+
 - New `drone-agent/test/tool-call-utils.test.ts`: unit tests for `toolCallSignature` (stability, key-order sensitivity matches streak) and `deduplicateToolCalls` (order preserved, first occurrence kept, per-group counts, no-op on unique batch, collapses multiple distinct groups, ignores `id` in key).
 - Add tests to `drone-agent/test/conversation-service-guardrails.test.ts`:
   - Defaults test (line ~513) asserts `deduplicateToolCalls?.enabled === true`.
@@ -84,16 +97,19 @@ In `conversation-service.ts`:
 - Verify no existing tests break (config defaults test, token-estimate tests that embed guardrail shape).
 
 ### Step 6 — docs
+
 - `AGENTS.md` guardrail table: add `deduplicateToolCalls.enabled` row (default true, "collapse parallel identical tool calls in one response").
 - Wiki (in `/home/unleet/Obsidian/drone-agent-project`): update `concepts/session-management.md` Guardrails section table + prose; update `decisions/145-guardrail-reliability-features.md` Related; add **ADR 166** `decisions/166-parallel-duplicate-tool-call-dedup.md`; add row to `decisions/index.md` (latest is 165); update `index.md` summary if needed.
 
 ### Step 7 — validation
+
 - `pnpm -r run build` — zero errors.
 - `pnpm lint` (eslint + prettier) — zero errors.
 - LSP diagnostics — zero errors across touched files (config-types.ts, config-schema.ts, tool-call-utils.ts, conversation-service.ts, tests).
 - `pnpm test` (fast suite) — all pass, including new dedup tests + existing streak tests.
 
 ## Validation Criteria
+
 - All LSP checks pass (typescript).
 - `pnpm -r run build` and `pnpm lint` pass with zero errors.
 - Fast test suite (`pnpm test`) passes; new dedup tests and existing streak-guardrail tests green.
