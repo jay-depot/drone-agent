@@ -7,7 +7,7 @@ tags:
   - llm
   - roles
 created: 2026-08-26T22:23:30.948Z
-updated: 2026-08-26T22:23:30.948Z
+updated: 2026-08-27T01:16:06.586Z
 ---
 
 # PLAN: `image_describer` role — describe images for non-vision models, as abstract context
@@ -26,90 +26,85 @@ When a tool result contains an image (e.g. `file__read_image`) and the target mo
 
 ## Locked decisions
 
-| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D1  | Seam: conversation-service tool loop, BESIDE truncation, BEFORE append. Parallel across batch (Promise.all). Synchronous-with-batch (description needed before next LLM send). Timeout-guarded ~60s (aligned with retry maxWaitMs).                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| D2  | Abstract context: stored turn holds image + description (both persisted); presentation derived per-request by target `hasVision`. `image_describer` model must itself be vision-capable (receives the image it describes).                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| D3  | Generation: LAZY-ONCE cached. Generate only when a non-vision model is about to receive the image; persist description into stored message; subsequent requests reuse. Vision-capable sessions never generate. Must land before compaction.                                                                                                                                                                                                                                                                                                                                                                                                          |
-| D4  | Pre-compaction flush: shared `describeImages(images)` capability broker-side (owns role resolution + provider access), returns images with descriptions filled; caller (conversation-service, compaction) owns write-back onto its turns. Idempotent (skip already-described). Triggers: (a) request seam lazy, (b) pre-compaction before formatTurnsForSummary.                                                                                                                                                                                                                                                                                     |
-| D5  | Durability (C2): description lands in log/swarm persisted store, gated `log.enabled \|\| swarm active`. EAGER-when-persisting at append time iff that gate; else lazy (D3). Structural guarantee, no shutdown race. NOT on safety-drop (safety trim drops turns wholesale, no carrier; dropped turns never reach store).                                                                                                                                                                                                                                                                                                                             |
-| D6  | Storage: `description?: string` on `DroneImageContent` (drone-core/src/session-types.ts:42-47), per-image, persisted verbatim. Survives log/swarm JSON round-trips (no schema validation on those stores). Multi-image tool results: describe each independently.                                                                                                                                                                                                                                                                                                                                                                                    |
-| D7  | Token accounting (Q5): per-image budget contribution = `max(256, estimateTextTokens(description))` in `estimateMessageTokens` (token-estimate.ts:15-33). Model-agnostic (no hasVision at estimate time). Do NOT fix the base64 double-count (content-text + images[]) — pre-existing, deferred to V2.                                                                                                                                                                                                                                                                                                                                                |
-| D8  | Describer vision fallback chain (Q6): (1) configured `image_describer` if vision-capable → (2) active selection if vision-capable → (3) SAME PROVIDER ENTRY as pinned describer: any vision-capable model under that exact `config.providers.<id>` → (4) breadth: any configured+instantiated vision-capable model in broker precedence order → (5) none: warn + skip, lazy/idempotent so later model change can retry. NO name-similarity/context-window ranking (guessing without price probe). NOTE: "fall back to active" alone is WRONG at the request seam (active is the non-vision model that triggered describing).                         |
-| D9  | Degradation (Q7): fail-open. Request seam timeout/failure → warn + send bare image (today's behavior). Flush failure → warn + skip (idempotent, retried later). Never hard-error on describer failure.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| D10 | Retry (Q7b): borrow T1 ONLY (bounded silent auto-retry on 429/5xx honoring Retry-After + session.retry backoff), via a SHARED `withBoundedSilentRetry` helper used by BOTH `runWithRetry`'s T1 branch (conversation-service.ts:492) and the describer — one source of truth. NO T2 (no user prompting for background artifact work). No separate T3 (already fails open). Outer ~60s timeout is the hard cap.                                                                                                                                                                                                                                        |
-| D11 | V1 loosening (Q8): per-tool image-extractor registry at the append/extraction seam — `file__read_image` gets a STRUCTURED extractor producing `DroneImageContent[]` directly (knows its own return shape); content-scan heuristic (`extractImageFromToolResult`/`findDataUri`, conversation-service.ts:1121-1160) becomes the DEFAULT FALLBACK for unregistered tools. PLUS presentation-only base64 stripping on the wire, BOTH vision and non-vision targets (image carried via `images[]`; leave marker in content text). Storage/persistence/estimator unchanged. MCP stays on the content-heuristic fallback (raw image blocks deferred to V2). |
+| #   | Decision |
+| --- | --- |
+| D1  | Seam: conversation-service tool loop, BESIDE truncation, BEFORE append. Parallel across batch (Promise.all). Synchronous-with-batch (description needed before next LLM send). Timeout-guarded ~60s (aligned with retry maxWaitMs). |
+| D2  | Abstract context: stored turn holds image + description (both persisted); presentation derived per-request by target `hasVision`. `image_describer` model must itself be vision-capable (receives the image it describes). |
+| D3  | Generation: LAZY-ONCE cached. Generate only when a non-vision model is about to receive the image; persist description into stored message; subsequent requests reuse. Vision-capable sessions never generate. Must land before compaction. |
+| D4  | Pre-compaction flush: shared `describeImages(images)` capability broker-side (owns role resolution + provider access), returns images with descriptions filled; caller (conversation-service, compaction) owns write-back onto its turns. Idempotent (skip already-described). Triggers: (a) request seam lazy, (b) pre-compaction before formatTurnsForSummary. |
+| D5  | Durability (C2): description lands in log/swarm persisted store, gated `log.enabled \|\| swarm active`. EAGER-when-persisting at append time iff that gate; else lazy (D3). Structural guarantee, no shutdown race. NOT on safety-drop. |
+| D6  | Storage: `description?: string` on `DroneImageContent` (drone-core/src/session-types.ts:42-47), per-image, persisted verbatim. Survives log/swarm JSON round-trips. Multi-image tool results: describe each independently. |
+| D7  | Token accounting (Q5): per-image budget contribution = `max(256, estimateTextTokens(description))` in `estimateMessageTokens` (token-estimate.ts:15-33). Model-agnostic. Do NOT fix the base64 double-count — pre-existing, deferred to V2. |
+| D8  | Describer vision fallback chain (Q6): (1) configured `image_describer` if vision-capable → (2) active selection if vision-capable → (3) SAME PROVIDER ENTRY as pinned describer: any vision-capable model under that exact `config.providers.<id>` → (4) breadth: any configured+instantiated vision-capable model in broker precedence order → (5) none: warn + skip, lazy/idempotent so later model change can retry. NO name-similarity/context-window ranking. |
+| D9  | Degradation (Q7): fail-open. Request seam timeout/failure → warn + send bare image (today's behavior). Flush failure → warn + skip (idempotent, retried later). Never hard-error on describer failure. |
+| D10 | Retry (Q7b): borrow T1 ONLY (bounded silent auto-retry on 429/5xx honoring Retry-After + session.retry backoff), via a SHARED `withBoundedSilentRetry` helper used by BOTH `runWithRetry`'s T1 branch (conversation-service.ts:492) and the describer — one source of truth. NO T2. No separate T3 (already fails open). Outer ~60s timeout is the hard cap. |
+| D11 | V1 loosening (Q8): per-tool image-extractor registry at the append/extraction seam — `file__read_image` gets a STRUCTURED extractor producing `DroneImageContent[]` directly; content-scan heuristic becomes the DEFAULT FALLBACK for unregistered tools. PLUS presentation-only base64 stripping on the wire, BOTH vision and non-vision targets. Storage/persistence/estimator unchanged. MCP stays on the content-heuristic fallback. |
 
 ## Implementation steps
 
 ### Phase 1 — drone-core: storage + token accounting + role name
-
-Assignee: coder. Files: `drone-core/src/`.
-
-1. `session-types.ts:42-47` — add `description?: string` to `DroneImageContent` (jsdoc: "Model-generated description of the image, used as the wire representation when the target model is not vision-capable. Stored as part of the abstract context.").
-2. `model-selection.ts` — add `'image_describer'` to `WELL_KNOWN_MODEL_ROLES` (becomes `['summarizer','wizard','describer','image_describer']`).
-3. `token-estimate.ts:15-33` — change the per-image charge from flat `256` to `256 + estimateTextTokens(description ?? '')`... CAREFUL — locked decision D7 is `max(256, estimateTextTokens(description))`, NOT additive. Implement: for each image, `const descTokens = estimateTextTokens(image.description ?? ''); sum += Math.max(256, descTokens)`. Verify the existing 256/image call site is the one to change.
-4. Tests (drone-core/test): DroneImageContent accepts description; token estimate uses max(256, desc) for a present description and 256 for absent; description persisted unchanged through JSON round-trip.
-5. Run `pnpm -r run build` (dependent packages resolve drone-core types from dist/) before Phase 3.
+1. `session-types.ts:42-47` — add `description?: string` to `DroneImageContent`.
+2. `model-selection.ts` — add `'image_describer'` to `WELL_KNOWN_MODEL_ROLES`.
+3. `token-estimate.ts:15-33` — per-image charge = `max(256, estimateTextTokens(description))`.
+4. Tests (drone-core/test): DroneImageContent accepts description; token estimate uses max(256, desc); description persisted unchanged through JSON round-trip.
+5. Run `pnpm -r run build` before Phase 3.
 
 ### Phase 2 — shared T1 silent-retry helper extraction (if not done in base plan)
-
-Assignee: coder. NOTE: if `withBoundedSilentRetry` already exists from `plan-model-role-bindings` (it was proposed there for the describer; verify), SKIP this phase and just consume it.
-
-6. Extract the T1 branch of `runWithRetry` (conversation-service.ts:492+) into an exported helper `withBoundedSilentRetry(request, config, attempt)` (name TBD; location e.g. drone-core or a runtime/shared module) honoring `session.retry.{maxRetries,maxWaitMs,backoffBaseMs,backoffFactor}` + `Retry-After` on 429/5xx. `runWithRetry`'s T1 branch calls it; describer calls it too.
-7. Tests: helper retries on 429/5xx, honors Retry-After + backoff, gives up at maxRetries; main loop behavior unchanged (existing runWithRetry tests stay green).
+6. Extract T1 branch of `runWithRetry` into exported `withBoundedSilentRetry` honoring `session.retry.{maxRetries,maxWaitMs,backoffBaseMs,backoffFactor}` + `Retry-After` on 429/5xx. `runWithRetry`'s T1 branch calls it; describer calls it too.
+7. Tests: helper retries on 429/5xx, honors Retry-After + backoff, gives up at maxRetries.
 
 ### Phase 3 — broker: describer resolution + describeImages capability
-
-Assignee: coder. File: `drone-agent/src/plugins/llm/index.ts`.
-
-8. Add internal vision-capability resolution reusing `resolveModelMetadata` (llm/index.ts:254-302) to test a model's `hasVision`. Implement the D8 fallback chain producing a `{ provider, providerId, model, reasoningLevel? }` describer selection: pinned image_describer (if vision) → active (if vision) → same provider entry → breadth (precedence) → null (warn+skip).
-9. Extend `DroneLlmCapability` (drone-core/src/capabilities.ts:146-198) with:
-   ```ts
-   /** Describe images that lack descriptions, using the image_describer model (or a vision-capable fallback). Returns images with `description` filled; skips already-described. */
-   describeImages: (images: DroneImageContent[]) =>
-     Promise<DroneImageContent[]>;
-   ```
-   Implementation: filter undescribed images → resolve describer via D8 chain → call `describerProvider.chat({ model, reasoningLevel, messages: [describerSystemPrompt, { role:'user', content: 'Describe this image...', images: [img] }] })` per image (or batched; decide batch strategy) wrapped in `withBoundedSilentRetry` + ~60s timeout → on success set `img.description = text`; on failure/timeout/no-describer → leave undescribed (idempotent), warn-once-per-session. Uses the plugin's existing logger.
-10. Tests (test/plugins/llm/\*): D8 chain each step (pinned-vision → active-vision → same-entry → breadth → none+skip); statelessness (never mutates active selection); describeImages fills description, skips already-described, fails open + idempotent; describer chat uses resolved model + reasoningLevel + receives the image; warn-once dedup.
-11. Sweep: LSP find-references + grep for `DroneLlmCapability` mocks/implementers; every complete test mock gains `describeImages` (structural inline types in consumers do NOT break; full mocks DO).
+8. Add internal vision-capability resolution reusing `resolveModelMetadata` to test a model's `hasVision`. Implement the D8 fallback chain.
+9. Extend `DroneLlmCapability` with `describeImages: (images) => Promise<DroneImageContent[]>`.
+10. Tests: D8 chain each step; statelessness; describeImages fills description, skips already-described, fails open + idempotent; describer chat uses resolved model + reasoningLevel + receives the image; warn-once dedup.
+11. Sweep: LSP find-references + grep for `DroneLlmCapability` mocks/implementers; every complete test mock gains `describeImages`.
 
 ### Phase 4 — conversation-service: request-seam description + presentation stripping
-
-Assignee: coder. File: `drone-agent/src/runtime/conversation-service.ts`.
-
-12. Per-tool image-extractor registry (D11): register a structured extractor for `file__read_image` producing `DroneImageContent[]` from its JSON result; keep `extractImageFromToolResult` as default fallback. (Where the registry lives: a small map in conversation-service or a shared module; file.ts just gains an entry or a marker.)
-13. In the tool loop after extraction (the block near :710-728 that does Anthropic-inline vs synthetic user message): when a tool message has images, run the D4 `describeImages` when EITHER (a) `log.enabled || swarm active` (D5 eager) — ALWAYS describe at append if the durability gate is on — OR (b) the target model `hasVision === false` (D3 lazy). Store descriptions into the message's `DroneImageContent.description`.
-14. Presentation stripping (D11): at request-assembly (where tool messages become LLM request parts), for BOTH vision and non-vision targets, if the image is carried via `images[]`, strip the redundant base64 blob from the content string (leave a marker like `[Image: <path> attached]`). Vision → image via images[]; non-vision → substitute description text in content, image omitted. Storage/estimator untouched.
-15. Guard: the ~60s describer timeout (D9) wraps describeImages in the request seam; on timeout/failure, send bare image (today's behavior), warn.
-16. Tests: request seam describes when non-vision target (lazy, once-cached), NOT when vision target (unless durability gate on); durability gate forces eager describe at append; presentation strips blob for both cases; non-vision target gets description instead of image; vision target gets image via images[]; idempotency (second send reuses stored description); tool-loop parallel-safety under Promise.all.
+12. Per-tool image-extractor registry (D11): register a structured extractor for `file__read_image`; keep `extractImageFromToolResult` as default fallback.
+13. In the tool loop after extraction: when a tool message has images, run `describeImages` when EITHER (a) `log.enabled || swarm active` (D5 eager) OR (b) target model `hasVision === false` (D3 lazy). Store descriptions into the message's `DroneImageContent.description`.
+14. Presentation stripping (D11): at request-assembly, for BOTH vision and non-vision targets, strip redundant base64 blob from content (leave marker). Vision → image via images[]; non-vision → substitute description text in content, image omitted.
+15. Guard: ~60s describer timeout (D9) wraps describeImages in the request seam; on timeout/failure, send bare image, warn.
+16. Tests: request seam describes when non-vision target (lazy, once-cached), NOT when vision target (unless durability gate on); durability gate forces eager describe at append; presentation strips blob for both cases; non-vision target gets description instead of image; vision target gets image via images[]; idempotency; tool-loop parallel-safety under Promise.all.
 
 ### Phase 5 — compaction: pre-compaction flush
-
-Assignee: coder. File: `drone-agent/src/plugins/compaction/index.ts`.
-
-17. Before building the summary (before `formatTurnsForSummary` on the oldest non-summary turns being compacted): for each image-bearing tool message in those turns, call `llm.describeImages(...)` to flush descriptions, writing back onto the turns. Idempotent — only undescribed images described. This ensures the summary (which may be produced by a non-vision `summarizer`) sees the description text and captures its semantics, so abstract context survives the compaction boundary even though image bytes are destroyed.
+17. Before building the summary (before `formatTurnsForSummary`): for each image-bearing tool message in those turns, call `llm.describeImages(...)` to flush descriptions, writing back onto the turns. Idempotent.
 18. Test: pre-compaction flush describes undescribed images before summarization; already-described skipped; flush failure doesn't block compaction (fail-open, D9).
 
 ### Phase 6 — docs
-
-Assignee: coder.
-
-19. `docs/agents/provider-model-config.md`: add `image_describer` to the well-known-roles table; document the vision-capability requirement + D8 fallback chain; document lazy-vs-eager durability gate; document that describer failures fail open. Add a short "Images & vision" note: non-vision models receive descriptions, vision models receive images, both representations stored.
+19. `docs/agents/provider-model-config.md`: add `image_describer` to the well-known-roles table; document the vision-capability requirement + D8 fallback chain; document lazy-vs-eager durability gate; document that describer failures fail open. Add a short "Images & vision" note.
 
 ### Phase 7 — final verification
-
-Assignee: tester/reviewer. See Validation criteria; run in order.
+See Validation criteria; run in order.
 
 ## Dependencies / order
-
-Strictly sequential: P1 → P2 (if helper absent) → P3 → P4 → P5 → P6 → P7. P1 ends with a full rebuild. P4 and P5 both depend on P3's capability. P5 (compaction flush) is independent of P4's request-seam logic but shares the capability.
+Strictly sequential: P1 → P2 (if helper absent) → P3 → P4 → P5 → P6 → P7.
 
 ## Validation criteria
-
 1. `pnpm -r run build` — zero errors.
 2. LSP diagnostics — zero errors across all packages (pre-existing coordinator-ui CSS warnings out of scope).
-3. `pnpm lint` — zero errors (re-read files after prettier reformats).
-4. `pnpm test` (fast suite) — fully green, including: drone-core image type + token `max(256, desc)` tests; broker D8 chain + statelessness + describeImages + fail-open tests; conversation-service request-seam lazy/eager + presentation-stripping + idempotency tests; compaction pre-flush test.
+3. `pnpm lint` — zero errors.
+4. `pnpm test` (fast suite) — fully green, including all image-describer tests.
 5. Grep/behavior sweeps: `describeImages` present on broker capability + called at (request seam, pre-compaction, durability-eager); no `getActiveProvider().chat(` direct describer calls outside broker/runWithRetry; compaction still flushes before `formatTurnsForSummary`; no token-accounting regression (D7 exact `max`, not additive).
-6. Manual smoke (optional, host-permitting): pin `image_describer` to a vision model + active to a non-vision model; `file__read_image` then a user turn; observe the non-vision model receives the description (not the blob), the stored/logged turn holds both image + description, and a later vision-capable `/model` switch shows the image again (presentation re-derives, no regeneration).
+6. Manual smoke (optional).
+
+---
+
+## STATUS: COMPLETE (2026-08-27)
+
+All 7 phases implemented and verified. The plan was largely implemented in prior commits on `feat/model-role-bindings`; this session closed the remaining gaps against the locked decisions:
+
+**Fixed deviations:**
+- **D8 breadth precedence**: breadth step now sorts providers by broker precedence (ollama=0, remote=1) via a shared `providerPrecedence` helper, instead of config insertion order. `getAvailableProviders` reuses the same helper.
+- **D10 retry config**: describer now sources `session.retry.{maxRetries,maxWaitMs,backoffBaseMs,backoffFactor}` with `DEFAULT_RETRY_CONFIG` fallback, matching the main loop's `runWithRetry` T1 policy (was hardcoded 2/30s/1s/2).
+- **D1 parallel-across-batch**: request-seam describe now runs across the batch via `Promise.all`, then applies results to the session store sequentially (was serial `await` per result).
+- **D9 compaction timeout**: pre-compaction flush now wraps `describeImages` in a ~60s `withTimeout` guard so a hung describer can't block compaction (was unguarded).
+- **Docs fail-open**: added the "both representations stored + describer failures fail open" paragraph to the Images & vision section.
+
+**Tests added:**
+- D8 breadth precedence ordering (ollama wins over openrouter even when declared second).
+- D1 parallel-across-batch (durability gate on, two tool calls → two concurrent describe calls).
+- Typed the recording driver in `llm-model-roles.test.ts` (fixes a pre-existing LSP error `'sent.messages' is of type 'unknown'`).
+
+**Verification:** `pnpm -r run build` ✓, `pnpm lint` ✓, `pnpm test` (2350 passed, 9 skipped) ✓, LSP zero errors in touched files ✓, grep sweeps ✓.
+
+**Key files:** `drone-core/src/{session-types,model-selection,token-estimate,capabilities}.ts`, `drone-agent/src/plugins/llm/index.ts`, `drone-agent/src/runtime/conversation-service.ts`, `drone-agent/src/plugins/compaction/index.ts`, `docs/agents/provider-model-config.md`, plus tests in `drone-core/test/` and `drone-agent/test/`.

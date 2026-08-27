@@ -314,5 +314,13 @@
   {
     "timestamp": "2026-08-26T00:40:32.501Z",
     "insight": "The drone-agent git plugin (git__commit/git__status cwd default) reported branch \"main\" while the repository was actually on feat/display-fixes; `git -C <repo> branch --show-current` via shell showed the truth. The plugin also failed to distinguish \"nothing to commit\" from other commit failures (bare \"Command failed\" with no stderr). Until fixed: verify branch state with an exec git command before trusting plugin-reported branch info, especially before deciding whether .drone-agent memory/insight files may be committed."
+  },
+  {
+    "timestamp": "2026-08-27T01:16:20.507Z",
+    "insight": "When executing a plan that was partially implemented in prior commits, always re-verify each locked decision against the actual code rather than trusting that \"implemented\" means \"correct.\" In the image-describer plan, three locked decisions (D8 breadth precedence, D10 retry config sourcing, D1 parallel-across-batch) and one D9 timeout guard were silently deviated from in the initial implementation. The deviations were only caught by reading the code against the decision table line-by-line. A plan's \"done\" state is not the same as \"conforms to every locked decision.\""
+  },
+  {
+    "timestamp": "2026-08-27T01:16:20.510Z",
+    "insight": "The broker's provider precedence (ollama=0, remote=1) was duplicated inline in `getAvailableProviders` and separately (incorrectly) ignored in the D8 breadth fallback, which iterated config insertion order. When a precedence rule exists in one place, extract it into a shared helper and use it everywhere — otherwise a second consumer silently uses a different ordering. This is the same class of bug as the shared-interface sweep principle: a precedence/ordering rule is a shared contract that every consumer must honor."
   }
 ]
