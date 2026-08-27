@@ -106,7 +106,10 @@ async function captureRegistration(
     providerId: string;
     model: string;
     reasoningLevel?: import('drone-core').DroneReasoningLevel;
-  }
+  },
+  describeImagesOverride?: (
+    images: import('drone-core').DroneImageContent[]
+  ) => Promise<import('drone-core').DroneImageContent[]>
 ): Promise<RegistrationCapture> {
   const hooks: HookBucket = {
     onPluginsLoaded: [],
@@ -141,7 +144,7 @@ async function captureRegistration(
         registerDriver: () => {},
         registerProvider: () => {},
         unregisterProvider: () => {},
-        describeImages: async images => images,
+        describeImages: describeImagesOverride ?? (async images => images),
         resolveModelForRole: () =>
           role
             ? {
@@ -2335,5 +2338,93 @@ describe('compaction summarizer model role', () => {
         reasoningLevel: 'high',
       })
     );
+  });
+});
+
+describe('pre-compaction image description flush', () => {
+  it('describes undescribed images in the turns being compacted before summarizing', async () => {
+    const sessionManager = createSessionManager();
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 50,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'Summary with image context.' }],
+    });
+
+    const described: string[] = [];
+    const describeImagesOverride = async (
+      images: import('drone-core').DroneImageContent[]
+    ): Promise<import('drone-core').DroneImageContent[]> => {
+      return images.map(img => {
+        described.push(img.data);
+        return { ...img, description: 'a red circle on a white background' };
+      });
+    };
+
+    const plugin = createCompactionPlugin({ sessionManager });
+    const capture = await captureRegistration(
+      plugin,
+      config,
+      provider,
+      undefined,
+      describeImagesOverride
+    );
+
+    // Two turns, one carrying an undescribed image, to exceed the low threshold.
+    sessionManager.appendUserMessage('q1', [
+      { data: 'data:image/png;base64,AAAA', mimeType: 'image/png' },
+    ]);
+    sessionManager.appendAssistantMessage('a1');
+    sessionManager.appendUserMessage('q2');
+    sessionManager.appendAssistantMessage('a2');
+
+    await runAfterToolCall(capture);
+
+    // The flush should have described the image before the summary was built.
+    expect(described).toEqual(['data:image/png;base64,AAAA']);
+    expect(provider.__chatMock).toHaveBeenCalled();
+    // The summary prompt should carry the description text.
+    const prompt = JSON.stringify(provider.__chatMock.mock.calls);
+    expect(prompt).toContain('a red circle on a white background');
+  });
+
+  it('fails open when describeImages throws, still compacting', async () => {
+    const sessionManager = createSessionManager();
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 50,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'Summary.' }],
+    });
+
+    const plugin = createCompactionPlugin({ sessionManager });
+    const capture = await captureRegistration(plugin, config, provider, undefined, async () => {
+      throw new Error('describer down');
+    });
+
+    sessionManager.appendUserMessage('q1', [
+      { data: 'data:image/png;base64,BBBB', mimeType: 'image/png' },
+    ]);
+    sessionManager.appendAssistantMessage('a1');
+    sessionManager.appendUserMessage('q2');
+    sessionManager.appendAssistantMessage('a2');
+
+    await runAfterToolCall(capture);
+
+    // Compaction still proceeds despite the describer failure.
+    expect(provider.__chatMock).toHaveBeenCalled();
+    expect(sessionManager.getSummaryTurns().length).toBeGreaterThan(0);
   });
 });

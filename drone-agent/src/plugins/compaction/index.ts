@@ -4,6 +4,7 @@ import {
   type DroneChatMessage,
   type DroneCompactionConfig,
   type DroneConversationEvent,
+  type DroneImageContent,
   type DroneLlmCapability,
   type DroneLlmProvider,
   type DroneLogger,
@@ -135,7 +136,10 @@ function formatTurnsForSummary(
         if (message.toolName) {
           return `${header} (tool=${message.toolName}) ${body}`;
         }
-        return `${header} ${body}`;
+        const imageLines = (message.images ?? [])
+          .map(img => (img.description ? `  image: ${img.description}` : '  image: (undescribed)'))
+          .join('\n');
+        return imageLines ? `${header} ${body}\n${imageLines}` : `${header} ${body}`;
       });
       return `--- Turn ${startIndex + index + 1} ---\n${parts.join('\n')}`;
     })
@@ -354,6 +358,9 @@ async function maybeCompact(input: {
     // appended at the tail. getOldestNonSummaryTurns iterates forward,
     // skipping summaries, to collect exactly these turns.
     const slice = getOldestNonSummaryTurns(turns, sliceSize);
+    // Pre-compaction flush (D4): describe undescribed images so the summary
+    // captures their semantics before image bytes are destroyed.
+    await flushImageDescriptions(slice, llm);
     const transcript = formatTurnsForSummary(slice);
 
     const summaryUserPrompt =
@@ -775,4 +782,38 @@ export function createCompactionPlugin(
       });
     },
   };
+}
+
+/**
+ * Pre-compaction flush (D4): describe any undescribed images in the turns
+ * being compacted, writing descriptions back onto the stored image objects in
+ * place (the turns are references into the session store, so mutation
+ * persists). This ensures the summary — which may be produced by a non-vision
+ * `summarizer` — sees the description text and captures its semantics, so
+ * abstract context survives the compaction boundary even though image bytes
+ * are destroyed. Idempotent (only undescribed images described). Fails open
+ * (D9): a flush failure never blocks compaction.
+ */
+async function flushImageDescriptions(
+  turns: DroneSessionTurn[],
+  llm: DroneLlmCapability
+): Promise<void> {
+  const undescribed: DroneImageContent[] = [];
+  for (const turn of turns) {
+    for (const message of turn.messages) {
+      for (const img of message.images ?? []) {
+        if (!img.description) undescribed.push(img);
+      }
+    }
+  }
+  if (undescribed.length === 0) return;
+  try {
+    const described = await llm.describeImages(undescribed);
+    for (let i = 0; i < undescribed.length; i++) {
+      const desc = described[i]?.description;
+      if (desc) undescribed[i].description = desc;
+    }
+  } catch {
+    // Fail open: leave images undescribed; compaction proceeds.
+  }
 }
