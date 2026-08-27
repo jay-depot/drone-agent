@@ -23,9 +23,7 @@ describe('DroneImageContent', () => {
     };
     const roundTripped = JSON.parse(JSON.stringify(image)) as DroneImageContent;
     expect(roundTripped).toEqual(image);
-    expect(roundTripped.description).toBe(
-      'A screenshot of a terminal window.'
-    );
+    expect(roundTripped.description).toBe('A screenshot of a terminal window.');
   });
 
   it('omits description when absent', () => {

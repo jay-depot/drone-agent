@@ -172,19 +172,16 @@ describe('withBoundedSilentRetry', () => {
 
   it('retries on 5xx statuses even when not marked retryable', async () => {
     let attempt = 0;
-    await withBoundedSilentRetry(
-      async () => {
-        attempt += 1;
-        if (attempt < 2) {
-          throw new DroneLlmError('server overloaded', {
-            status: 503,
-            retryable: false,
-          });
-        }
-        return 'ok';
-      },
-      FAST
-    );
+    await withBoundedSilentRetry(async () => {
+      attempt += 1;
+      if (attempt < 2) {
+        throw new DroneLlmError('server overloaded', {
+          status: 503,
+          retryable: false,
+        });
+      }
+      return 'ok';
+    }, FAST);
     expect(attempt).toBe(2);
   });
 

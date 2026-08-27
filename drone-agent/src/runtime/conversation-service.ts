@@ -729,7 +729,10 @@ export function createConversationService({
         const durabilityGate =
           config.log.enabled || engine.getCapability('swarm') !== undefined;
         for (const result of bufferedResults) {
-          const images = extractImagesFromToolResult(result.name, result.content);
+          const images = extractImagesFromToolResult(
+            result.name,
+            result.content
+          );
           if (images.length === 0) continue;
           const activeProvider = llm.getActiveProvider();
           if (activeProvider.supportsImagesInToolResults) {
@@ -796,8 +799,7 @@ export function createConversationService({
             ? resolveConfiguredReasoningLevel(config, selection)
             : undefined);
 
-        const targetHasVision =
-          (await llm.hasVision?.(currentModel)) ?? false;
+        const targetHasVision = (await llm.hasVision?.(currentModel)) ?? false;
         const chatRequest: DroneChatRequest = {
           model: currentModel,
           messages: await (async () => {
@@ -1341,9 +1343,7 @@ function prepareRequestMessages(
       // No descriptions available — send as-is (fail open).
       return message;
     }
-    const descriptionText = described
-      .map(img => img.description)
-      .join('\n');
+    const descriptionText = described.map(img => img.description).join('\n');
     const content = message.content
       ? `${message.content}\n\n[Image description]\n${descriptionText}`
       : `[Image description]\n${descriptionText}`;

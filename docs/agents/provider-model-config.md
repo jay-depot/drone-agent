@@ -156,11 +156,11 @@ Well-known roles (the startup validator warns on role names outside this
 list, catching typos like `summarizer` that would otherwise silently fall
 back):
 
-| role         | consumer                                         |
-| ------------ | ------------------------------------------------ |
-| `summarizer` | Compaction (`/compact`) summary generation       |
-| `wizard`     | `persona.create` wizard persona-draft generation |
-| `describer`  | MCP server-description generation                |
+| role              | consumer                                                                                       |
+| ----------------- | ---------------------------------------------------------------------------------------------- |
+| `summarizer`      | Compaction (`/compact`) summary generation                                                     |
+| `wizard`          | `persona.create` wizard persona-draft generation                                               |
+| `describer`       | MCP server-description generation                                                              |
 | `image_describer` | Vision-capable model that describes images for non-vision targets, compaction, and persistence |
 
 The role namespace is open — plugins may mint additional roles, though only

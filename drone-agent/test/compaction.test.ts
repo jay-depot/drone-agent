@@ -2410,9 +2410,15 @@ describe('pre-compaction image description flush', () => {
     });
 
     const plugin = createCompactionPlugin({ sessionManager });
-    const capture = await captureRegistration(plugin, config, provider, undefined, async () => {
-      throw new Error('describer down');
-    });
+    const capture = await captureRegistration(
+      plugin,
+      config,
+      provider,
+      undefined,
+      async () => {
+        throw new Error('describer down');
+      }
+    );
 
     sessionManager.appendUserMessage('q1', [
       { data: 'data:image/png;base64,BBBB', mimeType: 'image/png' },

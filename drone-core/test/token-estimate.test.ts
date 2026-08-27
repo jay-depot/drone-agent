@@ -136,9 +136,7 @@ describe('estimateMessageTokens', () => {
     const shortDesc: DroneChatMessage = {
       role: 'user',
       content: 'hello',
-      images: [
-        { mimeType: 'image/png', data: 'abc', description: 'a cat' },
-      ],
+      images: [{ mimeType: 'image/png', data: 'abc', description: 'a cat' }],
     };
     expect(estimateMessageTokens(shortDesc)).toBe(baseTokens + 256);
 

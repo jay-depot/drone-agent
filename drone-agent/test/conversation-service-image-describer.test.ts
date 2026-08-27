@@ -35,9 +35,7 @@ function makeProvider(
   };
 }
 
-function makeBudgetService(
-  provider: DroneLlmProvider
-): ContextBudgetService {
+function makeBudgetService(provider: DroneLlmProvider): ContextBudgetService {
   return createContextBudgetService({
     config: createDefaultAgentConfig(),
     renderPromptFragments: async () => [],
@@ -48,7 +46,9 @@ function makeBudgetService(
 
 type LlmOverrides = {
   hasVision?: boolean;
-  describeImages?: (images: DroneImageContent[]) => Promise<DroneImageContent[]>;
+  describeImages?: (
+    images: DroneImageContent[]
+  ) => Promise<DroneImageContent[]>;
   supportsImagesInToolResults?: boolean;
 };
 
@@ -133,7 +133,8 @@ async function setup(options: {
     id: string
   ) => {
     if (id === 'llm') return llm;
-    if (id === 'swarm' && options.swarmActive) return { getBeaconUrl: () => '' };
+    if (id === 'swarm' && options.swarmActive)
+      return { getBeaconUrl: () => '' };
     return undefined;
   };
   const send = (prompt: string) => conversation.sendUserMessage(prompt);
@@ -353,8 +354,7 @@ describe('conversation-service presentation stripping (D11)', () => {
     await h.send('look at this');
     const lastChat = h.provider.__chatMock.mock.calls.at(-1)?.[0];
     const userMsg = lastChat.messages.find(
-      (m: { role: string; images?: unknown }) =>
-        m.role === 'user' && m.images
+      (m: { role: string; images?: unknown }) => m.role === 'user' && m.images
     );
     expect(userMsg).toBeDefined();
     expect(userMsg.images).toHaveLength(1);

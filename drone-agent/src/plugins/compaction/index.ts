@@ -137,9 +137,15 @@ function formatTurnsForSummary(
           return `${header} (tool=${message.toolName}) ${body}`;
         }
         const imageLines = (message.images ?? [])
-          .map(img => (img.description ? `  image: ${img.description}` : '  image: (undescribed)'))
+          .map(img =>
+            img.description
+              ? `  image: ${img.description}`
+              : '  image: (undescribed)'
+          )
           .join('\n');
-        return imageLines ? `${header} ${body}\n${imageLines}` : `${header} ${body}`;
+        return imageLines
+          ? `${header} ${body}\n${imageLines}`
+          : `${header} ${body}`;
       });
       return `--- Turn ${startIndex + index + 1} ---\n${parts.join('\n')}`;
     })
