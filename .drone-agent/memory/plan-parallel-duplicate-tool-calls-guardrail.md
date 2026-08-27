@@ -1,11 +1,9 @@
 ---
 key: plan-parallel-duplicate-tool-calls-guardrail
 tags:
-  - plan
-  - guardrail
-  - conversation-service
+  []
 created: 2026-08-27T02:20:55.583Z
-updated: 2026-08-27T02:20:55.583Z
+updated: 2026-08-27T02:28:54.911Z
 ---
 
 # Plan: Parallel Duplicate Tool-Call Dedup Guardrail
@@ -36,84 +34,55 @@ New `session.guardrail.deduplicateToolCalls` guardrail that collapses parallel i
 ## Steps
 
 ### Step 1 — drone-core config (types + schema + defaults)
-
-- `drone-core/src/config-types.ts`:
-  - New type `DroneToolCallDedupConfig = { enabled?: boolean }`.
-  - Add `deduplicateToolCalls?: DroneToolCallDedupConfig;` to `DroneGuardrailConfig`.
-  - In `createDefaultAgentConfig` session.guardrail, add `deduplicateToolCalls: { enabled: true }`.
-- `drone-core/src/config-schema.ts`: add `const ToolCallDedupSchema = Type.Object({ enabled: Type.Optional(Type.Boolean()) });` and `deduplicateToolCalls: Type.Optional(ToolCallDedupSchema)` to `GuardrailSchema`.
-- Run `pnpm -r run build` (deps resolve from dist).
+- `drone-core/src/config-types.ts`: new `DroneToolCallDedupConfig = { enabled?: boolean }`; `deduplicateToolCalls?: DroneToolCallDedupConfig` on `DroneGuardrailConfig`; default `deduplicateToolCalls: { enabled: true }` in `createDefaultAgentConfig`; exported from `drone-core/src/index.ts`.
+- `drone-core/src/config-schema.ts`: `ToolCallDedupSchema = Type.Object({ enabled: Type.Optional(Type.Boolean()) })`; `deduplicateToolCalls` field on `GuardrailSchema`.
+- Ran `pnpm -r run build`.
 
 ### Step 2 — shared helper module `runtime/tool-call-utils.ts`
-
-New pure module (imports `DroneToolCall` type from drone-core). Export:
-
-1. `toolCallSignature(call: { name: string; arguments: Record<string, unknown> }): string` — returns `name + ':' + JSON.stringify(arguments)`. THE single identity definition.
-2. `deduplicateToolCalls(toolCalls: DroneToolCall[]): { deduped: DroneToolCall[]; collapsedGroups: { name: string; removed: number }[] }` — pure transform: preserves order, keeps first occurrence per signature, returns deduped list + per-group collapse counts (removed = count-1 per group, only groups with removed > 0).
+New pure module (imports `DroneToolCall` type). Exports `toolCallSignature(call)` → `name + ':' + JSON.stringify(arguments)` and `deduplicateToolCalls(toolCalls)` → `{ deduped, collapsedGroups }` (preserves order, first occurrence per signature, per-group `{name, removed}` counts, ignores `id`).
 
 ### Step 3 — refactor streak guardrail onto shared helper
-
-In `conversation-service.ts`, replace the inline identity check in the identical-call streak block (~line 900-910):
-
-```ts
-lastIdenticalToolCall.name === call.name &&
-  JSON.stringify(lastIdenticalToolCall.arguments) ===
-    JSON.stringify(call.arguments);
-```
-
-with `toolCallSignature(lastIdenticalToolCall) === toolCallSignature(call)`. Import `toolCallSignature` from `./tool-call-utils.js`.
+Replaced the inline `name === && JSON.stringify ===` comparison in the identical-call streak block with `toolCallSignature(lastIdenticalToolCall) === toolCallSignature(call)`. Imported `toolCallSignature` from `./tool-call-utils.js`.
 
 ### Step 4 — wire dedup into conversation loop
-
-In `conversation-service.ts`:
-
-- Import `deduplicateToolCalls` from `./tool-call-utils.js`.
-- Resolve the toggle: `const dedupEnabled = guardrail.deduplicateToolCalls?.enabled ?? true;` (near the other resolved guardrail config; note this is not a threshold, so it stays a simple boolean — no `resolveThreshold`).
-- Immediately after `const toolCalls = response.toolCalls ?? [];` (line ~816), BEFORE broken-response detection:
-  ```ts
-  let toolCalls = response.toolCalls ?? [];
-  if (dedupEnabled && toolCalls.length > 1) {
-    const { deduped, collapsedGroups } = deduplicateToolCalls(toolCalls);
-    for (const g of collapsedGroups) {
-      emit({
-        kind: 'notice',
-        content: `Deduplicated ${g.removed} identical parallel tool call(s) to 1 (${g.name})`,
-      });
-    }
-    toolCalls = deduped;
-  }
-  ```
-  (Change `const toolCalls` → `let toolCalls`.) The deduped `toolCalls` then flows through the existing broken-response detection, append, `toolCallBatch` event, and `executeToolCalls` unchanged.
+- Imported `deduplicateToolCalls` + `toolCallSignature` from `./tool-call-utils.js`.
+- Resolved `dedupToolCallsEnabled = guardrail.deduplicateToolCalls?.enabled ?? true` (plain boolean, not a threshold).
+- Immediately after `let toolCalls = response.toolCalls ?? []`, if `dedupToolCallsEnabled && toolCalls.length > 1`, ran `deduplicateToolCalls`, emitted one `notice` per collapsed group, reassigned `toolCalls = deduped`. Deduped list flows through broken-response detection, append, `toolCallBatch`, `executeToolCalls` unchanged.
 
 ### Step 5 — tests
-
-- New `drone-agent/test/tool-call-utils.test.ts`: unit tests for `toolCallSignature` (stability, key-order sensitivity matches streak) and `deduplicateToolCalls` (order preserved, first occurrence kept, per-group counts, no-op on unique batch, collapses multiple distinct groups, ignores `id` in key).
-- Add tests to `drone-agent/test/conversation-service-guardrails.test.ts`:
-  - Defaults test (line ~513) asserts `deduplicateToolCalls?.enabled === true`.
-  - Batch of identical parallel calls → deduped, notice emitted per group, single execution (assert `executeTool` called once / results reflect one call).
-  - Batch with mixed distinct + duplicate calls → only dups collapsed.
-  - `deduplicateToolCalls: { enabled: false }` → batch passes through unchanged, no notice.
-  - Streak guardrail still works after refactor (existing tests cover; verify they pass).
-- Verify no existing tests break (config defaults test, token-estimate tests that embed guardrail shape).
+- New `drone-agent/test/tool-call-utils.test.ts` (10 tests): `toolCallSignature` stability, key-order sensitivity matches streak, distinguishes name/args; `deduplicateToolCalls` order-preserving, first-occurrence-kept, per-group counts, no-op on unique, multi-group collapse, ignores `id`, no input mutation.
+- Extended `drone-agent/test/conversation-service-guardrails.test.ts` (14 tests): defaults asserts `deduplicateToolCalls?.enabled === true`; identical-batch deduped with one notice + single execution; mixed batch collapses only dups (3 executions); `enabled: false` passthrough with no notice. Existing streak tests still pass after refactor.
 
 ### Step 6 — docs
-
-- `AGENTS.md` guardrail table: add `deduplicateToolCalls.enabled` row (default true, "collapse parallel identical tool calls in one response").
-- Wiki (in `/home/unleet/Obsidian/drone-agent-project`): update `concepts/session-management.md` Guardrails section table + prose; update `decisions/145-guardrail-reliability-features.md` Related; add **ADR 166** `decisions/166-parallel-duplicate-tool-call-dedup.md`; add row to `decisions/index.md` (latest is 165); update `index.md` summary if needed.
+- `AGENTS.md` guardrail table + prose paragraph.
+- Wiki (vault `/home/unleet/Obsidian/drone-agent-project`): `concepts/session-management.md` table + prose + Related; `flows/tool-call-loop.md` new dedup step; `modules/drone-agent.md` guardrails bullet; `modules/drone-core.md` config-types + config-schema lines; `decisions/145` Related; **ADR 166** `decisions/166-parallel-duplicate-tool-call-dedup.md`; `decisions/index.md` row + count 167; `index.md` latest-ADR pointer + row; `log.md` ingest entry; `meta.json` checkpoint.
 
 ### Step 7 — validation
-
 - `pnpm -r run build` — zero errors.
 - `pnpm lint` (eslint + prettier) — zero errors.
-- LSP diagnostics — zero errors across touched files (config-types.ts, config-schema.ts, tool-call-utils.ts, conversation-service.ts, tests).
-- `pnpm test` (fast suite) — all pass, including new dedup tests + existing streak tests.
+- LSP diagnostics — zero errors across touched files.
+- `pnpm test` fast suite — 2310 passed / 9 skipped.
 
 ## Validation Criteria
+- All LSP checks pass (typescript). ✓
+- `pnpm -r run build` and `pnpm lint` pass with zero errors. ✓
+- Fast test suite passes; new dedup + streak tests green. ✓ (2310 passed / 9 skipped)
+- Single-response batch of N identical calls executes once + emits per-group notice. ✓
+- `enabled: false` leaves batch untouched with no notice. ✓
+- Streak guardrail inline identity check replaced by shared `toolCallSignature` (no duplicate identity logic). ✓
+- Config schema validates `deduplicateToolCalls.enabled`, defaults to `true`. ✓
 
-- All LSP checks pass (typescript).
-- `pnpm -r run build` and `pnpm lint` pass with zero errors.
-- Fast test suite (`pnpm test`) passes; new dedup tests and existing streak-guardrail tests green.
-- A single-response batch of N identical parallel calls executes exactly once and emits one per-group `notice`.
-- `enabled: false` leaves the batch untouched with no notice.
-- The streak guardrail's inline identity check is replaced by the shared `toolCallSignature` helper (no duplicate identity logic remains).
-- Config schema validates `deduplicateToolCalls.enabled` and `createDefaultAgentConfig` defaults it to `true`.
+## COMPLETION SUMMARY (2026-08-27)
+
+All 7 steps implemented and validated. Commits:
+- `14d7acc` plan memory commit
+- `cb11a8c` implementation (drone-core types/schema/defaults, runtime/tool-call-utils.ts, conversation-service refactor + wiring, tests, AGENTS.md docs)
+- Wiki ingest committed to vault `main` as `064d39c` (ADR 166 + concept/flow/module/decisions/index updates + log + meta.json)
+
+Full fast suite 2310 passed / 9 skipped; build, lint, LSP clean. Feature branch `feat/guardrail-parallel-duplicate-tool-calls`.
+
+**Execution notes / lessons:**
+1. `file__apply_diff` fuzz-matching can misfire and corrupt files when hunks are too small (lost the `DroneToolCallDedupConfig` type declaration and duplicated the file tail once). Always re-read after edits and keep hunks anchored with sufficient context.
+2. The LSP diagnostic for `dedupToolCallsEnabled` was initially stale (reported before the declaration edit re-indexed). Cross-check against `tsc -b` build output rather than trusting a single LSP read.
+3. When running vitest filters from the monorepo root, pass the full `drone-agent/test/...` path — vitest resolves paths from the workspace root, not the package dir.
+4. Prettier (`pnpm lint`) reformatted the plan memory file; remember to re-read files after lint before further edits.
