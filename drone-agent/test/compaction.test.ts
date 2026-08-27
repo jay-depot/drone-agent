@@ -141,6 +141,7 @@ async function captureRegistration(
         registerDriver: () => {},
         registerProvider: () => {},
         unregisterProvider: () => {},
+        describeImages: async images => images,
         resolveModelForRole: () =>
           role
             ? {

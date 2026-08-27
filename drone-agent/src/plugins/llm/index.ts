@@ -4,7 +4,9 @@ import {
   parseModelSelection,
   resolveConfiguredReasoningLevel,
   type DiscoveredModel,
+  type DroneChatMessage,
   type DroneContextWindowInfo,
+  type DroneImageContent,
   type DroneLlmCapability,
   type DroneLlmProvider,
   type DronePlugin,
@@ -13,6 +15,7 @@ import {
   type DroneSlashCommandContext,
   type LlmProtocolDriver,
 } from 'drone-core';
+import { withBoundedSilentRetry } from '../../runtime/llm-retry.js';
 
 const VALID_REASONING_LEVELS: DroneReasoningLevel[] = [
   'off',
@@ -201,6 +204,173 @@ export const llmPlugin: DronePlugin = {
         model: selection.modelLocalId,
         reasoningLevel: resolveConfiguredReasoningLevel(config, selection),
       };
+    }
+
+    // Session-lifetime dedup for describer-resolution warnings, so a missing
+    // vision-capable describer is logged once, not on every describe call.
+    const warnedNoDescriber = new Set<string>();
+
+    /**
+     * Resolve a vision-capable describer selection per the D8 fallback chain:
+     *   1. configured `image_describer` if vision-capable
+     *   2. active selection if vision-capable
+     *   3. same provider entry as the pinned describer: any vision-capable
+     *      model under that exact `config.providers.<id>`
+     *   4. breadth: any configured+instantiated vision-capable model in
+     *      broker precedence order
+     *   5. none → warn + skip (lazy/idempotent so a later model change can retry)
+     * Returns undefined when no vision-capable model is available.
+     */
+    function resolveDescriber(): DroneResolvedModelRole | undefined {
+      const config = registration.getConfig();
+      const pinnedRaw = config.llm?.modelRoles?.['image_describer'];
+
+      // 1. Pinned image_describer if vision-capable.
+      if (pinnedRaw) {
+        const pinned = parseModelSelection(pinnedRaw);
+        const pinnedInstance = pinned && getInstance(pinned.providerId);
+        if (pinned && pinnedInstance) {
+          const fullId = `${pinned.providerId}/${pinned.modelLocalId}`;
+          if (resolveModelMetadata(fullId).hasVision) {
+            return {
+              provider: enrichProvider(pinnedInstance),
+              providerId: pinned.providerId,
+              model: pinned.modelLocalId,
+              reasoningLevel: resolveConfiguredReasoningLevel(config, pinned),
+            };
+          }
+        }
+      }
+
+      // 2. Active selection if vision-capable.
+      const activeInstance = getInstance(activeProviderId);
+      if (activeInstance && currentModel) {
+        const activeFullId = `${activeProviderId}/${currentModel}`;
+        if (resolveModelMetadata(activeFullId).hasVision) {
+          return {
+            provider: enrichProvider(activeInstance),
+            providerId: activeProviderId,
+            model: currentModel,
+          };
+        }
+      }
+
+      // 3. Same provider entry as the pinned describer: any vision-capable
+      //    model under that exact `config.providers.<id>`.
+      if (pinnedRaw) {
+        const pinned = parseModelSelection(pinnedRaw);
+        if (pinned) {
+          const entry = config.providers[pinned.providerId];
+          const pinnedInstance = getInstance(pinned.providerId);
+          if (entry && pinnedInstance) {
+            for (const modelId of Object.keys(entry.models ?? {})) {
+              const fullId = `${pinned.providerId}/${modelId}`;
+              if (resolveModelMetadata(fullId).hasVision) {
+                return {
+                  provider: enrichProvider(pinnedInstance),
+                  providerId: pinned.providerId,
+                  model: modelId,
+                  reasoningLevel: resolveConfiguredReasoningLevel(config, {
+                    providerId: pinned.providerId,
+                    modelLocalId: modelId,
+                  }),
+                };
+              }
+            }
+          }
+        }
+      }
+
+      // 4. Breadth: any configured+instantiated vision-capable model in
+      //    broker precedence order.
+      for (const [providerId, entry] of Object.entries(config.providers)) {
+        const instance = getInstance(providerId);
+        if (!instance) continue;
+        for (const modelId of Object.keys(entry.models ?? {})) {
+          const fullId = `${providerId}/${modelId}`;
+          if (resolveModelMetadata(fullId).hasVision) {
+            return {
+              provider: enrichProvider(instance),
+              providerId,
+              model: modelId,
+              reasoningLevel: resolveConfiguredReasoningLevel(config, {
+                providerId,
+                modelLocalId: modelId,
+              }),
+            };
+          }
+        }
+      }
+
+      // 5. None → warn + skip.
+      if (!warnedNoDescriber.has('image_describer')) {
+        warnedNoDescriber.add('image_describer');
+        registration.logger.warn(
+          'No vision-capable model is available to describe images (image_describer role unset or no vision-capable model configured). Images will be sent as-is.'
+        );
+      }
+      return undefined;
+    }
+
+    const DESCRIBER_SYSTEM_PROMPT =
+      'You are an image describer. Describe the image in detail, focusing on the visual content, layout, text, and any notable elements. Be concise but complete.';
+
+    /**
+     * Describe images that lack descriptions, using the resolved describer
+     * model. Skips already-described images. Fails open: on describer failure
+     * or timeout, images are returned unchanged (idempotent — a later call
+     * can retry).
+     */
+    async function describeImagesImpl(
+      images: DroneImageContent[]
+    ): Promise<DroneImageContent[]> {
+      const undescribed = images.filter(img => !img.description);
+      if (undescribed.length === 0) {
+        return images;
+      }
+      const describer = resolveDescriber();
+      if (!describer) {
+        return images;
+      }
+
+      const result = [...images];
+      for (const img of undescribed) {
+        const idx = result.indexOf(img);
+        try {
+          const response = await withBoundedSilentRetry(
+            async () =>
+              describer.provider.chat({
+                model: describer.model,
+                reasoningLevel: describer.reasoningLevel,
+                messages: [
+                  { role: 'system', content: DESCRIBER_SYSTEM_PROMPT },
+                  {
+                    role: 'user',
+                    content: 'Describe this image:',
+                    images: [img],
+                  },
+                ],
+              }),
+            {
+              maxRetries: 2,
+              maxWaitMs: 30_000,
+              backoffBaseMs: 1_000,
+              backoffFactor: 2,
+            }
+          );
+          const description = response.message?.trim();
+          if (description && idx !== -1) {
+            result[idx] = { ...img, description };
+          }
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          registration.logger.warn(
+            `Image description failed (non-fatal, image sent as-is): ${message}`
+          );
+        }
+      }
+      return result;
     }
 
     // ── Hybrid model listing: declared ⊕ discovered, declared wins ──
@@ -496,6 +666,7 @@ export const llmPlugin: DronePlugin = {
           : `${activeProviderId}/${model}`;
         return resolveModelMetadata(fullId).hasVision ?? false;
       },
+      describeImages: describeImagesImpl,
       registerProvider: provider => {
         // Legacy path — retained for the migration window. Wraps the
         // registration as a synthetic provider instance.

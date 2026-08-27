@@ -66,6 +66,7 @@ function createRegistrationCapture() {
     listModels: async () => {
       return [];
     },
+    describeImages: async images => images,
   };
 
   const registration: DronePluginRegistration = {

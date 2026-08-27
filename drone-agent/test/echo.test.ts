@@ -33,6 +33,7 @@ function createMockRegistration(): {
     },
     registerProvider: () => {},
     unregisterProvider: () => {},
+    describeImages: async images => images,
   };
 
   const registration: DronePluginRegistration = {

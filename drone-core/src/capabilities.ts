@@ -76,6 +76,7 @@ import type {
   DroneLlmProviderRegistration,
 } from './provider-types.js';
 import type { LlmProtocolDriver } from './provider-config-types.js';
+import type { DroneImageContent } from './session-types.js';
 
 // ── Config capability ──────────────────────────────────────────────
 
@@ -191,6 +192,13 @@ export type DroneLlmCapability = {
   listModels: () => Promise<string[]>;
   /** Check whether a specific model supports vision. */
   hasVision?: (model: string) => boolean | Promise<boolean>;
+  /**
+   * Describe images that lack descriptions, using the `image_describer` model
+   * (or a vision-capable fallback). Returns images with `description` filled;
+   * skips already-described images. Fails open: on describer failure or when
+   * no vision-capable model is available, images are returned unchanged.
+   */
+  describeImages: (images: DroneImageContent[]) => Promise<DroneImageContent[]>;
   /** Register a provider. Providers are sorted by precedence (ascending). */
   registerProvider: (registration: DroneLlmProviderRegistration) => void;
   /** Unregister a provider by id. */

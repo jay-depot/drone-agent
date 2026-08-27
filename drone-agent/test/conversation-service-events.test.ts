@@ -70,6 +70,7 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
     registerDriver: () => {},
     registerProvider: () => {},
     unregisterProvider: () => {},
+    describeImages: async images => images,
   };
 }
 

@@ -80,6 +80,7 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
     registerDriver: () => {},
     registerProvider: () => {},
     unregisterProvider: () => {},
+    describeImages: async images => images,
   };
 }
 
@@ -146,6 +147,7 @@ it('uses the newly active provider on the next loop iteration', async () => {
     registerDriver: () => {},
     registerProvider: () => {},
     unregisterProvider: () => {},
+    describeImages: async images => images,
   };
 
   const config = createDefaultAgentConfig();

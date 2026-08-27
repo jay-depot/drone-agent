@@ -207,3 +207,125 @@ describe('broker resolveModelForRole', () => {
     expect(sent.hasVision).toBe(true);
   });
 });
+
+describe('broker describeImages (D8 chain)', () => {
+  it('uses the pinned image_describer when it is vision-capable', async () => {
+    const recording = makeRecordingDriver('ollama');
+    const { capability } = await setupBroker({
+      providers: baseProviders,
+      llmActive: 'ollama/llama3.1',
+      modelRoles: { image_describer: 'ollama/vision-model' },
+      drivers: { ollama: recording.driver },
+    });
+    const images = [{ mimeType: 'image/png', data: 'abc' }];
+    const result = await capability.describeImages(images);
+    expect(result[0].description).toBe('ok');
+    expect(recording.calls).toHaveLength(1);
+    const sent = recording.calls[0];
+    expect(sent.model).toBe('vision-model');
+    expect(sent.messages[1].images).toEqual(images);
+  });
+
+  it('falls back to the active selection when it is vision-capable', async () => {
+    const recording = makeRecordingDriver('ollama');
+    const { capability } = await setupBroker({
+      providers: baseProviders,
+      llmActive: 'ollama/vision-model',
+      drivers: { ollama: recording.driver },
+    });
+    const result = await capability.describeImages([
+      { mimeType: 'image/png', data: 'abc' },
+    ]);
+    expect(result[0].description).toBe('ok');
+    expect(recording.calls[0].model).toBe('vision-model');
+  });
+
+  it('falls back to a vision-capable model in the pinned provider entry', async () => {
+    const recording = makeRecordingDriver('ollama');
+    const { capability } = await setupBroker({
+      providers: baseProviders,
+      llmActive: 'ollama/llama3.1',
+      modelRoles: { image_describer: 'ollama/llama3.1' },
+      drivers: { ollama: recording.driver },
+    });
+    const result = await capability.describeImages([
+      { mimeType: 'image/png', data: 'abc' },
+    ]);
+    expect(result[0].description).toBe('ok');
+    expect(recording.calls[0].model).toBe('vision-model');
+  });
+
+  it('falls back to any vision-capable model in breadth order', async () => {
+    const recording = makeRecordingDriver('ollama');
+    const { capability } = await setupBroker({
+      providers: baseProviders,
+      llmActive: 'ollama/llama3.1',
+      drivers: { ollama: recording.driver },
+    });
+    const result = await capability.describeImages([
+      { mimeType: 'image/png', data: 'abc' },
+    ]);
+    expect(result[0].description).toBe('ok');
+    expect(recording.calls[0].model).toBe('vision-model');
+  });
+
+  it('warns once and skips when no vision-capable model is available', async () => {
+    const warnings: string[] = [];
+    const logger: DroneLogger = {
+      info: () => {},
+      warn: m => warnings.push(String(m)),
+      error: () => {},
+    };
+    const { capability } = await setupBroker({
+      providers: {
+        ollama: {
+          protocol: 'ollama',
+          models: { 'llama3.1': {} },
+        },
+      },
+      llmActive: 'ollama/llama3.1',
+      logger,
+    });
+    const images = [{ mimeType: 'image/png', data: 'abc' }];
+    const result = await capability.describeImages(images);
+    expect(result).toEqual(images);
+    expect(result[0].description).toBeUndefined();
+    await capability.describeImages(images);
+    expect(warnings).toHaveLength(1);
+  });
+
+  it('skips already-described images', async () => {
+    const recording = makeRecordingDriver('ollama');
+    const { capability } = await setupBroker({
+      providers: baseProviders,
+      llmActive: 'ollama/llama3.1',
+      drivers: { ollama: recording.driver },
+    });
+    const result = await capability.describeImages([
+      { mimeType: 'image/png', data: 'abc', description: 'already described' },
+    ]);
+    expect(result[0].description).toBe('already described');
+    expect(recording.calls).toHaveLength(0);
+  });
+
+  it('fails open and is idempotent on describer failure', async () => {
+    const driver: LlmProtocolDriver = {
+      protocolId: 'ollama',
+      createProvider: () => ({
+        chat: async () => {
+          throw new Error('describer failed');
+        },
+      }),
+      parameterSchema: { parameters: {} },
+    };
+    const { capability } = await setupBroker({
+      providers: baseProviders,
+      llmActive: 'ollama/llama3.1',
+      drivers: { ollama: driver },
+    });
+    const images = [{ mimeType: 'image/png', data: 'abc' }];
+    const result = await capability.describeImages(images);
+    expect(result).toEqual(images);
+    expect(result[0].description).toBeUndefined();
+  });
+});
