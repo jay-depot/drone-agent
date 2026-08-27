@@ -138,7 +138,8 @@ specific purpose via the user-scope `llm.modelRoles` map:
     "modelRoles": {
       "summarizer": "ollama/llama3.1",
       "wizard": "anthropic/claude-haiku-4-5",
-      "describer": "openrouter/openai/gpt-5.3-codex"
+      "describer": "openrouter/openai/gpt-5.3-codex",
+      "image_describer": "openrouter/openai/gpt-5.3-codex"
     }
   }
 }
@@ -160,6 +161,7 @@ back):
 | `summarizer` | Compaction (`/compact`) summary generation       |
 | `wizard`     | `persona.create` wizard persona-draft generation |
 | `describer`  | MCP server-description generation                |
+| `image_describer` | Vision-capable model that describes images for non-vision targets, compaction, and persistence |
 
 The role namespace is open — plugins may mint additional roles, though only
 the well-known list above is recognized by the validator.
@@ -169,6 +171,24 @@ error), same class as `providers`: role values reference providers that may
 not exist in a freshly-cloned environment. Define them in user config or
 distribute via swarm underlays. `llm.modelRoles` merges per-key across
 layers, so distinct roles from different scopes combine.
+
+## Images & vision
+
+Models declare vision support via the per-model `hasVision` metadata flag
+(default false). When the active model is vision-capable, image content is
+carried to the provider on the wire as native image parts (base64 blobs are
+stripped from the text content and replaced with an `[Image attached]`
+marker). When the active model is **not** vision-capable, images are
+described instead: the `image_describer` role (falling back to the active
+selection, then any vision-capable configured model) generates a text
+description that is substituted into the message content, so the model
+still sees the image's semantics without receiving the bytes.
+
+Descriptions are also produced eagerly when a durability gate is active
+(`log.enabled` or a swarm connection) so they survive compaction and
+persistence even though the raw image bytes are destroyed. The
+`image_describer` role is the preferred way to pin which model performs
+this work; see the model-roles table above.
 
 ## Reasoning
 
