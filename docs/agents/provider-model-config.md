@@ -190,6 +190,14 @@ persistence even though the raw image bytes are destroyed. The
 `image_describer` role is the preferred way to pin which model performs
 this work; see the model-roles table above.
 
+Both representations are stored in the session: the image bytes and (once
+generated) the description. Presentation is derived per request — a
+vision-capable target receives the image, a non-vision target receives the
+description. Describer failures **fail open**: if no vision-capable model is
+available, or the describer times out or errors, the image is sent as-is
+(today's behavior) and the description is retried lazily on a later request.
+This never makes things worse than before the feature existed.
+
 ## Reasoning
 
 Chain: session (`/reasoning`) > selected model entry `reasoningLevel` >

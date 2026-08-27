@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type {
+  DroneChatRequest,
   DroneLlmCapability,
   DroneLogger,
   DroneModelEntryConfig,
@@ -96,12 +97,12 @@ async function setupBroker(options: {
 
 /** A driver that records the chat requests it receives, for enrichment parity checks. */
 function makeRecordingDriver(protocolId: string) {
-  const calls: Array<Record<string, unknown>> = [];
+  const calls: DroneChatRequest[] = [];
   const driver: LlmProtocolDriver = {
     protocolId,
     createProvider: () => ({
       chat: async request => {
-        calls.push(request as unknown as Record<string, unknown>);
+        calls.push(request);
         return { message: 'ok' };
       },
     }),
@@ -267,6 +268,43 @@ describe('broker describeImages (D8 chain)', () => {
     ]);
     expect(result[0].description).toBe('ok');
     expect(recording.calls[0].model).toBe('vision-model');
+  });
+
+  it('breadth step honors broker precedence, not config insertion order', async () => {
+    // A lower-precedence (non-ollama) provider is declared FIRST in config,
+    // but the higher-precedence ollama provider must win the breadth fallback.
+    const ollamaRecording = makeRecordingDriver('ollama');
+    const remoteRecording = makeRecordingDriver('openrouter');
+    const { capability } = await setupBroker({
+      providers: {
+        openrouter: {
+          protocol: 'openrouter',
+          models: { 'remote-vision': { hasVision: true } },
+        },
+        ollama: {
+          protocol: 'ollama',
+          models: {
+            'local-text': {},
+            'local-vision': { hasVision: true },
+          },
+        },
+      },
+      // Active model is non-vision so the D8 chain falls through to breadth.
+      llmActive: 'ollama/local-text',
+      drivers: {
+        ollama: ollamaRecording.driver,
+        openrouter: remoteRecording.driver,
+      },
+    });
+    const result = await capability.describeImages([
+      { mimeType: 'image/png', data: 'abc' },
+    ]);
+    expect(result[0].description).toBe('ok');
+    // ollama (precedence 0) must be chosen over openrouter (precedence 1),
+    // even though openrouter is declared first in config.
+    expect(ollamaRecording.calls).toHaveLength(1);
+    expect(remoteRecording.calls).toHaveLength(0);
+    expect(ollamaRecording.calls[0].model).toBe('local-vision');
   });
 
   it('warns once and skips when no vision-capable model is available', async () => {

@@ -15,7 +15,10 @@ import {
   type DroneSlashCommandContext,
   type LlmProtocolDriver,
 } from 'drone-core';
-import { withBoundedSilentRetry } from '../../runtime/llm-retry.js';
+import {
+  DEFAULT_RETRY_CONFIG,
+  withBoundedSilentRetry,
+} from '../../runtime/llm-retry.js';
 
 const VALID_REASONING_LEVELS: DroneReasoningLevel[] = [
   'off',
@@ -102,6 +105,14 @@ export const llmPlugin: DronePlugin = {
 
     function getInstance(providerId: string): ProviderInstance | undefined {
       return instances.get(providerId) ?? instantiateProvider(providerId);
+    }
+
+    // Broker precedence: lower number = higher priority. Currently ollama
+    // (local, free) outranks remote providers. Used to order the D8 breadth
+    // fallback and the getAvailableProviders listing.
+    function providerPrecedence(providerId: string): number {
+      const entry = registration.getConfig().providers[providerId];
+      return entry?.protocol === 'ollama' ? 0 : 1;
     }
 
     // Broker-enriched view of a provider instance: chat() fills the additive
@@ -283,7 +294,11 @@ export const llmPlugin: DronePlugin = {
 
       // 4. Breadth: any configured+instantiated vision-capable model in
       //    broker precedence order.
-      for (const [providerId, entry] of Object.entries(config.providers)) {
+      const providerIds = Object.keys(config.providers).sort(
+        (a, b) => providerPrecedence(a) - providerPrecedence(b)
+      );
+      for (const providerId of providerIds) {
+        const entry = config.providers[providerId];
         const instance = getInstance(providerId);
         if (!instance) continue;
         for (const modelId of Object.keys(entry.models ?? {})) {
@@ -333,6 +348,20 @@ export const llmPlugin: DronePlugin = {
         return images;
       }
 
+      // D10: borrow T1 only — bounded silent auto-retry honoring session.retry
+      // backoff (same policy as the main loop's runWithRetry T1 branch). No T2
+      // (no user prompting for background artifact work); the outer ~60s
+      // timeout in the caller is the hard cap.
+      const retry = registration.getConfig().session.retry;
+      const describerRetryConfig = {
+        maxRetries: retry?.maxRetries ?? DEFAULT_RETRY_CONFIG.maxRetries,
+        maxWaitMs: retry?.maxWaitMs ?? DEFAULT_RETRY_CONFIG.maxWaitMs,
+        backoffBaseMs:
+          retry?.backoffBaseMs ?? DEFAULT_RETRY_CONFIG.backoffBaseMs,
+        backoffFactor:
+          retry?.backoffFactor ?? DEFAULT_RETRY_CONFIG.backoffFactor,
+      };
+
       const result = [...images];
       for (const img of undescribed) {
         const idx = result.indexOf(img);
@@ -351,12 +380,7 @@ export const llmPlugin: DronePlugin = {
                   },
                 ],
               }),
-            {
-              maxRetries: 2,
-              maxWaitMs: 30_000,
-              backoffBaseMs: 1_000,
-              backoffFactor: 2,
-            }
+            describerRetryConfig
           );
           const description = response.message?.trim();
           if (description && idx !== -1) {
@@ -607,12 +631,10 @@ export const llmPlugin: DronePlugin = {
       resolveModelForRole: resolveModelForRoleImpl,
       getActiveProviderId: () => activeProviderId,
       getAvailableProviders: () =>
-        Object.entries(registration.getConfig().providers).map(
-          ([id, entry]) => ({
-            id,
-            precedence: entry.protocol === 'ollama' ? 0 : 1,
-          })
-        ),
+        Object.keys(registration.getConfig().providers).map(id => ({
+          id,
+          precedence: providerPrecedence(id),
+        })),
       activateProvider: (providerId: string) => {
         const instance = getInstance(providerId);
         if (!instance) {

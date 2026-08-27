@@ -172,6 +172,46 @@ describe('conversation-service image describer (request seam)', () => {
     expect(userMsg?.images?.[0].description).toBe('a screenshot');
   });
 
+  it('describes across a multi-tool batch in parallel (D1 Promise.all)', async () => {
+    // Two tool calls in one batch, each producing an image. With the
+    // durability gate on, the eager describe at append must run the two
+    // describe calls concurrently (Promise.all), not serially.
+    let active = 0;
+    let maxActive = 0;
+    const describeImages = vi.fn(async (images: DroneImageContent[]) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise(resolve => setTimeout(resolve, 10));
+      active -= 1;
+      return images.map(img => ({ ...img, description: 'parallel desc' }));
+    });
+    const h = await setup({
+      chatResponses: [
+        {
+          toolCalls: [
+            {
+              id: 'call-1',
+              name: 'read_image',
+              arguments: { path: '/tmp/a.png' },
+            },
+            {
+              id: 'call-2',
+              name: 'read_image',
+              arguments: { path: '/tmp/b.png' },
+            },
+          ],
+        },
+        { message: 'done' },
+      ],
+      llmOverrides: { hasVision: true, describeImages },
+      logEnabled: true,
+    });
+    await h.send('look at these');
+    // Two separate describe calls (one per tool result), run concurrently.
+    expect(describeImages).toHaveBeenCalledTimes(2);
+    expect(maxActive).toBeGreaterThan(1);
+  });
+
   it('does NOT describe when the target model is vision-capable (unless durability gate)', async () => {
     const describeImages = vi.fn(async (images: DroneImageContent[]) => images);
     const h = await setup({

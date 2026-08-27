@@ -728,24 +728,35 @@ export function createConversationService({
         // non-vision model is about to receive the image (D3).
         const durabilityGate =
           config.log.enabled || engine.getCapability('swarm') !== undefined;
+        // D1: describe across the batch in parallel (Promise.all), then apply
+        // the results to the session store in order. The describe calls are
+        // the expensive part; the session mutations must stay sequential.
+        const activeProvider = llm.getActiveProvider();
+        const supportsInline = activeProvider.supportsImagesInToolResults;
+        const describeWork: Array<{
+          result: (typeof bufferedResults)[number];
+          described: Promise<DroneImageContent[]>;
+        }> = [];
         for (const result of bufferedResults) {
           const images = extractImagesFromToolResult(
             result.name,
             result.content
           );
           if (images.length === 0) continue;
-          const activeProvider = llm.getActiveProvider();
-          if (activeProvider.supportsImagesInToolResults) {
-            if (durabilityGate) {
-              const described = await describeImagesSafely(llm, images);
-              sessionManager.updateLastToolResultImages(described);
-            } else {
-              sessionManager.updateLastToolResultImages(images);
-            }
+          const described = durabilityGate
+            ? describeImagesSafely(llm, images)
+            : Promise.resolve(images);
+          describeWork.push({ result, described });
+        }
+        const settled = await Promise.all(
+          describeWork.map(work => work.described)
+        );
+        for (let i = 0; i < describeWork.length; i++) {
+          const { result } = describeWork[i];
+          const described = settled[i];
+          if (supportsInline) {
+            sessionManager.updateLastToolResultImages(described);
           } else {
-            const described = durabilityGate
-              ? await describeImagesSafely(llm, images)
-              : images;
             sessionManager.appendUserMessage(
               `[Image from ${result.name} tool]`,
               described

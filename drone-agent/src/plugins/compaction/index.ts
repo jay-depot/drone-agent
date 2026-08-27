@@ -814,7 +814,11 @@ async function flushImageDescriptions(
   }
   if (undescribed.length === 0) return;
   try {
-    const described = await llm.describeImages(undescribed);
+    const described = await withTimeout(
+      llm.describeImages(undescribed),
+      60_000,
+      'image description timed out'
+    );
     for (let i = 0; i < undescribed.length; i++) {
       const desc = described[i]?.description;
       if (desc) undescribed[i].description = desc;
@@ -822,4 +826,24 @@ async function flushImageDescriptions(
   } catch {
     // Fail open: leave images undescribed; compaction proceeds.
   }
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 }
