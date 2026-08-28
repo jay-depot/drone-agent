@@ -141,6 +141,9 @@ export function createCoordinatorFetch(baseUrl: string): typeof fetch {
       // For HTTPS connections to the coordinator (which uses a self-signed cert),
       // disable certificate validation
       if (isHttps) {
+        // CA validation is inapplicable for self-signed certs; MITM protection
+        // is provided by checkServerIdentity fingerprint pinning instead.
+        // codeql[js/disabling-certificate-verification]
         (options as https.RequestOptions).rejectUnauthorized = false;
       }
 
