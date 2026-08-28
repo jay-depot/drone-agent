@@ -33,7 +33,6 @@ import { promptFilePlugin } from './prompt-file/index.js';
 import { skillProviderUserPlugin } from './skill-provider-user/index.js';
 import { lightpandaPlugin } from './lightpanda/index.js';
 import { startupPlugin } from './startup.js';
-// NEW:
 import { subagentPlugin } from './subagent/index.js';
 import { swarmPlugin } from './swarm/index.js';
 import { todoPlugin } from './todo/index.js';

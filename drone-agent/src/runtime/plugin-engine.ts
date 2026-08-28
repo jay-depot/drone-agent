@@ -185,7 +185,6 @@ type CreateDronePluginEngineOptions = {
   logger?: DroneLogger;
   logToStderr?: boolean;
   debugFlags?: DebugFlagRegistry;
-  // NEW:
   runtimeOptions?: {
     subagentId?: string;
     persona?: string;
