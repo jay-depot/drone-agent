@@ -31,10 +31,15 @@ const GuardrailThresholdSchema = Type.Object({
   maxHints: Type.Optional(NonNegativeInteger),
 });
 
+const ToolCallDedupSchema = Type.Object({
+  enabled: Type.Optional(Type.Boolean()),
+});
+
 const GuardrailSchema = Type.Object({
   brokenResponses: Type.Optional(GuardrailThresholdSchema),
   reasoningOnlyResponses: Type.Optional(GuardrailThresholdSchema),
   identicalToolCalls: Type.Optional(GuardrailThresholdSchema),
+  deduplicateToolCalls: Type.Optional(ToolCallDedupSchema),
 });
 
 const RetrySchema = Type.Object({

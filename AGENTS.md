@@ -153,10 +153,13 @@ The conversation service includes built-in guardrails that detect and mitigate c
 | `reasoningOnlyResponses.maxHints`  | 2       | Same as `brokenResponses` but for reasoning-only responses             |
 | `identicalToolCalls.hintAfter`     | 2       | Number of identical single-tool-call iterations before nudging         |
 | `identicalToolCalls.maxHints`      | 3       | Max nudges before hard limit (total iterations = hintAfter + maxHints) |
+| `deduplicateToolCalls.enabled`     | true    | Collapse parallel identical tool calls within one response to one      |
 
 **Broken responses** (Feature 1): When the LLM produces an empty response or a reasoning-only response, the conversation service retries without appending the degenerate response to the session. After `hintAfter` silent retries, it injects a non-persisted system hint. After `hintAfter + maxHints` total attempts, it prompts the user via `onBrokenResponseLimitReached`.
 
 **Identical tool-call streak** (Feature 2): When the LLM repeatedly makes the exact same single tool call (same name and arguments), the service tracks a streak counter. After `hintAfter` repetitions, it injects a non-persisted nudge message. After `hintAfter + maxHints` total repetitions, it prompts the user via `onIdenticalToolCallLimitReached` or throws an error.
+
+**Parallel duplicate tool-call dedup**: When a single LLM response contains multiple parallel calls with the same name and arguments (a degenerate loop that spews a massive batch of identical calls), the service collapses each duplicate group down to its first occurrence before processing. One `notice` is emitted per collapsed group. Dedup is semantically lossless — one call does what N would.
 
 **Assistant text before tool calls** (Feature 3): When an LLM response includes both text and tool calls, the `assistantMessage` and `assistantMessageComplete` events are emitted before the `toolCallBatch` event, so the TUI can show the text immediately.
 

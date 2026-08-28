@@ -34,6 +34,7 @@ import {
 import type { DronePluginEngine } from './plugin-engine.js';
 import type { DroneSessionManager } from './session-manager.js';
 import type { ContextBudgetService } from './context-budget-service.js';
+import { deduplicateToolCalls, toolCallSignature } from './tool-call-utils.js';
 
 export type ConversationEventHandler = (event: DroneConversationEvent) => void;
 // Re-export for convenience — used by interactive.ts and tui/types.ts
@@ -224,6 +225,8 @@ export function createConversationService({
       DEFAULT_GUARDRAIL.identicalToolCalls
     ),
   };
+  // Dedup is a plain on/off toggle (not a hint/maxHints threshold ladder).
+  const dedupToolCallsEnabled = guardrail.deduplicateToolCalls?.enabled ?? true;
 
   // ── Streak / broken-response state (reset by resetStuckDetectors) ────
   let identicalToolCallStreak = 0;
@@ -878,7 +881,24 @@ export function createConversationService({
         // T3  fail fast on transport errors and context-window overflow.
         const response = await runWithRetry(provider, chatRequest);
 
-        const toolCalls = response.toolCalls ?? [];
+        // ── Deduplicate parallel identical tool calls ─────────────────
+        // A degenerate model loop can spew a massive batch of identical
+        // parallel tool calls (same name + arguments) in a single response.
+        // Collapse each group down to its first occurrence before anything
+        // else, so the session, execution pipeline, and TUI never see the
+        // wasted duplicates. Gated by session.guardrail.deduplicateToolCalls.
+        let toolCalls = response.toolCalls ?? [];
+        if (dedupToolCallsEnabled && toolCalls.length > 1) {
+          const { deduped, collapsedGroups } = deduplicateToolCalls(toolCalls);
+          for (const group of collapsedGroups) {
+            emit({
+              kind: 'notice',
+              content: `Deduplicated ${group.removed} identical parallel tool call(s) to 1 (${group.name})`,
+            });
+          }
+          toolCalls = deduped;
+        }
+
         const assistantText = response.message ?? '';
         const isBrokenResponse =
           toolCalls.length === 0 && assistantText.length === 0;
@@ -966,9 +986,8 @@ export function createConversationService({
             const call = toolCalls[0];
             if (
               lastIdenticalToolCall &&
-              lastIdenticalToolCall.name === call.name &&
-              JSON.stringify(lastIdenticalToolCall.arguments) ===
-                JSON.stringify(call.arguments)
+              toolCallSignature(lastIdenticalToolCall) ===
+                toolCallSignature(call)
             ) {
               identicalToolCallStreak += 1;
             } else {

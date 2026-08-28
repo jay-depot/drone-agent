@@ -61,6 +61,7 @@ export type {
   DroneSessionRetryConfig,
   DroneGuardrailThresholdConfig,
   DroneGuardrailConfig,
+  DroneToolCallDedupConfig,
   DroneCompactionStrategy,
   DroneCompactionConfig,
   DroneMemoryConfig,

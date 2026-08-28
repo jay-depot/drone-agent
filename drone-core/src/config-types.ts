@@ -214,13 +214,19 @@ export type DroneGuardrailThresholdConfig = {
   maxHints?: number;
 };
 
+/** Whether the parallel duplicate tool-call dedup guardrail is active. */
+export type DroneToolCallDedupConfig = {
+  enabled?: boolean;
+};
+
 /** Guardrail thresholds. Fields are optional to match the config schema, which
  * lets users override only the thresholds they care about. The resolved config
- * (createDefaultAgentConfig + layer merge) always populates all three defaults. */
+ * (createDefaultAgentConfig + layer merge) always populates all defaults. */
 export type DroneGuardrailConfig = {
   brokenResponses?: DroneGuardrailThresholdConfig;
   reasoningOnlyResponses?: DroneGuardrailThresholdConfig;
   identicalToolCalls?: DroneGuardrailThresholdConfig;
+  deduplicateToolCalls?: DroneToolCallDedupConfig;
 };
 
 export type DroneCompactionStrategy = 'summary-drop';
@@ -587,6 +593,7 @@ export function createDefaultAgentConfig(
         brokenResponses: { hintAfter: 2, maxHints: 2 },
         reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },
         identicalToolCalls: { hintAfter: 2, maxHints: 3 },
+        deduplicateToolCalls: { enabled: true },
       },
       retry: {
         maxRetries: 3,
