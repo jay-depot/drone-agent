@@ -80,7 +80,7 @@ export function resolveTargetScope(
   } else if (targetType === 'skill') {
     if (skillsCap) {
       const skill = skillsCap.getSkill(targetId);
-      return (skill as any)?.scope;
+      return skill?.source;
     }
   }
   return undefined;

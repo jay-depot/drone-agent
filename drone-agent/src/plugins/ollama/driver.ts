@@ -417,7 +417,10 @@ export function createOllamaProvider(providerConfig: {
         }
 
         const message = error instanceof Error ? error.message : String(error);
-        const statusCode = (error as any)?.status_code;
+        const statusCode =
+          typeof error === 'object' && error !== null && 'status_code' in error
+            ? Number((error as { status_code: unknown }).status_code)
+            : undefined;
         const statusSuffix = statusCode ? ` (HTTP ${statusCode})` : '';
 
         if (message.includes('not found')) {

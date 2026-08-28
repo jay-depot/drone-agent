@@ -19,6 +19,13 @@ import { PRECEDENCE_COORDINATOR, PRECEDENCE_SWARM } from 'drone-core';
 import { parsePersonaMd } from '../persona/loader.js';
 import type { SwarmContext } from './context.js';
 
+// The beacon /skills endpoint returns the persisted Skill shape (which
+// carries a `scope` field) rather than a DroneSkillDefinition. Keep the
+// wire type honest so `scope` is typed instead of cast through `any`.
+interface BeaconSkill extends DroneSkillDefinition {
+  scope: 'local' | 'coordinator';
+}
+
 /**
  * Reload personas and skills from the beacon, splitting by scope.
  */
@@ -56,12 +63,12 @@ export async function reloadFromBeacon(ctx: SwarmContext): Promise<void> {
     if (!skillsResp.ok) {
       throw new Error(`Failed to fetch skills: ${skillsResp.status}`);
     }
-    const skillsData = (await skillsResp.json()) as DroneSkillDefinition[];
+    const skillsData = (await skillsResp.json()) as BeaconSkill[];
     ctx.beaconSkills = new Map();
     ctx.coordinatorSkills = new Map();
 
     for (const s of skillsData) {
-      if ((s as any).scope === 'coordinator') {
+      if (s.scope === 'coordinator') {
         ctx.coordinatorSkills.set(s.id, s);
       } else {
         ctx.beaconSkills.set(s.id, s);
