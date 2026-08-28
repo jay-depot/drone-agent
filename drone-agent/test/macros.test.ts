@@ -710,7 +710,7 @@ describe('macrosPlugin', () => {
           getModel: () => 'test-model',
           setModel: () => {},
           getReasoningLevel: () => undefined,
-          setReasoningLevel: (_level: any) => {},
+          setReasoningLevel: (_level: unknown) => {},
           sendUserMessage: async (_prompt: string) => {
             // Simulate the events that conversation-service emits
             // through engine conversation event hooks

@@ -57,7 +57,7 @@ function createRegistrationCapture() {
     getModel: () => 'claude-sonnet-4-6',
     setModel: () => {},
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: unknown) => {},
     listModels: async () => {
       return [];
     },

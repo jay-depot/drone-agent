@@ -23,12 +23,12 @@ const { resolveDroneExecutable } = await import('drone-core');
 function makeMockProcess(pid: number, stdoutData: string[]): ChildProcess {
   const stdout = Readable.from(stdoutData.map(d => d + '\n'));
   const stdin = new Writable({
-    write(_chunk: any, _enc: any, cb: () => void) {
+    write(_chunk: Buffer, _enc: string, cb: () => void) {
       cb();
     },
   });
   const stderr = new Writable({
-    write(_chunk: any, _enc: any, cb: () => void) {
+    write(_chunk: Buffer, _enc: string, cb: () => void) {
       cb();
     },
   });

@@ -188,7 +188,7 @@ describe('swarm coordinator trust', () => {
       line: `/trust-coordinator acorn-badge-cabin-daisy`,
       args: ['acorn-badge-cabin-daisy'],
       logger,
-      engine: {} as any,
+      engine: {} as never,
     });
     expect(result).toBe(true);
     expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('confirmed'));

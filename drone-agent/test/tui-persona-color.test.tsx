@@ -75,7 +75,7 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
       },
       getModel: (): string => model,
       getReasoningLevel: () => undefined,
-      setReasoningLevel: (_level: any) => {},
+      setReasoningLevel: (_level: unknown) => {},
       getDebugSubsystems: () => [],
       enableDebugSubsystem: () => {},
       disableDebugSubsystem: () => {},

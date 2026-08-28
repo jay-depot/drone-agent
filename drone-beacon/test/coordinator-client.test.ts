@@ -6,6 +6,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
+import type { PeerCertificate } from 'node:tls';
 import {
   initCoordinatorTrust,
   setPendingCoordinatorFingerprint,
@@ -17,6 +18,27 @@ import {
 
 const TEST_FP =
   'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
+
+// The mocked HTTP response is a Readable augmented with the response fields
+// http.request callbacks observe.
+type MockResponse = Readable & {
+  statusCode: number;
+  statusMessage: string;
+  headers: Record<string, string>;
+};
+
+// The mocked ClientRequest returned by the http.request mock.
+type MockClientRequest = EventEmitter & {
+  write: ReturnType<typeof vi.fn>;
+  end: ReturnType<typeof vi.fn>;
+  destroy?: ReturnType<typeof vi.fn>;
+  __socket?: MockSocket;
+  __callback?: (res: MockResponse) => void;
+};
+
+type MockSocket = EventEmitter & {
+  getPeerCertificate: () => { fingerprint256?: string };
+};
 
 describe('Coordinator Client', () => {
   let configDir: string;
@@ -33,7 +55,7 @@ describe('Coordinator Client', () => {
     setBeaconApproved(true);
     // Mock http.request
     mockRequest = vi.fn();
-    vi.spyOn(http, 'request').mockImplementation(mockRequest as any);
+    vi.spyOn(http, 'request').mockImplementation(mockRequest as unknown as typeof http.request);
   });
 
   afterEach(async () => {
@@ -49,18 +71,19 @@ describe('Coordinator Client', () => {
         this.push(null);
       },
     });
-    (response as any).statusCode = statusCode;
-    (response as any).statusMessage = 'OK';
-    (response as any).headers = { 'content-type': 'application/json' };
-    return response;
+    const mock = response as unknown as MockResponse;
+    mock.statusCode = statusCode;
+    mock.statusMessage = 'OK';
+    mock.headers = { 'content-type': 'application/json' };
+    return mock;
   }
 
   function setupMockHttpResponse(statusCode: number, body: unknown) {
     const response = makeMockResponse(statusCode, body);
     mockRequest.mockImplementation(
-      (_opts: any, callback: (res: any) => void) => {
+      (_opts: unknown, callback: (res: MockResponse) => void) => {
         callback(response);
-        const req = new EventEmitter() as any;
+        const req = new EventEmitter() as unknown as MockClientRequest;
         req.write = vi.fn();
         req.end = vi.fn();
         return req;
@@ -73,11 +96,14 @@ describe('Coordinator Client', () => {
   function makeHttpsRequestMock(cert: { fingerprint256?: string }) {
     const httpsRequest = vi.fn();
     httpsRequest.mockImplementation(
-      (_opts: any, callback: (res: any) => void) => {
-        const req = new EventEmitter() as any;
-        const socket = new EventEmitter() as any;
+      (_opts: unknown, callback: (res: MockResponse) => void) => {
+        const req = new EventEmitter() as unknown as MockClientRequest;
+        const socket = new EventEmitter() as unknown as MockSocket;
         socket.getPeerCertificate = () => cert;
-        req.on = (event: string, listener: (...args: any[]) => void): any => {
+        req.on = (
+          event: string,
+          listener: (...args: unknown[]) => void
+        ): MockClientRequest => {
           if (event === 'socket') {
             listener(socket);
             return req;
@@ -97,12 +123,19 @@ describe('Coordinator Client', () => {
         return req;
       }
     );
-    vi.spyOn(https, 'request').mockImplementation(httpsRequest as any);
+    vi.spyOn(https, 'request').mockImplementation(
+      httpsRequest as unknown as typeof https.request
+    );
     return {
       httpsRequest,
-      getSocket: () => (httpsRequest.mock.results[0]?.value as any)?.__socket,
+      getSocket: () =>
+        (
+          httpsRequest.mock.results[0]?.value as unknown as MockClientRequest
+        )?.__socket,
       getCallback: () =>
-        (httpsRequest.mock.results[0]?.value as any)?.__callback,
+        (
+          httpsRequest.mock.results[0]?.value as unknown as MockClientRequest
+        )?.__callback,
     };
   }
 
@@ -167,7 +200,7 @@ describe('Coordinator Client', () => {
       const fakeCert = {
         fingerprint256:
           'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99',
-      } as any;
+      } as PeerCertificate;
       const result = check('localhost', fakeCert);
       expect(result).toBeUndefined();
       expect(seen).toEqual([
@@ -184,7 +217,7 @@ describe('Coordinator Client', () => {
       const fakeCert = {
         fingerprint256:
           'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99',
-      } as any;
+      } as PeerCertificate;
       expect(check('localhost', fakeCert)).toBeUndefined();
     });
 
@@ -197,7 +230,7 @@ describe('Coordinator Client', () => {
       const fakeCert = {
         fingerprint256:
           'FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE',
-      } as any;
+      } as PeerCertificate;
       const err = check('localhost', fakeCert);
       expect(err).toBeInstanceOf(Error);
       expect(err?.message).toMatch(/fingerprint mismatch/);
@@ -207,7 +240,7 @@ describe('Coordinator Client', () => {
       const { buildCheckServerIdentity } =
         await import('../src/coordinator-client.js');
       const check = buildCheckServerIdentity(undefined);
-      const err = check('localhost', {} as any);
+      const err = check('localhost', {} as PeerCertificate);
       expect(err).toBeInstanceOf(Error);
       expect(err?.message).toMatch(/no fingerprint/);
     });
@@ -336,9 +369,9 @@ describe('Coordinator Client', () => {
 
       const response = makeMockResponse(403, { error: 'Forbidden' });
       mockRequest.mockImplementation(
-        (_opts: any, callback: (res: any) => void) => {
+        (_opts: unknown, callback: (res: MockResponse) => void) => {
           callback(response);
-          const req = new EventEmitter() as any;
+          const req = new EventEmitter() as unknown as MockClientRequest;
           req.write = vi.fn();
           req.end = vi.fn();
           return req;
@@ -374,9 +407,9 @@ describe('Coordinator Client', () => {
 
       const response = makeMockResponse(404, { error: 'Not found' });
       mockRequest.mockImplementation(
-        (_opts: any, callback: (res: any) => void) => {
+        (_opts: unknown, callback: (res: MockResponse) => void) => {
           callback(response);
-          const req = new EventEmitter() as any;
+          const req = new EventEmitter() as unknown as MockClientRequest;
           req.write = vi.fn();
           req.end = vi.fn();
           return req;
@@ -547,9 +580,9 @@ describe('Coordinator Client', () => {
 
       const response = makeMockResponse(404, { error: 'Agent not found' });
       mockRequest.mockImplementation(
-        (_opts: any, callback: (res: any) => void) => {
+        (_opts: unknown, callback: (res: MockResponse) => void) => {
           callback(response);
-          const req = new EventEmitter() as any;
+          const req = new EventEmitter() as unknown as MockClientRequest;
           req.write = vi.fn();
           req.end = vi.fn();
           return req;
@@ -665,8 +698,8 @@ describe('Coordinator Client', () => {
 
       // Simulate a request error by emitting 'error' on the req
       mockRequest.mockImplementation(
-        (_opts: any, _callback: (res: any) => void) => {
-          const req = new EventEmitter() as any;
+        (_opts: unknown, _callback: (res: MockResponse) => void) => {
+          const req = new EventEmitter() as unknown as MockClientRequest;
           req.write = vi.fn();
           req.end = vi.fn();
           process.nextTick(() => req.emit('error', new Error('Network error')));
