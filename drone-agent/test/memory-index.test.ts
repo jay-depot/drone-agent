@@ -7,6 +7,7 @@ import {
   createDefaultAgentConfig,
   type DronePluginRegistration,
   type DronePromptFragment,
+  type DroneToolDefinition,
   type DroneWorkflow,
 } from 'drone-core';
 import { memoryPlugin } from '../src/plugins/memory/index.js';
@@ -20,11 +21,11 @@ function createMockRegistration(): {
   registration: DronePluginRegistration;
   captured: {
     capabilities: Map<string, unknown>;
-    tools: { name: string; execute: Function }[];
+    tools: { name: string; execute: DroneToolDefinition['execute'] }[];
     prompts: { key: string; phase: string }[];
     help: string[];
     workflows: DroneWorkflow[];
-    hooks: Record<string, Function[]>;
+    hooks: Record<string, Array<(...args: unknown[]) => unknown>>;
   };
   logger: {
     info: ReturnType<typeof vi.fn>;
@@ -40,7 +41,7 @@ function createMockRegistration(): {
 
   const captured = {
     capabilities: new Map<string, unknown>(),
-    tools: [] as { name: string; execute: Function }[],
+    tools: [] as { name: string; execute: DroneToolDefinition['execute'] }[],
     prompts: [] as {
       key: string;
       phase: string;
@@ -49,15 +50,15 @@ function createMockRegistration(): {
     help: [] as string[],
     workflows: [] as DroneWorkflow[],
     hooks: {
-      onPluginsLoaded: [] as Function[],
-      onSessionStart: [] as Function[],
-      onBeforePrompt: [] as Function[],
-      onAfterToolCall: [] as Function[],
-      onConversationEvent: [] as Function[],
-      onSessionClear: [] as Function[],
-      onShutdown: [] as Function[],
-      onSessionSafetyTrimWillRun: [] as Function[],
-      onSessionSafetyTrimApplied: [] as Function[],
+      onPluginsLoaded: [] as Array<(...args: unknown[]) => unknown>,
+      onSessionStart: [] as Array<(...args: unknown[]) => unknown>,
+      onBeforePrompt: [] as Array<(...args: unknown[]) => unknown>,
+      onAfterToolCall: [] as Array<(...args: unknown[]) => unknown>,
+      onConversationEvent: [] as Array<(...args: unknown[]) => unknown>,
+      onSessionClear: [] as Array<(...args: unknown[]) => unknown>,
+      onShutdown: [] as Array<(...args: unknown[]) => unknown>,
+      onSessionSafetyTrimWillRun: [] as Array<(...args: unknown[]) => unknown>,
+      onSessionSafetyTrimApplied: [] as Array<(...args: unknown[]) => unknown>,
     },
   };
 

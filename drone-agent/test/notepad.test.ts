@@ -1,19 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import type { DronePluginRegistration, DronePromptFragment } from 'drone-core';
+import type {
+  DronePluginRegistration,
+  DronePromptFragment,
+  DroneToolDefinition,
+} from 'drone-core';
 import { createDefaultAgentConfig } from 'drone-core';
 import { notepadPlugin } from '../src/plugins/notepad.js';
 
 function createMockRegistration(): {
   registration: DronePluginRegistration;
-  tools: { name: string; execute: Function }[];
+  tools: { name: string; execute: DroneToolDefinition['execute'] }[];
   prompts: DronePromptFragment[];
 } {
-  const tools: { name: string; execute: Function }[] = [];
+  const tools: { name: string; execute: DroneToolDefinition['execute'] }[] = [];
   const prompts: DronePromptFragment[] = [];
   const registration: DronePluginRegistration = {
     logger: { info: () => {}, warn: () => {}, error: () => {} },
     getConfig: () => createDefaultAgentConfig(),
-    registerTool: (tool: { name: string; execute: Function }) => {
+    registerTool: (
+      tool: { name: string; execute: DroneToolDefinition['execute'] }
+    ) => {
       tools.push(tool);
     },
     registerPromptFragment: (fragment: DronePromptFragment) => {
