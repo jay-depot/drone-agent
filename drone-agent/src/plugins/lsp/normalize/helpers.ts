@@ -134,7 +134,7 @@ export function truncateWorkspaceEdit(
   // always retained since they cost almost nothing.
   const retainedFiles: string[] = [];
   const droppedFiles: string[] = [];
-  let consumedTokens = 0;
+  let consumedTokens: number;
   const baseTokens = (() => {
     // Cost of the response shell with all file edits emptied.
     const empty: import('./types.js').NormalizedWorkspaceEdit = {

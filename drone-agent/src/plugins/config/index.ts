@@ -240,7 +240,7 @@ async function upsertConfigFile(
   key: string,
   value: unknown
 ): Promise<string> {
-  let config: Record<string, unknown> = {};
+  let config: Record<string, unknown>;
   try {
     const raw = await readFile(filePath, 'utf-8');
     config = JSON.parse(raw) as Record<string, unknown>;

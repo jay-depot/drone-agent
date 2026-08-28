@@ -576,7 +576,8 @@ export async function ensureServerInstalled(
         throw new Error(
           `Failed to install npm dependencies for ${spec.install.package}@${spec.install.version}.\n` +
             `  Error: ${(installError as Error).message}\n` +
-            `npm must be installed and on PATH to use auto-installed LSP servers.`
+            `npm must be installed and on PATH to use auto-installed LSP servers.`,
+          { cause: installError }
         );
       }
     }
@@ -592,7 +593,8 @@ export async function ensureServerInstalled(
         throw new Error(
           `Failed to build ${spec.install.package} from source. Go must be installed and on PATH.\n` +
             `  Error: ${(buildError as Error).message}\n` +
-            `If you don't have Go installed, install gopls manually or set it up via your system package manager.`
+            `If you don't have Go installed, install gopls manually or set it up via your system package manager.`,
+          { cause: buildError }
         );
       }
     }

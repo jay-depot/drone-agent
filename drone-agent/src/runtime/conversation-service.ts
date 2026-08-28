@@ -517,7 +517,8 @@ export function createConversationService({
                   message: `LLM context window exceeded: ${llmErr.message}`,
                 });
                 throw new Error(
-                  'The LLM context window was exceeded, but compaction did not reclaim enough space (or the token estimate undercounts it). Enable compaction and run /compact to reset the session.'
+                  'The LLM context window was exceeded, but compaction did not reclaim enough space (or the token estimate undercounts it). Enable compaction and run /compact to reset the session.',
+                  { cause: error }
                 );
               }
 

@@ -120,7 +120,7 @@ export function createAnthropicProvider(
       }
 
       if (!response.ok) {
-        let errorBody = '';
+        let errorBody: string;
         try {
           errorBody = await response.text();
         } catch {
