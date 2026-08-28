@@ -16,8 +16,6 @@ import type {
 import type { SwarmContext } from './context.js';
 import {
   reloadFromBeacon,
-  registerPersonaProviders,
-  registerSkillProviders,
 } from './providers.js';
 import { connectWebSocket } from './websocket.js';
 import { BeaconConfigInjector } from './config.js';
@@ -267,8 +265,8 @@ function registerStorageEngines(
  */
 export function registerHooks(
   ctx: SwarmContext,
-  configCap: DroneConfigCapability | undefined,
-  beaconConfigInjector: BeaconConfigInjector | null
+  _configCap: DroneConfigCapability | undefined,
+  _beaconConfigInjector: BeaconConfigInjector | null
 ): void {
   const { registration } = ctx;
 

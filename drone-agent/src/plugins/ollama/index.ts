@@ -1,10 +1,8 @@
 import type {
   DroneLlmCapability,
-  DroneLlmProvider,
   LlmProtocolDriver,
   DronePlugin,
 } from 'drone-core';
-import { PRECEDENCE_LLM_PROVIDER } from 'drone-core';
 import {
   createOllamaProvider,
   discoverOllamaModels,

@@ -1,7 +1,7 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os, { tmpdir } from 'node:os';
-import { afterEach, beforeEach, vi } from 'vitest';
+import { vi } from 'vitest';
 import { createDefaultAgentConfig, type DronePlugin } from 'drone-core';
 import { createDronePluginEngine } from '../../src/runtime/plugin-engine.js';
 import { selfImprovementPlugin } from '../../src/plugins/self-improvement/index.js';

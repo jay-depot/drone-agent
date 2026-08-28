@@ -7,7 +7,6 @@
 
 import type {
   DronePersonaCapability,
-  DronePersonaDefinition,
   DronePersonaProvider,
   DronePersonaWriter,
   DroneSkillDefinition,
@@ -93,7 +92,6 @@ export function registerPersonaProviders(
   ctx: SwarmContext,
   personaCap: DronePersonaCapability
 ): void {
-  const { registration } = ctx;
 
   const beaconPersonaProvider: DronePersonaProvider = {
     id: 'swarm-persona-beacon',
@@ -188,7 +186,6 @@ export function registerSkillProviders(
   ctx: SwarmContext,
   skillsCap: DroneSkillsCapability
 ): void {
-  const { registration } = ctx;
 
   const beaconSkillProvider: DroneSkillProvider = {
     id: 'swarm-skill-beacon',

@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   DroneConversationEvent,
   DroneLlmCapability,
-  DroneLlmProviderRegistration,
   DronePluginRegistration,
   DroneSessionSafetyTrimPayload,
 } from 'drone-core';

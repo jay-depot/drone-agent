@@ -19,12 +19,9 @@ export const macrosPlugin: DronePlugin = {
   register: async registration => {
     const {
       logger,
-      getConfig,
       registerSlashCommand,
       offer,
-      requestElicitation,
     } = registration;
-    const config = getConfig();
     const projectDir = process.cwd();
 
     let macros = new Map<string, DroneMacroDefinition>();

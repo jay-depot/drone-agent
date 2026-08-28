@@ -103,7 +103,7 @@ export default function messageRoutes(app: FastifyInstance) {
   // List messages in a channel
   app.get<{ Params: { channel: string } }>(
     '/messages/channel/:channel',
-    async (request, reply) => {
+    async request => {
       return db.listMessagesByChannel(request.params.channel);
     }
   );

@@ -365,9 +365,7 @@ async function extractZip(
     }
 
     const compressionMethod = zipBuffer.readUInt16LE(cdPos + 10);
-    const crc32 = zipBuffer.readUInt32LE(cdPos + 16);
     const compressedSize = zipBuffer.readUInt32LE(cdPos + 20);
-    const uncompressedSize = zipBuffer.readUInt32LE(cdPos + 24);
     const fileNameLength = zipBuffer.readUInt16LE(cdPos + 28);
     const extraFieldLength = zipBuffer.readUInt16LE(cdPos + 30);
     const commentLength = zipBuffer.readUInt16LE(cdPos + 32);

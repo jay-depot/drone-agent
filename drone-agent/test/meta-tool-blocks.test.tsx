@@ -6,7 +6,7 @@
  * ink-testing-library, and the output is checked for expected text.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { render } from 'ink-testing-library';
 import { ListToolsBlock } from '../src/tui/components/ListToolsBlock.js';
 import { MountToolBlock } from '../src/tui/components/MountToolBlock.js';

@@ -8,7 +8,6 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { ReactElement } from 'react';
 import {
   DEFAULT_SYNTAX_THEME,
   SYNTAX_COLORS,

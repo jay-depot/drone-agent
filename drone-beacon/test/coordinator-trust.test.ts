@@ -12,7 +12,6 @@ import {
   getPendingCoordinatorFingerprint,
   getObservedCoordinatorFingerprint,
   setBeaconApproved,
-  isBeaconApproved,
   setBeaconVerificationCode,
   getBeaconVerificationCode,
   isSwarmReady,

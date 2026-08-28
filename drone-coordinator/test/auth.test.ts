@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createWebAuthMiddleware, isLocalRequest } from '../src/web-auth.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
