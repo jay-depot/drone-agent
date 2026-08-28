@@ -353,6 +353,14 @@ export async function runInteractiveLoop(
   const promptLabel = buildPromptLabel(conversation, engine);
 
   let shouldExit = false;
+  // Render conversation events (reasoning, tool calls, results, assistant
+  // messages) as they stream from any source (regular messages and macro
+  // chat-prompt steps alike). This is the console-mode counterpart to the
+  // TUI's global listener.
+  const unregisterConversationEvents =
+    engine.onConversationEvent?.(
+      makePlainOutputEventHandler({ renderAssistantMessage: true })
+    ) ?? null;
 
   try {
     while (true) {
@@ -423,12 +431,13 @@ export async function runInteractiveLoop(
 
       // Regular chat message
       await engine.runHooks('onBeforePrompt');
-      const plainHandler = makePlainOutputEventHandler();
-      const response = await conversation.sendUserMessage(line, plainHandler);
-      output.write(`${response}\n`);
+      // The global listener above renders the assistant reply and tool
+      // events; pass no per-call handler to avoid double-rendering.
+      await conversation.sendUserMessage(line);
       await engine.runHooks('onAfterToolCall');
     }
   } finally {
+    unregisterConversationEvents?.();
     rl.close();
   }
 }
