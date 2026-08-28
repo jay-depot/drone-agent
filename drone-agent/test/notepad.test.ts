@@ -17,9 +17,10 @@ function createMockRegistration(): {
   const registration: DronePluginRegistration = {
     logger: { info: () => {}, warn: () => {}, error: () => {} },
     getConfig: () => createDefaultAgentConfig(),
-    registerTool: (
-      tool: { name: string; execute: DroneToolDefinition['execute'] }
-    ) => {
+    registerTool: (tool: {
+      name: string;
+      execute: DroneToolDefinition['execute'];
+    }) => {
       tools.push(tool);
     },
     registerPromptFragment: (fragment: DronePromptFragment) => {

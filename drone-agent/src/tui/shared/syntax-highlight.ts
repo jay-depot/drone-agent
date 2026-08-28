@@ -20,6 +20,21 @@ import React from 'react';
 
 export const lowlight = createLowlight(common);
 
+// Minimal structural types for the lowlight highlight tree (a hast AST).
+// Defined locally rather than importing `hast` (a transitive dep) so the
+// module stays self-contained.
+export type HighlightNode =
+  | {
+      type: 'element';
+      properties?: { className?: Array<string | number> };
+      children: HighlightNode[];
+    }
+  | { type: 'text'; value: string }
+  // Catch-all for other hast node kinds (comment, doctype, ...) so a real
+  // lowlight tree (which can contain them) is assignable.
+  | { type: string; value?: string; children?: HighlightNode[] };
+export type HighlightRoot = { type: 'root'; children: HighlightNode[] };
+
 /** Foreground/attribute styling applied to one highlight.js token class. */
 export type SyntaxStyle = {
   /**
@@ -224,20 +239,21 @@ export function normalizeLegacyColors(
   return toTheme(colors);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function extractTokenText(token: any): string {
-  if (token.value) return token.value;
-  if (token.children) {
-     
+export function extractTokenText(token: HighlightNode): string {
+  if ('value' in token && token.value) return token.value;
+  if ('children' in token && token.children) {
     return token.children.map(extractTokenText).join('');
   }
   return '';
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function resolveTokenStyle(token: any, theme: SyntaxTheme): SyntaxStyle {
-  if (token.properties?.className) {
-    for (const cls of token.properties.className) {
+function resolveTokenStyle(
+  token: Extract<HighlightNode, { type: 'element' }>,
+  theme: SyntaxTheme
+): SyntaxStyle {
+  const className = token.properties?.className;
+  if (className) {
+    for (const cls of className) {
       if (typeof cls === 'string' && cls.startsWith('hljs-')) {
         const style = theme[cls.slice(5)];
         if (style) return style;
@@ -258,17 +274,18 @@ function resolveTokenStyle(token: any, theme: SyntaxTheme): SyntaxStyle {
  * and is exactly how fg/bg collisions previously crept in.
  */
 export function renderHighlightedTree(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tree: any,
+  tree: HighlightRoot,
   backgroundColor: string,
   colors?: Record<string, string> | SyntaxTheme
 ): ReactNode {
   const theme = toTheme(colors as Record<string, unknown> | undefined);
 
   let fullRendered = '';
-   
   for (const token of tree.children ?? []) {
-    const style = resolveTokenStyle(token, theme);
+    const style =
+      token.type === 'element' && 'properties' in token
+        ? resolveTokenStyle(token, theme)
+        : {};
     const text = extractTokenText(token);
     if (text) fullRendered += `${sgrOpen(style)}${text}${sgrClose(style)}`;
   }
@@ -276,7 +293,8 @@ export function renderHighlightedTree(
   const lines = fullRendered.split('\n');
 
   const visibleLength = (line: string): number =>
-    line.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*m', 'g'), '').length;
+    line.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*m', 'g'), '')
+      .length;
 
   const maxWidth = lines.reduce(
     (max, line) => Math.max(max, visibleLength(line)),

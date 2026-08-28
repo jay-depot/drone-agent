@@ -55,7 +55,9 @@ describe('Coordinator Client', () => {
     setBeaconApproved(true);
     // Mock http.request
     mockRequest = vi.fn();
-    vi.spyOn(http, 'request').mockImplementation(mockRequest as unknown as typeof http.request);
+    vi.spyOn(http, 'request').mockImplementation(
+      mockRequest as unknown as typeof http.request
+    );
   });
 
   afterEach(async () => {
@@ -129,13 +131,11 @@ describe('Coordinator Client', () => {
     return {
       httpsRequest,
       getSocket: () =>
-        (
-          httpsRequest.mock.results[0]?.value as unknown as MockClientRequest
-        )?.__socket,
+        (httpsRequest.mock.results[0]?.value as unknown as MockClientRequest)
+          ?.__socket,
       getCallback: () =>
-        (
-          httpsRequest.mock.results[0]?.value as unknown as MockClientRequest
-        )?.__callback,
+        (httpsRequest.mock.results[0]?.value as unknown as MockClientRequest)
+          ?.__callback,
     };
   }
 

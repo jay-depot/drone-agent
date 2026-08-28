@@ -8,19 +8,17 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import type { ReactElement } from 'react';
 import {
   DEFAULT_SYNTAX_THEME,
   SYNTAX_COLORS,
   normalizeLegacyColors,
   renderHighlightedTree,
+  type HighlightNode,
 } from '../src/tui/shared/syntax-highlight.js';
 
 /** Minimal lowlight-AST-shaped token for building fake trees. */
-function elementToken(
-  classNames: string[],
-  value: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): any {
+function elementToken(classNames: string[], value: string): HighlightNode {
   return {
     type: 'element',
     properties: { className: classNames },
@@ -34,10 +32,7 @@ function elementToken(
  * A fragment with a single child stores that child directly rather than in
  * an array, so normalize both shapes.
  */
-function renderedLines(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  result: any
-): string[] {
+function renderedLines(result: ReactElement): string[] {
   const lines: string[] = [];
   const children = Array.isArray(result.props.children)
     ? result.props.children

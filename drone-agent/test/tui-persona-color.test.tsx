@@ -125,7 +125,9 @@ describe('App — persona color override', () => {
     callback!({ id: 'researcher', uiColor: '#ff8800' });
     await new Promise(r => setTimeout(r, 50));
     const frames = instance.stdout.frames.join('');
-    expect(frames).toMatch(new RegExp(String.fromCharCode(27) + '\\[\\d+(;\\d+)*m'));
+    expect(frames).toMatch(
+      new RegExp(String.fromCharCode(27) + '\\[\\d+(;\\d+)*m')
+    );
   });
 
   it('falls back to the default grayscale scheme when no uiColor is set', async () => {

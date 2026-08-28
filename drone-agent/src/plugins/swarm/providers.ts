@@ -92,7 +92,6 @@ export function registerPersonaProviders(
   ctx: SwarmContext,
   personaCap: DronePersonaCapability
 ): void {
-
   const beaconPersonaProvider: DronePersonaProvider = {
     id: 'swarm-persona-beacon',
     precedence: PRECEDENCE_SWARM,
@@ -186,7 +185,6 @@ export function registerSkillProviders(
   ctx: SwarmContext,
   skillsCap: DroneSkillsCapability
 ): void {
-
   const beaconSkillProvider: DroneSkillProvider = {
     id: 'swarm-skill-beacon',
     precedence: PRECEDENCE_SWARM,

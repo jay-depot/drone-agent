@@ -280,21 +280,13 @@ describe('deepMerge', () => {
 
   it('replaces fields listed in replaceNullable even when null', () => {
     const base: Record<string, unknown> = { a: 1, b: 2 };
-    const result = deepMerge(
-      base,
-      { a: null },
-      { replaceNullable: ['a'] }
-    );
+    const result = deepMerge(base, { a: null }, { replaceNullable: ['a'] });
     expect(result).toEqual({ a: null, b: 2 });
   });
 
   it('shallow-merges fields listed in merge', () => {
     const base: Record<string, unknown> = { a: { x: 1, y: 2 }, b: 3 };
-    const result = deepMerge(
-      base,
-      { a: { y: 99, z: 100 } },
-      { merge: ['a'] }
-    );
+    const result = deepMerge(base, { a: { y: 99, z: 100 } }, { merge: ['a'] });
     expect(result).toEqual({ a: { x: 1, y: 99, z: 100 }, b: 3 });
   });
 

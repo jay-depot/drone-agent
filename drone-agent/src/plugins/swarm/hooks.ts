@@ -14,9 +14,7 @@ import type {
   DronePersonaCapability,
 } from 'drone-core';
 import type { SwarmContext } from './context.js';
-import {
-  reloadFromBeacon,
-} from './providers.js';
+import { reloadFromBeacon } from './providers.js';
 import { connectWebSocket } from './websocket.js';
 import { BeaconConfigInjector } from './config.js';
 

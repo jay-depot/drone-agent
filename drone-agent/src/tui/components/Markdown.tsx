@@ -98,7 +98,11 @@ function renderToken(
       );
 
     case 'code':
-      return renderCodeBlock(token as Tokens.Code, codeBackground, syntaxColors);
+      return renderCodeBlock(
+        token as Tokens.Code,
+        codeBackground,
+        syntaxColors
+      );
 
     case 'hr':
       return <Text color="gray">{'-'.repeat(80)}</Text>;
@@ -206,7 +210,7 @@ function renderInlineToken(
 
     default:
       // br, escape, checkbox and other text-less inline tokens render empty.
-      return ['text' in token ? token.text ?? '' : ''];
+      return ['text' in token ? (token.text ?? '') : ''];
   }
 }
 
@@ -238,10 +242,7 @@ function renderHeading(
  * rendered inline nodes into a string instead would stringify React
  * elements to "[object Object]".
  */
-function renderBlockquote(
-  token: Tokens.Blockquote,
-  color: string
-): ReactNode {
+function renderBlockquote(token: Tokens.Blockquote, color: string): ReactNode {
   const content = token.text ?? '';
 
   return (
