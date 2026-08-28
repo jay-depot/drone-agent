@@ -1,9 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import type { DronePlugin } from 'drone-core';
+import type { DebugFlagRegistry, DronePlugin } from 'drone-core';
 
 type RuntimeInfo = {
   isSubagent: boolean;
-  flags: { isEnabled(name: string): boolean };
+  debugFlags?: DebugFlagRegistry;
 };
 
 type Inhibitor = {
@@ -70,7 +70,7 @@ export const wakelockPlugin: DronePlugin = {
 
     let working = false;
     let child: ChildProcess | null = null;
-    const debug = () => runtime?.flags.isEnabled('wakelock') ?? false;
+    const debug = () => runtime?.debugFlags?.isEnabled('wakelock') ?? false;
 
     const acquire = () => {
       if (working || !inhibitor) return; // idempotent

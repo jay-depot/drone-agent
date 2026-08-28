@@ -792,6 +792,7 @@ export function createDronePluginEngine({
         subagentId: runtimeOptions?.subagentId,
         persona: runtimeOptions?.persona,
         isSubagent: !!runtimeOptions?.subagentId,
+        debugFlags,
         flags: runtimeFlagRegistry,
         resetStuckDetectors: resetStuckDetectorsFromHost,
         queueSystemReminder: (content: string) =>

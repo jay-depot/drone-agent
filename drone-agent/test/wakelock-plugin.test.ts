@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { wakelockPlugin } from '../src/plugins/wakelock/index.js';
-import { createDefaultAgentConfig } from 'drone-core';
+import { createDebugFlagRegistry, createDefaultAgentConfig } from 'drone-core';
 import type { DroneAgentConfig } from 'drone-core';
+import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
 
 // Mock child_process spawn so no real inhibitor process is started.
 const mockSpawn = vi.fn();
@@ -73,7 +74,7 @@ function makeRegistration(overrides?: {
       id === 'runtime'
         ? {
             isSubagent: overrides?.isSubagent ?? false,
-            flags: { isEnabled: mockFlagEnabled },
+            debugFlags,
           }
         : undefined,
     runWorkflow: async () => ({ toolResult: '{}' }),
@@ -88,14 +89,14 @@ function makeRegistration(overrides?: {
   };
 }
 
-let mockFlagEnabled: (name: string) => boolean;
+let debugFlags: ReturnType<typeof createDebugFlagRegistry>;
 
 describe('wakelock plugin', () => {
   const originalPlatform = process.platform;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockFlagEnabled = () => false;
+    debugFlags = createDebugFlagRegistry();
     // Default: non-WSL Linux, so the plugin proceeds past the WSL check.
     Object.defineProperty(process, 'platform', { value: 'linux' });
     mockReadFile.mockResolvedValue(
@@ -208,7 +209,7 @@ describe('wakelock plugin', () => {
   });
 
   it('logs acquire/release transitions when the wakelock debug flag is on', async () => {
-    mockFlagEnabled = name => name === 'wakelock';
+    debugFlags.enable('wakelock');
     const child = makeChild();
     mockSpawn.mockReturnValue(child);
     const { registration, logger, getOnConversationEvent } = makeRegistration();
@@ -233,5 +234,33 @@ describe('wakelock plugin', () => {
     expect(mockSpawn).toHaveBeenCalledWith('caffeinate', ['-i'], {
       stdio: 'ignore',
     });
+  });
+
+  it('reads the debug flag through a real engine (no TypeError)', async () => {
+    // Regression test for the bug where `_runtime.flags` (a RuntimeFlagRegistry)
+    // had no `isEnabled`, so `--debug wakelock` threw a swallowed TypeError on
+    // every acquire/release. Wired through the real engine with the debug
+    // subsystem enabled, the plugin's info log must fire.
+    const child = makeChild();
+    mockSpawn.mockReturnValue(child);
+    const consoleInfo = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const config = createDefaultAgentConfig();
+    config.enabledPlugins = ['wakelock'];
+    const debugFlags = createDebugFlagRegistry(['wakelock']);
+    const engine = createDronePluginEngine({
+      plugins: [wakelockPlugin],
+      config,
+      debugFlags,
+    });
+    await engine.initialize();
+
+    await engine.runConversationEventHooks({
+      kind: 'userMessage',
+      content: 'hi',
+    });
+
+    expect(consoleInfo).toHaveBeenCalledWith('[wakelock] wakelock acquired');
+    consoleInfo.mockRestore();
   });
 });
