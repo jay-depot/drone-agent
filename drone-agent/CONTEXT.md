@@ -20,9 +20,13 @@ _Avoid_: Tool, capability, feature, action
 An extension that provides capabilities to the agent (LLM providers, MCP servers, LSP servers, etc.). Plugins register tools, prompts, and hooks.
 _Avoid_: Extension, addon, module
 
+**Round**:
+A complete round in the conversation between user and agent, consists of a user message turn, zero or more pending message turns, zero or more agent response with tool call turns, corresponding tool result turns, zero or more user steering message turns and one final assistant response turn, marking the end of the round. See: **Turn** below.
+_Avoid_: Exchange, interaction
+
 **Turn**:
-A single round in the conversation between the agent and the LLM. Contains a user message (or tool result), the LLM response, and optionally tool calls.
-_Avoid_: Round, exchange, message
+A single interaction within a round, typically consisting of a user message and the agent's response (which may include tool calls). See: **Round** above.
+_Avoid_: Interaction, step
 
 **Tool**:
 A function the LLM can invoke to interact with the outside world (file system, shell, git, etc.). Exposed to the LLM via its tool definition.
