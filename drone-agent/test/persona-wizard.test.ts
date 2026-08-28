@@ -64,7 +64,7 @@ function makeProvider(md: string): {
   callCount: () => number;
 } {
   let count = 0;
-  let current = md;
+  const current = md;
   return {
     provider: {
       chat: async () => {

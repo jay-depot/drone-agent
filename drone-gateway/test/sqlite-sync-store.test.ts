@@ -6,6 +6,7 @@ import type { ISyncResponse } from 'matrix-js-sdk/lib/sync-accumulator.js';
 import type { IStateEventWithRoomId } from 'matrix-js-sdk/lib/@types/search.js';
 import type { IStartClientOpts } from 'matrix-js-sdk/lib/client.js';
 import type { ToDeviceBatchWithTxnId } from 'matrix-js-sdk/lib/models/ToDeviceMessage.js';
+import type { IEvent } from 'matrix-js-sdk/lib/models/event.js';
 
 describe('SqliteSyncStore', () => {
   let db: Database.Database;
@@ -66,8 +67,8 @@ describe('SqliteSyncStore', () => {
     });
 
     it('overwrites existing saved sync', async () => {
-      await store.setSyncData({ next_batch: 's1' } as any);
-      await store.setSyncData({ next_batch: 's2' } as any);
+      await store.setSyncData({ next_batch: 's1' } as ISyncResponse);
+      await store.setSyncData({ next_batch: 's2' } as ISyncResponse);
       const token = await store.getSavedSyncToken();
       expect(token).toBe('s2');
     });
@@ -87,7 +88,7 @@ describe('SqliteSyncStore', () => {
           state_key: '@alice:test',
           content: { membership: 'join' },
           event_id: '$1',
-        } as any,
+        } as IStateEventWithRoomId,
       ];
 
       await store.setOutOfBandMembers('!room:test', members);
@@ -135,7 +136,7 @@ describe('SqliteSyncStore', () => {
 
     it('clears pending events when empty array', async () => {
       await store.setPendingEvents('!room:test', [
-        { type: 'm.room.message' } as any,
+        { type: 'm.room.message' } as Partial<IEvent>,
       ]);
       await store.setPendingEvents('!room:test', []);
       const result = await store.getPendingEvents('!room:test');
@@ -178,7 +179,7 @@ describe('SqliteSyncStore', () => {
 
   describe('deleteAllData', () => {
     it('clears all persisted data', async () => {
-      await store.setSyncData({ next_batch: 's1' } as any);
+      await store.setSyncData({ next_batch: 's1' } as ISyncResponse);
       await store.setOutOfBandMembers('!room:test', []);
       await store.storeClientOptions({ initialSyncLimit: 10 });
 

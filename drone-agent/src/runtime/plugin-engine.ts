@@ -185,7 +185,6 @@ type CreateDronePluginEngineOptions = {
   logger?: DroneLogger;
   logToStderr?: boolean;
   debugFlags?: DebugFlagRegistry;
-  // NEW:
   runtimeOptions?: {
     subagentId?: string;
     persona?: string;
@@ -792,6 +791,7 @@ export function createDronePluginEngine({
         subagentId: runtimeOptions?.subagentId,
         persona: runtimeOptions?.persona,
         isSubagent: !!runtimeOptions?.subagentId,
+        debugFlags,
         flags: runtimeFlagRegistry,
         resetStuckDetectors: resetStuckDetectorsFromHost,
         queueSystemReminder: (content: string) =>

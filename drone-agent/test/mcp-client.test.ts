@@ -886,8 +886,7 @@ describe('streamable-HTTP GET SSE stream + DELETE termination (point 8)', () => 
     // Holder so the callback can reach `conn` even if the GET reader errors
     // during makeConnection (before the local is assigned). Mirrors index.ts,
     // where the connection is declared ahead of the per-server loop.
-    let captured: Awaited<ReturnType<typeof makeConnection>> | undefined;
-    captured = await makeConnection(
+    const captured = await makeConnection(
       mock,
       {},
       {},

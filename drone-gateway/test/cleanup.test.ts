@@ -70,7 +70,7 @@ describe('cleanupAdapter', () => {
     mockExistsSync.mockReturnValue(false);
     const mockExit = vi
       .spyOn(process, 'exit')
-      .mockImplementation((() => {}) as any);
+      .mockImplementation((() => {}) as unknown as typeof process.exit);
     const confirmFn = vi.fn().mockResolvedValue(true);
 
     await cleanupAdapter('/tmp/.drone-gateway', 'nonexistent', confirmFn);
@@ -87,7 +87,7 @@ describe('cleanupAdapter', () => {
     );
     const mockExit = vi
       .spyOn(process, 'exit')
-      .mockImplementation((() => {}) as any);
+      .mockImplementation((() => {}) as unknown as typeof process.exit);
     const confirmFn = vi.fn().mockResolvedValue(true);
 
     await cleanupAdapter('/tmp/.drone-gateway', 'telegram-1', confirmFn);
@@ -100,7 +100,7 @@ describe('cleanupAdapter', () => {
     const confirmFn = vi.fn().mockResolvedValue(false);
     const mockExit = vi
       .spyOn(process, 'exit')
-      .mockImplementation((() => {}) as any);
+      .mockImplementation((() => {}) as unknown as typeof process.exit);
 
     await cleanupAdapter('/tmp/.drone-gateway', 'matrix-main', confirmFn);
 

@@ -13,8 +13,6 @@ import { ChatLog } from '../src/tui/components/ChatLog.js';
 import { DEFAULT_GRAYSCALE_SCHEME } from '../src/tui/theme.js';
 import type { ChatEntry } from '../src/tui/types.js';
 
-type Opts = Parameters<typeof ChatLog>[0];
-
 function renderChatLog(entries: ChatEntry[]): ReturnType<typeof render> {
   return render(
     <ChatLog

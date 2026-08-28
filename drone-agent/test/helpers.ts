@@ -312,7 +312,7 @@ export function createMockEngine(
     getBuiltinSlashCommands: () => [],
     enablePlugin: async (_pluginId: string) => false,
     buildSystemMessages: async () => [],
-    addExternalPlugin: async (_plugin: any) => false,
+    addExternalPlugin: async (_plugin: unknown) => false,
     __executeMock: executeMock,
     __reminderQueue: reminderQueue,
   };

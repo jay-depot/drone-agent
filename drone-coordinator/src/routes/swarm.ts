@@ -81,7 +81,7 @@ export default function swarmRoutes(app: FastifyInstance) {
     const created: db.SwarmEvent[] = [];
     for (const evt of events) {
       let payload = evt.payload ?? null;
-      let metadata = evt.metadata ?? null;
+      const metadata = evt.metadata ?? null;
       if (payload && isLargePayload(payload)) {
         const ref = await storeLargePayload(evt.sessionId, evt.id, payload);
         payload = ref;

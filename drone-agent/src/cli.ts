@@ -6,7 +6,6 @@ export type CliOptions = {
   modelOverride?: string;
   configDir?: string;
   pluginOverrides: string[];
-  // NEW:
   subagentId?: string;
   persona?: string;
   workflow?: {
@@ -141,7 +140,6 @@ export function parseCliArgs(argv: string[]): CliInvocation {
           options.debugSubsystems.push(trimmed);
         }
       }
-      // NEW: subagent mode flags
     } else if (arg === '--subagent-id' && i + 1 < argv.length) {
       options.subagentId = argv[++i];
     } else if (arg === '--persona' && i + 1 < argv.length) {
@@ -231,7 +229,6 @@ export function parseCliArgs(argv: string[]): CliInvocation {
     return { kind: 'chat', prompt: positionalArgs.join(' '), options };
   }
 
-  // NEW: env var fallback for subagent mode flags
   options.subagentId ??= process.env.DRONE_SUBAGENT_ID;
   options.persona ??= process.env.DRONE_PERSONA;
 

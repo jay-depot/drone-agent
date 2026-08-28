@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   DroneConversationEvent,
   DroneLlmCapability,
-  DroneLlmProviderRegistration,
   DronePluginRegistration,
   DroneSessionSafetyTrimPayload,
 } from 'drone-core';
@@ -57,7 +56,7 @@ function createRegistrationCapture() {
     getModel: () => 'claude-sonnet-4-6',
     setModel: () => {},
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: unknown) => {},
     listModels: async () => {
       return [];
     },

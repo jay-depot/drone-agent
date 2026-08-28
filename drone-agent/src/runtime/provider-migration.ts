@@ -1,4 +1,4 @@
-import type { DroneAgentConfig, DroneProviderConfig } from 'drone-core';
+import type { DroneAgentConfig } from 'drone-core';
 
 /**
  * Legacy → providers migration.

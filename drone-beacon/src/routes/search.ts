@@ -39,7 +39,6 @@ export default function searchRoutes(app: FastifyInstance) {
 
     // Get current paths for this agent
     const currentPaths = db.listSearchPaths(id);
-    const currentDirs = new Set(currentPaths.map(p => p.directory_path));
     const newDirs = new Set(paths.map(p => path.resolve(p.path)));
 
     // Remove paths that are no longer configured

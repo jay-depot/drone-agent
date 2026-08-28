@@ -2,7 +2,7 @@
  * Tests for the SubagentDispatchBlock custom render component.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { render } from 'ink-testing-library';
 import { SubagentDispatchBlock } from '../src/tui/components/SubagentDispatchBlock.js';
 import { DEFAULT_GRAYSCALE_SCHEME } from '../src/tui/theme.js';

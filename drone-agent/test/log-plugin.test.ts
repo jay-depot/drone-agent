@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mkdtemp, mkdir, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import os from 'node:os';
@@ -99,7 +99,7 @@ describe('log plugin — path resolution', () => {
   });
 
   it('logs to ~/.drone-agent/logs/<persona-id>/ for user-scoped personas', async () => {
-    await withTempHome(async homeDir => {
+    await withTempHome(async _homeDir => {
       const sessionManager = createSessionManager();
       const plugin = createLogPlugin({ sessionManager });
       const { cap } = await getCapability(plugin);
@@ -363,6 +363,7 @@ async function getCapability(
         nudgeMarginPercent: 10,
       },
       memory: { enabled: false },
+      wakelock: { enabled: false },
       log: { enabled: false },
       terminal: {
         enabled: false,

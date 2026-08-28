@@ -56,7 +56,7 @@ function createRegistrationCapture() {
     getModel: () => 'openai/gpt-4o',
     setModel: () => {},
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: unknown) => {},
     listModels: async () => {
       return [];
     },

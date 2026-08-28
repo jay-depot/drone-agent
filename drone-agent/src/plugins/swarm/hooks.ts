@@ -14,13 +14,27 @@ import type {
   DronePersonaCapability,
 } from 'drone-core';
 import type { SwarmContext } from './context.js';
-import {
-  reloadFromBeacon,
-  registerPersonaProviders,
-  registerSkillProviders,
-} from './providers.js';
+import { reloadFromBeacon } from './providers.js';
 import { connectWebSocket } from './websocket.js';
 import { BeaconConfigInjector } from './config.js';
+
+// JSON shapes returned by the beacon's /insights and /principles endpoints.
+interface BeaconInsightRecord {
+  targetType: string;
+  targetId: string;
+  timestamp: string;
+  insight: string;
+  lastExamined?: string;
+}
+
+interface BeaconPrincipleRecord {
+  id: string;
+  targetType: string;
+  targetId: string;
+  principle: string;
+  source?: string;
+  createdAt: string;
+}
 
 /**
  * Generate a UUID v4 string.
@@ -146,8 +160,8 @@ function registerStorageEngines(
       if (targetId) params.set('targetId', targetId);
       const res = await fetch(`${baseUrl}/insights?${params}`);
       if (!res.ok) return [];
-      const data = (await res.json()) as any[];
-      return data.map((d: any) => ({
+      const data = (await res.json()) as BeaconInsightRecord[];
+      return data.map(d => ({
         targetType: d.targetType,
         targetId: d.targetId,
         entryCount: 1,
@@ -158,8 +172,8 @@ function registerStorageEngines(
       const params = new URLSearchParams({ targetType, targetId });
       const res = await fetch(`${baseUrl}/insights?${params}`);
       if (!res.ok) return [];
-      const data = (await res.json()) as any[];
-      return data.map((d: any) => ({
+      const data = (await res.json()) as BeaconInsightRecord[];
+      return data.map(d => ({
         timestamp: d.timestamp,
         insight: d.insight,
         lastExamined: d.lastExamined,
@@ -201,8 +215,8 @@ function registerStorageEngines(
       if (targetId) params.set('targetId', targetId);
       const res = await fetch(`${baseUrl}/principles?${params}`);
       if (!res.ok) return [];
-      const data = (await res.json()) as any[];
-      return data.map((d: any) => ({
+      const data = (await res.json()) as BeaconPrincipleRecord[];
+      return data.map(d => ({
         targetType: d.targetType,
         targetId: d.targetId,
         principleCount: 1,
@@ -212,8 +226,8 @@ function registerStorageEngines(
       const params = new URLSearchParams({ targetType, targetId });
       const res = await fetch(`${baseUrl}/principles?${params}`);
       if (!res.ok) return [];
-      const data = (await res.json()) as any[];
-      return data.map((d: any) => ({
+      const data = (await res.json()) as BeaconPrincipleRecord[];
+      return data.map(d => ({
         principle: d.principle,
         source: d.source,
         createdAt: d.createdAt,
@@ -223,7 +237,7 @@ function registerStorageEngines(
       const params = new URLSearchParams({ targetType, targetId });
       const res = await fetch(`${baseUrl}/principles?${params}`);
       if (!res.ok) throw new Error(`Failed to list principles: ${res.status}`);
-      const data = (await res.json()) as any[];
+      const data = (await res.json()) as BeaconPrincipleRecord[];
       if (index >= data.length) {
         throw new Error(`Index ${index} is out of bounds.`);
       }
@@ -249,8 +263,8 @@ function registerStorageEngines(
  */
 export function registerHooks(
   ctx: SwarmContext,
-  configCap: DroneConfigCapability | undefined,
-  beaconConfigInjector: BeaconConfigInjector | null
+  _configCap: DroneConfigCapability | undefined,
+  _beaconConfigInjector: BeaconConfigInjector | null
 ): void {
   const { registration } = ctx;
 

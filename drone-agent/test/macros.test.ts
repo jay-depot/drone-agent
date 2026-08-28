@@ -28,18 +28,6 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   }
 }
 
-async function writeMacro(
-  dir: string,
-  filename: string,
-  content: string
-): Promise<string> {
-  const macroDir = path.join(dir, '.drone-agent', 'macros');
-  await mkdir(macroDir, { recursive: true });
-  const filePath = path.join(macroDir, filename);
-  await writeFile(filePath, content, 'utf-8');
-  return filePath;
-}
-
 // ---------------------------------------------------------------------------
 // Parser tests
 // ---------------------------------------------------------------------------
@@ -710,7 +698,7 @@ describe('macrosPlugin', () => {
           getModel: () => 'test-model',
           setModel: () => {},
           getReasoningLevel: () => undefined,
-          setReasoningLevel: (_level: any) => {},
+          setReasoningLevel: (_level: unknown) => {},
           sendUserMessage: async (_prompt: string) => {
             // Simulate the events that conversation-service emits
             // through engine conversation event hooks

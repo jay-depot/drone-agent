@@ -29,7 +29,6 @@
  * spec-compliant in a way that diverges from what the current client expects.
  */
 
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';

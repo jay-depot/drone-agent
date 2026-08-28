@@ -46,7 +46,8 @@ export function sanitizeKey(key: string): string {
   let safe = trimmed.replace(/[/\\\\]/g, '__');
 
   // Replace any remaining filesystem-unsafe characters
-  safe = safe.replace(/[<>"|?*\x00-\x1f]/g, '_');
+  const CONTROL_RANGE = String.fromCharCode(0) + '-' + String.fromCharCode(31);
+  safe = safe.replace(new RegExp('[<>"|?*' + CONTROL_RANGE + ']', 'g'), '_');
 
   return safe;
 }

@@ -44,7 +44,7 @@ export default function spawnRoutes(app: FastifyInstance) {
       const message = err instanceof Error ? err.message : 'Unknown error';
 
       // Create a failed spawn record
-      const spawnRecord = db.createSpawn(
+      db.createSpawn(
         finalSpawnId,
         personaId ?? null,
         task ?? null,
