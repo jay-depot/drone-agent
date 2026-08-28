@@ -25,7 +25,7 @@ A complete round in the conversation between user and agent, consists of a user 
 _Avoid_: Exchange, interaction
 
 **Turn**:
-A single interaction within a round, typically consisting of a user message and the agent's response (which may include tool calls). See: **Round** above.
+A single interaction within a round, whether it is a user message turn, a pending message turn, an agent response with tool call turn, or a tool result turn. See: **Round** above.
 _Avoid_: Interaction, step
 
 **Tool**:
