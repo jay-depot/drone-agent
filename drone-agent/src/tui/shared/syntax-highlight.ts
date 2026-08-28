@@ -276,7 +276,7 @@ export function renderHighlightedTree(
   const lines = fullRendered.split('\n');
 
   const visibleLength = (line: string): number =>
-    line.replace(/\u001b\[[0-9;]*m/g, '').length;
+    line.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*m', 'g'), '').length;
 
   const maxWidth = lines.reduce(
     (max, line) => Math.max(max, visibleLength(line)),
