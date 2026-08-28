@@ -363,6 +363,7 @@ async function getCapability(
         nudgeMarginPercent: 10,
       },
       memory: { enabled: false },
+      wakelock: { enabled: false },
       log: { enabled: false },
       terminal: {
         enabled: false,

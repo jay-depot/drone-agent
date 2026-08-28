@@ -325,6 +325,7 @@ describe('promptFilePlugin', () => {
         nudgeMarginPercent: 10,
       },
       memory: { enabled: false },
+      wakelock: { enabled: false },
       log: { enabled: false },
       terminal: {
         enabled: false,
@@ -430,6 +431,7 @@ describe('promptFilePlugin', () => {
           nudgeMarginPercent: 10,
         },
         memory: { enabled: false },
+        wakelock: { enabled: false },
         log: { enabled: false },
         terminal: {
           enabled: false,

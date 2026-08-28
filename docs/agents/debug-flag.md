@@ -24,7 +24,8 @@ Because the registry is shared, toggling a subsystem at runtime via `/debug enab
 
 ## Current Subsystems
 
-| Subsystem | What it logs                                                                                                                                                                            |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `llm`     | Full request and response bodies for all LLM providers (OpenAI, OpenRouter, Anthropic, Ollama)                                                                                          |
-| `tools`   | Tool surface changes: `[tools:mount]`, `[tools:unmount]`, `[tools:register]`, `[tools:unregister]`, `[tools:unregister-plugin]`, `[tools:enable-plugin]`, `[tools:add-external-plugin]` |
+| Subsystem  | What it logs                                                                                                                                                                            |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `llm`      | Full request and response bodies for all LLM providers (OpenAI, OpenRouter, Anthropic, Ollama)                                                                                          |
+| `tools`    | Tool surface changes: `[tools:mount]`, `[tools:unmount]`, `[tools:register]`, `[tools:unregister]`, `[tools:unregister-plugin]`, `[tools:enable-plugin]`, `[tools:add-external-plugin]` |
+| `wakelock` | Wakelock plugin transitions: acquire/release of the sleep inhibitor, plus WSL/unavailable-command warnings                                                                              |

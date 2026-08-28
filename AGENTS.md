@@ -141,6 +141,8 @@ The TUI (`src/tui/app.tsx`) renders any `DroneConversationEvent` with a recogniz
 
 **Rule of thumb**: If a plugin mutates session state without a user command, it must emit at least `started` and `completed`/`failed` events. The latch bug in compaction (Decision 053) went undetected for weeks partly because the plugin was observability-free — no events meant no visible signal that it had stopped firing.
 
+**Deliberate deviation — silent control signals**: Not every event kind is meant for TUI rendering. The `roundComplete` event (emitted once per `sendUserMessage` round) is a high-frequency control signal consumed by plugins (e.g. `wakelock` to release a sleep lock). It is intentionally added to the `DroneConversationEvent` union **without** a theme color or TUI render case, so it is silently ignored by the non-exhaustive consumers (`tui/app.tsx`, `output-handlers.ts`) while still flowing to `onConversationEvent` subscribers. The wakelock plugin also mutates no session state and has no `emitEvent` path (it is a static built-in), so it is logger-only by default.
+
 ### Guardrail System
 
 The conversation service includes built-in guardrails that detect and mitigate common LLM reliability issues. These are configured under `session.guardrail` in the config:
@@ -186,7 +188,7 @@ Config cascades: **Default → User → Project** (last-write-wins per key, exce
 
 Config files live in `.drone-agent/config.json` at each scope. The config loader (`runtime/config.ts`) walks up the directory tree looking for `.drone-agent/` directories.
 
-Key config sections: `enabledPlugins`, `systemPrompt`, `activePersona`, `providers` (user-defined LLM providers; banned at project scope), `llm` (active selection + reasoning), legacy `ollama`/`openai`/`anthropic`/`openrouter` (migration window only — migrated into `providers` and persisted to the file on first load), `session`, `lsp`, `mcp`, `compaction`, `memory`, `log`, `promptFile`, `swarm`.
+Key config sections: `enabledPlugins`, `systemPrompt`, `activePersona`, `providers` (user-defined LLM providers; banned at project scope), `llm` (active selection + reasoning), legacy `ollama`/`openai`/`anthropic`/`openrouter` (migration window only — migrated into `providers` and persisted to the file on first load), `session`, `lsp`, `mcp`, `compaction`, `memory`, `log`, `promptFile`, `swarm`, `wakelock`.
 
 → See `docs/agents/provider-model-config.md` for the provider/protocol/model model, parameters, secrets, scopes, and migration.
 

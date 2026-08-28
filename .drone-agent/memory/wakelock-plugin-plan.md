@@ -3,7 +3,7 @@ key: wakelock-plugin-plan
 tags:
   []
 created: 2026-08-28T14:58:37.137Z
-updated: 2026-08-28T15:00:16.229Z
+updated: 2026-08-28T15:20:36.318Z
 ---
 
 # Wakelock Plugin — Implementation Plan
@@ -29,95 +29,36 @@ Platform-agnostic sleep-inhibition plugin for drone-agent. Acquires sleep-inhibi
 5. `drone-agent/src/runtime/conversation-service.ts` — wrap `sendUserMessage` body in try/finally; in finally emit `{ kind: 'roundComplete' }` via `engine.runConversationEventHooks(...)` fire-and-forget with `.catch` swallow (mirror the existing userMessage emit at line 453). Fires on ALL exit paths (normal return, shouldStopLoop, CANCEL_SENTINEL, broken-response `return ''`, tool-depth/identical-call/stuck throws).
 6. `drone-agent/src/plugins/wakelock/index.ts` (new) — the plugin.
 7. `drone-agent/src/plugins/index.ts` — import + add `wakelockPlugin` to `staticBuiltInPlugins[]`.
-8. `drone-agent/test/wakelock-plugin.test.ts` (new) — unit tests.
+8. `drone-agent/test/wakelock-plugin.test.ts` (new) — unit tests (11 tests).
 9. `docs/agents/debug-flag.md` — add `wakelock` row to "Current Subsystems" table.
-10. `AGENTS.md` (optional) — add wakelock to plugin list + note roundComplete silent-signal deviation.
+10. `AGENTS.md` — add wakelock to config-section list + note roundComplete silent-signal deviation (done).
 
-## Plugin implementation (step 6 sketch)
-```ts
-import { spawn, type ChildProcess } from 'node:child_process';
-import type { DronePlugin } from 'drone-core';
+## Plugin implementation (implemented)
+The plugin lives at `drone-agent/src/plugins/wakelock/index.ts`:
+- metadata: `{ id: 'wakelock', name: 'Wakelock', version: '0.1.0', defaultEnabled: false }`
+- register(): guards — subagent (no-op), config.enabled false (no-op), WSL (log warning, no-op), unsupported platform (no-op).
+- resolveInhibitor(): darwin→caffeinate -i; linux→systemd-inhibit --what=idle:sleep sleep infinity; else null.
+- boolean state machine: acquire() spawns inhibitor idempotently (guards on ENOENT, attaches 'error' handler); release() kills it.
+- onConversationEvent: userMessage→acquire, roundComplete→release. onShutdown: kill live child. registerHelp added.
+- debug gate: `runtime.flags.isEnabled('wakelock')` controls info/warn logging (--debug wakelock subsystem).
 
-type RuntimeInfo = { isSubagent: boolean; flags: { isEnabled(name: string): boolean } };
+## Tests (implemented, 11 passing)
+mock registration + mocked child_process spawn + mocked /proc/version. Covers: defaultEnabled=false; subagent no-op; disabled no-op; idempotent acquire on repeated userMessage; release on roundComplete; roundComplete-without-userMessage no-op; unavailable-command no-throw; WSL warning+no-op; shutdown kill; debug logging on/off; macOS caffeinate command.
 
-export const wakelockPlugin: DronePlugin = {
-  metadata: {
-    id: 'wakelock', name: 'Wakelock', version: '0.1.0',
-    description: 'Prevents the host machine from sleeping while the agent is working.',
-    defaultEnabled: false,
-  },
-  register: async registration => {
-    const config = registration.getConfig().wakelock;
-    const runtime = registration.request<RuntimeInfo>('runtime');
-    if (runtime?.isSubagent) return; // subagents never acquire
-    if (!config?.enabled) return;
-
-    // Resolve platform command once at register:
-    //   darwin -> { cmd: 'caffeinate', args: ['-i'] }
-    //   linux  -> { cmd: 'systemd-inhibit', args: ['--what=idle:sleep', 'sleep', 'infinity'] }
-    //   WSL    -> log warning once, return (no-op)
-    //   other  -> return (no-op)
-
-    let working = false;
-    let inhibitor: ChildProcess | null = null;
-    const debug = () => runtime?.flags.isEnabled('wakelock');
-
-    const acquire = () => {
-      if (working || !cmd) return;        // idempotent
-      working = true;
-      try {
-        inhibitor = spawn(cmd, args, { stdio: 'ignore' });
-      } catch (err) {                    // ENOENT / unavailable
-        working = false;
-        if (debug()) registration.logger.warn(`wakelock unavailable: ${err}`);
-        return;                          // never crash the agent
-      }
-      if (debug()) registration.logger.info('wakelock acquired');
-    };
-    const release = () => {
-      if (!working) return;
-      working = false;
-      inhibitor?.kill();
-      inhibitor = null;
-      if (debug()) registration.logger.info('wakelock released');
-    };
-
-    registration.hooks.onConversationEvent(async ev => {
-      if (ev.kind === 'userMessage') acquire();
-      else if (ev.kind === 'roundComplete') release();
-    });
-    registration.hooks.onShutdown(async () => {
-      inhibitor?.kill();
-      inhibitor = null;
-    });
-    registration.registerHelp('Wakelock: prevents host sleep while working. Enable via wakelock.enabled or enabling the wakelock plugin.');
-  },
-};
-```
-Notes: spawn ENOENT throws synchronously → try/catch works; also attach `'error'` listener. WSL check is one-time at register (async read /proc/version).
-
-## Test cases (step 8)
-1. `defaultEnabled === false` in metadata.
-2. register() in subagent mode (runtime.isSubagent=true) → no spawn attempt.
-3. register() with wakelock.enabled=false → no spawn attempt.
-4. userMessage event → spawns inhibitor (mock spawn); second userMessage → still one child (idempotent).
-5. userMessage then roundComplete → child killed.
-6. roundComplete without userMessage → no-op (no crash).
-7. unavailable command (spawn throws ENOENT) → no-op + no throw, working stays safe.
-8. WSL detection (mock /proc/version) → warning logged, no spawn.
-9. onShutdown with live inhibitor → killed.
-10. Mock `_runtime.flags.isEnabled('wakelock')` toggles debug logging on/off.
-Tests use a mock registration object (mock getConfig, logger, request, hooks) calling register() directly, mocking `node:child_process` spawn (vi.mock) and /proc/version read.
-
-## Validation criteria
-- LSP passes (typescript) for all touched files.
-- `pnpm -r run build` passes (drone-core FIRST, then drone-agent resolves roundComplete/DroneWakelockConfig from dist/).
-- `pnpm lint` passes (eslint + prettier).
-- `pnpm test` fast suite passes, including new wakelock-plugin.test.ts.
-- `pnpm typecheck` passes.
-- Verify roundComplete reaches onConversationEvent (plugin test asserting both acquire+release fire for a synthetic userMessage→roundComplete sequence).
-- Confirm no TUI regression: app.tsx/output-handlers.ts still compile with roundComplete in union (non-exhaustive switches ignore it).
-- No dead code, no fluff comments, unused imports/vars removed.
+## Validation criteria — ALL PASS
+- `pnpm -r run build` ✓ (drone-core first, clean)
+- `pnpm typecheck` ✓ (incl. test tsconfig)
+- `pnpm lint` ✓ (eslint + prettier)
+- `pnpm test` fast suite ✓ (2321 passed, 9 skipped / 160 files)
+- LSP clean on all touched files ✓
+- wakelock-plugin.test.ts: 11/11 ✓
 
 ## Step 5 (try/finally wrap) — EXECUTOR NOTE
 Do NOT manually re-indent the ~620-line sendUserMessage body. Just add the `try { ... } finally { ... }` brackets around the existing body and run `pnpm lint` (prettier) to normalize indentation. This is the project convention (AGENTS.md: prettier handles formatting; don't hand-match it). Re-read the file after prettier before further edits.
+
+## Execution notes / gotchas hit
+- **file__apply_diff corrupts large files**: on `config-types.ts` and `conversation-service.ts`, apply_diff reported "patched: true" but silently dropped/duplicated edits at the file tail (duplicate trailing brace, missing merge-spec line) — a known issue documented in `.drone-agent/insights/project/project.json`. Mitigation: apply edits to large files via a deterministic Node `readFileSync`/`writeFileSync` script instead of apply_diff, then verify with grep + build. This worked reliably for config-types, conversation-service, and the 3 test-file mock-config updates.
+- **Adding a required field to DroneAgentConfig breaks test mock config literals**: three test files (log-plugin, prompt-file, terminal.test) construct `DroneAgentConfig` literals and needed `wakelock: { enabled: false }` added. Always sweep test mocks when adding a required config field.
+- **try/finally wrap of sendUserMessage**: the method contains a `while(true)` loop; inserting `try {` after the func-open and `} finally {...}` between the while-close and method-close requires care. Verify brace balance programmatically (count `{`/`}` over the method body) after editing.
+- **git stash/pop lost edits**: after a `git stash` + `git stash pop` for a clean-build comparison, three of the applied edits to config-types.ts were missing (not re-applied). Re-verify all edits after any stash cycle.
+- Prettier re-wraps long lines when re-indenting (conversation-service grew whitespace diff but logic preserved). Use `git diff -w` to confirm only whitespace + the intended additions.

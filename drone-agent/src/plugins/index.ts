@@ -39,6 +39,7 @@ import { swarmPlugin } from './swarm/index.js';
 import { todoPlugin } from './todo/index.js';
 import { utilsPlugin } from './utils.js';
 import { focusPlugin } from './focus.js';
+import { wakelockPlugin } from './wakelock/index.js';
 
 // Static built-ins — everything except the compaction plugin, which needs
 // access to the live engine and session manager. The CLI calls
@@ -55,6 +56,7 @@ const staticBuiltInPlugins: DronePlugin[] = [
   lightpandaPlugin,
   todoPlugin,
   focusPlugin,
+  wakelockPlugin,
   fetchPlugin,
   utilsPlugin,
   macrosPlugin,
