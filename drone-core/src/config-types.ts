@@ -281,7 +281,7 @@ export type DroneSwarmConfig = {
 export type DroneTuiConfig = {
   syntaxHighlighting: {
     colors: Record<string, string>;
-    codeBackground: string;
+    codeBackground?: string;
   };
 };
 

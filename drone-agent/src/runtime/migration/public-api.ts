@@ -282,7 +282,7 @@ export async function batchMigrate(
  * Resolve beacon host/port from config or CLI overrides.
  */
 export function resolveBeaconAddress(
-  config?: DroneAgentConfig,
+  config?: Partial<DroneAgentConfig>,
   cliHost?: string,
   cliPort?: number
 ): { host: string; port: number } | null {

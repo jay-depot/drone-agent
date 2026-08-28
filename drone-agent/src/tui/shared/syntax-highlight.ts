@@ -14,7 +14,7 @@
  */
 
 import { Text } from 'ink';
-import type { ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { createLowlight, common } from 'lowlight';
 import React from 'react';
 
@@ -277,7 +277,7 @@ export function renderHighlightedTree(
   tree: HighlightRoot,
   backgroundColor: string,
   colors?: Record<string, string> | SyntaxTheme
-): ReactNode {
+): ReactElement {
   const theme = toTheme(colors as Record<string, unknown> | undefined);
 
   let fullRendered = '';
