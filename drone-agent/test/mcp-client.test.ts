@@ -16,7 +16,15 @@
  * corrected behavior. They remain the regression net for later fix-phases.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { createMcpClientConnection } from '../src/plugins/mcp/client.js';
 import { createMockFetch } from './mcp-fake-server.js';
 import type { MockFetch } from './mcp-fake-server.js';
@@ -96,7 +104,12 @@ function installFetch(mock: MockFetch): void {
 
 let currentMock: MockFetch | undefined;
 
-// If any test forgets to install a mock, the real fetch throws loudly.
+// Original global fetch, restored after each test so the guard below never
+// leaks into other suites sharing this process (single-fork vitest pool).
+const ORIGINAL_FETCH = globalThis.fetch;
+
+// Installed between tests: any forgotten mock fails loudly within THIS file
+// without poisoning later suites with a permanent throwing fetch.
 const GUARD_FETCH = (async () => {
   throw new Error('real fetch must not be called in MCP unit tests');
 }) as unknown as typeof fetch;
@@ -110,6 +123,10 @@ afterEach(() => {
   globalThis.fetch = GUARD_FETCH;
   currentMock = undefined;
   vi.restoreAllMocks();
+});
+
+afterAll(() => {
+  globalThis.fetch = ORIGINAL_FETCH;
 });
 
 describe('initialize handshake', () => {

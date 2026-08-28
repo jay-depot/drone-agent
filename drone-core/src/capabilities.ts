@@ -1,3 +1,65 @@
+// ── Search capability types ─────────────────────────────────────────
+
+/**
+ * An embedding provider that generates vector embeddings for text.
+ */
+export type DroneEmbeddingProvider = {
+  id: string;
+  name: string;
+  /** Get the embedding vector for a text string. */
+  getEmbedding(text: string): Promise<Float32Array>;
+  /** Number of dimensions in the embedding vectors. */
+  dimensions: number;
+  /** Maximum number of tokens per chunk (for chunking). */
+  maxTokens: number;
+};
+
+/**
+ * Capability offered by the search plugin. Lets other plugins register
+ * embedding providers and resolve which provider to use for a given scope.
+ */
+export type DroneSearchCapability = {
+  registerEmbeddingProvider(provider: DroneEmbeddingProvider): void;
+  unregisterEmbeddingProvider(id: string): void;
+  getEmbeddingProviders(): DroneEmbeddingProvider[];
+  /** Get the provider to use for a given scope/dir. */
+  resolveProvider(
+    scope: 'user' | 'project',
+    dirPath?: string
+  ): DroneEmbeddingProvider | undefined;
+};
+
+/**
+ * Capability offered by the swarm plugin. Lets other plugins discover
+ * the beacon URL and agent ID for proxying requests to the beacon.
+ */
+export type DroneSwarmCapability = {
+  /** Get the base URL of the connected beacon. */
+  getBeaconUrl(): string;
+  /** Get the agent's session ID registered with the beacon. */
+  getAgentId(): string;
+};
+
+/**
+ * Result of a semantic search operation.
+ */
+export type SearchResult = {
+  filePath: string;
+  chunkIndex: number;
+  text: string;
+  score: number;
+};
+
+/**
+ * Result of an indexing operation.
+ */
+export type IndexResult = {
+  filesIndexed: number;
+  filesSkipped: number;
+  filesRemoved: number;
+  chunksCreated: number;
+};
+
 // ── Capability types ───────────────────────────────────────────────
 
 import type { DroneReasoningLevel } from './config-types.js';
@@ -13,6 +75,7 @@ import type {
   DroneLlmProvider,
   DroneLlmProviderRegistration,
 } from './provider-types.js';
+import type { LlmProtocolDriver } from './provider-config-types.js';
 
 // ── Config capability ──────────────────────────────────────────────
 
@@ -83,6 +146,11 @@ export type DroneSkillsCapability = {
 export type DroneLlmCapability = {
   /** Get the active DroneLlmProvider implementation. */
   getActiveProvider: () => DroneLlmProvider;
+  /**
+   * Register a protocol driver factory. The broker instantiates one
+   * provider per matching `config.providers` entry using these drivers.
+   */
+  registerDriver: (driver: LlmProtocolDriver) => void;
   /** Get the id of the active provider (e.g. 'ollama', 'openrouter'). */
   getActiveProviderId: () => string;
   /** List all registered provider ids in precedence order. */

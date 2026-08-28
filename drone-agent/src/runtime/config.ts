@@ -3,12 +3,19 @@ import { constants as fsConstants } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {
+  validateProviders,
   applyAgentConfigLayer,
   createDefaultAgentConfig,
   parseConfigWithSchema,
   type DroneConfigLayer,
   type DroneResolvedConfig,
 } from 'drone-core';
+import {
+  formatMigrationNotice,
+  migrateLegacyProviderConfig,
+} from './provider-migration.js';
+import { persistLegacyProviderMigration } from './provider-migration-persist.js';
+import { enforceProviderScopePolicy } from './provider-scope-policy.js';
 
 export const CONFIG_DIRECTORY_NAME = '.drone-agent';
 export const CONFIG_FILE_NAME = 'config.json';
@@ -46,9 +53,35 @@ export async function loadConfigLayer(
   };
 }
 
-export async function findProjectConfigPath(
-  startDirectory: string
-): Promise<string | undefined> {
+export interface ProjectConfigResolution {
+  /** Discovered project config file path, or undefined when none exists. */
+  path?: string;
+  /**
+   * Set when discovery encountered a config file identical to the user
+   * config and skipped it rather than loading it a second time as
+   * project scope.
+   */
+  skippedDuplicatePath?: string;
+}
+
+/**
+ * Walk up from startDirectory to the filesystem root looking for the
+ * nearest project config. The walk dedupes against the effective user
+ * config path by lexical identity: launching from $HOME (or any directory
+ * whose ancestors contain only the user's own .drone-agent directory)
+ * would otherwise rediscover the user config and load it a second time as
+ * project scope, tripping the provider scope policy. Symlinked homes are
+ * out of scope for the comparison.
+ */
+export async function resolveProjectConfig(
+  startDirectory: string,
+  userConfigPath?: string
+): Promise<ProjectConfigResolution> {
+  const resolvedUserConfigPath = path.resolve(
+    userConfigPath ??
+      path.join(os.homedir(), CONFIG_DIRECTORY_NAME, CONFIG_FILE_NAME)
+  );
+
   let currentDirectory = path.resolve(startDirectory);
 
   while (true) {
@@ -58,12 +91,15 @@ export async function findProjectConfigPath(
       CONFIG_FILE_NAME
     );
     if (await pathExists(candidate)) {
-      return candidate;
+      if (path.resolve(candidate) === resolvedUserConfigPath) {
+        return { skippedDuplicatePath: candidate };
+      }
+      return { path: candidate };
     }
 
     const parentDirectory = path.dirname(currentDirectory);
     if (parentDirectory === currentDirectory) {
-      return undefined;
+      return {};
     }
 
     currentDirectory = parentDirectory;
@@ -111,9 +147,15 @@ export async function loadAgentConfig(
     layers.push(userLayer);
   }
 
-  const projectConfigPath = await findProjectConfigPath(startDirectory);
-  if (projectConfigPath) {
-    const projectLayer = await loadConfigLayer('project', projectConfigPath);
+  const projectConfigResolution = await resolveProjectConfig(
+    startDirectory,
+    userConfigPath
+  );
+  if (projectConfigResolution.path) {
+    const projectLayer = await loadConfigLayer(
+      'project',
+      projectConfigResolution.path
+    );
     if (projectLayer) {
       layers.push(projectLayer);
     }
@@ -124,8 +166,49 @@ export async function loadAgentConfig(
     mergedConfig = applyAgentConfigLayer(mergedConfig, layer.config);
   }
 
+  // Legacy section → providers migration runs after the full merge so
+  // swarm-injected legacy sections are migrated too. Interpolation already
+  // happened per-layer at parse time (env is node-local, so per-layer and
+  // post-merge interpolation are equivalent).
+  const migration = migrateLegacyProviderConfig(mergedConfig);
+  mergedConfig = migration.config;
+
+  // Persist the migration to the file-backed layers so it happens exactly
+  // once. Derived from the raw files (not this merged object) so ${VAR}
+  // templates stay templates on disk.
+  const persisted = await persistLegacyProviderMigration(
+    layers.map(layer => ({ scope: layer.scope, path: layer.path }))
+  );
+
+  const scopePolicy = enforceProviderScopePolicy(layers);
+  if (scopePolicy.errors.length > 0) {
+    throw new Error(
+      `Provider config scope violations:\n  - ${scopePolicy.errors.join('\n  - ')}`
+    );
+  }
+
+  const validation = validateProviders(mergedConfig.providers);
+  if (validation.errors.length > 0) {
+    throw new Error(
+      `Invalid providers config:\n  - ${[...validation.errors].join('\n  - ')}`
+    );
+  }
+
   return {
     config: mergedConfig,
     layers,
+    migrationNotice: formatMigrationNotice(migration, {
+      backupPaths: persisted.backupPaths,
+    }),
+    warnings: [
+      ...(projectConfigResolution.skippedDuplicatePath !== undefined
+        ? [
+            `Found ${projectConfigResolution.skippedDuplicatePath} while searching for project config, but it is the same file as the user config; skipping redundant project-scope load.`,
+          ]
+        : []),
+      ...persisted.warnings,
+      ...scopePolicy.warnings,
+      ...validation.warnings,
+    ],
   };
 }

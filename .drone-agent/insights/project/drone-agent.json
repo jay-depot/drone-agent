@@ -12,8 +12,104 @@
     "insight": "When adding a new debug subsystem that must be consumed by the plugin engine (e.g. `--debug tools`), the debug set cannot live privately in the conversation service because the engine is constructed before the conversation service in index.tsx. Extract a shared `DebugFlagRegistry` in drone-core (mirroring `RuntimeFlagRegistry`), created once in index.tsx and passed to both the engine and conversation service. This makes runtime toggling via `/debug` take effect in both layers and makes future debug flags trivial to add."
   },
   {
+    "timestamp": "2026-07-14T20:58:46.803Z",
+    "insight": "The `file__write` tool has a bug where it truncates files when writing content that contains template literal backticks or certain special characters. This happened multiple times when writing TypeScript files with template literals (e.g., `Safety trim: dropping ${turnsToDrop} turn(s)`). The workaround is to use `git checkout` to restore the file, then use `sed` or Python scripts for surgical edits instead of `file__write` for files with complex template literals."
+  },
+  {
+    "timestamp": "2026-07-14T21:34:07.117Z",
+    "insight": "When using sed to insert multi-line blocks after a pattern, the approach of matching a closing brace pattern like `/^        },/` is fragile because it matches the first closing brace after the opening pattern, not the correct one. For inserting new config fields into test files that construct DroneAgentConfig objects, it's safer to either write the whole file or use a more targeted approach like matching the specific closing brace of the swarm block. The sed command corrupted two test files (log-plugin.test.ts and prompt-file.test.ts) by inserting the search config block multiple times inside the swarm block instead of after it."
+  },
+  {
+    "timestamp": "2026-07-19T18:04:08.795Z",
+    "insight": "The file__apply_diff tool consistently fails on files with certain content patterns (e.g., when context lines contain only whitespace or the @@ heading doesn't match exactly). For multi-line code insertions in TypeScript files, using a Python script with string replacement and assertions is more reliable than the diff tool. This was observed during the MCP roots capability implementation where all 13+ edits to client.ts were applied via Python instead of file__apply_diff."
+  },
+  {
+    "timestamp": "2026-07-21T18:08:06.455Z",
+    "insight": "Planned syntax highlighting fixes: (1) background width padding in renderHighlightedTree(), (2) configurable syntax colors via new DroneTuiConfig type in drone-core. Config threads through App → ChatLog/AssistantMessageBlock → Markdown. Plan saved as project memory 'tui-issue2-syntax-highlighting-fix'."
+  },
+  {
+    "timestamp": "2026-07-21T18:15:57.386Z",
+    "insight": "When threading new props through App.tsx's conversation event listener, use refs (like syntaxColorsRef) to avoid stale closure issues. The event listener is a useEffect that captures variables at setup time; refs let it read the latest values without re-registering the listener on every change."
+  },
+  {
+    "timestamp": "2026-07-21T18:23:13.103Z",
+    "insight": "Ingested the entire fix/tui-syntax-highlighting branch (7 commits) into the project wiki. Created ADR 077 covering all three bug fixes (ANSI escape codes for Yoga layout, proper lowlight AST traversal for stray undefined/missing colors, flat AST line splitting) and two enhancements (background width padding, configurable DroneTuiConfig). Updated modules/drone-agent-tui.md with a Syntax Highlighting section, entities/DroneAgentConfig.md with the tui section, and index.md. Also incidentally updated the MCP client gaps memory to mark all 14 items complete with a summary table."
+  },
+  {
+    "timestamp": "2026-07-21T19:20:26.208Z",
+    "insight": "The `file__apply_diff` tool's `renderComponent` registration was tricky because all 5 file tool registrations have identical context lines (`additionalProperties: false,\\n      },\\n      execute: async input => {`), causing `file__apply_diff` patches to land in the wrong spot. Had to rewrite the entire file to fix it. Lesson: when patching files with identical context blocks, use more unique context or write the whole file."
+  },
+  {
+    "timestamp": "2026-07-21T20:40:12.220Z",
+    "insight": "The subagent dispatch tool now has real-time NDJSON event streaming from the subagent's stdout. Each NDJSON event (reasoning, toolCall, assistantMessage, return) is parsed as it arrives and emitted via onProgress() with a prefixed string format (reasoning:, tool:, msg:, done:). This pattern is reusable for any future feature that needs to monitor subagent progress in real time — the infrastructure (onProgress callback, outputLines accumulation in app.tsx, custom renderComponent) is already in place."
+  },
+  {
+    "timestamp": "2026-07-21T20:52:29.107Z",
+    "insight": "Meta-tool pretty output plan: The list_tools/mount_tool/unmount_tool meta-tools across git, swarm, and MCP plugins are structurally identical but return slightly different JSON shapes (MCP includes serverId, uses different field names). A single set of 3 reusable components (ListToolsBlock, MountToolBlock, UnmountToolBlock) can serve all three plugins if we normalize the MCP result shapes. The plan is saved as project memory 'meta-tool-pretty-output'."
+  },
+  {
+    "timestamp": "2026-07-21T21:01:54.360Z",
+    "insight": "The file__apply_diff tool struggles with multi-hunk patches on files that have already been partially patched. When applying multiple changes to the same file, it's more reliable to write the complete file with file__write than to apply sequential patches. The patch tool also has issues with indentation-sensitive patches where the context lines have different indentation than expected — it can insert lines at wrong positions or create duplicate properties."
+  },
+  {
+    "timestamp": "2026-07-21T21:23:30.451Z",
+    "insight": "OpenAI and OpenRouter use different JSON formats for reasoning effort in their API requests. OpenAI uses a top-level `reasoning_effort` (snake_case string), while OpenRouter uses a nested `reasoning: { effort: string }` object. The solution was to add both fields to the shared `OpenAiChatRequest` type and let each plugin set the field its API expects. The API ignores fields it doesn't understand, so this is safe and avoids conditional logic."
+  },
+  {
+    "timestamp": "2026-07-21T22:26:35.605Z",
+    "insight": "OpenRouter returns `reasoning` inside `choice.message.reasoning` (as a field on the message object), not at `choice.reasoning` like OpenAI does. The shared `fromOpenAiResponse` adapter only checked `choice.reasoning`, so OpenRouter reasoning was silently dropped. Fixed by adding `reasoning?: string` to `OpenAiMessage` type and adding a fallback check in `fromOpenAiResponse` that checks `choice.message.reasoning` when `choice.reasoning` is absent. Choice-level still takes precedence when both are present."
+  },
+  {
+    "timestamp": "2026-07-22T01:07:27.030Z",
+    "insight": "When using file__apply_diff on multiple files in a session, some patches may silently fail to apply (e.g., when the file content has changed since the patch was generated). Always verify patches were applied by checking git diff or running typecheck after each batch of changes. In this session, several core type patches were lost and had to be re-applied manually."
+  },
+  {
+    "timestamp": "2026-07-28T17:07:27.429Z",
+    "insight": "Coordinator UI has a dual-session-table problem: `beacon_sessions` tracks per-beacon agent connections (with disconnected_at), while `swarm_sessions` tracks the overall session lifecycle (with status field). The terminate flow only touched beacon_sessions, leaving swarm_sessions stuck on 'active'. The fix adds a POST /sessions/:id/end endpoint that updates swarm_sessions, and the UI calls it after the beacon DELETE regardless of whether the beacon session was already ended."
+  },
+  {
+    "timestamp": "2026-07-28T17:24:22.835Z",
+    "insight": "The coordinator has two separate session tables (beacon_sessions and swarm_sessions) that can get out of sync. The terminate flow only updated beacon_sessions, leaving swarm_sessions stuck on 'active'. The fix adds a POST /sessions/:id/end endpoint that directly updates swarm_sessions, and the UI calls it after the beacon DELETE regardless of whether the beacon session was already ended. This pattern should be kept in mind for future session lifecycle work."
+  },
+  {
+    "timestamp": "2026-07-28T17:43:27.691Z",
+    "insight": "The /api prefix migration touched more files than initially scoped. The drone-gateway package also has a CoordinatorClient class that calls coordinator API routes directly, and its tests needed updating too. When doing cross-package API path changes, always search for all consumers of the API across the entire monorepo, not just the obvious ones (coordinator + UI + beacon)."
+  },
+  {
+    "timestamp": "2026-07-28T19:11:07.841Z",
+    "insight": "Coordinator UI active persona bug fix: The root cause was that the swarm plugin registers the agent session with the beacon at `onPluginsLoaded` (with `personaId: null`), but the persona plugin activates the persona at `onSessionStart` (which fires later). The fix adds a complete pipeline: (1) a PATCH endpoint on the coordinator for updating session persona, (2) a PATCH endpoint on the beacon for updating agent persona, (3) a coordinator client method on the beacon, (4) a hook function in the swarm plugin, and (5) a subscription to persona changes in the swarm plugin's index. Also added `activePersona` to event metadata for audit trail."
+  },
+  {
+    "timestamp": "2026-07-28T19:52:42.717Z",
+    "insight": "The mid-panel widget system in tui/app.tsx uses a hardcoded list of known plugin IDs and a useRef that doesn't trigger re-renders. This should be rearchitected to support dynamic registration from any plugin (including external/user plugins) with custom React components. Punted to roadmap — needs its own planning session."
+  },
+  {
+    "timestamp": "2026-07-28T20:47:19.039Z",
+    "insight": "When removing a dependency from a plugin's deps type (like budgetService from CompactionPluginDeps), the test file must also be updated. The initial code-quality-cleanup commit missed updating compaction.test.ts, which caused 15 LSP errors. Always grep for the removed field name in test files as part of the validation step."
+  },
+  {
+    "timestamp": "2026-07-28T21:19:30.041Z",
+    "insight": "The plan persona sometimes slips into implementation mode for trivial fixes. The project workflow accepts this — it's not worth fighting. The important thing is the fix is correct, not which persona wrote it. This is a pragmatic design choice: the workflow is resilient to role bleed."
+  },
+  {
+    "timestamp": "2026-07-28T21:27:30.375Z",
+    "insight": "Wiki ingest for 12 commits on feature/web-ui-management-console branch completed. Created 8 new wiki pages (7 decisions + 1 concept) and updated 7 module pages. The commits spanned 5 major features: Web UI Management Console (5.5), MitM verification, approval token improvements, live event streaming + /api prefix, active persona propagation, and code quality cleanup. All 1632 tests pass."
+  },
+  {
+    "timestamp": "2026-07-29T03:16:00.772Z",
+    "insight": "Planned the \"Move Semantic Search to Beacon\" feature. Key architectural decisions: (1) search paths via separate beacon endpoint (not in agent registration), (2) single SQLite DB with directory_path column for dedup, (3) regex stays local, semantic goes to beacon, (4) shared code in drone-swarm-common for future coordinator reuse, (5) reindexing via two-pronged approach: agent-side onAfterToolCall hook + beacon-side periodic hash sweep. Plan saved to project memory as plan-semantic-search."
+  },
+  {
+    "timestamp": "2026-07-29T03:35:08.010Z",
+    "insight": "Pre-existing test failures discovered during plan-semantic-search validation: (1) compaction.test.ts has 3 tests failing because `makeBudgetService` helper function is missing (the tests call it but it was never defined in that file), (2) coordinator-client.test.ts has 1 test failing because `generateVerificationCode` receives undefined inputA (the test passes a Promise<BeaconIdentity> instead of awaiting it). These failures exist on the base commit too and are not related to the semantic search changes."
+  },
+  {
     "timestamp": "2026-08-10T05:01:49.627Z",
     "insight": "The drone-agent package resolves drone-core from its built dist/ (package.json \"types\": \"./dist/index.d.ts\"), not from source. So after editing drone-core types, you MUST run `pnpm -r run build` before LSP/typecheck in dependent packages reflects the change; otherwise you'll chase stale diagnostics."
+  },
+  {
+    "timestamp": "2026-08-10T22:44:20.231Z",
+    "insight": "The beacon's coordinator-client (drone-beacon/src/coordinator-client.ts) is entirely fire-and-forget: pushEvents, endSwarmSession, pushPersona, etc. all just fetch() and log a warning on failure. There is NO durable write-behind queue today. The spawn path is the exception that must NOT be queued — a deferred spawn is a surprising side effect; spawn should drop + return an error when the coordinator is unreachable. Also, createCoordinatorFetch (self-signed-TLS-tolerant fetch) already exists in coordinator-client.ts and should be extracted into drone-swarm-common for reuse by any new CLI, since both beacon and coordinator use self-signed certs."
   },
   {
     "timestamp": "2026-08-10T23:09:18.343Z",
@@ -52,10 +148,13 @@
     "insight": "A CI-only typecheck failure can be masked locally by stale dist/ artifacts. When a feature branch is based on an older commit, its drone-swarm-common/src/tls.ts may still be synchronous while main has since made loadOrCreateTlsIdentity async (openssl shell-injection fix #54). Locally, dependent packages (drone-coordinator, drone-beacon) resolve drone-swarm-common from its built dist/ (package.json \"types\": \"./dist/tls.d.ts\"), so a stale dist hides the mismatch and `pnpm typecheck` passes. CI does a fresh build and fails with \"Property 'fingerprint' does not exist on type 'Promise<TlsIdentity>'\". To reproduce locally, build drone-swarm-common from main's tls.ts (git show origin/main:... > src/tls.ts, rebuild, typecheck dependents), then restore. Lesson: when a branch predates a change to a shared dependency's signature, verify against the dependency's CURRENT (main) signature, not just the local dist."
   },
   {
+<<<<<<< HEAD
     "timestamp": "2026-08-12T19:16:12.397Z",
     "insight": "Adding @types/ws as a direct dependency to drone-beacon surfaced a latent type bug in ws-server.ts: `conn.socket.readyState === 'OPEN'` was comparing a number (readyState) to a string. The @fastify/websocket types apparently didn't catch this, but @types/ws does. The fix is `readyState === 1 /* OPEN */`. When adding new type packages, sweep for comparison bugs in existing WebSocket code."
   },
   {
+=======
+>>>>>>> main
     "timestamp": "2026-08-14T03:39:26.096Z",
     "insight": "Compaction regression (c29bd93a) slices the *tail* of the non-summary turn array, but the session array is `[S_newest…S_oldest, normal_oldest…normal_newest]` because appendUserMessage pushes (newest last) while prependSystemTurn unshifts summaries (newest summary first). So `slice(-n)` grabs the newest normal turns — the inverse of intent. The existing compaction tests only assert that *some* summary is created and *some* turns dropped, so they cannot distinguish head-slicing from tail-slicing; a correct regression test must pin BOTH ends (transcript contains oldest & excludes newest; survivors are newest). Also: the safety-trim helper getDroppableTurnPrefix and compaction's slice had divergent \"oldest non-summary\" semantics (stop-at-summary vs skip-summaries); they should share ONE pure helper that skips summaries, and dropping must be done by id (not shift/slice) since summaries live at the head."
   },
@@ -98,5 +197,141 @@
   {
     "timestamp": "2026-08-17T01:19:51.705Z",
     "insight": "`advanced-security/dismiss-alerts` (the GitHub action that makes `// codeql[...]` suppression comments work) only dismisses alerts on the DEFAULT branch (main), NOT on PRs. On a PR, alerts are associated with the PR's head commit and the code-scanning API the action uses cannot dismiss them — so the alert stays red on the PR no matter how correct the suppression comment is. This creates a catch-22 with a \"CI must be green to merge\" policy: you can't merge because the PR check is red, but the suppression only takes effect after merge. The pragmatic design: gate the `dismiss-alerts` step to `main` only (`if: github.ref == 'refs/heads/main'`), so on PRs the analysis runs and shows alerts as warnings but the job stays green (neutral) and doesn't block merging; on main the dismissal runs and clears suppressed alerts. Then a green-to-merge policy can be added on main (where suppression works), not on PRs. Also note: the repo must be set to \"Advanced config\" (not default setup) in Settings → Code security and analysis → Code scanning, or the SARIF upload fails with \"CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled\" — and GitHub moved this setting under the \"Advanced Security\" section, not \"Copilot\"."
+  },
+  {  
+    "timestamp": "2026-08-17T00:08:28.077Z",
+    "insight": "drone-coordinator/test/routes/messages.test.ts \"POST /messages/broadcast with mixed fetch results\" is flaky: it failed once in a full `pnpm test` run (deliveredCount expected 1, got 0) but passed in isolation and on a second full-suite run. Unrelated to compaction work. Worth investigating as a timing/ordering flake in the broadcast route test."
+  },
+  {
+    "timestamp": "2026-08-17T02:08:37.100Z",
+    "insight": "When adding a convergence loop to a compaction/summarization routine, existing tests that assert exact LLM chat-call counts will break because the loop makes multiple calls per invocation. Update those tests to provide enough chat responses for the loop to converge (or to fail deterministically), and assert the convergence outcome (e.g. all non-summary turns compacted) rather than a single-shot call count. Also beware the summary-budget self-purge interacting with the loop: it can drop summaries mid-loop, changing the final summary count — set summaryBudgetPercent high (e.g. 100) in tests that only care about slice-and-summarize convergence to keep them deterministic."
+  },
+  {
+    "timestamp": "2026-08-17T02:08:43.727Z",
+    "insight": "The compaction plugin's `maybeCompact` convergence loop recomputes `sessionManager.getTurns()` at the top of each iteration because compaction mutates the session (drops turns, prepends summaries). When refactoring a single-shot routine into a loop, always re-read the shared state inside the loop rather than hoisting it — otherwise the loop operates on stale snapshots and can't converge. Also keep the empty-turns early return BEFORE the context-window probe (resolveContextWindow) so a no-op session doesn't trigger an LLM provider call."
+  },
+  {
+    "timestamp": "2026-08-17T03:37:33.632Z",
+    "insight": "The compaction plugin's \"user intent overrides config\" decision (manual `/compact` when `enabled: false`) requires more than just skipping the `config.enabled` check in the capability method — `maybeCompact` itself checks `config.enabled` internally. The fix is to temporarily set `context.config.enabled = true` (and restore it in `finally`) around the `runCompaction` call. When a plan says \"user intent overrides config,\" trace the full call chain to find every internal config gate, not just the entry point."
+  },
+  {
+    "timestamp": "2026-08-17T03:37:33.633Z",
+    "insight": "When implementing a plan that sketches a slash command handler, verify the actual `DroneSlashCommand.handler` signature before coding. The plan sketch used `{ exit, clearSession, printHelp }` return values, but the real handler returns `Promise<boolean>`. Also `ctx.args` is already a `string[]` (split by whitespace by the engine), not a raw string. Plans written from memory of an older API surface will silently diverge — always read the current `DroneSlashCommandContext` type and an existing slash command implementation (e.g. `/focus`, `/todo`) first."
+  },
+  {
+    "timestamp": "2026-08-17T03:37:33.634Z",
+    "insight": "A slash command flag like `--all` that appears as the FIRST argument needs its own `case` in the subcommand switch — it's not a trailing flag. `/compact --all` has `ctx.args[0] === '--all'`, which the plan's sketch routed to the `default` case (unknown subcommand). When a command supports both a subcommand and a leading flag, handle the flag explicitly in the switch before falling through to the default."
+  },
+  {
+    "timestamp": "2026-08-17T01:58:36.202Z",
+    "insight": "When renaming fields on a shared test-fixture type (e.g. Message.from/to → fromAgentId/toAgentId), sweep every consumer of that type — including assertion helpers that may have no callers. assertMessageExists in fixtures/assertions.ts referenced the old field names but had zero call sites, so it was missed by the rename and broke `pnpm typecheck` (TS2339). The `tsc -p tsconfig.test.json` step in the root typecheck script is what catches test-fixture type errors that the per-package `tsc -b` misses. Grep for the old field names across the whole test tree as a belt-and-suspenders check after any fixture type change."
+  },
+  {
+    "timestamp": "2026-08-17T02:58:19.840Z",
+    "insight": "When adding a column to a SQLite table that lives in a Docker volume (e.g. beacon agent_sessions), CREATE TABLE IF NOT EXISTS is NOT enough — the volume persists between `docker compose up` runs (without -v), so an existing table won't get the new column and INSERTs fail with \"table X has no column named Y\". Always add an idempotent migration (PRAGMA table_info check + ALTER TABLE ADD COLUMN) mirroring the existing lastExamined pattern in drone-beacon/src/db/init.ts. This bit us when adding `status` to agent_sessions: the first integration run passed unit tests (fresh temp DB) but failed in Docker against the persisted beacon-data volume."
+  },
+  {
+    "timestamp": "2026-08-17T02:58:19.841Z",
+    "insight": "The echo LLM provider's getContextWindowInfo() hardcoded contextWindowTokens:4096, which equals the default responseReserveTokens:4096, so maxPromptTokens = 4096-4096 = 1 and ANY system prompt tripped ensureSafeBudget() before a single turn was added — breaking all subagent dispatch tests with \"Session exceeds the safe context budget for echo-model\". The fix was to raise the reported window to 32768 (matching the config default). Lesson: a mock LLM provider's reported context window must be large enough to accommodate the system prompt + reserve, or the safety-trim budget fails before any real work happens."
+  },
+  {
+    "timestamp": "2026-08-18T01:44:04.276Z",
+    "insight": "The session turn model conflated \"conversation round\" with \"turn\". appendUserMessage() creates a turn, but appendAssistantMessage()/appendToolResult() append to the current turn, so an entire agentic tool-call round collapses into a single turn. Any turn-count-based gating (compaction's nonSummaryCount < minTurnsToCompact, safety-trim drop granularity) then becomes meaningless for tool-heavy sessions — 300 tool iterations register as 1 turn. The fix (every assistant message = its own turn) is purely granularity; getMessages() flattening order is unchanged, so LLM-visible context is identical. Lesson: when a system has both \"rounds\" and \"turns\", pin down which one gates behavior, and make the gating unit reflect real work."
+  },
+  {
+    "timestamp": "2026-08-18T01:44:04.280Z",
+    "insight": "Ollama (unlike other providers) refuses a chat request with no user message, even when the context is purely system instructions (observed in alice-assistant). When a fix causes the last user turn to be compacted away (e.g. turn-granularity change), the conversation loop can assemble a user-less context. The robust place to handle provider quirks is the provider's chat() itself (defense in depth covering ALL callers), not each call site. For Ollama, prepend a neutral placeholder user message like '(Continuing from summaries)' — an empty string works but a slightly informative placeholder is safer across models."
+  },
+  {
+    "timestamp": "2026-08-18T02:02:17.707Z",
+    "insight": "When a compaction/summarization convergence loop's turn granularity doubles (each user+assistant round becomes 2 turns), the sliceSize recomputed each round shrinks fast enough that 6-8 rounds of turns can exceed the 5-iteration hard cap before converging. Compaction tests asserting \"all non-summary turns compacted away\" then fail silently unless the test seeds a small enough turn count OR provides enough chat responses. Fix: keep convergence-loop tests at a small turn count (4 rounds = 8 turns compacts fully in 4 iterations), and provide exactly enough summary responses to cover the expected rounds; a short chatResponses array makes a later round return an empty summary and `break` the loop, which is itself a valid (if implicit) test expectation."
+  },
+  {
+    "timestamp": "2026-08-18T02:02:30.221Z",
+    "insight": "The ollama plugin constructs `new Ollama(...)` internally and offers the provider via `registration.offer`, so testing provider-level behavior (like the user-message injection) requires `vi.resetModules()` + `vi.doMock('ollama')` and re-importing the plugin via dynamic `import()`, then capturing the offered provider from the `offer` callback. The `offer` callback receives a `DroneLlmProvider` OBJECT (with a `.chat` method) — not a function — so the mock must capture `cap.provider` and call `provider.chat(...)`, not invoke `provider(...)` directly."
+  },
+  {
+    "timestamp": "2026-08-21T15:31:15.607Z",
+    "insight": "`pnpm -r run lint` is not available for the drone-agent monorepo: none of the workspace packages defines a `lint` script, so the recursive run fails with ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT. Use root `pnpm lint` instead (runs eslint + prettier across all packages, exit 0 on success). Similarly, `pnpm -r run test` fails on drone-core (no local test files); the correct entry point is root `pnpm test`."
+  },
+  {
+    "timestamp": "2026-08-21T15:31:15.609Z",
+    "insight": "When the compaction `force` option bypasses the soft-threshold early-bail, it also unintentionally inherits the full auto-convergence loop (up to 5 iterations), causing manual `/compact` to over-compact by slicing-and-summarizing until zero non-summary turns remain. Fix: add a `maxIterations?: number` option to CompactionOptions and default the loop bound to `maxIterations ?? MAX_COMPACTION_ITERATIONS`. Manual `forceEvaluate` and `forceEvaluateAll` pass `maxIterations: 1` so they perform exactly one forced slice; automatic hooks omit it to preserve convergence. `slicePercentOverride: 100` on forceEvaluateAll already makes a single round equivalent, so the maxIterations cap there is behaviorally neutral but makes intent explicit."
+  },
+  {
+    "timestamp": "2026-08-22T07:09:26.184Z",
+    "insight": "Recurring file__apply_diff failure mode (third occurrence): patches whose added lines belong INSIDE a single-line template literal (CLI help text with literal \\n escapes) or inside a SQL template literal instead landed at the top of the file as stray statements, silently breaking the build. The anchor matcher treats the file as line-based and the template literal is one giant line, so 'insert after line X' semantics do not exist. Reliable workaround: perform such insertions with a byte-exact scripted edit (node script via subagent; note perl -0pi with \\Q...\\E fails when the pattern contains ${VAR} because perl interpolates it as a variable even inside quotemeta). After ANY apply_diff, verify placement with a targeted grep before building."
+  },
+  {
+    "timestamp": "2026-08-22T07:09:26.184Z",
+    "insight": "Root cause of intermittent cross-suite test failures under vitest's single-fork pool: suites that mutate globalThis.fetch without restoring it poison every suite that runs after them (file order is nondeterministic, so failures look flaky). Two offenders found and fixed: mcp-client.test.ts installed a permanent throwing GUARD_FETCH in afterEach; migration.test.ts deleted globalThis.fetch in teardown ('fetch is not a function' for later suites). Rule: any test that replaces a global must save the original at module scope and restore it in afterAll (not just afterEach teardown-by-delete). Symptom fingerprint: a suite fails only in full runs with 'real fetch must not be called' or 'fetch is not a function' on stderr, passes in isolation, and failure correlates with another suite completing first."
+  },
+  {
+    "timestamp": "2026-08-22T07:09:26.184Z",
+    "insight": "LSP diagnostics in this workspace can be stale in BOTH directions: they persisted after files were fixed (cache lag), which tempts you to dismiss real errors as stale. Ground truth hierarchy: (1) `pnpm -r run build` (fresh tsc) is authoritative; (2) direct file__read of the suspected lines beats cached diagnostics; (3) only after a clean build should remaining LSP errors be trusted as real. During the drone-swarm pipeline work, a 'stale diagnostics' assumption was wrong twice — the errors were real stray-line corruption — and also right once (errors outliving a fix). Verify before either fixing or dismissing."
+  },
+  {
+    "timestamp": "2026-08-22T21:16:49.701Z",
+    "insight": "AGENTS.md standards table says `pnpm -r run lint` must pass, but NO workspace package defines a \"lint\" script (pnpm -r lint fails with ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT) — linting only exists at the repo root as plain `pnpm lint`. Per AGENTS.md's own rule (code is source of truth, document should be updated), the standards section should say `pnpm lint` at repo root, or packages should gain lint scripts. Discovered 2026-08-22 during fix-drone-swarm-bin-symlink validation; agents executing plans that specify `pnpm -r lint` will hit a spurious failure until fixed."
+  },
+  {
+    "timestamp": "2026-08-21T23:14:26.401Z",
+    "insight": "`pnpm -r run test` is structurally broken for every workspace package: all 7 packages define `\"test\": \"vitest run\"` but none ships a package-local vitest config, so each inherits the ROOT vitest.config.ts whose `include` globs (e.g. `drone-core/test/**`) are repo-root-relative and match zero files when vitest runs from a package cwd — vitest exits 1 with \"No test files found\" (drone-core fails first, aborting the recursive run). Verified pre-existing on a clean tree via git stash. The actual supported fast-suite entrypoint is root `pnpm test`. Candidate fix: give each package its own minimal vitest config (or a `--root`/`--config` pointing at the root config), or drop per-package test scripts. Until fixed, plans that say \"run pnpm -r run test\" should be executed as root `pnpm test`."
+  },
+  {
+    "timestamp": "2026-08-22T20:29:04.683Z",
+    "insight": "Follow-up from plan-pre-compaction-nudge: migrate the two hardcoded guardrail nudges (identicalCallNudgeActive / brokenResponseHintActive in conversation-service.ts) onto the new SystemReminderQueue primitive. Both now coexist as parallel one-shot non-persisted system-message mechanisms; the queue generalizes exactly what they do inline, so consolidating them would remove the duplication permanently. Deferred per plan decision 3c to keep v1 additive — the retry-path state machines around those flags make the migration riskier than the feature warranted."
+  },
+  {
+    "timestamp": "2026-08-23T15:25:27.614Z",
+    "insight": "Node's child_process spawn {timeout} SIGTERMs only the direct child. When /bin/sh forks instead of exec-ing (compound commands always fork; dash frequently forks single commands where bash would implicit-exec), the forked grandchild inherits the piped stdio and keeps the 'close' event — and any promise awaiting it — open indefinitely. This made drone-beacon/drone-coordinator session-end timeout tests shell-build-dependent (pass on Arch bash, hang on CI dash). Fix pattern: spawn with detached:true to make the shell a process-group leader, kill(-pid) on the timeout event with a short SIGKILL escalation, settle via an unref'd fallback timer so even setsid escapees can't hang the caller, and report signal-based termination distinctly from exit codes. Follow-up: runCommandTrigger is duplicated near-identically in drone-beacon/src/session-end.ts and drone-coordinator/src/session-end.ts — extract into drone-swarm-common per the deduplication standard; both copies must be patched in lockstep until then."
+  },
+  {
+    "timestamp": "2026-08-23T15:59:04.308Z",
+    "insight": "Deleting an entry-point invocation gate can silently kill a service on a different launch surface than the one you tested. The bin-shim refactor (8618235) removed coordinator's invokedDirectly gate AND its top-level main() call — correct for npm-shim launches, fatal for direct `node dist/index.js` launches like Dockerfile CMDs: module loads, nothing runs, exit 0 in ~450ms with no output. With compose --abort-on-container-exit this SIGKILLed the whole integration suite mid-run (exit 137s), vitest never printed a summary, and interleaved container logs buried the fragments. Rules of thumb: (1) when removing a guard or gate, enumerate every launch surface (npm bin shim, pnpm exec, direct node, Docker CMD, smoke-test harness) and verify each; (2) Docker-based suites are the ONLY coverage of Docker launch surfaces — fast-suite green proves nothing about them; (3) CI observability gap made this opaque: vitest.integration.config.ts writes no result files yet the workflow uploads test-results/ from the workspace (a named volume nobody populates). Follow-ups: gateway has the identical missing-invocation latent break (no image consumes it today); consider adding a JSON/file reporter to the integration config so future failures produce greppable artifacts instead of log soup."
+  },
+  {
+    "timestamp": "2026-08-24T00:35:33.808Z",
+    "insight": "Executing an ordering-invariant inversion (compaction summaries newest-first -> chronological) revealed that most pre-existing seeded fixtures need NO edits: assertions keyed off variable identity (s1.id, oldest.id via .some()) survive any storage order; only genuinely positional assertions ([0]/.at(-1) on getSummaryTurns()/status.summaries) required flipping. Plan accordingly: enumerate positional accessors during planning (they are the real edit set), not all fixture sites. Also: content-anchored apply_diff absorbed ~4 lines of plan-vs-reality drift without re-measuring, and the two intentional newest-at-tail test asserts (.at(-1)) will trip naive greps for residual reversed-order accessors — whitelist deliberate ones when validating."
+  },
+  {
+    "timestamp": "2026-08-23T18:51:34.791Z",
+    "insight": "Two validation-layer lessons from the context-window fix: (1) pnpm lint (prettier) reformatted test files mid-run, so LSP diagnostics pointed at PRE-EDIT positions and showed errors that no longer existed — ground truth required grep -c of the old pattern plus a fresh tsc -p tsconfig.test.json --noEmit, both of which were clean. Trust hierarchy confirmed again: fresh tsc > grep > cached LSP. (2) Vitest passing does NOT mean LSP-clean: esbuild strips types without checking, so my tests called getContextWindowInfo({}) where the wire contract requires {model: string} and only tsc caught it. AGENTS.md is right to demand zero LSP errors with no exceptions for tests."
+  },
+  {
+    "timestamp": "2026-08-23T21:45:01.311Z",
+    "insight": "vi.doMock('node:os') with a factory that spreads importOriginal only replaces NAMESPACE exports; modules using `import os from 'node:os'` (default import) keep the ORIGINAL default object including real homedir. The mock must also override `default`: `const mocked = {...actual, homedir: () => tmp}; return {...mocked, default: mocked}`. Symptom when missed: tests silently write to the REAL user home. Always verify no real-home pollution after homedir-mocked filesystem tests. Also: vi.spyOn cannot redefine ESM namespace exports ('Module namespace is not configurable') — use doMock factories, not spies, for ESM builtins. And vitest run must be invoked from the workspace root (config-rooted include patterns), not package subdirectories."
+  },
+  {
+    "timestamp": "2026-08-25T21:07:27.027Z",
+    "insight": "Config discovery pattern hazard (config.ts): findProjectConfigPath walks ancestor directories with no boundary while the user layer is pinned at ~/.drone-agent/config.json — so any launch from under $HOME rediscovers the user file as \"project\" scope and trips scope-policy fatals. Convention decided 2026-08-25: project-config discovery must dedupe by lexical path identity against the effective user config path (path.resolve equality; no home-boundary rule because network mounts/external media make \"home is never a project\" ambiguous). Project-scope writes that resolve to the shared file must refuse loudly rather than silently mutating user config (or worse, recreating it via the create-fresh fallback). First-class \"no-project mode\" remains future work — see memory key plan-home-dir-project-config-dedupe."
+  },
+  {
+    "timestamp": "2026-08-25T21:57:42.014Z",
+    "insight": "Root-level vitest.config.ts includes all workspace test globs, so `pnpm vitest run <path>` must be run from the repo ROOT with root-relative paths — running it from inside a package directory (cd drone-agent && pnpm vitest run test/...) fails with \"No test files found\" because the include globs are all root-relative."
+  },
+  {
+    "timestamp": "2026-08-25T22:16:56.927Z",
+    "insight": "When CI fails on jay-depot/drone-agent without admin rights: job logs download returns 403, but check-run ANNOTATIONS via GET /repos/{owner}/{repo}/check-runs/{id}/annotations are readable anonymously and usually contain the failure reason. Also, two consecutive failures on this repo (2026-08-25) were pure infra flake: (1) runner couldn't resolve internal-api.service.iad.github.net while fetching pnpm/action-setup, (2) a 5000ms timeout in lsp-installer.test.ts under runner load (passes locally in ~700ms). Empty-commit push (`git commit --allow-empty`) is the reliable way to retrigger workflows since `gh` CLI isn't installed on this host. Always compare against the same-code prior commit's check-runs before assuming a failure is real."
+  },
+  {
+    "timestamp": "2026-08-25T18:10:19.841Z",
+    "insight": "Recurring bug class found in drone-agent plugin tools: `(input.field as string).trim()` executed before validation guards, crashing with opaque TypeErrors when LLM callers omit fields — because executeTool() dispatches straight to tool.execute() with no JSON-schema enforcement, so `required` arrays are only hints to the LLM. Fixed in self-improvement tools via a shared trimOrEmpty(value: unknown): string helper funneling into existing non-empty guards (plan-self-improvement-trim-before-validate). KNOWN UNFIXED SITES for follow-up sweep: memory/index.ts:166 `(input.key as string).trim()` and bootstrap/index.ts:81-82 `(input.path as string).trim()` — audit these plus any new registerTool sites for the same pattern."
+  },
+  {
+    "timestamp": "2026-08-25T18:42:59.808Z",
+    "insight": "Error-surface conventions in drone-agent plugins are NOT uniform, and validation fixes must match local style per family: memory + subagent tools throw Error with friendly messages (executeToolSafely wraps into 'failed:' strings); swarm tools return JSON.stringify({success:false, error}) instead of throwing; notepad returns {success:false, error}. A cross-plugin validation sweep must enumerate the convention per touched file BEFORE writing steps — a uniform 'always throw' fix would break swarm tools' result-shape contract with calling LLMs."
+  },
+  {
+    "timestamp": "2026-08-25T19:16:13.990Z",
+    "insight": "When validating guard-style fixes, the stash-dance (git stash push -- <source files> -> run new tests -> git stash pop) cleanly proves criterion 'new cases fail pre-fix': it isolates ONLY source changes while keeping new test files in the tree, avoiding a full revert dance. Also: vitest's failure taxonomy matters — assertion failures show as failed tests, but syntax/transform errors in imported source show as FAILED SUITES with all individual tests passing; grep for 'Transform failed' / 'already been declared' when suites fail but tests pass."
+  },
+  {
+    "timestamp": "2026-08-26T00:09:33.925Z",
+    "insight": "In Ink, a parent <Text bold> leaves SGR 1 active when nested <Text> children open their own SGR runs — children do NOT inherit the parent's color props, but they DO inherit its active attribute state in the squashed output. Consequence: hardcoded fg colors on nested elements (e.g. color='black' inside bold) collide with terminal bold-promotion (fg black→bright black) and can equal common background palette slots (gray=bright black=90/100). Rule for this codebase: never hardcode a foreground on a child <Text> that sits inside an attribute-bearing parent; let it inherit, or model attributes explicitly (SyntaxStyle) instead of encoding them in color strings."
+  },
+  {
+    "timestamp": "2026-08-26T00:40:32.501Z",
+    "insight": "The drone-agent git plugin (git__commit/git__status cwd default) reported branch \"main\" while the repository was actually on feat/display-fixes; `git -C <repo> branch --show-current` via shell showed the truth. The plugin also failed to distinguish \"nothing to commit\" from other commit failures (bare \"Command failed\" with no stderr). Until fixed: verify branch state with an exec git command before trusting plugin-reported branch info, especially before deciding whether .drone-agent memory/insight files may be committed."
   }
 ]

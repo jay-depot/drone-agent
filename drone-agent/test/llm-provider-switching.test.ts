@@ -1,55 +1,42 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
-  DroneConversationEvent,
   DroneLlmCapability,
-  DroneLlmProviderRegistration,
   DronePluginRegistration,
-  DroneSessionSafetyTrimPayload,
   DroneSlashCommand,
   DroneSlashCommandContext,
+  LlmProtocolDriver,
 } from 'drone-core';
-import { createDefaultAgentConfig } from 'drone-core';
+import { createDefaultAgentConfig, DroneLlmError } from 'drone-core';
 import { llmPlugin } from '../src/plugins/llm/index.js';
 import { silentLogger } from './helpers.js';
-
-type HookBucket = {
-  onPluginsLoaded: Array<() => Promise<void>>;
-  onSessionStart: Array<() => Promise<void>>;
-  onBeforePrompt: Array<() => Promise<void>>;
-  onAfterToolCall: Array<() => Promise<void>>;
-  onConversationEvent: Array<(event: DroneConversationEvent) => Promise<void>>;
-  onSessionClear: Array<() => Promise<void>>;
-  onShutdown: Array<() => Promise<void>>;
-  onSessionSafetyTrimWillRun: Array<
-    (payload: DroneSessionSafetyTrimPayload) => Promise<void>
-  >;
-  onSessionSafetyTrimApplied: Array<
-    (payload: DroneSessionSafetyTrimPayload) => Promise<void>
-  >;
-};
 
 type Capture = {
   capability: DroneLlmCapability;
   modelCommand: DroneSlashCommand;
-  hooks: HookBucket;
+  runLoadedHooks: () => Promise<void>;
 };
 
-async function captureLlmPlugin(): Promise<Capture> {
+async function captureLlmPlugin(
+  providers: Record<string, { protocol: string; models: string[] }>,
+  llmActive?: string
+): Promise<Capture> {
   const config = createDefaultAgentConfig();
-  const hooks: HookBucket = {
-    onPluginsLoaded: [],
-    onSessionStart: [],
-    onBeforePrompt: [],
-    onAfterToolCall: [],
-    onConversationEvent: [],
-    onSessionClear: [],
-    onShutdown: [],
-    onSessionSafetyTrimWillRun: [],
-    onSessionSafetyTrimApplied: [],
-  };
+  config.providers = Object.fromEntries(
+    Object.entries(providers).map(([id, spec]) => [
+      id,
+      {
+        protocol: spec.protocol,
+        models: Object.fromEntries(spec.models.map(m => [m, {}])),
+      },
+    ])
+  );
+  if (llmActive) {
+    config.llm.active = llmActive;
+  }
 
   let offeredCapability: DroneLlmCapability | undefined;
   let modelCommand: DroneSlashCommand | undefined;
+  const loadedHooks: Array<() => Promise<void>> = [];
 
   const registration: DronePluginRegistration = {
     logger: silentLogger(),
@@ -69,17 +56,17 @@ async function captureLlmPlugin(): Promise<Capture> {
     unmountTool: () => {},
     listMountedTools: () => [],
     hooks: {
-      onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
-      onSessionStart: cb => hooks.onSessionStart.push(cb),
-      onBeforePrompt: cb => hooks.onBeforePrompt.push(cb),
-      onAfterToolCall: cb => hooks.onAfterToolCall.push(cb),
-      onConversationEvent: cb => hooks.onConversationEvent.push(cb),
-      onSessionClear: cb => hooks.onSessionClear.push(cb),
-      onShutdown: cb => hooks.onShutdown.push(cb),
-      onSessionSafetyTrimWillRun: cb =>
-        hooks.onSessionSafetyTrimWillRun.push(cb),
-      onSessionSafetyTrimApplied: cb =>
-        hooks.onSessionSafetyTrimApplied.push(cb),
+      onPluginsLoaded: cb => {
+        loadedHooks.push(cb);
+      },
+      onSessionStart: () => {},
+      onBeforePrompt: () => {},
+      onAfterToolCall: () => {},
+      onConversationEvent: () => {},
+      onSessionClear: () => {},
+      onShutdown: () => {},
+      onSessionSafetyTrimWillRun: () => {},
+      onSessionSafetyTrimApplied: () => {},
     },
     offer: cap => {
       offeredCapability = cap as DroneLlmCapability;
@@ -101,34 +88,34 @@ async function captureLlmPlugin(): Promise<Capture> {
   return {
     capability: offeredCapability,
     modelCommand,
-    hooks,
+    runLoadedHooks: async () => {
+      for (const hook of loadedHooks) {
+        await hook();
+      }
+    },
   };
 }
 
-function makeProviderRegistration(options: {
-  id: string;
-  defaultModel: string;
-  models: string[];
-  precedence?: number;
-}): DroneLlmProviderRegistration {
+function makeDriver(protocolId: string): LlmProtocolDriver {
   return {
-    id: options.id,
-    precedence: options.precedence ?? 1000,
-    getProvider: () => ({
+    protocolId,
+    createProvider: () => ({
       chat: async () => ({ message: 'ok' }),
       getContextWindowInfo: async () => null,
     }),
-    listModels: async () => options.models,
-    getDefaultModel: () => options.defaultModel,
+    parameterSchema: { parameters: {} },
   };
 }
 
 function makeCommandContext(
   capability: DroneLlmCapability
 ): DroneSlashCommandContext {
-  return {
+  const configCap = {
+    setValue: vi.fn(async () => {}),
+  };
+  const ctx = {
     line: '/model',
-    args: [],
+    args: [] as string[],
     logger: {
       info: vi.fn(),
       warn: vi.fn(),
@@ -137,142 +124,171 @@ function makeCommandContext(
     engine: {
       executeTool: async () => '',
       runHooks: async () => {},
-      getCapability: <T>() => capability as T,
+      getCapability: <T>(id: string) =>
+        (id === 'llm'
+          ? capability
+          : id === 'config'
+            ? configCap
+            : undefined) as T,
     },
     conversation: {
       getModel: () => capability.getModel(),
       setModel: (model: string) => capability.setModel(model),
       getReasoningLevel: () => undefined,
-      setReasoningLevel: (_level: any) => {},
+      setReasoningLevel: (_level: never) => {},
       sendUserMessage: async () => '',
-      enqueueUserMessage: (p: string) => {},
+      enqueueUserMessage: (_p: string) => {},
       cancelCurrentRequest: () => {},
       getDebugSubsystems: () => [],
       enableDebugSubsystem: () => {},
       disableDebugSubsystem: () => {},
     },
+  } as unknown as DroneSlashCommandContext & {
+    engine: { configCapability: typeof configCap };
   };
+  // Expose the config capability spy for assertions.
+  (ctx as unknown as { __configCap: typeof configCap }).__configCap = configCap;
+  return ctx;
 }
 
 describe('llm plugin provider switching', () => {
-  it('lists providers and switches provider via capability', async () => {
-    const { capability } = await captureLlmPlugin();
-
-    capability.registerProvider(
-      makeProviderRegistration({
-        id: 'ollama',
-        defaultModel: 'llama3.1',
-        models: ['llama3.1'],
-      })
-    );
-    capability.registerProvider(
-      makeProviderRegistration({
-        id: 'openrouter',
-        defaultModel: 'openai/gpt-4o',
-        models: ['openai/gpt-4o'],
-      })
+  it('activates llm.active provider+model via onPluginsLoaded', async () => {
+    const { capability, runLoadedHooks } = await captureLlmPlugin(
+      {
+        ollama: { protocol: 'ollama', models: ['llama3.1'] },
+        openrouter: {
+          protocol: 'openrouter',
+          models: ['openai/gpt-4o', 'openai/gpt-4.1'],
+        },
+      },
+      'openrouter/openai/gpt-4.1'
     );
 
-    expect(capability.getActiveProviderId()).toBe('ollama');
-    expect(capability.getModel()).toBe('llama3.1');
-    expect(capability.getAvailableProviders()).toEqual([
-      { id: 'ollama', precedence: 1000 },
-      { id: 'openrouter', precedence: 1000 },
-    ]);
+    capability.registerDriver(makeDriver('ollama'));
+    capability.registerDriver(makeDriver('openrouter'));
+    await runLoadedHooks();
 
-    capability.activateProvider('openrouter');
     expect(capability.getActiveProviderId()).toBe('openrouter');
-    expect(capability.getModel()).toBe('openai/gpt-4o');
+    expect(capability.getModel()).toBe('openai/gpt-4.1');
+  });
+
+  it('falls back to the first declared model when activating without a selection', async () => {
+    const { capability } = await captureLlmPlugin({
+      ollama: { protocol: 'ollama', models: ['llama3.1', 'qwen3'] },
+    });
+
+    capability.registerDriver(makeDriver('ollama'));
+    capability.activateProvider('ollama');
+    expect(capability.getModel()).toBe('llama3.1');
   });
 
   it('throws a clear error when provider id is unknown', async () => {
-    const { capability } = await captureLlmPlugin();
+    const { capability } = await captureLlmPlugin({
+      ollama: { protocol: 'ollama', models: ['llama3.1'] },
+    });
 
-    capability.registerProvider(
-      makeProviderRegistration({
-        id: 'ollama',
-        defaultModel: 'llama3.1',
-        models: ['llama3.1'],
-      })
+    expect(() => capability.activateProvider('missing')).toThrow(/missing/);
+  });
+
+  it('/model <provider/model> switches and persists to user scope', async () => {
+    const { capability, modelCommand } = await captureLlmPlugin(
+      {
+        ollama: { protocol: 'ollama', models: ['llama3.1'] },
+        openrouter: {
+          protocol: 'openrouter',
+          models: ['openai/gpt-4o', 'openai/gpt-4.1'],
+        },
+      },
+      'ollama/llama3.1'
     );
 
-    expect(() => capability.activateProvider('missing')).toThrow(
-      'LLM provider "missing" is not registered. Available: ollama'
+    capability.registerDriver(makeDriver('ollama'));
+    capability.registerDriver(makeDriver('openrouter'));
+    capability.activateProvider('ollama');
+
+    const ctx = makeCommandContext(capability);
+    ctx.line = '/model openrouter/openai/gpt-4.1';
+    ctx.args = ['openrouter/openai/gpt-4.1'];
+
+    const handled = await modelCommand.handler(ctx);
+
+    expect(handled).toBe(true);
+    expect(capability.getActiveProviderId()).toBe('openrouter');
+    expect(capability.getModel()).toBe('openai/gpt-4.1');
+    const configCap = (
+      ctx as unknown as { __configCap: { setValue: ReturnType<typeof vi.fn> } }
+    ).__configCap;
+    expect(configCap.setValue).toHaveBeenCalledWith(
+      'user',
+      'llm.active',
+      'openrouter/openai/gpt-4.1'
     );
   });
 
-  it('switches provider from /model --provider and resets to provider default', async () => {
-    const { capability, modelCommand } = await captureLlmPlugin();
+  it('/model --once switches without persisting', async () => {
+    const { capability, modelCommand } = await captureLlmPlugin(
+      {
+        ollama: { protocol: 'ollama', models: ['llama3.1'] },
+        openrouter: {
+          protocol: 'openrouter',
+          models: ['openai/gpt-4o'],
+        },
+      },
+      'ollama/llama3.1'
+    );
 
-    capability.registerProvider(
-      makeProviderRegistration({
-        id: 'ollama',
-        defaultModel: 'llama3.1',
-        models: ['llama3.1'],
-      })
-    );
-    capability.registerProvider(
-      makeProviderRegistration({
-        id: 'openrouter',
-        defaultModel: 'openai/gpt-4o',
-        models: ['openai/gpt-4o'],
-      })
-    );
+    capability.registerDriver(makeDriver('ollama'));
+    capability.registerDriver(makeDriver('openrouter'));
+    capability.activateProvider('ollama');
 
     const ctx = makeCommandContext(capability);
-    const conversationSetModel = vi.fn((model: string) =>
-      capability.setModel(model)
-    );
-    ctx.conversation = {
-      getModel: () => capability.getModel(),
-      setModel: conversationSetModel,
-      getReasoningLevel: () => undefined,
-      setReasoningLevel: (_level: any) => {},
-      sendUserMessage: async () => '',
-      enqueueUserMessage: (p: string) => {},
-      cancelCurrentRequest: () => {},
-      getDebugSubsystems: () => [],
-      enableDebugSubsystem: () => {},
-      disableDebugSubsystem: () => {},
-    };
-    ctx.line = '/model --provider openrouter';
-    ctx.args = ['--provider', 'openrouter'];
+    ctx.line = '/model --once openrouter/openai/gpt-4o';
+    ctx.args = ['--once', 'openrouter/openai/gpt-4o'];
 
     const handled = await modelCommand.handler(ctx);
 
     expect(handled).toBe(true);
     expect(capability.getActiveProviderId()).toBe('openrouter');
     expect(capability.getModel()).toBe('openai/gpt-4o');
-    expect(conversationSetModel).toHaveBeenCalledWith('openai/gpt-4o');
+    const configCap = (
+      ctx as unknown as { __configCap: { setValue: ReturnType<typeof vi.fn> } }
+    ).__configCap;
+    expect(configCap.setValue).not.toHaveBeenCalled();
   });
 
-  it('fails fast when selecting a model unavailable on the active provider', async () => {
-    const { capability, modelCommand } = await captureLlmPlugin();
-
-    capability.registerProvider(
-      makeProviderRegistration({
-        id: 'ollama',
-        defaultModel: 'llama3.1',
-        models: ['llama3.1'],
-      })
+  it('resolves bare ids against the active provider', async () => {
+    const { capability, modelCommand } = await captureLlmPlugin(
+      {
+        ollama: { protocol: 'ollama', models: ['llama3.1', 'qwen3'] },
+      },
+      'ollama/llama3.1'
     );
+
+    capability.registerDriver(makeDriver('ollama'));
+    capability.activateProvider('ollama');
 
     const ctx = makeCommandContext(capability);
-    const conversationSetModel = vi.fn((model: string) =>
-      capability.setModel(model)
+    ctx.line = '/model qwen3';
+    ctx.args = ['qwen3'];
+
+    await modelCommand.handler(ctx);
+
+    expect(capability.getActiveProviderId()).toBe('ollama');
+    expect(capability.getModel()).toBe('qwen3');
+  });
+
+  it('fails fast when selecting a model unavailable on any provider', async () => {
+    const { capability, modelCommand } = await captureLlmPlugin(
+      {
+        ollama: { protocol: 'ollama', models: ['llama3.1'] },
+      },
+      'ollama/llama3.1'
     );
-    ctx.conversation = {
-      getModel: () => capability.getModel(),
-      setModel: conversationSetModel,
-      getReasoningLevel: () => undefined,
-      setReasoningLevel: (_level: any) => {},
-      sendUserMessage: async () => '',
-      enqueueUserMessage: (p: string) => {},
-      cancelCurrentRequest: () => {},
-      getDebugSubsystems: () => [],
-      enableDebugSubsystem: () => {},
-      disableDebugSubsystem: () => {},
-    };
+
+    capability.registerDriver(makeDriver('ollama'));
+    capability.activateProvider('ollama');
+
+    const ctx = makeCommandContext(capability);
     ctx.line = '/model not-real';
     ctx.args = ['not-real'];
 
@@ -280,52 +296,47 @@ describe('llm plugin provider switching', () => {
 
     expect(handled).toBe(true);
     expect(capability.getModel()).toBe('llama3.1');
-    expect(conversationSetModel).not.toHaveBeenCalled();
     expect(ctx.logger.warn).toHaveBeenCalled();
   });
 
-  it('supports /model --provider <id> <model> in one command', async () => {
-    const { capability, modelCommand } = await captureLlmPlugin();
-
-    capability.registerProvider(
-      makeProviderRegistration({
-        id: 'ollama',
-        defaultModel: 'llama3.1',
-        models: ['llama3.1'],
-      })
-    );
-    capability.registerProvider(
-      makeProviderRegistration({
-        id: 'openrouter',
-        defaultModel: 'openai/gpt-4o',
-        models: ['openai/gpt-4o', 'openai/gpt-4.1'],
-      })
+  it('broker tags providerId on DroneLlmError from chat()', async () => {
+    const { capability, runLoadedHooks } = await captureLlmPlugin(
+      {
+        ollama: { protocol: 'ollama', models: ['llama3.1'] },
+      },
+      'ollama/llama3.1'
     );
 
-    const ctx = makeCommandContext(capability);
-    const conversationSetModel = vi.fn((model: string) =>
-      capability.setModel(model)
-    );
-    ctx.conversation = {
-      getModel: () => capability.getModel(),
-      setModel: conversationSetModel,
-      getReasoningLevel: () => undefined,
-      setReasoningLevel: (_level: any) => {},
-      sendUserMessage: async () => '',
-      enqueueUserMessage: (p: string) => {},
-      cancelCurrentRequest: () => {},
-      getDebugSubsystems: () => [],
-      enableDebugSubsystem: () => {},
-      disableDebugSubsystem: () => {},
+    const throwingDriver: LlmProtocolDriver = {
+      protocolId: 'ollama',
+      createProvider: () => ({
+        chat: async () => {
+          throw new DroneLlmError('boom', {
+            status: 500,
+            retryable: true,
+          });
+        },
+        getContextWindowInfo: async () => null,
+      }),
+      parameterSchema: { parameters: {} },
     };
-    ctx.line = '/model --provider openrouter openai/gpt-4.1';
-    ctx.args = ['--provider', 'openrouter', 'openai/gpt-4.1'];
+    capability.registerDriver(throwingDriver);
+    await runLoadedHooks();
 
-    const handled = await modelCommand.handler(ctx);
+    const provider = capability.getActiveProvider();
+    const err = await provider
+      .chat({
+        model: 'llama3.1',
+        messages: [{ role: 'user', content: 'hi' }],
+      })
+      .then(
+        () => null,
+        e => e
+      );
 
-    expect(handled).toBe(true);
-    expect(capability.getActiveProviderId()).toBe('openrouter');
-    expect(capability.getModel()).toBe('openai/gpt-4.1');
-    expect(conversationSetModel).toHaveBeenLastCalledWith('openai/gpt-4.1');
+    expect(err).toBeInstanceOf(DroneLlmError);
+    expect(err.providerId).toBe('ollama');
+    expect(err.status).toBe(500);
+    expect(err.retryable).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { resolve } from 'node:path';
+import { resolveDroneExecutable } from 'drone-core';
 
 export interface SubagentResult {
   /**
@@ -140,16 +140,23 @@ export async function launchSubagent(
     ? generateSubagentId()
     : `test-subagent-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-  // Find the drone-agent executable
+  // Find the drone-agent executable, preferring an explicit test path.
   const execPath =
     providedExecPath ??
-    resolve(process.cwd(), 'drone-agent', 'bin', 'drone-agent');
+    (await resolveDroneExecutable({
+      fallbackArgv1: process.argv[1],
+    }));
 
   // Build command args
   const args = ['--subagent-id', subagentId, '--output-json', '--once'];
 
   if (persona) {
     args.push('--persona', persona);
+  }
+
+  // When LLM_PROVIDER=echo, enable the echo and llm plugins
+  if (process.env.LLM_PROVIDER === 'echo') {
+    args.push('--plugin', 'echo', '--plugin', 'llm');
   }
 
   return new Promise((resolvePromise, rejectPromise) => {
@@ -300,7 +307,18 @@ export async function launchSubagent(
       clearTimeout(activityTimer);
       clearTimeout(hardCapTimer);
       pendingSubagents.delete(subagentId);
-      rejectPromise(err);
+      // Resolve with an error result rather than rejecting, so callers can
+      // assert on `result.error`. Spawn failures (e.g. missing executable)
+      // surface here; rejecting the promise leaks an unhandled rejection
+      // into tests that expect a SubagentResult.
+      resolvePromise({
+        error: err.message,
+        timedOut: false,
+        exitCode: undefined,
+        stdout: '',
+        stderr: '',
+        subagentId,
+      });
     });
   });
 }
@@ -433,7 +451,7 @@ export async function launchErrorSubagent(
       break;
     case 'no-return':
       // Task that completes but doesn't use the return tool
-      task = 'Say "hello" directly without using subagent.return';
+      task = 'Say "hello" directly without using subagent__return';
       break;
     default:
       task = options.task ?? 'Fail with unknown error';

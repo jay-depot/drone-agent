@@ -21,8 +21,16 @@ export type OutputEvent =
  * Handles the new batch event kinds (toolCallBatch, toolResultBatch,
  * reasoningComplete, assistantMessageComplete) by silently ignoring the
  * complete markers and flattening batches into individual events.
+ *
+ * By default assistantMessage events are suppressed because the final
+ * assistant reply is printed by the caller. Pass `renderAssistantMessage:
+ * true` to render them (used by the console host's global event listener,
+ * where there is no caller-side reply print).
  */
-export function makePlainOutputEventHandler() {
+export function makePlainOutputEventHandler(options?: {
+  renderAssistantMessage?: boolean;
+}) {
+  const renderAssistantMessage = options?.renderAssistantMessage ?? false;
   return (event: {
     kind: string;
     content?: string;
@@ -69,10 +77,16 @@ export function makePlainOutputEventHandler() {
         output.write(`\x1b[31m✗ ${event.message}\x1b[0m\n`);
         break;
       case 'assistantMessage':
-        // Suppress — the final reply is printed by the caller.
+        // Suppress by default — the final reply is printed by the caller.
+        if (renderAssistantMessage) {
+          output.write(`${event.content}\n`);
+        }
         break;
       case 'assistantMessageComplete':
         // No-op
+        break;
+      case 'notice':
+        output.write(`\x1b[33m⚠ ${event.content}\x1b[0m\n`);
         break;
     }
   };
@@ -80,7 +94,7 @@ export function makePlainOutputEventHandler() {
 
 /**
  * Write an NDJSON event directly to stdout (for use outside of
- * conversation.sendUserMessage, e.g., subagent.return).
+ * conversation.sendUserMessage, e.g., subagent__return).
  */
 export function writeNdjsonEvent(event: OutputEvent): void {
   output.write(JSON.stringify(event) + '\n');

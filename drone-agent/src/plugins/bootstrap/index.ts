@@ -236,12 +236,18 @@ export const bootstrapPlugin: DronePlugin = {
         const availableProviders: { id: string; label: string }[] = [];
 
         const ollamaCap = ctx.requestCapability<{
-          listModels: () => Promise<string[]>;
+          driver: {
+            discoverModels?: (config: {
+              baseUrl?: string;
+            }) => Promise<Array<{ id: string }>>;
+          };
         }>('ollama');
 
-        if (ollamaCap) {
+        if (ollamaCap?.driver.discoverModels) {
           try {
-            const models = await ollamaCap.listModels();
+            const models = (await ollamaCap.driver.discoverModels({})).map(
+              m => m.id
+            );
             if (models.length > 0) {
               availableProviders.push({
                 id: 'ollama',
@@ -306,7 +312,9 @@ export const bootstrapPlugin: DronePlugin = {
 
         // Ollama flow: pick a model
         if (chosenProvider === 'ollama') {
-          const models = ollamaCap ? await ollamaCap.listModels() : [];
+          const models = ollamaCap?.driver.discoverModels
+            ? (await ollamaCap.driver.discoverModels({})).map(m => m.id)
+            : [];
           if (models.length === 0) {
             const msgAnswer = await ctx.elicit.ask([
               {
@@ -320,8 +328,14 @@ export const bootstrapPlugin: DronePlugin = {
             ]);
             const selectedModel = (msgAnswer.model as string) || 'llama3.1';
             await writeUserConfig(userConfigPath, {
-              llm: { provider: 'ollama' },
-              ollama: { model: selectedModel },
+              llm: { active: `ollama/${selectedModel}` },
+              providers: {
+                ollama: {
+                  protocol: 'ollama',
+                  baseUrl: 'http://127.0.0.1:11434',
+                  models: { [selectedModel]: {} },
+                },
+              },
             });
             // Enable ollama plugin if not already enabled
             await ctx.enablePlugin('ollama');
@@ -346,8 +360,14 @@ export const bootstrapPlugin: DronePlugin = {
 
           const selectedModel = modelAnswer.model as string;
           await writeUserConfig(userConfigPath, {
-            llm: { provider: 'ollama' },
-            ollama: { model: selectedModel },
+            llm: { active: `ollama/${selectedModel}` },
+            providers: {
+              ollama: {
+                protocol: 'ollama',
+                baseUrl: 'http://127.0.0.1:11434',
+                models: { [selectedModel]: {} },
+              },
+            },
           });
           await ctx.enablePlugin('ollama');
           return {
@@ -399,11 +419,14 @@ export const bootstrapPlugin: DronePlugin = {
 
           const selectedModel = modelAnswer.model as string;
           await writeUserConfig(userConfigPath, {
-            llm: { provider: 'openai' },
-            openai: {
-              apiKey: '${OPENAI_API_KEY}',
-              defaultModel: selectedModel,
-              baseUrl: 'https://api.openai.com/v1',
+            llm: { active: `openai/${selectedModel}` },
+            providers: {
+              openai: {
+                protocol: 'openai',
+                apiKey: '${OPENAI_API_KEY}',
+                baseUrl: 'https://api.openai.com/v1',
+                models: { [selectedModel]: {} },
+              },
             },
           });
 
@@ -459,12 +482,15 @@ export const bootstrapPlugin: DronePlugin = {
 
           const selectedModel = modelAnswer.model as string;
           await writeUserConfig(userConfigPath, {
-            llm: { provider: 'anthropic' },
-            anthropic: {
-              apiKey: '${ANTHROPIC_API_KEY}',
-              defaultModel: selectedModel,
-              baseUrl: 'https://api.anthropic.com',
-              apiVersion: '2023-06-01',
+            llm: { active: `anthropic/${selectedModel}` },
+            providers: {
+              anthropic: {
+                protocol: 'anthropic',
+                apiKey: '${ANTHROPIC_API_KEY}',
+                baseUrl: 'https://api.anthropic.com',
+                apiVersion: '2023-06-01',
+                models: { [selectedModel]: {} },
+              },
             },
           });
 
@@ -525,12 +551,17 @@ export const bootstrapPlugin: DronePlugin = {
           ]);
 
           const selectedModel = modelAnswer.model as string;
+          // OpenRouter upstream ids contain slashes; keeping the full id
+          // as the local key preserves <provider>/<full-id> selection form.
           await writeUserConfig(userConfigPath, {
-            llm: { provider: 'openrouter' },
-            openrouter: {
-              apiKey: '${OPENROUTER_API_KEY}',
-              defaultModel: selectedModel,
-              baseUrl: 'https://openrouter.ai/api/v1',
+            llm: { active: `openrouter/${selectedModel}` },
+            providers: {
+              openrouter: {
+                protocol: 'openrouter',
+                apiKey: '${OPENROUTER_API_KEY}',
+                baseUrl: 'https://openrouter.ai/api/v1',
+                models: { [selectedModel]: {} },
+              },
             },
           });
 

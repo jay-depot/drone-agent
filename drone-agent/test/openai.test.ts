@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DroneLlmError, createDefaultAgentConfig } from 'drone-core';
 import type {
   DroneConversationEvent,
   DroneLlmCapability,
@@ -6,7 +7,6 @@ import type {
   DronePluginRegistration,
   DroneSessionSafetyTrimPayload,
 } from 'drone-core';
-import { createDefaultAgentConfig } from 'drone-core';
 import { openaiPlugin } from '../src/plugins/openai/index.js';
 import { silentLogger } from './helpers.js';
 
@@ -40,11 +40,12 @@ function createRegistrationCapture() {
     onSessionSafetyTrimApplied: [],
   };
 
-  let registeredProvider: DroneLlmProviderRegistration | undefined;
+  let registeredDriver: import('drone-core').LlmProtocolDriver | undefined;
   const llmCap: DroneLlmCapability = {
-    registerProvider: provider => {
-      registeredProvider = provider;
+    registerDriver: driver => {
+      registeredDriver = driver;
     },
+    registerProvider: () => {},
     unregisterProvider: () => {},
     getActiveProvider: () => ({
       chat: async () => ({ message: 'ok' }),
@@ -58,11 +59,7 @@ function createRegistrationCapture() {
     getReasoningLevel: () => undefined,
     setReasoningLevel: (_level: any) => {},
     listModels: async () => {
-      const provider = registeredProvider;
-      if (!provider) {
-        return [];
-      }
-      return provider.listModels();
+      return [];
     },
   };
 
@@ -102,7 +99,17 @@ function createRegistrationCapture() {
   return {
     config,
     registration,
-    getRegisteredProvider: () => registeredProvider,
+    getRegisteredDriver: () => registeredDriver,
+    getProviderViaDriver: () => {
+      const driver = registeredDriver;
+      if (!driver) throw new Error('driver not registered');
+      return driver.createProvider({
+        protocol: 'openai',
+        baseUrl: config.openai.baseUrl,
+        apiKey: config.openai.apiKey,
+        orgId: config.openai.orgId,
+      });
+    },
   };
 }
 
@@ -112,35 +119,19 @@ describe('openai plugin', () => {
     vi.restoreAllMocks();
   });
 
-  it('registers with llm broker and exposes configured models', async () => {
+  it('registers its driver with the llm broker', async () => {
     const capture = createRegistrationCapture();
-    capture.config.openai.models = [
-      { id: 'gpt-4o', contextWindow: 128000 },
-      { id: 'gpt-4.1', contextWindow: 1047576 },
-    ];
-    capture.config.openai.defaultModel = 'gpt-4o';
 
     await openaiPlugin.register(capture.registration);
 
-    const providerReg = capture.getRegisteredProvider();
-    expect(providerReg).toBeDefined();
-    expect(providerReg?.id).toBe('openai');
-    await expect(providerReg?.listModels()).resolves.toEqual([
-      'gpt-4o',
-      'gpt-4.1',
-    ]);
-    expect(providerReg?.getDefaultModel()).toBe('gpt-4o');
+    expect(capture.getRegisteredDriver()).toBeDefined();
   });
 
   it('errors clearly when api key is missing', async () => {
     const capture = createRegistrationCapture();
-    capture.config.openai.apiKey = '';
 
     await openaiPlugin.register(capture.registration);
-    const providerReg = capture.getRegisteredProvider();
-    expect(providerReg).toBeDefined();
-
-    const provider = providerReg!.getProvider();
+    const provider = capture.getProviderViaDriver();
     await expect(
       provider.chat({
         model: 'gpt-4o',
@@ -185,7 +176,7 @@ describe('openai plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openaiPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'gpt-4o',
@@ -259,7 +250,7 @@ describe('openai plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openaiPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'gpt-4o',
@@ -316,7 +307,7 @@ describe('openai plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openaiPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     await provider.chat({
       model: 'gpt-4o',
@@ -355,7 +346,7 @@ describe('openai plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openaiPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'gpt-4o',
@@ -388,7 +379,7 @@ describe('openai plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openaiPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'gpt-4o',
@@ -425,7 +416,7 @@ describe('openai plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openaiPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'gpt-4o',
@@ -434,5 +425,43 @@ describe('openai plugin', () => {
 
     expect(response.reasoning).toBe('Step-by-step reasoning inside message');
     expect(response.message).toBe('Final answer');
+  });
+
+  it('throws DroneLlmError with status/retryAfter/retryable for a 429', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.openai.apiKey = 'test-key';
+    capture.config.openai.baseUrl = 'https://api.openai.com/v1';
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({ error: { message: 'rate limited' } }),
+        {
+          status: 429,
+          headers: {
+            'content-type': 'application/json',
+            'retry-after': '2',
+          },
+        }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await openaiPlugin.register(capture.registration);
+    const provider = capture.getProviderViaDriver();
+
+    const err = await provider
+      .chat({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: 'hello' }],
+      })
+      .then(
+        () => null,
+        e => e
+      );
+
+    expect(err).toBeInstanceOf(DroneLlmError);
+    expect(err.status).toBe(429);
+    expect(err.retryAfterMs).toBe(2000);
+    expect(err.retryable).toBe(true);
   });
 });

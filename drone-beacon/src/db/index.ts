@@ -1,5 +1,15 @@
 export { initDatabase, getDatabase, closeDatabase } from './init.js';
 export {
+  enqueueOutbox,
+  dequeueDueOutbox,
+  countPendingOutbox,
+  markOutboxDelivered,
+  markOutboxFailed,
+  OUTBOX_RETRY_BASE_MS,
+} from './outbox.js';
+export { deleteOutboxEntry } from './outbox.js';
+export type { OutboxEntry } from './outbox.js';
+export {
   createPersona,
   getPersona,
   listPersonas,
@@ -88,3 +98,29 @@ export {
   deletePrinciple,
 } from './principles.js';
 export type { PrincipleRow } from './principles.js';
+export {
+  registerSearchPath,
+  unregisterSearchPath,
+  listSearchPaths,
+  listAllSearchPaths,
+  getAgentsForDirectory,
+  getAllDirectoryPaths,
+  removeAgentSearchPaths,
+  getFileHash,
+  upsertFile,
+  removeFile,
+  getFilesByDirectory,
+  removeFilesByDirectory,
+  removeStaleFiles,
+  insertChunk,
+  deleteChunksForFile,
+  getAllChunks,
+  getChunkCount,
+  searchChunksByVector,
+  backfillVecChunks,
+} from './search.js';
+export type {
+  SearchDirectoryRow,
+  SearchFileRow,
+  SearchChunkRow,
+} from './search.js';

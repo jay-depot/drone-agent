@@ -204,4 +204,106 @@ describe('Markdown', () => {
       expect(frame).not.toContain('undefined');
     });
   });
+
+  describe('foreground/background collision regressions', () => {
+    it('codespan inside bold emits no foreground color after its background', async () => {
+      // The old implementation hardcoded color="black" on the codespan.
+      // Under bold (SGR 1 active from the parent), terminals with
+      // bold-promotion render black as bright black — the same palette
+      // slot as the gray background — making the text invisible.
+      const md = 'A **bold claim** about `identifierName` here.';
+
+      const inst = render(<Markdown>{md}</Markdown>);
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f =>
+        f.includes('identifierName')
+      );
+
+      expect(frame).toContain('\u001b[100m');
+      expect(frame).not.toContain('\u001b[30m');
+      expect(frame).toContain('identifierName');
+    });
+
+    it('default comment styling never emits gray-on-gray', async () => {
+      const md = ['```ts', '// a comment', 'const x = 1;', '```'].join('\n');
+
+      const inst = render(<Markdown>{md}</Markdown>);
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f => f.includes('comment'));
+
+      expect(frame).toContain('// a comment');
+      // Comments are italic-only by default: no bright-black foreground
+      // touching the comment text that would sit on the bright-black
+      // background (the block border legitimately uses \e[90m).
+      expect(frame).not.toContain('90m// a comment');
+      expect(frame).toContain('\u001b[3m// a comment\u001b[23m');
+    });
+
+    it('honors a custom codeBackground for inline codespans', async () => {
+      const md = 'Run `make all` to build.';
+
+      const inst = render(<Markdown codeBackground="red">{md}</Markdown>);
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f => f.includes('make all'));
+
+      expect(frame).toContain('\u001b[41mmake all\u001b[49m');
+    });
+
+    it('emits truecolor SGR for hex syntax colors', async () => {
+      const md = ['```ts', '// hex colored', '```'].join('\n');
+      const syntaxColors = {
+        comment: { color: '#ff8800' },
+      } as unknown as Record<string, string>;
+
+      const inst = render(
+        <Markdown syntaxColors={syntaxColors}>{md}</Markdown>
+      );
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f => f.includes('hex colored'));
+
+      expect(frame).toContain('\u001b[38;2;255;136;0m// hex colored\u001b[39m');
+    });
+
+    it('emits 256-color SGR for decimal indices', async () => {
+      const md = ['```ts', '// indexed', '```'].join('\n');
+      const syntaxColors = {
+        comment: { color: '203' },
+      } as unknown as Record<string, string>;
+
+      const inst = render(
+        <Markdown syntaxColors={syntaxColors}>{md}</Markdown>
+      );
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f => f.includes('indexed'));
+
+      expect(frame).toContain('\u001b[38;5;203m// indexed\u001b[39m');
+    });
+
+    it('maps legacy strong/emphasis entries to real attribute SGR', async () => {
+      // Markdown fences reliably produce hljs-strong tokens; TS comments
+      // do not (they lex as hljs-comment regardless of emphasis markers).
+      const md = ['```md', '**loud**', '```'].join('\n');
+      const syntaxColors = { strong: 'bold', emphasis: 'italic' };
+
+      const inst = render(
+        <Markdown syntaxColors={syntaxColors}>{md}</Markdown>
+      );
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f => f.includes('loud'));
+
+      expect(frame).toContain('\u001b[1m**loud**\u001b[22m');
+    });
+
+    it('renders blockquotes containing inline markup without [object Object]', async () => {
+      const md = '> A **bold** thought with `code`.';
+
+      const inst = render(<Markdown>{md}</Markdown>);
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f => f.includes('thought'));
+
+      expect(frame).toContain('bold');
+      expect(frame).toContain('code');
+      expect(frame).not.toContain('[object Object]');
+    });
+  });
 });

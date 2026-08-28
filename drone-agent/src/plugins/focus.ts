@@ -27,10 +27,9 @@ export const focusPlugin: DronePlugin = {
         }
         return `# Current Focus
 
-Your current focus is: ${state.currentFocus}
+**Primary Objective:** ${state.currentFocus}
 
-YOU ARE UTTERLY OBSESSED WITH FULFILLING THIS FOCUS.
-DO NOT DEVIATE FROM IT UNTIL IT IS COMPLETE.`;
+**Strict Adherence:** You are currently in a "focused state." Prioritize all actions toward fulfilling this objective and do not deviate from it until the task is finished or you have been explicitly told to clear your focus. You may only deviate if you encounter a critical blocker that requires immediate resolution to proceed.`;
       },
     });
 

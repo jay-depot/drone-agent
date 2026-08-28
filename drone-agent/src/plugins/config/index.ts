@@ -15,9 +15,10 @@ import {
 import {
   CONFIG_DIRECTORY_NAME,
   CONFIG_FILE_NAME,
-  findProjectConfigPath,
   loadConfigLayer,
+  resolveProjectConfig,
 } from '../../runtime/config.js';
+import { deepSet } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -102,6 +103,7 @@ const KNOWN_CONFIG_KEYS: string[] = [
   'memory',
   'log',
   'promptFile',
+  'search',
   // ollama.*
   'ollama.host',
   'ollama.model',
@@ -110,6 +112,16 @@ const KNOWN_CONFIG_KEYS: string[] = [
   'session.responseReserveTokens',
   'session.maxToolIterations',
   'session.promptOnToolIterationLimit',
+  'session.maxToolResultTokensPercent',
+  'session.retry.maxRetries',
+  'session.retry.maxWaitMs',
+  'session.retry.promptOnError',
+  'session.retry.backoffBaseMs',
+  'session.retry.backoffFactor',
+  // llm.*
+  'llm.active',
+  'llm.reasoningLevel',
+  // lsp.*
   // lsp.*
   'lsp.enabled',
   'lsp.diagnosticTokenBudget',
@@ -139,6 +151,11 @@ const KNOWN_CONFIG_KEYS: string[] = [
   // promptFile.*
   'promptFile.enabled',
   'promptFile.files',
+  // search.*
+  'search.enabled',
+  'search.paths',
+  'search.userEmbeddingProvider',
+  'search.projectEmbeddingProvider',
 ];
 
 // ---------------------------------------------------------------------------
@@ -159,27 +176,6 @@ function getByPath(obj: Record<string, unknown>, keyPath: string): unknown {
     current = (current as Record<string, unknown>)[part];
   }
   return current;
-}
-
-/**
- * Set a value at a dot-notation path in a nested object, creating
- * intermediate objects as needed. Mutates the input object.
- */
-function deepSet(
-  obj: Record<string, unknown>,
-  keyPath: string,
-  value: unknown
-): void {
-  const parts = keyPath.split('.');
-  let current = obj;
-  for (let i = 0; i < parts.length - 1; i++) {
-    const part = parts[i];
-    if (typeof current[part] !== 'object' || current[part] === null) {
-      current[part] = {};
-    }
-    current = current[part] as Record<string, unknown>;
-  }
-  current[parts[parts.length - 1]] = value;
 }
 
 /**
@@ -236,38 +232,14 @@ function collectProvenance(layers: DroneConfigLayer[]): Record<string, string> {
 }
 
 /**
- * Read the existing config file for a scope, deep-set the value,
- * and write it back. Creates the file if it doesn't exist.
+ * Read an existing config file, deep-set the value, and write it back.
+ * Creates the file (and its parent directory) when missing or unparseable.
  */
-async function writeConfigValue(
-  scope: 'project' | 'user',
+async function upsertConfigFile(
+  filePath: string,
   key: string,
   value: unknown
 ): Promise<string> {
-  const filePath =
-    scope === 'user'
-      ? resolveUserConfigPath()
-      : await findProjectConfigPath(process.cwd());
-
-  if (!filePath) {
-    // No existing config file — create one at the default location
-    const resolvedPath =
-      scope === 'user'
-        ? resolveUserConfigPath()
-        : path.join(process.cwd(), CONFIG_DIRECTORY_NAME, CONFIG_FILE_NAME);
-
-    await mkdir(path.dirname(resolvedPath), { recursive: true });
-    const newConfig: Record<string, unknown> = {};
-    deepSet(newConfig, key, value);
-    await writeFile(
-      resolvedPath,
-      JSON.stringify(newConfig, null, 2) + '\n',
-      'utf-8'
-    );
-    return resolvedPath;
-  }
-
-  // Read existing config
   let config: Record<string, unknown> = {};
   try {
     const raw = await readFile(filePath, 'utf-8');
@@ -281,6 +253,28 @@ async function writeConfigValue(
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
   return filePath;
+}
+
+async function writeConfigValue(
+  scope: 'project' | 'user',
+  key: string,
+  value: unknown
+): Promise<string> {
+  if (scope === 'user') {
+    return upsertConfigFile(resolveUserConfigPath(), key, value);
+  }
+
+  const resolution = await resolveProjectConfig(process.cwd());
+  if (resolution.skippedDuplicatePath !== undefined) {
+    throw new Error(
+      `Cannot write project-scope config: the discovered project config (${resolution.skippedDuplicatePath}) is the same file as the user config — the session has no distinct project. Use 'user' scope instead.`
+    );
+  }
+
+  const filePath =
+    resolution.path ??
+    path.join(process.cwd(), CONFIG_DIRECTORY_NAME, CONFIG_FILE_NAME);
+  return upsertConfigFile(filePath, key, value);
 }
 
 /**
@@ -301,9 +295,14 @@ async function discoverLayers(): Promise<DroneConfigLayer[]> {
     layers.push(userLayer);
   }
 
-  const projectConfigPath = await findProjectConfigPath(process.cwd());
-  if (projectConfigPath) {
-    const projectLayer = await loadConfigLayer('project', projectConfigPath);
+  // Duplicates of the user config are silently skipped here; the redundant
+  // project-scope load warning is already surfaced once at startup.
+  const projectConfigResolution = await resolveProjectConfig(process.cwd());
+  if (projectConfigResolution.path) {
+    const projectLayer = await loadConfigLayer(
+      'project',
+      projectConfigResolution.path
+    );
     if (projectLayer) {
       layers.push(projectLayer);
     }

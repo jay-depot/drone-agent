@@ -11,6 +11,11 @@ export type DronePlugin = {
   register: (registration: DronePluginRegistration) => Promise<void>;
 };
 
+export type DroneToolExecutionContext = {
+  /** Signal the conversation loop to stop after processing the current tool batch. */
+  stopLoop?: () => void;
+};
+
 export type DroneToolDefinition = {
   name: string;
   description: string;
@@ -28,7 +33,8 @@ export type DroneToolDefinition = {
   ) => unknown;
   execute: (
     input: Record<string, unknown>,
-    onProgress?: (chunk: string) => void
+    onProgress?: (chunk: string) => void,
+    context?: DroneToolExecutionContext
   ) => Promise<string>;
 };
 
@@ -268,7 +274,9 @@ export type DroneSlashCommandContext = {
   engine: {
     executeTool: (
       canonicalName: string,
-      input: Record<string, unknown>
+      input: Record<string, unknown>,
+      onProgress?: (chunk: string) => void,
+      context?: DroneToolExecutionContext
     ) => Promise<string>;
     /** Optional — may be absent in minimal hosts. */
     runWorkflow?: (
@@ -350,6 +358,8 @@ export type DroneSlashCommandContext = {
     enableDebugSubsystem: (name: string) => void;
     /** Disable a debug subsystem by name (e.g. "llm"). */
     disableDebugSubsystem: (name: string) => void;
+    /** Estimated context usage percent (0-100) for /context-style displays. */
+    getEstimatedContextUsagePercent?: () => Promise<number>;
   };
   /** Session manager for appending synthetic messages. */
   sessionManager?: {

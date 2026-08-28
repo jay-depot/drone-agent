@@ -1,3 +1,4 @@
+import type { SearchIndexer } from '../search-indexer.js';
 import {
   type CoordinatorClient,
   createCoordinatorFetch,
@@ -25,6 +26,16 @@ export function setCoordinatorClient(client: CoordinatorClient | undefined) {
 
 export function getCoordinatorClient(): CoordinatorClient | undefined {
   return coordinatorClient;
+}
+
+let searchIndexer: SearchIndexer | undefined;
+
+export function setSearchIndexer(indexer: SearchIndexer | undefined) {
+  searchIndexer = indexer;
+}
+
+export function getSearchIndexer(): SearchIndexer | undefined {
+  return searchIndexer;
 }
 
 export function setBeaconAddress(host: string, port: number) {

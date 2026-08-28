@@ -1,7 +1,17 @@
 import Database from 'better-sqlite3';
+import { createRequire } from 'node:module';
 import path from 'path';
 import fs from 'fs';
 import { logger } from '../logger.js';
+
+// Load sqlite-vec via its CJS entry. The ESM entry resolves the platform
+// extension with `import.meta.resolve`, which under pnpm's store layout can
+// double the `.so` suffix (vec0.so.so) and fail to load. The CJS entry uses
+// `require.resolve`, which resolves the correct path.
+const require = createRequire(import.meta.url);
+const sqliteVec = require('sqlite-vec') as {
+  load: (db: Database.Database) => void;
+};
 
 let db: Database.Database | null = null;
 
@@ -9,6 +19,7 @@ export function initDatabase(dataPath: string): Database.Database {
   logger.info(`Initializing database at: ${dataPath}`);
   fs.mkdirSync(path.dirname(dataPath), { recursive: true });
   db = new Database(dataPath);
+  sqliteVec.load(db);
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS personas (
@@ -35,6 +46,7 @@ export function initDatabase(dataPath: string): Database.Database {
     CREATE TABLE IF NOT EXISTS agent_sessions (
       id TEXT PRIMARY KEY,
       personaId TEXT,
+      status TEXT NOT NULL DEFAULT 'connected',
       connectedAt INTEGER NOT NULL,
       lastActivity INTEGER NOT NULL
     );
@@ -88,6 +100,22 @@ export function initDatabase(dataPath: string): Database.Database {
       updatedAt INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS outbox (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      endpoint TEXT NOT NULL,
+      method TEXT NOT NULL,
+      body TEXT,
+      createdAt INTEGER NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      lastAttemptAt INTEGER,
+      lastError TEXT,
+      deliveredAt INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_outbox_undelivered ON outbox (createdAt)
+      WHERE deliveredAt IS NULL;
+
     CREATE TABLE IF NOT EXISTS event_log (
       id TEXT PRIMARY KEY,
       event_type TEXT NOT NULL,
@@ -140,6 +168,40 @@ export function initDatabase(dataPath: string): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_principles_target ON principles(targetType, targetId);
+
+    CREATE TABLE IF NOT EXISTS search_directories (
+      agent_id TEXT NOT NULL,
+      directory_path TEXT NOT NULL,
+      registered_at INTEGER NOT NULL,
+      PRIMARY KEY (agent_id, directory_path)
+    );
+
+    CREATE TABLE IF NOT EXISTS search_files (
+      id TEXT PRIMARY KEY,
+      directory_path TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      hash TEXT NOT NULL,
+      last_indexed INTEGER NOT NULL,
+      UNIQUE(directory_path, file_path)
+    );
+
+    CREATE TABLE IF NOT EXISTS search_chunks (
+      id TEXT PRIMARY KEY,
+      directory_path TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      chunk_index INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      embedding BLOB NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_search_files_dir ON search_files(directory_path);
+    CREATE INDEX IF NOT EXISTS idx_search_chunks_dir ON search_chunks(directory_path);
+    CREATE INDEX IF NOT EXISTS idx_search_directories_agent ON search_directories(agent_id);
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(
+      embedding FLOAT[768] distance_metric=cosine
+    );
+
     CREATE TABLE IF NOT EXISTS wiki_pages (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -159,6 +221,18 @@ export function initDatabase(dataPath: string): Database.Database {
   }>;
   if (!insightCols.some(c => c.name === 'lastExamined')) {
     db.exec('ALTER TABLE insights ADD COLUMN lastExamined TEXT');
+  }
+
+  // Idempotent migration: add status to existing agent_sessions tables.
+  const agentCols = db
+    .prepare('PRAGMA table_info(agent_sessions)')
+    .all() as Array<{
+    name: string;
+  }>;
+  if (!agentCols.some(c => c.name === 'status')) {
+    db.exec(
+      "ALTER TABLE agent_sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'connected'"
+    );
   }
 
   logger.info('Beacon database initialized successfully');

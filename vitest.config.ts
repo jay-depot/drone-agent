@@ -41,11 +41,12 @@ export default defineConfig({
       'drone-beacon/test/**/*.test.ts',
       'drone-coordinator/test/**/*.test.ts',
       'drone-swarm-common/test/**/*.test.ts',
+      'drone-swarm/test/**/*.test.ts',
       'drone-gateway/test/**/*.test.ts',
     ],
     // Exclude integration tests that require external services:
     // - Docker: e2e-swarm, coordinator-sync, spawn, inter-agent, agent-beacon
-    // - LLM: subagent/dispatch (requires LLM to follow subagent.return instruction)
+    // - LLM: subagent/dispatch (requires LLM to follow subagent__return instruction)
     exclude: [
       '**/e2e-swarm.test.ts',
       '**/coordinator-sync.test.ts',
@@ -73,6 +74,7 @@ export default defineConfig({
         'drone-beacon/src/**/*.ts',
         'drone-coordinator/src/**/*.ts',
         'drone-swarm-common/src/**/*.ts',
+        'drone-swarm/src/**/*.ts',
         'drone-gateway/src/**/*.ts',
       ],
       exclude: [

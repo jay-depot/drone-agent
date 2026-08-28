@@ -18,6 +18,7 @@ import {
   type DroneStandardHookName,
   type DroneToolDescriptor,
   type DroneToolDefinition,
+  type DroneToolExecutionContext,
   type DroneWorkflow,
   type DroneWorkflowContext,
   type DroneWorkflowResult,
@@ -26,6 +27,7 @@ import {
 } from 'drone-core';
 
 import { BUILT_IN_SLASH_COMMANDS } from './builtin-commands.js';
+import { SystemReminderQueue } from './system-reminders.js';
 
 export type RegisteredPluginState = {
   plugin: DronePlugin;
@@ -90,7 +92,8 @@ export type DronePluginEngine = {
   executeTool: (
     canonicalName: string,
     input: Record<string, unknown>,
-    onProgress?: (chunk: string) => void
+    onProgress?: (chunk: string) => void,
+    context?: DroneToolExecutionContext
   ) => Promise<string>;
   listTools: () => DroneToolDescriptor[];
   listAllTools: () => DroneToolDescriptor[];
@@ -126,6 +129,17 @@ export type DronePluginEngine = {
   getRuntimeFlags: () => RuntimeFlagRegistry;
   /** Build the full system messages as sent to the LLM (config prompt + runtime flags + prompt fragments). */
   buildSystemMessages: () => Promise<DroneChatMessage[]>;
+  /**
+   * Drain queued one-shot system reminders for inclusion in the next LLM
+   * call as non-persisted system messages. The conversation service calls
+   * this when assembling outgoing messages.
+   */
+  drainSystemReminders: () => string[];
+  /**
+   * Clear any queued system reminders without delivering them. Called on
+   * session clear so stale reminders never leak into a fresh session.
+   */
+  clearSystemReminders: () => void;
   /**
    * Set the host's elicitation capability. Must be called by the CLI shell
    * or TUI App BEFORE any workflow runs (and before `onSessionStart` if
@@ -169,6 +183,7 @@ type CreateDronePluginEngineOptions = {
   plugins: DronePlugin[];
   config: DroneAgentConfig;
   logger?: DroneLogger;
+  logToStderr?: boolean;
   debugFlags?: DebugFlagRegistry;
   // NEW:
   runtimeOptions?: {
@@ -176,6 +191,13 @@ type CreateDronePluginEngineOptions = {
     persona?: string;
   };
   buildSystemMessages?: () => Promise<DroneChatMessage[]>;
+  /**
+   * Optional callback to reset the conversation's stuck-detector state
+   * (identical-tool-call streak, broken-response counter). Exposed to
+   * plugins via the `_runtime` capability so e.g. a subagent return or a
+   * user-visible recovery path can clear guardrail detectors.
+   */
+  resetStuckDetectors?: () => void;
 };
 
 function createHookBuckets(): HookBuckets {
@@ -287,10 +309,13 @@ export function createDronePluginEngine({
   plugins,
   config,
   logger = createConsoleLogger('plugin-engine'),
+  logToStderr = false,
   debugFlags = createDebugFlagRegistry(),
   runtimeOptions,
   buildSystemMessages: buildSystemMessagesFromHost,
+  resetStuckDetectors: resetStuckDetectorsFromHost,
 }: CreateDronePluginEngineOptions): DronePluginEngine {
+  const systemReminders = new SystemReminderQueue();
   const pluginMap = validatePluginRegistry(plugins);
   const enabledPluginIds = resolveEnabledPluginIds(plugins, config);
   validateKnownEnabledPlugins(enabledPluginIds, pluginMap);
@@ -452,7 +477,9 @@ export function createDronePluginEngine({
   async function registerPlugin(
     plugin: DronePlugin
   ): Promise<RegisteredPluginState> {
-    const pluginLogger = createConsoleLogger(plugin.metadata.id);
+    const pluginLogger = createConsoleLogger(plugin.metadata.id, {
+      toStderr: logToStderr,
+    });
     const pluginTools: DroneToolDefinition[] = [];
     const pluginPrompts: DronePromptFragment[] = [];
     const dependencyIds = new Set<string>();
@@ -760,6 +787,17 @@ export function createDronePluginEngine({
         builtInSlashCommands.push(cmd);
       }
 
+      // Set _runtime BEFORE plugin registration so plugins can request it during register()
+      capabilities.set('_runtime', {
+        subagentId: runtimeOptions?.subagentId,
+        persona: runtimeOptions?.persona,
+        isSubagent: !!runtimeOptions?.subagentId,
+        flags: runtimeFlagRegistry,
+        resetStuckDetectors: resetStuckDetectorsFromHost,
+        queueSystemReminder: (content: string) =>
+          systemReminders.queue(content),
+      });
+
       logger.info(`initializing ${sortedPlugins.length} plugin(s)`);
       for (const plugin of sortedPlugins) {
         registeredPlugins.push(await registerPlugin(plugin));
@@ -767,15 +805,6 @@ export function createDronePluginEngine({
 
       // Register runtime meta-tools (always available)
       registerRuntimeMetaTools();
-
-      // Expose runtime options as a special '_runtime' capability
-      // that any plugin can request via 'runtime'
-      capabilities.set('_runtime', {
-        subagentId: runtimeOptions?.subagentId,
-        persona: runtimeOptions?.persona,
-        isSubagent: !!runtimeOptions?.subagentId,
-        flags: runtimeFlagRegistry,
-      });
 
       // Inject enabled plugin list into system prompt
       const enabledPluginList = Array.from(enabledPluginIds).sort().join(', ');
@@ -790,7 +819,23 @@ export function createDronePluginEngine({
     addExternalPlugin: doAddExternalPlugin,
     runHooks: async hookName => {
       for (const callback of hookBuckets[hookName]) {
-        await callback();
+        try {
+          await callback();
+        } catch (hookError) {
+          // A failure in onBeforePrompt must not abort the conversation
+          // turn or terminate the loop — log it and keep going so the
+          // user's message is still processed. Mirrors the non-fatal
+          // onAfterToolCall handling in the conversation service.
+          if (hookName === 'onBeforePrompt') {
+            const msg =
+              hookError instanceof Error
+                ? hookError.message
+                : String(hookError);
+            logger.warn(`onBeforePrompt hook error (non-fatal): ${msg}`);
+            continue;
+          }
+          throw hookError;
+        }
       }
     },
     runSessionSafetyTrimWillRunHooks: async payload => {
@@ -829,12 +874,12 @@ export function createDronePluginEngine({
       );
     },
     getTool: canonicalName => toolRegistry.get(canonicalName),
-    executeTool: async (canonicalName, input, onProgress) => {
+    executeTool: async (canonicalName, input, onProgress, context) => {
       const tool = toolRegistry.get(canonicalName);
       if (!tool) {
         throw new Error(`Unknown tool: ${canonicalName}`);
       }
-      return tool.execute(input, onProgress);
+      return tool.execute(input, onProgress, context);
     },
     listTools: () => toolRegistry.listMounted(),
     listAllTools: () => toolRegistry.listAll(),
@@ -877,6 +922,8 @@ export function createDronePluginEngine({
     unregisterPluginTools: (pluginId: string) => {
       unregisterPluginToolsImpl(pluginId);
     },
+    drainSystemReminders: () => systemReminders.drainAll(),
+    clearSystemReminders: () => systemReminders.clear(),
     unregisterTool: (canonicalName: string) => {
       unregisterToolImpl(canonicalName);
     },

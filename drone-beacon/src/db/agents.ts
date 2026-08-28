@@ -8,13 +8,14 @@ export function registerAgent(req: RegisterAgentRequest): AgentSession {
   const session: AgentSession = {
     id: req.id,
     personaId: req.personaId,
+    status: 'connected',
     connectedAt: now,
     lastActivity: now,
   };
 
   const stmt = getDatabase().prepare(`
-    INSERT OR REPLACE INTO agent_sessions (id, personaId, connectedAt, lastActivity)
-    VALUES (@id, @personaId, @connectedAt, @lastActivity)
+    INSERT OR REPLACE INTO agent_sessions (id, personaId, status, connectedAt, lastActivity)
+    VALUES (@id, @personaId, @status, @connectedAt, @lastActivity)
   `);
 
   stmt.run(session);

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import {
   createDefaultAgentConfig,
+  type DroneChatMessage,
   type DroneChatResponse,
   type DroneContextWindowInfo,
   type DroneLlmCapability,
@@ -61,6 +62,7 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
     getReasoningLevel: () => undefined,
     setReasoningLevel: (_level: any) => {},
     listModels: async () => ['fake'],
+    registerDriver: () => {},
     registerProvider: () => {},
     unregisterProvider: () => {},
   };
@@ -236,5 +238,103 @@ describe('conversation service — new batch events', () => {
 
     expect(events).toContain('assistantMessage');
     expect(events).toContain('assistantMessageComplete');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// System reminder drain
+// ---------------------------------------------------------------------------
+
+describe('conversation service — system reminders', () => {
+  it('delivers a queued reminder exactly once as a non-persisted system message', async () => {
+    const engine = createMockEngine({
+      tools: [],
+      executeToolImpl: async () => '',
+    });
+    const provider = makeProvider([
+      { message: 'first reply' },
+      { message: 'second reply' },
+    ]);
+
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    const queue = engine.__reminderQueue;
+    queue.queue(
+      'Context is approaching the compaction threshold (~4k tokens).'
+    );
+
+    await conversation.sendUserMessage('hello one', () => {});
+    const firstCallMessages = provider.__chatMock.mock.calls[0][0]
+      .messages as DroneChatMessage[];
+    const remindersInFirstCall = firstCallMessages.filter(
+      message =>
+        message.role === 'system' &&
+        message.content.includes('approaching the compaction threshold')
+    );
+    expect(remindersInFirstCall).toHaveLength(1);
+
+    // One-shot: the reminder must not appear in the next call, and it must
+    // never enter session history.
+    await conversation.sendUserMessage('hello two', () => {});
+    const secondCallMessages = provider.__chatMock.mock.calls[1][0]
+      .messages as DroneChatMessage[];
+    expect(
+      secondCallMessages.filter(
+        message =>
+          message.role === 'system' &&
+          message.content.includes('approaching the compaction threshold')
+      )
+    ).toHaveLength(0);
+    expect(
+      sessionManager.getMessages().filter(m => m.role === 'system')
+    ).toHaveLength(0);
+  });
+
+  it('clears queued reminders on session clear', async () => {
+    const engine = createMockEngine({
+      tools: [],
+      executeToolImpl: async () => '',
+    });
+    const provider = makeProvider([{ message: 'reply' }]);
+
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    const queue = engine.__reminderQueue;
+    queue.queue('stale pre-compaction reminder');
+
+    conversation.clearSession();
+
+    await conversation.sendUserMessage('fresh start', () => {});
+    const callMessages = provider.__chatMock.mock.calls[0][0]
+      .messages as DroneChatMessage[];
+    expect(
+      callMessages.filter(message =>
+        message.content.includes('stale pre-compaction reminder')
+      )
+    ).toHaveLength(0);
   });
 });

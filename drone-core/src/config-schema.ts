@@ -10,6 +10,12 @@
 import { type StaticDecode, Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 
+import type {
+  DroneProviderConfig,
+  ProviderConfigValidationResult,
+} from './provider-config-types.js';
+export type { ProviderConfigValidationResult };
+
 // ── Helper schemas ───────────────────────────────────────────────────
 
 const NonEmptyString = Type.String({ minLength: 1 });
@@ -18,6 +24,30 @@ const PositiveInteger = Type.Integer({ exclusiveMinimum: 0 });
 const NonNegativeInteger = Type.Integer({ minimum: 0 });
 const NonNegativeNumber = Type.Number({ minimum: 0 });
 const Percent = Type.Number({ exclusiveMinimum: 0, maximum: 100 });
+
+const GuardrailThresholdSchema = Type.Object({
+  hintAfter: Type.Optional(NonNegativeInteger),
+  maxHints: Type.Optional(NonNegativeInteger),
+});
+
+const ToolCallDedupSchema = Type.Object({
+  enabled: Type.Optional(Type.Boolean()),
+});
+
+const GuardrailSchema = Type.Object({
+  brokenResponses: Type.Optional(GuardrailThresholdSchema),
+  reasoningOnlyResponses: Type.Optional(GuardrailThresholdSchema),
+  identicalToolCalls: Type.Optional(GuardrailThresholdSchema),
+  deduplicateToolCalls: Type.Optional(ToolCallDedupSchema),
+});
+
+const RetrySchema = Type.Object({
+  maxRetries: Type.Optional(NonNegativeInteger),
+  maxWaitMs: Type.Optional(PositiveNumber),
+  promptOnError: Type.Optional(Type.Boolean()),
+  backoffBaseMs: Type.Optional(PositiveNumber),
+  backoffFactor: Type.Optional(PositiveNumber),
+});
 
 // ── OpenRouter model config (used in both standalone and nested) ─────
 
@@ -34,6 +64,45 @@ const OpenAiModelConfigSchema = Type.Object({
 const AnthropicModelConfigSchema = Type.Object({
   id: NonEmptyString,
   contextWindow: PositiveNumber,
+});
+
+// ── Provider config (new provider/model format) ─────────────────────
+
+const DroneModelEntrySchema = Type.Object({
+  model: Type.Optional(Type.String({ minLength: 1 })),
+  parameters: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+  contextWindow: Type.Optional(PositiveNumber),
+  maxOutputTokens: Type.Optional(PositiveInteger),
+  hasVision: Type.Optional(Type.Boolean()),
+  supportsTools: Type.Optional(Type.Boolean()),
+  reasoningLevel: Type.Optional(
+    Type.Union([
+      Type.Literal('off'),
+      Type.Literal('low'),
+      Type.Literal('medium'),
+      Type.Literal('high'),
+      Type.Literal('max'),
+    ])
+  ),
+});
+
+export const DroneProviderSchema = Type.Object({
+  protocol: NonEmptyString,
+  baseUrl: Type.Optional(NonEmptyString),
+  apiKey: Type.Optional(Type.String()),
+  apiVersion: Type.Optional(NonEmptyString),
+  orgId: Type.Optional(NonEmptyString),
+  headers: Type.Optional(Type.Record(Type.String(), Type.String())),
+  parameters: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+  extra: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+  autoImport: Type.Optional(
+    Type.Union([
+      Type.Literal('off'),
+      Type.Literal('onSelect'),
+      Type.Literal('all'),
+    ])
+  ),
+  models: Type.Optional(Type.Record(Type.String(), DroneModelEntrySchema)),
 });
 
 // ── LSP server configs ──────────────────────────────────────────────
@@ -123,7 +192,22 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
     }),
     llm: Type.Object({
       provider: Type.Optional(Type.String()),
+      active: Type.Optional(
+        Type.String({
+          pattern: '^[^/]+/.+',
+        })
+      ),
+      reasoningLevel: Type.Optional(
+        Type.Union([
+          Type.Literal('off'),
+          Type.Literal('low'),
+          Type.Literal('medium'),
+          Type.Literal('high'),
+          Type.Literal('max'),
+        ])
+      ),
     }),
+    providers: Type.Record(Type.String(), DroneProviderSchema),
     openrouter: Type.Object({
       apiKey: Type.Optional(Type.String()),
       defaultModel: Type.Optional(Type.String()),
@@ -150,6 +234,8 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       maxToolIterations: Type.Optional(PositiveInteger),
       promptOnToolIterationLimit: Type.Optional(Type.Boolean()),
       maxToolResultTokensPercent: Type.Optional(Percent),
+      guardrail: Type.Optional(GuardrailSchema),
+      retry: Type.Optional(RetrySchema),
     }),
     lsp: Type.Object({
       enabled: Type.Optional(Type.Boolean()),
@@ -179,6 +265,7 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       minTurnsToCompact: Type.Optional(PositiveInteger),
       summaryMaxTokens: Type.Optional(PositiveNumber),
       summaryBudgetPercent: Type.Optional(Percent),
+      nudgeMarginPercent: Type.Optional(Percent),
     }),
     memory: Type.Object({
       enabled: Type.Optional(Type.Boolean()),
@@ -196,6 +283,37 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
     promptFile: Type.Object({
       enabled: Type.Optional(Type.Boolean()),
       files: Type.Optional(Type.Array(Type.String())),
+    }),
+    search: Type.Object({
+      enabled: Type.Optional(Type.Boolean()),
+      paths: Type.Optional(
+        Type.Array(
+          Type.Object({
+            path: Type.String(),
+            embeddingProvider: Type.Optional(Type.String()),
+            includeHidden: Type.Optional(
+              Type.Boolean({
+                description:
+                  'Intended future functionality — not yet honored. .git and node_modules are always excluded.',
+              })
+            ),
+            includeNodeModules: Type.Optional(
+              Type.Boolean({
+                description:
+                  'Intended future functionality — not yet honored. .git and node_modules are always excluded.',
+              })
+            ),
+            exclude: Type.Optional(
+              Type.Array(Type.String(), {
+                description:
+                  'Glob patterns (minimatch) applied to each file path relative to this search root, excluding matches from semantic search results. Applied at query time.',
+              })
+            ),
+          })
+        )
+      ),
+      userEmbeddingProvider: Type.Optional(Type.String()),
+      projectEmbeddingProvider: Type.Optional(Type.String()),
     }),
     swarm: Type.Object({
       knowledgeSync: Type.Optional(
@@ -285,4 +403,60 @@ export function parseConfigWithSchema(
   }
   const decoded = Value.Decode(PartialDroneAgentConfigSchema, raw);
   return transformEnvVars(decoded, source) as PartialDroneAgentConfigDecoded;
+}
+
+/**
+ * Semantic validation for the providers section, run after the full config
+ * merge (defaults → user → project → swarm underlays). Structural shape is
+ * enforced by the schema at parse time; these are the cross-cutting rules:
+ *
+ * - provider ids must be non-empty and slash-free
+ * - every entry must declare a protocol
+ * - model aliasing must stay one level deep (chains/self-aliases warn)
+ *
+ * Returns errors/warnings rather than throwing so callers can surface all
+ * problems at once.
+ */
+export function validateProviders(
+  providers: Record<string, DroneProviderConfig>
+): ProviderConfigValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  for (const [providerId, provider] of Object.entries(providers)) {
+    if (providerId.length === 0 || providerId.includes('/')) {
+      errors.push(
+        `Provider id "${providerId}" must be non-empty and slash-free (it forms the prefix of <providerId>/<modelLocalId>).`
+      );
+      continue;
+    }
+    if (!provider.protocol || provider.protocol.trim().length === 0) {
+      errors.push(
+        `Provider "${providerId}" is missing required field "protocol".`
+      );
+      continue;
+    }
+
+    const models = provider.models ?? {};
+    const declaredKeys = new Set(Object.keys(models));
+    for (const [localId, entry] of Object.entries(models)) {
+      const target = entry.model;
+      if (target === undefined) continue;
+      if (target === localId) {
+        warnings.push(
+          `Model "${providerId}/${localId}" aliases itself; the alias is ignored.`
+        );
+        continue;
+      }
+      if (!declaredKeys.has(target)) continue;
+      const targetAlias = models[target]?.model;
+      if (targetAlias !== undefined) {
+        warnings.push(
+          `Alias chain detected: "${providerId}/${localId}" → "${providerId}/${target}" → "${targetAlias}". Only one alias level resolves.`
+        );
+      }
+    }
+  }
+
+  return { errors, warnings };
 }

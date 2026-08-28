@@ -3,6 +3,7 @@
 // This file re-exports all public types and utilities from the drone-core
 // library. The implementation is split across multiple modules:
 //
+//   - position-types.ts  : Position resolution types (AmbiguousPositionError)
 //   - config-types.ts     : Configuration types and helpers
 //   - session-types.ts    : Session, message, tool, and token types
 //   - lsp-types.ts        : LSP server types
@@ -21,6 +22,16 @@
 //   - wiki-types.ts       : Wiki page types for swarm knowledge base
 //
 // -----------------------------------------------------------------------
+
+// ── Position types ──────────────────────────────────────────────────
+
+export type { AmbiguousMatch } from './position-types.js';
+export {
+  AmbiguousPositionError,
+  buildAmbiguousMatches,
+  HARD_CONTEXT_LINES,
+  SOFT_CONTEXT_LINES,
+} from './position-types.js';
 
 // ── Config types ────────────────────────────────────────────────────
 
@@ -47,6 +58,10 @@ export type {
   DroneOpenRouterModelConfig,
   DroneOpenRouterConfig,
   DroneSessionConfig,
+  DroneSessionRetryConfig,
+  DroneGuardrailThresholdConfig,
+  DroneGuardrailConfig,
+  DroneToolCallDedupConfig,
   DroneCompactionStrategy,
   DroneCompactionConfig,
   DroneMemoryConfig,
@@ -55,6 +70,8 @@ export type {
   DronePromptFileConfig,
   DroneKnowledgeSyncConfig,
   DroneSwarmConfig,
+  DroneSearchPath,
+  DroneSearchConfig,
   DroneLspSpawnServerConfig,
   DroneLspExternalServerConfig,
   DroneLspServerConfig,
@@ -130,6 +147,11 @@ export type {
   DroneLspInstallSpec,
 } from './lsp-types.js';
 export type { DroneLspPlatformKey, DroneLspPlatformSpec } from './lsp-types.js';
+export {
+  commandExistsOnPath,
+  resolveDroneExecutable,
+  type ResolveDroneExecutableOptions,
+} from './utils.js';
 
 // ── MCP types ───────────────────────────────────────────────────────
 
@@ -152,8 +174,31 @@ export type {
   DronePersonaWriter,
   DroneSkillWriter,
   DroneLlmProvider,
+  DroneChatRequest,
   DroneLlmProviderRegistration,
 } from './provider-types.js';
+export { DroneLlmError } from './provider-types.js';
+
+// ── Provider/protocol/model config types ─────────────────────────────
+
+export type {
+  DroneAutoImportMode,
+  DroneModelEntryConfig,
+  DroneProviderConfig,
+  ResolvedProviderConfig,
+  DiscoveredModel,
+  LlmParameterSpec,
+  LlmParameterSchema,
+  LlmProtocolDriver,
+} from './provider-config-types.js';
+
+export type { ModelSelection } from './model-selection.js';
+export {
+  parseModelSelection,
+  formatModelSelection,
+  isValidFullModelSelection,
+  resolveInteractiveSelection,
+} from './model-selection.js';
 
 // ── Capability types ─────────────────────────────────────────────────
 
@@ -168,6 +213,11 @@ export type {
   DroneInsightStorageEngine,
   DronePrincipleStorageEngine,
   DroneSelfImprovementCapability,
+  DroneEmbeddingProvider,
+  DroneSearchCapability,
+  SearchResult,
+  IndexResult,
+  DroneSwarmCapability,
 } from './capabilities.js';
 
 // ── Wiki types ────────────────────────────────────────────────────────
@@ -183,6 +233,7 @@ export type {
 export type {
   DronePlugin,
   DroneToolDefinition,
+  DroneToolExecutionContext,
   DronePromptFragment,
   DronePluginHooks,
   DroneStandardHookName,
@@ -238,6 +289,7 @@ export {
   PartialDroneAgentConfigSchema,
   parseConfigWithSchema,
   transformEnvVars,
+  validateProviders,
 } from './config-schema.js';
 export type { PartialDroneAgentConfigDecoded } from './config-schema.js';
 

@@ -31,7 +31,7 @@ export {
   registerBeaconTrust,
   getBeaconTrust,
   listBeaconTrust,
-  approveBeacon,
+  approveBeaconById,
   rejectBeacon,
   deleteBeaconTrust,
 } from './beacon-trust.js';

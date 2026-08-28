@@ -72,6 +72,7 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
     getReasoningLevel: () => undefined,
     setReasoningLevel: (_level: any) => {},
     listModels: async () => ['fake'],
+    registerDriver: () => {},
     registerProvider: () => {},
     unregisterProvider: () => {},
   };
@@ -132,6 +133,7 @@ it('uses the newly active provider on the next loop iteration', async () => {
     setReasoningLevel: (_level: any) => {},
     listModels: async () =>
       activeProviderId === 'provider-a' ? ['fake-a'] : ['fake-b'],
+    registerDriver: () => {},
     registerProvider: () => {},
     unregisterProvider: () => {},
   };
@@ -424,10 +426,13 @@ describe('createConversationService — tool error handling', () => {
 
     await conversation.sendUserMessage('go');
 
-    // User / assistant-with-tool / tool / assistant-final all live in the
-    // same turn (see session-manager.appendToCurrentTurn).
+    // Each assistant message is its own turn: [user], [assistant+tool],
+    // [assistant-final].
     const turns: DroneSessionTurn[] = sessionManager.getTurns();
-    expect(turns.length).toBeGreaterThanOrEqual(1);
+    expect(turns).toHaveLength(3);
+    expect(turns[0].messages.map(m => m.role)).toEqual(['user']);
+    expect(turns[1].messages.map(m => m.role)).toEqual(['assistant', 'tool']);
+    expect(turns[2].messages.map(m => m.role)).toEqual(['assistant']);
     const allMessages = turns.flatMap(t => t.messages);
     const assistantWithToolCall = allMessages.find(
       m => m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0
@@ -1333,5 +1338,134 @@ describe('createConversationService — llm debug flag', () => {
       debug?: boolean;
     };
     expect(chatInput.debug).toBe(true);
+  });
+});
+
+describe('createConversationService — stopLoop signal', () => {
+  it('breaks the tool-call loop when a tool calls context.stopLoop()', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'subagent__return',
+          description: 'return to parent',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              result: { type: 'string' },
+            },
+          },
+        },
+      ],
+      executeToolImpl: async (name, input, onProgress, context) => {
+        // Simulate the subagent__return tool: signal the loop to stop
+        if (name === 'subagent__return') {
+          context?.stopLoop?.();
+          return JSON.stringify({ returned: true, result: input.result });
+        }
+        return 'ok';
+      },
+    });
+
+    const provider = makeProvider([
+      // First response: model calls the return tool
+      {
+        toolCalls: [
+          {
+            id: 'call-1',
+            name: 'subagent__return',
+            arguments: { result: 'done' },
+          },
+        ],
+      },
+      // Second response: model finishes the turn (should NOT be reached)
+      { message: 'should-not-be-reached' },
+    ]);
+
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    const result = await conversation.sendUserMessage('return');
+
+    // The loop should break after the return tool, returning the assistant message.
+    // The provider should only be called once (not twice for the second message).
+    expect(provider.__chatMock).toHaveBeenCalledTimes(1);
+    // response.message is undefined when only toolCalls are present
+    expect(result).toBe('');
+  });
+});
+
+describe('createConversationService — subagent__return canonical naming', () => {
+  it('emits toolCallBatch with the canonical subagent__return name', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'subagent__return',
+          description: 'return to parent',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              result: { type: 'string' },
+            },
+          },
+        },
+      ],
+      executeToolImpl: async (name, input, onProgress, context) => {
+        if (name === 'subagent__return') {
+          context?.stopLoop?.();
+          return JSON.stringify({ returned: true, result: input.result });
+        }
+        return 'ok';
+      },
+    });
+
+    const provider = makeProvider([
+      {
+        toolCalls: [
+          {
+            id: 'call-1',
+            name: 'subagent__return',
+            arguments: { result: 'done' },
+          },
+        ],
+      },
+    ]);
+
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    const batchNames: string[] = [];
+    await conversation.sendUserMessage('return', evt => {
+      if (evt.kind === 'toolCallBatch') {
+        for (const tc of evt.toolCalls) {
+          batchNames.push(tc.name);
+        }
+      }
+    });
+
+    // The toolCallBatch event must expose the canonical name so that
+    // interactive.ts's hasExplicitReturn check (against 'subagent__return') matches.
+    expect(batchNames).toContain('subagent__return');
   });
 });

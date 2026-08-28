@@ -68,7 +68,9 @@ export type ChatEntry = {
     | 'error'
     | 'plain'
     | 'success'
-    | 'markdown';
+    | 'markdown'
+    | 'compaction'
+    | 'notice';
   /** Primary text. Multi-line strings render with hard newlines. */
   text: string;
   /**
@@ -94,7 +96,7 @@ export type ChatEntry = {
  */
 export type TailItem = {
   id: string;
-  kind: 'reasoning' | 'toolCall' | 'assistantMessage';
+  kind: 'reasoning' | 'toolCall' | 'assistantMessage' | 'compaction';
   component: React.ReactNode;
   toEntry: () => Omit<ChatEntry, 'id'>;
 };

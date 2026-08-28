@@ -26,12 +26,7 @@ export const notepadPlugin: DronePlugin = {
         if (!state.currentNotepad) {
           return '';
         }
-        return (
-          `# Your Session Notepad\n\n===\n\n${state.currentNotepad}\n\n===\n\nUse notepad__* ` +
-          `tools to manage your notepad. Your notepad persists for the duration of this ` +
-          `session. It is useful for keeping track of complex tasks, instructions or other ` +
-          `information you want to temporarily elevate above conversational "noise".\n`
-        );
+        return `# Session Notepad\n\n===\n\n${state.currentNotepad}\n\n===\n\nUse the \`notepad__*\` tools to maintain a "working memory" for the current session. This is ideal for tracking complex constraints, temporary variables, or specific notes that should remain visible above the conversational noise. Refer to this notepad to maintain continuity during complex multi-step tasks.`;
       },
     });
 
@@ -60,6 +55,13 @@ export const notepadPlugin: DronePlugin = {
       },
       execute: async input => {
         const action = input.action as string;
+
+        if (action !== 'set' && action !== 'clear' && action !== 'append') {
+          return JSON.stringify({
+            success: false,
+            error: 'notepad action must be set, clear, or append.',
+          });
+        }
 
         if (action === 'clear') {
           state.currentNotepad = null;

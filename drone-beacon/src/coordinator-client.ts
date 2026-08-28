@@ -1,14 +1,66 @@
 import https from 'https';
 import http from 'http';
+import type { PeerCertificate, TLSSocket } from 'tls';
 import { generateVerificationCode } from 'drone-swarm-common';
 import { logger } from './logger.js';
+import {
+  isSwarmReady,
+  getObservedCoordinatorFingerprint,
+  setBeaconVerificationCode,
+} from './coordinator-trust.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
+import { enqueueOutbox } from './db/index.js';
+
+type SendMode = 'direct' | 'outbox';
+
+let sendMode: SendMode = 'direct';
+
+/**
+ * Route coordinator-bound fire-and-forget writes through the durable outbox
+ * instead of best-effort direct fetches. Enabled at startup by beacon main.
+ */
+export function setOutboxEnabled(enabled: boolean): void {
+  sendMode = enabled ? 'outbox' : 'direct';
+}
+
+function sendFireAndForget(
+  kind: string,
+  endpoint: string,
+  method: string,
+  body: unknown,
+  deliver: () => Promise<void>
+): Promise<void> {
+  if (sendMode === 'outbox') {
+    enqueueOutbox({ kind, endpoint, method, body });
+    return Promise.resolve();
+  }
+  return deliver();
+}
+
+let didWarnSwarmNotReady = false;
+
+/**
+ * True when swarm communications with the coordinator are allowed: the coordinator's
+ * TLS fingerprint has been confirmed AND the coordinator has approved this beacon.
+ */
+function coordinatorTrusted(): boolean {
+  if (isSwarmReady()) {
+    didWarnSwarmNotReady = false;
+    return true;
+  }
+  if (!didWarnSwarmNotReady) {
+    didWarnSwarmNotReady = true;
+    logger.warn(
+      'Swarm not ready (coordinator fingerprint not confirmed and/or beacon not approved); skipping coordinator sync.'
+    );
+  }
+  return false;
+}
 
 export interface BeaconStatusResponse {
   status: 'pending' | 'approved' | 'rejected';
-  approvalToken?: string;
 }
 
 export interface CoordinatorClient {
@@ -17,7 +69,6 @@ export interface CoordinatorClient {
     tlsFingerprint: string
   ): Promise<{
     status: 'pending' | 'approved' | 'rejected';
-    approvalToken?: string;
     verificationCode?: string;
   }>;
   pollForApproval(): Promise<BeaconStatusResponse>;
@@ -106,14 +157,69 @@ export interface CoordinatorClientOptions {
   identity: BeaconIdentity;
   tlsIdentity: TlsIdentity;
   useHttps?: boolean;
+  /** Known SHA-256 fingerprint of the coordinator's TLS certificate (TOFU pinning). */
+  coordinatorTlsFingerprint?: string;
+  /** Called on first HTTPS connection with the observed fingerprint so callers can persist it. */
+  onFirstCoordinatorFingerprint?: (fp: string) => void;
 }
 
 /**
- * Create a fetch-compatible function that accepts self-signed TLS certificates.
- * The coordinator uses a self-signed cert, so Node.js's built-in fetch rejects it.
- * This wrapper uses Node.js http/https modules with rejectUnauthorized: false.
+ * Build the `checkServerIdentity` override used for coordinator TLS connections.
+ *
+ * When `expectedFingerprint` is provided the function verifies the server's
+ * SHA-256 certificate fingerprint against it, providing TOFU-style MITM
+ * protection without a trusted CA.  When no fingerprint is known yet (first
+ * connection) `onFirstFingerprint` is called with the observed fingerprint so
+ * the caller can persist it.  In that case the connection is still accepted —
+ * this is the intentional Trust-On-First-Use window.
+ *
+ * The function returns `undefined` (no error) when the check passes and returns
+ * an `Error` when the fingerprint does not match a known pinned value.
  */
-export function createCoordinatorFetch(baseUrl: string): typeof fetch {
+export function buildCheckServerIdentity(
+  expectedFingerprint: string | undefined,
+  onFirstFingerprint?: (fp: string) => void
+): (hostname: string, cert: PeerCertificate) => Error | undefined {
+  return (_hostname, cert) => {
+    const raw = cert.fingerprint256;
+    if (!raw) {
+      return new Error('TLS: coordinator certificate has no fingerprint');
+    }
+    const observed = raw.replace(/:/g, '').toLowerCase();
+    if (expectedFingerprint) {
+      if (observed !== expectedFingerprint.toLowerCase()) {
+        return new Error(
+          `TLS: coordinator certificate fingerprint mismatch — expected ${expectedFingerprint} but got ${observed}. Possible MITM attack.`
+        );
+      }
+    } else {
+      onFirstFingerprint?.(observed);
+    }
+    return undefined;
+  };
+}
+
+/**
+ * Create a fetch-compatible function that connects to the coordinator.
+ *
+ * The coordinator uses a self-signed TLS certificate so standard CA
+ * validation is disabled (`rejectUnauthorized: false`).  MITM protection is
+ * instead provided by certificate-fingerprint pinning via
+ * `checkServerIdentity`: when `expectedCoordinatorFingerprint` is supplied
+ * the server certificate is verified against that pinned SHA-256 hash.  On
+ * the very first connection — before the fingerprint is known — any
+ * certificate is accepted and `onFirstFingerprint` is called so the caller
+ * can persist the observed fingerprint for subsequent connections (TOFU).
+ *
+ * CodeQL note: `rejectUnauthorized: false` is intentional here.  CA
+ * validation is inapplicable to self-signed certificates; MITM protection
+ * is provided by the `checkServerIdentity` fingerprint check above.
+ */
+export function createCoordinatorFetch(
+  baseUrl: string,
+  expectedCoordinatorFingerprint?: string,
+  onFirstFingerprint?: (fp: string) => void
+): typeof fetch {
   const urlObj = new URL(baseUrl);
   const isHttps = urlObj.protocol === 'https:';
 
@@ -138,13 +244,16 @@ export function createCoordinatorFetch(baseUrl: string): typeof fetch {
         headers,
       };
 
-      // For HTTPS connections to the coordinator (which uses a self-signed cert),
-      // disable certificate validation
       if (isHttps) {
         // CA validation is inapplicable for self-signed certs; MITM protection
         // is provided by checkServerIdentity fingerprint pinning instead.
         // codeql[js/disabling-certificate-verification]
         (options as https.RequestOptions).rejectUnauthorized = false;
+        (options as https.RequestOptions).checkServerIdentity =
+          buildCheckServerIdentity(
+            expectedCoordinatorFingerprint,
+            onFirstFingerprint
+          );
       }
 
       const req = (isHttps ? https : http).request(options, res => {
@@ -161,6 +270,35 @@ export function createCoordinatorFetch(baseUrl: string): typeof fetch {
           );
         });
       });
+
+      // `checkServerIdentity` is never invoked when `rejectUnauthorized` is
+      // false (Node skips server-identity verification), so observe the peer
+      // certificate ourselves once the TLS handshake completes. This both
+      // records the fingerprint on first contact (TOFU) and enforces the
+      // pinned fingerprint on subsequent connections.
+      if (isHttps) {
+        req.on('socket', socket => {
+          socket.on('secureConnect', () => {
+            const cert = (socket as TLSSocket).getPeerCertificate();
+            const raw = cert?.fingerprint256;
+            if (!raw) {
+              return;
+            }
+            const observed = raw.replace(/:/g, '').toLowerCase();
+            if (expectedCoordinatorFingerprint) {
+              if (observed !== expectedCoordinatorFingerprint.toLowerCase()) {
+                req.destroy(
+                  new Error(
+                    `TLS: coordinator certificate fingerprint mismatch — expected ${expectedCoordinatorFingerprint} but got ${observed}. Possible MITM attack.`
+                  )
+                );
+              }
+            } else {
+              onFirstFingerprint?.(observed);
+            }
+          });
+        });
+      }
 
       req.on('error', err => {
         reject(err);
@@ -181,7 +319,11 @@ export function createCoordinatorClient(
 ): CoordinatorClient {
   const protocol = options.useHttps ? 'https' : 'http';
   const baseUrl = `${protocol}://${config.host}:${config.port}`;
-  const cfetch = createCoordinatorFetch(baseUrl);
+  const cfetch = createCoordinatorFetch(
+    baseUrl,
+    options.coordinatorTlsFingerprint,
+    options.onFirstCoordinatorFingerprint
+  );
 
   return {
     getBaseUrl(): string {
@@ -193,7 +335,6 @@ export function createCoordinatorClient(
       tlsFingerprint: string
     ): Promise<{
       status: 'pending' | 'approved' | 'rejected';
-      approvalToken?: string;
       verificationCode?: string;
     }> {
       logger.info(`Registering beacon with coordinator at ${baseUrl}`);
@@ -220,20 +361,20 @@ export function createCoordinatorClient(
       const data = (await res.json()) as BeaconStatusResponse;
       logger.info(`Beacon registered with status: ${data.status}`);
 
-      if (data.approvalToken) {
-        logger.info(`Approval token: ${data.approvalToken}`);
-      }
-
       // Compute the verification code locally from the same inputs the
       // coordinator uses. Both sides should produce the same code.
       const verificationCode = generateVerificationCode(
         identity.publicKey,
-        tlsFingerprint
+        tlsFingerprint,
+        getObservedCoordinatorFingerprint() ?? ''
       );
+      // Hold the code in memory so the compare-only /coordinator/trust
+      // endpoint can validate a code the user transcribes from the
+      // coordinator's web UI.
+      setBeaconVerificationCode(verificationCode);
 
       return {
         status: data.status,
-        approvalToken: data.approvalToken,
         verificationCode,
       };
     },
@@ -273,6 +414,9 @@ export function createCoordinatorClient(
     },
 
     async fetchPersonas(): Promise<Persona[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
       const res = await cfetch(`${baseUrl}/api/personas`);
       if (!res.ok) {
         throw new Error(`Failed to fetch personas: ${res.status}`);
@@ -284,6 +428,9 @@ export function createCoordinatorClient(
     },
 
     async fetchSkills(): Promise<Skill[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
       const res = await cfetch(`${baseUrl}/api/skills`);
       if (!res.ok) {
         throw new Error(`Failed to fetch skills: ${res.status}`);
@@ -299,54 +446,75 @@ export function createCoordinatorClient(
       agentId: string,
       personaId: string | null
     ): Promise<void> {
-      try {
-        const res = await cfetch(
-          `${baseUrl}/api/beacons/${config.beaconId}/sessions`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: `session-${agentId}-${Date.now()}`,
-              agentId,
-              personaId: personaId ?? undefined,
-            }),
+      const body = {
+        id: `session-${agentId}-${Date.now()}`,
+        agentId,
+        personaId: personaId ?? undefined,
+      };
+      await sendFireAndForget(
+        'registerSession',
+        `/api/beacons/${config.beaconId}/sessions`,
+        'POST',
+        body,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
           }
-        );
-        if (!res.ok) {
-          logger.warn(`Failed to register session: ${res.status}`);
-        } else {
-          logger.info(`Registered session for agent ${agentId}`);
+          try {
+            const res = await cfetch(
+              `${baseUrl}/api/beacons/${config.beaconId}/sessions`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              }
+            );
+            if (!res.ok) {
+              logger.warn(`Failed to register session: ${res.status}`);
+            } else {
+              logger.info(`Registered session for agent ${agentId}`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to register session: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to register session: ${err}`);
-      }
+      );
     },
 
     async endSession(agentId: string, connectedAt: number): Promise<void> {
-      try {
-        const disconnectedAt = Date.now();
-        const durationMs = disconnectedAt - connectedAt;
-        const res = await cfetch(
-          `${baseUrl}/api/beacons/${config.beaconId}/sessions/${agentId}`,
-          {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              disconnectedAt,
-              durationMs,
-            }),
+      const disconnectedAt = Date.now();
+      const durationMs = disconnectedAt - connectedAt;
+      const body = { disconnectedAt, durationMs };
+      await sendFireAndForget(
+        'endSession',
+        `/api/beacons/${config.beaconId}/sessions/${agentId}`,
+        'DELETE',
+        body,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
           }
-        );
-        if (!res.ok) {
-          logger.warn(`Failed to end session: ${res.status}`);
-        } else {
-          logger.info(
-            `Ended session for agent ${agentId}, duration: ${durationMs}ms`
-          );
+          try {
+            const res = await cfetch(
+              `${baseUrl}/api/beacons/${config.beaconId}/sessions/${agentId}`,
+              {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              }
+            );
+            if (!res.ok) {
+              logger.warn(`Failed to end session: ${res.status}`);
+            } else {
+              logger.info(
+                `Ended session for agent ${agentId}, duration: ${durationMs}ms`
+              );
+            }
+          } catch (err) {
+            logger.warn(`Failed to end session: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to end session: ${err}`);
-      }
+      );
     },
 
     // Agent location (for cross-beacon messaging)
@@ -354,6 +522,9 @@ export function createCoordinatorClient(
       agentId: string,
       personaId?: string
     ): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/agents/location`, {
           method: 'POST',
@@ -375,6 +546,9 @@ export function createCoordinatorClient(
     },
 
     async updateAgentLocationHeartbeat(agentId: string): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(
           `${baseUrl}/api/agents/location/${agentId}/heartbeat`,
@@ -393,6 +567,9 @@ export function createCoordinatorClient(
     },
 
     async unregisterAgentLocation(agentId: string): Promise<void> {
+      if (!coordinatorTrusted()) {
+        return;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/agents/location/${agentId}`, {
           method: 'DELETE',
@@ -412,6 +589,9 @@ export function createCoordinatorClient(
       fromAgentId: string,
       body: string
     ): Promise<{ success: boolean; messageId?: string }> {
+      if (!coordinatorTrusted()) {
+        return { success: false };
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/messages/relay`, {
           method: 'POST',
@@ -440,88 +620,146 @@ export function createCoordinatorClient(
 
     // Knowledge push
     async pushPersona(persona: Persona): Promise<void> {
-      try {
-        const res = await cfetch(`${baseUrl}/api/personas`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(persona),
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to push persona: ${res.status}`);
-        } else {
-          logger.info(`Pushed persona ${persona.id} to coordinator`);
+      await sendFireAndForget(
+        'pushPersona',
+        '/api/personas',
+        'POST',
+        persona,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/personas`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(persona),
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to push persona: ${res.status}`);
+            } else {
+              logger.info(`Pushed persona ${persona.id} to coordinator`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to push persona: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to push persona: ${err}`);
-      }
+      );
     },
 
     async pushSkill(skill: Skill): Promise<void> {
-      try {
-        const res = await cfetch(`${baseUrl}/api/skills`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(skill),
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to push skill: ${res.status}`);
-        } else {
-          logger.info(`Pushed skill ${skill.id} to coordinator`);
+      await sendFireAndForget(
+        'pushSkill',
+        '/api/skills',
+        'POST',
+        skill,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/skills`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(skill),
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to push skill: ${res.status}`);
+            } else {
+              logger.info(`Pushed skill ${skill.id} to coordinator`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to push skill: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to push skill: ${err}`);
-      }
+      );
     },
 
     async deletePersona(id: string): Promise<void> {
-      try {
-        const res = await cfetch(`${baseUrl}/api/personas/${id}`, {
-          method: 'DELETE',
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to delete persona: ${res.status}`);
-        } else {
-          logger.info(`Deleted persona ${id} from coordinator`);
+      await sendFireAndForget(
+        'deletePersona',
+        `/api/personas/${id}`,
+        'DELETE',
+        undefined,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/personas/${id}`, {
+              method: 'DELETE',
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to delete persona: ${res.status}`);
+            } else {
+              logger.info(`Deleted persona ${id} from coordinator`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to delete persona: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to delete persona: ${err}`);
-      }
+      );
     },
 
     async deleteSkill(id: string): Promise<void> {
-      try {
-        const res = await cfetch(`${baseUrl}/api/skills/${id}`, {
-          method: 'DELETE',
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to delete skill: ${res.status}`);
-        } else {
-          logger.info(`Deleted skill ${id} from coordinator`);
+      await sendFireAndForget(
+        'deleteSkill',
+        `/api/skills/${id}`,
+        'DELETE',
+        undefined,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/skills/${id}`, {
+              method: 'DELETE',
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to delete skill: ${res.status}`);
+            } else {
+              logger.info(`Deleted skill ${id} from coordinator`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to delete skill: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to delete skill: ${err}`);
-      }
+      );
     },
 
     // Knowledge sync (global memory)
     async pushKnowledge(knowledge: Knowledge): Promise<void> {
-      try {
-        const res = await cfetch(`${baseUrl}/api/sync/knowledge/push`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(knowledge),
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to push knowledge: ${res.status}`);
-        } else {
-          logger.info(`Pushed knowledge ${knowledge.id} to coordinator`);
+      await sendFireAndForget(
+        'pushKnowledge',
+        '/api/sync/knowledge/push',
+        'POST',
+        knowledge,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/sync/knowledge/push`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(knowledge),
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to push knowledge: ${res.status}`);
+            } else {
+              logger.info(`Pushed knowledge ${knowledge.id} to coordinator`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to push knowledge: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to push knowledge: ${err}`);
-      }
+      );
     },
 
     async pullKnowledge(since?: number): Promise<Knowledge[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
       try {
         let url = `${baseUrl}/api/sync/knowledge/pull`;
         if (since) {
@@ -540,6 +778,9 @@ export function createCoordinatorClient(
     },
 
     async searchKnowledge(query: string, type?: string): Promise<Knowledge[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
       try {
         let url = `${baseUrl}/api/knowledge/search?q=${encodeURIComponent(query)}`;
         if (type) {
@@ -562,60 +803,98 @@ export function createCoordinatorClient(
       sessionId: string,
       personaId: string | null
     ): Promise<void> {
-      try {
-        const res = await cfetch(`${baseUrl}/api/sync/sessions/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: sessionId,
-            personaId: personaId ?? undefined,
-            beaconId: config.beaconId,
-          }),
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to register swarm session: ${res.status}`);
-        } else {
-          logger.info(`Registered swarm session ${sessionId}`);
+      const body = {
+        id: sessionId,
+        personaId: personaId ?? undefined,
+        beaconId: config.beaconId,
+      };
+      await sendFireAndForget(
+        'registerSwarmSession',
+        '/api/sync/sessions/register',
+        'POST',
+        body,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/sync/sessions/register`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to register swarm session: ${res.status}`);
+            } else {
+              logger.info(`Registered swarm session ${sessionId}`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to register swarm session: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to register swarm session: ${err}`);
-      }
+      );
     },
 
     async updateSwarmSessionPersona(
       sessionId: string,
       personaId: string | null
     ): Promise<void> {
-      try {
-        const res = await cfetch(
-          `${baseUrl}/api/sessions/${sessionId}/persona`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ personaId }),
+      const body = { personaId };
+      await sendFireAndForget(
+        'updateSwarmSessionPersona',
+        `/api/sessions/${sessionId}/persona`,
+        'PATCH',
+        body,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
           }
-        );
-        if (!res.ok) {
-          logger.warn(`Failed to update session persona: ${res.status}`);
+          try {
+            const res = await cfetch(
+              `${baseUrl}/api/sessions/${sessionId}/persona`,
+              {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              }
+            );
+            if (!res.ok) {
+              logger.warn(`Failed to update session persona: ${res.status}`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to update session persona: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to update session persona: ${err}`);
-      }
+      );
     },
 
     async endSwarmSession(sessionId: string): Promise<void> {
-      try {
-        const res = await cfetch(`${baseUrl}/api/sync/sessions/${sessionId}`, {
-          method: 'DELETE',
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to end swarm session: ${res.status}`);
-        } else {
-          logger.info(`Ended swarm session ${sessionId}`);
+      await sendFireAndForget(
+        'endSwarmSession',
+        `/api/sync/sessions/${sessionId}`,
+        'DELETE',
+        undefined,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(
+              `${baseUrl}/api/sync/sessions/${sessionId}`,
+              {
+                method: 'DELETE',
+              }
+            );
+            if (!res.ok) {
+              logger.warn(`Failed to end swarm session: ${res.status}`);
+            } else {
+              logger.info(`Ended swarm session ${sessionId}`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to end swarm session: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to end swarm session: ${err}`);
-      }
+      );
     },
 
     async pushEvents(
@@ -629,20 +908,32 @@ export function createCoordinatorClient(
         createdAt: number;
       }>
     ): Promise<void> {
-      try {
-        const res = await cfetch(`${baseUrl}/api/sync/events/push`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ events }),
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to push events: ${res.status}`);
-        } else {
-          logger.debug(`Pushed ${events.length} events to coordinator`);
+      const body = { events };
+      await sendFireAndForget(
+        'pushEvents',
+        '/api/sync/events/push',
+        'POST',
+        body,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/sync/events/push`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to push events: ${res.status}`);
+            } else {
+              logger.debug(`Pushed ${events.length} events to coordinator`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to push events: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to push events: ${err}`);
-      }
+      );
     },
 
     async pushToolDefinitions(
@@ -652,25 +943,40 @@ export function createCoordinatorClient(
         defaultHidden: boolean;
       }>
     ): Promise<void> {
-      try {
-        const res = await cfetch(`${baseUrl}/api/sync/tools/push`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tools }),
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to push tool definitions: ${res.status}`);
-        } else {
-          logger.debug(
-            `Pushed ${tools.length} tool definitions to coordinator`
-          );
+      const body = { tools };
+      await sendFireAndForget(
+        'pushToolDefinitions',
+        '/api/sync/tools/push',
+        'POST',
+        body,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/sync/tools/push`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to push tool definitions: ${res.status}`);
+            } else {
+              logger.debug(
+                `Pushed ${tools.length} tool definitions to coordinator`
+              );
+            }
+          } catch (err) {
+            logger.warn(`Failed to push tool definitions: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to push tool definitions: ${err}`);
-      }
+      );
     },
 
     async getDefaultHiddenTools(): Promise<{ tools: string[] }> {
+      if (!coordinatorTrusted()) {
+        return { tools: [] };
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/tools/default-hidden`);
         if (!res.ok) {
@@ -687,6 +993,9 @@ export function createCoordinatorClient(
     async getSessions(
       query: Record<string, string>
     ): Promise<{ sessions: any[]; count: number }> {
+      if (!coordinatorTrusted()) {
+        return { sessions: [], count: 0 };
+      }
       try {
         const params = new URLSearchParams(query).toString();
         const res = await cfetch(`${baseUrl}/api/sessions?${params}`);
@@ -702,6 +1011,9 @@ export function createCoordinatorClient(
     },
 
     async getSessionLog(sessionId: string): Promise<any> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
       try {
         const res = await cfetch(`${baseUrl}/api/sessions/${sessionId}/log`);
         if (!res.ok) {
@@ -716,6 +1028,9 @@ export function createCoordinatorClient(
     },
 
     async processSession(sessionId: string): Promise<any> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
       try {
         const res = await cfetch(
           `${baseUrl}/api/sessions/${sessionId}/process`,
@@ -738,6 +1053,9 @@ export function createCoordinatorClient(
       sessionId: string,
       body: { summary?: string; notes?: string }
     ): Promise<any> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
       try {
         const res = await cfetch(
           `${baseUrl}/api/sessions/${sessionId}/processed`,

@@ -1,4 +1,36 @@
+// ── Search config types ─────────────────────────────────────────────
+
+export type DroneSearchPath = {
+  path: string;
+  embeddingProvider?: string;
+  /**
+   * Intended future functionality — not yet honored. `.git` and `node_modules`
+   * are always excluded from indexing regardless of this flag.
+   */
+  includeHidden?: boolean;
+  /**
+   * Intended future functionality — not yet honored. `.git` and `node_modules`
+   * are always excluded from indexing regardless of this flag.
+   */
+  includeNodeModules?: boolean;
+  /**
+   * Glob patterns (matched with `minimatch`) applied to each file path
+   * relative to this search root. Files matching any pattern are excluded
+   * from semantic search results. Applied at query time, so changes take
+   * effect immediately without reindexing.
+   */
+  exclude?: string[];
+};
+
+export type DroneSearchConfig = {
+  enabled: boolean;
+  paths: DroneSearchPath[];
+  userEmbeddingProvider?: string;
+  projectEmbeddingProvider?: string;
+};
 import { deepMerge, type MergeSpec } from './deep-merge.js';
+
+import type { DroneProviderConfig } from './provider-config-types.js';
 
 // ── Precedence constants for skill/persona/provider plugins ──────────
 /** Precedence for swarm-level providers (highest priority — lowest number). */
@@ -47,6 +79,12 @@ export type DroneOllamaConfig = {
 export type DroneLlmConfig = {
   /** The id of the active LLM provider plugin (e.g. 'ollama', 'openrouter'). */
   provider: string;
+  /**
+   * Canonical selected model identity `<providerId>/<modelLocalId>`.
+   * Migration seeds this from the legacy sections; selection UX persists
+   * here. When absent the broker falls back to the first provider's default.
+   */
+  active?: string;
   reasoningLevel?: DroneReasoningLevel;
 };
 
@@ -123,6 +161,57 @@ export type DroneSessionConfig = {
    * Default is 15.
    */
   maxToolResultTokensPercent?: number;
+  /** Guardrail thresholds for broken responses, reasoning-only responses, and identical tool calls. */
+  guardrail: DroneGuardrailConfig;
+  /** Unified retry/classification policy for LLM chat() failures. */
+  retry: DroneSessionRetryConfig;
+};
+
+/**
+ * Bounded retry policy for LLM chat() failures, applied by the conversation
+ * service. Tiered classification:
+ *   - T1  bounded silent auto-retry on transient HTTP statuses
+ *   - T2  prompt the user to retry on most other HTTP statuses
+ *   - T3  fail fast on transport errors
+ * All fields optional to match the config schema (users override only what
+ * they care about); the resolved config always populates all defaults.
+ */
+export type DroneSessionRetryConfig = {
+  /** Max silent auto-retries on transient statuses (429/5xx). Default 3. */
+  maxRetries?: number;
+  /** Cap (ms) on a single silent wait; beyond → prompt. Default 30000. */
+  maxWaitMs?: number;
+  /** When true, prompt the user to retry on non-transient HTTP statuses. */
+  promptOnError?: boolean;
+  /** Exponential backoff base delay in ms. Default 1000. */
+  backoffBaseMs?: number;
+  /** Exponential backoff multiplier. Default 2. */
+  backoffFactor?: number;
+};
+
+/** Threshold values are optional to match the config schema, which lets users
+ * override a single field (e.g. only `hintAfter`). The resolved config always
+ * populates both via defaults. */
+export type DroneGuardrailThresholdConfig = {
+  /** Number of retries with identical context before injecting a hint. */
+  hintAfter?: number;
+  /** Number of retries with the hint before the hard-limit prompt. */
+  maxHints?: number;
+};
+
+/** Whether the parallel duplicate tool-call dedup guardrail is active. */
+export type DroneToolCallDedupConfig = {
+  enabled?: boolean;
+};
+
+/** Guardrail thresholds. Fields are optional to match the config schema, which
+ * lets users override only the thresholds they care about. The resolved config
+ * (createDefaultAgentConfig + layer merge) always populates all defaults. */
+export type DroneGuardrailConfig = {
+  brokenResponses?: DroneGuardrailThresholdConfig;
+  reasoningOnlyResponses?: DroneGuardrailThresholdConfig;
+  identicalToolCalls?: DroneGuardrailThresholdConfig;
+  deduplicateToolCalls?: DroneToolCallDedupConfig;
 };
 
 export type DroneCompactionStrategy = 'summary-drop';
@@ -135,6 +224,12 @@ export type DroneCompactionConfig = {
   minTurnsToCompact: number;
   summaryMaxTokens: number;
   summaryBudgetPercent: number;
+  /**
+   * Lead margin (percentage points) before the compaction soft threshold at
+   * which the one-shot pre-compaction nudge fires. The nudge band is
+   * `[softThresholdPercent - nudgeMarginPercent, softThresholdPercent]`.
+   */
+  nudgeMarginPercent: number;
 };
 
 export type DroneMemoryConfig = {
@@ -307,6 +402,8 @@ export type DroneAgentConfig = {
   systemPrompt: string;
   activePersona: string | null;
   llm: DroneLlmConfig;
+  /** User-defined provider entries (providers = data, protocols = code). */
+  providers: Record<string, DroneProviderConfig>;
   ollama: DroneOllamaConfig;
   openai: DroneOpenAiConfig;
   anthropic: DroneAnthropicConfig;
@@ -320,6 +417,7 @@ export type DroneAgentConfig = {
   terminal: DroneTerminalConfig;
   promptFile: DronePromptFileConfig;
   swarm: DroneSwarmConfig;
+  search: DroneSearchConfig;
   tui: DroneTuiConfig;
 };
 
@@ -330,6 +428,7 @@ export type PartialDroneAgentConfig = Partial<{
   systemPrompt: string;
   activePersona: string | null;
   llm: Partial<DroneLlmConfig>;
+  providers: Partial<Record<string, DroneProviderConfig>>;
   ollama: Partial<DroneOllamaConfig>;
   openai: Partial<DroneOpenAiConfig>;
   anthropic: Partial<DroneAnthropicConfig>;
@@ -343,6 +442,7 @@ export type PartialDroneAgentConfig = Partial<{
   promptFile: Partial<DronePromptFileConfig>;
   terminal: Partial<DroneTerminalConfig>;
   swarm: Partial<DroneSwarmConfig>;
+  search: Partial<DroneSearchConfig>;
   tui?: Partial<DroneTuiConfig>;
 }>;
 
@@ -357,6 +457,15 @@ export type DroneConfigLayer = {
 export type DroneResolvedConfig = {
   config: DroneAgentConfig;
   layers: DroneConfigLayer[];
+  /**
+   * Present when legacy LLM sections were migrated to providers entries —
+   * surface as a deprecation notice at startup.
+   */
+  migrationNotice?: string;
+  /**
+   * Non-fatal provider-config warnings (scope policy, alias chains, …).
+   */
+  warnings?: string[];
 };
 
 // ── Config helper functions ─────────────────────────────────────────
@@ -367,12 +476,16 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
   merge: [
     'trustedPlugins',
     'llm',
+    // Entry-level replace: maps merge by key, but any scope defining
+    // `providers.<id>` replaces that whole entry (no intra-entry deep merge —
+    // prevents beacon/local frankensteins).
+    'providers',
     'ollama',
-    'session',
     'compaction',
     'memory',
     'log',
     'terminal',
+    'search',
   ],
   deepMerge: {
     openai: { replace: ['models'] },
@@ -381,6 +494,12 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
     lsp: { replace: ['servers'] },
     mcp: { replace: ['servers'] },
     promptFile: { mergeArrays: ['files'] },
+    session: {
+      deepMerge: {
+        guardrail: { deepMerge: {} },
+        retry: { deepMerge: {} },
+      },
+    },
     swarm: { deepMerge: { knowledgeSync: {} } },
     tui: {
       deepMerge: {
@@ -407,6 +526,7 @@ export function createDefaultAgentConfig(
     llm: {
       provider: 'ollama',
     },
+    providers: {},
     ollama: {
       host: 'http://127.0.0.1:11434',
       model: 'llama3.1',
@@ -449,6 +569,19 @@ export function createDefaultAgentConfig(
       maxImageSizeBytes: 20 * 1024 * 1024,
       promptOnToolIterationLimit: false,
       maxToolResultTokensPercent: 15,
+      guardrail: {
+        brokenResponses: { hintAfter: 2, maxHints: 2 },
+        reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },
+        identicalToolCalls: { hintAfter: 2, maxHints: 3 },
+        deduplicateToolCalls: { enabled: true },
+      },
+      retry: {
+        maxRetries: 3,
+        maxWaitMs: 30000,
+        promptOnError: true,
+        backoffBaseMs: 1000,
+        backoffFactor: 2,
+      },
     },
     lsp: {
       enabled: true,
@@ -478,6 +611,7 @@ export function createDefaultAgentConfig(
       minTurnsToCompact: 4,
       summaryMaxTokens: 800,
       summaryBudgetPercent: 20,
+      nudgeMarginPercent: 10,
     },
     memory: {
       enabled: true,
@@ -503,6 +637,10 @@ export function createDefaultAgentConfig(
         pullOnStartup: true,
         pullIntervalMinutes: 60,
       },
+    },
+    search: {
+      enabled: false,
+      paths: [],
     },
     tui: {
       syntaxHighlighting: {

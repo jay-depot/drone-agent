@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
-import { which } from './which.js';
 import { logger } from './logger.js';
+import { resolveDroneExecutable } from 'drone-core';
 import type { SpawnBackend } from './spawn-backend.js';
 import type { SpawnSession } from './types.js';
 
@@ -35,7 +35,9 @@ export class LocalSpawnBackend implements SpawnBackend {
     }
 
     // Resolve agent binary path
-    const resolvedPath = await resolveAgentPath(this.agentPath);
+    const resolvedPath = await resolveDroneExecutable({
+      commandName: this.agentPath,
+    });
     logger.info(
       `Spawning agent for conversation ${conversationId} using ${resolvedPath}`
     );
@@ -166,23 +168,4 @@ export class LocalSpawnBackend implements SpawnBackend {
 interface ManagedAgentSession {
   session: SpawnSession;
   process: ChildProcess;
-}
-
-/**
- * Resolve the agent binary path.
- * If the given path is an absolute path, use it directly.
- * Otherwise, try to find it in PATH.
- */
-async function resolveAgentPath(pathOrName: string): Promise<string> {
-  if (pathOrName.startsWith('/')) {
-    return pathOrName;
-  }
-  try {
-    return await which(pathOrName);
-  } catch {
-    throw new Error(
-      `drone-agent binary not found: ${pathOrName}. ` +
-        'Set agentPath in config or ensure drone-agent is in PATH.'
-    );
-  }
 }

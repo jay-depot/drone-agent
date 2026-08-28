@@ -1,5 +1,9 @@
 // ── Utility functions ──────────────────────────────────────────────
 
+import { access } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { sep, join } from 'node:path';
+
 import type { DroneLogger } from './session-types.js';
 
 /**
@@ -69,9 +73,16 @@ export function filterByGlobPatterns(
 
 // ── Logger factory ─────────────────────────────────────────────────
 
-export function createConsoleLogger(scope: string): DroneLogger {
+export function createConsoleLogger(
+  scope: string,
+  options: { toStderr?: boolean } = {}
+): DroneLogger {
+  const { toStderr = false } = options;
   return {
-    info: message => console.log(`[${scope}] ${message}`),
+    info: message =>
+      toStderr
+        ? console.error(`[${scope}] ${message}`)
+        : console.log(`[${scope}] ${message}`),
     warn: message => console.warn(`[${scope}] ${message}`),
     error: message => console.error(`[${scope}] ${message}`),
   };
@@ -82,4 +93,78 @@ export function getCanonicalToolName(
   toolName: string
 ): string {
   return `${pluginId}__${toolName}`;
+}
+
+/**
+ * Returns true when `command` resolves to an executable file on PATH.
+ * Respects absolute/relative paths and (on Windows) `PATHEXT`. We avoid
+ * shelling out so the result is deterministic in tests.
+ */
+export async function commandExistsOnPath(
+  command: string,
+  env: NodeJS.ProcessEnv = process.env
+): Promise<boolean> {
+  if (!command) {
+    return false;
+  }
+  if (command.includes(sep) || command.includes('/')) {
+    try {
+      await access(command, fsConstants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  const pathEnv = env.PATH ?? '';
+  const pathSep = process.platform === 'win32' ? ';' : ':';
+  const exts =
+    process.platform === 'win32'
+      ? (env.PATHEXT ?? '.EXE;.CMD;.BAT;.COM')
+          .split(';')
+          .map(ext => ext.toLowerCase())
+      : [''];
+  const directories = pathEnv.split(pathSep).filter(Boolean);
+  for (const directory of directories) {
+    for (const ext of exts) {
+      const candidate = join(directory, command + ext);
+      try {
+        await access(candidate, fsConstants.X_OK);
+        return true;
+      } catch {
+        // continue
+      }
+    }
+  }
+  return false;
+}
+
+export interface ResolveDroneExecutableOptions {
+  commandName?: string;
+  env?: NodeJS.ProcessEnv;
+  fallbackArgv1?: string;
+}
+
+export async function resolveDroneExecutable(
+  options: ResolveDroneExecutableOptions = {}
+): Promise<string> {
+  const {
+    commandName = 'drone-agent',
+    env = process.env,
+    fallbackArgv1,
+  } = options;
+
+  if (await commandExistsOnPath(commandName, env)) {
+    return commandName;
+  }
+
+  if (fallbackArgv1 && (await commandExistsOnPath(fallbackArgv1, env))) {
+    return fallbackArgv1;
+  }
+
+  throw new Error(
+    fallbackArgv1
+      ? `Unable to resolve executable "${commandName}" from PATH or fallback path "${fallbackArgv1}".`
+      : `Unable to resolve executable "${commandName}" from PATH.`
+  );
 }

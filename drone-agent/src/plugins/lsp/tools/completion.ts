@@ -11,6 +11,8 @@ import {
   type LspCompletionListResponse,
 } from '../normalize/index.js';
 
+const SNIPPET_CONTEXT_LINES = 5;
+
 const POSITION_PROPERTIES = {
   filePath: {
     type: 'string',
@@ -35,13 +37,25 @@ const POSITION_PROPERTIES = {
     type: 'string',
     description: 'Symbol name to resolve (alternative to line/column).',
   },
+  surroundingText: {
+    type: 'string',
+    description:
+      'Surrounding context text to disambiguate between multiple matches (e.g., "class User {"). Works with text and symbol.',
+  },
 } as const;
+
+function filePathFromUri(uri: string): string {
+  if (uri.startsWith('file://')) {
+    return decodeURIComponent(uri.replace('file://', ''));
+  }
+  return uri;
+}
 
 export function createInspectTool(server: ServerManager): DroneToolDefinition {
   return {
     name: 'inspect',
     description:
-      'Inspect a symbol at a position. Returns hover information (type, documentation) and signature help (active parameter info for function calls) in a single response. Use this to understand what a symbol is, its type, or what parameters a function expects. Supports `text` and `symbol` parameters for position resolution.',
+      'Inspect a symbol at a position. Returns hover information (type, documentation) and signature help (active parameter info for function calls) in a single response. Use this to understand what a symbol is, its type, or what parameters a function expects. Supports `text` and `symbol` parameters for position resolution. Includes a code snippet of the surrounding context.',
     inputSchema: {
       type: 'object',
       properties: POSITION_PROPERTIES,
@@ -49,6 +63,7 @@ export function createInspectTool(server: ServerManager): DroneToolDefinition {
       additionalProperties: false,
     },
     execute: async input => {
+      await server.refreshIfNeeded();
       const { runtime, document, line, column } =
         await server.resolveAtPosition('lsp__inspect', input);
 
@@ -69,20 +84,32 @@ export function createInspectTool(server: ServerManager): DroneToolDefinition {
       const contents = normalizeHoverContents(hoverResponse?.contents);
       const signatures = normalizeSignatureHelp(signatureResponse);
 
-      return JSON.stringify(
-        {
-          query: { filePath: document.uri, line, column },
-          hover: {
-            contents,
-            range: hoverResponse?.range
-              ? normalizeLspRange(hoverResponse.range)
-              : undefined,
-          },
-          signatures,
+      const result: Record<string, unknown> = {
+        query: { filePath: document.uri, line, column },
+        hover: {
+          contents,
+          range: hoverResponse?.range
+            ? normalizeLspRange(hoverResponse.range)
+            : undefined,
         },
-        null,
-        2
-      );
+        signatures,
+      };
+
+      // Auto-expand: include a code snippet for the inspected position
+      try {
+        const snippet = await server.readFileSnippet(
+          filePathFromUri(document.uri),
+          line,
+          SNIPPET_CONTEXT_LINES
+        );
+        if (snippet) {
+          result.snippet = snippet;
+        }
+      } catch {
+        // Skip snippet if file can't be read
+      }
+
+      return JSON.stringify(result, null, 2);
     },
   };
 }
@@ -93,7 +120,7 @@ export function createCompletionTool(
   return {
     name: 'completion',
     description:
-      'Get completion suggestions at a position. Includes kind, detail, and documentation. Use this to see what identifiers, methods, or properties are available at a cursor position. Supports `text` and `symbol` parameters for position resolution.',
+      'Get completion suggestions at a position. Includes kind, detail, and documentation. Use this to see what identifiers, methods, or properties are available at a cursor position. Supports `text` and `symbol` parameters for position resolution. Includes a code snippet of the surrounding context.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -108,6 +135,7 @@ export function createCompletionTool(
       additionalProperties: false,
     },
     execute: async input => {
+      await server.refreshIfNeeded();
       const { runtime, document, line, column } =
         await server.resolveAtPosition('lsp__completion', input);
       const limit =
@@ -125,17 +153,30 @@ export function createCompletionTool(
       const { isIncomplete, items } = normalizeCompletionItems(response);
       const truncated = items.length > limit;
       const resultItems = truncated ? items.slice(0, limit) : items;
-      return JSON.stringify(
-        {
-          query: { filePath: document.uri, line, column },
-          isIncomplete,
-          items: resultItems,
-          truncated,
-          totalItems: items.length,
-        },
-        null,
-        2
-      );
+
+      const result: Record<string, unknown> = {
+        query: { filePath: document.uri, line, column },
+        isIncomplete,
+        items: resultItems,
+        truncated,
+        totalItems: items.length,
+      };
+
+      // Auto-expand: include a code snippet for the query position
+      try {
+        const snippet = await server.readFileSnippet(
+          filePathFromUri(document.uri),
+          line,
+          SNIPPET_CONTEXT_LINES
+        );
+        if (snippet) {
+          result.snippet = snippet;
+        }
+      } catch {
+        // Skip snippet if file can't be read
+      }
+
+      return JSON.stringify(result, null, 2);
     },
   };
 }

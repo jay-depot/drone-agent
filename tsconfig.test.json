@@ -15,6 +15,10 @@
   "include": [
     "drone-core/src/**/*.ts",
     "drone-core/test/**/*.ts",
+    "drone-beacon/src/**/*.ts",
+    "drone-coordinator/src/**/*.ts",
+    "drone-swarm-common/{src,test}/**/*.ts",
+    "drone-swarm/{src,test}/**/*.ts",
     "drone-agent/src/**/*.ts",
     "drone-agent/src/**/*.tsx",
     "drone-agent/test/**/*.ts",

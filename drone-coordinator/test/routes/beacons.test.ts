@@ -1,6 +1,8 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { setupDb, teardownDb } from '../setup.js';
 import { buildTestApp } from '../app-helper.js';
+import { setCoordinatorFingerprint } from '../../src/routes/health.js';
+import { generateVerificationCode } from 'drone-swarm-common';
 import type { FastifyInstance } from 'fastify';
 
 let app: FastifyInstance;
@@ -43,6 +45,33 @@ describe('Beacon Routes', () => {
     expect(body.status).toBe('approved');
   });
 
+  it('computes the verification code with the coordinator fingerprint', async () => {
+    const coordinatorFp =
+      '112233445566778899aabbccddeeff00112233445566778899aabbccddeeff';
+    setCoordinatorFingerprint(coordinatorFp);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: {
+        id: 'b-fp',
+        name: 'B-FP',
+        host: 'localhost',
+        port: 3457,
+        publicKey: 'key-fp',
+        tlsFingerprint:
+          'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = JSON.parse(res.body);
+    const expected = generateVerificationCode(
+      'key-fp',
+      'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899',
+      coordinatorFp
+    );
+    expect(body.verificationCode).toBe(expected);
+  });
+
   it('POST /beacons with publicKey mismatch returns 403', async () => {
     await app.inject({
       method: 'POST',
@@ -75,12 +104,27 @@ describe('Beacon Routes', () => {
       url: '/api/beacons',
       payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
     });
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: {
+        id: 'b2',
+        name: 'B2',
+        host: '10.0.0.1',
+        port: 3457,
+        publicKey: 'key1',
+        tlsFingerprint: 'aabb',
+      },
+    });
     const res = await app.inject({ method: 'GET', url: '/api/beacons' });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(Array.isArray(body)).toBe(true);
-    expect(body.length).toBe(1);
+    expect(body.length).toBe(2);
     expect(body[0].trustStatus).toBeDefined();
+    const b2 = body.find((b: { id: string }) => b.id === 'b2');
+    expect(b2.trustStatus).toBe('pending');
+    expect(b2.verificationCode).toBeTruthy();
   });
 
   it('GET /beacons/:id returns beacon with trust info', async () => {
@@ -222,7 +266,7 @@ describe('Beacon Routes', () => {
 
   // ── Approval Routes ──
 
-  it('POST /beacons/approve approves a pending beacon by token', async () => {
+  it('POST /beacons/trust/:id/approve approves a pending beacon by ID', async () => {
     const createRes = await app.inject({
       method: 'POST',
       url: '/api/beacons/trust',
@@ -234,32 +278,22 @@ describe('Beacon Routes', () => {
         publicKey: 'key1',
       },
     });
-    const { approvalToken } = JSON.parse(createRes.body);
-    expect(approvalToken).toBeTruthy();
+    const created = JSON.parse(createRes.body);
+    expect(created.status).toBe('pending');
+    expect(created.verificationCode).toBeTruthy();
 
     const res = await app.inject({
       method: 'POST',
-      url: '/api/beacons/approve',
-      payload: { approvalToken },
+      url: '/api/beacons/trust/b1/approve',
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).success).toBe(true);
   });
 
-  it('POST /beacons/approve returns 400 without approvalToken', async () => {
+  it('POST /beacons/trust/:id/approve returns 404 for a non-pending beacon', async () => {
     const res = await app.inject({
       method: 'POST',
-      url: '/api/beacons/approve',
-      payload: {},
-    });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it('POST /beacons/approve returns 404 for invalid token', async () => {
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/beacons/approve',
-      payload: { approvalToken: 'invalid-token' },
+      url: '/api/beacons/trust/nonexistent/approve',
     });
     expect(res.statusCode).toBe(404);
   });

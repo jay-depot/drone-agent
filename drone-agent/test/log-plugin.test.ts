@@ -290,6 +290,7 @@ async function getCapability(
       systemPrompt: '',
       activePersona: null,
       llm: { provider: 'ollama' },
+      providers: {},
       ollama: { host: '', model: '' },
       openai: {
         apiKey: '',
@@ -318,6 +319,18 @@ async function getCapability(
         contextWindowTokens: 32768,
         responseReserveTokens: 4096,
         maxToolIterations: 50,
+        guardrail: {
+          brokenResponses: { hintAfter: 2, maxHints: 2 },
+          reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },
+          identicalToolCalls: { hintAfter: 2, maxHints: 3 },
+        },
+        retry: {
+          maxRetries: 3,
+          maxWaitMs: 30000,
+          promptOnError: true,
+          backoffBaseMs: 1000,
+          backoffFactor: 2,
+        },
       },
       lsp: {
         enabled: false,
@@ -347,6 +360,7 @@ async function getCapability(
         minTurnsToCompact: 4,
         summaryMaxTokens: 800,
         summaryBudgetPercent: 20,
+        nudgeMarginPercent: 10,
       },
       memory: { enabled: false },
       log: { enabled: false },
@@ -367,6 +381,10 @@ async function getCapability(
           pullOnStartup: true,
           pullIntervalMinutes: 60,
         },
+      },
+      search: {
+        enabled: false,
+        paths: [],
       },
       tui: {
         syntaxHighlighting: {

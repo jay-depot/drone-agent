@@ -141,11 +141,3 @@ export async function main(): Promise<void> {
     process.exit(1);
   }
 }
-
-// Entry guard
-const invokedDirectly =
-  process.argv[1] &&
-  import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'));
-if (invokedDirectly) {
-  void main();
-}

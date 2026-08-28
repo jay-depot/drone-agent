@@ -1,4 +1,5 @@
-import fs from 'fs';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'path';
 import crypto from 'crypto';
 import { logger } from './logger.js';
@@ -39,15 +40,16 @@ export function generateIdentity(id: string): BeaconIdentity {
 /**
  * Load existing identity from disk or generate new one.
  */
-export function loadOrCreateIdentity(
+export async function loadOrCreateIdentity(
   id: string,
   configDir: string
-): BeaconIdentity {
+): Promise<BeaconIdentity> {
   const identityPath = path.join(configDir, 'beacon-identity.json');
 
-  if (fs.existsSync(identityPath)) {
+  if (existsSync(identityPath)) {
     try {
-      const data = JSON.parse(fs.readFileSync(identityPath, 'utf-8'));
+      const raw = await readFile(identityPath, 'utf-8');
+      const data = JSON.parse(raw);
       if (data.id === id && data.publicKey && data.privateKeyPem) {
         const publicKeyDer = Buffer.from(data.publicKey, 'base64');
         const publicKeyHex = crypto
@@ -69,8 +71,8 @@ export function loadOrCreateIdentity(
 
   const identity = generateIdentity(id);
 
-  if (!fs.existsSync(configDir)) {
-    fs.mkdirSync(configDir, { recursive: true });
+  if (!existsSync(configDir)) {
+    await mkdir(configDir, { recursive: true });
   }
 
   const dataToSave = {
@@ -78,7 +80,7 @@ export function loadOrCreateIdentity(
     publicKey: identity.publicKey,
     privateKeyPem: identity.privateKeyPem,
   };
-  fs.writeFileSync(identityPath, JSON.stringify(dataToSave, null, 2));
+  await writeFile(identityPath, JSON.stringify(dataToSave, null, 2));
   logger.info(`Generated and saved new identity for beacon: ${id}`);
 
   return identity;

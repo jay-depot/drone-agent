@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getCoordinatorClient } from './context.js';
 import { triggerCoordinatorSync } from './context.js';
+import { runSessionEndHook } from '../session-end.js';
 import { logger } from '../logger.js';
 
 export default function syncRoutes(app: FastifyInstance) {
@@ -68,6 +69,13 @@ export default function syncRoutes(app: FastifyInstance) {
         return reply.code(502).send({ error: 'Coordinator not configured' });
       }
       await client.endSwarmSession(request.params.id);
+      // Fire the session-end hook after the coordinator sync completes; it
+      // must work offline, so failures here never affect the response.
+      void runSessionEndHook(request.params.id).catch(err => {
+        logger.warn(
+          `Session-end hook error for session ${request.params.id}: ${err}`
+        );
+      });
       return { success: true };
     }
   );

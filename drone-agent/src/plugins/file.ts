@@ -122,7 +122,7 @@ export const filePlugin: DronePlugin = {
       key: 'editing-convention',
       phase: 'header',
       render: async () =>
-        `# File Editing\n\nFor editing existing files, prefer \`apply_diff\` over \`write\`. Mount it with \`runtime__mount_tool({ "tool": "file__apply_diff" })\` if not already available. Use \`write\` only for creating new files or complete rewrites.`,
+        `# File Editing\n\n**Guideline:** When modifying existing files, use \`apply_diff\` to ensure precision and prevent data loss. Use \`write\` only for creating new files or performing complete rewrites. If \`apply_diff\` is not available when you need to edit, mount it via \`runtime__mount_tool({ "tool": "file__apply_diff" })\`.`,
     });
 
     // -----------------------------------------------------------------------
@@ -272,7 +272,26 @@ export const filePlugin: DronePlugin = {
         } catch (err) {
           throw enhanceFsError('file__write', filePath, err);
         }
-        return JSON.stringify({ path: filePath, written: true }, null, 2);
+
+        // Verify the write by reading back and comparing.
+        let verified = true;
+        let verificationError: string | undefined;
+        try {
+          const written = await readFile(filePath, 'utf-8');
+          if (written !== input.content) {
+            verified = false;
+            verificationError = `Content mismatch: wrote ${input.content.length} bytes but read back ${written.length} bytes`;
+          }
+        } catch (err) {
+          verified = false;
+          verificationError = `Could not verify: ${err instanceof Error ? err.message : String(err)}`;
+        }
+
+        return JSON.stringify(
+          { path: filePath, written: true, verified, verificationError },
+          null,
+          2
+        );
       },
     });
 

@@ -24,6 +24,12 @@ describe('Spawn Route', () => {
     vi.unstubAllGlobals();
   });
 
+  function expectFetchUrl(callIndex: number, expectedHref: string) {
+    const [url] = vi.mocked(fetch).mock.calls[callIndex] ?? [];
+    expect(url).toBeInstanceOf(URL);
+    expect((url as URL).href).toBe(expectedHref);
+  }
+
   it('POST /spawn forwards request to beacon and returns result', async () => {
     // Register a beacon
     await app.inject({
@@ -69,8 +75,9 @@ describe('Spawn Route', () => {
     expect(body.targetBeaconId).toBe('b-target');
 
     // Verify fetch was called with the right URL and body
+    expectFetchUrl(0, 'http://localhost:3457/spawn');
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:3457/spawn',
+      expect.any(URL),
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -201,9 +208,7 @@ describe('Spawn Route', () => {
       url: '/api/spawn/b-filter?status=running',
     });
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:3457/spawn?status=running'
-    );
+    expectFetchUrl(0, 'http://localhost:3457/spawn?status=running');
   });
 
   it('GET /spawn/:beaconId returns 404 when beacon not found', async () => {
@@ -288,6 +293,7 @@ describe('Spawn Route', () => {
     const body = JSON.parse(res.body);
     expect(body.spawnId).toBe('s1');
     expect(body.status).toBe('running');
+    expectFetchUrl(0, 'http://localhost:3457/spawn/s1');
   });
 
   it('GET /spawn/:beaconId/:spawnId returns 404 when beacon not found', async () => {
@@ -321,6 +327,7 @@ describe('Spawn Route', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.success).toBe(true);
+    expectFetchUrl(0, 'http://localhost:3457/spawn/s1');
   });
 
   it('DELETE /spawn/:beaconId/:spawnId returns 404 when beacon not found', async () => {
