@@ -16,7 +16,7 @@ If classification is ambiguous, ask for clarification before editing that specif
 
 ## Project Structure
 
-The project is a pnpm workspace with seven packages:
+The project is a pnpm workspace with the following packages:
 
 | Package                 | Purpose                                                                            |
 | ----------------------- | ---------------------------------------------------------------------------------- |

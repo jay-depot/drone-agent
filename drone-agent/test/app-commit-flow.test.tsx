@@ -56,7 +56,7 @@ describe('App commit flow', () => {
   });
 
   function makeApp() {
-    let unregister: (() => void) | null = null;
+    const unregister: (() => void) | null = null;
     const opts: DroneTuiOptions = {
       model: 'llama3.1:latest',
       logger: silentLogger(),

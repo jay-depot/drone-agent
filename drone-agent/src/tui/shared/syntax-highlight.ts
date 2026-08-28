@@ -228,7 +228,7 @@ export function normalizeLegacyColors(
 export function extractTokenText(token: any): string {
   if (token.value) return token.value;
   if (token.children) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+     
     return token.children.map(extractTokenText).join('');
   }
   return '';
@@ -266,7 +266,7 @@ export function renderHighlightedTree(
   const theme = toTheme(colors as Record<string, unknown> | undefined);
 
   let fullRendered = '';
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   for (const token of tree.children ?? []) {
     const style = resolveTokenStyle(token, theme);
     const text = extractTokenText(token);
