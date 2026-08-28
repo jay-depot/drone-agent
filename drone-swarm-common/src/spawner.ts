@@ -130,6 +130,8 @@ export async function spawnAgent(
       ...process.env,
       ...((configOverride as { env?: Record<string, string> })?.env || {}),
     },
+    // Coordinator-provided workingDir is intentional and length-bounded above.
+    // codeql[js/path-injection]
     cwd:
       (configOverride as { workingDir?: string })?.workingDir || process.cwd(),
   });
