@@ -166,6 +166,9 @@ export type ToolRenderState = {
   syntaxColors?: Record<string, string>;
   /** User-configured code background color (from tui.syntaxHighlighting.codeBackground). */
   codeBackground?: string;
+  /** Terminal columns at render time, so width-aware components (e.g. code
+   * background padding) can compute wrap-correct line fills. */
+  columns?: number;
 };
 
 export type DroneConversationEvent =

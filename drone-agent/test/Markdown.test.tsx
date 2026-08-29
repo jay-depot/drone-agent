@@ -50,6 +50,33 @@ describe('Markdown', () => {
     instance = null;
   });
 
+  describe('bare code fences (plain text by design)', () => {
+    it('renders a bare fence as unstyled white text with no background or lang label', async () => {
+      // Bare ``` fences carry an empty lang from marked. This is the
+      // intentional plain-text path: no highlighting, no code background,
+      // no language label. Contrast with the ```ts width-mode tests, whose
+      // frames carry \u001b[100m...\u001b[49m background runs.
+      const md = ['```', 'plain content line', '```'].join('\n');
+
+      const inst = render(<Markdown>{md}</Markdown>);
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f =>
+        f.includes('plain content line')
+      );
+
+      expect(frame).toContain('\u001b[37mplain content line\u001b[39m');
+      expect(frame).not.toMatch(
+        new RegExp(
+          String.fromCharCode(27) +
+            '\\[100m +' +
+            String.fromCharCode(27) +
+            '\\[49m'
+        )
+      );
+      expect(frame).not.toContain('\u001b[100m');
+    });
+  });
+
   describe('code blocks with syntax highlighting', () => {
     it('renders a TSX code block without stray "undefined" strings', async () => {
       const md = ['```tsx', 'const x: number = 42;', '```'].join('\n');
@@ -304,6 +331,66 @@ describe('Markdown', () => {
       expect(frame).toContain('bold');
       expect(frame).toContain('code');
       expect(frame).not.toContain('[object Object]');
+    });
+  });
+
+  describe('code block width mode', () => {
+    // SGR pair bounding the 'gray' code background:
+    // \u001b[100m ... \u001b[49m. Built via fromCharCode
+    // (same no-control-regex workaround the renderer uses).
+    const bgPair = new RegExp(
+      String.fromCharCode(27) + '\\[100m +' + String.fromCharCode(27) + '\\[49m'
+    );
+    it('pads content to ceil(L / (columns - 4)) * (columns - 4) using inner width, not terminal width', async () => {
+      const md = ['```ts', 'x'.repeat(40), '```'].join('\n');
+
+      const inst = render(<Markdown columns={30}>{md}</Markdown>);
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f => f.includes('x'.repeat(40)));
+
+      // Inner width = 30 - 4 (border 2 + paddingX 2) = 26.
+      // ceil(40 / 26) * 26 = 52, so 12 trailing spaces sit inside the
+      // background run. Legacy maxWidth (40) would emit no padding; a
+      // terminal-width computation (96) would emit 56 spaces. The exact
+      // run, bounded by the background SGR pair, discriminates all three
+      // (box-fill spaces cannot satisfy it).
+      const bg = '\u001b[100m';
+      expect(frame).toContain(
+        bg + 'x'.repeat(40) + ' '.repeat(12) + '\u001b[49m'
+      );
+      expect(frame).not.toContain(bg + 'x'.repeat(40) + ' '.repeat(13));
+    });
+
+    it('pads short lines and blank lines to one full inner-width row each', async () => {
+      const md = ['```ts', 'ab', '', '```'].join('\n');
+
+      const inst = render(<Markdown columns={30}>{md}</Markdown>);
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f => f.includes('ab'));
+
+      // Both lines fill exactly one inner-width row (26 columns): the
+      // short line text+fill, the blank line as a full-width background
+      // band (ink drops zero-width text, so a 0-padded blank would vanish).
+      expect(frame).toContain('\u001b[100mab' + ' '.repeat(24) + '\u001b[49m');
+      expect(frame).toMatch(bgPair);
+    });
+
+    it('wraps a very long line with the fill landing inside the last wrapped row', async () => {
+      // Inner width 26: a 100-char line pads to ceil(100/26)*26 = 104,
+      // exceeding the 96 columns available inside the 100-column test
+      // terminal, so ink hard-wraps it. The remainder row must be
+      // text-bearing; the blank line paints exactly one inner-width band.
+      const md = ['```ts', 'x'.repeat(100), '', '```'].join('\n');
+
+      const inst = render(<Markdown columns={30}>{md}</Markdown>);
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f => f.includes('x'.repeat(90)));
+
+      // First wrapped row is fully filled at the 96-column content width,
+      // inside its own background pair.
+      expect(frame).toContain('\u001b[100m' + 'x'.repeat(96) + '\u001b[49m');
+      // Exactly one space-only background band (the blank line's row).
+      expect(frame.match(new RegExp(bgPair.source, 'g'))).toHaveLength(1);
     });
   });
 });

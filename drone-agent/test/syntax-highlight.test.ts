@@ -9,6 +9,9 @@
 
 import { describe, expect, it } from 'vitest';
 import type { ReactElement } from 'react';
+import React from 'react';
+import { Box, Text } from 'ink';
+import { render, cleanup } from 'ink-testing-library';
 import {
   DEFAULT_SYNTAX_THEME,
   SYNTAX_COLORS,
@@ -244,7 +247,7 @@ describe('renderHighlightedTree SGR emission', () => {
   });
 });
 
-describe('renderHighlightedTree padding', () => {
+describe('renderHighlightedTree padding (legacy maxWidth mode)', () => {
   it('pads short lines to the longest visible width with bare spaces', () => {
     const lines = renderedLines(
       renderHighlightedTree(
@@ -284,5 +287,158 @@ describe('renderHighlightedTree padding', () => {
     );
     expect(lines[1]).toMatch(/y {3}$/);
     expect(lines[1].endsWith('\u001b[39m')).toBe(false);
+  });
+
+  it('falls back to legacy maxWidth when width is zero or negative', () => {
+    for (const width of [0, -3]) {
+      const lines = renderedLines(
+        renderHighlightedTree(
+          {
+            type: 'root',
+            children: [
+              elementToken([], 'abcdefghij'),
+              { type: 'text', value: '\n' },
+              elementToken([], 'ab'),
+            ],
+          },
+          'gray',
+          undefined,
+          width
+        )
+      );
+      expect(lines[1]).toBe('ab        ');
+    }
+  });
+});
+
+describe('renderHighlightedTree width mode', () => {
+  const twoLineTree = (first: HighlightNode, second: HighlightNode) => ({
+    type: 'root' as const,
+    children: [first, { type: 'text' as const, value: '\n' }, second],
+  });
+
+  it('pads a short line to exactly W', () => {
+    const lines = renderedLines(
+      renderHighlightedTree(
+        twoLineTree(elementToken([], 'ab'), elementToken([], 'x')),
+        'gray',
+        undefined,
+        10
+      )
+    );
+    expect(lines[0]).toBe('ab' + ' '.repeat(8));
+    expect(lines[1]).toBe('x' + ' '.repeat(9));
+  });
+
+  it('pads a line of exactly W to W (single row, zero padding)', () => {
+    const lines = renderedLines(
+      renderHighlightedTree(
+        { type: 'root', children: [elementToken([], 'x'.repeat(10))] },
+        'gray',
+        undefined,
+        10
+      )
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toBe('x'.repeat(10));
+  });
+
+  it('pads a line of W+1 to 2W (two wrap rows, both filled)', () => {
+    const lines = renderedLines(
+      renderHighlightedTree(
+        { type: 'root', children: [elementToken([], 'x'.repeat(11))] },
+        'gray',
+        undefined,
+        10
+      )
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toHaveLength(20);
+  });
+
+  it('computes ceil math correctly for odd widths', () => {
+    const lines = renderedLines(
+      renderHighlightedTree(
+        twoLineTree(elementToken([], 'abc'), elementToken([], 'abcdef')),
+        'gray',
+        undefined,
+        5
+      )
+    );
+    expect(lines[0]).toBe('abc  ');
+    expect(lines[1]).toBe('abcdef    ');
+  });
+
+  it('pads blank lines to one full-width row (visible band)', () => {
+    const lines = renderedLines(
+      renderHighlightedTree(
+        twoLineTree(elementToken([], 'ab'), { type: 'text', value: '' }),
+        'gray',
+        undefined,
+        10
+      )
+    );
+    expect(lines[0]).toBe('ab' + ' '.repeat(8));
+    expect(lines[1]).toBe(' '.repeat(10));
+  });
+
+  it('never places padding inside a foreground SGR run (width mode)', () => {
+    const lines = renderedLines(
+      renderHighlightedTree(
+        {
+          type: 'root',
+          children: [
+            elementToken([], 'ab'),
+            elementToken(['hljs-keyword'], 'cd'),
+          ],
+        },
+        'gray',
+        { keyword: { color: 'magenta' } },
+        10
+      )
+    );
+    expect(lines[0]).toMatch(/ {6}$/);
+    expect(lines[0].endsWith('\u001b[39m')).toBe(false);
+  });
+
+  it('pads each line independently in a mixed-width block', () => {
+    const lines = renderedLines(
+      renderHighlightedTree(
+        twoLineTree(elementToken([], 'x'.repeat(15)), elementToken([], 'ab')),
+        'gray',
+        undefined,
+        10
+      )
+    );
+    expect(lines[0]).toHaveLength(20);
+    expect(lines[1]).toBe('ab' + ' '.repeat(8));
+  });
+});
+
+describe('ink wrap premise (width-mode dependency)', () => {
+  it('does not wrap a row of exactly W visible columns', () => {
+    const { lastFrame } = render(
+      React.createElement(
+        Box,
+        { width: 10 },
+        React.createElement(Text, { backgroundColor: 'gray' }, 'x'.repeat(10))
+      )
+    );
+    const rows = (lastFrame() ?? '').split('\n').filter(r => r.length > 0);
+    expect(rows).toHaveLength(1);
+    cleanup();
+  });
+
+  it('wraps a row of W+1 columns into exactly two rows', () => {
+    const { lastFrame } = render(
+      React.createElement(
+        Box,
+        { width: 10 },
+        React.createElement(Text, { backgroundColor: 'gray' }, 'x'.repeat(11))
+      )
+    );
+    const rows = (lastFrame() ?? '').split('\n').filter(r => r.length > 0);
+    expect(rows).toHaveLength(2);
+    cleanup();
   });
 });
