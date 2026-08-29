@@ -306,4 +306,59 @@ describe('Markdown', () => {
       expect(frame).not.toContain('[object Object]');
     });
   });
+
+  describe('code block width mode', () => {
+    it('pads content to ceil(L / (columns - 4)) * (columns - 4) using inner width, not terminal width', async () => {
+      const md = ['```ts', 'x'.repeat(40), '```'].join('\n');
+
+      const inst = render(<Markdown columns={30}>{md}</Markdown>);
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f =>
+        f.includes('x'.repeat(40))
+      );
+
+      // Inner width = 30 - 4 (border 2 + paddingX 2) = 26.
+      // ceil(40 / 26) * 26 = 52, so 12 trailing spaces sit inside the
+      // background run. Legacy maxWidth (40) would emit no padding; a
+      // terminal-width computation (96) would emit 56 spaces. The exact
+      // run, bounded by the background SGR pair, discriminates all three
+      // (box-fill spaces cannot satisfy it).
+      const bg = '\u001b[100m';
+      expect(frame).toContain(bg + 'x'.repeat(40) + ' '.repeat(12) + '\u001b[49m');
+      expect(frame).not.toContain(bg + 'x'.repeat(40) + ' '.repeat(13));
+    });
+
+    it('pads short lines to the inner width and leaves blank lines unpadded', async () => {
+      const md = ['```ts', 'ab', '', '```'].join('\n');
+
+      const inst = render(<Markdown columns={30}>{md}</Markdown>);
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f => f.includes('ab'));
+
+      // Short line fills exactly one inner-width row (26 columns).
+      expect(frame).toContain('\u001b[100mab' + ' '.repeat(24) + '\u001b[49m');
+      // The blank line pads to zero: no background run containing only
+      // spaces (the legacy artifact), and no empty background pair.
+      expect(frame).not.toMatch(/\u001b\[100m +\u001b\[49m/);
+      expect(frame).not.toContain('\u001b[100m\u001b[49m');
+    });
+
+    it('wraps a very long line with the fill landing inside the last wrapped row', async () => {
+      // Inner width 26: a 100-char line pads to ceil(100/26)*26 = 104,
+      // exceeding the 96 columns available inside the 100-column test
+      // terminal, so ink hard-wraps it. The remainder row must be
+      // text-bearing and the blank line must not paint a bare band.
+      const md = ['```ts', 'x'.repeat(100), '', '```'].join('\n');
+
+      const inst = render(<Markdown columns={30}>{md}</Markdown>);
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f => f.includes('x'.repeat(90)));
+
+      // First wrapped row is fully filled at the 96-column content width,
+      // inside its own background pair.
+      expect(frame).toContain('\u001b[100m' + 'x'.repeat(96) + '\u001b[49m');
+      // No background run containing only spaces (bare spill band).
+      expect(frame).not.toMatch(/\u001b\[100m +\u001b\[49m/);
+    });
+  });
 });
