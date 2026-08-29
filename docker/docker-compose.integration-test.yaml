@@ -25,6 +25,17 @@ services:
     volumes:
       - coordinator-data:/data
       - coordinator-config:/config
+      # session-end spawn trigger for the reverse-channel integration test
+      - ./coordinator.config.json:/config/coordinator.config.json:ro
+    command:
+      [
+        'node',
+        'bin/drone-coordinator',
+        '--config-dir',
+        '/config',
+        '--config-file',
+        '/config/coordinator.config.json',
+      ]
     networks:
       - test-swarm
     depends_on:
@@ -40,6 +51,10 @@ services:
       - COORDINATOR_HOST=drone-coordinator
       - COORDINATOR_PORT=3456
       - COORDINATOR_HTTPS=true
+      # Test-swarm opt-in: confirm the coordinator TLS fingerprint without
+      # the human compare-only handshake (the coordinator auto-approves this
+      # beacon via its own config opt-in).
+      - BEACON_AUTO_CONFIRM_COORDINATOR_FINGERPRINT=true
       - DB_PATH=/data/beacon.db
     volumes:
       - beacon-data:/data
@@ -48,6 +63,18 @@ services:
       - test-swarm
     depends_on:
       - drone-coordinator
+    # Fixed ID so the coordinator's sessionEnd config can target it.
+    command:
+      [
+        'node',
+        'dist/index.js',
+        '--config-dir',
+        '/config',
+        '--host',
+        '0.0.0.0',
+        '--id',
+        'beacon-teste2e',
+      ]
 
   # Dummy Agent - controlled testing agent
   # This is a minimal agent for testing agent-beacon interactions
