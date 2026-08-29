@@ -268,8 +268,15 @@ function resolveTokenStyle(
  * SGR sequences. Accepts either color format (legacy string map or
  * {@link SyntaxTheme}); the third parameter is normalized once up front.
  *
- * Each line is padded with trailing spaces to the longest line's visible
- * width so the background fills uniformly. The padding deliberately
+ * Each line is padded with trailing spaces so the background fills the
+ * rows the line will occupy when soft-wrapped. Without `width`, lines pad
+ * to the longest line's visible width (legacy mode). With `width` (the
+ * container's available content width in terminal columns — callers
+ * subtract their own chrome, e.g. a bordered code box passes
+ * `columns - 4`), each line pads to `ceil(visibleLength / width) *
+ * width`: a line then soft-wraps into exactly `ceil(L/width)` rows, every
+ * one fully background-filled (no bare spill row), and blank lines pad to
+ * zero so they render as true empty rows. The padding deliberately
  * carries no foreground SGR — a foreground on padding spaces is pointless
  * and is exactly how fg/bg collisions previously crept in.
  */
@@ -277,6 +284,8 @@ export function renderHighlightedTree(
   tree: HighlightRoot,
   backgroundColor: string,
   colors?: Record<string, string> | SyntaxTheme
+  ,
+  width?: number
 ): ReactElement {
   const theme = toTheme(colors as Record<string, unknown> | undefined);
 
@@ -300,12 +309,18 @@ export function renderHighlightedTree(
     (max, line) => Math.max(max, visibleLength(line)),
     0
   );
+  const widthMode = typeof width === 'number' && width > 0;
+  const fillWidth = widthMode ? width : maxWidth;
 
   return React.createElement(
     React.Fragment,
     null,
     ...lines.map((line: string, lineIndex: number) => {
-      const padding = ' '.repeat(Math.max(0, maxWidth - visibleLength(line)));
+      const lineLen = visibleLength(line);
+      const padTarget = widthMode
+        ? Math.ceil(lineLen / fillWidth) * fillWidth
+        : fillWidth;
+      const padding = ' '.repeat(Math.max(0, padTarget - lineLen));
       return React.createElement(
         Text,
         { key: lineIndex, backgroundColor },
