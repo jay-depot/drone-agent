@@ -338,24 +338,34 @@ function renderCodeBlock(
   columns: number | undefined
 ): ReactNode {
   const code = token.text ?? '';
-  const lang = token.lang ?? 'plaintext';
+  // marked gives bare ``` fences an empty lang. Lowlight cannot highlight
+  // an unknown/empty language, so those render as plain text by design:
+  // intentional here rather than an accident of highlight() throwing and
+  // the catch swallowing it. The empty string never displays (the lang
+  // label is only rendered when non-empty), so the observable behavior is
+  // unchanged — this just makes the path explicit and keeps the catch for
+  // genuinely unexpected failures.
+  const lang = token.lang ?? '';
+  const isPlain = lang === '';
   const contentWidth =
     typeof columns === 'number' && columns > 0 ? columns - 4 : undefined;
 
-  // Try to highlight, fallback to plain text
   let highlighted: ReactNode;
-
-  try {
-    const tree = lowlight.highlight(lang, code);
-    highlighted = renderHighlightedTree(
-      tree,
-      codeBackground,
-      syntaxColors,
-      contentWidth
-    );
-  } catch {
-    // Language not found or highlight failed
+  if (isPlain) {
     highlighted = <Text color="white">{code}</Text>;
+  } else {
+    try {
+      const tree = lowlight.highlight(lang, code);
+      highlighted = renderHighlightedTree(
+        tree,
+        codeBackground,
+        syntaxColors,
+        contentWidth
+      );
+    } catch {
+      // Language not found or highlight failed
+      highlighted = <Text color="white">{code}</Text>;
+    }
   }
 
   return (
@@ -366,7 +376,7 @@ function renderCodeBlock(
       paddingX={1}
       marginY={1}
     >
-      {lang !== 'plaintext' && (
+      {lang !== '' && (
         <Text color="gray" bold>
           {lang}
         </Text>

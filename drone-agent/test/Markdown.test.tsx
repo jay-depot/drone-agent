@@ -50,6 +50,33 @@ describe('Markdown', () => {
     instance = null;
   });
 
+  describe('bare code fences (plain text by design)', () => {
+    it('renders a bare fence as unstyled white text with no background or lang label', async () => {
+      // Bare ``` fences carry an empty lang from marked. This is the
+      // intentional plain-text path: no highlighting, no code background,
+      // no language label. Contrast with the ```ts width-mode tests, whose
+      // frames carry \u001b[100m...\u001b[49m background runs.
+      const md = ['```', 'plain content line', '```'].join('\n');
+
+      const inst = render(<Markdown>{md}</Markdown>);
+      instance = inst;
+      const frame = await waitUntilFrame(inst, f =>
+        f.includes('plain content line')
+      );
+
+      expect(frame).toContain('\u001b[37mplain content line\u001b[39m');
+      expect(frame).not.toMatch(
+        new RegExp(
+          String.fromCharCode(27) +
+            '\\[100m +' +
+            String.fromCharCode(27) +
+            '\\[49m'
+        )
+      );
+      expect(frame).not.toContain('\u001b[100m');
+    });
+  });
+
   describe('code blocks with syntax highlighting', () => {
     it('renders a TSX code block without stray "undefined" strings', async () => {
       const md = ['```tsx', 'const x: number = 42;', '```'].join('\n');
