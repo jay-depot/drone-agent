@@ -365,9 +365,7 @@ async function extractZip(
     }
 
     const compressionMethod = zipBuffer.readUInt16LE(cdPos + 10);
-    const crc32 = zipBuffer.readUInt32LE(cdPos + 16);
     const compressedSize = zipBuffer.readUInt32LE(cdPos + 20);
-    const uncompressedSize = zipBuffer.readUInt32LE(cdPos + 24);
     const fileNameLength = zipBuffer.readUInt16LE(cdPos + 28);
     const extraFieldLength = zipBuffer.readUInt16LE(cdPos + 30);
     const commentLength = zipBuffer.readUInt16LE(cdPos + 32);
@@ -576,7 +574,8 @@ export async function ensureServerInstalled(
         throw new Error(
           `Failed to install npm dependencies for ${spec.install.package}@${spec.install.version}.\n` +
             `  Error: ${(installError as Error).message}\n` +
-            `npm must be installed and on PATH to use auto-installed LSP servers.`
+            `npm must be installed and on PATH to use auto-installed LSP servers.`,
+          { cause: installError }
         );
       }
     }
@@ -592,7 +591,8 @@ export async function ensureServerInstalled(
         throw new Error(
           `Failed to build ${spec.install.package} from source. Go must be installed and on PATH.\n` +
             `  Error: ${(buildError as Error).message}\n` +
-            `If you don't have Go installed, install gopls manually or set it up via your system package manager.`
+            `If you don't have Go installed, install gopls manually or set it up via your system package manager.`,
+          { cause: buildError }
         );
       }
     }

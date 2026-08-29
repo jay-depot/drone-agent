@@ -47,7 +47,7 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
     getModel: () => 'fake',
     setModel: () => {},
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: unknown) => {},
     listModels: async () => ['fake'],
     registerDriver: () => {},
     registerProvider: () => {},

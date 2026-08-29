@@ -1106,9 +1106,8 @@ describe('file__apply_diff — round-trip integration', () => {
       ].join('\n');
 
       let threw: Error | undefined;
-      let result: { path?: string; patched?: boolean } = {};
       try {
-        result = JSON.parse(await applyDiff!({ path: target, patch }));
+        JSON.parse(await applyDiff!({ path: target, patch }));
       } catch (e) {
         threw = e as Error;
       }

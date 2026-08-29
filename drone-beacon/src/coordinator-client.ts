@@ -138,13 +138,13 @@ export interface CoordinatorClient {
   // Session pipeline
   getSessions(
     query: Record<string, string>
-  ): Promise<{ sessions: any[]; count: number }>;
-  getSessionLog(sessionId: string): Promise<any>;
-  processSession(sessionId: string): Promise<any>;
+  ): Promise<{ sessions: unknown[]; count: number }>;
+  getSessionLog(sessionId: string): Promise<unknown>;
+  processSession(sessionId: string): Promise<unknown>;
   completeSessionProcessing(
     sessionId: string,
     body: { summary?: string; notes?: string }
-  ): Promise<any>;
+  ): Promise<unknown>;
 }
 
 export interface SessionInfo {
@@ -606,7 +606,7 @@ export function createCoordinatorClient(
         if (!res.ok) {
           const error = await res.json();
           logger.warn(
-            `Failed to relay message: ${res.status} - ${(error as any).error}`
+            `Failed to relay message: ${res.status} - ${(error as { error?: string }).error}`
           );
           return { success: false };
         }
@@ -992,7 +992,7 @@ export function createCoordinatorClient(
 
     async getSessions(
       query: Record<string, string>
-    ): Promise<{ sessions: any[]; count: number }> {
+    ): Promise<{ sessions: unknown[]; count: number }> {
       if (!coordinatorTrusted()) {
         return { sessions: [], count: 0 };
       }
@@ -1003,14 +1003,14 @@ export function createCoordinatorClient(
           logger.warn(`Failed to get sessions: ${res.status}`);
           return { sessions: [], count: 0 };
         }
-        return (await res.json()) as { sessions: any[]; count: number };
+        return (await res.json()) as { sessions: unknown[]; count: number };
       } catch (err) {
         logger.warn(`Failed to get sessions: ${err}`);
         return { sessions: [], count: 0 };
       }
     },
 
-    async getSessionLog(sessionId: string): Promise<any> {
+    async getSessionLog(sessionId: string): Promise<unknown> {
       if (!coordinatorTrusted()) {
         return null;
       }
@@ -1027,7 +1027,7 @@ export function createCoordinatorClient(
       }
     },
 
-    async processSession(sessionId: string): Promise<any> {
+    async processSession(sessionId: string): Promise<unknown> {
       if (!coordinatorTrusted()) {
         return null;
       }
@@ -1052,7 +1052,7 @@ export function createCoordinatorClient(
     async completeSessionProcessing(
       sessionId: string,
       body: { summary?: string; notes?: string }
-    ): Promise<any> {
+    ): Promise<unknown> {
       if (!coordinatorTrusted()) {
         return null;
       }

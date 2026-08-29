@@ -394,7 +394,7 @@ describe('config plugin', () => {
 
   describe('config__get with showLayers', () => {
     it('includes layer info when showLayers=true', async () => {
-      const { homeDir, projectDir } = await setupDirs();
+      const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
       // Write a project-level config

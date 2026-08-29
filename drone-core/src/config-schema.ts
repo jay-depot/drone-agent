@@ -325,6 +325,9 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       userEmbeddingProvider: Type.Optional(Type.String()),
       projectEmbeddingProvider: Type.Optional(Type.String()),
     }),
+    wakelock: Type.Object({
+      enabled: Type.Optional(Type.Boolean()),
+    }),
     swarm: Type.Object({
       knowledgeSync: Type.Optional(
         Type.Object({

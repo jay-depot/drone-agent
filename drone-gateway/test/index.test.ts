@@ -9,7 +9,7 @@ vi.mock('../src/config/load.js', () => ({
 // Mock process.exit to prevent test runner from exiting
 const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {
   // never actually exit
-}) as any);
+}) as unknown as typeof process.exit);
 
 // Mock the spawn backends so we don't need actual implementations
 vi.mock('../src/local-spawn-backend.js', () => ({
@@ -155,7 +155,7 @@ describe('createSpawnBackend', () => {
   it('exits with error for unknown type', () => {
     const config = {
       coordinatorUrl: 'http://localhost:8080',
-      spawnBackend: 'unknown' as any,
+      spawnBackend: 'unknown',
       serviceAdapters: [],
     };
     createSpawnBackend(config);

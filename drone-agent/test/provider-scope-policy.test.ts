@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { createDefaultAgentConfig } from 'drone-core';
 import { enforceProviderScopePolicy } from '../src/runtime/provider-scope-policy.js';
 import { parseConfigWithSchema } from 'drone-core';
 import type { DroneConfigLayer } from 'drone-core';

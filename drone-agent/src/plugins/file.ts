@@ -1,7 +1,7 @@
 import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import fg from 'fast-glob';
-import type { DronePlugin, DroneToolDefinition } from 'drone-core';
+import type { DronePlugin } from 'drone-core';
 import { FileReadBlock } from '../tui/components/FileReadBlock.js';
 import { FileReadImageBlock } from '../tui/components/FileReadImageBlock.js';
 import { FileWriteBlock } from '../tui/components/FileWriteBlock.js';

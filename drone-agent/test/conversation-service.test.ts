@@ -75,7 +75,7 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
     getModel: () => 'fake',
     setModel: () => {},
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: unknown) => {},
     listModels: async () => ['fake'],
     registerDriver: () => {},
     registerProvider: () => {},
@@ -141,7 +141,7 @@ it('uses the newly active provider on the next loop iteration', async () => {
       model = nextModel;
     },
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: unknown) => {},
     listModels: async () =>
       activeProviderId === 'provider-a' ? ['fake-a'] : ['fake-b'],
     registerDriver: () => {},

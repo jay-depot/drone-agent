@@ -14,14 +14,11 @@ import {
   SYNTAX_COLORS,
   normalizeLegacyColors,
   renderHighlightedTree,
+  type HighlightNode,
 } from '../src/tui/shared/syntax-highlight.js';
 
 /** Minimal lowlight-AST-shaped token for building fake trees. */
-function elementToken(
-  classNames: string[],
-  value: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): any {
+function elementToken(classNames: string[], value: string): HighlightNode {
   return {
     type: 'element',
     properties: { className: classNames },
@@ -30,19 +27,33 @@ function elementToken(
 }
 
 /**
+ * Structural shape of the fragment {@link renderHighlightedTree} returns:
+ * a Fragment whose children are `<Text backgroundColor>` elements, each
+ * carrying `props.children = [styledLine, padding]`. A fragment with a
+ * single child stores that child directly rather than in an array.
+ */
+type TextLineElement = {
+  props: { children: [string, string] | [string] };
+};
+
+type HighlightedFragment = {
+  props: {
+    children: TextLineElement[] | TextLineElement;
+  };
+};
+
+/**
  * Pull the per-line strings out of renderHighlightedTree's returned
  * fragment. Each line is a <Text> whose children are [styledLine, padding].
  * A fragment with a single child stores that child directly rather than in
  * an array, so normalize both shapes.
  */
-function renderedLines(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  result: any
-): string[] {
+function renderedLines(result: ReactElement): string[] {
   const lines: string[] = [];
-  const children = Array.isArray(result.props.children)
-    ? result.props.children
-    : [result.props.children];
+  const fragment = result as unknown as HighlightedFragment;
+  const children = Array.isArray(fragment.props.children)
+    ? fragment.props.children
+    : [fragment.props.children];
   for (const child of children) {
     const textChild = child.props.children[0] as string;
     const paddingChild = child.props.children[1] as string;
@@ -111,7 +122,7 @@ describe('renderHighlightedTree SGR emission', () => {
   it('emits truecolor SGR for hex colors', () => {
     const lines = renderedLines(
       renderHighlightedTree(
-        { children: [elementToken(['hljs-comment'], '// hi')] },
+        { type: 'root', children: [elementToken(['hljs-comment'], '// hi')] },
         'gray',
         { comment: { color: '#ff8800' } }
       )
@@ -122,7 +133,7 @@ describe('renderHighlightedTree SGR emission', () => {
   it('emits truecolor SGR for shorthand hex colors', () => {
     const lines = renderedLines(
       renderHighlightedTree(
-        { children: [elementToken(['hljs-keyword'], 'const')] },
+        { type: 'root', children: [elementToken(['hljs-keyword'], 'const')] },
         'gray',
         { keyword: { color: '#f80' } }
       )
@@ -133,7 +144,7 @@ describe('renderHighlightedTree SGR emission', () => {
   it('emits 256-color SGR for decimal indices', () => {
     const lines = renderedLines(
       renderHighlightedTree(
-        { children: [elementToken(['hljs-number'], '42')] },
+        { type: 'root', children: [elementToken(['hljs-number'], '42')] },
         'gray',
         { number: { color: '203' } }
       )
@@ -144,7 +155,7 @@ describe('renderHighlightedTree SGR emission', () => {
   it('rejects out-of-range 256-color indices by omitting the foreground', () => {
     const lines = renderedLines(
       renderHighlightedTree(
-        { children: [elementToken(['hljs-number'], '42')] },
+        { type: 'root', children: [elementToken(['hljs-number'], '42')] },
         'gray',
         { number: { color: '999' } }
       )
@@ -155,7 +166,7 @@ describe('renderHighlightedTree SGR emission', () => {
   it('emits named base colors via the ANSI map', () => {
     const lines = renderedLines(
       renderHighlightedTree(
-        { children: [elementToken(['hljs-string'], '"x"')] },
+        { type: 'root', children: [elementToken(['hljs-string'], '"x"')] },
         'gray',
         { string: { color: 'green' } }
       )
@@ -166,7 +177,7 @@ describe('renderHighlightedTree SGR emission', () => {
   it('emits bold and italic attributes with proper reset codes', () => {
     const lines = renderedLines(
       renderHighlightedTree(
-        { children: [elementToken(['hljs-strong'], 'loud')] },
+        { type: 'root', children: [elementToken(['hljs-strong'], 'loud')] },
         'gray',
         { strong: { bold: true, italic: true } }
       )
@@ -177,7 +188,7 @@ describe('renderHighlightedTree SGR emission', () => {
   it('emits no foreground SGR for unparseable colors (inherits ambient)', () => {
     const lines = renderedLines(
       renderHighlightedTree(
-        { children: [elementToken(['hljs-variable'], 'x')] },
+        { type: 'root', children: [elementToken(['hljs-variable'], 'x')] },
         'gray',
         { variable: { color: 'not-a-color' } }
       )
@@ -188,7 +199,7 @@ describe('renderHighlightedTree SGR emission', () => {
   it('renders attribute-only styles (default comments) with no fg at all', () => {
     const lines = renderedLines(
       renderHighlightedTree(
-        { children: [elementToken(['hljs-comment'], '// c')] },
+        { type: 'root', children: [elementToken(['hljs-comment'], '// c')] },
         'gray',
         undefined
       )
@@ -199,7 +210,7 @@ describe('renderHighlightedTree SGR emission', () => {
   it('accepts the legacy string map directly', () => {
     const lines = renderedLines(
       renderHighlightedTree(
-        { children: [elementToken(['hljs-strong'], 'b')] },
+        { type: 'root', children: [elementToken(['hljs-strong'], 'b')] },
         'gray',
         SYNTAX_COLORS
       )
@@ -211,6 +222,7 @@ describe('renderHighlightedTree SGR emission', () => {
     const lines = renderedLines(
       renderHighlightedTree(
         {
+          type: 'root',
           children: [elementToken(['hljs-string', 'hljs-keyword'], 'both')],
         },
         'gray',
@@ -223,7 +235,7 @@ describe('renderHighlightedTree SGR emission', () => {
   it('leaves unclassed tokens unstyled', () => {
     const lines = renderedLines(
       renderHighlightedTree(
-        { children: [{ type: 'text', value: 'plain' }] },
+        { type: 'root', children: [{ type: 'text', value: 'plain' }] },
         'gray',
         undefined
       )
@@ -237,6 +249,7 @@ describe('renderHighlightedTree padding', () => {
     const lines = renderedLines(
       renderHighlightedTree(
         {
+          type: 'root',
           children: [
             elementToken(['hljs-keyword'], 'const'),
             { type: 'text', value: '\n' },
@@ -258,6 +271,7 @@ describe('renderHighlightedTree padding', () => {
     const lines = renderedLines(
       renderHighlightedTree(
         {
+          type: 'root',
           children: [
             elementToken(['hljs-comment'], '// x'),
             { type: 'text', value: '\n' },

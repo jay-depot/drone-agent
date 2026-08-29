@@ -11,7 +11,7 @@
 import { Box, Text } from 'ink';
 import type { ReactNode } from 'react';
 import React from 'react';
-import { marked } from 'marked';
+import { marked, type Token, type Tokens } from 'marked';
 import { lowlight, renderHighlightedTree } from '../shared/syntax-highlight.js';
 
 interface MarkdownProps {
@@ -36,11 +36,10 @@ export function Markdown({
   codeBackground = 'gray',
   syntaxColors,
 }: MarkdownProps): React.JSX.Element {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tokens = marked.lexer(children) as unknown as any[];
+  const tokens = marked.lexer(children);
   return (
     <Box flexDirection="column">
-      {tokens.map((token: any, index: number) => (
+      {tokens.map((token, index) => (
         <React.Fragment key={index}>
           {renderToken(
             token,
@@ -59,8 +58,7 @@ export function Markdown({
  * Render a single token (or sequence of tokens) to Ink components.
  */
 function renderToken(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  token: any,
+  token: Token,
   color: string,
   codeBackground: string,
   syntaxColors: Record<string, string> | undefined,
@@ -71,7 +69,7 @@ function renderToken(
   switch (token.type) {
     case 'heading':
       return renderHeading(
-        token,
+        token as Tokens.Heading,
         textColor ?? color,
         codeBackground,
         keyPrefix
@@ -81,7 +79,7 @@ function renderToken(
       return (
         <Text color={textColor}>
           {token.tokens
-            ?.map((t: any, i: number) =>
+            ?.map((t, i) =>
               renderInlineToken(t, color, codeBackground, `${keyPrefix}-p-${i}`)
             )
             .flat()}
@@ -89,13 +87,22 @@ function renderToken(
       );
 
     case 'blockquote':
-      return renderBlockquote(token, textColor ?? color);
+      return renderBlockquote(token as Tokens.Blockquote, textColor ?? color);
 
     case 'list':
-      return renderList(token, textColor ?? color, codeBackground, keyPrefix);
+      return renderList(
+        token as Tokens.List,
+        textColor ?? color,
+        codeBackground,
+        keyPrefix
+      );
 
     case 'code':
-      return renderCodeBlock(token, codeBackground, syntaxColors);
+      return renderCodeBlock(
+        token as Tokens.Code,
+        codeBackground,
+        syntaxColors
+      );
 
     case 'hr':
       return <Text color="gray">{'-'.repeat(80)}</Text>;
@@ -106,7 +113,7 @@ function renderToken(
 
     default:
       // For any unmatched token, try to render as text
-      if (token.text) {
+      if ('text' in token && token.text) {
         return <Text color={textColor}>{token.text}</Text>;
       }
       return null;
@@ -123,8 +130,7 @@ function renderToken(
  * background) and made text invisible.
  */
 function renderInlineToken(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  token: any,
+  token: Token,
   defaultColor: string,
   codeBackground: string,
   keyPrefix: string
@@ -135,7 +141,7 @@ function renderInlineToken(
     case 'strong':
       return [
         <Text bold key={key}>
-          {token.tokens?.flatMap((t: any, i: number) =>
+          {token.tokens?.flatMap((t, i) =>
             renderInlineToken(
               t,
               defaultColor,
@@ -149,7 +155,7 @@ function renderInlineToken(
     case 'emphasis':
       return [
         <Text italic key={key}>
-          {token.tokens?.flatMap((t: any, i: number) =>
+          {token.tokens?.flatMap((t, i) =>
             renderInlineToken(
               t,
               defaultColor,
@@ -170,7 +176,7 @@ function renderInlineToken(
     case 'link':
       return [
         <Text key={key} color="cyan" underline>
-          {token.tokens?.flatMap((t: any, i: number) =>
+          {token.tokens?.flatMap((t, i) =>
             renderInlineToken(
               t,
               'cyan',
@@ -191,7 +197,7 @@ function renderInlineToken(
     case 'del':
       return [
         <Text strikethrough key={key}>
-          {token.tokens?.flatMap((t: any, i: number) =>
+          {token.tokens?.flatMap((t, i) =>
             renderInlineToken(
               t,
               defaultColor,
@@ -203,7 +209,8 @@ function renderInlineToken(
       ];
 
     default:
-      return [token.text ?? ''];
+      // br, escape, checkbox and other text-less inline tokens render empty.
+      return ['text' in token ? (token.text ?? '') : ''];
   }
 }
 
@@ -211,8 +218,7 @@ function renderInlineToken(
  * Render a heading with appropriate sizing.
  */
 function renderHeading(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  token: any,
+  token: Tokens.Heading,
   color: string,
   codeBackground: string,
   keyPrefix: string
@@ -222,7 +228,7 @@ function renderHeading(
   return (
     <Text bold color={color} wrap="wrap">
       <Text bold>{'#'.repeat(depth)} </Text>
-      {token.tokens?.flatMap((t: any, i: number) =>
+      {token.tokens?.flatMap((t, i) =>
         renderInlineToken(t, color, codeBackground, `${keyPrefix}-h-${i}`)
       )}
     </Text>
@@ -236,11 +242,7 @@ function renderHeading(
  * rendered inline nodes into a string instead would stringify React
  * elements to "[object Object]".
  */
-function renderBlockquote(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  token: any,
-  color: string
-): ReactNode {
+function renderBlockquote(token: Tokens.Blockquote, color: string): ReactNode {
   const content = token.text ?? '';
 
   return (
@@ -259,8 +261,7 @@ function renderBlockquote(
  * Render a list (ordered or unordered).
  */
 function renderList(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  token: any,
+  token: Tokens.List,
   color: string,
   codeBackground: string,
   keyPrefix: string
@@ -270,7 +271,7 @@ function renderList(
 
   return (
     <Box flexDirection="column">
-      {items.map((item: any, index: number) => (
+      {items.map((item, index) => (
         <Text key={`${keyPrefix}-li-${index}`} color={color}>
           {isOrdered ? `${index + 1}. ` : '• '}
           {renderListItemContent(
@@ -290,20 +291,19 @@ function renderList(
  * Handle both the standard object form and any legacy/edge array form safely.
  */
 function renderListItemContent(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  item: any,
+  item: Tokens.ListItem,
   color: string,
   codeBackground: string,
   keyPrefix: string
 ): ReactNode {
   if (Array.isArray(item)) {
-    return item.flatMap((t: any, i: number) =>
+    return item.flatMap((t, i) =>
       renderInlineToken(t, color, codeBackground, `${keyPrefix}-arr-${i}`)
     );
   }
 
   if (item?.tokens) {
-    return item.tokens.flatMap((t: any, i: number) =>
+    return item.tokens.flatMap((t, i) =>
       renderInlineToken(t, color, codeBackground, `${keyPrefix}-tok-${i}`)
     );
   }
@@ -315,8 +315,7 @@ function renderListItemContent(
  * Render a code block with syntax highlighting.
  */
 function renderCodeBlock(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  token: any,
+  token: Tokens.Code,
   codeBackground: string,
   syntaxColors: Record<string, string> | undefined
 ): ReactNode {

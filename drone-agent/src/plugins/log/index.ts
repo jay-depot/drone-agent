@@ -139,7 +139,7 @@ export function createLogPlugin(deps: LogPluginDeps): DronePlugin {
           await mkdir(dir, { recursive: true });
 
           // Read existing log file (if any)
-          let turns: DroneSessionTurn[] = [];
+          let turns: DroneSessionTurn[];
           try {
             const raw = await readFile(logFilePath, 'utf-8');
             turns = JSON.parse(raw) as DroneSessionTurn[];

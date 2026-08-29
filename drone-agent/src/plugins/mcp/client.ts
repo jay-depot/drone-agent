@@ -1,9 +1,12 @@
 import { isRecord } from '../../shared/type-guards.js';
 import type {
   DroneLogger,
+<<<<<<< HEAD
   DroneToolResult,
   DroneImageContent,
   DroneMcpStreamableHttpServerConfig,
+=======
+>>>>>>> origin/main
   DroneMcpResourceMeta,
   DroneMcpResourceTemplateMeta,
   DroneMcpPromptArgument,
@@ -1263,7 +1266,7 @@ export async function createMcpClientConnection(options: {
 
   function handleServerRequest(
     method: string,
-    params: unknown
+    _params: unknown
   ): Promise<unknown> {
     if (method === 'roots/list') {
       return Promise.resolve({ roots: options.roots ?? [] });

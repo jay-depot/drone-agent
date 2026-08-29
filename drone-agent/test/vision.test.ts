@@ -6,7 +6,6 @@ import {
 } from '../src/shared/openai-compatible.js';
 import {
   __testing as anthropicTesting,
-  type AnthropicContentBlock,
   type AnthropicImageBlock,
 } from '../src/plugins/anthropic/anthropic-adapter.js';
 const { toAnthropicMessage } = anthropicTesting;

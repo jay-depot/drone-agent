@@ -200,6 +200,13 @@ export type DroneConversationEvent =
       message: string;
       status: 'started' | 'completed' | 'failed';
     }
+  /**
+   * Emitted once when a round (one sendUserMessage call) fully completes,
+   * including on cancellation and error exits. It is a silent control signal
+   * for plugins (e.g. wakelock) — it carries no message and intentionally has
+   * no TUI/theme rendering.
+   */
+  | { kind: 'roundComplete' }
   | {
       kind: 'notice';
       content: string;

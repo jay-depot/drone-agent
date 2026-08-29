@@ -4,9 +4,11 @@ import {
   createDefaultAgentConfig,
   type DroneChatResponse,
   type DroneContextWindowInfo,
+  type DroneConversationEvent,
   type DroneLlmCapability,
   type DroneLlmProvider,
   type DroneGuardrailConfig,
+  type DroneReasoningLevel,
 } from 'drone-core';
 import { createConversationService } from '../src/runtime/conversation-service.js';
 import { createContextBudgetService } from '../src/runtime/context-budget-service.js';
@@ -53,7 +55,7 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
     getModel: () => 'fake',
     setModel: () => {},
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: DroneReasoningLevel | undefined) => {},
     listModels: async () => ['fake'],
     registerDriver: () => {},
     registerProvider: () => {},
@@ -117,7 +119,7 @@ describe('createConversationService — broken response guardrails', () => {
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     const result = await conversation.sendUserMessage('test', event => {
       events.push(event);
     });
@@ -164,7 +166,7 @@ describe('createConversationService — broken response guardrails', () => {
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     const result = await conversation.sendUserMessage('test', event => {
       events.push(event);
     });
@@ -302,7 +304,7 @@ describe('createConversationService — identical tool-call streak detection', (
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     const result = await conversation.sendUserMessage('test', event => {
       events.push(event);
     });
@@ -365,7 +367,7 @@ describe('createConversationService — identical tool-call streak detection', (
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     const result = await conversation.sendUserMessage('test', event => {
       events.push(event);
     });
@@ -497,7 +499,7 @@ describe('createConversationService — parallel duplicate tool-call dedup', () 
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     const result = await conversation.sendUserMessage('test', event => {
       events.push(event);
     });
@@ -561,7 +563,7 @@ describe('createConversationService — parallel duplicate tool-call dedup', () 
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     await conversation.sendUserMessage('test', event => {
       events.push(event);
     });
@@ -616,7 +618,7 @@ describe('createConversationService — parallel duplicate tool-call dedup', () 
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     await conversation.sendUserMessage('test', event => {
       events.push(event);
     });
@@ -671,7 +673,7 @@ describe('createConversationService — assistant text emitted before toolCallBa
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     await conversation.sendUserMessage('test', event => {
       events.push(event);
     });
@@ -737,7 +739,7 @@ describe('createConversationService — notice event emission', () => {
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     await conversation.sendUserMessage('test', event => {
       events.push(event);
     });

@@ -4,7 +4,6 @@ import type {
   DroneLlmCapability,
   DroneMcpRoot,
   DroneMcpServerState,
-  DronePersonaCapability,
   DronePlugin,
   DroneToolJsonSchema,
   DroneToolJsonSchemaProperty,
@@ -167,7 +166,6 @@ export const mcpPlugin: DronePlugin = {
     const serverUsedNames = new Map<string, Set<string>>();
     const serverAllowlists = new Map<string, Set<string> | undefined>();
     const llmCapability = registration.request<DroneLlmCapability>('llm');
-    const personaCap = registration.request<DronePersonaCapability>('persona');
 
     function setServerState(state: DroneMcpServerState): void {
       serverStates.set(state.id, { ...state });
@@ -287,7 +285,7 @@ export const mcpPlugin: DronePlugin = {
       const allowedToolSet = allowlist ? new Set(allowlist) : undefined;
 
       // Generate server description via LLM (if available)
-      const serverDescription = await getOrCreateServerDescription(
+      await getOrCreateServerDescription(
         serverId,
         tools.map(t => ({ name: t.name, description: t.description })),
         llmCapability,

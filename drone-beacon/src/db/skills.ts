@@ -1,7 +1,7 @@
 import { getDatabase } from './init.js';
 import { logger } from '../logger.js';
 import type { Skill, CreateSkillRequest } from '../types.js';
-import { getRow, listRows, createRow, deleteRow } from 'drone-swarm-common';
+import { getRow, listRows, deleteRow } from 'drone-swarm-common';
 
 export function createSkill(
   req: CreateSkillRequest,

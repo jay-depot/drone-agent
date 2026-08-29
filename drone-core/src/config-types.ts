@@ -251,6 +251,10 @@ export type DroneMemoryConfig = {
   enabled: boolean;
 };
 
+export type DroneWakelockConfig = {
+  enabled: boolean;
+};
+
 export type DroneLogConfig = {
   enabled: boolean;
 };
@@ -292,7 +296,7 @@ export type DroneSwarmConfig = {
 export type DroneTuiConfig = {
   syntaxHighlighting: {
     colors: Record<string, string>;
-    codeBackground: string;
+    codeBackground?: string;
   };
 };
 
@@ -428,6 +432,7 @@ export type DroneAgentConfig = {
   mcp: DroneMcpConfig;
   compaction: DroneCompactionConfig;
   memory: DroneMemoryConfig;
+  wakelock: DroneWakelockConfig;
   log: DroneLogConfig;
   terminal: DroneTerminalConfig;
   promptFile: DronePromptFileConfig;
@@ -453,6 +458,7 @@ export type PartialDroneAgentConfig = Partial<{
   mcp: Partial<DroneMcpConfig>;
   compaction: Partial<DroneCompactionConfig>;
   memory: Partial<DroneMemoryConfig>;
+  wakelock: Partial<DroneWakelockConfig>;
   log: Partial<DroneLogConfig>;
   promptFile: Partial<DronePromptFileConfig>;
   terminal: Partial<DroneTerminalConfig>;
@@ -497,6 +503,7 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
     'ollama',
     'compaction',
     'memory',
+    'wakelock',
     'log',
     'terminal',
     'search',
@@ -634,6 +641,9 @@ export function createDefaultAgentConfig(
       nudgeMarginPercent: 10,
     },
     memory: {
+      enabled: true,
+    },
+    wakelock: {
       enabled: true,
     },
     log: {

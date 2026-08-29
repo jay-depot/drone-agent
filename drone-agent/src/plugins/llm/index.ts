@@ -66,18 +66,6 @@ export const llmPlugin: DronePlugin = {
           fetchedAt: number;
         }
       | undefined;
-    let activatedExplicitly = false;
-
-    function resolveProviderConfig(providerId: string) {
-      const config = registration.getConfig();
-      const entry = config.providers[providerId];
-      if (!entry) {
-        throw new Error(
-          `Provider "${providerId}" is not configured. Available: ${Object.keys(config.providers).join(', ') || '(none)'}`
-        );
-      }
-      return entry;
-    }
 
     function instantiateProvider(
       providerId: string
@@ -642,7 +630,6 @@ export const llmPlugin: DronePlugin = {
             `LLM provider "${providerId}" is not available (unconfigured or its protocol driver is missing).`
           );
         }
-        activatedExplicitly = true;
         const previousProvider = activeProviderId;
         activeProviderId = providerId;
         const selection = parseModelSelection(currentModel);

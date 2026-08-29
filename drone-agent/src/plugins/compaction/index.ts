@@ -1,4 +1,5 @@
 import {
+  DroneLlmError,
   estimateMessageTokens,
   estimateTurnTokens,
   type DroneChatMessage,
@@ -416,7 +417,8 @@ async function maybeCompact(input: {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const statusCode = (error as any)?.status_code;
+      const statusCode =
+        error instanceof DroneLlmError ? error.status : undefined;
       const statusSuffix = statusCode ? ` (HTTP ${statusCode})` : '';
       logger.warn(
         `compaction: summary failed; leaving session untouched: ${message}${statusSuffix}`

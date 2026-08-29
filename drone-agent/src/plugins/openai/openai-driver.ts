@@ -200,7 +200,7 @@ export function createOpenAiProvider(
         );
       }
 
-      let body = buildBody(request);
+      const body = buildBody(request);
       if (debug) {
         console.error(`[llm:request] POST ${baseUrl}/chat/completions`);
         console.error(`[llm:request] ${JSON.stringify(body)}`);
@@ -227,12 +227,11 @@ export function createOpenAiProvider(
         );
         if (retry !== undefined) {
           response = retry.response;
-          body = retry.body;
         }
       }
 
       if (!response.ok) {
-        let errorBody = '';
+        let errorBody: string;
         try {
           errorBody = await response.text();
         } catch {
@@ -346,9 +345,8 @@ async function maybeToolRoutingRetry(
   debug?: boolean
 ): Promise<{ response: Response; body: OpenAiChatRequest } | undefined> {
   let errorBody: OpenRouterErrorBody = {};
-  let errorText = '';
   try {
-    errorText = await failedResponse.text();
+    const errorText = await failedResponse.text();
     errorBody = JSON.parse(errorText) as OpenRouterErrorBody;
   } catch {
     // errorText stays as-is if JSON parse fails

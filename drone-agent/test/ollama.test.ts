@@ -1,8 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import type { ShowResponse } from 'ollama';
 import {
-  createOllamaProvider,
-  discoverOllamaModels,
   extractContextWindowTokens,
   isCloudModel,
   OLLAMA_LOCAL_NUM_CTX_PIN,

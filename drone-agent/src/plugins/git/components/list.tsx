@@ -1,7 +1,6 @@
 import { Text } from 'ink';
 import type { ReactNode } from 'react';
 import type { DroneColorScheme } from '../../../tui/theme.js';
-import { tryParseJson } from '../../../tui/shared/format.js';
 import type { ListItem } from '../types.js';
 
 export type { ListItem } from '../types.js';

@@ -168,7 +168,7 @@ async function main(): Promise<void> {
   );
   // The conversation is created after the engine, so expose a mutable ref that
   // the engine's `_runtime` capability closure reads at call time.
-  let resetStuckDetectorsRef: (() => void) | undefined;
+  const resetStuckDetectorsRef: { current?: () => void } = {};
   const engine = createDronePluginEngine({
     plugins: allPlugins,
     config: resolvedConfig.config,
@@ -180,7 +180,7 @@ async function main(): Promise<void> {
       persona: invocation.options.persona,
     },
     buildSystemMessages: () => budgetService.buildSystemMessages(),
-    resetStuckDetectors: () => resetStuckDetectorsRef?.(),
+    resetStuckDetectors: () => resetStuckDetectorsRef.current?.(),
   });
   engineRef.current = engine;
 
@@ -313,7 +313,7 @@ async function main(): Promise<void> {
       return answers.continue === 'yes';
     },
   });
-  resetStuckDetectorsRef = conversation.resetStuckDetectors;
+  resetStuckDetectorsRef.current = conversation.resetStuckDetectors;
   const registeredPlugins = await engine.initialize();
 
   // ── Elicitation wiring ──────────────────────────────────────────────

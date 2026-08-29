@@ -1,11 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createWebAuthMiddleware, isLocalRequest } from '../src/web-auth.js';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 // ── isLocalRequest ──────────────────────────────────────────────────
 
 describe('isLocalRequest', () => {
   function makeReq(ip: string) {
-    return { ip } as any;
+    return { ip } as unknown as FastifyRequest;
   }
 
   it('returns true for 127.0.0.1', () => {
@@ -39,24 +40,24 @@ describe('createWebAuthMiddleware', () => {
       headers: {
         authorization: authHeader,
       },
-    } as any;
+    } as unknown as FastifyRequest;
   }
 
   function makeReply() {
     let code = 0;
-    let sent: any = null;
+    let sent: unknown = null;
     return {
       code: (c: number) => {
         code = c;
         return {
-          send: (s: any) => {
+          send: (s: unknown) => {
             sent = s;
           },
         };
       },
       _sent: () => sent,
       _code: () => code,
-    } as any;
+    } as unknown as FastifyReply;
   }
 
   it('allows local requests without token', async () => {

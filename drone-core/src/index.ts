@@ -65,6 +65,7 @@ export type {
   DroneCompactionStrategy,
   DroneCompactionConfig,
   DroneMemoryConfig,
+  DroneWakelockConfig,
   DroneLogConfig,
   DroneTerminalConfig,
   DronePromptFileConfig,
