@@ -192,7 +192,6 @@ async function runSpawnTrigger(
   }
 }
 
-
 /**
  * Fire the configured session-end trigger for a finished session. Errors are
  * contained: the hook logs and reports them in the result instead of throwing,
