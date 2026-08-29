@@ -84,7 +84,7 @@ describe('spawner workingDir guard', () => {
     const [cmd, args, options] = spawnMock.mock.calls[0] as [
       string,
       string[],
-      { cwd: string }
+      { cwd: string },
     ];
     expect(cmd).toBe('drone-agent');
     expect(args).toContain('--working-dir');
@@ -111,7 +111,7 @@ describe('spawner workingDir guard', () => {
     const [, args, options] = spawnMock.mock.calls[0] as [
       string,
       string[],
-      { cwd: string }
+      { cwd: string },
     ];
     expect(args).not.toContain('--working-dir');
     expect(options.cwd).toBe(process.cwd());
