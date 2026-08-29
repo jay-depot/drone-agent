@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import type { SessionEndTrigger } from 'drone-swarm-common';
 import { logger } from './logger.js';
 import * as db from './db/index.js';
+import { isBeaconConnected, sendBeaconCommand } from './beacon-ws.js';
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 30000;
 const ESCALATION_KILL_GRACE_MS = 200;
@@ -135,14 +136,41 @@ async function runSpawnTrigger(
       error: `beacon not found: ${beaconId}`,
     };
   }
+  const payload = {
+    personaId: trigger.persona,
+    task: `Session ${sessionId} ended (session-end trigger)`,
+  };
+
+  // Preferred path: push the spawn down the beacon's reverse-channel
+  // WebSocket (the beacon opens it toward the coordinator at startup), so
+  // the coordinator never needs an inbound HTTP connection to the beacon.
+  if (isBeaconConnected(beaconId)) {
+    try {
+      const res = await sendBeaconCommand(beaconId, 'spawn', payload, 10000);
+      if (!res.ok) {
+        logger.warn(
+          `Session-end spawn to beacon ${beaconId} failed over reverse channel for session ${sessionId}: ${res.status} ${JSON.stringify(res.body)}`
+        );
+        return { ran: true, kind: 'spawn', error: `status ${res.status}` };
+      }
+      logger.info(
+        `Session-end spawn trigger forwarded persona ${trigger.persona} to beacon ${beaconId} via reverse channel`
+      );
+      return { ran: true, kind: 'spawn' };
+    } catch (err) {
+      logger.warn(
+        `Reverse-channel spawn to beacon ${beaconId} failed for session ${sessionId}: ${err}; falling back to HTTP`
+      );
+    }
+  }
+
+  // Fallback: direct HTTP to the beacon's /spawn route for beacons that
+  // have not (yet) connected their reverse channel.
   try {
     const response = await fetch(`http://${beacon.host}:${beacon.port}/spawn`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        personaId: trigger.persona,
-        task: `Session ${sessionId} ended (session-end trigger)`,
-      }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) {
@@ -163,6 +191,7 @@ async function runSpawnTrigger(
     return { ran: true, kind: 'spawn', error: String(err) };
   }
 }
+
 
 /**
  * Fire the configured session-end trigger for a finished session. Errors are
