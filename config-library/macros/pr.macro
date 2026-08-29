@@ -1,0 +1,7 @@
+#! /pr
+/tool mount mcp__github__create_pull_request
+/tool mount mcp__github__get_me
+/tool mount mcp__github__list_branches
+/tool mount exec__run
+Please open a pull request for the current branch. If we are on the main/trunk branch, ask before proceeding.
+
