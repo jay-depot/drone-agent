@@ -60,6 +60,116 @@ describe('Coordinator Client', () => {
     );
   });
 
+  describe('fetchCoordinatorFragments', () => {
+    it('should fetch fragments and mark them as coordinator scope', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+
+      setupMockHttpResponse(200, {
+        fragments: [
+          {
+            id: 'f1',
+            target: 'broadcast',
+            content: 'c',
+            phase: 'header',
+            scope: 'coordinator',
+            createdAt: 1,
+            updatedAt: 1,
+            expiresAt: null,
+          },
+        ],
+      });
+
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+
+      const fragments = await client.fetchCoordinatorFragments();
+      expect(fragments).toHaveLength(1);
+      expect(fragments[0].scope).toBe('coordinator');
+      expect(fragments[0].target).toBe('broadcast');
+    });
+
+    it('should accept a raw array response shape', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+
+      setupMockHttpResponse(200, [
+        {
+          id: 'f2',
+          target: 'agent-1',
+          content: 'c',
+          phase: 'footer',
+          scope: 'coordinator',
+          createdAt: 1,
+          updatedAt: 1,
+          expiresAt: null,
+        },
+      ]);
+
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+
+      const fragments = await client.fetchCoordinatorFragments();
+      expect(fragments).toHaveLength(1);
+      expect(fragments[0].id).toBe('f2');
+    });
+
+    it('should return empty array when coordinator is not trusted', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+
+      setBeaconApproved(false);
+
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+
+      setupMockHttpResponse(200, { fragments: [] });
+
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+
+      const fragments = await client.fetchCoordinatorFragments();
+      expect(fragments).toEqual([]);
+      expect(mockRequest).not.toHaveBeenCalled();
+    });
+  });
+
   afterEach(async () => {
     vi.restoreAllMocks();
     resetCoordinatorTrust();

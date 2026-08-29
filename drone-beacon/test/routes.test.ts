@@ -16,6 +16,8 @@ vi.mock('../src/ws-server.js', () => ({
   sendToChannel: vi.fn(),
   registerWebSocketServer: vi.fn(),
   startMessageCleanup: vi.fn(),
+  pushFragmentToAgent: vi.fn(),
+  pushFragmentSyncToAllConnected: vi.fn(),
 }));
 
 let app: FastifyInstance;
@@ -1119,5 +1121,202 @@ describe('Search Routes', () => {
     expect(body.results[0].file).toBe('/proj/src/dup.ts');
     expect(body.results[0].content).toContain('first matching chunk');
     expect(body.results[0].content).toContain('second matching chunk');
+  });
+});
+
+// ── Fragment Routes ─────────────────────────────────────────────────
+
+describe('Fragment Routes', () => {
+  beforeEach(async () => {
+    await setupDb();
+    app = await buildTestApp();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    await teardownDb();
+  });
+
+  it('POST /fragments upserts and returns the fragment', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: { id: 'maint', target: 'agent-1', content: 'hello' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.ok).toBe(true);
+    expect(body.fragment.id).toBe('maint');
+    expect(body.fragment.phase).toBe('header');
+    // Targeted fragments get a default TTL stamped.
+    expect(body.fragment.expiresAt).toBeGreaterThan(Date.now());
+  });
+
+  it('POST /fragments accept-and-queue: unknown agentId still 200', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: { id: 'q1', target: 'not-registered-agent', content: 'hi' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).ok).toBe(true);
+  });
+
+  it('POST /fragments upserts the same (id, target) idempotently', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: { id: 'idem', target: 'agent-1', content: 'v1' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: { id: 'idem', target: 'agent-1', content: 'v2' },
+    });
+    expect(res.statusCode).toBe(200);
+    const list = await app.inject({ method: 'GET', url: '/fragments' });
+    const fragments = JSON.parse(list.body).fragments;
+    expect(fragments).toHaveLength(1);
+    expect(fragments[0].content).toBe('v2');
+  });
+
+  it('GET /fragments lists all rows and filters by target', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: { id: 'f1', target: 'agent-1', content: 'c' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: { id: 'f1', target: 'broadcast', content: 'c' },
+    });
+    const all = await app.inject({ method: 'GET', url: '/fragments' });
+    expect(JSON.parse(all.body).fragments).toHaveLength(2);
+    const filtered = await app.inject({
+      method: 'GET',
+      url: '/fragments?target=broadcast',
+    });
+    expect(JSON.parse(filtered.body).fragments).toHaveLength(1);
+    expect(JSON.parse(filtered.body).fragments[0].target).toBe('broadcast');
+  });
+
+  it('POST /fragments returns 400 for validation and limit errors', async () => {
+    const badId = await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: { id: 'bad id', target: 'a', content: 'c' },
+    });
+    expect(badId.statusCode).toBe(400);
+    expect(JSON.parse(badId.body).code).toBe('validation');
+
+    const badPhase = await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: { id: 'ok', target: 'a', content: 'c', phase: 'middle' },
+    });
+    expect(badId.statusCode).toBe(400);
+    expect(JSON.parse(badId.body).code).toBe('validation');
+
+    const oversize = await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: { id: 'ok', target: 'a', content: 'x'.repeat(16 * 1024 + 1) },
+    });
+    expect(oversize.statusCode).toBe(400);
+    expect(JSON.parse(oversize.body).code).toBe('limit');
+  });
+
+  it('enforces the broadcast count cap', async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/fragments',
+        payload: { id: `bc-${i}`, target: 'broadcast', content: 'c' },
+      });
+      expect(res.statusCode).toBe(200);
+    }
+    const sixth = await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: { id: 'bc-5', target: 'broadcast', content: 'c' },
+    });
+    expect(sixth.statusCode).toBe(400);
+    expect(JSON.parse(sixth.body).code).toBe('limit');
+  });
+
+  it('enforces the per-agent count cap', async () => {
+    for (let i = 0; i < 50; i++) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/fragments',
+        payload: { id: `t-${i}`, target: 'agent-1', content: 'c' },
+      });
+      expect(res.statusCode).toBe(200);
+    }
+    const fiftyFirst = await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: { id: 't-50', target: 'agent-1', content: 'c' },
+    });
+    expect(fiftyFirst.statusCode).toBe(400);
+    expect(JSON.parse(fiftyFirst.body).code).toBe('limit');
+  });
+
+  it('DELETE /fragments/:id deletes a unique row without ?target', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: { id: 'del', target: 'agent-1', content: 'c' },
+    });
+    const res = await app.inject({ method: 'DELETE', url: '/fragments/del' });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).ok).toBe(true);
+    const list = await app.inject({ method: 'GET', url: '/fragments' });
+    expect(JSON.parse(list.body).fragments).toHaveLength(0);
+  });
+
+  it('DELETE /fragments/:id is 400 when ambiguous without ?target', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: { id: 'amb', target: 'agent-1', content: 'c' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: { id: 'amb', target: 'broadcast', content: 'c' },
+    });
+    const noTarget = await app.inject({
+      method: 'DELETE',
+      url: '/fragments/amb',
+    });
+    expect(noTarget.statusCode).toBe(400);
+    const withTarget = await app.inject({
+      method: 'DELETE',
+      url: '/fragments/amb?target=agent-1',
+    });
+    expect(withTarget.statusCode).toBe(200);
+    const list = await app.inject({ method: 'GET', url: '/fragments' });
+    expect(JSON.parse(list.body).fragments).toHaveLength(1);
+    expect(JSON.parse(list.body).fragments[0].target).toBe('broadcast');
+  });
+
+  it('DELETE /fragments/:id is 404 for unknown ids', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/fragments/missing',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('POST /agents rejects the broadcast sentinel as agentId', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/agents',
+      payload: { id: 'broadcast', personaId: null },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('broadcast');
   });
 });
