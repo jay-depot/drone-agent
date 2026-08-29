@@ -5,6 +5,7 @@ import path from 'node:path';
 import process from 'node:process';
 import {
   createDefaultAgentConfig,
+  toToolResultContent,
   type DronePluginHooks,
   type DronePluginRegistration,
   type DronePromptFragment,
@@ -20,9 +21,7 @@ import type { DroneMemoryCapability } from '../src/plugins/memory/types.js';
  * of forcing them through `(...args: unknown[]) => unknown`.
  */
 type CapturedHooks = {
-  [K in keyof DronePluginHooks]: Array<
-    Parameters<DronePluginHooks[K]>[0]
-  >;
+  [K in keyof DronePluginHooks]: Array<Parameters<DronePluginHooks[K]>[0]>;
 };
 
 /**
@@ -69,8 +68,10 @@ function createMockRegistration(): {
       onConversationEvent: [] as CapturedHooks['onConversationEvent'],
       onSessionClear: [] as CapturedHooks['onSessionClear'],
       onShutdown: [] as CapturedHooks['onShutdown'],
-      onSessionSafetyTrimWillRun: [] as CapturedHooks['onSessionSafetyTrimWillRun'],
-      onSessionSafetyTrimApplied: [] as CapturedHooks['onSessionSafetyTrimApplied'],
+      onSessionSafetyTrimWillRun:
+        [] as CapturedHooks['onSessionSafetyTrimWillRun'],
+      onSessionSafetyTrimApplied:
+        [] as CapturedHooks['onSessionSafetyTrimApplied'],
     },
   };
 
@@ -223,7 +224,7 @@ describe('memoryPlugin', () => {
       action: 'recall',
       key: 'nonexistent',
     });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
     expect(parsed.entry).toBeNull();
   });
 
@@ -279,7 +280,7 @@ describe('memoryPlugin', () => {
       action: 'list',
       prefix: 'session:',
     });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
     expect(parsed.count).toBe(2);
   });
 

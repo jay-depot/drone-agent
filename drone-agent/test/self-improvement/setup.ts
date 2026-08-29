@@ -1,17 +1,12 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os, { tmpdir } from 'node:os';
-<<<<<<< HEAD
-import { afterEach, beforeEach, vi } from 'vitest';
+import { vi } from 'vitest';
 import {
   createDefaultAgentConfig,
   toToolResultContent,
   type DronePlugin,
 } from 'drone-core';
-=======
-import { vi } from 'vitest';
-import { createDefaultAgentConfig, type DronePlugin } from 'drone-core';
->>>>>>> origin/main
 import { createDronePluginEngine } from '../../src/runtime/plugin-engine.js';
 import { selfImprovementPlugin } from '../../src/plugins/self-improvement/index.js';
 import { createTestPlugin, silentLogger } from '../helpers.js';

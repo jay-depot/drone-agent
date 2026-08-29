@@ -3,7 +3,6 @@ import path from 'node:path';
 import fg from 'fast-glob';
 import type { DronePlugin } from 'drone-core';
 import { FileReadBlock } from '../tui/components/FileReadBlock.js';
-import { FileReadImageBlock } from '../tui/components/FileReadImageBlock.js';
 import { FileWriteBlock } from '../tui/components/FileWriteBlock.js';
 import { FileApplyDiffBlock } from '../tui/components/FileApplyDiffBlock.js';
 import { FileListBlock } from '../tui/components/FileListBlock.js';

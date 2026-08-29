@@ -6,7 +6,6 @@ import {
   toToolResultContent,
   type DronePluginRegistration,
   type DronePromptFragment,
-  type DroneToolDefinition,
 } from 'drone-core';
 import {
   searchPlugin,

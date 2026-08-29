@@ -1,12 +1,8 @@
 import { isRecord } from '../../shared/type-guards.js';
 import type {
   DroneLogger,
-<<<<<<< HEAD
   DroneToolResult,
   DroneImageContent,
-  DroneMcpStreamableHttpServerConfig,
-=======
->>>>>>> origin/main
   DroneMcpResourceMeta,
   DroneMcpResourceTemplateMeta,
   DroneMcpPromptArgument,

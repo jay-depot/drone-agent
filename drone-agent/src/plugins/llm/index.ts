@@ -4,7 +4,6 @@ import {
   parseModelSelection,
   resolveConfiguredReasoningLevel,
   type DiscoveredModel,
-  type DroneChatMessage,
   type DroneContextWindowInfo,
   type DroneImageContent,
   type DroneLlmCapability,

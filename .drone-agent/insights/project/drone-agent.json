@@ -195,7 +195,7 @@
     "timestamp": "2026-08-17T01:19:51.705Z",
     "insight": "`advanced-security/dismiss-alerts` (the GitHub action that makes `// codeql[...]` suppression comments work) only dismisses alerts on the DEFAULT branch (main), NOT on PRs. On a PR, alerts are associated with the PR's head commit and the code-scanning API the action uses cannot dismiss them — so the alert stays red on the PR no matter how correct the suppression comment is. This creates a catch-22 with a \"CI must be green to merge\" policy: you can't merge because the PR check is red, but the suppression only takes effect after merge. The pragmatic design: gate the `dismiss-alerts` step to `main` only (`if: github.ref == 'refs/heads/main'`), so on PRs the analysis runs and shows alerts as warnings but the job stays green (neutral) and doesn't block merging; on main the dismissal runs and clears suppressed alerts. Then a green-to-merge policy can be added on main (where suppression works), not on PRs. Also note: the repo must be set to \"Advanced config\" (not default setup) in Settings → Code security and analysis → Code scanning, or the SARIF upload fails with \"CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled\" — and GitHub moved this setting under the \"Advanced Security\" section, not \"Copilot\"."
   },
-  {  
+  {
     "timestamp": "2026-08-17T00:08:28.077Z",
     "insight": "drone-coordinator/test/routes/messages.test.ts \"POST /messages/broadcast with mixed fetch results\" is flaky: it failed once in a full `pnpm test` run (deliveredCount expected 1, got 0) but passed in isolation and on a second full-suite run. Unrelated to compaction work. Worth investigating as a timing/ordering flake in the broadcast route test."
   },

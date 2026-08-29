@@ -7,6 +7,7 @@ import {
   type DroneImageContent,
   type DroneLlmCapability,
   type DroneLlmProvider,
+  type DroneReasoningLevel,
   type DroneToolResult,
 } from 'drone-core';
 import { createConversationService } from '../src/runtime/conversation-service.js';
@@ -72,7 +73,7 @@ function makeLlmCapability(
     getModel: () => 'fake',
     setModel: () => {},
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: DroneReasoningLevel | undefined) => {},
     listModels: async () => ['fake'],
     registerDriver: () => {},
     registerProvider: () => {},

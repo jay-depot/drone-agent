@@ -76,7 +76,7 @@ async function setupBroker(options: {
 
   await llmPlugin.register(registration);
   if (!offeredCapability) throw new Error('Expected llm capability.');
-  for (const [protocolId, driver] of Object.entries(options.drivers ?? {})) {
+  for (const [, driver] of Object.entries(options.drivers ?? {})) {
     offeredCapability.registerDriver(driver);
   }
   // Ensure any ollama-provider tests have a driver so auto-activation works.
