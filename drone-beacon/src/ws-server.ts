@@ -85,11 +85,19 @@ function unsubscribeFromChannel(agentId: string, channel: string): void {
 
 export function sendToAgent(agentId: string, message: object): boolean {
   const conn = connections.get(agentId);
-  if (conn && conn.socket.readyState === 'OPEN') {
-    conn.socket.send(JSON.stringify(message));
-    return true;
+  if (!conn) {
+    return false;
   }
-  return false;
+  // The ws library reports readyState as a number (1 === OPEN) while the
+  // WHATWG WebSocket reports the 'OPEN' string; accept both so server-side
+  // pushes cannot be silently dropped by a ready-state representation
+  // mismatch.
+  const readyState = conn.socket.readyState;
+  if (readyState !== 1 && readyState !== 'OPEN') {
+    return false;
+  }
+  conn.socket.send(JSON.stringify(message));
+  return true;
 }
 
 export function sendToChannel(channel: string, message: object): number {
