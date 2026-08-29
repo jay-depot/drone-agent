@@ -99,23 +99,32 @@ describe.skipIf(
   });
 
   it('delivers fragmentSync on WS connect with the full merged set and live pushes thereafter', async () => {
+    // WS connects are only accepted for registered agents.
+    const register = await fetch(`${BEACON_URL}/agents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: TEST_AGENT, personaId: null }),
+    });
+    expect(register.status).toBe(201);
+
     const wsUrl = `${BEACON_URL.replace(/^http/, 'ws')}/ws?agentId=${TEST_AGENT}`;
     const ws = new WebSocket(wsUrl);
 
     const received: Array<{ type: string; payload: Record<string, unknown> }> =
       [];
-    const waiter = { fragmentSync: false, push: false };
-    let notify: (() => void) | undefined;
-    const signal = () => {
-      const cb = notify;
-      notify = undefined;
-      cb?.();
+    const pollUntil = async (
+      predicate: () => boolean,
+      label: string,
+      timeoutMs = 10000
+    ): Promise<void> => {
+      const deadline = Date.now() + timeoutMs;
+      while (!predicate()) {
+        if (Date.now() > deadline) {
+          throw new Error(`timeout waiting for ${label}`);
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
     };
-    const waitFor = (ms: number) =>
-      new Promise<void>((resolve, reject) => {
-        notify = resolve;
-        setTimeout(() => reject(new Error('timeout waiting for WS frame')), ms);
-      });
 
     ws.addEventListener('message', event => {
       const msg = JSON.parse(String(event.data)) as {
@@ -123,23 +132,20 @@ describe.skipIf(
         payload: Record<string, unknown>;
       };
       received.push(msg);
-      if (msg.type === 'fragmentSync' && !waiter.fragmentSync) {
-        waiter.fragmentSync = true;
-        signal();
-      }
-      if (msg.type === 'fragment' && !waiter.push) {
-        waiter.push = true;
-        signal();
-      }
     });
 
     await new Promise<void>((resolve, reject) => {
       ws.addEventListener('open', () => resolve());
-      ws.addEventListener('error', () => reject(new Error('WS connect failed')));
+      ws.addEventListener('error', () =>
+        reject(new Error('WS connect failed'))
+      );
     });
 
-    // fragmentSync arrives on connect with the queued targeted row.
-    await waitFor(10000);
+    // fragmentSync arrives on connect with the queue-accepted targeted row.
+    await pollUntil(
+      () => received.some(m => m.type === 'fragmentSync'),
+      'fragmentSync'
+    );
     const sync = received.find(m => m.type === 'fragmentSync');
     expect(sync).toBeDefined();
     const syncFragments = sync?.payload.fragments as FragmentRow[];
@@ -156,7 +162,10 @@ describe.skipIf(
       }),
     });
     expect(post.status).toBe(200);
-    await waitFor(10000);
+    await pollUntil(
+      () => received.some(m => m.type === 'fragment'),
+      'fragment push'
+    );
     const push = received.find(m => m.type === 'fragment');
     expect(push).toBeDefined();
     expect((push?.payload.fragment as FragmentRow).id).toBe(
