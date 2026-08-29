@@ -51,11 +51,25 @@ export function SkillsListBlock({
     const s = skills[i];
     const id = (s.id as string) ?? '';
     const desc = (s.description as string) ?? '';
+    const remark = typeof s.remark === 'string' ? s.remark : undefined;
     elements.push(
       <Text key={`skill-${i}`} wrap="wrap">
         {`  - ${id}  (${desc})`}
       </Text>
     );
+    if (remark) {
+      elements.push(
+        <Text
+          key={`skill-remark-${i}`}
+          color={scheme.toolResult}
+          italic
+          wrap="wrap"
+        >
+          {`      ↳ ${remark}`}
+          {'\n'}
+        </Text>
+      );
+    }
   }
 
   elements.push(<Text key="trailing">{'\n'}</Text>);

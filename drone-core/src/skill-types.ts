@@ -6,6 +6,12 @@ export type DroneSkillDefinition = {
   description: string;
   recall: string[];
   modelInvocation: boolean;
+  /**
+   * Author-facing remark (credit/license note). Shown on user-facing
+   * listings only; never sent to the LLM. Local-scope only: not
+   * propagated by swarm sync.
+   */
+  remark?: string;
   body: string;
   source: 'user' | 'project' | 'beacon' | 'coordinator';
   /** Precedence assigned by the provider. Lower number = higher priority. */
