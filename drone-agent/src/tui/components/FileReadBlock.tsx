@@ -77,7 +77,12 @@ export function FileReadBlock({
   if (previewCode.length > 0) {
     try {
       const tree = lowlight.highlight(lang, previewCode);
-      highlighted = renderHighlightedTree(tree, codeBg, syntaxColors);
+      highlighted = renderHighlightedTree(
+        tree,
+        codeBg,
+        syntaxColors,
+        state.columns
+      );
     } catch {
       highlighted = <Text color="white">{previewCode}</Text>;
     }

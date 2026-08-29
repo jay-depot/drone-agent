@@ -8,7 +8,7 @@
  * - Headers, blockquotes, lists, horizontal rules
  */
 
-import { Box, Text } from 'ink';
+import { Box, Text, useStdout } from 'ink';
 import type { ReactNode } from 'react';
 import React from 'react';
 import { marked, type Token, type Tokens } from 'marked';
@@ -25,6 +25,11 @@ interface MarkdownProps {
    * prop) fall back to DEFAULT_SYNTAX_THEME, whose attribute-only comment
    * style cannot collide with the code background. */
   syntaxColors?: Record<string, string>;
+  /** Terminal columns override for code-block width computation. When
+   * omitted, the component reads `stdout.columns` itself. Exists as an
+   * explicit seam for tests and for callers that already know their
+   * effective width. */
+  columns?: number;
 }
 
 /**
@@ -35,7 +40,10 @@ export function Markdown({
   color = 'white',
   codeBackground = 'gray',
   syntaxColors,
+  columns,
 }: MarkdownProps): React.JSX.Element {
+  const { stdout } = useStdout();
+  const effectiveColumns = columns ?? stdout.columns;
   const tokens = marked.lexer(children);
   return (
     <Box flexDirection="column">
@@ -46,7 +54,8 @@ export function Markdown({
             color,
             codeBackground,
             syntaxColors,
-            `root-${index}`
+            `root-${index}`,
+            effectiveColumns
           )}
         </React.Fragment>
       ))}
@@ -62,7 +71,8 @@ function renderToken(
   color: string,
   codeBackground: string,
   syntaxColors: Record<string, string> | undefined,
-  keyPrefix: string
+  keyPrefix: string,
+  columns: number | undefined
 ): ReactNode {
   const textColor = token.type === 'paragraph' ? color : undefined;
 
@@ -101,7 +111,8 @@ function renderToken(
       return renderCodeBlock(
         token as Tokens.Code,
         codeBackground,
-        syntaxColors
+        syntaxColors,
+        columns
       );
 
     case 'hr':
@@ -313,21 +324,35 @@ function renderListItemContent(
 
 /**
  * Render a code block with syntax highlighting.
+ *
+ * The code box contributes border (2 columns) + paddingX (2 columns) of
+ * chrome, so the content width available to highlighted lines is
+ * `columns - 4` (the container-subtraction convention documented on
+ * renderHighlightedTree). Undefined/non-positive columns falls back to
+ * that function's legacy maxWidth mode.
  */
 function renderCodeBlock(
   token: Tokens.Code,
   codeBackground: string,
-  syntaxColors: Record<string, string> | undefined
+  syntaxColors: Record<string, string> | undefined,
+  columns: number | undefined
 ): ReactNode {
   const code = token.text ?? '';
   const lang = token.lang ?? 'plaintext';
+  const contentWidth =
+    typeof columns === 'number' && columns > 0 ? columns - 4 : undefined;
 
   // Try to highlight, fallback to plain text
   let highlighted: ReactNode;
 
   try {
     const tree = lowlight.highlight(lang, code);
-    highlighted = renderHighlightedTree(tree, codeBackground, syntaxColors);
+    highlighted = renderHighlightedTree(
+      tree,
+      codeBackground,
+      syntaxColors,
+      contentWidth
+    );
   } catch {
     // Language not found or highlight failed
     highlighted = <Text color="white">{code}</Text>;
