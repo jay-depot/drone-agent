@@ -140,3 +140,72 @@ Header bucket render → `# Swarm Fragments\n\n## [<id>]\n\n<content>` blocks jo
 ## Out of scope (v1, explicitly)
 
 Replacement sets/generations; agent-side fragment authoring tool; coordinator authoring UI/routes (write side); reverse-channel WS (separate branch); RAG pipeline itself (only the API contract it needs); per-fragment TUI widget/custom event kind; ack protocol (resync is the ack).
+
+
+---
+
+## COMPLETION SUMMARY (2026-08-29, executed by code persona)
+
+All phases A–J implemented and validated. The vault wiki also has ADR 173 + concepts page.
+
+### What shipped
+- **drone-core**: `src/swarm-fragment-types.ts` — `DroneSwarmFragment`, `BROADCAST_TARGET`, `validateFragmentId`);
+ re-exported from index. Unit test in `drone-core/test/swarm-fragment-types.test.ts`.
+- **drone-beacon**: `fragments` table (PK (id,target)) in db/init.ts; `db/fragments.ts` (upsert preserving
+ createdAt, TTL-filtered merged view with coordinator shadowing, deleteExpired returning rows, wholesale
+ coordinator replace, sha256 `mergedContentHash`); `fragments-limits.ts` (5 broadcasts / 50 per-agent /
+ 16 KB / 24h TTL / 60s sweep constants + `validateFragmentUpsert`); `routes/fragments.ts` (GET list w/
+ target+scope filter, POST upsert w/ WS push, DELETE w/ ambiguity 400, machine-readable 400 codes);
+ POST /agents rejects 'broadcast'; ws-server `pushFragmentToAgent`/`pushFragmentSyncToAllConnected`,
+ `fragmentSync` on connect, `fragmentAck` no-op case; `fragments-sweep.ts` wired into serve/shutdown;
+ `coordinator-client.fetchCoordinatorFragments()`; triggerCoordinatorSync mirrors coordinator rows
+ (scope=coordinator) + hash-change fan-out. **Bug fixes en route**: `sendToAgent` compared numeric
+ `readyState` to the string 'OPEN' and silently dropped every server push (pre-existing, also broke live
+ message delivery); `isLocalConnection` didn't implement the full RFC1918 172.16/12 range (Docker bridge
+ networks 172.17–172.31 rejected) and didn't strip ::ffff: prefixes.
+- **drone-coordinator**: fragments table + `db/fragments.ts` (upsert/get/list/delete scaffolding) +
+ read-only `GET /api/fragments` under /api prefix.
+- **drone-agent**: additive `_runtime.emitEvent` in plugin-engine (extracted shared
+ `dispatchConversationEvent`, fire-and-forget w/ logging); swarm plugin `fragment-store.ts` (pure store),
+ `fragment-messages.ts` (WS handlers, one notice per op, initial resync silent via `fragmentsResynced`
+ flag); two unconditional prompt registrations `swarm.fragments.header`/`.footer` rendering from the
+ in-memory store; SwarmContext gains fragmentStore + fragmentsResynced.
+- **drone-swarm CLI**: `fragments list [--target]` (beacon+coordinator), `set`/`delete` (beacon-only w/
+ clear error vs coordinator); HELP updated.
+- **docs**: `docs/agents/swarm-plugin.md` "Swarm prompt fragments" section (asset model, delivery, limits
+ table, CLI, security note).
+- **tests**: beacon db+routes+ws-server+coordinator-client unit tests; coordinator
+ routes/fragments.test.ts; agent test/swarm/fragments.test.ts (store + handlers + registration); new
+ guarded integration suite `drone-agent/test/swarm-fragments-integration.test.ts` (added to
+ vitest.integration.config.ts) — REST round-trips + WS frame delivery via global WebSocket (WHATWG
+ addEventListener; registered agent required before WS connect); **verified green inside the provisioned
+ Docker swarm (`pnpm test:integration`: 9 files / 68 tests passed)**.
+- **wiki** (separate repo, Obsidian drone-agent-project): ADR 173, concepts/swarm-prompt-fragments, index
+ row, decisions rows (2), module/drone-beacon.md fragment feature + corrected isLocalConnection line;
+ committed there as 9c45695.
+
+### Validation (all green)
+pnpm lint 0 errors (prettier applied); pnpm -r run build 0 errors; pnpm typecheck 0 errors; pnpm test
+2434 passed / 12 skipped incl. all new unit tests; Docker integration suite passed (68 tests);
+LSP clean on every touched file (remaining workspace diagnostics verified pre-existing via
+stash-baseline check: docker/subagent fixtures 'on' typing, coordinator-client mock casts,
+auth.test _code, gateway test casts — all predate this session and pass tsc -b).
+
+### Deviations / judgment calls (per plan-gap rules)
+1. `fragmentSync` is sent before the `connected` welcome message (plan said "right after connected +
+ unread replay"); ordering is functionally irrelevant — the agent applies frames on arrival.
+2. TTL sweep sweep function placed in `fragments-sweep.ts` importing from `db` + `ws-server` directly
+ (plan allowed either file).
+3. Integration WS client uses the WHATWG global WebSocket API (ws package is not a dependency of
+ drone-agent; Node >= 22 provides the global).
+4. Lint forced self-review fixups: badPhase assertion bug in a route test caught by
+ no-unused-vars (would have masked a copy-paste test error); unused WebSocket type import removed.
+5. Wiki/ADR "reviewer pass" items verified directly (no `_runtime` consumer breakage via find-references,
+ zero any/sync-fs in new code, ws union additive, route ordering untouched) — recorded here rather than
+ dispatching a reviewer persona.
+
+### Commits (this repo, branch feat/coordinator-sysmessage-insert)
+e144008 chore: commit plan memories / 2450f65 feat: phases A–G source / 821315c docs: swarm-plugin.md /
+62f1e3c test: unit + integration / 671e44f fix: WHATWG WebSocket API + lint cleanup /
+ac17501 fix: WS test polls + agent registration / b30b748 fix(beacon): sendToAgent readyState /
+fix(beacon): RFC1918 172.16/12 isLocalConnection

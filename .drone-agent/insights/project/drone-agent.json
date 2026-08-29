@@ -346,5 +346,13 @@
   {
     "timestamp": "2026-08-29T15:25:30.750Z",
     "insight": "drone-agent planning gotcha: the wiki describes a coordinator→beacon reverse-channel WS (concepts/mtls-and-reverse-channel, flows/swarm-connection 'sendBeaconCommand', '/ws/beacon') that does NOT exist in code as of 2026-08-29 — coordinator→beacon is plain HTTP today (e.g. session-end spawn trigger POSTs beacon /spawn). Similarly DroneConfigInjector inject() has no verified consumer applying it into effective config. When planning features that depend on transport or config seams, verify against source, not wiki claims; the wiki carries aspirational entries despite the AGENTS.md aspirational-only rule, and a separate 'persistent websocket' branch exists to fix the transport gap."
+  },
+  {
+    "timestamp": "2026-08-29T16:49:36.669Z",
+    "insight": "The beacon's `sendToAgent` (`drone-beacon/src/ws-server.ts`) compared `conn.socket.readyState === 'OPEN'` (string) against the `ws` library's numeric readyState (1 = OPEN), so it returned false for every connected agent and silently dropped ALL server→agent pushes (live message delivery as well as new fragment pushes). Any 'is socket open' check on a `ws` socket must accept both the numeric (ws: 0/1/2/3) and WHATWG string ('OPEN') representations — or compare against numeric constants only. Verified empirically with a probe client after the Docker integration test exposed it as a fragmentSync timeout."
+  },
+  {
+    "timestamp": "2026-08-29T16:49:40.556Z",
+    "insight": "The beacon's `isLocalConnection` implemented the RFC1918 172.16/12 private range as a prefix check on '172.16.' only, rejecting 172.17.0.0–172.31.255.255 — which is where Docker/Podman bridge networks allocate. Any \"private IP range\" predicate must cover the full CIDR (e.g. /^172\\.(1[6-9]|2\\d|3[01])\\./), and should strip the ::ffff: IPv4-mapped IPv6 prefix before checking. This surfaced when the first test-runner-container WS connection to the beacon was rejected as non-local inside the integration swarm. Do not \"tighten\" private-range checks by narrowing RFC1918 ranges."
   }
 ]
