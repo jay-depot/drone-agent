@@ -369,7 +369,7 @@ describe('renderHighlightedTree width mode', () => {
     expect(lines[1]).toBe('abcdef    ');
   });
 
-  it('gives blank lines zero padding (true empty rows)', () => {
+  it('pads blank lines to one full-width row (visible band)', () => {
     const lines = renderedLines(
       renderHighlightedTree(
         twoLineTree(elementToken([], 'ab'), { type: 'text', value: '' }),
@@ -379,7 +379,7 @@ describe('renderHighlightedTree width mode', () => {
       )
     );
     expect(lines[0]).toBe('ab' + ' '.repeat(8));
-    expect(lines[1]).toBe('');
+    expect(lines[1]).toBe(' '.repeat(10));
   });
 
   it('never places padding inside a foreground SGR run (width mode)', () => {

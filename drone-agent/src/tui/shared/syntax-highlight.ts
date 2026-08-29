@@ -275,10 +275,12 @@ function resolveTokenStyle(
  * subtract their own chrome, e.g. a bordered code box passes
  * `columns - 4`), each line pads to `ceil(visibleLength / width) *
  * width`: a line then soft-wraps into exactly `ceil(L/width)` rows, every
- * one fully background-filled (no bare spill row), and blank lines pad to
- * zero so they render as true empty rows. The padding deliberately
- * carries no foreground SGR — a foreground on padding spaces is pointless
- * and is exactly how fg/bg collisions previously crept in.
+ * one fully background-filled (no bare spill row). Blank lines pad to one
+ * full-width row so they stay visible as a background band (zero-width
+ * text is dropped by ink's output writer, which would make them vanish).
+ * The padding deliberately carries no foreground SGR — a foreground on
+ * padding spaces is pointless and is exactly how fg/bg collisions
+ * previously crept in.
  */
 export function renderHighlightedTree(
   tree: HighlightRoot,
@@ -317,7 +319,9 @@ export function renderHighlightedTree(
     ...lines.map((line: string, lineIndex: number) => {
       const lineLen = visibleLength(line);
       const padTarget = widthMode
-        ? Math.ceil(lineLen / fillWidth) * fillWidth
+        ? lineLen === 0
+          ? fillWidth
+          : Math.ceil(lineLen / fillWidth) * fillWidth
         : fillWidth;
       const padding = ' '.repeat(Math.max(0, padTarget - lineLen));
       return React.createElement(

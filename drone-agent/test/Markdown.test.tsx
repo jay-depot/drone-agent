@@ -334,26 +334,25 @@ describe('Markdown', () => {
       expect(frame).not.toContain(bg + 'x'.repeat(40) + ' '.repeat(13));
     });
 
-    it('pads short lines to the inner width and leaves blank lines unpadded', async () => {
+    it('pads short lines and blank lines to one full inner-width row each', async () => {
       const md = ['```ts', 'ab', '', '```'].join('\n');
 
       const inst = render(<Markdown columns={30}>{md}</Markdown>);
       instance = inst;
       const frame = await waitUntilFrame(inst, f => f.includes('ab'));
 
-      // Short line fills exactly one inner-width row (26 columns).
+      // Both lines fill exactly one inner-width row (26 columns): the
+      // short line text+fill, the blank line as a full-width background
+      // band (ink drops zero-width text, so a 0-padded blank would vanish).
       expect(frame).toContain('\u001b[100mab' + ' '.repeat(24) + '\u001b[49m');
-      // The blank line pads to zero: no background run containing only
-      // spaces (the legacy artifact), and no empty background pair.
-      expect(frame).not.toMatch(bgPair);
-      expect(frame).not.toContain('\u001b[100m\u001b[49m');
+      expect(frame).toMatch(bgPair);
     });
 
     it('wraps a very long line with the fill landing inside the last wrapped row', async () => {
       // Inner width 26: a 100-char line pads to ceil(100/26)*26 = 104,
       // exceeding the 96 columns available inside the 100-column test
       // terminal, so ink hard-wraps it. The remainder row must be
-      // text-bearing and the blank line must not paint a bare band.
+      // text-bearing; the blank line paints exactly one inner-width band.
       const md = ['```ts', 'x'.repeat(100), '', '```'].join('\n');
 
       const inst = render(<Markdown columns={30}>{md}</Markdown>);
@@ -363,8 +362,8 @@ describe('Markdown', () => {
       // First wrapped row is fully filled at the 96-column content width,
       // inside its own background pair.
       expect(frame).toContain('\u001b[100m' + 'x'.repeat(96) + '\u001b[49m');
-      // No background run containing only spaces (bare spill band).
-      expect(frame).not.toMatch(bgPair);
+      // Exactly one space-only background band (the blank line's row).
+      expect(frame.match(new RegExp(bgPair.source, 'g'))).toHaveLength(1);
     });
   });
 });

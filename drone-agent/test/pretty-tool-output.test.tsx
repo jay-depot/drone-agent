@@ -128,7 +128,7 @@ describe('FileReadBlock width mode', () => {
     expect(rows).toContain('x'.repeat(50) + ' '.repeat(50));
   });
 
-  it('fills short lines to the terminal width and leaves blank lines empty', () => {
+  it('fills short lines to the terminal width and blank lines as a full-width band', () => {
     const state = makeState({
       name: 'file__read',
       arguments: { path: '/tmp/test.ts' },
@@ -146,11 +146,9 @@ describe('FileReadBlock width mode', () => {
     const rows = frameRows(inst);
     expect(rows).toContain('ab' + ' '.repeat(98));
     expect(rows).toContain('cd' + ' '.repeat(98));
-    // The blank line renders as a true empty row: no row may consist
-    // solely of spaces (the legacy solid-bar artifact).
-    for (const row of rows) {
-      expect(row.trim()).not.toBe('');
-    }
+    // The blank line stays visible as exactly one full-width background
+    // band (ink drops zero-width text, so a 0-padded blank would vanish).
+    expect(rows).toContain(' '.repeat(100));
   });
 });
 
