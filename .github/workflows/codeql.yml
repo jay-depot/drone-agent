@@ -29,13 +29,16 @@ jobs:
           - language: javascript-typescript
             build-mode: none
             query: codeql/javascript-queries:AlertSuppression.ql
+            # The analyze action names its SARIF output after the canonical
+            # CodeQL language (javascript), not the workflow alias.
+            sarif-name: javascript
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
@@ -43,7 +46,7 @@ jobs:
 
       - name: Perform CodeQL Analysis
         id: analyze
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: '/language:${{ matrix.language }}'
           output: sarif-results
@@ -55,6 +58,6 @@ jobs:
         uses: advanced-security/dismiss-alerts@v2
         with:
           sarif-id: ${{ steps.analyze.outputs.sarif-id }}
-          sarif-file: sarif-results/${{ matrix.language }}.sarif
+          sarif-file: sarif-results/${{ matrix.sarif-name || matrix.language }}.sarif
         env:
           GITHUB_TOKEN: ${{ github.token }}
