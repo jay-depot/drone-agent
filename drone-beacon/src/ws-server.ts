@@ -14,14 +14,18 @@ export const ERROR_NON_LOCAL_CONNECTION = 4003;
  */
 export function isLocalConnection(ip: string | undefined): boolean {
   if (!ip) return false;
+  // Strip the IPv4-mapped IPv6 prefix before range checks.
+  const normalized = ip.startsWith('::ffff:') ? ip.slice(7) : ip;
   return (
-    ip === '127.0.0.1' ||
+    normalized === '127.0.0.1' ||
     ip === '::1' ||
-    ip === '::ffff:127.0.0.1' ||
-    ip.startsWith('192.168.') || // Local network
-    ip.startsWith('10.') || // Local network
-    ip.startsWith('172.16.') || // Private network
-    ip.startsWith('169.254.') // Link-local
+    normalized.startsWith('192.168.') || // Local network
+    normalized.startsWith('10.') || // Local network
+    // RFC1918 172.16.0.0/12 spans 172.16.0.0 - 172.31.255.255 (Docker
+    // networks live here); a prefix check on '172.16.' wrongly excludes
+    // 172.17-172.31.
+    /^172\.(1[6-9]|2\d|3[01])\./.test(normalized) || // Private network
+    normalized.startsWith('169.254.') // Link-local
   );
 }
 

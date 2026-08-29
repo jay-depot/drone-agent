@@ -46,6 +46,14 @@ describe('WebSocket Server - IP Validation', () => {
     expect(isLocalConnection('172.16.0.1')).toBe(true);
   });
 
+  it('should identify the rest of RFC1918 172.16/12 (172.17-172.31)', () => {
+    expect(isLocalConnection('172.17.0.6')).toBe(true);
+    expect(isLocalConnection('172.20.0.6')).toBe(true);
+    expect(isLocalConnection('172.31.255.255')).toBe(true);
+    expect(isLocalConnection('172.32.0.1')).toBe(false);
+    expect(isLocalConnection('172.15.0.1')).toBe(false);
+  });
+
   it('should identify link-local 169.254.x.x', () => {
     expect(isLocalConnection('169.254.1.1')).toBe(true);
   });
