@@ -109,6 +109,8 @@ async function main(): Promise<void> {
   });
   const builtInPlugins = createBuiltInPlugins({
     sessionManager,
+    ...createLlmGetters(engineRef),
+    resolveContextWindow: () => budgetService.resolveContextWindow(),
     buildFragmentMessages: async () => {
       const engine = getEngine();
       const fragments = await engine.renderPromptFragments();
@@ -485,6 +487,7 @@ async function main(): Promise<void> {
       const tui = createTui({
         engine,
         conversation,
+        sessionManager,
         model,
         logger,
       });

@@ -372,8 +372,7 @@ describe('createDronePluginEngine', () => {
 
       let listMountedFn: (() => DroneToolDescriptor[]) | undefined;
       let mountFn:
-        | ((name: string) => DroneToolDefinition | undefined)
-        | undefined;
+        ((name: string) => DroneToolDefinition | undefined) | undefined;
       let unmountFn: ((name: string) => void) | undefined;
 
       const engine = createDronePluginEngine({

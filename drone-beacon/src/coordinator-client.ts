@@ -142,11 +142,23 @@ export interface CoordinatorClient {
     query: Record<string, string>
   ): Promise<{ sessions: unknown[]; count: number }>;
   getSessionLog(sessionId: string): Promise<unknown>;
+  getSessionTranscript(sessionId: string): Promise<{
+    session: unknown;
+    transcript: string;
+  } | null>;
   processSession(sessionId: string): Promise<unknown>;
   completeSessionProcessing(
     sessionId: string,
     body: { summary?: string; notes?: string }
   ): Promise<unknown>;
+
+  // Coordinator proxy tools (beacon proxies for the agent)
+  listBeacons(): Promise<unknown[]>;
+  listAgentLocations(beaconId?: string): Promise<unknown[]>;
+  spawnSpawn(body: Record<string, unknown>): Promise<unknown>;
+  getSpawn(beaconId: string, spawnId: string): Promise<unknown>;
+  listSpawns(beaconId: string, status?: string): Promise<unknown[]>;
+  terminateSpawn(beaconId: string, spawnId: string): Promise<unknown>;
 }
 
 export interface SessionInfo {
@@ -1047,6 +1059,28 @@ export function createCoordinatorClient(
       }
     },
 
+    async getSessionTranscript(sessionId: string): Promise<{
+      session: unknown;
+      transcript: string;
+    } | null> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
+      try {
+        const res = await cfetch(
+          `${baseUrl}/api/sessions/${sessionId}/transcript`
+        );
+        if (!res.ok) {
+          logger.warn(`Failed to get session transcript: ${res.status}`);
+          return null;
+        }
+        return (await res.json()) as { session: unknown; transcript: string };
+      } catch (err) {
+        logger.warn(`Failed to get session transcript: ${err}`);
+        return null;
+      }
+    },
+
     async processSession(sessionId: string): Promise<unknown> {
       if (!coordinatorTrusted()) {
         return null;
@@ -1092,6 +1126,123 @@ export function createCoordinatorClient(
         return await res.json();
       } catch (err) {
         logger.warn(`Failed to complete session processing: ${err}`);
+        return null;
+      }
+    },
+
+    async listBeacons(): Promise<unknown[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
+      try {
+        const res = await cfetch(`${baseUrl}/api/beacons`);
+        if (!res.ok) {
+          logger.warn(`Failed to list beacons: ${res.status}`);
+          return [];
+        }
+        return (await res.json()) as unknown[];
+      } catch (err) {
+        logger.warn(`Failed to list beacons: ${err}`);
+        return [];
+      }
+    },
+
+    async listAgentLocations(beaconId?: string): Promise<unknown[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
+      try {
+        const query = beaconId
+          ? `?beaconId=${encodeURIComponent(beaconId)}`
+          : '';
+        const res = await cfetch(`${baseUrl}/api/agents/location${query}`);
+        if (!res.ok) {
+          logger.warn(`Failed to list agent locations: ${res.status}`);
+          return [];
+        }
+        return (await res.json()) as unknown[];
+      } catch (err) {
+        logger.warn(`Failed to list agent locations: ${err}`);
+        return [];
+      }
+    },
+
+    async spawnSpawn(body: Record<string, unknown>): Promise<unknown> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
+      try {
+        const res = await cfetch(`${baseUrl}/api/spawn`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          logger.warn(`Failed to spawn: ${res.status}`);
+          return null;
+        }
+        return await res.json();
+      } catch (err) {
+        logger.warn(`Failed to spawn: ${err}`);
+        return null;
+      }
+    },
+
+    async getSpawn(beaconId: string, spawnId: string): Promise<unknown> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
+      try {
+        const res = await cfetch(
+          `${baseUrl}/api/spawn/${encodeURIComponent(beaconId)}/${encodeURIComponent(spawnId)}`
+        );
+        if (!res.ok) {
+          logger.warn(`Failed to get spawn: ${res.status}`);
+          return null;
+        }
+        return await res.json();
+      } catch (err) {
+        logger.warn(`Failed to get spawn: ${err}`);
+        return null;
+      }
+    },
+
+    async listSpawns(beaconId: string, status?: string): Promise<unknown[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
+      try {
+        const query = status ? `?status=${encodeURIComponent(status)}` : '';
+        const res = await cfetch(
+          `${baseUrl}/api/spawn/${encodeURIComponent(beaconId)}${query}`
+        );
+        if (!res.ok) {
+          logger.warn(`Failed to list spawns: ${res.status}`);
+          return [];
+        }
+        return (await res.json()) as unknown[];
+      } catch (err) {
+        logger.warn(`Failed to list spawns: ${err}`);
+        return [];
+      }
+    },
+
+    async terminateSpawn(beaconId: string, spawnId: string): Promise<unknown> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
+      try {
+        const res = await cfetch(
+          `${baseUrl}/api/spawn/${encodeURIComponent(beaconId)}/${encodeURIComponent(spawnId)}`,
+          { method: 'DELETE' }
+        );
+        if (!res.ok) {
+          logger.warn(`Failed to terminate spawn: ${res.status}`);
+          return null;
+        }
+        return await res.json();
+      } catch (err) {
+        logger.warn(`Failed to terminate spawn: ${err}`);
         return null;
       }
     },

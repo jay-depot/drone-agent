@@ -507,7 +507,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             },
             engine: opts.engine,
             conversation: opts.conversation,
-            sessionManager: undefined,
+            sessionManager: opts.sessionManager,
             exit: () => exit(),
             printHelp: () => printHelp(opts, log),
           });

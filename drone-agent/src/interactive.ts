@@ -26,8 +26,7 @@ export type CreateSessionManager = ReturnType<typeof createSessionManager>;
  * Input event types for JSON mode (NDJSON input from stdin).
  */
 export type InputEvent =
-  | { type: 'kickoff'; task: string }
-  | { type: 'chat'; message: string };
+  { type: 'kickoff'; task: string } | { type: 'chat'; message: string };
 
 function getPersonaCapability(
   engine: CreateDronePluginEngine
@@ -402,6 +401,8 @@ export async function runInteractiveLoop(
           },
           sessionManager: {
             appendUserMessage: m => sessionManager.appendUserMessage(m),
+            appendAssistantMessage: (content, toolCalls) =>
+              sessionManager.appendAssistantMessage(content, toolCalls),
             appendToolResult: (name, content, id) =>
               sessionManager.appendToolResult(name, content, id),
           },

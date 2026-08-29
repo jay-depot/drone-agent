@@ -8,10 +8,7 @@ import { normalizeMarkupContent } from './helpers.js';
 
 export function normalizeCompletionItems(
   response:
-    | LspCompletionItemResponse[]
-    | LspCompletionListResponse
-    | null
-    | undefined
+    LspCompletionItemResponse[] | LspCompletionListResponse | null | undefined
 ): { isIncomplete: boolean; items: NormalizedCompletionItem[] } {
   if (!response) {
     return { isIncomplete: false, items: [] };

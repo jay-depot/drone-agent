@@ -7,6 +7,7 @@ import {
   storeLargePayload,
   retrieveLargePayload,
 } from '../storage.js';
+import { buildSessionTranscript } from '../transcript.js';
 import * as db from '../db/index.js';
 
 export default function swarmRoutes(app: FastifyInstance) {
@@ -197,6 +198,33 @@ export default function swarmRoutes(app: FastifyInstance) {
           updatedAt: session.updatedAt,
         },
         events: resolvedEvents,
+      });
+    }
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/sessions/:id/transcript',
+    async (request, reply) => {
+      const session = db.getSwarmSession(request.params.id);
+      if (!session) {
+        return reply.code(404).send({ error: 'Session not found' });
+      }
+      const events = db.getSwarmEvents(request.params.id);
+      const transcript = await buildSessionTranscript(
+        session,
+        events,
+        retrieveLargePayload
+      );
+      return reply.send({
+        session: {
+          id: session.id,
+          personaId: session.personaId,
+          beaconId: session.beaconId,
+          status: session.status,
+          createdAt: session.createdAt,
+          updatedAt: session.updatedAt,
+        },
+        transcript,
       });
     }
   );

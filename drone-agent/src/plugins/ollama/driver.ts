@@ -402,11 +402,7 @@ export function createOllamaProvider(providerConfig: {
           messages: outboundMessages,
           tools: tools && tools.length > 0 ? toOllamaTools(tools) : undefined,
           think: mapReasoningLevel(reasoningLevel) as
-            | boolean
-            | 'low'
-            | 'medium'
-            | 'high'
-            | undefined,
+            boolean | 'low' | 'medium' | 'high' | undefined,
           ...(Object.keys(options).length > 0 ? { options } : {}),
         });
       } catch (error) {

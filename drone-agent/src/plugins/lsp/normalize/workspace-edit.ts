@@ -12,9 +12,7 @@ import { fromFileUri } from './uri.js';
 
 export function normalizeTextEdits(
   edits:
-    | Array<{ range?: LspRangeResponse; newText?: string }>
-    | null
-    | undefined
+    Array<{ range?: LspRangeResponse; newText?: string }> | null | undefined
 ): NormalizedTextEdit[] {
   if (!edits) {
     return [];

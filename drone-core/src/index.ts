@@ -71,6 +71,7 @@ export type {
   DroneTerminalConfig,
   DronePromptFileConfig,
   DroneKnowledgeSyncConfig,
+  DroneSessionImportConfig,
   DroneSwarmConfig,
   DroneSearchPath,
   DroneSearchConfig,
@@ -261,6 +262,7 @@ export type {
   DroneWorkflowResult,
   DroneWorkflowRunReturn,
   DroneWorkflow,
+  DroneSlashCommandSessionManager,
   DroneSlashCommandContext,
   DroneSlashCommand,
 } from './plugin-system.js';

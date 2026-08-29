@@ -279,16 +279,29 @@ export type DroneKnowledgeSyncConfig = {
   pullIntervalMinutes?: number;
 };
 
+/**
+ * Configuration for the `/swarm-session import` command, which recreates
+ * the context of an old swarm session into the current session.
+ */
+export type DroneSessionImportConfig = {
+  /** Maximum number of chunks the imported session is split into. */
+  maxChunks?: number;
+  /**
+   * Per-chunk token budget as a percentage of the resolved context window.
+   * Larger models (bigger context windows) get more detailed summaries.
+   */
+  chunkTokenBudgetPercent?: number;
+};
+
 export type DroneSwarmConfig = {
   knowledgeSync?: DroneKnowledgeSyncConfig;
+  sessionImport?: DroneSessionImportConfig;
   /** Hostname of the drone-beacon instance for swarm operations. */
   beaconHost?: string;
   /** Port of the drone-beacon instance for swarm operations. */
   beaconPort?: number;
   /** Whether to use HTTPS when connecting to the beacon. */
   beaconUseHttps?: boolean;
-  /** URL of the drone-coordinator instance for remote spawn and info tools. */
-  coordinatorUrl?: string;
   /** Optional session ID override for this agent. */
   sessionId?: string;
 };
@@ -327,8 +340,7 @@ export type DroneLspExternalServerConfig = {
 };
 
 export type DroneLspServerConfig =
-  | DroneLspSpawnServerConfig
-  | DroneLspExternalServerConfig;
+  DroneLspSpawnServerConfig | DroneLspExternalServerConfig;
 
 export type DroneLspConfig = {
   enabled: boolean;
@@ -387,8 +399,7 @@ export type DroneMcpStreamableHttpServerConfig = {
 };
 
 export type DroneMcpServerConfig =
-  | DroneMcpStdioServerConfig
-  | DroneMcpStreamableHttpServerConfig;
+  DroneMcpStdioServerConfig | DroneMcpStreamableHttpServerConfig;
 
 export type DroneMcpRoot = {
   uri: string;
@@ -525,7 +536,7 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
         retry: { deepMerge: {} },
       },
     },
-    swarm: { deepMerge: { knowledgeSync: {} } },
+    swarm: { deepMerge: { knowledgeSync: {}, sessionImport: {} } },
     tui: {
       deepMerge: {
         syntaxHighlighting: { deepMerge: { colors: {} } },
@@ -666,6 +677,10 @@ export function createDefaultAgentConfig(
         pushInsights: true,
         pullOnStartup: true,
         pullIntervalMinutes: 60,
+      },
+      sessionImport: {
+        maxChunks: 5,
+        chunkTokenBudgetPercent: 12,
       },
     },
     search: {

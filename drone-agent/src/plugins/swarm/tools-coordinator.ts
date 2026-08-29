@@ -2,31 +2,32 @@
  * Coordinator spawn and info tool definitions for the swarm plugin.
  *
  * Provides tools to list beacons, list agents, spawn agents, and
- * manage spawns via the coordinator.
+ * manage spawns. These hit the **beacon's** `/coordinator/*` proxy routes
+ * (the beacon is the sole coordinator-facing trust gate); the agent never
+ * talks to the coordinator directly.
  */
 
 import type { DroneToolDefinition } from 'drone-core';
 import { firstMissingString } from './string-params.js';
 
 /**
- * Fetch from the coordinator API.
+ * Fetch from the beacon's `/coordinator/*` proxy routes.
  */
 async function coordinatorFetch(
-  coordinatorUrl: string | undefined,
+  baseUrl: string | undefined,
   path: string,
   options?: RequestInit
 ): Promise<Response> {
-  if (!coordinatorUrl) {
+  if (!baseUrl) {
     return {
       ok: false,
       json: async () => ({
         success: false,
-        error:
-          'coordinatorUrl not configured. Set swarm.coordinatorUrl in your config.',
+        error: 'Beacon URL not configured.',
       }),
     } as Response;
   }
-  return fetch(`${coordinatorUrl}${path}`, {
+  return fetch(`${baseUrl}${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
@@ -39,7 +40,7 @@ async function handleCoordinatorResponse(response: Response): Promise<string> {
     }));
     return JSON.stringify({
       success: false,
-      error: `Coordinator returned ${response.status}`,
+      error: `Coordinator proxy returned ${response.status}`,
       details: body,
     });
   }
@@ -56,7 +57,7 @@ function handleCoordinatorError(err: unknown): string {
 }
 
 function createSwarmListBeaconsTool(
-  coordinatorUrl: string | undefined
+  baseUrl: string | undefined
 ): DroneToolDefinition {
   return {
     name: 'swarm_list_beacons',
@@ -67,7 +68,10 @@ function createSwarmListBeaconsTool(
     },
     execute: async () => {
       try {
-        const response = await coordinatorFetch(coordinatorUrl, '/beacons');
+        const response = await coordinatorFetch(
+          baseUrl,
+          '/coordinator/beacons'
+        );
         return handleCoordinatorResponse(response);
       } catch (err) {
         return handleCoordinatorError(err);
@@ -77,7 +81,7 @@ function createSwarmListBeaconsTool(
 }
 
 function createSwarmListAgentsTool(
-  coordinatorUrl: string | undefined
+  baseUrl: string | undefined
 ): DroneToolDefinition {
   return {
     name: 'swarm_list_agents',
@@ -99,8 +103,8 @@ function createSwarmListAgentsTool(
           ? `?beaconId=${encodeURIComponent(params.beaconId as string)}`
           : '';
         const response = await coordinatorFetch(
-          coordinatorUrl,
-          `/agents/location${query}`
+          baseUrl,
+          `/coordinator/agents/location${query}`
         );
         return handleCoordinatorResponse(response);
       } catch (err) {
@@ -111,7 +115,7 @@ function createSwarmListAgentsTool(
 }
 
 function createSwarmSpawnTool(
-  coordinatorUrl: string | undefined
+  baseUrl: string | undefined
 ): DroneToolDefinition {
   return {
     name: 'swarm_spawn',
@@ -169,7 +173,7 @@ function createSwarmSpawnTool(
         });
       }
       try {
-        const response = await coordinatorFetch(coordinatorUrl, '/spawn', {
+        const response = await coordinatorFetch(baseUrl, '/coordinator/spawn', {
           method: 'POST',
           body: JSON.stringify({
             targetBeaconId: params.targetBeaconId,
@@ -188,7 +192,7 @@ function createSwarmSpawnTool(
 }
 
 function createSwarmGetSpawnTool(
-  coordinatorUrl: string | undefined
+  baseUrl: string | undefined
 ): DroneToolDefinition {
   return {
     name: 'swarm_get_spawn',
@@ -217,8 +221,8 @@ function createSwarmGetSpawnTool(
       }
       try {
         const response = await coordinatorFetch(
-          coordinatorUrl,
-          `/spawn/${encodeURIComponent(params.beaconId as string)}/${encodeURIComponent(params.spawnId as string)}`
+          baseUrl,
+          `/coordinator/spawn/${encodeURIComponent(params.beaconId as string)}/${encodeURIComponent(params.spawnId as string)}`
         );
         return handleCoordinatorResponse(response);
       } catch (err) {
@@ -229,7 +233,7 @@ function createSwarmGetSpawnTool(
 }
 
 function createSwarmListSpawnsTool(
-  coordinatorUrl: string | undefined
+  baseUrl: string | undefined
 ): DroneToolDefinition {
   return {
     name: 'swarm_list_spawns',
@@ -263,8 +267,8 @@ function createSwarmListSpawnsTool(
           ? `?status=${encodeURIComponent(params.status as string)}`
           : '';
         const response = await coordinatorFetch(
-          coordinatorUrl,
-          `/spawn/${encodeURIComponent(params.beaconId as string)}${query}`
+          baseUrl,
+          `/coordinator/spawn/${encodeURIComponent(params.beaconId as string)}${query}`
         );
         return handleCoordinatorResponse(response);
       } catch (err) {
@@ -275,7 +279,7 @@ function createSwarmListSpawnsTool(
 }
 
 function createSwarmTerminateSpawnTool(
-  coordinatorUrl: string | undefined
+  baseUrl: string | undefined
 ): DroneToolDefinition {
   return {
     name: 'swarm_terminate_spawn',
@@ -304,8 +308,8 @@ function createSwarmTerminateSpawnTool(
       }
       try {
         const response = await coordinatorFetch(
-          coordinatorUrl,
-          `/spawn/${encodeURIComponent(params.beaconId as string)}/${encodeURIComponent(params.spawnId as string)}`,
+          baseUrl,
+          `/coordinator/spawn/${encodeURIComponent(params.beaconId as string)}/${encodeURIComponent(params.spawnId as string)}`,
           { method: 'DELETE' }
         );
         return handleCoordinatorResponse(response);
@@ -320,14 +324,14 @@ function createSwarmTerminateSpawnTool(
  * Create all coordinator tool definitions.
  */
 export function createCoordinatorTools(
-  coordinatorUrl: string | undefined
+  baseUrl: string | undefined
 ): DroneToolDefinition[] {
   return [
-    createSwarmListBeaconsTool(coordinatorUrl),
-    createSwarmListAgentsTool(coordinatorUrl),
-    createSwarmSpawnTool(coordinatorUrl),
-    createSwarmGetSpawnTool(coordinatorUrl),
-    createSwarmListSpawnsTool(coordinatorUrl),
-    createSwarmTerminateSpawnTool(coordinatorUrl),
+    createSwarmListBeaconsTool(baseUrl),
+    createSwarmListAgentsTool(baseUrl),
+    createSwarmSpawnTool(baseUrl),
+    createSwarmGetSpawnTool(baseUrl),
+    createSwarmListSpawnsTool(baseUrl),
+    createSwarmTerminateSpawnTool(baseUrl),
   ];
 }

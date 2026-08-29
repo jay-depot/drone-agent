@@ -27,8 +27,7 @@ export const WELL_KNOWN_MODEL_ROLES = [
 
 /** Any well-known role name, or an arbitrary plugin-defined role. */
 export type DroneModelRole =
-  | (typeof WELL_KNOWN_MODEL_ROLES)[number]
-  | (string & {});
+  (typeof WELL_KNOWN_MODEL_ROLES)[number] | (string & {});
 
 /**
  * Parse a canonical `<providerId>/<modelLocalId>` string, splitting on the

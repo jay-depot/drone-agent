@@ -41,8 +41,7 @@ export function FileApplyDiffBlock({
 
   const path = typeof parsed.path === 'string' ? parsed.path : '';
   const summary = parsed.summary as
-    | { additions?: number; deletions?: number; hunks?: number }
-    | undefined;
+    { additions?: number; deletions?: number; hunks?: number } | undefined;
   const additions = summary?.additions ?? 0;
   const deletions = summary?.deletions ?? 0;
   const hunks = summary?.hunks ?? 0;
