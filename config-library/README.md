@@ -28,3 +28,4 @@ This setup assumes you have the following plugins enabled:
 - startup
 - utils
 
+It also assumed you've set up the Github MCP server (for the `/pr` macro), and a searXNG MCP server (for the research persona) correctly in your configuration.

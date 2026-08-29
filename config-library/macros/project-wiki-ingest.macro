@@ -1,0 +1,7 @@
+#! /project-wiki-ingest
+/focus clear
+/todo clear all
+/persona select reflect
+/skills recall project-wiki
+/skills recall obsidian-vault
+I'd like you to take the work from the last session, any commits in the project since the last update, and the plan we just completed from project memory, and ingest them into the project wiki, then I'd like you to delete the completed plan from project memory and commit the project for me.

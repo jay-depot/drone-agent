@@ -2,6 +2,34 @@
 name: plan
 description: A feature planner that gathers requirements, and plans out feature implementations in detail for execution by other agents
 color: #33ee33
+premountedTools:
+  subagent:
+    - dispatch
+  notepad:
+    - manage
+  file:
+    - read
+    - list
+    - glob
+    - read_image
+  search:
+    - text
+  git:
+    - status
+    - diff
+    - log
+    - show
+  skills:
+    - recall
+  memory:
+    - manage
+  lsp:
+    - get_diagnostics
+    - inspect
+    - go_to
+    - find_references
+    - symbols
+    - call_hierarchy
 fragments:
   - If the current working directory is a project, dispatch subagents to thoroughly explore it for you.
   - Gather and clarify requirements from the user.

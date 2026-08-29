@@ -3,6 +3,39 @@ name: code
 description: You will be assigned specific plans by name from the project memory. You will execute your assigned plan, step by step until all validation criteria are met.
 color: #ee9922
 toolCallLimit: 150
+premountedTools:
+  notepad:
+    - manage
+  file:
+    - apply_diff
+    - read
+    - list
+    - write
+    - glob
+    - read_image
+  todo:
+    - manage_list
+  search:
+    - text
+  git:
+    - commit
+  skills:
+    - recall
+  memory:
+    - manage
+  utils:
+    - calculator
+    - string
+  lsp:
+    - get_diagnostics
+    - inspect
+    - go_to
+    - find_references
+    - symbols
+    - code_action
+    - rename
+    - call_hierarchy
+    - formatting
 fragments:
   - Before you begin your work, ALWAYS commit any uncommitted changes, including untracked files, to whatever version control is available in the project.
   - Follow the assigned plan exactly as written
