@@ -10,6 +10,7 @@ import {
 } from './coordinator-trust.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
+import type { DroneSwarmFragment } from 'drone-core';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
 import { enqueueOutbox } from './db/index.js';
 
@@ -75,6 +76,7 @@ export interface CoordinatorClient {
   heartbeat(): Promise<void>;
   fetchPersonas(): Promise<Persona[]>;
   fetchSkills(): Promise<Skill[]>;
+  fetchCoordinatorFragments(): Promise<DroneSwarmFragment[]>;
 
   // Session management
   registerSession(agentId: string, personaId: string | null): Promise<void>;
@@ -439,6 +441,24 @@ export function createCoordinatorClient(
       const skills = data as Skill[];
       // Mark them as coordinator scope
       return skills.map(s => ({ ...s, scope: 'coordinator' as const }));
+    },
+
+    async fetchCoordinatorFragments(): Promise<DroneSwarmFragment[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
+      const res = await cfetch(`${baseUrl}/api/fragments`);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch fragments: ${res.status}`);
+      }
+      const data = (await res.json()) as unknown;
+      const payload = data as { fragments?: DroneSwarmFragment[] };
+      const fragments = Array.isArray(payload) ? payload : payload.fragments;
+      if (!Array.isArray(fragments)) {
+        throw new Error('Malformed fragments response from coordinator');
+      }
+      // Normalize scope; coordinator rows are implicitly coordinator-scoped.
+      return fragments.map(f => ({ ...f, scope: 'coordinator' as const }));
     },
 
     // Session management

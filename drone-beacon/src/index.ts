@@ -45,6 +45,10 @@ import {
   type SpawnerConfig,
 } from './spawner.js';
 import * as wsServer from './ws-server.js';
+import {
+  startFragmentTtlSweep,
+  stopFragmentTtlSweep,
+} from './fragments-sweep.js';
 import { logger } from './logger.js';
 import { loadOrCreateIdentity } from './identity.js';
 import { configureSessionEndHook } from './session-end.js';
@@ -384,6 +388,7 @@ async function main() {
   // Register WebSocket server with local-only enforcement
   await wsServer.registerWebSocketServer(app, { enforceLocalOnly: true });
   wsServer.startMessageCleanup();
+  startFragmentTtlSweep();
 
   // Start periodic TTL cleanup
   const cleanupInterval = setInterval(() => {
@@ -433,6 +438,7 @@ async function main() {
     logger.info('Shutting down...');
     clearInterval(cleanupInterval);
     searchIndexer.stopPeriodicSweep();
+    stopFragmentTtlSweep();
     if (syncInterval) {
       clearInterval(syncInterval);
     }

@@ -31,16 +31,16 @@
   "license": "MIT",
   "packageManager": "pnpm@11.8.0",
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.5",
+    "@eslint/eslintrc": "^3.3.6",
     "@eslint/js": "^10.0.1",
-    "@types/node": "^24.0.10",
-    "@typescript-eslint/eslint-plugin": "^8.57.1",
-    "@typescript-eslint/parser": "^8.57.1",
-    "eslint": "^10.0.3",
-    "globals": "^17.4.0",
-    "prettier": "^3.8.1",
-    "typescript": "^5.9.2",
-    "vitest": "^3.2.6"
+    "@types/node": "^24.13.3",
+    "@typescript-eslint/eslint-plugin": "^8.68.0",
+    "@typescript-eslint/parser": "^8.68.0",
+    "eslint": "^10.9.1",
+    "globals": "^17.11.0",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
   },
   "type": "module"
 }

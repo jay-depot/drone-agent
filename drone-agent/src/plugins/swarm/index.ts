@@ -111,6 +111,20 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       // Create shared context
       const ctx = createSwarmContext(baseUrl, sessionId, registration, wsUrl);
 
+      // Register prompt fragments unconditionally at registration time so
+      // render output is stable whether or not the beacon is reachable;
+      // render() reads the in-memory store only (no network).
+      registration.registerPromptFragment({
+        key: 'fragments.header',
+        phase: 'header',
+        render: () => Promise.resolve(ctx.fragmentStore.renderHeader()),
+      });
+      registration.registerPromptFragment({
+        key: 'fragments.footer',
+        phase: 'footer',
+        render: () => Promise.resolve(ctx.fragmentStore.renderFooter()),
+      });
+
       // ── Offer swarm capability ─────────────────────────────────────────
       const swarmCap: DroneSwarmCapability = {
         getBeaconUrl: () => baseUrl,

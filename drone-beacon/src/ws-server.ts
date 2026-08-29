@@ -1,3 +1,4 @@
+import type { DroneSwarmFragment } from 'drone-core';
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
 import * as db from './db/index.js';
@@ -13,14 +14,18 @@ export const ERROR_NON_LOCAL_CONNECTION = 4003;
  */
 export function isLocalConnection(ip: string | undefined): boolean {
   if (!ip) return false;
+  // Strip the IPv4-mapped IPv6 prefix before range checks.
+  const normalized = ip.startsWith('::ffff:') ? ip.slice(7) : ip;
   return (
-    ip === '127.0.0.1' ||
+    normalized === '127.0.0.1' ||
     ip === '::1' ||
-    ip === '::ffff:127.0.0.1' ||
-    ip.startsWith('192.168.') || // Local network
-    ip.startsWith('10.') || // Local network
-    ip.startsWith('172.16.') || // Private network
-    ip.startsWith('169.254.') // Link-local
+    normalized.startsWith('192.168.') || // Local network
+    normalized.startsWith('10.') || // Local network
+    // RFC1918 172.16.0.0/12 spans 172.16.0.0 - 172.31.255.255 (Docker
+    // networks live here); a prefix check on '172.16.' wrongly excludes
+    // 172.17-172.31.
+    /^172\.(1[6-9]|2\d|3[01])\./.test(normalized) || // Private network
+    normalized.startsWith('169.254.') // Link-local
   );
 }
 
@@ -84,11 +89,19 @@ function unsubscribeFromChannel(agentId: string, channel: string): void {
 
 export function sendToAgent(agentId: string, message: object): boolean {
   const conn = connections.get(agentId);
-  if (conn && conn.socket.readyState === 'OPEN') {
-    conn.socket.send(JSON.stringify(message));
-    return true;
+  if (!conn) {
+    return false;
   }
-  return false;
+  // The ws library reports readyState as a number (1 === OPEN) while the
+  // WHATWG WebSocket reports the 'OPEN' string; accept both so server-side
+  // pushes cannot be silently dropped by a ready-state representation
+  // mismatch.
+  const readyState = conn.socket.readyState;
+  if (readyState !== 1 && readyState !== 'OPEN') {
+    return false;
+  }
+  conn.socket.send(JSON.stringify(message));
+  return true;
 }
 
 export function sendToChannel(channel: string, message: object): number {
@@ -104,8 +117,46 @@ export function sendToChannel(channel: string, message: object): number {
   return count;
 }
 
+// ── Fragment push helpers ──────────────────────────────────────────────
+
+/**
+ * Push a single fragment op to one agent. The agent stores it in its
+ * in-memory fragment store and re-renders its prompt fragments next round.
+ */
+export function pushFragmentToAgent(
+  agentId: string,
+  op: 'set' | 'remove',
+  fragment: DroneSwarmFragment
+): boolean {
+  return sendToAgent(agentId, {
+    type: 'fragment',
+    payload: { op, fragment },
+  });
+}
+
+/**
+ * Send the full merged fragment set to every connected agent. Used for
+ * broadcast deltas (set/delete) where per-agent targeting is pointless
+ * (count ≤ 5 keeps payloads tiny) and after coordinator mirror changes.
+ */
+export function pushFragmentSyncToAllConnected(): void {
+  for (const agentId of connections.keys()) {
+    sendToAgent(agentId, {
+      type: 'fragmentSync',
+      payload: { fragments: db.listMergedForAgent(agentId) },
+    });
+  }
+}
+
 interface WSMessage {
-  type: 'message' | 'ack' | 'ping' | 'pong' | 'subscribe' | 'unsubscribe';
+  type:
+    | 'message'
+    | 'ack'
+    | 'ping'
+    | 'pong'
+    | 'subscribe'
+    | 'unsubscribe'
+    | 'fragmentAck';
   payload: unknown;
 }
 
@@ -239,6 +290,12 @@ function handleMessage(agentId: string, wsMsg: WSMessage): void {
       break;
     }
 
+    case 'fragmentAck': {
+      // Reserved no-op for forward compatibility: agents may acknowledge
+      // fragment pushes; resync is the authoritative ack.
+      break;
+    }
+
     default:
       logger.warn(`Unknown WS message type: ${(wsMsg as WSMessage).type}`);
   }
@@ -305,6 +362,13 @@ export async function registerWebSocketServer(
         `Delivered ${unreadMessages.length} unread messages to ${agentId}`
       );
     }
+
+    // Full fragment-state delivery: the agent's fragment store is rebuilt
+    // from this set, so reconnects converge without an ack protocol.
+    sendToAgent(agentId, {
+      type: 'fragmentSync',
+      payload: { fragments: db.listMergedForAgent(agentId) },
+    });
 
     // Handle incoming messages
     socket.on('message', (data: Buffer) => {
