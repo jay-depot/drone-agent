@@ -1,7 +1,6 @@
 ---
 key: plan-long-line-padding-fix
-tags:
-  []
+tags: []
 created: 2026-08-29T01:59:59.107Z
 updated: 2026-08-29T01:59:59.107Z
 ---
@@ -9,9 +8,11 @@ updated: 2026-08-29T01:59:59.107Z
 # Plan: Long-line padding fix for renderHighlightedTree (TUI code-band rendering)
 
 ## Summary
-`renderHighlightedTree` (drone-agent/src/tui/shared/syntax-highlight.ts) pads every highlighted code line to the preview's longest visible line (`maxWidth`) and gives each `<Text>` a background. Consequences: (a) long lines soft-wrap and their final wrapped row is a full-width bare background band (reads as opaque "redaction bars" — observed on file__read of Obsidian wiki pages with long prose lines); (b) blank/short lines become solid bars. Fix: pad each line to `ceil(L / W) * W` (W = available width). Long lines wrap into exactly `ceil(L/W)` fully-filled rows; blank lines pad to 0 (true empty rows); short lines fill one row. One formula, no branches.
+
+`renderHighlightedTree` (drone-agent/src/tui/shared/syntax-highlight.ts) pads every highlighted code line to the preview's longest visible line (`maxWidth`) and gives each `<Text>` a background. Consequences: (a) long lines soft-wrap and their final wrapped row is a full-width bare background band (reads as opaque "redaction bars" — observed on file\_\_read of Obsidian wiki pages with long prose lines); (b) blank/short lines become solid bars. Fix: pad each line to `ceil(L / W) * W` (W = available width). Long lines wrap into exactly `ceil(L/W)` fully-filled rows; blank lines pad to 0 (true empty rows); short lines fill one row. One formula, no branches.
 
 Scope notes (confirmed during planning):
+
 - The 10-line preview cap in FileReadBlock is INTENDED display truncation. No change.
 - Markdown nested containers (blockquote/list) flatten nested code to raw text today — they never reach renderHighlightedTree. Only top-level code boxes do; their Box chrome is border(2)+paddingX(2) → content width = columns − 4. FileReadBlock has no chrome → width = columns.
 - Ink offers no container-width measurement; width is deterministic arithmetic (each container subtracts its own chrome). Document this convention in renderHighlightedTree's jsdoc.
@@ -37,10 +38,12 @@ Scope notes (confirmed during planning):
 9. **[reviewer] Deferred follow-ups (do NOT fold into this feature)**: replace bare `===` truncation marker with explicit "… +N more line(s)"; line-number gutter; blank-line padding variant (pad to W instead of 0) if gaps in the band bother; prose-vs-code background treatment for .md files.
 
 ## Execution order / dependencies
+
 1 → 2 → 3 (empirical check may amend step 2's constant) → {4+5} and {6} in parallel → 7, 8 → 9 deferred.
 Cross-cutting caution: changing shared interfaces historically breaks stale test mocks — LSP find-references `ToolRenderState` constructions after step 1 (tests may construct the type; the new field is optional so mocks stay valid, but verify).
 
 ## Validation criteria
+
 - LSP diagnostics: zero errors project-wide (all packages).
 - `pnpm -r run build` passes with zero errors.
 - `pnpm lint` passes (prettier will reformat — re-read files after any lint run before further edits).

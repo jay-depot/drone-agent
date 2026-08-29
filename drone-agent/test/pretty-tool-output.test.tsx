@@ -92,6 +92,68 @@ describe('ExecRunBlock', () => {
   });
 });
 
+describe('FileReadBlock width mode', () => {
+  const stripAnsi = (s: string): string =>
+    s.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*m', 'g'), '');
+
+  /** ANSI-stripped, non-empty rows of the rendered frame. */
+  function frameRows(inst: { lastFrame: () => string | undefined }): string[] {
+    return (inst.lastFrame() ?? '')
+      .split('\n')
+      .map(stripAnsi)
+      .filter(row => row.length > 0);
+  }
+
+  it('wraps a line longer than columns into ceil(L/W) fully-filled rows', () => {
+    // ink-testing-library renders at a fixed 100-column terminal; matching
+    // state.columns to it means the padded line (ceil(150/100)*100 = 200)
+    // hard-wraps into two rows of exactly 100 — the second carrying the
+    // text remainder plus its background fill (no bare band).
+    const state = makeState({
+      name: 'file__read',
+      arguments: { path: '/tmp/test.ts' },
+      status: 'done',
+      columns: 100,
+      result: JSON.stringify({
+        path: '/tmp/test.ts',
+        totalLines: 1,
+        startLine: 1,
+        endLine: 1,
+        content: 'x'.repeat(150),
+      }),
+    });
+    const inst = render(<FileReadBlock state={state} />);
+    const rows = frameRows(inst);
+    expect(rows).toContain('x'.repeat(100));
+    expect(rows).toContain('x'.repeat(50) + ' '.repeat(50));
+  });
+
+  it('fills short lines to the terminal width and leaves blank lines empty', () => {
+    const state = makeState({
+      name: 'file__read',
+      arguments: { path: '/tmp/test.ts' },
+      status: 'done',
+      columns: 100,
+      result: JSON.stringify({
+        path: '/tmp/test.ts',
+        totalLines: 3,
+        startLine: 1,
+        endLine: 3,
+        content: 'ab\n\ncd',
+      }),
+    });
+    const inst = render(<FileReadBlock state={state} />);
+    const rows = frameRows(inst);
+    expect(rows).toContain('ab' + ' '.repeat(98));
+    expect(rows).toContain('cd' + ' '.repeat(98));
+    // The blank line renders as a true empty row: no row may consist
+    // solely of spaces (the legacy solid-bar artifact).
+    for (const row of rows) {
+      expect(row.trim()).not.toBe('');
+    }
+  });
+});
+
 // ── FileReadBlock ─────────────────────────────────────────────────────
 
 describe('FileReadBlock', () => {

@@ -20,9 +20,7 @@ import type { DroneMemoryCapability } from '../src/plugins/memory/types.js';
  * of forcing them through `(...args: unknown[]) => unknown`.
  */
 type CapturedHooks = {
-  [K in keyof DronePluginHooks]: Array<
-    Parameters<DronePluginHooks[K]>[0]
-  >;
+  [K in keyof DronePluginHooks]: Array<Parameters<DronePluginHooks[K]>[0]>;
 };
 
 /**
@@ -69,8 +67,10 @@ function createMockRegistration(): {
       onConversationEvent: [] as CapturedHooks['onConversationEvent'],
       onSessionClear: [] as CapturedHooks['onSessionClear'],
       onShutdown: [] as CapturedHooks['onShutdown'],
-      onSessionSafetyTrimWillRun: [] as CapturedHooks['onSessionSafetyTrimWillRun'],
-      onSessionSafetyTrimApplied: [] as CapturedHooks['onSessionSafetyTrimApplied'],
+      onSessionSafetyTrimWillRun:
+        [] as CapturedHooks['onSessionSafetyTrimWillRun'],
+      onSessionSafetyTrimApplied:
+        [] as CapturedHooks['onSessionSafetyTrimApplied'],
     },
   };
 

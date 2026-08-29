@@ -308,14 +308,18 @@ describe('Markdown', () => {
   });
 
   describe('code block width mode', () => {
+    // SGR pair bounding the 'gray' code background:
+    // \u001b[100m ... \u001b[49m. Built via fromCharCode
+    // (same no-control-regex workaround the renderer uses).
+    const bgPair = new RegExp(
+      String.fromCharCode(27) + '\\[100m +' + String.fromCharCode(27) + '\\[49m'
+    );
     it('pads content to ceil(L / (columns - 4)) * (columns - 4) using inner width, not terminal width', async () => {
       const md = ['```ts', 'x'.repeat(40), '```'].join('\n');
 
       const inst = render(<Markdown columns={30}>{md}</Markdown>);
       instance = inst;
-      const frame = await waitUntilFrame(inst, f =>
-        f.includes('x'.repeat(40))
-      );
+      const frame = await waitUntilFrame(inst, f => f.includes('x'.repeat(40)));
 
       // Inner width = 30 - 4 (border 2 + paddingX 2) = 26.
       // ceil(40 / 26) * 26 = 52, so 12 trailing spaces sit inside the
@@ -324,7 +328,9 @@ describe('Markdown', () => {
       // run, bounded by the background SGR pair, discriminates all three
       // (box-fill spaces cannot satisfy it).
       const bg = '\u001b[100m';
-      expect(frame).toContain(bg + 'x'.repeat(40) + ' '.repeat(12) + '\u001b[49m');
+      expect(frame).toContain(
+        bg + 'x'.repeat(40) + ' '.repeat(12) + '\u001b[49m'
+      );
       expect(frame).not.toContain(bg + 'x'.repeat(40) + ' '.repeat(13));
     });
 
@@ -339,7 +345,7 @@ describe('Markdown', () => {
       expect(frame).toContain('\u001b[100mab' + ' '.repeat(24) + '\u001b[49m');
       // The blank line pads to zero: no background run containing only
       // spaces (the legacy artifact), and no empty background pair.
-      expect(frame).not.toMatch(/\u001b\[100m +\u001b\[49m/);
+      expect(frame).not.toMatch(bgPair);
       expect(frame).not.toContain('\u001b[100m\u001b[49m');
     });
 
@@ -358,7 +364,7 @@ describe('Markdown', () => {
       // inside its own background pair.
       expect(frame).toContain('\u001b[100m' + 'x'.repeat(96) + '\u001b[49m');
       // No background run containing only spaces (bare spill band).
-      expect(frame).not.toMatch(/\u001b\[100m +\u001b\[49m/);
+      expect(frame).not.toMatch(bgPair);
     });
   });
 });

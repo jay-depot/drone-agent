@@ -404,10 +404,7 @@ describe('renderHighlightedTree width mode', () => {
   it('pads each line independently in a mixed-width block', () => {
     const lines = renderedLines(
       renderHighlightedTree(
-        twoLineTree(
-          elementToken([], 'x'.repeat(15)),
-          elementToken([], 'ab')
-        ),
+        twoLineTree(elementToken([], 'x'.repeat(15)), elementToken([], 'ab')),
         'gray',
         undefined,
         10
@@ -424,11 +421,7 @@ describe('ink wrap premise (width-mode dependency)', () => {
       React.createElement(
         Box,
         { width: 10 },
-        React.createElement(
-          Text,
-          { backgroundColor: 'gray' },
-          'x'.repeat(10)
-        )
+        React.createElement(Text, { backgroundColor: 'gray' }, 'x'.repeat(10))
       )
     );
     const rows = (lastFrame() ?? '').split('\n').filter(r => r.length > 0);
@@ -441,11 +434,7 @@ describe('ink wrap premise (width-mode dependency)', () => {
       React.createElement(
         Box,
         { width: 10 },
-        React.createElement(
-          Text,
-          { backgroundColor: 'gray' },
-          'x'.repeat(11)
-        )
+        React.createElement(Text, { backgroundColor: 'gray' }, 'x'.repeat(11))
       )
     );
     const rows = (lastFrame() ?? '').split('\n').filter(r => r.length > 0);

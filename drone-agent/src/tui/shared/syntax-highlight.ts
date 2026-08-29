@@ -283,8 +283,7 @@ function resolveTokenStyle(
 export function renderHighlightedTree(
   tree: HighlightRoot,
   backgroundColor: string,
-  colors?: Record<string, string> | SyntaxTheme
-  ,
+  colors?: Record<string, string> | SyntaxTheme,
   width?: number
 ): ReactElement {
   const theme = toTheme(colors as Record<string, unknown> | undefined);
