@@ -355,6 +355,17 @@ export function createDronePluginEngine({
     }
   };
 
+  const dispatchConversationEvent = async (
+    event: DroneConversationEvent
+  ): Promise<void> => {
+    for (const callback of conversationEventHooks) {
+      await callback(event);
+    }
+    for (const callback of externalConversationEventListeners) {
+      callback(event);
+    }
+  };
+
   // --- Local functions (declared before the return object so they can ---)
   // --- reference each other and be used in the return object)       ---
 
@@ -797,6 +808,11 @@ export function createDronePluginEngine({
         resetStuckDetectors: resetStuckDetectorsFromHost,
         queueSystemReminder: (content: string) =>
           systemReminders.queue(content),
+        emitEvent: (event: DroneConversationEvent) => {
+          dispatchConversationEvent(event).catch(err => {
+            logger.error(`emitEvent hook dispatch failed: ${err}`);
+          });
+        },
       });
 
       logger.info(`initializing ${sortedPlugins.length} plugin(s)`);
@@ -849,15 +865,7 @@ export function createDronePluginEngine({
         await callback(payload);
       }
     },
-    runConversationEventHooks: async (event: DroneConversationEvent) => {
-      for (const callback of conversationEventHooks) {
-        await callback(event);
-      }
-      // Also notify external listeners
-      for (const callback of externalConversationEventListeners) {
-        callback(event);
-      }
-    },
+    runConversationEventHooks: dispatchConversationEvent,
     onConversationEvent: callback => {
       externalConversationEventListeners.push(callback);
       return () => {

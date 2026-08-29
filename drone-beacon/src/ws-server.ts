@@ -1,3 +1,4 @@
+import type { DroneSwarmFragment } from 'drone-core';
 import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
 import * as db from './db/index.js';
@@ -104,8 +105,46 @@ export function sendToChannel(channel: string, message: object): number {
   return count;
 }
 
+// ── Fragment push helpers ──────────────────────────────────────────────
+
+/**
+ * Push a single fragment op to one agent. The agent stores it in its
+ * in-memory fragment store and re-renders its prompt fragments next round.
+ */
+export function pushFragmentToAgent(
+  agentId: string,
+  op: 'set' | 'remove',
+  fragment: DroneSwarmFragment
+): boolean {
+  return sendToAgent(agentId, {
+    type: 'fragment',
+    payload: { op, fragment },
+  });
+}
+
+/**
+ * Send the full merged fragment set to every connected agent. Used for
+ * broadcast deltas (set/delete) where per-agent targeting is pointless
+ * (count ≤ 5 keeps payloads tiny) and after coordinator mirror changes.
+ */
+export function pushFragmentSyncToAllConnected(): void {
+  for (const agentId of connections.keys()) {
+    sendToAgent(agentId, {
+      type: 'fragmentSync',
+      payload: { fragments: db.listMergedForAgent(agentId) },
+    });
+  }
+}
+
 interface WSMessage {
-  type: 'message' | 'ack' | 'ping' | 'pong' | 'subscribe' | 'unsubscribe';
+  type:
+    | 'message'
+    | 'ack'
+    | 'ping'
+    | 'pong'
+    | 'subscribe'
+    | 'unsubscribe'
+    | 'fragmentAck';
   payload: unknown;
 }
 
@@ -239,6 +278,12 @@ function handleMessage(agentId: string, wsMsg: WSMessage): void {
       break;
     }
 
+    case 'fragmentAck': {
+      // Reserved no-op for forward compatibility: agents may acknowledge
+      // fragment pushes; resync is the authoritative ack.
+      break;
+    }
+
     default:
       logger.warn(`Unknown WS message type: ${(wsMsg as WSMessage).type}`);
   }
@@ -305,6 +350,13 @@ export async function registerWebSocketServer(
         `Delivered ${unreadMessages.length} unread messages to ${agentId}`
       );
     }
+
+    // Full fragment-state delivery: the agent's fragment store is rebuilt
+    // from this set, so reconnects converge without an ack protocol.
+    sendToAgent(agentId, {
+      type: 'fragmentSync',
+      payload: { fragments: db.listMergedForAgent(agentId) },
+    });
 
     // Handle incoming messages
     socket.on('message', (data: Buffer) => {

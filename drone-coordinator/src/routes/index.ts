@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import health from './health.js';
 import personas from './personas.js';
 import skills from './skills.js';
+import fragments from './fragments.js';
 import beacons from './beacons.js';
 import knowledge from './knowledge.js';
 import insights from './insights.js';
@@ -20,6 +21,7 @@ export async function registerRoutes(app: FastifyInstance) {
     async api => {
       personas(api);
       skills(api);
+      fragments(api);
       beacons(api);
       knowledge(api);
       insights(api);

@@ -133,6 +133,72 @@ export class SwarmClient {
     return { status, result: data };
   }
 
+  // === Prompt fragments (list: both layers; set/delete: beacon only) ===
+
+  async listFragments(query: Record<string, string> = {}): Promise<{
+    status: number;
+    fragments: unknown[];
+  }> {
+    const params = new URLSearchParams(query).toString();
+    const { status, data } = await this.request<{
+      fragments?: unknown[];
+    }>('GET', `/fragments${params ? `?${params}` : ''}`);
+    if (status !== 200) {
+      throw new ApiError(status, `Failed to list fragments: ${status}`);
+    }
+    return { status, fragments: data.fragments ?? [] };
+  }
+
+  async setFragment(body: {
+    id: string;
+    target: string;
+    content: string;
+    phase?: string;
+    expiresAt?: number | null;
+  }): Promise<{ status: number; fragment: unknown }> {
+    if (this.target !== 'beacon') {
+      throw new ApiError(
+        400,
+        'fragment authoring requires --beacon (coordinator authoring arrives with the persistent-WS rework)'
+      );
+    }
+    const { status, data } = await this.request<{
+      fragment?: unknown;
+      error?: string;
+    }>('POST', '/fragments', body);
+    if (status !== 200) {
+      throw new ApiError(
+        status,
+        `Failed to set fragment: ${status}${typeof data === 'object' && data !== null && 'error' in data ? ` (${(data as { error: string }).error})` : ''}`
+      );
+    }
+    return { status, fragment: data.fragment };
+  }
+
+  async deleteFragment(
+    id: string,
+    target?: string
+  ): Promise<{ status: number; result: unknown }> {
+    if (this.target !== 'beacon') {
+      throw new ApiError(
+        400,
+        'fragment authoring requires --beacon (coordinator authoring arrives with the persistent-WS rework)'
+      )
+    }
+    const params = new URLSearchParams();
+    if (target) {
+      params.set('target', target);
+    }
+    const { status, data } = await this.request<unknown>(
+      'DELETE',
+      `/fragments/${encodeURIComponent(id)}${params.size > 0 ? `?${params.toString()}` : ''}`
+    );
+    if (status !== 200) {
+      throw new ApiError(status, `Failed to delete fragment: ${status}`);
+    }
+    return { status, result: data };
+  }
+
   // === Wiki (available at both layers; route dialect handled in url()) ===
 
   async readWikiPage(

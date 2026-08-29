@@ -20,6 +20,7 @@
 //   - token-estimate.ts   : Token estimation functions
 //   - config-schema.ts     : Config schema and parsing
 //   - wiki-types.ts       : Wiki page types for swarm knowledge base
+//   - swarm-fragment-types.ts : Swarm prompt fragment types
 //
 // -----------------------------------------------------------------------
 
@@ -233,6 +234,14 @@ export type {
   DroneWikiPage,
   DroneWikiSearchResult,
 } from './wiki-types.js';
+
+// ── Swarm prompt fragment types ──────────────────────────────────────
+
+export type { DroneSwarmFragment } from './swarm-fragment-types.js';
+export {
+  BROADCAST_TARGET,
+  validateFragmentId,
+} from './swarm-fragment-types.js';
 
 // ── Plugin system types ──────────────────────────────────────────────
 

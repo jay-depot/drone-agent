@@ -6,6 +6,8 @@
  * module functions can access and mutate it without closure capture.
  */
 
+import type { SwarmFragmentStore } from './fragment-store.js';
+import { createSwarmFragmentStore } from './fragment-store.js';
 import type {
   DronePersonaDefinition,
   DronePluginRegistration,
@@ -62,6 +64,13 @@ export interface SwarmContext {
   messageQueue: QueuedMessage[];
   pendingMessages: PendingMessage[];
   wsUrl: string;
+  /**
+   * Current fragment set from the beacon. Rendered into the system prompt
+   * via the swarm.fragments.header/footer prompt fragments.
+   */
+  fragmentStore: SwarmFragmentStore;
+  /** True once the first fragmentSync (or reconnect resync) has been applied. */
+  fragmentsResynced: boolean;
 }
 
 /**
@@ -90,5 +99,7 @@ export function createSwarmContext(
     messageQueue: [],
     pendingMessages: [],
     wsUrl,
+    fragmentStore: createSwarmFragmentStore(),
+    fragmentsResynced: false,
   };
 }

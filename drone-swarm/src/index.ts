@@ -31,6 +31,12 @@ Wiki commands (beacon or coordinator):
         [--scope <beacon|coordinator>] [--tags <a,b,c>] [--sources <x,y>]
   wiki search <query>
 
+Fragment commands (list: beacon or coordinator; set/delete: beacon only):
+  fragments list [--target <agentId|broadcast>]
+  fragments set <id> --target <agentId|broadcast> --content <text> | --file <path>
+        [--phase <header|footer>] [--expires-at <epochMs>]
+  fragments delete <id> --target <agentId|broadcast>
+
 JSON is printed to stdout; errors go to stderr with exit code 1.
 `;
 
@@ -180,6 +186,67 @@ async function runWikiCommand(
   }
 }
 
+async function runFragmentsCommand(
+  client: SwarmClient,
+  action: string,
+  args: ParsedArgs
+): Promise<number> {
+  const id = args.positional[2];
+  switch (action) {
+    case 'list': {
+      const query: Record<string, string> = {};
+      if (args.flags.target) {
+        query.target = args.flags.target;
+      }
+      const { fragments } = await client.listFragments(query);
+      printJson({ fragments });
+      return 0;
+    }
+    case 'set': {
+      if (!id || !args.flags.target) {
+        console.error(
+          'usage: drone-swarm fragments set <id> --target <agentId|broadcast> --content <text> | --file <path>'
+        );
+        return 1;
+      }
+      let content = args.flags.content;
+      if (!content && args.flags.file) {
+        const { readFile } = await import('node:fs/promises');
+        content = await readFile(args.flags.file, 'utf8');
+      }
+      if (!content) {
+        console.error('fragments set requires one of --content or --file');
+        return 1;
+      }
+      const { fragment } = await client.setFragment({
+        id,
+        target: args.flags.target,
+        content,
+        ...(args.flags.phase ? { phase: args.flags.phase } : {}),
+        ...(args.flags['expires-at']
+          ? { expiresAt: Number(args.flags['expires-at']) }
+          : {}),
+      });
+      printJson(fragment);
+      return 0;
+    }
+    case 'delete': {
+      if (!id || !args.flags.target) {
+        console.error(
+          'usage: drone-swarm fragments delete <id> --target <agentId|broadcast>'
+        );
+        return 1;
+      }
+      await client.deleteFragment(id, args.flags.target);
+      printJson({ ok: true });
+      return 0;
+    }
+    default:
+      console.error(`unknown fragments action "${action}"`);
+      return 1;
+  }
+}
+
 export async function main(
   argv: string[] = process.argv.slice(2),
   fetchImpl?: typeof fetch
@@ -203,6 +270,8 @@ export async function main(
         return await runSessionCommand(client, action ?? '', args);
       case 'wiki':
         return await runWikiCommand(client, action ?? '', args);
+      case 'fragments':
+        return await runFragmentsCommand(client, action ?? '', args);
       default:
         console.error(`unknown command group "${group}"`);
         console.log(HELP);

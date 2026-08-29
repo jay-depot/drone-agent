@@ -124,3 +124,14 @@ export type {
   SearchFileRow,
   SearchChunkRow,
 } from './search.js';
+export {
+  upsertFragment,
+  getFragment,
+  listFragments,
+  deleteFragment,
+  deleteExpiredFragments,
+  replaceCoordinatorFragments,
+  listMergedForAgent,
+  mergedContentHash,
+} from './fragments.js';
+export type { FragmentRow, ListFragmentsOptions } from './fragments.js';

@@ -213,6 +213,22 @@ export function initDatabase(dataPath: string): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_wiki_pages_scope ON wiki_pages(scope);
+
+    CREATE TABLE IF NOT EXISTS fragments (
+      id TEXT NOT NULL,
+      target TEXT NOT NULL,
+      content TEXT NOT NULL,
+      phase TEXT NOT NULL DEFAULT 'header',
+      scope TEXT NOT NULL DEFAULT 'local',
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL,
+      expiresAt INTEGER,
+      PRIMARY KEY (id, target)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_fragments_target ON fragments(target);
+    CREATE INDEX IF NOT EXISTS idx_fragments_scope ON fragments(scope);
+    CREATE INDEX IF NOT EXISTS idx_fragments_expires ON fragments(expiresAt);
   `);
 
   // Idempotent migration: add lastExamined to existing insights tables.
