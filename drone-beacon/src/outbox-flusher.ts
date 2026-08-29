@@ -1,4 +1,5 @@
 import { createCoordinatorFetch } from './coordinator-client.js';
+import type { TlsIdentity } from 'drone-swarm-common/tls';
 import {
   dequeueDueOutbox,
   markOutboxDelivered,
@@ -14,6 +15,12 @@ const DEFAULT_MAX_ATTEMPTS = 10;
 export interface OutboxFlusherOptions {
   /** Returns the coordinator base URL, or undefined when not configured. */
   getBaseUrl: () => string | undefined;
+  /** Beacon TLS identity, presented as the mTLS client certificate. */
+  tlsIdentity?: TlsIdentity;
+  /** Expected coordinator TLS fingerprint (TOFU pin), or undefined. */
+  expectedCoordinatorFingerprint?: string;
+  /** Called with the coordinator fingerprint on first contact (TOFU). */
+  onFirstFingerprint?: (fp: string) => void;
   intervalMs: number;
   batchSize?: number;
   maxAttempts?: number;
@@ -55,7 +62,12 @@ async function deliverEntry(
   try {
     const res = await fetcher(`${baseUrl}${entry.endpoint}`, {
       method: entry.method,
-      headers: { 'Content-Type': 'application/json' },
+      // Fastify rejects an empty body when the JSON content-type is set
+      // (FST_ERR_CTP_EMPTY_JSON_BODY), so only set it when there is one.
+      headers:
+        entry.body !== null && entry.body !== undefined
+          ? { 'Content-Type': 'application/json' }
+          : undefined,
       body: entry.body ?? undefined,
     });
     if (res.ok || res.status === 404) {
@@ -92,7 +104,12 @@ export function createOutboxFlusher(
     if (!baseUrl) {
       return result;
     }
-    fetcher ??= createCoordinatorFetch(baseUrl);
+    fetcher ??= createCoordinatorFetch(
+      baseUrl,
+      options.expectedCoordinatorFingerprint,
+      options.onFirstFingerprint,
+      options.tlsIdentity
+    );
     const entries = dequeueDueOutbox(
       batchSize,
       now ?? options.now?.() ?? Date.now()

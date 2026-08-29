@@ -37,6 +37,7 @@ import {
   setPendingCoordinatorFingerprint,
   getTrustedCoordinatorFingerprint,
   confirmCoordinatorFingerprint,
+  getPendingCoordinatorFingerprint,
   setBeaconApproved,
 } from './coordinator-trust.js';
 import {
@@ -111,6 +112,12 @@ async function parseArgs(): Promise<Config> {
     syncIntervalMinutes: DEFAULT_SYNC_INTERVAL_MINUTES,
     rateLimitMax: DEFAULT_RATE_LIMIT_MAX,
     rateLimitWindowMs: DEFAULT_RATE_LIMIT_WINDOW_MS,
+    // COORDINATOR_HOST/PORT are read from the environment (docker compose
+    // sets them); CLI flags override below.
+    coordinatorHost: process.env.COORDINATOR_HOST,
+    coordinatorPort: process.env.COORDINATOR_PORT
+      ? parseInt(process.env.COORDINATOR_PORT, 10)
+      : undefined,
     coordinatorUseHttps: process.env.COORDINATOR_HTTPS === 'true',
     useHttps: process.env.BEACON_HTTPS === 'true',
     command: 'serve',
@@ -345,6 +352,21 @@ async function main() {
         setBeaconApproved(true);
       }
 
+      // Test/integration opt-in: confirm the coordinator's TLS fingerprint
+      // without the compare-only human handshake. The fingerprint was
+      // observed on the very connection that performed registration, and
+      // the coordinator already verified this beacon's certificate, so the
+      // trust-on-first-use basis is the registration connection itself.
+      if (
+        process.env.BEACON_AUTO_CONFIRM_COORDINATOR_FINGERPRINT === 'true' &&
+        result.status === 'approved'
+      ) {
+        const pending = getPendingCoordinatorFingerprint();
+        if (pending) {
+          confirmCoordinatorFingerprint(pending);
+        }
+      }
+
       if (result.status === 'pending') {
         logger.info('Beacon pending approval.');
         logger.info(
@@ -449,6 +471,9 @@ async function main() {
     setOutboxEnabled(true);
     outboxFlusher = createOutboxFlusher({
       getBaseUrl: () => coordinatorClient?.getBaseUrl(),
+      tlsIdentity,
+      expectedCoordinatorFingerprint: getTrustedCoordinatorFingerprint(),
+      onFirstFingerprint: fp => setPendingCoordinatorFingerprint(fp),
       intervalMs: Math.min(config.syncIntervalMinutes * 60 * 1000, 60000),
     });
     outboxFlusher.start();
