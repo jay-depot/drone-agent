@@ -28,7 +28,7 @@ The project is a pnpm workspace with the following packages:
 | `drone-swarm-common/`   | Shared utilities for beacon and coordinator.                                       |
 | `drone-swarm/`          | `drone-swarm` CLI: standalone REST client for session pipeline + wiki.             |
 | `drone-gateway/`        | Chat API gateway (Matrix, Discord, Slack).                                         |
-| `skill-library/`        | Reusable skill `.md` files (not a workspace package).                              |
+| `config-library/`       | Example skills, macros and personas for a full agent setup (not a workspace package). |
 
 Key source directories within `drone-agent/`:
 
