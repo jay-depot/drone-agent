@@ -50,6 +50,11 @@ function createRegistrationCapture() {
       chat: async () => ({ message: 'ok' }),
       getContextWindowInfo: async () => null,
     }),
+    resolveModelForRole: () => ({
+      provider: { chat: async () => ({ message: 'ok' }) },
+      providerId: 'openrouter',
+      model: 'openai/gpt-4o',
+    }),
     getActiveProviderId: () => 'openrouter',
     getAvailableProviders: () => [{ id: 'openrouter', precedence: 1000 }],
     activateProvider: () => {},
@@ -60,6 +65,7 @@ function createRegistrationCapture() {
     listModels: async () => {
       return [];
     },
+    describeImages: async images => images,
   };
 
   const registration: DronePluginRegistration = {

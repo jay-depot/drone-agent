@@ -4,7 +4,7 @@ import type {
   DronePromptFragment,
   DroneToolDefinition,
 } from 'drone-core';
-import { createDefaultAgentConfig } from 'drone-core';
+import { createDefaultAgentConfig, toToolResultContent } from 'drone-core';
 import { notepadPlugin } from '../src/plugins/notepad.js';
 
 function createMockRegistration(): {
@@ -65,7 +65,9 @@ describe('notepad manage tool', () => {
   it('rejects unknown action instead of silently succeeding', async () => {
     const { manageTool } = await setup();
     const parsed = JSON.parse(
-      await manageTool.execute({ action: 'bogus', content: 'x' })
+      toToolResultContent(
+        await manageTool.execute({ action: 'bogus', content: 'x' })
+      )
     );
     expect(parsed.success).toBe(false);
     expect(parsed.error).toMatch(/must be set, clear, or append/);
@@ -73,7 +75,9 @@ describe('notepad manage tool', () => {
 
   it('rejects omitted action instead of silently succeeding', async () => {
     const { manageTool } = await setup();
-    const parsed = JSON.parse(await manageTool.execute({}));
+    const parsed = JSON.parse(
+      toToolResultContent(await manageTool.execute({}))
+    );
     expect(parsed.success).toBe(false);
     expect(parsed.error).toMatch(/must be set, clear, or append/);
   });
@@ -92,13 +96,13 @@ describe('notepad manage tool', () => {
       action: 'set',
       content: 'first note',
     });
-    expect(JSON.parse(result).success).toBe(true);
+    expect(JSON.parse(toToolResultContent(result)).success).toBe(true);
 
     const second = await manageTool.execute({
       action: 'set',
       content: 'second note',
     });
-    expect(JSON.parse(second).success).toBe(true);
+    expect(JSON.parse(toToolResultContent(second)).success).toBe(true);
 
     const rendered = await fragment.render();
     expect(rendered).toContain('Session Notepad');
@@ -122,14 +126,16 @@ describe('notepad manage tool', () => {
 
     await manageTool.execute({ action: 'set', content: 'temporary' });
     const result = await manageTool.execute({ action: 'clear' });
-    expect(JSON.parse(result).success).toBe(true);
+    expect(JSON.parse(toToolResultContent(result)).success).toBe(true);
     expect(await fragment.render()).toBe('');
   });
 
   it('rejects non-string content for set and append', async () => {
     const { manageTool } = await setup();
     for (const action of ['set', 'append'] as const) {
-      const parsed = JSON.parse(await manageTool.execute({ action }));
+      const parsed = JSON.parse(
+        toToolResultContent(await manageTool.execute({ action }))
+      );
       expect(parsed.success).toBe(false);
       expect(parsed.error).toMatch(/Missing content/);
     }

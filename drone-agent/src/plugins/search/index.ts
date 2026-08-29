@@ -1,3 +1,4 @@
+import { toToolResultContent } from 'drone-core';
 import type {
   DronePlugin,
   DronePluginRegistration,
@@ -119,7 +120,9 @@ export const searchPlugin: DronePlugin = {
 
         let raw: string;
         try {
-          raw = await ctx.engine.executeTool('search__text', input);
+          raw = toToolResultContent(
+            await ctx.engine.executeTool('search__text', input)
+          );
         } catch (err) {
           ctx.logger.error(
             `search failed: ${err instanceof Error ? err.message : String(err)}`

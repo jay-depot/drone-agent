@@ -2,6 +2,7 @@ import {
   insertSortedByPrecedence,
   removeById,
   insertWriterSorted,
+  toToolResultContent,
 } from 'drone-core';
 import { SkillsRecallBlock } from '../../tui/components/SkillsRecallBlock.js';
 import { SkillsListBlock } from '../../tui/components/SkillsListBlock.js';
@@ -273,7 +274,11 @@ export const skillsPlugin: DronePlugin = {
         const subcommand = ctx.args[0] ?? '';
 
         if (subcommand === 'list') {
-          ctx.logger.info(await ctx.engine.executeTool('skills__list', {}));
+          ctx.logger.info(
+            toToolResultContent(
+              await ctx.engine.executeTool('skills__list', {})
+            )
+          );
           return true;
         }
 
@@ -286,10 +291,11 @@ export const skillsPlugin: DronePlugin = {
 
           // Execute the tool to get skill data
           const result = await ctx.engine.executeTool('skills__recall', { id });
-          const skill = JSON.parse(result);
+          const raw = toToolResultContent(result);
+          const skill = JSON.parse(raw);
 
           // Append to conversation context as synthetic tool result
-          ctx.sessionManager?.appendToolResult('skills__recall', result);
+          ctx.sessionManager?.appendToolResult('skills__recall', raw);
 
           // Tell the user it worked (not the full body)
           ctx.logger.info(`Loaded skill: ${skill.name} (${skill.source})`);
@@ -298,7 +304,9 @@ export const skillsPlugin: DronePlugin = {
 
         if (subcommand === 'reload') {
           ctx.logger.info(
-            await ctx.engine.executeTool('skills__list', { reload: true })
+            toToolResultContent(
+              await ctx.engine.executeTool('skills__list', { reload: true })
+            )
           );
           return true;
         }

@@ -567,11 +567,14 @@ export const filePlugin: DronePlugin = {
         }
 
         const data = buffer.toString('base64');
-        return JSON.stringify(
-          { path: filePath, mimeType, data, size: buffer.length },
-          null,
-          2
-        );
+        return {
+          content: JSON.stringify(
+            { path: filePath, mimeType, size: buffer.length },
+            null,
+            2
+          ),
+          images: [{ mimeType, data }],
+        };
       },
     });
   },

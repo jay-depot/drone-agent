@@ -84,10 +84,10 @@ export async function getOrCreateServerDescription(
   if (!llmCapability) return undefined;
 
   try {
-    const provider = llmCapability.getActiveProvider();
-    const model = llmCapability.getModel();
-    const response = await provider.chat({
-      model,
+    const role = llmCapability.resolveModelForRole('describer');
+    const response = await role.provider.chat({
+      model: role.model,
+      reasoningLevel: role.reasoningLevel,
       messages: [
         {
           role: 'system',

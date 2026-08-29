@@ -19,6 +19,7 @@ import {
   type DroneToolDescriptor,
   type DroneToolDefinition,
   type DroneToolExecutionContext,
+  type DroneToolResult,
   type DroneWorkflow,
   type DroneWorkflowContext,
   type DroneWorkflowResult,
@@ -94,7 +95,7 @@ export type DronePluginEngine = {
     input: Record<string, unknown>,
     onProgress?: (chunk: string) => void,
     context?: DroneToolExecutionContext
-  ) => Promise<string>;
+  ) => Promise<string | DroneToolResult>;
   listTools: () => DroneToolDescriptor[];
   listAllTools: () => DroneToolDescriptor[];
   /** Mount a tool by canonical name (e.g. "file__read"). Returns the tool definition if newly mounted, else undefined. */

@@ -3,6 +3,8 @@ import {
   createDebugFlagRegistry,
   estimateTextTokens,
   parseModelSelection,
+  resolveConfiguredReasoningLevel,
+  toToolResultContent,
   type DroneGuardrailConfig,
   type DroneGuardrailThresholdConfig,
   type DebugFlagRegistry,
@@ -24,13 +26,11 @@ import type {
   DroneToolExecutionContext,
 } from 'drone-core';
 import {
-  computeBackoffDelay,
   DEFAULT_RETRY_CONFIG,
   isContextWindowExceeded,
-  isTransientStatus,
+  withBoundedSilentRetry,
   type RetryPolicyConfig,
 } from './llm-retry.js';
-import { isRecord } from '../shared/type-guards.js';
 import type { DronePluginEngine } from './plugin-engine.js';
 import type { DroneSessionManager } from './session-manager.js';
 import type { ContextBudgetService } from './context-budget-service.js';
@@ -411,17 +411,21 @@ export function createConversationService({
     onProgress?: (chunk: string) => void,
     context?: DroneToolExecutionContext
   ): Promise<
-    | { kind: 'ok'; content: string }
+    | { kind: 'ok'; content: string; images?: DroneImageContent[] }
     | { kind: 'error'; content: string; code: string | null }
   > {
     try {
-      const content = await engine.executeTool(
+      const result = await engine.executeTool(
         canonicalName,
         input,
         onProgress,
         context
       );
-      return { kind: 'ok', content };
+      return {
+        kind: 'ok',
+        content: toToolResultContent(result),
+        images: typeof result === 'string' ? undefined : result.images,
+      };
     } catch (err) {
       const rawMessage = err instanceof Error ? err.message : String(err);
       const code = (err as NodeJS.ErrnoException)?.code ?? null;
@@ -500,7 +504,41 @@ export function createConversationService({
           let failureCount = 0;
           while (true) {
             try {
-              return await provider.chat(request);
+              return await withBoundedSilentRetry(
+                async () => {
+                  try {
+                    return await provider.chat(request);
+                  } catch (error) {
+                    if (!(error instanceof DroneLlmError)) {
+                      // T3: transport/network/bad-shape — not classifiable.
+                      throw error;
+                    }
+                    // Context-window overflow → fail fast with guidance. This
+                    // happens when compaction failed AND the token estimate
+                    // undercounts the window; retrying would never succeed.
+                    // Convert to a non-transient error so the shared helper
+                    // throws it immediately (no auto-retry).
+                    if (isContextWindowExceeded(error.status, error.message)) {
+                      throw new DroneLlmError(error.message, {
+                        status: error.status,
+                        retryable: false,
+                        retryAfterMs: error.retryAfterMs,
+                        providerId: error.providerId,
+                        body: error.body,
+                      });
+                    }
+                    throw error;
+                  }
+                },
+                retryConfig,
+                (llmErr, attempt, delay) => {
+                  failureCount = attempt;
+                  emit({
+                    kind: 'notice',
+                    content: `LLM API error (${llmErr.status ?? '?'}), retrying in ${Math.round(delay / 1000)}s (${attempt}/${retryConfig.maxRetries})`,
+                  });
+                }
+              );
             } catch (error) {
               if (!(error instanceof DroneLlmError)) {
                 // T3: transport/network/bad-shape — not classifiable, throw.
@@ -520,27 +558,6 @@ export function createConversationService({
                   'The LLM context window was exceeded, but compaction did not reclaim enough space (or the token estimate undercounts it). Enable compaction and run /compact to reset the session.',
                   { cause: error }
                 );
-              }
-
-              const transient =
-                llmErr.retryable ||
-                (llmErr.status !== undefined &&
-                  isTransientStatus(llmErr.status));
-
-              // T1: bounded silent auto-retry.
-              if (transient && failureCount < retryConfig.maxRetries) {
-                failureCount += 1;
-                const delay = computeBackoffDelay(
-                  failureCount,
-                  retryConfig,
-                  llmErr.retryAfterMs
-                );
-                emit({
-                  kind: 'notice',
-                  content: `LLM API error (${llmErr.status ?? '?'}), retrying in ${Math.round(delay / 1000)}s (${failureCount}/${retryConfig.maxRetries})`,
-                });
-                await new Promise(resolve => setTimeout(resolve, delay));
-                continue;
               }
 
               // T2: prompt the user to retry, or fail fast.
@@ -566,14 +583,16 @@ export function createConversationService({
         // Shared tool-execution pipeline used by both the primary tool-call path
         // and the Feature-1 hint-recovery path: execute all tool calls in
         // parallel, truncate results, buffer them, emit batch/error events,
-        // append results to the session, run onAfterToolCall hooks, and extract
-        // images. Returns the buffered results plus stuck-detector info so the
-        // caller can make its own loop decisions (iteration limit, stop, throw).
+        // append results to the session, run onAfterToolCall hooks, and carry
+        // structured images. Returns the buffered results plus stuck-detector
+        // info so the caller can make its own loop decisions (iteration limit,
+        // stop, throw).
         async function executeToolCalls(toolCalls: DroneToolCall[]): Promise<{
           bufferedResults: Array<{
             name: string;
             content: string;
             toolCallId: string | undefined;
+            images?: DroneImageContent[];
           }>;
           allErrors: boolean;
           firstErrorSignature: {
@@ -632,17 +651,34 @@ export function createConversationService({
             }
           }
 
-          // Collect results in order (the map preserves the array order).
+          // Collect results in order (the map preserves the array order),
+          // enforcing the per-message image count cap so the images channel
+          // stays bounded. Over-cap images are dropped (kept-first-N) and a
+          // marker is appended to content telling the model how to retrieve
+          // the rest.
+          const maxImagesPerMessage = config.session.maxImagesPerMessage ?? 20;
           const bufferedResults: Array<{
             name: string;
             content: string;
             toolCallId: string | undefined;
+            images?: DroneImageContent[];
           }> = [];
           for (const result of rawResults) {
+            const toolResult = result.toolResult;
+            let content = toolResult.content;
+            let images =
+              toolResult.kind === 'ok' ? toolResult.images : undefined;
+            if (images && images.length > maxImagesPerMessage) {
+              const kept = images.slice(0, maxImagesPerMessage);
+              const omitted = images.length - kept.length;
+              images = kept;
+              content = `${content}\n\n[${omitted} additional images omitted. Request a narrower/range selection to retrieve them.]`;
+            }
             bufferedResults.push({
               name: result.name,
-              content: result.toolResult.content,
+              content,
               toolCallId: result.toolCallId,
+              images,
             });
           }
 
@@ -720,19 +756,44 @@ export function createConversationService({
             logger.warn(`onAfterToolCall hook error (non-fatal): ${msg}`);
           }
 
-          // After appending tool results, check for image data in tool results.
+          // After appending tool results, carry the structured images (already
+          // capped to maxImagesPerMessage) out of the content string and into
+          // the session. When the durability gate is on (log enabled or swarm
+          // active) we eagerly describe images so the description lands in the
+          // persisted store (D5). Otherwise we describe lazily at the request
+          // seam when a non-vision model is about to receive the image (D3).
+          const durabilityGate =
+            config.log.enabled || engine.getCapability('swarm') !== undefined;
+          // D1: describe across the batch in parallel (Promise.all), then apply
+          // the results to the session store in order. The describe calls are
+          // the expensive part; the session mutations must stay sequential.
+          const activeProvider = llm.getActiveProvider();
+          const supportsInline = activeProvider.supportsImagesInToolResults;
+          const describeWork: Array<{
+            result: (typeof bufferedResults)[number];
+            described: Promise<DroneImageContent[]>;
+          }> = [];
           for (const result of bufferedResults) {
-            const imageContent = extractImageFromToolResult(result.content);
-            if (imageContent) {
-              const activeProvider = llm.getActiveProvider();
-              if (activeProvider.supportsImagesInToolResults) {
-                sessionManager.updateLastToolResultImages([imageContent]);
-              } else {
-                sessionManager.appendUserMessage(
-                  `[Image from ${result.name} tool]`,
-                  [imageContent]
-                );
-              }
+            const images = result.images ?? [];
+            if (images.length === 0) continue;
+            const described = durabilityGate
+              ? describeImagesSafely(llm, images)
+              : Promise.resolve(images);
+            describeWork.push({ result, described });
+          }
+          const settled = await Promise.all(
+            describeWork.map(work => work.described)
+          );
+          for (let i = 0; i < describeWork.length; i++) {
+            const { result } = describeWork[i];
+            const described = settled[i];
+            if (supportsInline) {
+              sessionManager.updateLastToolResultImages(described);
+            } else {
+              sessionManager.appendUserMessage(
+                `[Image from ${result.name} tool]`,
+                described
+              );
             }
           }
 
@@ -771,27 +832,22 @@ export function createConversationService({
           const provider = llm.getActiveProvider();
 
           // Resolve reasoning level: session override → selected model entry →
-          // llm-level config. Cross-wired legacy fallbacks to inactive
-          // providers' sections are gone.
+          // llm-level config (shared helper). Cross-wired legacy fallbacks to
+          // inactive providers' sections are gone.
+          const selection = parseModelSelection(
+            `${activeProviderId}/${currentModel}`
+          );
           const effectiveReasoningLevel =
             reasoningLevel ??
-            (() => {
-              const selection = parseModelSelection(
-                `${activeProviderId}/${currentModel}`
-              );
-              if (!selection) return undefined;
-              const entry =
-                config.providers[selection.providerId]?.models?.[
-                  selection.modelLocalId
-                ];
-              return entry?.reasoningLevel;
-            })() ??
-            config.llm.reasoningLevel ??
-            undefined;
+            (selection
+              ? resolveConfiguredReasoningLevel(config, selection)
+              : undefined);
 
+          const targetHasVision =
+            (await llm.hasVision?.(currentModel)) ?? false;
           const chatRequest: DroneChatRequest = {
             model: currentModel,
-            messages: (() => {
+            messages: await (async () => {
               const base: DroneChatMessage[] = [
                 ...systemMessages,
                 ...sessionManager.getMessages(),
@@ -813,7 +869,17 @@ export function createConversationService({
               for (const reminder of engine.drainSystemReminders()) {
                 base.push({ role: 'system', content: reminder });
               }
-              return base;
+              // Lazy description (D3): when a non-vision model is about to
+              // receive an undescribed image, describe it now (once-cached into
+              // the stored message). Vision-capable targets skip generation.
+              if (!targetHasVision) {
+                await describeUndescribedImages(base, llm);
+              }
+              // Presentation stripping (D11): derive the wire representation
+              // per target model. Vision-capable target → image via images[]
+              // (base64 blob stripped from content, marker left). Non-vision
+              // target → description substituted into content, image omitted.
+              return prepareRequestMessages(base, targetHasVision);
             })(),
             tools,
             reasoningLevel: effectiveReasoningLevel,
@@ -1096,6 +1162,7 @@ export function createConversationService({
           });
       }
     },
+
     clearSession: () => {
       hasWarnedAboutSafetyTrim = false;
       pendingMessages.length = 0;
@@ -1160,44 +1227,117 @@ export function createConversationService({
   };
 }
 
-function extractImageFromToolResult(content: string): DroneImageContent | null {
+/**
+ * Describe images via the broker's describeImages capability, guarded by a
+ * ~60s timeout (aligned with retry maxWaitMs). Fails open: on timeout or
+ * describer failure, images are returned unchanged (idempotent — a later
+ * call can retry). Never hard-errors on describer failure (D9).
+ */
+async function describeImagesSafely(
+  llm: DroneLlmCapability,
+  images: DroneImageContent[]
+): Promise<DroneImageContent[]> {
   try {
-    const parsed = JSON.parse(content);
-    if (isRecord(parsed)) {
-      // Check for file__read_image format
-      if (
-        typeof parsed.mimeType === 'string' &&
-        parsed.mimeType.startsWith('image/') &&
-        typeof parsed.data === 'string'
-      ) {
-        return { mimeType: parsed.mimeType, data: parsed.data };
-      }
-      // Check for MCP data URI in any string field
-      const dataUri = findDataUri(parsed);
-      if (dataUri) return dataUri;
-    }
+    return await withTimeout(
+      llm.describeImages(images),
+      60_000,
+      'image description timed out'
+    );
   } catch {
-    // Not JSON — skip
+    // Fail open: return images unchanged. The broker already warns on
+    // describer failure; this guard covers the timeout path.
+    return images;
   }
-  return null;
 }
 
-function findDataUri(obj: unknown): DroneImageContent | null {
-  if (typeof obj === 'string') {
-    const match = obj.match(/^data:(image\/\w+);base64,(.+)$/);
-    if (match) return { mimeType: match[1], data: match[2] };
-  }
-  if (Array.isArray(obj)) {
-    for (const item of obj) {
-      const result = findDataUri(item);
-      if (result) return result;
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
+/**
+ * Describe any undescribed images across the given messages, writing the
+ * descriptions back onto the stored image objects in place (the messages are
+ * references into the session store, so mutation persists). Idempotent —
+ * already-described images are skipped. Fails open (D9).
+ */
+async function describeUndescribedImages(
+  messages: DroneChatMessage[],
+  llm: DroneLlmCapability
+): Promise<void> {
+  const undescribed: DroneImageContent[] = [];
+  for (const message of messages) {
+    for (const img of message.images ?? []) {
+      if (!img.description) undescribed.push(img);
     }
   }
-  if (isRecord(obj)) {
-    for (const val of Object.values(obj)) {
-      const result = findDataUri(val);
-      if (result) return result;
-    }
+  if (undescribed.length === 0) return;
+  const described = await describeImagesSafely(llm, undescribed);
+  // Write descriptions back onto the original image objects in place.
+  for (let i = 0; i < undescribed.length; i++) {
+    const desc = described[i]?.description;
+    if (desc) undescribed[i].description = desc;
   }
-  return null;
+}
+
+/**
+ * Derive the wire representation of each message for the target model (D11).
+ * - Vision-capable target: image carried via `images[]`; the redundant base64
+ *   blob is stripped from the content string, leaving a marker.
+ * - Non-vision target: the image is omitted and its description (if present)
+ *   is substituted into the content; if no description exists, the image is
+ *   sent as-is (today's behavior — fail open).
+ * Storage/estimator are untouched; this is presentation-only.
+ */
+function prepareRequestMessages(
+  messages: DroneChatMessage[],
+  targetHasVision: boolean
+): DroneChatMessage[] {
+  return messages.map(message => {
+    if (!message.images || message.images.length === 0) {
+      return message;
+    }
+    if (targetHasVision) {
+      // Strip the base64 blob from content, leaving a marker. The image is
+      // carried via images[].
+      const stripped = stripBase64Blobs(message.content);
+      return stripped === message.content
+        ? message
+        : { ...message, content: stripped };
+    }
+    // Non-vision target: substitute descriptions into content, omit images.
+    const described = message.images.filter(img => img.description);
+    if (described.length === 0) {
+      // No descriptions available — send as-is (fail open).
+      return message;
+    }
+    const descriptionText = described.map(img => img.description).join('\n');
+    const content = message.content
+      ? `${message.content}\n\n[Image description]\n${descriptionText}`
+      : `[Image description]\n${descriptionText}`;
+    return { ...message, content, images: undefined };
+  });
+}
+
+/** Strip base64 image blobs from a content string, leaving a marker. */
+function stripBase64Blobs(content: string): string {
+  return content.replace(
+    /data:image\/\w+;base64,[A-Za-z0-9+/=]+/g,
+    '[Image attached]'
+  );
 }

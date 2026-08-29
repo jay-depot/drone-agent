@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { createSwarmPlugin } from '../src/plugins/swarm/index.js';
 import { silentLogger } from './helpers.js';
-import { createDefaultAgentConfig } from 'drone-core';
+import { createDefaultAgentConfig, toToolResultContent } from 'drone-core';
 import type { DronePluginRegistration, DroneToolDefinition } from 'drone-core';
 
 /**
@@ -134,7 +134,7 @@ describe('swarm spawn tools', () => {
       const tool = registeredTools.get('swarm_list_beacons')!;
       expect(tool).toBeDefined();
       const result = await tool.execute({});
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
       expect(parsed.success).toBe(true);
       expect(parsed[0].id).toBe('b1');
     });
@@ -154,7 +154,7 @@ describe('swarm spawn tools', () => {
       const tool = registeredTools.get('swarm_list_beacons')!;
       expect(tool).toBeDefined();
       const result = await tool.execute({});
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
       expect(parsed.success).toBe(false);
       expect(parsed.details.error).toContain('coordinatorUrl');
     });
@@ -178,7 +178,7 @@ describe('swarm spawn tools', () => {
       const tool = registeredTools.get('swarm_list_beacons')!;
       expect(tool).toBeDefined();
       const result = await tool.execute({});
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
       expect(parsed.success).toBe(false);
       expect(parsed.error).toBe('Failed to reach coordinator');
     });
@@ -209,7 +209,7 @@ describe('swarm spawn tools', () => {
       const tool = registeredTools.get('swarm_list_agents')!;
       expect(tool).toBeDefined();
       const result = await tool.execute({});
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
       expect(parsed.success).toBe(true);
       expect(parsed[0].agentId).toBe('a1');
     });
@@ -272,7 +272,7 @@ describe('swarm spawn tools', () => {
         personaId: 'coder',
         task: 'fix bugs',
       });
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
       expect(parsed.success).toBe(true);
       expect(parsed.spawnId).toBe('spawn-123');
       expect(parsed.status).toBe('spawning');
@@ -293,7 +293,7 @@ describe('swarm spawn tools', () => {
       const tool = registeredTools.get('swarm_spawn')!;
       expect(tool).toBeDefined();
       const result = await tool.execute({ targetBeaconId: 'b-target' });
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
       expect(parsed.success).toBe(false);
       expect(parsed.details.error).toContain('coordinatorUrl');
     });
@@ -326,7 +326,7 @@ describe('swarm spawn tools', () => {
       const tool = registeredTools.get('swarm_get_spawn')!;
       expect(tool).toBeDefined();
       const result = await tool.execute({ beaconId: 'b1', spawnId: 's1' });
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
       expect(parsed.success).toBe(true);
       expect(parsed.status).toBe('running');
     });
@@ -355,7 +355,7 @@ describe('swarm spawn tools', () => {
       const tool = registeredTools.get('swarm_list_spawns')!;
       expect(tool).toBeDefined();
       const result = await tool.execute({ beaconId: 'b1' });
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
       expect(parsed.success).toBe(true);
       expect(parsed[0].id).toBe('s1');
     });
@@ -412,7 +412,7 @@ describe('swarm spawn tools', () => {
       const tool = registeredTools.get('swarm_terminate_spawn')!;
       expect(tool).toBeDefined();
       const result = await tool.execute({ beaconId: 'b1', spawnId: 's1' });
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
       expect(parsed.success).toBe(true);
     });
 

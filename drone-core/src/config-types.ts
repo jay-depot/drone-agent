@@ -86,6 +86,14 @@ export type DroneLlmConfig = {
    */
   active?: string;
   reasoningLevel?: DroneReasoningLevel;
+  /**
+   * Role-name → canonical `<providerId>/<modelLocalId>` selection, used by
+   * built-in plugins that make their own LLM calls (compaction's summarizer,
+   * persona-creation wizard, MCP server-description generator). Unset roles
+   * fall back to the active selection. Banned at project scope (project files
+   * may not pin role models that reference providers absent in that environment).
+   */
+  modelRoles?: Record<string, string>;
 };
 
 export type DroneOpenRouterModelConfig = {
@@ -154,6 +162,13 @@ export type DroneSessionConfig = {
    * Default is 20MB (20 * 1024 * 1024).
    */
   maxImageSizeBytes?: number;
+  /**
+   * Maximum number of images that may attach to a single tool-result message.
+   * Images beyond this count are dropped (kept-first-N) and a marker is
+   * appended to the result content telling the model how to retrieve the rest.
+   * Default is 20.
+   */
+  maxImagesPerMessage?: number;
   /**
    * Maximum percentage of the context window that a single tool result
    * may consume. Results exceeding this threshold are truncated with a
@@ -481,7 +496,6 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
   replaceNullable: ['activePersona'],
   merge: [
     'trustedPlugins',
-    'llm',
     // Entry-level replace: maps merge by key, but any scope defining
     // `providers.<id>` replaces that whole entry (no intra-entry deep merge —
     // prevents beacon/local frankensteins).
@@ -501,6 +515,10 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
     lsp: { replace: ['servers'] },
     mcp: { replace: ['servers'] },
     promptFile: { mergeArrays: ['files'] },
+    // llm scalars (provider/active/reasoningLevel) replace; modelRoles merges
+    // per-key so distinct roles from different scopes combine (user sets
+    // summarizer, beacon underlay sets wizard → both apply).
+    llm: { deepMerge: { modelRoles: {} } },
     session: {
       deepMerge: {
         guardrail: { deepMerge: {} },
@@ -532,6 +550,7 @@ export function createDefaultAgentConfig(
     activePersona: null,
     llm: {
       provider: 'ollama',
+      modelRoles: {},
     },
     providers: {},
     ollama: {
@@ -574,6 +593,7 @@ export function createDefaultAgentConfig(
       responseReserveTokens: 4096,
       maxToolIterations: 50,
       maxImageSizeBytes: 20 * 1024 * 1024,
+      maxImagesPerMessage: 20,
       promptOnToolIterationLimit: false,
       maxToolResultTokensPercent: 15,
       guardrail: {

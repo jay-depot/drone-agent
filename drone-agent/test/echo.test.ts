@@ -17,6 +17,9 @@ function createMockRegistration(): {
     getActiveProvider: () => {
       throw new Error('not used in test');
     },
+    resolveModelForRole: () => {
+      throw new Error('not used in test');
+    },
     getActiveProviderId: () => 'echo',
     getAvailableProviders: () => [],
     activateProvider: () => {},
@@ -30,6 +33,7 @@ function createMockRegistration(): {
     },
     registerProvider: () => {},
     unregisterProvider: () => {},
+    describeImages: async images => images,
   };
 
   const registration: DronePluginRegistration = {

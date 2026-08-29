@@ -2,7 +2,11 @@ import { mkdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { createDefaultAgentConfig, type DronePlugin } from 'drone-core';
+import {
+  createDefaultAgentConfig,
+  toToolResultContent,
+  type DronePlugin,
+} from 'drone-core';
 import { createDronePluginEngine } from '../../src/runtime/plugin-engine.js';
 import { selfImprovementPlugin } from '../../src/plugins/self-improvement/index.js';
 import { createTestPlugin, silentLogger } from '../helpers.js';
@@ -717,7 +721,7 @@ describe('skill principles injection', () => {
     const result = await engine.executeTool('skills__recall', {
       id: 'test-skill',
     });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
     expect(parsed.body).toContain('Original body.');
     expect(parsed.body).toContain('## Principles');
     expect(parsed.body).toContain('Always test edge cases.');
@@ -770,7 +774,7 @@ describe('skill principles injection', () => {
     const result = await engine.executeTool('skills__recall', {
       id: 'test-skill',
     });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
     expect(parsed.body).toBe('Original body.');
     expect(parsed.body).not.toContain('## Principles');
   });
@@ -864,7 +868,7 @@ describe('skill principles injection', () => {
     const result = await engine.executeTool('skills__recall', {
       id: 'test-skill',
     });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
     expect(parsed.body).toBe('Original body.');
     expect(parsed.body).not.toContain('## Principles');
   });

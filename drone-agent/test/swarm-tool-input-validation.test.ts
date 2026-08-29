@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DronePluginRegistration } from 'drone-core';
+import { toToolResultContent, type DronePluginRegistration } from 'drone-core';
 import { createWikiTools } from '../src/plugins/swarm/tools-wiki.js';
 import { createCoordinatorTools } from '../src/plugins/swarm/tools-coordinator.js';
 import { createSwarmMessageTool } from '../src/plugins/swarm/tools-message.js';
@@ -31,10 +31,10 @@ function coordinatorToolMap() {
 }
 
 async function expectRejection(
-  resultPromise: Promise<string>,
+  resultPromise: Promise<string | import('drone-core').DroneToolResult>,
   expectedFragment: RegExp
 ) {
-  const parsed = JSON.parse(await resultPromise);
+  const parsed = JSON.parse(toToolResultContent(await resultPromise));
   expect(parsed.success).toBe(false);
   expect(parsed.error).toMatch(expectedFragment);
 }
@@ -91,7 +91,9 @@ describe('swarm tool input validation (pre-network guards)', () => {
     });
     const tools = wikiToolMap();
     const parsed = JSON.parse(
-      await tools.get('wiki_read')!.execute({ pageId: 'real-page' })
+      toToolResultContent(
+        await tools.get('wiki_read')!.execute({ pageId: 'real-page' })
+      )
     );
     expect(parsed.success).toBe(true);
     expect(parsed.page.id).toBe('real-page');

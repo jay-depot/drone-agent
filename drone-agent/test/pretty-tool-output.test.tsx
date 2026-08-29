@@ -13,6 +13,7 @@ import { FileWriteBlock } from '../src/tui/components/FileWriteBlock.js';
 import { FileApplyDiffBlock } from '../src/tui/components/FileApplyDiffBlock.js';
 import { FileListBlock } from '../src/tui/components/FileListBlock.js';
 import { FileGlobBlock } from '../src/tui/components/FileGlobBlock.js';
+import { FileReadImageBlock } from '../src/tui/components/FileReadImageBlock.js';
 import { SearchTextBlock } from '../src/tui/components/SearchTextBlock.js';
 import { DEFAULT_GRAYSCALE_SCHEME } from '../src/tui/theme.js';
 import type { ToolRenderState } from 'drone-core';
@@ -89,6 +90,51 @@ describe('ExecRunBlock', () => {
     });
     const { lastFrame } = render(<ExecRunBlock state={state} />);
     expect(lastFrame()).toContain('✗');
+  });
+});
+
+// ── FileReadImageBlock ──────────────────────────────────────────────
+
+describe('FileReadImageBlock', () => {
+  it('shows running state with path', () => {
+    const state = makeState({
+      name: 'file__read_image',
+      arguments: { path: '/tmp/photo.png' },
+      status: 'running',
+    });
+    const { lastFrame } = render(<FileReadImageBlock state={state} />);
+    expect(lastFrame()).toContain('…');
+    expect(lastFrame()).toContain('file__read_image /tmp/photo.png');
+  });
+
+  it('shows done state with metadata and no base64', () => {
+    const state = makeState({
+      name: 'file__read_image',
+      arguments: { path: '/tmp/photo.png' },
+      status: 'done',
+      result: JSON.stringify({
+        path: '/tmp/photo.png',
+        mimeType: 'image/png',
+        size: 1234,
+      }),
+    });
+    const { lastFrame } = render(<FileReadImageBlock state={state} />);
+    expect(lastFrame()).toContain('✓ file__read_image /tmp/photo.png');
+    expect(lastFrame()).toContain('image/png, 1234 bytes');
+    expect(lastFrame()).toContain('[Image attached]');
+    expect(lastFrame()).not.toContain('iVBOR');
+  });
+
+  it('shows error state', () => {
+    const state = makeState({
+      name: 'file__read_image',
+      arguments: { path: '/tmp/missing.png' },
+      status: 'error',
+      result: 'file__read_image: no such file',
+    });
+    const { lastFrame } = render(<FileReadImageBlock state={state} />);
+    expect(lastFrame()).toContain('✗');
+    expect(lastFrame()).toContain('no such file');
   });
 });
 
