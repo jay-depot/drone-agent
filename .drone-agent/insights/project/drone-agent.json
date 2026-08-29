@@ -148,6 +148,10 @@
     "insight": "A CI-only typecheck failure can be masked locally by stale dist/ artifacts. When a feature branch is based on an older commit, its drone-swarm-common/src/tls.ts may still be synchronous while main has since made loadOrCreateTlsIdentity async (openssl shell-injection fix #54). Locally, dependent packages (drone-coordinator, drone-beacon) resolve drone-swarm-common from its built dist/ (package.json \"types\": \"./dist/tls.d.ts\"), so a stale dist hides the mismatch and `pnpm typecheck` passes. CI does a fresh build and fails with \"Property 'fingerprint' does not exist on type 'Promise<TlsIdentity>'\". To reproduce locally, build drone-swarm-common from main's tls.ts (git show origin/main:... > src/tls.ts, rebuild, typecheck dependents), then restore. Lesson: when a branch predates a change to a shared dependency's signature, verify against the dependency's CURRENT (main) signature, not just the local dist."
   },
   {
+    "timestamp": "2026-08-12T19:16:12.397Z",
+    "insight": "Adding @types/ws as a direct dependency to drone-beacon surfaced a latent type bug in ws-server.ts: `conn.socket.readyState === 'OPEN'` was comparing a number (readyState) to a string. The @fastify/websocket types apparently didn't catch this, but @types/ws does. The fix is `readyState === 1 /* OPEN */`. When adding new type packages, sweep for comparison bugs in existing WebSocket code."
+  },
+  {
     "timestamp": "2026-08-14T03:39:26.096Z",
     "insight": "Compaction regression (c29bd93a) slices the *tail* of the non-summary turn array, but the session array is `[S_newest…S_oldest, normal_oldest…normal_newest]` because appendUserMessage pushes (newest last) while prependSystemTurn unshifts summaries (newest summary first). So `slice(-n)` grabs the newest normal turns — the inverse of intent. The existing compaction tests only assert that *some* summary is created and *some* turns dropped, so they cannot distinguish head-slicing from tail-slicing; a correct regression test must pin BOTH ends (transcript contains oldest & excludes newest; survivors are newest). Also: the safety-trim helper getDroppableTurnPrefix and compaction's slice had divergent \"oldest non-summary\" semantics (stop-at-summary vs skip-summaries); they should share ONE pure helper that skips summaries, and dropping must be done by id (not shift/slice) since summaries live at the head."
   },
@@ -178,6 +182,18 @@
   {
     "timestamp": "2026-08-14T18:57:16.308Z",
     "insight": "CodeQL suppression: `// lgtm[rule-id]` comments do NOT suppress GitHub CodeQL/code-scanning alerts — `lgtm[...]` is LGTM.com-only syntax (LGTM.com shut down Dec 2022). The correct, currently-supported inline suppression is `// codeql[rule-id]`, placed on the sink line or the line immediately before it. The rule ID must match exactly including the `js/` prefix — TypeScript is analyzed by the JS query suite, so there is no `ts/` variant (e.g. `js/reflected-xss`, `js/disabling-certificate-verification`). Suppression targets the sink location, not the source/intermediate lines; a comment in a JSDoc block far from the sink is ineffective. One comment per alert location. `// nosemgrep` is Semgrep-only (irrelevant); `paths-ignore` config is too coarse (blinds whole files); UI/API dismissal is not durable/source-controlled."
+  },
+  {
+    "timestamp": "2026-08-17T00:40:40.413Z",
+    "insight": "GitHub CodeQL does not honor `// codeql[...]` suppression comments by default (github/codeql#11427). To make them work you must add the `advanced-security/dismiss-alerts` action to the CodeQL workflow, which runs the `AlertSuppression` query and dismisses matching alerts. Critical setup details that are easy to get wrong: (1) the AlertSuppression query pack is `codeql/javascript-queries:AlertSuppression.ql` passed via the `packs:` input on the `init` step — NOT as a `language`; (2) the `dismiss-alerts` step MUST run AFTER `github/codeql-action/analyze` and consume its SARIF output (`id: analyze` + `output: sarif-results`, then `sarif-id: ${{ steps.analyze.outputs.sarif-id }}` and `sarif-file: sarif-results/${{ matrix.language }}.sarif`); (3) the suppression comment must be on the sink line or the line immediately before it, with the rule ID matching exactly including the `js/` prefix (TypeScript is analyzed by the JS query suite — no `ts/` variant); (4) dismissal works on PRs too if you omit the `if: github.ref == 'refs/heads/main'` gate, but it will NOT work on PRs from forks (fork's GITHUB_TOKEN lacks permission to dismiss alerts on the base repo)."
+  },
+  {
+    "timestamp": "2026-08-17T00:44:35.894Z",
+    "insight": "In the drone-agent monorepo, `pnpm -r run test` fails on the drone-core package with \"No test files found\" even though drone-core/test/ has test files. Root cause: drone-core has no local vitest config, so running `vitest run` from within its directory resolves the root config's include patterns incorrectly. This is a pre-existing quirk, NOT a regression. The canonical command per AGENTS.md is `pnpm test` from the repo root (which uses the root vitest.config.ts and passes — 1935 tests). When validating, use `pnpm test` from root, not `pnpm -r run test`. Similarly, `pnpm -r run lint` fails with \"None of the selected packages has a lint script\" — the lint script is root-only; use `pnpm lint` from root."
+  },
+  {
+    "timestamp": "2026-08-17T01:19:51.705Z",
+    "insight": "`advanced-security/dismiss-alerts` (the GitHub action that makes `// codeql[...]` suppression comments work) only dismisses alerts on the DEFAULT branch (main), NOT on PRs. On a PR, alerts are associated with the PR's head commit and the code-scanning API the action uses cannot dismiss them — so the alert stays red on the PR no matter how correct the suppression comment is. This creates a catch-22 with a \"CI must be green to merge\" policy: you can't merge because the PR check is red, but the suppression only takes effect after merge. The pragmatic design: gate the `dismiss-alerts` step to `main` only (`if: github.ref == 'refs/heads/main'`), so on PRs the analysis runs and shows alerts as warnings but the job stays green (neutral) and doesn't block merging; on main the dismissal runs and clears suppressed alerts. Then a green-to-merge policy can be added on main (where suppression works), not on PRs. Also note: the repo must be set to \"Advanced config\" (not default setup) in Settings → Code security and analysis → Code scanning, or the SARIF upload fails with \"CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled\" — and GitHub moved this setting under the \"Advanced Security\" section, not \"Copilot\"."
   },
   {
     "timestamp": "2026-08-17T00:08:28.077Z",
@@ -290,5 +306,61 @@
   {
     "timestamp": "2026-08-25T15:57:17.983Z",
     "insight": "The git__commit tool rejects multi-line commit messages with an opaque \"Command failed\" and no stderr. Worse, the failed commit leaves its files STAGED, so an immediately following placeholder commit silently sweeps them up under the wrong message. Recovery: exec `git commit --amend -m ...`. Rules going forward: git__commit takes single-line messages only; use exec for multi-line messages or amends; never parallel-call todo__manage_list updates alongside git__commit (the race caused the probe commit)."
+  },
+  {
+    "timestamp": "2026-08-25T21:07:27.027Z",
+    "insight": "Config discovery pattern hazard (config.ts): findProjectConfigPath walks ancestor directories with no boundary while the user layer is pinned at ~/.drone-agent/config.json — so any launch from under $HOME rediscovers the user file as \"project\" scope and trips scope-policy fatals. Convention decided 2026-08-25: project-config discovery must dedupe by lexical path identity against the effective user config path (path.resolve equality; no home-boundary rule because network mounts/external media make \"home is never a project\" ambiguous). Project-scope writes that resolve to the shared file must refuse loudly rather than silently mutating user config (or worse, recreating it via the create-fresh fallback). First-class \"no-project mode\" remains future work — see memory key plan-home-dir-project-config-dedupe."
+  },
+  {
+    "timestamp": "2026-08-25T21:57:42.014Z",
+    "insight": "Root-level vitest.config.ts includes all workspace test globs, so `pnpm vitest run <path>` must be run from the repo ROOT with root-relative paths — running it from inside a package directory (cd drone-agent && pnpm vitest run test/...) fails with \"No test files found\" because the include globs are all root-relative."
+  },
+  {
+    "timestamp": "2026-08-25T22:16:56.927Z",
+    "insight": "When CI fails on jay-depot/drone-agent without admin rights: job logs download returns 403, but check-run ANNOTATIONS via GET /repos/{owner}/{repo}/check-runs/{id}/annotations are readable anonymously and usually contain the failure reason. Also, two consecutive failures on this repo (2026-08-25) were pure infra flake: (1) runner couldn't resolve internal-api.service.iad.github.net while fetching pnpm/action-setup, (2) a 5000ms timeout in lsp-installer.test.ts under runner load (passes locally in ~700ms). Empty-commit push (`git commit --allow-empty`) is the reliable way to retrigger workflows since `gh` CLI isn't installed on this host. Always compare against the same-code prior commit's check-runs before assuming a failure is real."
+  },
+  {
+    "timestamp": "2026-08-25T18:10:19.841Z",
+    "insight": "Recurring bug class found in drone-agent plugin tools: `(input.field as string).trim()` executed before validation guards, crashing with opaque TypeErrors when LLM callers omit fields — because executeTool() dispatches straight to tool.execute() with no JSON-schema enforcement, so `required` arrays are only hints to the LLM. Fixed in self-improvement tools via a shared trimOrEmpty(value: unknown): string helper funneling into existing non-empty guards (plan-self-improvement-trim-before-validate). KNOWN UNFIXED SITES for follow-up sweep: memory/index.ts:166 `(input.key as string).trim()` and bootstrap/index.ts:81-82 `(input.path as string).trim()` — audit these plus any new registerTool sites for the same pattern."
+  },
+  {
+    "timestamp": "2026-08-25T18:42:59.808Z",
+    "insight": "Error-surface conventions in drone-agent plugins are NOT uniform, and validation fixes must match local style per family: memory + subagent tools throw Error with friendly messages (executeToolSafely wraps into 'failed:' strings); swarm tools return JSON.stringify({success:false, error}) instead of throwing; notepad returns {success:false, error}. A cross-plugin validation sweep must enumerate the convention per touched file BEFORE writing steps — a uniform 'always throw' fix would break swarm tools' result-shape contract with calling LLMs."
+  },
+  {
+    "timestamp": "2026-08-25T19:16:13.990Z",
+    "insight": "When validating guard-style fixes, the stash-dance (git stash push -- <source files> -> run new tests -> git stash pop) cleanly proves criterion 'new cases fail pre-fix': it isolates ONLY source changes while keeping new test files in the tree, avoiding a full revert dance. Also: vitest's failure taxonomy matters — assertion failures show as failed tests, but syntax/transform errors in imported source show as FAILED SUITES with all individual tests passing; grep for 'Transform failed' / 'already been declared' when suites fail but tests pass."
+  },
+  {
+    "timestamp": "2026-08-26T00:09:33.925Z",
+    "insight": "In Ink, a parent <Text bold> leaves SGR 1 active when nested <Text> children open their own SGR runs — children do NOT inherit the parent's color props, but they DO inherit its active attribute state in the squashed output. Consequence: hardcoded fg colors on nested elements (e.g. color='black' inside bold) collide with terminal bold-promotion (fg black→bright black) and can equal common background palette slots (gray=bright black=90/100). Rule for this codebase: never hardcode a foreground on a child <Text> that sits inside an attribute-bearing parent; let it inherit, or model attributes explicitly (SyntaxStyle) instead of encoding them in color strings."
+  },
+  {
+    "timestamp": "2026-08-26T00:40:32.501Z",
+    "insight": "The drone-agent git plugin (git__commit/git__status cwd default) reported branch \"main\" while the repository was actually on feat/display-fixes; `git -C <repo> branch --show-current` via shell showed the truth. The plugin also failed to distinguish \"nothing to commit\" from other commit failures (bare \"Command failed\" with no stderr). Until fixed: verify branch state with an exec git command before trusting plugin-reported branch info, especially before deciding whether .drone-agent memory/insight files may be committed."
+  },
+  {
+    "timestamp": "2026-08-27T01:16:20.507Z",
+    "insight": "When executing a plan that was partially implemented in prior commits, always re-verify each locked decision against the actual code rather than trusting that \"implemented\" means \"correct.\" In the image-describer plan, three locked decisions (D8 breadth precedence, D10 retry config sourcing, D1 parallel-across-batch) and one D9 timeout guard were silently deviated from in the initial implementation. The deviations were only caught by reading the code against the decision table line-by-line. A plan's \"done\" state is not the same as \"conforms to every locked decision.\""
+  },
+  {
+    "timestamp": "2026-08-27T01:16:20.510Z",
+    "insight": "The broker's provider precedence (ollama=0, remote=1) was duplicated inline in `getAvailableProviders` and separately (incorrectly) ignored in the D8 breadth fallback, which iterated config insertion order. When a precedence rule exists in one place, extract it into a shared helper and use it everywhere — otherwise a second consumer silently uses a different ordering. This is the same class of bug as the shared-interface sweep principle: a precedence/ordering rule is a shared contract that every consumer must honor."
+  },
+  {
+    "timestamp": "2026-08-29T01:25:00.000Z",
+    "insight": "When merging a feature branch into main, lint errors can surface that were invisible on the branch because main's lint config (eslint.config.mjs) was updated to include test files and previously-excluded source. The branch's unused imports (FileReadImageBlock, DroneChatMessage, DroneMcpStreamableHttpServerConfig, DroneToolDefinition, afterEach/beforeEach) and a no-explicit-any passed branch lint but failed after the merge. Always run `pnpm lint` (not just build/typecheck/test) after resolving a merge, and expect the merged lint config to be the stricter superset."
+  },
+  {
+    "timestamp": "2026-08-29T15:25:30.750Z",
+    "insight": "drone-agent planning gotcha: the wiki describes a coordinator→beacon reverse-channel WS (concepts/mtls-and-reverse-channel, flows/swarm-connection 'sendBeaconCommand', '/ws/beacon') that does NOT exist in code as of 2026-08-29 — coordinator→beacon is plain HTTP today (e.g. session-end spawn trigger POSTs beacon /spawn). Similarly DroneConfigInjector inject() has no verified consumer applying it into effective config. When planning features that depend on transport or config seams, verify against source, not wiki claims; the wiki carries aspirational entries despite the AGENTS.md aspirational-only rule, and a separate 'persistent websocket' branch exists to fix the transport gap."
+  },
+  {
+    "timestamp": "2026-08-29T16:49:36.669Z",
+    "insight": "The beacon's `sendToAgent` (`drone-beacon/src/ws-server.ts`) compared `conn.socket.readyState === 'OPEN'` (string) against the `ws` library's numeric readyState (1 = OPEN), so it returned false for every connected agent and silently dropped ALL server→agent pushes (live message delivery as well as new fragment pushes). Any 'is socket open' check on a `ws` socket must accept both the numeric (ws: 0/1/2/3) and WHATWG string ('OPEN') representations — or compare against numeric constants only. Verified empirically with a probe client after the Docker integration test exposed it as a fragmentSync timeout."
+  },
+  {
+    "timestamp": "2026-08-29T16:49:40.556Z",
+    "insight": "The beacon's `isLocalConnection` implemented the RFC1918 172.16/12 private range as a prefix check on '172.16.' only, rejecting 172.17.0.0–172.31.255.255 — which is where Docker/Podman bridge networks allocate. Any \"private IP range\" predicate must cover the full CIDR (e.g. /^172\\.(1[6-9]|2\\d|3[01])\\./), and should strip the ::ffff: IPv4-mapped IPv6 prefix before checking. This surfaced when the first test-runner-container WS connection to the beacon was rejected as non-local inside the integration swarm. Do not \"tighten\" private-range checks by narrowing RFC1918 ranges."
   }
 ]

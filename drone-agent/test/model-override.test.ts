@@ -31,3 +31,30 @@ describe('--model invocation override parsing', () => {
     expect(invocation.options.modelOverride).toBe('ollama/qwen3');
   });
 });
+
+describe('--retry CLI override parsing', () => {
+  it('parses --retry-max-retries', () => {
+    const invocation = parseCliArgs(['--retry-max-retries', '10']);
+    expect(invocation.options.retryMaxRetries).toBe(10);
+  });
+
+  it('parses --retry-max-wait-ms', () => {
+    const invocation = parseCliArgs(['--retry-max-wait-ms', '60000']);
+    expect(invocation.options.retryMaxWaitMs).toBe(60000);
+  });
+
+  it('rejects non-numeric retry values', () => {
+    expect(() => parseCliArgs(['--retry-max-retries', 'lots'])).toThrow(
+      /Invalid --retry-max-retries/
+    );
+    expect(() => parseCliArgs(['--retry-max-wait-ms', '-5'])).toThrow(
+      /Invalid --retry-max-wait-ms/
+    );
+  });
+
+  it('is absent by default', () => {
+    const invocation = parseCliArgs([]);
+    expect(invocation.options.retryMaxRetries).toBeUndefined();
+    expect(invocation.options.retryMaxWaitMs).toBeUndefined();
+  });
+});

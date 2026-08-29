@@ -1,7 +1,11 @@
 // ── Plugin system types ────────────────────────────────────────────
 
 import type { DroneReasoningLevel } from './config-types.js';
-import type { DroneToolCall, DroneToolJsonSchema } from './session-types.js';
+import type {
+  DroneToolCall,
+  DroneToolJsonSchema,
+  DroneToolResult,
+} from './session-types.js';
 import type { DroneAgentConfig } from './config-types.js';
 
 // ── Plugin infrastructure ─────────────────────────────────────────
@@ -35,7 +39,7 @@ export type DroneToolDefinition = {
     input: Record<string, unknown>,
     onProgress?: (chunk: string) => void,
     context?: DroneToolExecutionContext
-  ) => Promise<string>;
+  ) => Promise<string | DroneToolResult>;
 };
 
 export type DronePromptFragment = {
@@ -236,10 +240,7 @@ export type DroneWorkflowResult = {
 };
 
 export type DroneWorkflowRunReturn =
-  | DroneWorkflowResult
-  | void
-  | string
-  | Record<string, unknown>;
+  DroneWorkflowResult | void | string | Record<string, unknown>;
 
 export type DroneWorkflow = {
   /** Unique within the registering plugin. */
@@ -296,7 +297,7 @@ export type DroneSlashCommandContext = {
       input: Record<string, unknown>,
       onProgress?: (chunk: string) => void,
       context?: DroneToolExecutionContext
-    ) => Promise<string>;
+    ) => Promise<string | DroneToolResult>;
     /** Optional — may be absent in minimal hosts. */
     runWorkflow?: (
       canonicalName: string,

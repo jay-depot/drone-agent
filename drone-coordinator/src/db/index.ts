@@ -92,3 +92,10 @@ export {
 } from './principles.js';
 export type { PrincipleRow } from './principles.js';
 export { getWebToken, generateWebToken, initWebToken } from './web-token.js';
+export {
+  upsertFragment,
+  getFragment,
+  listFragments,
+  deleteFragment,
+} from './fragments.js';
+export type { CoordinatorFragmentRow } from './fragments.js';

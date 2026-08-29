@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { createDefaultAgentConfig } from 'drone-core';
 import { enforceProviderScopePolicy } from '../src/runtime/provider-scope-policy.js';
 import { parseConfigWithSchema } from 'drone-core';
 import type { DroneConfigLayer } from 'drone-core';
@@ -25,6 +24,31 @@ describe('provider scope policy', () => {
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]).toContain('banned at project scope');
     expect(result.errors[0]).toContain('local');
+  });
+
+  it('errors when a project-scope file defines llm.modelRoles', () => {
+    const result = enforceProviderScopePolicy([
+      projectLayer({
+        llm: { modelRoles: { summarizer: 'ollama/llama3.1' } },
+      }),
+    ]);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('llm.modelRoles');
+    expect(result.errors[0]).toContain('summarizer');
+  });
+
+  it('allows user-scope llm.modelRoles', () => {
+    const result = enforceProviderScopePolicy([
+      {
+        scope: 'user',
+        path: '/home/u/.drone-agent/config.json',
+        config: {
+          llm: { modelRoles: { wizard: 'anthropic/claude-haiku-4-5' } },
+        } as never,
+      },
+    ]);
+    expect(result.errors).toHaveLength(0);
+    expect(result.warnings).toHaveLength(0);
   });
 
   it('warns on project-scope plaintext apiKeys', () => {

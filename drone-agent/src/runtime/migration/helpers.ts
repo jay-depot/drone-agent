@@ -27,13 +27,13 @@ export function getBeaconUrl(host?: string, port?: number): string {
 }
 
 export function getConfigBeaconHost(
-  config?: DroneAgentConfig
+  config?: Partial<DroneAgentConfig>
 ): string | undefined {
   return config?.swarm?.beaconHost;
 }
 
 export function getConfigBeaconPort(
-  config?: DroneAgentConfig
+  config?: Partial<DroneAgentConfig>
 ): number | undefined {
   return config?.swarm?.beaconPort;
 }

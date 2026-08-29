@@ -44,6 +44,30 @@ export type DroneImageContent = {
   mimeType: string;
   /** Base64-encoded image data (without the data: URI prefix). */
   data: string;
+  /**
+   * Model-generated description of the image, used as the wire representation
+   * when the target model is not vision-capable. Stored as part of the
+   * abstract context.
+   */
+  description?: string;
+};
+
+/**
+ * Structured result a tool may return in place of a plain string. When a tool
+ * returns a `DroneToolResult`, the base64 image data must live ONLY in
+ * `images[]` (never in `content`), so the images channel is the single source
+ * of truth and the content string stays small enough for token estimation and
+ * wire transmission.
+ *
+ * The string form of a tool result is a first-class "text-only" equivalent of
+ * this type with no images. Tools may keep returning plain strings; only
+ * image-producing tools need the structured form.
+ */
+export type DroneToolResult = {
+  /** Human-readable text for the LLM. Must NOT contain base64 image data. */
+  content: string;
+  /** Structured images carried out-of-band from the content string. */
+  images?: DroneImageContent[];
 };
 
 export type DroneChatMessage = {
@@ -142,6 +166,9 @@ export type ToolRenderState = {
   syntaxColors?: Record<string, string>;
   /** User-configured code background color (from tui.syntaxHighlighting.codeBackground). */
   codeBackground?: string;
+  /** Terminal columns at render time, so width-aware components (e.g. code
+   * background padding) can compute wrap-correct line fills. */
+  columns?: number;
 };
 
 export type DroneConversationEvent =
@@ -176,6 +203,13 @@ export type DroneConversationEvent =
       message: string;
       status: 'started' | 'completed' | 'failed';
     }
+  /**
+   * Emitted once when a round (one sendUserMessage call) fully completes,
+   * including on cancellation and error exits. It is a silent control signal
+   * for plugins (e.g. wakelock) — it carries no message and intentionally has
+   * no TUI/theme rendering.
+   */
+  | { kind: 'roundComplete' }
   | {
       kind: 'notice';
       content: string;

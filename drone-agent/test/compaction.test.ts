@@ -7,6 +7,7 @@ import {
   type DroneCompactionConfig,
   type DroneConversationEvent,
   type DroneContextWindowInfo,
+  type DroneLlmCapability,
   type DroneLlmProvider,
   type DroneLogger,
   type DronePluginRegistration,
@@ -98,7 +99,17 @@ type RegistrationCapture = {
 
 async function captureRegistration(
   plugin: ReturnType<typeof createCompactionPlugin>,
-  config: DroneAgentConfig
+  config: DroneAgentConfig,
+  provider?: DroneLlmProvider,
+  role?: {
+    provider: DroneLlmProvider;
+    providerId: string;
+    model: string;
+    reasoningLevel?: import('drone-core').DroneReasoningLevel;
+  },
+  describeImagesOverride?: (
+    images: import('drone-core').DroneImageContent[]
+  ) => Promise<import('drone-core').DroneImageContent[]>
 ): Promise<RegistrationCapture> {
   const hooks: HookBucket = {
     onPluginsLoaded: [],
@@ -115,6 +126,42 @@ async function captureRegistration(
   const slashCommands: DroneSlashCommand[] = [];
   const queuedReminders: string[] = [];
   const mountedToolNames: string[] = [];
+
+  // Minimal DroneLlmCapability backed by the test provider, so the plugin's
+  // request<DroneLlmCapability>('llm') resolves to a summarizer role wrapping
+  // the same provider (active-selection fallback).
+  const llmCapability: DroneLlmCapability | undefined = provider
+    ? {
+        getActiveProvider: () => provider,
+        getActiveProviderId: () => 'test-provider',
+        getModel: () => 'fake',
+        getAvailableProviders: () => [],
+        activateProvider: () => {},
+        setModel: () => {},
+        getReasoningLevel: () => undefined,
+        setReasoningLevel: () => {},
+        listModels: async () => [],
+        registerDriver: () => {},
+        registerProvider: () => {},
+        unregisterProvider: () => {},
+        describeImages: describeImagesOverride ?? (async images => images),
+        resolveModelForRole: () =>
+          role
+            ? {
+                provider: role.provider,
+                providerId: role.providerId,
+                model: role.model,
+                ...(role.reasoningLevel
+                  ? { reasoningLevel: role.reasoningLevel }
+                  : {}),
+              }
+            : {
+                provider,
+                providerId: 'test-provider',
+                model: 'fake',
+              },
+      }
+    : undefined;
 
   const logger: DroneLogger = {
     info: vi.fn(),
@@ -157,13 +204,15 @@ async function captureRegistration(
       capability.value = cap;
     },
     request: <T>(pluginId: string) =>
-      pluginId === 'runtime'
-        ? ({
-            queueSystemReminder: (content: string) => {
-              queuedReminders.push(content);
-            },
-          } as T)
-        : (undefined as T | undefined),
+      pluginId === 'llm' && llmCapability
+        ? (llmCapability as T)
+        : pluginId === 'runtime'
+          ? ({
+              queueSystemReminder: (content: string) => {
+                queuedReminders.push(content);
+              },
+            } as T)
+          : (undefined as T | undefined),
     runWorkflow: async () => ({ toolResult: '{}' }),
     requestElicitation: () => undefined,
   };
@@ -228,11 +277,8 @@ async function runSlashCommand(
 
 describe('createCompactionPlugin', () => {
   it('reports the expected metadata', () => {
-    const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager: createSessionManager(),
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
     expect(plugin.metadata).toMatchObject({
       id: 'compaction',
@@ -243,11 +289,8 @@ describe('createCompactionPlugin', () => {
 
   it('registers help text and a CompactionCapability', async () => {
     const config = makeConfig();
-    const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager: createSessionManager(),
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
     let helpRegistered: string | undefined;
@@ -320,11 +363,9 @@ describe('createCompactionPlugin', () => {
     const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     await runBeforePrompt(capture);
 
     expect(provider.__chatMock).not.toHaveBeenCalled();
@@ -339,11 +380,9 @@ describe('createCompactionPlugin', () => {
     const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     await runBeforePrompt(capture);
 
     expect(provider.__chatMock).not.toHaveBeenCalled();
@@ -363,11 +402,9 @@ describe('createCompactionPlugin', () => {
     const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     await runBeforePrompt(capture);
 
     expect(provider.__chatMock).not.toHaveBeenCalled();
@@ -391,11 +428,9 @@ describe('createCompactionPlugin', () => {
     const provider = makeProvider({ contextWindow: 200 });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     await runBeforePrompt(capture);
 
     const summaries = sessionManager.getSummaryTurns();
@@ -437,11 +472,9 @@ describe('createCompactionPlugin', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     await runBeforePrompt(capture);
 
     // The convergence loop keeps compacting until usage is below the soft
@@ -496,11 +529,9 @@ describe('createCompactionPlugin', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     await runBeforePrompt(capture);
 
     const summaryContents = sessionManager
@@ -545,11 +576,9 @@ describe('createCompactionPlugin', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     await runBeforePrompt(capture);
 
     // 12 rounds = 24 non-summary turns. sliceSize recomputed each round:
@@ -588,11 +617,9 @@ describe('createCompactionPlugin', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     await runBeforePrompt(capture);
 
     // The first transcript must contain exactly 8 turns (50% of the 16
@@ -639,11 +666,9 @@ describe('createCompactionPlugin', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     await runBeforePrompt(capture);
 
     // The loop must stop after at most 5 iterations (the hard cap), even
@@ -674,11 +699,9 @@ describe('createCompactionPlugin', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     await runBeforePrompt(capture);
 
     expect(provider.__chatMock).toHaveBeenCalledTimes(1);
@@ -722,11 +745,9 @@ describe('createCompactionPlugin', () => {
     };
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
 
     const first = runBeforePrompt(capture);
     // Give the first call enough ticks to reach provider.chat().
@@ -769,11 +790,9 @@ describe('createCompactionPlugin', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const capability = capture.capability.value as {
       forceEvaluate: () => Promise<void>;
     };
@@ -822,11 +841,9 @@ describe('createCompactionPlugin', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     await runBeforePrompt(capture);
 
     // The plugin should have compacted the oldest non-summary turns (from the
@@ -891,11 +908,9 @@ describe('createCompactionPlugin', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     await runBeforePrompt(capture);
 
     // 4 rounds = 8 non-summary turns, sliceSize 2 -> 4 rounds to compact all.
@@ -940,11 +955,9 @@ describe('createCompactionPlugin', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
 
     // Round 1: add long turns and compact.
     for (let i = 0; i < 4; i++) {
@@ -998,11 +1011,9 @@ describe('createCompactionPlugin', () => {
     const provider = makeProvider({ contextWindow: 200 });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     await runBeforePrompt(capture);
 
     const summaries = sessionManager.getSummaryTurns();
@@ -1016,7 +1027,7 @@ describe('createCompactionPlugin', () => {
     expect(provider.__chatMock).not.toHaveBeenCalled();
   });
 
-  it('throws a clear error when the ollama provider is missing', async () => {
+  it('warns and skips when the LLM broker is unavailable', async () => {
     const sessionManager = createSessionManager();
     for (let i = 0; i < 5; i++) {
       sessionManager.appendUserMessage(`u${i} `.repeat(400));
@@ -1032,17 +1043,13 @@ describe('createCompactionPlugin', () => {
 
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => {
-        throw new Error('Ollama provider is not available.');
-      },
     });
 
+    // No provider passed → request('llm') returns undefined → warn + skip.
     const capture = await captureRegistration(plugin, config);
-    // The hook should catch the error and log it as a warning, not reject.
     await runBeforePrompt(capture);
     expect(capture.logger.warn).toHaveBeenCalledWith(
-      expect.stringMatching(/compaction: error during evaluation/)
+      expect.stringMatching(/LLM broker capability unavailable/)
     );
   });
 
@@ -1062,10 +1069,13 @@ describe('createCompactionPlugin', () => {
 
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => makeProvider({ contextWindow: 1000 }),
     });
-    const capture = await captureRegistration(plugin, config);
+    // Provider returns an empty message → summary throws → logged as failure.
+    const capture = await captureRegistration(
+      plugin,
+      config,
+      makeProvider({ contextWindow: 1000 })
+    );
     await runBeforePrompt(capture);
     expect(capture.logger.warn).toHaveBeenCalledWith(
       expect.stringMatching(/compaction: summary failed/)
@@ -1095,11 +1105,9 @@ describe('createCompactionPlugin', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
 
     // Start with a small session that's under the threshold.
     // (Two short turns are well under 5% of a 200-token window.)
@@ -1169,11 +1177,9 @@ describe('createCompactionPlugin', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
 
     // First call on an empty session: early return with the latch latched.
     await runBeforePrompt(capture);
@@ -1219,11 +1225,9 @@ describe('createCompactionPlugin', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
 
     // First prompt of the session: empty session, latch latches + early return.
     await runBeforePrompt(capture);
@@ -1281,12 +1285,10 @@ it('emits compaction events when emitEvent is provided', async () => {
   const emitEvent = vi.fn();
   const plugin = createCompactionPlugin({
     sessionManager,
-    getModel: () => 'fake',
-    getProvider: () => provider,
     emitEvent,
   });
 
-  const capture = await captureRegistration(plugin, config);
+  const capture = await captureRegistration(plugin, config, provider);
   await runBeforePrompt(capture);
 
   // 4 rounds = 8 non-summary turns; sliceSize 2 compacts 2 per round for 4
@@ -1344,12 +1346,10 @@ it('emits a failed compaction event when summarization fails', async () => {
   const emitEvent = vi.fn();
   const plugin = createCompactionPlugin({
     sessionManager,
-    getModel: () => 'fake',
-    getProvider: () => provider,
     emitEvent,
   });
 
-  const capture = await captureRegistration(plugin, config);
+  const capture = await captureRegistration(plugin, config, provider);
   await runBeforePrompt(capture);
 
   expect(emitEvent).toHaveBeenCalledTimes(2);
@@ -1382,12 +1382,10 @@ it('emits a compaction event when self-purging old summaries', async () => {
   const emitEvent = vi.fn();
   const plugin = createCompactionPlugin({
     sessionManager,
-    getModel: () => 'fake',
-    getProvider: () => provider,
     emitEvent,
   });
 
-  const capture = await captureRegistration(plugin, config);
+  const capture = await captureRegistration(plugin, config, provider);
   await runBeforePrompt(capture);
 
   expect(emitEvent).toHaveBeenCalledTimes(1);
@@ -1424,11 +1422,9 @@ describe('CompactionCapability extensions', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const capability = capture.capability.value as {
       forceEvaluateAll: () => Promise<void>;
     };
@@ -1464,11 +1460,9 @@ describe('CompactionCapability extensions', () => {
     const provider = makeProvider({ contextWindow: 4096 });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const capability = capture.capability.value as {
       getStatus: () => Promise<{
         enabled: boolean;
@@ -1521,11 +1515,9 @@ describe('CompactionCapability extensions', () => {
     const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const capability = capture.capability.value as {
       dropSummary: (id: string) => Promise<boolean>;
     };
@@ -1549,11 +1541,9 @@ describe('CompactionCapability extensions', () => {
     const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const capability = capture.capability.value as {
       dropAllSummaries: () => Promise<number>;
     };
@@ -1581,11 +1571,9 @@ describe('CompactionCapability extensions', () => {
     const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const capability = capture.capability.value as {
       dropOldestSummaries: (count: number) => Promise<number>;
     };
@@ -1607,11 +1595,9 @@ describe('/compact slash command', () => {
     const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager: createSessionManager(),
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     expect(capture.slashCommands.some(c => c.command === '/compact')).toBe(
       true
     );
@@ -1627,11 +1613,9 @@ describe('/compact slash command', () => {
     const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const handled = await runSlashCommand(capture, '/compact');
     expect(handled).toBe(true);
     expect(capture.logger.warn).toHaveBeenCalledWith(
@@ -1664,11 +1648,9 @@ describe('/compact slash command', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const handled = await runSlashCommand(capture, '/compact');
     expect(handled).toBe(true);
     expect(provider.__chatMock).toHaveBeenCalled();
@@ -1710,11 +1692,9 @@ describe('/compact slash command', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const handled = await runSlashCommand(capture, '/compact');
     expect(handled).toBe(true);
 
@@ -1756,11 +1736,9 @@ describe('/compact slash command', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const handled = await runSlashCommand(capture, '/compact');
     expect(handled).toBe(true);
     expect(provider.__chatMock).toHaveBeenCalled();
@@ -1788,11 +1766,9 @@ describe('/compact slash command', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const handled = await runSlashCommand(capture, '/compact --all');
     expect(handled).toBe(true);
     expect(provider.__chatMock).toHaveBeenCalledTimes(1);
@@ -1815,11 +1791,9 @@ describe('/compact slash command', () => {
     const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const handled = await runSlashCommand(capture, '/compact show');
     expect(handled).toBe(true);
     expect(capture.logger.info).toHaveBeenCalledWith(
@@ -1838,11 +1812,9 @@ describe('/compact slash command', () => {
     const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const handled = await runSlashCommand(capture, '/compact show');
     expect(handled).toBe(true);
     expect(capture.logger.info).toHaveBeenCalledWith(
@@ -1861,11 +1833,9 @@ describe('/compact slash command', () => {
     const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const handled = await runSlashCommand(capture, `/compact drop ${s1.id}`);
     expect(handled).toBe(true);
     expect(sessionManager.getSummaryTurns()).toHaveLength(0);
@@ -1884,11 +1854,9 @@ describe('/compact slash command', () => {
     const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const handled = await runSlashCommand(capture, '/compact drop all');
     expect(handled).toBe(true);
     expect(sessionManager.getSummaryTurns()).toHaveLength(0);
@@ -1908,11 +1876,9 @@ describe('/compact slash command', () => {
     const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const handled = await runSlashCommand(capture, '/compact drop 2');
     expect(handled).toBe(true);
     expect(sessionManager.getSummaryTurns()).toHaveLength(1);
@@ -1926,11 +1892,9 @@ describe('/compact slash command', () => {
     const provider = makeProvider();
     const plugin = createCompactionPlugin({
       sessionManager: createSessionManager(),
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const handled = await runSlashCommand(capture, '/compact bogus');
     expect(handled).toBe(true);
     expect(capture.logger.warn).toHaveBeenCalledWith(
@@ -1960,11 +1924,9 @@ describe('/compact slash command', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     const handled = await runSlashCommand(capture, '/compact');
     expect(handled).toBe(true);
     expect(capture.logger.warn).toHaveBeenCalledWith(
@@ -2037,12 +1999,10 @@ describe('pre-compaction nudge', () => {
     const provider = makeProvider({ contextWindow: WINDOW });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
       emitEvent,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
 
     // Grow to just below the band floor and evaluate: nothing yet.
     while (tracker.total < BAND_FLOOR_TOKENS - 260) {
@@ -2081,12 +2041,10 @@ describe('pre-compaction nudge', () => {
     const provider = makeProvider({ contextWindow: WINDOW });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
       emitEvent,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
 
     while (tracker.total < BAND_FLOOR_TOKENS - 260) {
       sessionManager.appendUserMessage('x'.repeat(960));
@@ -2113,12 +2071,10 @@ describe('pre-compaction nudge', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
       emitEvent,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
 
     // First excursion: fire once. (No auto-compaction runs here — usage
     // stays inside the band, below the soft threshold.)
@@ -2174,12 +2130,10 @@ describe('pre-compaction nudge', () => {
     const provider = makeProvider({ contextWindow: WINDOW });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
       emitEvent,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
 
     for (let i = 0; i < 20; i++) {
       sessionManager.appendUserMessage('x'.repeat(960));
@@ -2202,12 +2156,10 @@ describe('pre-compaction nudge', () => {
     });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
       emitEvent,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
 
     for (let i = 0; i < 18; i++) {
       sessionManager.appendUserMessage('x'.repeat(960));
@@ -2226,12 +2178,10 @@ describe('pre-compaction nudge', () => {
     const provider = makeProvider({ contextWindow: WINDOW });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
       emitEvent,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     capture.mountedToolNames.push(
       'file__read',
       'notepad__manage',
@@ -2267,12 +2217,10 @@ describe('pre-compaction nudge', () => {
     const provider = makeProvider({ contextWindow: WINDOW });
     const plugin = createCompactionPlugin({
       sessionManager,
-      getModel: () => 'fake',
-      getProvider: () => provider,
       emitEvent,
     });
 
-    const capture = await captureRegistration(plugin, config);
+    const capture = await captureRegistration(plugin, config, provider);
     capture.mountedToolNames.push('file__read');
 
     for (let i = 0; i < 18; i++) {
@@ -2286,5 +2234,203 @@ describe('pre-compaction nudge', () => {
     );
     expect(capture.queuedReminders[0]).not.toContain('notepad__manage');
     expect(capture.queuedReminders[0]).not.toContain('todo__manage_list');
+  });
+});
+
+describe('compaction summarizer model role', () => {
+  it('names the resolved role model in compaction events', async () => {
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 4; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const roleProvider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'A concise summary.' }],
+    });
+    const emitEvent = vi.fn();
+    const plugin = createCompactionPlugin({ sessionManager, emitEvent });
+    const capture = await captureRegistration(plugin, config, roleProvider, {
+      provider: roleProvider,
+      providerId: 'ollama',
+      model: 'cheap-model',
+    });
+
+    await runBeforePrompt(capture);
+    const first = emitEvent.mock.calls[0]?.[0] as { message: string };
+    expect(first.message).toContain('ollama/cheap-model');
+    const completed = emitEvent.mock.calls[1]?.[0] as { message: string };
+    expect(completed.message).toContain('ollama/cheap-model');
+  });
+
+  it('probes the context window against the resolved role provider', async () => {
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 4; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const roleProvider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'A concise summary.' }],
+    });
+    const plugin = createCompactionPlugin({ sessionManager });
+    const capture = await captureRegistration(plugin, config, roleProvider, {
+      provider: roleProvider,
+      providerId: 'ollama',
+      model: 'cheap-model',
+    });
+
+    await runBeforePrompt(capture);
+    expect(roleProvider.__contextMock).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'cheap-model' })
+    );
+  });
+
+  it('threads the resolved reasoningLevel into the summary chat call', async () => {
+    const sessionManager = createSessionManager();
+    for (let i = 0; i < 4; i++) {
+      sessionManager.appendUserMessage(`u${i} `.repeat(300));
+      sessionManager.appendAssistantMessage(`a${i} `.repeat(300));
+    }
+
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 25,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const roleProvider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'A concise summary.' }],
+    });
+    const plugin = createCompactionPlugin({ sessionManager });
+    const capture = await captureRegistration(plugin, config, roleProvider, {
+      provider: roleProvider,
+      providerId: 'ollama',
+      model: 'cheap-model',
+      reasoningLevel: 'high',
+    });
+
+    await runBeforePrompt(capture);
+    expect(roleProvider.__chatMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'cheap-model',
+        reasoningLevel: 'high',
+      })
+    );
+  });
+});
+
+describe('pre-compaction image description flush', () => {
+  it('describes undescribed images in the turns being compacted before summarizing', async () => {
+    const sessionManager = createSessionManager();
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 50,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'Summary with image context.' }],
+    });
+
+    const described: string[] = [];
+    const describeImagesOverride = async (
+      images: import('drone-core').DroneImageContent[]
+    ): Promise<import('drone-core').DroneImageContent[]> => {
+      return images.map(img => {
+        described.push(img.data);
+        return { ...img, description: 'a red circle on a white background' };
+      });
+    };
+
+    const plugin = createCompactionPlugin({ sessionManager });
+    const capture = await captureRegistration(
+      plugin,
+      config,
+      provider,
+      undefined,
+      describeImagesOverride
+    );
+
+    // Two turns, one carrying an undescribed image, to exceed the low threshold.
+    sessionManager.appendUserMessage('q1', [
+      { data: 'data:image/png;base64,AAAA', mimeType: 'image/png' },
+    ]);
+    sessionManager.appendAssistantMessage('a1');
+    sessionManager.appendUserMessage('q2');
+    sessionManager.appendAssistantMessage('a2');
+
+    await runAfterToolCall(capture);
+
+    // The flush should have described the image before the summary was built.
+    expect(described).toEqual(['data:image/png;base64,AAAA']);
+    expect(provider.__chatMock).toHaveBeenCalled();
+    // The summary prompt should carry the description text.
+    const prompt = JSON.stringify(provider.__chatMock.mock.calls);
+    expect(prompt).toContain('a red circle on a white background');
+  });
+
+  it('fails open when describeImages throws, still compacting', async () => {
+    const sessionManager = createSessionManager();
+    const config = makeConfig({
+      softThresholdPercent: 5,
+      slicePercent: 50,
+      minTurnsToCompact: 2,
+      summaryMaxTokens: 200,
+      summaryBudgetPercent: 50,
+    });
+
+    const provider = makeProvider({
+      contextWindow: 200,
+      chatResponses: [{ message: 'Summary.' }],
+    });
+
+    const plugin = createCompactionPlugin({ sessionManager });
+    const capture = await captureRegistration(
+      plugin,
+      config,
+      provider,
+      undefined,
+      async () => {
+        throw new Error('describer down');
+      }
+    );
+
+    sessionManager.appendUserMessage('q1', [
+      { data: 'data:image/png;base64,BBBB', mimeType: 'image/png' },
+    ]);
+    sessionManager.appendAssistantMessage('a1');
+    sessionManager.appendUserMessage('q2');
+    sessionManager.appendAssistantMessage('a2');
+
+    await runAfterToolCall(capture);
+
+    // Compaction still proceeds despite the describer failure.
+    expect(provider.__chatMock).toHaveBeenCalled();
+    expect(sessionManager.getSummaryTurns().length).toBeGreaterThan(0);
   });
 });

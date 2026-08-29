@@ -9,6 +9,14 @@ export function isValidTargetType(t: string): t is TargetType {
 }
 
 /**
+ * Trim a possibly-missing string input. Returns '' for non-strings so
+ * downstream non-empty guards produce friendly errors instead of TypeErrors.
+ */
+export function trimOrEmpty(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/**
  * Validate a target type and id. Throws on invalid input.
  */
 export function validateTarget(
@@ -72,7 +80,7 @@ export function resolveTargetScope(
   } else if (targetType === 'skill') {
     if (skillsCap) {
       const skill = skillsCap.getSkill(targetId);
-      return (skill as any)?.scope;
+      return skill?.source;
     }
   }
   return undefined;

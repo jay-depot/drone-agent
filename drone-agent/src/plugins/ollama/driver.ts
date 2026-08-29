@@ -1,3 +1,4 @@
+import { DroneLlmError } from 'drone-core';
 import type {
   DiscoveredModel,
   DroneChatRequest,
@@ -6,6 +7,7 @@ import type {
   DroneLlmProvider,
 } from 'drone-core';
 import { Ollama, type ShowResponse } from 'ollama';
+import { isTransientStatus } from '../../runtime/llm-retry.js';
 
 /** Reasoning level → Ollama `think` parameter (off disables thinking). */
 export function mapReasoningLevel(
@@ -400,11 +402,7 @@ export function createOllamaProvider(providerConfig: {
           messages: outboundMessages,
           tools: tools && tools.length > 0 ? toOllamaTools(tools) : undefined,
           think: mapReasoningLevel(reasoningLevel) as
-            | boolean
-            | 'low'
-            | 'medium'
-            | 'high'
-            | undefined,
+            boolean | 'low' | 'medium' | 'high' | undefined,
           ...(Object.keys(options).length > 0 ? { options } : {}),
         });
       } catch (error) {
@@ -415,19 +413,29 @@ export function createOllamaProvider(providerConfig: {
         }
 
         const message = error instanceof Error ? error.message : String(error);
-        const statusCode = (error as any)?.status_code;
+        const statusCode =
+          typeof error === 'object' && error !== null && 'status_code' in error
+            ? Number((error as { status_code: unknown }).status_code)
+            : undefined;
         const statusSuffix = statusCode ? ` (HTTP ${statusCode})` : '';
 
         if (message.includes('not found')) {
-          throw new Error(
+          throw new DroneLlmError(
             `Ollama model ${model} is not available at ${host}. Pull it with "ollama pull ${model}" or update your providers config to use an installed model.`,
-            { cause: error }
+            {
+              status: statusCode ?? 404,
+              retryable: false,
+            }
           );
         }
 
-        throw new Error(
+        throw new DroneLlmError(
           `Ollama chat request failed for model ${model} at ${host}: ${message}${statusSuffix}`,
-          { cause: error }
+          {
+            status: statusCode ?? undefined,
+            retryable:
+              statusCode !== undefined && isTransientStatus(statusCode),
+          }
         );
       }
 

@@ -10,6 +10,7 @@ import messages from './messages.js';
 import spawn from './spawn.js';
 import config from './config.js';
 import events from './events.js';
+import fragments from './fragments.js';
 import insights from './insights.js';
 import principles from './principles.js';
 import wiki from './wiki.js';
@@ -38,6 +39,7 @@ export async function registerRoutes(app: FastifyInstance) {
   spawn(app);
   config(app);
   events(app);
+  fragments(app);
   insights(app);
   principles(app);
   wiki(app);

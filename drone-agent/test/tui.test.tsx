@@ -154,7 +154,7 @@ function makeOptions(
       },
       getModel: () => model,
       getReasoningLevel: () => undefined,
-      setReasoningLevel: (_level: any) => {},
+      setReasoningLevel: (_level: unknown) => {},
       enqueueUserMessage: () => {},
       cancelCurrentRequest: () => {},
       getDebugSubsystems: () => [],

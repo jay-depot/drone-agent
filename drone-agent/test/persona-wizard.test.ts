@@ -64,7 +64,7 @@ function makeProvider(md: string): {
   callCount: () => number;
 } {
   let count = 0;
-  let current = md;
+  const current = md;
   return {
     provider: {
       chat: async () => {
@@ -159,8 +159,11 @@ function makeContext(input: {
   const caps = input.capabilities ?? new Map<string, unknown>();
   if (!caps.has('llm')) {
     caps.set('llm', {
-      getActiveProvider: () => input.provider,
-      getModel: () => 'test-model',
+      resolveModelForRole: () => ({
+        provider: input.provider,
+        providerId: 'test-provider',
+        model: 'test-model',
+      }),
     });
   }
   // Add persona capability with writers if not already set
@@ -536,14 +539,58 @@ describe('personaCreateWorkflow — overwrite prompts', () => {
   });
 });
 
+describe('personaCreateWorkflow — wizard model role', () => {
+  it('uses the resolved wizard role provider/model for the LLM call', async () => {
+    await withProjectDir(async projectDir => {
+      const chatMock = () => ({ message: PERSONA_MD('reviewer') });
+      const roleProvider: DroneLlmProvider = { chat: async () => chatMock() };
+      const caps = new Map<string, unknown>();
+      caps.set('llm', {
+        resolveModelForRole: (role: string) => {
+          expect(role).toBe('wizard');
+          return {
+            provider: roleProvider,
+            providerId: 'anthropic',
+            model: 'claude-haiku-4-5',
+          };
+        },
+      });
+      caps.set('persona', {
+        getWriters: () => {
+          const writers = makeWriters(projectDir);
+          return [writers.project, writers.user];
+        },
+        reloadPersonas: async () => {},
+      });
+      const config = createDefaultAgentConfig();
+      const ctx: DroneWorkflowContext = {
+        elicit: scriptedElicit([]),
+        projectDir,
+        config,
+        requestCapability: <T>(id: string): T | undefined =>
+          caps.get(id) as T | undefined,
+        enablePlugin: async () => false,
+      };
+      const result = await runWizard(
+        { scope: 'project', id: 'reviewer', description: 'reviews code' },
+        ctx
+      );
+      expect(result).toBeTruthy();
+    });
+  });
+});
+
 describe('personaCreateWorkflow — missing prerequisites', () => {
   it('throws when the persona capability is unavailable', async () => {
     await withProjectDir(async projectDir => {
       const config = createDefaultAgentConfig();
       const caps = new Map<string, unknown>();
       caps.set('llm', {
-        getActiveProvider: () => makeProvider(PERSONA_MD('reviewer')).provider,
-        getModel: () => 'test-model',
+        resolveModelForRole: () => ({
+          provider: makeProvider(PERSONA_MD('reviewer')).provider,
+          providerId: 'test-provider',
+          model: 'test-model',
+        }),
       });
       // No 'persona' key
       await expect(

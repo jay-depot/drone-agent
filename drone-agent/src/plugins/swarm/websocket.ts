@@ -5,7 +5,18 @@
  * inter-agent messaging.
  */
 
+import type { DroneSwarmFragment } from 'drone-core';
 import type { SwarmContext } from './context.js';
+import {
+  handleFragmentMessage,
+  handleFragmentSyncMessage,
+} from './fragment-messages.js';
+
+interface FragmentWsPayload {
+  op?: 'set' | 'remove';
+  fragment?: DroneSwarmFragment;
+  fragments?: DroneSwarmFragment[];
+}
 
 /**
  * Connect to the beacon WebSocket and set up event handlers.
@@ -39,6 +50,16 @@ export function connectWebSocket(ctx: SwarmContext): void {
         } else if (wsMsg.type === 'ack') {
           registration.logger.info(
             `Message ${wsMsg.payload.messageId} acknowledged`
+          );
+        } else if (wsMsg.type === 'fragment') {
+          handleFragmentMessage(
+            ctx,
+            (wsMsg.payload ?? {}) as FragmentWsPayload
+          );
+        } else if (wsMsg.type === 'fragmentSync') {
+          handleFragmentSyncMessage(
+            ctx,
+            (wsMsg.payload ?? {}) as FragmentWsPayload
           );
         } else if (wsMsg.type === 'error') {
           registration.logger.error(

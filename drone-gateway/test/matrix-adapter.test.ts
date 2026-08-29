@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type { MatrixAdapterConfig } from '../src/adapters/matrix.js';
+import type { AdapterMessage } from '../src/types.js';
 
 // Mock matrix-js-sdk
 const mockCreateClient = vi.fn();
@@ -164,7 +166,7 @@ describe('MatrixServiceAdapter', () => {
         homeserverUrl: 'https://matrix.org',
         accessToken: 'syt_token',
         // missing userId
-      } as any);
+      } as MatrixAdapterConfig);
 
       await expect(adapter.start()).rejects.toThrow();
     });
@@ -235,7 +237,7 @@ describe('MatrixServiceAdapter', () => {
         userId: '@bot:matrix.org',
       });
 
-      const messages: any[] = [];
+      const messages: AdapterMessage[] = [];
       adapter.onMessage(msg => messages.push(msg));
 
       await adapter.start();
@@ -274,7 +276,7 @@ describe('MatrixServiceAdapter', () => {
         rooms: ['!room:matrix.org'],
       });
 
-      const messages: any[] = [];
+      const messages: AdapterMessage[] = [];
       adapter.onMessage(msg => messages.push(msg));
 
       await adapter.start();
@@ -309,7 +311,7 @@ describe('MatrixServiceAdapter', () => {
         rooms: ['!allowed:matrix.org'],
       });
 
-      const messages: any[] = [];
+      const messages: AdapterMessage[] = [];
       adapter.onMessage(msg => messages.push(msg));
 
       await adapter.start();
@@ -337,7 +339,7 @@ describe('MatrixServiceAdapter', () => {
         userId: '@bot:matrix.org',
       });
 
-      const messages: any[] = [];
+      const messages: AdapterMessage[] = [];
       adapter.onMessage(msg => messages.push(msg));
 
       await adapter.start();
@@ -363,7 +365,7 @@ describe('MatrixServiceAdapter', () => {
         userId: '@bot:matrix.org',
       });
 
-      const messages: any[] = [];
+      const messages: AdapterMessage[] = [];
       adapter.onMessage(msg => messages.push(msg));
 
       await adapter.start();

@@ -1,7 +1,7 @@
 import { getDatabase } from './init.js';
 import { logger } from '../logger.js';
 import type { SpawnRecord, SpawnConfig } from '../types.js';
-import { getRow, deleteRow } from 'drone-swarm-common';
+import { deleteRow } from 'drone-swarm-common';
 
 interface SpawnRow {
   id: string;

@@ -1,8 +1,8 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDefaultAgentConfig } from 'drone-core';
+import { createDefaultAgentConfig, toToolResultContent } from 'drone-core';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
 import { configPlugin } from '../src/plugins/config/index.js';
 import type { DroneConfigCapability } from '../src/plugins/config/index.js';
@@ -130,7 +130,7 @@ describe('config plugin', () => {
       await engine.initialize();
 
       const result = await engine.executeTool('config__get', {});
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
 
       expect(parsed.ollama).toBeDefined();
       expect(parsed.ollama.host).toBe('http://127.0.0.1:11434');
@@ -153,7 +153,7 @@ describe('config plugin', () => {
       const result = await engine.executeTool('config__get', {
         key: 'ollama.model',
       });
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
 
       expect(parsed.key).toBe('ollama.model');
       expect(parsed.value).toBe('llama3.1');
@@ -180,7 +180,7 @@ describe('config plugin', () => {
       const result = await engine.executeTool('config__get', {
         key: 'ollama.model',
       });
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
 
       expect(parsed.value).toBe('custom-model');
       expect(parsed.source).toBe('project');
@@ -204,7 +204,7 @@ describe('config plugin', () => {
         key: 'ollama.model',
         value: 'llama3.2',
       });
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
 
       expect(parsed.ok).toBe(true);
       expect(parsed.scope).toBe('project');
@@ -234,7 +234,7 @@ describe('config plugin', () => {
         key: 'ollama.model',
         value: 'user-model',
       });
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
 
       expect(parsed.ok).toBe(true);
       expect(parsed.scope).toBe('user');
@@ -264,6 +264,27 @@ describe('config plugin', () => {
           value: 'foo',
         })
       ).rejects.toThrow(/Unknown config key/);
+    });
+
+    it('accepts session.retry.* keys', async () => {
+      const { projectDir } = await setupDirs();
+      process.chdir(projectDir);
+
+      const engine = createDronePluginEngine({
+        plugins: [configPlugin],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+
+      await engine.initialize();
+
+      const result = await engine.executeTool('config__set', {
+        key: 'session.retry.maxRetries',
+        value: 5,
+      });
+      const parsed = JSON.parse(toToolResultContent(result));
+      expect(parsed.ok).toBe(true);
+      expect(parsed.key).toBe('session.retry.maxRetries');
     });
 
     it('rejects invalid scope values', async () => {
@@ -303,7 +324,7 @@ describe('config plugin', () => {
         key: 'ollama',
         value: { host: 'http://localhost:11435', model: 'nested-model' },
       });
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
       expect(parsed.ok).toBe(true);
 
       const { readFile } = await import('node:fs/promises');
@@ -311,11 +332,69 @@ describe('config plugin', () => {
       expect(written.ollama.host).toBe('http://localhost:11435');
       expect(written.ollama.model).toBe('nested-model');
     });
+
+    it('refuses project-scope writes when launched from home with no distinct project', async () => {
+      const { homeDir, projectDir } = await setupDirs();
+      const userConfigPath = path.join(
+        testHomeDir,
+        '.drone-agent',
+        'config.json'
+      );
+      await writeJson(userConfigPath, { ollama: { model: 'user-model' } });
+      const userConfigBefore = await readFile(userConfigPath, 'utf-8');
+
+      process.chdir(homeDir);
+
+      const engine = createDronePluginEngine({
+        plugins: [configPlugin],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+
+      await engine.initialize();
+
+      await expect(
+        engine.executeTool('config__set', {
+          key: 'session.contextWindowTokens',
+          value: 64000,
+        })
+      ).rejects.toThrow(/no distinct project/);
+
+      expect(await readFile(userConfigPath, 'utf-8')).toBe(userConfigBefore);
+      process.chdir(projectDir);
+    });
+
+    it('creates the project config file for a genuine no-config project', async () => {
+      const { projectDir } = await setupDirs();
+      process.chdir(projectDir);
+
+      const engine = createDronePluginEngine({
+        plugins: [configPlugin],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+
+      await engine.initialize();
+
+      const result = await engine.executeTool('config__set', {
+        key: 'ollama.model',
+        value: 'created-model',
+      });
+      const parsed = JSON.parse(toToolResultContent(result));
+
+      expect(parsed.ok).toBe(true);
+      expect(parsed.filePath).toBe(
+        path.join(projectDir, '.drone-agent', 'config.json')
+      );
+
+      const written = JSON.parse(await readFile(parsed.filePath, 'utf-8'));
+      expect(written.ollama.model).toBe('created-model');
+    });
   });
 
   describe('config__get with showLayers', () => {
     it('includes layer info when showLayers=true', async () => {
-      const { homeDir, projectDir } = await setupDirs();
+      const { projectDir } = await setupDirs();
       process.chdir(projectDir);
 
       // Write a project-level config
@@ -334,7 +413,7 @@ describe('config plugin', () => {
       const result = await engine.executeTool('config__get', {
         showLayers: true,
       });
-      const parsed = JSON.parse(result);
+      const parsed = JSON.parse(toToolResultContent(result));
 
       expect(parsed.layers).toBeDefined();
       expect(parsed.layers.length).toBeGreaterThanOrEqual(2);

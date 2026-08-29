@@ -17,11 +17,7 @@ export type DroneMcpServerState = {
   retryCount: number;
   retryAttemptCount: number;
   lastErrorCategory?:
-    | 'transport'
-    | 'timeout'
-    | 'protocol'
-    | 'payload'
-    | 'unknown';
+    'transport' | 'timeout' | 'protocol' | 'payload' | 'unknown';
   lastError?: string;
   /** True while the streamable-HTTP GET SSE channel is open. */
   streaming?: boolean;

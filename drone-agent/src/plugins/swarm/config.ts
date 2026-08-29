@@ -47,7 +47,7 @@ export class BeaconConfigInjector {
       }
 
       return this.cachedConfig;
-    } catch (error) {
+    } catch {
       // On failure, return cached config if available
       return this.cachedConfig;
     }

@@ -20,6 +20,7 @@
 //   - token-estimate.ts   : Token estimation functions
 //   - config-schema.ts     : Config schema and parsing
 //   - wiki-types.ts       : Wiki page types for swarm knowledge base
+//   - swarm-fragment-types.ts : Swarm prompt fragment types
 //
 // -----------------------------------------------------------------------
 
@@ -58,11 +59,14 @@ export type {
   DroneOpenRouterModelConfig,
   DroneOpenRouterConfig,
   DroneSessionConfig,
+  DroneSessionRetryConfig,
   DroneGuardrailThresholdConfig,
   DroneGuardrailConfig,
+  DroneToolCallDedupConfig,
   DroneCompactionStrategy,
   DroneCompactionConfig,
   DroneMemoryConfig,
+  DroneWakelockConfig,
   DroneLogConfig,
   DroneTerminalConfig,
   DronePromptFileConfig,
@@ -97,6 +101,7 @@ export {
 export type {
   DroneLogger,
   DroneImageContent,
+  DroneToolResult,
   DroneToolJsonSchemaProperty,
   DroneToolJsonSchema,
   DroneChatMessage,
@@ -176,6 +181,7 @@ export type {
   DroneChatRequest,
   DroneLlmProviderRegistration,
 } from './provider-types.js';
+export { DroneLlmError } from './provider-types.js';
 
 // ── Provider/protocol/model config types ─────────────────────────────
 
@@ -192,10 +198,13 @@ export type {
 
 export type { ModelSelection } from './model-selection.js';
 export {
+  WELL_KNOWN_MODEL_ROLES,
   parseModelSelection,
   formatModelSelection,
   isValidFullModelSelection,
   resolveInteractiveSelection,
+  resolveConfiguredReasoningLevel,
+  type DroneModelRole,
 } from './model-selection.js';
 
 // ── Capability types ─────────────────────────────────────────────────
@@ -205,6 +214,7 @@ export type {
   DroneConfigCapability,
   DroneSkillsCapability,
   DroneLlmCapability,
+  DroneResolvedModelRole,
   DronePrincipleEntry,
   DronePrinciplesCapability,
   DroneInsightEntry,
@@ -225,6 +235,14 @@ export type {
   DroneWikiPage,
   DroneWikiSearchResult,
 } from './wiki-types.js';
+
+// ── Swarm prompt fragment types ──────────────────────────────────────
+
+export type { DroneSwarmFragment } from './swarm-fragment-types.js';
+export {
+  BROADCAST_TARGET,
+  validateFragmentId,
+} from './swarm-fragment-types.js';
 
 // ── Plugin system types ──────────────────────────────────────────────
 
@@ -259,6 +277,7 @@ export {
   filterByGlobPatterns,
   createConsoleLogger,
   getCanonicalToolName,
+  toToolResultContent,
 } from './utils.js';
 
 // ── ToolRegistry ──────────────────────────────────────────────────────
@@ -289,6 +308,7 @@ export {
   parseConfigWithSchema,
   transformEnvVars,
   validateProviders,
+  validateModelRoles,
 } from './config-schema.js';
 export type { PartialDroneAgentConfigDecoded } from './config-schema.js';
 

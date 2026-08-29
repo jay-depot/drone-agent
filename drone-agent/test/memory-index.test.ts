@@ -5,12 +5,24 @@ import path from 'node:path';
 import process from 'node:process';
 import {
   createDefaultAgentConfig,
+  toToolResultContent,
+  type DronePluginHooks,
   type DronePluginRegistration,
   type DronePromptFragment,
+  type DroneToolDefinition,
   type DroneWorkflow,
 } from 'drone-core';
 import { memoryPlugin } from '../src/plugins/memory/index.js';
 import type { DroneMemoryCapability } from '../src/plugins/memory/types.js';
+
+/**
+ * Map each hook name to an array of its registration callback type, so a
+ * mock registration's captured hooks type-check with real callbacks instead
+ * of forcing them through `(...args: unknown[]) => unknown`.
+ */
+type CapturedHooks = {
+  [K in keyof DronePluginHooks]: Array<Parameters<DronePluginHooks[K]>[0]>;
+};
 
 /**
  * Build a mock registration that tools and hooks can call.
@@ -20,11 +32,11 @@ function createMockRegistration(): {
   registration: DronePluginRegistration;
   captured: {
     capabilities: Map<string, unknown>;
-    tools: { name: string; execute: Function }[];
+    tools: { name: string; execute: DroneToolDefinition['execute'] }[];
     prompts: { key: string; phase: string }[];
     help: string[];
     workflows: DroneWorkflow[];
-    hooks: Record<string, Function[]>;
+    hooks: CapturedHooks;
   };
   logger: {
     info: ReturnType<typeof vi.fn>;
@@ -40,7 +52,7 @@ function createMockRegistration(): {
 
   const captured = {
     capabilities: new Map<string, unknown>(),
-    tools: [] as { name: string; execute: Function }[],
+    tools: [] as { name: string; execute: DroneToolDefinition['execute'] }[],
     prompts: [] as {
       key: string;
       phase: string;
@@ -49,15 +61,17 @@ function createMockRegistration(): {
     help: [] as string[],
     workflows: [] as DroneWorkflow[],
     hooks: {
-      onPluginsLoaded: [] as Function[],
-      onSessionStart: [] as Function[],
-      onBeforePrompt: [] as Function[],
-      onAfterToolCall: [] as Function[],
-      onConversationEvent: [] as Function[],
-      onSessionClear: [] as Function[],
-      onShutdown: [] as Function[],
-      onSessionSafetyTrimWillRun: [] as Function[],
-      onSessionSafetyTrimApplied: [] as Function[],
+      onPluginsLoaded: [] as CapturedHooks['onPluginsLoaded'],
+      onSessionStart: [] as CapturedHooks['onSessionStart'],
+      onBeforePrompt: [] as CapturedHooks['onBeforePrompt'],
+      onAfterToolCall: [] as CapturedHooks['onAfterToolCall'],
+      onConversationEvent: [] as CapturedHooks['onConversationEvent'],
+      onSessionClear: [] as CapturedHooks['onSessionClear'],
+      onShutdown: [] as CapturedHooks['onShutdown'],
+      onSessionSafetyTrimWillRun:
+        [] as CapturedHooks['onSessionSafetyTrimWillRun'],
+      onSessionSafetyTrimApplied:
+        [] as CapturedHooks['onSessionSafetyTrimApplied'],
     },
   };
 
@@ -210,10 +224,49 @@ describe('memoryPlugin', () => {
       action: 'recall',
       key: 'nonexistent',
     });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
     expect(parsed.entry).toBeNull();
   });
 
+  it('manage tool rejects omitted key with friendly error', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const manageTool = captured.tools.find(t => t.name === 'manage')!;
+    await expect(manageTool.execute({ action: 'recall' })).rejects.toThrow(
+      /requires a non-empty key/
+    );
+  });
+
+  it('manage tool rejects mistyped key with friendly error', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const manageTool = captured.tools.find(t => t.name === 'manage')!;
+    await expect(
+      manageTool.execute({ action: 'recall', key: 42 })
+    ).rejects.toThrow(/requires a non-empty key/);
+  });
+
+  it('manage tool rejects unknown action', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const manageTool = captured.tools.find(t => t.name === 'manage')!;
+    await expect(
+      manageTool.execute({ action: 'bogus', key: 'k' })
+    ).rejects.toThrow(/action must be store, recall, or delete/);
+  });
+
+  it('browse tool rejects unknown action', async () => {
+    const { registration, captured } = createMockRegistration();
+    await memoryPlugin.register(registration);
+
+    const browseTool = captured.tools.find(t => t.name === 'browse')!;
+    await expect(browseTool.execute({ action: 'bogus' })).rejects.toThrow(
+      /action must be list or search/
+    );
+  });
   it('browse tool with list action accepts optional prefix', async () => {
     const { registration, captured } = createMockRegistration();
     await memoryPlugin.register(registration);
@@ -227,7 +280,7 @@ describe('memoryPlugin', () => {
       action: 'list',
       prefix: 'session:',
     });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
     expect(parsed.count).toBe(2);
   });
 

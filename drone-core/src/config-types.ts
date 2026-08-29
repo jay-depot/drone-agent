@@ -86,6 +86,14 @@ export type DroneLlmConfig = {
    */
   active?: string;
   reasoningLevel?: DroneReasoningLevel;
+  /**
+   * Role-name → canonical `<providerId>/<modelLocalId>` selection, used by
+   * built-in plugins that make their own LLM calls (compaction's summarizer,
+   * persona-creation wizard, MCP server-description generator). Unset roles
+   * fall back to the active selection. Banned at project scope (project files
+   * may not pin role models that reference providers absent in that environment).
+   */
+  modelRoles?: Record<string, string>;
 };
 
 export type DroneOpenRouterModelConfig = {
@@ -155,6 +163,13 @@ export type DroneSessionConfig = {
    */
   maxImageSizeBytes?: number;
   /**
+   * Maximum number of images that may attach to a single tool-result message.
+   * Images beyond this count are dropped (kept-first-N) and a marker is
+   * appended to the result content telling the model how to retrieve the rest.
+   * Default is 20.
+   */
+  maxImagesPerMessage?: number;
+  /**
    * Maximum percentage of the context window that a single tool result
    * may consume. Results exceeding this threshold are truncated with a
    * note indicating the original size. Set to 0 to disable.
@@ -163,6 +178,30 @@ export type DroneSessionConfig = {
   maxToolResultTokensPercent?: number;
   /** Guardrail thresholds for broken responses, reasoning-only responses, and identical tool calls. */
   guardrail: DroneGuardrailConfig;
+  /** Unified retry/classification policy for LLM chat() failures. */
+  retry: DroneSessionRetryConfig;
+};
+
+/**
+ * Bounded retry policy for LLM chat() failures, applied by the conversation
+ * service. Tiered classification:
+ *   - T1  bounded silent auto-retry on transient HTTP statuses
+ *   - T2  prompt the user to retry on most other HTTP statuses
+ *   - T3  fail fast on transport errors
+ * All fields optional to match the config schema (users override only what
+ * they care about); the resolved config always populates all defaults.
+ */
+export type DroneSessionRetryConfig = {
+  /** Max silent auto-retries on transient statuses (429/5xx). Default 3. */
+  maxRetries?: number;
+  /** Cap (ms) on a single silent wait; beyond → prompt. Default 30000. */
+  maxWaitMs?: number;
+  /** When true, prompt the user to retry on non-transient HTTP statuses. */
+  promptOnError?: boolean;
+  /** Exponential backoff base delay in ms. Default 1000. */
+  backoffBaseMs?: number;
+  /** Exponential backoff multiplier. Default 2. */
+  backoffFactor?: number;
 };
 
 /** Threshold values are optional to match the config schema, which lets users
@@ -175,13 +214,19 @@ export type DroneGuardrailThresholdConfig = {
   maxHints?: number;
 };
 
+/** Whether the parallel duplicate tool-call dedup guardrail is active. */
+export type DroneToolCallDedupConfig = {
+  enabled?: boolean;
+};
+
 /** Guardrail thresholds. Fields are optional to match the config schema, which
  * lets users override only the thresholds they care about. The resolved config
- * (createDefaultAgentConfig + layer merge) always populates all three defaults. */
+ * (createDefaultAgentConfig + layer merge) always populates all defaults. */
 export type DroneGuardrailConfig = {
   brokenResponses?: DroneGuardrailThresholdConfig;
   reasoningOnlyResponses?: DroneGuardrailThresholdConfig;
   identicalToolCalls?: DroneGuardrailThresholdConfig;
+  deduplicateToolCalls?: DroneToolCallDedupConfig;
 };
 
 export type DroneCompactionStrategy = 'summary-drop';
@@ -203,6 +248,10 @@ export type DroneCompactionConfig = {
 };
 
 export type DroneMemoryConfig = {
+  enabled: boolean;
+};
+
+export type DroneWakelockConfig = {
   enabled: boolean;
 };
 
@@ -260,7 +309,7 @@ export type DroneSwarmConfig = {
 export type DroneTuiConfig = {
   syntaxHighlighting: {
     colors: Record<string, string>;
-    codeBackground: string;
+    codeBackground?: string;
   };
 };
 
@@ -291,8 +340,7 @@ export type DroneLspExternalServerConfig = {
 };
 
 export type DroneLspServerConfig =
-  | DroneLspSpawnServerConfig
-  | DroneLspExternalServerConfig;
+  DroneLspSpawnServerConfig | DroneLspExternalServerConfig;
 
 export type DroneLspConfig = {
   enabled: boolean;
@@ -351,8 +399,7 @@ export type DroneMcpStreamableHttpServerConfig = {
 };
 
 export type DroneMcpServerConfig =
-  | DroneMcpStdioServerConfig
-  | DroneMcpStreamableHttpServerConfig;
+  DroneMcpStdioServerConfig | DroneMcpStreamableHttpServerConfig;
 
 export type DroneMcpRoot = {
   uri: string;
@@ -396,6 +443,7 @@ export type DroneAgentConfig = {
   mcp: DroneMcpConfig;
   compaction: DroneCompactionConfig;
   memory: DroneMemoryConfig;
+  wakelock: DroneWakelockConfig;
   log: DroneLogConfig;
   terminal: DroneTerminalConfig;
   promptFile: DronePromptFileConfig;
@@ -421,6 +469,7 @@ export type PartialDroneAgentConfig = Partial<{
   mcp: Partial<DroneMcpConfig>;
   compaction: Partial<DroneCompactionConfig>;
   memory: Partial<DroneMemoryConfig>;
+  wakelock: Partial<DroneWakelockConfig>;
   log: Partial<DroneLogConfig>;
   promptFile: Partial<DronePromptFileConfig>;
   terminal: Partial<DroneTerminalConfig>;
@@ -458,7 +507,6 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
   replaceNullable: ['activePersona'],
   merge: [
     'trustedPlugins',
-    'llm',
     // Entry-level replace: maps merge by key, but any scope defining
     // `providers.<id>` replaces that whole entry (no intra-entry deep merge —
     // prevents beacon/local frankensteins).
@@ -466,6 +514,7 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
     'ollama',
     'compaction',
     'memory',
+    'wakelock',
     'log',
     'terminal',
     'search',
@@ -477,8 +526,15 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
     lsp: { replace: ['servers'] },
     mcp: { replace: ['servers'] },
     promptFile: { mergeArrays: ['files'] },
+    // llm scalars (provider/active/reasoningLevel) replace; modelRoles merges
+    // per-key so distinct roles from different scopes combine (user sets
+    // summarizer, beacon underlay sets wizard → both apply).
+    llm: { deepMerge: { modelRoles: {} } },
     session: {
-      deepMerge: { guardrail: { deepMerge: {} } },
+      deepMerge: {
+        guardrail: { deepMerge: {} },
+        retry: { deepMerge: {} },
+      },
     },
     swarm: { deepMerge: { knowledgeSync: {}, sessionImport: {} } },
     tui: {
@@ -505,6 +561,7 @@ export function createDefaultAgentConfig(
     activePersona: null,
     llm: {
       provider: 'ollama',
+      modelRoles: {},
     },
     providers: {},
     ollama: {
@@ -547,12 +604,21 @@ export function createDefaultAgentConfig(
       responseReserveTokens: 4096,
       maxToolIterations: 50,
       maxImageSizeBytes: 20 * 1024 * 1024,
+      maxImagesPerMessage: 20,
       promptOnToolIterationLimit: false,
       maxToolResultTokensPercent: 15,
       guardrail: {
         brokenResponses: { hintAfter: 2, maxHints: 2 },
         reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },
         identicalToolCalls: { hintAfter: 2, maxHints: 3 },
+        deduplicateToolCalls: { enabled: true },
+      },
+      retry: {
+        maxRetries: 3,
+        maxWaitMs: 30000,
+        promptOnError: true,
+        backoffBaseMs: 1000,
+        backoffFactor: 2,
       },
     },
     lsp: {
@@ -586,6 +652,9 @@ export function createDefaultAgentConfig(
       nudgeMarginPercent: 10,
     },
     memory: {
+      enabled: true,
+    },
+    wakelock: {
       enabled: true,
     },
     log: {

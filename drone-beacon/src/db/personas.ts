@@ -1,13 +1,7 @@
 import { getDatabase } from './init.js';
 import { logger } from '../logger.js';
 import type { Persona, CreatePersonaRequest } from '../types.js';
-import {
-  getRow,
-  listRows,
-  createRow,
-  updateRow,
-  deleteRow,
-} from 'drone-swarm-common';
+import { getRow, listRows, deleteRow } from 'drone-swarm-common';
 
 export function createPersona(
   req: CreatePersonaRequest,

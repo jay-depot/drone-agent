@@ -4,11 +4,7 @@
  * Provides utilities for managing Docker containers during integration testing.
  */
 
-import { spawn, exec } from 'node:child_process';
-import { promisify } from 'node:util';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-
-const execAsync = promisify(exec);
+import { spawn } from 'node:child_process';
 
 /**
  * Container health status
@@ -334,7 +330,7 @@ export async function getServiceUrls(
       const ports = JSON.parse(portsOutput);
 
       // Look for exposed ports
-      for (const [containerPort, bindings] of Object.entries(ports)) {
+      for (const [, bindings] of Object.entries(ports)) {
         if (bindings && Array.isArray(bindings) && bindings.length > 0) {
           const hostPort = bindings[0].HostPort;
           services[info.Service] = `http://localhost:${hostPort}`;

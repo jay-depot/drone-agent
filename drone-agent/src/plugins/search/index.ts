@@ -1,3 +1,4 @@
+import { toToolResultContent } from 'drone-core';
 import type {
   DronePlugin,
   DronePluginRegistration,
@@ -119,7 +120,9 @@ export const searchPlugin: DronePlugin = {
 
         let raw: string;
         try {
-          raw = await ctx.engine.executeTool('search__text', input);
+          raw = toToolResultContent(
+            await ctx.engine.executeTool('search__text', input)
+          );
         } catch (err) {
           ctx.logger.error(
             `search failed: ${err instanceof Error ? err.message : String(err)}`
@@ -335,7 +338,8 @@ async function handleSemanticSearch(
     return JSON.stringify(data, null, 2);
   } catch (err) {
     throw new Error(
-      `Semantic search failed: ${err instanceof Error ? err.message : String(err)}`
+      `Semantic search failed: ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err }
     );
   }
 }
@@ -416,7 +420,8 @@ async function handleRegexSearch(
       return '';
     })();
     throw new Error(
-      `search__text: command failed${exitCode !== null ? ` (exit ${exitCode})` : ''} for ${searchPath}: ${stderr || (err instanceof Error ? err.message : String(err))}`
+      `search__text: command failed${exitCode !== null ? ` (exit ${exitCode})` : ''} for ${searchPath}: ${stderr || (err instanceof Error ? err.message : String(err))}`,
+      { cause: err }
     );
   }
 

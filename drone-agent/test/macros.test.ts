@@ -28,18 +28,6 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   }
 }
 
-async function writeMacro(
-  dir: string,
-  filename: string,
-  content: string
-): Promise<string> {
-  const macroDir = path.join(dir, '.drone-agent', 'macros');
-  await mkdir(macroDir, { recursive: true });
-  const filePath = path.join(macroDir, filename);
-  await writeFile(filePath, content, 'utf-8');
-  return filePath;
-}
-
 // ---------------------------------------------------------------------------
 // Parser tests
 // ---------------------------------------------------------------------------
@@ -710,7 +698,7 @@ describe('macrosPlugin', () => {
           getModel: () => 'test-model',
           setModel: () => {},
           getReasoningLevel: () => undefined,
-          setReasoningLevel: (_level: any) => {},
+          setReasoningLevel: (_level: unknown) => {},
           sendUserMessage: async (_prompt: string) => {
             // Simulate the events that conversation-service emits
             // through engine conversation event hooks
@@ -744,8 +732,10 @@ describe('macrosPlugin', () => {
 
       expect(handled).toBe(true);
 
-      // The substituted prompt text should be logged first
-      expect(infoMessages[0]).toBe('What is the meaning of life?');
+      // Only the substituted prompt text should be logged. Reasoning,
+      // assistant, and reply content must NOT be re-logged via ctx.logger
+      // (that would double-render alongside the engine-hook listener).
+      expect(infoMessages).toEqual(['What is the meaning of life?']);
 
       // Events should be streamed through engine hooks
       expect(capturedEvents.length).toBeGreaterThan(0);
@@ -753,9 +743,6 @@ describe('macrosPlugin', () => {
       expect(capturedEvents[1]?.kind).toBe('toolCall');
       expect(capturedEvents[2]?.kind).toBe('toolResult');
       expect(capturedEvents[3]?.kind).toBe('assistantMessage');
-
-      // The reply from sendUserMessage should be logged
-      expect(infoMessages[1]).toBe('42');
     });
   });
 });

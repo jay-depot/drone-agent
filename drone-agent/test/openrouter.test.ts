@@ -50,16 +50,22 @@ function createRegistrationCapture() {
       chat: async () => ({ message: 'ok' }),
       getContextWindowInfo: async () => null,
     }),
+    resolveModelForRole: () => ({
+      provider: { chat: async () => ({ message: 'ok' }) },
+      providerId: 'openrouter',
+      model: 'openai/gpt-4o',
+    }),
     getActiveProviderId: () => 'openrouter',
     getAvailableProviders: () => [{ id: 'openrouter', precedence: 1000 }],
     activateProvider: () => {},
     getModel: () => 'openai/gpt-4o',
     setModel: () => {},
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: unknown) => {},
     listModels: async () => {
       return [];
     },
+    describeImages: async images => images,
   };
 
   const registration: DronePluginRegistration = {

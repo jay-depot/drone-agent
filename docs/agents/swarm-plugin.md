@@ -83,3 +83,103 @@ To rotate the certificate (e.g. after a reinstall, or to regenerate a compromise
 6. **Re-verify the bidirectional code.** Because the verification code now includes the coordinator's fingerprint, the code shown in the coordinator web UI will change. Re-enter the new code in the agent with `/trust-coordinator <code>` and re-confirm to ensure no MITM occurred during the rotation.
 
 > **Note:** The beacon's pinned fingerprint lives in `coordinator-tls-fingerprint.txt` in the beacon's config directory (default `~/.drone-beacon/`). You generally do **not** need to delete it manually — the confirmation flow replaces it. If you want to force a fresh TOFU handshake from scratch, you can remove it (and the `.pending.txt` file) and restart the beacon, but the confirmation flow above is the supported path.
+
+## Swarm prompt fragments
+
+Beacons and the coordinator can inject **system prompt fragments** into running
+drone-agent sessions. A fragment is a stored, addressed DB asset — not a
+fire-and-forget push — so it survives agent reconnects and can be listed,
+updated idempotently, and deleted.
+
+### Asset model
+
+A fragment row is `{ id, target, content, phase, scope, createdAt, updatedAt, expiresAt }`:
+
+| Field       | Meaning                                                                                                                                         |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`        | Caller-chosen stable id (`^[a-zA-Z0-9:_-]+$`). Upserting the same `(id, target)` replaces content.                                              |
+| `target`    | An `agentId` (a session id; unknown ids are accepted and queued) or the reserved sentinel `broadcast` (all sessions).                           |
+| `content`   | Prompt text. Re-sent to the LLM verbatim under the heading below.                                                                               |
+| `phase`     | `header` (default) or `footer` — which prompt seam it renders into.                                                                             |
+| `scope`     | `local` (beacon-authored) or `coordinator` (mirrored from coordinator). Coordinator-scoped rows **shadow** beacon-scoped rows with the same id. |
+| `expiresAt` | Epoch ms expiry, or null. Targeted fragments default to now + 24h; broadcasts never expire by default.                                          |
+
+The primary key is `(id, target)`: the same id can exist as a targeted row and a
+broadcast simultaneously. `POST /agents` rejects registering an agentId of
+`broadcast` (reserved sentinel).
+
+### Delivery and rendering
+
+The swarm plugin registers two prompt fragments — `swarm.fragments.header`
+(phase `header`) and `swarm.fragments.footer` (phase `footer`) — whose render
+functions read an in-memory store only (no network I/O in the render path, and
+prompts are stable whether or not the beacon is reachable). The beacon pushes:
+
+- On every WS connect: `fragmentSync` — the full merged current set for the
+  connecting agent (targeted-for-agent + all broadcasts, TTL-filtered,
+  coordinator-shadowed). Reconnects converge without an ack protocol.
+- On upsert/delete of a targeted row: a `fragment` set/remove message to that
+  agent (if connected).
+- On upsert/delete of a broadcast: `fragmentSync` to all connected agents.
+- On the beacon's TTL sweep (60s interval): a remove push for expired targeted
+  rows addressed to connected agents.
+- Coordinator mirror changes arrive during the beacon→coordinator sync interval
+  (default 5 min); on change the beacon fans out `fragmentSync` to all agents.
+
+Render format (ids are model-visible for reference):
+
+```
+# Swarm Fragments
+
+## [maintenance-window]
+
+The wiki analytics collector is down until 14:00 UTC.
+```
+
+Footer-phase fragments render identically under `# Swarm Directives`. Fragments
+render after all other plugin fragments.
+
+### Limits (provisional constants)
+
+| Limit                              | Value                      |
+| ---------------------------------- | -------------------------- |
+| Max broadcast fragments per beacon | 5                          |
+| Max targeted fragments per agent   | 50                         |
+| Max content size                   | 16 KB                      |
+| Default targeted TTL               | 24h (implicit `expiresAt`) |
+| TTL sweep interval                 | 60s                        |
+
+### CLI usage
+
+```sh
+# Beacon authoring (list also works against the coordinator, read-only)
+drone-swarm --beacon http://localhost:3457 fragments set maintenance-window \
+  --target broadcast --content "Collector down until 14:00 UTC"
+drone-swarm --beacon http://localhost:3457 fragments list
+drone-swarm --beacon http://localhost:3457 fragments list --target agent-123
+drone-swarm --beacon http://localhost:3457 fragments delete maintenance-window --target broadcast
+
+# Coordinator-side list (read-only v1; authoring arrives with the persistent-WS rework)
+drone-swarm --coordinator http://localhost:3456 fragments list
+```
+
+### Coordinator scope
+
+The coordinator serves `GET /api/fragments` (with `?target=` filter) from its
+own `fragments` table. The beacon pulls it on the persona-precedent sync
+interval (default 5 min), stores rows with `scope: 'coordinator'`, and fans out
+a resync to connected agents when the merged set changes. This sync-hop is
+scaffolding for the coming persistent-WS rework (which moves coordinator
+authoring + push to a dedicated reverse channel); agent-side behavior is
+unchanged by that rework.
+
+### Security note
+
+Fragments are prompt content injected by whoever can reach the beacon's write
+API. This is a deliberate trade-off for the single-user swarm: the beacon binds
+localhost/LAN (secure by default; tailscale for remote access) and requires
+careful TOFU confirmation on coordinator trust. Do not expose a beacon's
+fragment write routes to untrusted networks before release.
+
+> Coordinator-side storage/serving is scaffolding for the persistent-WS rework
+> branch; the swarm-internal prompt-injection surface above is accepted for v1.

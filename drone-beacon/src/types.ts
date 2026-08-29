@@ -186,10 +186,7 @@ export interface CreateEventLogRequest {
 // === Knowledge Types ===
 
 export type KnowledgeType =
-  | 'fact'
-  | 'preference'
-  | 'skill_pattern'
-  | 'principle';
+  'fact' | 'preference' | 'skill_pattern' | 'principle';
 
 export interface Knowledge {
   id: string;

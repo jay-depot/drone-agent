@@ -2,6 +2,7 @@ import {
   insertSortedByPrecedence,
   removeById,
   insertWriterSorted,
+  toToolResultContent,
 } from 'drone-core';
 import { PersonaListBlock } from '../../tui/components/PersonaListBlock.js';
 import { PersonaSelectBlock } from '../../tui/components/PersonaSelectBlock.js';
@@ -530,15 +531,21 @@ export const personaPlugin: DronePlugin = {
         const subcommand = ctx.args[0] ?? '';
 
         if (subcommand === 'list') {
-          ctx.logger.info(await ctx.engine.executeTool('persona__list', {}));
+          ctx.logger.info(
+            toToolResultContent(
+              await ctx.engine.executeTool('persona__list', {})
+            )
+          );
           return true;
         }
 
         if (subcommand === 'current') {
           ctx.logger.info(
-            await ctx.engine.executeTool('persona__list', {
-              showCurrent: true,
-            })
+            toToolResultContent(
+              await ctx.engine.executeTool('persona__list', {
+                showCurrent: true,
+              })
+            )
           );
           return true;
         }
@@ -550,7 +557,9 @@ export const personaPlugin: DronePlugin = {
             return true;
           }
           ctx.logger.info(
-            await ctx.engine.executeTool('persona__select', { id })
+            toToolResultContent(
+              await ctx.engine.executeTool('persona__select', { id })
+            )
           );
           return true;
         }

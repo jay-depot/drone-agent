@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   DroneConversationEvent,
   DroneLlmCapability,
-  DroneLlmProviderRegistration,
   DronePluginRegistration,
   DroneSessionSafetyTrimPayload,
 } from 'drone-core';
@@ -51,16 +50,22 @@ function createRegistrationCapture() {
       chat: async () => ({ message: 'ok' }),
       getContextWindowInfo: async () => null,
     }),
+    resolveModelForRole: () => ({
+      provider: { chat: async () => ({ message: 'ok' }) },
+      providerId: 'anthropic',
+      model: 'claude-sonnet-4-6',
+    }),
     getActiveProviderId: () => 'anthropic',
     getAvailableProviders: () => [{ id: 'anthropic', precedence: 1000 }],
     activateProvider: () => {},
     getModel: () => 'claude-sonnet-4-6',
     setModel: () => {},
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: unknown) => {},
     listModels: async () => {
       return [];
     },
+    describeImages: async images => images,
   };
 
   const registration: DronePluginRegistration = {
@@ -350,5 +355,39 @@ describe('anthropic plugin', () => {
 
     expect(response.reasoning).toBe('My reasoning');
     expect(response.message).toBe('Final output');
+  });
+
+  it('throws DroneLlmError with status for an HTTP error response', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.anthropic.apiKey = 'test-anthropic-key';
+    capture.config.anthropic.baseUrl = 'https://api.anthropic.com';
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({ error: { message: 'bad request' } }),
+        {
+          status: 400,
+          headers: { 'content-type': 'application/json' },
+        }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await anthropicPlugin.register(capture.registration);
+    const provider = capture.getProviderViaDriver();
+
+    const err = await provider
+      .chat({
+        model: 'claude-sonnet-4-6',
+        messages: [{ role: 'user', content: 'hello' }],
+      })
+      .then(
+        () => null,
+        e => e
+      );
+
+    expect(err?.name).toBe('DroneLlmError');
+    expect(err.status).toBe(400);
+    expect(err.retryable).toBe(false);
   });
 });

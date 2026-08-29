@@ -19,6 +19,7 @@ import {
   type DroneToolDescriptor,
   type DroneToolDefinition,
   type DroneToolExecutionContext,
+  type DroneToolResult,
   type DroneWorkflow,
   type DroneWorkflowContext,
   type DroneWorkflowResult,
@@ -94,7 +95,7 @@ export type DronePluginEngine = {
     input: Record<string, unknown>,
     onProgress?: (chunk: string) => void,
     context?: DroneToolExecutionContext
-  ) => Promise<string>;
+  ) => Promise<string | DroneToolResult>;
   listTools: () => DroneToolDescriptor[];
   listAllTools: () => DroneToolDescriptor[];
   /** Mount a tool by canonical name (e.g. "file__read"). Returns the tool definition if newly mounted, else undefined. */
@@ -185,7 +186,6 @@ type CreateDronePluginEngineOptions = {
   logger?: DroneLogger;
   logToStderr?: boolean;
   debugFlags?: DebugFlagRegistry;
-  // NEW:
   runtimeOptions?: {
     subagentId?: string;
     persona?: string;
@@ -352,6 +352,17 @@ export function createDronePluginEngine({
   const logToolChange = (kind: string, detail: string): void => {
     if (debugFlags.isEnabled('tools')) {
       console.error(`[tools:${kind}] ${detail}`);
+    }
+  };
+
+  const dispatchConversationEvent = async (
+    event: DroneConversationEvent
+  ): Promise<void> => {
+    for (const callback of conversationEventHooks) {
+      await callback(event);
+    }
+    for (const callback of externalConversationEventListeners) {
+      callback(event);
     }
   };
 
@@ -792,10 +803,16 @@ export function createDronePluginEngine({
         subagentId: runtimeOptions?.subagentId,
         persona: runtimeOptions?.persona,
         isSubagent: !!runtimeOptions?.subagentId,
+        debugFlags,
         flags: runtimeFlagRegistry,
         resetStuckDetectors: resetStuckDetectorsFromHost,
         queueSystemReminder: (content: string) =>
           systemReminders.queue(content),
+        emitEvent: (event: DroneConversationEvent) => {
+          dispatchConversationEvent(event).catch(err => {
+            logger.error(`emitEvent hook dispatch failed: ${err}`);
+          });
+        },
       });
 
       logger.info(`initializing ${sortedPlugins.length} plugin(s)`);
@@ -848,15 +865,7 @@ export function createDronePluginEngine({
         await callback(payload);
       }
     },
-    runConversationEventHooks: async (event: DroneConversationEvent) => {
-      for (const callback of conversationEventHooks) {
-        await callback(event);
-      }
-      // Also notify external listeners
-      for (const callback of externalConversationEventListeners) {
-        callback(event);
-      }
-    },
+    runConversationEventHooks: dispatchConversationEvent,
     onConversationEvent: callback => {
       externalConversationEventListeners.push(callback);
       return () => {

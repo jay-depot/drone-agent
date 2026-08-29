@@ -1,0 +1,5 @@
+#! /plan Swtich to planning mode
+/focus clear
+/todo clear all
+/persona select plan
+I'd like to start planning $$

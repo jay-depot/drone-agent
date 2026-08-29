@@ -54,17 +54,23 @@ function makeBudgetService(
 function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
   return {
     getActiveProvider: () => provider,
+    resolveModelForRole: () => ({
+      provider,
+      providerId: 'test-provider',
+      model: 'fake',
+    }),
     getActiveProviderId: () => 'test-provider',
     getAvailableProviders: () => [{ id: 'test-provider', precedence: 1000 }],
     activateProvider: () => {},
     getModel: () => 'fake',
     setModel: () => {},
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: unknown) => {},
     listModels: async () => ['fake'],
     registerDriver: () => {},
     registerProvider: () => {},
     unregisterProvider: () => {},
+    describeImages: async images => images,
   };
 }
 

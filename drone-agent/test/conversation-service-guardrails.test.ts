@@ -4,9 +4,11 @@ import {
   createDefaultAgentConfig,
   type DroneChatResponse,
   type DroneContextWindowInfo,
+  type DroneConversationEvent,
   type DroneLlmCapability,
   type DroneLlmProvider,
   type DroneGuardrailConfig,
+  type DroneReasoningLevel,
 } from 'drone-core';
 import { createConversationService } from '../src/runtime/conversation-service.js';
 import { createContextBudgetService } from '../src/runtime/context-budget-service.js';
@@ -42,17 +44,23 @@ function makeProvider(
 function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
   return {
     getActiveProvider: () => provider,
+    resolveModelForRole: () => ({
+      provider,
+      providerId: 'test-provider',
+      model: 'fake',
+    }),
     getActiveProviderId: () => 'test-provider',
     getAvailableProviders: () => [{ id: 'test-provider', precedence: 1000 }],
     activateProvider: () => {},
     getModel: () => 'fake',
     setModel: () => {},
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: DroneReasoningLevel | undefined) => {},
     listModels: async () => ['fake'],
     registerDriver: () => {},
     registerProvider: () => {},
     unregisterProvider: () => {},
+    describeImages: async images => images,
   };
 }
 
@@ -111,7 +119,7 @@ describe('createConversationService — broken response guardrails', () => {
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     const result = await conversation.sendUserMessage('test', event => {
       events.push(event);
     });
@@ -158,7 +166,7 @@ describe('createConversationService — broken response guardrails', () => {
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     const result = await conversation.sendUserMessage('test', event => {
       events.push(event);
     });
@@ -296,7 +304,7 @@ describe('createConversationService — identical tool-call streak detection', (
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     const result = await conversation.sendUserMessage('test', event => {
       events.push(event);
     });
@@ -359,7 +367,7 @@ describe('createConversationService — identical tool-call streak detection', (
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     const result = await conversation.sendUserMessage('test', event => {
       events.push(event);
     });
@@ -447,6 +455,182 @@ describe('createConversationService — identical tool-call streak detection', (
 });
 
 // ---------------------------------------------------------------------------
+// Parallel duplicate tool-call dedup guardrail
+// ---------------------------------------------------------------------------
+
+describe('createConversationService — parallel duplicate tool-call dedup', () => {
+  it('deduplicates a batch of identical parallel calls and emits one notice per group', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'file__read',
+          description: 'read a file',
+          inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+          },
+        },
+      ],
+      executeToolImpl: async () => 'content',
+    });
+    // One response with three identical parallel calls plus a final answer.
+    const provider = makeProvider([
+      {
+        toolCalls: [
+          { id: 'call-1', name: 'file__read', arguments: { path: '/a' } },
+          { id: 'call-2', name: 'file__read', arguments: { path: '/a' } },
+          { id: 'call-3', name: 'file__read', arguments: { path: '/a' } },
+        ],
+      },
+      { message: 'Done' },
+    ]);
+    const llm = makeLlmCapability(provider);
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? llm : undefined);
+
+    const events: DroneConversationEvent[] = [];
+    const result = await conversation.sendUserMessage('test', event => {
+      events.push(event);
+    });
+
+    expect(result).toBe('Done');
+    // The three identical calls collapse to one execution.
+    expect(engine.__executeMock).toHaveBeenCalledTimes(1);
+    const noticeEvents = events.filter(e => e.kind === 'notice');
+    expect(noticeEvents).toHaveLength(1);
+    expect(noticeEvents[0].content).toContain(
+      'Deduplicated 2 identical parallel'
+    );
+    expect(noticeEvents[0].content).toContain('file__read');
+  });
+
+  it('collapses only duplicate groups and keeps distinct calls', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'file__read',
+          description: 'read a file',
+          inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+          },
+        },
+        {
+          name: 'file__write',
+          description: 'write a file',
+          inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+          },
+        },
+      ],
+      executeToolImpl: async () => 'ok',
+    });
+    const provider = makeProvider([
+      {
+        toolCalls: [
+          { id: 'call-1', name: 'file__read', arguments: { path: '/a' } },
+          { id: 'call-2', name: 'file__read', arguments: { path: '/a' } },
+          { id: 'call-3', name: 'file__read', arguments: { path: '/b' } },
+          { id: 'call-4', name: 'file__write', arguments: { path: '/c' } },
+        ],
+      },
+      { message: 'Done' },
+    ]);
+    const llm = makeLlmCapability(provider);
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? llm : undefined);
+
+    const events: DroneConversationEvent[] = [];
+    await conversation.sendUserMessage('test', event => {
+      events.push(event);
+    });
+
+    // /a duplicate collapsed; /b and write /c kept. So 3 executions.
+    expect(engine.__executeMock).toHaveBeenCalledTimes(3);
+    const noticeEvents = events.filter(e => e.kind === 'notice');
+    expect(noticeEvents).toHaveLength(1);
+    expect(noticeEvents[0].content).toContain('file__read');
+  });
+
+  it('passes the batch through unchanged when disabled', async () => {
+    const engine = createMockEngine({
+      tools: [
+        {
+          name: 'file__read',
+          description: 'read a file',
+          inputSchema: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+          },
+        },
+      ],
+      executeToolImpl: async () => 'content',
+    });
+    const provider = makeProvider([
+      {
+        toolCalls: [
+          { id: 'call-1', name: 'file__read', arguments: { path: '/a' } },
+          { id: 'call-2', name: 'file__read', arguments: { path: '/a' } },
+          { id: 'call-3', name: 'file__read', arguments: { path: '/a' } },
+        ],
+      },
+      { message: 'Done' },
+    ]);
+    const llm = makeLlmCapability(provider);
+    const config = createDefaultAgentConfig();
+    config.session.guardrail = {
+      ...defaultGuardrail,
+      deduplicateToolCalls: { enabled: false },
+    };
+    const sessionManager = createSessionManager();
+    const budgetService = makeBudgetService(provider);
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? llm : undefined);
+
+    const events: DroneConversationEvent[] = [];
+    await conversation.sendUserMessage('test', event => {
+      events.push(event);
+    });
+
+    // All three run; no dedup notice.
+    expect(engine.__executeMock).toHaveBeenCalledTimes(3);
+    const noticeEvents = events.filter(e => e.kind === 'notice');
+    expect(noticeEvents).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Feature 3: Assistant text before tool calls
 // ---------------------------------------------------------------------------
 
@@ -489,7 +673,7 @@ describe('createConversationService — assistant text emitted before toolCallBa
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     await conversation.sendUserMessage('test', event => {
       events.push(event);
     });
@@ -521,6 +705,7 @@ describe('guardrail config defaults', () => {
     expect(guardrail?.reasoningOnlyResponses?.maxHints).toBe(2);
     expect(guardrail?.identicalToolCalls?.hintAfter).toBe(2);
     expect(guardrail?.identicalToolCalls?.maxHints).toBe(3);
+    expect(guardrail?.deduplicateToolCalls?.enabled).toBe(true);
   });
 });
 
@@ -554,7 +739,7 @@ describe('createConversationService — notice event emission', () => {
       id: string
     ) => (id === 'llm' ? llm : undefined);
 
-    const events: any[] = [];
+    const events: DroneConversationEvent[] = [];
     await conversation.sendUserMessage('test', event => {
       events.push(event);
     });

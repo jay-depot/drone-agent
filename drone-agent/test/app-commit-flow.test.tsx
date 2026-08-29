@@ -14,7 +14,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { render } from 'ink-testing-library';
 import { App } from '../src/tui/app.js';
-import { DEFAULT_GRAYSCALE_SCHEME } from '../src/tui/theme.js';
 import type { DroneTuiOptions } from '../src/tui/types.js';
 import type { ConversationEvent } from '../src/runtime/conversation-service.js';
 import { silentLogger } from './helpers.js';
@@ -56,7 +55,6 @@ describe('App commit flow', () => {
   });
 
   function makeApp() {
-    let unregister: (() => void) | null = null;
     const opts: DroneTuiOptions = {
       model: 'llama3.1:latest',
       logger: silentLogger(),

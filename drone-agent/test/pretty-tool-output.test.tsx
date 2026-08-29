@@ -5,7 +5,7 @@
  * ink-testing-library, and the output is checked for expected text.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { render } from 'ink-testing-library';
 import { ExecRunBlock } from '../src/tui/components/ExecRunBlock.js';
 import { FileReadBlock } from '../src/tui/components/FileReadBlock.js';
@@ -13,6 +13,7 @@ import { FileWriteBlock } from '../src/tui/components/FileWriteBlock.js';
 import { FileApplyDiffBlock } from '../src/tui/components/FileApplyDiffBlock.js';
 import { FileListBlock } from '../src/tui/components/FileListBlock.js';
 import { FileGlobBlock } from '../src/tui/components/FileGlobBlock.js';
+import { FileReadImageBlock } from '../src/tui/components/FileReadImageBlock.js';
 import { SearchTextBlock } from '../src/tui/components/SearchTextBlock.js';
 import { DEFAULT_GRAYSCALE_SCHEME } from '../src/tui/theme.js';
 import type { ToolRenderState } from 'drone-core';
@@ -89,6 +90,111 @@ describe('ExecRunBlock', () => {
     });
     const { lastFrame } = render(<ExecRunBlock state={state} />);
     expect(lastFrame()).toContain('✗');
+  });
+});
+
+describe('FileReadBlock width mode', () => {
+  const stripAnsi = (s: string): string =>
+    s.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*m', 'g'), '');
+
+  /** ANSI-stripped, non-empty rows of the rendered frame. */
+  function frameRows(inst: { lastFrame: () => string | undefined }): string[] {
+    return (inst.lastFrame() ?? '')
+      .split('\n')
+      .map(stripAnsi)
+      .filter(row => row.length > 0);
+  }
+
+  it('wraps a line longer than columns into ceil(L/W) fully-filled rows', () => {
+    // ink-testing-library renders at a fixed 100-column terminal; matching
+    // state.columns to it means the padded line (ceil(150/100)*100 = 200)
+    // hard-wraps into two rows of exactly 100 — the second carrying the
+    // text remainder plus its background fill (no bare band).
+    const state = makeState({
+      name: 'file__read',
+      arguments: { path: '/tmp/test.ts' },
+      status: 'done',
+      columns: 100,
+      result: JSON.stringify({
+        path: '/tmp/test.ts',
+        totalLines: 1,
+        startLine: 1,
+        endLine: 1,
+        content: 'x'.repeat(150),
+      }),
+    });
+    const inst = render(<FileReadBlock state={state} />);
+    const rows = frameRows(inst);
+    expect(rows).toContain('x'.repeat(100));
+    expect(rows).toContain('x'.repeat(50) + ' '.repeat(50));
+  });
+
+  it('fills short lines to the terminal width and blank lines as a full-width band', () => {
+    const state = makeState({
+      name: 'file__read',
+      arguments: { path: '/tmp/test.ts' },
+      status: 'done',
+      columns: 100,
+      result: JSON.stringify({
+        path: '/tmp/test.ts',
+        totalLines: 3,
+        startLine: 1,
+        endLine: 3,
+        content: 'ab\n\ncd',
+      }),
+    });
+    const inst = render(<FileReadBlock state={state} />);
+    const rows = frameRows(inst);
+    expect(rows).toContain('ab' + ' '.repeat(98));
+    expect(rows).toContain('cd' + ' '.repeat(98));
+    // The blank line stays visible as exactly one full-width background
+    // band (ink drops zero-width text, so a 0-padded blank would vanish).
+    expect(rows).toContain(' '.repeat(100));
+  });
+});
+
+// ── FileReadImageBlock ──────────────────────────────────────────────
+
+describe('FileReadImageBlock', () => {
+  it('shows running state with path', () => {
+    const state = makeState({
+      name: 'file__read_image',
+      arguments: { path: '/tmp/photo.png' },
+      status: 'running',
+    });
+    const { lastFrame } = render(<FileReadImageBlock state={state} />);
+    expect(lastFrame()).toContain('…');
+    expect(lastFrame()).toContain('file__read_image /tmp/photo.png');
+  });
+
+  it('shows done state with metadata and no base64', () => {
+    const state = makeState({
+      name: 'file__read_image',
+      arguments: { path: '/tmp/photo.png' },
+      status: 'done',
+      result: JSON.stringify({
+        path: '/tmp/photo.png',
+        mimeType: 'image/png',
+        size: 1234,
+      }),
+    });
+    const { lastFrame } = render(<FileReadImageBlock state={state} />);
+    expect(lastFrame()).toContain('✓ file__read_image /tmp/photo.png');
+    expect(lastFrame()).toContain('image/png, 1234 bytes');
+    expect(lastFrame()).toContain('[Image attached]');
+    expect(lastFrame()).not.toContain('iVBOR');
+  });
+
+  it('shows error state', () => {
+    const state = makeState({
+      name: 'file__read_image',
+      arguments: { path: '/tmp/missing.png' },
+      status: 'error',
+      result: 'file__read_image: no such file',
+    });
+    const { lastFrame } = render(<FileReadImageBlock state={state} />);
+    expect(lastFrame()).toContain('✗');
+    expect(lastFrame()).toContain('no such file');
   });
 });
 

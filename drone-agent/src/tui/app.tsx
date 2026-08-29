@@ -130,6 +130,11 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   const codeBackgroundRef = useRef<string | undefined>(codeBackground);
   codeBackgroundRef.current = codeBackground;
 
+  // Terminal columns for event-listener render callbacks (avoids stale
+  // closure on the debounced width, same pattern as the refs above).
+  const columnsRef = useRef<number | undefined>(columns);
+  columnsRef.current = columns;
+
   // ── Mid-panel widget state ────────────────────────────────────────────
   const midPanelWidgetsRef = useRef<MidPanelWidget[]>([]);
 
@@ -251,6 +256,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             outputLines: [...entry.lines],
             syntaxColors: syntaxColorsRef.current,
             codeBackground: codeBackgroundRef.current,
+            columns: columnsRef.current,
           }) as React.ReactNode;
           updateItem(entry.id, component, () => ({
             text: `→ ${event.name}`,
@@ -285,6 +291,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
                 scheme: s as unknown,
                 syntaxColors: syntaxColorsRef.current,
                 codeBackground: codeBackgroundRef.current,
+                columns: columnsRef.current,
               }) as React.ReactNode)
             ) : (
               <ToolCallProgress
@@ -332,6 +339,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
                   outputLines,
                   syntaxColors: syntaxColorsRef.current,
                   codeBackground: codeBackgroundRef.current,
+                  columns: columnsRef.current,
                 }) as React.ReactNode)
               ) : (
                 <ToolCallProgress

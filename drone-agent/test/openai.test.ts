@@ -1,12 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DroneLlmError, createDefaultAgentConfig } from 'drone-core';
 import type {
   DroneConversationEvent,
   DroneLlmCapability,
-  DroneLlmProviderRegistration,
   DronePluginRegistration,
   DroneSessionSafetyTrimPayload,
 } from 'drone-core';
-import { createDefaultAgentConfig } from 'drone-core';
 import { openaiPlugin } from '../src/plugins/openai/index.js';
 import { silentLogger } from './helpers.js';
 
@@ -51,16 +50,22 @@ function createRegistrationCapture() {
       chat: async () => ({ message: 'ok' }),
       getContextWindowInfo: async () => null,
     }),
+    resolveModelForRole: () => ({
+      provider: { chat: async () => ({ message: 'ok' }) },
+      providerId: 'openai',
+      model: 'gpt-4o',
+    }),
     getActiveProviderId: () => 'openai',
     getAvailableProviders: () => [{ id: 'openai', precedence: 1000 }],
     activateProvider: () => {},
     getModel: () => 'gpt-4o',
     setModel: () => {},
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: unknown) => {},
     listModels: async () => {
       return [];
     },
+    describeImages: async images => images,
   };
 
   const registration: DronePluginRegistration = {
@@ -425,5 +430,43 @@ describe('openai plugin', () => {
 
     expect(response.reasoning).toBe('Step-by-step reasoning inside message');
     expect(response.message).toBe('Final answer');
+  });
+
+  it('throws DroneLlmError with status/retryAfter/retryable for a 429', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.openai.apiKey = 'test-key';
+    capture.config.openai.baseUrl = 'https://api.openai.com/v1';
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({ error: { message: 'rate limited' } }),
+        {
+          status: 429,
+          headers: {
+            'content-type': 'application/json',
+            'retry-after': '2',
+          },
+        }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await openaiPlugin.register(capture.registration);
+    const provider = capture.getProviderViaDriver();
+
+    const err = await provider
+      .chat({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: 'hello' }],
+      })
+      .then(
+        () => null,
+        e => e
+      );
+
+    expect(err).toBeInstanceOf(DroneLlmError);
+    expect(err.status).toBe(429);
+    expect(err.retryAfterMs).toBe(2000);
+    expect(err.retryable).toBe(true);
   });
 });

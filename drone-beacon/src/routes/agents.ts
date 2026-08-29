@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { RegisterAgentRequest } from '../types.js';
 import { getCoordinatorClient } from './context.js';
+import { BROADCAST_TARGET } from 'drone-core';
 import {
   getPendingCoordinatorFingerprint,
   getBeaconVerificationCode,
@@ -16,6 +17,12 @@ export default function agentRoutes(app: FastifyInstance) {
   app.post<{ Body: RegisterAgentRequest }>(
     '/agents',
     async (request, reply) => {
+      if (request.body?.id === BROADCAST_TARGET) {
+        return reply.code(400).send({
+          error: `'${BROADCAST_TARGET}' is a reserved fragment target and cannot be used as an agentId`,
+        });
+      }
+
       const session = db.registerAgent(request.body);
 
       // If this agent was spawned by the beacon, update the spawn record

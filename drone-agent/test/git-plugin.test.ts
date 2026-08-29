@@ -6,6 +6,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
   createDefaultAgentConfig,
+  toToolResultContent,
   type DronePluginRegistration,
 } from 'drone-core';
 import { gitPlugin } from '../src/plugins/git/index.js';
@@ -38,7 +39,9 @@ function captureGitTools(): Map<
     logger: silentLogger(),
     getConfig: () => createDefaultAgentConfig(),
     registerTool: tool => {
-      tools.set(tool.name, tool.execute);
+      tools.set(tool.name, async (i: Record<string, unknown>) =>
+        toToolResultContent(await tool.execute(i))
+      );
     },
     registerPromptFragment: () => {},
     registerHelp: () => {},

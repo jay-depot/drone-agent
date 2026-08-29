@@ -2,7 +2,11 @@ import { mkdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { createDefaultAgentConfig, type DronePlugin } from 'drone-core';
+import {
+  createDefaultAgentConfig,
+  toToolResultContent,
+  type DronePlugin,
+} from 'drone-core';
 import { createDronePluginEngine } from '../../src/runtime/plugin-engine.js';
 import { selfImprovementPlugin } from '../../src/plugins/self-improvement/index.js';
 import { createTestPlugin, silentLogger } from '../helpers.js';
@@ -129,6 +133,30 @@ describe('self-improvement__principle (store action)', () => {
         targetType: 'project',
         targetId: 'test',
         principle: '',
+      })
+    ).rejects.toThrow(/principle must be a non-empty string/);
+  });
+
+  it('rejects omitted targetId on store', async () => {
+    const engine = await createEngine();
+
+    await expect(
+      engine.executeTool('self-improvement__principle', {
+        action: 'store',
+        targetType: 'project',
+        principle: 'A principle.',
+      })
+    ).rejects.toThrow(/targetId must be a non-empty string/);
+  });
+
+  it('rejects omitted principle on store', async () => {
+    const engine = await createEngine();
+
+    await expect(
+      engine.executeTool('self-improvement__principle', {
+        action: 'store',
+        targetType: 'project',
+        targetId: 'test',
       })
     ).rejects.toThrow(/principle must be a non-empty string/);
   });
@@ -391,6 +419,18 @@ describe('self-improvement__principle (delete action)', () => {
         index: -1,
       })
     ).rejects.toThrow(/index must be a non-negative integer/);
+  });
+
+  it('rejects omitted targetId on delete', async () => {
+    const engine = await createEngine();
+
+    await expect(
+      engine.executeTool('self-improvement__principle', {
+        action: 'delete',
+        targetType: 'project',
+        index: 0,
+      })
+    ).rejects.toThrow(/targetId must be a non-empty string/);
   });
 
   it('removes the file when last principle is deleted', async () => {
@@ -681,7 +721,7 @@ describe('skill principles injection', () => {
     const result = await engine.executeTool('skills__recall', {
       id: 'test-skill',
     });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
     expect(parsed.body).toContain('Original body.');
     expect(parsed.body).toContain('## Principles');
     expect(parsed.body).toContain('Always test edge cases.');
@@ -734,7 +774,7 @@ describe('skill principles injection', () => {
     const result = await engine.executeTool('skills__recall', {
       id: 'test-skill',
     });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
     expect(parsed.body).toBe('Original body.');
     expect(parsed.body).not.toContain('## Principles');
   });
@@ -828,7 +868,7 @@ describe('skill principles injection', () => {
     const result = await engine.executeTool('skills__recall', {
       id: 'test-skill',
     });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
     expect(parsed.body).toBe('Original body.');
     expect(parsed.body).not.toContain('## Principles');
   });

@@ -1,6 +1,7 @@
 import {
   createConsoleLogger,
   createDebugFlagRegistry,
+  toToolResultContent,
   type DroneLlmCapability,
   type DroneLlmProvider,
 } from 'drone-core';
@@ -169,7 +170,7 @@ async function main(): Promise<void> {
   );
   // The conversation is created after the engine, so expose a mutable ref that
   // the engine's `_runtime` capability closure reads at call time.
-  let resetStuckDetectorsRef: (() => void) | undefined;
+  const resetStuckDetectorsRef: { current?: () => void } = {};
   const engine = createDronePluginEngine({
     plugins: allPlugins,
     config: resolvedConfig.config,
@@ -181,9 +182,25 @@ async function main(): Promise<void> {
       persona: invocation.options.persona,
     },
     buildSystemMessages: () => budgetService.buildSystemMessages(),
-    resetStuckDetectors: () => resetStuckDetectorsRef?.(),
+    resetStuckDetectors: () => resetStuckDetectorsRef.current?.(),
   });
   engineRef.current = engine;
+
+  // Apply CLI retry overrides onto the resolved config (long-running headless
+  // agents may want more silent retries than the interactive default).
+  if (invocation.options.retryMaxRetries !== undefined) {
+    resolvedConfig.config.session.retry = {
+      ...resolvedConfig.config.session.retry,
+      maxRetries: invocation.options.retryMaxRetries,
+    };
+  }
+  if (invocation.options.retryMaxWaitMs !== undefined) {
+    resolvedConfig.config.session.retry = {
+      ...resolvedConfig.config.session.retry,
+      maxWaitMs: invocation.options.retryMaxWaitMs,
+    };
+  }
+
   const conversation = createConversationService({
     engine,
     config: resolvedConfig.config,
@@ -233,6 +250,27 @@ async function main(): Promise<void> {
       ]);
       return answers.continue === 'yes';
     },
+    // When an LLM chat() failure warrants a retry decision (Tier 2:
+    // non-transient HTTP statuses, or transient retries exhausted), ask
+    // the user whether to retry. Non-interactive → fail fast (false).
+    onRetryPrompt: async (error, attempt) => {
+      const elicit = engine.getElicitation();
+      if (!elicit) return false;
+      const statusSuffix = error.status ? ` (HTTP ${error.status})` : '';
+      const providerPrefix = error.providerId ? `[${error.providerId}] ` : '';
+      const answers = await elicit.ask([
+        {
+          id: 'retry',
+          prompt: `${providerPrefix}LLM request failed${statusSuffix} (attempt ${attempt}). Retry?`,
+          choices: [
+            { value: 'yes', label: 'Yes, retry' },
+            { value: 'no', label: 'No, stop' },
+          ],
+          defaultValue: 'no',
+        },
+      ]);
+      return answers.retry === 'yes';
+    },
     // When degenerate responses (empty or reasoning-only) exceed the
     // retry limit, ask the user whether to continue or stop.
     onBrokenResponseLimitReached: async type => {
@@ -277,7 +315,7 @@ async function main(): Promise<void> {
       return answers.continue === 'yes';
     },
   });
-  resetStuckDetectorsRef = conversation.resetStuckDetectors;
+  resetStuckDetectorsRef.current = conversation.resetStuckDetectors;
   const registeredPlugins = await engine.initialize();
 
   // ── Elicitation wiring ──────────────────────────────────────────────
@@ -432,7 +470,7 @@ async function main(): Promise<void> {
       }
       await engine.runHooks('onBeforePrompt');
       const result = await selectedTool.execute({});
-      logger.info(result);
+      logger.info(toToolResultContent(result));
       await engine.runHooks('onAfterToolCall');
     }
   } else if (invocation.kind === 'default' && !invocation.options.once) {
@@ -473,7 +511,7 @@ async function main(): Promise<void> {
       invocation.kind === 'tool'
         ? await engine.executeTool(invocation.toolName, invocation.input)
         : await selectedTool.execute({});
-    logger.info(result);
+    logger.info(toToolResultContent(result));
     await engine.runHooks('onAfterToolCall');
   }
 

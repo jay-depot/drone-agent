@@ -1,15 +1,23 @@
 import { registerContextCommand } from './context-command.js';
 import {
+  DroneLlmError,
   parseModelSelection,
+  resolveConfiguredReasoningLevel,
   type DiscoveredModel,
   type DroneContextWindowInfo,
+  type DroneImageContent,
   type DroneLlmCapability,
   type DroneLlmProvider,
   type DronePlugin,
   type DroneReasoningLevel,
+  type DroneResolvedModelRole,
   type DroneSlashCommandContext,
   type LlmProtocolDriver,
 } from 'drone-core';
+import {
+  DEFAULT_RETRY_CONFIG,
+  withBoundedSilentRetry,
+} from '../../runtime/llm-retry.js';
 
 const VALID_REASONING_LEVELS: DroneReasoningLevel[] = [
   'off',
@@ -57,18 +65,6 @@ export const llmPlugin: DronePlugin = {
           fetchedAt: number;
         }
       | undefined;
-    let activatedExplicitly = false;
-
-    function resolveProviderConfig(providerId: string) {
-      const config = registration.getConfig();
-      const entry = config.providers[providerId];
-      if (!entry) {
-        throw new Error(
-          `Provider "${providerId}" is not configured. Available: ${Object.keys(config.providers).join(', ') || '(none)'}`
-        );
-      }
-      return entry;
-    }
 
     function instantiateProvider(
       providerId: string
@@ -96,6 +92,296 @@ export const llmPlugin: DronePlugin = {
 
     function getInstance(providerId: string): ProviderInstance | undefined {
       return instances.get(providerId) ?? instantiateProvider(providerId);
+    }
+
+    // Broker precedence: lower number = higher priority. Currently ollama
+    // (local, free) outranks remote providers. Used to order the D8 breadth
+    // fallback and the getAvailableProviders listing.
+    function providerPrecedence(providerId: string): number {
+      const entry = registration.getConfig().providers[providerId];
+      return entry?.protocol === 'ollama' ? 0 : 1;
+    }
+
+    // Broker-enriched view of a provider instance: chat() fills the additive
+    // DroneChatRequest fields (effective parameters, resolved metadata) before
+    // delegating. Single interception point — wire contract intact. Used by the
+    // active provider AND any model-role-resolved provider.
+    function enrichProvider(instance: ProviderInstance): DroneLlmProvider {
+      const inner = instance.provider;
+      return {
+        chat: async request => {
+          const fullId = `${instance.providerId}/${request.model}`;
+          const metadata = resolveModelMetadata(fullId);
+          const effectiveParameters = mergeEffectiveParameters(
+            instance.providerId,
+            fullId,
+            request.parameters
+          );
+          warnUnknownParameters(instance, effectiveParameters);
+          try {
+            return await inner.chat({
+              ...request,
+              parameters: effectiveParameters,
+              extra: {
+                ...(registration.getConfig().providers[instance.providerId]
+                  ?.extra ?? {}),
+              },
+              maxOutputTokens:
+                request.maxOutputTokens ?? metadata.maxOutputTokens,
+              hasVision: request.hasVision ?? metadata.hasVision,
+            });
+          } catch (error) {
+            if (error instanceof DroneLlmError && !error.providerId) {
+              error.providerId = instance.providerId;
+            }
+            throw error;
+          }
+        },
+        getContextWindowInfo: ({ model }) =>
+          resolveActiveContextWindow(instance, model),
+        supportsImagesInToolResults: inner.supportsImagesInToolResults,
+      };
+    }
+
+    // Session-lifetime dedup for role-resolution warnings/announcements, so a
+    // broken role (or a role that diverges from active) is logged once, not on
+    // every call.
+    const warnedFallbackRoles = new Set<string>();
+    const announcedRoleDivergence = new Set<string>();
+
+    function activeFallback(): DroneResolvedModelRole {
+      const instance = getInstance(activeProviderId);
+      if (!instance) {
+        throw new Error(
+          'No active LLM provider. Ensure a providers config entry exists and its protocol plugin is enabled.'
+        );
+      }
+      return {
+        provider: enrichProvider(instance),
+        providerId: activeProviderId,
+        model: currentModel,
+      };
+    }
+
+    /**
+     * Resolve a named model role per `llm.modelRoles`. Stateless: never mutates
+     * the active selection and emits no events. Unset/unknown/broken roles fall
+     * back to the active selection with a one-time-per-role warning.
+     */
+    function resolveModelForRoleImpl(role: string): DroneResolvedModelRole {
+      const config = registration.getConfig();
+      const raw = config.llm?.modelRoles?.[role];
+      if (!raw) {
+        return activeFallback();
+      }
+      const selection = parseModelSelection(raw);
+      const instance = selection && getInstance(selection.providerId);
+      if (!selection || !instance) {
+        if (!warnedFallbackRoles.has(role)) {
+          warnedFallbackRoles.add(role);
+          registration.logger.warn(
+            `Model role "${role}" (${raw}) could not be resolved; falling back to the active selection.`
+          );
+        }
+        return activeFallback();
+      }
+      if (
+        instance.providerId !== activeProviderId ||
+        selection.modelLocalId !== currentModel
+      ) {
+        if (!announcedRoleDivergence.has(role)) {
+          announcedRoleDivergence.add(role);
+          registration.logger.info(
+            `Model role "${role}" resolved to ${instance.providerId}/${selection.modelLocalId} (differs from active ${activeProviderId}/${currentModel}).`
+          );
+        }
+      }
+      return {
+        provider: enrichProvider(instance),
+        providerId: instance.providerId,
+        model: selection.modelLocalId,
+        reasoningLevel: resolveConfiguredReasoningLevel(config, selection),
+      };
+    }
+
+    // Session-lifetime dedup for describer-resolution warnings, so a missing
+    // vision-capable describer is logged once, not on every describe call.
+    const warnedNoDescriber = new Set<string>();
+
+    /**
+     * Resolve a vision-capable describer selection per the D8 fallback chain:
+     *   1. configured `image_describer` if vision-capable
+     *   2. active selection if vision-capable
+     *   3. same provider entry as the pinned describer: any vision-capable
+     *      model under that exact `config.providers.<id>`
+     *   4. breadth: any configured+instantiated vision-capable model in
+     *      broker precedence order
+     *   5. none → warn + skip (lazy/idempotent so a later model change can retry)
+     * Returns undefined when no vision-capable model is available.
+     */
+    function resolveDescriber(): DroneResolvedModelRole | undefined {
+      const config = registration.getConfig();
+      const pinnedRaw = config.llm?.modelRoles?.['image_describer'];
+
+      // 1. Pinned image_describer if vision-capable.
+      if (pinnedRaw) {
+        const pinned = parseModelSelection(pinnedRaw);
+        const pinnedInstance = pinned && getInstance(pinned.providerId);
+        if (pinned && pinnedInstance) {
+          const fullId = `${pinned.providerId}/${pinned.modelLocalId}`;
+          if (resolveModelMetadata(fullId).hasVision) {
+            return {
+              provider: enrichProvider(pinnedInstance),
+              providerId: pinned.providerId,
+              model: pinned.modelLocalId,
+              reasoningLevel: resolveConfiguredReasoningLevel(config, pinned),
+            };
+          }
+        }
+      }
+
+      // 2. Active selection if vision-capable.
+      const activeInstance = getInstance(activeProviderId);
+      if (activeInstance && currentModel) {
+        const activeFullId = `${activeProviderId}/${currentModel}`;
+        if (resolveModelMetadata(activeFullId).hasVision) {
+          return {
+            provider: enrichProvider(activeInstance),
+            providerId: activeProviderId,
+            model: currentModel,
+          };
+        }
+      }
+
+      // 3. Same provider entry as the pinned describer: any vision-capable
+      //    model under that exact `config.providers.<id>`.
+      if (pinnedRaw) {
+        const pinned = parseModelSelection(pinnedRaw);
+        if (pinned) {
+          const entry = config.providers[pinned.providerId];
+          const pinnedInstance = getInstance(pinned.providerId);
+          if (entry && pinnedInstance) {
+            for (const modelId of Object.keys(entry.models ?? {})) {
+              const fullId = `${pinned.providerId}/${modelId}`;
+              if (resolveModelMetadata(fullId).hasVision) {
+                return {
+                  provider: enrichProvider(pinnedInstance),
+                  providerId: pinned.providerId,
+                  model: modelId,
+                  reasoningLevel: resolveConfiguredReasoningLevel(config, {
+                    providerId: pinned.providerId,
+                    modelLocalId: modelId,
+                  }),
+                };
+              }
+            }
+          }
+        }
+      }
+
+      // 4. Breadth: any configured+instantiated vision-capable model in
+      //    broker precedence order.
+      const providerIds = Object.keys(config.providers).sort(
+        (a, b) => providerPrecedence(a) - providerPrecedence(b)
+      );
+      for (const providerId of providerIds) {
+        const entry = config.providers[providerId];
+        const instance = getInstance(providerId);
+        if (!instance) continue;
+        for (const modelId of Object.keys(entry.models ?? {})) {
+          const fullId = `${providerId}/${modelId}`;
+          if (resolveModelMetadata(fullId).hasVision) {
+            return {
+              provider: enrichProvider(instance),
+              providerId,
+              model: modelId,
+              reasoningLevel: resolveConfiguredReasoningLevel(config, {
+                providerId,
+                modelLocalId: modelId,
+              }),
+            };
+          }
+        }
+      }
+
+      // 5. None → warn + skip.
+      if (!warnedNoDescriber.has('image_describer')) {
+        warnedNoDescriber.add('image_describer');
+        registration.logger.warn(
+          'No vision-capable model is available to describe images (image_describer role unset or no vision-capable model configured). Images will be sent as-is.'
+        );
+      }
+      return undefined;
+    }
+
+    const DESCRIBER_SYSTEM_PROMPT =
+      'You are an image describer. Describe the image in detail, focusing on the visual content, layout, text, and any notable elements. Be concise but complete.';
+
+    /**
+     * Describe images that lack descriptions, using the resolved describer
+     * model. Skips already-described images. Fails open: on describer failure
+     * or timeout, images are returned unchanged (idempotent — a later call
+     * can retry).
+     */
+    async function describeImagesImpl(
+      images: DroneImageContent[]
+    ): Promise<DroneImageContent[]> {
+      const undescribed = images.filter(img => !img.description);
+      if (undescribed.length === 0) {
+        return images;
+      }
+      const describer = resolveDescriber();
+      if (!describer) {
+        return images;
+      }
+
+      // D10: borrow T1 only — bounded silent auto-retry honoring session.retry
+      // backoff (same policy as the main loop's runWithRetry T1 branch). No T2
+      // (no user prompting for background artifact work); the outer ~60s
+      // timeout in the caller is the hard cap.
+      const retry = registration.getConfig().session.retry;
+      const describerRetryConfig = {
+        maxRetries: retry?.maxRetries ?? DEFAULT_RETRY_CONFIG.maxRetries,
+        maxWaitMs: retry?.maxWaitMs ?? DEFAULT_RETRY_CONFIG.maxWaitMs,
+        backoffBaseMs:
+          retry?.backoffBaseMs ?? DEFAULT_RETRY_CONFIG.backoffBaseMs,
+        backoffFactor:
+          retry?.backoffFactor ?? DEFAULT_RETRY_CONFIG.backoffFactor,
+      };
+
+      const result = [...images];
+      for (const img of undescribed) {
+        const idx = result.indexOf(img);
+        try {
+          const response = await withBoundedSilentRetry(
+            async () =>
+              describer.provider.chat({
+                model: describer.model,
+                reasoningLevel: describer.reasoningLevel,
+                messages: [
+                  { role: 'system', content: DESCRIBER_SYSTEM_PROMPT },
+                  {
+                    role: 'user',
+                    content: 'Describe this image:',
+                    images: [img],
+                  },
+                ],
+              }),
+            describerRetryConfig
+          );
+          const description = response.message?.trim();
+          if (description && idx !== -1) {
+            result[idx] = { ...img, description };
+          }
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          registration.logger.warn(
+            `Image description failed (non-fatal, image sent as-is): ${message}`
+          );
+        }
+      }
+      return result;
     }
 
     // ── Hybrid model listing: declared ⊕ discovered, declared wins ──
@@ -327,45 +613,15 @@ export const llmPlugin: DronePlugin = {
             'No active LLM provider. Ensure a providers config entry exists and its protocol plugin is enabled.'
           );
         }
-        // Broker-enriched view of the provider: chat() fills the additive
-        // DroneChatRequest fields (effective parameters, resolved metadata)
-        // before delegating. Single interception point — wire contract intact.
-        const inner = instance.provider;
-        return {
-          chat: async request => {
-            const fullId = `${instance.providerId}/${request.model}`;
-            const metadata = resolveModelMetadata(fullId);
-            const effectiveParameters = mergeEffectiveParameters(
-              instance.providerId,
-              fullId,
-              request.parameters
-            );
-            warnUnknownParameters(instance, effectiveParameters);
-            return inner.chat({
-              ...request,
-              parameters: effectiveParameters,
-              extra: {
-                ...(registration.getConfig().providers[instance.providerId]
-                  ?.extra ?? {}),
-              },
-              maxOutputTokens:
-                request.maxOutputTokens ?? metadata.maxOutputTokens,
-              hasVision: request.hasVision ?? metadata.hasVision,
-            });
-          },
-          getContextWindowInfo: ({ model }) =>
-            resolveActiveContextWindow(instance, model),
-          supportsImagesInToolResults: inner.supportsImagesInToolResults,
-        };
+        return enrichProvider(instance);
       },
+      resolveModelForRole: resolveModelForRoleImpl,
       getActiveProviderId: () => activeProviderId,
       getAvailableProviders: () =>
-        Object.entries(registration.getConfig().providers).map(
-          ([id, entry]) => ({
-            id,
-            precedence: entry.protocol === 'ollama' ? 0 : 1,
-          })
-        ),
+        Object.keys(registration.getConfig().providers).map(id => ({
+          id,
+          precedence: providerPrecedence(id),
+        })),
       activateProvider: (providerId: string) => {
         const instance = getInstance(providerId);
         if (!instance) {
@@ -373,7 +629,6 @@ export const llmPlugin: DronePlugin = {
             `LLM provider "${providerId}" is not available (unconfigured or its protocol driver is missing).`
           );
         }
-        activatedExplicitly = true;
         const previousProvider = activeProviderId;
         activeProviderId = providerId;
         const selection = parseModelSelection(currentModel);
@@ -419,6 +674,7 @@ export const llmPlugin: DronePlugin = {
           : `${activeProviderId}/${model}`;
         return resolveModelMetadata(fullId).hasVision ?? false;
       },
+      describeImages: describeImagesImpl,
       registerProvider: provider => {
         // Legacy path — retained for the migration window. Wraps the
         // registration as a synthetic provider instance.

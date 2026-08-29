@@ -33,6 +33,7 @@ export default function personaRoutes(app: FastifyInstance) {
       if (!persona) {
         return reply.code(404).send({ error: 'Persona not found' });
       }
+
       // codeql[js/reflected-xss]
       return persona;
     }

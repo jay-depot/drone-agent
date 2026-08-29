@@ -1,0 +1,5 @@
+#! /execute-plan Switch to `code` persona and tell it to get to work.
+/persona select code
+/todo clear all
+/focus set Read the plan from project memory `$1` and execute every step until completion.
+Read the plan from project memory `$1` and execute every step until completion.

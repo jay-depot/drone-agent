@@ -27,6 +27,7 @@ export default defineConfig({
       'drone-agent/test/spawn.test.ts',
       'drone-agent/test/inter-agent.test.ts',
       'drone-agent/test/agent-beacon.test.ts',
+      'drone-agent/test/swarm-fragments-integration.test.ts',
       'drone-agent/test/subagent/dispatch.test.ts',
       'drone-agent/test/mcp.test.ts',
       'drone-agent/test/lsp-server-smoke.test.ts',

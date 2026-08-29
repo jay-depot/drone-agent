@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {
   validateProviders,
+  validateModelRoles,
   applyAgentConfigLayer,
   createDefaultAgentConfig,
   parseConfigWithSchema,
@@ -53,9 +54,35 @@ export async function loadConfigLayer(
   };
 }
 
-export async function findProjectConfigPath(
-  startDirectory: string
-): Promise<string | undefined> {
+export interface ProjectConfigResolution {
+  /** Discovered project config file path, or undefined when none exists. */
+  path?: string;
+  /**
+   * Set when discovery encountered a config file identical to the user
+   * config and skipped it rather than loading it a second time as
+   * project scope.
+   */
+  skippedDuplicatePath?: string;
+}
+
+/**
+ * Walk up from startDirectory to the filesystem root looking for the
+ * nearest project config. The walk dedupes against the effective user
+ * config path by lexical identity: launching from $HOME (or any directory
+ * whose ancestors contain only the user's own .drone-agent directory)
+ * would otherwise rediscover the user config and load it a second time as
+ * project scope, tripping the provider scope policy. Symlinked homes are
+ * out of scope for the comparison.
+ */
+export async function resolveProjectConfig(
+  startDirectory: string,
+  userConfigPath?: string
+): Promise<ProjectConfigResolution> {
+  const resolvedUserConfigPath = path.resolve(
+    userConfigPath ??
+      path.join(os.homedir(), CONFIG_DIRECTORY_NAME, CONFIG_FILE_NAME)
+  );
+
   let currentDirectory = path.resolve(startDirectory);
 
   while (true) {
@@ -65,12 +92,15 @@ export async function findProjectConfigPath(
       CONFIG_FILE_NAME
     );
     if (await pathExists(candidate)) {
-      return candidate;
+      if (path.resolve(candidate) === resolvedUserConfigPath) {
+        return { skippedDuplicatePath: candidate };
+      }
+      return { path: candidate };
     }
 
     const parentDirectory = path.dirname(currentDirectory);
     if (parentDirectory === currentDirectory) {
-      return undefined;
+      return {};
     }
 
     currentDirectory = parentDirectory;
@@ -118,9 +148,15 @@ export async function loadAgentConfig(
     layers.push(userLayer);
   }
 
-  const projectConfigPath = await findProjectConfigPath(startDirectory);
-  if (projectConfigPath) {
-    const projectLayer = await loadConfigLayer('project', projectConfigPath);
+  const projectConfigResolution = await resolveProjectConfig(
+    startDirectory,
+    userConfigPath
+  );
+  if (projectConfigResolution.path) {
+    const projectLayer = await loadConfigLayer(
+      'project',
+      projectConfigResolution.path
+    );
     if (projectLayer) {
       layers.push(projectLayer);
     }
@@ -159,6 +195,11 @@ export async function loadAgentConfig(
     );
   }
 
+  const modelRoleWarnings = validateModelRoles(
+    mergedConfig.providers,
+    mergedConfig.llm?.modelRoles
+  );
+
   return {
     config: mergedConfig,
     layers,
@@ -166,9 +207,15 @@ export async function loadAgentConfig(
       backupPaths: persisted.backupPaths,
     }),
     warnings: [
+      ...(projectConfigResolution.skippedDuplicatePath !== undefined
+        ? [
+            `Found ${projectConfigResolution.skippedDuplicatePath} while searching for project config, but it is the same file as the user config; skipping redundant project-scope load.`,
+          ]
+        : []),
       ...persisted.warnings,
       ...scopePolicy.warnings,
       ...validation.warnings,
+      ...modelRoleWarnings,
     ],
   };
 }

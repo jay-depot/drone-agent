@@ -4,7 +4,7 @@ import { access } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { sep, join } from 'node:path';
 
-import type { DroneLogger } from './session-types.js';
+import type { DroneLogger, DroneToolResult } from './session-types.js';
 
 /**
  * Convert a simple glob pattern to a RegExp.
@@ -93,6 +93,15 @@ export function getCanonicalToolName(
   toolName: string
 ): string {
   return `${pluginId}__${toolName}`;
+}
+
+/**
+ * Normalize a tool result (which may be a plain string or a structured
+ * `DroneToolResult`) to its text content. Strings pass through unchanged;
+ * structured results yield `.content`.
+ */
+export function toToolResultContent(result: string | DroneToolResult): string {
+  return typeof result === 'string' ? result : result.content;
 }
 
 /**

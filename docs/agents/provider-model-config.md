@@ -124,10 +124,86 @@ FIRST slash so multi-slash upstream ids survive
   invocation only (never persisted).
 - The status bar shows the full-form identity.
 
+## Model roles
+
+Some built-in plugins make their own LLM calls (compaction summarization,
+persona creation, MCP server-description generation) rather than riding the
+main chat loop. By default those calls reuse the session's active selection
+(`llm.active`). **Model roles** let you pin a different provider/model for a
+specific purpose via the user-scope `llm.modelRoles` map:
+
+```json
+{
+  "llm": {
+    "modelRoles": {
+      "summarizer": "ollama/llama3.1",
+      "wizard": "anthropic/claude-haiku-4-5",
+      "describer": "openrouter/openai/gpt-5.3-codex",
+      "image_describer": "openrouter/openai/gpt-5.3-codex"
+    }
+  }
+}
+```
+
+Each role maps to a canonical `<providerId>/<modelLocalId>` selection (same
+strict form as `llm.active`; bare ids are rejected). Unset or misconfigured
+roles fall back to the active selection, so omitting the map changes nothing.
+Resolution is stateless — it never mutates the active selection — and the
+resolved provider is broker-enriched exactly like the active one (effective
+parameters, resolved context window, error tagging).
+
+Well-known roles (the startup validator warns on role names outside this
+list, catching typos like `summarizer` that would otherwise silently fall
+back):
+
+| role              | consumer                                                                                       |
+| ----------------- | ---------------------------------------------------------------------------------------------- |
+| `summarizer`      | Compaction (`/compact`) summary generation                                                     |
+| `wizard`          | `persona.create` wizard persona-draft generation                                               |
+| `describer`       | MCP server-description generation                                                              |
+| `image_describer` | Vision-capable model that describes images for non-vision targets, compaction, and persistence |
+
+The role namespace is open — plugins may mint additional roles, though only
+the well-known list above is recognized by the validator.
+
+**Scopes:** `llm.modelRoles` is **banned in project-scope config** (startup
+error), same class as `providers`: role values reference providers that may
+not exist in a freshly-cloned environment. Define them in user config or
+distribute via swarm underlays. `llm.modelRoles` merges per-key across
+layers, so distinct roles from different scopes combine.
+
+## Images & vision
+
+Models declare vision support via the per-model `hasVision` metadata flag
+(default false). When the active model is vision-capable, image content is
+carried to the provider on the wire as native image parts (base64 blobs are
+stripped from the text content and replaced with an `[Image attached]`
+marker). When the active model is **not** vision-capable, images are
+described instead: the `image_describer` role (falling back to the active
+selection, then any vision-capable configured model) generates a text
+description that is substituted into the message content, so the model
+still sees the image's semantics without receiving the bytes.
+
+Descriptions are also produced eagerly when a durability gate is active
+(`log.enabled` or a swarm connection) so they survive compaction and
+persistence even though the raw image bytes are destroyed. The
+`image_describer` role is the preferred way to pin which model performs
+this work; see the model-roles table above.
+
+Both representations are stored in the session: the image bytes and (once
+generated) the description. Presentation is derived per request — a
+vision-capable target receives the image, a non-vision target receives the
+description. Describer failures **fail open**: if no vision-capable model is
+available, or the describer times out or errors, the image is sent as-is
+(today's behavior) and the description is retried lazily on a later request.
+This never makes things worse than before the feature existed.
+
 ## Reasoning
 
 Chain: session (`/reasoning`) > selected model entry `reasoningLevel` >
-`llm.reasoningLevel`. Drivers own the mapping tables:
+`llm.reasoningLevel`. Drivers own the mapping tables. A role-bound model
+honors its model-entry `reasoningLevel` (then `llm.reasoningLevel`); there
+is no session-level tier for role calls:
 
 | protocol   | off                           | low                            | medium/high/max         |
 | ---------- | ----------------------------- | ------------------------------ | ----------------------- |
@@ -147,11 +223,20 @@ keys (loud warning); user scope and swarm underlays may.
 
 ## Scopes
 
-`providers` entries are **banned in project-scope config** (startup error).
-Projects may pin `llm.active` / `llm.reasoningLevel`. Beacon/coordinator
-underlays are sanctioned distribution channels; entries merge by key with
-whole-entry replacement (a scope defining `providers.<id>` replaces that
-entire entry — no partial overrides across scopes).
+`providers` entries and `llm.modelRoles` are **banned in project-scope
+config** (startup error). Projects may pin `llm.active` /
+`llm.reasoningLevel`. Beacon/coordinator underlays are sanctioned
+distribution channels; entries merge by key with whole-entry replacement (a
+scope defining `providers.<id>` replaces that entire entry — no partial
+overrides across scopes). `llm.modelRoles` merges per-key.
+
+Project-scope discovery dedupes against the effective user config by file
+identity: launching from the home directory would otherwise rediscover
+`~/.drone-agent/config.json` and load it a second time as project scope,
+tripping the ban above. When the walked-to file _is_ the user config it is
+skipped, a one-time notice is logged at startup, and the session runs with
+no project layer. Project-scope writes (`config.set` with scope `project`)
+refuse in that situation — use user scope instead.
 
 See `docs/agents/swarm-plugin.md` for the swarm-underlay contract.
 

@@ -1,4 +1,8 @@
-import type { DiscoveredModel, DroneChatResponse } from 'drone-core';
+import {
+  DroneLlmError,
+  type DiscoveredModel,
+  type DroneChatResponse,
+} from 'drone-core';
 import {
   fromOpenAiResponse,
   toOpenAiMessage,
@@ -6,6 +10,10 @@ import {
   type OpenAiChatRequest,
   type OpenAiChatResponse,
 } from '../../shared/openai-compatible.js';
+import {
+  isTransientStatus,
+  parseRetryAfterMs,
+} from '../../runtime/llm-retry.js';
 
 /**
  * Reasoning level → OpenAI-family `reasoning_effort` (off maps to
@@ -192,7 +200,7 @@ export function createOpenAiProvider(
         );
       }
 
-      let body = buildBody(request);
+      const body = buildBody(request);
       if (debug) {
         console.error(`[llm:request] POST ${baseUrl}/chat/completions`);
         console.error(`[llm:request] ${JSON.stringify(body)}`);
@@ -203,11 +211,9 @@ export function createOpenAiProvider(
         response = await doFetch(body);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(
+        throw new DroneLlmError(
           `${label} request failed for model ${model}: ${message}`,
-          {
-            cause: error,
-          }
+          { retryable: false }
         );
       }
 
@@ -221,12 +227,11 @@ export function createOpenAiProvider(
         );
         if (retry !== undefined) {
           response = retry.response;
-          body = retry.body;
         }
       }
 
       if (!response.ok) {
-        let errorBody = '';
+        let errorBody: string;
         try {
           errorBody = await response.text();
         } catch {
@@ -238,8 +243,17 @@ export function createOpenAiProvider(
           );
           console.error(`[llm:response] ${errorBody}`);
         }
-        throw new Error(
-          `${label} API error (${response.status}): ${errorBody}`
+        const retryAfterMs = parseRetryAfterMs(
+          response.headers.get('retry-after') ?? undefined
+        );
+        throw new DroneLlmError(
+          `${label} API error (${response.status}): ${errorBody}`,
+          {
+            status: response.status,
+            retryAfterMs,
+            retryable: isTransientStatus(response.status),
+            body: errorBody,
+          }
         );
       }
 
@@ -255,7 +269,9 @@ export function createOpenAiProvider(
         data = JSON.parse(responseText) as OpenAiChatResponse;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`${label} returned invalid JSON: ${message}`);
+        throw new DroneLlmError(`${label} returned invalid JSON: ${message}`, {
+          retryable: false,
+        });
       }
 
       return fromOpenAiResponse(data);
@@ -274,8 +290,16 @@ export function createOpenAiProvider(
         headers: buildHeaders(config),
       });
       if (!response.ok) {
-        throw new Error(
-          `${label} model discovery failed (${response.status}).`
+        const retryAfterMs = parseRetryAfterMs(
+          response.headers.get('retry-after') ?? undefined
+        );
+        throw new DroneLlmError(
+          `${label} model discovery failed (${response.status}).`,
+          {
+            status: response.status,
+            retryAfterMs,
+            retryable: isTransientStatus(response.status),
+          }
         );
       }
       const data = (await response.json()) as {
@@ -321,9 +345,8 @@ async function maybeToolRoutingRetry(
   debug?: boolean
 ): Promise<{ response: Response; body: OpenAiChatRequest } | undefined> {
   let errorBody: OpenRouterErrorBody = {};
-  let errorText = '';
   try {
-    errorText = await failedResponse.text();
+    const errorText = await failedResponse.text();
     errorBody = JSON.parse(errorText) as OpenRouterErrorBody;
   } catch {
     // errorText stays as-is if JSON parse fails

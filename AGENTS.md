@@ -16,19 +16,19 @@ If classification is ambiguous, ask for clarification before editing that specif
 
 ## Project Structure
 
-The project is a pnpm workspace with seven packages:
+The project is a pnpm workspace with the following packages:
 
-| Package                 | Purpose                                                                            |
-| ----------------------- | ---------------------------------------------------------------------------------- |
-| `drone-agent/`          | CLI + TUI coding agent (Ink-based). Entry point, plugins, runtime, TUI components. |
-| `drone-core/`           | Shared types, contracts, config defaults, token estimation.                        |
-| `drone-beacon/`         | Local hub for drone swarm (Fastify + SQLite + WebSocket).                          |
-| `drone-coordinator/`    | Global hub for swarm coordination (Fastify + SQLite).                              |
-| `drone-coordinator-ui/` | Web UI for the coordinator (React + Vite + Tailwind).                              |
-| `drone-swarm-common/`   | Shared utilities for beacon and coordinator.                                       |
-| `drone-swarm/`          | `drone-swarm` CLI: standalone REST client for session pipeline + wiki.             |
-| `drone-gateway/`        | Chat API gateway (Matrix, Discord, Slack).                                         |
-| `skill-library/`        | Reusable skill `.md` files (not a workspace package).                              |
+| Package                 | Purpose                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| `drone-agent/`          | CLI + TUI coding agent (Ink-based). Entry point, plugins, runtime, TUI components.    |
+| `drone-core/`           | Shared types, contracts, config defaults, token estimation.                           |
+| `drone-beacon/`         | Local hub for drone swarm (Fastify + SQLite + WebSocket).                             |
+| `drone-coordinator/`    | Global hub for swarm coordination (Fastify + SQLite).                                 |
+| `drone-coordinator-ui/` | Web UI for the coordinator (React + Vite + Tailwind).                                 |
+| `drone-swarm-common/`   | Shared utilities for beacon and coordinator.                                          |
+| `drone-swarm/`          | `drone-swarm` CLI: standalone REST client for session pipeline + wiki.                |
+| `drone-gateway/`        | Chat API gateway (Matrix, Discord, Slack).                                            |
+| `config-library/`       | Example skills, macros and personas for a full agent setup (not a workspace package). |
 
 Key source directories within `drone-agent/`:
 
@@ -141,6 +141,8 @@ The TUI (`src/tui/app.tsx`) renders any `DroneConversationEvent` with a recogniz
 
 **Rule of thumb**: If a plugin mutates session state without a user command, it must emit at least `started` and `completed`/`failed` events. The latch bug in compaction (Decision 053) went undetected for weeks partly because the plugin was observability-free — no events meant no visible signal that it had stopped firing.
 
+**Deliberate deviation — silent control signals**: Not every event kind is meant for TUI rendering. The `roundComplete` event (emitted once per `sendUserMessage` round) is a high-frequency control signal consumed by plugins (e.g. `wakelock` to release a sleep lock). It is intentionally added to the `DroneConversationEvent` union **without** a theme color or TUI render case, so it is silently ignored by the non-exhaustive consumers (`tui/app.tsx`, `output-handlers.ts`) while still flowing to `onConversationEvent` subscribers. The wakelock plugin also mutates no session state and has no `emitEvent` path (it is a static built-in), so it is logger-only by default.
+
 ### Guardrail System
 
 The conversation service includes built-in guardrails that detect and mitigate common LLM reliability issues. These are configured under `session.guardrail` in the config:
@@ -153,10 +155,13 @@ The conversation service includes built-in guardrails that detect and mitigate c
 | `reasoningOnlyResponses.maxHints`  | 2       | Same as `brokenResponses` but for reasoning-only responses             |
 | `identicalToolCalls.hintAfter`     | 2       | Number of identical single-tool-call iterations before nudging         |
 | `identicalToolCalls.maxHints`      | 3       | Max nudges before hard limit (total iterations = hintAfter + maxHints) |
+| `deduplicateToolCalls.enabled`     | true    | Collapse parallel identical tool calls within one response to one      |
 
 **Broken responses** (Feature 1): When the LLM produces an empty response or a reasoning-only response, the conversation service retries without appending the degenerate response to the session. After `hintAfter` silent retries, it injects a non-persisted system hint. After `hintAfter + maxHints` total attempts, it prompts the user via `onBrokenResponseLimitReached`.
 
 **Identical tool-call streak** (Feature 2): When the LLM repeatedly makes the exact same single tool call (same name and arguments), the service tracks a streak counter. After `hintAfter` repetitions, it injects a non-persisted nudge message. After `hintAfter + maxHints` total repetitions, it prompts the user via `onIdenticalToolCallLimitReached` or throws an error.
+
+**Parallel duplicate tool-call dedup**: When a single LLM response contains multiple parallel calls with the same name and arguments (a degenerate loop that spews a massive batch of identical calls), the service collapses each duplicate group down to its first occurrence before processing. One `notice` is emitted per collapsed group. Dedup is semantically lossless — one call does what N would.
 
 **Assistant text before tool calls** (Feature 3): When an LLM response includes both text and tool calls, the `assistantMessage` and `assistantMessageComplete` events are emitted before the `toolCallBatch` event, so the TUI can show the text immediately.
 
@@ -183,7 +188,7 @@ Config cascades: **Default → User → Project** (last-write-wins per key, exce
 
 Config files live in `.drone-agent/config.json` at each scope. The config loader (`runtime/config.ts`) walks up the directory tree looking for `.drone-agent/` directories.
 
-Key config sections: `enabledPlugins`, `systemPrompt`, `activePersona`, `providers` (user-defined LLM providers; banned at project scope), `llm` (active selection + reasoning), legacy `ollama`/`openai`/`anthropic`/`openrouter` (migration window only — migrated into `providers` and persisted to the file on first load), `session`, `lsp`, `mcp`, `compaction`, `memory`, `log`, `promptFile`, `swarm`.
+Key config sections: `enabledPlugins`, `systemPrompt`, `activePersona`, `providers` (user-defined LLM providers; banned at project scope), `llm` (active selection + reasoning), legacy `ollama`/`openai`/`anthropic`/`openrouter` (migration window only — migrated into `providers` and persisted to the file on first load), `session`, `lsp`, `mcp`, `compaction`, `memory`, `log`, `promptFile`, `swarm`, `wakelock`.
 
 → See `docs/agents/provider-model-config.md` for the provider/protocol/model model, parameters, secrets, scopes, and migration.
 

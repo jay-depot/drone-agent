@@ -626,8 +626,8 @@ export function createServerManager(
     }
 
     for (const candidate of selected) {
-      let resolved: ResolvedSpawn | null = null;
-      let installStatus: DroneLspServerState['installStatus'] = 'unused';
+      let resolved: ResolvedSpawn | null;
+      let installStatus: DroneLspServerState['installStatus'];
 
       try {
         resolved = await resolveServerCommand(
@@ -1472,8 +1472,8 @@ export function createServerManager(
       rootPatterns: spec.rootPatterns,
     };
 
-    let resolved: ResolvedSpawn | null = null;
-    let installStatus: DroneLspServerState['installStatus'] = 'unused';
+    let resolved: ResolvedSpawn | null;
+    let installStatus: DroneLspServerState['installStatus'];
 
     try {
       resolved = await resolveServerCommand(

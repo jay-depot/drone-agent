@@ -10,6 +10,7 @@ import {
 } from './coordinator-trust.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
+import type { DroneSwarmFragment } from 'drone-core';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
 import { enqueueOutbox } from './db/index.js';
 
@@ -75,6 +76,7 @@ export interface CoordinatorClient {
   heartbeat(): Promise<void>;
   fetchPersonas(): Promise<Persona[]>;
   fetchSkills(): Promise<Skill[]>;
+  fetchCoordinatorFragments(): Promise<DroneSwarmFragment[]>;
 
   // Session management
   registerSession(agentId: string, personaId: string | null): Promise<void>;
@@ -138,25 +140,25 @@ export interface CoordinatorClient {
   // Session pipeline
   getSessions(
     query: Record<string, string>
-  ): Promise<{ sessions: any[]; count: number }>;
-  getSessionLog(sessionId: string): Promise<any>;
+  ): Promise<{ sessions: unknown[]; count: number }>;
+  getSessionLog(sessionId: string): Promise<unknown>;
   getSessionTranscript(sessionId: string): Promise<{
-    session: any;
+    session: unknown;
     transcript: string;
   } | null>;
-  processSession(sessionId: string): Promise<any>;
+  processSession(sessionId: string): Promise<unknown>;
   completeSessionProcessing(
     sessionId: string,
     body: { summary?: string; notes?: string }
-  ): Promise<any>;
+  ): Promise<unknown>;
 
   // Coordinator proxy tools (beacon proxies for the agent)
-  listBeacons(): Promise<any[]>;
-  listAgentLocations(beaconId?: string): Promise<any[]>;
-  spawnSpawn(body: Record<string, unknown>): Promise<any>;
-  getSpawn(beaconId: string, spawnId: string): Promise<any>;
-  listSpawns(beaconId: string, status?: string): Promise<any[]>;
-  terminateSpawn(beaconId: string, spawnId: string): Promise<any>;
+  listBeacons(): Promise<unknown[]>;
+  listAgentLocations(beaconId?: string): Promise<unknown[]>;
+  spawnSpawn(body: Record<string, unknown>): Promise<unknown>;
+  getSpawn(beaconId: string, spawnId: string): Promise<unknown>;
+  listSpawns(beaconId: string, status?: string): Promise<unknown[]>;
+  terminateSpawn(beaconId: string, spawnId: string): Promise<unknown>;
 }
 
 export interface SessionInfo {
@@ -453,6 +455,24 @@ export function createCoordinatorClient(
       return skills.map(s => ({ ...s, scope: 'coordinator' as const }));
     },
 
+    async fetchCoordinatorFragments(): Promise<DroneSwarmFragment[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
+      const res = await cfetch(`${baseUrl}/api/fragments`);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch fragments: ${res.status}`);
+      }
+      const data = (await res.json()) as unknown;
+      const payload = data as { fragments?: DroneSwarmFragment[] };
+      const fragments = Array.isArray(payload) ? payload : payload.fragments;
+      if (!Array.isArray(fragments)) {
+        throw new Error('Malformed fragments response from coordinator');
+      }
+      // Normalize scope; coordinator rows are implicitly coordinator-scoped.
+      return fragments.map(f => ({ ...f, scope: 'coordinator' as const }));
+    },
+
     // Session management
     async registerSession(
       agentId: string,
@@ -618,7 +638,7 @@ export function createCoordinatorClient(
         if (!res.ok) {
           const error = await res.json();
           logger.warn(
-            `Failed to relay message: ${res.status} - ${(error as any).error}`
+            `Failed to relay message: ${res.status} - ${(error as { error?: string }).error}`
           );
           return { success: false };
         }
@@ -1004,7 +1024,7 @@ export function createCoordinatorClient(
 
     async getSessions(
       query: Record<string, string>
-    ): Promise<{ sessions: any[]; count: number }> {
+    ): Promise<{ sessions: unknown[]; count: number }> {
       if (!coordinatorTrusted()) {
         return { sessions: [], count: 0 };
       }
@@ -1015,14 +1035,14 @@ export function createCoordinatorClient(
           logger.warn(`Failed to get sessions: ${res.status}`);
           return { sessions: [], count: 0 };
         }
-        return (await res.json()) as { sessions: any[]; count: number };
+        return (await res.json()) as { sessions: unknown[]; count: number };
       } catch (err) {
         logger.warn(`Failed to get sessions: ${err}`);
         return { sessions: [], count: 0 };
       }
     },
 
-    async getSessionLog(sessionId: string): Promise<any> {
+    async getSessionLog(sessionId: string): Promise<unknown> {
       if (!coordinatorTrusted()) {
         return null;
       }
@@ -1040,7 +1060,7 @@ export function createCoordinatorClient(
     },
 
     async getSessionTranscript(sessionId: string): Promise<{
-      session: any;
+      session: unknown;
       transcript: string;
     } | null> {
       if (!coordinatorTrusted()) {
@@ -1054,14 +1074,14 @@ export function createCoordinatorClient(
           logger.warn(`Failed to get session transcript: ${res.status}`);
           return null;
         }
-        return (await res.json()) as { session: any; transcript: string };
+        return (await res.json()) as { session: unknown; transcript: string };
       } catch (err) {
         logger.warn(`Failed to get session transcript: ${err}`);
         return null;
       }
     },
 
-    async processSession(sessionId: string): Promise<any> {
+    async processSession(sessionId: string): Promise<unknown> {
       if (!coordinatorTrusted()) {
         return null;
       }
@@ -1086,7 +1106,7 @@ export function createCoordinatorClient(
     async completeSessionProcessing(
       sessionId: string,
       body: { summary?: string; notes?: string }
-    ): Promise<any> {
+    ): Promise<unknown> {
       if (!coordinatorTrusted()) {
         return null;
       }
@@ -1110,7 +1130,7 @@ export function createCoordinatorClient(
       }
     },
 
-    async listBeacons(): Promise<any[]> {
+    async listBeacons(): Promise<unknown[]> {
       if (!coordinatorTrusted()) {
         return [];
       }
@@ -1120,14 +1140,14 @@ export function createCoordinatorClient(
           logger.warn(`Failed to list beacons: ${res.status}`);
           return [];
         }
-        return (await res.json()) as any[];
+        return (await res.json()) as unknown[];
       } catch (err) {
         logger.warn(`Failed to list beacons: ${err}`);
         return [];
       }
     },
 
-    async listAgentLocations(beaconId?: string): Promise<any[]> {
+    async listAgentLocations(beaconId?: string): Promise<unknown[]> {
       if (!coordinatorTrusted()) {
         return [];
       }
@@ -1140,14 +1160,14 @@ export function createCoordinatorClient(
           logger.warn(`Failed to list agent locations: ${res.status}`);
           return [];
         }
-        return (await res.json()) as any[];
+        return (await res.json()) as unknown[];
       } catch (err) {
         logger.warn(`Failed to list agent locations: ${err}`);
         return [];
       }
     },
 
-    async spawnSpawn(body: Record<string, unknown>): Promise<any> {
+    async spawnSpawn(body: Record<string, unknown>): Promise<unknown> {
       if (!coordinatorTrusted()) {
         return null;
       }
@@ -1168,7 +1188,7 @@ export function createCoordinatorClient(
       }
     },
 
-    async getSpawn(beaconId: string, spawnId: string): Promise<any> {
+    async getSpawn(beaconId: string, spawnId: string): Promise<unknown> {
       if (!coordinatorTrusted()) {
         return null;
       }
@@ -1187,7 +1207,7 @@ export function createCoordinatorClient(
       }
     },
 
-    async listSpawns(beaconId: string, status?: string): Promise<any[]> {
+    async listSpawns(beaconId: string, status?: string): Promise<unknown[]> {
       if (!coordinatorTrusted()) {
         return [];
       }
@@ -1200,14 +1220,14 @@ export function createCoordinatorClient(
           logger.warn(`Failed to list spawns: ${res.status}`);
           return [];
         }
-        return (await res.json()) as any[];
+        return (await res.json()) as unknown[];
       } catch (err) {
         logger.warn(`Failed to list spawns: ${err}`);
         return [];
       }
     },
 
-    async terminateSpawn(beaconId: string, spawnId: string): Promise<any> {
+    async terminateSpawn(beaconId: string, spawnId: string): Promise<unknown> {
       if (!coordinatorTrusted()) {
         return null;
       }

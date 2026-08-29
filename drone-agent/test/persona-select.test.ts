@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDefaultAgentConfig,
+  toToolResultContent,
   type DronePersonaProvider,
 } from 'drone-core';
 import { createDronePluginEngine } from '../src/runtime/plugin-engine.js';
@@ -75,7 +76,7 @@ describe('persona.select tool — graceful error handling', () => {
 
     // Try selecting a typo'd persona
     const result = await engine.executeTool('persona__select', { id: 'plna' });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
 
     expect(parsed.error).toBe(true);
     expect(parsed.message).toContain('Unknown persona "plna"');
@@ -106,7 +107,7 @@ describe('persona.select tool — graceful error handling', () => {
     await reloadCap!.reloadPersonas();
 
     const result = await engine.executeTool('persona__select', { id: 'coder' });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
 
     expect(parsed.error).toBeUndefined();
     expect(parsed.activePersona).toBe('coder');
@@ -127,7 +128,7 @@ describe('persona.select tool — graceful error handling', () => {
     const result = await engine.executeTool('persona__select', {
       id: 'anything',
     });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
 
     expect(parsed.error).toBe(true);
     expect(parsed.message).toContain('(none)');

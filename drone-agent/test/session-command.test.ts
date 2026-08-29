@@ -40,7 +40,13 @@ function makeLlm(
   };
   return {
     getActiveProvider: () => provider,
+    resolveModelForRole: () => ({
+      provider,
+      providerId: 'test',
+      model: 'model-x',
+    }),
     registerDriver: () => {},
+    describeImages: async images => images,
     getActiveProviderId: () => 'test',
     getAvailableProviders: () => [],
     activateProvider: () => {},

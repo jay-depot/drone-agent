@@ -1,0 +1,4 @@
+#! /work-on Set the agent's focus and next user message to the same value and start working.
+/todo clear all
+/focus set $$
+$$

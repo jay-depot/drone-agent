@@ -398,6 +398,13 @@ describe('terminalPlugin', () => {
             reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },
             identicalToolCalls: { hintAfter: 2, maxHints: 3 },
           },
+          retry: {
+            maxRetries: 3,
+            maxWaitMs: 30000,
+            promptOnError: true,
+            backoffBaseMs: 1000,
+            backoffFactor: 2,
+          },
         },
         lsp: {
           enabled: false,
@@ -430,6 +437,7 @@ describe('terminalPlugin', () => {
           nudgeMarginPercent: 10,
         },
         memory: { enabled: false },
+        wakelock: { enabled: false },
         log: { enabled: false },
         terminal: {
           enabled: true,
