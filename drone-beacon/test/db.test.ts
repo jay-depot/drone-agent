@@ -996,7 +996,10 @@ describe('Beacon Fragment CRUD', () => {
         expiresAt: now - 500,
       });
       const deleted = deleteExpiredFragments(now);
-      expect(deleted.map(f => f.id).sort()).toEqual(['expired', 'expired-broadcast']);
+      expect(deleted.map(f => f.id).sort()).toEqual([
+        'expired',
+        'expired-broadcast',
+      ]);
       expect(listFragments().map(f => f.id)).toEqual(['live']);
     } finally {
       vi.useRealTimers();
@@ -1029,9 +1032,9 @@ describe('Beacon Fragment CRUD', () => {
         expiresAt: null,
       },
     ]);
-    expect(
-      listFragments({ scope: 'coordinator' }).map(f => f.id)
-    ).toEqual(['shared']);
+    expect(listFragments({ scope: 'coordinator' }).map(f => f.id)).toEqual([
+      'shared',
+    ]);
     const merged = listMergedForAgent('agent-1');
     const shared = merged.find(f => f.id === 'shared');
     expect(shared?.content).toBe('coordinator version');
@@ -1106,7 +1109,9 @@ describe('validateFragmentUpsert', () => {
       if (result.ok) {
         expect(result.normalized.phase).toBe('header');
         expect(result.normalized.scope).toBe('local');
-        expect(result.normalized.expiresAt).toBe(1_000_000 + 24 * 60 * 60 * 1000);
+        expect(result.normalized.expiresAt).toBe(
+          1_000_000 + 24 * 60 * 60 * 1000
+        );
       }
     } finally {
       vi.useRealTimers();
@@ -1125,13 +1130,33 @@ describe('validateFragmentUpsert', () => {
   });
 
   it('rejects bad ids, missing target/content, bad phases, bad expiresAt, oversize content', () => {
-    expect(validateFragmentUpsert({ id: 'bad id', target: 'a', content: 'c' }, ctx).ok).toBe(false);
-    expect(validateFragmentUpsert({ id: 'ok', target: '', content: 'c' }, ctx).ok).toBe(false);
-    expect(validateFragmentUpsert({ id: 'ok', target: 'a', content: '' }, ctx).ok).toBe(false);
-    expect(validateFragmentUpsert({ id: 'ok', target: 'a', content: 'c', phase: 'middle' }, ctx).ok).toBe(false);
-    expect(validateFragmentUpsert({ id: 'ok', target: 'a', content: 'c', expiresAt: 'soon' }, ctx).ok).toBe(false);
+    expect(
+      validateFragmentUpsert({ id: 'bad id', target: 'a', content: 'c' }, ctx)
+        .ok
+    ).toBe(false);
+    expect(
+      validateFragmentUpsert({ id: 'ok', target: '', content: 'c' }, ctx).ok
+    ).toBe(false);
+    expect(
+      validateFragmentUpsert({ id: 'ok', target: 'a', content: '' }, ctx).ok
+    ).toBe(false);
+    expect(
+      validateFragmentUpsert(
+        { id: 'ok', target: 'a', content: 'c', phase: 'middle' },
+        ctx
+      ).ok
+    ).toBe(false);
+    expect(
+      validateFragmentUpsert(
+        { id: 'ok', target: 'a', content: 'c', expiresAt: 'soon' },
+        ctx
+      ).ok
+    ).toBe(false);
     const big = 'x'.repeat(16 * 1024 + 1);
-    const over = validateFragmentUpsert({ id: 'ok', target: 'a', content: big }, ctx);
+    const over = validateFragmentUpsert(
+      { id: 'ok', target: 'a', content: big },
+      ctx
+    );
     expect(over.ok).toBe(false);
     if (!over.ok) {
       expect(over.code).toBe('limit');

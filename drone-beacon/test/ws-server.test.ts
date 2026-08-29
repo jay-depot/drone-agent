@@ -20,7 +20,6 @@ import {
   startFragmentTtlSweep,
   stopFragmentTtlSweep,
 } from '../src/fragments-sweep.js';
-import type { WebSocket } from '@fastify/websocket';
 
 describe('WebSocket Server - IP Validation', () => {
   it('should identify localhost IPv4', () => {

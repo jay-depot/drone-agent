@@ -248,12 +248,8 @@ describe('swarm plugin fragment registration', () => {
       const plugin = createSwarmPlugin({});
       await plugin.register(registration);
 
-      const headerPrompt = promptFragments.find(
-        f => f.phase === 'header'
-      );
-      const footerPrompt = promptFragments.find(
-        f => f.phase === 'footer'
-      );
+      const headerPrompt = promptFragments.find(f => f.phase === 'header');
+      const footerPrompt = promptFragments.find(f => f.phase === 'footer');
       expect(headerPrompt).toBeDefined();
       expect(footerPrompt).toBeDefined();
       expect(headerPrompt?.key).toBe('fragments.header');

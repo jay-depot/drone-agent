@@ -24,9 +24,9 @@ interface FragmentWsMessage {
 }
 
 function emitNotice(ctx: SwarmContext, content: string): void {
-  const runtime = ctx.registration.request<{ emitEvent?: (event: DroneConversationEvent) => void }>(
-    '_runtime'
-  );
+  const runtime = ctx.registration.request<{
+    emitEvent?: (event: DroneConversationEvent) => void;
+  }>('_runtime');
   runtime?.emitEvent?.({ kind: 'notice', content });
 }
 

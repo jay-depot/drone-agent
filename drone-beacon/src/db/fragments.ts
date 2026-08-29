@@ -52,7 +52,10 @@ export function upsertFragment(
   return row;
 }
 
-export function getFragment(id: string, target: string): FragmentRow | undefined {
+export function getFragment(
+  id: string,
+  target: string
+): FragmentRow | undefined {
   const stmt = getDatabase().prepare(
     'SELECT * FROM fragments WHERE id = ? AND target = ?'
   );
@@ -60,7 +63,9 @@ export function getFragment(id: string, target: string): FragmentRow | undefined
   return row ? rowToFragment(row) : undefined;
 }
 
-export function listFragments(options: ListFragmentsOptions = {}): FragmentRow[] {
+export function listFragments(
+  options: ListFragmentsOptions = {}
+): FragmentRow[] {
   const clauses: string[] = [];
   const params: (string | number)[] = [];
 
@@ -75,13 +80,17 @@ export function listFragments(options: ListFragmentsOptions = {}): FragmentRow[]
 
   const where = clauses.length > 0 ? ` WHERE ${clauses.join(' AND ')}` : '';
   const stmt = getDatabase().prepare(`SELECT * FROM fragments${where}`);
-  const rows = (params.length > 0
-    ? stmt.all(...params)
-    : stmt.all()) as Record<string, unknown>[];
+  const rows = (params.length > 0 ? stmt.all(...params) : stmt.all()) as Record<
+    string,
+    unknown
+  >[];
   return rows.map(rowToFragment);
 }
 
-export function deleteFragment(id: string, target: string): FragmentRow | undefined {
+export function deleteFragment(
+  id: string,
+  target: string
+): FragmentRow | undefined {
   const existing = getFragment(id, target);
   if (!existing) return undefined;
   const stmt = getDatabase().prepare(
@@ -96,7 +105,9 @@ export function deleteFragment(id: string, target: string): FragmentRow | undefi
  * Delete expired targeted rows. Returns the deleted rows so the caller can
  * push removal notices to connected agents.
  */
-export function deleteExpiredFragments(now: number = Date.now()): FragmentRow[] {
+export function deleteExpiredFragments(
+  now: number = Date.now()
+): FragmentRow[] {
   const stmt = getDatabase().prepare(
     'DELETE FROM fragments WHERE expiresAt IS NOT NULL AND expiresAt <= ?'
   );
@@ -121,7 +132,10 @@ function listExpired(now: number): FragmentRow[] {
  * coordinator's current fragment table as seen by the last sync).
  */
 export function replaceCoordinatorFragments(
-  fragments: Array<Omit<FragmentRow, 'scope' | 'createdAt' | 'updatedAt'> & Partial<Pick<FragmentRow, 'scope'>>>
+  fragments: Array<
+    Omit<FragmentRow, 'scope' | 'createdAt' | 'updatedAt'> &
+      Partial<Pick<FragmentRow, 'scope'>>
+  >
 ): void {
   const db = getDatabase();
   const replace = db.transaction((rows: FragmentRow[]) => {
@@ -159,7 +173,10 @@ function isExpired(fragment: FragmentRow, now: number): boolean {
  * TTL-filtered targeted fragments for one agent plus all broadcasts, with
  * coordinator-scoped rows shadowing local rows of the same id.
  */
-export function listMergedForAgent(agentId: string, now: number = Date.now()): FragmentRow[] {
+export function listMergedForAgent(
+  agentId: string,
+  now: number = Date.now()
+): FragmentRow[] {
   const all = listFragments();
   const live = all.filter(f => !isExpired(f, now));
 
@@ -187,7 +204,5 @@ export function mergedContentHash(): string {
   const sorted = [...merged].sort((a, b) =>
     `${a.id}\u0000${a.target}`.localeCompare(`${b.id}\u0000${b.target}`)
   );
-  return createHash('sha256')
-    .update(JSON.stringify(sorted))
-    .digest('hex');
+  return createHash('sha256').update(JSON.stringify(sorted)).digest('hex');
 }

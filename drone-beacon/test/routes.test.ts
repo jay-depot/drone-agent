@@ -1215,8 +1215,8 @@ describe('Fragment Routes', () => {
       url: '/fragments',
       payload: { id: 'ok', target: 'a', content: 'c', phase: 'middle' },
     });
-    expect(badId.statusCode).toBe(400);
-    expect(JSON.parse(badId.body).code).toBe('validation');
+    expect(badPhase.statusCode).toBe(400);
+    expect(JSON.parse(badPhase.body).code).toBe('validation');
 
     const oversize = await app.inject({
       method: 'POST',

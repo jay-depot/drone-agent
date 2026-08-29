@@ -32,7 +32,9 @@ interface FragmentRow {
 }
 
 describe.skipIf(
-  shouldSkipIntegrationSuite([{ url: BEACON_URL, fallbackUrl: DEFAULT_BEACON_URL }])
+  shouldSkipIntegrationSuite([
+    { url: BEACON_URL, fallbackUrl: DEFAULT_BEACON_URL },
+  ])
 )('Swarm Prompt Fragments (integration)', () => {
   beforeAll(async () => {
     const ready = await waitForService(BEACON_URL);
@@ -80,9 +82,9 @@ describe.skipIf(
       }),
     });
     expect(post.status).toBe(200);
-    const list = (await (
-      await fetch(`${BEACON_URL}/fragments`)
-    ).json()) as { fragments: FragmentRow[] };
+    const list = (await (await fetch(`${BEACON_URL}/fragments`)).json()) as {
+      fragments: FragmentRow[];
+    };
     expect(
       list.fragments.some(
         f => f.id === 'it-fragment-broadcast' && f.target === 'broadcast'
@@ -100,7 +102,8 @@ describe.skipIf(
     const wsUrl = `${BEACON_URL.replace(/^http/, 'ws')}/ws?agentId=${TEST_AGENT}`;
     const ws = new WebSocket(wsUrl);
 
-    const received: Array<{ type: string; payload: Record<string, unknown> }> = [];
+    const received: Array<{ type: string; payload: Record<string, unknown> }> =
+      [];
     const waiter = { fragmentSync: false, push: false };
     let notify: (() => void) | undefined;
     const signal = () => {
@@ -114,8 +117,8 @@ describe.skipIf(
         setTimeout(() => reject(new Error('timeout waiting for WS frame')), ms);
       });
 
-    ws.on('message', raw => {
-      const msg = JSON.parse(String(raw)) as {
+    ws.addEventListener('message', event => {
+      const msg = JSON.parse(String(event.data)) as {
         type: string;
         payload: Record<string, unknown>;
       };
@@ -130,20 +133,17 @@ describe.skipIf(
       }
     });
 
-    const connected = await new Promise<boolean>((resolve, reject) => {
-      ws.once('open', () => resolve(true));
-      ws.once('error', err => reject(err));
+    await new Promise<void>((resolve, reject) => {
+      ws.addEventListener('open', () => resolve());
+      ws.addEventListener('error', () => reject(new Error('WS connect failed')));
     });
-    expect(connected).toBe(true);
 
     // fragmentSync arrives on connect with the queued targeted row.
     await waitFor(10000);
     const sync = received.find(m => m.type === 'fragmentSync');
     expect(sync).toBeDefined();
     const syncFragments = sync?.payload.fragments as FragmentRow[];
-    expect(
-      syncFragments.some(f => f.id === 'it-fragment-targeted')
-    ).toBe(true);
+    expect(syncFragments.some(f => f.id === 'it-fragment-targeted')).toBe(true);
 
     // Live push on targeted upsert.
     const post = await fetch(`${BEACON_URL}/fragments`, {

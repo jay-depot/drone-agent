@@ -62,23 +62,28 @@ export function validateFragmentUpsert(
   ) {
     return {
       ok: false,
-      error:
-        'Fragment id is required and must match ^[a-zA-Z0-9:_-]+$',
+      error: 'Fragment id is required and must match ^[a-zA-Z0-9:_-]+$',
       code: 'validation',
     };
   }
 
   if (typeof raw.target !== 'string' || raw.target.length === 0) {
-    return { ok: false, error: 'Fragment target is required', code: 'validation' };
+    return {
+      ok: false,
+      error: 'Fragment target is required',
+      code: 'validation',
+    };
   }
 
   if (typeof raw.content !== 'string' || raw.content.length === 0) {
-    return { ok: false, error: 'Fragment content is required', code: 'validation' };
+    return {
+      ok: false,
+      error: 'Fragment content is required',
+      code: 'validation',
+    };
   }
 
-  if (
-    Buffer.byteLength(raw.content, 'utf8') > MAX_FRAGMENT_CONTENT_BYTES
-  ) {
+  if (Buffer.byteLength(raw.content, 'utf8') > MAX_FRAGMENT_CONTENT_BYTES) {
     return {
       ok: false,
       error: `Fragment content exceeds ${MAX_FRAGMENT_CONTENT_BYTES} bytes`,

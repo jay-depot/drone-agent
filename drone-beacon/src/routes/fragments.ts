@@ -45,10 +45,8 @@ export default function fragmentRoutes(app: FastifyInstance) {
   // unknown agentIds)
   app.post<{ Body: unknown }>('/fragments', async (request, reply) => {
     const result = validateFragmentUpsert(request.body, {
-      countBroadcasts: () =>
-        db.listFragments({ target: 'broadcast' }).length,
-      countTargetedForAgent: target =>
-        db.listFragments({ target }).length,
+      countBroadcasts: () => db.listFragments({ target: 'broadcast' }).length,
+      countTargetedForAgent: target => db.listFragments({ target }).length,
     });
 
     if (!result.ok) {

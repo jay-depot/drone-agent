@@ -14,6 +14,7 @@ updated: 2026-08-29T15:20:19.959Z
 Feature: beacon + coordinator push system prompt fragments to specific sessions (targeted) or broadcast to all sessions.
 
 ## Verified architecture facts (with paths)
+
 - `DronePromptFragment` drone-core/src/plugin-system.ts:41-44 `{ key, phase:'header'|'footer', render:()=>Promise<string|false> }`; registered plugin-engine.ts:512-521 (`<pluginId>.<key>` unique); re-rendered EVERY round via engine.renderPromptFragments() (plugin-engine.ts:868-876); false/empty filtered out.
 - System prompt assembly per round: createContextBudgetService (runtime/context-budget-service.ts:140-157) = [config.systemPrompt, runtimeFlags.render()?, ...fragment messages]; conversation-service.ts:380 + :829 rebuild each round.
 - RuntimeFlagRegistry (drone-core/runtime-flags.ts) = flat KV; SystemReminderQueue (runtime/system-reminders.ts) = 8-max one-shot non-persisted. Both wrong for standing content.
@@ -29,6 +30,7 @@ Feature: beacon + coordinator push system prompt fragments to specific sessions 
 - Project standards: fragments need top-level `# Heading`; LSP sạch + pnpm lint + pnpm -r build + pnpm test; swarm integration tests run only in provisioned Docker swarm.
 
 ## Locked decisions (user-confirmed)
+
 1. **Authoring/asset model**: stored addressed DB asset (not fire-and-forget). Operator-first via REST + CLI; agent-tool + pipeline authors work "by construction" later. RAG = future consumer; programmatic path must genuinely work.
 2. **Set semantics**: caller-chosen stable id upsert (idempotent replace) + TTL backstop. No replacements-sets/generations in v1.
 3. **Agent injection**: swarm plugin registers TWO seed fragments `swarm.fragments.header`/`.footer` (phase header/footer), render() reads in-memory Map, returns false when empty. Freshness = beacon WS push (`fragment` msg type) + full resync on WS connect (GET /fragments?target=<agentId> + current broadcast set). No network in render().
@@ -39,6 +41,7 @@ Feature: beacon + coordinator push system prompt fragments to specific sessions 
 8. **Observability**: reuse `notice` event kind on fragment add/remove/update (no new event kind/theme work). /systemprompt already exposes content.
 
 ## Plan-level implementation choices I (planner) will make unless pushed back
+
 - render format: header block under `# Swarm Fragments`, footer block under `# Swarm Directives`; per-fragment bodies joined blank-line separated (ids not injected into prompt in v1... revisit in plan).
 - Beacon `fragments` table + db/fragments.ts; WS msg type `fragment` on beacon ws-server; resync delivery on WS connect; sync loop extension for coordinator-scoped mirror; CLI group `drone-swarm fragments`.
 - Tests: unit (db + routes + ws + agent render/resync) in existing suites (coordinator-sync pattern for integration in Docker swarm).

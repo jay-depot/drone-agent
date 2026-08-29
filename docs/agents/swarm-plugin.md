@@ -93,14 +93,14 @@ updated idempotently, and deleted.
 
 A fragment row is `{ id, target, content, phase, scope, createdAt, updatedAt, expiresAt }`:
 
-| Field | Meaning |
-| ----- | ------- |
-| `id` | Caller-chosen stable id (`^[a-zA-Z0-9:_-]+$`). Upserting the same `(id, target)` replaces content. |
-| `target` | An `agentId` (a session id; unknown ids are accepted and queued) or the reserved sentinel `broadcast` (all sessions). |
-| `content` | Prompt text. Re-sent to the LLM verbatim under the heading below. |
-| `phase` | `header` (default) or `footer` — which prompt seam it renders into. |
-| `scope` | `local` (beacon-authored) or `coordinator` (mirrored from coordinator). Coordinator-scoped rows **shadow** beacon-scoped rows with the same id. |
-| `expiresAt` | Epoch ms expiry, or null. Targeted fragments default to now + 24h; broadcasts never expire by default. |
+| Field       | Meaning                                                                                                                                         |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`        | Caller-chosen stable id (`^[a-zA-Z0-9:_-]+$`). Upserting the same `(id, target)` replaces content.                                              |
+| `target`    | An `agentId` (a session id; unknown ids are accepted and queued) or the reserved sentinel `broadcast` (all sessions).                           |
+| `content`   | Prompt text. Re-sent to the LLM verbatim under the heading below.                                                                               |
+| `phase`     | `header` (default) or `footer` — which prompt seam it renders into.                                                                             |
+| `scope`     | `local` (beacon-authored) or `coordinator` (mirrored from coordinator). Coordinator-scoped rows **shadow** beacon-scoped rows with the same id. |
+| `expiresAt` | Epoch ms expiry, or null. Targeted fragments default to now + 24h; broadcasts never expire by default.                                          |
 
 The primary key is `(id, target)`: the same id can exist as a targeted row and a
 broadcast simultaneously. `POST /agents` rejects registering an agentId of
@@ -139,13 +139,13 @@ render after all other plugin fragments.
 
 ### Limits (provisional constants)
 
-| Limit | Value |
-| ----- | ----- |
-| Max broadcast fragments per beacon | 5 |
-| Max targeted fragments per agent | 50 |
-| Max content size | 16 KB |
-| Default targeted TTL | 24h (implicit `expiresAt`) |
-| TTL sweep interval | 60s |
+| Limit                              | Value                      |
+| ---------------------------------- | -------------------------- |
+| Max broadcast fragments per beacon | 5                          |
+| Max targeted fragments per agent   | 50                         |
+| Max content size                   | 16 KB                      |
+| Default targeted TTL               | 24h (implicit `expiresAt`) |
+| TTL sweep interval                 | 60s                        |
 
 ### CLI usage
 

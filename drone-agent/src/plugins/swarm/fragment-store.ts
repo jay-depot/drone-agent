@@ -10,7 +10,10 @@
 
 import type { DroneSwarmFragment } from 'drone-core';
 
-type StoredFragment = Pick<DroneSwarmFragment, 'id' | 'target' | 'content' | 'phase'>;
+type StoredFragment = Pick<
+  DroneSwarmFragment,
+  'id' | 'target' | 'content' | 'phase'
+>;
 
 export type FragmentApplyResult = 'added' | 'updated' | 'unchanged';
 
@@ -25,7 +28,9 @@ export interface SwarmFragmentStore {
   size(): number;
 }
 
-function fragmentKey(fragment: Pick<DroneSwarmFragment, 'id' | 'target'>): string {
+function fragmentKey(
+  fragment: Pick<DroneSwarmFragment, 'id' | 'target'>
+): string {
   return `${fragment.target}\u0000${fragment.id}`;
 }
 
@@ -41,13 +46,22 @@ function renderBucket(
   return `# ${heading}\n\n${blocks.join('\n\n')}`;
 }
 
-function renderAll(map: Map<string, StoredFragment>): { header: string; footer: string } {
+function renderAll(map: Map<string, StoredFragment>): {
+  header: string;
+  footer: string;
+} {
   const values = Array.from(map.values());
   return {
     header:
-      renderBucket('Swarm Fragments', values.filter(f => f.phase === 'header')) || '',
+      renderBucket(
+        'Swarm Fragments',
+        values.filter(f => f.phase === 'header')
+      ) || '',
     footer:
-      renderBucket('Swarm Directives', values.filter(f => f.phase === 'footer')) || '',
+      renderBucket(
+        'Swarm Directives',
+        values.filter(f => f.phase === 'footer')
+      ) || '',
   };
 }
 
@@ -58,7 +72,11 @@ export function createSwarmFragmentStore(): SwarmFragmentStore {
     applySet(fragment) {
       const key = fragmentKey(fragment);
       const existing = fragments.get(key);
-      if (existing && existing.content === fragment.content && existing.phase === fragment.phase) {
+      if (
+        existing &&
+        existing.content === fragment.content &&
+        existing.phase === fragment.phase
+      ) {
         return 'unchanged';
       }
       fragments.set(key, {
@@ -94,11 +112,17 @@ export function createSwarmFragmentStore(): SwarmFragmentStore {
     },
 
     renderHeader() {
-      return renderBucket('Swarm Fragments', Array.from(fragments.values()).filter(f => f.phase === 'header'));
+      return renderBucket(
+        'Swarm Fragments',
+        Array.from(fragments.values()).filter(f => f.phase === 'header')
+      );
     },
 
     renderFooter() {
-      return renderBucket('Swarm Directives', Array.from(fragments.values()).filter(f => f.phase === 'footer'));
+      return renderBucket(
+        'Swarm Directives',
+        Array.from(fragments.values()).filter(f => f.phase === 'footer')
+      );
     },
 
     size() {

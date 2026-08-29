@@ -183,7 +183,7 @@ export class SwarmClient {
       throw new ApiError(
         400,
         'fragment authoring requires --beacon (coordinator authoring arrives with the persistent-WS rework)'
-      )
+      );
     }
     const params = new URLSearchParams();
     if (target) {

@@ -37,7 +37,7 @@ describe('GET /api/fragments', () => {
       id: 'f1',
       target: 'broadcast',
       scope: 'coordinator',
-  });
+    });
   });
 
   it('filters by target query parameter', async () => {

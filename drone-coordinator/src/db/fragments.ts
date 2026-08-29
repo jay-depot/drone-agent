@@ -23,7 +23,9 @@ function rowToFragment(row: Record<string, unknown>): CoordinatorFragmentRow {
  * v1 serves rows read-only via GET /api/fragments and the beacon mirror
  * pull.
  */
-export function upsertFragment(fragment: DroneSwarmFragment): DroneSwarmFragment {
+export function upsertFragment(
+  fragment: DroneSwarmFragment
+): DroneSwarmFragment {
   const stmt = getDatabase().prepare(`
     INSERT INTO fragments (id, target, content, phase, scope, createdAt, updatedAt, expiresAt)
     VALUES (@id, @target, @content, @phase, @scope, @createdAt, @updatedAt, @expiresAt)
@@ -51,7 +53,9 @@ export function getFragment(
   return row ? rowToFragment(row) : undefined;
 }
 
-export function listFragments(options: { target?: string } = {}): DroneSwarmFragment[] {
+export function listFragments(
+  options: { target?: string } = {}
+): DroneSwarmFragment[] {
   const clauses: string[] = [];
   const params: (string | number)[] = [];
 
@@ -62,9 +66,10 @@ export function listFragments(options: { target?: string } = {}): DroneSwarmFrag
 
   const where = clauses.length > 0 ? ` WHERE ${clauses.join(' AND ')}` : '';
   const stmt = getDatabase().prepare(`SELECT * FROM fragments${where}`);
-  const rows = (params.length > 0
-    ? stmt.all(...params)
-    : stmt.all()) as Record<string, unknown>[];
+  const rows = (params.length > 0 ? stmt.all(...params) : stmt.all()) as Record<
+    string,
+    unknown
+  >[];
   return rows.map(rowToFragment);
 }
 
