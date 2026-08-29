@@ -1,0 +1,8 @@
+{
+  "sessionEnd": {
+    "type": "spawn",
+    "persona": "e2e-reverse-agent",
+    "beaconId": "beacon-teste2e"
+  },
+  "autoApproveBeacons": true
+}

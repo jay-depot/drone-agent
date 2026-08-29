@@ -20,6 +20,7 @@ export interface ServerConfigFile {
   webHost?: string;
   dbPath?: string;
   useHttps?: boolean;
+  autoApproveBeacons?: boolean;
   sessionEnd?: SessionEndTrigger;
   [key: string]: unknown;
 }
@@ -31,6 +32,7 @@ const ALLOWED_KEYS: ReadonlySet<string> = new Set([
   'webHost',
   'dbPath',
   'useHttps',
+  'autoApproveBeacons',
   'sessionEnd',
 ]);
 
@@ -114,6 +116,12 @@ export function validateConfigFile(value: unknown): string[] {
   }
   if (value.useHttps !== undefined && typeof value.useHttps !== 'boolean') {
     errors.push('"useHttps" must be a boolean');
+  }
+  if (
+    value.autoApproveBeacons !== undefined &&
+    typeof value.autoApproveBeacons !== 'boolean'
+  ) {
+    errors.push('"autoApproveBeacons" must be a boolean');
   }
   if (value.sessionEnd !== undefined) {
     validateSessionEnd(value.sessionEnd, errors);

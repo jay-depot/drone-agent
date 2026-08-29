@@ -50,6 +50,7 @@ import { createWebAuthMiddleware, isLocalRequest } from './web-auth.js';
 import { createMtlsMiddleware } from './mtls.js';
 import { registerBeaconWebSocket } from './beacon-ws.js';
 import { configureSessionEndHook } from './session-end.js';
+import { setAutoApproveBeacons } from './auto-approve.js';
 
 const DEFAULT_PORT = 3456;
 const DEFAULT_HOST = '0.0.0.0';
@@ -74,6 +75,7 @@ interface Config {
   rateLimitMax: number;
   rateLimitWindowMs: number;
   sessionEnd?: SessionEndTrigger;
+  autoApproveBeacons?: boolean;
   command:
     | 'serve'
     | 'approve-beacon'
@@ -174,6 +176,9 @@ async function parseArgs(): Promise<Config> {
     config.dbPath = (merged.dbPath as string) ?? config.dbPath;
     if (merged.sessionEnd !== undefined) {
       config.sessionEnd = merged.sessionEnd as SessionEndTrigger;
+    }
+    if (merged.autoApproveBeacons !== undefined) {
+      config.autoApproveBeacons = merged.autoApproveBeacons as boolean;
     }
   }
 
@@ -522,6 +527,11 @@ export async function main() {
   if (config.command === 'show-fingerprint') {
     await handleShowFingerprint(config);
     return;
+  }
+
+  if (config.autoApproveBeacons) {
+    setAutoApproveBeacons(true);
+    logger.info('Beacon auto-approval enabled (test/integration mode)');
   }
 
   if (config.sessionEnd) {
