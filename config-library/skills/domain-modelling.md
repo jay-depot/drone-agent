@@ -11,7 +11,7 @@ remark: 'All credit to Matt Pocock. I just ported it.'
 
 # Domain Modeling
 
-Actively build and sharpen the project's domain model as you design. This is the *active* discipline — challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely *reading* `CONTEXT.md` for vocabulary is not this skill — that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
+Actively build and sharpen the project's domain model as you design. This is the _active_ discipline — challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely _reading_ `CONTEXT.md` for vocabulary is not this skill — that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
 
 ## File structure
 
@@ -79,7 +79,6 @@ Only offer to create an ADR when all three are true:
 
 If any of the three is missing, skip the ADR. Use the format specified under "ADR Format"
 
-
 # ADR Format
 
 ADRs live in `docs/adr/` and use sequential numbering: `0001-slug.md`, `0002-slug.md`, etc.
@@ -94,7 +93,7 @@ Create the `docs/adr/` directory lazily — only when the first ADR is needed.
 {1-3 sentences: what's the context, what did we decide, and why.}
 ```
 
-That's it. An ADR can be a single paragraph. The value is in recording *that* a decision was made and *why* — not in filling out sections.
+That's it. An ADR can be a single paragraph. The value is in recording _that_ a decision was made and _why_ — not in filling out sections.
 
 ## Optional sections
 
@@ -127,7 +126,6 @@ If a decision is easy to reverse, skip it — you'll just reverse it. If it's no
 - **Deliberate deviations from the obvious path.** "We're using manual SQL instead of an ORM because X." Anything where a reasonable reader would assume the opposite. These stop the next engineer from "fixing" something that was deliberate.
 - **Constraints not visible in the code.** "We can't use AWS because of compliance requirements." "Response times must be under 200ms because of the partner API contract."
 - **Rejected alternatives when the rejection is non-obvious.** If you considered GraphQL and picked REST for subtle reasons, record it — otherwise someone will suggest GraphQL again in six months.
-
 
 # CONTEXT.md Format
 
@@ -189,4 +187,3 @@ The skill infers which structure applies:
 - If neither exists, create a root `CONTEXT.md` lazily when the first term is resolved
 
 When multiple contexts exist, infer which one the current topic relates to. If unclear, ask.
-

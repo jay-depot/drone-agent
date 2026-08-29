@@ -5,6 +5,7 @@ recall:
   - you need to interact with information in an obsidian vault
 model-invocation: true
 ---
+
 # Obsidian-vault
 
 ## Overview
@@ -25,13 +26,13 @@ Obsidian uses **wikilinks** (double-bracket syntax) as its primary internal link
 
 #### Basic Wikilink Syntax
 
-| Syntax | Description | Example |
-|--------|-------------|---------|
-| `[[Note Name]]` | Link to a note by filename (no extension needed) | `[[Project Alpha]]` |
-| `[[Note Name\|Display Text]]` | Link with custom display text (pipe syntax) | `[[Atomic Habits\|James Clear – Atomic Habits]]` |
-| `[[Note Name#Heading]]` | Link to a specific heading within a note | `[[Project Alpha#Timeline]]` |
-| `[[Note Name#^block-id]]` | Link to a specific block (paragraph, list item, quote) | `[[Note^my-block]]` |
-| `[[Note Name#Heading\|Display]]` | Combined: heading + custom display | `[[Project Alpha#Timeline\|View Timeline]]` |
+| Syntax                           | Description                                            | Example                                          |
+| -------------------------------- | ------------------------------------------------------ | ------------------------------------------------ |
+| `[[Note Name]]`                  | Link to a note by filename (no extension needed)       | `[[Project Alpha]]`                              |
+| `[[Note Name\|Display Text]]`    | Link with custom display text (pipe syntax)            | `[[Atomic Habits\|James Clear – Atomic Habits]]` |
+| `[[Note Name#Heading]]`          | Link to a specific heading within a note               | `[[Project Alpha#Timeline]]`                     |
+| `[[Note Name#^block-id]]`        | Link to a specific block (paragraph, list item, quote) | `[[Note^my-block]]`                              |
+| `[[Note Name#Heading\|Display]]` | Combined: heading + custom display                     | `[[Project Alpha#Timeline\|View Timeline]]`      |
 
 #### How to Follow Links
 
@@ -44,12 +45,12 @@ Obsidian uses **wikilinks** (double-bracket syntax) as its primary internal link
 
 #### Wikilinks vs. Markdown Links
 
-| Feature | Wikilink `[[...]]` | Markdown `[text](url)` |
-|---------|-------------------|----------------------|
-| Primary use | Internal vault notes | External URLs |
-| Refactoring | Automatic (Obsidian tracks renames) | Manual updates required |
-| Anchors | Supports headings and blocks | Supports headings (standard) |
-| Interoperability | Obsidian-only | Works in any markdown viewer |
+| Feature          | Wikilink `[[...]]`                  | Markdown `[text](url)`       |
+| ---------------- | ----------------------------------- | ---------------------------- |
+| Primary use      | Internal vault notes                | External URLs                |
+| Refactoring      | Automatic (Obsidian tracks renames) | Manual updates required      |
+| Anchors          | Supports headings and blocks        | Supports headings (standard) |
+| Interoperability | Obsidian-only                       | Works in any markdown viewer |
 
 #### Aliases
 
@@ -86,6 +87,7 @@ status: draft
 ```
 
 Common frontmatter fields:
+
 - `tags` — cross-cutting labels (can also use inline `#tag` in the body)
 - `aliases` — alternate names for wikilink resolution
 - `created` / `modified` — timestamps
@@ -104,6 +106,7 @@ Tags are used for cross-cutting organization — they answer "what is this about
 Obsidian vaults can be organized in many ways. The most common approaches:
 
 #### PARA Method (Tiago Forte)
+
 ```
 📁 1 - Projects      ← Active work with deadlines
 📁 2 - Areas         ← Ongoing responsibilities (health, finance, etc.)
@@ -113,6 +116,7 @@ Obsidian vaults can be organized in many ways. The most common approaches:
 ```
 
 #### Zettelkasten (for researchers/writers)
+
 ```
 📁 00 - Inbox              ← Unprocessed notes
 📁 10 - Literature Notes   ← Summaries of what you read
@@ -122,6 +126,7 @@ Obsidian vaults can be organized in many ways. The most common approaches:
 ```
 
 #### Recommended Hybrid
+
 ```
 📁 00 - Inbox        ← Capture everything here first
 📁 01 - Projects     ← Active work with deadlines
@@ -139,23 +144,27 @@ Obsidian vaults can be organized in many ways. The most common approaches:
 ### 6. Maintenance Best Practices
 
 #### Regular Tasks
+
 - **Process the inbox weekly**: File, link, or delete each note in the inbox folder.
 - **Review backlinks**: Check the backlinks of hub notes to discover forgotten connections.
 - **Prune dead links**: Notes that link to non-existent files (shown in red in Obsidian) should either be created or the link removed.
 - **Check for orphans**: Notes with no incoming links may need to be connected or archived.
 
 #### Naming Conventions
+
 - Use descriptive filenames: `Project Alpha - Q2 Review.md` not `Note1.md`
 - Avoid problematic characters: `# ^ | : %` (they have special meaning in Obsidian syntax)
 - Use date prefixes for time-based notes: `2026-06-28 Daily Log.md`
 - Keep filenames short enough to type in `[[wikilinks]]` but descriptive enough to identify
 
 #### Settings to Verify
+
 - **Automatically update internal links**: Enable in Settings → Files & Links. This keeps wikilinks valid when files are renamed or moved.
 - **New link format**: Wikilink (default) or Markdown. Use Markdown if syncing with GitHub or publishing to static sites.
 - **Default attachment folder**: Set to `Attachments/` or `06 - Attachments/` to keep media organized.
 
 #### Vault Health Checks
+
 - Run `file.glob` with `**/*.md` to list all notes and check for naming consistency.
 - Use `search.text` to find broken wikilinks (patterns like `[[NonExistentNote]]` that don't resolve to any `.md` file).
 - Check for duplicate filenames (Obsidian resolves by filename, so duplicates cause ambiguity).
@@ -166,21 +175,25 @@ Obsidian vaults can be organized in many ways. The most common approaches:
 ### Example 1: Reading and following links in a vault
 
 Given a note `Home.md` containing:
+
 ```markdown
 # Home
 
 Welcome to my vault. Key areas:
+
 - [[Project Alpha]] — the main project
 - [[Health Log]] — fitness tracking
 - See [[Resources#Books]] for reading list
 ```
 
 To follow the link `[[Project Alpha]]`:
+
 1. Extract the target: `Project Alpha`
 2. Find the file: look for `Project Alpha.md` in the vault directory
 3. Read it with `file.read`
 
 To follow `[[Resources#Books]]`:
+
 1. Extract the target note: `Resources`
 2. Extract the heading: `Books`
 3. Read `Resources.md` and search for the `## Books` heading
@@ -188,6 +201,7 @@ To follow `[[Resources#Books]]`:
 ### Example 2: Creating a new linked note
 
 To create a new note and link it from an existing one:
+
 1. Write the new file: `file.write` to `Project Alpha.md`
 2. Add a wikilink in the source note: edit the file to include `[[Project Alpha]]`
 3. Optionally add aliases in the new note's frontmatter for discoverability
@@ -205,5 +219,6 @@ find /path/to/vault -name '*.md'
 ### Example 4: Restructuring without breaking links
 
 When moving or renaming a note:
+
 - Working outside of Obsidian, after renaming a file, search for all `[[OldName]]` patterns and replace them with `[[NewName]]`.
 - Markdown links `[text](path)` are NOT automatically updated — they must be fixed manually.

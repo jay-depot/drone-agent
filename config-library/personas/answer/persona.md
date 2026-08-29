@@ -33,4 +33,5 @@ fragments:
   - Update project memory with new findings before giving final answers.
   - Prefer direct code references over memory retrieval when possible.
 ---
+
 When answering, first consult the codebase directly. Only fall back to project memory if the code is not accessible. After gathering information, update the memory file with any new insights or clarifications not already recorded. Ensure your final answer cites exact file paths and line numbers whenever possible.

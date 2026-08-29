@@ -8,6 +8,7 @@ recall:
   - you need to understand how the project is structured at a high level
 model-invocation: true
 ---
+
 # Project-wiki
 
 ## Overview
@@ -34,15 +35,15 @@ A directory of LLM-generated markdown files (e.g., `.drone-agent/wiki/`). The LL
 
 Typical wiki pages for a codebase:
 
-| Page Type | Description | Example |
-|-----------|-------------|---------|
-| **Module/package overview** | What a package does, its key exports, its dependencies | `drone-agent-runtime.md` |
-| **Concept/abstraction** | Key architectural concepts | `plugin-system.md`, `config-cascade.md` |
-| **Entity/schema** | Important types, models, data structures | `DronePlugin.md`, `Session.md` |
-| **Flow** | Request/execution flows through the system | `tool-call-flow.md`, `startup-flow.md` |
-| **Architecture Decision Record** | Notable design decisions and tradeoffs | `why-plugins.md`, `why-ink.md` |
-| **Index** | Catalog of all wiki pages with summaries | `index.md` |
-| **Log** | Chronological record of ingests and updates | `log.md` |
+| Page Type                        | Description                                            | Example                                 |
+| -------------------------------- | ------------------------------------------------------ | --------------------------------------- |
+| **Module/package overview**      | What a package does, its key exports, its dependencies | `drone-agent-runtime.md`                |
+| **Concept/abstraction**          | Key architectural concepts                             | `plugin-system.md`, `config-cascade.md` |
+| **Entity/schema**                | Important types, models, data structures               | `DronePlugin.md`, `Session.md`          |
+| **Flow**                         | Request/execution flows through the system             | `tool-call-flow.md`, `startup-flow.md`  |
+| **Architecture Decision Record** | Notable design decisions and tradeoffs                 | `why-plugins.md`, `why-ink.md`          |
+| **Index**                        | Catalog of all wiki pages with summaries               | `index.md`                              |
+| **Log**                          | Chronological record of ingests and updates            | `log.md`                                |
 
 ### 3. The Schema — The Maintenance Contract
 
@@ -64,6 +65,7 @@ When you ingest a source file (or set of files) into the wiki:
 6. **Advance the checkpoint** — record the last ingested commit SHA
 
 For codebases, git makes this incremental:
+
 - The initial ingest processes the entire repo at `HEAD`
 - Subsequent ingests only need to look at what changed between the saved `last_commit` and the new `HEAD`
 - Changed files, renames, and deletions are detected from the git diff
