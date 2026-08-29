@@ -5,6 +5,7 @@ import path from 'node:path';
 import process from 'node:process';
 import {
   createDefaultAgentConfig,
+  toToolResultContent,
   type DronePluginHooks,
   type DronePluginRegistration,
   type DronePromptFragment,
@@ -223,7 +224,7 @@ describe('memoryPlugin', () => {
       action: 'recall',
       key: 'nonexistent',
     });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
     expect(parsed.entry).toBeNull();
   });
 
@@ -279,7 +280,7 @@ describe('memoryPlugin', () => {
       action: 'list',
       prefix: 'session:',
     });
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
     expect(parsed.count).toBe(2);
   });
 

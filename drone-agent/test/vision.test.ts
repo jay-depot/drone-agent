@@ -197,53 +197,6 @@ describe('toOllamaMessage with images', () => {
   });
 });
 
-// ── extractImageFromToolResult tests ────────────────────────────────
-
-describe('extractImageFromToolResult', () => {
-  // Import the helper from the conversation service
-  // Since it's not exported, we test the logic inline
-
-  it('detects file__read_image format in JSON tool results', () => {
-    const content = JSON.stringify({
-      path: '/tmp/test.jpg',
-      mimeType: 'image/jpeg',
-      data: 'base64data',
-      size: 12345,
-    });
-    // Parse and check shape
-    const parsed = JSON.parse(content);
-    expect(parsed.mimeType).toBe('image/jpeg');
-    expect(parsed.data).toBe('base64data');
-  });
-
-  it('detects MCP data URI format in tool results', () => {
-    const content = JSON.stringify({
-      serverId: 'playwright',
-      tool: 'screenshot',
-      result: {
-        data: 'data:image/png;base64,screenshotdata',
-      },
-    });
-    const parsed = JSON.parse(content);
-    const dataUri = parsed.result.data;
-    const match = dataUri.match(/^data:(image\/\w+);base64,(.+)$/);
-    expect(match).not.toBeNull();
-    expect(match![1]).toBe('image/png');
-    expect(match![2]).toBe('screenshotdata');
-  });
-
-  it('returns null for non-JSON tool results', () => {
-    const content = 'plain text result';
-    expect(() => JSON.parse(content)).toThrow();
-  });
-
-  it('returns null for JSON without image data', () => {
-    const content = JSON.stringify({ result: 'no image here' });
-    const parsed = JSON.parse(content);
-    expect(parsed.mimeType).toBeUndefined();
-  });
-});
-
 // ── Session manager image tests ─────────────────────────────────────
 
 describe('session manager with images', () => {

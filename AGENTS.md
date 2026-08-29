@@ -18,17 +18,17 @@ If classification is ambiguous, ask for clarification before editing that specif
 
 The project is a pnpm workspace with the following packages:
 
-| Package                 | Purpose                                                                            |
-| ----------------------- | ---------------------------------------------------------------------------------- |
-| `drone-agent/`          | CLI + TUI coding agent (Ink-based). Entry point, plugins, runtime, TUI components. |
-| `drone-core/`           | Shared types, contracts, config defaults, token estimation.                        |
-| `drone-beacon/`         | Local hub for drone swarm (Fastify + SQLite + WebSocket).                          |
-| `drone-coordinator/`    | Global hub for swarm coordination (Fastify + SQLite).                              |
-| `drone-coordinator-ui/` | Web UI for the coordinator (React + Vite + Tailwind).                              |
-| `drone-swarm-common/`   | Shared utilities for beacon and coordinator.                                       |
-| `drone-swarm/`          | `drone-swarm` CLI: standalone REST client for session pipeline + wiki.             |
-| `drone-gateway/`        | Chat API gateway (Matrix, Discord, Slack).                                         |
-| `skill-library/`        | Reusable skill `.md` files (not a workspace package).                              |
+| Package                 | Purpose                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| `drone-agent/`          | CLI + TUI coding agent (Ink-based). Entry point, plugins, runtime, TUI components.    |
+| `drone-core/`           | Shared types, contracts, config defaults, token estimation.                           |
+| `drone-beacon/`         | Local hub for drone swarm (Fastify + SQLite + WebSocket).                             |
+| `drone-coordinator/`    | Global hub for swarm coordination (Fastify + SQLite).                                 |
+| `drone-coordinator-ui/` | Web UI for the coordinator (React + Vite + Tailwind).                                 |
+| `drone-swarm-common/`   | Shared utilities for beacon and coordinator.                                          |
+| `drone-swarm/`          | `drone-swarm` CLI: standalone REST client for session pipeline + wiki.                |
+| `drone-gateway/`        | Chat API gateway (Matrix, Discord, Slack).                                            |
+| `config-library/`       | Example skills, macros and personas for a full agent setup (not a workspace package). |
 
 Key source directories within `drone-agent/`:
 

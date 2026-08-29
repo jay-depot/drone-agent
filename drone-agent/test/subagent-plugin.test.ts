@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { toToolResultContent } from 'drone-core';
 import type {
   DronePluginRegistration,
   DronePromptFragment,
@@ -105,7 +106,7 @@ describe('subagentPlugin', () => {
     );
 
     expect(stopLoop).toHaveBeenCalled();
-    const parsed = JSON.parse(result);
+    const parsed = JSON.parse(toToolResultContent(result));
     expect(parsed.returned).toBe(true);
     expect(parsed.result).toBe('test-result');
   });

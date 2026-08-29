@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  WELL_KNOWN_MODEL_ROLES,
   formatModelSelection,
   isValidFullModelSelection,
   parseModelSelection,
+  resolveConfiguredReasoningLevel,
   resolveInteractiveSelection,
 } from '../src/model-selection.js';
+import type { DroneAgentConfig } from '../src/config-types.js';
 
 describe('parseModelSelection', () => {
   it('splits on the first slash (OpenRouter-style multi-slash ids)', () => {
@@ -71,5 +74,63 @@ describe('resolveInteractiveSelection', () => {
 
   it('rejects a bare id with no active provider', () => {
     expect(resolveInteractiveSelection('llama3.1', '')).toBeUndefined();
+  });
+});
+
+describe('WELL_KNOWN_MODEL_ROLES', () => {
+  it('lists the built-in plugin roles', () => {
+    expect([...WELL_KNOWN_MODEL_ROLES].sort()).toEqual([
+      'describer',
+      'image_describer',
+      'summarizer',
+      'wizard',
+    ]);
+  });
+});
+
+describe('resolveConfiguredReasoningLevel', () => {
+  const base = (overrides?: Partial<DroneAgentConfig>): DroneAgentConfig =>
+    ({
+      providers: {},
+      llm: { provider: 'ollama' },
+      ...overrides,
+    }) as DroneAgentConfig;
+
+  it('falls back to llm.reasoningLevel when the model entry has none', () => {
+    const config = base({ llm: { provider: 'ollama', reasoningLevel: 'low' } });
+    expect(
+      resolveConfiguredReasoningLevel(config, {
+        providerId: 'ollama',
+        modelLocalId: 'llama3.1',
+      })
+    ).toBe('low');
+  });
+
+  it('prefers the selected model entry reasoningLevel', () => {
+    const config = base({
+      providers: {
+        p: {
+          protocol: 'ollama',
+          models: { m: { reasoningLevel: 'high' } },
+        },
+      },
+      llm: { provider: 'ollama', reasoningLevel: 'low' },
+    });
+    expect(
+      resolveConfiguredReasoningLevel(config, {
+        providerId: 'p',
+        modelLocalId: 'm',
+      })
+    ).toBe('high');
+  });
+
+  it('returns undefined when neither the entry nor llm config sets it', () => {
+    const config = base();
+    expect(
+      resolveConfiguredReasoningLevel(config, {
+        providerId: 'p',
+        modelLocalId: 'm',
+      })
+    ).toBeUndefined();
   });
 });

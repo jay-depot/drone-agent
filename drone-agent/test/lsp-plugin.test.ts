@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDefaultAgentConfig,
+  toToolResultContent,
   type DronePluginRegistration,
 } from 'drone-core';
 import { lspPlugin } from '../src/plugins/lsp/plugin.js';
@@ -19,7 +20,9 @@ function captureLspTools(): Map<
     logger: silentLogger(),
     getConfig: () => createDefaultAgentConfig(),
     registerTool: tool => {
-      tools.set(tool.name, tool.execute);
+      tools.set(tool.name, async (i: Record<string, unknown>) =>
+        toToolResultContent(await tool.execute(i))
+      );
     },
     registerPromptFragment: () => {},
     registerHelp: () => {},

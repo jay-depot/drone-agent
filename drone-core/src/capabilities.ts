@@ -76,6 +76,7 @@ import type {
   DroneLlmProviderRegistration,
 } from './provider-types.js';
 import type { LlmProtocolDriver } from './provider-config-types.js';
+import type { DroneImageContent } from './session-types.js';
 
 // ── Config capability ──────────────────────────────────────────────
 
@@ -140,12 +141,34 @@ export type DroneSkillsCapability = {
 // ── LLM capability ─────────────────────────────────────────────────
 
 /**
+ * A resolved model-role binding: a ready-to-call provider (broker-enriched,
+ * same parameter/metadata path as the active provider), its id, and the model
+ * local id. `reasoningLevel` is present only when the role resolved to a
+ * non-active selection with a configured level; the active-selection fallback
+ * omits it so callers preserve today's exact behavior.
+ */
+export type DroneResolvedModelRole = {
+  provider: DroneLlmProvider;
+  providerId: string;
+  model: string;
+  reasoningLevel?: DroneReasoningLevel;
+};
+
+/**
  * Capability offered by the LLM broker plugin. Lets other plugins and
  * the host resolve the active LLM provider and manage model selection.
  */
 export type DroneLlmCapability = {
   /** Get the active DroneLlmProvider implementation. */
   getActiveProvider: () => DroneLlmProvider;
+  /**
+   * Resolve a named model role (e.g. 'summarizer') to a ready-to-call
+   * provider/model pair, per `llm.modelRoles`. Stateless: never mutates the
+   * active selection and emits no events. Falls back to the active selection
+   * (with a one-time-per-role warning) when the role is unset, unknown, or
+   * references a provider that is not instantiated.
+   */
+  resolveModelForRole: (role: string) => DroneResolvedModelRole;
   /**
    * Register a protocol driver factory. The broker instantiates one
    * provider per matching `config.providers` entry using these drivers.
@@ -169,6 +192,13 @@ export type DroneLlmCapability = {
   listModels: () => Promise<string[]>;
   /** Check whether a specific model supports vision. */
   hasVision?: (model: string) => boolean | Promise<boolean>;
+  /**
+   * Describe images that lack descriptions, using the `image_describer` model
+   * (or a vision-capable fallback). Returns images with `description` filled;
+   * skips already-described images. Fails open: on describer failure or when
+   * no vision-capable model is available, images are returned unchanged.
+   */
+  describeImages: (images: DroneImageContent[]) => Promise<DroneImageContent[]>;
   /** Register a provider. Providers are sorted by precedence (ascending). */
   registerProvider: (registration: DroneLlmProviderRegistration) => void;
   /** Unregister a provider by id. */

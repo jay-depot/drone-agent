@@ -2,7 +2,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os, { tmpdir } from 'node:os';
 import { vi } from 'vitest';
-import { createDefaultAgentConfig, type DronePlugin } from 'drone-core';
+import {
+  createDefaultAgentConfig,
+  toToolResultContent,
+  type DronePlugin,
+} from 'drone-core';
 import { createDronePluginEngine } from '../../src/runtime/plugin-engine.js';
 import { selfImprovementPlugin } from '../../src/plugins/self-improvement/index.js';
 import { createTestPlugin, silentLogger } from '../helpers.js';
@@ -94,7 +98,16 @@ export async function withTempHome<T>(
 export async function createEngine(options?: {
   personaCapability?: unknown;
   skillsCapability?: unknown;
-}): Promise<ReturnType<typeof createDronePluginEngine>> {
+}): Promise<
+  Omit<ReturnType<typeof createDronePluginEngine>, 'executeTool'> & {
+    executeTool: (
+      canonicalName: string,
+      input: Record<string, unknown>,
+      onProgress?: (chunk: string) => void,
+      context?: import('drone-core').DroneToolExecutionContext
+    ) => Promise<string>;
+  }
+> {
   const plugins: DronePlugin[] = [selfImprovementPlugin];
 
   if (options?.personaCapability !== undefined) {
@@ -132,5 +145,21 @@ export async function createEngine(options?: {
   });
 
   await engine.initialize();
-  return engine;
+  return {
+    ...engine,
+    executeTool: async (
+      canonicalName: string,
+      input: Record<string, unknown>,
+      onProgress?: (chunk: string) => void,
+      context?: import('drone-core').DroneToolExecutionContext
+    ) => {
+      const result = await engine.executeTool(
+        canonicalName,
+        input,
+        onProgress,
+        context
+      );
+      return toToolResultContent(result);
+    },
+  };
 }

@@ -4,6 +4,8 @@
  * building blocks (Retry-After parsing, backoff, status classification).
  */
 
+import { DroneLlmError } from 'drone-core';
+
 export type RetryPolicyConfig = {
   maxRetries: number;
   maxWaitMs: number;
@@ -99,3 +101,48 @@ export function isContextWindowExceeded(
 
 const CONTEXT_WINDOW_RE =
   /(?:context\s*(?:length|window|limit|size)|max\s*context|token\s*(?:limit|budget|context|window)|maximum\s*context)/i;
+
+/**
+ * Run a request with bounded silent auto-retry on transient statuses
+ * (429/5xx), honoring Retry-After / exponential backoff, capped at
+ * `config.maxRetries` attempts. Non-transient errors and non-DroneLlmError
+ * errors are thrown immediately. Returns the first successful response.
+ *
+ * `onRetry` (optional) is invoked before each retry with the error, the
+ * 1-based attempt number, and the computed delay in ms.
+ */
+export async function withBoundedSilentRetry<T>(
+  request: () => Promise<T>,
+  config: Pick<
+    RetryPolicyConfig,
+    'maxRetries' | 'maxWaitMs' | 'backoffBaseMs' | 'backoffFactor'
+  >,
+  onRetry?: (error: DroneLlmError, attempt: number, delayMs: number) => void
+): Promise<T> {
+  let failureCount = 0;
+  while (true) {
+    try {
+      return await request();
+    } catch (error) {
+      if (!(error instanceof DroneLlmError)) {
+        throw error;
+      }
+      const llmErr = error;
+      const transient =
+        llmErr.retryable ||
+        (llmErr.status !== undefined && isTransientStatus(llmErr.status));
+      if (transient && failureCount < config.maxRetries) {
+        failureCount += 1;
+        const delay = computeBackoffDelay(
+          failureCount,
+          config,
+          llmErr.retryAfterMs
+        );
+        onRetry?.(llmErr, failureCount, delay);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw llmErr;
+    }
+  }
+}

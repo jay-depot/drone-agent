@@ -17,9 +17,13 @@ const CONFIG_DIR = '.drone-agent';
  *     - The user mentions testing, debugging, or verifying a web application
  *     - The project contains Playwright or browser test configuration
  *   model-invocation: true
+ *   remark: 'All credit to Matt Pocock. I just ported it.'
  *   ---
  *   # Web Application Testing
  *   ...
+ *
+ * `remark` is author-facing metadata (e.g. attribution). It is surfaced on
+ * user-facing listings only and must never be included in LLM-facing output.
  */
 function parseSkillMd(
   id: string,
@@ -85,6 +89,8 @@ function parseSkillMd(
       }
     } else if (key === 'model-invocation') {
       definition.modelInvocation = value === 'true';
+    } else if (key === 'remark') {
+      definition.remark = value === '' ? undefined : value;
     }
   }
 

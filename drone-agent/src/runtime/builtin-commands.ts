@@ -7,6 +7,7 @@
  */
 
 import {
+  toToolResultContent,
   type DroneSlashCommand,
   type DroneSlashCommandContext,
   type DroneToolDescriptor,
@@ -247,7 +248,7 @@ const toolCommand: DroneSlashCommand = {
     try {
       await ctx.engine.runHooks('onBeforePrompt');
       const result = await ctx.engine.executeTool(toolName, parsed);
-      ctx.logger.info(result);
+      ctx.logger.info(toToolResultContent(result));
       await ctx.engine.runHooks('onAfterToolCall');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -274,7 +275,7 @@ const execCommand: DroneSlashCommand = {
         command,
         cwd: process.cwd(),
       });
-      ctx.logger.info(result);
+      ctx.logger.info(toToolResultContent(result));
       await ctx.engine.runHooks('onAfterToolCall');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

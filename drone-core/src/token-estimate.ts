@@ -29,8 +29,9 @@ export function estimateMessageTokens(message: DroneChatMessage): number {
     total += estimateTextTokens(JSON.stringify(message.toolCalls));
   }
   if (message.images) {
-    for (const _img of message.images) {
-      total += 256; // rough estimate per image for vision models
+    for (const img of message.images) {
+      const descTokens = estimateTextTokens(img.description ?? '');
+      total += Math.max(256, descTokens);
     }
   }
 

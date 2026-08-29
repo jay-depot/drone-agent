@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {
   validateProviders,
+  validateModelRoles,
   applyAgentConfigLayer,
   createDefaultAgentConfig,
   parseConfigWithSchema,
@@ -194,6 +195,11 @@ export async function loadAgentConfig(
     );
   }
 
+  const modelRoleWarnings = validateModelRoles(
+    mergedConfig.providers,
+    mergedConfig.llm?.modelRoles
+  );
+
   return {
     config: mergedConfig,
     layers,
@@ -209,6 +215,7 @@ export async function loadAgentConfig(
       ...persisted.warnings,
       ...scopePolicy.warnings,
       ...validation.warnings,
+      ...modelRoleWarnings,
     ],
   };
 }

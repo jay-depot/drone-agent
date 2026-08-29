@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   computeBackoffDelay,
   DEFAULT_RETRY_CONFIG,
   isContextWindowExceeded,
   isTransientStatus,
   parseRetryAfterMs,
+  withBoundedSilentRetry,
 } from '../src/runtime/llm-retry.js';
+import { DroneLlmError } from 'drone-core';
 
 const CONFIG = { maxWaitMs: 30000, backoffBaseMs: 1000, backoffFactor: 2 };
 
@@ -129,5 +131,127 @@ describe('DEFAULT_RETRY_CONFIG', () => {
       backoffBaseMs: 1000,
       backoffFactor: 2,
     });
+  });
+});
+
+describe('withBoundedSilentRetry', () => {
+  const FAST = {
+    maxRetries: 3,
+    maxWaitMs: 5,
+    backoffBaseMs: 1,
+    backoffFactor: 1,
+  };
+
+  it('returns the first successful response', async () => {
+    const result = await withBoundedSilentRetry(async () => 'ok', FAST);
+    expect(result).toBe('ok');
+  });
+
+  it('retries on transient 429 then succeeds', async () => {
+    let attempt = 0;
+    const onRetry = vi.fn();
+    const result = await withBoundedSilentRetry(
+      async () => {
+        attempt += 1;
+        if (attempt < 3) {
+          throw new DroneLlmError('rate limited', {
+            status: 429,
+            retryable: true,
+            retryAfterMs: 1,
+          });
+        }
+        return 'finally ok';
+      },
+      FAST,
+      onRetry
+    );
+    expect(result).toBe('finally ok');
+    expect(attempt).toBe(3);
+    expect(onRetry).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries on 5xx statuses even when not marked retryable', async () => {
+    let attempt = 0;
+    await withBoundedSilentRetry(async () => {
+      attempt += 1;
+      if (attempt < 2) {
+        throw new DroneLlmError('server overloaded', {
+          status: 503,
+          retryable: false,
+        });
+      }
+      return 'ok';
+    }, FAST);
+    expect(attempt).toBe(2);
+  });
+
+  it('gives up after maxRetries and throws the last error', async () => {
+    const onRetry = vi.fn();
+    await expect(
+      withBoundedSilentRetry(
+        async () => {
+          throw new DroneLlmError('always 429', {
+            status: 429,
+            retryable: true,
+            retryAfterMs: 1,
+          });
+        },
+        { ...FAST, maxRetries: 2 },
+        onRetry
+      )
+    ).rejects.toThrow('always 429');
+    expect(onRetry).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws immediately on non-transient errors', async () => {
+    const onRetry = vi.fn();
+    await expect(
+      withBoundedSilentRetry(
+        async () => {
+          throw new DroneLlmError('unauthorized', {
+            status: 401,
+            retryable: false,
+          });
+        },
+        FAST,
+        onRetry
+      )
+    ).rejects.toThrow('unauthorized');
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  it('throws immediately on non-DroneLlmError errors', async () => {
+    const onRetry = vi.fn();
+    await expect(
+      withBoundedSilentRetry(
+        async () => {
+          throw new Error('ECONNREFUSED');
+        },
+        FAST,
+        onRetry
+      )
+    ).rejects.toThrow('ECONNREFUSED');
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  it('honors Retry-After via the onRetry callback delay', async () => {
+    const delays: number[] = [];
+    let attempt = 0;
+    await withBoundedSilentRetry(
+      async () => {
+        attempt += 1;
+        if (attempt < 3) {
+          throw new DroneLlmError('rate limited', {
+            status: 429,
+            retryable: true,
+            retryAfterMs: 2,
+          });
+        }
+        return 'ok';
+      },
+      FAST,
+      (_err, _attempt, delay) => delays.push(delay)
+    );
+    expect(delays).toEqual([2, 2]);
   });
 });

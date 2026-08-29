@@ -57,6 +57,18 @@ describe('loadAgentConfig', () => {
     expect(resolved.config.compaction.strategy).toBe('summary-drop');
   });
 
+  it('surfaces model-role warnings from user-scope config', async () => {
+    const { projectDir } = await setupDirs();
+    await writeJson(path.join(testHomeDir, '.drone-agent/config.json'), {
+      llm: { modelRoles: { summarizer: 'missing-provider/llama3.1' } },
+    });
+
+    const resolved = await loadAgentConfig(projectDir);
+    expect(resolved.warnings?.some(w => w.includes('missing-provider'))).toBe(
+      true
+    );
+  });
+
   it('layers defaults + user + project config in that order', async () => {
     const { projectDir } = await setupDirs();
     await writeJson(path.join(testHomeDir, '.drone-agent/config.json'), {
