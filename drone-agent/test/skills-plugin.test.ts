@@ -198,3 +198,211 @@ describe('skills.list tool (with reload)', () => {
     });
   });
 });
+
+const REMARK = 'Authored by the remark test.';
+
+const REMARKED_SKILL_MD = (id: string) =>
+  `---
+name: ${id}
+description: 'A test skill with an author remark.'
+recall:
+  - The user mentions testing
+model-invocation: true
+remark: '${REMARK}'
+---
+# ${id}
+
+Test body.
+`;
+
+describe('skill remark field visibility', () => {
+  it('omits remark from the default skills__list payload', async () => {
+    await withProjectDir(async projectDir => {
+      const originalCwd = process.cwd;
+      process.cwd = () => projectDir;
+      try {
+        const config = createDefaultAgentConfig();
+        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        const engine = createDronePluginEngine({
+          plugins: [skillsPlugin, skillProviderProjectPlugin],
+          config,
+        });
+        await engine.initialize();
+
+        const skillsDir = path.join(projectDir, '.drone-agent', 'skills');
+        await mkdir(skillsDir, { recursive: true });
+        await writeFile(
+          path.join(skillsDir, 'remarked.md'),
+          REMARKED_SKILL_MD('remarked'),
+          'utf-8'
+        );
+        await engine.executeTool('skills__list', { reload: true });
+
+        const result = await engine.executeTool('skills__list', {});
+        const parsed = JSON.parse(toToolResultContent(result));
+        expect(parsed.count).toBe(1);
+        expect(parsed.skills[0]).not.toHaveProperty('remark');
+        expect(toToolResultContent(result)).not.toContain(REMARK);
+      } finally {
+        process.cwd = originalCwd;
+      }
+    });
+  });
+
+  it('includes remark in skills__list only when includeRemark=true', async () => {
+    await withProjectDir(async projectDir => {
+      const originalCwd = process.cwd;
+      process.cwd = () => projectDir;
+      try {
+        const config = createDefaultAgentConfig();
+        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        const engine = createDronePluginEngine({
+          plugins: [skillsPlugin, skillProviderProjectPlugin],
+          config,
+        });
+        await engine.initialize();
+
+        const skillsDir = path.join(projectDir, '.drone-agent', 'skills');
+        await mkdir(skillsDir, { recursive: true });
+        await writeFile(
+          path.join(skillsDir, 'remarked.md'),
+          REMARKED_SKILL_MD('remarked'),
+          'utf-8'
+        );
+        await engine.executeTool('skills__list', { reload: true });
+
+        const result = await engine.executeTool('skills__list', {
+          includeRemark: true,
+        });
+        const parsed = JSON.parse(toToolResultContent(result));
+        expect(parsed.skills[0].remark).toBe(REMARK);
+      } finally {
+        process.cwd = originalCwd;
+      }
+    });
+  });
+
+  it('keeps the skills__recall payload remark-free', async () => {
+    await withProjectDir(async projectDir => {
+      const originalCwd = process.cwd;
+      process.cwd = () => projectDir;
+      try {
+        const config = createDefaultAgentConfig();
+        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        const engine = createDronePluginEngine({
+          plugins: [skillsPlugin, skillProviderProjectPlugin],
+          config,
+        });
+        await engine.initialize();
+
+        const skillsDir = path.join(projectDir, '.drone-agent', 'skills');
+        await mkdir(skillsDir, { recursive: true });
+        await writeFile(
+          path.join(skillsDir, 'remarked.md'),
+          REMARKED_SKILL_MD('remarked'),
+          'utf-8'
+        );
+        await engine.executeTool('skills__list', { reload: true });
+
+        const result = await engine.executeTool('skills__recall', {
+          id: 'remarked',
+        });
+        const raw = toToolResultContent(result);
+        const parsed = JSON.parse(raw);
+        expect(parsed).not.toHaveProperty('remark');
+        expect(raw).not.toContain(REMARK);
+      } finally {
+        process.cwd = originalCwd;
+      }
+    });
+  });
+
+  it('never renders remark in the LLM-facing skills prompt fragment', async () => {
+    await withProjectDir(async projectDir => {
+      const originalCwd = process.cwd;
+      process.cwd = () => projectDir;
+      try {
+        const config = createDefaultAgentConfig();
+        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        const engine = createDronePluginEngine({
+          plugins: [skillsPlugin, skillProviderProjectPlugin],
+          config,
+        });
+        await engine.initialize();
+
+        const skillsDir = path.join(projectDir, '.drone-agent', 'skills');
+        await mkdir(skillsDir, { recursive: true });
+        await writeFile(
+          path.join(skillsDir, 'remarked.md'),
+          REMARKED_SKILL_MD('remarked'),
+          'utf-8'
+        );
+        await engine.executeTool('skills__list', { reload: true });
+
+        const messages = await engine.buildSystemMessages();
+        const systemText = messages.map(m => m.content).join('\n');
+        expect(systemText).toContain('# Skills');
+        expect(systemText).toContain('remarked');
+        expect(systemText).not.toContain(REMARK);
+      } finally {
+        process.cwd = originalCwd;
+      }
+    });
+  });
+
+  it('appends remark to the /skills recall confirmation line', async () => {
+    await withProjectDir(async projectDir => {
+      const originalCwd = process.cwd;
+      process.cwd = () => projectDir;
+      try {
+        const config = createDefaultAgentConfig();
+        config.enabledPlugins = ['skills', 'skill-provider-project'];
+        const engine = createDronePluginEngine({
+          plugins: [skillsPlugin, skillProviderProjectPlugin],
+          config,
+        });
+        await engine.initialize();
+
+        const skillsDir = path.join(projectDir, '.drone-agent', 'skills');
+        await mkdir(skillsDir, { recursive: true });
+        await writeFile(
+          path.join(skillsDir, 'remarked.md'),
+          REMARKED_SKILL_MD('remarked'),
+          'utf-8'
+        );
+        await engine.executeTool('skills__list', { reload: true });
+
+        const infoLines: string[] = [];
+        const logger = {
+          info: (msg: string | unknown) => {
+            infoLines.push(String(msg));
+          },
+          warn: (msg: string | unknown) => {
+            infoLines.push(String(msg));
+          },
+          error: (msg: string | unknown) => {
+            infoLines.push(String(msg));
+          },
+          debug: () => {},
+        };
+        const handled = await engine.dispatchSlashCommand(
+          '/skills recall remarked',
+          {
+            logger,
+            engine,
+          } as unknown as Parameters<
+            NonNullable<typeof engine.dispatchSlashCommand>
+          >[1]
+        );
+        expect(handled).toBe(true);
+        const confirmation = infoLines.find(line =>
+          line.includes('Loaded skill:')
+        );
+        expect(confirmation).toBeDefined();
+        expect(confirmation).toContain(` — ${REMARK}`);
+      } finally {
+        process.cwd = originalCwd;
+      }
+    });
+  });
+});

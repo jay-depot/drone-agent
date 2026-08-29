@@ -209,6 +209,10 @@ export const skillsPlugin: DronePlugin = {
             description:
               'If true, reload skills from disk first before listing.',
           },
+          includeRemark: {
+            type: 'boolean',
+            description: 'Include author remarks in the result.',
+          },
         },
         additionalProperties: false,
       },
@@ -227,6 +231,9 @@ export const skillsPlugin: DronePlugin = {
               recall: s.recall,
               source: s.source,
               hasBody: s.body.length > 0,
+              ...(input.includeRemark === true && s.remark
+                ? { remark: s.remark }
+                : {}),
             })),
           },
           null,
@@ -276,7 +283,9 @@ export const skillsPlugin: DronePlugin = {
         if (subcommand === 'list') {
           ctx.logger.info(
             toToolResultContent(
-              await ctx.engine.executeTool('skills__list', {})
+              await ctx.engine.executeTool('skills__list', {
+                includeRemark: true,
+              })
             )
           );
           return true;
@@ -298,14 +307,20 @@ export const skillsPlugin: DronePlugin = {
           ctx.sessionManager?.appendToolResult('skills__recall', raw);
 
           // Tell the user it worked (not the full body)
-          ctx.logger.info(`Loaded skill: ${skill.name} (${skill.source})`);
+          const skillDef = getSkillById(id.trim().toLowerCase());
+          ctx.logger.info(
+            `Loaded skill: ${skill.name} (${skill.source})${skillDef?.remark ? ` — ${skillDef.remark}` : ''}`
+          );
           return true;
         }
 
         if (subcommand === 'reload') {
           ctx.logger.info(
             toToolResultContent(
-              await ctx.engine.executeTool('skills__list', { reload: true })
+              await ctx.engine.executeTool('skills__list', {
+                reload: true,
+                includeRemark: true,
+              })
             )
           );
           return true;

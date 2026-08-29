@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-08-29T18:16:51.358Z",
+    "insight": "skills plugin pattern (remark field, 2026-08-29): the tool-result JSON dual-audience problem (same payload feeds LLM context AND human TUI rendering) is solved cleanly with the opt-in input flag pattern — skills__list's includeRemark defaults false and is deliberately absent from the tool description so the model never reaches for it; only the /skills slash command (host-side, user-initiated) passes includeRemark:true. The TUI renders the remark line iff present in the JSON, giving per-surface LLM-cleanliness with ONE code path. Directly reusable for persona listing surfaces when persona remark support rides in with the swarm/B phase. Precedent: ADR-161 runtime enforcement makes schema'd optional inputs advisory — an unadvertised optional input is safe as the visibility gate."
+  }
+]
