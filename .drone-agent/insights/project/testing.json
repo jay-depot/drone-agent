@@ -70,5 +70,9 @@
   {
     "timestamp": "2026-07-08T17:42:22.900Z",
     "insight": "All TUI test files that used racy fixed-tick/setTimeout barriers before lastFrame() have been migrated to content-aware polling (waitUntilFrame) or await-tick. This should eliminate the class of CI-only flaky failures where lastFrame() returns the empty pre-render frame on slower runners. The pattern to follow: waitUntilFrame(inst, f => f.includes('expected content')) with 10ms polling and 1s timeout."
+  },
+  {
+    "timestamp": "2026-08-25T17:26:05.205Z",
+    "insight": "A DroneLlmError's instanceof check in a vitest test can fail across `vi.resetModules()` because the module is re-imported fresh, giving the test file a different class identity than the driver's copy. Assert on `err?.name === 'DroneLlmError'` plus the structured fields instead of `toBeInstanceOf` when mocking via doMock/resetModules. Also, with the conversation-service retry config, the semantics of `maxRetries` is retries AFTER the initial call, so a `maxRetries: 2` test sees 3 total chat() invocations before prompting — count calls as initial + maxRetries."
   }
 ]

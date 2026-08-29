@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { setupDb, teardownDb } from './setup.js';
 import {
   createMtlsMiddleware,
@@ -18,24 +19,24 @@ function makeReq(url: string, method = 'GET', certFingerprint?: string) {
       getPeerCertificate: () =>
         certFingerprint ? { fingerprint256: certFingerprint } : false,
     },
-  } as any;
+  } as unknown as FastifyRequest;
 }
 
 function makeReply() {
   let code = 0;
-  let sent: any = null;
+  let sent: unknown = null;
   return {
     code: (c: number) => {
       code = c;
       return {
-        send: (s: any) => {
+        send: (s: unknown) => {
           sent = s;
         },
       };
     },
     _sent: () => sent,
     _code: () => code,
-  } as any;
+  } as unknown as FastifyReply;
 }
 
 beforeEach(async () => {

@@ -6,6 +6,8 @@ import http from 'node:http';
 import https from 'node:https';
 import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
+import type { PeerCertificate } from 'node:tls';
+import type { TlsIdentity } from 'drone-swarm-common/tls';
 import {
   initCoordinatorTrust,
   setPendingCoordinatorFingerprint,
@@ -17,6 +19,27 @@ import {
 
 const TEST_FP =
   'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
+
+// The mocked HTTP response is a Readable augmented with the response fields
+// http.request callbacks observe.
+type MockResponse = Readable & {
+  statusCode: number;
+  statusMessage: string;
+  headers: Record<string, string>;
+};
+
+// The mocked ClientRequest returned by the http.request mock.
+type MockClientRequest = EventEmitter & {
+  write: ReturnType<typeof vi.fn>;
+  end: ReturnType<typeof vi.fn>;
+  destroy?: ReturnType<typeof vi.fn>;
+  __socket?: MockSocket;
+  __callback?: (res: MockResponse) => void;
+};
+
+type MockSocket = EventEmitter & {
+  getPeerCertificate: () => { fingerprint256?: string };
+};
 
 describe('Coordinator Client', () => {
   let configDir: string;
@@ -33,7 +56,119 @@ describe('Coordinator Client', () => {
     setBeaconApproved(true);
     // Mock http.request
     mockRequest = vi.fn();
-    vi.spyOn(http, 'request').mockImplementation(mockRequest as any);
+    vi.spyOn(http, 'request').mockImplementation(
+      mockRequest as unknown as typeof http.request
+    );
+  });
+
+  describe('fetchCoordinatorFragments', () => {
+    it('should fetch fragments and mark them as coordinator scope', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+
+      setupMockHttpResponse(200, {
+        fragments: [
+          {
+            id: 'f1',
+            target: 'broadcast',
+            content: 'c',
+            phase: 'header',
+            scope: 'coordinator',
+            createdAt: 1,
+            updatedAt: 1,
+            expiresAt: null,
+          },
+        ],
+      });
+
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+
+      const fragments = await client.fetchCoordinatorFragments();
+      expect(fragments).toHaveLength(1);
+      expect(fragments[0].scope).toBe('coordinator');
+      expect(fragments[0].target).toBe('broadcast');
+    });
+
+    it('should accept a raw array response shape', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+
+      setupMockHttpResponse(200, [
+        {
+          id: 'f2',
+          target: 'agent-1',
+          content: 'c',
+          phase: 'footer',
+          scope: 'coordinator',
+          createdAt: 1,
+          updatedAt: 1,
+          expiresAt: null,
+        },
+      ]);
+
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+
+      const fragments = await client.fetchCoordinatorFragments();
+      expect(fragments).toHaveLength(1);
+      expect(fragments[0].id).toBe('f2');
+    });
+
+    it('should return empty array when coordinator is not trusted', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+
+      setBeaconApproved(false);
+
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+
+      setupMockHttpResponse(200, { fragments: [] });
+
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+
+      const fragments = await client.fetchCoordinatorFragments();
+      expect(fragments).toEqual([]);
+      expect(mockRequest).not.toHaveBeenCalled();
+    });
   });
 
   afterEach(async () => {
@@ -49,18 +184,19 @@ describe('Coordinator Client', () => {
         this.push(null);
       },
     });
-    (response as any).statusCode = statusCode;
-    (response as any).statusMessage = 'OK';
-    (response as any).headers = { 'content-type': 'application/json' };
-    return response;
+    const mock = response as unknown as MockResponse;
+    mock.statusCode = statusCode;
+    mock.statusMessage = 'OK';
+    mock.headers = { 'content-type': 'application/json' };
+    return mock;
   }
 
   function setupMockHttpResponse(statusCode: number, body: unknown) {
     const response = makeMockResponse(statusCode, body);
     mockRequest.mockImplementation(
-      (_opts: any, callback: (res: any) => void) => {
+      (_opts: unknown, callback: (res: MockResponse) => void) => {
         callback(response);
-        const req = new EventEmitter() as any;
+        const req = new EventEmitter() as unknown as MockClientRequest;
         req.write = vi.fn();
         req.end = vi.fn();
         return req;
@@ -73,11 +209,14 @@ describe('Coordinator Client', () => {
   function makeHttpsRequestMock(cert: { fingerprint256?: string }) {
     const httpsRequest = vi.fn();
     httpsRequest.mockImplementation(
-      (_opts: any, callback: (res: any) => void) => {
-        const req = new EventEmitter() as any;
-        const socket = new EventEmitter() as any;
+      (_opts: unknown, callback: (res: MockResponse) => void) => {
+        const req = new EventEmitter() as unknown as MockClientRequest;
+        const socket = new EventEmitter() as unknown as MockSocket;
         socket.getPeerCertificate = () => cert;
-        req.on = (event: string, listener: (...args: any[]) => void): any => {
+        req.on = (
+          event: string,
+          listener: (...args: unknown[]) => void
+        ): MockClientRequest => {
           if (event === 'socket') {
             listener(socket);
             return req;
@@ -97,12 +236,17 @@ describe('Coordinator Client', () => {
         return req;
       }
     );
-    vi.spyOn(https, 'request').mockImplementation(httpsRequest as any);
+    vi.spyOn(https, 'request').mockImplementation(
+      httpsRequest as unknown as typeof https.request
+    );
     return {
       httpsRequest,
-      getSocket: () => (httpsRequest.mock.results[0]?.value as any)?.__socket,
+      getSocket: () =>
+        (httpsRequest.mock.results[0]?.value as unknown as MockClientRequest)
+          ?.__socket,
       getCallback: () =>
-        (httpsRequest.mock.results[0]?.value as any)?.__callback,
+        (httpsRequest.mock.results[0]?.value as unknown as MockClientRequest)
+          ?.__callback,
     };
   }
 
@@ -171,11 +315,11 @@ describe('Coordinator Client', () => {
         {
           certPem: 'CERT_PEM',
           keyPem: 'KEY_PEM',
-        } as any
+        } as TlsIdentity
       );
       void cfetch('https://localhost:3456/health');
 
-      const opts = httpsRequest.mock.calls[0][0] as any;
+      const opts = httpsRequest.mock.calls[0][0] as https.RequestOptions;
       expect(opts.cert).toBe('CERT_PEM');
       expect(opts.key).toBe('KEY_PEM');
     });
@@ -190,7 +334,7 @@ describe('Coordinator Client', () => {
       const fakeCert = {
         fingerprint256:
           'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99',
-      } as any;
+      } as PeerCertificate;
       const result = check('localhost', fakeCert);
       expect(result).toBeUndefined();
       expect(seen).toEqual([
@@ -207,7 +351,7 @@ describe('Coordinator Client', () => {
       const fakeCert = {
         fingerprint256:
           'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99',
-      } as any;
+      } as PeerCertificate;
       expect(check('localhost', fakeCert)).toBeUndefined();
     });
 
@@ -220,7 +364,7 @@ describe('Coordinator Client', () => {
       const fakeCert = {
         fingerprint256:
           'FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE',
-      } as any;
+      } as PeerCertificate;
       const err = check('localhost', fakeCert);
       expect(err).toBeInstanceOf(Error);
       expect(err?.message).toMatch(/fingerprint mismatch/);
@@ -230,7 +374,7 @@ describe('Coordinator Client', () => {
       const { buildCheckServerIdentity } =
         await import('../src/coordinator-client.js');
       const check = buildCheckServerIdentity(undefined);
-      const err = check('localhost', {} as any);
+      const err = check('localhost', {} as PeerCertificate);
       expect(err).toBeInstanceOf(Error);
       expect(err?.message).toMatch(/no fingerprint/);
     });
@@ -359,9 +503,9 @@ describe('Coordinator Client', () => {
 
       const response = makeMockResponse(403, { error: 'Forbidden' });
       mockRequest.mockImplementation(
-        (_opts: any, callback: (res: any) => void) => {
+        (_opts: unknown, callback: (res: MockResponse) => void) => {
           callback(response);
-          const req = new EventEmitter() as any;
+          const req = new EventEmitter() as unknown as MockClientRequest;
           req.write = vi.fn();
           req.end = vi.fn();
           return req;
@@ -397,9 +541,9 @@ describe('Coordinator Client', () => {
 
       const response = makeMockResponse(404, { error: 'Not found' });
       mockRequest.mockImplementation(
-        (_opts: any, callback: (res: any) => void) => {
+        (_opts: unknown, callback: (res: MockResponse) => void) => {
           callback(response);
-          const req = new EventEmitter() as any;
+          const req = new EventEmitter() as unknown as MockClientRequest;
           req.write = vi.fn();
           req.end = vi.fn();
           return req;
@@ -570,9 +714,9 @@ describe('Coordinator Client', () => {
 
       const response = makeMockResponse(404, { error: 'Agent not found' });
       mockRequest.mockImplementation(
-        (_opts: any, callback: (res: any) => void) => {
+        (_opts: unknown, callback: (res: MockResponse) => void) => {
           callback(response);
-          const req = new EventEmitter() as any;
+          const req = new EventEmitter() as unknown as MockClientRequest;
           req.write = vi.fn();
           req.end = vi.fn();
           return req;
@@ -688,8 +832,8 @@ describe('Coordinator Client', () => {
 
       // Simulate a request error by emitting 'error' on the req
       mockRequest.mockImplementation(
-        (_opts: any, _callback: (res: any) => void) => {
-          const req = new EventEmitter() as any;
+        (_opts: unknown, _callback: (res: MockResponse) => void) => {
+          const req = new EventEmitter() as unknown as MockClientRequest;
           req.write = vi.fn();
           req.end = vi.fn();
           process.nextTick(() => req.emit('error', new Error('Network error')));
@@ -812,6 +956,172 @@ describe('Coordinator Client', () => {
         },
       ]);
       expect(mockRequest).toHaveBeenCalled();
+    });
+  });
+
+  describe('getSessionTranscript', () => {
+    it('should fetch a session transcript from the coordinator', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+
+      setupMockHttpResponse(200, {
+        session: { id: 'ss1', personaId: 'coder', status: 'ended' },
+        transcript: '# Session ss1\n\n--- Turn 1 ---\n[user] hello',
+      });
+
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+
+      const result = await client.getSessionTranscript('ss1');
+      expect(result?.session.id).toBe('ss1');
+      expect(result?.transcript).toContain('[user] hello');
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: '/api/sessions/ss1/transcript',
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('should return null when the transcript endpoint errors', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+
+      setupMockHttpResponse(404, {});
+
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+
+      const result = await client.getSessionTranscript('missing');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('coordinator proxy methods', () => {
+    async function makeClient() {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+
+      return createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+    }
+
+    it('listBeacons fetches /api/beacons', async () => {
+      setupMockHttpResponse(200, [{ id: 'b1', name: 'Beacon 1' }]);
+      const client = await makeClient();
+      const result = await client.listBeacons();
+      expect(result).toHaveLength(1);
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ path: '/api/beacons' }),
+        expect.any(Function)
+      );
+    });
+
+    it('listAgentLocations passes beaconId query', async () => {
+      setupMockHttpResponse(200, []);
+      const client = await makeClient();
+      await client.listAgentLocations('b1');
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: '/api/agents/location?beaconId=b1',
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('spawnSpawn posts to /api/spawn', async () => {
+      setupMockHttpResponse(200, { spawnId: 's1', status: 'spawning' });
+      const client = await makeClient();
+      const result = await client.spawnSpawn({ targetBeaconId: 'b1' });
+      expect(result.spawnId).toBe('s1');
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ path: '/api/spawn', method: 'POST' }),
+        expect.any(Function)
+      );
+    });
+
+    it('getSpawn fetches /api/spawn/:beaconId/:spawnId', async () => {
+      setupMockHttpResponse(200, { spawnId: 's1', status: 'running' });
+      const client = await makeClient();
+      const result = await client.getSpawn('b1', 's1');
+      expect(result.status).toBe('running');
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ path: '/api/spawn/b1/s1' }),
+        expect.any(Function)
+      );
+    });
+
+    it('listSpawns passes status query', async () => {
+      setupMockHttpResponse(200, []);
+      const client = await makeClient();
+      await client.listSpawns('b1', 'running');
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ path: '/api/spawn/b1?status=running' }),
+        expect.any(Function)
+      );
+    });
+
+    it('terminateSpawn sends DELETE to /api/spawn/:beaconId/:spawnId', async () => {
+      setupMockHttpResponse(200, { success: true });
+      const client = await makeClient();
+      await client.terminateSpawn('b1', 's1');
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: '/api/spawn/b1/s1',
+          method: 'DELETE',
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('returns empty/null when coordinator is not trusted', async () => {
+      resetCoordinatorTrust();
+      const client = await makeClient();
+      expect(await client.listBeacons()).toEqual([]);
+      expect(await client.listAgentLocations('b1')).toEqual([]);
+      expect(await client.spawnSpawn({ targetBeaconId: 'b1' })).toBeNull();
+      expect(await client.getSpawn('b1', 's1')).toBeNull();
+      expect(await client.listSpawns('b1')).toEqual([]);
+      expect(await client.terminateSpawn('b1', 's1')).toBeNull();
     });
   });
 });

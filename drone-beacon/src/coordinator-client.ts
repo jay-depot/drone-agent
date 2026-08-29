@@ -10,7 +10,35 @@ import {
 } from './coordinator-trust.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
+import type { DroneSwarmFragment } from 'drone-core';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
+import { enqueueOutbox } from './db/index.js';
+
+type SendMode = 'direct' | 'outbox';
+
+let sendMode: SendMode = 'direct';
+
+/**
+ * Route coordinator-bound fire-and-forget writes through the durable outbox
+ * instead of best-effort direct fetches. Enabled at startup by beacon main.
+ */
+export function setOutboxEnabled(enabled: boolean): void {
+  sendMode = enabled ? 'outbox' : 'direct';
+}
+
+function sendFireAndForget(
+  kind: string,
+  endpoint: string,
+  method: string,
+  body: unknown,
+  deliver: () => Promise<void>
+): Promise<void> {
+  if (sendMode === 'outbox') {
+    enqueueOutbox({ kind, endpoint, method, body });
+    return Promise.resolve();
+  }
+  return deliver();
+}
 
 let didWarnSwarmNotReady = false;
 
@@ -48,6 +76,7 @@ export interface CoordinatorClient {
   heartbeat(): Promise<void>;
   fetchPersonas(): Promise<Persona[]>;
   fetchSkills(): Promise<Skill[]>;
+  fetchCoordinatorFragments(): Promise<DroneSwarmFragment[]>;
 
   // Session management
   registerSession(agentId: string, personaId: string | null): Promise<void>;
@@ -111,13 +140,25 @@ export interface CoordinatorClient {
   // Session pipeline
   getSessions(
     query: Record<string, string>
-  ): Promise<{ sessions: any[]; count: number }>;
-  getSessionLog(sessionId: string): Promise<any>;
-  processSession(sessionId: string): Promise<any>;
+  ): Promise<{ sessions: unknown[]; count: number }>;
+  getSessionLog(sessionId: string): Promise<unknown>;
+  getSessionTranscript(sessionId: string): Promise<{
+    session: unknown;
+    transcript: string;
+  } | null>;
+  processSession(sessionId: string): Promise<unknown>;
   completeSessionProcessing(
     sessionId: string,
     body: { summary?: string; notes?: string }
-  ): Promise<any>;
+  ): Promise<unknown>;
+
+  // Coordinator proxy tools (beacon proxies for the agent)
+  listBeacons(): Promise<unknown[]>;
+  listAgentLocations(beaconId?: string): Promise<unknown[]>;
+  spawnSpawn(body: Record<string, unknown>): Promise<unknown>;
+  getSpawn(beaconId: string, spawnId: string): Promise<unknown>;
+  listSpawns(beaconId: string, status?: string): Promise<unknown[]>;
+  terminateSpawn(beaconId: string, spawnId: string): Promise<unknown>;
 }
 
 export interface SessionInfo {
@@ -422,65 +463,98 @@ export function createCoordinatorClient(
       return skills.map(s => ({ ...s, scope: 'coordinator' as const }));
     },
 
+    async fetchCoordinatorFragments(): Promise<DroneSwarmFragment[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
+      const res = await cfetch(`${baseUrl}/api/fragments`);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch fragments: ${res.status}`);
+      }
+      const data = (await res.json()) as unknown;
+      const payload = data as { fragments?: DroneSwarmFragment[] };
+      const fragments = Array.isArray(payload) ? payload : payload.fragments;
+      if (!Array.isArray(fragments)) {
+        throw new Error('Malformed fragments response from coordinator');
+      }
+      // Normalize scope; coordinator rows are implicitly coordinator-scoped.
+      return fragments.map(f => ({ ...f, scope: 'coordinator' as const }));
+    },
+
     // Session management
     async registerSession(
       agentId: string,
       personaId: string | null
     ): Promise<void> {
-      if (!coordinatorTrusted()) {
-        return;
-      }
-      try {
-        const res = await cfetch(
-          `${baseUrl}/api/beacons/${config.beaconId}/sessions`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: `session-${agentId}-${Date.now()}`,
-              agentId,
-              personaId: personaId ?? undefined,
-            }),
+      const body = {
+        id: `session-${agentId}-${Date.now()}`,
+        agentId,
+        personaId: personaId ?? undefined,
+      };
+      await sendFireAndForget(
+        'registerSession',
+        `/api/beacons/${config.beaconId}/sessions`,
+        'POST',
+        body,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
           }
-        );
-        if (!res.ok) {
-          logger.warn(`Failed to register session: ${res.status}`);
-        } else {
-          logger.info(`Registered session for agent ${agentId}`);
+          try {
+            const res = await cfetch(
+              `${baseUrl}/api/beacons/${config.beaconId}/sessions`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              }
+            );
+            if (!res.ok) {
+              logger.warn(`Failed to register session: ${res.status}`);
+            } else {
+              logger.info(`Registered session for agent ${agentId}`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to register session: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to register session: ${err}`);
-      }
+      );
     },
 
     async endSession(agentId: string, connectedAt: number): Promise<void> {
-      if (!coordinatorTrusted()) {
-        return;
-      }
-      try {
-        const disconnectedAt = Date.now();
-        const durationMs = disconnectedAt - connectedAt;
-        const res = await cfetch(
-          `${baseUrl}/api/beacons/${config.beaconId}/sessions/${agentId}`,
-          {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              disconnectedAt,
-              durationMs,
-            }),
+      const disconnectedAt = Date.now();
+      const durationMs = disconnectedAt - connectedAt;
+      const body = { disconnectedAt, durationMs };
+      await sendFireAndForget(
+        'endSession',
+        `/api/beacons/${config.beaconId}/sessions/${agentId}`,
+        'DELETE',
+        body,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
           }
-        );
-        if (!res.ok) {
-          logger.warn(`Failed to end session: ${res.status}`);
-        } else {
-          logger.info(
-            `Ended session for agent ${agentId}, duration: ${durationMs}ms`
-          );
+          try {
+            const res = await cfetch(
+              `${baseUrl}/api/beacons/${config.beaconId}/sessions/${agentId}`,
+              {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              }
+            );
+            if (!res.ok) {
+              logger.warn(`Failed to end session: ${res.status}`);
+            } else {
+              logger.info(
+                `Ended session for agent ${agentId}, duration: ${durationMs}ms`
+              );
+            }
+          } catch (err) {
+            logger.warn(`Failed to end session: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to end session: ${err}`);
-      }
+      );
     },
 
     // Agent location (for cross-beacon messaging)
@@ -572,7 +646,7 @@ export function createCoordinatorClient(
         if (!res.ok) {
           const error = await res.json();
           logger.warn(
-            `Failed to relay message: ${res.status} - ${(error as any).error}`
+            `Failed to relay message: ${res.status} - ${(error as { error?: string }).error}`
           );
           return { success: false };
         }
@@ -586,100 +660,140 @@ export function createCoordinatorClient(
 
     // Knowledge push
     async pushPersona(persona: Persona): Promise<void> {
-      if (!coordinatorTrusted()) {
-        return;
-      }
-      try {
-        const res = await cfetch(`${baseUrl}/api/personas`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(persona),
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to push persona: ${res.status}`);
-        } else {
-          logger.info(`Pushed persona ${persona.id} to coordinator`);
+      await sendFireAndForget(
+        'pushPersona',
+        '/api/personas',
+        'POST',
+        persona,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/personas`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(persona),
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to push persona: ${res.status}`);
+            } else {
+              logger.info(`Pushed persona ${persona.id} to coordinator`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to push persona: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to push persona: ${err}`);
-      }
+      );
     },
 
     async pushSkill(skill: Skill): Promise<void> {
-      if (!coordinatorTrusted()) {
-        return;
-      }
-      try {
-        const res = await cfetch(`${baseUrl}/api/skills`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(skill),
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to push skill: ${res.status}`);
-        } else {
-          logger.info(`Pushed skill ${skill.id} to coordinator`);
+      await sendFireAndForget(
+        'pushSkill',
+        '/api/skills',
+        'POST',
+        skill,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/skills`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(skill),
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to push skill: ${res.status}`);
+            } else {
+              logger.info(`Pushed skill ${skill.id} to coordinator`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to push skill: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to push skill: ${err}`);
-      }
+      );
     },
 
     async deletePersona(id: string): Promise<void> {
-      if (!coordinatorTrusted()) {
-        return;
-      }
-      try {
-        const res = await cfetch(`${baseUrl}/api/personas/${id}`, {
-          method: 'DELETE',
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to delete persona: ${res.status}`);
-        } else {
-          logger.info(`Deleted persona ${id} from coordinator`);
+      await sendFireAndForget(
+        'deletePersona',
+        `/api/personas/${id}`,
+        'DELETE',
+        undefined,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/personas/${id}`, {
+              method: 'DELETE',
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to delete persona: ${res.status}`);
+            } else {
+              logger.info(`Deleted persona ${id} from coordinator`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to delete persona: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to delete persona: ${err}`);
-      }
+      );
     },
 
     async deleteSkill(id: string): Promise<void> {
-      if (!coordinatorTrusted()) {
-        return;
-      }
-      try {
-        const res = await cfetch(`${baseUrl}/api/skills/${id}`, {
-          method: 'DELETE',
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to delete skill: ${res.status}`);
-        } else {
-          logger.info(`Deleted skill ${id} from coordinator`);
+      await sendFireAndForget(
+        'deleteSkill',
+        `/api/skills/${id}`,
+        'DELETE',
+        undefined,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/skills/${id}`, {
+              method: 'DELETE',
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to delete skill: ${res.status}`);
+            } else {
+              logger.info(`Deleted skill ${id} from coordinator`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to delete skill: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to delete skill: ${err}`);
-      }
+      );
     },
 
     // Knowledge sync (global memory)
     async pushKnowledge(knowledge: Knowledge): Promise<void> {
-      if (!coordinatorTrusted()) {
-        return;
-      }
-      try {
-        const res = await cfetch(`${baseUrl}/api/sync/knowledge/push`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(knowledge),
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to push knowledge: ${res.status}`);
-        } else {
-          logger.info(`Pushed knowledge ${knowledge.id} to coordinator`);
+      await sendFireAndForget(
+        'pushKnowledge',
+        '/api/sync/knowledge/push',
+        'POST',
+        knowledge,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/sync/knowledge/push`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(knowledge),
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to push knowledge: ${res.status}`);
+            } else {
+              logger.info(`Pushed knowledge ${knowledge.id} to coordinator`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to push knowledge: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to push knowledge: ${err}`);
-      }
+      );
     },
 
     async pullKnowledge(since?: number): Promise<Knowledge[]> {
@@ -729,69 +843,98 @@ export function createCoordinatorClient(
       sessionId: string,
       personaId: string | null
     ): Promise<void> {
-      if (!coordinatorTrusted()) {
-        return;
-      }
-      try {
-        const res = await cfetch(`${baseUrl}/api/sync/sessions/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: sessionId,
-            personaId: personaId ?? undefined,
-            beaconId: config.beaconId,
-          }),
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to register swarm session: ${res.status}`);
-        } else {
-          logger.info(`Registered swarm session ${sessionId}`);
+      const body = {
+        id: sessionId,
+        personaId: personaId ?? undefined,
+        beaconId: config.beaconId,
+      };
+      await sendFireAndForget(
+        'registerSwarmSession',
+        '/api/sync/sessions/register',
+        'POST',
+        body,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/sync/sessions/register`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to register swarm session: ${res.status}`);
+            } else {
+              logger.info(`Registered swarm session ${sessionId}`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to register swarm session: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to register swarm session: ${err}`);
-      }
+      );
     },
 
     async updateSwarmSessionPersona(
       sessionId: string,
       personaId: string | null
     ): Promise<void> {
-      if (!coordinatorTrusted()) {
-        return;
-      }
-      try {
-        const res = await cfetch(
-          `${baseUrl}/api/sessions/${sessionId}/persona`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ personaId }),
+      const body = { personaId };
+      await sendFireAndForget(
+        'updateSwarmSessionPersona',
+        `/api/sessions/${sessionId}/persona`,
+        'PATCH',
+        body,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
           }
-        );
-        if (!res.ok) {
-          logger.warn(`Failed to update session persona: ${res.status}`);
+          try {
+            const res = await cfetch(
+              `${baseUrl}/api/sessions/${sessionId}/persona`,
+              {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+              }
+            );
+            if (!res.ok) {
+              logger.warn(`Failed to update session persona: ${res.status}`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to update session persona: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to update session persona: ${err}`);
-      }
+      );
     },
 
     async endSwarmSession(sessionId: string): Promise<void> {
-      if (!coordinatorTrusted()) {
-        return;
-      }
-      try {
-        const res = await cfetch(`${baseUrl}/api/sync/sessions/${sessionId}`, {
-          method: 'DELETE',
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to end swarm session: ${res.status}`);
-        } else {
-          logger.info(`Ended swarm session ${sessionId}`);
+      await sendFireAndForget(
+        'endSwarmSession',
+        `/api/sync/sessions/${sessionId}`,
+        'DELETE',
+        undefined,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(
+              `${baseUrl}/api/sync/sessions/${sessionId}`,
+              {
+                method: 'DELETE',
+              }
+            );
+            if (!res.ok) {
+              logger.warn(`Failed to end swarm session: ${res.status}`);
+            } else {
+              logger.info(`Ended swarm session ${sessionId}`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to end swarm session: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to end swarm session: ${err}`);
-      }
+      );
     },
 
     async pushEvents(
@@ -805,23 +948,32 @@ export function createCoordinatorClient(
         createdAt: number;
       }>
     ): Promise<void> {
-      if (!coordinatorTrusted()) {
-        return;
-      }
-      try {
-        const res = await cfetch(`${baseUrl}/api/sync/events/push`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ events }),
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to push events: ${res.status}`);
-        } else {
-          logger.debug(`Pushed ${events.length} events to coordinator`);
+      const body = { events };
+      await sendFireAndForget(
+        'pushEvents',
+        '/api/sync/events/push',
+        'POST',
+        body,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/sync/events/push`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to push events: ${res.status}`);
+            } else {
+              logger.debug(`Pushed ${events.length} events to coordinator`);
+            }
+          } catch (err) {
+            logger.warn(`Failed to push events: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to push events: ${err}`);
-      }
+      );
     },
 
     async pushToolDefinitions(
@@ -831,25 +983,34 @@ export function createCoordinatorClient(
         defaultHidden: boolean;
       }>
     ): Promise<void> {
-      if (!coordinatorTrusted()) {
-        return;
-      }
-      try {
-        const res = await cfetch(`${baseUrl}/api/sync/tools/push`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tools }),
-        });
-        if (!res.ok) {
-          logger.warn(`Failed to push tool definitions: ${res.status}`);
-        } else {
-          logger.debug(
-            `Pushed ${tools.length} tool definitions to coordinator`
-          );
+      const body = { tools };
+      await sendFireAndForget(
+        'pushToolDefinitions',
+        '/api/sync/tools/push',
+        'POST',
+        body,
+        async () => {
+          if (!coordinatorTrusted()) {
+            return;
+          }
+          try {
+            const res = await cfetch(`${baseUrl}/api/sync/tools/push`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+              logger.warn(`Failed to push tool definitions: ${res.status}`);
+            } else {
+              logger.debug(
+                `Pushed ${tools.length} tool definitions to coordinator`
+              );
+            }
+          } catch (err) {
+            logger.warn(`Failed to push tool definitions: ${err}`);
+          }
         }
-      } catch (err) {
-        logger.warn(`Failed to push tool definitions: ${err}`);
-      }
+      );
     },
 
     async getDefaultHiddenTools(): Promise<{ tools: string[] }> {
@@ -871,7 +1032,7 @@ export function createCoordinatorClient(
 
     async getSessions(
       query: Record<string, string>
-    ): Promise<{ sessions: any[]; count: number }> {
+    ): Promise<{ sessions: unknown[]; count: number }> {
       if (!coordinatorTrusted()) {
         return { sessions: [], count: 0 };
       }
@@ -882,14 +1043,14 @@ export function createCoordinatorClient(
           logger.warn(`Failed to get sessions: ${res.status}`);
           return { sessions: [], count: 0 };
         }
-        return (await res.json()) as { sessions: any[]; count: number };
+        return (await res.json()) as { sessions: unknown[]; count: number };
       } catch (err) {
         logger.warn(`Failed to get sessions: ${err}`);
         return { sessions: [], count: 0 };
       }
     },
 
-    async getSessionLog(sessionId: string): Promise<any> {
+    async getSessionLog(sessionId: string): Promise<unknown> {
       if (!coordinatorTrusted()) {
         return null;
       }
@@ -906,7 +1067,29 @@ export function createCoordinatorClient(
       }
     },
 
-    async processSession(sessionId: string): Promise<any> {
+    async getSessionTranscript(sessionId: string): Promise<{
+      session: unknown;
+      transcript: string;
+    } | null> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
+      try {
+        const res = await cfetch(
+          `${baseUrl}/api/sessions/${sessionId}/transcript`
+        );
+        if (!res.ok) {
+          logger.warn(`Failed to get session transcript: ${res.status}`);
+          return null;
+        }
+        return (await res.json()) as { session: unknown; transcript: string };
+      } catch (err) {
+        logger.warn(`Failed to get session transcript: ${err}`);
+        return null;
+      }
+    },
+
+    async processSession(sessionId: string): Promise<unknown> {
       if (!coordinatorTrusted()) {
         return null;
       }
@@ -931,7 +1114,7 @@ export function createCoordinatorClient(
     async completeSessionProcessing(
       sessionId: string,
       body: { summary?: string; notes?: string }
-    ): Promise<any> {
+    ): Promise<unknown> {
       if (!coordinatorTrusted()) {
         return null;
       }
@@ -951,6 +1134,123 @@ export function createCoordinatorClient(
         return await res.json();
       } catch (err) {
         logger.warn(`Failed to complete session processing: ${err}`);
+        return null;
+      }
+    },
+
+    async listBeacons(): Promise<unknown[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
+      try {
+        const res = await cfetch(`${baseUrl}/api/beacons`);
+        if (!res.ok) {
+          logger.warn(`Failed to list beacons: ${res.status}`);
+          return [];
+        }
+        return (await res.json()) as unknown[];
+      } catch (err) {
+        logger.warn(`Failed to list beacons: ${err}`);
+        return [];
+      }
+    },
+
+    async listAgentLocations(beaconId?: string): Promise<unknown[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
+      try {
+        const query = beaconId
+          ? `?beaconId=${encodeURIComponent(beaconId)}`
+          : '';
+        const res = await cfetch(`${baseUrl}/api/agents/location${query}`);
+        if (!res.ok) {
+          logger.warn(`Failed to list agent locations: ${res.status}`);
+          return [];
+        }
+        return (await res.json()) as unknown[];
+      } catch (err) {
+        logger.warn(`Failed to list agent locations: ${err}`);
+        return [];
+      }
+    },
+
+    async spawnSpawn(body: Record<string, unknown>): Promise<unknown> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
+      try {
+        const res = await cfetch(`${baseUrl}/api/spawn`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          logger.warn(`Failed to spawn: ${res.status}`);
+          return null;
+        }
+        return await res.json();
+      } catch (err) {
+        logger.warn(`Failed to spawn: ${err}`);
+        return null;
+      }
+    },
+
+    async getSpawn(beaconId: string, spawnId: string): Promise<unknown> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
+      try {
+        const res = await cfetch(
+          `${baseUrl}/api/spawn/${encodeURIComponent(beaconId)}/${encodeURIComponent(spawnId)}`
+        );
+        if (!res.ok) {
+          logger.warn(`Failed to get spawn: ${res.status}`);
+          return null;
+        }
+        return await res.json();
+      } catch (err) {
+        logger.warn(`Failed to get spawn: ${err}`);
+        return null;
+      }
+    },
+
+    async listSpawns(beaconId: string, status?: string): Promise<unknown[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
+      try {
+        const query = status ? `?status=${encodeURIComponent(status)}` : '';
+        const res = await cfetch(
+          `${baseUrl}/api/spawn/${encodeURIComponent(beaconId)}${query}`
+        );
+        if (!res.ok) {
+          logger.warn(`Failed to list spawns: ${res.status}`);
+          return [];
+        }
+        return (await res.json()) as unknown[];
+      } catch (err) {
+        logger.warn(`Failed to list spawns: ${err}`);
+        return [];
+      }
+    },
+
+    async terminateSpawn(beaconId: string, spawnId: string): Promise<unknown> {
+      if (!coordinatorTrusted()) {
+        return null;
+      }
+      try {
+        const res = await cfetch(
+          `${baseUrl}/api/spawn/${encodeURIComponent(beaconId)}/${encodeURIComponent(spawnId)}`,
+          { method: 'DELETE' }
+        );
+        if (!res.ok) {
+          logger.warn(`Failed to terminate spawn: ${res.status}`);
+          return null;
+        }
+        return await res.json();
+      } catch (err) {
+        logger.warn(`Failed to terminate spawn: ${err}`);
         return null;
       }
     },

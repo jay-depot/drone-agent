@@ -1,152 +1,50 @@
 /**
- * Echo LLM Provider Plugin
+ * Echo LLM protocol driver.
  *
- * A mock LLM provider that echoes back prompts for deterministic testing.
- * This provider connects to the echo-llm Docker service or any compatible endpoint.
+ * A mock driver that echoes back prompts for deterministic testing. It
+ * connects to the echo-llm Docker service or any compatible endpoint.
  */
 
 import type {
-  DroneChatMessage,
-  DroneChatResponse,
-  DroneContextWindowInfo,
   DroneLlmCapability,
-  DroneLlmProvider,
-  DroneLlmProviderRegistration,
+  LlmProtocolDriver,
   DronePlugin,
 } from 'drone-core';
-import { PRECEDENCE_LLM_PROVIDER } from 'drone-core';
-
-// ── Echo API types ────────────────────────────────────────────────────
-
-type EchoMessage = {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-};
-
-type EchoChatRequest = {
-  model: string;
-  messages: EchoMessage[];
-  temperature?: number;
-  max_tokens?: number;
-};
-
-type EchoChatChoice = {
-  message: EchoMessage;
-  finish_reason: string;
-};
-
-type EchoChatResponse = {
-  id: string;
-  choices: EchoChatChoice[];
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-};
-
-// ── Message conversion ─────────────────────────────────────────────
-
-function toEchoMessage(msg: DroneChatMessage): EchoMessage {
-  // Filter out tool messages - they don't have a valid role for the echo API
-  if (msg.role === 'tool') {
-    return { role: 'user', content: msg.content };
-  }
-  return {
-    role: msg.role,
-    content: msg.content,
-  };
-}
-
-function fromEchoResponse(response: EchoChatResponse): DroneChatResponse {
-  const choice = response.choices[0];
-  if (!choice) {
-    throw new Error('Echo provider returned no choices');
-  }
-
-  return {
-    message: choice.message.content,
-  };
-}
-
-// ── Provider implementation ─────────────────────────────────────────
+import { createEchoProvider, echoParameterSchema } from './echo-driver.js';
 
 export const echoPlugin: DronePlugin = {
   metadata: {
     id: 'echo',
     name: 'Echo LLM Provider',
-    version: '1.0.0',
+    version: '1.1.0',
     description:
-      'Mock LLM provider that echoes prompts for deterministic testing',
+      'Mock LLM protocol driver that echoes prompts for deterministic testing. Inert until a providers config entry selects the "echo" protocol.',
     defaultEnabled: false,
     dependencies: [{ id: 'llm' }],
   },
 
   async register(registration) {
-    // Get echo provider URL from environment (recommended for Docker)
-    const echoUrl = process.env.LLM_ECHO_URL || 'http://localhost:3458';
-    const model = process.env.LLM_ECHO_MODEL || 'echo-model';
-
-    registration.logger.info(`Echo LLM provider connecting to: ${echoUrl}`);
-
-    const provider: DroneLlmProvider = {
-      async chat(params) {
-        const { messages, reasoningLevel } = params;
-
-        const body: EchoChatRequest = {
-          model,
-          messages: messages.map(toEchoMessage),
-        };
-
-        const response = await fetch(`${echoUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-        });
-
-        if (!response.ok) {
-          const errorBody = await response.text();
-          throw new Error(
-            `Echo provider API error (${response.status}): ${errorBody}`
-          );
-        }
-
-        const data = (await response.json()) as EchoChatResponse;
-        return fromEchoResponse(data);
-      },
-
-      async getContextWindowInfo() {
-        // Echo provider doesn't report context window, use defaults
-        return {
-          model: model,
-          contextWindowTokens: 4096,
-          source: 'default' as const,
-        } as DroneContextWindowInfo;
-      },
+    const driver: LlmProtocolDriver = {
+      protocolId: 'echo',
+      createProvider: providerConfig =>
+        createEchoProvider({ baseUrl: providerConfig.baseUrl }),
+      parameterSchema: echoParameterSchema,
     };
 
-    // Register with the LLM broker
+    registration.offer({ driver });
+
     const llmCap = registration.request<DroneLlmCapability>('llm');
     if (llmCap) {
-      const llmRegistration: DroneLlmProviderRegistration = {
-        id: 'echo',
-        precedence: PRECEDENCE_LLM_PROVIDER,
-        getProvider: () => provider,
-        listModels: async () => [model],
-        getDefaultModel: () => model,
-      };
-      llmCap.registerProvider(llmRegistration);
-      registration.logger.info('Echo provider registered with LLM broker');
+      llmCap.registerDriver(driver);
+      registration.logger.info('echo protocol driver registered');
     } else {
       registration.logger.warn(
-        'LLM broker not available; echo will not be registered as a provider'
+        'LLM broker not available; echo driver not registered'
       );
     }
 
     registration.hooks.onPluginsLoaded(async () => {
-      registration.logger.info('Echo provider ready');
+      registration.logger.info('echo protocol driver ready');
     });
   },
 };

@@ -130,6 +130,11 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   const codeBackgroundRef = useRef<string | undefined>(codeBackground);
   codeBackgroundRef.current = codeBackground;
 
+  // Terminal columns for event-listener render callbacks (avoids stale
+  // closure on the debounced width, same pattern as the refs above).
+  const columnsRef = useRef<number | undefined>(columns);
+  columnsRef.current = columns;
+
   // ── Mid-panel widget state ────────────────────────────────────────────
   const midPanelWidgetsRef = useRef<MidPanelWidget[]>([]);
 
@@ -251,6 +256,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             outputLines: [...entry.lines],
             syntaxColors: syntaxColorsRef.current,
             codeBackground: codeBackgroundRef.current,
+            columns: columnsRef.current,
           }) as React.ReactNode;
           updateItem(entry.id, component, () => ({
             text: `→ ${event.name}`,
@@ -285,6 +291,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
                 scheme: s as unknown,
                 syntaxColors: syntaxColorsRef.current,
                 codeBackground: codeBackgroundRef.current,
+                columns: columnsRef.current,
               }) as React.ReactNode)
             ) : (
               <ToolCallProgress
@@ -332,6 +339,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
                   outputLines,
                   syntaxColors: syntaxColorsRef.current,
                   codeBackground: codeBackgroundRef.current,
+                  columns: columnsRef.current,
                 }) as React.ReactNode)
               ) : (
                 <ToolCallProgress
@@ -471,6 +479,10 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           logFn(`Error: ${event.message}`, 'error');
           break;
         }
+        case 'notice': {
+          logFn(event.content, 'notice');
+          break;
+        }
       }
     });
     return () => unregister?.();
@@ -495,7 +507,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             },
             engine: opts.engine,
             conversation: opts.conversation,
-            sessionManager: undefined,
+            sessionManager: opts.sessionManager,
             exit: () => exit(),
             printHelp: () => printHelp(opts, log),
           });
@@ -612,7 +624,18 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   }, [opts.engine, pushColorOverride, popColorOverride]);
 
   // ── Status bar content ─────────────────────────────────────────────
-  const model = opts.conversation.getModel();
+  // Full-form identity: <providerId>/<modelLocalId>. The conversation's
+  // getModel() may already return the full form (after /model) or a bare
+  // local id (initial activation); normalize for display.
+  const llmCapForStatus = opts.engine.getCapability<{
+    getActiveProviderId: () => string;
+  }>('llm');
+  const model = (() => {
+    const raw = opts.conversation.getModel();
+    const providerId = llmCapForStatus?.getActiveProviderId();
+    if (!providerId || raw.includes('/')) return raw;
+    return `${providerId}/${raw}`;
+  })();
   const pluginCount = opts.engine.getRegisteredPluginCount();
   const totalTools = opts.engine.getRegisteredToolCount();
   const allToolsDescs = opts.engine.listTools();

@@ -9,13 +9,14 @@ import {
 import type { WebSocket } from '@fastify/websocket';
 
 function makeFakeWs() {
+  const send = vi.fn((data: string, cb?: (err?: Error) => void) => cb?.());
   const ws = {
-    send: vi.fn((data: string, cb?: (err?: Error) => void) => cb?.()),
+    send,
     on: vi.fn(),
     close: vi.fn(),
     readyState: 1,
   };
-  return ws as unknown as WebSocket;
+  return Object.assign(ws as unknown as WebSocket, { send });
 }
 
 beforeEach(() => {
@@ -37,7 +38,7 @@ describe('sendBeaconCommand', () => {
     expect(ws.send).toHaveBeenCalled();
 
     // Parse the sent message to extract its id, then simulate the response.
-    const sent = JSON.parse((ws.send as any).mock.calls[0][0]);
+    const sent = JSON.parse(String(ws.send.mock.calls[0][0]));
     expect(sent.type).toBe('command');
     expect(sent.command).toBe('spawn');
     expect(sent.payload).toEqual({ personaId: 'p1' });
@@ -75,7 +76,7 @@ describe('sendBeaconCommand', () => {
 
   it('rejects when ws.send errors', async () => {
     const ws = makeFakeWs();
-    (ws.send as any) = vi.fn((_data: string, cb?: (err?: Error) => void) =>
+    ws.send.mockImplementation((_data: string, cb?: (err?: Error) => void) =>
       cb?.(new Error('send failed'))
     );
     _registerTestConnection('b1', ws);

@@ -6,7 +6,6 @@ export type CliOptions = {
   modelOverride?: string;
   configDir?: string;
   pluginOverrides: string[];
-  // NEW:
   subagentId?: string;
   persona?: string;
   workflow?: {
@@ -14,6 +13,10 @@ export type CliOptions = {
     workflowName: string;
     args: Record<string, string>;
   };
+  /** Override session.retry.maxRetries (e.g. for long-running headless agents). */
+  retryMaxRetries?: number;
+  /** Override session.retry.maxWaitMs (e.g. for long-running headless agents). */
+  retryMaxWaitMs?: number;
 };
 
 export type CliInvocation =
@@ -137,11 +140,24 @@ export function parseCliArgs(argv: string[]): CliInvocation {
           options.debugSubsystems.push(trimmed);
         }
       }
-      // NEW: subagent mode flags
     } else if (arg === '--subagent-id' && i + 1 < argv.length) {
       options.subagentId = argv[++i];
     } else if (arg === '--persona' && i + 1 < argv.length) {
       options.persona = argv[++i];
+    } else if (arg === '--retry-max-retries' && i + 1 < argv.length) {
+      const raw = argv[++i];
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        throw new Error(`Invalid --retry-max-retries value: ${raw}`);
+      }
+      options.retryMaxRetries = parsed;
+    } else if (arg === '--retry-max-wait-ms' && i + 1 < argv.length) {
+      const raw = argv[++i];
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        throw new Error(`Invalid --retry-max-wait-ms value: ${raw}`);
+      }
+      options.retryMaxWaitMs = parsed;
     } else if (arg === '--workflow' && i + 1 < argv.length) {
       const raw = argv[++i];
       const parts = raw.split('__');
@@ -213,7 +229,6 @@ export function parseCliArgs(argv: string[]): CliInvocation {
     return { kind: 'chat', prompt: positionalArgs.join(' '), options };
   }
 
-  // NEW: env var fallback for subagent mode flags
   options.subagentId ??= process.env.DRONE_SUBAGENT_ID;
   options.persona ??= process.env.DRONE_PERSONA;
 

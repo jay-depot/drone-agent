@@ -6,6 +6,7 @@
  */
 
 import type {
+  DroneContextWindowInfo,
   DronePlugin,
   DronePersonaCapability,
   DroneSkillsCapability,
@@ -30,10 +31,20 @@ import {
   createTrustCoordinatorCommand,
   surfacePendingCoordinatorTrust,
 } from './tools-coordinator-trust.js';
+import { createSwarmSessionCommand } from './session-command.js';
 import { registerHooks } from './hooks.js';
 import { startHeartbeat, registerShutdown } from './heartbeat.js';
 
 export type { SwarmConfig } from './config.js';
+
+/**
+ * Optional host-provided dependencies for the swarm plugin. When
+ * `resolveContextWindow` is not provided, `/swarm-session import` falls back
+ * to the configured `session.contextWindowTokens`.
+ */
+export type SwarmPluginDeps = {
+  resolveContextWindow?: () => Promise<DroneContextWindowInfo>;
+};
 
 /**
  * The swarm plugin connects to a drone-beacon and provides
@@ -41,7 +52,10 @@ export type { SwarmConfig } from './config.js';
  * It also implements a push-through mechanism that records
  * all conversation events to the coordinator via the beacon.
  */
-export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
+export function createSwarmPlugin(
+  config: SwarmConfig,
+  deps?: SwarmPluginDeps
+): DronePlugin {
   return {
     metadata: {
       id: 'swarm',
@@ -53,6 +67,7 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       dependencies: [
         { id: 'persona' },
         { id: 'config' },
+        { id: 'llm', optional: true },
         { id: 'skills', optional: true },
         { id: 'self-improvement', optional: true },
       ],
@@ -69,8 +84,6 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       const sessionId =
         userSwarmConfig.sessionId ?? config.sessionId ?? `agent-${Date.now()}`;
       const protocol = beaconUseHttps ? 'https' : 'http';
-      const coordinatorUrl =
-        userSwarmConfig.coordinatorUrl ?? config.coordinatorUrl;
       const baseUrl = `${protocol}://${beaconHost}:${beaconPort}`;
       const wsProtocol = beaconUseHttps ? 'wss' : 'ws';
       const wsUrl = `${wsProtocol}://${beaconHost}:${beaconPort}/ws?agentId=${sessionId}`;
@@ -110,6 +123,20 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
 
       // Create shared context
       const ctx = createSwarmContext(baseUrl, sessionId, registration, wsUrl);
+
+      // Register prompt fragments unconditionally at registration time so
+      // render output is stable whether or not the beacon is reachable;
+      // render() reads the in-memory store only (no network).
+      registration.registerPromptFragment({
+        key: 'fragments.header',
+        phase: 'header',
+        render: () => Promise.resolve(ctx.fragmentStore.renderHeader()),
+      });
+      registration.registerPromptFragment({
+        key: 'fragments.footer',
+        phase: 'footer',
+        render: () => Promise.resolve(ctx.fragmentStore.renderFooter()),
+      });
 
       // ── Offer swarm capability ─────────────────────────────────────────
       const swarmCap: DroneSwarmCapability = {
@@ -179,11 +206,29 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
       // ── Coordinator trust (TOFU) ────────────────────────────────────────
       registration.registerSlashCommand(createTrustCoordinatorCommand(baseUrl));
 
+      // ── Session import command ───────────────────────────────────────────
+      const resolveContextWindow = deps?.resolveContextWindow;
+      const sessionImportConfig = registration.getConfig().swarm
+        .sessionImport ?? {
+        maxChunks: 5,
+        chunkTokenBudgetPercent: 12,
+      };
+      registration.registerSlashCommand(
+        createSwarmSessionCommand(
+          baseUrl,
+          sessionId,
+          sessionImportConfig,
+          resolveContextWindow
+            ? async () => (await resolveContextWindow()).contextWindowTokens
+            : undefined
+        )
+      );
+
       // ── Tools ───────────────────────────────────────────────────────────
       const toolFactories: Array<() => DroneToolDefinition> = [
         () => createSwarmMessageTool(ctx),
         ...createWikiTools(ctx).map(t => () => t),
-        ...createCoordinatorTools(coordinatorUrl).map(t => () => t),
+        ...createCoordinatorTools(baseUrl).map(t => () => t),
       ];
 
       for (const factory of toolFactories) {
@@ -197,6 +242,3 @@ export function createSwarmPlugin(config: SwarmConfig): DronePlugin {
     },
   };
 }
-
-// Default instance for easy configuration
-export const swarmPlugin = createSwarmPlugin({});

@@ -8,10 +8,34 @@ import {
   getCanonicalToolName,
   matchGlob,
   type DroneAgentConfig,
+  type DroneImageContent,
   type PartialDroneAgentConfig,
   commandExistsOnPath,
   resolveDroneExecutable,
 } from '../src/index.js';
+
+describe('DroneImageContent', () => {
+  it('accepts an optional description and persists it unchanged through JSON round-trip', () => {
+    const image: DroneImageContent = {
+      mimeType: 'image/png',
+      data: 'aGVsbG8=',
+      description: 'A screenshot of a terminal window.',
+    };
+    const roundTripped = JSON.parse(JSON.stringify(image)) as DroneImageContent;
+    expect(roundTripped).toEqual(image);
+    expect(roundTripped.description).toBe('A screenshot of a terminal window.');
+  });
+
+  it('omits description when absent', () => {
+    const image: DroneImageContent = {
+      mimeType: 'image/jpeg',
+      data: 'YWJj',
+    };
+    expect(image.description).toBeUndefined();
+    const roundTripped = JSON.parse(JSON.stringify(image)) as DroneImageContent;
+    expect(roundTripped.description).toBeUndefined();
+  });
+});
 
 describe('createConsoleLogger', () => {
   it('prefixes messages with the scope', () => {
@@ -57,6 +81,7 @@ describe('createDefaultAgentConfig', () => {
     expect(config.lsp.servers).toEqual({});
     expect(config.mcp.servers).toEqual({});
     expect(config.compaction.strategy).toBe('summary-drop');
+    expect(config.compaction.nudgeMarginPercent).toBe(10);
   });
 
   it('returns a fresh object each call', () => {
@@ -108,6 +133,9 @@ describe('applyAgentConfigLayer', () => {
     });
     expect(merged.compaction.softThresholdPercent).toBe(50);
     expect(merged.compaction.enabled).toBe(base.compaction.enabled);
+    expect(merged.compaction.nudgeMarginPercent).toBe(
+      base.compaction.nudgeMarginPercent
+    );
   });
 
   it('replaces LSP server map but merges LSP scalar fields', () => {
@@ -263,45 +291,37 @@ describe('filterByGlobPatterns', () => {
 
 describe('deepMerge', () => {
   it('skips undefined values in the overlay', () => {
-    const base = { a: 1, b: 2 };
+    const base: Record<string, unknown> = { a: 1, b: 2 };
     const result = deepMerge(base, { a: undefined }, {});
     expect(result).toEqual({ a: 1, b: 2 });
   });
 
   it('replaces fields listed in replace', () => {
-    const base = { a: 1, b: 2 };
+    const base: Record<string, unknown> = { a: 1, b: 2 };
     const result = deepMerge(base, { a: 99 }, { replace: ['a'] });
     expect(result).toEqual({ a: 99, b: 2 });
   });
 
   it('replaces fields listed in replaceNullable even when null', () => {
-    const base = { a: 1, b: 2 };
-    const result = deepMerge(
-      base,
-      { a: null as any },
-      { replaceNullable: ['a'] }
-    );
+    const base: Record<string, unknown> = { a: 1, b: 2 };
+    const result = deepMerge(base, { a: null }, { replaceNullable: ['a'] });
     expect(result).toEqual({ a: null, b: 2 });
   });
 
   it('shallow-merges fields listed in merge', () => {
-    const base = { a: { x: 1, y: 2 }, b: 3 };
-    const result = deepMerge(
-      base,
-      { a: { y: 99, z: 100 } as any },
-      { merge: ['a'] }
-    );
+    const base: Record<string, unknown> = { a: { x: 1, y: 2 }, b: 3 };
+    const result = deepMerge(base, { a: { y: 99, z: 100 } }, { merge: ['a'] });
     expect(result).toEqual({ a: { x: 1, y: 99, z: 100 }, b: 3 });
   });
 
   it('merges and deduplicates arrays listed in mergeArrays', () => {
-    const base = { a: [1, 2, 3] };
+    const base: Record<string, unknown> = { a: [1, 2, 3] };
     const result = deepMerge(base, { a: [3, 4, 5] }, { mergeArrays: ['a'] });
     expect(result).toEqual({ a: [1, 2, 3, 4, 5] });
   });
 
   it('recursively deep-merges nested specs', () => {
-    const base = {
+    const base: Record<string, unknown> = {
       outer: {
         inner: { a: 1, b: 2 },
         other: 'keep',
@@ -309,7 +329,7 @@ describe('deepMerge', () => {
     };
     const result = deepMerge(
       base,
-      { outer: { inner: { b: 99, c: 3 } } } as any,
+      { outer: { inner: { b: 99, c: 3 } } },
       { deepMerge: { outer: { deepMerge: { inner: {} } } } }
     );
     expect(result).toEqual({
@@ -318,20 +338,20 @@ describe('deepMerge', () => {
   });
 
   it('defaults unlisted objects to shallow spread merge', () => {
-    const base = { a: { x: 1, y: 2 } };
-    const result = deepMerge(base, { a: { y: 99 } as any }, {});
+    const base: Record<string, unknown> = { a: { x: 1, y: 2 } };
+    const result = deepMerge(base, { a: { y: 99 } }, {});
     expect(result).toEqual({ a: { x: 1, y: 99 } });
   });
 
   it('defaults unlisted scalars to replace', () => {
-    const base = { a: 1, b: 'hello' };
+    const base: Record<string, unknown> = { a: 1, b: 'hello' };
     const result = deepMerge(base, { a: 99, b: 'world' }, {});
     expect(result).toEqual({ a: 99, b: 'world' });
   });
 
   it('does not mutate the base object', () => {
-    const base = { a: { x: 1 } };
-    const result = deepMerge(base, { a: { y: 2 } as any }, { merge: ['a'] });
+    const base: Record<string, unknown> = { a: { x: 1 } };
+    const result = deepMerge(base, { a: { y: 2 } }, { merge: ['a'] });
     expect(base.a).toEqual({ x: 1 });
     expect(result.a).toEqual({ x: 1, y: 2 });
   });
@@ -346,7 +366,7 @@ describe('applyAgentConfigLayer — tui nested merge', () => {
           colors: { keyword: 'red' },
         },
       },
-    } as any);
+    } as PartialDroneAgentConfig);
     expect(merged.tui.syntaxHighlighting.colors.keyword).toBe('red');
     // Other colors from the base should be preserved
     expect(merged.tui.syntaxHighlighting.colors.function).toBe('cyan');

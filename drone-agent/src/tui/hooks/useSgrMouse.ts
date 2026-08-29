@@ -43,7 +43,8 @@ const SGR_MOUSE_ENABLE = '\x1b[?1000h\x1b[?1006h';
 const SGR_MOUSE_DISABLE = '\x1b[?1000l\x1b[?1006l';
 
 // SGR mouse event regex: \x1b[<row;col;buttonM or \x1b[<row;col;buttonm
-const SGR_MOUSE_RE = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/;
+const ESC = String.fromCharCode(27);
+const SGR_MOUSE_RE = new RegExp('^' + ESC + '\\[<(\\d+);(\\d+);(\\d+)([Mm])');
 
 /**
  * Hook that enables SGR mouse mode and returns click events.

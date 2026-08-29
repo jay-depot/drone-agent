@@ -3,6 +3,7 @@ import {
   createDefaultAgentConfig,
   createDebugFlagRegistry,
   filterByGlobPatterns,
+  toToolResultContent,
   type DronePlugin,
   type DroneSessionSafetyTrimPayload,
   type DroneToolDescriptor,
@@ -371,8 +372,7 @@ describe('createDronePluginEngine', () => {
 
       let listMountedFn: (() => DroneToolDescriptor[]) | undefined;
       let mountFn:
-        | ((name: string) => DroneToolDefinition | undefined)
-        | undefined;
+        ((name: string) => DroneToolDefinition | undefined) | undefined;
       let unmountFn: ((name: string) => void) | undefined;
 
       const engine = createDronePluginEngine({
@@ -844,7 +844,7 @@ describe('runtime__list_tools — tool visibility filtering', () => {
     });
     await engine.initialize();
     const result = JSON.parse(
-      await engine.executeTool('runtime__list_tools', {})
+      toToolResultContent(await engine.executeTool('runtime__list_tools', {}))
     );
     return (result.tools as Array<{ name: string }>).map(t => t.name);
   }

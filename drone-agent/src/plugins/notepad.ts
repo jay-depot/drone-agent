@@ -56,6 +56,13 @@ export const notepadPlugin: DronePlugin = {
       execute: async input => {
         const action = input.action as string;
 
+        if (action !== 'set' && action !== 'clear' && action !== 'append') {
+          return JSON.stringify({
+            success: false,
+            error: 'notepad action must be set, clear, or append.',
+          });
+        }
+
         if (action === 'clear') {
           state.currentNotepad = null;
           return JSON.stringify({ success: true });

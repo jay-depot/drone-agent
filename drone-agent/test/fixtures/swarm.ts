@@ -36,6 +36,34 @@ export async function waitForService(
   return false;
 }
 
+export function getRequiredIntegrationEnv(
+  envName: string,
+  fallbackUrl: string
+): string {
+  const configured = process.env[envName]?.trim();
+  if (configured) {
+    return configured;
+  }
+  return fallbackUrl;
+}
+
+/**
+ * Synchronous guard for swarm integration suites. Returns true when the suite
+ * must be skipped to avoid touching a user's real local beacon/coordinator:
+ * - RUN_INTEGRATION_TESTS is not set (not running under `pnpm test:integration`)
+ * - A target resolved to its unsafe `localhost` fallback (env not provided)
+ *
+ * Use with `describe.skipIf(shouldSkipIntegrationSuite([...]))`.
+ */
+export function shouldSkipIntegrationSuite(
+  targets: Array<{ url: string; fallbackUrl: string }>
+): boolean {
+  if (process.env.RUN_INTEGRATION_TESTS !== 'true') {
+    return true;
+  }
+  return targets.some(target => target.url === target.fallbackUrl);
+}
+
 /**
  * Make an HTTP request with proper defaults
  */
@@ -124,6 +152,21 @@ export async function getBeaconAgent(
 }
 
 /**
+ * Register an agent with the beacon directly (REST fallback for tests that
+ * need more than the dummy-agent container, e.g. inter-agent messaging).
+ */
+export async function registerBeaconAgent(
+  beaconUrl: string,
+  agentId: string,
+  personaId: string | null = null
+): Promise<Agent> {
+  return swarmRequest<Agent>(beaconUrl, '/agents', {
+    method: 'POST',
+    body: { id: agentId, personaId },
+  });
+}
+
+/**
  * Get all personas from beacon
  */
 export async function getBeaconPersonas(beaconUrl: string): Promise<Persona[]> {
@@ -185,7 +228,10 @@ export async function getBeaconMessages(
   beaconUrl: string,
   agentId: string
 ): Promise<Message[]> {
-  return swarmRequest<Message[]>(beaconUrl, `/agents/${agentId}/messages`);
+  return swarmRequest<Message[]>(
+    beaconUrl,
+    `/messages?agentId=${encodeURIComponent(agentId)}`
+  );
 }
 
 /**
@@ -200,9 +246,9 @@ export async function sendBeaconMessage(
   return swarmRequest<Message>(beaconUrl, `/messages`, {
     method: 'POST',
     body: {
-      from: fromAgentId,
-      to: toAgentId,
-      body,
+      fromAgentId,
+      toAgentId,
+      body: JSON.stringify(body),
     },
   });
 }
@@ -219,8 +265,8 @@ export async function sendChannelMessage(
   return swarmRequest<Message>(beaconUrl, `/channels/${channel}/messages`, {
     method: 'POST',
     body: {
-      from: fromAgentId,
-      body,
+      fromAgentId,
+      body: JSON.stringify(body),
     },
   });
 }
@@ -343,7 +389,7 @@ export async function pushPersonaToCoordinator(
   coordinatorUrl: string,
   persona: CreatePersonaRequest
 ): Promise<void> {
-  await swarmRequest(coordinatorUrl, `/personas`, {
+  await swarmRequest(coordinatorUrl, `/api/personas`, {
     method: 'POST',
     body: persona,
   });
@@ -355,7 +401,7 @@ export async function pushPersonaToCoordinator(
 export async function getCoordinatorPersonas(
   coordinatorUrl: string
 ): Promise<Persona[]> {
-  return swarmRequest<Persona[]>(coordinatorUrl, '/personas');
+  return swarmRequest<Persona[]>(coordinatorUrl, '/api/personas');
 }
 
 /**
@@ -363,11 +409,23 @@ export async function getCoordinatorPersonas(
  */
 export async function pushSkillToCoordinator(
   coordinatorUrl: string,
-  skill: { id: string; name: string; content: string }
+  skill: {
+    id: string;
+    name: string;
+    description: string;
+    trigger: string;
+    body: string;
+  }
 ): Promise<void> {
-  await swarmRequest(coordinatorUrl, `/skills`, {
+  await swarmRequest(coordinatorUrl, `/api/skills`, {
     method: 'POST',
-    body: skill,
+    body: {
+      id: skill.id,
+      name: skill.name,
+      description: skill.description,
+      trigger: skill.trigger,
+      body: skill.body,
+    },
   });
 }
 
@@ -377,5 +435,5 @@ export async function pushSkillToCoordinator(
 export async function getCoordinatorSkills(
   coordinatorUrl: string
 ): Promise<{ id: string; name: string }[]> {
-  return swarmRequest(coordinatorUrl, '/skills');
+  return swarmRequest(coordinatorUrl, '/api/skills');
 }

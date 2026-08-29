@@ -26,6 +26,7 @@
   "files": [
     "dist"
   ],
+  "private": true,
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
@@ -39,6 +40,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.10",
-    "@types/better-sqlite3": "^7.6.13"
+    "@types/better-sqlite3": "^7.6.13",
+    "vitest": "^3.2.6"
   }
 }

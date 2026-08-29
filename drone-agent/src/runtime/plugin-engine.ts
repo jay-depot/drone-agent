@@ -19,6 +19,7 @@ import {
   type DroneToolDescriptor,
   type DroneToolDefinition,
   type DroneToolExecutionContext,
+  type DroneToolResult,
   type DroneWorkflow,
   type DroneWorkflowContext,
   type DroneWorkflowResult,
@@ -27,6 +28,7 @@ import {
 } from 'drone-core';
 
 import { BUILT_IN_SLASH_COMMANDS } from './builtin-commands.js';
+import { SystemReminderQueue } from './system-reminders.js';
 
 export type RegisteredPluginState = {
   plugin: DronePlugin;
@@ -93,7 +95,7 @@ export type DronePluginEngine = {
     input: Record<string, unknown>,
     onProgress?: (chunk: string) => void,
     context?: DroneToolExecutionContext
-  ) => Promise<string>;
+  ) => Promise<string | DroneToolResult>;
   listTools: () => DroneToolDescriptor[];
   listAllTools: () => DroneToolDescriptor[];
   /** Mount a tool by canonical name (e.g. "file__read"). Returns the tool definition if newly mounted, else undefined. */
@@ -128,6 +130,17 @@ export type DronePluginEngine = {
   getRuntimeFlags: () => RuntimeFlagRegistry;
   /** Build the full system messages as sent to the LLM (config prompt + runtime flags + prompt fragments). */
   buildSystemMessages: () => Promise<DroneChatMessage[]>;
+  /**
+   * Drain queued one-shot system reminders for inclusion in the next LLM
+   * call as non-persisted system messages. The conversation service calls
+   * this when assembling outgoing messages.
+   */
+  drainSystemReminders: () => string[];
+  /**
+   * Clear any queued system reminders without delivering them. Called on
+   * session clear so stale reminders never leak into a fresh session.
+   */
+  clearSystemReminders: () => void;
   /**
    * Set the host's elicitation capability. Must be called by the CLI shell
    * or TUI App BEFORE any workflow runs (and before `onSessionStart` if
@@ -173,12 +186,18 @@ type CreateDronePluginEngineOptions = {
   logger?: DroneLogger;
   logToStderr?: boolean;
   debugFlags?: DebugFlagRegistry;
-  // NEW:
   runtimeOptions?: {
     subagentId?: string;
     persona?: string;
   };
   buildSystemMessages?: () => Promise<DroneChatMessage[]>;
+  /**
+   * Optional callback to reset the conversation's stuck-detector state
+   * (identical-tool-call streak, broken-response counter). Exposed to
+   * plugins via the `_runtime` capability so e.g. a subagent return or a
+   * user-visible recovery path can clear guardrail detectors.
+   */
+  resetStuckDetectors?: () => void;
 };
 
 function createHookBuckets(): HookBuckets {
@@ -294,7 +313,9 @@ export function createDronePluginEngine({
   debugFlags = createDebugFlagRegistry(),
   runtimeOptions,
   buildSystemMessages: buildSystemMessagesFromHost,
+  resetStuckDetectors: resetStuckDetectorsFromHost,
 }: CreateDronePluginEngineOptions): DronePluginEngine {
+  const systemReminders = new SystemReminderQueue();
   const pluginMap = validatePluginRegistry(plugins);
   const enabledPluginIds = resolveEnabledPluginIds(plugins, config);
   validateKnownEnabledPlugins(enabledPluginIds, pluginMap);
@@ -331,6 +352,17 @@ export function createDronePluginEngine({
   const logToolChange = (kind: string, detail: string): void => {
     if (debugFlags.isEnabled('tools')) {
       console.error(`[tools:${kind}] ${detail}`);
+    }
+  };
+
+  const dispatchConversationEvent = async (
+    event: DroneConversationEvent
+  ): Promise<void> => {
+    for (const callback of conversationEventHooks) {
+      await callback(event);
+    }
+    for (const callback of externalConversationEventListeners) {
+      callback(event);
     }
   };
 
@@ -771,7 +803,16 @@ export function createDronePluginEngine({
         subagentId: runtimeOptions?.subagentId,
         persona: runtimeOptions?.persona,
         isSubagent: !!runtimeOptions?.subagentId,
+        debugFlags,
         flags: runtimeFlagRegistry,
+        resetStuckDetectors: resetStuckDetectorsFromHost,
+        queueSystemReminder: (content: string) =>
+          systemReminders.queue(content),
+        emitEvent: (event: DroneConversationEvent) => {
+          dispatchConversationEvent(event).catch(err => {
+            logger.error(`emitEvent hook dispatch failed: ${err}`);
+          });
+        },
       });
 
       logger.info(`initializing ${sortedPlugins.length} plugin(s)`);
@@ -824,15 +865,7 @@ export function createDronePluginEngine({
         await callback(payload);
       }
     },
-    runConversationEventHooks: async (event: DroneConversationEvent) => {
-      for (const callback of conversationEventHooks) {
-        await callback(event);
-      }
-      // Also notify external listeners
-      for (const callback of externalConversationEventListeners) {
-        callback(event);
-      }
-    },
+    runConversationEventHooks: dispatchConversationEvent,
     onConversationEvent: callback => {
       externalConversationEventListeners.push(callback);
       return () => {
@@ -898,6 +931,8 @@ export function createDronePluginEngine({
     unregisterPluginTools: (pluginId: string) => {
       unregisterPluginToolsImpl(pluginId);
     },
+    drainSystemReminders: () => systemReminders.drainAll(),
+    clearSystemReminders: () => systemReminders.clear(),
     unregisterTool: (canonicalName: string) => {
       unregisterToolImpl(canonicalName);
     },

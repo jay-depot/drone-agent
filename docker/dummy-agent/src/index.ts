@@ -59,30 +59,44 @@ const logger = {
  * Register this agent with the beacon
  */
 async function registerWithBeacon(): Promise<void> {
-  try {
-    const response = await fetch(
-      `http://${BEACON_HOST}:${BEACON_PORT}/agents`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: AGENT_ID,
-          personaId: null,
-          capabilities: ['file', 'memory', 'exec', 'git'],
-        }),
-      }
-    );
+  const maxRetries = 10;
+  const retryDelayMs = 2000;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(
+        `http://${BEACON_HOST}:${BEACON_PORT}/agents`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: AGENT_ID,
+            personaId: null,
+            capabilities: ['file', 'memory', 'exec', 'git'],
+          }),
+        }
+      );
 
-    if (response.ok) {
-      state.status = 'connected';
-      state.lastActivity = new Date();
-      logger.info(`Registered with beacon as ${AGENT_ID}`);
-    } else {
-      logger.error(`Failed to register with beacon: ${response.status}`);
+      if (response.ok) {
+        state.status = 'connected';
+        state.lastActivity = new Date();
+        logger.info(`Registered with beacon as ${AGENT_ID}`);
+        return;
+      } else {
+        logger.error(
+          `Failed to register with beacon: ${response.status} (attempt ${attempt}/${maxRetries})`
+        );
+      }
+    } catch (error) {
+      logger.error(
+        `Failed to register with beacon (attempt ${attempt}/${maxRetries}):`,
+        error
+      );
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+      }
     }
-  } catch (error) {
-    logger.error(`Failed to register with beacon:`, error);
   }
+  logger.error(`Failed to register with beacon after ${maxRetries} attempts`);
 }
 
 /**

@@ -31,11 +31,11 @@
 
 import type {
   DroneElicitation,
-  DroneLlmProvider,
   DroneLogger,
   DronePersonaCapability,
   DronePersonaDefinition,
   DronePersonaWriter,
+  DroneResolvedModelRole,
   DroneWorkflow,
 } from 'drone-core';
 import { parsePersonaMd } from './loader.js';
@@ -325,16 +325,18 @@ export const personaCreateWorkflow: DroneWorkflow = {
     );
 
     // 5. LLM call (fresh — no tools, no conversation history).
-    const ollama = ctx.requestCapability<{
-      provider: DroneLlmProvider;
-    }>('ollama');
-    if (!ollama) {
+    const llm = ctx.requestCapability<{
+      resolveModelForRole: (role: string) => DroneResolvedModelRole;
+    }>('llm');
+    if (!llm) {
       throw new Error(
-        'persona.create workflow requires the Ollama provider; enable the ollama plugin.'
+        'persona.create workflow requires an active LLM provider; configure a providers entry and its protocol plugin.'
       );
     }
-    const candidate = await ollama.provider.chat({
-      model: ctx.config.ollama.model,
+    const role = llm.resolveModelForRole('wizard');
+    const candidate = await role.provider.chat({
+      model: role.model,
+      reasoningLevel: role.reasoningLevel,
       tools: [],
       messages: [
         { role: 'system', content: buildPersonaSystemPrompt() },

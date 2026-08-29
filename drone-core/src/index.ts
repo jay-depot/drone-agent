@@ -3,6 +3,7 @@
 // This file re-exports all public types and utilities from the drone-core
 // library. The implementation is split across multiple modules:
 //
+//   - position-types.ts  : Position resolution types (AmbiguousPositionError)
 //   - config-types.ts     : Configuration types and helpers
 //   - session-types.ts    : Session, message, tool, and token types
 //   - lsp-types.ts        : LSP server types
@@ -19,8 +20,19 @@
 //   - token-estimate.ts   : Token estimation functions
 //   - config-schema.ts     : Config schema and parsing
 //   - wiki-types.ts       : Wiki page types for swarm knowledge base
+//   - swarm-fragment-types.ts : Swarm prompt fragment types
 //
 // -----------------------------------------------------------------------
+
+// ── Position types ──────────────────────────────────────────────────
+
+export type { AmbiguousMatch } from './position-types.js';
+export {
+  AmbiguousPositionError,
+  buildAmbiguousMatches,
+  HARD_CONTEXT_LINES,
+  SOFT_CONTEXT_LINES,
+} from './position-types.js';
 
 // ── Config types ────────────────────────────────────────────────────
 
@@ -47,13 +59,19 @@ export type {
   DroneOpenRouterModelConfig,
   DroneOpenRouterConfig,
   DroneSessionConfig,
+  DroneSessionRetryConfig,
+  DroneGuardrailThresholdConfig,
+  DroneGuardrailConfig,
+  DroneToolCallDedupConfig,
   DroneCompactionStrategy,
   DroneCompactionConfig,
   DroneMemoryConfig,
+  DroneWakelockConfig,
   DroneLogConfig,
   DroneTerminalConfig,
   DronePromptFileConfig,
   DroneKnowledgeSyncConfig,
+  DroneSessionImportConfig,
   DroneSwarmConfig,
   DroneSearchPath,
   DroneSearchConfig,
@@ -83,6 +101,7 @@ export {
 export type {
   DroneLogger,
   DroneImageContent,
+  DroneToolResult,
   DroneToolJsonSchemaProperty,
   DroneToolJsonSchema,
   DroneChatMessage,
@@ -159,8 +178,34 @@ export type {
   DronePersonaWriter,
   DroneSkillWriter,
   DroneLlmProvider,
+  DroneChatRequest,
   DroneLlmProviderRegistration,
 } from './provider-types.js';
+export { DroneLlmError } from './provider-types.js';
+
+// ── Provider/protocol/model config types ─────────────────────────────
+
+export type {
+  DroneAutoImportMode,
+  DroneModelEntryConfig,
+  DroneProviderConfig,
+  ResolvedProviderConfig,
+  DiscoveredModel,
+  LlmParameterSpec,
+  LlmParameterSchema,
+  LlmProtocolDriver,
+} from './provider-config-types.js';
+
+export type { ModelSelection } from './model-selection.js';
+export {
+  WELL_KNOWN_MODEL_ROLES,
+  parseModelSelection,
+  formatModelSelection,
+  isValidFullModelSelection,
+  resolveInteractiveSelection,
+  resolveConfiguredReasoningLevel,
+  type DroneModelRole,
+} from './model-selection.js';
 
 // ── Capability types ─────────────────────────────────────────────────
 
@@ -169,6 +214,7 @@ export type {
   DroneConfigCapability,
   DroneSkillsCapability,
   DroneLlmCapability,
+  DroneResolvedModelRole,
   DronePrincipleEntry,
   DronePrinciplesCapability,
   DroneInsightEntry,
@@ -190,6 +236,14 @@ export type {
   DroneWikiSearchResult,
 } from './wiki-types.js';
 
+// ── Swarm prompt fragment types ──────────────────────────────────────
+
+export type { DroneSwarmFragment } from './swarm-fragment-types.js';
+export {
+  BROADCAST_TARGET,
+  validateFragmentId,
+} from './swarm-fragment-types.js';
+
 // ── Plugin system types ──────────────────────────────────────────────
 
 export type {
@@ -208,6 +262,7 @@ export type {
   DroneWorkflowResult,
   DroneWorkflowRunReturn,
   DroneWorkflow,
+  DroneSlashCommandSessionManager,
   DroneSlashCommandContext,
   DroneSlashCommand,
 } from './plugin-system.js';
@@ -222,6 +277,7 @@ export {
   filterByGlobPatterns,
   createConsoleLogger,
   getCanonicalToolName,
+  toToolResultContent,
 } from './utils.js';
 
 // ── ToolRegistry ──────────────────────────────────────────────────────
@@ -251,6 +307,8 @@ export {
   PartialDroneAgentConfigSchema,
   parseConfigWithSchema,
   transformEnvVars,
+  validateProviders,
+  validateModelRoles,
 } from './config-schema.js';
 export type { PartialDroneAgentConfigDecoded } from './config-schema.js';
 

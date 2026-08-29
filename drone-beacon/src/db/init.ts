@@ -46,6 +46,7 @@ export function initDatabase(dataPath: string): Database.Database {
     CREATE TABLE IF NOT EXISTS agent_sessions (
       id TEXT PRIMARY KEY,
       personaId TEXT,
+      status TEXT NOT NULL DEFAULT 'connected',
       connectedAt INTEGER NOT NULL,
       lastActivity INTEGER NOT NULL
     );
@@ -98,6 +99,22 @@ export function initDatabase(dataPath: string): Database.Database {
       createdAt INTEGER NOT NULL,
       updatedAt INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS outbox (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      endpoint TEXT NOT NULL,
+      method TEXT NOT NULL,
+      body TEXT,
+      createdAt INTEGER NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      lastAttemptAt INTEGER,
+      lastError TEXT,
+      deliveredAt INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_outbox_undelivered ON outbox (createdAt)
+      WHERE deliveredAt IS NULL;
 
     CREATE TABLE IF NOT EXISTS event_log (
       id TEXT PRIMARY KEY,
@@ -196,6 +213,22 @@ export function initDatabase(dataPath: string): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_wiki_pages_scope ON wiki_pages(scope);
+
+    CREATE TABLE IF NOT EXISTS fragments (
+      id TEXT NOT NULL,
+      target TEXT NOT NULL,
+      content TEXT NOT NULL,
+      phase TEXT NOT NULL DEFAULT 'header',
+      scope TEXT NOT NULL DEFAULT 'local',
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL,
+      expiresAt INTEGER,
+      PRIMARY KEY (id, target)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_fragments_target ON fragments(target);
+    CREATE INDEX IF NOT EXISTS idx_fragments_scope ON fragments(scope);
+    CREATE INDEX IF NOT EXISTS idx_fragments_expires ON fragments(expiresAt);
   `);
 
   // Idempotent migration: add lastExamined to existing insights tables.
@@ -204,6 +237,18 @@ export function initDatabase(dataPath: string): Database.Database {
   }>;
   if (!insightCols.some(c => c.name === 'lastExamined')) {
     db.exec('ALTER TABLE insights ADD COLUMN lastExamined TEXT');
+  }
+
+  // Idempotent migration: add status to existing agent_sessions tables.
+  const agentCols = db
+    .prepare('PRAGMA table_info(agent_sessions)')
+    .all() as Array<{
+    name: string;
+  }>;
+  if (!agentCols.some(c => c.name === 'status')) {
+    db.exec(
+      "ALTER TABLE agent_sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'connected'"
+    );
   }
 
   logger.info('Beacon database initialized successfully');

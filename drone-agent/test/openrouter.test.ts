@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   DroneConversationEvent,
   DroneLlmCapability,
-  DroneLlmProviderRegistration,
   DronePluginRegistration,
   DroneSessionSafetyTrimPayload,
 } from 'drone-core';
@@ -40,15 +39,21 @@ function createRegistrationCapture() {
     onSessionSafetyTrimApplied: [],
   };
 
-  let registeredProvider: DroneLlmProviderRegistration | undefined;
+  let registeredDriver: import('drone-core').LlmProtocolDriver | undefined;
   const llmCap: DroneLlmCapability = {
-    registerProvider: provider => {
-      registeredProvider = provider;
+    registerDriver: driver => {
+      registeredDriver = driver;
     },
+    registerProvider: () => {},
     unregisterProvider: () => {},
     getActiveProvider: () => ({
       chat: async () => ({ message: 'ok' }),
       getContextWindowInfo: async () => null,
+    }),
+    resolveModelForRole: () => ({
+      provider: { chat: async () => ({ message: 'ok' }) },
+      providerId: 'openrouter',
+      model: 'openai/gpt-4o',
     }),
     getActiveProviderId: () => 'openrouter',
     getAvailableProviders: () => [{ id: 'openrouter', precedence: 1000 }],
@@ -56,14 +61,11 @@ function createRegistrationCapture() {
     getModel: () => 'openai/gpt-4o',
     setModel: () => {},
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: unknown) => {},
     listModels: async () => {
-      const provider = registeredProvider;
-      if (!provider) {
-        return [];
-      }
-      return provider.listModels();
+      return [];
     },
+    describeImages: async images => images,
   };
 
   const registration: DronePluginRegistration = {
@@ -102,7 +104,16 @@ function createRegistrationCapture() {
   return {
     config,
     registration,
-    getRegisteredProvider: () => registeredProvider,
+    getRegisteredDriver: () => registeredDriver,
+    getProviderViaDriver: () => {
+      const driver = registeredDriver;
+      if (!driver) throw new Error('driver not registered');
+      return driver.createProvider({
+        protocol: 'openrouter',
+        baseUrl: config.openrouter.baseUrl,
+        apiKey: config.openrouter.apiKey,
+      });
+    },
   };
 }
 
@@ -162,7 +173,7 @@ describe('openrouter plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openrouterPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'openai/gpt-4o',
@@ -230,7 +241,7 @@ describe('openrouter plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openrouterPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     await expect(
       provider.chat({
@@ -291,7 +302,7 @@ describe('openrouter plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openrouterPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'openai/gpt-4o',
@@ -350,7 +361,7 @@ describe('openrouter plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openrouterPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'openai/gpt-4o',
@@ -388,7 +399,7 @@ describe('openrouter plugin', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await openrouterPlugin.register(capture.registration);
-    const provider = capture.getRegisteredProvider()!.getProvider();
+    const provider = capture.getProviderViaDriver();
 
     const response = await provider.chat({
       model: 'openai/gpt-4o',

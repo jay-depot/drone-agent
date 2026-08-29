@@ -94,7 +94,7 @@ describe('runFirstRunSetup', () => {
       'ollama',
       'openai',
     ]);
-    expect((written['llm'] as { provider: string }).provider).toBe('openai');
+    expect((written['llm'] as { active: string }).active).toBe('openai/gpt-4o');
     expect(process.env['OPENAI_API_KEY']).toBe('sk-test-openai');
     expect(setModel).toHaveBeenCalledWith('gpt-4o');
   });
@@ -136,8 +136,8 @@ describe('runFirstRunSetup', () => {
       'llm',
       'openrouter',
     ]);
-    expect((openRouterConfig['llm'] as { provider: string }).provider).toBe(
-      'openrouter'
+    expect((openRouterConfig['llm'] as { active: string }).active).toBe(
+      'openrouter/openai/gpt-4o'
     );
 
     vi.clearAllMocks();
@@ -159,8 +159,8 @@ describe('runFirstRunSetup', () => {
       'llm',
       'anthropic',
     ]);
-    expect((anthropicConfig['llm'] as { provider: string }).provider).toBe(
-      'anthropic'
+    expect((anthropicConfig['llm'] as { active: string }).active).toBe(
+      'anthropic/claude-sonnet-4-6'
     );
   });
 });

@@ -163,8 +163,14 @@ export const memoryPlugin: DronePlugin = {
       },
       execute: async input => {
         const action = input.action as string;
-        const key = (input.key as string).trim();
+
+        const key = typeof input.key === 'string' ? input.key.trim() : '';
         if (!key) throw new Error('memory.manage requires a non-empty key.');
+        if (action !== 'store' && action !== 'recall' && action !== 'delete') {
+          throw new Error(
+            'memory.manage action must be store, recall, or delete.'
+          );
+        }
 
         if (action === 'store') {
           const value = input.value as string;
@@ -237,6 +243,9 @@ export const memoryPlugin: DronePlugin = {
       },
       execute: async input => {
         const action = input.action as string;
+        if (action !== 'list' && action !== 'search') {
+          throw new Error('memory.browse action must be list or search.');
+        }
 
         if (action === 'list') {
           const prefix =

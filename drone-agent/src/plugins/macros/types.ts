@@ -4,8 +4,7 @@
  * - `chatPrompt`: any other non-empty, non-comment line sent as a chat message
  */
 export type DroneMacroStep =
-  | { kind: 'slashCommand'; line: string }
-  | { kind: 'chatPrompt'; text: string };
+  { kind: 'slashCommand'; line: string } | { kind: 'chatPrompt'; text: string };
 
 /**
  * A parsed macro definition loaded from a .macro file.

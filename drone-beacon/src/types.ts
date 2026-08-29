@@ -11,6 +11,7 @@ export type {
 export interface AgentSession {
   id: string;
   personaId: string | null;
+  status: 'connected' | 'disconnected' | 'busy' | 'idle';
   connectedAt: number;
   lastActivity: number;
 }
@@ -185,10 +186,7 @@ export interface CreateEventLogRequest {
 // === Knowledge Types ===
 
 export type KnowledgeType =
-  | 'fact'
-  | 'preference'
-  | 'skill_pattern'
-  | 'principle';
+  'fact' | 'preference' | 'skill_pattern' | 'principle';
 
 export interface Knowledge {
   id: string;

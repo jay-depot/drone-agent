@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { mkdtemp, mkdir, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import os from 'node:os';
@@ -99,7 +99,7 @@ describe('log plugin — path resolution', () => {
   });
 
   it('logs to ~/.drone-agent/logs/<persona-id>/ for user-scoped personas', async () => {
-    await withTempHome(async homeDir => {
+    await withTempHome(async _homeDir => {
       const sessionManager = createSessionManager();
       const plugin = createLogPlugin({ sessionManager });
       const { cap } = await getCapability(plugin);
@@ -290,6 +290,7 @@ async function getCapability(
       systemPrompt: '',
       activePersona: null,
       llm: { provider: 'ollama' },
+      providers: {},
       ollama: { host: '', model: '' },
       openai: {
         apiKey: '',
@@ -318,6 +319,18 @@ async function getCapability(
         contextWindowTokens: 32768,
         responseReserveTokens: 4096,
         maxToolIterations: 50,
+        guardrail: {
+          brokenResponses: { hintAfter: 2, maxHints: 2 },
+          reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },
+          identicalToolCalls: { hintAfter: 2, maxHints: 3 },
+        },
+        retry: {
+          maxRetries: 3,
+          maxWaitMs: 30000,
+          promptOnError: true,
+          backoffBaseMs: 1000,
+          backoffFactor: 2,
+        },
       },
       lsp: {
         enabled: false,
@@ -347,8 +360,10 @@ async function getCapability(
         minTurnsToCompact: 4,
         summaryMaxTokens: 800,
         summaryBudgetPercent: 20,
+        nudgeMarginPercent: 10,
       },
       memory: { enabled: false },
+      wakelock: { enabled: false },
       log: { enabled: false },
       terminal: {
         enabled: false,

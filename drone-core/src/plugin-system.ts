@@ -1,7 +1,11 @@
 // ── Plugin system types ────────────────────────────────────────────
 
 import type { DroneReasoningLevel } from './config-types.js';
-import type { DroneToolJsonSchema } from './session-types.js';
+import type {
+  DroneToolCall,
+  DroneToolJsonSchema,
+  DroneToolResult,
+} from './session-types.js';
 import type { DroneAgentConfig } from './config-types.js';
 
 // ── Plugin infrastructure ─────────────────────────────────────────
@@ -35,7 +39,7 @@ export type DroneToolDefinition = {
     input: Record<string, unknown>,
     onProgress?: (chunk: string) => void,
     context?: DroneToolExecutionContext
-  ) => Promise<string>;
+  ) => Promise<string | DroneToolResult>;
 };
 
 export type DronePromptFragment = {
@@ -236,10 +240,7 @@ export type DroneWorkflowResult = {
 };
 
 export type DroneWorkflowRunReturn =
-  | DroneWorkflowResult
-  | void
-  | string
-  | Record<string, unknown>;
+  DroneWorkflowResult | void | string | Record<string, unknown>;
 
 export type DroneWorkflow = {
   /** Unique within the registering plugin. */
@@ -254,6 +255,25 @@ export type DroneWorkflow = {
 };
 
 // ── Slash command types ────────────────────────────────────────────
+
+/**
+ * The subset of the session manager a slash-command handler receives.
+ * Enough to inject synthetic messages, tool-call/result pairs, and read
+ * the current user message. Used by `DroneSlashCommandContext` and the TUI
+ * host so both construct the same contract.
+ */
+export type DroneSlashCommandSessionManager = {
+  appendUserMessage: (message: string) => void;
+  appendAssistantMessage: (
+    content: string,
+    toolCalls?: DroneToolCall[]
+  ) => void;
+  appendToolResult: (
+    toolName: string,
+    content: string,
+    toolCallId?: string
+  ) => void;
+};
 
 /**
  * Context passed to a slash command handler. Bundles the host-side
@@ -277,7 +297,7 @@ export type DroneSlashCommandContext = {
       input: Record<string, unknown>,
       onProgress?: (chunk: string) => void,
       context?: DroneToolExecutionContext
-    ) => Promise<string>;
+    ) => Promise<string | DroneToolResult>;
     /** Optional — may be absent in minimal hosts. */
     runWorkflow?: (
       canonicalName: string,
@@ -358,16 +378,11 @@ export type DroneSlashCommandContext = {
     enableDebugSubsystem: (name: string) => void;
     /** Disable a debug subsystem by name (e.g. "llm"). */
     disableDebugSubsystem: (name: string) => void;
+    /** Estimated context usage percent (0-100) for /context-style displays. */
+    getEstimatedContextUsagePercent?: () => Promise<number>;
   };
   /** Session manager for appending synthetic messages. */
-  sessionManager?: {
-    appendUserMessage: (message: string) => void;
-    appendToolResult: (
-      toolName: string,
-      content: string,
-      toolCallId?: string
-    ) => void;
-  };
+  sessionManager?: DroneSlashCommandSessionManager;
   /** Request the host to exit (for /exit, /quit). */
   exit?: () => void;
   /** Host-provided help display function (TUI passes its printHelp, CLI passes its own). */

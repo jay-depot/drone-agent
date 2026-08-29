@@ -1,3 +1,4 @@
+import { SystemReminderQueue } from '../src/runtime/system-reminders.js';
 import { vi } from 'vitest';
 import {
   createConsoleLogger,
@@ -210,6 +211,8 @@ export function createFakeEngine(
     getRegisteredPluginCount: () => 0,
     getRegisteredToolCount: () => 0,
     getHelpSnippets: () => [],
+    drainSystemReminders: () => [],
+    clearSystemReminders: () => {},
     getConfig: () => {
       throw new Error('getConfig not implemented in fake engine');
     },
@@ -241,7 +244,7 @@ export type MockEngineOptions = {
     input: Record<string, unknown>,
     onProgress?: (chunk: string) => void,
     context?: import('drone-core').DroneToolExecutionContext
-  ) => Promise<string>;
+  ) => Promise<string | import('drone-core').DroneToolResult>;
   promptFragments?: string[];
   /** Optional custom getCapability override. Defaults to returning {} for 'llm'. */
   getCapability?: <T>(id: string) => T | undefined;
@@ -259,10 +262,12 @@ export function createMockEngine(
   options: MockEngineOptions
 ): import('../src/runtime/plugin-engine.js').DronePluginEngine & {
   __executeMock: ReturnType<typeof vi.fn>;
+  __reminderQueue: SystemReminderQueue;
 } {
   const executeMock = vi.fn(options.executeToolImpl);
   const toolList = options.tools;
   const customGetCapability = options.getCapability;
+  const reminderQueue = new SystemReminderQueue();
 
   return {
     initialize: async () => [],
@@ -300,12 +305,15 @@ export function createMockEngine(
     },
     dispatchSlashCommand: async () => false,
     getSlashCommands: () => [],
+    drainSystemReminders: () => reminderQueue.drainAll(),
+    clearSystemReminders: () => reminderQueue.clear(),
     onConversationEvent: () => () => {},
     registerBuiltinSlashCommand: () => {},
     getBuiltinSlashCommands: () => [],
     enablePlugin: async (_pluginId: string) => false,
     buildSystemMessages: async () => [],
-    addExternalPlugin: async (_plugin: any) => false,
+    addExternalPlugin: async (_plugin: unknown) => false,
     __executeMock: executeMock,
+    __reminderQueue: reminderQueue,
   };
 }

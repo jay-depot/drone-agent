@@ -16,8 +16,19 @@
  * corrected behavior. They remain the regression net for later fix-phases.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMcpClientConnection } from '../src/plugins/mcp/client.js';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
+import {
+  createMcpClientConnection,
+  splitToolResultBlocks,
+} from '../src/plugins/mcp/client.js';
 import { createMockFetch } from './mcp-fake-server.js';
 import type { MockFetch } from './mcp-fake-server.js';
 import type {
@@ -96,7 +107,12 @@ function installFetch(mock: MockFetch): void {
 
 let currentMock: MockFetch | undefined;
 
-// If any test forgets to install a mock, the real fetch throws loudly.
+// Original global fetch, restored after each test so the guard below never
+// leaks into other suites sharing this process (single-fork vitest pool).
+const ORIGINAL_FETCH = globalThis.fetch;
+
+// Installed between tests: any forgotten mock fails loudly within THIS file
+// without poisoning later suites with a permanent throwing fetch.
 const GUARD_FETCH = (async () => {
   throw new Error('real fetch must not be called in MCP unit tests');
 }) as unknown as typeof fetch;
@@ -110,6 +126,10 @@ afterEach(() => {
   globalThis.fetch = GUARD_FETCH;
   currentMock = undefined;
   vi.restoreAllMocks();
+});
+
+afterAll(() => {
+  globalThis.fetch = ORIGINAL_FETCH;
 });
 
 describe('initialize handshake', () => {
@@ -869,8 +889,7 @@ describe('streamable-HTTP GET SSE stream + DELETE termination (point 8)', () => 
     // Holder so the callback can reach `conn` even if the GET reader errors
     // during makeConnection (before the local is assigned). Mirrors index.ts,
     // where the connection is declared ahead of the per-server loop.
-    let captured: Awaited<ReturnType<typeof makeConnection>> | undefined;
-    captured = await makeConnection(
+    const captured = await makeConnection(
       mock,
       {},
       {},
@@ -927,5 +946,48 @@ describe('streamable-HTTP GET SSE stream + DELETE termination (point 8)', () => 
     await expect(conn.disconnect()).resolves.toBeUndefined();
     expect(conn.state.status).toBe('disconnected');
     expect(errors.some(e => e.includes('DELETE failed'))).toBe(true);
+  });
+});
+
+describe('splitToolResultBlocks', () => {
+  it('joins text blocks into content', () => {
+    const result = splitToolResultBlocks({
+      content: [
+        { type: 'text', text: 'hello' },
+        { type: 'text', text: 'world' },
+      ],
+    });
+    expect(result.content).toBe('hello\nworld');
+    expect(result.images).toBeUndefined();
+  });
+
+  it('maps image blocks to structured images', () => {
+    const result = splitToolResultBlocks({
+      content: [
+        { type: 'text', text: 'a screenshot' },
+        { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' },
+      ],
+    });
+    expect(result.content).toBe('a screenshot');
+    expect(result.images).toEqual([
+      { mimeType: 'image/png', data: 'aGVsbG8=' },
+    ]);
+  });
+
+  it('drops non-text/non-image blocks (e.g. resource)', () => {
+    const result = splitToolResultBlocks({
+      content: [
+        { type: 'text', text: 'text only' },
+        { type: 'resource', resource: { uri: 'file:///a.txt' } },
+      ],
+    });
+    expect(result.content).toBe('text only');
+    expect(result.images).toBeUndefined();
+  });
+
+  it('returns empty content for a result without content blocks', () => {
+    const result = splitToolResultBlocks({ someField: 'x' });
+    expect(result.content).toBe('');
+    expect(result.images).toBeUndefined();
   });
 });

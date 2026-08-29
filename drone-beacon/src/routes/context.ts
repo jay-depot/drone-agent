@@ -5,6 +5,7 @@ import {
 } from '../coordinator-client.js';
 import { logger } from '../logger.js';
 import * as db from '../db/index.js';
+import { pushFragmentSyncToAllConnected } from '../ws-server.js';
 
 // Lazy-initialized fetch wrapper that accepts the coordinator's self-signed TLS cert
 let _coordinatorFetch: typeof fetch | undefined;
@@ -90,7 +91,12 @@ export async function proxyWikiToCoordinator(
 // Exported function for periodic sync (called from index.ts)
 export async function triggerCoordinatorSync(): Promise<{
   success: boolean;
-  synced?: { personas: number; skills: number; knowledge: number };
+  synced?: {
+    personas: number;
+    skills: number;
+    knowledge: number;
+    fragments: number;
+  };
   error?: string;
 }> {
   const client = getCoordinatorClient();
@@ -120,8 +126,23 @@ export async function triggerCoordinatorSync(): Promise<{
       logger.warn(`Knowledge sync failed: ${err}`);
     }
 
+    // Mirror coordinator-scoped fragments wholesale; fan out a resync to
+    // connected agents when the merged set changed.
+    let fragmentCount = 0;
+    try {
+      const hashBefore = db.mergedContentHash();
+      const fragments = await client.fetchCoordinatorFragments();
+      db.replaceCoordinatorFragments(fragments);
+      fragmentCount = fragments.length;
+      if (db.mergedContentHash() !== hashBefore) {
+        pushFragmentSyncToAllConnected();
+      }
+    } catch (err) {
+      logger.warn(`Fragment mirror sync failed: ${err}`);
+    }
+
     logger.info(
-      `Synced ${personas.length} personas, ${skills.length} skills, and ${knowledgeCount} knowledge entries from coordinator`
+      `Synced ${personas.length} personas, ${skills.length} skills, ${knowledgeCount} knowledge entries, and ${fragmentCount} fragments from coordinator`
     );
     return {
       success: true,
@@ -129,6 +150,7 @@ export async function triggerCoordinatorSync(): Promise<{
         personas: personas.length,
         skills: skills.length,
         knowledge: knowledgeCount,
+        fragments: fragmentCount,
       },
     };
   } catch (err) {

@@ -5,6 +5,7 @@ packages:
   - drone-coordinator
   - drone-coordinator-ui
   - drone-swarm-common
+  - drone-swarm
   - drone-gateway
 allowBuilds:
   better-sqlite3: true

@@ -1,8 +1,4 @@
-import type {
-  DroneConversationEvent,
-  DronePlugin,
-  DroneSlashCommandContext,
-} from 'drone-core';
+import type { DronePlugin, DroneSlashCommandContext } from 'drone-core';
 import type { DroneMacroDefinition } from './types.js';
 import { loadMacros } from './loader.js';
 import { substituteMacroArgs } from './parser.js';
@@ -21,14 +17,7 @@ export const macrosPlugin: DronePlugin = {
     defaultEnabled: true,
   },
   register: async registration => {
-    const {
-      logger,
-      getConfig,
-      registerSlashCommand,
-      offer,
-      requestElicitation,
-    } = registration;
-    const config = getConfig();
+    const { logger, registerSlashCommand, offer } = registration;
     const projectDir = process.cwd();
 
     let macros = new Map<string, DroneMacroDefinition>();
@@ -98,36 +87,7 @@ export const macrosPlugin: DronePlugin = {
                   ctxLogger.info(substituted);
                   if (ctx.conversation?.sendUserMessage) {
                     await ctx.engine.runHooks?.('onBeforePrompt');
-                    const reply = await ctx.conversation.sendUserMessage(
-                      substituted,
-                      (rawEvent: unknown) => {
-                        const event = rawEvent as DroneConversationEvent;
-                        switch (event.kind) {
-                          case 'reasoning':
-                            ctxLogger.info(`💭 ${event.content}`);
-                            break;
-                          case 'toolCall':
-                            ctxLogger.info(
-                              `→ tool: ${event.name} ${JSON.stringify(event.arguments)}`
-                            );
-                            break;
-                          case 'toolResult':
-                            ctxLogger.info(
-                              `← ${event.name}: ${event.content.slice(0, 200)}`
-                            );
-                            break;
-                          case 'assistantMessage':
-                            ctxLogger.info(event.content);
-                            break;
-                          case 'error':
-                            ctxLogger.warn(`Error: ${event.message}`);
-                            break;
-                        }
-                      }
-                    );
-                    if (reply.length > 0) {
-                      ctxLogger.info(reply);
-                    }
+                    await ctx.conversation.sendUserMessage(substituted);
                     await ctx.engine.runHooks?.('onAfterToolCall');
                   } else {
                     // Fallback: append as user message if no conversation available.

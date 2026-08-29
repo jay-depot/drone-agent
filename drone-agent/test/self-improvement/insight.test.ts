@@ -311,6 +311,41 @@ describe('self-improvement plugin', () => {
     ).rejects.toThrow(/insight must be a non-empty string/);
   });
 
+  it('rejects omitted targetId on record', async () => {
+    const engine = await createEngine();
+
+    await expect(
+      engine.executeTool('self-improvement__insight', {
+        action: 'record',
+        targetType: 'persona',
+        insight: 'Some insight.',
+      })
+    ).rejects.toThrow(/targetId must be a non-empty string/);
+  });
+
+  it('rejects omitted targetId on recall', async () => {
+    const engine = await createEngine();
+
+    await expect(
+      engine.executeTool('self-improvement__insight', {
+        action: 'recall',
+        targetType: 'persona',
+      })
+    ).rejects.toThrow(/targetId must be a non-empty string/);
+  });
+
+  it('rejects omitted insight on record', async () => {
+    const engine = await createEngine();
+
+    await expect(
+      engine.executeTool('self-improvement__insight', {
+        action: 'record',
+        targetType: 'persona',
+        targetId: 'foo',
+      })
+    ).rejects.toThrow(/insight must be a non-empty string/);
+  });
+
   it('rejects unknown persona when persona plugin is loaded', async () => {
     const personaCap = {
       getPersonas: () => [

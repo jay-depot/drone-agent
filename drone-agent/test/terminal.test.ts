@@ -363,6 +363,7 @@ describe('terminalPlugin', () => {
         systemPrompt: '',
         activePersona: null,
         llm: { provider: 'ollama' },
+        providers: {},
         ollama: { host: 'http://127.0.0.1:11434', model: 'llama3.1' },
         openai: {
           apiKey: '',
@@ -392,6 +393,18 @@ describe('terminalPlugin', () => {
           responseReserveTokens: 4096,
           maxToolIterations: 50,
           promptOnToolIterationLimit: false,
+          guardrail: {
+            brokenResponses: { hintAfter: 2, maxHints: 2 },
+            reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },
+            identicalToolCalls: { hintAfter: 2, maxHints: 3 },
+          },
+          retry: {
+            maxRetries: 3,
+            maxWaitMs: 30000,
+            promptOnError: true,
+            backoffBaseMs: 1000,
+            backoffFactor: 2,
+          },
         },
         lsp: {
           enabled: false,
@@ -421,8 +434,10 @@ describe('terminalPlugin', () => {
           minTurnsToCompact: 4,
           summaryMaxTokens: 800,
           summaryBudgetPercent: 20,
+          nudgeMarginPercent: 10,
         },
         memory: { enabled: false },
+        wakelock: { enabled: false },
         log: { enabled: false },
         terminal: {
           enabled: true,

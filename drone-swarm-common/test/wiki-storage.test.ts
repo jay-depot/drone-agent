@@ -199,7 +199,7 @@ describe('Wiki Storage', () => {
   });
 
   it('should preserve createdAt on update', async () => {
-    const { writePage, readPage } = await import('../src/wiki-storage.js');
+    const { writePage } = await import('../src/wiki-storage.js');
     const first = await writePage('test', 'Test', 'beacon', 'v1');
     await new Promise(r => setTimeout(r, 10));
     const second = await writePage('test', 'Test Updated', 'beacon', 'v2');

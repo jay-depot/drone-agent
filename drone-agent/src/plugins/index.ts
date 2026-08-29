@@ -1,4 +1,4 @@
-import type { DronePlugin } from 'drone-core';
+import type { DroneContextWindowInfo, DronePlugin } from 'drone-core';
 import { bootstrapPlugin } from './bootstrap/index.js';
 import { configPlugin } from './config/index.js';
 import {
@@ -17,7 +17,7 @@ import { lspPlugin } from './lsp/plugin.js';
 import { mcpPlugin } from './mcp/index.js';
 import { memoryPlugin } from './memory/index.js';
 import { notepadPlugin } from './notepad.js';
-import { ollamaPlugin } from './ollama.js';
+import { ollamaPlugin } from './ollama/index.js';
 import { anthropicPlugin } from './anthropic/index.js';
 import { openaiPlugin } from './openai/index.js';
 import { openrouterPlugin } from './openrouter/index.js';
@@ -33,17 +33,18 @@ import { promptFilePlugin } from './prompt-file/index.js';
 import { skillProviderUserPlugin } from './skill-provider-user/index.js';
 import { lightpandaPlugin } from './lightpanda/index.js';
 import { startupPlugin } from './startup.js';
-// NEW:
 import { subagentPlugin } from './subagent/index.js';
-import { swarmPlugin } from './swarm/index.js';
+import { createSwarmPlugin } from './swarm/index.js';
 import { todoPlugin } from './todo/index.js';
 import { utilsPlugin } from './utils.js';
 import { focusPlugin } from './focus.js';
+import { wakelockPlugin } from './wakelock/index.js';
 
 // Static built-ins — everything except the compaction plugin, which needs
 // access to the live engine and session manager. The CLI calls
 // createBuiltInPlugins() to assemble the full list with the compaction plugin
-// wired in.
+// wired in. The swarm plugin is also created in the funnel because it needs
+// an optional host-provided context-window resolver.
 const staticBuiltInPlugins: DronePlugin[] = [
   notepadPlugin,
   subagentPlugin, // NEW
@@ -55,6 +56,7 @@ const staticBuiltInPlugins: DronePlugin[] = [
   lightpandaPlugin,
   todoPlugin,
   focusPlugin,
+  wakelockPlugin,
   fetchPlugin,
   utilsPlugin,
   macrosPlugin,
@@ -78,14 +80,22 @@ const staticBuiltInPlugins: DronePlugin[] = [
   selfImprovementPlugin,
   memoryPlugin,
   promptFilePlugin,
-  swarmPlugin,
 ];
 
 export function createBuiltInPlugins(
-  compactionDeps: CompactionPluginDeps
+  compactionDeps: CompactionPluginDeps & {
+    /** Host context-window resolver shared with the conversation service. */
+    resolveContextWindow?: () => Promise<DroneContextWindowInfo>;
+  }
 ): DronePlugin[] {
   return [
     ...staticBuiltInPlugins,
+    createSwarmPlugin(
+      {},
+      {
+        resolveContextWindow: compactionDeps.resolveContextWindow,
+      }
+    ),
     createCompactionPlugin(compactionDeps),
     createLogPlugin(compactionDeps),
   ];
@@ -94,11 +104,12 @@ export function createBuiltInPlugins(
 // Convenience for external consumers (and lib.ts) that want the list without
 // wiring compaction — for example, an embedding harness that only registers
 // tools and never starts a chat session. Pass createBuiltInPlugins(...) to
-// get the full list with the compaction plugin wired.
+// get the full list with the compaction and swarm plugins wired.
 export const builtInPlugins: DronePlugin[] = staticBuiltInPlugins;
 
 export type { CompactionPluginDeps } from './compaction/index.js';
 export type { CompactionCapability } from './compaction/index.js';
+export type { CompactionStatus } from './compaction/index.js';
 export { createCompactionPlugin } from './compaction/index.js';
 export { createLogPlugin } from './log/index.js';
 export { createSwarmPlugin, type SwarmConfig } from './swarm/index.js';

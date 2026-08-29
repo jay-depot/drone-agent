@@ -55,11 +55,11 @@ export interface Agent {
 
 export interface Message {
   id: string;
-  from: string;
-  to: string;
+  fromAgentId: string;
+  toAgentId: string | null;
   channel?: string;
-  body: object;
+  body: string;
   delivered: boolean;
-  readAt?: string;
+  readAt?: string | null;
   createdAt: string;
 }

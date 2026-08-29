@@ -4,6 +4,7 @@ import path from 'node:path';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import {
   createDefaultAgentConfig,
+  toToolResultContent,
   type DronePluginRegistration,
 } from 'drone-core';
 import { filePlugin, __testing } from '../src/plugins/file.js';
@@ -30,6 +31,12 @@ function makeHunk(
 function captureRegistration(): {
   registration: DronePluginRegistration;
   tools: Map<string, (input: Record<string, unknown>) => Promise<string>>;
+  rawTools: Map<
+    string,
+    (
+      input: Record<string, unknown>
+    ) => Promise<string | import('drone-core').DroneToolResult>
+  >;
   helpText: string[];
   promptFragments: Array<{
     key: string;
@@ -39,6 +46,12 @@ function captureRegistration(): {
   const tools = new Map<
     string,
     (input: Record<string, unknown>) => Promise<string>
+  >();
+  const rawTools = new Map<
+    string,
+    (
+      input: Record<string, unknown>
+    ) => Promise<string | import('drone-core').DroneToolResult>
   >();
   const helpText: string[] = [];
   const promptFragments: Array<{
@@ -50,7 +63,10 @@ function captureRegistration(): {
     logger: silentLogger(),
     getConfig: () => createDefaultAgentConfig(),
     registerTool: tool => {
-      tools.set(tool.name, tool.execute);
+      rawTools.set(tool.name, tool.execute);
+      tools.set(tool.name, async (input: Record<string, unknown>) =>
+        toToolResultContent(await tool.execute(input))
+      );
     },
     registerPromptFragment: fragment => {
       promptFragments.push(fragment);
@@ -82,7 +98,7 @@ function captureRegistration(): {
     listMountedTools: () => [],
   };
 
-  return { registration, tools, helpText, promptFragments };
+  return { registration, tools, rawTools, helpText, promptFragments };
 }
 
 describe('enhanceFsError', () => {
@@ -149,6 +165,74 @@ describe('enhanceFsError', () => {
     const out = enhanceFsError('file__read', '/x', 'a string error');
     expect(out.message).toContain('file__read');
     expect(out.message).toContain('a string error');
+  });
+});
+
+describe('file plugin — read_image structured result', () => {
+  it('returns metadata in content and base64 in images[], not in content', async () => {
+    const { registration, rawTools } = captureRegistration();
+    await filePlugin.register(registration);
+    const readImage = rawTools.get('read_image');
+    expect(readImage).toBeDefined();
+
+    const target = path.join(
+      tmpdir(),
+      `drone-agent-test-image-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}.png`
+    );
+    // 1x1 transparent PNG.
+    const pngBytes = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+      'base64'
+    );
+    try {
+      await writeFile(target, pngBytes);
+      const result = await readImage!({ path: target });
+      expect(typeof result).toBe('object');
+      const structured = result as import('drone-core').DroneToolResult;
+      // Content carries only metadata — no base64.
+      expect(structured.content).toContain('image/png');
+      expect(structured.content).not.toContain('iVBOR');
+      // Images carry the base64 payload.
+      expect(structured.images).toHaveLength(1);
+      expect(structured.images![0].mimeType).toBe('image/png');
+      expect(structured.images![0].data).toBe(pngBytes.toString('base64'));
+    } finally {
+      try {
+        const { unlink } = await import('node:fs/promises');
+        await unlink(target);
+      } catch {
+        // ignore
+      }
+    }
+  });
+
+  it('rejects images over maxImageSizeBytes', async () => {
+    const { registration, rawTools } = captureRegistration();
+    await filePlugin.register(registration);
+    const readImage = rawTools.get('read_image');
+    expect(readImage).toBeDefined();
+
+    const target = path.join(
+      tmpdir(),
+      `drone-agent-test-image-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}.png`
+    );
+    try {
+      await writeFile(target, Buffer.alloc(20 * 1024 * 1024 + 1));
+      await expect(readImage!({ path: target })).rejects.toThrow(
+        /exceeds the maximum allowed size/
+      );
+    } finally {
+      try {
+        const { unlink } = await import('node:fs/promises');
+        await unlink(target);
+      } catch {
+        // ignore
+      }
+    }
   });
 });
 
@@ -1022,9 +1106,8 @@ describe('file__apply_diff — round-trip integration', () => {
       ].join('\n');
 
       let threw: Error | undefined;
-      let result: { path?: string; patched?: boolean } = {};
       try {
-        result = JSON.parse(await applyDiff!({ path: target, patch }));
+        JSON.parse(await applyDiff!({ path: target, patch }));
       } catch (e) {
         threw = e as Error;
       }

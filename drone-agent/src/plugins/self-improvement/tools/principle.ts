@@ -7,6 +7,7 @@ import type {
 import {
   VALID_TARGET_TYPES,
   isValidTargetType,
+  trimOrEmpty,
   validateTarget,
   type TargetType,
 } from '../validation.js';
@@ -88,10 +89,10 @@ export function createPrincipleTool(
       }
 
       const targetType = input.targetType as string;
-      const targetId = (input.targetId as string).trim().toLowerCase();
+      const targetId = trimOrEmpty(input.targetId).toLowerCase();
 
       if (action === 'store') {
-        const principle = (input.principle as string).trim();
+        const principle = trimOrEmpty(input.principle);
         const source =
           (input.source as string | undefined)?.trim() || undefined;
 

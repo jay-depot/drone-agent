@@ -1,4 +1,5 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import Database from 'better-sqlite3';
 import { setupDb, teardownDb } from './setup.js';
 import {
   createPersona,
@@ -63,7 +64,16 @@ import {
   listPrinciples,
   getPrinciple,
   deletePrinciple,
+  upsertFragment,
+  getFragment,
+  listFragments,
+  deleteFragment,
+  deleteExpiredFragments,
+  replaceCoordinatorFragments,
+  listMergedForAgent,
+  mergedContentHash,
 } from '../src/db/index.js';
+import { validateFragmentUpsert } from '../src/fragments-limits.js';
 import type {
   CreatePersonaRequest,
   CreateSkillRequest,
@@ -279,19 +289,64 @@ describe('Beacon Agent Session CRUD', () => {
   it('should register an agent', () => {
     const session = registerAgent({ id: 'agent-1', personaId: null });
     expect(session.id).toBe('agent-1');
+    expect(session.status).toBe('connected');
     expect(session.connectedAt).toBeGreaterThan(0);
     expect(session.lastActivity).toBeGreaterThan(0);
   });
 
+  it('migrates an existing agent_sessions table to add the status column', async () => {
+    // Simulate a pre-existing DB whose agent_sessions table predates the
+    // `status` column (e.g. a persisted beacon-data volume from an older
+    // build). initDatabase must add the column idempotently.
+    const { mkdtemp, rm } = await import('node:fs/promises');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'drone-beacon-migrate-'));
+    const dbFile = path.join(dir, 'test.db');
+
+    // Create a legacy agent_sessions table without the status column.
+    const legacy = new Database(dbFile);
+    legacy.exec(`
+      CREATE TABLE agent_sessions (
+        id TEXT PRIMARY KEY,
+        personaId TEXT,
+        connectedAt INTEGER NOT NULL,
+        lastActivity INTEGER NOT NULL
+      );
+    `);
+    legacy.close();
+
+    // Re-init the DB — the migration should add the status column.
+    const { initDatabase, closeDatabase, getDatabase } =
+      await import('../src/db/index.js');
+    initDatabase(dbFile);
+    const cols = getDatabase()
+      .prepare('PRAGMA table_info(agent_sessions)')
+      .all() as Array<{ name: string }>;
+    expect(cols.some(c => c.name === 'status')).toBe(true);
+
+    // registerAgent should now succeed against the migrated table.
+    const { registerAgent } = await import('../src/db/index.js');
+    const session = registerAgent({ id: 'migrated-agent', personaId: null });
+    expect(session.status).toBe('connected');
+
+    closeDatabase();
+    await rm(dir, { recursive: true, force: true });
+  });
+
   it('should get an agent by id', () => {
     registerAgent({ id: 'agent-1', personaId: null });
-    expect(getAgent('agent-1')).toBeDefined();
+    const agent = getAgent('agent-1');
+    expect(agent).toBeDefined();
+    expect(agent!.status).toBe('connected');
   });
 
   it('should list all agents', () => {
     registerAgent({ id: 'a1', personaId: null });
     registerAgent({ id: 'a2', personaId: null });
-    expect(listAgents()).toHaveLength(2);
+    const agents = listAgents();
+    expect(agents).toHaveLength(2);
+    expect(agents.every(a => a.status === 'connected')).toBe(true);
   });
 
   it('should update agent activity', () => {
@@ -840,5 +895,295 @@ describe('Beacon Principle CRUD', () => {
     const row = createPrinciple('persona', 'p1', 'pr1');
     expect(deletePrinciple(row.id)).toBe(true);
     expect(getPrinciple(row.id)).toBeUndefined();
+  });
+});
+
+describe('Beacon Fragment CRUD', () => {
+  beforeEach(async () => {
+    await setupDb();
+  });
+
+  afterEach(async () => {
+    await teardownDb();
+  });
+
+  it('should upsert a fragment and preserve createdAt on conflict', async () => {
+    const first = upsertFragment({
+      id: 'f1',
+      target: 'agent-1',
+      content: 'v1',
+      phase: 'header',
+      scope: 'local',
+      expiresAt: null,
+    });
+    const second = upsertFragment({
+      id: 'f1',
+      target: 'agent-1',
+      content: 'v2',
+      phase: 'header',
+      scope: 'local',
+      expiresAt: null,
+    });
+    expect(second.createdAt).toBe(first.createdAt);
+    expect(second.updatedAt).toBeGreaterThanOrEqual(first.updatedAt);
+    expect(second.content).toBe('v2');
+  });
+
+  it('should get and list fragments with filters', () => {
+    upsertFragment({
+      id: 'f1',
+      target: 'agent-1',
+      content: 'c',
+      phase: 'header',
+      scope: 'local',
+      expiresAt: null,
+    });
+    upsertFragment({
+      id: 'f1',
+      target: 'broadcast',
+      content: 'c',
+      phase: 'footer',
+      scope: 'local',
+      expiresAt: null,
+    });
+    expect(getFragment('f1', 'agent-1')).toBeDefined();
+    expect(getFragment('f1', 'agent-2')).toBeUndefined();
+    expect(listFragments({ target: 'broadcast' })).toHaveLength(1);
+    expect(listFragments({ scope: 'local' })).toHaveLength(2);
+    expect(listFragments()).toHaveLength(2);
+  });
+
+  it('should delete a fragment by id and target', () => {
+    upsertFragment({
+      id: 'd1',
+      target: 'agent-1',
+      content: 'c',
+      phase: 'header',
+      scope: 'local',
+      expiresAt: null,
+    });
+    const deleted = deleteFragment('d1', 'agent-1');
+    expect(deleted?.id).toBe('d1');
+    expect(deleteFragment('d1', 'agent-1')).toBeUndefined();
+  });
+
+  it('should delete only expired targeted rows and return them', async () => {
+    vi.useFakeTimers();
+    try {
+      const now = Date.now();
+      upsertFragment({
+        id: 'expired',
+        target: 'agent-1',
+        content: 'c',
+        phase: 'header',
+        scope: 'local',
+        expiresAt: now - 1000,
+      });
+      upsertFragment({
+        id: 'live',
+        target: 'agent-1',
+        content: 'c',
+        phase: 'header',
+        scope: 'local',
+        expiresAt: now + 60000,
+      });
+      upsertFragment({
+        id: 'expired-broadcast',
+        target: 'broadcast',
+        content: 'c',
+        phase: 'header',
+        scope: 'local',
+        expiresAt: now - 500,
+      });
+      const deleted = deleteExpiredFragments(now);
+      expect(deleted.map(f => f.id).sort()).toEqual([
+        'expired',
+        'expired-broadcast',
+      ]);
+      expect(listFragments().map(f => f.id)).toEqual(['live']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('should wholesale-replace coordinator rows and shadow local rows in merged view', () => {
+    upsertFragment({
+      id: 'shared',
+      target: 'agent-1',
+      content: 'local version',
+      phase: 'header',
+      scope: 'local',
+      expiresAt: null,
+    });
+    upsertFragment({
+      id: 'coord-only',
+      target: 'agent-1',
+      content: 'from coordinator',
+      phase: 'header',
+      scope: 'local',
+      expiresAt: null,
+    });
+    replaceCoordinatorFragments([
+      {
+        id: 'shared',
+        target: 'agent-1',
+        content: 'coordinator version',
+        phase: 'header',
+        expiresAt: null,
+      },
+    ]);
+    expect(listFragments({ scope: 'coordinator' }).map(f => f.id)).toEqual([
+      'shared',
+    ]);
+    const merged = listMergedForAgent('agent-1');
+    const shared = merged.find(f => f.id === 'shared');
+    expect(shared?.content).toBe('coordinator version');
+    expect(shared?.scope).toBe('coordinator');
+    expect(merged.map(f => f.id).sort()).toEqual(['coord-only', 'shared']);
+  });
+
+  it('should filter expired rows and target-match in listMergedForAgent', () => {
+    const now = Date.now();
+    upsertFragment({
+      id: 'gone',
+      target: 'agent-1',
+      content: 'c',
+      phase: 'header',
+      scope: 'local',
+      expiresAt: now - 1000,
+    });
+    upsertFragment({
+      id: 'other-agent',
+      target: 'agent-2',
+      content: 'c',
+      phase: 'header',
+      scope: 'local',
+      expiresAt: null,
+    });
+    upsertFragment({
+      id: 'bc',
+      target: 'broadcast',
+      content: 'c',
+      phase: 'footer',
+      scope: 'local',
+      expiresAt: null,
+    });
+    const merged = listMergedForAgent('agent-1');
+    expect(merged.map(f => f.id)).toEqual(['bc']);
+  });
+
+  it('should produce a deterministic mergedContentHash sensitive to content', () => {
+    const seed = (content: string) => {
+      upsertFragment({
+        id: 'h1',
+        target: 'broadcast',
+        content,
+        phase: 'header',
+        scope: 'local',
+        expiresAt: null,
+      });
+    };
+    seed('v1');
+    const a = mergedContentHash();
+    expect(mergedContentHash()).toBe(a);
+    seed('v2');
+    expect(mergedContentHash()).not.toBe(a);
+  });
+});
+
+describe('validateFragmentUpsert', () => {
+  const ctx = {
+    countBroadcasts: () => 0,
+    countTargetedForAgent: () => 0,
+  };
+
+  it('normalizes a targeted fragment with default TTL stamping', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_000_000);
+      const result = validateFragmentUpsert(
+        { id: 'ok', target: 'agent-1', content: 'hi' },
+        ctx
+      );
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.normalized.phase).toBe('header');
+        expect(result.normalized.scope).toBe('local');
+        expect(result.normalized.expiresAt).toBe(
+          1_000_000 + 24 * 60 * 60 * 1000
+        );
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('broadcast with no expiresAt never expires', () => {
+    const result = validateFragmentUpsert(
+      { id: 'ok', target: 'broadcast', content: 'hi' },
+      ctx
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.normalized.expiresAt).toBeNull();
+    }
+  });
+
+  it('rejects bad ids, missing target/content, bad phases, bad expiresAt, oversize content', () => {
+    expect(
+      validateFragmentUpsert({ id: 'bad id', target: 'a', content: 'c' }, ctx)
+        .ok
+    ).toBe(false);
+    expect(
+      validateFragmentUpsert({ id: 'ok', target: '', content: 'c' }, ctx).ok
+    ).toBe(false);
+    expect(
+      validateFragmentUpsert({ id: 'ok', target: 'a', content: '' }, ctx).ok
+    ).toBe(false);
+    expect(
+      validateFragmentUpsert(
+        { id: 'ok', target: 'a', content: 'c', phase: 'middle' },
+        ctx
+      ).ok
+    ).toBe(false);
+    expect(
+      validateFragmentUpsert(
+        { id: 'ok', target: 'a', content: 'c', expiresAt: 'soon' },
+        ctx
+      ).ok
+    ).toBe(false);
+    const big = 'x'.repeat(16 * 1024 + 1);
+    const over = validateFragmentUpsert(
+      { id: 'ok', target: 'a', content: big },
+      ctx
+    );
+    expect(over.ok).toBe(false);
+    if (!over.ok) {
+      expect(over.code).toBe('limit');
+    }
+  });
+
+  it('enforces broadcast and per-agent caps', () => {
+    const fullBroadcasts = {
+      countBroadcasts: () => 5,
+      countTargetedForAgent: () => 0,
+    };
+    const r1 = validateFragmentUpsert(
+      { id: 'ok', target: 'broadcast', content: 'c' },
+      fullBroadcasts
+    );
+    expect(r1.ok).toBe(false);
+    if (!r1.ok) {
+      expect(r1.code).toBe('limit');
+    }
+    const fullAgent = {
+      countBroadcasts: () => 0,
+      countTargetedForAgent: () => 50,
+    };
+    const r2 = validateFragmentUpsert(
+      { id: 'ok', target: 'agent-1', content: 'c' },
+      fullAgent
+    );
+    expect(r2.ok).toBe(false);
   });
 });

@@ -1,10 +1,13 @@
 import type { FastifyInstance } from 'fastify';
+import { logger } from '../logger.js';
+import { runSessionEndHook } from '../session-end.js';
 import { publishMutationEvent } from '../ws-pubsub.js';
 import {
   isLargePayload,
   storeLargePayload,
   retrieveLargePayload,
 } from '../storage.js';
+import { buildSessionTranscript } from '../transcript.js';
 import * as db from '../db/index.js';
 
 export default function swarmRoutes(app: FastifyInstance) {
@@ -48,6 +51,13 @@ export default function swarmRoutes(app: FastifyInstance) {
         eventType: 'session.ended',
         payload: { sessionId: request.params.id, status: 'ended' },
       });
+      // Fire the configured session-end hook after the session is marked
+      // ended and published; failures are contained and non-blocking.
+      void runSessionEndHook(request.params.id).catch(err => {
+        logger.warn(
+          `Session-end hook error for session ${request.params.id}: ${err}`
+        );
+      });
       return session;
     }
   );
@@ -72,7 +82,7 @@ export default function swarmRoutes(app: FastifyInstance) {
     const created: db.SwarmEvent[] = [];
     for (const evt of events) {
       let payload = evt.payload ?? null;
-      let metadata = evt.metadata ?? null;
+      const metadata = evt.metadata ?? null;
       if (payload && isLargePayload(payload)) {
         const ref = await storeLargePayload(evt.sessionId, evt.id, payload);
         payload = ref;
@@ -188,6 +198,33 @@ export default function swarmRoutes(app: FastifyInstance) {
           updatedAt: session.updatedAt,
         },
         events: resolvedEvents,
+      });
+    }
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/sessions/:id/transcript',
+    async (request, reply) => {
+      const session = db.getSwarmSession(request.params.id);
+      if (!session) {
+        return reply.code(404).send({ error: 'Session not found' });
+      }
+      const events = db.getSwarmEvents(request.params.id);
+      const transcript = await buildSessionTranscript(
+        session,
+        events,
+        retrieveLargePayload
+      );
+      return reply.send({
+        session: {
+          id: session.id,
+          personaId: session.personaId,
+          beaconId: session.beaconId,
+          status: session.status,
+          createdAt: session.createdAt,
+          updatedAt: session.updatedAt,
+        },
+        transcript,
       });
     }
   );

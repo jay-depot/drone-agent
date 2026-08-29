@@ -64,16 +64,23 @@ function makeBudgetService(
 function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
   return {
     getActiveProvider: () => provider,
+    resolveModelForRole: () => ({
+      provider,
+      providerId: 'test-provider',
+      model: 'fake',
+    }),
     getActiveProviderId: () => 'test-provider',
     getAvailableProviders: () => [{ id: 'test-provider', precedence: 1000 }],
     activateProvider: () => {},
     getModel: () => 'fake',
     setModel: () => {},
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: unknown) => {},
     listModels: async () => ['fake'],
+    registerDriver: () => {},
     registerProvider: () => {},
     unregisterProvider: () => {},
+    describeImages: async images => images,
   };
 }
 
@@ -115,6 +122,11 @@ it('uses the newly active provider on the next loop iteration', async () => {
 
   const llm: DroneLlmCapability = {
     getActiveProvider: () => providers[activeProviderId],
+    resolveModelForRole: () => ({
+      provider: providers[activeProviderId],
+      providerId: activeProviderId,
+      model,
+    }),
     getActiveProviderId: () => activeProviderId,
     getAvailableProviders: () => [
       { id: 'provider-a', precedence: 1000 },
@@ -129,11 +141,13 @@ it('uses the newly active provider on the next loop iteration', async () => {
       model = nextModel;
     },
     getReasoningLevel: () => undefined,
-    setReasoningLevel: (_level: any) => {},
+    setReasoningLevel: (_level: unknown) => {},
     listModels: async () =>
       activeProviderId === 'provider-a' ? ['fake-a'] : ['fake-b'],
+    registerDriver: () => {},
     registerProvider: () => {},
     unregisterProvider: () => {},
+    describeImages: async images => images,
   };
 
   const config = createDefaultAgentConfig();
@@ -424,10 +438,13 @@ describe('createConversationService — tool error handling', () => {
 
     await conversation.sendUserMessage('go');
 
-    // User / assistant-with-tool / tool / assistant-final all live in the
-    // same turn (see session-manager.appendToCurrentTurn).
+    // Each assistant message is its own turn: [user], [assistant+tool],
+    // [assistant-final].
     const turns: DroneSessionTurn[] = sessionManager.getTurns();
-    expect(turns.length).toBeGreaterThanOrEqual(1);
+    expect(turns).toHaveLength(3);
+    expect(turns[0].messages.map(m => m.role)).toEqual(['user']);
+    expect(turns[1].messages.map(m => m.role)).toEqual(['assistant', 'tool']);
+    expect(turns[2].messages.map(m => m.role)).toEqual(['assistant']);
     const allMessages = turns.flatMap(t => t.messages);
     const assistantWithToolCall = allMessages.find(
       m => m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0

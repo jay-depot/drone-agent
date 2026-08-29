@@ -180,7 +180,6 @@ function _parsePersonaMdInternal(
   if (currentPremountPlugin) {
     premountMap[currentPremountPlugin] = [...premountValues];
     premountValues.length = 0;
-    currentPremountPlugin = null;
   }
 
   if (Object.keys(premountMap).length > 0) {

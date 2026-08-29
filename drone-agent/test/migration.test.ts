@@ -11,6 +11,7 @@ import {
   batchMigrate,
   resolveBeaconAddress,
 } from '../src/runtime/migration/index.js';
+import type { DroneAgentConfig } from 'drone-core';
 
 // ── Test helpers ────────────────────────────────────────────────────────
 
@@ -110,6 +111,7 @@ async function createPrincipleFile(
 // ── Mock fetch ─────────────────────────────────────────────────────────
 
 const mockServerData = new Map<string, Record<string, unknown>[]>();
+const ORIGINAL_FETCH = globalThis.fetch;
 
 function setupMockFetch() {
   mockServerData.clear();
@@ -211,7 +213,7 @@ function setupMockFetch() {
 }
 
 function teardownMockFetch() {
-  delete (globalThis as any).fetch;
+  globalThis.fetch = ORIGINAL_FETCH;
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────
@@ -227,13 +229,13 @@ describe('Migration Service', () => {
     originalHome = os.homedir;
     // Override cwd and homedir to use separate temp dirs
     process.cwd = () => projectDir;
-    (os as any).homedir = () => userDir;
+    os.homedir = () => userDir;
     setupMockFetch();
   });
 
   afterEach(async () => {
     process.cwd = originalCwd;
-    (os as any).homedir = originalHome;
+    os.homedir = originalHome;
     teardownMockFetch();
     await rm(projectDir, { recursive: true, force: true });
     await rm(userDir, { recursive: true, force: true });
@@ -627,7 +629,7 @@ describe('Migration Service', () => {
         beaconHost: 'my-beacon',
         beaconPort: 3457,
       },
-    } as any;
+    } as Partial<DroneAgentConfig>;
 
     const addr = resolveBeaconAddress(config);
     expect(addr).toEqual({ host: 'my-beacon', port: 3457 });
@@ -645,7 +647,7 @@ describe('Migration Service', () => {
         beaconHost: 'config-host',
         beaconPort: 3457,
       },
-    } as any;
+    } as Partial<DroneAgentConfig>;
 
     const addr = resolveBeaconAddress(config, 'cli-host', 9999);
     expect(addr).toEqual({ host: 'cli-host', port: 9999 });
@@ -661,7 +663,7 @@ describe('Migration Service', () => {
           pullIntervalMinutes: 60,
         },
       },
-    } as any;
+    } as Partial<DroneAgentConfig>;
 
     const addr = resolveBeaconAddress(config);
     expect(addr).toBeNull();

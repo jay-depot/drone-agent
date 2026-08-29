@@ -74,8 +74,7 @@ export async function scanJsonDir<T>(
         id,
         entryCount: data.length,
         lastTimestamp: (lastEntry as Record<string, unknown>)?.timestamp as
-          | string
-          | undefined,
+          string | undefined,
       });
     }
 

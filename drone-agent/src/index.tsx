@@ -1,6 +1,7 @@
 import {
   createConsoleLogger,
   createDebugFlagRegistry,
+  toToolResultContent,
   type DroneLlmCapability,
   type DroneLlmProvider,
 } from 'drone-core';
@@ -61,6 +62,12 @@ async function main(): Promise<void> {
   const resolvedConfig = await loadAgentConfig(process.cwd(), {
     configDir: invocation.options.configDir,
   });
+  if (resolvedConfig.migrationNotice) {
+    logger.warn(resolvedConfig.migrationNotice);
+  }
+  for (const warning of resolvedConfig.warnings ?? []) {
+    logger.warn(warning);
+  }
 
   // Handle migrate subcommand early (no engine needed)
   if (invocation.kind === 'migrate') {
@@ -68,8 +75,12 @@ async function main(): Promise<void> {
     return;
   }
 
+  // --model is an invocation-scoped override of llm.active (never persisted).
+  // The override wins; otherwise llm.active from the migrated config. This
+  // value only feeds the createLlmGetters fallback used before the engine
+  // exists — once initialized, the broker is the single source of truth.
   const model =
-    invocation.options.modelOverride ?? resolvedConfig.config.ollama.model;
+    invocation.options.modelOverride ?? resolvedConfig.config.llm.active ?? '';
   const sessionManager = createSessionManager();
 
   // The budget service needs renderPromptFragments from the engine, but the
@@ -99,6 +110,12 @@ async function main(): Promise<void> {
   const builtInPlugins = createBuiltInPlugins({
     sessionManager,
     ...createLlmGetters(engineRef),
+    resolveContextWindow: () => budgetService.resolveContextWindow(),
+    buildFragmentMessages: async () => {
+      const engine = getEngine();
+      const fragments = await engine.renderPromptFragments();
+      return fragments.map(content => ({ role: 'system' as const, content }));
+    },
   });
 
   // ── External plugin discovery ───────────────────────────────────────
@@ -151,6 +168,9 @@ async function main(): Promise<void> {
   const debugFlags = createDebugFlagRegistry(
     invocation.options.debugSubsystems
   );
+  // The conversation is created after the engine, so expose a mutable ref that
+  // the engine's `_runtime` capability closure reads at call time.
+  const resetStuckDetectorsRef: { current?: () => void } = {};
   const engine = createDronePluginEngine({
     plugins: allPlugins,
     config: resolvedConfig.config,
@@ -162,8 +182,25 @@ async function main(): Promise<void> {
       persona: invocation.options.persona,
     },
     buildSystemMessages: () => budgetService.buildSystemMessages(),
+    resetStuckDetectors: () => resetStuckDetectorsRef.current?.(),
   });
   engineRef.current = engine;
+
+  // Apply CLI retry overrides onto the resolved config (long-running headless
+  // agents may want more silent retries than the interactive default).
+  if (invocation.options.retryMaxRetries !== undefined) {
+    resolvedConfig.config.session.retry = {
+      ...resolvedConfig.config.session.retry,
+      maxRetries: invocation.options.retryMaxRetries,
+    };
+  }
+  if (invocation.options.retryMaxWaitMs !== undefined) {
+    resolvedConfig.config.session.retry = {
+      ...resolvedConfig.config.session.retry,
+      maxWaitMs: invocation.options.retryMaxWaitMs,
+    };
+  }
+
   const conversation = createConversationService({
     engine,
     config: resolvedConfig.config,
@@ -213,7 +250,72 @@ async function main(): Promise<void> {
       ]);
       return answers.continue === 'yes';
     },
+    // When an LLM chat() failure warrants a retry decision (Tier 2:
+    // non-transient HTTP statuses, or transient retries exhausted), ask
+    // the user whether to retry. Non-interactive → fail fast (false).
+    onRetryPrompt: async (error, attempt) => {
+      const elicit = engine.getElicitation();
+      if (!elicit) return false;
+      const statusSuffix = error.status ? ` (HTTP ${error.status})` : '';
+      const providerPrefix = error.providerId ? `[${error.providerId}] ` : '';
+      const answers = await elicit.ask([
+        {
+          id: 'retry',
+          prompt: `${providerPrefix}LLM request failed${statusSuffix} (attempt ${attempt}). Retry?`,
+          choices: [
+            { value: 'yes', label: 'Yes, retry' },
+            { value: 'no', label: 'No, stop' },
+          ],
+          defaultValue: 'no',
+        },
+      ]);
+      return answers.retry === 'yes';
+    },
+    // When degenerate responses (empty or reasoning-only) exceed the
+    // retry limit, ask the user whether to continue or stop.
+    onBrokenResponseLimitReached: async type => {
+      const elicit = engine.getElicitation();
+      if (!elicit) return false;
+      const label = type === 'reasoning-only' ? 'reasoning-only' : 'empty';
+      const answers = await elicit.ask([
+        {
+          id: 'continue',
+          prompt: `The model produced ${label} responses repeatedly. Continue anyway?`,
+          choices: [
+            { value: 'yes', label: 'Yes, continue' },
+            { value: 'no', label: 'No, stop' },
+          ],
+          defaultValue: 'no',
+        },
+      ]);
+      return answers.continue === 'yes';
+    },
+    // When an identical tool call is repeated beyond the nudge limit,
+    // ask the user whether to continue or stop.
+    onIdenticalToolCallLimitReached: async (toolName, args, count) => {
+      const elicit = engine.getElicitation();
+      if (!elicit) return false;
+      let argsSummary = '{}';
+      try {
+        argsSummary = JSON.stringify(args);
+      } catch {
+        // Non-serializable args — fall back to an empty object marker.
+      }
+      const answers = await elicit.ask([
+        {
+          id: 'continue',
+          prompt: `The model appears stuck: repeated call to ${toolName}(${argsSummary}) ${count} times. Continue?`,
+          choices: [
+            { value: 'yes', label: 'Yes, continue' },
+            { value: 'no', label: 'No, stop' },
+          ],
+          defaultValue: 'no',
+        },
+      ]);
+      return answers.continue === 'yes';
+    },
   });
+  resetStuckDetectorsRef.current = conversation.resetStuckDetectors;
   const registeredPlugins = await engine.initialize();
 
   // ── Elicitation wiring ──────────────────────────────────────────────
@@ -231,6 +333,24 @@ async function main(): Promise<void> {
 
   await engine.runHooks('onPluginsLoaded');
   await engine.runHooks('onSessionStart');
+
+  // ── --model invocation-scoped override ─────────────────────────────
+  // Applied AFTER onPluginsLoaded so the broker has already activated from
+  // llm.active; the override wins for this invocation and is never persisted.
+  if (invocation.options.modelOverride) {
+    const llm = getLlmCapability(engine);
+    if (llm) {
+      try {
+        conversation.setModel(invocation.options.modelOverride);
+        logger.info(
+          `model override (this invocation): ${invocation.options.modelOverride}`
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.warn(`Failed to apply --model override: ${message}`);
+      }
+    }
+  }
 
   // ── Deferred project plugin trust prompting ──────────────────────────
   // After elicitation is set up, prompt the user for any project-scope
@@ -350,7 +470,7 @@ async function main(): Promise<void> {
       }
       await engine.runHooks('onBeforePrompt');
       const result = await selectedTool.execute({});
-      logger.info(result);
+      logger.info(toToolResultContent(result));
       await engine.runHooks('onAfterToolCall');
     }
   } else if (invocation.kind === 'default' && !invocation.options.once) {
@@ -367,6 +487,7 @@ async function main(): Promise<void> {
       const tui = createTui({
         engine,
         conversation,
+        sessionManager,
         model,
         logger,
       });
@@ -390,7 +511,7 @@ async function main(): Promise<void> {
       invocation.kind === 'tool'
         ? await engine.executeTool(invocation.toolName, invocation.input)
         : await selectedTool.execute({});
-    logger.info(result);
+    logger.info(toToolResultContent(result));
     await engine.runHooks('onAfterToolCall');
   }
 

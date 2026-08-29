@@ -255,93 +255,6 @@ describe('promptFilePlugin', () => {
       logger,
     };
 
-    const baseConfig = {
-      enabledPlugins: [],
-      systemPrompt: '',
-      activePersona: null,
-      llm: { provider: 'ollama' },
-      ollama: { host: '', model: '' },
-      openai: {
-        apiKey: '',
-        defaultModel: 'gpt-4o',
-        baseUrl: 'https://api.openai.com/v1',
-        models: [{ id: 'gpt-4o', contextWindow: 128000 }],
-      },
-      anthropic: {
-        apiKey: '',
-        defaultModel: 'claude-sonnet-4-6',
-        baseUrl: 'https://api.anthropic.com',
-        apiVersion: '2023-06-01',
-        models: [{ id: 'claude-sonnet-4-6', contextWindow: 200000 }],
-      },
-      openrouter: {
-        apiKey: '',
-        defaultModel: 'openai/gpt-4o',
-        baseUrl: 'https://openrouter.ai/api/v1',
-        models: [
-          { id: 'openai/gpt-4o', contextWindow: 128000 },
-          { id: 'anthropic/claude-3.5-sonnet', contextWindow: 200000 },
-          { id: 'google/gemini-2.0-flash-001', contextWindow: 1000000 },
-        ],
-      },
-      session: {
-        contextWindowTokens: 32768,
-        responseReserveTokens: 4096,
-        maxToolIterations: 50,
-      },
-      lsp: {
-        enabled: false,
-        diagnosticTokenBudget: 500,
-        requestTimeoutMs: 5000,
-        preferExternal: false,
-        autoInstall: true,
-        servers: {},
-      },
-      mcp: {
-        enabled: false,
-        requestTimeoutMs: 10000,
-        retryCount: 1,
-        retryDelayMs: 200,
-        maxListPages: 25,
-        maxListItems: 500,
-        compatibilityMode: 'strict',
-        servers: {},
-      },
-      compaction: {
-        enabled: false,
-        strategy: 'summary-drop',
-        softThresholdPercent: 75,
-        slicePercent: 25,
-        minTurnsToCompact: 4,
-        summaryMaxTokens: 800,
-        summaryBudgetPercent: 20,
-      },
-      memory: { enabled: false },
-      log: { enabled: false },
-      terminal: {
-        enabled: false,
-        maxActiveSessions: 5,
-        defaultShell: '',
-        defaultCols: 80,
-        defaultRows: 24,
-      },
-      promptFile: { enabled: true, files: [] },
-      externalPlugins: [],
-      trustedPlugins: {},
-      swarm: {
-        knowledgeSync: {
-          enabled: true,
-          pushInsights: true,
-          pullOnStartup: true,
-          pullIntervalMinutes: 60,
-        },
-      },
-      search: {
-        enabled: false,
-        paths: [],
-      },
-    };
-
     const registration: DronePluginRegistration = {
       logger,
       getConfig: () => ({
@@ -349,6 +262,7 @@ describe('promptFilePlugin', () => {
         systemPrompt: '',
         activePersona: null,
         llm: { provider: 'ollama' },
+        providers: {},
         ollama: { host: '', model: '' },
         openai: {
           apiKey: '',
@@ -377,6 +291,18 @@ describe('promptFilePlugin', () => {
           contextWindowTokens: 32768,
           responseReserveTokens: 4096,
           maxToolIterations: 50,
+          guardrail: {
+            brokenResponses: { hintAfter: 2, maxHints: 2 },
+            reasoningOnlyResponses: { hintAfter: 4, maxHints: 2 },
+            identicalToolCalls: { hintAfter: 2, maxHints: 3 },
+          },
+          retry: {
+            maxRetries: 3,
+            maxWaitMs: 30000,
+            promptOnError: true,
+            backoffBaseMs: 1000,
+            backoffFactor: 2,
+          },
         },
         lsp: {
           enabled: false,
@@ -406,8 +332,10 @@ describe('promptFilePlugin', () => {
           minTurnsToCompact: 4,
           summaryMaxTokens: 800,
           summaryBudgetPercent: 20,
+          nudgeMarginPercent: 10,
         },
         memory: { enabled: false },
+        wakelock: { enabled: false },
         log: { enabled: false },
         terminal: {
           enabled: false,

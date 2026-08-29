@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { FastifyRequest } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
 import { randomUUID } from 'node:crypto';
 import {
@@ -47,7 +48,9 @@ interface IncomingMessage {
  */
 export function registerBeaconWebSocket(app: FastifyInstance): void {
   app.get('/ws/beacon', { websocket: true }, (socket, request) => {
-    const fingerprint = getClientCertFingerprint(request as any);
+    const fingerprint = getClientCertFingerprint(
+      request as unknown as FastifyRequest
+    );
     const beaconId = fingerprint
       ? resolveBeaconIdByFingerprint(fingerprint)
       : undefined;

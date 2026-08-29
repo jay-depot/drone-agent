@@ -17,14 +17,7 @@ const compat = new FlatCompat({
 
 export default defineConfig([
   {
-    ignores: [
-      '**/dist/',
-      '**/test/**/*.ts',
-      '**/test/**/*.tsx',
-      'drone-beacon/**',
-      'drone-coordinator/**',
-      'drone-agent/src/**',
-    ],
+    ignores: ['**/node_modules/', '**/dist/'],
   },
   {
     extends: compat.extends(

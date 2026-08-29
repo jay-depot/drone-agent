@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
-import type { DroneReasoningLevel } from 'drone-core';
+import type {
+  DroneReasoningLevel,
+  DroneSlashCommandSessionManager,
+} from 'drone-core';
 /**
  * Shared types for the Ink-based TUI.
  */
@@ -69,7 +72,8 @@ export type ChatEntry = {
     | 'plain'
     | 'success'
     | 'markdown'
-    | 'compaction';
+    | 'compaction'
+    | 'notice';
   /** Primary text. Multi-line strings render with hard newlines. */
   text: string;
   /**
@@ -142,6 +146,7 @@ export type DroneTuiOptions = {
     enableDebugSubsystem: (name: string) => void;
     disableDebugSubsystem: (name: string) => void;
   };
+  sessionManager: DroneSlashCommandSessionManager;
   model: string;
   logger: {
     info: (message: string) => void;

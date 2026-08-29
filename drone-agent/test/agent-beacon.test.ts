@@ -9,27 +9,45 @@
  * - agent-cleanup: Agent shuts down cleanly
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import {
   getBeaconAgents,
   getBeaconAgent,
   getBeaconPersonas,
   getBeaconSkills,
   createBeaconPersona,
+  getRequiredIntegrationEnv,
   waitForService,
+  shouldSkipIntegrationSuite,
 } from './fixtures/index.js';
 
-const BEACON_URL = process.env.BEACON_URL || 'http://localhost:3457';
-const AGENT_URL = process.env.AGENT_URL || 'http://localhost:3459';
+const DEFAULT_BEACON_URL = 'http://localhost:3457';
+const DEFAULT_AGENT_URL = 'http://localhost:3459';
+const BEACON_URL = getRequiredIntegrationEnv('BEACON_URL', DEFAULT_BEACON_URL);
+const AGENT_URL = getRequiredIntegrationEnv('AGENT_URL', DEFAULT_AGENT_URL);
 
-describe('Agent ↔ Beacon', () => {
-  const agentId = 'test-agent-1';
-
+describe.skipIf(
+  shouldSkipIntegrationSuite([
+    { url: BEACON_URL, fallbackUrl: DEFAULT_BEACON_URL },
+    { url: AGENT_URL, fallbackUrl: DEFAULT_AGENT_URL },
+  ])
+)('Agent ↔ Beacon', () => {
   beforeAll(async () => {
-    // Wait for services to be ready
-    await waitForService(BEACON_URL, 30, 1000);
-    await waitForService(AGENT_URL, 30, 1000);
+    const beaconReady = await waitForService(BEACON_URL);
+    if (!beaconReady) {
+      throw new Error(`Beacon service not available at ${BEACON_URL}`);
+    }
+
+    // Wait for the dummy-agent to register with the beacon
+    const maxAgentWait = 30;
+    for (let i = 0; i < maxAgentWait; i++) {
+      const agents = await getBeaconAgents(BEACON_URL);
+      if (agents.length > 0) break;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
   });
+
+  const agentId = 'test-agent-1';
 
   describe('agent-registers', () => {
     it('should register agent with beacon', async () => {
