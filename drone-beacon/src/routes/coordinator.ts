@@ -10,6 +10,38 @@ import { getCoordinatorClient } from './context.js';
  * through unchanged (no reshaping).
  */
 export default function coordinatorRoutes(app: FastifyInstance) {
+  // List coordinator personas
+  app.get('/coordinator/personas', async (_request, reply) => {
+    const client = getCoordinatorClient();
+    if (!client) {
+      return reply.code(503).send({ error: 'Coordinator not configured' });
+    }
+    try {
+      return await client.fetchPersonas();
+    } catch (err) {
+      return reply.code(502).send({
+        error: 'Coordinator error',
+        details: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
+  });
+
+  // List coordinator skills
+  app.get('/coordinator/skills', async (_request, reply) => {
+    const client = getCoordinatorClient();
+    if (!client) {
+      return reply.code(503).send({ error: 'Coordinator not configured' });
+    }
+    try {
+      return await client.fetchSkills();
+    } catch (err) {
+      return reply.code(502).send({
+        error: 'Coordinator error',
+        details: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
+  });
+
   // List beacons
   app.get('/coordinator/beacons', async (_request, reply) => {
     const client = getCoordinatorClient();
