@@ -135,3 +135,22 @@ export {
   mergedContentHash,
 } from './fragments.js';
 export type { FragmentRow, ListFragmentsOptions } from './fragments.js';
+export {
+  listWikiSources,
+  upsertWikiSource,
+  removeWikiSource,
+  insertWikiChunk,
+  deleteChunksForWikiPage,
+  getWikiChunks,
+  searchWikiChunksByVector,
+  replaceWikiChunks,
+  getWikiSourcesWithChunkCounts,
+  backfillWikiVecChunks,
+} from './wiki-chunks.js';
+export type {
+  WikiOrigin,
+  PageHash,
+  WikiSourceRow,
+  WikiChunkRow,
+  WikiSourceWithChunkCount,
+} from './wiki-chunks.js';
