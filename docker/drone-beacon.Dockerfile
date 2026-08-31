@@ -47,6 +47,12 @@ COPY --from=builder /app/node_modules ./node_modules
 RUN mkdir -p /config && chown -R node:node /config
 
 # Set working directory
+
+# Run the agent on React's production reconciler: the dev build instruments
+# every component commit with performance.measure entries that are never
+# cleared, filling Node's 1M-entry global User Timing buffer (and its
+# memory) in long TUI sessions.
+ENV NODE_ENV=production
 ENV PATH="/app/drone-agent/bin:${PATH}"
 
 WORKDIR /app/drone-beacon

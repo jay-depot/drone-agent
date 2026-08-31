@@ -4,6 +4,13 @@
 // Parses CLI args and calls the migration service.
 // We prepend 'migrate' so parseCliArgs routes to parseMigrateSubcommand.
 
+// Match the drone-agent shim: default to React's production reconciler when
+// the caller hasn't chosen a mode (react-reconciler's dev build leaks
+// performance entries; see bin/drone-agent).
+if (process.env.NODE_ENV === undefined) {
+  process.env.NODE_ENV = 'production';
+}
+
 import { parseCliArgs } from '../dist/cli.js';
 import { runMigrate } from '../dist/migrate.js';
 

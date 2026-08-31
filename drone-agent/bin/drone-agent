@@ -1,4 +1,16 @@
 #!/usr/bin/env node
 
+// Default the agent to React's production reconciler unless the user (or a
+// test harness) explicitly asked for development mode. The reconciler's dev
+// build instruments every component commit with performance.measure entries
+// and never clears them, which fills Node's 1M-entry global User Timing
+// buffer (MaxPerformanceEntryBufferExceededWarning + unreclaimable memory)
+// over long TUI sessions. NODE_ENV must be set before the first import of
+// react-reconciler, which is why this lives in the shim rather than in
+// dist/index.js.
+if (process.env.NODE_ENV === undefined) {
+  process.env.NODE_ENV = 'production';
+}
+
 // We just need to import `./dist/index.js` to get started.
 import '../dist/index.js';
