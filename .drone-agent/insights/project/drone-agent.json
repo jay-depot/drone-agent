@@ -374,5 +374,13 @@
   {
     "timestamp": "2026-08-31T18:40:19.196Z",
     "insight": "Ollama's /api/embed (nomic-embed-text, maxTokens 8192) silently truncates over-long input from the END. Any feature assembling text for embedding must enforce its own client-side token budget (drone-core token estimator) — relying on server truncation silently drops the newest/most-important text when assembly order puts the query last. Relevant to all future embedding work in drone-beacon/drone-swarm-common."
+  },
+  {
+    "timestamp": "2026-08-31T20:00:00.895Z",
+    "insight": "drone_swarm packages' subpath exports (e.g. drone-swarm-common/wiki-storage) resolve at runtime but NOT under the shared root vitest config, which resolves only package-root specifiers (drone-swarm-common). Static or dynamic imports of subpath specifiers throw ERR_MODULE_NOT_FOUND inside vitest even though tsc accepts them — this is why several modules (wiki routes) had zero test coverage. Convention for this repo: prefer the root package specifier (drone-swarm-common) everywhere in beacon/agent source, or add explicit vitest aliases if subpaths are ever needed."
+  },
+  {
+    "timestamp": "2026-08-31T20:00:08.155Z",
+    "insight": "pnpm -r run test fails for this monorepo (drone-core has no own test files but vitest resolves the root config from inside the package and finds no files) — the correct full-suite command is plain `pnpm test` at the repo root (single vitest run over all packages). `pnpm -r run build` and `pnpm -r run typecheck` are correct for build/typecheck; only test differs. Also: prettier's lint pass renames/moves nothing but reformats, so re-run typecheck after lint before trusting green."
   }
 ]
