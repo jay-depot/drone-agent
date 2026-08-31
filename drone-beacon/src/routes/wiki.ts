@@ -11,22 +11,43 @@ import {
 const OVERFETCH_FACTOR = 4;
 const MAX_SEMANTIC_RESULTS = 50;
 
+type CoordinatorPageLike = Record<string, unknown> & { id?: string };
+
+function withOrigin<T extends object>(page: T, origin: WikiOrigin): T & { origin: WikiOrigin } {
+  return { ...page, origin };
+}
+
 export default function wikiRoutes(app: FastifyInstance) {
-  // List all wiki pages (beacon + coordinator)
+  // List all wiki pages (beacon + coordinator), each tagged with its origin.
   app.get('/wiki', async () => {
     const { listPages } = await import('drone-swarm-common');
     const localPages = await listPages();
     const coordinatorPages = await proxyWikiToCoordinator('GET', '/wiki');
     if (coordinatorPages && Array.isArray(coordinatorPages)) {
-      return [...localPages, ...coordinatorPages];
+      return [
+        ...localPages.map(p => withOrigin(p, 'beacon')),
+        ...(coordinatorPages as CoordinatorPageLike[]).map(p =>
+          withOrigin(p, 'coordinator')
+        ),
+      ];
     }
-    return localPages;
+    return localPages.map(p => withOrigin(p, 'beacon'));
   });
 
-  // Get a single wiki page (local or coordinator)
+  // Get wiki page(s). Without ?scope=, returns ALL versions of the page id
+  // (each tagged origin); 404 only when no version exists anywhere.
   app.get<{ Params: { pageId: string }; Querystring: { scope?: string } }>(
     '/wiki/:pageId',
     async (request, reply) => {
+      if (request.query.scope === 'beacon') {
+        const { readPage } = await import('drone-swarm-common');
+        const page = await readPage(request.params.pageId);
+        if (!page) {
+          return reply.code(404).send({ error: 'Wiki page not found' });
+        }
+        return withOrigin(page, 'beacon');
+      }
+
       if (request.query.scope === 'coordinator') {
         const result = await proxyWikiToCoordinator(
           'GET',
@@ -35,15 +56,36 @@ export default function wikiRoutes(app: FastifyInstance) {
         if (!result) {
           return reply.code(404).send({ error: 'Wiki page not found' });
         }
-        return result;
+        return withOrigin(result, 'coordinator');
       }
 
       const { readPage } = await import('drone-swarm-common');
-      const page = await readPage(request.params.pageId);
-      if (!page) {
+      const localPage = await readPage(request.params.pageId);
+      let coordinatorVersion: CoordinatorPageLike | null = null;
+      try {
+        const coordinatorResult = await proxyWikiToCoordinator(
+          'GET',
+          `/wiki/${request.params.pageId}`
+        );
+        if (coordinatorResult && typeof coordinatorResult === 'object') {
+          coordinatorVersion = withOrigin(
+            coordinatorResult as CoordinatorPageLike,
+            'coordinator'
+          );
+        }
+      } catch {
+        coordinatorVersion = null;
+      }
+      if (!localPage && !coordinatorVersion) {
         return reply.code(404).send({ error: 'Wiki page not found' });
       }
-      return page;
+      return {
+        pageId: request.params.pageId,
+        versions: [
+          ...(localPage ? [withOrigin(localPage, 'beacon')] : []),
+          ...(coordinatorVersion ? [coordinatorVersion] : []),
+        ],
+      };
     }
   );
 
@@ -130,6 +172,32 @@ export default function wikiRoutes(app: FastifyInstance) {
     }
     const result = await runWikiIndexCycle(indexer);
     return { success: true, result };
+  });
+
+  // Keyword search over the merged wiki corpus (naive substring, tagged origin)
+  app.get<{ Querystring: { q: string } }>('/wiki/search', async request => {
+    const { searchPages } = await import('drone-swarm-common');
+    const { q } = request.query;
+    if (!q) return [];
+    const localResults = await searchPages(q);
+    const taggedLocal = localResults.map(r => ({
+      ...r,
+      origin: 'beacon' as WikiOrigin,
+    }));
+    const coordinatorResults = await proxyWikiToCoordinator(
+      'GET',
+      `/wiki/search?q=${encodeURIComponent(q)}`
+    );
+    if (coordinatorResults && Array.isArray(coordinatorResults)) {
+      return [
+        ...taggedLocal,
+        ...(coordinatorResults as Array<Record<string, unknown>>).map(r => ({
+          ...r,
+          origin: 'coordinator' as WikiOrigin,
+        })),
+      ];
+    }
+    return taggedLocal;
   });
 
   // Semantic (vector) search over the merged wiki corpus. Stateless: the
