@@ -38,6 +38,12 @@ COPY --from=builder /app/node_modules ./node_modules
 # Set working directory
 WORKDIR /app/drone-agent
 
+# Run the agent on React's production reconciler: the dev build instruments
+# every component commit with performance.measure entries that are never
+# cleared, filling Node's 1M-entry global User Timing buffer (and its
+# memory) in long TUI sessions.
+ENV NODE_ENV=production
+
 # Expose the port
 EXPOSE 3459
 

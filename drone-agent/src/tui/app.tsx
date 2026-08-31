@@ -47,6 +47,7 @@ import { ToolCallProgress } from './components/ToolCallProgress.js';
 import { useChatLog } from './hooks/useChatLog.js';
 import { useColorOverrides } from './hooks/useColorOverrides.js';
 import { useDebouncedWindowSize } from './hooks/useDebouncedWindowSize.js';
+import { usePerformanceDrain } from './hooks/usePerformanceDrain.js';
 import { useElicitation } from './hooks/useElicitation.js';
 import { useLlmIndicator } from './hooks/useLlmIndicator.js';
 import { useStatusBar } from './hooks/useStatusBar.js';
@@ -105,6 +106,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
     entries.length
   );
   // Debounce resize events to reduce flicker during window-drag gestures.
+  usePerformanceDrain();
   const { columns } = useDebouncedWindowSize(120);
 
   // ── Scheme ref for event listener (avoids stale closure) ────────────
