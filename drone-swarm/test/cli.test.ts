@@ -143,30 +143,6 @@ async function startFixture(port: number): Promise<Server> {
     sendJson(404, { error: `no fixture for ${req.method} ${url}` });
   });
 
-  it('session transcript prints the readable turn transcript', async () => {
-    const out: string[] = [];
-    const originalLog = console.log;
-    console.log = (...msgs: unknown[]) => {
-      out.push(msgs.map(String).join(' '));
-    };
-    try {
-      const code = await main(
-        [
-          '--coordinator',
-          `http://127.0.0.1:${port}`,
-          'session',
-          'transcript',
-          's-1',
-        ],
-        directFetch
-      );
-      expect(code).toBe(0);
-      expect(out.join('\n')).toContain('--- Turn 1 ---');
-    } finally {
-      console.log = originalLog;
-    }
-  });
-
   await new Promise<void>(resolve =>
     server.listen(port === -1 ? 0 : port, '127.0.0.1', resolve)
   );
@@ -221,6 +197,30 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
       const parsed = JSON.parse(out.join('\n'));
       expect(parsed.count).toBe(1);
       expect(parsed.sessions[0].id).toBe('s-1');
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it('session transcript prints the readable turn transcript', async () => {
+    const out: string[] = [];
+    const originalLog = console.log;
+    console.log = (...msgs: unknown[]) => {
+      out.push(msgs.map(String).join(' '));
+    };
+    try {
+      const code = await main(
+        [
+          '--coordinator',
+          `http://127.0.0.1:${port}`,
+          'session',
+          'transcript',
+          's-1',
+        ],
+        directFetch
+      );
+      expect(code).toBe(0);
+      expect(out.join('\n')).toContain('--- Turn 1 ---');
     } finally {
       console.log = originalLog;
     }

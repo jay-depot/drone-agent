@@ -1,6 +1,13 @@
 import { spawn } from 'node:child_process';
 import { constants as fsConstants } from 'node:fs';
-import { access, chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import {
+  access,
+  chmod,
+  mkdir,
+  readFile,
+  rename,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { DroneElicitation, DroneWorkflow } from 'drone-core';
@@ -21,12 +28,10 @@ export type CommandRunner = (
   options?: { input?: string }
 ) => Promise<RunResult>;
 
-const LIBRARIAN_PERSONA_ID = 'coordinator-wiki-librarian';
 const MEMORY_DIR = '.drone-swarm-memory';
 const DEFAULT_COORDINATOR_URL = 'http://localhost:3456';
 const DEFAULT_BATCH_LIMIT = '5';
 const DEFAULT_CRON_SCHEDULE = '0 * * * *';
-
 
 type Discovery = {
   settings: SwarmMemorySettings;
@@ -122,17 +127,6 @@ async function atomicWrite(
   await rename(tmp, filePath);
 }
 
-function parseJsonIfPossible(raw: string | undefined): unknown {
-  if (raw === undefined) {
-    return undefined;
-  }
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return undefined;
-  }
-}
-
 export function mergeSessionEndTrigger(
   existingRaw: string | undefined,
   hookPath: string
@@ -167,7 +161,9 @@ async function confirm(
   return answers[id] === 'yes';
 }
 
-async function detectLaunchMode(runner: CommandRunner): Promise<Discovery['launchMode']> {
+async function detectLaunchMode(
+  runner: CommandRunner
+): Promise<Discovery['launchMode']> {
   const systemd = await runner(['systemctl', 'status', 'drone-coordinator']);
   if (systemd.code === 0 || systemd.code === 3) {
     return 'systemd';
@@ -251,8 +247,10 @@ async function discover(
   const settings: SwarmMemorySettings = {
     coordinatorUrl: url,
     configureBeacon: answers.configureBeacon === 'yes',
-    batchLimit: ((answers.batchLimit as string) || '').trim() || DEFAULT_BATCH_LIMIT,
-    cronSchedule: ((answers.cronSchedule as string) || '').trim() || DEFAULT_CRON_SCHEDULE,
+    batchLimit:
+      ((answers.batchLimit as string) || '').trim() || DEFAULT_BATCH_LIMIT,
+    cronSchedule:
+      ((answers.cronSchedule as string) || '').trim() || DEFAULT_CRON_SCHEDULE,
   };
   if (!/^\*\/\d+|^\d+/.test(settings.cronSchedule)) {
     return undefined;
@@ -292,7 +290,9 @@ async function restartServer(
     `The ${server} must restart to load the new config (launch mode: ${discovery.launchMode}).\n\nRun: ${command}`
   );
   if (!approved) {
-    pendingRestart.push(`${server}: restart pending (declined) — run: ${command}`);
+    pendingRestart.push(
+      `${server}: restart pending (declined) — run: ${command}`
+    );
     return;
   }
   const result = await runner(command.split(' '));
@@ -357,7 +357,10 @@ async function installCronEntry(
   const existing = await runner(['crontab', '-l']);
   const currentCrontab =
     existing.code === 0 ? existing.stdout : '# (no crontab yet)';
-  const updated = existing.code === 0 ? `${existing.stdout.trimEnd()}\n${line}\n` : `${line}\n`;
+  const updated =
+    existing.code === 0
+      ? `${existing.stdout.trimEnd()}\n${line}\n`
+      : `${line}\n`;
 
   const approved = await confirm(
     elicit,
@@ -479,7 +482,11 @@ async function runStaticValidation(
     const check = await runner(['bash', '-n', script]);
     reports.push(
       check.code === 0
-        ? { step: `bash-n:${path.basename(script)}`, status: 'done', detail: 'syntax ok' }
+        ? {
+            step: `bash-n:${path.basename(script)}`,
+            status: 'done',
+            detail: 'syntax ok',
+          }
         : {
             step: `bash-n:${path.basename(script)}`,
             status: 'failed',
@@ -501,7 +508,8 @@ async function runStaticValidation(
     );
   }
   const crontab = await runner(['crontab', '-l']);
-  const cronOk = crontab.code === 0 && crontab.stdout.includes(path.basename(catchupPath));
+  const cronOk =
+    crontab.code === 0 && crontab.stdout.includes(path.basename(catchupPath));
   reports.push({
     step: 'cron-present',
     status: cronOk ? 'done' : 'failed',
@@ -574,7 +582,12 @@ export function createSwarmMemoryWorkflow(
           status: 'skipped',
           detail: 'user declined — stopping here',
         });
-        return summarize(discovery, reports, pendingRestart, 'hook script declined');
+        return summarize(
+          discovery,
+          reports,
+          pendingRestart,
+          'hook script declined'
+        );
       }
 
       // Catch-up script + cron
@@ -593,7 +606,13 @@ export function createSwarmMemoryWorkflow(
           status: 'done',
           detail: catchupPath,
         });
-        await installCronEntry(ctx.elicit, runner, discovery, catchupPath, reports);
+        await installCronEntry(
+          ctx.elicit,
+          runner,
+          discovery,
+          catchupPath,
+          reports
+        );
       } else {
         reports.push({
           step: 'catchup-script',
@@ -641,7 +660,13 @@ export function createSwarmMemoryWorkflow(
       }
 
       // Static validation (always)
-      await runStaticValidation(runner, discovery, hookPath, catchupPath, reports);
+      await runStaticValidation(
+        runner,
+        discovery,
+        hookPath,
+        catchupPath,
+        reports
+      );
 
       // Smoke (confirm-first, real conversations)
       await smokeTest(ctx.elicit, runner, discovery, hookPath, reports);

@@ -11,6 +11,7 @@ updated: 2026-08-31T21:14:33.642Z
 ---
 
 FINDING (2026-08-31): The `bootstrap__swarm-memory` workflow does NOT exist in code — docs reference a phantom.
+
 - Total registered workflows in the whole repo: bootstrap__project + bootstrap__user (drone-agent/src/plugins/bootstrap/index.ts:209,592), skills__create (skills/index.ts:264), persona__create (persona/index.ts:509), macros 'reload' (macros/index.ts:180). Nothing else.
 - grep `bootstrap__(swarm|swarm-memory|standalone)` hits ONLY docs: docs/agents/memory-pipeline.md:9-13 claims the workflow + coordinator-wiki-librarian persona "already implement a complete pipeline (shell script + systemd timer + spawned librarian)" and recommends it — false. docs/agents/bootstrap-plugin.md:15-18 correctly lists bootstrap__swarm (+standalone-agent) under "Future Workflows (not yet implemented)". docs contradict each other.
 - ADR 151 ([[decisions/151-memory-pipeline-infra]]) Context line repeats the phantom: "bootstrap__swarm-memory generates a curl+jq shell script + systemd timer". Git log of drone-agent/src/plugins/bootstrap shows NO commit ever added it (only e2cc270 2026-06-23 added project/user workflows).

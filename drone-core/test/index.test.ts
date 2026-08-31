@@ -156,9 +156,9 @@ describe('applyAgentConfigLayer', () => {
     expect(merged.swarm.memory?.enabled).toBe(true);
     expect(merged.swarm.memory?.topK).toBe(5);
     expect(merged.swarm.memory?.minScore).toBe(0.35);
-    expect(merged.swarm.memory?.anchors.tags).toEqual(['drone-beacon']);
-    expect(merged.swarm.memory?.anchors.boostPerTag).toBe(0.08);
-    expect(merged.swarm.memory?.window.maxQueryTokens).toBe(6000);
+    expect(merged.swarm.memory?.anchors?.tags).toEqual(['drone-beacon']);
+    expect(merged.swarm.memory?.anchors?.boostPerTag).toBe(0.08);
+    expect(merged.swarm.memory?.window?.maxQueryTokens).toBe(6000);
   });
 
   it('replaces LSP server map but merges LSP scalar fields', () => {

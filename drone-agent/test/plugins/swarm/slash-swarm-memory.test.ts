@@ -37,7 +37,7 @@ describe('/swarm-memory slash command', () => {
       config: baseConfig(false),
       logger: { warn: vi.fn(), info: vi.fn() },
     });
-    const command = createSwarmMemoryCommand(retriever, async () => 0);
+    const command = createSwarmMemoryCommand(retriever);
     const info: string[] = [];
     await command.handler(makeCtx(['status'], info));
     expect(info.join('\n')).toContain('OFF');
@@ -60,7 +60,7 @@ describe('/swarm-memory slash command', () => {
         pitch: 'pitch',
       },
     ]);
-    const command = createSwarmMemoryCommand(retriever, async () => 0);
+    const command = createSwarmMemoryCommand(retriever);
     const info: string[] = [];
     await command.handler(makeCtx(['status'], info));
     const report = info.join('\n');
@@ -75,7 +75,7 @@ describe('/swarm-memory slash command', () => {
       config: baseConfig(),
       logger: { warn: vi.fn(), info: vi.fn() },
     });
-    const command = createSwarmMemoryCommand(retriever, async () => 0);
+    const command = createSwarmMemoryCommand(retriever);
     const info: string[] = [];
 
     await command.handler(makeCtx(['session-scope', 'off'], info));
@@ -99,10 +99,7 @@ describe('/swarm-memory slash command', () => {
       prevSteering: [],
       prevResponse: '',
     }));
-    const command = createSwarmMemoryCommand(retriever, async () => {
-      const entries = await retriever.forceRefreshWindow();
-      return entries.length;
-    });
+    const command = createSwarmMemoryCommand(retriever);
     const info: string[] = [];
     await command.handler(makeCtx(['refresh'], info));
     expect(info.join('\n')).toContain('Refresh complete');
@@ -115,7 +112,7 @@ describe('/swarm-memory slash command', () => {
       config: baseConfig(),
       logger: { warn: vi.fn(), info: vi.fn() },
     });
-    const command = createSwarmMemoryCommand(retriever, async () => 0);
+    const command = createSwarmMemoryCommand(retriever);
     const info: string[] = [];
     await command.handler(makeCtx(['bogus'], info));
     expect(info.join('\n')).toContain('Usage:');

@@ -1,7 +1,8 @@
-import { logger } from './logger.js';
-
 /** Minimal structural logger so tests can inject fakes. */
-export type SeedLogger = { info: (msg: string) => void; warn: (msg: string) => void };
+export type SeedLogger = {
+  info: (msg: string) => void;
+  warn: (msg: string) => void;
+};
 
 export type SeedDb = {
   createPersona: (req: {
@@ -123,9 +124,7 @@ export function seedDefaultAssets(db: SeedDb, log: SeedLogger): void {
     log.info('Seeded default persona: coordinator-wiki-librarian');
   } else {
     warnIfLibrarianPersonaIsLegacy(
-      db
-        .listPersonas()
-        .find(p => p.id === 'coordinator-wiki-librarian'),
+      db.listPersonas().find(p => p.id === 'coordinator-wiki-librarian'),
       log
     );
   }

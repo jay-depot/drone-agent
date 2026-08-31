@@ -1,5 +1,12 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createSwarmMemoryWorkflow } from '../../../src/plugins/bootstrap/swarm-memory.js';
@@ -45,7 +52,12 @@ function makeRunner(handlers: {
       }
       if (joined === 'crontab -l') {
         if (crontabInstalled) {
-          return { code: 0, stdout: '0 * * * * bash /tmp/homedir/.drone-swarm-memory/bin/catch-up-ingest.sh >> log', stderr: '' };
+          return {
+            code: 0,
+            stdout:
+              '0 * * * * bash /tmp/homedir/.drone-swarm-memory/bin/catch-up-ingest.sh >> log',
+            stderr: '',
+          };
         }
         return {
           code: handlers.crontab?.code ?? 1,
@@ -129,11 +141,10 @@ describe('bootstrap swarm-memory workflow', () => {
     });
     const { ask, asked } = makeElicit({ ...HAPPY });
     const workflow = createSwarmMemoryWorkflow({ runner, home });
-    const result = await workflow.run(
-      {},
-      makeCtx({ ask }) as never
-    );
-    const parsed = JSON.parse(result.toolResult as string) as {
+    const result = await workflow.run({}, makeCtx({ ask }) as never);
+    const parsed = JSON.parse(
+      (result as { toolResult?: string }).toolResult ?? ''
+    ) as {
       ok: boolean;
       steps: { step: string; status: string }[];
     };
@@ -221,7 +232,9 @@ describe('bootstrap swarm-memory workflow', () => {
     const { ask, asked } = makeElicit({ ...HAPPY, 'write-hook': 'no' });
     const workflow = createSwarmMemoryWorkflow({ runner, home });
     const result = await workflow.run({}, makeCtx({ ask }) as never);
-    const parsed = JSON.parse(result.toolResult as string) as {
+    const parsed = JSON.parse(
+      (result as { toolResult?: string }).toolResult ?? ''
+    ) as {
       ok: boolean;
       outcome: string;
     };
@@ -235,16 +248,14 @@ describe('bootstrap swarm-memory workflow', () => {
     const { ask } = makeElicit({ ...HAPPY, smoke: 'no' });
     const workflow = createSwarmMemoryWorkflow({ runner, home });
     const result = await workflow.run({}, makeCtx({ ask }) as never);
-    const parsed = JSON.parse(result.toolResult as string) as {
+    const parsed = JSON.parse(
+      (result as { toolResult?: string }).toolResult ?? ''
+    ) as {
       steps: { step: string; status: string }[];
     };
+    expect(parsed.steps.find(s => s.step === 'smoke')?.status).toBe('skipped');
     expect(
-      parsed.steps.find(s => s.step === 'smoke')?.status
-    ).toBe('skipped');
-    expect(
-      calls.filter(c =>
-        c.join(' ').includes('session-end-ingest.sh sess')
-      )
+      calls.filter(c => c.join(' ').includes('session-end-ingest.sh sess'))
     ).toHaveLength(0);
   });
 
@@ -256,7 +267,9 @@ describe('bootstrap swarm-memory workflow', () => {
     const { ask } = makeElicit({ ...HAPPY });
     const workflow = createSwarmMemoryWorkflow({ runner, home });
     const result = await workflow.run({}, makeCtx({ ask }) as never);
-    const parsed = JSON.parse(result.toolResult as string) as {
+    const parsed = JSON.parse(
+      (result as { toolResult?: string }).toolResult ?? ''
+    ) as {
       ok: boolean;
       steps: { step: string; status: string; detail?: string }[];
     };
@@ -274,7 +287,9 @@ describe('bootstrap swarm-memory workflow', () => {
     const { ask } = makeElicit({ ...HAPPY });
     const workflow = createSwarmMemoryWorkflow({ runner, home });
     const result = await workflow.run({}, makeCtx({ ask }) as never);
-    const parsed = JSON.parse(result.toolResult as string) as {
+    const parsed = JSON.parse(
+      (result as { toolResult?: string }).toolResult ?? ''
+    ) as {
       pendingRestart: string[];
     };
     expect(parsed.pendingRestart).toHaveLength(1);
