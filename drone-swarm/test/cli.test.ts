@@ -87,6 +87,12 @@ async function startFixture(port: number): Promise<Server> {
         events: [{ type: 'message', payload: 'hello' }],
       });
     }
+    if (url === '/api/sessions/s-1/transcript') {
+      return sendJson(200, {
+        session: { id: 's-1' },
+        transcript: '--- Turn 1 ---\nhello',
+      });
+    }
     if (url === '/api/sessions/s-1/process') {
       return sendJson(200, { session: { id: 's-1', status: 'processing' } });
     }
@@ -135,6 +141,30 @@ async function startFixture(port: number): Promise<Server> {
     }
 
     sendJson(404, { error: `no fixture for ${req.method} ${url}` });
+  });
+
+  it('session transcript prints the readable turn transcript', async () => {
+    const out: string[] = [];
+    const originalLog = console.log;
+    console.log = (...msgs: unknown[]) => {
+      out.push(msgs.map(String).join(' '));
+    };
+    try {
+      const code = await main(
+        [
+          '--coordinator',
+          `http://127.0.0.1:${port}`,
+          'session',
+          'transcript',
+          's-1',
+        ],
+        directFetch
+      );
+      expect(code).toBe(0);
+      expect(out.join('\n')).toContain('--- Turn 1 ---');
+    } finally {
+      console.log = originalLog;
+    }
   });
 
   await new Promise<void>(resolve =>

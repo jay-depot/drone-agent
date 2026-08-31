@@ -105,6 +105,20 @@ export class SwarmClient {
     return { status, log: data };
   }
 
+  async getSessionTranscript(sessionId: string): Promise<{
+    status: number;
+    transcript: unknown;
+  }> {
+    const path = `/sessions/${encodeURIComponent(sessionId)}/transcript`;
+    const { status, data } = await this.request<{
+      transcript?: unknown;
+    }>('GET', path);
+    if (status !== 200) {
+      throw new ApiError(status, `Failed to get session transcript: ${status}`);
+    }
+    return { status, transcript: data.transcript ?? data };
+  }
+
   async processSession(
     sessionId: string
   ): Promise<{ status: number; result: unknown }> {

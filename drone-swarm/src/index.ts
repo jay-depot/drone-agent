@@ -22,6 +22,7 @@ Address selection (mutually exclusive):
 Session commands (coordinator):
   session list [--status <s>] [--limit <n>]
   session log <id>            Print the full conversation transcript as JSON
+  session transcript <id>     Print the readable --- Turn N --- transcript
   session process <id>        Transition a finished session to "processing"
   session processed <id>      Mark a processed session complete [--summary <s>] [--notes <n>]
 
@@ -92,6 +93,15 @@ async function runSessionCommand(
       }
       const { log } = await client.getSessionLog(id);
       printJson(log);
+      return 0;
+    }
+    case 'transcript': {
+      if (!id) {
+        console.error('usage: drone-swarm session transcript <id>');
+        return 1;
+      }
+      const { transcript } = await client.getSessionTranscript(id);
+      printJson(transcript);
       return 0;
     }
     case 'process': {
