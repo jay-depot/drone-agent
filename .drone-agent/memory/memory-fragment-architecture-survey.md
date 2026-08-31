@@ -1,0 +1,16 @@
+---
+key: memory-fragment-architecture-survey
+tags:
+  []
+created: 2026-08-31T01:00:44.435Z
+updated: 2026-08-31T01:00:44.435Z
+---
+
+Survey of memory/prompt-fragment architecture in drone-agent (2026-08-30):
+- Memory plugin (drone-agent/src/plugins/memory/): tools are `memory__manage` (store/recall/delete actions) + `memory__browse` (list/search actions) — NOT memory__store/memory__recall as AGENTS.md claims (code is source of truth; AGENTS.md's "Tools: memory__store, memory__recall, memory__list, memory__delete" line is stale). Storage: `<projectDir>/.drone-agent/memory/<key>.md` w/ YAML frontmatter (store.ts, atomic tmp+rename). Prompt fragment key 'memory' phase header: renders false when disabled; empty→"No project memories stored yet..."; populated→"# Project Memories" + 10 most recent keys (sorted by updatedAt desc) + recall CTA. Offers DroneMemoryCapability gated on config.memory.enabled. defaultEnabled:false but config default memory.enabled:true (config-types.ts:250,654).
+- Notepad (drone-agent/src/plugins/notepad.ts): fragment 'notepad-current' header-phase, closure state, returns '' when empty (engine filters len>0), "# Session Notepad" between === markers when set. Tool notepad__manage.
+- Skills broker (drone-agent/src/plugins/skills/index.ts): fragment 'skills' header-phase; false when none; filters via persona.getFilteredSkills; "# Skills" + per-skill "## id/description/recall when" + CTA; skills__recall returns body JSON, runs DroneRecallEnhancer chain (self-improvement principles injection).
+- Persona (drone-agent/src/plugins/persona/index.ts): 2 fragments — 'persona' (renders "# [Persona brief: name]" + systemPromptOverride + "## Observe..." fragment list when active) and 'personas-available' (advertises all). getFilteredTools/getFilteredSkills control tool/skill visibility.
+- Fragment plumbing: DronePromptFragment {key, phase: 'header'|'footer', render: () => Promise<string|false>} (drone-core/src/plugin-system.ts:45). Engine registerPromptFragment dedupes on `<pluginId>.<key>`; renderPromptFragments (plugin-engine.ts:876) renders all in registration order — phase is metadata-only in main engine (only swarm's fragment-store buckets by header/footer). buildSystemMessages (runtime/context-budget-service.ts): config.systemPrompt msg, then RuntimeFlagRegistry.render() msg, then one system msg per fragment. Re-rendered fresh per prompt (conversation-service.ts:380,829). Wired lazily in src/index.tsx:104-106.
+- Swarm overlays (src/plugins/swarm/): registers fragments.header/footer unconditionally at register time; render reads in-memory SwarmFragmentStore only (no network at render); WS fragmentSync/fragment deltas; renderHeader→"# Swarm Fragments", renderFooter→"# Swarm Directives".
+- Default-enabled rules (plugin-engine.ts:216-235): enabledPlugins non-empty → authoritative (+required always on); else required||defaultEnabled. --plugin merges into enabledPlugins (src/index.tsx:~148). Config defaults in drone-core/src/config-types.ts: promptFile {enabled:false, files:[]} mergeArrays:['files']; swarm knowledgeSync/sessionImport deepMerge; memory.enabled:true.

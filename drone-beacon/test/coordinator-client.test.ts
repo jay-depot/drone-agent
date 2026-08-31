@@ -221,7 +221,11 @@ describe('Coordinator Client', () => {
             listener(socket);
             return req;
           }
-          return EventEmitter.prototype.on.call(req, event, listener);
+          return EventEmitter.prototype.on.call(
+            req,
+            event,
+            listener
+          ) as MockClientRequest;
         };
         req.write = vi.fn();
         req.end = vi.fn();
@@ -275,8 +279,15 @@ describe('Coordinator Client', () => {
       const promise = cfetch('https://localhost:3456/health');
 
       const socket = getSocket();
+      if (!socket) {
+        throw new Error('mock https.request was not invoked');
+      }
+      const deliver = getCallback();
+      if (!deliver) {
+        throw new Error('mock https.request was not invoked');
+      }
       socket.emit('secureConnect');
-      getCallback()(makeMockResponse(200, { ok: true }));
+      deliver(makeMockResponse(200, { ok: true }));
 
       expect(observed).toEqual([TEST_FP]);
       await expect(promise).resolves.toBeInstanceOf(Response);
@@ -296,6 +307,9 @@ describe('Coordinator Client', () => {
       const promise = cfetch('https://localhost:3456/health');
 
       const socket = getSocket();
+      if (!socket) {
+        throw new Error('mock https.request was not invoked');
+      }
       socket.emit('secureConnect');
 
       await expect(promise).rejects.toThrow(/fingerprint mismatch/);
@@ -1072,6 +1086,9 @@ describe('Coordinator Client', () => {
       setupMockHttpResponse(200, { spawnId: 's1', status: 'spawning' });
       const client = await makeClient();
       const result = await client.spawnSpawn({ targetBeaconId: 'b1' });
+      if (!result) {
+        throw new Error('spawnSpawn unexpectedly returned null');
+      }
       expect(result.spawnId).toBe('s1');
       expect(mockRequest).toHaveBeenCalledWith(
         expect.objectContaining({ path: '/api/spawn', method: 'POST' }),
@@ -1083,6 +1100,9 @@ describe('Coordinator Client', () => {
       setupMockHttpResponse(200, { spawnId: 's1', status: 'running' });
       const client = await makeClient();
       const result = await client.getSpawn('b1', 's1');
+      if (!result) {
+        throw new Error('getSpawn unexpectedly returned null');
+      }
       expect(result.status).toBe('running');
       expect(mockRequest).toHaveBeenCalledWith(
         expect.objectContaining({ path: '/api/spawn/b1/s1' }),
