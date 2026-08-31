@@ -33,7 +33,7 @@ pnpm start
 | Option                    | Default                      | Description                                      |
 | ------------------------- | ---------------------------- | ------------------------------------------------ |
 | `--port`                  | 3457                         | Port to listen on                                |
-| `--host`                  | 0.0.0.0                      | Host to bind to                                  |
+| `--host`                  | 127.0.0.1                    | Host to bind to                                  |
 | `--config-dir`            | ~/.drone-beacon              | Configuration directory                          |
 | `--db`                    | <config-dir>/drone-beacon.db | Path to SQLite database                          |
 | `--coordinator-host`      | -                            | Coordinator host to connect to                   |
@@ -47,6 +47,8 @@ pnpm start
 | `--spawn-timeout-ms`      | 30000                        | Agent connection timeout (ms)                    |
 | `--max-concurrent-spawns` | 10                           | Max concurrent spawned agents                    |
 | `--sync-interval-minutes` | 5                            | Interval for periodic coordinator sync (minutes) |
+| `--rate-limit-max`        | 1000                         | Max requests per IP per window                   |
+| `--rate-limit-window-ms`  | 60000                        | Rate limit window in milliseconds                |
 | `--help`                  | -                            | Show help message                                |
 
 ## API Endpoints

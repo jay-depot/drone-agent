@@ -232,7 +232,8 @@ export function buildCheckServerIdentity(
 export function createCoordinatorFetch(
   baseUrl: string,
   expectedCoordinatorFingerprint?: string,
-  onFirstFingerprint?: (fp: string) => void
+  onFirstFingerprint?: (fp: string) => void,
+  tlsIdentity?: TlsIdentity
 ): typeof fetch {
   const urlObj = new URL(baseUrl);
   const isHttps = urlObj.protocol === 'https:';
@@ -268,6 +269,12 @@ export function createCoordinatorFetch(
             expectedCoordinatorFingerprint,
             onFirstFingerprint
           );
+        // Present the beacon's TLS client certificate so the coordinator can
+        // authenticate this beacon via mTLS (fingerprint pinning).
+        if (tlsIdentity) {
+          (options as https.RequestOptions).cert = tlsIdentity.certPem;
+          (options as https.RequestOptions).key = tlsIdentity.keyPem;
+        }
       }
 
       const req = (isHttps ? https : http).request(options, res => {
@@ -336,7 +343,8 @@ export function createCoordinatorClient(
   const cfetch = createCoordinatorFetch(
     baseUrl,
     options.coordinatorTlsFingerprint,
-    options.onFirstCoordinatorFingerprint
+    options.onFirstCoordinatorFingerprint,
+    options.tlsIdentity
   );
 
   return {

@@ -2,8 +2,14 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { setupDb, teardownDb } from '../setup.js';
 import { buildTestApp } from '../app-helper.js';
 import type { FastifyInstance } from 'fastify';
+import { sendBeaconCommand } from '../../src/beacon-ws.js';
+
+vi.mock('../../src/beacon-ws.js', () => ({
+  sendBeaconCommand: vi.fn(),
+}));
 
 let app: FastifyInstance;
+const mockSend = vi.mocked(sendBeaconCommand);
 
 beforeEach(async () => {
   await setupDb();
@@ -50,6 +56,7 @@ describe('Message Routes', () => {
   });
 
   it('POST /messages/broadcast broadcasts to beacons', async () => {
+    mockSend.mockResolvedValue({ ok: true, body: {} });
     const res = await app.inject({
       method: 'POST',
       url: '/api/messages/broadcast',
@@ -67,14 +74,6 @@ describe('Message Routes', () => {
 });
 
 describe('Message Routes (detailed)', () => {
-  beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn());
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it('POST /messages/relay returns 503 when target beacon unavailable', async () => {
     // Register an agent location with a beacon that has no beacon row
     await app.inject({
@@ -96,8 +95,7 @@ describe('Message Routes (detailed)', () => {
     expect(JSON.parse(res.body).code).toBe('BEACON_NOT_FOUND');
   });
 
-  it('POST /messages/relay happy path with fetch stub', async () => {
-    // Register a beacon and agent location
+  it('POST /messages/relay happy path', async () => {
     await app.inject({
       method: 'POST',
       url: '/api/beacons',
@@ -113,12 +111,7 @@ describe('Message Routes (detailed)', () => {
       url: '/api/agents/location',
       payload: { agentId: 'agent-target', beaconId: 'b-target' },
     });
-    // Stub fetch to return success
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ id: 'm1' }),
-    });
-    vi.stubGlobal('fetch', mockFetch);
+    mockSend.mockResolvedValue({ ok: true, body: { id: 'm1' } });
 
     const res = await app.inject({
       method: 'POST',
@@ -153,11 +146,10 @@ describe('Message Routes (detailed)', () => {
       url: '/api/agents/location',
       payload: { agentId: 'agent-target', beaconId: 'b-target' },
     });
-    const mockFetch = vi.fn().mockResolvedValue({
+    mockSend.mockResolvedValue({
       ok: false,
-      text: async () => 'error details',
+      body: { error: 'error details' },
     });
-    vi.stubGlobal('fetch', mockFetch);
 
     const res = await app.inject({
       method: 'POST',
@@ -172,7 +164,7 @@ describe('Message Routes (detailed)', () => {
     expect(res.statusCode).toBe(502);
   });
 
-  it('POST /messages/relay returns 503 when fetch throws', async () => {
+  it('POST /messages/relay returns 503 when sendBeaconCommand throws', async () => {
     await app.inject({
       method: 'POST',
       url: '/api/beacons',
@@ -188,10 +180,7 @@ describe('Message Routes (detailed)', () => {
       url: '/api/agents/location',
       payload: { agentId: 'agent-target', beaconId: 'b-target' },
     });
-    const mockFetch = vi
-      .fn()
-      .mockRejectedValue(new Error('Connection refused'));
-    vi.stubGlobal('fetch', mockFetch);
+    mockSend.mockRejectedValue(new Error('Beacon not connected'));
 
     const res = await app.inject({
       method: 'POST',
@@ -207,8 +196,7 @@ describe('Message Routes (detailed)', () => {
     expect(JSON.parse(res.body).code).toBe('BEACON_UNAVAILABLE');
   });
 
-  it('POST /messages/broadcast with mixed fetch results', async () => {
-    // Register two beacons
+  it('POST /messages/broadcast with mixed results', async () => {
     await app.inject({
       method: 'POST',
       url: '/api/beacons',
@@ -219,12 +207,9 @@ describe('Message Routes (detailed)', () => {
       url: '/api/beacons',
       payload: { id: 'b2', name: 'B2', host: '10.0.0.1', port: 3457 },
     });
-    // Stub fetch: first call succeeds, second throws
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true })
+    mockSend
+      .mockResolvedValueOnce({ ok: true, body: {} })
       .mockRejectedValueOnce(new Error('unreachable'));
-    vi.stubGlobal('fetch', mockFetch);
 
     const res = await app.inject({
       method: 'POST',

@@ -399,9 +399,11 @@ export async function pushPersonaToCoordinator(
  * Get personas from coordinator
  */
 export async function getCoordinatorPersonas(
-  coordinatorUrl: string
+  beaconUrl: string
 ): Promise<Persona[]> {
-  return swarmRequest<Persona[]>(coordinatorUrl, '/api/personas');
+  // Read through the beacon's coordinator proxy: the coordinator's API is
+  // mTLS-gated and only the beacon holds client credentials.
+  return swarmRequest<Persona[]>(beaconUrl, '/coordinator/personas');
 }
 
 /**
@@ -433,7 +435,9 @@ export async function pushSkillToCoordinator(
  * Get skills from coordinator
  */
 export async function getCoordinatorSkills(
-  coordinatorUrl: string
+  beaconUrl: string
 ): Promise<{ id: string; name: string }[]> {
-  return swarmRequest(coordinatorUrl, '/api/skills');
+  // Read through the beacon's coordinator proxy: the coordinator's API is
+  // mTLS-gated and only the beacon holds client credentials.
+  return swarmRequest(beaconUrl, '/coordinator/skills');
 }

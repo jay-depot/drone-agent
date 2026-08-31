@@ -12,12 +12,12 @@ import type {
   DroneLspServerState,
   DroneLogger,
 } from 'drone-core';
+import { commandExistsOnPath } from 'drone-core';
 import {
   AmbiguousPositionError,
   buildAmbiguousMatches,
   HARD_CONTEXT_LINES,
 } from 'drone-core';
-import { commandExistsOnPath } from 'drone-core';
 import {
   computeCacheKey,
   ensureServerInstalled,

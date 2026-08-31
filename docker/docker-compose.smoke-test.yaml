@@ -41,6 +41,8 @@ services:
     container_name: drone-beacon
     ports:
       - '3457:3457'
+    environment:
+      - COORDINATOR_HTTPS=true
     volumes:
       - beacon-config:/config
     networks:
@@ -78,7 +80,8 @@ services:
       dockerfile: docker/smoke-test.Dockerfile
     container_name: smoke-test-runner
     environment:
-      - COORDINATOR_URL=http://drone-coordinator:3456
+      - COORDINATOR_URL=https://drone-coordinator:3456
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
       - BEACON_URL=http://drone-beacon:3457
       - AGENT_URL=http://drone-agent:3459
       - ECHO_LLM_URL=http://echo-llm:3458

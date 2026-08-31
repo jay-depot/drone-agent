@@ -7,6 +7,7 @@ import https from 'node:https';
 import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
 import type { PeerCertificate } from 'node:tls';
+import type { TlsIdentity } from 'drone-swarm-common/tls';
 import {
   initCoordinatorTrust,
   setPendingCoordinatorFingerprint,
@@ -298,6 +299,29 @@ describe('Coordinator Client', () => {
       socket.emit('secureConnect');
 
       await expect(promise).rejects.toThrow(/fingerprint mismatch/);
+    });
+
+    it('passes the beacon client cert/key to https.request for mTLS', async () => {
+      const { createCoordinatorFetch } =
+        await import('../src/coordinator-client.js');
+      const { httpsRequest } = makeHttpsRequestMock({
+        fingerprint256: TEST_FP,
+      });
+
+      const cfetch = createCoordinatorFetch(
+        'https://localhost:3456',
+        undefined,
+        undefined,
+        {
+          certPem: 'CERT_PEM',
+          keyPem: 'KEY_PEM',
+        } as TlsIdentity
+      );
+      void cfetch('https://localhost:3456/health');
+
+      const opts = httpsRequest.mock.calls[0][0] as https.RequestOptions;
+      expect(opts.cert).toBe('CERT_PEM');
+      expect(opts.key).toBe('KEY_PEM');
     });
   });
 

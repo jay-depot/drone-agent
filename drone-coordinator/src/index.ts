@@ -47,7 +47,10 @@ import {
   publishInitialState,
 } from './ws-pubsub.js';
 import { createWebAuthMiddleware, isLocalRequest } from './web-auth.js';
+import { createMtlsMiddleware } from './mtls.js';
+import { registerBeaconWebSocket } from './beacon-ws.js';
 import { configureSessionEndHook } from './session-end.js';
+import { setAutoApproveBeacons } from './auto-approve.js';
 
 const DEFAULT_PORT = 3456;
 const DEFAULT_HOST = '0.0.0.0';
@@ -56,6 +59,8 @@ const DEFAULT_WEB_HOST = '127.0.0.1';
 const DEFAULT_COMMAND_TIMEOUT_MS = 30000;
 const DEFAULT_CONFIG_DIR = path.join(os.homedir(), '.drone-coordinator');
 const DEFAULT_DB_FILENAME = 'drone-coordinator.db';
+const DEFAULT_RATE_LIMIT_MAX = 1000;
+const DEFAULT_RATE_LIMIT_WINDOW_MS = 60000;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -67,7 +72,10 @@ interface Config {
   configDir: string;
   dbPath: string;
   useHttps: boolean;
+  rateLimitMax: number;
+  rateLimitWindowMs: number;
   sessionEnd?: SessionEndTrigger;
+  autoApproveBeacons?: boolean;
   command:
     | 'serve'
     | 'approve-beacon'
@@ -95,7 +103,9 @@ async function parseArgs(): Promise<Config> {
     webHost: DEFAULT_WEB_HOST,
     configDir: DEFAULT_CONFIG_DIR,
     dbPath: path.join(DEFAULT_CONFIG_DIR, DEFAULT_DB_FILENAME),
-    useHttps: process.env.COORDINATOR_HTTPS === 'true',
+    useHttps: true,
+    rateLimitMax: DEFAULT_RATE_LIMIT_MAX,
+    rateLimitWindowMs: DEFAULT_RATE_LIMIT_WINDOW_MS,
     command: 'serve',
   };
 
@@ -132,6 +142,10 @@ async function parseArgs(): Promise<Config> {
       config.useHttps = true;
     } else if (arg === '--no-https') {
       config.useHttps = false;
+    } else if (arg === '--rate-limit-max' && i + 1 < args.length) {
+      config.rateLimitMax = parseInt(args[++i], 10);
+    } else if (arg === '--rate-limit-window-ms' && i + 1 < args.length) {
+      config.rateLimitWindowMs = parseInt(args[++i], 10);
     } else if (arg === '--approve-beacon' && i + 1 < args.length) {
       config.command = 'approve-beacon';
       config.beaconId = args[++i];
@@ -162,6 +176,9 @@ async function parseArgs(): Promise<Config> {
     config.dbPath = (merged.dbPath as string) ?? config.dbPath;
     if (merged.sessionEnd !== undefined) {
       config.sessionEnd = merged.sessionEnd as SessionEndTrigger;
+    }
+    if (merged.autoApproveBeacons !== undefined) {
+      config.autoApproveBeacons = merged.autoApproveBeacons as boolean;
     }
   }
 
@@ -300,20 +317,55 @@ function resolveUiDistPath(): string {
  */
 export async function buildApp(opts?: {
   getToken?: () => string | null;
-  https?: { cert: Buffer; key: Buffer };
+  enableMtls?: boolean;
+  https?: {
+    cert: Buffer;
+    key: Buffer;
+    requestCert?: boolean;
+    rejectUnauthorized?: boolean;
+  };
+  rateLimitMax?: number;
+  rateLimitWindowMs?: number;
 }): Promise<FastifyInstance> {
   const app = fastify({
     logger: { level: process.env.LOG_LEVEL || 'info' },
-    ...(opts?.https ? { https: { allowHTTP1: true, ...opts.https } } : {}),
+    ...(opts?.https
+      ? {
+          https: {
+            allowHTTP1: true,
+            requestCert: true,
+            rejectUnauthorized: false,
+            ...opts.https,
+          },
+        }
+      : {}),
   });
 
   await app.register(fastifyCors, {
     origin: process.env.NODE_ENV === 'development' ? true : false,
   });
 
+  // Register rate limiting (permissive defaults; configurable via CLI flags)
+  await app.register(import('@fastify/rate-limit'), {
+    max: opts?.rateLimitMax ?? DEFAULT_RATE_LIMIT_MAX,
+    timeWindow: opts?.rateLimitWindowMs ?? DEFAULT_RATE_LIMIT_WINDOW_MS,
+  });
+
   // Register auth middleware for the web port
   if (opts?.getToken) {
     app.addHook('onRequest', createWebAuthMiddleware(opts.getToken));
+  }
+
+  // Register mTLS middleware for the primary (beacon-facing) port
+  if (opts?.enableMtls) {
+    app.addHook(
+      'onRequest',
+      createMtlsMiddleware({ httpsEnabled: !!opts.https })
+    );
+    // Register the WebSocket reverse channel used by beacons to receive
+    // spawn/message commands from the coordinator.
+    await app.register(import('@fastify/websocket'));
+    registerBeaconWebSocket(app);
   }
 
   // Register API routes
@@ -330,7 +382,9 @@ async function attachUi(
   uiDistPath: string,
   opts?: { getToken?: () => string | null }
 ): Promise<void> {
-  await app.register(import('@fastify/websocket'));
+  if (!app.hasRequestDecorator('ws')) {
+    await app.register(import('@fastify/websocket'));
+  }
 
   // WebSocket endpoint for real-time events
   app.get('/ws', { websocket: true }, (socket, req) => {
@@ -475,6 +529,11 @@ export async function main() {
     return;
   }
 
+  if (config.autoApproveBeacons) {
+    setAutoApproveBeacons(true);
+    logger.info('Beacon auto-approval enabled (test/integration mode)');
+  }
+
   if (config.sessionEnd) {
     if (config.sessionEnd.type === 'spawn' && !config.sessionEnd.beaconId) {
       console.error(
@@ -524,11 +583,20 @@ export async function main() {
   logger.info(`Serving UI from: ${uiDistPath}`);
 
   // Primary server (with TLS if configured)
-  const app = await buildApp(tlsOptions ? { https: tlsOptions } : undefined);
+  const app = await buildApp({
+    ...(tlsOptions ? { https: tlsOptions } : {}),
+    enableMtls: true,
+    rateLimitMax: config.rateLimitMax,
+    rateLimitWindowMs: config.rateLimitWindowMs,
+  });
   await attachUi(app, uiDistPath);
 
   // Web server (HTTP only, no TLS, with auth for non-local connections)
-  const webApp = await buildApp({ getToken: () => getWebToken() });
+  const webApp = await buildApp({
+    getToken: () => getWebToken(),
+    rateLimitMax: config.rateLimitMax,
+    rateLimitWindowMs: config.rateLimitWindowMs,
+  });
   await attachUi(webApp, uiDistPath, { getToken: () => getWebToken() });
 
   // Check for stale sessions every hour (mark sessions inactive > 24 hours)

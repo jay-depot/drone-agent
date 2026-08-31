@@ -19,11 +19,13 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@fastify/rate-limit": "^11.2.0",
     "@fastify/websocket": "^11.0.0",
     "better-sqlite3": "^11.8.1",
     "drone-core": "workspace:*",
     "drone-swarm-common": "workspace:*",
     "fastify": "^5.2.1",
+    "ws": "^8.21.3",
     "minimatch": "^10.2.5",
     "pino": "^9.6.0",
     "sqlite-vec": "0.1.9",
@@ -39,6 +41,7 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^24.0.10"
+    "@types/node": "^24.0.10",
+    "@types/ws": "^8.18.1"
   }
 }

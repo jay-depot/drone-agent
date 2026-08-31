@@ -1,6 +1,7 @@
 import { getDatabase } from './init.js';
 import { generateVerificationCode } from 'drone-swarm-common';
 import { logger } from '../logger.js';
+import { isAutoApproveBeacons } from '../auto-approve.js';
 import { getCoordinatorFingerprint } from '../routes/health.js';
 import type {
   BeaconTrust,
@@ -96,15 +97,19 @@ export function registerBeaconTrust(
     };
   }
 
-  const isLocal = req.host === 'localhost' || req.host === '127.0.0.1';
-
   // Auto-approve local beacons
   const verificationCode = generateVerificationCode(
     req.publicKey,
     req.tlsFingerprint ?? '',
     getCoordinatorFingerprint() ?? ''
   );
-  const status: BeaconTrustStatus = isLocal ? 'approved' : 'pending';
+  const isLocal = req.host === 'localhost' || req.host === '127.0.0.1';
+
+  // Test/integration deployments opt into auto-approval (setAutoApproveBeacons
+  // at startup); the mTLS fingerprint-vs-claim anti-spoof check is unaffected.
+  const status: BeaconTrustStatus =
+    isLocal || isAutoApproveBeacons() ? 'approved' : 'pending';
+  const approvedAt = isLocal || isAutoApproveBeacons() ? now : null;
 
   const trust: BeaconTrust = {
     beaconId: req.id,
@@ -113,7 +118,7 @@ export function registerBeaconTrust(
     host: req.host,
     port: req.port,
     status,
-    approvedAt: isLocal ? now : null,
+    approvedAt,
     tlsFingerprint: req.tlsFingerprint ?? null,
     verificationCode,
     createdAt: now,

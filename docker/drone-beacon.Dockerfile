@@ -61,4 +61,4 @@ WORKDIR /app/drone-beacon
 EXPOSE 3457
 
 # Run the beacon
-CMD ["node", "dist/index.js", "--config-dir", "/config"]
+CMD ["node", "dist/index.js", "--config-dir", "/config", "--host", "0.0.0.0"]

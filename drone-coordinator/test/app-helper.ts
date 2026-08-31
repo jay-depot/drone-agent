@@ -7,7 +7,10 @@ import fastify, { type FastifyInstance } from 'fastify';
 import fastifyCors from '@fastify/cors';
 import { registerRoutes } from '../src/routes/index.js';
 
-export async function buildTestApp(): Promise<FastifyInstance> {
+export async function buildTestApp(opts?: {
+  rateLimitMax?: number;
+  rateLimitWindowMs?: number;
+}): Promise<FastifyInstance> {
   const app = fastify({
     logger: { level: 'silent' },
   });
@@ -15,6 +18,13 @@ export async function buildTestApp(): Promise<FastifyInstance> {
   await app.register(fastifyCors, {
     origin: true,
   });
+
+  if (opts?.rateLimitMax !== undefined) {
+    await app.register(import('@fastify/rate-limit'), {
+      max: opts.rateLimitMax,
+      timeWindow: opts.rateLimitWindowMs ?? 60000,
+    });
+  }
 
   await registerRoutes(app);
 

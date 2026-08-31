@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { publishMutationEvent } from '../ws-pubsub.js';
+import { getClientCertFingerprint } from '../mtls.js';
 import type {
   RegisterBeaconRequest,
   RegisterBeaconTrustRequest,
@@ -16,6 +17,21 @@ export default function beaconRoutes(app: FastifyInstance) {
     '/beacons',
     async (request, reply) => {
       if (request.body.publicKey) {
+        // Verify the presented client certificate matches the TLS fingerprint
+        // the beacon claims. This prevents a beacon from registering with a
+        // fingerprint it doesn't actually hold (spoofing).
+        const presentedFingerprint = getClientCertFingerprint(request);
+        if (
+          request.body.tlsFingerprint &&
+          presentedFingerprint &&
+          presentedFingerprint !==
+            request.body.tlsFingerprint.replace(/:/g, '').toLowerCase()
+        ) {
+          return reply.code(403).send({
+            error:
+              'Client certificate fingerprint does not match the claimed TLS fingerprint',
+          });
+        }
         const trustReq: RegisterBeaconTrustRequest = {
           id: request.body.id,
           name: request.body.name,

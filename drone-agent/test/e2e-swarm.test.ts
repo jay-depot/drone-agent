@@ -18,6 +18,7 @@ import {
   getRequiredIntegrationEnv,
   waitForService,
   shouldSkipIntegrationSuite,
+  registerBeaconAgent,
 } from './fixtures/index.js';
 
 const DEFAULT_BEACON_URL = 'http://localhost:3457';
@@ -45,30 +46,33 @@ describe.skipIf(
         `Coordinator service not available at ${COORDINATOR_URL}`
       );
     }
+
+    // The suites that run before this one leave stale 'connected' rows in
+    // the beacon's agent_sessions (spawned agents are not cleaned up —
+    // see project memory spawned-agent-llm-wiring), so assertions here
+    // must be anchored to an agent this test owns, not to whatever the
+    // DB happens to contain.
+    await registerBeaconAgent(BEACON_URL, 'e2e-lifecycle-agent');
   });
 
   describe('full-agent-lifecycle', () => {
     it('should complete full agent lifecycle', async () => {
-      // Get initial agent state
-      const initialAgents = await getBeaconAgents(BEACON_URL);
-      expect(initialAgents.length).toBeGreaterThan(0);
-
-      // Verify agent is connected
-      const connectedAgents = initialAgents.filter(
-        a => a.status === 'connected'
+      // Register → connected → heartbeat → stale check for an agent this
+      // test owns. Other 'connected' rows may be stale leftovers from
+      // earlier suites, so the freshness assertion applies only to ours.
+      const agent = await registerBeaconAgent(
+        BEACON_URL,
+        'e2e-lifecycle-agent'
       );
-      expect(connectedAgents.length).toBeGreaterThan(0);
+      expect(agent.status).toBe('connected');
 
-      // Verify agent has activity
-      for (const agent of connectedAgents) {
-        const lastActivity = new Date(agent.lastActivity).getTime();
-        const now = Date.now();
-        expect(now - lastActivity).toBeLessThan(60000); // Within last minute
-      }
+      const agents = await getBeaconAgents(BEACON_URL);
+      const ours = agents.find(a => a.id === 'e2e-lifecycle-agent');
+      expect(ours).toBeDefined();
+      expect(ours?.status).toBe('connected');
 
-      // Agent lifecycle is managed by the swarm
-      // The test verifies the agent is in expected state
-      expect(true).toBe(true);
+      const lastActivity = new Date(ours!.lastActivity).getTime();
+      expect(Date.now() - lastActivity).toBeLessThan(60000);
     });
   });
 

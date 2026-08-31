@@ -2,7 +2,7 @@ import pino from 'pino';
 
 const logger = pino({ level: 'info' });
 
-const COORDINATOR_URL = process.env.COORDINATOR_URL || 'http://localhost:3456';
+const COORDINATOR_URL = process.env.COORDINATOR_URL || 'https://localhost:3456';
 const BEACON_URL = process.env.BEACON_URL || 'http://localhost:3457';
 const AGENT_URL = process.env.AGENT_URL || 'http://localhost:3459';
 const ECHO_LLM_URL = process.env.ECHO_LLM_URL || 'http://localhost:3458';

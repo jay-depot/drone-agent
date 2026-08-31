@@ -37,6 +37,7 @@ import {
   setPendingCoordinatorFingerprint,
   getTrustedCoordinatorFingerprint,
   confirmCoordinatorFingerprint,
+  getPendingCoordinatorFingerprint,
   setBeaconApproved,
 } from './coordinator-trust.js';
 import {
@@ -45,6 +46,7 @@ import {
   type SpawnerConfig,
 } from './spawner.js';
 import * as wsServer from './ws-server.js';
+import { startCoordinatorWsClient } from './coordinator-ws.js';
 import {
   startFragmentTtlSweep,
   stopFragmentTtlSweep,
@@ -60,13 +62,15 @@ import {
 import { setKnowledgeBaseDir } from 'drone-swarm-common/wiki-storage';
 
 const DEFAULT_PORT = 3457;
-const DEFAULT_HOST = '0.0.0.0';
+const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_CONFIG_DIR = path.join(os.homedir(), '.drone-beacon');
 const DEFAULT_DB_FILENAME = 'drone-beacon.db';
 const DEFAULT_SPAWN_AGENT_PATH = 'drone-agent';
 const DEFAULT_SPAWN_TIMEOUT_MS = 30000;
 const DEFAULT_MAX_CONCURRENT_SPAWNS = 10;
 const DEFAULT_SYNC_INTERVAL_MINUTES = 5;
+const DEFAULT_RATE_LIMIT_MAX = 1000;
+const DEFAULT_RATE_LIMIT_WINDOW_MS = 60000;
 const DEFAULT_COMMAND_TIMEOUT_MS = 30000;
 
 interface Config {
@@ -86,6 +90,8 @@ interface Config {
   spawnTimeoutMs: number;
   maxConcurrentSpawns: number;
   syncIntervalMinutes: number;
+  rateLimitMax: number;
+  rateLimitWindowMs: number;
   sessionEnd?: SessionEndTrigger;
 }
 
@@ -104,6 +110,14 @@ async function parseArgs(): Promise<Config> {
     spawnTimeoutMs: DEFAULT_SPAWN_TIMEOUT_MS,
     maxConcurrentSpawns: DEFAULT_MAX_CONCURRENT_SPAWNS,
     syncIntervalMinutes: DEFAULT_SYNC_INTERVAL_MINUTES,
+    rateLimitMax: DEFAULT_RATE_LIMIT_MAX,
+    rateLimitWindowMs: DEFAULT_RATE_LIMIT_WINDOW_MS,
+    // COORDINATOR_HOST/PORT are read from the environment (docker compose
+    // sets them); CLI flags override below.
+    coordinatorHost: process.env.COORDINATOR_HOST,
+    coordinatorPort: process.env.COORDINATOR_PORT
+      ? parseInt(process.env.COORDINATOR_PORT, 10)
+      : undefined,
     coordinatorUseHttps: process.env.COORDINATOR_HTTPS === 'true',
     useHttps: process.env.BEACON_HTTPS === 'true',
     command: 'serve',
@@ -154,6 +168,10 @@ async function parseArgs(): Promise<Config> {
       config.maxConcurrentSpawns = parseInt(args[++i], 10);
     } else if (arg === '--sync-interval-minutes' && i + 1 < args.length) {
       config.syncIntervalMinutes = parseInt(args[++i], 10);
+    } else if (arg === '--rate-limit-max' && i + 1 < args.length) {
+      config.rateLimitMax = parseInt(args[++i], 10);
+    } else if (arg === '--rate-limit-window-ms' && i + 1 < args.length) {
+      config.rateLimitWindowMs = parseInt(args[++i], 10);
     } else if (
       arg === '--confirm-coordinator-fingerprint' &&
       i + 1 < args.length
@@ -319,6 +337,11 @@ async function main() {
 
     setCoordinatorClient(coordinatorClient);
 
+    // Start the reverse-channel WebSocket client so the coordinator can push
+    // spawn/message commands to this beacon (instead of calling it inbound).
+    const coordinatorBase = `${config.coordinatorUseHttps ? 'https' : 'http'}://${config.coordinatorHost}:${config.coordinatorPort}`;
+    startCoordinatorWsClient(coordinatorBase, tlsIdentity);
+
     try {
       const result = await coordinatorClient.registerBeacon(
         identity,
@@ -327,6 +350,21 @@ async function main() {
 
       if (result.status === 'approved') {
         setBeaconApproved(true);
+      }
+
+      // Test/integration opt-in: confirm the coordinator's TLS fingerprint
+      // without the compare-only human handshake. The fingerprint was
+      // observed on the very connection that performed registration, and
+      // the coordinator already verified this beacon's certificate, so the
+      // trust-on-first-use basis is the registration connection itself.
+      if (
+        process.env.BEACON_AUTO_CONFIRM_COORDINATOR_FINGERPRINT === 'true' &&
+        result.status === 'approved'
+      ) {
+        const pending = getPendingCoordinatorFingerprint();
+        if (pending) {
+          confirmCoordinatorFingerprint(pending);
+        }
       }
 
       if (result.status === 'pending') {
@@ -382,6 +420,12 @@ async function main() {
       : {}),
   });
 
+  // Register rate limiting (permissive defaults; configurable via CLI flags)
+  await app.register(import('@fastify/rate-limit'), {
+    max: config.rateLimitMax,
+    timeWindow: config.rateLimitWindowMs,
+  });
+
   // Register routes
   await registerRoutes(app);
 
@@ -427,6 +471,9 @@ async function main() {
     setOutboxEnabled(true);
     outboxFlusher = createOutboxFlusher({
       getBaseUrl: () => coordinatorClient?.getBaseUrl(),
+      tlsIdentity,
+      expectedCoordinatorFingerprint: getTrustedCoordinatorFingerprint(),
+      onFirstFingerprint: fp => setPendingCoordinatorFingerprint(fp),
       intervalMs: Math.min(config.syncIntervalMinutes * 60 * 1000, 60000),
     });
     outboxFlusher.start();

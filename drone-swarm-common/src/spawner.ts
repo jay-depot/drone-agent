@@ -36,6 +36,12 @@ export interface SpawnDb {
     exitCode?: number
   ): unknown;
   getSpawn(id: string): { status: string } | undefined;
+  /**
+   * Remove the agent's session record when its process is gone. Optional so
+   * minimal adapters stay valid; omitting it leaves stale agent_sessions
+   * rows ('connected' with frozen activity) behind every exit.
+   */
+  unregisterAgent?(agentId: string): unknown;
 }
 
 // === State ===
@@ -43,6 +49,7 @@ export interface SpawnDb {
 const activeSpawns = new Map<string, ManagedProcess>();
 let spawnerConfig: SpawnerConfig | null = null;
 let spawnDb: SpawnDb | null = null;
+const MAX_WORKING_DIR_LENGTH = 4096;
 
 // === Initialization ===
 
@@ -78,6 +85,24 @@ export async function spawnAgent(
     throw new Error('Spawner not initialized. Call initSpawner() first.');
   }
 
+  const override = configOverride as
+    | {
+        model?: unknown;
+        env?: Record<string, string>;
+        workingDir?: string;
+      }
+    | undefined;
+  const workingDirOverride = override?.workingDir;
+  if (
+    workingDirOverride &&
+    workingDirOverride.length > MAX_WORKING_DIR_LENGTH
+  ) {
+    throw new Error(
+      `Working directory exceeds maximum length: ${workingDirOverride.length}`
+    );
+  }
+  const workingDir = workingDirOverride || process.cwd();
+
   // Check max concurrent spawns
   if (getActiveSpawnCount() >= spawnerConfig.maxConcurrentSpawns) {
     throw new Error('Max concurrent spawns reached');
@@ -104,12 +129,11 @@ export async function spawnAgent(
 
   // Add config overrides
   if (configOverride) {
-    const cfg = configOverride as Record<string, unknown>;
-    if (cfg.model) {
-      args.push('--model', String(cfg.model));
+    if (override?.model) {
+      args.push('--model', String(override.model));
     }
-    if (cfg.workingDir) {
-      args.push('--working-dir', String(cfg.workingDir));
+    if (workingDirOverride) {
+      args.push('--working-dir', workingDirOverride);
     }
   }
 
@@ -128,12 +152,11 @@ export async function spawnAgent(
     stdio: ['pipe', 'pipe', 'pipe'],
     env: {
       ...process.env,
-      ...((configOverride as { env?: Record<string, string> })?.env || {}),
+      ...(override?.env || {}),
     },
     // Coordinator-provided workingDir is intentional and length-bounded above.
     // codeql[js/path-injection]
-    cwd:
-      (configOverride as { workingDir?: string })?.workingDir || process.cwd(),
+    cwd: workingDir,
   });
 
   // Track the process
@@ -143,7 +166,9 @@ export async function spawnAgent(
     startedAt: Date.now(),
   });
 
-  // Handle process events
+  // Handle process events. Both exit and error paths also drop the agent's
+  // session record: a dead process can never heartbeat again, and leaving
+  // the row behind poisons 'connected'/'lastActivity' views (zombie agents).
   childProcess.on('exit', (code, signal) => {
     logger.info(`Agent ${agentId} exited with code=${code}, signal=${signal}`);
 
@@ -156,6 +181,8 @@ export async function spawnAgent(
       code ?? undefined
     );
 
+    spawnDb!.unregisterAgent?.(agentId);
+
     // Clean up tracking
     activeSpawns.delete(spawnId);
   });
@@ -165,6 +192,8 @@ export async function spawnAgent(
 
     // Update spawn record with error
     spawnDb!.updateSpawnStatus(spawnId, 'failed', null, err.message);
+
+    spawnDb!.unregisterAgent?.(agentId);
 
     // Clean up tracking
     activeSpawns.delete(spawnId);

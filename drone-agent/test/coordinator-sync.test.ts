@@ -51,7 +51,7 @@ describe.skipIf(
 
   describe('persona-push-to-coordinator', () => {
     it('should get personas from coordinator', async () => {
-      const personas = await getCoordinatorPersonas(COORDINATOR_URL);
+      const personas = await getCoordinatorPersonas(BEACON_URL);
       expect(personas).toBeDefined();
       expect(Array.isArray(personas)).toBe(true);
     });
@@ -67,7 +67,7 @@ describe.skipIf(
       try {
         await pushPersonaToCoordinator(COORDINATOR_URL, testPersona);
 
-        const personas = await getCoordinatorPersonas(COORDINATOR_URL);
+        const personas = await getCoordinatorPersonas(BEACON_URL);
         const found = personas.find(p => p.id === testPersona.id);
 
         expect(found).toBeDefined();
@@ -80,7 +80,7 @@ describe.skipIf(
 
   describe('skill-push-to-coordinator', () => {
     it('should get skills from coordinator', async () => {
-      const skills = await getCoordinatorSkills(COORDINATOR_URL);
+      const skills = await getCoordinatorSkills(BEACON_URL);
       expect(skills).toBeDefined();
       expect(Array.isArray(skills)).toBe(true);
     });
@@ -97,7 +97,7 @@ describe.skipIf(
       try {
         await pushSkillToCoordinator(COORDINATOR_URL, testSkill);
 
-        const skills = await getCoordinatorSkills(COORDINATOR_URL);
+        const skills = await getCoordinatorSkills(BEACON_URL);
         const found = skills.find(s => s.id === testSkill.id);
 
         expect(found).toBeDefined();
@@ -139,7 +139,7 @@ describe.skipIf(
       expect(inBeacon).toBeDefined();
 
       // Try to verify in coordinator (sync may not be automatic)
-      const coordinatorPersonas = await getCoordinatorPersonas(COORDINATOR_URL);
+      const coordinatorPersonas = await getCoordinatorPersonas(BEACON_URL);
       const inCoordinator = coordinatorPersonas.find(
         p => p.id === testPersona.id
       );

@@ -1,26 +1,35 @@
 import type { FastifyInstance } from 'fastify';
 import * as db from '../db/index.js';
 import type { SpawnRequest } from '../types.js';
+import { sendBeaconCommand, type CommandResponse } from '../beacon-ws.js';
 
-function buildBeaconUrl(
-  beacon: { host: string; port: number },
-  pathname: string,
-  searchParams?: Record<string, string | undefined>
+function handleCommandError(
+  reply: { code: (c: number) => { send: (b: unknown) => unknown } },
+  err: unknown
 ) {
-  const url = new URL('http://beacon.invalid');
-  url.hostname = beacon.host;
-  url.port = String(beacon.port);
-  url.pathname = pathname;
+  return reply.code(503).send({
+    error: 'Target beacon unavailable',
+    details: err instanceof Error ? err.message : 'Unknown error',
+    code: 'BEACON_UNAVAILABLE',
+  });
+}
 
-  if (searchParams) {
-    for (const [key, value] of Object.entries(searchParams)) {
-      if (value !== undefined) {
-        url.searchParams.set(key, value);
-      }
-    }
-  }
-
-  return url;
+function respond(
+  reply: { code: (c: number) => { send: (b: unknown) => unknown } },
+  res: CommandResponse
+) {
+  const status = res.status ?? (res.ok ? 200 : 502);
+  return reply.code(status).send(
+    res.ok
+      ? res.body
+      : {
+          error: 'Beacon error',
+          details:
+            res.body && typeof res.body === 'object' && 'error' in res.body
+              ? (res.body as { error: string }).error
+              : 'Unknown beacon error',
+        }
+  );
 }
 
 export default function spawnRoutes(app: FastifyInstance) {
@@ -45,33 +54,23 @@ export default function spawnRoutes(app: FastifyInstance) {
       });
     }
 
-    // Forward the spawn request to the beacon
+    // Forward the spawn request to the beacon over the reverse channel
     try {
-      const response = await fetch(buildBeaconUrl(beacon, '/spawn'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personaId, task, config, spawnId }),
+      const res = await sendBeaconCommand(targetBeaconId, 'spawn', {
+        personaId,
+        task,
+        config,
+        spawnId,
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        return reply.code(502).send({
-          error: 'Failed to spawn agent on target beacon',
-          details: errorText,
+      if (res.ok) {
+        return reply.code(201).send({
+          ...(res.body as Record<string, unknown>),
+          targetBeaconId,
         });
       }
-
-      const spawnData = (await response.json()) as Record<string, unknown>;
-      return {
-        ...spawnData,
-        targetBeaconId,
-      };
+      return respond(reply, res);
     } catch (err) {
-      return reply.code(503).send({
-        error: 'Target beacon unavailable',
-        details: err instanceof Error ? err.message : 'Unknown error',
-        code: 'BEACON_UNAVAILABLE',
-      });
+      return handleCommandError(reply, err);
     }
   });
 
@@ -89,21 +88,17 @@ export default function spawnRoutes(app: FastifyInstance) {
     }
 
     try {
-      const response = await fetch(
-        buildBeaconUrl(beacon, '/spawn', { status: request.query.status })
+      const res = await sendBeaconCommand(
+        request.params.beaconId,
+        'listSpawns',
+        { status: request.query.status }
       );
-      if (!response.ok) {
-        return reply
-          .code(502)
-          .send({ error: 'Beacon error', details: await response.text() });
+      if (res.ok) {
+        return reply.code(200).send(res.body);
       }
-      return response.json();
+      return respond(reply, res);
     } catch (err) {
-      return reply.code(503).send({
-        error: 'Beacon unavailable',
-        code: 'BEACON_UNAVAILABLE',
-        details: err instanceof Error ? err.message : 'Unknown error',
-      });
+      return handleCommandError(reply, err);
     }
   });
 
@@ -120,21 +115,17 @@ export default function spawnRoutes(app: FastifyInstance) {
       }
 
       try {
-        const response = await fetch(
-          buildBeaconUrl(beacon, `/spawn/${request.params.spawnId}`)
+        const res = await sendBeaconCommand(
+          request.params.beaconId,
+          'getSpawn',
+          { spawnId: request.params.spawnId }
         );
-        if (!response.ok) {
-          return reply
-            .code(502)
-            .send({ error: 'Beacon error', details: await response.text() });
+        if (res.ok) {
+          return reply.code(200).send(res.body);
         }
-        return response.json();
+        return respond(reply, res);
       } catch (err) {
-        return reply.code(503).send({
-          error: 'Beacon unavailable',
-          code: 'BEACON_UNAVAILABLE',
-          details: err instanceof Error ? err.message : 'Unknown error',
-        });
+        return handleCommandError(reply, err);
       }
     }
   );
@@ -152,22 +143,17 @@ export default function spawnRoutes(app: FastifyInstance) {
       }
 
       try {
-        const response = await fetch(
-          buildBeaconUrl(beacon, `/spawn/${request.params.spawnId}`),
-          { method: 'DELETE' }
+        const res = await sendBeaconCommand(
+          request.params.beaconId,
+          'terminateSpawn',
+          { spawnId: request.params.spawnId }
         );
-        if (!response.ok) {
-          return reply
-            .code(502)
-            .send({ error: 'Beacon error', details: await response.text() });
+        if (res.ok) {
+          return reply.code(200).send(res.body);
         }
-        return response.json();
+        return respond(reply, res);
       } catch (err) {
-        return reply.code(503).send({
-          error: 'Beacon unavailable',
-          code: 'BEACON_UNAVAILABLE',
-          details: err instanceof Error ? err.message : 'Unknown error',
-        });
+        return handleCommandError(reply, err);
       }
     }
   );

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import * as db from '../db/index.js';
+import { sendBeaconCommand } from '../beacon-ws.js';
 
 export default function messageRoutes(app: FastifyInstance) {
   // === Message Relay Routes ===
@@ -31,20 +32,22 @@ export default function messageRoutes(app: FastifyInstance) {
         .send({ error: 'Target beacon not found', code: 'BEACON_NOT_FOUND' });
     }
     try {
-      const targetUrl = `http://${beacon.host}:${beacon.port}`;
-      const response = await fetch(`${targetUrl}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fromAgentId, fromBeaconId, toAgentId, body }),
+      const res = await sendBeaconCommand(location.beaconId, 'deliverMessage', {
+        fromAgentId,
+        fromBeaconId,
+        toAgentId,
+        body,
       });
-      if (!response.ok) {
-        const errorText = await response.text();
+      if (!res.ok) {
         return reply.code(502).send({
           error: 'Failed to deliver message to target beacon',
-          details: errorText,
+          details:
+            res.body && typeof res.body === 'object' && 'error' in res.body
+              ? (res.body as { error: string }).error
+              : 'Unknown beacon error',
         });
       }
-      const messageData = (await response.json()) as { id: string };
+      const messageData = res.body as { id?: string };
       return { success: true, messageId: messageData.id, delivered: true };
     } catch (err) {
       return reply.code(503).send({
@@ -68,13 +71,12 @@ export default function messageRoutes(app: FastifyInstance) {
       let deliveredCount = 0;
       for (const beacon of beacons) {
         try {
-          const targetUrl = `http://${beacon.host}:${beacon.port}`;
-          const response = await fetch(`${targetUrl}/messages`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fromAgentId, toChannel: channel, body }),
+          const res = await sendBeaconCommand(beacon.id, 'deliverMessage', {
+            fromAgentId,
+            toChannel: channel,
+            body,
           });
-          if (response.ok) deliveredCount++;
+          if (res.ok) deliveredCount++;
         } catch {
           /* skip unreachable beacons */
         }

@@ -62,7 +62,6 @@ describe('WebSocket Server - IP Validation', () => {
     expect(isLocalConnection('8.8.8.8')).toBe(false);
     expect(isLocalConnection('203.0.113.1')).toBe(false);
   });
-
   it('should handle undefined IP', () => {
     expect(isLocalConnection(undefined)).toBe(false);
   });

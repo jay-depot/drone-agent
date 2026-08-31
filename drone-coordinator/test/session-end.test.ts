@@ -14,6 +14,11 @@ import {
   configureSessionEndHook,
   runSessionEndHook,
 } from '../src/session-end.js';
+import {
+  _handleIncomingMessage,
+  _registerTestConnection,
+  resetBeaconConnections,
+} from '../src/beacon-ws.js';
 
 describe('coordinator runSessionEndHook', () => {
   let dir: string;
@@ -26,6 +31,7 @@ describe('coordinator runSessionEndHook', () => {
 
   afterEach(async () => {
     configureSessionEndHook({});
+    resetBeaconConnections();
     vi.unstubAllGlobals();
     await rm(dir, { recursive: true, force: true });
   });
@@ -133,5 +139,107 @@ describe('coordinator runSessionEndHook', () => {
     const result = await runSessionEndHook('session-a');
     expect(result.ran).toBe(true);
     expect(result.error).toContain('ECONNREFUSED');
+  });
+  // Reverse-channel (WebSocket) spawn path --------------------------
+
+  function makeReverseChannelWs(onSend: (raw: string) => void) {
+    return {
+      send: vi.fn((data: string, cb?: (err?: Error) => void) => {
+        onSend(data);
+        cb?.();
+      }),
+      on: vi.fn(),
+      close: vi.fn(),
+      readyState: 1,
+    };
+  }
+
+  it('sends spawn triggers over the reverse channel when the beacon is connected', async () => {
+    const ws = makeReverseChannelWs(raw => {
+      const msg = JSON.parse(raw) as {
+        id: string;
+        command: string;
+        payload: Record<string, unknown>;
+      };
+      expect(msg.command).toBe('spawn');
+      queueMicrotask(() =>
+        _handleIncomingMessage(
+          JSON.stringify({
+            type: 'response',
+            id: msg.id,
+            ok: true,
+            status: 202,
+            body: { spawnId: 's-1' },
+          })
+        )
+      );
+    });
+    _registerTestConnection('b-1', ws as never);
+
+    configureSessionEndHook({
+      trigger: { type: 'spawn', persona: 'librarian', beaconId: 'b-1' },
+    });
+    const result = await runSessionEndHook('session-a');
+    expect(result).toEqual({ ran: true, kind: 'spawn' });
+    expect(ws.send).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(ws.send.mock.calls[0][0] as string) as {
+      payload: { personaId: string; task: string };
+    };
+    expect(body.payload.personaId).toBe('librarian');
+    expect(body.payload.task).toContain('session-a');
+  });
+
+  it('does not fall back to HTTP on an app-level failure response', async () => {
+    const fetchMock = vi.fn(
+      async () => new Response('unused', { status: 202 })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const ws = makeReverseChannelWs(raw => {
+      const msg = JSON.parse(raw) as { id: string };
+      queueMicrotask(() =>
+        _handleIncomingMessage(
+          JSON.stringify({
+            type: 'response',
+            id: msg.id,
+            ok: false,
+            status: 404,
+            body: { error: 'persona not found' },
+          })
+        )
+      );
+    });
+    _registerTestConnection('b-1', ws as never);
+
+    configureSessionEndHook({
+      trigger: { type: 'spawn', persona: 'librarian', beaconId: 'b-1' },
+    });
+    const result = await runSessionEndHook('session-a');
+    expect(result).toEqual({ ran: true, kind: 'spawn', error: 'status 404' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to HTTP when the reverse channel fails to deliver', async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({}), { status: 202 })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const ws = makeReverseChannelWs(() => {
+      // send overridden below: delivery fails
+    });
+    ws.send = vi.fn((_data: string, cb?: (err?: Error) => void) =>
+      cb?.(new Error('socket closed'))
+    );
+    _registerTestConnection('b-1', ws as never);
+
+    configureSessionEndHook({
+      trigger: { type: 'spawn', persona: 'librarian', beaconId: 'b-1' },
+    });
+    const result = await runSessionEndHook('session-a');
+    expect(result).toEqual({ ran: true, kind: 'spawn' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:4599/spawn',
+      expect.objectContaining({ method: 'POST' })
+    );
   });
 });

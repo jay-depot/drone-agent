@@ -55,6 +55,10 @@ const beaconSpawnDb: SpawnDb = {
   getSpawn(id: string): { status: string } | undefined {
     return db.getSpawn(id);
   },
+
+  unregisterAgent(agentId: string): boolean {
+    return db.unregisterAgent(agentId);
+  },
 };
 
 // === Re-exported API (same signatures as before) ===

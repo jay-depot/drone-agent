@@ -11,6 +11,9 @@ export const ERROR_NON_LOCAL_CONNECTION = 4003;
 
 /**
  * Check if a connection is from a local address.
+ * Local sources are loopback addresses and the machine's own network
+ * interfaces. Remote beacons are not supported, so private-LAN ranges are
+ * not treated as local.
  */
 export function isLocalConnection(ip: string | undefined): boolean {
   if (!ip) return false;
@@ -96,7 +99,9 @@ export function sendToAgent(agentId: string, message: object): boolean {
   // WHATWG WebSocket reports the 'OPEN' string; accept both so server-side
   // pushes cannot be silently dropped by a ready-state representation
   // mismatch.
-  const readyState = conn.socket.readyState;
+  // (Widened deliberately: @types/ws types the field as numeric-only, but the
+  // runtime accepts the WHATWG string form, so the defensive check must type.)
+  const readyState: unknown = conn.socket.readyState;
   if (readyState !== 1 && readyState !== 'OPEN') {
     return false;
   }
