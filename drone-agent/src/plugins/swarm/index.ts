@@ -1,3 +1,4 @@
+import type { DebugFlagRegistry } from 'drone-core';
 /**
  * Swarm plugin — connects to a drone-beacon for swarm-wide personas,
  * skills, messaging, wiki, and coordinator integration.
@@ -33,6 +34,10 @@ import {
 } from './tools-coordinator-trust.js';
 import { createSwarmSessionCommand } from './session-command.js';
 import { registerHooks } from './hooks.js';
+import { SwarmMemoryRetriever } from './memory-retrieval.js';
+import { ConversationWindowTracker } from './memory-window.js';
+import { createSwarmMemoryFragment } from './memory-fragment.js';
+import { createSwarmMemoryCommand } from './slash-swarm-memory.js';
 import { startHeartbeat, registerShutdown } from './heartbeat.js';
 
 export type { SwarmConfig } from './config.js';
@@ -145,6 +150,42 @@ export function createSwarmPlugin(
       };
       registration.offer(swarmCap);
       registration.logger.info('Offered DroneSwarmCapability');
+
+      // ── Swarm memory (wiki) proactive retrieval ──────────────────────
+      // Opt-in via swarm.memory.enabled; the retriever stays inert (zero
+      // network) until enabled AND the session is not suppressed.
+      const memoryConfig = registration.getConfig().swarm.memory ?? {
+        enabled: false,
+      };
+      const runtimeInfo =
+        registration.request<{ debugFlags?: DebugFlagRegistry }>('runtime');
+      const memoryRetriever = new SwarmMemoryRetriever({
+        capability: swarmCap,
+        config: memoryConfig,
+        logger: registration.logger,
+        debugFlags: runtimeInfo?.debugFlags,
+      });
+      const memoryTracker = new ConversationWindowTracker();
+      memoryRetriever.setWindowSource(() => memoryTracker.assemble());
+      registration.hooks.onConversationEvent(async event => {
+        memoryTracker.onEvent(event);
+      });
+      registration.hooks.onBeforePrompt(async () => {
+        // Fire-and-forget: never delay the prompt; the fragment render races
+        // the refresh and simply shows the last cached entries until done.
+        void memoryRetriever
+          .maybeRefresh(memoryTracker.assemble())
+          .catch(() => {});
+      });
+      registration.registerPromptFragment(
+        createSwarmMemoryFragment(memoryRetriever)
+      );
+      registration.registerSlashCommand(
+        createSwarmMemoryCommand(memoryRetriever, async () => {
+          const entries = await memoryRetriever.forceRefreshWindow();
+          return entries.length;
+        })
+      );
 
       // ── Persona and skill providers ─────────────────────────────────────
       const personaCap =

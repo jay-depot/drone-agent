@@ -1,4 +1,4 @@
-import type { DroneSessionMessage } from 'drone-core';
+import type { DroneConversationEvent } from 'drone-core';
 
 /**
  * The tight round window for swarm-memory retrieval:
@@ -12,105 +12,88 @@ export interface WindowParts {
   prevResponse: string;
 }
 
-/** Minimal session-manager surface the window assembler needs. */
-export interface SessionMessagesSource {
-  getMessages(): DroneSessionMessage[];
+interface TrackedRound {
+  userQuery: string;
+  steering: string[];
+  lastResponse: string;
 }
 
-/**
- * Split the flat message list into rounds. A round begins at a user message
- * that follows a *completed* assistant turn (a final response with no pending
- * tool calls) or at the start of the session. A user message arriving after
- * tool results — or after an assistant message that still carries tool calls —
- * is mid-round steering, not a new round.
- */
-function groupIntoRounds(
-  messages: DroneSessionMessage[]
-): DroneSessionMessage[][] {
-  const rounds: DroneSessionMessage[][] = [];
-  for (let i = 0; i < messages.length; i++) {
-    const message = messages[i];
-    const prev = i > 0 ? messages[i - 1] : undefined;
-    const prevIsFinalAssistant =
-      prev?.role === 'assistant' &&
-      (!prev.toolCalls || prev.toolCalls.length === 0);
-    const startsNewRound = rounds.length === 0 || (message.role === 'user' && prevIsFinalAssistant);
-    if (startsNewRound) {
-      rounds.push([message]);
-    } else {
-      rounds[rounds.length - 1].push(message);
-    }
-  }
-  return rounds;
-}
-
-function contentOf(message: DroneSessionMessage): string {
-  return typeof message.content === 'string' ? message.content : '';
-}
-
-function isMeaningfulUserText(text: string): boolean {
+function isMeaningful(text: string): boolean {
   return text.trim().length > 0;
 }
 
 /**
- * Extract the window parts from the raw message list and the current round's
- * query. The current query is the just-submitted user text (not necessarily in
- * the session yet, so it is passed explicitly and takes precedence). The
- * previous round is the most recent round that ends with an assistant message.
+ * Tracks conversation events to assemble the retrieval window. A "round" is
+ * one sendUserMessage call; the engine emits a `roundComplete` event when it
+ * finishes (including on error/cancel), which closes the round. Assistant
+ * messages overwrite the round's last response, so the final response wins.
+ * User messages arriving inside an in-flight round are steering messages.
+ * Tool/reasoning/progress events are ignored — they are the noise the filter
+ * would strip anyway.
  */
-export function assembleWindow(
-  getMessages: SessionMessagesSource['getMessages'],
-  currentQuery: string
-): WindowParts {
-  const query = currentQuery.trim();
-  const parts: WindowParts = {
-    currentQuery: query,
-    prevUserQuery: '',
-    prevSteering: [],
-    prevResponse: '',
-  };
+export class ConversationWindowTracker {
+  private completed: TrackedRound[] = [];
+  private current: TrackedRound | null = null;
+  private sawAssistantInCurrent = false;
 
-  const rounds = groupIntoRounds(getMessages());
-
-  // Walk backwards past the trailing (in-progress) round; the previous round
-  // is the most recent one that produced an assistant response.
-  let end = rounds.length;
-  if (end > 0) {
-    const last = rounds[end - 1];
-    const lastRoundHasAssistant = last.some(
-      m => m.role === 'assistant' && isMeaningfulUserText(contentOf(m))
-    );
-    if (!lastRoundHasAssistant) end = end - 1;
-  }
-
-  for (let i = end - 1; i >= 0; i--) {
-    const round = rounds[i];
-    const userMessages = round.filter(
-      m => m.role === 'user' && isMeaningfulUserText(contentOf(m))
-    );
-    const assistantMessages = round.filter(
-      m => m.role === 'assistant' && isMeaningfulUserText(contentOf(m))
-    );
-    if (userMessages.length === 0 || assistantMessages.length === 0) {
-      continue;
+  onEvent(event: DroneConversationEvent): void {
+    if (event.kind === 'roundComplete') {
+      if (this.current) {
+        this.completed.push(this.current);
+        this.current = null;
+      }
+      this.sawAssistantInCurrent = false;
+      return;
     }
-    parts.prevUserQuery = contentOf(userMessages[0]);
-    parts.prevSteering = userMessages
-      .slice(1)
-      .map(contentOf)
-      .filter(isMeaningfulUserText);
-    parts.prevResponse = contentOf(assistantMessages[assistantMessages.length - 1]);
-    break;
+    if (event.kind === 'userMessage') {
+      if (!this.current) {
+        this.current = {
+          userQuery: event.content,
+          steering: [],
+          lastResponse: '',
+        };
+        return;
+      }
+      if (!isMeaningful(this.current.userQuery)) {
+        this.current.userQuery = event.content;
+      } else {
+        this.current.steering.push(event.content);
+      }
+      return;
+    }
+    if (event.kind === 'assistantMessage') {
+      if (!this.current) {
+        this.current = { userQuery: '', steering: [], lastResponse: '' };
+      }
+      this.current.lastResponse = event.content;
+      this.sawAssistantInCurrent = true;
+    }
   }
 
-  return parts;
+  /** The tight retrieval window from tracked conversation state. */
+  assemble(): WindowParts {
+    const prev = this.completed[this.completed.length - 1] ?? null;
+    const currentQuery = this.current?.userQuery.trim() || '';
+    return {
+      currentQuery,
+      prevUserQuery: prev?.userQuery ?? '',
+      prevSteering: prev?.steering ?? [],
+      prevResponse: prev?.lastResponse ?? '',
+    };
+  }
+
+  reset(): void {
+    this.completed = [];
+    this.current = null;
+    this.sawAssistantInCurrent = false;
+  }
 }
 
 /**
  * Strip code/tool noise from window text before it is used for embedding or
  * debounce hashing. Deterministic: identical input always yields identical
  * output. Deliberately conservative — real prose (the retrieval signal) is
- * kept; machine-shaped runs (code fences, tool JSON, paths, hashes, long
+ * kept; machine-shaped runs (code fences, tool payloads, paths, hashes, long
  * symbol-dense runs) are removed.
  */
 export function filterForQuery(text: string): string {
@@ -119,7 +102,7 @@ export function filterForQuery(text: string): string {
   // Fenced code blocks.
   result = result.replace(/```[\s\S]*?```/g, ' ');
 
-  // Indented JSON-ish tool blocks (lines starting with { or }).
+  // Brace-only lines (pretty-printed tool payload skeletons).
   result = result
     .split('\n')
     .filter(line => !/^\s*[{}[\]]\s*$/.test(line.trim()))
