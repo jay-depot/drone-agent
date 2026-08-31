@@ -1,17 +1,21 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
 import { setupDb, teardownDb } from './setup.js';
-import { setKnowledgeBaseDir, writePage } from '../../drone-swarm-common/src/index.js';
+import {
+  setKnowledgeBaseDir,
+  writePage,
+} from '../../drone-swarm-common/src/index.js';
 import { buildTestApp } from './app-helper.js';
 import type { FastifyInstance } from 'fastify';
 
 const proxyWikiToCoordinator = vi.fn();
 
 vi.mock('../src/routes/context.js', async importOriginal => {
-  const actual = await importOriginal<typeof import('../src/routes/context.js')>();
+  const actual =
+    await importOriginal<typeof import('../src/routes/context.js')>();
   return {
     ...actual,
     proxyWikiToCoordinator: (...args: unknown[]) =>
@@ -30,18 +34,27 @@ const COORD_VERSION = {
 };
 
 function mockCoordinatorWithDualPage(): void {
-  proxyWikiToCoordinator.mockImplementation(async (method: string, p: string) => {
-    if (method === 'GET' && p === '/wiki') {
-      return [COORD_VERSION];
+  proxyWikiToCoordinator.mockImplementation(
+    async (method: string, p: string) => {
+      if (method === 'GET' && p === '/wiki') {
+        return [COORD_VERSION];
+      }
+      if (method === 'GET' && p === '/wiki/dual-page') {
+        return { ...COORD_VERSION, content: '# Dual\n\nCoordinator body.' };
+      }
+      if (method === 'GET' && p.startsWith('/wiki/search')) {
+        return [
+          {
+            page: COORD_VERSION,
+            snippet: 'dual',
+            score: 0.9,
+            origin: 'coordinator',
+          },
+        ];
+      }
+      return null;
     }
-    if (method === 'GET' && p === '/wiki/dual-page') {
-      return { ...COORD_VERSION, content: '# Dual\n\nCoordinator body.' };
-    }
-    if (method === 'GET' && p.startsWith('/wiki/search')) {
-      return [{ page: COORD_VERSION, snippet: 'dual', score: 0.9, origin: 'coordinator' }];
-    }
-    return null;
-  });
+  );
 }
 
 describe('origin-tagged wiki reads (S6)', () => {
@@ -61,7 +74,12 @@ describe('origin-tagged wiki reads (S6)', () => {
   });
 
   it('no-scope read returns ALL versions tagged by origin', async () => {
-    await writePage('dual-page', 'Dual Page', 'beacon', '# Dual\n\nBeacon body.');
+    await writePage(
+      'dual-page',
+      'Dual Page',
+      'beacon',
+      '# Dual\n\nBeacon body.'
+    );
     mockCoordinatorWithDualPage();
 
     const res = await app.inject({ method: 'GET', url: '/wiki/dual-page' });
@@ -93,7 +111,12 @@ describe('origin-tagged wiki reads (S6)', () => {
   });
 
   it('?scope=beacon returns exactly the local version', async () => {
-    await writePage('dual-page', 'Dual Page', 'beacon', '# Dual\n\nBeacon body.');
+    await writePage(
+      'dual-page',
+      'Dual Page',
+      'beacon',
+      '# Dual\n\nBeacon body.'
+    );
     mockCoordinatorWithDualPage();
 
     const res = await app.inject({
@@ -118,7 +141,12 @@ describe('origin-tagged wiki reads (S6)', () => {
   });
 
   it('list results carry origin tags for both versions', async () => {
-    await writePage('dual-page', 'Dual Page', 'beacon', '# Dual\n\nBeacon body.');
+    await writePage(
+      'dual-page',
+      'Dual Page',
+      'beacon',
+      '# Dual\n\nBeacon body.'
+    );
     mockCoordinatorWithDualPage();
 
     const res = await app.inject({ method: 'GET', url: '/wiki' });
@@ -131,7 +159,12 @@ describe('origin-tagged wiki reads (S6)', () => {
   });
 
   it('keyword search results carry origin tags for both sides', async () => {
-    await writePage('dual-page', 'Dual Page', 'beacon', '# Dual\n\nBeacon body.');
+    await writePage(
+      'dual-page',
+      'Dual Page',
+      'beacon',
+      '# Dual\n\nBeacon body.'
+    );
     mockCoordinatorWithDualPage();
 
     const res = await app.inject({

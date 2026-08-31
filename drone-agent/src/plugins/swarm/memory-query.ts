@@ -62,7 +62,11 @@ export function buildQueryInputs(
       const segments = chunkText(windowText, maxTokens);
       let tokenSum = 0;
       const kept: string[] = [];
-      for (let i = segments.length - 1; i >= 0 && kept.length < maxSegments; i--) {
+      for (
+        let i = segments.length - 1;
+        i >= 0 && kept.length < maxSegments;
+        i--
+      ) {
         const tokens = estimateTextTokens(segments[i]);
         if (tokenSum + tokens > maxTokens && kept.length > 0) break;
         kept.unshift(segments[i]);
@@ -72,8 +76,6 @@ export function buildQueryInputs(
     }
   }
 
-  const hash = createHash('sha256')
-    .update(inputs.join('\u0000'))
-    .digest('hex');
+  const hash = createHash('sha256').update(inputs.join('\u0000')).digest('hex');
   return { inputs, hash };
 }

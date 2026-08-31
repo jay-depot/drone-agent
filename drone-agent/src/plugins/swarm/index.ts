@@ -157,8 +157,9 @@ export function createSwarmPlugin(
       const memoryConfig = registration.getConfig().swarm.memory ?? {
         enabled: false,
       };
-      const runtimeInfo =
-        registration.request<{ debugFlags?: DebugFlagRegistry }>('runtime');
+      const runtimeInfo = registration.request<{
+        debugFlags?: DebugFlagRegistry;
+      }>('runtime');
       const memoryRetriever = new SwarmMemoryRetriever({
         capability: swarmCap,
         config: memoryConfig,
@@ -181,10 +182,7 @@ export function createSwarmPlugin(
         createSwarmMemoryFragment(memoryRetriever)
       );
       registration.registerSlashCommand(
-        createSwarmMemoryCommand(memoryRetriever, async () => {
-          const entries = await memoryRetriever.forceRefreshWindow();
-          return entries.length;
-        })
+        createSwarmMemoryCommand(memoryRetriever)
       );
 
       // ── Persona and skill providers ─────────────────────────────────────

@@ -32,13 +32,28 @@ describe('wiki chunk store', () => {
 
   it('stores wiki sources keyed by (page_id, origin)', () => {
     upsertWikiSource('p1', 'beacon', 'Page One', '2026-01-01T00:00:00Z', 'h1');
-    upsertWikiSource('p1', 'coordinator', 'Page One', '2026-01-02T00:00:00Z', 'h2');
+    upsertWikiSource(
+      'p1',
+      'coordinator',
+      'Page One',
+      '2026-01-02T00:00:00Z',
+      'h2'
+    );
 
     const sources = listWikiSources();
     expect(sources).toHaveLength(2);
-    expect(sources.map(s => s.origin).sort()).toEqual(['beacon', 'coordinator']);
+    expect(sources.map(s => s.origin).sort()).toEqual([
+      'beacon',
+      'coordinator',
+    ]);
 
-    upsertWikiSource('p1', 'beacon', 'Page One v2', '2026-01-03T00:00:00Z', 'h3');
+    upsertWikiSource(
+      'p1',
+      'beacon',
+      'Page One v2',
+      '2026-01-03T00:00:00Z',
+      'h3'
+    );
     const after = listWikiSources();
     expect(after).toHaveLength(2);
     const beaconRow = after.find(s => s.origin === 'beacon');
@@ -62,14 +77,19 @@ describe('wiki chunk store', () => {
     expect(chunks.map(c => c.chunk_index)).toEqual([0, 1]);
     expect(chunks[0].text).toBe('first chunk');
 
-
     expect(chunks[0].embedding).toBeInstanceOf(Buffer);
     expect(chunks[0].embedding.byteLength).toBe(768 * 4);
   });
 
   it('keeps same-id pages from different origins distinct', () => {
     insertWikiChunk('dual', 'beacon', 0, 'beacon version', fakeEmbedding(1));
-    insertWikiChunk('dual', 'coordinator', 0, 'coordinator version', fakeEmbedding(2));
+    insertWikiChunk(
+      'dual',
+      'coordinator',
+      0,
+      'coordinator version',
+      fakeEmbedding(2)
+    );
 
     expect(getWikiChunks('dual', 'beacon')).toHaveLength(1);
     expect(getWikiChunks('dual', 'coordinator')).toHaveLength(1);

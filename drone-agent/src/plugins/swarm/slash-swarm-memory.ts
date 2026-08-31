@@ -1,7 +1,6 @@
 import type { DroneSlashCommand } from 'drone-core';
 
 import type { SwarmMemoryRetriever } from './memory-retrieval.js';
-import type { WindowParts } from './memory-window.js';
 
 /**
  * `/swarm-memory` control surface: status, forced refresh, and a
@@ -10,8 +9,7 @@ import type { WindowParts } from './memory-window.js';
  * lives in the plugin wiring.
  */
 export function createSwarmMemoryCommand(
-  retriever: SwarmMemoryRetriever,
-  refresh: () => Promise<number>
+  retriever: SwarmMemoryRetriever
 ): DroneSlashCommand {
   return {
     command: '/swarm-memory',

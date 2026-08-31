@@ -1,11 +1,6 @@
-import type {
-  DroneSwarmCapability,
-  DroneSwarmMemoryConfig,
-} from 'drone-core';
+import type { DroneSwarmCapability, DroneSwarmMemoryConfig } from 'drone-core';
 
-import {
-  buildQueryInputs,
-} from './memory-query.js';
+import { buildQueryInputs } from './memory-query.js';
 import type { WindowParts } from './memory-window.js';
 
 /** One injected wiki entry after merge/boost/filter. */
@@ -51,9 +46,7 @@ export interface SwarmMemoryRetrieverDeps {
 
 const PITCH_MAX_CHARS = 240;
 
-function formatCacheReport(
-  cache: SwarmMemoryCache | null
-): string {
+function formatCacheReport(cache: SwarmMemoryCache | null): string {
   if (!cache) {
     return 'Swarm memory: ON, no retrieval yet (waiting for the next prompt).';
   }
@@ -62,7 +55,9 @@ function formatCacheReport(
     `Swarm memory: ON — last refresh ${ageSec}s ago, hash ${cache.hash.slice(0, 12)}, ${cache.entries.length} entries`,
   ];
   for (const entry of cache.entries) {
-    lines.push(`  - ${entry.title} · ${entry.pageId} (${entry.origin}) · ${entry.score.toFixed(2)}`);
+    lines.push(
+      `  - ${entry.title} · ${entry.pageId} (${entry.origin}) · ${entry.score.toFixed(2)}`
+    );
   }
   return lines.join('\n');
 }
@@ -118,7 +113,9 @@ export class SwarmMemoryRetriever {
   }
 
   isEnabled(): boolean {
-    return this.config.enabled && this.sessionEnabled && this.capability !== null;
+    return (
+      this.config.enabled && this.sessionEnabled && this.capability !== null
+    );
   }
 
   /** Human-readable status for the /swarm-memory slash command. */
@@ -159,12 +156,14 @@ export class SwarmMemoryRetriever {
    * using the currently tracked window. No-op when disabled.
    */
   async forceRefreshWindow(): Promise<SwarmMemoryEntry[]> {
-    return this.forceRefresh(this.windowSource?.() ?? {
-      currentQuery: '',
-      prevUserQuery: '',
-      prevSteering: [],
-      prevResponse: '',
-    });
+    return this.forceRefresh(
+      this.windowSource?.() ?? {
+        currentQuery: '',
+        prevUserQuery: '',
+        prevSteering: [],
+        prevResponse: '',
+      }
+    );
   }
 
   /** Runtime override that forces a refresh bypassing the debounce hash. */
@@ -206,7 +205,9 @@ export class SwarmMemoryRetriever {
       return merged;
     } catch (err) {
       if (this.debugFlags?.isEnabled('swarm-memory')) {
-        this.logger.warn(`swarm-memory refresh failed (keeping last cache): ${err}`);
+        this.logger.warn(
+          `swarm-memory refresh failed (keeping last cache): ${err}`
+        );
       }
       return this.cache?.entries ?? [];
     } finally {

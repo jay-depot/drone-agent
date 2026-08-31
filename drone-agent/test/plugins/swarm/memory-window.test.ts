@@ -29,7 +29,7 @@ describe('ConversationWindowTracker', () => {
     expect(parts.currentQuery).toBe('now wire it into the tests');
     expect(parts.prevUserQuery).toBe('make it configurable');
     expect(parts.prevResponse).toBe('Added TTL_SWEEP_INTERVAL_MS.');
-   });
+  });
 
   it('roundComplete closes rounds; error/cancel paths still mark the boundary', () => {
     const tracker = new ConversationWindowTracker();

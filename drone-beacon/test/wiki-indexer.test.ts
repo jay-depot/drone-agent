@@ -1,18 +1,16 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
 import { setupDb, teardownDb } from './setup.js';
-import {
-  listWikiSources,
-  getWikiChunks,
-  searchWikiChunksByVector,
-} from '../src/db/index.js';
-import type { WikiOrigin } from '../src/db/index.js';
+import { listWikiSources, getWikiChunks } from '../src/db/index.js';
 import { WikiIndexer } from '../src/wiki-indexer.js';
 import type { WikiPageInput, WikiIndexResult } from '../src/wiki-indexer.js';
-import { setKnowledgeBaseDir, writePage } from '../../drone-swarm-common/src/index.js';
+import {
+  setKnowledgeBaseDir,
+  writePage,
+} from '../../drone-swarm-common/src/index.js';
 import type { DroneEmbeddingProvider } from 'drone-core';
 
 function fakeEmbedding(activeIndex: number): Float32Array {
@@ -81,10 +79,6 @@ describe('WikiIndexer', () => {
     await teardownDb();
   });
 
-  function makeIndexer(): WikiIndexer {
-    return new WikiIndexer(makeProvider());
-  }
-
   it('indexes beacon-origin pages (content from disk) and coordinator pages (explicit content)', async () => {
     await writePage(
       'fragments-guide',
@@ -95,15 +89,23 @@ describe('WikiIndexer', () => {
     const indexer = new WikiIndexer(makeProvider());
     const pages: WikiPageInput[] = [
       { page: BEACON_PAGE_META, origin: 'beacon' },
-      { page: COORDINATOR_PAGE_META, origin: 'coordinator', content: '# Fragment sync\n\nCoordinator fragment details.' },
+      {
+        page: COORDINATOR_PAGE_META,
+        origin: 'coordinator',
+        content: '# Fragment sync\n\nCoordinator fragment details.',
+      },
     ];
 
     const result = await indexer.indexWiki(pages);
     expect(result.pagesIndexed).toBe(2);
     expect(result.pagesRemoved).toBe(0);
     expect(listWikiSources()).toHaveLength(2);
-    expect(getWikiChunks('fragments-guide', 'beacon').length).toBeGreaterThan(0);
-    expect(getWikiChunks('fragments-guide', 'coordinator').length).toBeGreaterThan(0);
+    expect(getWikiChunks('fragments-guide', 'beacon').length).toBeGreaterThan(
+      0
+    );
+    expect(
+      getWikiChunks('fragments-guide', 'coordinator').length
+    ).toBeGreaterThan(0);
   });
 
   it('skips unchanged pages', async () => {
@@ -115,7 +117,9 @@ describe('WikiIndexer', () => {
     );
     const provider = makeProvider();
     const indexer = new WikiIndexer(provider);
-    const pages: WikiPageInput[] = [{ page: BEACON_PAGE_META, origin: 'beacon' }];
+    const pages: WikiPageInput[] = [
+      { page: BEACON_PAGE_META, origin: 'beacon' },
+    ];
 
     const first = await indexer.indexWiki(pages);
     expect(first.pagesIndexed).toBe(1);
@@ -131,7 +135,11 @@ describe('WikiIndexer', () => {
   it('removes pages absent from a later authoritative set (local delete → reconcile)', async () => {
     const indexer = new WikiIndexer(makeProvider());
     await indexer.indexWiki([
-      { page: BEACON_PAGE_META, origin: 'beacon', content: '# Fragment guide\n\nBeacon fragment details.' },
+      {
+        page: BEACON_PAGE_META,
+        origin: 'beacon',
+        content: '# Fragment guide\n\nBeacon fragment details.',
+      },
     ]);
     expect(listWikiSources()).toHaveLength(1);
 
@@ -144,29 +152,51 @@ describe('WikiIndexer', () => {
   it('coordinator pages with explicit content are indexed without a local file', async () => {
     const indexer = new WikiIndexer(makeProvider());
     const result = await indexer.indexWiki([
-      { page: COORDINATOR_PAGE_META, origin: 'coordinator', content: '# Fragment TTL\n\nTTL sweep details.' },
+      {
+        page: COORDINATOR_PAGE_META,
+        origin: 'coordinator',
+        content: '# Fragment TTL\n\nTTL sweep details.',
+      },
     ]);
     expect(result.pagesIndexed).toBe(1);
-    expect(getWikiChunks('fragments-guide', 'coordinator')[0].text).toContain('TTL sweep');
+    expect(getWikiChunks('fragments-guide', 'coordinator')[0].text).toContain(
+      'TTL sweep'
+    );
   });
 
   it('reconciles both origins independently for the same pageId', async () => {
     const indexer = new WikiIndexer(makeProvider());
     await indexer.indexWiki([
-      { page: BEACON_PAGE_META, origin: 'beacon', content: '# Fragment guide\n\nBeacon fragment details.' },
-      { page: COORDINATOR_PAGE_META, origin: 'coordinator', content: '# Fragment sync\n\nCoordinator details.' },
+      {
+        page: BEACON_PAGE_META,
+        origin: 'beacon',
+        content: '# Fragment guide\n\nBeacon fragment details.',
+      },
+      {
+        page: COORDINATOR_PAGE_META,
+        origin: 'coordinator',
+        content: '# Fragment sync\n\nCoordinator details.',
+      },
     ]);
     expect(listWikiSources()).toHaveLength(2);
 
     // Coordinator version is gone from the authoritative set; beacon persists.
     await indexer.indexWiki([
-      { page: BEACON_PAGE_META, origin: 'beacon', content: '# Fragment guide\n\nBeacon fragment details.' },
+      {
+        page: BEACON_PAGE_META,
+        origin: 'beacon',
+        content: '# Fragment guide\n\nBeacon fragment details.',
+      },
     ]);
     expect(
-      listWikiSources().find(s => s.page_id === 'fragments-guide' && s.origin === 'beacon')
+      listWikiSources().find(
+        s => s.page_id === 'fragments-guide' && s.origin === 'beacon'
+      )
     ).toBeDefined();
     expect(
-      listWikiSources().find(s => s.page_id === 'fragments-guide' && s.origin === 'coordinator')
+      listWikiSources().find(
+        s => s.page_id === 'fragments-guide' && s.origin === 'coordinator'
+      )
     ).toBeUndefined();
-   });
+  });
 });

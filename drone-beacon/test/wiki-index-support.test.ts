@@ -1,19 +1,26 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
 import { setupDb, teardownDb } from './setup.js';
 import { listWikiSources, getWikiChunks } from '../src/db/index.js';
 import { WikiIndexer } from '../src/wiki-indexer.js';
-import { runWikiIndexCycle, setWikiIndexer } from '../src/wiki-index-support.js';
-import { setKnowledgeBaseDir, writePage } from '../../drone-swarm-common/src/index.js';
+import {
+  runWikiIndexCycle,
+  setWikiIndexer,
+} from '../src/wiki-index-support.js';
+import {
+  setKnowledgeBaseDir,
+  writePage,
+} from '../../drone-swarm-common/src/index.js';
 import type { DroneEmbeddingProvider } from 'drone-core';
 
 const proxyWikiToCoordinator = vi.fn();
 
 vi.mock('../src/routes/context.js', async importOriginal => {
-  const actual = await importOriginal<typeof import('../src/routes/context.js')>();
+  const actual =
+    await importOriginal<typeof import('../src/routes/context.js')>();
   return {
     ...actual,
     proxyWikiToCoordinator: (...args: unknown[]) =>
@@ -33,8 +40,7 @@ function makeProvider(): DroneEmbeddingProvider {
     name: 'Fake Embedder',
     dimensions: 768,
     maxTokens: 8192,
-    getEmbedding: async (text: string) =>
-      fakeEmbedding(text.length % 768),
+    getEmbedding: async (text: string) => fakeEmbedding(text.length % 768),
   };
 }
 
@@ -76,7 +82,10 @@ describe('wiki index cycle (S3 wiring)', () => {
           return [COORD_PAGE_META];
         }
         if (method === 'GET' && p === '/wiki/spawn-pipeline') {
-          return { ...COORD_PAGE_META, content: '# Spawn pipeline\n\nCoordinator spawn details.' };
+          return {
+            ...COORD_PAGE_META,
+            content: '# Spawn pipeline\n\nCoordinator spawn details.',
+          };
         }
         return null;
       }
@@ -101,7 +110,10 @@ describe('wiki index cycle (S3 wiring)', () => {
           return [COORD_PAGE_META];
         }
         if (method === 'GET' && p === '/wiki/spawn-pipeline') {
-          return { ...COORD_PAGE_META, content: '# Spawn pipeline\n\nCoordinator spawn details.' };
+          return {
+            ...COORD_PAGE_META,
+            content: '# Spawn pipeline\n\nCoordinator spawn details.',
+          };
         }
         return null;
       }
@@ -122,15 +134,20 @@ describe('wiki index cycle (S3 wiring)', () => {
   });
 
   it('never wipes coordinator-origin rows when the coordinator is unreachable', async () => {
-    proxyWikiToCoordinator.mockImplementation(async (method: string, p: string) => {
-      if (method === 'GET' && p === '/wiki') {
-        return [COORD_PAGE_META];
+    proxyWikiToCoordinator.mockImplementation(
+      async (method: string, p: string) => {
+        if (method === 'GET' && p === '/wiki') {
+          return [COORD_PAGE_META];
+        }
+        if (method === 'GET' && p === '/wiki/spawn-pipeline') {
+          return {
+            ...COORD_PAGE_META,
+            content: '# Spawn pipeline\n\nCoordinator spawn details.',
+          };
+        }
+        return null;
       }
-      if (method === 'GET' && p === '/wiki/spawn-pipeline') {
-        return { ...COORD_PAGE_META, content: '# Spawn pipeline\n\nCoordinator spawn details.' };
-      }
-      return null;
-    });
+    );
 
     const indexer = new WikiIndexer(makeProvider());
     await runWikiIndexCycle(indexer);
@@ -146,7 +163,9 @@ describe('wiki index cycle (S3 wiring)', () => {
     expect(second?.pagesRemoved).toBe(0);
     const sources = listWikiSources();
     expect(
-      sources.find(s => s.page_id === 'spawn-pipeline' && s.origin === 'coordinator')
+      sources.find(
+        s => s.page_id === 'spawn-pipeline' && s.origin === 'coordinator'
+      )
     ).toBeDefined();
   });
 

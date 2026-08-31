@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DronePromptFragment } from 'drone-core';
 
 import { createSwarmMemoryFragment } from '../../../src/plugins/swarm/memory-fragment.js';
 import { SwarmMemoryRetriever } from '../../../src/plugins/swarm/memory-retrieval.js';
@@ -20,30 +19,6 @@ function baseConfig(enabled = true): DroneSwarmMemoryConfig {
   };
 }
 
-function makeRetriever(
-  enabled: boolean,
-  cacheEntries: Array<{ title: string; pitch: string }> | null
-): SwarmMemoryRetriever {
-  const retriever = new SwarmMemoryRetriever({
-    capability,
-    config: { ...baseConfig(), enabled },
-    logger: { warn: vi.fn(), info: vi.fn() },
-  });
-  if (cacheEntries && cacheEntries.length > 0) {
-    retriever.setCacheForTest(
-      cacheEntries.map((e, i) => ({
-        pageId: `page-${i}`,
-        origin: 'beacon' as const,
-        title: e.title,
-        tags: [],
-        score: 0.9,
-        pitch: e.pitch,
-      }))
-    );
-  }
-  return retriever;
-}
-
 async function render(
   retriever: SwarmMemoryRetriever
 ): Promise<string | false> {
@@ -59,7 +34,14 @@ describe('swarm-memory prompt fragment', () => {
       logger: { warn: vi.fn(), info: vi.fn() },
     });
     retriever.setCacheForTest([
-      { pageId: 'p', origin: 'beacon', title: 'T', tags: [], score: 0.9, pitch: 'p' },
+      {
+        pageId: 'p',
+        origin: 'beacon',
+        title: 'T',
+        tags: [],
+        score: 0.9,
+        pitch: 'p',
+      },
     ]);
     expect(await render(retriever)).toBe(false);
   });

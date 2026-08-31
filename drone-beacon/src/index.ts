@@ -9,10 +9,7 @@ import {
 } from 'drone-swarm-common';
 import { SearchIndexer } from './search-indexer.js';
 import { WikiIndexer } from './wiki-indexer.js';
-import {
-  runWikiIndexCycle,
-  setWikiIndexer,
-} from './wiki-index-support.js';
+import { runWikiIndexCycle, setWikiIndexer } from './wiki-index-support.js';
 import os from 'node:os';
 import path from 'path';
 import fs from 'fs';

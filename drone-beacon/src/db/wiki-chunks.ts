@@ -88,9 +88,7 @@ export function deleteChunksForWikiPage(
 ): void {
   const db = getDatabase();
   const rowids = db
-    .prepare(
-      'SELECT rowid FROM wiki_chunks WHERE page_id = ? AND origin = ?'
-    )
+    .prepare('SELECT rowid FROM wiki_chunks WHERE page_id = ? AND origin = ?')
     .all(pageId, origin) as { rowid: number }[];
   const delVec = db.prepare('DELETE FROM wiki_vec_chunks WHERE rowid = ?');
   for (const r of rowids) delVec.run(BigInt(r.rowid));
@@ -178,9 +176,10 @@ export function backfillWikiVecChunks(): number {
     .prepare('SELECT COUNT(*) as c FROM wiki_vec_chunks')
     .get() as { c: number };
   if (vecCount.c > 0) return 0;
-  const rows = db
-    .prepare('SELECT rowid, embedding FROM wiki_chunks')
-    .all() as { rowid: number; embedding: Buffer }[];
+  const rows = db.prepare('SELECT rowid, embedding FROM wiki_chunks').all() as {
+    rowid: number;
+    embedding: Buffer;
+  }[];
   if (rows.length === 0) return 0;
   const insert = db.prepare(
     'INSERT INTO wiki_vec_chunks(rowid, embedding) VALUES (?, ?)'

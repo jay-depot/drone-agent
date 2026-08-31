@@ -154,7 +154,9 @@ export interface CoordinatorClient {
   // Coordinator proxy tools (beacon proxies for the agent)
   listBeacons(): Promise<unknown[]>;
   listAgentLocations(beaconId?: string): Promise<unknown[]>;
-  spawnSpawn(body: Record<string, unknown>): Promise<SpawnOperationResult | null>;
+  spawnSpawn(
+    body: Record<string, unknown>
+  ): Promise<SpawnOperationResult | null>;
   getSpawn(
     beaconId: string,
     spawnId: string

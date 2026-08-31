@@ -1,4 +1,4 @@
-import { listPages, readPage } from 'drone-swarm-common';
+import { listPages } from 'drone-swarm-common';
 import type { DroneWikiPageMeta } from 'drone-core';
 
 import { logger } from './logger.js';
@@ -27,8 +27,7 @@ export async function collectWikiPages(): Promise<CollectedWikiPages> {
 
   try {
     const coordinatorPages = (await proxyWikiToCoordinator('GET', '/wiki')) as
-      | DroneWikiPageMeta[]
-      | null;
+      DroneWikiPageMeta[] | null;
     if (Array.isArray(coordinatorPages) && coordinatorPages.length >= 0) {
       coordinatorReachable = true;
       for (const meta of coordinatorPages) {
@@ -50,7 +49,10 @@ export async function collectWikiPages(): Promise<CollectedWikiPages> {
     localInputs.push({ page: meta, origin: 'beacon', content: undefined });
   }
 
-  return { pages: [...localInputs, ...coordinatorInputs], coordinatorReachable };
+  return {
+    pages: [...localInputs, ...coordinatorInputs],
+    coordinatorReachable,
+  };
 }
 
 /**

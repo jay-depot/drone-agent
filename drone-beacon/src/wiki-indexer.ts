@@ -21,14 +21,24 @@ export interface WikiIndexResult {
   chunksCreated: number;
 }
 
-function pageHash(pageId: string, origin: string, updatedAt: string, content: string): string {
+function pageHash(
+  pageId: string,
+  origin: string,
+  updatedAt: string,
+  content: string
+): string {
   return createHash('sha256')
     .update(`${pageId}\u0000${origin}\u0000${updatedAt}\u0000${content}`)
     .digest('hex');
 }
 
 function emptyResult(): WikiIndexResult {
-  return { pagesIndexed: 0, pagesSkipped: 0, pagesRemoved: 0, chunksCreated: 0 };
+  return {
+    pagesIndexed: 0,
+    pagesSkipped: 0,
+    pagesRemoved: 0,
+    chunksCreated: 0,
+  };
 }
 
 async function fetchPageContent(page: WikiPageInput): Promise<string> {
@@ -125,7 +135,12 @@ export class WikiIndexer {
     for (const entry of pages) {
       try {
         const content = await fetchPageContent(entry);
-        const hash = pageHash(entry.page.id, entry.origin, entry.page.updatedAt, content);
+        const hash = pageHash(
+          entry.page.id,
+          entry.origin,
+          entry.page.updatedAt,
+          content
+        );
         const stored = db
           .listWikiSources()
           .find(s => s.page_id === entry.page.id && s.origin === entry.origin);
@@ -153,7 +168,13 @@ export class WikiIndexer {
         for (const text of chunkTexts) {
           const prefixed = `search_document: ${text}`;
           const embedding = await provider.getEmbedding(prefixed);
-          db.insertWikiChunk(entry.page.id, entry.origin, index, text, embedding);
+          db.insertWikiChunk(
+            entry.page.id,
+            entry.origin,
+            index,
+            text,
+            embedding
+          );
           index++;
           result.chunksCreated++;
         }
@@ -195,8 +216,8 @@ export class WikiIndexer {
     );
     this.sweepTimer = setInterval(() => {
       runCycle().catch(err => {
-          logger.error(err, 'Wiki index: periodic sweep failed');
-        });
+        logger.error(err, 'Wiki index: periodic sweep failed');
+      });
     }, this.sweepIntervalMs);
   }
 

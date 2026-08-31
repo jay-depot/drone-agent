@@ -1,7 +1,6 @@
 ---
 key: pre-existing-integration-failures
-tags:
-  []
+tags: []
 created: 2026-08-29T23:24:56.646Z
 updated: 2026-08-30T00:27:20.854Z
 ---

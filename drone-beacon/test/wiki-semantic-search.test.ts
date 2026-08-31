@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -9,7 +9,10 @@ import {
   runWikiIndexCycle,
   setWikiIndexer,
 } from '../src/wiki-index-support.js';
-import { setKnowledgeBaseDir, writePage } from '../../drone-swarm-common/src/index.js';
+import {
+  setKnowledgeBaseDir,
+  writePage,
+} from '../../drone-swarm-common/src/index.js';
 import { buildTestApp } from './app-helper.js';
 import type { FastifyInstance } from 'fastify';
 import type { DroneEmbeddingProvider } from 'drone-core';
@@ -17,7 +20,8 @@ import type { DroneEmbeddingProvider } from 'drone-core';
 const proxyWikiToCoordinator = vi.fn();
 
 vi.mock('../src/routes/context.js', async importOriginal => {
-  const actual = await importOriginal<typeof import('../src/routes/context.js')>();
+  const actual =
+    await importOriginal<typeof import('../src/routes/context.js')>();
   return {
     ...actual,
     proxyWikiToCoordinator: (...args: unknown[]) =>
@@ -214,7 +218,10 @@ describe('GET /wiki/semantic-search', () => {
   });
 
   it('returns 400 without q and 503 without an embedding provider', async () => {
-    const noQ = await app.inject({ method: 'GET', url: '/wiki/semantic-search' });
+    const noQ = await app.inject({
+      method: 'GET',
+      url: '/wiki/semantic-search',
+    });
     expect(noQ.statusCode).toBe(400);
 
     setWikiIndexer(undefined);

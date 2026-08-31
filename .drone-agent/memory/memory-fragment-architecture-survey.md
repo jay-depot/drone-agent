@@ -1,12 +1,12 @@
 ---
 key: memory-fragment-architecture-survey
-tags:
-  []
+tags: []
 created: 2026-08-31T01:00:44.435Z
 updated: 2026-08-31T01:00:44.435Z
 ---
 
 Survey of memory/prompt-fragment architecture in drone-agent (2026-08-30):
+
 - Memory plugin (drone-agent/src/plugins/memory/): tools are `memory__manage` (store/recall/delete actions) + `memory__browse` (list/search actions) — NOT memory__store/memory__recall as AGENTS.md claims (code is source of truth; AGENTS.md's "Tools: memory__store, memory__recall, memory__list, memory__delete" line is stale). Storage: `<projectDir>/.drone-agent/memory/<key>.md` w/ YAML frontmatter (store.ts, atomic tmp+rename). Prompt fragment key 'memory' phase header: renders false when disabled; empty→"No project memories stored yet..."; populated→"# Project Memories" + 10 most recent keys (sorted by updatedAt desc) + recall CTA. Offers DroneMemoryCapability gated on config.memory.enabled. defaultEnabled:false but config default memory.enabled:true (config-types.ts:250,654).
 - Notepad (drone-agent/src/plugins/notepad.ts): fragment 'notepad-current' header-phase, closure state, returns '' when empty (engine filters len>0), "# Session Notepad" between === markers when set. Tool notepad__manage.
 - Skills broker (drone-agent/src/plugins/skills/index.ts): fragment 'skills' header-phase; false when none; filters via persona.getFilteredSkills; "# Skills" + per-skill "## id/description/recall when" + CTA; skills__recall returns body JSON, runs DroneRecallEnhancer chain (self-improvement principles injection).

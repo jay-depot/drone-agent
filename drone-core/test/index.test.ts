@@ -149,7 +149,6 @@ describe('applyAgentConfigLayer', () => {
     );
   });
 
-
   it('deep-merges a partial swarm.memory override onto defaults', () => {
     const merged = applyAgentConfigLayer(base, {
       swarm: { memory: { enabled: true, anchors: { tags: ['drone-beacon'] } } },

@@ -4,7 +4,9 @@ import type { DroneSwarmCapability, DroneSwarmMemoryConfig } from 'drone-core';
 import { SwarmMemoryRetriever } from '../../../src/plugins/swarm/memory-retrieval.js';
 import type { WindowParts } from '../../../src/plugins/swarm/memory-window.js';
 
-function config(overrides: Partial<DroneSwarmMemoryConfig> = {}): DroneSwarmMemoryConfig {
+function config(
+  overrides: Partial<DroneSwarmMemoryConfig> = {}
+): DroneSwarmMemoryConfig {
   return {
     enabled: true,
     topK: 5,
@@ -25,14 +27,16 @@ function parts(overrides: Partial<WindowParts> = {}): WindowParts {
   };
 }
 
-function searchResponse(entries: Array<{
-  pageId: string;
-  title: string;
-  score: number;
-  matchedChunk: string;
-  tags?: string[];
-  origin?: 'beacon' | 'coordinator';
-}>): unknown {
+function searchResponse(
+  entries: Array<{
+    pageId: string;
+    title: string;
+    score: number;
+    matchedChunk: string;
+    tags?: string[];
+    origin?: 'beacon' | 'coordinator';
+  }>
+): unknown {
   return {
     query: 'q',
     resultCount: entries.length,
@@ -42,13 +46,19 @@ function searchResponse(entries: Array<{
 }
 
 function jsonResponse(body: unknown): Response {
-  return { ok: true, status: 200, json: async () => body } as unknown as Response;
+  return {
+    ok: true,
+    status: 200,
+    json: async () => body,
+  } as unknown as Response;
 }
 
 describe('SwarmMemoryRetriever', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
-  function makeRetriever(cfg: DroneSwarmMemoryConfig = config()): SwarmMemoryRetriever {
+  function makeRetriever(
+    cfg: DroneSwarmMemoryConfig = config()
+  ): SwarmMemoryRetriever {
     const capability: DroneSwarmCapability = {
       getBeaconUrl: () => 'http://beacon:3457',
       getAgentId: () => 'agent-1',
@@ -73,7 +83,8 @@ describe('SwarmMemoryRetriever', () => {
             pageId: 'fragments',
             title: 'Fragment Guide',
             score: 0.72,
-            matchedChunk: 'The TTL sweep deletes expired fragments every minute.',
+            matchedChunk:
+              'The TTL sweep deletes expired fragments every minute.',
             tags: ['fragments'],
           },
         ])
@@ -93,9 +104,15 @@ describe('SwarmMemoryRetriever', () => {
     fetchMock.mockResolvedValue(jsonResponse(searchResponse([])));
     const retriever = makeRetriever();
 
-    await retriever.maybeRefresh(parts({ currentQuery: 'same window every time' }));
-    await retriever.maybeRefresh(parts({ currentQuery: 'same window every time' }));
-    await retriever.maybeRefresh(parts({ currentQuery: 'same window every time' }));
+    await retriever.maybeRefresh(
+      parts({ currentQuery: 'same window every time' })
+    );
+    await retriever.maybeRefresh(
+      parts({ currentQuery: 'same window every time' })
+    );
+    await retriever.maybeRefresh(
+      parts({ currentQuery: 'same window every time' })
+    );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -106,13 +123,23 @@ describe('SwarmMemoryRetriever', () => {
       if (u.includes('q=first')) {
         return jsonResponse(
           searchResponse([
-            { pageId: 'p1', title: 'P1', score: 0.42, matchedChunk: 'first hit' },
+            {
+              pageId: 'p1',
+              title: 'P1',
+              score: 0.42,
+              matchedChunk: 'first hit',
+            },
           ])
         );
       }
       return jsonResponse(
         searchResponse([
-          { pageId: 'p1', title: 'P1', score: 0.88, matchedChunk: 'better hit' },
+          {
+            pageId: 'p1',
+            title: 'P1',
+            score: 0.88,
+            matchedChunk: 'better hit',
+          },
           { pageId: 'p2', title: 'P2', score: 0.5, matchedChunk: 'other' },
         ])
       );
@@ -150,7 +177,9 @@ describe('SwarmMemoryRetriever', () => {
       )
     );
     const retriever = makeRetriever(
-      config({ anchors: { tags: ['beacon'], boostPerTag: 0.08, boostTitle: 0.05 } })
+      config({
+        anchors: { tags: ['beacon'], boostPerTag: 0.08, boostTitle: 0.05 },
+      })
     );
     const entries = await retriever.maybeRefresh(parts());
 
@@ -165,7 +194,12 @@ describe('SwarmMemoryRetriever', () => {
       .mockResolvedValueOnce(
         jsonResponse(
           searchResponse([
-            { pageId: 'good', title: 'Good', score: 0.9, matchedChunk: 'cached entry' },
+            {
+              pageId: 'good',
+              title: 'Good',
+              score: 0.9,
+              matchedChunk: 'cached entry',
+            },
           ])
         )
       )

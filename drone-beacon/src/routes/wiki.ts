@@ -13,7 +13,10 @@ const MAX_SEMANTIC_RESULTS = 50;
 
 type CoordinatorPageLike = Record<string, unknown> & { id?: string };
 
-function withOrigin<T extends object>(page: T, origin: WikiOrigin): T & { origin: WikiOrigin } {
+function withOrigin<T extends object>(
+  page: T,
+  origin: WikiOrigin
+): T & { origin: WikiOrigin } {
   return { ...page, origin };
 }
 
@@ -216,9 +219,7 @@ export default function wikiRoutes(app: FastifyInstance) {
     }
     const provider = getWikiIndexer()?.getProvider();
     if (!provider) {
-      return reply
-        .code(503)
-        .send({ error: 'No embedding provider available' });
+      return reply.code(503).send({ error: 'No embedding provider available' });
     }
 
     const k = Math.min(
@@ -236,13 +237,15 @@ export default function wikiRoutes(app: FastifyInstance) {
         : hits;
 
     // Group by (pageId, origin); keep the best-scoring chunk per page.
-    interface PageHit {
-      pageId: string;
-      origin: WikiOrigin;
-      score: number;
-      matchedChunk: string;
-    }
-    const byPage = new Map<string, { pageId: string; origin: WikiOrigin; score: number; matchedChunk: string }>();
+    const byPage = new Map<
+      string,
+      {
+        pageId: string;
+        origin: WikiOrigin;
+        score: number;
+        matchedChunk: string;
+      }
+    >();
     for (const hit of filtered) {
       if (origin && hit.origin !== origin) continue;
       const key = `${hit.pageId}\u0000${hit.origin}`;
@@ -273,13 +276,15 @@ export default function wikiRoutes(app: FastifyInstance) {
     const { listPages } = await import('drone-swarm-common');
     const metaByKey = new Map<string, PageMetaLite>();
     for (const p of await listPages()) {
-      metaByKey.set(`beacon\u0000${p.id}`, { id: p.id, title: p.title, tags: p.tags });
+      metaByKey.set(`beacon\u0000${p.id}`, {
+        id: p.id,
+        title: p.title,
+        tags: p.tags,
+      });
     }
     if ([...byPage.values()].some(p => p.origin === 'coordinator')) {
-      const coordinatorList = (await proxyWikiToCoordinator(
-        'GET',
-        '/wiki'
-      )) as PageMetaLite[] | null;
+      const coordinatorList = (await proxyWikiToCoordinator('GET', '/wiki')) as
+        PageMetaLite[] | null;
       if (Array.isArray(coordinatorList)) {
         for (const m of coordinatorList) {
           metaByKey.set(`coordinator\u0000${m.id}`, {

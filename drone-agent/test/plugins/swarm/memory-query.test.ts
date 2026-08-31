@@ -24,10 +24,10 @@ describe('buildQueryInputs', () => {
 
   it('keeps the current query verbatim as the first input for over-budget windows', () => {
     const bigResponse = 'paragraph about vector search. '.repeat(2000);
-    const result = buildQueryInputs(
-      parts({ prevResponse: bigResponse }),
-      { maxQueryTokens: 600, maxQuerySegments: 2 }
-    );
+    const result = buildQueryInputs(parts({ prevResponse: bigResponse }), {
+      maxQueryTokens: 600,
+      maxQuerySegments: 2,
+    });
     expect(result.inputs[0]).toBe('how does vec0 mirroring work');
     expect(result.inputs.length).toBeLessThanOrEqual(3);
     for (const input of result.inputs.slice(1)) {
@@ -40,10 +40,10 @@ describe('buildQueryInputs', () => {
       { length: 60 },
       (_, i) => `Section ${i}: discusses embedding indexes and retrieval.`
     ).join('\n\n');
-    const result = buildQueryInputs(
-      parts({ prevResponse: response }),
-      { maxQueryTokens: 40, maxQuerySegments: 3 }
-    );
+    const result = buildQueryInputs(parts({ prevResponse: response }), {
+      maxQueryTokens: 40,
+      maxQuerySegments: 3,
+    });
     expect(result.inputs.length).toBeLessThanOrEqual(4); // current query + 3
     expect(result.inputs[0]).toBe('how does vec0 mirroring work');
   });
@@ -54,10 +54,10 @@ describe('buildQueryInputs', () => {
       'Middle topic: compaction triggers at fifty percent.',
       'Recent topic: the wiki indexer reconciles nightly.',
     ].join('\n\n');
-    const result = buildQueryInputs(
-      parts({ prevResponse: response }),
-      { maxQueryTokens: 30, maxQuerySegments: 2 }
-    );
+    const result = buildQueryInputs(parts({ prevResponse: response }), {
+      maxQueryTokens: 30,
+      maxQuerySegments: 2,
+    });
     const windowInput = result.inputs[1] ?? '';
     expect(windowInput).toContain('wiki indexer');
     expect(windowInput).not.toContain('persona broker');
@@ -69,7 +69,9 @@ describe('buildQueryInputs', () => {
     expect(a.hash).toBe(b.hash);
     expect(a.hash).toMatch(/^[0-9a-f]{64}$/);
 
-    const c = buildQueryInputs(parts({ currentQuery: 'something else entirely' }));
+    const c = buildQueryInputs(
+      parts({ currentQuery: 'something else entirely' })
+    );
     expect(c.hash).not.toBe(a.hash);
   });
 
