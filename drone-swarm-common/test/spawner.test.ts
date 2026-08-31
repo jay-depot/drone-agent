@@ -33,6 +33,7 @@ describe('spawner workingDir guard', () => {
       createSpawn: vi.fn(() => ({ id: 'spawn-1', status: 'spawning' })),
       updateSpawnStatus: vi.fn(),
       getSpawn: vi.fn(() => undefined),
+      unregisterAgent: vi.fn(),
     };
   });
 
@@ -115,5 +116,48 @@ describe('spawner workingDir guard', () => {
     ];
     expect(args).not.toContain('--working-dir');
     expect(options.cwd).toBe(process.cwd());
+  });
+  it('unregisters the agent session when the spawned process exits', async () => {
+    const { initSpawner, spawnAgent } = await import('../src/spawner.js');
+    initSpawner(
+      {
+        agentPath: 'drone-agent',
+        timeoutMs: 60_000,
+        maxConcurrentSpawns: 2,
+        beaconHost: '127.0.0.1',
+        beaconPort: 4000,
+      },
+      db
+    );
+    const child = createMockChildProcess();
+    spawnMock.mockReturnValue(child);
+
+    await spawnAgent('spawn-1', 'agent-1', null, null, {});
+
+    child.emit('exit', 1, null);
+
+    expect(db.unregisterAgent).toHaveBeenCalledWith('agent-1');
+  });
+
+  it('unregisters the agent session when the spawned process errors', async () => {
+    const { initSpawner, spawnAgent } = await import('../src/spawner.js');
+    initSpawner(
+      {
+        agentPath: 'drone-agent',
+        timeoutMs: 60_000,
+        maxConcurrentSpawns: 2,
+        beaconHost: '127.0.0.1',
+        beaconPort: 4000,
+      },
+      db
+    );
+    const child = createMockChildProcess();
+    spawnMock.mockReturnValue(child);
+
+    await spawnAgent('spawn-1', 'agent-2', null, null, {});
+
+    child.emit('error', new Error('spawn ENOENT'));
+
+    expect(db.unregisterAgent).toHaveBeenCalledWith('agent-2');
   });
 });

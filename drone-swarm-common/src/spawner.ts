@@ -36,6 +36,12 @@ export interface SpawnDb {
     exitCode?: number
   ): unknown;
   getSpawn(id: string): { status: string } | undefined;
+  /**
+   * Remove the agent's session record when its process is gone. Optional so
+   * minimal adapters stay valid; omitting it leaves stale agent_sessions
+   * rows ('connected' with frozen activity) behind every exit.
+   */
+  unregisterAgent?(agentId: string): unknown;
 }
 
 // === State ===
@@ -160,7 +166,9 @@ export async function spawnAgent(
     startedAt: Date.now(),
   });
 
-  // Handle process events
+  // Handle process events. Both exit and error paths also drop the agent's
+  // session record: a dead process can never heartbeat again, and leaving
+  // the row behind poisons 'connected'/'lastActivity' views (zombie agents).
   childProcess.on('exit', (code, signal) => {
     logger.info(`Agent ${agentId} exited with code=${code}, signal=${signal}`);
 
@@ -173,6 +181,8 @@ export async function spawnAgent(
       code ?? undefined
     );
 
+    spawnDb!.unregisterAgent?.(agentId);
+
     // Clean up tracking
     activeSpawns.delete(spawnId);
   });
@@ -182,6 +192,8 @@ export async function spawnAgent(
 
     // Update spawn record with error
     spawnDb!.updateSpawnStatus(spawnId, 'failed', null, err.message);
+
+    spawnDb!.unregisterAgent?.(agentId);
 
     // Clean up tracking
     activeSpawns.delete(spawnId);
