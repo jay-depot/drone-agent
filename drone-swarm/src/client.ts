@@ -51,9 +51,7 @@ export class SwarmClient {
       method,
       headers: {
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-        ...(this.webToken
-          ? { Authorization: `Bearer ${this.webToken}` }
-          : {}),
+        ...(this.webToken ? { Authorization: `Bearer ${this.webToken}` } : {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(30000),

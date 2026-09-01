@@ -74,7 +74,10 @@ describe('createWebAuthMiddleware', () => {
   it('allows non-local requests with correct auth header', async () => {
     const middleware = createWebAuthMiddleware(() => 'secret');
     const reply = makeReply();
-    await middleware(makeReq('8.8.8.8', '/api/sessions', 'Bearer secret'), reply);
+    await middleware(
+      makeReq('8.8.8.8', '/api/sessions', 'Bearer secret'),
+      reply
+    );
     expect(reply._code()).toBe(0);
   });
 
@@ -95,7 +98,10 @@ describe('createWebAuthMiddleware', () => {
   it('blocks non-local requests to /api routes with wrong token', async () => {
     const middleware = createWebAuthMiddleware(() => 'secret');
     const reply = makeReply();
-    await middleware(makeReq('8.8.8.8', '/api/sessions', 'Bearer wrong'), reply);
+    await middleware(
+      makeReq('8.8.8.8', '/api/sessions', 'Bearer wrong'),
+      reply
+    );
     expect(reply._code()).toBe(401);
   });
 

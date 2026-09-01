@@ -15,9 +15,11 @@ updated: 2026-09-01T21:16:27.231Z
 # Plan: Close the coordinator web-port /api auth gap + give the pipeline a token path
 
 ## Summary
-The coordinator's web port *appears* token-protected but is not: `PROTECTED_PREFIXES` (drone-coordinator/src/web-auth.ts:9-25) lists root-level prefixes ('/sessions','/wiki',…) while all API routes live under `/api` (routes/index.ts prefix:'/api'). `isProtectedPath` receives the full '/api/…' URL, matches nothing, and the Bearer check never runs. Live-confirmed 2026-09-01 (bare curl → full beacon registry). Fix = add '/api' to the prefix list (Q1), shipped together with token support for the consumers that send nothing today (drone-swarm CLI + bootstrap-generated scripts + workflow probe) so no consumer strands. UI (useAuthenticatedFetch) and gateway (CoordinatorClient Bearer) are already compliant — verified. Beacon/primary-port/mTLS untouched.
+
+The coordinator's web port _appears_ token-protected but is not: `PROTECTED_PREFIXES` (drone-coordinator/src/web-auth.ts:9-25) lists root-level prefixes ('/sessions','/wiki',…) while all API routes live under `/api` (routes/index.ts prefix:'/api'). `isProtectedPath` receives the full '/api/…' URL, matches nothing, and the Bearer check never runs. Live-confirmed 2026-09-01 (bare curl → full beacon registry). Fix = add '/api' to the prefix list (Q1), shipped together with token support for the consumers that send nothing today (drone-swarm CLI + bootstrap-generated scripts + workflow probe) so no consumer strands. UI (useAuthenticatedFetch) and gateway (CoordinatorClient Bearer) are already compliant — verified. Beacon/primary-port/mTLS untouched.
 
 ## Grilled decisions (2026-09-01)
+
 - Q1: Minimal gap-close. Add '/api' to PROTECTED_PREFIXES. `isLocalRequest` (loopback, own interfaces, Tailscale 100.64/10) stays untouched as local bypass. Remote callers must send Bearer.
 - Q2: drone-swarm gains `--web-token <t>` flag + `DRONE_COORDINATOR_WEB_TOKEN` env (flag wins). `Authorization: Bearer` header sent only when token set. Beacon target: no-op (no token concept).
 - Q3: Bootstrap workflow — DEFAULT_COORDINATOR_URL → `http://localhost:8080`. Probe STAYS `drone-swarm session list` (validates the exact binary+route+token path the pipeline uses, catches the missing-binary failure class at the front door). Failure message gains: binary-presence check + stderr/exit code from the probe result (current message hides ENOENT vs refused vs 401).
@@ -50,6 +52,7 @@ The coordinator's web port *appears* token-protected but is not: `PROTECTED_PREF
 - S7 (final): log insights (planner persona: probe-that-shells-out must surface stderr; auth-prefix lists must be generated/derived from route prefixes — this is the 2nd prefix-drift bug class in the codebase). Update project memories (coordinator-probe-auth-gap → mark fix planned). Commit .drone-agent + vault changes per policy: only on the feature branch, never main.
 
 ## Validation criteria
+
 - All S1–S4 tests pass; no existing tests regressed (root pnpm test fast suite green, 192+ files).
 - LSP: zero diagnostics on touched files (web-auth.ts, client.ts, index.ts, swarm-memory.ts, swarm-memory-scripts.ts, login.tsx + tests).
 - pnpm -r run build, pnpm typecheck, pnpm lint all pass.
@@ -58,5 +61,6 @@ The coordinator's web port *appears* token-protected but is not: `PROTECTED_PREF
 - No changes to: beacon, primary port/mTLS, gateway, UI internals beyond login.tsx, session pipeline semantics.
 
 ## Explicitly deferred
+
 - Restart unit-name fix + --help HTTPS drift → user's workflow-rework effort.
 - swarm.memory read-side bootstrap + stale-session UI + librarian migration → swarm-memory-phase-2-backlog (project memory).

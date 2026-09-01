@@ -34,7 +34,10 @@ function renderLogin() {
 
 async function submitToken(value: string) {
   const user = userEvent.setup();
-  await user.type(screen.getByPlaceholderText('Paste your access token...'), value);
+  await user.type(
+    screen.getByPlaceholderText('Paste your access token...'),
+    value
+  );
   await user.click(screen.getByRole('button', { name: 'Connect' }));
 }
 

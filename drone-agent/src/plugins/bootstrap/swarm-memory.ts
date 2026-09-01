@@ -220,7 +220,12 @@ function classifyProbe(result: {
     return { reason: 'binary-missing' };
   }
   if (result.code !== 0) {
-    return { reason: 'exit', code: result.code, stderr: result.stderr, stdout: result.stdout };
+    return {
+      reason: 'exit',
+      code: result.code,
+      stderr: result.stderr,
+      stdout: result.stdout,
+    };
   }
   return { reason: 'ok' };
 }
@@ -230,7 +235,11 @@ async function probeCoordinator(
   url: string,
   webToken: string
 ): Promise<ProbeFailure> {
-  const binaryCheck = await runner(['sh', '-c', 'command -v drone-swarm >/dev/null 2>&1']);
+  const binaryCheck = await runner([
+    'sh',
+    '-c',
+    'command -v drone-swarm >/dev/null 2>&1',
+  ]);
   if (binaryCheck.code !== 0) {
     return { reason: 'binary-missing' };
   }
