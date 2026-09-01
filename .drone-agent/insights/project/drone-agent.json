@@ -382,5 +382,9 @@
   {
     "timestamp": "2026-08-31T20:00:08.155Z",
     "insight": "pnpm -r run test fails for this monorepo (drone-core has no own test files but vitest resolves the root config from inside the package and finds no files) — the correct full-suite command is plain `pnpm test` at the repo root (single vitest run over all packages). `pnpm -r run build` and `pnpm -r run typecheck` are correct for build/typecheck; only test differs. Also: prettier's lint pass renames/moves nothing but reformats, so re-run typecheck after lint before trusting green."
+  },
+  {
+    "timestamp": "2026-09-01T19:47:58.824Z",
+    "insight": "sqlite-vec 0.1.9 (the beacon's pinned version) fully supports a bit-signature prefilter stack, verified LIVE against the exact installed vec0.so: BIT[768] vec0 columns + MATCH k= KNN with integer hamming distance; vec_quantize_binary() (float32/int8 in, length divisible by 8, raw headerless LSB-first packed-bits BLOB out); vec_distance_hamming(). Three gotchas that cost real time if rediscovered: (1) distance_metric=hamming is NOT a valid vec0 column option on 0.1.9 (constructor parse error) — hamming is implicit for BIT columns, declare them bare; (2) bare BLOB bindings to BIT columns are misread as float32 — always produce bit values inside SQL via vec_quantize_binary(?) or wrap with vec_bit(?); (3) the combined schema vec0(embedding FLOAT[768] distance_metric=cosine, sig BIT[768]) works and both columns are independently KNN-queryable. Method worth reusing: spike against the EXACT pinned binary via better-sqlite3 (vec_version() to confirm), cross-checked with npm tarball symbol greps across versions — web docs alone were ambiguous about version support."
   }
 ]
