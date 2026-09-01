@@ -3,6 +3,7 @@ import { setupDb, teardownDb } from './setup.js';
 import { buildTestApp } from './app-helper.js';
 import type { FastifyInstance } from 'fastify';
 import * as db from '../src/db/index.js';
+import { getDatabase } from '../src/db/index.js';
 import { SearchIndexer } from '../src/search-indexer.js';
 import { setSearchIndexer } from '../src/routes/context.js';
 
@@ -1121,6 +1122,35 @@ describe('Search Routes', () => {
     expect(body.results[0].file).toBe('/proj/src/dup.ts');
     expect(body.results[0].content).toContain('first matching chunk');
     expect(body.results[0].content).toContain('second matching chunk');
+  });
+
+  it('GET /agents/:id/search falls back to float KNN when the bit mirror is empty', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/agents',
+      payload: { id: 'agent-3', personaId: null },
+    });
+    db.registerSearchPath('agent-3', '/proj');
+
+    // Seed chunks normally (writes to search_chunks + vec_chunks + bit mirror),
+    // then wipe the bit mirror to simulate a lost/unpopulated signature table.
+    db.insertChunk('/proj', '/proj/src/keep.ts', 0, 'keep me', emb(1));
+    // The second chunk's embedding is orthogonal to the query so the score
+    // ordering is deterministic (parallel embeddings would tie at cosine 1).
+    const orth = new Float32Array(768);
+    orth[1] = 1;
+    db.insertChunk('/proj', '/proj/src/other.ts', 0, 'other', orth);
+    getDatabase().prepare('DELETE FROM vec_chunks_bq').run();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/agents/agent-3/search?q=test',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.resultCount).toBe(2);
+    expect(body.results[0].file).toBe('/proj/src/keep.ts');
+    expect(body.results[1].file).toBe('/proj/src/other.ts');
   });
 });
 

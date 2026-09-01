@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   dedupeAndCombineChunks,
+  rescoreByCosine,
   type ScoredChunk,
 } from '../src/search-searcher.js';
 
@@ -82,5 +83,58 @@ describe('dedupeAndCombineChunks', () => {
     ];
     const results = dedupeAndCombineChunks(scored, { maxResults: 10 });
     expect(results.map(r => r.filePath)).toEqual(['b.ts', 'c.ts', 'a.ts']);
+  });
+});
+
+describe('rescoreByCosine', () => {
+  function float32Buffer(values: number[]): Buffer {
+    const f32 = new Float32Array(values);
+    return Buffer.from(f32.buffer, f32.byteOffset, f32.byteLength);
+  }
+
+  it('scores parallel vectors as 1', () => {
+    const query = new Float32Array([1, 0, 0]);
+    const rows = [{ embedding: float32Buffer([2, 0, 0]) }];
+    const scored = rescoreByCosine(query, rows);
+    expect(scored[0].score).toBeCloseTo(1, 6);
+  });
+
+  it('scores orthogonal vectors as 0', () => {
+    const query = new Float32Array([1, 0, 0]);
+    const rows = [{ embedding: float32Buffer([0, 5, 0]) }];
+    const scored = rescoreByCosine(query, rows);
+    expect(scored[0].score).toBeCloseTo(0, 6);
+  });
+
+  it('scores opposite vectors as -1', () => {
+    const query = new Float32Array([1, 0, 0]);
+    const rows = [{ embedding: float32Buffer([-3, 0, 0]) }];
+    const scored = rescoreByCosine(query, rows);
+    expect(scored[0].score).toBeCloseTo(-1, 6);
+  });
+
+  it('decodes raw float32 buffers correctly', () => {
+    const query = new Float32Array([1, 2, 3]);
+    // 1*1 + 2*2 + 3*3 = 14; norms sqrt(14) * sqrt(14) → cosine 1.
+    const rows = [{ embedding: float32Buffer([1, 2, 3]) }];
+    const scored = rescoreByCosine(query, rows);
+    expect(scored[0].score).toBeCloseTo(1, 6);
+  });
+
+  it('sorts results by score descending and preserves extra row fields', () => {
+    const query = new Float32Array([1, 0, 0]);
+    const rows = [
+      { filePath: 'orthogonal.ts', embedding: float32Buffer([0, 1, 0]) },
+      { filePath: 'parallel.ts', embedding: float32Buffer([7, 0, 0]) },
+      { filePath: 'opposite.ts', embedding: float32Buffer([-1, 0, 0]) },
+    ];
+    const scored = rescoreByCosine(query, rows);
+    expect(scored.map(r => r.filePath)).toEqual([
+      'parallel.ts',
+      'orthogonal.ts',
+      'opposite.ts',
+    ]);
+    expect(scored[0].score).toBeCloseTo(1, 6);
+    expect(scored).toHaveLength(3);
   });
 });

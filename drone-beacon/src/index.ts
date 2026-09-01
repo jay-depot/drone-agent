@@ -18,6 +18,7 @@ import {
   closeDatabase,
   cleanupExpiredMemories,
   backfillVecChunks,
+  backfillBqVecChunks,
 } from './db/index.js';
 import {
   registerRoutes,
@@ -250,6 +251,12 @@ async function main() {
   const backfilled = backfillVecChunks();
   if (backfilled > 0) {
     logger.info(`Search index: backfilled ${backfilled} chunk(s) into vec0`);
+  }
+  const backfilledBq = backfillBqVecChunks();
+  if (backfilledBq > 0) {
+    logger.info(
+      `Search index: backfilled ${backfilledBq} chunk signature(s) into vec_chunks_bq`
+    );
   }
   // Initialize search indexer
   const ollamaHost = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';

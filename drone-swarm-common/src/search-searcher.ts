@@ -87,3 +87,52 @@ export function dedupeAndCombineChunks(
   results.sort((a, b) => b.score - a.score);
   return results.slice(0, maxResults);
 }
+
+// ── Cosine Rescoring ────────────────────────────────────────────────
+
+/**
+ * Rescore candidate rows with exact cosine similarity against the query.
+ *
+ * Each row's `embedding` is assumed to be a raw little-endian float32 buffer
+ * with NO header — exactly the BLOB format stored in the beacon's
+ * `search_chunks.embedding` column. The buffer length must be a multiple of 4
+ * (768 dims → 3072 bytes).
+ *
+ * Rows with a zero-length query or embedding get a score of 0 (the cosine of a
+ * zero vector is undefined; 0 keeps the sort stable and total).
+ *
+ * Returns a new array sorted by score descending; every input row appears
+ * exactly once (rescoring never drops rows), so `rows.length < k` from the
+ * caller's prefilter stage is preserved through this function.
+ */
+export function rescoreByCosine<T extends { embedding: Buffer }>(
+  queryEmbedding: Float32Array,
+  rows: T[]
+): Array<T & { score: number }> {
+  let queryNorm = 0;
+  for (let i = 0; i < queryEmbedding.length; i++) {
+    queryNorm += queryEmbedding[i] * queryEmbedding[i];
+  }
+  queryNorm = Math.sqrt(queryNorm);
+
+  const scored = rows.map(row => {
+    const vec = new Float32Array(
+      row.embedding.buffer,
+      row.embedding.byteOffset,
+      row.embedding.byteLength / 4
+    );
+    let vecNorm = 0;
+    let dot = 0;
+    for (let i = 0; i < vec.length; i++) {
+      vecNorm += vec[i] * vec[i];
+      dot += vec[i] * (queryEmbedding[i] ?? 0);
+    }
+    vecNorm = Math.sqrt(vecNorm);
+    const score =
+      queryNorm === 0 || vecNorm === 0 ? 0 : dot / (queryNorm * vecNorm);
+    return { ...row, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored;
+}

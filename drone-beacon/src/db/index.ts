@@ -117,7 +117,9 @@ export {
   getAllChunks,
   getChunkCount,
   searchChunksByVector,
+  searchChunksByVectorPrefiltered,
   backfillVecChunks,
+  backfillBqVecChunks,
 } from './search.js';
 export type {
   SearchDirectoryRow,

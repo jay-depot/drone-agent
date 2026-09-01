@@ -202,6 +202,10 @@ export function initDatabase(dataPath: string): Database.Database {
       embedding FLOAT[768] distance_metric=cosine
     );
 
+    CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks_bq USING vec0(
+      sig BIT[768]
+    );
+
     CREATE TABLE IF NOT EXISTS wiki_pages (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
