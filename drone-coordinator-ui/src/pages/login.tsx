@@ -18,18 +18,21 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      // Test the token against an API endpoint
-      const res = await fetch('/health', {
+      // Validate the token against a protected API endpoint (not /health,
+      // which is auth-exempt and answers 200 to any token). A wrong token
+      // 401s here and fails at the gate.
+      const res = await fetch('/api/personas', {
         headers: { Authorization: `Bearer ${trimmed}` },
       });
 
-      if (res.ok) {
-        setToken(trimmed);
-      } else if (res.status === 401) {
+      if (res.status === 401) {
         setError('Invalid token. Please try again.');
+      } else if (res.ok) {
+        setToken(trimmed);
       } else {
-        // If the API returns something else, the token might still be valid
-        // (e.g., the health endpoint might not exist). Try it anyway.
+        // Other statuses (429/5xx) mean the server answered but we can't
+        // confirm rejection — keep the permissive fallback and let the app
+        // handle any 401 later.
         setToken(trimmed);
       }
     } catch {
