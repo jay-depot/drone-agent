@@ -29,6 +29,8 @@ import {
 
 import { BUILT_IN_SLASH_COMMANDS } from './builtin-commands.js';
 import { SystemReminderQueue } from './system-reminders.js';
+import { createEphemeralConversation } from './ephemeral-conversation.js';
+import { buildKickEnvelope } from './kick-envelope.js';
 
 export type RegisteredPluginState = {
   plugin: DronePlugin;
@@ -336,6 +338,19 @@ export function createDronePluginEngine({
   const helpSnippets = new Map<string, string[]>();
   const slashCommands = new Map<string, DroneSlashCommand[]>();
   const builtInSlashCommands: DroneSlashCommand[] = [];
+  // Self-reference so closures created before the return object (e.g. the
+  // workflow ctx.agent binding) can reach the fully-assembled engine.
+  const engineRef: { current?: DronePluginEngine } = {};
+  function thisEngine(): DronePluginEngine {
+    if (!engineRef.current) {
+      throw new Error('Engine self-reference not ready.');
+    }
+    return engineRef.current;
+  }
+  function captureEngine(e: DronePluginEngine): DronePluginEngine {
+    engineRef.current = e;
+    return e;
+  }
   const sessionSafetyTrimWillRunHooks: Array<
     (payload: DroneSessionSafetyTrimPayload) => Promise<void>
   > = [];
@@ -439,6 +454,22 @@ export function createDronePluginEngine({
         `Workflow ${canonicalName} requested elicitation, but the host did not provide an interactive capability. Use --output-plain or the TUI; do not run workflows with --once.`
       );
     }
+    // Lazy per-run ephemeral conversation for agent-assisted steps:
+    // created on first ctx.agent() call, shared by all calls in this
+    // run, discarded when the run returns.
+    let ephemeral: ReturnType<typeof createEphemeralConversation> | undefined;
+    const agent = async (
+      prompt: string
+    ): Promise<string> => {
+      if (!ephemeral) {
+        ephemeral = createEphemeralConversation({
+          engine: thisEngine(),
+          config,
+          logger,
+        });
+      }
+      return ephemeral.send(prompt);
+    };
     const ctx: DroneWorkflowContext = {
       elicit,
       projectDir: process.cwd(),
@@ -446,9 +477,14 @@ export function createDronePluginEngine({
       requestCapability: <T>(pluginId: string) =>
         capabilities.get(pluginId) as T | undefined,
       enablePlugin: (pluginId: string) => doEnablePlugin(pluginId),
+      agent,
     };
     const raw = await workflow.run(args, ctx);
-    return normalizeWorkflowResult(raw);
+    const result = normalizeWorkflowResult(raw);
+    if (result.kickMessage) {
+      result.kickMessage = buildKickEnvelope(canonicalName, result.kickMessage);
+    }
+    return result;
   }
 
   function unregisterPluginToolsImpl(pluginId: string): void {
@@ -791,7 +827,7 @@ export function createDronePluginEngine({
     }
   }
 
-  return {
+  return captureEngine({
     initialize: async () => {
       // Register built-in slash commands before plugins load.
       for (const cmd of BUILT_IN_SLASH_COMMANDS) {
@@ -1014,7 +1050,7 @@ export function createDronePluginEngine({
       builtInSlashCommands.push(command);
     },
     getBuiltinSlashCommands: () => [...builtInSlashCommands],
-  };
+  });
 }
 
 function normalizeWorkflowResult(
@@ -1035,6 +1071,9 @@ function normalizeWorkflowResult(
     const result: DroneWorkflowResult = {};
     if (typeof raw.kickMessage === 'string') {
       result.kickMessage = raw.kickMessage;
+    }
+    if ('continueSession' in raw && typeof raw.continueSession === 'boolean') {
+      result.continueSession = raw.continueSession;
     }
     if (typeof raw.toolResult === 'string') {
       result.toolResult = raw.toolResult;

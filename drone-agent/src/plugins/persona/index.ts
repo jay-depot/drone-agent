@@ -580,7 +580,6 @@ export const personaPlugin: DronePlugin = {
           await ctx.engine.runHooks('onAfterToolCall');
           if (result.kickMessage && ctx.conversation && ctx.sessionManager) {
             // Re-enter the chat loop so the assistant can summarise.
-            ctx.sessionManager.appendUserMessage(result.kickMessage);
             await ctx.engine.runHooks('onBeforePrompt');
             const reply = await ctx.conversation.sendUserMessage(
               result.kickMessage
