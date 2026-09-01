@@ -29,13 +29,14 @@ export type CommandRunner = (
 ) => Promise<RunResult>;
 
 const MEMORY_DIR = '.drone-swarm-memory';
-const DEFAULT_COORDINATOR_URL = 'http://localhost:3456';
+const DEFAULT_COORDINATOR_URL = 'http://localhost:8080';
 const DEFAULT_BATCH_LIMIT = '5';
 const DEFAULT_CRON_SCHEDULE = '0 * * * *';
 
 type Discovery = {
   settings: SwarmMemorySettings;
   coordinatorReachable: boolean;
+  probeFailureHint: string;
   launchMode: 'systemd' | 'docker' | 'unknown';
   coordinatorConfigPath: string;
   beaconConfigPath: string;
@@ -180,20 +181,70 @@ async function detectLaunchMode(
   return 'unknown';
 }
 
+type ProbeFailure =
+  | { reason: 'binary-missing' }
+  | { reason: 'exit'; code: number; stderr: string; stdout: string }
+  | { reason: 'ok' };
+
+/**
+ * Turn a raw probe result into a human hint for the failure message, so
+ * "not reachable" distinguishes a missing drone-swarm binary from a dead
+ * server (exit/stderr) instead of hiding the cause.
+ */
+export function describeProbeFailure(failure: ProbeFailure): string {
+  switch (failure.reason) {
+    case 'binary-missing':
+      return 'the drone-swarm binary was not found on PATH — install/link the drone-swarm package (it is what the ingest hook and catch-up job call)';
+    case 'exit':
+      return `drone-swarm exited ${failure.code}: ${
+        failure.stderr.trim() ||
+        failure.stdout.trim().slice(0, 200) ||
+        '(no output)'
+      }`;
+    case 'ok':
+      return '';
+  }
+}
+
+/**
+ * Validate the probe result into a structured outcome: binary presence
+ * first (spawn failures resolve to code -1 and are indistinguishable from
+ * connection failures), then exit status.
+ */
+function classifyProbe(result: {
+  code: number;
+  stdout: string;
+  stderr: string;
+}): ProbeFailure {
+  if (result.code === -1) {
+    return { reason: 'binary-missing' };
+  }
+  if (result.code !== 0) {
+    return { reason: 'exit', code: result.code, stderr: result.stderr, stdout: result.stdout };
+  }
+  return { reason: 'ok' };
+}
+
 async function probeCoordinator(
   runner: CommandRunner,
-  url: string
-): Promise<boolean> {
+  url: string,
+  webToken: string
+): Promise<ProbeFailure> {
+  const binaryCheck = await runner(['sh', '-c', 'command -v drone-swarm >/dev/null 2>&1']);
+  if (binaryCheck.code !== 0) {
+    return { reason: 'binary-missing' };
+  }
   const result = await runner([
     'drone-swarm',
     '--coordinator',
     url,
+    ...(webToken ? ['--web-token', webToken] : []),
     'session',
     'list',
     '--limit',
     '1',
   ]);
-  return result.code === 0;
+  return classifyProbe(result);
 }
 
 async function discover(
@@ -203,17 +254,30 @@ async function discover(
 ): Promise<Discovery | undefined> {
   const reachableDefault = await probeCoordinator(
     runner,
-    DEFAULT_COORDINATOR_URL
+    DEFAULT_COORDINATOR_URL,
+    ''
   );
   const answers = await elicit.ask([
     {
       id: 'coordinatorUrl',
       prompt: `Swarm memory setup. I detected the coordinator ${
-        reachableDefault ? 'REACHABLE' : 'NOT reachable'
-      } at ${DEFAULT_COORDINATOR_URL}.\n\nWhich URL should the pipeline talk to?`,
+        reachableDefault.reason === 'ok' ? 'REACHABLE' : 'NOT reachable'
+      } at ${DEFAULT_COORDINATOR_URL}.\n\nWhich URL should the pipeline talk to?${
+        reachableDefault.reason === 'ok'
+          ? ''
+          : `\n\nProbe failure: ${describeProbeFailure(reachableDefault)}`
+      }`,
       freeform: true,
       placeholder: DEFAULT_COORDINATOR_URL,
       defaultValue: DEFAULT_COORDINATOR_URL,
+    },
+    {
+      id: 'webToken',
+      prompt:
+        'Web token for the coordinator web port? (Leave empty when the coordinator is local — loopback needs no token.)',
+      freeform: true,
+      placeholder: '(empty if local)',
+      defaultValue: '',
     },
     {
       id: 'configureBeacon',
@@ -246,6 +310,7 @@ async function discover(
   ).trim();
   const settings: SwarmMemorySettings = {
     coordinatorUrl: url,
+    webToken: ((answers.webToken as string) || '').trim(),
     configureBeacon: answers.configureBeacon === 'yes',
     batchLimit:
       ((answers.batchLimit as string) || '').trim() || DEFAULT_BATCH_LIMIT,
@@ -256,9 +321,11 @@ async function discover(
     return undefined;
   }
 
+  const probe = await probeCoordinator(runner, url, settings.webToken);
   return {
     settings,
-    coordinatorReachable: await probeCoordinator(runner, url),
+    coordinatorReachable: probe.reason === 'ok',
+    probeFailureHint: describeProbeFailure(probe),
     launchMode: await detectLaunchMode(runner),
     coordinatorConfigPath: coordinatorConfigPath(home),
     beaconConfigPath: beaconConfigPath(home),
@@ -303,10 +370,14 @@ async function restartServer(
     return;
   }
   if (server === 'coordinator') {
-    discovery.coordinatorReachable = await probeCoordinator(
-      runner,
-      discovery.settings.coordinatorUrl
-    );
+    discovery.coordinatorReachable =
+      (
+        await probeCoordinator(
+          runner,
+          discovery.settings.coordinatorUrl,
+          discovery.settings.webToken
+        )
+      ).reason === 'ok';
   }
 }
 
@@ -394,6 +465,9 @@ async function smokeTest(
     'drone-swarm',
     '--coordinator',
     discovery.settings.coordinatorUrl,
+    ...(discovery.settings.webToken
+      ? ['--web-token', discovery.settings.webToken]
+      : []),
     'session',
     'list',
     '--status',
@@ -460,6 +534,9 @@ async function smokeTest(
     'drone-swarm',
     '--coordinator',
     discovery.settings.coordinatorUrl,
+    ...(discovery.settings.webToken
+      ? ['--web-token', discovery.settings.webToken]
+      : []),
     'wiki',
     'search',
     smokeId,
@@ -556,7 +633,7 @@ export function createSwarmMemoryWorkflow(
           toolResult: JSON.stringify(
             {
               ok: false,
-              message: `Coordinator at ${discovery.settings.coordinatorUrl} is not reachable. Start it (or fix the URL) and run the workflow again.`,
+              message: `Coordinator at ${discovery.settings.coordinatorUrl} is not reachable (${discovery.probeFailureHint}). Start it (or fix the URL) and run the workflow again.`,
             },
             null,
             2
@@ -618,6 +695,20 @@ export function createSwarmMemoryWorkflow(
           step: 'catchup-script',
           status: 'skipped',
           detail: 'user declined',
+        });
+      }
+
+      if (discovery.settings.webToken) {
+        const escapedToken = discovery.settings.webToken.replace(/'/g, "'\\''");
+        await atomicWrite(
+          path.join(home, MEMORY_DIR, 'env'),
+          `export DRONE_COORDINATOR_WEB_TOKEN='${escapedToken}'\n`,
+          0o600
+        );
+        reports.push({
+          step: 'env-file',
+          status: 'done',
+          detail: path.join(home, MEMORY_DIR, 'env'),
         });
       }
 

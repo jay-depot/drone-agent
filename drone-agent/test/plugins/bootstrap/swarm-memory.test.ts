@@ -36,6 +36,8 @@ function makeRunner(handlers: {
   systemctl?: { code: number };
   docker?: { code: number; stdout?: string };
   smokeHook?: { code: number; stderr?: string };
+  binaryCheck?: { code: number };
+  probe?: { code: number; stderr?: string; stdout?: string };
 }) {
   const calls: string[][] = [];
   let bashNIndex = 0;
@@ -83,6 +85,22 @@ function makeRunner(handlers: {
           stderr: '',
         };
       }
+      if (joined.startsWith('sh -c command -v drone-swarm')) {
+        return {
+          code: handlers.binaryCheck?.code ?? 0,
+          stdout: '',
+          stderr: '',
+        };
+      }
+      if (joined.includes('session list --limit 1')) {
+        return {
+          code: handlers.probe?.code ?? 0,
+          stdout:
+            handlers.probe?.stdout ??
+            JSON.stringify({ sessions: [{ id: 'sess-1' }], count: 1 }),
+          stderr: handlers.probe?.stderr ?? '',
+        };
+      }
       if (joined.includes('session list')) {
         return {
           code: 0,
@@ -114,6 +132,7 @@ function makeCtx(elicit: { ask: unknown }) {
 
 const HAPPY: Record<string, string> = {
   coordinatorUrl: 'http://127.0.0.1:3456',
+  webToken: '',
   configureBeacon: 'no',
   batchLimit: '5',
   cronSchedule: '0 * * * *',
@@ -181,6 +200,7 @@ describe('bootstrap swarm-memory workflow', () => {
     const ids = asked.map(a => a.id);
     expect(ids).toEqual([
       'coordinatorUrl',
+      'webToken',
       'configureBeacon',
       'batchLimit',
       'cronSchedule',
@@ -197,6 +217,93 @@ describe('bootstrap swarm-memory workflow', () => {
     expect(calls.filter(c => c.join(' ').startsWith('bash -n'))).toHaveLength(
       2
     );
+    expect(
+      calls.some(c => c.join(' ').includes('command -v drone-swarm'))
+    ).toBe(true);
+    expect(calls.some(c => c.includes('web-token'))).toBe(false);
+  });
+
+  it('writes the env file 0600 and threads --web-token when a token is given', async () => {
+    const { runner, calls } = makeRunner({
+      crontab: { code: 1, stdout: '' },
+      systemctl: { code: 0 },
+    });
+    const { ask, asked } = makeElicit({
+      ...HAPPY,
+      coordinatorUrl: 'http://10.0.0.5:8080',
+      webToken: 'tok-en-123',
+    });
+    const workflow = createSwarmMemoryWorkflow({ runner, home });
+    const result = await workflow.run({}, makeCtx({ ask }) as never);
+    const parsed = JSON.parse(
+      (result as { toolResult?: string }).toolResult ?? ''
+    ) as { ok: boolean; steps: { step: string; status: string }[] };
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.steps.find(s => s.step === 'env-file')?.status).toBe('done');
+
+    const envPath = path.join(home, '.drone-swarm-memory', 'env');
+    const envContent = await readFile(envPath, 'utf-8');
+    expect(envContent).toBe(
+      "export DRONE_COORDINATOR_WEB_TOKEN='tok-en-123'\n"
+    );
+    expect((await stat(envPath)).mode & 0o777).toBe(0o600);
+
+    const hookScript = await readFile(
+      path.join(home, '.drone-swarm-memory', 'bin', 'session-end-ingest.sh'),
+      'utf-8'
+    );
+    expect(hookScript).toContain('. "$HOME/.drone-swarm-memory/env"');
+
+    const probeCalls = calls.filter(c =>
+      c.join(' ').includes('session list --limit 1')
+    );
+    expect(probeCalls.length).toBeGreaterThan(0);
+    expect(probeCalls.some(c => c.includes('--web-token'))).toBe(true);
+    expect(probeCalls.some(c => c.includes('tok-en-123'))).toBe(true);
+    expect(probeCalls[0]).not.toContain('--web-token');
+    expect(asked.map(a => a.id)).toContain('webToken');
+  });
+
+  it('writes no env file when the token is empty', async () => {
+    const { runner } = makeRunner({ crontab: { code: 1, stdout: '' } });
+    const { ask } = makeElicit({ ...HAPPY });
+    const workflow = createSwarmMemoryWorkflow({ runner, home });
+    await workflow.run({}, makeCtx({ ask }) as never);
+    await expect(
+      readFile(path.join(home, '.drone-swarm-memory', 'env'), 'utf-8')
+    ).rejects.toThrow();
+  });
+
+  it('names the missing binary when drone-swarm is not on PATH', async () => {
+    const { runner } = makeRunner({
+      crontab: { code: 1, stdout: '' },
+      binaryCheck: { code: 1 },
+    });
+    const { ask } = makeElicit({ ...HAPPY });
+    const workflow = createSwarmMemoryWorkflow({ runner, home });
+    const result = await workflow.run({}, makeCtx({ ask }) as never);
+    const parsed = JSON.parse(
+      (result as { toolResult?: string }).toolResult ?? ''
+    ) as { ok: boolean; message?: string };
+    expect(parsed.ok).toBe(false);
+    expect(parsed.message).toContain('drone-swarm binary was not found');
+  });
+
+  it('surfaces probe stderr in the not-reachable message', async () => {
+    const { runner } = makeRunner({
+      crontab: { code: 1, stdout: '' },
+      probe: { code: 7, stderr: 'Failed to list sessions: 401' },
+    });
+    const { ask } = makeElicit({ ...HAPPY });
+    const workflow = createSwarmMemoryWorkflow({ runner, home });
+    const result = await workflow.run({}, makeCtx({ ask }) as never);
+    const parsed = JSON.parse(
+      (result as { toolResult?: string }).toolResult ?? ''
+    ) as { ok: boolean; message?: string };
+    expect(parsed.ok).toBe(false);
+    expect(parsed.message).toContain('drone-swarm exited 7');
+    expect(parsed.message).toContain('Failed to list sessions: 401');
   });
 
   it('replaces a differing-type sessionEnd trigger wholesale', async () => {
