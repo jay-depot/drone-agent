@@ -172,6 +172,10 @@ Call `registration.registerPromptFragment({ key, phase: 'header'|'footer', rende
 
 Call `registration.registerWorkflow({ name, description, inputSchema, run })`. The `run` function receives `(input, ctx)` where `ctx` has `elicit`, `projectDir`, `config`, `requestCapability`, and `enablePlugin`.
 
+`ctx.agent(prompt)` runs one agent-assisted step: a synthetic user turn through the full conversation machinery (tools, guardrails, events) whose final assistant reply is returned as a string. Agent steps share a workflow-scoped ephemeral conversation — they see each other, the main session's history is untouched. `run` may return `continueSession: true` (workflow-owned) to keep the host session alive after completion instead of exiting.
+
+**Kick-message contract:** a workflow's `kickMessage` is an instruction to the agent, not a report to the user — reports belong in `toolResult`. The runner wraps every kickMessage in a standard envelope before injecting it; never pre-append a synthetic turn (sendUserMessage appends its own prompt). See the workflow-system docs for details.
+
 ### Adding a new slash command
 
 Call `registration.registerSlashCommand({ command, description, handler })`. The handler receives a `DroneSlashCommandContext` with the raw line, args, engine, conversation, session manager, logger, and optional fields `exit?`, `clearSession?`, and `printHelp?`.
