@@ -394,5 +394,9 @@
   {
     "timestamp": "2026-09-01T20:06:29.712Z",
     "insight": "drone-agent validation-gate quirk: `pnpm -r run test` FAILS at drone-core with \"No test files found\" — the root vitest.config.ts include patterns (drone-core/test/**, drone-beacon/test/**, etc.) are workspace-root-relative and do not resolve when vitest starts inside a package directory (drone-core has no local vitest config). Verified PRE-EXISTING via git stash + rerun on the base commit. The REAL fast-suite gate is the root `pnpm test` (single vitest run with the root config: 192 files / 2650 tests). When a plan's validation criteria say `pnpm -r run test`, run root `pnpm test` instead — and note the discrepancy rather than \"fixing\" drone-core's package.json mid-feature."
+  },
+  {
+    "timestamp": "2026-09-01T21:40:35.782Z",
+    "insight": "Auth/feature prefix lists that must mirror route prefixes are drift bugs waiting to happen: drone-coordinator's PROTECTED_PREFIXES listed root-level prefixes while all routes moved under /api (routes/index.ts prefix:'/api'), silently disabling all web-token enforcement (token theater, live-confirmed 2026-09-01 via bare curl). Second occurrence of this class in the codebase (first was allowlist patterns vs canonical tool names, ADR 180). Rule for future plans: when routes move under a new prefix, grep for prefix lists in middleware and update in the SAME commit; better, derive protected prefixes from the route-mount prefix constant."
   }
 ]
