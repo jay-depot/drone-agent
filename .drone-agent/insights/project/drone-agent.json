@@ -406,5 +406,13 @@
   {
     "timestamp": "2026-09-01T21:50:35.955Z",
     "insight": "A stray exported NODE_ENV=production in the operator shell makes React Testing Library fail with \"React.act is not a function\" — react-dom's production test-utils build has no act; it only exists in dev builds. drone-coordinator-ui's vitest suite is NOT part of the root vitest include list (separate config, jsdom), so root `pnpm test` never caught it. When running UI component tests directly, prefix `NODE_ENV=test`. Relevant to the ADR 178 production-defaults work: those bin-shim defaults only apply when NODE_ENV is undefined, but a human shell that exports it leaks into ad-hoc test invocations."
+  },
+  {
+    "timestamp": "2026-09-01T22:16:17.913Z",
+    "insight": "Interactive entry points should share one host-selection function instead of re-deriving output modes per branch: drone-agent's --workflow branch ran unconditionally in plain-output mode (readline elicitation + plain handler) because it executed before the TUI mount in index.tsx — workflows silently lost streaming, tool renders, and inline elicitations. The same index.tsx already had a correct three-way host selection for chat (TUI / plain / JSON). When a new invocation kind is added, route it through the SAME host-selection decision as chat rather than inventing its own."
+  },
+  {
+    "timestamp": "2026-09-01T22:16:20.881Z",
+    "insight": "Annotating a giant object literal with its interface type (const engineObject: DronePluginEngine = {...}) DESTROYS contextual typing: every method's parameters became implicit-any (TS7006 x15). Correct pattern for self-referencing factories: return captureEngine({ ...literal }) where captureEngine(e: DronePluginEngine) stores the ref and returns e typed by inference — the wrapper function provides the contextual type, the holder provides the self-reference. Hit in plugin-engine.ts while wiring ctx.agent's engine self-reference (ADR 183)."
   }
 ]
