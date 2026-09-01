@@ -181,6 +181,9 @@ function makeContext(input: {
     requestCapability: <T>(id: string): T | undefined =>
       caps.get(id) as T | undefined,
     enablePlugin: async (_pluginId: string) => false,
+    agent: async () => {
+      throw new Error('ctx.agent not expected in this test');
+    },
   };
 }
 
@@ -570,6 +573,9 @@ describe('personaCreateWorkflow — wizard model role', () => {
         requestCapability: <T>(id: string): T | undefined =>
           caps.get(id) as T | undefined,
         enablePlugin: async () => false,
+        agent: async () => {
+          throw new Error('ctx.agent not expected in this test');
+        },
       };
       const result = await runWizard(
         { scope: 'project', id: 'reviewer', description: 'reviews code' },
@@ -603,6 +609,9 @@ describe('personaCreateWorkflow — missing prerequisites', () => {
             requestCapability: <T>(id: string): T | undefined =>
               caps.get(id) as T | undefined,
             enablePlugin: async (_pluginId: string) => false,
+            agent: async () => {
+              throw new Error('ctx.agent not expected in this test');
+            },
           }
         )
       ).rejects.toThrow(/requires the persona broker plugin/);
@@ -635,6 +644,9 @@ describe('personaCreateWorkflow — missing prerequisites', () => {
             requestCapability: <T>(id: string): T | undefined =>
               caps.get(id) as T | undefined,
             enablePlugin: async (_pluginId: string) => false,
+            agent: async () => {
+              throw new Error('ctx.agent not expected in this test');
+            },
           }
         )
       ).rejects.toThrow(/requires an active LLM provider/);

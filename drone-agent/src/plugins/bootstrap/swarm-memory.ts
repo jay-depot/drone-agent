@@ -33,11 +33,17 @@ const DEFAULT_COORDINATOR_URL = 'http://localhost:8080';
 const DEFAULT_BATCH_LIMIT = '5';
 const DEFAULT_CRON_SCHEDULE = '0 * * * *';
 
+type LaunchInfo = {
+  launchMode: 'systemd' | 'docker' | 'unknown';
+  restartCommand: string;
+};
+
 type Discovery = {
   settings: SwarmMemorySettings;
   coordinatorReachable: boolean;
   probeFailureHint: string;
-  launchMode: 'systemd' | 'docker' | 'unknown';
+  coordinatorLaunch: LaunchInfo;
+  beaconLaunch?: LaunchInfo;
   coordinatorConfigPath: string;
   beaconConfigPath: string;
   coordinatorConfigRaw: string | undefined;
@@ -162,25 +168,6 @@ async function confirm(
   return answers[id] === 'yes';
 }
 
-async function detectLaunchMode(
-  runner: CommandRunner
-): Promise<Discovery['launchMode']> {
-  const systemd = await runner(['systemctl', 'status', 'drone-coordinator']);
-  if (systemd.code === 0 || systemd.code === 3) {
-    return 'systemd';
-  }
-  const docker = await runner([
-    'docker',
-    'ps',
-    '--format',
-    '{{.Names}} {{.Image}}',
-  ]);
-  if (docker.code === 0 && docker.stdout.includes('drone-coordinator')) {
-    return 'docker';
-  }
-  return 'unknown';
-}
-
 type ProbeFailure =
   | { reason: 'binary-missing' }
   | { reason: 'exit'; code: number; stderr: string; stdout: string }
@@ -228,6 +215,42 @@ function classifyProbe(result: {
     };
   }
   return { reason: 'ok' };
+}
+
+/**
+ * Agent-assisted service detection (ADR 183): observe how the coordinator
+ * (and optionally beacon) actually run on this host, including the REAL
+ * systemd unit / docker container name — the previous hardcoded
+ * `systemctl status drone-coordinator` probe missed custom unit names.
+ */
+async function detectServiceLaunch(
+  runner: CommandRunner,
+  agent: (prompt: string) => Promise<string>,
+  server: 'coordinator' | 'beacon'
+): Promise<LaunchInfo> {
+  const reply = await agent(
+    `Determine how the ${server} service runs on this host. Check in this order: ` +
+      `1) systemd — run \`systemctl list-units --type=service | grep -i drone\` (or \`systemctl status <unit>\` on candidate unit names) to find the ACTUAL unit name; ` +
+      `2) docker — run \`docker ps --format '{{.Names}} {{.Image}}'\` and look for the ${server} container; ` +
+      `3) if neither, it runs as a bare process or is not running here.\n\n` +
+      `Reply with EXACTLY one line in this format: launch=<systemd|docker|bare|none> restart=<exact restart command or "none">\n` +
+      `For systemd use \`systemctl restart <actual-unit-name>\`; for docker use \`docker restart <actual-container-name>\`; ` +
+      `for bare/none use restart=none. Do not guess a unit or container name — report only what you verified.`
+  );
+  const launchMatch = reply.match(/launch=(\w+)/);
+  const restartMatch = reply.match(/restart=(.+?)(?:\n|$)/);
+  const launch = (launchMatch?.[1] ?? 'none') as
+    | 'systemd'
+    | 'docker'
+    | 'bare'
+    | 'none';
+  const restart = (restartMatch?.[1] ?? '').trim();
+  if (launch === 'systemd' || launch === 'docker') {
+    if (restart.length > 0 && restart !== 'none') {
+      return { launchMode: launch, restartCommand: restart };
+    }
+  }
+  return { launchMode: 'unknown', restartCommand: '' };
 }
 
 async function probeCoordinator(
@@ -335,7 +358,7 @@ async function discover(
     settings,
     coordinatorReachable: probe.reason === 'ok',
     probeFailureHint: describeProbeFailure(probe),
-    launchMode: await detectLaunchMode(runner),
+    coordinatorLaunch: { launchMode: 'unknown', restartCommand: '' },
     coordinatorConfigPath: coordinatorConfigPath(home),
     beaconConfigPath: beaconConfigPath(home),
     coordinatorConfigRaw: await readIfPresent(coordinatorConfigPath(home)),
@@ -350,20 +373,21 @@ async function restartServer(
   server: 'coordinator' | 'beacon',
   pendingRestart: string[]
 ): Promise<void> {
-  if (discovery.launchMode === 'unknown') {
+  const launch =
+    server === 'coordinator' ? discovery.coordinatorLaunch : discovery.beaconLaunch;
+  if (!launch || launch.launchMode === 'unknown') {
     pendingRestart.push(
-      `${server}: launch mode not detected — restart it yourself to activate the config`
+      `${server}: launch mode not detected${
+        launch?.restartCommand ? ` (agent reported: ${launch.restartCommand})` : ''
+      } — restart it yourself to activate the config`
     );
     return;
   }
-  const command =
-    discovery.launchMode === 'systemd'
-      ? `systemctl restart ${server}`
-      : `docker restart ${server}`;
+  const command = launch.restartCommand;
   const approved = await confirm(
     elicit,
     `restart-${server}`,
-    `The ${server} must restart to load the new config (launch mode: ${discovery.launchMode}).\n\nRun: ${command}`
+    `The ${server} must restart to load the new config (launch mode: ${launch.launchMode}).\n\nRun: ${command}`
   );
   if (!approved) {
     pendingRestart.push(
@@ -371,7 +395,7 @@ async function restartServer(
     );
     return;
   }
-  const result = await runner(command.split(' '));
+  const result = await runner(command.split(/\s+/));
   if (result.code !== 0) {
     pendingRestart.push(
       `${server}: restart command failed (${result.code}): ${result.stderr.trim()}`
@@ -637,6 +661,19 @@ export function createSwarmMemoryWorkflow(
         };
       }
 
+      discovery.coordinatorLaunch = await detectServiceLaunch(
+        runner,
+        ctx.agent,
+        'coordinator'
+      );
+      if (discovery.settings.configureBeacon) {
+        discovery.beaconLaunch = await detectServiceLaunch(
+          runner,
+          ctx.agent,
+          'beacon'
+        );
+      }
+
       if (!discovery.coordinatorReachable) {
         return {
           toolResult: JSON.stringify(
@@ -781,7 +818,7 @@ function summarize(
   reports: StepReport[],
   pendingRestart: string[],
   outcome: string
-): { toolResult: string; kickMessage?: string } {
+): { toolResult: string; kickMessage?: string; continueSession?: boolean } {
   const failed = reports.filter(r => r.status === 'failed');
   const result = {
     ok: failed.length === 0,
@@ -790,25 +827,27 @@ function summarize(
     pendingRestart,
     settings: discovery.settings,
   };
-  const lines = [
-    `Swarm memory bootstrap ${outcome}.`,
-    '',
-    ...reports.map(
-      r => `- ${r.step}: ${r.status}${r.detail ? ` — ${r.detail}` : ''}`
-    ),
+  const instructions = [
+    'You just completed the bootstrap__swarm-memory workflow.',
+    'Report to the user in 2-4 short bullets:',
+    '1. The pipeline outcome — which steps are done, and anything failed or skipped (check the tool result for the full step list).',
   ];
   if (pendingRestart.length > 0) {
-    lines.push('', 'Pending restarts:');
-    for (const item of pendingRestart) {
-      lines.push(`- ${item}`);
-    }
+    instructions.push(
+      '2. Pending restarts are the MOST important thing to surface — list each exact restart command and tell the user the new config is not live until they run it.'
+    );
+  } else {
+    instructions.push(
+      '2. All requested servers restarted cleanly; no action is pending.'
+    );
   }
-  lines.push(
-    '',
-    'Sessions move active → stale → ended → processing → processed; the hook claims ended sessions and the catch-up script sweeps the queue hourly.'
+  instructions.push(
+    '3. Suggest concrete followups: enable the swarm.memory read side (wiki advertise+recall in agent sessions), review the stale-session backlog on the coordinator, and consider migrating remaining local personas/skills to the swarm.',
+    'Do not repeat the step list verbatim and do not explain the pipeline — the user can see the tool result.'
   );
   return {
     toolResult: JSON.stringify(result, null, 2),
-    kickMessage: lines.join('\n'),
+    kickMessage: instructions.join('\n'),
+    continueSession: true,
   };
 }

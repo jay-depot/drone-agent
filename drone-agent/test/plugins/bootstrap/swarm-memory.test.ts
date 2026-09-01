@@ -120,13 +120,25 @@ function makeRunner(handlers: {
   };
 }
 
-function makeCtx(elicit: { ask: unknown }) {
+function makeCtx(
+  elicit: { ask: unknown },
+  agentScript?: (server: string) => string
+) {
+  const agentCalls: string[] = [];
   return {
     elicit,
     projectDir: '/tmp/unused',
     config: {},
     requestCapability: () => undefined,
     enablePlugin: async () => true,
+    agent: async (prompt: string) => {
+      agentCalls.push(prompt);
+      const server = prompt.includes('the beacon') ? 'beacon' : 'coordinator';
+      return agentScript
+        ? agentScript(server)
+        : 'launch=systemd restart=systemctl restart drone-coordinator';
+    },
+    agentCalls,
   };
 }
 
@@ -385,7 +397,7 @@ describe('bootstrap swarm-memory workflow', () => {
     expect(parsed.ok).toBe(false);
   });
 
-  it('falls back to instruct-only restart guidance when launch mode is unknown', async () => {
+  it('falls back to instruct-only restart guidance when the agent cannot identify the launch mode', async () => {
     const { runner } = makeRunner({
       crontab: { code: 1, stdout: '' },
       systemctl: { code: 1 },
@@ -393,7 +405,13 @@ describe('bootstrap swarm-memory workflow', () => {
     });
     const { ask } = makeElicit({ ...HAPPY });
     const workflow = createSwarmMemoryWorkflow({ runner, home });
-    const result = await workflow.run({}, makeCtx({ ask }) as never);
+    const result = await workflow.run(
+      {},
+      makeCtx(
+        { ask },
+        () => 'launch=none restart=none'
+      ) as never
+    );
     const parsed = JSON.parse(
       (result as { toolResult?: string }).toolResult ?? ''
     ) as {
@@ -401,5 +419,58 @@ describe('bootstrap swarm-memory workflow', () => {
     };
     expect(parsed.pendingRestart).toHaveLength(1);
     expect(parsed.pendingRestart[0]).toContain('restart it yourself');
+  });
+
+  it('restarts using the agent-observed unit name, not the plugin id', async () => {
+    const { runner, calls } = makeRunner({
+      crontab: { code: 1, stdout: '' },
+      systemctl: { code: 0 },
+    });
+    const { ask } = makeElicit({ ...HAPPY });
+    const workflow = createSwarmMemoryWorkflow({ runner, home });
+    const result = await workflow.run(
+      {},
+      makeCtx(
+        { ask },
+        () => 'launch=systemd restart=systemctl restart drone-coordinator-prod.service'
+      ) as never
+    );
+    expect(
+      calls.some(c => c.join(' ') === 'systemctl restart drone-coordinator-prod.service')
+    ).toBe(true);
+    const parsed = JSON.parse(
+      (result as { toolResult?: string }).toolResult ?? ''
+    ) as { pendingRestart: string[] };
+    expect(parsed.pendingRestart).toHaveLength(0);
+  });
+
+  it('kickMessage follows the instruction-not-report contract and owns continueSession', async () => {
+    const { runner } = makeRunner({
+      crontab: { code: 1, stdout: '' },
+      systemctl: { code: 0 },
+    });
+    const { ask } = makeElicit({ ...HAPPY });
+    const workflow = createSwarmMemoryWorkflow({ runner, home });
+    const result = await workflow.run({}, makeCtx({ ask }) as never) as {
+      kickMessage?: string;
+      continueSession?: boolean;
+      toolResult?: string;
+    };
+    expect(result.continueSession).toBe(true);
+    expect(result.kickMessage).toContain('bootstrap__swarm-memory');
+    expect(result.kickMessage).toContain('Report to the user');
+    expect(result.kickMessage).toContain('followups');
+  });
+
+  it('asks the agent to discover launch for both servers when beacon is configured', async () => {
+    const { runner } = makeRunner({
+      crontab: { code: 1, stdout: '' },
+      systemctl: { code: 0 },
+    });
+    const { ask } = makeElicit({ ...HAPPY, configureBeacon: 'yes' });
+    const workflow = createSwarmMemoryWorkflow({ runner, home });
+    const ctx = makeCtx({ ask });
+    await workflow.run({}, ctx as never);
+    expect((ctx as { agentCalls: string[] }).agentCalls.length).toBe(2);
   });
 });
