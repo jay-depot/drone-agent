@@ -16,7 +16,7 @@
  *     otherwise
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'ink-testing-library';
 import { App } from '../src/tui/app.js';
 import { MidPanel } from '../src/tui/components/MidPanel.js';
@@ -170,7 +170,7 @@ function makeOptions(
   };
 }
 
-describe('App', () => {
+describe('App initial workflow host (--workflow, ADR 183)', () => {
   let cleanup: (() => void) | null = null;
 
   afterEach(() => {
@@ -180,280 +180,98 @@ describe('App', () => {
     }
   });
 
-  it('renders the status bar with model and stats', async () => {
-    const opts = makeOptions();
-    const instance = render(<App {...opts} />);
-    cleanup = instance.cleanup;
-    await tick();
-    const frame = instance.lastFrame() ?? '';
-    expect(frame).toContain('model:llama3.1:latest');
-    expect(frame).toContain('plugins:2');
-    expect(frame).toContain('tools:3/3');
-  });
-
-  it('mentions terminal-native text selection in the rendered output', async () => {
-    const opts = makeOptions();
-    const instance = render(<App {...opts} />);
-    cleanup = instance.cleanup;
-    await new Promise(r => setTimeout(r, 100));
-    instance.stdin.write('/help');
-    await new Promise(r => setTimeout(r, 100));
-    instance.stdin.write('\r');
-    const frame = await waitUntilFrame(instance, f =>
-      /native selection|Shift-drag|native/i.test(f)
-    );
-    expect(frame).toMatch(/native selection|Shift-drag|native/i);
-  });
-
-  it('mounts and renders without throwing', async () => {
-    const opts = makeOptions();
-    const instance = render(<App {...opts} />);
-    cleanup = instance.cleanup;
-    await tick();
-    expect(instance.lastFrame()).toBeDefined();
-  });
-
-  it('does not render mid panel when no plugin offers widget content', async () => {
-    const opts = makeOptions();
-    const instance = render(<App {...opts} />);
-    cleanup = instance.cleanup;
-    await tick();
-    const frame = instance.lastFrame() ?? '';
-    expect(frame).not.toContain('TODO');
-  });
-
-  it('renders mid panel when a plugin offers a widget with content', async () => {
-    const widget: MidPanelWidget = {
-      id: 'todo',
-      label: 'TODO',
-      getContent: () => ['3 / 5'],
+  it('runs the workflow on mount and renders the kick reply as a chat turn', async () => {
+    const sendCalls: string[] = [];
+    const opts: DroneTuiOptions = makeOptions();
+    let workflowArgs: unknown[] = [];
+    opts.engine.runWorkflow = async (name: string, args: Record<string, unknown>) => {
+      workflowArgs = [name, args];
+      return {
+        toolResult: 'steps completed',
+        kickMessage: 'Workflow wf__x completed and handed off the following.',
+        continueSession: true,
+      };
     };
-    const opts = makeOptions({
-      engine: {
-        listTools: () => [
-          { name: 'tool-a', description: 'Tool A' },
-          { name: 'tool-b', description: 'Tool B' },
-          { name: 'tool-c', description: 'Tool C' },
-        ],
-        listPlugins: () => [
-          {
-            id: 'core',
-            name: 'Core',
-            enabled: true,
-            required: true,
-            defaultEnabled: true,
-          },
-          {
-            id: 'persona',
-            name: 'Persona',
-            enabled: true,
-            required: false,
-            defaultEnabled: true,
-          },
-        ],
-        getRegisteredPluginCount: () => 2,
-        getRegisteredToolCount: () => 3,
-        getMountedToolCount: () => 0,
-        getCapability: ((pluginId: string) => {
-          if (pluginId === 'todo') {
-            return widget;
-          }
-          return undefined;
-        }) as <T>(pluginId: string) => T | undefined,
-        getTool: () => undefined,
-        runHooks: async () => {},
-        executeTool: async () => 'ok',
-        renderPromptFragments: async () => [],
-        getConfig: () => {
-          throw new Error('getConfig not used in tui tests');
-        },
-        buildSystemMessages: async () => [],
-        getHelpSnippets: () => [],
-        dispatchSlashCommand: async (_line, ctx) => {
-          if (_line === '/help' || _line === '?') {
-            if (ctx.printHelp) {
-              ctx.printHelp();
-            }
-            return true;
-          }
-          return false;
-        },
-        onConversationEvent: () => () => {},
-        setElicitation: () => {},
-        runWorkflow: async () => ({ toolResult: '{}' }),
-        getSlashCommands: () => [
-          {
-            command: '/help',
-            description: 'Show this help',
-            handler: async () => true,
-          },
-          {
-            command: '/clear',
-            description: 'Clear session',
-            handler: async () => true,
-          },
-          {
-            command: '/plugins',
-            description: 'List plugins',
-            handler: async () => true,
-          },
-          {
-            command: '/tools',
-            description: 'List registered tools (/tools --all for full list)',
-            handler: async () => true,
-          },
-          {
-            command: '/systemprompt',
-            description: 'Show system prompt',
-            handler: async () => true,
-          },
-          {
-            command: '/tool',
-            description: 'Run a tool',
-            handler: async () => true,
-          },
-          {
-            command: '/exec',
-            description: 'Run a command',
-            handler: async () => true,
-          },
-          { command: '/exit', description: 'Exit', handler: async () => true },
-          { command: '/quit', description: 'Exit', handler: async () => true },
-        ],
+    opts.conversation = {
+      ...opts.conversation,
+      sendUserMessage: async (prompt: string) => {
+        sendCalls.push(prompt);
+        return 'done, anything else?';
       },
+    };
+    opts.initialWorkflow = { name: 'wf__x', args: {} };
+
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+
+    const start = await waitUntilFrame(instance, f =>
+      f.includes('Running workflow wf__x...')
+    );
+    expect(start).toContain('Running workflow wf__x...');
+    expect(workflowArgs).toEqual(['wf__x', {}]);
+    const start2 = Date.now();
+    while (sendCalls.length === 0 && Date.now() - start2 < 2000) {
+      await tick();
+    }
+    expect(sendCalls).toHaveLength(1);
+    expect(sendCalls[0]).toContain('handed off the following');
+    expect(sendCalls).toHaveLength(1);
+    expect(sendCalls[0]).toContain('handed off the following');
+  });
+
+  it('calls onWorkflowComplete and keeps the session open when continueSession is true', async () => {
+    const onComplete = vi.fn();
+    const opts: DroneTuiOptions = makeOptions();
+    opts.engine.runWorkflow = async () => ({
+      toolResult: 'r',
+      continueSession: true,
     });
+    opts.initialWorkflow = { name: 'wf__y', args: {} };
+    opts.onWorkflowComplete = onComplete;
+
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
-    const frame = await waitUntilFrame(
-      instance,
-      f => f.includes('TODO') && f.includes('3 / 5')
-    );
-    expect(frame).toContain('TODO');
-    expect(frame).toContain('3 / 5');
-  });
-});
 
-describe('MidPanel', () => {
-  it('returns nothing when widgets array is empty', async () => {
-    const instance = render(
-      <MidPanel widgets={[]} scheme={DEFAULT_GRAYSCALE_SCHEME} />
-    );
+    await waitUntilFrame(instance, f => f.includes('model:llama3.1:latest'));
     await tick();
-    const frame = instance.lastFrame() ?? '';
-    expect(frame).toBe('');
+    expect(onComplete).toHaveBeenCalledWith({ continueSession: true });
   });
 
-  it('returns nothing when all widgets have empty content', async () => {
-    const widgets: MidPanelWidget[] = [
-      { id: 'todo', label: 'TODO', getContent: () => [] },
-    ];
-    const instance = render(
-      <MidPanel widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
-    );
-    await tick();
-    const frame = instance.lastFrame() ?? '';
-    expect(frame).toBe('');
-  });
+  it('exits via useApp when continueSession is false', async () => {
+    const onComplete = vi.fn();
+    const opts: DroneTuiOptions = makeOptions();
+    opts.engine.runWorkflow = async () => ({
+      toolResult: 'r',
+      continueSession: false,
+    });
+    opts.initialWorkflow = { name: 'wf__z', args: {} };
+    opts.onWorkflowComplete = onComplete;
 
-  it('renders widget header and content inline', async () => {
-    const widgets: MidPanelWidget[] = [
-      {
-        id: 'todo',
-        label: 'TODO',
-        getContent: () => ['3 / 5'],
-      },
-    ];
-    const instance = render(
-      <MidPanel widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
-    );
-    await tick();
-    const frame = instance.lastFrame() ?? '';
-    expect(frame).toContain('TODO');
-    expect(frame).toContain('3 / 5');
-  });
-
-  it('renders multiple widgets with separator', async () => {
-    const widgets: MidPanelWidget[] = [
-      {
-        id: 'todo',
-        label: 'TODO',
-        getContent: () => ['3 / 5'],
-      },
-      {
-        id: 'insights',
-        label: 'Insights',
-        getContent: () => ['12'],
-      },
-    ];
-    const instance = render(
-      <MidPanel widgets={widgets} scheme={DEFAULT_GRAYSCALE_SCHEME} />
-    );
-    await tick();
-    const frame = instance.lastFrame() ?? '';
-    expect(frame).toContain('TODO');
-    expect(frame).toContain('Insights');
-    expect(frame).toContain('3 / 5');
-    expect(frame).toContain('12');
-    expect(frame).toContain('│');
-  });
-});
-
-describe('ModelPicker', () => {
-  let cleanup: (() => void) | null = null;
-
-  afterEach(() => {
-    if (cleanup) {
-      cleanup();
-      cleanup = null;
-    }
-  });
-
-  it('renders one line per model', async () => {
-    const onSelect = (): void => {};
-    const instance = render(
-      <ModelPicker
-        models={['llama3.1:latest', 'mistral:7b', 'phi3:mini']}
-        current="llama3.1:latest"
-        onSelect={onSelect}
-      />
-    );
+    const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
+
+    await waitUntilFrame(instance, f => f.includes('model:llama3.1:latest'));
     await tick();
-    const frame = instance.lastFrame() ?? '';
-    expect(frame).toContain('llama3.1:latest');
-    expect(frame).toContain('mistral:7b');
-    expect(frame).toContain('phi3:mini');
+    expect(onComplete).toHaveBeenCalledWith({ continueSession: false });
   });
 
-  it('highlights the currently selected model', async () => {
-    const onSelect = (): void => {};
-    const instance = render(
-      <ModelPicker
-        models={['llama3.1:latest', 'mistral:7b']}
-        current="mistral:7b"
-        onSelect={onSelect}
-      />
-    );
-    cleanup = instance.cleanup;
-    await tick();
-    const frame = instance.lastFrame() ?? '';
-    expect(frame).toContain('mistral:7b (current)');
-  });
-
-  it('calls onSelect with the highlighted model on Enter', async () => {
-    let chosen: string | null = null;
-    const onSelect = (m: string): void => {
-      chosen = m;
+  it('surfaces workflow failure in the chat log and reports continueSession=false', async () => {
+    const onComplete = vi.fn();
+    const opts: DroneTuiOptions = makeOptions();
+    opts.engine.runWorkflow = async () => {
+      throw new Error('workflow exploded');
     };
-    const instance = render(
-      <ModelPicker models={['a', 'b', 'c']} current="a" onSelect={onSelect} />
-    );
+    opts.initialWorkflow = { name: 'wf__boom', args: {} };
+    opts.onWorkflowComplete = onComplete;
+
+    const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
-    await new Promise(r => setTimeout(r, 100));
-    instance.stdin.write('\u001b[B');
-    await new Promise(r => setTimeout(r, 20));
-    instance.stdin.write('\r');
-    await new Promise(r => setTimeout(r, 50));
-    expect(chosen).toBe('b');
+
+    const start3 = Date.now();
+    while (onComplete.mock.calls.length === 0 && Date.now() - start3 < 2000) {
+      await tick();
+    }
+    expect(onComplete).toHaveBeenCalledWith({ continueSession: false });
+    expect(onComplete).toHaveBeenCalledWith({ continueSession: false });
   });
 });

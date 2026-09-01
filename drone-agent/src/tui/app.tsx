@@ -121,6 +121,57 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
       return undefined;
     }
   }, [opts.engine]);
+
+  // ── Initial workflow host mode (--workflow) ─────────────────────────
+  // Runs once on mount. Elicitations surface through useElicitation (the
+  // engine capability is wired there), conversation events stream through
+  // the subscription above, and a kickMessage reply is a normal chat turn
+  // through the main conversation (the envelope was applied by the
+  // runner). When the workflow owns continueSession=false, the App exits
+  // Ink programmatically after the reply renders.
+  const workflowStartedRef = useRef(false);
+  const workflowLogRef = useRef(log);
+  workflowLogRef.current = log;
+  useEffect(() => {
+    if (!opts.initialWorkflow || workflowStartedRef.current) return;
+    workflowStartedRef.current = true;
+    const logFn = (text: string, kind?: import('./types.js').ChatEntry['kind']) =>
+      workflowLogRef.current(text, kind);
+    void (async () => {
+      const { name, args } = opts.initialWorkflow!;
+      logFn(`Running workflow ${name}...`, 'info');
+      setIsLlmActive(true);
+      try {
+        await opts.engine.runHooks('onBeforePrompt');
+        const result = await opts.engine.runWorkflow(name, args);
+        if (result.toolResult) {
+          logFn(result.toolResult, 'toolResult');
+        }
+        await opts.engine.runHooks('onAfterToolCall');
+        if (result.kickMessage) {
+          logFn(result.kickMessage, 'user');
+          await opts.engine.runHooks('onBeforePrompt');
+          const reply = await opts.conversation.sendUserMessage(result.kickMessage);
+          if (reply !== CANCEL_SENTINEL) {
+            await opts.engine.runHooks('onAfterToolCall');
+          }
+        }
+        opts.onWorkflowComplete?.({
+          continueSession: result.continueSession === true,
+        });
+        if (result.continueSession !== true) {
+          exit();
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logFn(`Workflow failed: ${msg}`, 'error');
+        opts.onWorkflowComplete?.({ continueSession: false });
+        exit();
+      } finally {
+        setIsLlmActive(false);
+      }
+    })();
+  }, []);
   const syntaxColors = tuiConfig?.syntaxHighlighting?.colors;
   const codeBackground = tuiConfig?.syntaxHighlighting?.codeBackground;
 
