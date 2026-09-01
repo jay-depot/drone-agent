@@ -398,5 +398,13 @@
   {
     "timestamp": "2026-09-01T21:40:35.782Z",
     "insight": "Auth/feature prefix lists that must mirror route prefixes are drift bugs waiting to happen: drone-coordinator's PROTECTED_PREFIXES listed root-level prefixes while all routes moved under /api (routes/index.ts prefix:'/api'), silently disabling all web-token enforcement (token theater, live-confirmed 2026-09-01 via bare curl). Second occurrence of this class in the codebase (first was allowlist patterns vs canonical tool names, ADR 180). Rule for future plans: when routes move under a new prefix, grep for prefix lists in middleware and update in the SAME commit; better, derive protected prefixes from the route-mount prefix constant."
+  },
+  {
+    "timestamp": "2026-09-01T21:50:33.201Z",
+    "insight": "Shell scripts running under `set -euo pipefail` must not use `[ -f file ] && . file` as an optional-source idiom: when the file is absent the `&&` chain evaluates false and the compound command returns 1, which `set -e` treats as a fatal error — the script dies silently at the sourcing line. Use an `if [ -f file ]; then . file; fi` block instead. Found while adding the env-file sourcing to bootstrap__swarm-memory's generated scripts (plan S3; the plan itself specified the buggy form)."
+  },
+  {
+    "timestamp": "2026-09-01T21:50:35.955Z",
+    "insight": "A stray exported NODE_ENV=production in the operator shell makes React Testing Library fail with \"React.act is not a function\" — react-dom's production test-utils build has no act; it only exists in dev builds. drone-coordinator-ui's vitest suite is NOT part of the root vitest include list (separate config, jsdom), so root `pnpm test` never caught it. When running UI component tests directly, prefix `NODE_ENV=test`. Relevant to the ADR 178 production-defaults work: those bin-shim defaults only apply when NODE_ENV is undefined, but a human shell that exports it leaks into ad-hoc test invocations."
   }
 ]
