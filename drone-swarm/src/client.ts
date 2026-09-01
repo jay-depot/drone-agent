@@ -32,6 +32,7 @@ export class SwarmClient {
   constructor(
     readonly target: SwarmTarget,
     private readonly baseUrl: string,
+    private readonly webToken?: string,
     private readonly fetchImpl: typeof fetch = (...args) =>
       fetch(...(args as Parameters<typeof fetch>))
   ) {}
@@ -48,7 +49,12 @@ export class SwarmClient {
   ): Promise<{ status: number; data: T }> {
     const response = await this.fetchImpl(this.url(path), {
       method,
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+      headers: {
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(this.webToken
+          ? { Authorization: `Bearer ${this.webToken}` }
+          : {}),
+      },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(30000),
     });

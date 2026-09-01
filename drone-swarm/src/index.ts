@@ -16,7 +16,10 @@ Usage:
 Address selection (mutually exclusive):
   --beacon <url>        Talk to a beacon (wiki routes live at /wiki/*)
   --coordinator <url>   Talk to the coordinator (routes live under /api/*)
+  --web-token <t>       Web token for the coordinator web port (Bearer auth).
+                        Preferred over DRONE_COORDINATOR_WEB_TOKEN.
   Environment: DRONE_BEACON_URL / DRONE_COORDINATOR_URL
+  Environment: DRONE_COORDINATOR_WEB_TOKEN — used when --web-token is absent
   Default: local coordinator on http://localhost:3456
 
 Session commands (coordinator):
@@ -272,7 +275,17 @@ export async function main(
       beacon: args.beacon,
       coordinator: args.coordinator,
     });
-    const client = new SwarmClient(address.target, address.baseUrl, fetchImpl);
+    const webToken =
+      args.flags['web-token'] ||
+      (address.target === 'coordinator'
+        ? process.env.DRONE_COORDINATOR_WEB_TOKEN
+        : undefined);
+    const client = new SwarmClient(
+      address.target,
+      address.baseUrl,
+      webToken || undefined,
+      fetchImpl
+    );
 
     const [group, action] = args.positional;
     switch (group) {
