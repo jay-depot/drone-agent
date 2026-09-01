@@ -12,6 +12,7 @@ export type SeedDb = {
     systemPrompt: string;
   }) => unknown;
   listPersonas: () => Array<{ id: string; systemPrompt: string }>;
+  updatePersona: (id: string, req: { systemPrompt: string }) => unknown;
   createSkill: (req: {
     id: string;
     name: string;
@@ -79,11 +80,114 @@ You cannot execute shell commands, write files, run git operations, or delete wi
 
 1. Call skills.recall({"id": "memory-wiki"}) to load the wiki conventions
 2. Analyze the material in the user's query for key insights, decisions, and patterns
-3. Create or update wiki pages with swarm__wiki_write, citing source session ids in the sources field
+3. Create or update wiki pages with swarm__wiki_write, ALWAYS passing scope: "coordinator" — the swarm memory wiki lives at the coordinator (the store the web UI shows). Writing to beacon scope stores the page locally where the memory read side will not find it. Cite the source session id in the sources field
 4. Summarize in your reply which pages you created or updated (page ids and titles)`;
+
+export const MEMORY_WIKI_SKILL_BODY = `# Memory Wiki
+
+## Structure
+
+Wiki pages are stored as .md files with YAML frontmatter:
+
+\`\`\`yaml
+---
+id: my-page
+title: My Page
+scope: coordinator  # ALWAYS 'coordinator' for memory-wiki pages (see rule below)
+tags:
+  - reference
+sources:
+  - session-abc123
+---
+\`\`\`
+
+**SCOPE RULE — read this first:** the swarm memory wiki lives at the coordinator. When ingesting sessions, ALWAYS pass \`scope: "coordinator"\` to swarm__wiki_write. The beacon scope is a separate local store: pages written there are invisible to the web UI and the memory read side will not index them. Only use beacon scope for a deliberate local-only page (rare).
+
+Pages support [[wiki links]] for cross-references. The wiki enforces a "no downward links" rule: coordinator pages cannot link to beacon pages.
+
+## Exploration
+
+- swarm__wiki_list — list all pages
+- swarm__wiki_search — search by keyword
+- swarm__wiki_read — read a specific page
+- swarm__wiki_lint — check for broken links, downward links, orphan pages
+
+## Ingestion Workflow
+
+1. Treat the material in your input (typically a conversation transcript) as the content to ingest
+2. Analyze it for key insights, decisions, patterns
+3. Create or update wiki pages with swarm__wiki_write
+4. Include the session ID in the sources field
+5. Summarize in your reply which pages you created or updated
+
+## Wiki vs Project Memory
+
+- **Wiki**: Persistent, structured, shared across the swarm. Use for documentation, architecture decisions, patterns, reference material.
+- **Project Memory** (memory__manage): Quick facts, local context, ephemeral notes. Use for temporary information that only this agent needs.`;
 
 export function isLegacyLibrarianPrompt(systemPrompt: string): boolean {
   return PHANTOM_TOOL_REFERENCES.some(id => systemPrompt.includes(id));
+}
+
+/**
+ * Pristine copies of the PREVIOUS seed generation (before the scope-rule
+ * repair). An existing asset matching one of these verbatim was never
+ * customized by the operator — safe to update in place. Anything else is
+ * treated as user-customized and preserved with a warning.
+ */
+const PRIOR_LIBRARIAN_PROMPT_MARKERS = [
+  '3. Create or update wiki pages with swarm__wiki_write, citing source session ids in the sources field',
+];
+
+function repairSeededAsset(
+  current: string | undefined,
+  priorMarkers: readonly string[],
+  fresh: string
+): { action: 'update' | 'keep' | 'missing' } {
+  if (!current) {
+    return { action: 'missing' };
+  }
+  const matchesPriorSeed = priorMarkers.every(m => current.includes(m));
+  if (matchesPriorSeed && current !== fresh) {
+    return { action: 'update' };
+  }
+  return { action: 'keep' };
+}
+
+/**
+ * Repair a pre-existing seeded librarian persona to the current prompt
+ * generation (scope guidance: the memory wiki lives at the coordinator).
+ * The memory-wiki SKILL is deliberately not auto-repaired — the operator
+ * is expected to maintain its body in the web UI; the seed still carries
+ * the current text for fresh installs. Runs only when the stored copy is
+ * byte-recognizable as a prior seed — a customized asset is preserved
+ * with a warning instead, so operator edits are never overwritten.
+ */
+export function repairSeededLibrarianAssets(db: SeedDb, log: SeedLogger): void {
+  const persona = db
+    .listPersonas()
+    .find(p => p.id === WIKI_LIBRARIAN_PERSONA_ID);
+  const personaCheck = repairSeededAsset(
+    persona?.systemPrompt,
+    PRIOR_LIBRARIAN_PROMPT_MARKERS,
+    WIKI_LIBRARIAN_SYSTEM_PROMPT
+  );
+  if (personaCheck.action === 'update') {
+    db.updatePersona(WIKI_LIBRARIAN_PERSONA_ID, {
+      systemPrompt: WIKI_LIBRARIAN_SYSTEM_PROMPT,
+    });
+    log.info(
+      'Repaired seeded persona: coordinator-wiki-librarian (scope guidance updated)'
+    );
+  } else if (
+    personaCheck.action === 'keep' &&
+    persona &&
+    persona.systemPrompt !== WIKI_LIBRARIAN_SYSTEM_PROMPT
+  ) {
+    log.warn(
+      `Seeded persona "coordinator-wiki-librarian" has been customized and was NOT auto-updated. The current seed teaches the librarian to write memory-wiki pages with scope "coordinator"; your copy may still lack that guidance.`
+    );
+  }
 }
 
 /**
@@ -220,45 +324,7 @@ You have read-only access to most systems plus the ability to run the migration 
         'A description of the memory wiki structure, exploration, and ingestion workflow',
       trigger:
         'the user wants to understand the wiki structure, ingest a session into the wiki, explore the wiki, or know the difference between wiki and project memory',
-      body: `# Memory Wiki
-
-## Structure
-
-Wiki pages are stored as .md files with YAML frontmatter:
-
-\`\`\`yaml
----
-id: my-page
-title: My Page
-scope: beacon  # or 'coordinator'
-tags:
-  - reference
-sources:
-  - session-abc123
----
-\`\`\`
-
-Pages support [[wiki links]] for cross-references. The wiki enforces a "no downward links" rule: coordinator pages cannot link to beacon pages.
-
-## Exploration
-
-- swarm__wiki_list — list all pages
-- swarm__wiki_search — search by keyword
-- swarm__wiki_read — read a specific page
-- swarm__wiki_lint — check for broken links, downward links, orphan pages
-
-## Ingestion Workflow
-
-1. Treat the material in your input (typically a conversation transcript) as the content to ingest
-2. Analyze it for key insights, decisions, patterns
-3. Create or update wiki pages with swarm__wiki_write
-4. Include the session ID in the sources field
-5. Summarize in your reply which pages you created or updated
-
-## Wiki vs Project Memory
-
-- **Wiki**: Persistent, structured, shared across the swarm. Use for documentation, architecture decisions, patterns, reference material.
-- **Project Memory** (memory__manage): Quick facts, local context, ephemeral notes. Use for temporary information that only this agent needs.`,
+      body: MEMORY_WIKI_SKILL_BODY,
     });
     log.info('Seeded default skill: memory-wiki');
   }

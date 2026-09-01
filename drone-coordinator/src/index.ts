@@ -26,6 +26,7 @@ import {
   initWebToken,
   createPersona,
   createSkill,
+  updatePersona,
   listPersonas,
   listSkills,
 } from './db/index.js';
@@ -49,7 +50,10 @@ import {
 import { createWebAuthMiddleware, isLocalRequest } from './web-auth.js';
 import { createMtlsMiddleware } from './mtls.js';
 import { registerBeaconWebSocket } from './beacon-ws.js';
-import { seedDefaultAssets } from './default-assets.js';
+import {
+  seedDefaultAssets,
+  repairSeededLibrarianAssets,
+} from './default-assets.js';
 import { configureSessionEndHook } from './session-end.js';
 import { setAutoApproveBeacons } from './auto-approve.js';
 
@@ -648,13 +652,13 @@ export async function main() {
  */
 
 function seedDefaults(): void {
-  seedDefaultAssets(
-    {
-      createPersona,
-      createSkill,
-      listPersonas,
-      listSkills,
-    },
-    logger
-  );
+  const db = {
+    createPersona,
+    createSkill,
+    listPersonas,
+    listSkills,
+    updatePersona,
+  };
+  seedDefaultAssets(db, logger);
+  repairSeededLibrarianAssets(db, logger);
 }
