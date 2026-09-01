@@ -1,4 +1,8 @@
-import type { DroneAgentConfig, DroneLlmCapability, DroneLogger } from 'drone-core';
+import type {
+  DroneAgentConfig,
+  DroneLlmCapability,
+  DroneLogger,
+} from 'drone-core';
 import type { DronePluginEngine } from './plugin-engine.js';
 import {
   createConversationService,

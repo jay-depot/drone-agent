@@ -135,8 +135,10 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   useEffect(() => {
     if (!opts.initialWorkflow || workflowStartedRef.current) return;
     workflowStartedRef.current = true;
-    const logFn = (text: string, kind?: import('./types.js').ChatEntry['kind']) =>
-      workflowLogRef.current(text, kind);
+    const logFn = (
+      text: string,
+      kind?: import('./types.js').ChatEntry['kind']
+    ) => workflowLogRef.current(text, kind);
     void (async () => {
       const { name, args } = opts.initialWorkflow!;
       logFn(`Running workflow ${name}...`, 'info');
@@ -151,7 +153,9 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         if (result.kickMessage) {
           logFn(result.kickMessage, 'user');
           await opts.engine.runHooks('onBeforePrompt');
-          const reply = await opts.conversation.sendUserMessage(result.kickMessage);
+          const reply = await opts.conversation.sendUserMessage(
+            result.kickMessage
+          );
           if (reply !== CANCEL_SENTINEL) {
             await opts.engine.runHooks('onAfterToolCall');
           }

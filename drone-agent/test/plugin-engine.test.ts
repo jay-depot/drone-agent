@@ -1012,12 +1012,8 @@ describe('--debug tools — tool surface change logging', () => {
 });
 
 describe('workflow run contract (ADR 183)', () => {
-  function makeWorkflowPlugin(run: DronePlugin['workflows'] extends (infer W)[] | undefined ? W | undefined : never) {
-    return createTestPlugin({ id: 'wf', workflows: run ? [run] : [] });
-  }
-
   async function makeEngineWithWorkflow(
-    workflow: NonNullable<DronePlugin['workflows']>[number]
+    workflow: import('drone-core').DroneWorkflow
   ) {
     const engine = createDronePluginEngine({
       plugins: [createTestPlugin({ id: 'wf', workflows: [workflow] })],
@@ -1027,9 +1023,7 @@ describe('workflow run contract (ADR 183)', () => {
     await engine.initialize();
     engine.setElicitation({
       ask: async (questions: Array<{ id: string; defaultValue?: string }>) =>
-        Object.fromEntries(
-          questions.map(q => [q.id, q.defaultValue ?? ''])
-        ),
+        Object.fromEntries(questions.map(q => [q.id, q.defaultValue ?? ''])),
     } as never);
     return engine;
   }
@@ -1073,7 +1067,10 @@ describe('workflow run contract (ADR 183)', () => {
     const engine = await makeEngineWithWorkflow({
       name: 'assisted',
       description: 'Assisted',
-      run: async (_input, ctx) => {
+      run: async (
+        _input: Record<string, unknown>,
+        ctx: import('drone-core').DroneWorkflowContext
+      ) => {
         await ctx.agent('Discover how the service runs.');
         return { toolResult: 'unreachable' };
       },
@@ -1091,7 +1088,10 @@ describe('workflow run contract (ADR 183)', () => {
     const engine = await makeEngineWithWorkflow({
       name: 'probe',
       description: 'Probe',
-      run: async (_input, ctx) => {
+      run: async (
+        _input: Record<string, unknown>,
+        ctx: import('drone-core').DroneWorkflowContext
+      ) => {
         agentType = typeof ctx.agent === 'function' ? 'function' : 'missing';
         return { toolResult: 'ok' };
       },

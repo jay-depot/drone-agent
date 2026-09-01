@@ -407,10 +407,7 @@ describe('bootstrap swarm-memory workflow', () => {
     const workflow = createSwarmMemoryWorkflow({ runner, home });
     const result = await workflow.run(
       {},
-      makeCtx(
-        { ask },
-        () => 'launch=none restart=none'
-      ) as never
+      makeCtx({ ask }, () => 'launch=none restart=none') as never
     );
     const parsed = JSON.parse(
       (result as { toolResult?: string }).toolResult ?? ''
@@ -432,11 +429,14 @@ describe('bootstrap swarm-memory workflow', () => {
       {},
       makeCtx(
         { ask },
-        () => 'launch=systemd restart=systemctl restart drone-coordinator-prod.service'
+        () =>
+          'launch=systemd restart=systemctl restart drone-coordinator-prod.service'
       ) as never
     );
     expect(
-      calls.some(c => c.join(' ') === 'systemctl restart drone-coordinator-prod.service')
+      calls.some(
+        c => c.join(' ') === 'systemctl restart drone-coordinator-prod.service'
+      )
     ).toBe(true);
     const parsed = JSON.parse(
       (result as { toolResult?: string }).toolResult ?? ''
@@ -451,7 +451,7 @@ describe('bootstrap swarm-memory workflow', () => {
     });
     const { ask } = makeElicit({ ...HAPPY });
     const workflow = createSwarmMemoryWorkflow({ runner, home });
-    const result = await workflow.run({}, makeCtx({ ask }) as never) as {
+    const result = (await workflow.run({}, makeCtx({ ask }) as never)) as {
       kickMessage?: string;
       continueSession?: boolean;
       toolResult?: string;

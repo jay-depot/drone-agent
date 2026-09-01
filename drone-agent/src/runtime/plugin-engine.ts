@@ -458,9 +458,7 @@ export function createDronePluginEngine({
     // created on first ctx.agent() call, shared by all calls in this
     // run, discarded when the run returns.
     let ephemeral: ReturnType<typeof createEphemeralConversation> | undefined;
-    const agent = async (
-      prompt: string
-    ): Promise<string> => {
+    const agent = async (prompt: string): Promise<string> => {
       if (!ephemeral) {
         ephemeral = createEphemeralConversation({
           engine: thisEngine(),

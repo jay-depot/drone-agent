@@ -240,10 +240,7 @@ async function detectServiceLaunch(
   const launchMatch = reply.match(/launch=(\w+)/);
   const restartMatch = reply.match(/restart=(.+?)(?:\n|$)/);
   const launch = (launchMatch?.[1] ?? 'none') as
-    | 'systemd'
-    | 'docker'
-    | 'bare'
-    | 'none';
+    'systemd' | 'docker' | 'bare' | 'none';
   const restart = (restartMatch?.[1] ?? '').trim();
   if (launch === 'systemd' || launch === 'docker') {
     if (restart.length > 0 && restart !== 'none') {
@@ -374,11 +371,15 @@ async function restartServer(
   pendingRestart: string[]
 ): Promise<void> {
   const launch =
-    server === 'coordinator' ? discovery.coordinatorLaunch : discovery.beaconLaunch;
+    server === 'coordinator'
+      ? discovery.coordinatorLaunch
+      : discovery.beaconLaunch;
   if (!launch || launch.launchMode === 'unknown') {
     pendingRestart.push(
       `${server}: launch mode not detected${
-        launch?.restartCommand ? ` (agent reported: ${launch.restartCommand})` : ''
+        launch?.restartCommand
+          ? ` (agent reported: ${launch.restartCommand})`
+          : ''
       } — restart it yourself to activate the config`
     );
     return;
