@@ -19,6 +19,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'ink-testing-library';
 import { App } from '../src/tui/app.js';
+import { initialPickerIndex } from '../src/tui/hooks/useElicitation.js';
 import { MidPanel } from '../src/tui/components/MidPanel.js';
 import { ModelPicker } from '../src/tui/components/ModelPicker.js';
 import { DEFAULT_GRAYSCALE_SCHEME } from '../src/tui/theme.js';
@@ -564,5 +565,96 @@ describe('App initial workflow host (--workflow, ADR 183)', () => {
     }
     expect(onComplete).toHaveBeenCalledWith({ continueSession: false });
     expect(onComplete).toHaveBeenCalledWith({ continueSession: false });
+  });
+});
+
+describe('initialPickerIndex (default/highlight agreement)', () => {
+  it('highlights the choice matching defaultValue', () => {
+    expect(
+      initialPickerIndex({
+        id: 'q',
+        prompt: 'Install?',
+        choices: [
+          { value: 'yes', label: 'Yes — apply it' },
+          { value: 'no', label: 'No — stop here' },
+        ],
+        defaultValue: 'no',
+      })
+    ).toBe(1);
+  });
+
+  it('falls back to 0 when no choice matches the default', () => {
+    expect(
+      initialPickerIndex({
+        id: 'q',
+        prompt: 'Pick?',
+        choices: [
+          { value: 'a', label: 'A' },
+          { value: 'b', label: 'B' },
+        ],
+        defaultValue: 'missing',
+      })
+    ).toBe(0);
+  });
+
+  it('falls back to 0 when there is no default', () => {
+    expect(
+      initialPickerIndex({
+        id: 'q',
+        prompt: 'Pick?',
+        choices: [{ value: 'a', label: 'A' }],
+      })
+    ).toBe(0);
+  });
+
+  it('returns 0 for freeform questions (no picker)', () => {
+    expect(
+      initialPickerIndex({ id: 'q', prompt: 'Type?', freeform: true })
+    ).toBe(0);
+  });
+});
+
+describe('TUI picker highlights the default on mutation confirms', () => {
+  let cleanup: (() => void) | null = null;
+
+  afterEach(() => {
+    if (cleanup) {
+      cleanup();
+      cleanup = null;
+    }
+  });
+
+  it('renders the ▶ marker on the defaultValue choice', async () => {
+    const elicitQuestion = {
+      id: 'write-cron',
+      prompt: 'Install the catch-up cron entry?',
+      choices: [
+        { value: 'yes', label: 'Yes — apply it' },
+        { value: 'no', label: 'No — stop here' },
+      ],
+      defaultValue: 'no',
+      uiKey: 'test-ui-key',
+    };
+    const opts = makeOptions();
+    opts.engine.setElicitation = (cap: unknown) => {
+      // Capture the capability the hook wires, then simulate a question.
+      const elicitation = cap as {
+        ask: (questions: unknown[]) => Promise<Record<string, string>>;
+      };
+      elicitation.ask([elicitQuestion]).catch(() => undefined);
+    };
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+
+    const frame = await waitUntilFrame(instance, f =>
+      f.includes('Install the catch-up cron entry?')
+    );
+    expect(frame).toContain('Install the catch-up cron entry?');
+    expect(frame).toContain('No — stop here (default)');
+    // The highlight marker ▶ must sit on the "No" line, not "Yes".
+    const noLine = frame.split('\n').find(l => l.includes('No — stop here'));
+    const yesLine = frame.split('\n').find(l => l.includes('Yes — apply it'));
+    expect(noLine).toContain('▶');
+    expect(yesLine).not.toContain('▶');
   });
 });

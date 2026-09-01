@@ -19,6 +19,31 @@ import type { DroneElicitationQuestion } from 'drone-core';
 import type { DronePluginEngine } from '../../runtime/plugin-engine.js';
 import { createTuiElicitation } from '../elicitation.js';
 
+/**
+ * Initial picker highlight for a question: the choice matching
+ * `defaultValue`, or 0 when there is no match (or the question is
+ * freeform — no picker at all).
+ *
+ * The default and the initial highlight must AGREE: mutation confirms
+ * use a safety default of 'no', and plain-output mode treats an empty
+ * Enter as the default ("decline"). If the TUI picker highlighted
+ * index 0 ('yes') instead, reflex-Enter in the TUI would silently
+ * ACCEPT — the mirror-image of the plain-mode trap that made the
+ * swarm-memory bootstrap's cron confirm look like a yes.
+ */
+export function initialPickerIndex(
+  question: DroneElicitationQuestion | null
+): number {
+  if (!question || question.freeform) {
+    return 0;
+  }
+  const choices = question.choices ?? [];
+  const defaultIdx = choices.findIndex(
+    choice => choice.value === question.defaultValue
+  );
+  return defaultIdx >= 0 ? defaultIdx : 0;
+}
+
 export function useElicitation(
   engine: Pick<DronePluginEngine, 'setElicitation'>
 ): {
@@ -50,7 +75,7 @@ export function useElicitation(
         if (prev) prev(new Error('Superseded by a new elicitation question.'));
       }
       const uiKey = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      setPickerIndex(0);
+      setPickerIndex(initialPickerIndex(question));
       setActiveQuestion({ ...question, uiKey });
       return new Promise<string>((resolve, reject) => {
         questionResolveRef.current = resolve;
