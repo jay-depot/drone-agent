@@ -473,4 +473,55 @@ describe('bootstrap swarm-memory workflow', () => {
     await workflow.run({}, ctx as never);
     expect((ctx as { agentCalls: string[] }).agentCalls.length).toBe(2);
   });
+
+  it('generates a hook script with a librarian self-ingest guard', async () => {
+    const { buildHookScript } =
+      await import('../../../src/plugins/bootstrap/swarm-memory-scripts.js');
+    const script = buildHookScript({
+      coordinatorUrl: 'http://127.0.0.1:8080',
+      webToken: '',
+      configureBeacon: false,
+      batchLimit: '5',
+      cronSchedule: '0 * * * *',
+    });
+
+    // Guard reads the persona from the transcript payload...
+    expect(script).toContain('session_persona=');
+    expect(script).toContain('t.session && t.session.personaId');
+    // ...compares against the librarian persona...
+    expect(script).toContain(
+      'if [ "$session_persona" = "$LIBRARIAN_PERSONA" ]'
+    );
+    // ...marks the session processed with a skip summary (never leaves it
+    // ended, which would re-queue it every catch-up run)...
+    expect(script).toContain(
+      'skipped: librarian self-session (self-ingest guard)'
+    );
+    // ...and exits 0 (the coordinator trigger treats non-zero as failure).
+    expect(script).toMatch(/self-ingest guard[\s\S]*exit 0/);
+  });
+
+  it('generated hook script is valid bash (self-ingest guard continuation)', async () => {
+    const { execFile } = await import('node:child_process');
+    const { promisify } = await import('node:util');
+    const { buildHookScript } =
+      await import('../../../src/plugins/bootstrap/swarm-memory-scripts.js');
+    const run = promisify(execFile);
+    const os = await import('node:os');
+    const fs = await import('node:fs/promises');
+    const script = buildHookScript({
+      coordinatorUrl: 'http://127.0.0.1:8080',
+      webToken: '',
+      configureBeacon: false,
+      batchLimit: '5',
+      cronSchedule: '0 * * * *',
+    });
+    const tmp = path.join(os.tmpdir(), `hook-guard-${Date.now()}.sh`);
+    try {
+      await fs.writeFile(tmp, script, { mode: 0o755 });
+      await run('bash', ['-n', tmp]);
+    } finally {
+      await fs.rm(tmp, { force: true });
+    }
+  });
 });
