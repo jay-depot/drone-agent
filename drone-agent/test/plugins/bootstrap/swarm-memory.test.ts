@@ -485,8 +485,10 @@ describe('bootstrap swarm-memory workflow', () => {
       cronSchedule: '0 * * * *',
     });
 
-    // Guard reads the persona from the transcript payload...
+    // Guard reads the persona from `session log` (the full envelope), NOT the
+    // transcript string (which has no persona and never matched)...
     expect(script).toContain('session_persona=');
+    expect(script).toContain('session log "$SESSION_ID"');
     expect(script).toContain('t.session && t.session.personaId');
     // ...compares against the librarian persona...
     expect(script).toContain(
@@ -523,5 +525,34 @@ describe('bootstrap swarm-memory workflow', () => {
     } finally {
       await fs.rm(tmp, { force: true });
     }
+  });
+
+  it('catch-up script filters librarian sessions at the list level (no agent spawn)', async () => {
+    const { buildCatchupScript } =
+      await import('../../../src/plugins/bootstrap/swarm-memory-scripts.js');
+    const script = buildCatchupScript({
+      coordinatorUrl: 'http://127.0.0.1:8080',
+      webToken: '',
+      configureBeacon: false,
+      batchLimit: '5',
+      cronSchedule: '0 * * * *',
+    });
+
+    // The list query carries personaId so the guard can dismiss librarian
+    // sessions without spawning an agent (spawning one just to learn it is a
+    // librarian session creates a new session the next catch-up picks up).
+    expect(script).toContain('s.personaId');
+    expect(script).toContain('if [ "$persona" = "$LIBRARIAN_PERSONA" ]');
+    expect(script).toContain(
+      'skipped: librarian self-session (list-level guard)'
+    );
+    // The dismissed branch must NOT call the ingest hook (no agent spawn).
+    const ifStart = script.indexOf('if [ "$persona" = "$LIBRARIAN_PERSONA" ]');
+    const dismissedBranch = script.slice(
+      ifStart,
+      script.indexOf('fi', ifStart)
+    );
+    expect(dismissedBranch).not.toContain('INGEST_HOOK');
+    expect(dismissedBranch).toContain('session processed');
   });
 });

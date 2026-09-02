@@ -41,19 +41,23 @@ LIBRARIAN_PERSONA="${LIBRARIAN_PERSONA_ID}"
 # Claim the session first (ended → processing) so concurrent runs skip it.
 drone-swarm --coordinator "$COORDINATOR_URL" session process "$SESSION_ID" > /dev/null
 
-# Read the --- Turn N --- transcript and queue it to a headless librarian.
-transcript_json="$(drone-swarm --coordinator "$COORDINATOR_URL" session transcript "$SESSION_ID")"
-
 # Self-ingest guard: the librarian must not ingest its own sessions.
 # Skip = mark processed (NOT leave-as-ended, which would re-queue the
 # session forever and starve the catch-up batch) and exit 0.
-session_persona="$(printf '%s' "$transcript_json" | node -e 'const fs=require("node:fs");const t=JSON.parse(fs.readFileSync(0,"utf8"));process.stdout.write(String(t.session && t.session.personaId || ""))')"
+# session log returns the full { session: { personaId }, ... } envelope, so the
+# persona is available here without spawning an agent. (session transcript
+# prints only the transcript string, which has no persona — reading it there
+# never matched, so every librarian session spawned an agent.)
+session_persona="$(drone-swarm --coordinator "$COORDINATOR_URL" session log "$SESSION_ID" | node -e 'const fs=require("node:fs");const t=JSON.parse(fs.readFileSync(0,"utf8"));process.stdout.write(String(t.session && t.session.personaId || ""))')"
 if [ "$session_persona" = "$LIBRARIAN_PERSONA" ]; then
   drone-swarm --coordinator "$COORDINATOR_URL" session processed "$SESSION_ID" \\
     --summary "skipped: librarian self-session (self-ingest guard)"
   echo "self-ingest guard: session $SESSION_ID is a $LIBRARIAN_PERSONA session; skipped"
   exit 0
 fi
+
+# Read the --- Turn N --- transcript and queue it to a headless librarian.
+transcript_json="$(drone-swarm --coordinator "$COORDINATOR_URL" session transcript "$SESSION_ID")"
 
 kickoff="$(printf '%s' "$transcript_json" | ${TRANSCRIPT_TO_KICKOFF})"
 
@@ -79,23 +83,30 @@ ${ENV_SOURCE_BLOCK}
 COORDINATOR_URL="${settings.coordinatorUrl}"
 BATCH_LIMIT="${settings.batchLimit}"
 INGEST_HOOK="$HOME/.drone-swarm-memory/bin/${HOOK_SCRIPT_NAME}"
+LIBRARIAN_PERSONA="${LIBRARIAN_PERSONA_ID}"
 
 sessions_json="$(drone-swarm --coordinator "$COORDINATOR_URL" session list --status ended --limit "$BATCH_LIMIT")"
-ids="$(printf '%s' "$sessions_json" | node -e 'const fs=require("node:fs");const d=JSON.parse(fs.readFileSync(0,"utf8"));for(const s of (d.sessions ?? []))process.stdout.write(String(s.id)+"\\n")')"
+rows="$(printf '%s' "$sessions_json" | node -e 'const fs=require("node:fs");const d=JSON.parse(fs.readFileSync(0,"utf8"));for(const s of (d.sessions ?? []))process.stdout.write(String(s.id)+"\\t"+(s.personaId||"")+"\\n")')"
 
-if [ -z "$ids" ]; then
+if [ -z "$rows" ]; then
   echo "catch-up: no ended sessions to ingest"
   exit 0
 fi
 
 failed=0
-while IFS= read -r id; do
+while IFS=$'\t' read -r id persona; do
   [ -n "$id" ] || continue
+  if [ "$persona" = "$LIBRARIAN_PERSONA" ]; then
+    drone-swarm --coordinator "$COORDINATOR_URL" session processed "$id" \
+      --summary "skipped: librarian self-session (list-level guard)"
+    echo "catch-up: dismissed librarian session $id"
+    continue
+  fi
   if ! bash "$INGEST_HOOK" "$id"; then
     echo "catch-up: ingest failed for session $id (continuing)" >&2
     failed=$((failed + 1))
   fi
-done <<< "$ids"
+done <<< "$rows"
 
 echo "catch-up: batch complete ($failed failure(s))"
 exit 0
