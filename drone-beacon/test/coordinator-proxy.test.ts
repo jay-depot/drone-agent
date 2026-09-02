@@ -162,15 +162,11 @@ describe('wiki coordinator-scope proxy (missing /api prefix + no mTLS identity f
   });
 
   it('does not double-prefix a path that already carries /api', async () => {
-    const { coordinatorApiPath } = await import(
-      '../src/routes/context.js'
-    );
+    const { coordinatorApiPath } = await import('../src/routes/context.js');
     expect(coordinatorApiPath('/api/wiki/sess-page')).toBe(
       '/api/wiki/sess-page'
     );
-    expect(coordinatorApiPath('/wiki/sess-page')).toBe(
-      '/api/wiki/sess-page'
-    );
+    expect(coordinatorApiPath('/wiki/sess-page')).toBe('/api/wiki/sess-page');
     expect(coordinatorApiPath('/insights')).toBe('/api/insights');
   });
 });
