@@ -98,6 +98,15 @@ async function runSessionCommand(
       printJson(log);
       return 0;
     }
+    case 'get': {
+      if (!id) {
+        console.error('usage: drone-swarm session get <id>');
+        return 1;
+      }
+      const { session } = await client.getSession(id);
+      printJson(session);
+      return 0;
+    }
     case 'transcript': {
       if (!id) {
         console.error('usage: drone-swarm session transcript <id>');

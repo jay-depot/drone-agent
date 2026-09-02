@@ -44,11 +44,11 @@ drone-swarm --coordinator "$COORDINATOR_URL" session process "$SESSION_ID" > /de
 # Self-ingest guard: the librarian must not ingest its own sessions.
 # Skip = mark processed (NOT leave-as-ended, which would re-queue the
 # session forever and starve the catch-up batch) and exit 0.
-# session log returns the full { session: { personaId }, ... } envelope, so the
-# persona is available here without spawning an agent. (session transcript
-# prints only the transcript string, which has no persona — reading it there
-# never matched, so every librarian session spawned an agent.)
-session_persona="$(drone-swarm --coordinator "$COORDINATOR_URL" session log "$SESSION_ID" | node -e 'const fs=require("node:fs");const t=JSON.parse(fs.readFileSync(0,"utf8"));process.stdout.write(String(t.session && t.session.personaId || ""))')"
+# session get returns just the session metadata (personaId, status, ...) — NOT
+# the full event log, which can be huge (giant tool-result payloads) and
+# truncates at the transport limit, producing malformed JSON. Reading the
+# persona here avoids both the truncation and spawning an agent.
+session_persona="$(drone-swarm --coordinator "$COORDINATOR_URL" session get "$SESSION_ID" | node -e 'const fs=require("node:fs");const t=JSON.parse(fs.readFileSync(0,"utf8"));process.stdout.write(String(t.personaId || ""))')"
 if [ "$session_persona" = "$LIBRARIAN_PERSONA" ]; then
   drone-swarm --coordinator "$COORDINATOR_URL" session processed "$SESSION_ID" \\
     --summary "skipped: librarian self-session (self-ingest guard)"

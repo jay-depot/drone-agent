@@ -485,11 +485,12 @@ describe('bootstrap swarm-memory workflow', () => {
       cronSchedule: '0 * * * *',
     });
 
-    // Guard reads the persona from `session log` (the full envelope), NOT the
-    // transcript string (which has no persona and never matched)...
+    // Guard reads the persona from `session get` (lightweight metadata), NOT
+    // the full event log (which can be huge and truncate into malformed JSON)
+    // and NOT the transcript string (which has no persona)...
     expect(script).toContain('session_persona=');
-    expect(script).toContain('session log "$SESSION_ID"');
-    expect(script).toContain('t.session && t.session.personaId');
+    expect(script).toContain('session get "$SESSION_ID"');
+    expect(script).toContain('t.personaId');
     // ...compares against the librarian persona...
     expect(script).toContain(
       'if [ "$session_persona" = "$LIBRARIAN_PERSONA" ]'

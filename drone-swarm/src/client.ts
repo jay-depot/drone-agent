@@ -109,6 +109,24 @@ export class SwarmClient {
     return { status, log: data };
   }
 
+  async getSession(sessionId: string): Promise<{
+    status: number;
+    session: unknown;
+  }> {
+    const path =
+      this.target === 'coordinator'
+        ? `/sessions/${encodeURIComponent(sessionId)}`
+        : `/sync/sessions/${encodeURIComponent(sessionId)}`;
+    const { status, data } = await this.request<{ session?: unknown }>(
+      'GET',
+      path
+    );
+    if (status !== 200) {
+      throw new ApiError(status, `Failed to get session: ${status}`);
+    }
+    return { status, session: data.session ?? data };
+  }
+
   async getSessionTranscript(sessionId: string): Promise<{
     status: number;
     transcript: unknown;
