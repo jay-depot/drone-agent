@@ -250,6 +250,21 @@ async function detectServiceLaunch(
   return { launchMode: 'unknown', restartCommand: '' };
 }
 
+/**
+ * Resolve the absolute path to a binary via `command -v`. Returns the path, or
+ * the bare name as a fallback so the generated scripts still work when the
+ * binary is on PATH (cron / session-end hooks run in minimal environments where
+ * PATH may not include the drone binaries, so an absolute path is preferred).
+ */
+async function resolveBinaryPath(
+  runner: CommandRunner,
+  name: string
+): Promise<string> {
+  const result = await runner(['sh', '-c', `command -v ${name}`]);
+  const path = result.stdout.trim();
+  return path.length > 0 ? path : name;
+}
+
 async function probeCoordinator(
   runner: CommandRunner,
   url: string,
@@ -345,6 +360,8 @@ async function discover(
       ((answers.batchLimit as string) || '').trim() || DEFAULT_BATCH_LIMIT,
     cronSchedule:
       ((answers.cronSchedule as string) || '').trim() || DEFAULT_CRON_SCHEDULE,
+    droneAgentPath: await resolveBinaryPath(runner, 'drone-agent'),
+    droneSwarmPath: await resolveBinaryPath(runner, 'drone-swarm'),
   };
   if (!/^\*\/\d+|^\d+/.test(settings.cronSchedule)) {
     return undefined;

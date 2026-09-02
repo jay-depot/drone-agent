@@ -483,6 +483,8 @@ describe('bootstrap swarm-memory workflow', () => {
       configureBeacon: false,
       batchLimit: '5',
       cronSchedule: '0 * * * *',
+      droneAgentPath: '/usr/local/bin/drone-agent',
+      droneSwarmPath: '/usr/local/bin/drone-swarm',
     });
 
     // Guard reads the persona from `session get` (lightweight metadata), NOT
@@ -518,6 +520,8 @@ describe('bootstrap swarm-memory workflow', () => {
       configureBeacon: false,
       batchLimit: '5',
       cronSchedule: '0 * * * *',
+      droneAgentPath: '/usr/local/bin/drone-agent',
+      droneSwarmPath: '/usr/local/bin/drone-swarm',
     });
     const tmp = path.join(os.tmpdir(), `hook-guard-${Date.now()}.sh`);
     try {
@@ -537,6 +541,8 @@ describe('bootstrap swarm-memory workflow', () => {
       configureBeacon: false,
       batchLimit: '5',
       cronSchedule: '0 * * * *',
+      droneAgentPath: '/usr/local/bin/drone-agent',
+      droneSwarmPath: '/usr/local/bin/drone-swarm',
     });
 
     // The list query carries personaId so the guard can dismiss librarian
@@ -555,5 +561,30 @@ describe('bootstrap swarm-memory workflow', () => {
     );
     expect(dismissedBranch).not.toContain('INGEST_HOOK');
     expect(dismissedBranch).toContain('session processed');
+  });
+
+  it('generated scripts use the discovered absolute binary paths', async () => {
+    const { buildHookScript, buildCatchupScript } =
+      await import('../../../src/plugins/bootstrap/swarm-memory-scripts.js');
+    const settings = {
+      coordinatorUrl: 'http://127.0.0.1:8080',
+      webToken: '',
+      configureBeacon: false,
+      batchLimit: '5',
+      cronSchedule: '0 * * * *',
+      droneAgentPath: '/opt/drone/bin/drone-agent',
+      droneSwarmPath: '/opt/drone/bin/drone-swarm',
+    };
+    const hook = buildHookScript(settings);
+    const catchup = buildCatchupScript(settings);
+
+    // Both scripts bind the absolute paths and invoke them (cron / session-end
+    // hooks run in minimal PATH environments, so bare names may not resolve).
+    expect(hook).toContain('DRONE_SWARM="/opt/drone/bin/drone-swarm"');
+    expect(hook).toContain('DRONE_AGENT="/opt/drone/bin/drone-agent"');
+    expect(hook).toContain('"$DRONE_SWARM" --coordinator');
+    expect(hook).toContain('"$DRONE_AGENT" --output-json');
+    expect(catchup).toContain('DRONE_SWARM="/opt/drone/bin/drone-swarm"');
+    expect(catchup).toContain('"$DRONE_SWARM" --coordinator');
   });
 });

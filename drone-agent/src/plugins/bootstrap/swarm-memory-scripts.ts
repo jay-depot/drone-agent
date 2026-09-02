@@ -6,6 +6,8 @@ export type SwarmMemorySettings = {
   configureBeacon: boolean;
   batchLimit: string;
   cronSchedule: string;
+  droneAgentPath: string;
+  droneSwarmPath: string;
 };
 
 /**
@@ -37,9 +39,11 @@ ${ENV_SOURCE_BLOCK}
 SESSION_ID="\${1:?usage: ${HOOK_SCRIPT_NAME} <session_id>}"
 COORDINATOR_URL="${settings.coordinatorUrl}"
 LIBRARIAN_PERSONA="${LIBRARIAN_PERSONA_ID}"
+DRONE_SWARM="${settings.droneSwarmPath}"
+DRONE_AGENT="${settings.droneAgentPath}"
 
 # Claim the session first (ended → processing) so concurrent runs skip it.
-drone-swarm --coordinator "$COORDINATOR_URL" session process "$SESSION_ID" > /dev/null
+"$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session process "$SESSION_ID" > /dev/null
 
 # Self-ingest guard: the librarian must not ingest its own sessions.
 # Skip = mark processed (NOT leave-as-ended, which would re-queue the
@@ -48,21 +52,21 @@ drone-swarm --coordinator "$COORDINATOR_URL" session process "$SESSION_ID" > /de
 # the full event log, which can be huge (giant tool-result payloads) and
 # truncates at the transport limit, producing malformed JSON. Reading the
 # persona here avoids both the truncation and spawning an agent.
-session_persona="$(drone-swarm --coordinator "$COORDINATOR_URL" session get "$SESSION_ID" | node -e 'const fs=require("node:fs");const t=JSON.parse(fs.readFileSync(0,"utf8"));process.stdout.write(String(t.personaId || ""))')"
+session_persona="$("$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session get "$SESSION_ID" | node -e 'const fs=require("node:fs");const t=JSON.parse(fs.readFileSync(0,"utf8"));process.stdout.write(String(t.personaId || ""))')"
 if [ "$session_persona" = "$LIBRARIAN_PERSONA" ]; then
-  drone-swarm --coordinator "$COORDINATOR_URL" session processed "$SESSION_ID" \\
+  "$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session processed "$SESSION_ID" \\
     --summary "skipped: librarian self-session (self-ingest guard)"
   echo "self-ingest guard: session $SESSION_ID is a $LIBRARIAN_PERSONA session; skipped"
   exit 0
 fi
 
 # Read the --- Turn N --- transcript and queue it to a headless librarian.
-transcript_json="$(drone-swarm --coordinator "$COORDINATOR_URL" session transcript "$SESSION_ID")"
+transcript_json="$("$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session transcript "$SESSION_ID")"
 
 kickoff="$(printf '%s' "$transcript_json" | ${TRANSCRIPT_TO_KICKOFF})"
 
-if printf '%s\\n' "$kickoff" | drone-agent --output-json --once --persona "$LIBRARIAN_PERSONA" > /dev/null 2>&1; then
-  drone-swarm --coordinator "$COORDINATOR_URL" session processed "$SESSION_ID" \\
+if printf '%s\\n' "$kickoff" | "$DRONE_AGENT" --output-json --once --persona "$LIBRARIAN_PERSONA" > /dev/null 2>&1; then
+  "$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session processed "$SESSION_ID" \\
     --summary "ingested into memory wiki by ${HOOK_SCRIPT_NAME}"
 else
   echo "librarian agent failed for session $SESSION_ID (left in processing)" >&2
@@ -84,8 +88,9 @@ COORDINATOR_URL="${settings.coordinatorUrl}"
 BATCH_LIMIT="${settings.batchLimit}"
 INGEST_HOOK="$HOME/.drone-swarm-memory/bin/${HOOK_SCRIPT_NAME}"
 LIBRARIAN_PERSONA="${LIBRARIAN_PERSONA_ID}"
+DRONE_SWARM="${settings.droneSwarmPath}"
 
-sessions_json="$(drone-swarm --coordinator "$COORDINATOR_URL" session list --status ended --limit "$BATCH_LIMIT")"
+sessions_json="$( "$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session list --status ended --limit "$BATCH_LIMIT")"
 rows="$(printf '%s' "$sessions_json" | node -e 'const fs=require("node:fs");const d=JSON.parse(fs.readFileSync(0,"utf8"));for(const s of (d.sessions ?? []))process.stdout.write(String(s.id)+"\\t"+(s.personaId||"")+"\\n")')"
 
 if [ -z "$rows" ]; then
@@ -97,7 +102,7 @@ failed=0
 while IFS=$'\t' read -r id persona; do
   [ -n "$id" ] || continue
   if [ "$persona" = "$LIBRARIAN_PERSONA" ]; then
-    drone-swarm --coordinator "$COORDINATOR_URL" session processed "$id" \
+    "$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session processed "$id" \
       --summary "skipped: librarian self-session (list-level guard)"
     echo "catch-up: dismissed librarian session $id"
     continue
