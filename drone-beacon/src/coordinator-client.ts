@@ -127,6 +127,11 @@ export interface CoordinatorClient {
 
   // Get the base URL of the coordinator (for proxying)
   getBaseUrl(): string;
+  // The coordinator fetch this client already configured with the pinned
+  // coordinator fingerprint and the beacon's mTLS client identity. Reuse it
+  // for any proxied call so a proxy can never drift from how this client
+  // authenticates to the coordinator (ADR 177 precedent).
+  getFetch(): typeof fetch;
   // Tool definition sync
   pushToolDefinitions(
     tools: Array<{
@@ -370,6 +375,10 @@ export function createCoordinatorClient(
   return {
     getBaseUrl(): string {
       return baseUrl;
+    },
+
+    getFetch(): typeof fetch {
+      return cfetch;
     },
 
     async registerBeacon(

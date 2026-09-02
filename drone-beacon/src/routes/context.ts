@@ -1,8 +1,5 @@
 import type { SearchIndexer } from '../search-indexer.js';
-import {
-  type CoordinatorClient,
-  createCoordinatorFetch,
-} from '../coordinator-client.js';
+import type { CoordinatorClient } from '../coordinator-client.js';
 import { logger } from '../logger.js';
 import * as db from '../db/index.js';
 import { pushFragmentSyncToAllConnected } from '../ws-server.js';
@@ -12,7 +9,10 @@ let _coordinatorFetch: typeof fetch | undefined;
 function coordinatorFetch(url: string, init?: RequestInit): Promise<Response> {
   const client = getCoordinatorClient();
   if (!_coordinatorFetch && client) {
-    _coordinatorFetch = createCoordinatorFetch(client.getBaseUrl());
+    // Reuse the fetch the coordinator client already configured with the
+    // pinned coordinator fingerprint and the beacon's mTLS client identity,
+    // so proxied calls authenticate exactly like registerBeacon/outbox do.
+    _coordinatorFetch = client.getFetch();
   }
   return (_coordinatorFetch ?? fetch)(url, init);
 }
@@ -48,6 +48,17 @@ export function getBeaconUrl(): string {
   return `http://${beaconHost}:${beaconPort}`;
 }
 
+/**
+ * Route a coordinator API path onto the coordinator's /api prefix. The
+ * coordinator mounts every API route under /api (registerRoutes prefix), so a
+ * proxy path must be prefixed — proxying bare /wiki/... previously hit the SPA
+ * fallback (index.html 200) instead of the route, which then broke res.json()
+ * into a beacon 500. Idempotent for paths that already carry /api.
+ */
+export function coordinatorApiPath(path: string): string {
+  return path.startsWith('/api') ? path : `/api${path}`;
+}
+
 // Helper to proxy insight/principle requests to coordinator
 export async function proxyToCoordinator(
   method: string,
@@ -58,7 +69,7 @@ export async function proxyToCoordinator(
   if (!client) {
     return null;
   }
-  const url = `${client.getBaseUrl()}${path}`;
+  const url = `${client.getBaseUrl()}${coordinatorApiPath(path)}`;
   const res = await coordinatorFetch(url, {
     method,
     headers: { 'Content-Type': 'application/json' },
@@ -78,7 +89,7 @@ export async function proxyWikiToCoordinator(
   if (!client) {
     return null;
   }
-  const url = `${client.getBaseUrl()}${path}`;
+  const url = `${client.getBaseUrl()}${coordinatorApiPath(path)}`;
   const res = await coordinatorFetch(url, {
     method,
     headers: { 'Content-Type': 'application/json' },
