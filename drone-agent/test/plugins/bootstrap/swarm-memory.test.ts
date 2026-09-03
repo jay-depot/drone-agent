@@ -557,10 +557,13 @@ describe('bootstrap swarm-memory workflow', () => {
     const ifStart = script.indexOf('if [ "$persona" = "$LIBRARIAN_PERSONA" ]');
     const dismissedBranch = script.slice(
       ifStart,
-      script.indexOf('fi', ifStart)
+      script.indexOf('continue', ifStart)
     );
     expect(dismissedBranch).not.toContain('INGEST_HOOK');
-    expect(dismissedBranch).toContain('session processed');
+    // It must claim the session first (ended → processing) — /processed only
+    // allows processing → processed, so marking an ended session directly 409s.
+    expect(dismissedBranch).toContain('session process "$id"');
+    expect(dismissedBranch).toContain('session processed "$id"');
   });
 
   it('generated scripts use the discovered absolute binary paths', async () => {

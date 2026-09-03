@@ -102,6 +102,11 @@ failed=0
 while IFS=$'\t' read -r id persona; do
   [ -n "$id" ] || continue
   if [ "$persona" = "$LIBRARIAN_PERSONA" ]; then
+    # Claim the session first (ended → processing) — /processed only allows
+    # processing → processed, so marking an ended session directly 409s. A
+    # concurrent run may have already claimed it (409) — that's fine, we just
+    # need it in 'processing' before marking processed.
+    "$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session process "$id" > /dev/null || true
     "$DRONE_SWARM" --coordinator "$COORDINATOR_URL" session processed "$id" \
       --summary "skipped: librarian self-session (list-level guard)"
     echo "catch-up: dismissed librarian session $id"
