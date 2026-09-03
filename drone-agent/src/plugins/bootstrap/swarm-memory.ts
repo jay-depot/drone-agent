@@ -534,13 +534,8 @@ async function smokeTest(
     });
     return;
   }
-  const endedIds = listing.stdout
-    .trim()
-    .split('\n')
-    .join(' ')
-    .match(/"id"\s*:\s*"([^"]+)"/g)
-    ?.map(m => m.replace(/"id"\s*:\s*"/, '').replace('"', ''))
-    .slice(0, 5);
+  const endedIdMatches = [...listing.stdout.matchAll(/"id"\s*:\s*"([^"]+)"/g)];
+  const endedIds = endedIdMatches.map(m => m[1]).slice(0, 5);
 
   const approved = await confirm(
     elicit,
