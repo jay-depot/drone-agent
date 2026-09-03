@@ -204,6 +204,56 @@ describe('buildSessionTranscript', () => {
     expect(transcript).not.toContain(longContent);
   });
 
+  it('truncates long tool-call arguments', async () => {
+    const longArgs = { command: 'x'.repeat(1000) };
+    const events = [
+      event(
+        'e1',
+        'toolCallBatch',
+        {
+          kind: 'toolCallBatch',
+          toolCalls: [{ name: 'exec__run', arguments: longArgs }],
+        },
+        'c1',
+        1
+      ),
+    ];
+    const transcript = await buildSessionTranscript(
+      session,
+      events,
+      resolveBlob
+    );
+    expect(transcript).toContain('…[truncated, original');
+    expect(transcript).not.toContain('x'.repeat(1000));
+  });
+
+  it('caps the total transcript size so it never truncates mid-JSON', async () => {
+    // A session with many turns each carrying a large (but individually
+    // under-cap) tool result would otherwise push the transcript past the
+    // transport limit. The builder must elide the tail with a note.
+    const events = Array.from({ length: 700 }, (_, i) =>
+      event(
+        `e${i}`,
+        'toolResultBatch',
+        {
+          kind: 'toolResultBatch',
+          results: [
+            { name: 'exec__run', content: 'y'.repeat(800), arguments: {} },
+          ],
+        },
+        `c${i}`,
+        i
+      )
+    );
+    const transcript = await buildSessionTranscript(
+      session,
+      events,
+      resolveBlob
+    );
+    expect(transcript).toContain('…[transcript truncated, original');
+    expect(transcript.length).toBeLessThan(210 * 1024);
+  });
+
   it('resolves blob payloads', async () => {
     const events = [
       {
