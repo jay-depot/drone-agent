@@ -27,7 +27,7 @@ const DEFAULT_BUDGET: QueryBudget = {
 
 /**
  * Build the query inputs for one retrieval refresh:
- * [current query (verbatim, first — never truncated), ...compressed window].
+ * [current query (noise-filtered, first — never truncated), ...compressed window].
  * The window text is tool/code-noise filtered, then token-budgeted; oversized
  * window text is segmented via the prose chunker so no input ever exceeds the
  * embedder's effective limit (Ollama truncates from the END, which would

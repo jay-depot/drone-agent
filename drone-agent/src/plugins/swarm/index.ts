@@ -174,13 +174,15 @@ export function createSwarmPlugin(
       memoryRetriever.setWindowSource(() => memoryTracker.assemble());
       registration.hooks.onConversationEvent(async event => {
         memoryTracker.onEvent(event);
-      });
-      registration.hooks.onBeforePrompt(async () => {
-        // Fire-and-forget: never delay the prompt; the fragment render races
-        // the refresh and simply shows the last cached entries until done.
-        void memoryRetriever
-          .maybeRefresh(memoryTracker.assemble())
-          .catch(() => {});
+        // Refresh on the user's message so the CURRENT query drives retrieval
+        // (`current.userQuery` is populated above). Fire-and-forget: never
+        // block the turn; the fragment renders the last cached entries until
+        // the refresh lands. The engine already runs this hook with .catch().
+        if (event.kind === 'userMessage') {
+          void memoryRetriever
+            .maybeRefresh(memoryTracker.assemble())
+            .catch(() => {});
+        }
       });
       registration.registerPromptFragment(
         createSwarmMemoryFragment(memoryRetriever)
