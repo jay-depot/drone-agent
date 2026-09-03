@@ -22,3 +22,6 @@ allowBuilds:
   tree-sitter-python: false
   tree-sitter-rust: false
   tree-sitter-typescript: false
+overrides:
+  browserslist: ^4.28.7
+  qs: ^6.16.0
