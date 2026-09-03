@@ -111,7 +111,7 @@ export default function SessionDetailPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate('/sessions')}
+          onClick={() => navigate(-1)}
         >
           ← Back
         </Button>

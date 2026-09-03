@@ -70,7 +70,7 @@ export default function PersonaDetailPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate('/personas')}
+            onClick={() => navigate(-1)}
           >
             ← Back
           </Button>
@@ -91,7 +91,7 @@ export default function PersonaDetailPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate('/personas')}
+            onClick={() => navigate(-1)}
           >
             ← Back
           </Button>
@@ -109,7 +109,7 @@ export default function PersonaDetailPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate('/personas')}
+          onClick={() => navigate(-1)}
         >
           ← Back
         </Button>

@@ -70,7 +70,7 @@ export default function SkillDetailPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate('/skills')}
+            onClick={() => navigate(-1)}
           >
             ← Back
           </Button>
@@ -91,7 +91,7 @@ export default function SkillDetailPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate('/skills')}
+            onClick={() => navigate(-1)}
           >
             ← Back
           </Button>
@@ -106,7 +106,7 @@ export default function SkillDetailPage() {
   return (
     <div>
       <div className="flex items-center gap-4 mb-6">
-        <Button variant="outline" size="sm" onClick={() => navigate('/skills')}>
+        <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
           ← Back
         </Button>
         <div className="flex-1">
