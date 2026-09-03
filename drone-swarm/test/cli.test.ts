@@ -79,12 +79,19 @@ async function startFixture(port: number): Promise<Server> {
       return sendJson(200, {
         sessions: [{ id: 's-1', status: 'ended' }],
         count: 1,
+        auth: req.headers.authorization ?? null,
       });
     }
     if (url === '/api/sessions/s-1/log') {
       return sendJson(200, {
         session: { id: 's-1' },
         events: [{ type: 'message', payload: 'hello' }],
+      });
+    }
+    if (url === '/api/sessions/s-1/transcript') {
+      return sendJson(200, {
+        session: { id: 's-1' },
+        transcript: '--- Turn 1 ---\nhello',
       });
     }
     if (url === '/api/sessions/s-1/process') {
@@ -128,6 +135,7 @@ async function startFixture(port: number): Promise<Server> {
         id: 'my-page',
         title: 'My Page',
         content: '# My Page\n\nHello',
+        auth: req.headers.authorization ?? null,
       });
     }
     if (url === '/api/wiki/missing' || url === '/wiki/missing') {
@@ -191,6 +199,30 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
       const parsed = JSON.parse(out.join('\n'));
       expect(parsed.count).toBe(1);
       expect(parsed.sessions[0].id).toBe('s-1');
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it('session transcript prints the readable turn transcript', async () => {
+    const out: string[] = [];
+    const originalLog = console.log;
+    console.log = (...msgs: unknown[]) => {
+      out.push(msgs.map(String).join(' '));
+    };
+    try {
+      const code = await main(
+        [
+          '--coordinator',
+          `http://127.0.0.1:${port}`,
+          'session',
+          'transcript',
+          's-1',
+        ],
+        directFetch
+      );
+      expect(code).toBe(0);
+      expect(out.join('\n')).toContain('--- Turn 1 ---');
     } finally {
       console.log = originalLog;
     }
@@ -357,6 +389,125 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
       console.log = originalLog;
     }
   });
+
+  it('sends Bearer token from the --web-token flag', async () => {
+    const out: string[] = [];
+    const originalLog = console.log;
+    console.log = (...msgs: unknown[]) => {
+      out.push(msgs.map(String).join(' '));
+    };
+    try {
+      const code = await main(
+        [
+          '--coordinator',
+          `http://127.0.0.1:${port}`,
+          '--web-token',
+          'flag-token',
+          'wiki',
+          'read',
+          'my-page',
+        ],
+        directFetch
+      );
+      expect(code).toBe(0);
+      expect(JSON.parse(out.join('\n')).auth).toBe('Bearer flag-token');
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it('sends Bearer token from DRONE_COORDINATOR_WEB_TOKEN', async () => {
+    const previous = process.env.DRONE_COORDINATOR_WEB_TOKEN;
+    process.env.DRONE_COORDINATOR_WEB_TOKEN = 'env-token';
+    const out: string[] = [];
+    const originalLog = console.log;
+    console.log = (...msgs: unknown[]) => {
+      out.push(msgs.map(String).join(' '));
+    };
+    try {
+      const code = await main(
+        [
+          '--coordinator',
+          `http://127.0.0.1:${port}`,
+          'wiki',
+          'read',
+          'my-page',
+        ],
+        directFetch
+      );
+      expect(code).toBe(0);
+      expect(JSON.parse(out.join('\n')).auth).toBe('Bearer env-token');
+    } finally {
+      console.log = originalLog;
+      if (previous === undefined) {
+        delete process.env.DRONE_COORDINATOR_WEB_TOKEN;
+      } else {
+        process.env.DRONE_COORDINATOR_WEB_TOKEN = previous;
+      }
+    }
+  });
+
+  it('the --web-token flag wins over the env var', async () => {
+    const previous = process.env.DRONE_COORDINATOR_WEB_TOKEN;
+    process.env.DRONE_COORDINATOR_WEB_TOKEN = 'env-token';
+    const out: string[] = [];
+    const originalLog = console.log;
+    console.log = (...msgs: unknown[]) => {
+      out.push(msgs.map(String).join(' '));
+    };
+    try {
+      const code = await main(
+        [
+          '--coordinator',
+          `http://127.0.0.1:${port}`,
+          '--web-token',
+          'flag-token',
+          'wiki',
+          'read',
+          'my-page',
+        ],
+        directFetch
+      );
+      expect(code).toBe(0);
+      expect(JSON.parse(out.join('\n')).auth).toBe('Bearer flag-token');
+    } finally {
+      console.log = originalLog;
+      if (previous === undefined) {
+        delete process.env.DRONE_COORDINATOR_WEB_TOKEN;
+      } else {
+        process.env.DRONE_COORDINATOR_WEB_TOKEN = previous;
+      }
+    }
+  });
+
+  it('sends no Authorization header when no token is configured', async () => {
+    const previous = process.env.DRONE_COORDINATOR_WEB_TOKEN;
+    delete process.env.DRONE_COORDINATOR_WEB_TOKEN;
+    const out: string[] = [];
+    const originalLog = console.log;
+    console.log = (...msgs: unknown[]) => {
+      out.push(msgs.map(String).join(' '));
+    };
+    try {
+      const code = await main(
+        [
+          '--coordinator',
+          `http://127.0.0.1:${port}`,
+          'wiki',
+          'read',
+          'my-page',
+        ],
+        directFetch
+      );
+      expect(code).toBe(0);
+      expect(JSON.parse(out.join('\n')).auth).toBeNull();
+    } finally {
+      console.log = originalLog;
+      if (previous !== undefined) {
+        process.env.DRONE_COORDINATOR_WEB_TOKEN = previous;
+      }
+    }
+  });
 });
 
 describe('drone-swarm CLI against a beacon-dialect fixture', () => {
@@ -404,6 +555,31 @@ describe('drone-swarm CLI against a beacon-dialect fixture', () => {
       expect(JSON.parse(out[0]).results).toHaveLength(1);
     } finally {
       console.log = originalLog;
+    }
+  });
+
+  it('ignores DRONE_COORDINATOR_WEB_TOKEN on the beacon target', async () => {
+    const previous = process.env.DRONE_COORDINATOR_WEB_TOKEN;
+    process.env.DRONE_COORDINATOR_WEB_TOKEN = 'env-token';
+    const out: string[] = [];
+    const originalLog = console.log;
+    console.log = (...msgs: unknown[]) => {
+      out.push(msgs.map(String).join(' '));
+    };
+    try {
+      const code = await main(
+        ['--beacon', `http://127.0.0.1:${port}`, 'wiki', 'read', 'my-page'],
+        directFetch
+      );
+      expect(code).toBe(0);
+      expect(JSON.parse(out[0]).auth).toBeNull();
+    } finally {
+      console.log = originalLog;
+      if (previous === undefined) {
+        delete process.env.DRONE_COORDINATOR_WEB_TOKEN;
+      } else {
+        process.env.DRONE_COORDINATOR_WEB_TOKEN = previous;
+      }
     }
   });
 

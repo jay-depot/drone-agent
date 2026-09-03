@@ -7,11 +7,16 @@ the wiki are synced back down). This document covers the infrastructure that
 lets you build your own pipeline between them — or use the opinionated
 default instead.
 
-> **Opinionated default:** the `bootstrap__swarm-memory` workflow plus the
-> `coordinator-wiki-librarian` persona already implement a complete pipeline
-> (shell script + systemd timer + spawned librarian). Everything below is the
-> "roll your own" alternative for people who want different trade-offs. The
-> default remains the recommended path.
+> **Opinionated default:** the `bootstrap__swarm-memory` workflow sets up the
+> complete write-side pipeline for you: it generates a session-end ingest
+> hook and a cron catch-up script (both feed ended-session transcripts to
+> headless `coordinator-wiki-librarian` agent sessions via the
+> `drone-swarm session transcript` command), merges the `sessionEnd`
+> command trigger into the coordinator (and optionally beacon) config
+> files, offers ask-first restarts, and smoke tests on real ended
+> conversations. Run it from an agent on the coordinator host with
+> `--plugin bootstrap`. Everything below is the "roll your own"
+> alternative for people who want different trade-offs.
 
 ## Data flow
 

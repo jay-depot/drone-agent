@@ -73,6 +73,7 @@ export type {
   DroneKnowledgeSyncConfig,
   DroneSessionImportConfig,
   DroneSwarmConfig,
+  DroneSwarmMemoryConfig,
   DroneSearchPath,
   DroneSearchConfig,
   DroneLspSpawnServerConfig,

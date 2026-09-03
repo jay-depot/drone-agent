@@ -6,6 +6,7 @@ import { networkInterfaces } from 'os';
  * Static files (/assets/*) and the SPA index (/) are always served without auth.
  */
 const PROTECTED_PREFIXES = [
+  '/api',
   '/beacons',
   '/skills',
   '/personas',

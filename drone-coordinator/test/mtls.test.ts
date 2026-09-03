@@ -22,21 +22,17 @@ function makeReq(url: string, method = 'GET', certFingerprint?: string) {
   } as unknown as FastifyRequest;
 }
 
-function makeReply() {
+function makeReply(): FastifyReply & { _code(): number } {
   let code = 0;
-  let sent: unknown = null;
   return {
     code: (c: number) => {
       code = c;
       return {
-        send: (s: unknown) => {
-          sent = s;
-        },
+        send: () => {},
       };
     },
-    _sent: () => sent,
     _code: () => code,
-  } as unknown as FastifyReply;
+  } as unknown as FastifyReply & { _code(): number };
 }
 
 beforeEach(async () => {

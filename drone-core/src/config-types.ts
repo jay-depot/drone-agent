@@ -296,6 +296,13 @@ export type DroneSessionImportConfig = {
 export type DroneSwarmConfig = {
   knowledgeSync?: DroneKnowledgeSyncConfig;
   sessionImport?: DroneSessionImportConfig;
+  /**
+   * Proactive swarm-memory retrieval (query-aware wiki injection). When
+   * enabled, the agent's system prompt gains a "# Swarm Memory (wiki)"
+   * fragment listing wiki entries semantically relevant to the current
+   * conversation, with on-demand recall via the wiki tools.
+   */
+  memory?: DroneSwarmMemoryConfig;
   /** Hostname of the drone-beacon instance for swarm operations. */
   beaconHost?: string;
   /** Port of the drone-beacon instance for swarm operations. */
@@ -536,7 +543,7 @@ const CONFIG_MERGE_SPEC: MergeSpec = {
         retry: { deepMerge: {} },
       },
     },
-    swarm: { deepMerge: { knowledgeSync: {}, sessionImport: {} } },
+    swarm: { deepMerge: { knowledgeSync: {}, sessionImport: {}, memory: {} } },
     tui: {
       deepMerge: {
         syntaxHighlighting: { deepMerge: { colors: {} } },
@@ -682,6 +689,20 @@ export function createDefaultAgentConfig(
         maxChunks: 5,
         chunkTokenBudgetPercent: 12,
       },
+      memory: {
+        enabled: false,
+        topK: 5,
+        minScore: 0.35,
+        anchors: {
+          tags: [],
+          boostPerTag: 0.08,
+          boostTitle: 0.05,
+        },
+        window: {
+          maxQueryTokens: 6000,
+          maxQuerySegments: 3,
+        },
+      },
     },
     search: {
       enabled: false,
@@ -718,6 +739,34 @@ export function createDefaultAgentConfig(
   };
   return { ...base, ...overrides };
 }
+
+/**
+ * Config for proactive swarm-memory retrieval (`swarm.memory`).
+ */
+export type DroneSwarmMemoryConfig = {
+  /** Master switch. Disabled = the fragment is hidden and no network calls are made. */
+  enabled: boolean;
+  /** Maximum number of wiki entries injected per refresh. */
+  topK?: number;
+  /** Minimum semantic similarity (cosine) for an entry to be injected. */
+  minScore?: number;
+  /** Static per-project relevance anchors applied as additive score boosts. */
+  anchors?: {
+    /** Anchor tags matched (fully, case-insensitive) against page tags. */
+    tags: string[];
+    /** Score boost per matching anchor tag. */
+    boostPerTag?: number;
+    /** Score boost when the anchor tag appears in the page title. */
+    boostTitle?: number;
+  };
+  /** Query assembly budgeting (client-side; the embedder truncates from the end). */
+  window?: {
+    /** Token budget per assembled query input. */
+    maxQueryTokens?: number;
+    /** Maximum number of segmented query inputs per refresh (plus the current query). */
+    maxQuerySegments?: number;
+  };
+};
 
 export function applyAgentConfigLayer(
   baseConfig: DroneAgentConfig,

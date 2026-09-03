@@ -202,6 +202,10 @@ export function initDatabase(dataPath: string): Database.Database {
       embedding FLOAT[768] distance_metric=cosine
     );
 
+    CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks_bq USING vec0(
+      sig BIT[768]
+    );
+
     CREATE TABLE IF NOT EXISTS wiki_pages (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -213,6 +217,30 @@ export function initDatabase(dataPath: string): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_wiki_pages_scope ON wiki_pages(scope);
+
+    CREATE TABLE IF NOT EXISTS wiki_sources (
+      page_id TEXT NOT NULL,
+      origin TEXT NOT NULL CHECK (origin IN ('beacon', 'coordinator')),
+      title TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL DEFAULT '',
+      hash TEXT NOT NULL DEFAULT '',
+      PRIMARY KEY (page_id, origin)
+    );
+
+    CREATE TABLE IF NOT EXISTS wiki_chunks (
+      id TEXT PRIMARY KEY,
+      page_id TEXT NOT NULL,
+      origin TEXT NOT NULL,
+      chunk_index INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      embedding BLOB NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_wiki_chunks_page ON wiki_chunks(page_id, origin);
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS wiki_vec_chunks USING vec0(
+      embedding FLOAT[768] distance_metric=cosine
+    );
 
     CREATE TABLE IF NOT EXISTS fragments (
       id TEXT NOT NULL,

@@ -1,3 +1,4 @@
+import type { DebugFlagRegistry } from 'drone-core';
 /**
  * Swarm plugin — connects to a drone-beacon for swarm-wide personas,
  * skills, messaging, wiki, and coordinator integration.
@@ -6,6 +7,7 @@
  */
 
 import type {
+  DroneConversationEvent,
   DroneContextWindowInfo,
   DronePlugin,
   DronePersonaCapability,
@@ -33,6 +35,10 @@ import {
 } from './tools-coordinator-trust.js';
 import { createSwarmSessionCommand } from './session-command.js';
 import { registerHooks } from './hooks.js';
+import { SwarmMemoryRetriever } from './memory-retrieval.js';
+import { ConversationWindowTracker } from './memory-window.js';
+import { createSwarmMemoryFragment } from './memory-fragment.js';
+import { createSwarmMemoryCommand } from './slash-swarm-memory.js';
 import { startHeartbeat, registerShutdown } from './heartbeat.js';
 
 export type { SwarmConfig } from './config.js';
@@ -145,6 +151,45 @@ export function createSwarmPlugin(
       };
       registration.offer(swarmCap);
       registration.logger.info('Offered DroneSwarmCapability');
+
+      // ── Swarm memory (wiki) proactive retrieval ──────────────────────
+      // Opt-in via swarm.memory.enabled; the retriever stays inert (zero
+      // network) until enabled AND the session is not suppressed.
+      const memoryConfig = registration.getConfig().swarm.memory ?? {
+        enabled: false,
+      };
+      const runtimeInfo = registration.request<{
+        debugFlags?: DebugFlagRegistry;
+        emitEvent?: (event: DroneConversationEvent) => void;
+      }>('runtime');
+      const memoryRetriever = new SwarmMemoryRetriever({
+        capability: swarmCap,
+        config: memoryConfig,
+        logger: registration.logger,
+        debugFlags: runtimeInfo?.debugFlags,
+        emitNotice: content =>
+          runtimeInfo?.emitEvent?.({ kind: 'notice', content }),
+      });
+      const memoryTracker = new ConversationWindowTracker();
+      memoryRetriever.setWindowSource(() => memoryTracker.assemble());
+      registration.hooks.onConversationEvent(async event => {
+        memoryTracker.onEvent(event);
+        // Refresh on the user's message so the CURRENT query drives retrieval
+        // (`current.userQuery` is populated above). Fire-and-forget: never
+        // block the turn; the fragment renders the last cached entries until
+        // the refresh lands. The engine already runs this hook with .catch().
+        if (event.kind === 'userMessage') {
+          void memoryRetriever
+            .maybeRefresh(memoryTracker.assemble())
+            .catch(() => {});
+        }
+      });
+      registration.registerPromptFragment(
+        createSwarmMemoryFragment(memoryRetriever)
+      );
+      registration.registerSlashCommand(
+        createSwarmMemoryCommand(memoryRetriever)
+      );
 
       // ── Persona and skill providers ─────────────────────────────────────
       const personaCap =

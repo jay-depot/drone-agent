@@ -46,6 +46,9 @@ importers:
       drone-core:
         specifier: workspace:*
         version: link:../drone-core
+      drone-swarm-common:
+        specifier: workspace:*
+        version: link:../drone-swarm-common
       fast-glob:
         specifier: ^3.3.3
         version: 3.3.3

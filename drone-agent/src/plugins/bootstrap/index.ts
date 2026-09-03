@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import type { DroneAgentConfig, DronePlugin, DroneWorkflow } from 'drone-core';
 import { detectProject } from './project-detect.js';
+import { createSwarmMemoryWorkflow } from './swarm-memory.js';
 
 type DroneConfigCapability = {
   getConfig: () => DroneAgentConfig;
@@ -590,6 +591,8 @@ export const bootstrapPlugin: DronePlugin = {
     };
 
     registration.registerWorkflow(userWorkflow);
+
+    registration.registerWorkflow(createSwarmMemoryWorkflow());
   },
 };
 

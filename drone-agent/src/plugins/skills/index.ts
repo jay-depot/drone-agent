@@ -338,7 +338,6 @@ export const skillsPlugin: DronePlugin = {
           }
           await ctx.engine.runHooks('onAfterToolCall');
           if (result.kickMessage && ctx.conversation && ctx.sessionManager) {
-            ctx.sessionManager.appendUserMessage(result.kickMessage);
             await ctx.engine.runHooks('onBeforePrompt');
             const reply = await ctx.conversation.sendUserMessage(
               result.kickMessage

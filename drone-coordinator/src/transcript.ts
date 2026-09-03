@@ -8,6 +8,24 @@ import type { SwarmEvent, SwarmSession } from './db/swarm-sessions.js';
 const MAX_TOOL_RESULT_CHARS = 400;
 
 /**
+ * Maximum number of characters to keep from a single tool-call's serialized
+ * arguments in the transcript. Tool-call arguments are NOT truncated by
+ * `truncateToolResult` (that only covers results), and a complex tool call can
+ * carry a huge argument payload (a giant exec command, file content in args).
+ * Without this cap, many such calls push the transcript past the transport
+ * limit (~256KB) and it truncates mid-JSON, breaking the ingest hook.
+ */
+const MAX_TOOL_CALL_ARGS_CHARS = 400;
+
+/**
+ * Hard cap on the total transcript size. Even with per-result and per-args
+ * truncation, a session with many turns can still exceed the transport limit;
+ * the response must never truncate mid-JSON. When the cap is hit, the tail is
+ * elided with a note so the summarizer knows content was dropped.
+ */
+const MAX_TRANSCRIPT_CHARS = 200 * 1024; // 200KB — safely under the ~256KB limit
+
+/**
  * Event kinds that carry conversation content worth keeping in the
  * transcript. Everything else (compaction notices, reasoning, progress,
  * completion markers, non-batch tool events) is noise for summarization.
@@ -103,7 +121,7 @@ function renderEvent(event: ParsedEvent): string[] {
       const calls = event.toolCalls ?? [];
       if (calls.length === 0) return [];
       return calls.map(
-        tc => `  tool_call: ${tc.name}(${JSON.stringify(tc.arguments)})`
+        tc => `  tool_call: ${tc.name}(${truncateToolCallArgs(tc.arguments)})`
       );
     }
     case 'toolResultBatch': {
@@ -118,6 +136,17 @@ function renderEvent(event: ParsedEvent): string[] {
     default:
       return [];
   }
+}
+
+/**
+ * Truncate a tool-call's serialized arguments to a bounded length, appending a
+ * note about the original size so the summarizer knows content was elided.
+ */
+function truncateToolCallArgs(args: Record<string, unknown>): string {
+  const serialized = JSON.stringify(args);
+  if (serialized.length <= MAX_TOOL_CALL_ARGS_CHARS) return serialized;
+  const truncated = serialized.slice(0, MAX_TOOL_CALL_ARGS_CHARS);
+  return `${truncated}…[truncated, original ${serialized.length} chars]`;
 }
 
 /**
@@ -179,5 +208,8 @@ export async function buildSessionTranscript(
     })
     .join('\n');
 
-  return `${header.join('\n')}${body}`;
+  const full = `${header.join('\n')}${body}`;
+  if (full.length <= MAX_TRANSCRIPT_CHARS) return full;
+  const truncated = full.slice(0, MAX_TRANSCRIPT_CHARS);
+  return `${truncated}\n…[transcript truncated, original ${full.length} chars]`;
 }

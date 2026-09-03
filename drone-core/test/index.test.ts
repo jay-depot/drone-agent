@@ -92,6 +92,17 @@ describe('createDefaultAgentConfig', () => {
     a.enabledPlugins.push('mutate-me');
     expect(b.enabledPlugins).toEqual([]);
   });
+
+  it('defaults swarm.memory to disabled with plan defaults', () => {
+    const config = createDefaultAgentConfig();
+    expect(config.swarm.memory).toEqual({
+      enabled: false,
+      topK: 5,
+      minScore: 0.35,
+      anchors: { tags: [], boostPerTag: 0.08, boostTitle: 0.05 },
+      window: { maxQueryTokens: 6000, maxQuerySegments: 3 },
+    });
+  });
 });
 
 describe('applyAgentConfigLayer', () => {
@@ -136,6 +147,18 @@ describe('applyAgentConfigLayer', () => {
     expect(merged.compaction.nudgeMarginPercent).toBe(
       base.compaction.nudgeMarginPercent
     );
+  });
+
+  it('deep-merges a partial swarm.memory override onto defaults', () => {
+    const merged = applyAgentConfigLayer(base, {
+      swarm: { memory: { enabled: true, anchors: { tags: ['drone-beacon'] } } },
+    });
+    expect(merged.swarm.memory?.enabled).toBe(true);
+    expect(merged.swarm.memory?.topK).toBe(5);
+    expect(merged.swarm.memory?.minScore).toBe(0.35);
+    expect(merged.swarm.memory?.anchors?.tags).toEqual(['drone-beacon']);
+    expect(merged.swarm.memory?.anchors?.boostPerTag).toBe(0.08);
+    expect(merged.swarm.memory?.window?.maxQueryTokens).toBe(6000);
   });
 
   it('replaces LSP server map but merges LSP scalar fields', () => {

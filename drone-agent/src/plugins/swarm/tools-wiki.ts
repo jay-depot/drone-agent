@@ -12,7 +12,10 @@ import { firstMissingString } from './string-params.js';
 function createWikiReadTool(ctx: SwarmContext): DroneToolDefinition {
   return {
     name: 'wiki_read',
-    description: 'Read a wiki page from the swarm knowledge base by ID.',
+    description:
+      'Read wiki page(s) from the swarm knowledge base by ID. ' +
+      'Without a scope, returns ALL versions of the page (beacon and/or coordinator), ' +
+      'each tagged with its "origin". With ?scope, returns exactly that version as a single page.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -48,7 +51,18 @@ function createWikiReadTool(ctx: SwarmContext): DroneToolDefinition {
             error: `Wiki page not found: ${pageId}`,
           });
         }
-        return JSON.stringify({ success: true, page: await res.json() });
+        const data = (await res.json()) as Record<string, unknown>;
+        if (
+          !scope &&
+          data &&
+          Array.isArray((data as { versions?: unknown[] }).versions)
+        ) {
+          return JSON.stringify({
+            success: true,
+            pages: (data as { versions: unknown[] }).versions,
+          });
+        }
+        return JSON.stringify({ success: true, page: data });
       } catch (err) {
         return JSON.stringify({
           success: false,

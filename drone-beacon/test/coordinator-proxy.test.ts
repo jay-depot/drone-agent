@@ -24,6 +24,7 @@ function makeFakeClient(
 ): CoordinatorClient {
   return {
     getBaseUrl: () => 'http://coordinator:3456',
+    getFetch: () => fetch as typeof fetch,
     ...overrides,
   } as unknown as CoordinatorClient;
 }
@@ -121,6 +122,52 @@ describe('POST /coordinator/spawn (beacon proxy)', () => {
       payload: { targetBeaconId: 'b1' },
     });
     expect(res.statusCode).toBe(503);
+  });
+});
+
+describe('wiki coordinator-scope proxy (missing /api prefix + no mTLS identity fix)', () => {
+  it('proxies a coordinator-scope wiki write to the /api/wiki path via the client fetch', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: 'sess-page', title: 'Title' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    const fakeGetFetch = vi.fn().mockReturnValue(fetchMock);
+    setCoordinatorClient(makeFakeClient({ getFetch: fakeGetFetch }));
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/wiki/sess-page',
+      payload: {
+        title: 'Title',
+        content: 'Body',
+        scope: 'coordinator',
+        tags: [],
+        sources: [],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // The proxied request must hit the coordinator's /api-prefixed wiki route
+    // (previously it went to /wiki/... which the SPA fallback answered with
+    // index.html 200, then res.json() threw → beacon 500 "Internal Server Error").
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://coordinator:3456/api/wiki/sess-page',
+      expect.objectContaining({ method: 'PUT' })
+    );
+    // The client's pre-configured fetch (fingerprint + mTLS identity) must be
+    // used, not a fresh createCoordinatorFetch with no credentials.
+    expect(fakeGetFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not double-prefix a path that already carries /api', async () => {
+    const { coordinatorApiPath } = await import('../src/routes/context.js');
+    expect(coordinatorApiPath('/api/wiki/sess-page')).toBe(
+      '/api/wiki/sess-page'
+    );
+    expect(coordinatorApiPath('/wiki/sess-page')).toBe('/api/wiki/sess-page');
+    expect(coordinatorApiPath('/insights')).toBe('/api/insights');
   });
 });
 

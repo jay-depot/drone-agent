@@ -1,5 +1,4 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import type { MatrixAdapterConfig } from '../src/adapters/matrix.js';
 import type { AdapterMessage } from '../src/types.js';
 
 // Mock matrix-js-sdk
@@ -166,7 +165,7 @@ describe('MatrixServiceAdapter', () => {
         homeserverUrl: 'https://matrix.org',
         accessToken: 'syt_token',
         // missing userId
-      } as MatrixAdapterConfig);
+      });
 
       await expect(adapter.start()).rejects.toThrow();
     });

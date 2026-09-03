@@ -43,21 +43,17 @@ describe('createWebAuthMiddleware', () => {
     } as unknown as FastifyRequest;
   }
 
-  function makeReply() {
+  function makeReply(): FastifyReply & { _code(): number } {
     let code = 0;
-    let sent: unknown = null;
     return {
       code: (c: number) => {
         code = c;
         return {
-          send: (s: unknown) => {
-            sent = s;
-          },
+          send: () => {},
         };
       },
-      _sent: () => sent,
       _code: () => code,
-    } as unknown as FastifyReply;
+    } as unknown as FastifyReply & { _code(): number };
   }
 
   it('allows local requests without token', async () => {
@@ -76,6 +72,47 @@ describe('createWebAuthMiddleware', () => {
   });
 
   it('allows non-local requests with correct auth header', async () => {
+    const middleware = createWebAuthMiddleware(() => 'secret');
+    const reply = makeReply();
+    await middleware(
+      makeReq('8.8.8.8', '/api/sessions', 'Bearer secret'),
+      reply
+    );
+    expect(reply._code()).toBe(0);
+  });
+
+  it('blocks non-local requests to /api routes without auth header', async () => {
+    const middleware = createWebAuthMiddleware(() => 'secret');
+    const reply = makeReply();
+    await middleware(makeReq('8.8.8.8', '/api/sessions'), reply);
+    expect(reply._code()).toBe(401);
+  });
+
+  it('allows local requests to /api routes without token', async () => {
+    const middleware = createWebAuthMiddleware(() => 'secret');
+    const reply = makeReply();
+    await middleware(makeReq('127.0.0.1', '/api/sessions'), reply);
+    expect(reply._code()).toBe(0);
+  });
+
+  it('blocks non-local requests to /api routes with wrong token', async () => {
+    const middleware = createWebAuthMiddleware(() => 'secret');
+    const reply = makeReply();
+    await middleware(
+      makeReq('8.8.8.8', '/api/sessions', 'Bearer wrong'),
+      reply
+    );
+    expect(reply._code()).toBe(401);
+  });
+
+  it('allows static asset paths without token', async () => {
+    const middleware = createWebAuthMiddleware(() => 'secret');
+    const reply = makeReply();
+    await middleware(makeReq('8.8.8.8', '/assets/app.js'), reply);
+    expect(reply._code()).toBe(0);
+  });
+
+  it('allows non-local requests with correct auth header on root-level routes', async () => {
     const middleware = createWebAuthMiddleware(() => 'secret');
     const reply = makeReply();
     await middleware(makeReq('8.8.8.8', '/personas', 'Bearer secret'), reply);

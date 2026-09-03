@@ -223,6 +223,18 @@ export type DroneWorkflowContext = {
    * plugins so they're available for the kickMessage chat turn.
    */
   enablePlugin: (pluginId: string) => Promise<boolean>;
+  /**
+   * Run one agent-assisted step inside the workflow: `prompt` is sent as a
+   * synthetic user turn through the full conversation machinery (registered
+   * tools, guardrails, conversation events), and the final assistant reply
+   * is returned as a string.
+   *
+   * Agent steps share a workflow-scoped EPHEMERAL conversation with the
+   * other `agent` calls of the same workflow run: later steps see what
+   * earlier steps concluded, but nothing is written to the main session's
+   * chat history or persisted. Uses the active provider/model.
+   */
+  agent: (prompt: string, opts?: { label?: string }) => Promise<string>;
 };
 
 /**
@@ -235,6 +247,12 @@ export type DroneWorkflowContext = {
 export type DroneWorkflowResult = {
   /** If set, the engine injects this as a synthetic user turn and re-enters the chat loop. */
   kickMessage?: string;
+  /**
+   * When true, the host keeps the session alive after processing the
+   * kickMessage reply (TUI stays open; plain mode drops into the
+   * interactive loop) instead of exiting. The workflow owns this flag.
+   */
+  continueSession?: boolean;
   /** Human-readable JSON for the tool caller. Defaults to '{}' if the workflow produces nothing else. */
   toolResult?: string;
 };

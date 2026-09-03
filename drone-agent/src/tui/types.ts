@@ -153,4 +153,17 @@ export type DroneTuiOptions = {
     warn: (message: string) => void;
     error: (message: string) => void;
   };
+  /**
+   * When set (CLI `--workflow` host mode), the App runs this workflow once
+   * on mount: elicitations render inline in the TUI, tool activity streams
+   * through the normal event subscription, and a kickMessage reply is sent
+   * as a normal chat turn.
+   */
+  initialWorkflow?: { name: string; args: Record<string, unknown> };
+  /**
+   * Called after the initial workflow completes (or fails). `continueSession`
+   * mirrors the workflow's own flag: true → the host keeps the session live;
+   * false → the host may exit (the App exits itself in that case).
+   */
+  onWorkflowComplete?: (info: { continueSession: boolean }) => void;
 };

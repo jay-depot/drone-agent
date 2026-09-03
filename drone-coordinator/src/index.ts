@@ -26,6 +26,7 @@ import {
   initWebToken,
   createPersona,
   createSkill,
+  updatePersona,
   listPersonas,
   listSkills,
 } from './db/index.js';
@@ -49,6 +50,10 @@ import {
 import { createWebAuthMiddleware, isLocalRequest } from './web-auth.js';
 import { createMtlsMiddleware } from './mtls.js';
 import { registerBeaconWebSocket } from './beacon-ws.js';
+import {
+  seedDefaultAssets,
+  repairSeededLibrarianAssets,
+} from './default-assets.js';
 import { configureSessionEndHook } from './session-end.js';
 import { setAutoApproveBeacons } from './auto-approve.js';
 
@@ -161,7 +166,7 @@ async function parseArgs(): Promise<Config> {
       config.command = 'show-fingerprint';
     } else if (arg === '--help' || arg === '-h') {
       console.log(
-        `\ndrone-coordinator [options]\n\nCommands:\n  serve                Start the coordinator server (default)\n  approve-beacon <id>  Approve a pending beacon by its ID\n  list-beacons         List all registered beacons and their trust status\n  --show-web-token     Print the current web UI access token\n  --generate-web-token Generate a new web UI access token\n  --show-fingerprint   Print the coordinator's TLS certificate fingerprint\n\nOptions:\n  --port <n>           Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>           Host to bind to (default: ${DEFAULT_HOST})\n  --web-port <n>       HTTP port for web UI (default: ${DEFAULT_WEB_PORT})\n  --web-host <h>       Host for web UI port (default: ${DEFAULT_WEB_HOST})\n\n  --config-file <path> Load settings from a JSON config file (flags override file values)\n  --config-dir <dir>   Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>          Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https              Enable HTTPS (default: ${process.env.COORDINATOR_HTTPS === 'true' ? 'enabled' : 'disabled'}, or set COORDINATOR_HTTPS=true)\n  --no-https           Disable HTTPS\n  --help               Show this help message\n      `
+        `\ndrone-coordinator [options]\n\nCommands:\n  serve                Start the coordinator server (default)\n  approve-beacon <id>  Approve a pending beacon by its ID\n  list-beacons         List all registered beacons and their trust status\n  --show-web-token     Print the current web UI access token\n  --generate-web-token Generate a new web UI access token\n  --show-fingerprint   Print the coordinator's TLS certificate fingerprint\n\nOptions:\n  --port <n>           Port to listen on (default: ${DEFAULT_PORT})\n  --host <h>           Host to bind to (default: ${DEFAULT_HOST})\n  --web-port <n>       HTTP port for web UI (default: ${DEFAULT_WEB_PORT})\n  --web-host <h>       Host for web UI port (default: ${DEFAULT_WEB_HOST})\n\n  --config-file <path> Load settings from a JSON config file (flags override file values)\n  --config-dir <dir>   Configuration directory (default: ${DEFAULT_CONFIG_DIR})\n  --db <path>          Path to SQLite database (default: <config-dir>/${DEFAULT_DB_FILENAME})\n  --https              Enable HTTPS on the primary port (ON unless --no-https; COORDINATOR_HTTPS env is not read — use --no-https to disable)\n  --no-https           Disable HTTPS\n  --help               Show this help message\n      `
       );
       process.exit(0);
     }
@@ -645,211 +650,15 @@ export async function main() {
  * Seed default personas and skills into the coordinator database.
  * Only creates items that don't already exist, so user customizations are preserved.
  */
+
 function seedDefaults(): void {
-  const existingPersonas = listPersonas();
-  const existingPersonaIds = new Set(existingPersonas.map(p => p.id));
-
-  if (!existingPersonaIds.has('coordinator-wiki-librarian')) {
-    createPersona({
-      id: 'coordinator-wiki-librarian',
-      name: 'Coordinator Wiki Librarian',
-      description:
-        'Suggested persona for scheduled and manual memory wiki maintenance sessions',
-      systemPrompt: `---
-name: coordinator-wiki-librarian
-description: Suggested persona for scheduled and manual memory wiki maintenance sessions
-color: '#4488ff'
-tools:
-  - wiki_*
-  - session_*
-  - search__*
-  - skills__recall
-  - memory__recall
-  - memory__search
-  - memory__list
-  - file__read
-  - file__list
-  - file__glob
-  - !exec.*
-  - !file.write
-  - !file.apply_diff
-  - !git.*
-  - !self-improvement.*
-  - !memory.store
-  - !memory.delete
-  - !swarm__wiki_delete
-skills:
-  - memory-wiki
-toolCallLimit: 50
-
-# Coordinator Wiki Librarian
-
-You are a knowledge management specialist for the drone-agent swarm. Your purpose is to maintain the swarm's memory wiki by ingesting conversation history, organizing knowledge, and ensuring the wiki remains accurate and well-structured.
-
-## Your Tools
-
-You have access to:
-- **Wiki tools** (wiki_read, wiki_write, wiki_search, wiki_list, wiki_lint) — for reading and writing wiki pages
-- **Session tools** (session_list, session_get_log, session_mark_processed) — for finding and processing sessions
-- **Search tools** (search__text) — for searching text
-- **Skill recall** (skills__recall) — for loading the memory-wiki skill
-- **Memory read tools** (memory__recall, memory__search, memory__list) — for reading project memory
-- **File read tools** (file__read, file__list, file__glob) — for reading files
-
-You do NOT have access to:
-- Shell execution (exec.*)
-- File writing (file.write, file.apply_diff)
-- Git operations (git.*)
-- Self-improvement tools (self-improvement.*)
-- Memory writing/deletion (memory.store, memory.delete)
-- Wiki deletion (swarm__wiki_delete)
-
-## Your Workflow
-
-When asked to process a session:
-1. Call skills.recall({"id": "memory-wiki"}) to load the wiki skill
-2. Use session_list to find finished sessions
-3. Use session_get_log to retrieve the full conversation
-4. Analyze the conversation for key insights, decisions, patterns
-5. Create or update wiki pages with wiki_write
-6. Call session_mark_processed when done`,
-    });
-    logger.info('Seeded default persona: coordinator-wiki-librarian');
-  }
-
-  if (!existingPersonaIds.has('coordinator-admin')) {
-    createPersona({
-      id: 'coordinator-admin',
-      name: 'Coordinator Admin',
-      description:
-        'Persona with an overview of the drone framework internals preloaded. Use for setup/maintenance questions and tasks.',
-      systemPrompt: `---
-name: coordinator-admin
-description: Persona with an overview of the drone framework internals preloaded. Use for setup/maintenance questions and tasks.
-color: '#ff8844'
-tools:
-  - config__*
-  - startup__*
-  - persona__*
-  - skills__*
-  - wiki_read
-  - wiki_search
-  - wiki_list
-  - wiki_lint
-  - session_list
-  - session_get_log
-  - memory__*
-  - search__*
-  - file__read
-  - file__list
-  - file__glob
-  - !exec.*
-  - !file.write
-  - !file.apply_diff
-  - !git.*
-  - !self-improvement.*
-  - !swarm__wiki_write
-  - !swarm__wiki_delete
-  - !session_mark_processed
-toolCallLimit: 30
-
-# Coordinator Admin
-
-You are a drone-agent swarm administration specialist. You have deep knowledge of the drone framework's architecture and can help with setup, configuration, and maintenance questions.
-
-## Architecture Overview
-
-The drone ecosystem has four layers:
-
-1. **drone-agent** — The CLI/TUI coding agent. Runs plugins, connects to LLM providers, manages sessions. Can work standalone or as part of a swarm.
-2. **drone-beacon** — Local coordination hub. Runs on each host, provides host-wide personas/skills/memory, inter-agent messaging, agent spawning.
-3. **drone-coordinator** — Global control plane. Manages swarm sessions, knowledge, wiki, insights/principles across all beacons. Source of truth for swarm-scoped assets.
-4. **drone-gateway** (future) — Chat API integration layer.
-
-## Config Cascade
-
-Config is resolved in this order (last wins):
-1. System defaults (precedence 0)
-2. Coordinator config (precedence 50)
-3. Beacon config (precedence 75)
-4. User config (~/.drone-agent/config.json)
-5. Project config (<project>/.drone-agent/config.json)
-
-## Key Concepts
-
-- **Personas** define an agent's identity, system prompt, and tool access. Personas can be scoped to user, project, beacon, or coordinator.
-- **Skills** provide the LLM with instructions on how to perform tasks. Skills are loaded via skills.recall().
-- **Wiki** is a shared knowledge base of markdown pages with YAML frontmatter, stored on the beacon/coordinator filesystem.
-- **Migration tool** (drone-migrate) promotes/demotes assets between scopes (project ↔ user ↔ beacon ↔ coordinator).
-- **Self-improvement** system records insights and derives principles that are injected into the system prompt.
-
-## Your Tools
-
-You have read-only access to most systems plus the ability to run the migration tool. You cannot execute shell commands, write files, or modify the wiki.
-
-## Common Tasks
-
-- "How do I set up TLS?" — Explain the --https flag and certificate auto-generation
-- "What's the difference between beacon and coordinator scopes?" — Explain scope hierarchy
-- "How do I migrate a persona from local to swarm?" — Explain the migration tool
-- "Show me the current config" — Use config__get and config__list_layers
-- "List all personas" — Use persona__list`,
-    });
-    logger.info('Seeded default persona: coordinator-admin');
-  }
-
-  const existingSkills = listSkills();
-  const existingSkillIds = new Set(existingSkills.map(s => s.id));
-
-  if (!existingSkillIds.has('memory-wiki')) {
-    createSkill({
-      id: 'memory-wiki',
-      name: 'Memory Wiki',
-      description:
-        'A description of the memory wiki structure, exploration, and ingestion workflow',
-      trigger:
-        'the user wants to understand the wiki structure, ingest a session into the wiki, explore the wiki, or know the difference between wiki and project memory',
-      body: `# Memory Wiki
-
-## Structure
-
-Wiki pages are stored as .md files with YAML frontmatter:
-
-\`\`\`yaml
----
-id: my-page
-title: My Page
-scope: beacon  # or 'coordinator'
-tags:
-  - reference
-sources:
-  - session-abc123
----
-\`\`\`
-
-Pages support [[wiki links]] for cross-references. The wiki enforces a "no downward links" rule: coordinator pages cannot link to beacon pages.
-
-## Exploration
-
-- wiki_list — list all pages
-- wiki_search — search by keyword
-- wiki_read — read a specific page
-- wiki_lint — check for broken links, downward links, orphan pages
-
-## Ingestion Workflow
-
-1. Use session_list to find finished sessions
-2. Use session_get_log to retrieve the full conversation
-3. Analyze the conversation for key insights, decisions, patterns
-4. Create or update wiki pages with wiki_write
-5. Include the session ID in the sources field
-6. Call session_mark_processed when done
-
-## Wiki vs Project Memory
-
-- **Wiki**: Persistent, structured, shared across the swarm. Use for documentation, architecture decisions, patterns, reference material.
-- **Project Memory** (memory__store): Quick facts, local context, ephemeral notes. Use for temporary information that only this agent needs.`,
-    });
-    logger.info('Seeded default skill: memory-wiki');
-  }
+  const db = {
+    createPersona,
+    createSkill,
+    listPersonas,
+    listSkills,
+    updatePersona,
+  };
+  seedDefaultAssets(db, logger);
+  repairSeededLibrarianAssets(db, logger);
 }

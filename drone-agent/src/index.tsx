@@ -427,35 +427,50 @@ async function main(): Promise<void> {
     output.write(`${response}\n`);
     await engine.runHooks('onAfterToolCall');
   } else if (invocation.kind === 'workflow') {
-    // For workflow runs we always need elicitation. If we're in plain
-    // mode the capability is already set; otherwise (e.g. someone ran
-    // `--workflow` without `--plain-output`) attach the readline
-    // elicitation here so the wizard can prompt.
-    if (!engine.getElicitation()) {
-      engine.setElicitation(createReadlineElicitation());
-    }
     const { pluginId, workflowName, args } = invocation.options.workflow;
     const canonicalName = `${pluginId}__${workflowName}`;
-    await engine.runHooks('onBeforePrompt');
-    const result = await engine.runWorkflow(canonicalName, args);
-    if (result.toolResult) {
-      logger.info(result.toolResult);
-    }
-    await engine.runHooks('onAfterToolCall');
 
-    if (result.kickMessage) {
-      // The workflow wants the agent to react to its completion. Inject
-      // the message as a synthetic user turn and re-enter the chat loop
-      // so the assistant can summarise the result.
-      sessionManager.appendUserMessage(result.kickMessage);
+    if (invocation.options.outputPlain) {
+      // Plain host: readline elicitation + plain output (scripting UX).
+      if (!engine.getElicitation()) {
+        engine.setElicitation(createReadlineElicitation());
+      }
       await engine.runHooks('onBeforePrompt');
-      const plainHandler = makePlainOutputEventHandler();
-      const reply = await conversation.sendUserMessage(
-        result.kickMessage,
-        plainHandler
-      );
-      output.write(`${reply}\n`);
+      const result = await engine.runWorkflow(canonicalName, args);
+      if (result.toolResult) {
+        logger.info(result.toolResult);
+      }
       await engine.runHooks('onAfterToolCall');
+      if (result.kickMessage) {
+        // sendUserMessage appends the prompt itself — do not pre-append.
+        await engine.runHooks('onBeforePrompt');
+        const plainHandler = makePlainOutputEventHandler();
+        const reply = await conversation.sendUserMessage(
+          result.kickMessage,
+          plainHandler
+        );
+        output.write(`${reply}\n`);
+        await engine.runHooks('onAfterToolCall');
+      }
+      if (result.continueSession === true) {
+        // The workflow wants followups: stay in the interactive loop
+        // instead of exiting.
+        await runInteractiveLoop(conversation, engine, logger, sessionManager);
+      }
+    } else {
+      // TUI host (default): the workflow runs inside the mounted App so
+      // elicitations render inline, tool activity streams live, and the
+      // kick reply is a normal chat turn. The App exits itself when the
+      // workflow does not own continueSession.
+      const tui = createTui({
+        engine,
+        conversation,
+        sessionManager,
+        model,
+        logger,
+        initialWorkflow: { name: canonicalName, args },
+      });
+      await tui.waitUntilExit();
     }
   } else if (invocation.kind === 'default' && invocation.options.once) {
     // === Subagent mode: --once (+ optionally --output-json) ===

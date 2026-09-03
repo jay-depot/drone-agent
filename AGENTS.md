@@ -115,7 +115,7 @@ The TUI is built with Ink 5.x (React for CLIs). It renders a five-region layout:
 
 ### Memory System
 
-Project-level memory is stored as JSON files in `.drone-agent/memory/`. Tools: `memory__store`, `memory__recall`, `memory__list`, `memory__search`, `memory__delete`. The memory plugin is opt-in (not enabled by default).
+Project-level memory is stored as Markdown files with YAML frontmatter in `.drone-agent/memory/`. Tools: `memory__manage` (store/recall/delete actions) and `memory__browse` (list/search actions). The memory plugin is opt-in (not enabled by default).
 
 ### Insight System
 
@@ -171,6 +171,10 @@ Call `registration.registerPromptFragment({ key, phase: 'header'|'footer', rende
 ### Adding a new workflow
 
 Call `registration.registerWorkflow({ name, description, inputSchema, run })`. The `run` function receives `(input, ctx)` where `ctx` has `elicit`, `projectDir`, `config`, `requestCapability`, and `enablePlugin`.
+
+`ctx.agent(prompt)` runs one agent-assisted step: a synthetic user turn through the full conversation machinery (tools, guardrails, events) whose final assistant reply is returned as a string. Agent steps share a workflow-scoped ephemeral conversation — they see each other, the main session's history is untouched. `run` may return `continueSession: true` (workflow-owned) to keep the host session alive after completion instead of exiting.
+
+**Kick-message contract:** a workflow's `kickMessage` is an instruction to the agent, not a report to the user — reports belong in `toolResult`. The runner wraps every kickMessage in a standard envelope before injecting it; never pre-append a synthetic turn (sendUserMessage appends its own prompt). See the workflow-system docs for details.
 
 ### Adding a new slash command
 

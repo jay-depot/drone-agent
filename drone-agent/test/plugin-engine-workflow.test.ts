@@ -27,7 +27,8 @@ describe('plugin-engine workflow registry', () => {
     await engine.initialize();
 
     const result = await engine.runWorkflow('wf__hello', {});
-    expect(result.kickMessage).toBe('hi');
+    expect(result.kickMessage).toContain('Workflow wf__hello completed');
+    expect(result.kickMessage).toContain('---\nhi\n---');
     expect(result.toolResult).toBe('{"ok":true}');
   });
 
@@ -121,7 +122,8 @@ describe('plugin-engine workflow normalization', () => {
       kickMessage: 'k',
       toolResult: 't',
     })) as { kickMessage?: string; toolResult?: string };
-    expect(result.kickMessage).toBe('k');
+    expect(result.kickMessage).toContain('Workflow wf__x completed');
+    expect(result.kickMessage).toContain('---\nk\n---');
     expect(result.toolResult).toBe('t');
   });
 
@@ -130,7 +132,8 @@ describe('plugin-engine workflow normalization', () => {
       kickMessage?: string;
       toolResult?: string;
     };
-    expect(result.kickMessage).toBe('k');
+    expect(result.kickMessage).toContain('Workflow wf__x completed');
+    expect(result.kickMessage).toContain('---\nk\n---');
     expect(result.toolResult).toBeUndefined();
   });
 

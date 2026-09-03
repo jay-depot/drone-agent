@@ -11,6 +11,11 @@ import path from 'node:path';
 // Fetch this many times maxResults candidates from the vector index so that
 // exclude filtering and per-file dedup can still yield maxResults files.
 const OVERFETCH_FACTOR = 4;
+// Over-fetch multiplier for the bit-signature prefilter: the Hamming KNN
+// shortlist is maxResults * BIT_OVERFETCH rows, rescored by exact cosine
+// before the dedup pipeline. Opinionated constant per ADR 181;
+// real-corpus calibration may adjust it.
+const BIT_OVERFETCH = 8;
 
 function isExcluded(
   filePath: string,
@@ -148,14 +153,25 @@ export default function searchRoutes(app: FastifyInstance) {
     // Get query embedding
     const queryEmbedding = await provider.getEmbedding(`search_query: ${q}`);
 
-    // Fetch a larger candidate set than maxResults so exclude filtering and
-    // dedup can still yield maxResults files.
-    const overFetch = (maxResults ?? 50) * OVERFETCH_FACTOR;
-    const candidates = db.searchChunksByVector(
+    const maxResultsVal = maxResults ?? 50;
+
+    // Cheap integer-Hamming KNN over the bit-signature mirror, rescored by
+    // exact cosine. Rescoring never drops rows, so fewer candidates than
+    // requested means the bit stage itself under-delivered (empty/lost mirror
+    // or corpus smaller than k) and we fall back to the float KNN path.
+    const bitK = maxResultsVal * BIT_OVERFETCH;
+    let candidates = db.searchChunksByVectorPrefiltered(
       queryEmbedding,
-      overFetch,
+      bitK,
       directoryPath
     );
+    if (candidates.length < bitK) {
+      candidates = db.searchChunksByVector(
+        queryEmbedding,
+        maxResultsVal * OVERFETCH_FACTOR,
+        directoryPath
+      );
+    }
 
     const minScoreVal = minScore ?? 0.0;
     const scored = candidates
@@ -165,13 +181,13 @@ export default function searchRoutes(app: FastifyInstance) {
     // Deduplicate by file, keeping the best chunk's score and combining the
     // matching chunks' text (with gap markers for non-consecutive chunks).
     const top = dedupeAndCombineChunks(scored, {
-      maxResults: maxResults ?? 50,
+      maxResults: maxResultsVal,
     });
 
     return {
       query: q,
       resultCount: top.length,
-      truncated: top.length >= (maxResults ?? 50),
+      truncated: top.length >= maxResultsVal,
       results: top.map(r => ({
         file: r.filePath,
         chunkIndex: r.chunkIndex,

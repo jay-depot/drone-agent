@@ -7,9 +7,8 @@ import {
   getConnection,
   sendToAgent,
   sendToChannel,
+  pushFragmentSyncToAllConnected,
   pushFragmentToAgent,
-  pushFragmentSyncToAllConnected,
-  pushFragmentSyncToAllConnected,
 } from '../src/ws-server.js';
 import {
   registerAgent,

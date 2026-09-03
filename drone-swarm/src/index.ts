@@ -16,12 +16,16 @@ Usage:
 Address selection (mutually exclusive):
   --beacon <url>        Talk to a beacon (wiki routes live at /wiki/*)
   --coordinator <url>   Talk to the coordinator (routes live under /api/*)
+  --web-token <t>       Web token for the coordinator web port (Bearer auth).
+                        Preferred over DRONE_COORDINATOR_WEB_TOKEN.
   Environment: DRONE_BEACON_URL / DRONE_COORDINATOR_URL
+  Environment: DRONE_COORDINATOR_WEB_TOKEN — used when --web-token is absent
   Default: local coordinator on http://localhost:3456
 
 Session commands (coordinator):
   session list [--status <s>] [--limit <n>]
   session log <id>            Print the full conversation transcript as JSON
+  session transcript <id>     Print the readable --- Turn N --- transcript
   session process <id>        Transition a finished session to "processing"
   session processed <id>      Mark a processed session complete [--summary <s>] [--notes <n>]
 
@@ -92,6 +96,24 @@ async function runSessionCommand(
       }
       const { log } = await client.getSessionLog(id);
       printJson(log);
+      return 0;
+    }
+    case 'get': {
+      if (!id) {
+        console.error('usage: drone-swarm session get <id>');
+        return 1;
+      }
+      const { session } = await client.getSession(id);
+      printJson(session);
+      return 0;
+    }
+    case 'transcript': {
+      if (!id) {
+        console.error('usage: drone-swarm session transcript <id>');
+        return 1;
+      }
+      const { transcript } = await client.getSessionTranscript(id);
+      printJson(transcript);
       return 0;
     }
     case 'process': {
@@ -262,7 +284,17 @@ export async function main(
       beacon: args.beacon,
       coordinator: args.coordinator,
     });
-    const client = new SwarmClient(address.target, address.baseUrl, fetchImpl);
+    const webToken =
+      args.flags['web-token'] ||
+      (address.target === 'coordinator'
+        ? process.env.DRONE_COORDINATOR_WEB_TOKEN
+        : undefined);
+    const client = new SwarmClient(
+      address.target,
+      address.baseUrl,
+      webToken || undefined,
+      fetchImpl
+    );
 
     const [group, action] = args.positional;
     switch (group) {

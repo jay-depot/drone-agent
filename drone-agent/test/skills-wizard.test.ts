@@ -135,6 +135,9 @@ function makeContext(input: {
     requestCapability: <T>(id: string): T | undefined =>
       caps.get(id) as T | undefined,
     enablePlugin: async (_pluginId: string) => false,
+    agent: async () => {
+      throw new Error('ctx.agent not expected in this test');
+    },
   };
 }
 
@@ -468,6 +471,9 @@ describe('skillsCreateWorkflow — reload capability', () => {
             requestCapability: <T>(id: string): T | undefined =>
               caps.get(id) as T | undefined,
             enablePlugin: async (_pluginId: string) => false,
+            agent: async () => {
+              throw new Error('ctx.agent not expected in this test');
+            },
           }
         )
       ).rejects.toThrow(/requires the skills broker plugin/);

@@ -32,6 +32,7 @@ export class SwarmClient {
   constructor(
     readonly target: SwarmTarget,
     private readonly baseUrl: string,
+    private readonly webToken?: string,
     private readonly fetchImpl: typeof fetch = (...args) =>
       fetch(...(args as Parameters<typeof fetch>))
   ) {}
@@ -48,7 +49,10 @@ export class SwarmClient {
   ): Promise<{ status: number; data: T }> {
     const response = await this.fetchImpl(this.url(path), {
       method,
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+      headers: {
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(this.webToken ? { Authorization: `Bearer ${this.webToken}` } : {}),
+      },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(30000),
     });
@@ -103,6 +107,38 @@ export class SwarmClient {
       throw new ApiError(status, `Failed to get session log: ${status}`);
     }
     return { status, log: data };
+  }
+
+  async getSession(sessionId: string): Promise<{
+    status: number;
+    session: unknown;
+  }> {
+    const path =
+      this.target === 'coordinator'
+        ? `/sessions/${encodeURIComponent(sessionId)}`
+        : `/sync/sessions/${encodeURIComponent(sessionId)}`;
+    const { status, data } = await this.request<{ session?: unknown }>(
+      'GET',
+      path
+    );
+    if (status !== 200) {
+      throw new ApiError(status, `Failed to get session: ${status}`);
+    }
+    return { status, session: data.session ?? data };
+  }
+
+  async getSessionTranscript(sessionId: string): Promise<{
+    status: number;
+    transcript: unknown;
+  }> {
+    const path = `/sessions/${encodeURIComponent(sessionId)}/transcript`;
+    const { status, data } = await this.request<{
+      transcript?: unknown;
+    }>('GET', path);
+    if (status !== 200) {
+      throw new ApiError(status, `Failed to get session transcript: ${status}`);
+    }
+    return { status, transcript: data.transcript ?? data };
   }
 
   async processSession(

@@ -167,6 +167,21 @@ export default function swarmRoutes(app: FastifyInstance) {
     return reply.send({ sessions, count: totalCount });
   });
 
+  // Lightweight single-session metadata (no events). Used by the swarm-memory
+  // hook to read a session's personaId without pulling the full event log —
+  // the log can be huge (giant tool-result payloads) and truncates at the
+  // transport limit, producing malformed JSON.
+  app.get<{ Params: { id: string } }>(
+    '/sessions/:id',
+    async (request, reply) => {
+      const session = db.getSwarmSession(request.params.id);
+      if (!session) {
+        return reply.code(404).send({ error: 'Session not found' });
+      }
+      return reply.send({ session });
+    }
+  );
+
   app.get<{ Params: { id: string } }>(
     '/sessions/:id/log',
     async (request, reply) => {

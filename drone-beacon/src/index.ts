@@ -8,6 +8,8 @@ import {
   type SessionEndTrigger,
 } from 'drone-swarm-common';
 import { SearchIndexer } from './search-indexer.js';
+import { WikiIndexer } from './wiki-indexer.js';
+import { runWikiIndexCycle, setWikiIndexer } from './wiki-index-support.js';
 import os from 'node:os';
 import path from 'path';
 import fs from 'fs';
@@ -16,6 +18,7 @@ import {
   closeDatabase,
   cleanupExpiredMemories,
   backfillVecChunks,
+  backfillBqVecChunks,
 } from './db/index.js';
 import {
   registerRoutes,
@@ -249,6 +252,12 @@ async function main() {
   if (backfilled > 0) {
     logger.info(`Search index: backfilled ${backfilled} chunk(s) into vec0`);
   }
+  const backfilledBq = backfillBqVecChunks();
+  if (backfilledBq > 0) {
+    logger.info(
+      `Search index: backfilled ${backfilledBq} chunk signature(s) into vec_chunks_bq`
+    );
+  }
   // Initialize search indexer
   const ollamaHost = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
   let searchIndexer: SearchIndexer;
@@ -267,6 +276,16 @@ async function main() {
   setSearchIndexer(searchIndexer);
   searchIndexer.startPeriodicSweep();
 
+  // Initialize wiki indexer over the merged (beacon + coordinator) corpus
+  let wikiIndexer: WikiIndexer;
+  try {
+    const provider = createOllamaEmbeddingProvider({ host: ollamaHost });
+    wikiIndexer = new WikiIndexer(provider);
+  } catch {
+    wikiIndexer = new WikiIndexer();
+  }
+  setWikiIndexer(wikiIndexer);
+  wikiIndexer.startPeriodicSweep(() => runWikiIndexCycle(wikiIndexer));
   // Initialize wiki storage under config dir
   setKnowledgeBaseDir(path.join(config.configDir, 'knowledge-base'));
 
@@ -485,6 +504,7 @@ async function main() {
     logger.info('Shutting down...');
     clearInterval(cleanupInterval);
     searchIndexer.stopPeriodicSweep();
+    wikiIndexer.stopPeriodicSweep();
     stopFragmentTtlSweep();
     if (syncInterval) {
       clearInterval(syncInterval);

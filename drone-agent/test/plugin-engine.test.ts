@@ -1010,3 +1010,93 @@ describe('--debug tools — tool surface change logging', () => {
     expect(capturedRuntime[1].subagentId).toBe('subagent-test-123');
   });
 });
+
+describe('workflow run contract (ADR 183)', () => {
+  async function makeEngineWithWorkflow(
+    workflow: import('drone-core').DroneWorkflow
+  ) {
+    const engine = createDronePluginEngine({
+      plugins: [createTestPlugin({ id: 'wf', workflows: [workflow] })],
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+    });
+    await engine.initialize();
+    engine.setElicitation({
+      ask: async (questions: Array<{ id: string; defaultValue?: string }>) =>
+        Object.fromEntries(questions.map(q => [q.id, q.defaultValue ?? ''])),
+    } as never);
+    return engine;
+  }
+
+  it('wraps kickMessage in the standard handoff envelope', async () => {
+    const engine = await makeEngineWithWorkflow({
+      name: 'setup',
+      description: 'Setup',
+      run: async () => ({ toolResult: 'done', kickMessage: 'Do the thing.' }),
+    });
+
+    const result = await engine.runWorkflow('wf__setup', {});
+    expect(result.kickMessage).toContain('Workflow wf__setup completed');
+    expect(result.kickMessage).toContain('---\nDo the thing.\n---');
+  });
+
+  it('normalizes continueSession from result objects', async () => {
+    const engine = await makeEngineWithWorkflow({
+      name: 'setup',
+      description: 'Setup',
+      run: async () => ({
+        toolResult: 'done',
+        kickMessage: 'Go on.',
+        continueSession: true,
+      }),
+    });
+
+    const result = await engine.runWorkflow('wf__setup', {});
+    expect(result.continueSession).toBe(true);
+
+    const engine2 = await makeEngineWithWorkflow({
+      name: 'plain',
+      description: 'Plain',
+      run: async () => 'just a tool result',
+    });
+    const result2 = await engine2.runWorkflow('wf__plain', {});
+    expect(result2.continueSession).toBeUndefined();
+  });
+
+  it('supplies a working ctx.agent bound to an ephemeral conversation', async () => {
+    const engine = await makeEngineWithWorkflow({
+      name: 'assisted',
+      description: 'Assisted',
+      run: async (
+        _input: Record<string, unknown>,
+        ctx: import('drone-core').DroneWorkflowContext
+      ) => {
+        await ctx.agent('Discover how the service runs.');
+        return { toolResult: 'unreachable' };
+      },
+    });
+
+    // No LLM capability in this bare engine: ctx.agent must surface a
+    // clear error rather than silently corrupt the workflow.
+    await expect(engine.runWorkflow('wf__assisted', {})).rejects.toThrow(
+      /LLM provider broker is not available/
+    );
+  });
+
+  it('exposes ctx.agent on the workflow context', async () => {
+    let agentType: 'function' | 'missing' = 'missing';
+    const engine = await makeEngineWithWorkflow({
+      name: 'probe',
+      description: 'Probe',
+      run: async (
+        _input: Record<string, unknown>,
+        ctx: import('drone-core').DroneWorkflowContext
+      ) => {
+        agentType = typeof ctx.agent === 'function' ? 'function' : 'missing';
+        return { toolResult: 'ok' };
+      },
+    });
+    await engine.runWorkflow('wf__probe', {});
+    expect(agentType).toBe('function');
+  });
+});

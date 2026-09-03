@@ -127,6 +127,11 @@ export interface CoordinatorClient {
 
   // Get the base URL of the coordinator (for proxying)
   getBaseUrl(): string;
+  // The coordinator fetch this client already configured with the pinned
+  // coordinator fingerprint and the beacon's mTLS client identity. Reuse it
+  // for any proxied call so a proxy can never drift from how this client
+  // authenticates to the coordinator (ADR 177 precedent).
+  getFetch(): typeof fetch;
   // Tool definition sync
   pushToolDefinitions(
     tools: Array<{
@@ -142,10 +147,9 @@ export interface CoordinatorClient {
     query: Record<string, string>
   ): Promise<{ sessions: unknown[]; count: number }>;
   getSessionLog(sessionId: string): Promise<unknown>;
-  getSessionTranscript(sessionId: string): Promise<{
-    session: unknown;
-    transcript: string;
-  } | null>;
+  getSessionTranscript(
+    sessionId: string
+  ): Promise<SessionTranscriptResult | null>;
   processSession(sessionId: string): Promise<unknown>;
   completeSessionProcessing(
     sessionId: string,
@@ -155,10 +159,31 @@ export interface CoordinatorClient {
   // Coordinator proxy tools (beacon proxies for the agent)
   listBeacons(): Promise<unknown[]>;
   listAgentLocations(beaconId?: string): Promise<unknown[]>;
-  spawnSpawn(body: Record<string, unknown>): Promise<unknown>;
-  getSpawn(beaconId: string, spawnId: string): Promise<unknown>;
+  spawnSpawn(
+    body: Record<string, unknown>
+  ): Promise<SpawnOperationResult | null>;
+  getSpawn(
+    beaconId: string,
+    spawnId: string
+  ): Promise<SpawnOperationResult | null>;
   listSpawns(beaconId: string, status?: string): Promise<unknown[]>;
-  terminateSpawn(beaconId: string, spawnId: string): Promise<unknown>;
+  terminateSpawn(
+    beaconId: string,
+    spawnId: string
+  ): Promise<SpawnOperationResult | null>;
+}
+
+/** Minimal shape of coordinator spawn responses (proxied verbatim to agents). */
+export interface SpawnOperationResult {
+  spawnId?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+/** Transcript response from `GET /api/sessions/:id/transcript`. */
+export interface SessionTranscriptResult {
+  session: { id: string; [key: string]: unknown };
+  transcript: string;
 }
 
 export interface SessionInfo {
@@ -350,6 +375,10 @@ export function createCoordinatorClient(
   return {
     getBaseUrl(): string {
       return baseUrl;
+    },
+
+    getFetch(): typeof fetch {
+      return cfetch;
     },
 
     async registerBeacon(
@@ -1067,10 +1096,9 @@ export function createCoordinatorClient(
       }
     },
 
-    async getSessionTranscript(sessionId: string): Promise<{
-      session: unknown;
-      transcript: string;
-    } | null> {
+    async getSessionTranscript(
+      sessionId: string
+    ): Promise<SessionTranscriptResult | null> {
       if (!coordinatorTrusted()) {
         return null;
       }
@@ -1082,7 +1110,7 @@ export function createCoordinatorClient(
           logger.warn(`Failed to get session transcript: ${res.status}`);
           return null;
         }
-        return (await res.json()) as { session: unknown; transcript: string };
+        return (await res.json()) as SessionTranscriptResult;
       } catch (err) {
         logger.warn(`Failed to get session transcript: ${err}`);
         return null;
@@ -1175,7 +1203,9 @@ export function createCoordinatorClient(
       }
     },
 
-    async spawnSpawn(body: Record<string, unknown>): Promise<unknown> {
+    async spawnSpawn(
+      body: Record<string, unknown>
+    ): Promise<SpawnOperationResult | null> {
       if (!coordinatorTrusted()) {
         return null;
       }
@@ -1189,14 +1219,17 @@ export function createCoordinatorClient(
           logger.warn(`Failed to spawn: ${res.status}`);
           return null;
         }
-        return await res.json();
+        return (await res.json()) as SpawnOperationResult;
       } catch (err) {
         logger.warn(`Failed to spawn: ${err}`);
         return null;
       }
     },
 
-    async getSpawn(beaconId: string, spawnId: string): Promise<unknown> {
+    async getSpawn(
+      beaconId: string,
+      spawnId: string
+    ): Promise<SpawnOperationResult | null> {
       if (!coordinatorTrusted()) {
         return null;
       }
@@ -1208,7 +1241,7 @@ export function createCoordinatorClient(
           logger.warn(`Failed to get spawn: ${res.status}`);
           return null;
         }
-        return await res.json();
+        return (await res.json()) as SpawnOperationResult;
       } catch (err) {
         logger.warn(`Failed to get spawn: ${err}`);
         return null;
@@ -1235,7 +1268,10 @@ export function createCoordinatorClient(
       }
     },
 
-    async terminateSpawn(beaconId: string, spawnId: string): Promise<unknown> {
+    async terminateSpawn(
+      beaconId: string,
+      spawnId: string
+    ): Promise<SpawnOperationResult | null> {
       if (!coordinatorTrusted()) {
         return null;
       }
@@ -1248,7 +1284,7 @@ export function createCoordinatorClient(
           logger.warn(`Failed to terminate spawn: ${res.status}`);
           return null;
         }
-        return await res.json();
+        return (await res.json()) as SpawnOperationResult;
       } catch (err) {
         logger.warn(`Failed to terminate spawn: ${err}`);
         return null;

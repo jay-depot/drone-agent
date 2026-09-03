@@ -16,9 +16,10 @@
  *     otherwise
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'ink-testing-library';
 import { App } from '../src/tui/app.js';
+import { initialPickerIndex } from '../src/tui/hooks/useElicitation.js';
 import { MidPanel } from '../src/tui/components/MidPanel.js';
 import { ModelPicker } from '../src/tui/components/ModelPicker.js';
 import { DEFAULT_GRAYSCALE_SCHEME } from '../src/tui/theme.js';
@@ -455,5 +456,205 @@ describe('ModelPicker', () => {
     instance.stdin.write('\r');
     await new Promise(r => setTimeout(r, 50));
     expect(chosen).toBe('b');
+  });
+});
+
+describe('App initial workflow host (--workflow, ADR 183)', () => {
+  let cleanup: (() => void) | null = null;
+
+  afterEach(() => {
+    if (cleanup) {
+      cleanup();
+      cleanup = null;
+    }
+  });
+
+  it('runs the workflow on mount and renders the kick reply as a chat turn', async () => {
+    const sendCalls: string[] = [];
+    const opts: DroneTuiOptions = makeOptions();
+    let workflowArgs: unknown[] = [];
+    opts.engine.runWorkflow = async (
+      name: string,
+      args: Record<string, unknown>
+    ) => {
+      workflowArgs = [name, args];
+      return {
+        toolResult: 'steps completed',
+        kickMessage: 'Workflow wf__x completed and handed off the following.',
+        continueSession: true,
+      };
+    };
+    opts.conversation = {
+      ...opts.conversation,
+      sendUserMessage: async (prompt: string) => {
+        sendCalls.push(prompt);
+        return 'done, anything else?';
+      },
+    };
+    opts.initialWorkflow = { name: 'wf__x', args: {} };
+
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+
+    const start = await waitUntilFrame(instance, f =>
+      f.includes('Running workflow wf__x...')
+    );
+    expect(start).toContain('Running workflow wf__x...');
+    expect(workflowArgs).toEqual(['wf__x', {}]);
+    const start2 = Date.now();
+    while (sendCalls.length === 0 && Date.now() - start2 < 2000) {
+      await tick();
+    }
+    expect(sendCalls).toHaveLength(1);
+    expect(sendCalls[0]).toContain('handed off the following');
+    expect(sendCalls).toHaveLength(1);
+    expect(sendCalls[0]).toContain('handed off the following');
+  });
+
+  it('calls onWorkflowComplete and keeps the session open when continueSession is true', async () => {
+    const onComplete = vi.fn();
+    const opts: DroneTuiOptions = makeOptions();
+    opts.engine.runWorkflow = async () => ({
+      toolResult: 'r',
+      continueSession: true,
+    });
+    opts.initialWorkflow = { name: 'wf__y', args: {} };
+    opts.onWorkflowComplete = onComplete;
+
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+
+    await waitUntilFrame(instance, f => f.includes('model:llama3.1:latest'));
+    await tick();
+    expect(onComplete).toHaveBeenCalledWith({ continueSession: true });
+  });
+
+  it('exits via useApp when continueSession is false', async () => {
+    const onComplete = vi.fn();
+    const opts: DroneTuiOptions = makeOptions();
+    opts.engine.runWorkflow = async () => ({
+      toolResult: 'r',
+      continueSession: false,
+    });
+    opts.initialWorkflow = { name: 'wf__z', args: {} };
+    opts.onWorkflowComplete = onComplete;
+
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+
+    await waitUntilFrame(instance, f => f.includes('model:llama3.1:latest'));
+    await tick();
+    expect(onComplete).toHaveBeenCalledWith({ continueSession: false });
+  });
+
+  it('surfaces workflow failure in the chat log and reports continueSession=false', async () => {
+    const onComplete = vi.fn();
+    const opts: DroneTuiOptions = makeOptions();
+    opts.engine.runWorkflow = async () => {
+      throw new Error('workflow exploded');
+    };
+    opts.initialWorkflow = { name: 'wf__boom', args: {} };
+    opts.onWorkflowComplete = onComplete;
+
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+
+    const start3 = Date.now();
+    while (onComplete.mock.calls.length === 0 && Date.now() - start3 < 2000) {
+      await tick();
+    }
+    expect(onComplete).toHaveBeenCalledWith({ continueSession: false });
+    expect(onComplete).toHaveBeenCalledWith({ continueSession: false });
+  });
+});
+
+describe('initialPickerIndex (default/highlight agreement)', () => {
+  it('highlights the choice matching defaultValue', () => {
+    expect(
+      initialPickerIndex({
+        id: 'q',
+        prompt: 'Install?',
+        choices: [
+          { value: 'yes', label: 'Yes — apply it' },
+          { value: 'no', label: 'No — stop here' },
+        ],
+        defaultValue: 'no',
+      })
+    ).toBe(1);
+  });
+
+  it('falls back to 0 when no choice matches the default', () => {
+    expect(
+      initialPickerIndex({
+        id: 'q',
+        prompt: 'Pick?',
+        choices: [
+          { value: 'a', label: 'A' },
+          { value: 'b', label: 'B' },
+        ],
+        defaultValue: 'missing',
+      })
+    ).toBe(0);
+  });
+
+  it('falls back to 0 when there is no default', () => {
+    expect(
+      initialPickerIndex({
+        id: 'q',
+        prompt: 'Pick?',
+        choices: [{ value: 'a', label: 'A' }],
+      })
+    ).toBe(0);
+  });
+
+  it('returns 0 for freeform questions (no picker)', () => {
+    expect(
+      initialPickerIndex({ id: 'q', prompt: 'Type?', freeform: true })
+    ).toBe(0);
+  });
+});
+
+describe('TUI picker highlights the default on mutation confirms', () => {
+  let cleanup: (() => void) | null = null;
+
+  afterEach(() => {
+    if (cleanup) {
+      cleanup();
+      cleanup = null;
+    }
+  });
+
+  it('renders the ▶ marker on the defaultValue choice', async () => {
+    const elicitQuestion = {
+      id: 'write-cron',
+      prompt: 'Install the catch-up cron entry?',
+      choices: [
+        { value: 'yes', label: 'Yes — apply it' },
+        { value: 'no', label: 'No — stop here' },
+      ],
+      defaultValue: 'no',
+      uiKey: 'test-ui-key',
+    };
+    const opts = makeOptions();
+    opts.engine.setElicitation = (cap: unknown) => {
+      // Capture the capability the hook wires, then simulate a question.
+      const elicitation = cap as {
+        ask: (questions: unknown[]) => Promise<Record<string, string>>;
+      };
+      elicitation.ask([elicitQuestion]).catch(() => undefined);
+    };
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+
+    const frame = await waitUntilFrame(instance, f =>
+      f.includes('Install the catch-up cron entry?')
+    );
+    expect(frame).toContain('Install the catch-up cron entry?');
+    expect(frame).toContain('No — stop here (default)');
+    // The highlight marker ▶ must sit on the "No" line, not "Yes".
+    const noLine = frame.split('\n').find(l => l.includes('No — stop here'));
+    const yesLine = frame.split('\n').find(l => l.includes('Yes — apply it'));
+    expect(noLine).toContain('▶');
+    expect(yesLine).not.toContain('▶');
   });
 });

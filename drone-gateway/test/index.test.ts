@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { GatewayConfig } from '../src/types.js';
 
 // Mock the config loader so we don't need filesystem access
 const mockLoadGatewayConfig = vi.fn();
@@ -157,7 +158,9 @@ describe('createSpawnBackend', () => {
       coordinatorUrl: 'http://localhost:8080',
       spawnBackend: 'unknown',
       serviceAdapters: [],
-    };
+      // This ugly cast is necessary because 'unknown' is not a valid spawnBackend type, and
+      // we're testing that this thing errors at runtime when the provided value is invalid.
+    } as unknown as GatewayConfig;
     createSpawnBackend(config);
     expect(mockExit).toHaveBeenCalledWith(1);
   });
@@ -171,7 +174,7 @@ describe('main', () => {
     process.argv = ['node', 'drone-gateway'];
     mockLoadGatewayConfig.mockResolvedValue({
       coordinatorUrl: 'http://localhost:8080',
-      spawnBackend: 'local',
+      spawnBackend: 'local' as const,
       serviceAdapters: [],
     });
   });
