@@ -7,6 +7,9 @@ import { spawnAgent } from './spawner.js';
 const DEFAULT_COMMAND_TIMEOUT_MS = 30000;
 const ESCALATION_KILL_GRACE_MS = 200;
 const FALLBACK_SETTLE_GRACE_MS = 1000;
+// Session IDs are substituted verbatim into a shell command, so they must be
+// restricted to a safe charset to prevent command injection via the sync route.
+const SESSION_ID_SAFE = /^[a-zA-Z0-9._-]+$/;
 
 export interface SessionEndHookConfig {
   trigger?: SessionEndTrigger;
@@ -39,6 +42,13 @@ async function runCommandTrigger(
   timeoutMs: number,
   sessionId: string
 ): Promise<SessionEndHookResult> {
+  if (!SESSION_ID_SAFE.test(sessionId)) {
+    return {
+      ran: true,
+      kind: 'command',
+      error: `refusing to run session-end command for unsafe session id "${sessionId}"`,
+    };
+  }
   const finalCommand = substituteSessionId(command, sessionId);
   return new Promise(resolve => {
     let settled = false;
