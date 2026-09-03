@@ -53,7 +53,14 @@ export default function WikiPage() {
           `/api/wiki/search?q=${encodeURIComponent(search)}`
         );
         if (res.ok) {
-          setPages(await res.json());
+          // Search results are { page, snippet, score } wrappers; the card
+          // grid renders page metadata directly.
+          const results = await res.json();
+          setPages(
+            Array.isArray(results)
+              ? results.map((r: { page: WikiPageMeta }) => r.page)
+              : []
+          );
         }
       } catch {
         // Fall back to current list
