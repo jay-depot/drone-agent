@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import WikiMarkdown from './wiki-markdown';
 
@@ -44,5 +45,53 @@ describe('WikiMarkdown', () => {
     expect(screen.getByRole('table')).toBeTruthy();
     expect(screen.getByText('A')).toBeTruthy();
     expect(screen.getByText('1')).toBeTruthy();
+  });
+
+  it('collapses a leading frontmatter block by default', () => {
+    const content = [
+      '---',
+      'id: my-page',
+      'title: My Page',
+      'scope: coordinator',
+      '---',
+      '',
+      '# Heading',
+      '',
+      'Body text.',
+    ].join('\n');
+    renderMarkdown(content);
+
+    expect(screen.getByText('Metadata (YAML frontmatter)')).toBeTruthy();
+    // The YAML body is hidden while collapsed.
+    expect(screen.queryByText('id: my-page')).toBeNull();
+    // The markdown body still renders.
+    expect(screen.getByText('Body text.')).toBeTruthy();
+  });
+
+  it('reveals the raw YAML when the summary is clicked', async () => {
+    const content = [
+      '---',
+      'id: my-page',
+      'title: My Page',
+      'scope: coordinator',
+      '---',
+      '',
+      '# Heading',
+    ].join('\n');
+    renderMarkdown(content);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByText('Metadata (YAML frontmatter)'));
+
+    const pre = screen.getByText(/id: my-page/);
+    expect(pre.textContent).toContain('title: My Page');
+    expect(pre.textContent).toContain('scope: coordinator');
+  });
+
+  it('renders normally when there is no frontmatter block', () => {
+    renderMarkdown('# Heading\n\nJust body text.');
+
+    expect(screen.queryByText('Metadata (YAML frontmatter)')).toBeNull();
+    expect(screen.getByText('Just body text.')).toBeTruthy();
   });
 });

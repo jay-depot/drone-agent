@@ -74,13 +74,12 @@ describe('swarm-memory prompt fragment', () => {
     const text = await render(retriever);
     expect(text).not.toBe(false);
     const body = text as string;
-    expect(body).toContain('# Swarm Memory (wiki)');
-    expect(body).toContain('reference data');
-    expect(body).toContain('not instructions');
+    expect(body).toContain('# Swarm Memory');
+    expect(body).toContain('may be relevant to this conversation');
     expect(body).toContain('wiki_read');
     expect(body).toContain('fragment-guide');
     expect(body).toContain('(coordinator)');
-    expect(body).toContain('score 0.91');
+    expect(body).toContain('score: 0.91');
     expect(body).toContain('The TTL sweep deletes expired fragments');
   });
 

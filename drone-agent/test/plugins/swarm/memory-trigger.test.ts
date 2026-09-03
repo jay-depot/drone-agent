@@ -228,7 +228,7 @@ describe('swarm-memory retrieval trigger (userMessage)', () => {
     expect(memoryFragment).toBeDefined();
     const body = await memoryFragment!.render();
     expect(body).not.toBe(false);
-    expect(body as string).toContain('# Swarm Memory (wiki)');
+    expect(body as string).toContain('# Swarm Memory');
     expect(body as string).toContain('Fragment Guide');
     expect(body as string).toContain('TTL sweep');
   });

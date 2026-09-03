@@ -2,6 +2,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Link } from 'react-router-dom';
 import { preprocessWikiLinks } from '@/lib/wiki-links';
+import { splitFrontmatter } from '@/lib/wiki-frontmatter';
 import type { ReactNode } from 'react';
 
 function getHostname(href: string): string | null {
@@ -66,8 +67,20 @@ function MarkdownLink({
 }
 
 export default function WikiMarkdown({ children }: { children: string }) {
+  const { frontmatter, body } = splitFrontmatter(children);
+
   return (
     <div className="text-sm leading-relaxed">
+      {frontmatter && (
+        <details className="mb-4 rounded-md border border-border bg-muted/40">
+          <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-muted-foreground">
+            Metadata (YAML frontmatter)
+          </summary>
+          <pre className="px-3 pb-3 text-xs font-mono whitespace-pre-wrap overflow-x-auto">
+            {frontmatter}
+          </pre>
+        </details>
+      )}
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -138,7 +151,7 @@ export default function WikiMarkdown({ children }: { children: string }) {
           em: ({ children }) => <em className="italic">{children}</em>,
         }}
       >
-        {preprocessWikiLinks(children)}
+        {preprocessWikiLinks(body)}
       </ReactMarkdown>
     </div>
   );
