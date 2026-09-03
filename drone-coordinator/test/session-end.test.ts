@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -47,6 +47,23 @@ describe('coordinator runSessionEndHook', () => {
     });
     const result = await runSessionEndHook('session-a');
     expect(result).toEqual({ ran: true, kind: 'command' });
+  });
+
+  it('refuses to run a command for an unsafe session id', async () => {
+    const outFile = path.join(dir, 'pwned.txt');
+    configureSessionEndHook({
+      trigger: {
+        type: 'command',
+        command: `printf '%s' '{session_id}' > '${outFile}'`,
+      },
+    });
+    const result = await runSessionEndHook('$(touch /tmp/pwned)');
+    expect(result).toEqual({
+      ran: true,
+      kind: 'command',
+      error: 'refusing to run session-end command for unsafe session id "$(touch /tmp/pwned)"',
+    });
+    await expect(readFile(outFile, 'utf8')).rejects.toThrow();
   });
 
   it('captures failing commands instead of throwing', async () => {
