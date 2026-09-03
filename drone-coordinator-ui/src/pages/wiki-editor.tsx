@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import type { WikiPage, CreateWikiPageRequest } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -9,8 +9,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function WikiEditorPage() {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const authFetch = useAuthenticatedFetch();
-  const isEdit = !!pageId;
+  const createMode = searchParams.get('create') === '1';
+  const isEdit = !!pageId && !createMode;
 
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -25,7 +27,7 @@ export default function WikiEditorPage() {
 
   // Load existing page for edit mode
   useEffect(() => {
-    if (!pageId) return;
+    if (!pageId || createMode) return;
 
     async function fetchPage() {
       try {
@@ -50,12 +52,19 @@ export default function WikiEditorPage() {
       }
     }
     fetchPage();
-  }, [pageId, authFetch]);
+  }, [pageId, createMode, authFetch]);
+
+  // Pre-fill the page ID from the URL when creating a page for a specific id
+  useEffect(() => {
+    if (createMode && pageId) {
+      setWikiPageId(pageId);
+    }
+  }, [createMode, pageId]);
 
   // Auto-generate pageId from title on create
   const handleTitleChange = (value: string) => {
     setTitle(value);
-    if (!isEdit) {
+    if (!isEdit && !createMode) {
       setWikiPageId(
         value
           .toLowerCase()

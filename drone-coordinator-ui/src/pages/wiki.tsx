@@ -1,24 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
+import { useWikiPages } from '@/hooks/use-wiki-pages';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
 import type { WikiPageMeta } from '@/lib/types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { paginationRange } from '@/lib/pagination';
+import WikiPageGrid from '@/components/wiki-page-grid';
 
 const PAGE_SIZE = 12;
 
 export default function WikiPage() {
   const navigate = useNavigate();
   const authFetch = useAuthenticatedFetch();
-  const [pages, setPages] = useState<WikiPageMeta[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { pages, setPages, loading, error } = useWikiPages();
   const [search, setSearch] = useState('');
   const { offset, setOffset } = usePaginationOffset(PAGE_SIZE);
 
@@ -26,24 +25,6 @@ export default function WikiPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<WikiPageMeta | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-
-  useEffect(() => {
-    async function fetchWiki() {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await authFetch('/api/wiki');
-        if (res.ok) {
-          setPages(await res.json());
-        }
-      } catch {
-        setError('Failed to load wiki pages');
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchWiki();
-  }, [authFetch]);
 
   // Search via API when query changes
   useEffect(() => {
@@ -150,67 +131,13 @@ export default function WikiPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {paged.map(wikiPage => (
-              <Card
-                key={wikiPage.id}
-                className="cursor-pointer hover:ring-2 hover:ring-ring/50 transition-all"
-                onClick={() => navigate(`/wiki/${wikiPage.id}`)}
-              >
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">{wikiPage.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xs text-muted-foreground space-y-1">
-                    <div className="flex justify-between">
-                      <span>ID</span>
-                      <span className="font-mono">{wikiPage.id}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Scope</span>
-                      <Badge variant="outline" className="text-xs">
-                        {wikiPage.scope}
-                      </Badge>
-                    </div>
-                    {wikiPage.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {wikiPage.tags.map(tag => (
-                          <Badge
-                            key={tag}
-                            variant="secondary"
-                            className="text-xs"
-                          >
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex justify-between pt-1">
-                      <span>Updated</span>
-                      <span>
-                        {new Date(wikiPage.updatedAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                  <div
-                    className="mt-3 pt-3 border-t"
-                    onClick={e => e.stopPropagation()}
-                  >
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => {
-                        setDeleteTarget(wikiPage);
-                        setDeleteOpen(true);
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <WikiPageGrid
+            pages={paged}
+            onDelete={wikiPage => {
+              setDeleteTarget(wikiPage);
+              setDeleteOpen(true);
+            }}
+          />
 
           {/* Pagination */}
           {total > PAGE_SIZE && (

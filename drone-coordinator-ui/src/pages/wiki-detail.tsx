@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import type { WikiPage } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import WikiMarkdown from '@/components/wiki-markdown';
 
 export default function WikiDetailPage() {
   const { pageId } = useParams<{ pageId: string }>();
@@ -92,6 +93,11 @@ export default function WikiDetailPage() {
         </div>
         <div className="text-center py-12 text-muted-foreground">
           <p className="text-lg">{error || 'Wiki page not found'}</p>
+          <div className="mt-4">
+            <Button onClick={() => navigate(`/wiki/${pageId}/edit?create=1`)}>
+              Create it
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -156,9 +162,11 @@ export default function WikiDetailPage() {
               <span className="text-sm text-muted-foreground">Tags</span>
               <div className="flex flex-wrap gap-1 mt-1">
                 {page.tags.map(tag => (
-                  <Badge key={tag} variant="secondary" className="text-xs">
-                    {tag}
-                  </Badge>
+                  <Link key={tag} to={`/wiki/tag/${tag}`}>
+                    <Badge variant="secondary" className="text-xs">
+                      {tag}
+                    </Badge>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -185,9 +193,7 @@ export default function WikiDetailPage() {
           <CardTitle className="text-base">Content</CardTitle>
         </CardHeader>
         <CardContent>
-          <pre className="text-sm bg-muted p-4 rounded-md overflow-x-auto whitespace-pre-wrap font-mono">
-            {page.content}
-          </pre>
+          <WikiMarkdown>{page.content}</WikiMarkdown>
         </CardContent>
       </Card>
 

@@ -79,7 +79,10 @@ describe('WikiPage search', () => {
     await screen.findByText('Deployment');
 
     const user = userEvent.setup();
-    await user.type(screen.getByPlaceholderText('Search wiki pages...'), 'deploy');
+    await user.type(
+      screen.getByPlaceholderText('Search wiki pages...'),
+      'deploy'
+    );
 
     // The tags badge only renders after the { page, snippet, score } wrapper
     // is flattened (tags live under `.page.tags`, not top-level). Without the
@@ -87,5 +90,9 @@ describe('WikiPage search', () => {
     await waitFor(() => {
       expect(screen.getByText('ops')).toBeTruthy();
     });
+
+    // The tag badge is a link to the tag page.
+    const tagLink = screen.getByRole('link', { name: 'ops' });
+    expect(tagLink).toHaveAttribute('href', '/wiki/tag/ops');
   });
 });
