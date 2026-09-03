@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
+import { usePaginationOffset } from '@/hooks/use-pagination-offset';
 import type { Skill } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { paginationRange } from '@/lib/pagination';
 
 const PAGE_SIZE = 12;
 
@@ -18,7 +20,7 @@ export default function SkillsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
+  const { offset, setOffset } = usePaginationOffset(PAGE_SIZE);
 
   // Delete dialog
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -54,8 +56,8 @@ export default function SkillsPage() {
     );
   });
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const total = filtered.length;
+  const paged = filtered.slice(offset, offset + PAGE_SIZE);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -101,7 +103,7 @@ export default function SkillsPage() {
           value={search}
           onChange={e => {
             setSearch(e.target.value);
-            setPage(0);
+            setOffset(0);
           }}
         />
       </div>
@@ -189,25 +191,25 @@ export default function SkillsPage() {
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 && (
+          {total > PAGE_SIZE && (
             <div className="flex items-center justify-between mt-4">
               <p className="text-sm text-muted-foreground">
-                Showing {paged.length} of {filtered.length} skills
+                Showing {paginationRange(offset, PAGE_SIZE, total)}
               </p>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={page === 0}
-                  onClick={() => setPage(page - 1)}
+                  disabled={offset === 0}
+                  onClick={() => setOffset(offset - PAGE_SIZE)}
                 >
                   Previous
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={page >= totalPages - 1}
-                  onClick={() => setPage(page + 1)}
+                  disabled={offset + PAGE_SIZE >= total}
+                  onClick={() => setOffset(offset + PAGE_SIZE)}
                 >
                   Next
                 </Button>

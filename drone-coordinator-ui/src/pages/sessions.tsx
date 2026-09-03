@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
+import { usePaginationOffset } from '@/hooks/use-pagination-offset';
 import type {
   BeaconSession,
   WsInitialMessage,
@@ -19,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { paginationRange } from '@/lib/pagination';
 
 const PAGE_SIZE = 20;
 
@@ -31,8 +33,9 @@ export default function SessionsPage() {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [offset, setOffset] = useState(0);
+  const { offset, setOffset } = usePaginationOffset(PAGE_SIZE);
   const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -58,6 +61,7 @@ export default function SessionsPage() {
         }
         const data = await sessionsRes.json();
         const swarmSessions: SwarmSession[] = data.sessions || [];
+        setTotal(data.count ?? 0);
 
         // Enrich with beacon names
         const beaconsRes = await authFetch('/api/beacons');
@@ -343,15 +347,14 @@ export default function SessionsPage() {
           {/* Pagination */}
           <div className="flex items-center justify-between mt-4">
             <p className="text-sm text-muted-foreground">
-              Showing {sessions.length} session
-              {sessions.length !== 1 ? 's' : ''}
+              Showing {paginationRange(offset, PAGE_SIZE, total)}
             </p>
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 disabled={offset === 0}
-                onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+                onClick={() => setOffset(offset - PAGE_SIZE)}
               >
                 Previous
               </Button>
