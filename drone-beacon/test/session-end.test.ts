@@ -55,6 +55,24 @@ describe('runSessionEndHook', () => {
     await expect(readFile(outFile, 'utf8')).resolves.toBe('session-xyz');
   });
 
+  it('refuses to run a command for an unsafe session id', async () => {
+    const outFile = path.join(dir, 'pwned.txt');
+    configureSessionEndHook({
+      beaconId: 'b-1',
+      trigger: {
+        type: 'command',
+        command: `printf '%s' '{session_id}' > '${outFile}'`,
+      },
+    });
+    const result = await runSessionEndHook('$(touch /tmp/pwned)');
+    expect(result).toEqual({
+      ran: true,
+      kind: 'command',
+      error: 'refusing to run session-end command for unsafe session id "$(touch /tmp/pwned)"',
+    });
+    await expect(readFile(outFile, 'utf8')).rejects.toThrow();
+  });
+
   it('captures failing commands instead of throwing', async () => {
     configureSessionEndHook({
       beaconId: 'b-1',
