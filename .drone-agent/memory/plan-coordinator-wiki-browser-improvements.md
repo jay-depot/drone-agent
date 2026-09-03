@@ -3,7 +3,7 @@ key: plan-coordinator-wiki-browser-improvements
 tags:
   []
 created: 2026-09-03T21:49:30.693Z
-updated: 2026-09-03T21:49:30.693Z
+updated: 2026-09-03T22:06:18.954Z
 ---
 
 # Plan: Coordinator Wiki Browser Improvements
@@ -80,3 +80,26 @@ Wrap each tag `Badge` in a `react-router-dom` `<Link to={/wiki/tag/${tag}}>` in 
 - `pnpm -r run test` passes — all new tests (`wiki-links`, `wiki-markdown`, `wiki-editor`, `wiki-tag`, updated `wiki`) pass.
 - Manual check: open a wiki page with markdown → rendered, not raw; `[[wikilink]]` navigates internally; external link opens new tab with domain shown; a broken link lands on not-found with a working "Create it" button; clicking a tag badge opens the tag page filtered to that tag.
 - No dead code; no duplicated fetch/grid logic (extracted to `useWikiPages` / `WikiPageGrid`).
+
+## EXECUTION SUMMARY (2026-09-03)
+All 10 steps completed and committed on branch `feat/memory-wiki-browser-improvements` (commit `97db550`).
+
+### What was built
+- **`src/lib/wiki-links.ts`** — `preprocessWikiLinks()` converts `[[target]]`/`[[target|alias]]` to internal markdown links, URL-encoding the target and escaping markdown special chars in the label. 7 unit tests.
+- **`src/components/wiki-markdown.tsx`** — `WikiMarkdown` wraps `react-markdown` + `remark-gfm` with custom components styled with existing Tailwind tokens (no `@tailwindcss/typography`). Custom `a`: `/wiki/` → `<Link>` (client nav); external `http(s)` → new tab + hostname shown after text; else plain `<a>`. 5 tests.
+- **`src/pages/wiki-detail.tsx`** — Content card now renders `<WikiMarkdown>` instead of raw `<pre>`; not-found state has a "Create it" button → `/wiki/:pageId/edit?create=1`; tag badges are clickable `<Link>`s.
+- **`src/pages/wiki-editor.tsx`** — `?create=1` forces create mode (skips fetch, pre-fills page ID from URL param, shows page-ID field, disables auto-gen-from-title). 2 tests.
+- **`src/hooks/use-wiki-pages.ts`** — shared list-fetch hook (`pages, setPages, loading, error, refetch`); `setPages` is a `Dispatch<SetStateAction<...>>` so callers can apply search results and deletes.
+- **`src/components/wiki-page-grid.tsx`** — reusable card grid; `onDelete` is optional (tag page omits it → no delete button). Tag badges are clickable `<Link>`s.
+- **`src/pages/wiki-tag.tsx`** — virtual tag page filtering the fetched list client-side, with header (tag name + count), grid, pagination, empty state. Route registered in `App.tsx` before `/wiki/:pageId`. 3 tests.
+- **`src/pages/wiki.test.tsx`** — updated to assert the tag badge is a link to `/wiki/tag/ops`.
+
+### Validation
+- `pnpm -r run typecheck` — pass (LSP clean).
+- `pnpm -r run lint` (eslint + prettier) — pass.
+- `pnpm -r run build` — pass.
+- `pnpm -r run test` — 2701 passed / 14 skipped across the monorepo; 42 UI tests pass.
+
+### Notes / follow-ups
+- **Known limitation (accepted):** client-side tag filtering won't scale to thousands of pages. The follow-up plan `plan-coordinator-wiki-tag-scaleup` moves tag filtering coordinator-side (`?tag=` query param, `GET /api/wiki/tags` index, reserved-name guard for page id `tags`). That plan depends on this one's `wiki-tag.tsx` / `WikiPageGrid` / `useWikiPages`.
+- Prettier reformatted several unrelated files during `pnpm lint:prettier`; those were reverted to keep the commit focused.

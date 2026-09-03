@@ -414,5 +414,13 @@
   {
     "timestamp": "2026-09-01T22:16:20.881Z",
     "insight": "Annotating a giant object literal with its interface type (const engineObject: DronePluginEngine = {...}) DESTROYS contextual typing: every method's parameters became implicit-any (TS7006 x15). Correct pattern for self-referencing factories: return captureEngine({ ...literal }) where captureEngine(e: DronePluginEngine) stores the ref and returns e typed by inference — the wrapper function provides the contextual type, the holder provides the self-reference. Hit in plugin-engine.ts while wiring ctx.agent's engine self-reference (ADR 183)."
+  },
+  {
+    "timestamp": "2026-09-03T22:06:36.972Z",
+    "insight": "When extracting a shared data-fetching hook that exposes a state setter (e.g. `useWikiPages` exposing `setPages`), type the setter as `Dispatch<SetStateAction<T>>` (React's functional-updater type) rather than `(value: T) => void`. Callers that need to apply a functional update (e.g. a delete handler doing `setPages(prev => prev.filter(...))`) will otherwise fail typecheck with \"Parameter 'prev' implicitly has an 'any' type\". This bit me during the wiki-browser-improvements work."
+  },
+  {
+    "timestamp": "2026-09-03T22:06:36.974Z",
+    "insight": "When running `pnpm lint:prettier` (or `pnpm lint`) in the drone-agent monorepo, prettier reformats the ENTIRE repo, including files unrelated to the current task. Before committing, always `git status --short` and `git checkout --` any unrelated files that prettier touched, so the commit stays focused. This happened during the wiki-browser-improvements work (prettier reformatted memory files, swarm memory-retrieval, session-end tests, and several unrelated UI pages)."
   }
 ]
