@@ -132,7 +132,7 @@ export default function PersonaEditorPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate('/personas')}
+            onClick={() => navigate(-1)}
           >
             ← Back
           </Button>

@@ -69,7 +69,7 @@ export default function WikiDetailPage() {
     return (
       <div>
         <div className="flex items-center gap-4 mb-6">
-          <Button variant="outline" size="sm" onClick={() => navigate('/wiki')}>
+          <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
             ← Back
           </Button>
           <Skeleton className="h-8 w-48" />
@@ -86,7 +86,7 @@ export default function WikiDetailPage() {
     return (
       <div>
         <div className="flex items-center gap-4 mb-6">
-          <Button variant="outline" size="sm" onClick={() => navigate('/wiki')}>
+          <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
             ← Back
           </Button>
         </div>
@@ -100,7 +100,7 @@ export default function WikiDetailPage() {
   return (
     <div>
       <div className="flex items-center gap-4 mb-6">
-        <Button variant="outline" size="sm" onClick={() => navigate('/wiki')}>
+        <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
           ← Back
         </Button>
         <div className="flex-1">

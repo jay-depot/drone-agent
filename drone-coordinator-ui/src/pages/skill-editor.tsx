@@ -135,7 +135,7 @@ export default function SkillEditorPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate('/skills')}
+            onClick={() => navigate(-1)}
           >
             ← Back
           </Button>
