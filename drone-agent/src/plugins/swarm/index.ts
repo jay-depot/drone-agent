@@ -7,6 +7,7 @@ import type { DebugFlagRegistry } from 'drone-core';
  */
 
 import type {
+  DroneConversationEvent,
   DroneContextWindowInfo,
   DronePlugin,
   DronePersonaCapability,
@@ -159,12 +160,15 @@ export function createSwarmPlugin(
       };
       const runtimeInfo = registration.request<{
         debugFlags?: DebugFlagRegistry;
+        emitEvent?: (event: DroneConversationEvent) => void;
       }>('runtime');
       const memoryRetriever = new SwarmMemoryRetriever({
         capability: swarmCap,
         config: memoryConfig,
         logger: registration.logger,
         debugFlags: runtimeInfo?.debugFlags,
+        emitNotice: content =>
+          runtimeInfo?.emitEvent?.({ kind: 'notice', content }),
       });
       const memoryTracker = new ConversationWindowTracker();
       memoryRetriever.setWindowSource(() => memoryTracker.assemble());

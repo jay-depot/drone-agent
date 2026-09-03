@@ -41,6 +41,8 @@ export interface SwarmMemoryRetrieverDeps {
   config: DroneSwarmMemoryConfig;
   debugFlags?: { isEnabled(name: string): boolean };
   logger?: { warn(...args: unknown[]): void; info(...args: unknown[]): void };
+  /** Optional one-line status surface (e.g. the TUI chat log via a notice event). */
+  emitNotice?: (content: string) => void;
   fetchImpl?: typeof fetch;
 }
 
@@ -80,6 +82,7 @@ export class SwarmMemoryRetriever {
   private config: DroneSwarmMemoryConfig;
   private debugFlags?: SwarmMemoryRetrieverDeps['debugFlags'];
   private logger: NonNullable<SwarmMemoryRetrieverDeps['logger']>;
+  private emitNotice: (content: string) => void;
   private fetchImpl: typeof fetch;
   private cache: SwarmMemoryCache | null = null;
   private inflight = false;
@@ -89,6 +92,7 @@ export class SwarmMemoryRetriever {
     this.capability = deps.capability ?? null;
     this.config = deps.config;
     this.debugFlags = deps.debugFlags;
+    this.emitNotice = deps.emitNotice ?? (() => {});
     this.logger = deps.logger ?? {
       warn: (...a: unknown[]) => console.warn(...a),
       info: (...a: unknown[]) => console.info(...a),
@@ -197,6 +201,7 @@ export class SwarmMemoryRetriever {
     try {
       const merged = await this.retrieve(inputs);
       this.cache = { hash, entries: merged, at: Date.now() };
+      this.emitNotice(`[swarm.memory: found ${merged.length} match${merged.length === 1 ? '' : 'es'}]`);
       if (this.debugFlags?.isEnabled('swarm-memory')) {
         this.logger.info(
           `swarm-memory refresh hash=${hash.slice(0, 12)} inputs=${inputs.length} → ${merged.length} entries`

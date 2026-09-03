@@ -43,7 +43,7 @@ export function createSwarmMemoryFragment(
       }
       lines.push('');
       lines.push(
-        'Call `wiki_read` with a pageId to load the full entry. If a page ' +
+        'Call `swarm__wiki_read` with a pageId to load the full entry. If a page ' +
           'exists in both scopes, prefer adding ?scope=coordinator for ' +
           'coordinator-origin entries.'
       );

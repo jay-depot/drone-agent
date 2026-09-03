@@ -55,6 +55,7 @@ function jsonResponse(body: unknown): Response {
 
 describe('SwarmMemoryRetriever', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
+  const notices: string[] = [];
 
   function makeRetriever(
     cfg: DroneSwarmMemoryConfig = config()
@@ -68,11 +69,13 @@ describe('SwarmMemoryRetriever', () => {
       config: cfg,
       fetchImpl: fetchMock as unknown as typeof fetch,
       logger: { warn: vi.fn(), info: vi.fn() },
+      emitNotice: content => notices.push(content),
     });
   }
 
   beforeEach(() => {
     fetchMock = vi.fn();
+    notices.length = 0;
   });
 
   it('retrieves, merges by max score, and caches', async () => {
@@ -115,6 +118,40 @@ describe('SwarmMemoryRetriever', () => {
     );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('emits a notice line once per real retrieval, with the match count', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        searchResponse([
+          {
+            pageId: 'fragments',
+            title: 'Fragment Guide',
+            score: 0.72,
+            matchedChunk: 'TTL sweep',
+          },
+        ])
+      )
+    );
+    const retriever = makeRetriever();
+
+    await retriever.maybeRefresh(
+      parts({ currentQuery: 'window A' })
+    );
+    await retriever.maybeRefresh(
+      parts({ currentQuery: 'window A' })
+    );
+
+    // Fires once (debounced); the repeat is a no-op.
+    expect(notices).toEqual(['[swarm.memory: found 1 match]']);
+
+    // A genuinely new window triggers a fresh notice with 0 matches.
+    fetchMock.mockResolvedValue(jsonResponse(searchResponse([])));
+    await retriever.maybeRefresh(parts({ currentQuery: 'window B' }));
+    expect(notices).toEqual([
+      '[swarm.memory: found 1 match]',
+      '[swarm.memory: found 0 matches]',
+    ]);
   });
 
   it('merges duplicate pages across multiple query inputs by max score', async () => {
