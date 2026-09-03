@@ -27,7 +27,7 @@
     "drone-coordinator-ui": "workspace:*",
     "drone-core": "workspace:*",
     "drone-swarm-common": "workspace:*",
-    "fastify": "^5.2.1",
+    "fastify": "^5.12.1",
     "pino": "^9.6.0"
   },
   "devDependencies": {
