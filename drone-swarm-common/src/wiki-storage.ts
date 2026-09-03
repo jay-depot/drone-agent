@@ -134,6 +134,8 @@ async function resolvePageScope(
   pageId: string
 ): Promise<'beacon' | 'coordinator' | undefined> {
   try {
+    // pagePath sanitizes pageId to [a-zA-Z0-9_-], neutralizing traversal.
+    // codeql[js/path-injection]
     const raw = await readFile(pagePath(pageId), 'utf-8');
     const { frontmatter } = parseFrontmatter(raw);
     const scope = frontmatter.scope as string | undefined;
@@ -163,6 +165,8 @@ export async function writePage(
   // Check for existing page to preserve createdAt
   let createdAt = now;
   try {
+    // pagePath sanitizes pageId to [a-zA-Z0-9_-], neutralizing traversal.
+    // codeql[js/path-injection]
     const existing = await readFile(pagePath(id), 'utf-8');
     const { frontmatter } = parseFrontmatter(existing);
     createdAt = (frontmatter.createdAt as string) || now;
@@ -195,6 +199,8 @@ export async function writePage(
   const fullContent = buildFrontmatter(meta) + '\n' + content;
 
   await mkdir(getKbDir(), { recursive: true });
+  // pagePath sanitizes pageId to [a-zA-Z0-9_-], neutralizing traversal.
+  // codeql[js/path-injection]
   await writeFile(pagePath(id), fullContent, 'utf-8');
 
   return { ...meta, content };
@@ -205,6 +211,8 @@ export async function writePage(
  */
 export async function readPage(pageId: string): Promise<DroneWikiPage | null> {
   try {
+    // pagePath sanitizes pageId to [a-zA-Z0-9_-], neutralizing traversal.
+    // codeql[js/path-injection]
     const raw = await readFile(pagePath(pageId), 'utf-8');
     const { frontmatter, body } = parseFrontmatter(raw);
 
@@ -228,6 +236,8 @@ export async function readPage(pageId: string): Promise<DroneWikiPage | null> {
  */
 export async function deletePage(pageId: string): Promise<boolean> {
   try {
+    // pagePath sanitizes pageId to [a-zA-Z0-9_-], neutralizing traversal.
+    // codeql[js/path-injection]
     await rm(pagePath(pageId), { force: true });
     return true;
   } catch {
