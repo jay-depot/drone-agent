@@ -9,7 +9,7 @@
     "dev": "tsx watch ./src/index.ts"
   },
   "dependencies": {
-    "fastify": "^5.11.3",
+    "fastify": "^5.12.1",
     "pino": "^9.6.0"
   },
   "devDependencies": {
