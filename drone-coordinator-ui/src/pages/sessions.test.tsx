@@ -41,6 +41,15 @@ function jsonResponse(status: number, body: unknown): Response {
   } as Response;
 }
 
+function lastSessionsCall(
+  mockFetch: ReturnType<typeof vi.fn>
+): string | undefined {
+  return mockFetch.mock.calls
+    .map(([url]) => url as string)
+    .filter(u => u.includes('/api/sessions?'))
+    .at(-1);
+}
+
 const sessionPayload = (status: string, id = 's-1') => ({
   id,
   beaconId: 'b1',
@@ -88,9 +97,7 @@ describe('SessionsPage archive view', () => {
     );
 
     await screen.findByText('Processed');
-    const sessionsCall = mockFetch.mock.calls
-      .map(([url]) => url)
-      .find((u: string) => u.includes('/api/sessions?'));
+    const sessionsCall = lastSessionsCall(mockFetch);
     expect(sessionsCall).toContain('exclude=archived');
   });
 
@@ -112,9 +119,7 @@ describe('SessionsPage archive view', () => {
     await user.click(screen.getByRole('button', { name: 'Archived' }));
 
     await waitFor(() => {
-      const sessionsCall = mockFetch.mock.calls
-        .map(([url]) => url)
-        .find((u: string) => u.includes('/api/sessions?'));
+      const sessionsCall = lastSessionsCall(mockFetch);
       expect(sessionsCall).toContain('status=archived');
       expect(sessionsCall).not.toContain('exclude=archived');
     });
