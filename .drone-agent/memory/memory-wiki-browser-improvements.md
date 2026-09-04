@@ -3,7 +3,7 @@ key: memory-wiki-browser-improvements
 tags:
   []
 created: 2026-09-04T19:20:44.200Z
-updated: 2026-09-04T19:45:30.242Z
+updated: 2026-09-04T20:00:15.009Z
 ---
 
 # Memory Wiki Browser Improvements — Organized List (from brainstorm session)
@@ -11,6 +11,7 @@ updated: 2026-09-04T19:45:30.242Z
 Ready-to-plan list of improvements. Brought into future planning sessions.
 
 ## STATUS: B (edit-page back buttons) and C (session listing confirmations) COMPLETED 2026-09-04.
+## STATUS: E1 PLAN APPROVED 2026-09-04 → see dedicated plan `plan-swarm-topology-live-ws-status`.
 
 ## A. Wiki Browser
 
@@ -54,10 +55,10 @@ Ready-to-plan list of improvements. Brought into future planning sessions.
 
 ## E. Swarm Topology
 
-### E1. Status indicators = live websocket state
+### E1. Status indicators = live websocket state — PLAN APPROVED → `plan-swarm-topology-live-ws-status`
 - Red when a beacon's websocket is NOT connected (currently misreads "recently restarted").
-- If already wired to WS, investigate why connections are unstable.
-- Open: "never seen" handling — red since coordinator restart; if never seen at all, ambiguous (pending TOFU approval) → find a place that needs it.
+- Root cause confirmed: topology.tsx `isBeaconOnline` + beacon-detail.tsx `isOnline` use 5-min heartbeat heuristic, NOT live WS state. Coordinator already tracks live reverse-channel WS via `isBeaconConnected` (beacon-ws.ts).
+- Decisions: untrusted pending = AMBER; only topology+beacon-detail need it; live-updating via beacon.connected/disconnected events on UI /ws; `connected` field on GET /beacons + /:id; harden half-open detection (ping/pong isAlive sweep).
 
 ## F. Session Transcript
 
