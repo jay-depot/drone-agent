@@ -41,6 +41,7 @@ const existingPage = {
   scope: 'coordinator',
   tags: ['ops'],
   sources: [],
+  pitch: 'A one-sentence pitch about deployment.',
   createdAt: '2026-09-01T00:00:00.000Z',
   updatedAt: '2026-09-01T00:00:00.000Z',
   content: '# Deployment',
@@ -96,6 +97,69 @@ describe('WikiEditorPage create mode', () => {
     });
     await waitFor(() => {
       expect(screen.getByLabelText(/Title/)).toHaveValue('Deployment');
+    });
+  });
+});
+
+describe('WikiEditorPage pitch field', () => {
+  beforeEach(() => {
+    localStorageMock.clear();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('loads the stored pitch into the form in edit mode', async () => {
+    const mockFetch = vi.fn(async () => {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => existingPage,
+      } as Response;
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderEditor('/wiki/deploy/edit');
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Pitch')).toHaveValue(
+        'A one-sentence pitch about deployment.'
+      );
+    });
+  });
+
+  it('submits the pitch in the PUT body', async () => {
+    const mockFetch = vi.fn<
+      (url: string | URL | Request, init?: RequestInit) => Promise<Response>
+    >(
+      async (_url, _init) =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => existingPage,
+        }) as Response
+    );
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderEditor('/wiki/deploy/edit');
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Title/)).toHaveValue('Deployment');
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /Save Changes/ }));
+
+    await waitFor(() => {
+      const putCall = mockFetch.mock.calls.find(([url, init]) => {
+        const u = String(url);
+        return u.includes('/api/wiki/deploy') && init?.method === 'PUT';
+      });
+      expect(putCall).toBeDefined();
+      const body = JSON.parse(String(putCall![1]!.body));
+      expect(body.pitch).toBe('A one-sentence pitch about deployment.');
     });
   });
 });

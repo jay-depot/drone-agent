@@ -460,6 +460,8 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
             'C',
             '--tags',
             'a,b',
+            '--pitch',
+            'One-sentence pitch.',
           ],
           directFetch
         )
@@ -467,6 +469,7 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
       const written = JSON.parse(out[0]);
       expect(written.written.title).toBe('T');
       expect(written.written.tags).toEqual(['a', 'b']);
+      expect(written.written.pitch).toBe('One-sentence pitch.');
 
       out.length = 0;
       expect(

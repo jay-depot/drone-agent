@@ -3,7 +3,7 @@ key: plan-swarm-memory-wiki-pitch-field
 tags:
   []
 created: 2026-09-04T22:40:18.463Z
-updated: 2026-09-04T22:40:18.463Z
+updated: 2026-09-04T22:52:06.587Z
 ---
 
 # Plan: H1 — "One-sentence pitch" as official swarm memory wiki schema field
@@ -61,93 +61,87 @@ Then run `pnpm -r run build` (drone-core dist must be rebuilt before dependent p
 
 File: `drone-swarm-common/src/wiki-storage.ts`
 
-- `buildFrontmatter(meta)`: add `lines.push(\`pitch: ${meta.pitch}\`)` only when `meta.pitch` is non-empty (keep frontmatter clean for optional field).
-- `writePage(...)`: add a trailing optional parameter `pitch?: string = ''` (after `sources`), include in `meta`.
-- `readPage(...)`: parse `pitch: (frontmatter.pitch as string | undefined) || undefined` (do NOT coerce to empty string; leave absent → undefined).
-- `listPages(...)` already spreads `page` meta → carries `pitch` through `readPage`.
+- `buildFrontmatter(meta)`: add `lines.push(`pitch: ${meta.pitch}`)` only when `meta.pitch` is non-empty (keep frontmatter clean for optional field).
+- `writePage(...)`: add a trailing optional parameter `pitch?: string` (after `sources`), include in `meta`.
+- `readPage(...)`: parse pitch; leave absent → undefined.
+- `listPages(...)`: NOTE — builds each meta explicitly field-by-field, so `pitch` must be added there too (not just readPage).
 
-Signature: `writePage(id, title, scope, content, tags = [], sources = [], pitch?: string)`.
-
-Tests: `drone-swarm-common/test/wiki-storage.test.ts` — add a test that writes a page WITH a pitch and reads it back; assert frontmatter contains `pitch:`; write without a pitch and assert read pitch is `undefined`/absent.
+Tests: write a page WITH a pitch and read it back; assert frontmatter contains `pitch:`; write without a pitch and assert read pitch is `undefined`/absent; assert `listPages` includes pitch.
 
 ## Step 3 — Beacon + coordinator routes
 
 Beacon: `drone-beacon/src/routes/wiki.ts`
-- `PUT /wiki/:pageId` Body type: add `pitch?: string`; pass to `writePage(..., tags ?? [], sources ?? [], body.pitch ?? undefined)`. Coordinator-proxy branch already forwards `request.body` wholesale → carries pitch.
-- `GET /wiki/semantic-search`: extend `PageMetaLite` with `pitch?: string`; populate local branch from `listPages()` results (`p.pitch`); coordinator branch from proxied `/wiki` list (`m.pitch`). Include `pitch: (meta.pitch as string | undefined)` in each emitted result object.
+- `PUT /wiki/:pageId` Body: add `pitch?: string`; pass to `writePage(..., tags ?? [], sources ?? [], pitch ?? undefined)`.
+- `GET /wiki/semantic-search`: extend `PageMetaLite` with `pitch?: string`; populate local branch from `listPages()` and coordinator branch from proxied `/wiki` list; emit per result.
 
 Coordinator: `drone-coordinator/src/routes/wiki.ts`
-- `PUT /wiki/:pageId` Body type: add `pitch?: string`; pass to `writePage(..., tags ?? [], sources ?? [], body.pitch ?? undefined)`.
+- `PUT /wiki/:pageId` Body: add `pitch?: string`; pass to `writePage(..., tags ?? [], sources ?? [], pitch ?? undefined)`.
 
-Tests:
-- `drone-beacon/test/wiki-semantic-search.test.ts`: assert result exposes `pitch` when the page's frontmatter has one; assert `pitch` absent/undefined when none.
-- Add/adjust a beacon or coordinator route test covering PUT with a `pitch` body value (round-trip).
-- `drone-beacon/test/wiki-routes` / coordinator route tests: coverage for pitch round-trip (see existing wiki route tests for patterns).
+Tests: semantic-search returns pitch when present, absent otherwise; beacon+coordinator PUT round-trip (pitch keep + absent). Coordinator route tests MUST call `setKnowledgeBaseDir(mkdtemp())` + cleanup (coordinator setup does NOT isolate the KB dir).
 
 ## Step 4 — Drone-agent swarm plugin
 
-Files:
-- `drone-agent/src/plugins/swarm/tools-wiki.ts` — `createWikiWriteTool`: add `pitch: { type: 'string', description: 'Optional one-sentence summary...' }` to inputSchema properties (NOT required); include `pitch: params.pitch` in the PUT body if present (pass through; omit if undefined/empty).
-- `drone-agent/src/plugins/swarm/memory-retrieval.ts` — in `retrieve()`: `SearchRouteResult` add `pitch?: string`; build `SwarmMemoryEntry.pitch` as `truncatePitch(result.pitch ?? result.matchedChunk ?? '')` (field-first, chunk fallback). Also decide: `pitch` should pass the stored value through `truncatePitch` (still caps at 240) — yes, keep truncation as safety.
-- `drone-agent/src/plugins/swarm/memory-fragment.ts` — UNCHANGED logic (already renders `entry.pitch` via `pitchOf`), but add a doc comment noting pitch now sourced from the schema field. (Optional; no behavior change.)
+- `tools-wiki.ts` `createWikiWriteTool`: add `pitch` inputSchema property (optional); forward `pitch` in PUT body.
+- `memory-retrieval.ts`: `SearchRouteResult.pitch?: string`; `entry.pitch = truncatePitch(result.pitch ?? result.matchedChunk ?? '')`.
+- `memory-fragment.ts`: doc comment only.
 
-Tests:
-- `drone-agent/test/plugins/swarm/memory-retrieval.test.ts` — add cases: (a) result has BOTH `pitch` and `matchedChunk` → entry.pitch uses `pitch`; (b) result has only `matchedChunk` → falls back to it.
-- `drone-agent/test/plugins/swarm/memory-fragment.test.ts` — existing tests still pass (they inject `pitch` directly into cache). Add one assertion showing the fragment renders the stored pitch unchanged.
+Tests: retrieval (field-first when both; fallback when only matchedChunk), fragment renders stored pitch, `swarm-tool-input-validation.test.ts` wiki_write PUT-body pitch assertion.
 
 ## Step 5 — drone-swarm CLI + client
 
-File: `drone-swarm/src/client.ts`
-- `writeWikiPage` body type param: add `pitch?: string`.
+- `client.ts` `writeWikiPage` body: add `pitch?: string`.
+- `index.ts` `wiki write`: parse `--pitch`; forward; add to usage.
 
-File: `drone-swarm/src/index.ts`
-- `wiki write` command: parse `args.flags.pitch`; include `...(args.flags.pitch ? { pitch: args.flags.pitch } : {})` in the write body. Add `--pitch` to usage string.
-
-Tests: add/extend `drone-swarm` CLI test asserting `wiki write --pitch "..."` sends the pitch in the body (see existing CLI test patterns).
+Tests: `drone-swarm/test/cli.test.ts` write with `--pitch` asserts parsed body.
 
 ## Step 6 — Migration tool
 
-File: `drone-agent/src/runtime/migration/wiki.ts`
-- In `migrateWikiPage`, when building the PUT body, include pitch copy-through: `...(data.pitch ? { pitch: data.pitch } : {})` alongside title/content/tags/sources.
+- `wiki.ts` `migrateWikiPage` PUT body: `...(data.pitch ? { pitch: data.pitch } : {})`.
 
-(beacon-client.ts `putBeaconAsset` takes `Record<string, unknown>` — no type change needed; it spreads body.)
-
-Tests: add/extend `drone-agent/test/migration.test.ts` wiki-migration case asserting pitch is carried across a migrate.
+Tests: `drone-agent/test/migration.test.ts` beacon→coordinator migrate carries pitch.
 
 ## Step 7 — Coordinator UI
 
-Files:
-- `drone-coordinator-ui/src/lib/types.ts` — `WikiPageMeta` add `pitch?: string`.
-- `drone-coordinator-ui/src/pages/wiki-editor.tsx` — add a `pitch` state, a form `<Input>` (with label "Pitch" + helper "One-sentence summary of this page"), preload from existing page, include in `CreateWikiPageRequest` body. Add to the editor test (`wiki-editor.test.tsx`) asserting the field loads and submits.
-- `drone-coordinator-ui/src/pages/wiki-detail.tsx` — render `page.pitch` if present in the info card (e.g. a "Pitch" row near title / above content). Add to detail test (`wiki.test.tsx` or a detail assertion).
-- `drone-coordinator-ui/src/lib/types.ts` `CreateWikiPageRequest` add `pitch?: string`.
+- `lib/types.ts`: `WikiPageMeta.pitch?`, `CreateWikiPageRequest.pitch?`.
+- `wiki-editor.tsx`: pitch state, preload, form Input, submit body.
+- `wiki-detail.tsx`: Pitch row in info card (only when present).
+- Grid (`wiki-page-grid.tsx`) UNCHANGED.
 
-Grid (`wiki-page-grid.tsx`) deliberately UNCHANGED.
+Tests: editor loads + submits pitch; new `wiki-detail.test.tsx` renders/omits pitch.
 
 ## Step 8 — Coordinator default-assets seeds
 
-File: `drone-coordinator/src/default-assets.ts`
-- `WIKI_LIBRARIAN_SYSTEM_PROMPT`: add a step/instruction: after creating/updating a page, write a concise one-sentence `pitch` summarizing what the page is about (pass `pitch` to `swarm__wiki_write`). Because the persona prompt has auto-repair, also update `PRIOR_LIBRARIAN_PROMPT_MARKERS` so pre-existing seeded personas get the new instruction (add a distinctive new phrase as a marker; see existing `repairSeededLibrarianAssets`).
-- `MEMORY_WIKI_SKILL_BODY`: add `pitch: ...` example to the frontmatter YAML block in the skill body + a short instruction line ("Include a concise one-sentence pitch field"). NOTE: installed skill copies are NOT force-updated (existing design) — seed text changes only.
+- `default-assets.ts`: librarian prompt step 4 = write a one-sentence `pitch`; `PRIOR_LIBRARIAN_PROMPT_MARKERS` switched to a NUMBER-AGNOSTIC phrase marker (the pitch generation renumbers the summarize step 4→5, so a numbered marker breaks);
+- memory-wiki skill body: `pitch:` frontmatter example + instruction line.
 
-Tests: `drone-coordinator/test/default-assets.test.ts` — assert the new seed text includes `pitch` guidance (persona prompt marker + skill body).
+Tests: prompt + skill seed contain pitch guidance; repair tests still pass.
 
 ## Final step — Validation (MUST pass)
 
-1. LSP diagnostics clean across all touched packages (typescript LSP; check via lsp__get_diagnostics per file).
-2. `pnpm -r run build` passes (rebuilds dist for drone-core first so dependents resolve the new type).
-3. `pnpm -r run lint` passes (eslint + prettier).
-4. Fast test suite `pnpm -r run test` passes — includes new unit tests added in each step.
-5. (Optional/slow, at discretion) `pnpm -r run test:integration` if swarm paths integrate.
+1. LSP clean across touched packages.
+2. `pnpm -r run build` passes (rebuild drone-core first).
+3. `pnpm lint` (root: eslint --fix + prettier) passes.
+4. `pnpm test` fast suite passes (root vitest) + `drone-coordinator-ui` `NODE_ENV=test vitest run`.
+5. Pre-existing failures (unrelated): session-param-events.test.ts (3) + beacon-ws.test.ts (1) typecheck; UI index.css warnings.
 
-## Validation criteria checklist
+---
 
-- [ ] `DroneWikiPageMeta.pitch?: string` exists in drone-core; build passes.
-- [ ] `writePage`/`readPage` round-trip the pitch through frontmatter; page without pitch reads back `undefined`.
-- [ ] Beacon + coordinator PUT accept optional `pitch`.
-- [ ] `GET /wiki/semantic-search` returns `pitch` from metadata when present.
-- [ ] Retriever uses stored `pitch` when present, falls back to `matchedChunk` otherwise.
-- [ ] `swarm__wiki_write`, drone-swarm CLI, migration tool all accept/forward `pitch`.
-- [ ] UI editor + detail render/edit `pitch`; grid untouched.
-- [ ] Seeds (librarian persona + memory-wiki skill) instruct `pitch`.
-- [ ] LSP clean + build + lint + fast tests pass.
+# COMPLETED 2026-09-04
+
+Execution results (all validation criteria met):
+
+- **Step 1** drone-core `DroneWikiPageMeta.pitch?: string` added; build passes.
+- **Step 2** drone-swarm-common `wiki-storage.ts`: `buildFrontmatter` emits `pitch:` only when non-empty; `writePage` gained trailing optional `pitch?: string`; `readPage` and `listPages` parse/pass `pitch` through (listPages needed an explicit field — not a spread). 3 new storage tests.
+- **Step 3** beacon+coordinator PUT routes accept optional `pitch`; beacon `/wiki/semantic-search` enriched with metadata pitch (`PageMetaLite.pitch`). New beacon semantic-search tests (pitch present/absent), beacon PUT round-trip tests, new `drone-coordinator/test/wiki-routes.test.ts` (uses temp KB dir).
+- **Step 4** agent swarm: `tools-wiki.ts` `wiki_write` accepts+forwards `pitch`; `memory-retrieval.ts` prefers `result.pitch ?? result.matchedChunk`; `memory-fragment.ts` doc comment only. New retrieval/fragment/tools tests.
+- **Step 5** drone-swarm `client.ts` `writeWikiPage` body + CLI `--pitch` flag + usage; CLI test extended.
+- **Step 6** migration `wiki.ts` copies `pitch` through to the PUT body; new migration test.
+- **Step 7** coordinator UI: `types.ts`, `wiki-editor.tsx` (field), `wiki-detail.tsx` (Pitch row). New `wiki-detail.test.tsx`; editor tests extended.
+- **Step 8** `default-assets.ts`: librarian persona step 4 (pitch) + markers made number-agnostic; memory-wiki skill pitch example/instruction; tests extended.
+- **Validation** build ✓, lint ✓, fast tests 2764 passed / 14 pre-existing skips ✓, UI 73 passed ✓, LSP clean on touched source. Pre-existing failures untouched (see above).
+
+## Notes / lessons
+- **listPages was NOT a spread**: `wiki-storage.listPages` builds each meta explicitly field-by-field, so `pitch` had to be added there too. Easy to miss when adding a schema field — grep for explicit field lists.
+- **file__apply_diff fuzz can silently no-op**: reported success with a mangled `\n`-escaped diff but wrote nothing; always re-read the file to confirm the edit landed, especially for multi-line property additions (hit in tools-wiki.ts).
+- **coordinator route tests must isolate the wiki KB dir**: coordinator `setupDb` does NOT redirect `setKnowledgeBaseDir`; route tests that PUT wiki pages write to `./knowledge-base`. Call `setKnowledgeBaseDir(mkdtemp())` + cleanup, mirroring beacon tests.
+- Prettier's markdown pass reformats tracked `.drone-agent/memory/*.md` (cosmetic diffs expected after `pnpm lint`).

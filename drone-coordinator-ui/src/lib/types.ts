@@ -105,6 +105,7 @@ export interface WikiPageMeta {
   scope: string;
   tags: string[];
   sources: string[];
+  pitch?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -119,6 +120,7 @@ export interface CreateWikiPageRequest {
   scope?: string;
   tags?: string[];
   sources?: string[];
+  pitch?: string;
 }
 
 export interface WikiTagCount {

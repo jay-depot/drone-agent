@@ -24,6 +24,7 @@ export default function WikiEditorPage() {
   const [scope, setScope] = useState('coordinator');
   const [tags, setTags] = useState('');
   const [sources, setSources] = useState('');
+  const [pitch, setPitch] = useState('');
 
   // Load existing page for edit mode
   useEffect(() => {
@@ -40,6 +41,7 @@ export default function WikiEditorPage() {
           setScope(p.scope);
           setTags(p.tags.join(', '));
           setSources(p.sources.join(', '));
+          setPitch(p.pitch ?? '');
         } else {
           setError('Wiki page not found');
         }
@@ -107,6 +109,7 @@ export default function WikiEditorPage() {
           .split(',')
           .map(s => s.trim())
           .filter(Boolean),
+        ...(pitch.trim() ? { pitch: pitch.trim() } : {}),
       };
 
       const res = await authFetch(`/api/wiki/${targetId}`, {
@@ -242,6 +245,21 @@ export default function WikiEditorPage() {
           />
           <p className="text-xs text-muted-foreground mt-1">
             Comma-separated list of source session IDs.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="pitch" className="block text-sm font-medium mb-1">
+            Pitch
+          </label>
+          <Input
+            id="pitch"
+            value={pitch}
+            onChange={e => setPitch(e.target.value)}
+            placeholder="One-sentence summary of this page"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            One-sentence summary. Shown in swarm memory RAG results.
           </p>
         </div>
 

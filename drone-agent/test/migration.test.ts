@@ -615,6 +615,32 @@ describe('Migration Service', () => {
     expect(result.error).toContain('server-to-server only');
   });
 
+  it('should carry the pitch through a beacon → coordinator wiki migrate', async () => {
+    mockServerData.set('wiki', [
+      {
+        id: 'test-page',
+        title: 'Test Page',
+        content: '# Body',
+        tags: ['tag1'],
+        sources: ['s1'],
+        pitch: 'A one-sentence pitch.',
+      },
+    ]);
+
+    const result = await migrateAsset({
+      type: 'wiki',
+      id: 'test-page',
+      from: 'beacon',
+      to: 'coordinator',
+      beaconHost: 'localhost',
+      beaconPort: 9999,
+    });
+
+    expect(result.success).toBe(true);
+    const stored = mockServerData.get('wiki')!.find(d => d.id === 'test-page')!;
+    expect(stored.pitch).toBe('A one-sentence pitch.');
+  });
+
   // ── resolveBeaconAddress ──────────────────────────────────────────
 
   it('should resolve beacon address from config', () => {

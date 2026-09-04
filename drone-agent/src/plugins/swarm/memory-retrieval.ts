@@ -26,6 +26,7 @@ export interface SearchRouteResult {
   tags?: string[];
   score: number;
   matchedChunk: string;
+  pitch?: string;
 }
 
 export interface SearchRouteResponse {
@@ -255,7 +256,7 @@ export class SwarmMemoryRetriever {
           title: result.title,
           tags: result.tags ?? [],
           score: result.score,
-          pitch: truncatePitch(result.matchedChunk ?? ''),
+          pitch: truncatePitch(result.pitch ?? result.matchedChunk ?? ''),
         };
         const existing = byKey.get(key);
         if (!existing || entry.score > existing.score) {

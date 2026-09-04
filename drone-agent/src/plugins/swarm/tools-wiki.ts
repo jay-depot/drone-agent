@@ -107,6 +107,11 @@ function createWikiWriteTool(ctx: SwarmContext): DroneToolDefinition {
           items: { type: 'string' },
           description: 'Optional session log IDs that contributed to this page',
         },
+        pitch: {
+          type: 'string',
+          description:
+            'Optional one-sentence summary of what this page is about (shown in swarm memory RAG results)',
+        },
       },
       required: ['pageId', 'title', 'content'],
     },
@@ -122,7 +127,7 @@ function createWikiWriteTool(ctx: SwarmContext): DroneToolDefinition {
           error: `wiki_write requires a non-empty ${missing}.`,
         });
       }
-      const { pageId, title, content, scope, tags, sources } = params;
+      const { pageId, title, content, scope, tags, sources, pitch } = params;
       try {
         const res = await fetch(
           `${ctx.baseUrl}/wiki/${encodeURIComponent(pageId as string)}`,
@@ -135,6 +140,7 @@ function createWikiWriteTool(ctx: SwarmContext): DroneToolDefinition {
               scope: scope || 'beacon',
               tags: tags || [],
               sources: sources || [],
+              ...(pitch ? { pitch } : {}),
             }),
           }
         );

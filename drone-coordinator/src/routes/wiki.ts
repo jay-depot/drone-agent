@@ -31,11 +31,12 @@ export default function wikiRoutes(app: FastifyInstance) {
       scope?: string;
       tags?: string[];
       sources?: string[];
+      pitch?: string;
     };
   }>('/wiki/:pageId', async (request, reply) => {
     const { writePage } = await import('drone-swarm-common');
     const { pageId } = request.params;
-    const { title, content, scope, tags, sources } = request.body;
+    const { title, content, scope, tags, sources, pitch } = request.body;
     if (!title || !content) {
       return reply.code(400).send({ error: 'title and content are required' });
     }
@@ -46,7 +47,8 @@ export default function wikiRoutes(app: FastifyInstance) {
         (scope as 'beacon' | 'coordinator') || 'coordinator',
         content,
         tags ?? [],
-        sources ?? []
+        sources ?? [],
+        pitch ?? undefined
       );
       return reply.code(200).send(page);
     } catch (err) {

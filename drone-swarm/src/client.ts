@@ -284,6 +284,7 @@ export class SwarmClient {
       scope?: string;
       tags?: string[];
       sources?: string[];
+      pitch?: string;
     }
   ): Promise<{ status: number; page: unknown }> {
     const { status, data } = await this.request<unknown>(

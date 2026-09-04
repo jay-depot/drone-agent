@@ -73,6 +73,9 @@ function buildFrontmatter(meta: DroneWikiPageMeta): string {
   lines.push(`scope: ${meta.scope}`);
   lines.push(`tags: [${meta.tags.map(t => `"${t}"`).join(', ')}]`);
   lines.push(`sources: [${meta.sources.map(s => `"${s}"`).join(', ')}]`);
+  if (meta.pitch) {
+    lines.push(`pitch: ${meta.pitch}`);
+  }
   lines.push(`createdAt: ${meta.createdAt}`);
   lines.push(`updatedAt: ${meta.updatedAt}`);
   lines.push('---');
@@ -159,7 +162,8 @@ export async function writePage(
   scope: 'beacon' | 'coordinator',
   content: string,
   tags: string[] = [],
-  sources: string[] = []
+  sources: string[] = [],
+  pitch?: string
 ): Promise<DroneWikiPage> {
   if (id.toLowerCase() === 'tags') {
     throw new Error(
@@ -199,6 +203,7 @@ export async function writePage(
     scope,
     tags,
     sources,
+    ...(pitch ? { pitch } : {}),
     createdAt,
     updatedAt: now,
   };
@@ -222,6 +227,7 @@ export async function readPage(pageId: string): Promise<DroneWikiPage | null> {
     // codeql[js/path-injection]
     const raw = await readFile(pagePath(pageId), 'utf-8');
     const { frontmatter, body } = parseFrontmatter(raw);
+    const pitch = frontmatter.pitch as string | undefined;
 
     return {
       id: (frontmatter.id as string) || pageId,
@@ -229,6 +235,7 @@ export async function readPage(pageId: string): Promise<DroneWikiPage | null> {
       scope: (frontmatter.scope as 'beacon' | 'coordinator') || 'beacon',
       tags: (frontmatter.tags as string[]) || [],
       sources: (frontmatter.sources as string[]) || [],
+      ...(pitch ? { pitch } : {}),
       createdAt: (frontmatter.createdAt as string) || new Date().toISOString(),
       updatedAt: (frontmatter.updatedAt as string) || new Date().toISOString(),
       content: body,
@@ -271,6 +278,7 @@ export async function listPages(tag?: string): Promise<DroneWikiPageMeta[]> {
           scope: page.scope,
           tags: page.tags,
           sources: page.sources,
+          ...(page.pitch ? { pitch: page.pitch } : {}),
           createdAt: page.createdAt,
           updatedAt: page.updatedAt,
         });

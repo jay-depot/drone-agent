@@ -27,4 +27,5 @@ LESSON: when a project's test script sets `NODE_ENV`, reproduce via that exact s
 3. **e2e-swarm full-agent-lifecycle staleness (1 test)** — FIXED: test asserts against its own registered agent.
 
 ## Still-open upstream root cause (NOT fixed)
+
 Spawned agents are never cleaned out of `agent_sessions` (zombie 'connected' rows) because they crash without an LLM provider — see memory `spawned-agent-llm-wiring`.

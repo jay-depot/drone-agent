@@ -56,6 +56,53 @@ describe('Wiki Storage', () => {
     expect(page).toBeNull();
   });
 
+  it('should round-trip an optional pitch through frontmatter', async () => {
+    const { writePage, readPage } = await import('../src/wiki-storage.js');
+    const page = await writePage(
+      'pitch-page',
+      'Pitch Page',
+      'coordinator',
+      '# Content',
+      ['tag'],
+      ['session-1'],
+      'A one-sentence pitch about this page.'
+    );
+    expect(page.pitch).toBe('A one-sentence pitch about this page.');
+
+    const read = await readPage('pitch-page');
+    expect(read).not.toBeNull();
+    expect(read!.pitch).toBe('A one-sentence pitch about this page.');
+  });
+
+  it('should omit pitch from frontmatter and read back undefined when not provided', async () => {
+    const { writePage, readPage } = await import('../src/wiki-storage.js');
+    const { readFile } = await import('node:fs/promises');
+    await writePage('no-pitch', 'No Pitch', 'beacon', 'content');
+
+    const raw = await readFile(`${kbDir}/no-pitch.md`, 'utf-8');
+    expect(raw).not.toContain('pitch:');
+
+    const read = await readPage('no-pitch');
+    expect(read).not.toBeNull();
+    expect(read!.pitch).toBeUndefined();
+  });
+
+  it('should include pitch in listPages metadata when present', async () => {
+    const { writePage, listPages } = await import('../src/wiki-storage.js');
+    await writePage(
+      'list-pitch',
+      'List Pitch',
+      'beacon',
+      'content',
+      [],
+      [],
+      'Listed pitch value.'
+    );
+    const pages = await listPages();
+    expect(pages).toHaveLength(1);
+    expect(pages[0].pitch).toBe('Listed pitch value.');
+  });
+
   it('should delete a wiki page', async () => {
     const { writePage, deletePage, readPage } =
       await import('../src/wiki-storage.js');

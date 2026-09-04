@@ -134,6 +134,13 @@ export default function WikiDetailPage() {
           <CardTitle className="text-base">Information</CardTitle>
         </CardHeader>
         <CardContent>
+          {page.pitch && (
+            <div className="mb-3">
+              <span className="text-sm text-muted-foreground">Pitch</span>
+              <p className="mt-0.5">{page.pitch}</p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-muted-foreground">Scope</span>

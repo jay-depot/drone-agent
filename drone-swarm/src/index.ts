@@ -37,6 +37,7 @@ Wiki commands (beacon or coordinator):
   wiki read <pageId>
   wiki write <pageId> --title <t> --file <path> | --content <text>
         [--scope <beacon|coordinator>] [--tags <a,b,c>] [--sources <x,y>]
+        [--pitch <one-sentence summary>]
   wiki search <query>
 
 Fragment commands (list: beacon or coordinator; set/delete: beacon only):
@@ -215,6 +216,7 @@ async function runWikiCommand(
         ...(args.flags.sources
           ? { sources: args.flags.sources.split(',').map(s => s.trim()) }
           : {}),
+        ...(args.flags.pitch ? { pitch: args.flags.pitch } : {}),
       });
       printJson(page);
       return 0;

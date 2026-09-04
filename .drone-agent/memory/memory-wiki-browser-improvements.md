@@ -3,14 +3,14 @@ key: memory-wiki-browser-improvements
 tags:
   []
 created: 2026-09-04T19:20:44.200Z
-updated: 2026-09-04T22:17:42.287Z
+updated: 2026-09-04T22:52:18.749Z
 ---
 
 # Memory Wiki Browser Improvements — Organized List (from brainstorm session)
 
 Ready-to-plan list of improvements. Brought into future planning sessions.
 
-## STATUS: B, C, E1, F1 COMPLETED. A (A1-A5), D1, G1, H1 open. See plans: `plan-swarm-topology-live-ws-status` (E1), `plan-swarm-session-param-events` (F1).
+## STATUS: B, C, E1, F1, H1 COMPLETED. A (A1-A5), D1, G1 open. See plans: `plan-swarm-topology-live-ws-status` (E1), `plan-swarm-session-param-events` (F1), `plan-swarm-memory-wiki-pitch-field` (H1).
 
 ## A. Wiki Browser
 
@@ -72,6 +72,7 @@ Ready-to-plan list of improvements. Brought into future planning sessions.
 
 ## H. Swarm memory wiki schema
 
-### H1. "One-sentence pitch" as official schema field
+### H1. "One-sentence pitch" as official schema field  ✅ COMPLETED → `plan-swarm-memory-wiki-pitch-field`
 - Make the one-sentence pitch an official part of the swarm memory wiki page schema.
 - Source it from there in the "swarm memory RAG" prompt fragment, rather than assembling it procedurally.
+- IMPLEMENTED: optional `pitch?: string` on `DroneWikiPageMeta`; stored in frontmatter (build/parse/read/list in `wiki-storage.ts`); beacon+coordinator PUT accept it; `/wiki/semantic-search` enriches results with metadata pitch; retriever prefers stored pitch over `matchedChunk`; `swarm__wiki_write`, drone-swarm CLI (`--pitch`), and migration carry it; UI editor + detail page now have a Pitch field/row (grid untouched); librarian persona + memory-wiki skill seeds instruct writing a pitch.

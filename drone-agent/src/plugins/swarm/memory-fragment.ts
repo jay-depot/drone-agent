@@ -11,6 +11,12 @@ function pitchOf(text: string): string {
 }
 
 /**
+ * Renders each entry's pitch as `— {pitch}`. The pitch is sourced from the
+ * wiki page's stored `pitch` schema field when present (field-first), falling
+ * back to the best-scoring vector chunk for pages written without one.
+ */
+
+/**
  * The `# Swarm Memory (wiki)` header fragment: an advertise+recall index of
  * wiki entries relevant to the current conversation. Reads the retriever's
  * cache ONLY — never the network — so it stays cheap and synchronous at
