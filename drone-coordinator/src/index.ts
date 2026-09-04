@@ -49,7 +49,11 @@ import {
 } from './ws-pubsub.js';
 import { createWebAuthMiddleware, isLocalRequest } from './web-auth.js';
 import { createMtlsMiddleware } from './mtls.js';
-import { registerBeaconWebSocket } from './beacon-ws.js';
+import {
+  isBeaconConnected,
+  registerBeaconWebSocket,
+  startBeaconLivenessSweep,
+} from './beacon-ws.js';
 import {
   seedDefaultAssets,
   repairSeededLibrarianAssets,
@@ -371,6 +375,7 @@ export async function buildApp(opts?: {
     // spawn/message commands from the coordinator.
     await app.register(import('@fastify/websocket'));
     registerBeaconWebSocket(app);
+    startBeaconLivenessSweep();
   }
 
   // Register API routes
@@ -424,7 +429,10 @@ async function attachUi(
     const sub = addSubscriber(socket);
 
     try {
-      const beacons = listBeacons();
+      const beacons = listBeacons().map(b => ({
+        ...b,
+        connected: isBeaconConnected(b.id),
+      }));
       const agentLocations = listAllAgentLocations();
       const swarmSessions = listSwarmSessions({ status: 'active' });
       const sessions = swarmSessions.map(s => {

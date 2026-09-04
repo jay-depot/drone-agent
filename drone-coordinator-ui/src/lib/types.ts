@@ -5,6 +5,7 @@ export interface Beacon {
   name: string;
   host: string;
   port: number;
+  connected?: boolean;
   connectedAt: number;
   lastHeartbeat: number;
   trustStatus?: 'pending' | 'approved' | 'rejected' | null;

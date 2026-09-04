@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
-import type { BeaconDetail, BeaconSession, AgentLocation } from '@/lib/types';
+import { useWebSocket } from '@/hooks/use-websocket';
+import type {
+  BeaconDetail,
+  BeaconSession,
+  AgentLocation,
+  WsEventMessage,
+} from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,6 +25,7 @@ export default function BeaconDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const authFetch = useAuthenticatedFetch();
+  const { subscribe } = useWebSocket();
   const [beacon, setBeacon] = useState<BeaconDetail | null>(null);
   const [sessions, setSessions] = useState<BeaconSession[]>([]);
   const [agents, setAgents] = useState<AgentLocation[]>([]);
@@ -62,9 +69,45 @@ export default function BeaconDetailPage() {
     fetchData();
   }, [id, authFetch]);
 
-  const isOnline = beacon
-    ? Date.now() - beacon.lastHeartbeat < 5 * 60 * 1000
-    : false;
+  // Live beacon connection state: reverse-channel WebSocket open/close events
+  // update the header dot without a refresh.
+  useEffect(() => {
+    if (!id) return;
+
+    const unsub = subscribe('event', msg => {
+      const eventMsg = msg as WsEventMessage;
+      if (
+        eventMsg.eventType !== 'beacon.connected' &&
+        eventMsg.eventType !== 'beacon.disconnected'
+      ) {
+        return;
+      }
+      const payload =
+        typeof eventMsg.payload === 'object' && eventMsg.payload !== null
+          ? (eventMsg.payload as { beaconId?: string })
+          : undefined;
+      if (!payload?.beaconId || payload.beaconId !== id) return;
+      setBeacon(prev =>
+        prev
+          ? {
+              ...prev,
+              connected: eventMsg.eventType === 'beacon.connected',
+            }
+          : prev
+      );
+    });
+
+    return () => {
+      unsub();
+    };
+  }, [id, subscribe]);
+
+  const status =
+    beacon && beacon.connected
+      ? { colorClass: 'bg-green-500', label: 'Online' }
+      : beacon && beacon.trustStatus === 'pending'
+        ? { colorClass: 'bg-amber-400', label: 'Pending' }
+        : { colorClass: 'bg-red-400', label: 'Offline' };
 
   if (!id) {
     return (
@@ -119,10 +162,8 @@ export default function BeaconDetailPage() {
           </p>
         </div>
         <div
-          className={`w-2.5 h-2.5 rounded-full ${
-            isOnline ? 'bg-green-500' : 'bg-red-400'
-          }`}
-          title={isOnline ? 'Online' : 'Offline'}
+          className={`w-2.5 h-2.5 rounded-full ${status.colorClass}`}
+          title={status.label}
         />
       </div>
 

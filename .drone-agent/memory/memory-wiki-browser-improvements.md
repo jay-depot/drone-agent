@@ -3,15 +3,14 @@ key: memory-wiki-browser-improvements
 tags:
   []
 created: 2026-09-04T19:20:44.200Z
-updated: 2026-09-04T20:00:15.009Z
+updated: 2026-09-04T20:11:14.077Z
 ---
 
 # Memory Wiki Browser Improvements — Organized List (from brainstorm session)
 
 Ready-to-plan list of improvements. Brought into future planning sessions.
 
-## STATUS: B (edit-page back buttons) and C (session listing confirmations) COMPLETED 2026-09-04.
-## STATUS: E1 PLAN APPROVED 2026-09-04 → see dedicated plan `plan-swarm-topology-live-ws-status`.
+## STATUS: B (edit-page back buttons), C (session listing confirmations), E1 (topology live WS status) COMPLETED. See `plan-swarm-topology-live-ws-status` for E1.
 
 ## A. Wiki Browser
 
@@ -55,10 +54,9 @@ Ready-to-plan list of improvements. Brought into future planning sessions.
 
 ## E. Swarm Topology
 
-### E1. Status indicators = live websocket state — PLAN APPROVED → `plan-swarm-topology-live-ws-status`
-- Red when a beacon's websocket is NOT connected (currently misreads "recently restarted").
-- Root cause confirmed: topology.tsx `isBeaconOnline` + beacon-detail.tsx `isOnline` use 5-min heartbeat heuristic, NOT live WS state. Coordinator already tracks live reverse-channel WS via `isBeaconConnected` (beacon-ws.ts).
-- Decisions: untrusted pending = AMBER; only topology+beacon-detail need it; live-updating via beacon.connected/disconnected events on UI /ws; `connected` field on GET /beacons + /:id; harden half-open detection (ping/pong isAlive sweep).
+### E1. Status indicators = live websocket state  ✅ COMPLETED → `plan-swarm-topology-live-ws-status`
+- Red when a beacon's websocket is NOT connected (previously misread "recently restarted" via a 5-min heartbeat heuristic in topology.tsx isBeaconOnline / beacon-detail.tsx isOnline).
+- IMPLEMENTED: coordinator exposes `connected` (isBeaconConnected) on GET /beacons + /beacons/:id + /ws initial beacons; beacon-ws.ts published beacon.connected/beacon.disconnected events over UI /ws and hardened half-open detection with a ping/pong startBeaconLivenessSweep (30s, isAlive, terminate dead sockets). UI topology.tsx + beacon-detail.tsx use `connected` with green/red/amber (pending=amber) dots and live-update on events. Tests: coordinator beacon-ws.test.ts + routes/beacons.test.ts; UI topology.test.tsx + beacon-detail.test.tsx.
 
 ## F. Session Transcript
 

@@ -6,6 +6,7 @@ import {
   getClientCertFingerprint,
   resolveBeaconIdByFingerprint,
 } from './mtls.js';
+import { publishMutationEvent } from './ws-pubsub.js';
 import { logger } from './logger.js';
 
 /**
@@ -21,9 +22,53 @@ import { logger } from './logger.js';
 interface BeaconConnection {
   ws: WebSocket;
   beaconId: string;
+  isAlive: boolean;
 }
 
 const connections = new Map<string, BeaconConnection>();
+
+/**
+ * Test-visible hook registration point. The connect/disconnect lifecycle
+ * publishes beacon.connected / beacon.disconnected events; tests spy on these
+ * callbacks to observe those publishes without a live WebSocket.
+ */
+const lifecycleHooks: {
+  onConnected?: (beaconId: string) => void;
+  onDisconnected?: (beaconId: string) => void;
+} = {};
+
+/** Internal: add a beacon connection and fire the connected hook. */
+function registerBeaconConnection(
+  beaconId: string,
+  ws: WebSocket
+): BeaconConnection {
+  const conn: BeaconConnection = { ws, beaconId, isAlive: true };
+  connections.set(beaconId, conn);
+  logger.info(`Beacon ${beaconId} connected via reverse-channel WebSocket`);
+  ws.on('pong', () => {
+    conn.isAlive = true;
+  });
+  publishMutationEvent({
+    sessionId: beaconId,
+    eventType: 'beacon.connected',
+    payload: { beaconId },
+  });
+  lifecycleHooks.onConnected?.(beaconId);
+  return conn;
+}
+
+/** Internal: remove a beacon connection and fire the disconnected hook. */
+function unregisterBeaconConnection(beaconId: string): void {
+  const removed = connections.delete(beaconId);
+  if (!removed) return;
+  logger.info(`Beacon ${beaconId} disconnected from reverse-channel WebSocket`);
+  publishMutationEvent({
+    sessionId: beaconId,
+    eventType: 'beacon.disconnected',
+    payload: { beaconId },
+  });
+  lifecycleHooks.onDisconnected?.(beaconId);
+}
 
 // Pending command requests awaiting a response: id -> resolver
 const pendingRequests = new Map<string, (res: CommandResponse) => void>();
@@ -66,9 +111,7 @@ export function registerBeaconWebSocket(app: FastifyInstance): void {
       return;
     }
 
-    const conn: BeaconConnection = { ws: socket, beaconId };
-    connections.set(beaconId, conn);
-    logger.info(`Beacon ${beaconId} connected via reverse-channel WebSocket`);
+    registerBeaconConnection(beaconId, socket);
 
     socket.on('message', (raw: Buffer) => {
       let msg: IncomingMessage;
@@ -92,12 +135,35 @@ export function registerBeaconWebSocket(app: FastifyInstance): void {
     });
 
     socket.on('close', () => {
-      connections.delete(beaconId);
-      logger.info(
-        `Beacon ${beaconId} disconnected from reverse-channel WebSocket`
-      );
+      unregisterBeaconConnection(beaconId);
     });
   });
+}
+
+/**
+ * Half-open connection detection: periodically ping every beacon's reverse
+ * channel. A beacon that fails to pong by the next sweep is terminated so dead
+ * sockets don't keep `isBeaconConnected` reporting true forever.
+ *
+ * Returns the interval so callers can clear it on shutdown. The interval is
+ * unref'd so it never keeps the process alive by itself.
+ */
+export function startBeaconLivenessSweep(intervalMs = 30000): NodeJS.Timeout {
+  const interval = setInterval(() => {
+    for (const conn of connections.values()) {
+      if (!conn.isAlive) {
+        conn.ws.terminate();
+        // Terminate fires 'close' (which also unregisters), but unregister
+        // explicitly so the map and disconnected publish are deterministic.
+        unregisterBeaconConnection(conn.beaconId);
+        continue;
+      }
+      conn.isAlive = false;
+      conn.ws.ping();
+    }
+  }, intervalMs);
+  interval.unref();
+  return interval;
 }
 
 /**
@@ -155,7 +221,27 @@ export function _registerTestConnection(
   beaconId: string,
   fakeWs: WebSocket
 ): void {
-  connections.set(beaconId, { ws: fakeWs, beaconId });
+  registerBeaconConnection(beaconId, fakeWs);
+}
+
+/**
+ * Test-only helper: install lifecycle hooks so tests can observe the
+ * connected/disconnected publishes without a live WebSocket.
+ */
+export function _setLifecycleHooks(hooks: {
+  onConnected?: (beaconId: string) => void;
+  onDisconnected?: (beaconId: string) => void;
+}): void {
+  lifecycleHooks.onConnected = hooks.onConnected;
+  lifecycleHooks.onDisconnected = hooks.onDisconnected;
+}
+
+/** Test-only helper: expose whether a beacon is connected, for liveness tests. */
+export function _getConnection(
+  beaconId: string
+): { isAlive: boolean } | undefined {
+  const conn = connections.get(beaconId);
+  return conn ? { isAlive: conn.isAlive } : undefined;
 }
 
 /**
@@ -182,13 +268,17 @@ export function _handleIncomingMessage(raw: string): void {
 
 /** For tests: clear all connections and pending requests. */
 export function resetBeaconConnections(): void {
-  for (const conn of connections.values()) {
+  for (const beaconId of [...connections.keys()]) {
+    const conn = connections.get(beaconId);
+    if (!conn) continue;
     try {
       conn.ws.close();
     } catch {
       // best-effort
     }
+    unregisterBeaconConnection(beaconId);
   }
-  connections.clear();
   pendingRequests.clear();
+  lifecycleHooks.onConnected = undefined;
+  lifecycleHooks.onDisconnected = undefined;
 }
