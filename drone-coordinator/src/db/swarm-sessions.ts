@@ -80,6 +80,7 @@ export function getSwarmSession(id: string): SwarmSession | undefined {
 
 export function listSwarmSessions(options?: {
   status?: string;
+  exclude?: string;
   sortBy?: string;
   sortDirection?: string;
   limit?: number;
@@ -91,6 +92,11 @@ export function listSwarmSessions(options?: {
   if (options?.status) {
     query += ' AND status = ?';
     params.push(options.status);
+  }
+
+  if (options?.exclude) {
+    query += ' AND status != ?';
+    params.push(options.exclude);
   }
 
   const sortCol = options?.sortBy === 'updatedAt' ? 'updatedAt' : 'createdAt';
@@ -141,13 +147,21 @@ export function markStaleSessions(thresholdMs: number): SwarmSession[] {
   return updated;
 }
 
-export function countSwarmSessions(options?: { status?: string }): number {
+export function countSwarmSessions(options?: {
+  status?: string;
+  exclude?: string;
+}): number {
   let query = 'SELECT COUNT(*) as count FROM swarm_sessions WHERE 1=1';
   const params: unknown[] = [];
 
   if (options?.status) {
     query += ' AND status = ?';
     params.push(options.status);
+  }
+
+  if (options?.exclude) {
+    query += ' AND status != ?';
+    params.push(options.exclude);
   }
 
   const stmt = getDatabase().prepare(query);
@@ -193,6 +207,18 @@ export function transitionSessionStatus(
   stmt.run({ id, status: toStatus, updatedAt: now });
 
   return { ...session, status: toStatus, updatedAt: now };
+}
+
+export function archiveSwarmSession(
+  id: string
+): SwarmSession | { error: string } {
+  return transitionSessionStatus(id, 'processed', 'archived');
+}
+
+export function restoreSwarmSession(
+  id: string
+): SwarmSession | { error: string } {
+  return transitionSessionStatus(id, 'archived', 'processed');
 }
 
 export function updateSwarmSessionPersona(

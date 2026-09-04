@@ -169,6 +169,32 @@ export class SwarmClient {
     return { status, result: data };
   }
 
+  async archiveSession(
+    sessionId: string
+  ): Promise<{ status: number; result: unknown }> {
+    const { status, data } = await this.request<unknown>(
+      'POST',
+      `/sessions/${encodeURIComponent(sessionId)}/archive`
+    );
+    if (status !== 200) {
+      throw new ApiError(status, `Failed to archive session: ${status}`);
+    }
+    return { status, result: data };
+  }
+
+  async restoreSession(
+    sessionId: string
+  ): Promise<{ status: number; result: unknown }> {
+    const { status, data } = await this.request<unknown>(
+      'POST',
+      `/sessions/${encodeURIComponent(sessionId)}/restore`
+    );
+    if (status !== 200) {
+      throw new ApiError(status, `Failed to restore session: ${status}`);
+    }
+    return { status, result: data };
+  }
+
   // === Prompt fragments (list: both layers; set/delete: beacon only) ===
 
   async listFragments(query: Record<string, string> = {}): Promise<{

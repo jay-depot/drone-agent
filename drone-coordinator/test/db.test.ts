@@ -29,7 +29,11 @@ import {
   deleteBeaconSession,
   createSwarmSession,
   getSwarmSession,
+  listSwarmSessions,
+  countSwarmSessions,
   updateSwarmSessionStatus,
+  archiveSwarmSession,
+  restoreSwarmSession,
   createSwarmEvent,
   getSwarmEvents,
   getLatestSwarmEvents,
@@ -556,6 +560,53 @@ describe('Swarm Session & Events', () => {
   });
   it('should return undefined when updating non-existent session', () => {
     expect(updateSwarmSessionStatus('nonexistent', 'ended')).toBeUndefined();
+  });
+
+  it('listSwarmSessions with exclude omits sessions with that status', () => {
+    createSwarmSession('ss1', null, 'b1'); // active
+    createSwarmSession('ss2', null, 'b1');
+    updateSwarmSessionStatus('ss2', 'archived');
+    const active = listSwarmSessions({ exclude: 'archived' });
+    expect(active.some(s => s.id === 'ss2')).toBe(false);
+    expect(active.some(s => s.id === 'ss1')).toBe(true);
+  });
+
+  it('countSwarmSessions with exclude omits excluded statuses', () => {
+    createSwarmSession('ss1', null, 'b1'); // active
+    createSwarmSession('ss2', null, 'b1');
+    updateSwarmSessionStatus('ss2', 'archived');
+    expect(countSwarmSessions({ exclude: 'archived' })).toBe(1);
+    expect(countSwarmSessions({ status: 'archived' })).toBe(1);
+  });
+
+  it('archiveSwarmSession transitions processed to archived', () => {
+    createSwarmSession('ss1', null, 'b1');
+    updateSwarmSessionStatus('ss1', 'processed');
+    const result = archiveSwarmSession('ss1');
+    expect('error' in result).toBe(false);
+    expect((result as { status: string }).status).toBe('archived');
+  });
+
+  it('archiveSwarmSession rejects a non-processed session', () => {
+    createSwarmSession('ss1', null, 'b1');
+    updateSwarmSessionStatus('ss1', 'ended');
+    const result = archiveSwarmSession('ss1');
+    expect('error' in result).toBe(true);
+  });
+
+  it('restoreSwarmSession transitions archived to processed', () => {
+    createSwarmSession('ss1', null, 'b1');
+    updateSwarmSessionStatus('ss1', 'processed');
+    archiveSwarmSession('ss1');
+    const result = restoreSwarmSession('ss1');
+    expect('error' in result).toBe(false);
+    expect((result as { status: string }).status).toBe('processed');
+  });
+
+  it('restoreSwarmSession rejects a non-archived session', () => {
+    createSwarmSession('ss1', null, 'b1');
+    const result = restoreSwarmSession('ss1');
+    expect('error' in result).toBe(true);
   });
 
   it('should create a swarm event', () => {

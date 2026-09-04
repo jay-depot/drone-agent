@@ -58,6 +58,8 @@ export {
   listSwarmSessions,
   updateSwarmSessionStatus,
   transitionSessionStatus,
+  archiveSwarmSession,
+  restoreSwarmSession,
   getStaleSessions,
   markStaleSessions,
   updateSwarmSessionPersona,

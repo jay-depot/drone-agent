@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
@@ -37,10 +37,28 @@ export default function SessionsPage() {
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
 
+  // Archived view state, persisted in the URL (mirrors pagination offset).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const archivedView = searchParams.get('view') === 'archived';
+  const setArchivedView = useCallback(
+    (next: boolean) => {
+      const params = new URLSearchParams(searchParams);
+      if (next) {
+        params.set('view', 'archived');
+      } else {
+        params.delete('view');
+      }
+      // Reset pagination to the first page when switching views.
+      setOffset(0);
+      setSearchParams(params);
+    },
+    [searchParams, setOffset, setSearchParams]
+  );
+
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogAction, setDialogAction] = useState<
-    'terminate' | 'process' | 'processed' | null
+    'terminate' | 'process' | 'processed' | 'end' | 'archive' | 'restore' | null
   >(null);
   const [dialogSession, setDialogSession] = useState<SessionRow | null>(null);
   const [dialogLoading, setDialogLoading] = useState(false);
@@ -50,9 +68,10 @@ export default function SessionsPage() {
       setLoading(true);
       setError(null);
       try {
-        // Fetch sessions with pagination and status from the coordinator
+        // Normal view hides archived sessions; archived view lists only them.
+        const filter = archivedView ? `status=archived` : `exclude=archived`;
         const sessionsRes = await authFetch(
-          `/api/sessions?limit=${PAGE_SIZE}&offset=${currentOffset}`
+          `/api/sessions?limit=${PAGE_SIZE}&offset=${currentOffset}&${filter}`
         );
         if (!sessionsRes.ok) {
           setError('Failed to load sessions');
@@ -95,7 +114,7 @@ export default function SessionsPage() {
         setLoading(false);
       }
     },
-    [authFetch]
+    [authFetch, archivedView]
   );
 
   // Subscribe to WebSocket for live updates
@@ -132,7 +151,8 @@ export default function SessionsPage() {
   };
 
   const openDialog = (
-    action: 'terminate' | 'process' | 'processed',
+    action:
+      'terminate' | 'process' | 'processed' | 'end' | 'archive' | 'restore',
     session: SessionRow
   ) => {
     setDialogAction(action);
@@ -174,6 +194,18 @@ export default function SessionsPage() {
         await authFetch(`/api/sessions/${dialogSession.id}/processed`, {
           method: 'POST',
         });
+      } else if (dialogAction === 'end') {
+        await authFetch(`/api/sessions/${dialogSession.id}/end`, {
+          method: 'POST',
+        });
+      } else if (dialogAction === 'archive') {
+        await authFetch(`/api/sessions/${dialogSession.id}/archive`, {
+          method: 'POST',
+        });
+      } else if (dialogAction === 'restore') {
+        await authFetch(`/api/sessions/${dialogSession.id}/restore`, {
+          method: 'POST',
+        });
       }
       setDialogOpen(false);
       // Refresh
@@ -205,10 +237,22 @@ export default function SessionsPage() {
             Processed
           </Badge>
         );
-      case 'finished':
+      case 'ended':
         return (
           <Badge variant="outline" className="text-xs">
-            Finished
+            Ended
+          </Badge>
+        );
+      case 'stale':
+        return (
+          <Badge variant="outline" className="text-xs">
+            Stale
+          </Badge>
+        );
+      case 'archived':
+        return (
+          <Badge variant="ghost" className="text-xs">
+            Archived
           </Badge>
         );
       default:
@@ -220,6 +264,8 @@ export default function SessionsPage() {
     }
   };
 
+  const viewLabel = archivedView ? 'Sessions' : 'Archived';
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -229,16 +275,28 @@ export default function SessionsPage() {
             Swarm sessions across all beacons
           </p>
         </div>
-        <Badge
-          variant={status === 'connected' ? 'default' : 'secondary'}
-          className="text-xs"
-        >
-          {status === 'connected'
-            ? '● Live'
-            : status === 'connecting'
-              ? '○ Connecting'
-              : '○ Disconnected'}
-        </Badge>
+        <div className="flex items-center gap-3">
+          <Button
+            variant={archivedView ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setArchivedView(!archivedView)}
+            title={
+              archivedView ? 'Show sessions' : 'Show only archived sessions'
+            }
+          >
+            {viewLabel}
+          </Button>
+          <Badge
+            variant={status === 'connected' ? 'default' : 'secondary'}
+            className="text-xs"
+          >
+            {status === 'connected'
+              ? '● Live'
+              : status === 'connecting'
+                ? '○ Connecting'
+                : '○ Disconnected'}
+          </Badge>
+        </div>
       </div>
 
       {error && (
@@ -255,11 +313,22 @@ export default function SessionsPage() {
         </div>
       ) : sessions.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
-          <p className="text-lg">No sessions</p>
-          <p className="text-sm mt-1">
-            Agent sessions will appear here when agents are connected to
-            beacons.
-          </p>
+          {archivedView ? (
+            <>
+              <p className="text-lg">No archived sessions</p>
+              <p className="text-sm mt-1">
+                Archive a processed session to move it here.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-lg">No sessions</p>
+              <p className="text-sm mt-1">
+                Agent sessions will appear here when agents are connected to
+                beacons.
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <>
@@ -317,8 +386,8 @@ export default function SessionsPage() {
                             Terminate
                           </Button>
                         )}
-                        {(session.status === 'finished' ||
-                          session.status === 'stale') && (
+                        {(session.status === 'stale' ||
+                          session.status === 'ended') && (
                           <Button
                             variant="secondary"
                             size="sm"
@@ -334,6 +403,35 @@ export default function SessionsPage() {
                             onClick={() => openDialog('processed', session)}
                           >
                             Mark Processed
+                          </Button>
+                        )}
+                        {(session.status === 'stale' ||
+                          session.status === 'processing' ||
+                          session.status === 'processed') && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openDialog('end', session)}
+                          >
+                            End
+                          </Button>
+                        )}
+                        {session.status === 'processed' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openDialog('archive', session)}
+                          >
+                            Archive
+                          </Button>
+                        )}
+                        {session.status === 'archived' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openDialog('restore', session)}
+                          >
+                            Restore
                           </Button>
                         )}
                       </div>
@@ -381,21 +479,39 @@ export default function SessionsPage() {
             ? 'Terminate Session'
             : dialogAction === 'process'
               ? 'Process Session'
-              : 'Mark Session as Processed'
+              : dialogAction === 'processed'
+                ? 'Mark Session as Processed'
+                : dialogAction === 'end'
+                  ? 'End Session'
+                  : dialogAction === 'archive'
+                    ? 'Archive Session'
+                    : 'Restore Session'
         }
         description={
           dialogAction === 'terminate'
             ? `Are you sure you want to terminate session ${dialogSession?.agentId?.slice(0, 12)}...?`
             : dialogAction === 'process'
               ? `Mark session ${dialogSession?.agentId?.slice(0, 12)}... as processing?`
-              : `Mark session ${dialogSession?.agentId?.slice(0, 12)}... as processed?`
+              : dialogAction === 'processed'
+                ? `Mark session ${dialogSession?.agentId?.slice(0, 12)}... as processed?`
+                : dialogAction === 'end'
+                  ? `End session ${dialogSession?.agentId?.slice(0, 12)}...?`
+                  : dialogAction === 'archive'
+                    ? `Archive processed session ${dialogSession?.agentId?.slice(0, 12)}...?`
+                    : `Restore archived session ${dialogSession?.agentId?.slice(0, 12)}...?`
         }
         confirmLabel={
           dialogAction === 'terminate'
             ? 'Terminate'
             : dialogAction === 'process'
               ? 'Process'
-              : 'Mark Processed'
+              : dialogAction === 'processed'
+                ? 'Mark Processed'
+                : dialogAction === 'end'
+                  ? 'End'
+                  : dialogAction === 'archive'
+                    ? 'Archive'
+                    : 'Restore'
         }
         variant={dialogAction === 'terminate' ? 'destructive' : 'default'}
         loading={dialogLoading}

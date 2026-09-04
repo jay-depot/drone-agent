@@ -24,10 +24,14 @@ Address selection (mutually exclusive):
 
 Session commands (coordinator):
   session list [--status <s>] [--limit <n>]
+                              Excludes archived sessions by default; use
+                              --status archived to list archived sessions
   session log <id>            Print the full conversation transcript as JSON
   session transcript <id>     Print the readable --- Turn N --- transcript
   session process <id>        Transition a finished session to "processing"
   session processed <id>      Mark a processed session complete [--summary <s>] [--notes <n>]
+  session archive <id>        Archive a processed session (processed → archived)
+  session restore <id>        Restore an archived session (archived → processed)
 
 Wiki commands (beacon or coordinator):
   wiki read <pageId>
@@ -81,6 +85,10 @@ async function runSessionCommand(
       const query: Record<string, string> = {};
       if (args.flags.status) {
         query.status = args.flags.status;
+      } else {
+        // Archived sessions are hidden by default; pass --status archived
+        // (or --exclude) to see or filter them explicitly.
+        query.exclude = 'archived';
       }
       if (args.flags.limit) {
         query.limit = args.flags.limit;
@@ -138,6 +146,24 @@ async function runSessionCommand(
         body.notes = args.flags.notes;
       }
       const { result } = await client.markSessionProcessed(id, body);
+      printJson(result);
+      return 0;
+    }
+    case 'archive': {
+      if (!id) {
+        console.error('usage: drone-swarm session archive <id>');
+        return 1;
+      }
+      const { result } = await client.archiveSession(id);
+      printJson(result);
+      return 0;
+    }
+    case 'restore': {
+      if (!id) {
+        console.error('usage: drone-swarm session restore <id>');
+        return 1;
+      }
+      const { result } = await client.restoreSession(id);
       printJson(result);
       return 0;
     }

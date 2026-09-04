@@ -63,6 +63,17 @@ function makeDirectFetch(): typeof fetch {
 }
 
 /**
+ * Wraps a fetch impl and records the request URLs so tests can assert on the
+ * query strings the CLI sends (e.g. exclude=archived).
+ */
+function makeRecordingFetch(inner: typeof fetch, urls: string[]): typeof fetch {
+  return ((input: string | URL | Request, init?: RequestInit) => {
+    urls.push(String(input));
+    return inner(input as string, init);
+  }) as typeof fetch;
+}
+
+/**
  * Fixture server implementing both route dialects:
  * - coordinator dialect: everything under /api (wiki + sessions)
  * - beacon dialect: flat /wiki routes only
@@ -106,6 +117,12 @@ async function startFixture(port: number): Promise<Server> {
         sendJson(200, { session: { id: 's-1', status: 'processed', body } });
       });
       return;
+    }
+    if (url === '/api/sessions/s-1/archive') {
+      return sendJson(200, { session: { id: 's-1', status: 'archived' } });
+    }
+    if (url === '/api/sessions/s-1/restore') {
+      return sendJson(200, { session: { id: 's-1', status: 'processed' } });
     }
 
     if (
@@ -199,6 +216,108 @@ describe('drone-swarm CLI against a coordinator-dialect fixture', () => {
       const parsed = JSON.parse(out.join('\n'));
       expect(parsed.count).toBe(1);
       expect(parsed.sessions[0].id).toBe('s-1');
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it('session list (no --status) sends exclude=archived by default', async () => {
+    const out: string[] = [];
+    const urls: string[] = [];
+    const originalLog = console.log;
+    console.log = (...msgs: unknown[]) => {
+      out.push(msgs.map(String).join(' '));
+    };
+    try {
+      const recordingFetch = makeRecordingFetch(directFetch, urls);
+      const code = await main(
+        ['--coordinator', `http://127.0.0.1:${port}`, 'session', 'list'],
+        recordingFetch
+      );
+      expect(code).toBe(0);
+      const parsed = JSON.parse(out.join('\n'));
+      expect(parsed.count).toBe(1);
+      expect(urls.some(u => u.includes('exclude=archived'))).toBe(true);
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it('session list --status archived does not add exclude=archived', async () => {
+    const out: string[] = [];
+    const urls: string[] = [];
+    const originalLog = console.log;
+    console.log = (...msgs: unknown[]) => {
+      out.push(msgs.map(String).join(' '));
+    };
+    try {
+      const recordingFetch = makeRecordingFetch(directFetch, urls);
+      const code = await main(
+        [
+          '--coordinator',
+          `http://127.0.0.1:${port}`,
+          'session',
+          'list',
+          '--status',
+          'archived',
+        ],
+        recordingFetch
+      );
+      expect(code).toBe(0);
+      const parsed = JSON.parse(out.join('\n'));
+      expect(parsed.count).toBe(1);
+      expect(urls.some(u => u.includes('exclude=archived'))).toBe(false);
+      expect(urls.some(u => u.includes('status=archived'))).toBe(true);
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it('session archive archives a session', async () => {
+    const out: string[] = [];
+    const originalLog = console.log;
+    console.log = (...msgs: unknown[]) => {
+      out.push(msgs.map(String).join(' '));
+    };
+    try {
+      const code = await main(
+        [
+          '--coordinator',
+          `http://127.0.0.1:${port}`,
+          'session',
+          'archive',
+          's-1',
+        ],
+        directFetch
+      );
+      expect(code).toBe(0);
+      const parsed = JSON.parse(out.join('\n'));
+      expect(parsed.session.status).toBe('archived');
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it('session restore restores a session', async () => {
+    const out: string[] = [];
+    const originalLog = console.log;
+    console.log = (...msgs: unknown[]) => {
+      out.push(msgs.map(String).join(' '));
+    };
+    try {
+      const code = await main(
+        [
+          '--coordinator',
+          `http://127.0.0.1:${port}`,
+          'session',
+          'restore',
+          's-1',
+        ],
+        directFetch
+      );
+      expect(code).toBe(0);
+      const parsed = JSON.parse(out.join('\n'));
+      expect(parsed.session.status).toBe('processed');
     } finally {
       console.log = originalLog;
     }

@@ -10,6 +10,7 @@ export const SESSION_STATUSES = {
   ENDED: 'ended',
   PROCESSING: 'processing',
   PROCESSED: 'processed',
+  ARCHIVED: 'archived',
 } as const;
 
 /** Union type of all session status values. */
