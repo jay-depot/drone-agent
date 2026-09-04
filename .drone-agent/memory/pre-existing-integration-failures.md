@@ -1,21 +1,24 @@
 ---
 key: pre-existing-integration-failures
-tags: []
+tags:
+  - pre-existing
+  - ui
+  - tests
 created: 2026-08-29T23:24:56.646Z
-updated: 2026-08-30T00:27:20.854Z
+updated: 2026-09-04T04:20:48.210Z
 ---
 
-# Integration failures: RESOLVED 2026-08-29 (commit 7eda0f0, PR #85)
+# Integration failures
 
-## Status: all four known failures fixed and verified green in Docker
+## OPEN (pre-existing, blocks coordinator-ui tests from RUNNING)
 
-1. **coordinator-sync GET 401s (3 tests)** — FIXED: `getCoordinatorPersonas`/`getCoordinatorSkills` now read through the beacon's coordinator proxy (new routes `GET /coordinator/personas|skills` in drone-beacon/src/routes/coordinator.ts, served over the beacon's mTLS client via `fetchPersonas()`/`fetchSkills()`). Helpers take `beaconUrl` explicitly; coordinator-sync call sites pass BEACON_URL. Result: coordinator-sync 6/6.
-2. **e2e-swarm full-agent-lifecycle staleness (1 test)** — FIXED: the test registered its OWN agent (`e2e-lifecycle-agent` via `registerBeaconAgent`) and asserts freshness against that agent's record only, instead of wall-clock-checking whatever 'connected' rows earlier suites left behind. Result: e2e-swarm 4/4.
+1. **drone-coordinator-ui vitest suite is pre-existing-broken** (2026-09-04): every `@testing-library/react` `render()` throws `TypeError: React.act is not a function` under react-dom 19.2.7 + @testing-library/react 16.3.2 (`node_modules/@testing-library/react/dist/act-compat.js` resolves `DeprecatedReactTestUtils.act` but react-dom/test-utils was removed/moved in 19.2.7). Affects ALL pages/*.test.tsx (wiki, wiki-tag, trust, etc.) — collision with UNMODIFIED tests confirmed by running wiki.test.tsx with the new sessions.test.tsx moved out. UI tests are NOT in root `vitest run` include glob (which covers drone-core/drone-agent/drone-beacon/drone-coordinator/drone-swarm-common/drone-swarm/drone-gateway), so they run only via `drone-coordinator-ui`'s own `pnpm test`, and they CANNOT pass in this env until the react/testing-library dep mismatch is resolved.
 
-## Still-open root cause (upstream of both, NOT fixed)
+## RESOLVED 2026-08-29 (commit 7eda0f0, PR #85)
 
-Spawned agents are never cleaned out of `agent_sessions` (rows stay `status:'connected'`, `lastActivity` frozen at spawn) because they crash without an LLM provider before any real heartbeat — see memory `spawned-agent-llm-wiring`. The zombie rows are why the freshness assertion failed and why 'connected' sets are untrustworthy generally. Real fix options: (a) beacon ties agent_sessions lifecycle to spawn process lifecycle (remove/deactivate row on exit), (b) an aggressive stale-marking sweep in the beacon, or (c) fix the LLM wiring so spawned agents actually live. The tests now tolerate the zombies, but the ledger is still lying.
+2. **coordinator-sync GET 401s (3 tests)** — FIXED: read via beacon coordinator proxy (`/coordinator/personas|skills`).
+3. **e2e-swarm full-agent-lifecycle staleness (1 test)** — FIXED: test asserts against its own registered agent.
 
-## Context from the original isolation work (2026-08-15..17)
+## Still-open upstream root cause (NOT fixed)
 
-`pnpm test:integration` runs vitest INSIDE the test-runner container (never on host); all 5 swarm suites + subagent dispatch are gated by `shouldSkipIntegrationSuite()` via `describe.skipIf(...)`. Categories 1-5 of that era were fixed per the earlier version of this memory; note Category 5 (FST_ERR_CTP_EMPTY_JSON_BODY) had a regression in the outbox flusher that was fixed 2026-08-29 (commit 3dee794).
+Spawned agents are never cleaned out of `agent_sessions` (zombie 'connected' rows) because they crash without an LLM provider — see memory `spawned-agent-llm-wiring`.
