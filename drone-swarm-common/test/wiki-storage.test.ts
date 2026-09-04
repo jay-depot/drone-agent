@@ -88,6 +88,59 @@ describe('Wiki Storage', () => {
     expect(pages[0].id).toBe('page-2');
   });
 
+  it('should filter pages by tag', async () => {
+    const { writePage, listPages } = await import('../src/wiki-storage.js');
+    await writePage('page-1', 'Page 1', 'beacon', 'content 1', ['ops']);
+    await writePage('page-2', 'Page 2', 'beacon', 'content 2', ['design']);
+    await writePage('page-3', 'Page 3', 'beacon', 'content 3', ['ops']);
+
+    const opsPages = await listPages('ops');
+    expect(opsPages).toHaveLength(2);
+    expect(opsPages.map(p => p.id).sort()).toEqual(['page-1', 'page-3']);
+
+    const designPages = await listPages('design');
+    expect(designPages).toHaveLength(1);
+    expect(designPages[0].id).toBe('page-2');
+  });
+
+  it('should return empty array when filtering by a tag with no matches', async () => {
+    const { writePage, listPages } = await import('../src/wiki-storage.js');
+    await writePage('page-1', 'Page 1', 'beacon', 'content 1', ['ops']);
+    const pages = await listPages('nonexistent');
+    expect(pages).toEqual([]);
+  });
+
+  it('should list distinct tags with counts sorted by count desc then tag asc', async () => {
+    const { writePage, listTags } = await import('../src/wiki-storage.js');
+    await writePage('page-1', 'Page 1', 'beacon', 'content 1', [
+      'ops',
+      'design',
+    ]);
+    await writePage('page-2', 'Page 2', 'beacon', 'content 2', ['ops']);
+    await writePage('page-3', 'Page 3', 'beacon', 'content 3', ['personal']);
+
+    const tags = await listTags();
+    expect(tags).toEqual([
+      { tag: 'ops', count: 2 },
+      { tag: 'design', count: 1 },
+      { tag: 'personal', count: 1 },
+    ]);
+  });
+
+  it('should reject writePage with reserved id "tags"', async () => {
+    const { writePage } = await import('../src/wiki-storage.js');
+    await expect(
+      writePage('tags', 'Tags', 'beacon', 'content')
+    ).rejects.toThrow('Page id "tags" is reserved');
+  });
+
+  it('should reject writePage with reserved id "TAGS" (case-insensitive)', async () => {
+    const { writePage } = await import('../src/wiki-storage.js');
+    await expect(
+      writePage('TAGS', 'Tags', 'beacon', 'content')
+    ).rejects.toThrow('Page id "tags" is reserved');
+  });
+
   it('should search pages by title', async () => {
     const { writePage, searchPages } = await import('../src/wiki-storage.js');
     await writePage(

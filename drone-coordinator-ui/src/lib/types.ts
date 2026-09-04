@@ -120,6 +120,11 @@ export interface CreateWikiPageRequest {
   sources?: string[];
 }
 
+export interface WikiTagCount {
+  tag: string;
+  count: number;
+}
+
 // Pagination types
 export interface PaginationState {
   limit: number;

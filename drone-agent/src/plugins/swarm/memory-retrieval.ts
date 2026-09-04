@@ -201,7 +201,9 @@ export class SwarmMemoryRetriever {
     try {
       const merged = await this.retrieve(inputs);
       this.cache = { hash, entries: merged, at: Date.now() };
-      this.emitNotice(`[swarm.memory: found ${merged.length} match${merged.length === 1 ? '' : 'es'}]`);
+      this.emitNotice(
+        `[swarm.memory: found ${merged.length} match${merged.length === 1 ? '' : 'es'}]`
+      );
       if (this.debugFlags?.isEnabled('swarm-memory')) {
         this.logger.info(
           `swarm-memory refresh hash=${hash.slice(0, 12)} inputs=${inputs.length} → ${merged.length} entries`

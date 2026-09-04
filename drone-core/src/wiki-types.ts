@@ -39,3 +39,13 @@ export type DroneWikiSearchResult = {
   /** Relevance score (0-1). */
   score: number;
 };
+
+/**
+ * A distinct wiki tag with the number of pages carrying it.
+ */
+export type DroneWikiTagCount = {
+  /** The tag string. */
+  tag: string;
+  /** Number of pages carrying this tag. */
+  count: number;
+};

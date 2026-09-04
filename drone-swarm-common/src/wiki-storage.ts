@@ -4,6 +4,7 @@ import type {
   DroneWikiPage,
   DroneWikiPageMeta,
   DroneWikiSearchResult,
+  DroneWikiTagCount,
 } from 'drone-core';
 
 /**
@@ -160,6 +161,12 @@ export async function writePage(
   tags: string[] = [],
   sources: string[] = []
 ): Promise<DroneWikiPage> {
+  if (id.toLowerCase() === 'tags') {
+    throw new Error(
+      'Page id "tags" is reserved; it conflicts with the wiki tag index route.'
+    );
+  }
+
   const now = new Date().toISOString();
 
   // Check for existing page to preserve createdAt
@@ -248,7 +255,7 @@ export async function deletePage(pageId: string): Promise<boolean> {
 /**
  * List all wiki pages with their metadata.
  */
-export async function listPages(): Promise<DroneWikiPageMeta[]> {
+export async function listPages(tag?: string): Promise<DroneWikiPageMeta[]> {
   try {
     const files = await readdir(getKbDir());
     const pages: DroneWikiPageMeta[] = [];
@@ -270,10 +277,31 @@ export async function listPages(): Promise<DroneWikiPageMeta[]> {
       }
     }
 
-    return pages.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const filtered = tag ? pages.filter(p => p.tags.includes(tag)) : pages;
+
+    return filtered.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   } catch {
     return [];
   }
+}
+
+/**
+ * List all distinct tags across pages with their page counts,
+ * sorted by count descending then tag ascending.
+ */
+export async function listTags(): Promise<DroneWikiTagCount[]> {
+  const pages = await listPages();
+  const counts = new Map<string, number>();
+
+  for (const page of pages) {
+    for (const tag of page.tags) {
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+  }
+
+  return [...counts.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 }
 
 /**

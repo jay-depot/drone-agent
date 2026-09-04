@@ -135,12 +135,8 @@ describe('SwarmMemoryRetriever', () => {
     );
     const retriever = makeRetriever();
 
-    await retriever.maybeRefresh(
-      parts({ currentQuery: 'window A' })
-    );
-    await retriever.maybeRefresh(
-      parts({ currentQuery: 'window A' })
-    );
+    await retriever.maybeRefresh(parts({ currentQuery: 'window A' }));
+    await retriever.maybeRefresh(parts({ currentQuery: 'window A' }));
 
     // Fires once (debounced); the repeat is a no-op.
     expect(notices).toEqual(['[swarm.memory: found 1 match]']);

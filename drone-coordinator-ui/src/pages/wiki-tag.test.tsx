@@ -34,7 +34,7 @@ function renderTagPage(tag: string) {
   );
 }
 
-const pages = [
+const opsPages = [
   {
     id: 'deploy',
     title: 'Deployment',
@@ -53,15 +53,6 @@ const pages = [
     createdAt: '2026-09-01T00:00:00.000Z',
     updatedAt: '2026-09-01T00:00:00.000Z',
   },
-  {
-    id: 'notes',
-    title: 'Notes',
-    scope: 'coordinator',
-    tags: ['personal'],
-    sources: [],
-    createdAt: '2026-09-01T00:00:00.000Z',
-    updatedAt: '2026-09-01T00:00:00.000Z',
-  },
 ];
 
 describe('WikiTagPage', () => {
@@ -74,9 +65,10 @@ describe('WikiTagPage', () => {
     vi.unstubAllGlobals();
   });
 
-  it('filters pages by the tag and shows the count', async () => {
-    const mockFetch = vi.fn(async () => {
-      return { ok: true, status: 200, json: async () => pages } as Response;
+  it('fetches /api/wiki?tag=<tag> and renders the returned pages', async () => {
+    const mockFetch = vi.fn(async (url: string) => {
+      expect(url).toBe('/api/wiki?tag=ops');
+      return { ok: true, status: 200, json: async () => opsPages } as Response;
     });
     vi.stubGlobal('fetch', mockFetch);
 
@@ -84,13 +76,13 @@ describe('WikiTagPage', () => {
 
     await screen.findByText('Deployment');
     expect(screen.getByText('Architecture')).toBeTruthy();
-    expect(screen.queryByText('Notes')).toBeNull();
     expect(screen.getByText(/2 pages tagged with "ops"/)).toBeTruthy();
   });
 
-  it('shows an empty state when no pages have the tag', async () => {
-    const mockFetch = vi.fn(async () => {
-      return { ok: true, status: 200, json: async () => pages } as Response;
+  it('shows an empty state when the server returns no pages', async () => {
+    const mockFetch = vi.fn(async (url: string) => {
+      expect(url).toBe('/api/wiki?tag=nonexistent');
+      return { ok: true, status: 200, json: async () => [] } as Response;
     });
     vi.stubGlobal('fetch', mockFetch);
 
@@ -113,7 +105,8 @@ describe('WikiTagPage', () => {
       createdAt: '2026-09-01T00:00:00.000Z',
       updatedAt: '2026-09-01T00:00:00.000Z',
     }));
-    const mockFetch = vi.fn(async () => {
+    const mockFetch = vi.fn(async (url: string) => {
+      expect(url).toBe('/api/wiki?tag=ops');
       return { ok: true, status: 200, json: async () => manyPages } as Response;
     });
     vi.stubGlobal('fetch', mockFetch);

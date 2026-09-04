@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useWikiPages } from '@/hooks/use-wiki-pages';
+import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
+import type { WikiPageMeta } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { paginationRange } from '@/lib/pagination';
@@ -12,16 +13,39 @@ const PAGE_SIZE = 12;
 export default function WikiTagPage() {
   const { tag = '' } = useParams<{ tag: string }>();
   const navigate = useNavigate();
-  const { pages, loading, error } = useWikiPages();
+  const authFetch = useAuthenticatedFetch();
+  const [pages, setPages] = useState<WikiPageMeta[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { offset, setOffset } = usePaginationOffset(PAGE_SIZE);
 
-  const tagged = useMemo(
-    () => pages.filter(p => p.tags.includes(tag)),
-    [pages, tag]
-  );
+  useEffect(() => {
+    let cancelled = false;
 
-  const total = tagged.length;
-  const paged = tagged.slice(offset, offset + PAGE_SIZE);
+    async function fetchTaggedPages() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await authFetch(`/api/wiki?tag=${encodeURIComponent(tag)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) setPages(data);
+        }
+      } catch {
+        if (!cancelled) setError('Failed to load wiki pages');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchTaggedPages();
+    return () => {
+      cancelled = true;
+    };
+  }, [tag, authFetch]);
+
+  const total = pages.length;
+  const paged = pages.slice(offset, offset + PAGE_SIZE);
 
   return (
     <div>
