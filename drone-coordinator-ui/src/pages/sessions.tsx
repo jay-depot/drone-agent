@@ -18,13 +18,20 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { paginationRange } from '@/lib/pagination';
 
 const PAGE_SIZE = 20;
+// How long a just-archived session lingers as a phantom row with an undo
+// button before disappearing from view.
+const ARCHIVE_UNDO_MS = 5000;
 
 type SessionRow = BeaconSession & { status?: string };
+
+type PhantomArchive = {
+  session: SessionRow;
+  timer: ReturnType<typeof setTimeout>;
+};
 
 export default function SessionsPage() {
   const navigate = useNavigate();
@@ -36,6 +43,10 @@ export default function SessionsPage() {
   const { offset, setOffset } = usePaginationOffset(PAGE_SIZE);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
+  // Phantom row for a just-archived session, offering a brief undo window.
+  const [phantomArchive, setPhantomArchive] = useState<PhantomArchive | null>(
+    null
+  );
 
   // Archived view state, persisted in the URL (mirrors pagination offset).
   const [searchParams, setSearchParams] = useSearchParams();
@@ -55,13 +66,11 @@ export default function SessionsPage() {
     [searchParams, setOffset, setSearchParams]
   );
 
-  // Dialog state
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogAction, setDialogAction] = useState<
-    'terminate' | 'process' | 'processed' | 'end' | 'archive' | 'restore' | null
-  >(null);
-  const [dialogSession, setDialogSession] = useState<SessionRow | null>(null);
-  const [dialogLoading, setDialogLoading] = useState(false);
+  const cancelPhantomTimer = useCallback((phantom: PhantomArchive | null) => {
+    if (phantom) {
+      clearTimeout(phantom.timer);
+    }
+  }, []);
 
   const fetchSessions = useCallback(
     async (currentOffset: number) => {
@@ -150,71 +159,85 @@ export default function SessionsPage() {
     return `${minutes}m`;
   };
 
-  const openDialog = (
-    action:
-      'terminate' | 'process' | 'processed' | 'end' | 'archive' | 'restore',
-    session: SessionRow
-  ) => {
-    setDialogAction(action);
-    setDialogSession(session);
-    setDialogOpen(true);
+  const refresh = useCallback(
+    () => fetchSessions(offset),
+    [fetchSessions, offset]
+  );
+
+  const handleTerminate = async (session: SessionRow) => {
+    // Try to end the beacon session (may already be ended)
+    try {
+      await authFetch(
+        `/api/beacons/${session.beaconId}/sessions/${session.agentId}`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            disconnectedAt: Date.now(),
+            durationMs: Date.now() - session.connectedAt,
+          }),
+        }
+      );
+    } catch {
+      // Beacon session may already be ended — that's fine
+    }
+    // Always update the swarm session status
+    await authFetch(`/api/sessions/${session.id}/end`, {
+      method: 'POST',
+    });
+    refresh();
   };
 
-  const handleDialogConfirm = async () => {
-    if (!dialogSession || !dialogAction) return;
+  const handleProcess = async (session: SessionRow) => {
+    await authFetch(`/api/sessions/${session.id}/process`, {
+      method: 'POST',
+    });
+    refresh();
+  };
 
-    setDialogLoading(true);
-    try {
-      if (dialogAction === 'terminate') {
-        // Try to end the beacon session (may already be ended)
-        try {
-          await authFetch(
-            `/api/beacons/${dialogSession.beaconId}/sessions/${dialogSession.agentId}`,
-            {
-              method: 'DELETE',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                disconnectedAt: Date.now(),
-                durationMs: Date.now() - dialogSession.connectedAt,
-              }),
-            }
-          );
-        } catch {
-          // Beacon session may already be ended — that's fine
-        }
-        // Always update the swarm session status
-        await authFetch(`/api/sessions/${dialogSession.id}/end`, {
-          method: 'POST',
-        });
-      } else if (dialogAction === 'process') {
-        await authFetch(`/api/sessions/${dialogSession.id}/process`, {
-          method: 'POST',
-        });
-      } else if (dialogAction === 'processed') {
-        await authFetch(`/api/sessions/${dialogSession.id}/processed`, {
-          method: 'POST',
-        });
-      } else if (dialogAction === 'end') {
-        await authFetch(`/api/sessions/${dialogSession.id}/end`, {
-          method: 'POST',
-        });
-      } else if (dialogAction === 'archive') {
-        await authFetch(`/api/sessions/${dialogSession.id}/archive`, {
-          method: 'POST',
-        });
-      } else if (dialogAction === 'restore') {
-        await authFetch(`/api/sessions/${dialogSession.id}/restore`, {
-          method: 'POST',
-        });
-      }
-      setDialogOpen(false);
-      // Refresh
-      fetchSessions(offset);
-    } catch {
-      // Error handled silently
-    } finally {
-      setDialogLoading(false);
-    }
+  const handleMarkProcessed = async (session: SessionRow) => {
+    await authFetch(`/api/sessions/${session.id}/processed`, {
+      method: 'POST',
+    });
+    refresh();
+  };
+
+  const handleEnd = async (session: SessionRow) => {
+    await authFetch(`/api/sessions/${session.id}/end`, {
+      method: 'POST',
+    });
+    refresh();
+  };
+
+  const handleRestore = async (session: SessionRow) => {
+    await authFetch(`/api/sessions/${session.id}/restore`, {
+      method: 'POST',
+    });
+    refresh();
+  };
+
+  const handleArchive = async (session: SessionRow) => {
+    cancelPhantomTimer(phantomArchive);
+    await authFetch(`/api/sessions/${session.id}/archive`, {
+      method: 'POST',
+    });
+    // Remove the archived session immediately and drop in a phantom row with a
+    // brief undo window.
+    setSessions(prev => prev.filter(s => s.id !== session.id));
+    const timer = setTimeout(() => {
+      setPhantomArchive(null);
+    }, ARCHIVE_UNDO_MS);
+    setPhantomArchive({ session, timer });
+  };
+
+  const handleUndoArchive = async () => {
+    if (!phantomArchive) return;
+    cancelPhantomTimer(phantomArchive);
+    setPhantomArchive(null);
+    await authFetch(`/api/sessions/${phantomArchive.session.id}/restore`, {
+      method: 'POST',
+    });
+    refresh();
   };
 
   const getStatusBadge = (sessionStatus?: string) => {
@@ -311,7 +334,7 @@ export default function SessionsPage() {
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>
-      ) : sessions.length === 0 ? (
+      ) : sessions.length === 0 && !phantomArchive ? (
         <div className="text-center py-12 text-muted-foreground">
           {archivedView ? (
             <>
@@ -346,6 +369,44 @@ export default function SessionsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {phantomArchive && (
+                  <TableRow key="phantom-archive">
+                    <TableCell className="font-medium">
+                      {phantomArchive.session.beaconName ??
+                        phantomArchive.session.beaconId}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {phantomArchive.session.agentId}
+                    </TableCell>
+                    <TableCell>
+                      {phantomArchive.session.personaId ? (
+                        <Badge variant="outline">
+                          {phantomArchive.session.personaId}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{getStatusBadge('archived')}</TableCell>
+                    <TableCell>
+                      {formatDuration(phantomArchive.session.connectedAt)}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {new Date(
+                        phantomArchive.session.connectedAt
+                      ).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleUndoArchive()}
+                      >
+                        Undo
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )}
                 {sessions.map(session => (
                   <TableRow key={session.id}>
                     <TableCell className="font-medium">
@@ -381,7 +442,7 @@ export default function SessionsPage() {
                           <Button
                             variant="destructive"
                             size="sm"
-                            onClick={() => openDialog('terminate', session)}
+                            onClick={() => handleTerminate(session)}
                           >
                             Terminate
                           </Button>
@@ -391,7 +452,7 @@ export default function SessionsPage() {
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => openDialog('process', session)}
+                            onClick={() => handleProcess(session)}
                           >
                             Process
                           </Button>
@@ -400,7 +461,7 @@ export default function SessionsPage() {
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => openDialog('processed', session)}
+                            onClick={() => handleMarkProcessed(session)}
                           >
                             Mark Processed
                           </Button>
@@ -411,7 +472,7 @@ export default function SessionsPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => openDialog('end', session)}
+                            onClick={() => handleEnd(session)}
                           >
                             End
                           </Button>
@@ -420,7 +481,7 @@ export default function SessionsPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => openDialog('archive', session)}
+                            onClick={() => handleArchive(session)}
                           >
                             Archive
                           </Button>
@@ -429,7 +490,7 @@ export default function SessionsPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => openDialog('restore', session)}
+                            onClick={() => handleRestore(session)}
                           >
                             Restore
                           </Button>
@@ -468,54 +529,6 @@ export default function SessionsPage() {
           </div>
         </>
       )}
-
-      {/* Confirmation Dialog */}
-      <Dialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        onConfirm={handleDialogConfirm}
-        title={
-          dialogAction === 'terminate'
-            ? 'Terminate Session'
-            : dialogAction === 'process'
-              ? 'Process Session'
-              : dialogAction === 'processed'
-                ? 'Mark Session as Processed'
-                : dialogAction === 'end'
-                  ? 'End Session'
-                  : dialogAction === 'archive'
-                    ? 'Archive Session'
-                    : 'Restore Session'
-        }
-        description={
-          dialogAction === 'terminate'
-            ? `Are you sure you want to terminate session ${dialogSession?.agentId?.slice(0, 12)}...?`
-            : dialogAction === 'process'
-              ? `Mark session ${dialogSession?.agentId?.slice(0, 12)}... as processing?`
-              : dialogAction === 'processed'
-                ? `Mark session ${dialogSession?.agentId?.slice(0, 12)}... as processed?`
-                : dialogAction === 'end'
-                  ? `End session ${dialogSession?.agentId?.slice(0, 12)}...?`
-                  : dialogAction === 'archive'
-                    ? `Archive processed session ${dialogSession?.agentId?.slice(0, 12)}...?`
-                    : `Restore archived session ${dialogSession?.agentId?.slice(0, 12)}...?`
-        }
-        confirmLabel={
-          dialogAction === 'terminate'
-            ? 'Terminate'
-            : dialogAction === 'process'
-              ? 'Process'
-              : dialogAction === 'processed'
-                ? 'Mark Processed'
-                : dialogAction === 'end'
-                  ? 'End'
-                  : dialogAction === 'archive'
-                    ? 'Archive'
-                    : 'Restore'
-        }
-        variant={dialogAction === 'terminate' ? 'destructive' : 'default'}
-        loading={dialogLoading}
-      />
     </div>
   );
 }

@@ -3,12 +3,14 @@ key: memory-wiki-browser-improvements
 tags:
   []
 created: 2026-09-04T19:20:44.200Z
-updated: 2026-09-04T19:34:50.712Z
+updated: 2026-09-04T19:45:30.242Z
 ---
 
 # Memory Wiki Browser Improvements — Organized List (from brainstorm session)
 
 Ready-to-plan list of improvements. Brought into future planning sessions.
+
+## STATUS: B (edit-page back buttons) and C (session listing confirmations) COMPLETED 2026-09-04.
 
 ## A. Wiki Browser
 
@@ -32,18 +34,18 @@ Ready-to-plan list of improvements. Brought into future planning sessions.
 - Possible form: tabs under sidebar items (alternatives still being explored).
 - If built: nodes = pages, edges = wikilinks; toggle vs table; static vs interactive — all open.
 
-## B. Edit Pages
+## B. Edit Pages  ✅ COMPLETED
 
 ### B1. Back buttons
 - All edit pages (wiki create/edit, skills, personas, etc.).
 - Bug: item "back" does history -1 now, but edit-page back buttons navigate forward to the item view → infinite link loop.
-- Fix: reuse the standard history-back pattern used everywhere else.
+- FIX: wiki-editor, persona-editor, skill-editor — changed main "← Back" AND bottom "Cancel" buttons to `navigate(-1)` (history-back), matching the loading-state back button and the detail-page back pattern. Tests: persona-editor.test.tsx / skill-editor.test.tsx (new) + wiki-editor.test.tsx (added) cover history-back via MemoryRouter multi-entry initialEntries.
 
-## C. Session Listing
+## C. Session Listing  ✅ COMPLETED
 
 ### C1. Remove confirmation dialogs on workflow actions
 - None are destructive (End / Archive / Restore).
-- Archive-only "phantom row with undo" (lingering a few seconds); all other actions leave item in place for easy reversion anyway.
+- ARCHIVE-only "phantom row with undo": sessions.tsx no longer uses a `<Dialog>` for workflow actions (removed Dialog import, openDialog, handleDialogConfirm, dialog state/JSX). Direct handlers: handleTerminate, handleProcess, handleMarkProcessed, handleEnd, handleRestore, handleArchive, handleUndoArchive. handleArchive calls POST /archive, removes the row, sets a phantomArchive with a 5s (ARCHIVE_UNDO_MS=5000) timeout; Undo calls POST /restore + refresh; phantom row renders at top of table with Archived badge + Undo button. Terminate stays visually destructive but acts immediately. Tests added to sessions.test.tsx: direct-execute (no dialog), phantom+undo, phantom timeout.
 
 ## D. Coordinator UI General
 

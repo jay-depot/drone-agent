@@ -150,11 +150,7 @@ export default function SkillEditorPage() {
   return (
     <div>
       <div className="flex items-center gap-4 mb-6">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate(id ? `/skills/${id}` : '/skills')}
-        >
+        <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
           ← Back
         </Button>
         <div>
@@ -263,11 +259,7 @@ export default function SkillEditorPage() {
           <Button type="submit" disabled={saving}>
             {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Skill'}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate(id ? `/skills/${id}` : '/skills')}
-          >
+          <Button type="button" variant="outline" onClick={() => navigate(-1)}>
             Cancel
           </Button>
         </div>

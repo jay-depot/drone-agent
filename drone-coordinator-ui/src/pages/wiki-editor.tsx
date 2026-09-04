@@ -149,11 +149,7 @@ export default function WikiEditorPage() {
   return (
     <div>
       <div className="flex items-center gap-4 mb-6">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate(pageId ? `/wiki/${pageId}` : '/wiki')}
-        >
+        <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
           ← Back
         </Button>
         <div>
@@ -266,11 +262,7 @@ export default function WikiEditorPage() {
           <Button type="submit" disabled={saving}>
             {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Page'}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate(pageId ? `/wiki/${pageId}` : '/wiki')}
-          >
+          <Button type="button" variant="outline" onClick={() => navigate(-1)}>
             Cancel
           </Button>
         </div>
