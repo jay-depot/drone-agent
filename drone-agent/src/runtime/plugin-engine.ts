@@ -600,6 +600,11 @@ export function createDronePluginEngine({
         onSessionSafetyTrimApplied: callback =>
           sessionSafetyTrimAppliedHooks.push(callback),
       },
+      emitEvent: (event: DroneConversationEvent) => {
+        dispatchConversationEvent(event).catch(err => {
+          logger.error(`emitEvent dispatch failed: ${err}`);
+        });
+      },
       offer: capability => {
         capabilities.set(plugin.metadata.id, capability);
       },

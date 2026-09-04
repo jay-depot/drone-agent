@@ -38,6 +38,7 @@ function createCapture(
     mountTool: () => undefined,
     unmountTool: () => {},
     listMountedTools: () => [],
+    emitEvent: () => {},
     hooks: {
       onPluginsLoaded: () => {},
       onSessionStart: () => {},

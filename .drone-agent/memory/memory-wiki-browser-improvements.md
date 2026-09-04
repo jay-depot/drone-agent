@@ -3,15 +3,14 @@ key: memory-wiki-browser-improvements
 tags:
   []
 created: 2026-09-04T19:20:44.200Z
-updated: 2026-09-04T22:02:44.434Z
+updated: 2026-09-04T22:17:42.287Z
 ---
 
 # Memory Wiki Browser Improvements — Organized List (from brainstorm session)
 
 Ready-to-plan list of improvements. Brought into future planning sessions.
 
-## STATUS: B (edit-page back buttons), C (session listing confirmations), E1 (topology live WS status) COMPLETED. See `plan-swarm-topology-live-ws-status`.
-## STATUS: F1 PLAN APPROVED 2026-09-04 → see dedicated plan `plan-swarm-session-param-events`.
+## STATUS: B, C, E1, F1 COMPLETED. A (A1-A5), D1, G1, H1 open. See plans: `plan-swarm-topology-live-ws-status` (E1), `plan-swarm-session-param-events` (F1).
 
 ## A. Wiki Browser
 
@@ -61,10 +60,10 @@ Ready-to-plan list of improvements. Brought into future planning sessions.
 
 ## F. Session Transcript
 
-### F1. Emit session-parameter events to coordinator — PLAN APPROVED → `plan-swarm-session-param-events`
+### F1. Emit session-parameter events to coordinator  ✅ COMPLETED → `plan-swarm-session-param-events`
 - Persona changes, focus string changes, macro executed, plus a synthetic event at session start when it's a subagent.
 - All land in the readable transcript sent to the swarm memory ingest agent.
-- Key decisions: distinct event kinds (personaChanged/focusChanged/macroExecuted/sessionStarted); no correlationId (own transcript turns); keep persona column PATCH path (additive); unified API = `registration.emitEvent` on DronePluginRegistration (A1 only, no probe/registry in F1); synthetic sessionStarted fires on every subagent session start at top of log.
+- IMPLEMENTED: 4 new DroneConversationEvent kinds (personaChanged/focusChanged/macroExecuted/sessionStarted) emitted via new unified `registration.emitEvent` API (Option A) from the persona/focus/macros plugins and swarm onSessionStart (subagent). Coordinator transcript KEPT_EVENT_KINDS + renderEvent surface all 4. Tests: coordinator transcript.test.ts + agent session-param-events.test.ts + macros.test.ts.
 
 ## G. Transcript tools
 

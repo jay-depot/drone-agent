@@ -36,6 +36,14 @@ const KEPT_EVENT_KINDS = new Set([
   'toolCallBatch',
   'toolResultBatch',
   'error',
+  // Session-parameter / lifecycle events emitted by plugins via
+  // registration.emitEvent (personaChanged, focusChanged, macroExecuted,
+  // sessionStarted). These carry no correlationId, so each renders as its own
+  // standalone turn line for the ingest agent.
+  'personaChanged',
+  'focusChanged',
+  'macroExecuted',
+  'sessionStarted',
 ]);
 
 type ParsedEvent = {
@@ -45,6 +53,12 @@ type ParsedEvent = {
   content?: string;
   name?: string;
   message?: string;
+  from?: string | null;
+  to?: string | null;
+  focus?: string | null;
+  command?: string;
+  subagentId?: string | null;
+  personaId?: string | null;
   toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>;
   results?: Array<{
     name: string;
@@ -87,6 +101,16 @@ async function parseEvent(
   if (typeof parsed.content === 'string') result.content = parsed.content;
   if (typeof parsed.name === 'string') result.name = parsed.name;
   if (typeof parsed.message === 'string') result.message = parsed.message;
+  if ('from' in parsed) result.from = parsed.from as string | null;
+  if ('to' in parsed) result.to = parsed.to as string | null;
+  if ('focus' in parsed) result.focus = parsed.focus as string | null;
+  if (typeof parsed.command === 'string') result.command = parsed.command;
+  if ('subagentId' in parsed) {
+    result.subagentId = parsed.subagentId as string | null;
+  }
+  if ('personaId' in parsed) {
+    result.personaId = parsed.personaId as string | null;
+  }
   if (Array.isArray(parsed.toolCalls)) {
     result.toolCalls = parsed.toolCalls as ParsedEvent['toolCalls'];
   }
@@ -133,6 +157,20 @@ function renderEvent(event: ParsedEvent): string[] {
     }
     case 'error':
       return [`[error] ${event.message ?? ''}`];
+    case 'personaChanged':
+      return [
+        `persona changed: ${event.from ?? 'none'} -> ${event.to ?? 'none'}`,
+      ];
+    case 'focusChanged':
+      return [`focus ${event.focus ? `set: ${event.focus}` : 'cleared'}`];
+    case 'macroExecuted':
+      return [`macro executed: ${event.command ?? ''}`];
+    case 'sessionStarted':
+      return [
+        `session started as subagent: ${
+          event.subagentId ?? event.personaId ?? ''
+        }`,
+      ];
     default:
       return [];
   }

@@ -49,6 +49,7 @@ function createMockRegistration(): {
     unregisterPluginTools: () => {},
     unregisterTool: () => {},
     listMountedTools: () => [],
+    emitEvent: () => {},
   };
   return { registration, tools, prompts };
 }

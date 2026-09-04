@@ -63,6 +63,7 @@ export const focusPlugin: DronePlugin = {
 
           state.currentFocus = focus;
           ctx.logger.info(`Focus set to: ${state.currentFocus}`);
+          registration.emitEvent({ kind: 'focusChanged', focus });
           return true;
         }
 
@@ -70,6 +71,7 @@ export const focusPlugin: DronePlugin = {
         if (subcommand === 'clear') {
           state.currentFocus = null;
           ctx.logger.info('Focus cleared.');
+          registration.emitEvent({ kind: 'focusChanged', focus: null });
           return true;
         }
 

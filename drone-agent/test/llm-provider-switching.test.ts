@@ -55,6 +55,7 @@ async function captureLlmPlugin(
     mountTool: () => undefined,
     unmountTool: () => {},
     listMountedTools: () => [],
+    emitEvent: () => {},
     hooks: {
       onPluginsLoaded: cb => {
         loadedHooks.push(cb);

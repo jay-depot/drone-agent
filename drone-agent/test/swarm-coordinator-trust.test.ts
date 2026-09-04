@@ -32,6 +32,7 @@ function createRegistrationCapture(
     mountTool: () => undefined,
     unmountTool: () => {},
     listMountedTools: () => [],
+    emitEvent: () => {},
     hooks: {
       onPluginsLoaded: () => {},
       onSessionStart: () => {},
