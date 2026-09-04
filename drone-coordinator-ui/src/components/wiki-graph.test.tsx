@@ -15,7 +15,6 @@ function makeFakeHandle() {
     linkDirectionalArrowLength: ReturnType<typeof vi.fn>;
     linkWidth: ReturnType<typeof vi.fn>;
     onNodeClick: ReturnType<typeof vi.fn>;
-    onNodeDoubleClick: ReturnType<typeof vi.fn>;
     onBackgroundClick: ReturnType<typeof vi.fn>;
     width: ReturnType<typeof vi.fn>;
     height: ReturnType<typeof vi.fn>;
@@ -32,7 +31,6 @@ function makeFakeHandle() {
   handle.linkDirectionalArrowLength = vi.fn(chain);
   handle.linkWidth = vi.fn(chain);
   handle.onNodeClick = vi.fn(chain);
-  handle.onNodeDoubleClick = vi.fn(chain);
   handle.onBackgroundClick = vi.fn(chain);
   handle.width = vi.fn(chain);
   handle.height = vi.fn(chain);
@@ -64,7 +62,6 @@ describe('WikiGraphView', () => {
         edges={edges}
         onNodeFocus={vi.fn()}
         onClearFocus={vi.fn()}
-        onOpenPage={vi.fn()}
         forceGraphFactory={() => handle as unknown as ForceGraphHandle}
         {...props}
       />
@@ -81,11 +78,10 @@ describe('WikiGraphView', () => {
     expect(handle.linkTarget).toHaveBeenCalledWith('target');
   });
 
-  it('wires node click to focus, double-click to open, background to clear', async () => {
+  it('wires node click to focus and background to clear', async () => {
     const onNodeFocus = vi.fn();
     const onClearFocus = vi.fn();
-    const onOpenPage = vi.fn();
-    renderView({ onNodeFocus, onClearFocus, onOpenPage });
+    renderView({ onNodeFocus, onClearFocus });
 
     await waitFor(() => {
       expect(handle.onNodeClick).toHaveBeenCalled();
@@ -94,16 +90,10 @@ describe('WikiGraphView', () => {
     const nodeClickCb = handle.onNodeClick.mock.calls[0][0] as (
       node: WikiGraphNode
     ) => void;
-    const dblClickCb = handle.onNodeDoubleClick.mock.calls[0][0] as (
-      node: WikiGraphNode
-    ) => void;
     const bgClickCb = handle.onBackgroundClick.mock.calls[0][0] as () => void;
 
     nodeClickCb({ ...nodes[0] });
     expect(onNodeFocus).toHaveBeenCalledWith('a');
-
-    dblClickCb({ ...nodes[0] });
-    expect(onOpenPage).toHaveBeenCalledWith('a');
 
     bgClickCb();
     expect(onClearFocus).toHaveBeenCalled();

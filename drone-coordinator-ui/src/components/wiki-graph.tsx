@@ -20,7 +20,6 @@ export interface ForceGraphHandle {
   linkDirectionalArrowLength(length: number): ForceGraphHandle;
   linkWidth(width: number): ForceGraphHandle;
   onNodeClick(cb: (node: WikiGraphNode) => void): ForceGraphHandle;
-  onNodeDoubleClick(cb: (node: WikiGraphNode) => void): ForceGraphHandle;
   onBackgroundClick(cb: () => void): ForceGraphHandle;
   width(px: number): ForceGraphHandle;
   height(px: number): ForceGraphHandle;
@@ -41,7 +40,6 @@ export default function WikiGraphView({
   focusedNodeId,
   onNodeFocus,
   onClearFocus,
-  onOpenPage,
   forceGraphFactory = defaultFactory,
 }: {
   nodes: WikiGraphNode[];
@@ -49,15 +47,14 @@ export default function WikiGraphView({
   focusedNodeId?: string | null;
   onNodeFocus: (pageId: string) => void;
   onClearFocus: () => void;
-  onOpenPage: (pageId: string) => void;
   forceGraphFactory?: (el: HTMLElement) => ForceGraphHandle;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const handleRef = useRef<ForceGraphHandle | null>(null);
 
   // Keep latest callbacks without re-instantiating the graph.
-  const cbRef = useRef({ onNodeFocus, onClearFocus, onOpenPage });
-  cbRef.current = { onNodeFocus, onClearFocus, onOpenPage };
+  const cbRef = useRef({ onNodeFocus, onClearFocus });
+  cbRef.current = { onNodeFocus, onClearFocus };
 
   useEffect(() => {
     const el = containerRef.current;
@@ -65,11 +62,7 @@ export default function WikiGraphView({
     const fg = forceGraphFactory(el);
     handleRef.current = fg;
 
-    const {
-      onNodeFocus: focus,
-      onClearFocus: clear,
-      onOpenPage: open,
-    } = cbRef.current;
+    const { onNodeFocus: focus, onClearFocus: clear } = cbRef.current;
     fg.nodeId('id')
       .linkSource('source')
       .linkTarget('target')
@@ -78,7 +71,6 @@ export default function WikiGraphView({
       .linkWidth(1.5)
       .nodeColor(node => (node.exists ? '#2563eb' : '#d97706'))
       .onNodeClick(node => focus(String(node.id)))
-      .onNodeDoubleClick(node => open(String(node.id)))
       .onBackgroundClick(() => clear());
 
     return () => {

@@ -195,7 +195,6 @@ export default function WikiPage() {
             focusedNodeId={focusedNodeId}
             onNodeFocus={setFocusedNode}
             onClearFocus={() => setFocusedNode(null)}
-            onOpenPage={pageId => navigate(`/wiki/${pageId}`)}
           />
         </>
       ) : (

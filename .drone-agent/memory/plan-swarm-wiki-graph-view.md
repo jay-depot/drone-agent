@@ -1,7 +1,6 @@
 ---
 key: plan-swarm-wiki-graph-view
-tags:
-  []
+tags: []
 created: 2026-09-04T23:07:35.360Z
 updated: 2026-09-04T23:23:47.644Z
 ---
@@ -42,24 +41,25 @@ Add a `WikiGraph` type and `buildGraph()` export. Shape:
 ```ts
 export type WikiGraph = {
   nodes: Array<{
-    id: string;          // pageId (or broken-target pageId)
-    title: string;       // page title; for broken targets use the raw link target
-    exists: boolean;     // false for broken-link placeholder nodes
+    id: string; // pageId (or broken-target pageId)
+    title: string; // page title; for broken targets use the raw link target
+    exists: boolean; // false for broken-link placeholder nodes
     tags: string[];
     pitch?: string;
     scope: 'beacon' | 'coordinator';
   }>;
   edges: Array<{
-    source: string;      // pageId of the linking page
-    target: string;      // pageId of the linked page (exists or placeholder)
-    kind: 'link';        // forward direction (source links to target); reverse derived in UI
+    source: string; // pageId of the linking page
+    target: string; // pageId of the linked page (exists or placeholder)
+    kind: 'link'; // forward direction (source links to target); reverse derived in UI
   }>;
 };
 
-export async function buildGraph(): Promise<WikiGraph>
+export async function buildGraph(): Promise<WikiGraph>;
 ```
 
 Implementation:
+
 - `const metas = await listPages();` (all coordinator pages).
 - For each page, `readPage(page.id)` to get `content`, then reuse the private `extractWikiLinks(content)` (already in this file) to get outgoing targets.
 - Build a node per page: `{ id, title, tags, pitch, scope, exists: true }`.
@@ -71,6 +71,7 @@ Implementation:
 NOTE: `listPages(meta)` does NOT include `pitch`/`content`, so `buildGraph` must `readPage` each (it needs `pitch` for the node + `content` for links) — reuse the pattern already used by `lintPages`.
 
 Tests: `drone-swarm-common/test/wiki-storage.test.ts` — add cases:
+
 - buildGraph returns a node per page and edges for outgoing wikilinks.
 - reverse direction: inferring incoming is a data-shaping concern but the graph should include the edge from the linking page; verify an orphan (no links either way) still appears as a node.
 - broken link target appears as `exists:false` placeholder node + an edge to it.
@@ -92,6 +93,7 @@ app.get('/wiki/graph', async () => {
 No query params needed (v1 renders the whole graph; focus/expand is a client-side view concern, not a refetch). Endpoint returns `{ nodes, edges }`.
 
 Tests: `drone-coordinator/test/wiki-routes.test.ts` (new or extended) —
+
 - seed a few pages (two linked, one orphan, one broken-link target) and assert `GET /api/wiki/graph` returns the expected nodes (all pages present incl. exists:false placeholder) and edges.
 - Uses temp `setKnowledgeBaseDir(mkdtemp())` isolation already established.
 
@@ -104,21 +106,26 @@ Tests: `drone-coordinator/test/wiki-routes.test.ts` (new or extended) —
 ## Step 4 — Graph data+types + thin wrapper component
 
 File: `drone-coordinator-ui/src/lib/types.ts`
+
 - Add `WikiGraphNode`, `WikiGraphEdge`, `WikiGraph` mirroring the coordinator response.
 
 File: `drone-coordinator-ui/src/hooks/use-wiki-graph.ts` (new)
+
 - `useWikiGraph(enabled?: boolean)` hook: `authFetch('/api/wiki/graph')` → `{ graph, loading, error, refetch }`. When `enabled` is false, does NOT fetch (avoids graph fetch in grid view). Mirrors `useWikiPages.ts`.
 
 File: `drone-coordinator-ui/src/lib/wiki-graph-utils.ts` (new)
+
 - `buildFocusedSubgraph(graph, focusedNodeId)` — pure function: node + direct in/out neighbors + only edges touching it. Used by the page to compute the focused subgraph (keeps the component dumb).
 
 File: `drone-coordinator-ui/src/components/wiki-graph.tsx` (new) — thin wrapper isolating the library.
+
 - Props: `nodes`, `edges`, `focusedNodeId?`, `onNodeFocus`, `onClearFocus`, `onOpenPage`, and a `forceGraphFactory` injectable (defaults to the real `ForceGraph`).
 - `useEffect` (once) instantiates `ForceGraph(container)`, wires `.nodeId('id')`, `.linkSource('source')`, `.linkTarget('target')`, `.nodeRelSize`, `.linkDirectionalArrowLength`, `.linkWidth`, `.nodeColor` (blue for exists, amber for placeholder), `.onNodeClick` → focus, `.onNodeDoubleClick` → open, `.onBackgroundClick` → clear; `_destructor` on cleanup.
 - Second `useEffect` pushes `graphData({nodes, links: edges})` and adjusts `nodeRelSize` (10 focused / 6 unfocused).
 - Testability: `forceGraphFactory` lets tests inject a fake handle; no canvas needed.
 
 Tests:
+
 - `wiki-graph-utils.test.ts`: focused subgraph keeps node+neighbors, keeps only touching edges, orphan (no edges) → node alone, incoming-neighbor case.
 - `wiki-graph.test.tsx`: fake handle asserts graphData shape, nodeId/source/target wiring, click→focus, double-click→open, background→clear, focused node size, destructor on unmount.
 
@@ -137,6 +144,7 @@ File: `drone-coordinator-ui/src/pages/wiki.tsx`
 - Hook: `useWikiGraph(graphView)` so graph fetch only happens in graph view.
 
 Tests (`wiki.test.tsx`):
+
 - Graph view: stub `@/components/wiki-graph` to a div, assert fetch to `/api/wiki/graph` + "Grid" toggle rendered.
 - Grid view: assert NO `/api/wiki/graph` fetch.
 - (Type the mock fetch as `(url, init?) => Promise<Response>` to avoid the tuple-typing error on `.mock.calls`.)
@@ -175,6 +183,7 @@ Execution results (all validation criteria met):
 - **Validation** `pnpm -r run build` ✓; `pnpm lint:eslint` + `pnpm lint:prettier` ✓; root fast suite 2770 passed / 14 pre-existing skips ✓; UI suite 84 passed ✓; LSP clean on all touched files ✓.
 
 ## Notes / lessons
+
 - **pnpm 11.8 `blockExoticSubdeps` blocks `react-force-graph`**: its transitive `3d-force-graph-vr → aframe → three-bmfont-text` (git-resolved) violates the supply-chain policy. The standalone `force-graph` engine (same author) has a clean npm-only dep tree and works. Worth checking any future candidate library's transitive deps for git-resolved subdeps before promising a specific package.
 - **`force-graph` is imperative, not a React wrapper**: instantiate `new ForceGraph(containerEl)` in a `useEffect`; chain setter methods; call `_destructor()` on cleanup. Design the wrapper's factory as an injectable seam for testability.
 - **`useWikiGraph(enabled)` gating**: hooks must be called unconditionally, but the graph fetch should be skipped in grid view — an `enabled` param on the hook (default true) avoids fetching when `?view` isn't graph.
