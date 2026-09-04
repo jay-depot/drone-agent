@@ -17,6 +17,7 @@
     "@fontsource-variable/geist": "^5.2.9",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
+    "force-graph": "^1.51.4",
     "lucide-react": "^0.400.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

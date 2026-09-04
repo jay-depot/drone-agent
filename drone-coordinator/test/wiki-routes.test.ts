@@ -3,7 +3,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { setupDb, teardownDb } from './setup.js';
-import { setKnowledgeBaseDir } from '../../drone-swarm-common/src/index.js';
+import {
+  setKnowledgeBaseDir,
+  writePage,
+} from '../../drone-swarm-common/src/index.js';
 import { buildTestApp } from './app-helper.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -69,5 +72,44 @@ describe('coordinator wiki routes', () => {
       url: '/api/wiki/no-pitch-page',
     });
     expect(JSON.parse(read.body).pitch).toBeUndefined();
+  });
+
+  it('GET /api/wiki/graph returns nodes and edges from the coordinator store', async () => {
+    await writePage(
+      'page-a',
+      'Page A',
+      'coordinator',
+      'See [[page-b]] and [[missing-page]].',
+      ['tagA']
+    );
+    await writePage('page-b', 'Page B', 'coordinator', 'Body');
+    await writePage('orphan', 'Orphan', 'coordinator', 'Body');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/wiki/graph',
+    });
+    expect(res.statusCode).toBe(200);
+    const graph = JSON.parse(res.body);
+    const ids = graph.nodes.map((n: { id: string }) => n.id).sort();
+    // page-a, page-b, orphan, plus the exists:false placeholder for missing-page
+    expect(ids).toEqual(['missing-page', 'orphan', 'page-a', 'page-b']);
+
+    const missing = graph.nodes.find(
+      (n: { id: string }) => n.id === 'missing-page'
+    );
+    expect(missing).toBeDefined();
+    expect(missing.exists).toBe(false);
+
+    expect(graph.edges).toContainEqual({
+      source: 'page-a',
+      target: 'page-b',
+      kind: 'link',
+    });
+    expect(graph.edges).toContainEqual({
+      source: 'page-a',
+      target: 'missing-page',
+      kind: 'link',
+    });
   });
 });

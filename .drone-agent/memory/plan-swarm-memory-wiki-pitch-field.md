@@ -1,7 +1,6 @@
 ---
 key: plan-swarm-memory-wiki-pitch-field
-tags:
-  []
+tags: []
 created: 2026-09-04T22:40:18.463Z
 updated: 2026-09-04T22:52:06.587Z
 ---
@@ -28,6 +27,7 @@ Target: a stored optional `pitch?: string` on every wiki page that RAG reads fro
 ## Dependencies / order
 
 All steps independent EXCEPT: must add `pitch` to schema type FIRST (everything depends on it). Order:
+
 1. drone-core type
 2. drone-swarm-common storage (frontmatter build/parse) + tests
 3. rocket routes (beacon + coordinator PUT, semantic-search enrich) + tests — depends on 1,2
@@ -42,6 +42,7 @@ All steps independent EXCEPT: must add `pitch` to schema type FIRST (everything 
 File: `drone-core/src/wiki-types.ts`
 
 Add optional `pitch` to `DroneWikiPageMeta`:
+
 ```ts
 export type DroneWikiPageMeta = {
   id: string;
@@ -55,6 +56,7 @@ export type DroneWikiPageMeta = {
   updatedAt: string;
 };
 ```
+
 Then run `pnpm -r run build` (drone-core dist must be rebuilt before dependent packages typecheck against it).
 
 ## Step 2 — drone-swarm-common storage
@@ -71,10 +73,12 @@ Tests: write a page WITH a pitch and read it back; assert frontmatter contains `
 ## Step 3 — Beacon + coordinator routes
 
 Beacon: `drone-beacon/src/routes/wiki.ts`
+
 - `PUT /wiki/:pageId` Body: add `pitch?: string`; pass to `writePage(..., tags ?? [], sources ?? [], pitch ?? undefined)`.
 - `GET /wiki/semantic-search`: extend `PageMetaLite` with `pitch?: string`; populate local branch from `listPages()` and coordinator branch from proxied `/wiki` list; emit per result.
 
 Coordinator: `drone-coordinator/src/routes/wiki.ts`
+
 - `PUT /wiki/:pageId` Body: add `pitch?: string`; pass to `writePage(..., tags ?? [], sources ?? [], pitch ?? undefined)`.
 
 Tests: semantic-search returns pitch when present, absent otherwise; beacon+coordinator PUT round-trip (pitch keep + absent). Coordinator route tests MUST call `setKnowledgeBaseDir(mkdtemp())` + cleanup (coordinator setup does NOT isolate the KB dir).
@@ -141,6 +145,7 @@ Execution results (all validation criteria met):
 - **Validation** build ✓, lint ✓, fast tests 2764 passed / 14 pre-existing skips ✓, UI 73 passed ✓, LSP clean on touched source. Pre-existing failures untouched (see above).
 
 ## Notes / lessons
+
 - **listPages was NOT a spread**: `wiki-storage.listPages` builds each meta explicitly field-by-field, so `pitch` had to be added there too. Easy to miss when adding a schema field — grep for explicit field lists.
 - **file__apply_diff fuzz can silently no-op**: reported success with a mangled `\n`-escaped diff but wrote nothing; always re-read the file to confirm the edit landed, especially for multi-line property additions (hit in tools-wiki.ts).
 - **coordinator route tests must isolate the wiki KB dir**: coordinator `setupDb` does NOT redirect `setKnowledgeBaseDir`; route tests that PUT wiki pages write to `./knowledge-base`. Call `setKnowledgeBaseDir(mkdtemp())` + cleanup, mirroring beacon tests.

@@ -438,3 +438,93 @@ export async function lintPages(): Promise<{
 
   return { issues };
 }
+
+/**
+ * A node in the wiki connected-graph view.
+ */
+export type WikiGraphNode = {
+  /** Page id, or the raw link target for a broken-link placeholder node. */
+  id: string;
+  /** Page title, or the raw link target for a broken-link placeholder node. */
+  title: string;
+  /** False for broken-link placeholder nodes (a linked page that doesn't exist). */
+  exists: boolean;
+  tags: string[];
+  pitch?: string;
+  scope: 'beacon' | 'coordinator';
+};
+
+/**
+ * A directed edge in the wiki graph: `source` links to `target` via a
+ * [[wikilink]]. Reverse/incoming direction is derived in the UI.
+ */
+export type WikiGraphEdge = {
+  source: string;
+  target: string;
+  kind: 'link';
+};
+
+/**
+ * The full connected-graph view of the wiki: one node per page (including
+ * orphans) plus placeholder nodes for broken-link targets, and forward edges
+ * for each [[wikilink]]. Used to power the coordinator UI graph view.
+ */
+export type WikiGraph = {
+  nodes: WikiGraphNode[];
+  edges: WikiGraphEdge[];
+};
+
+/**
+ * Build the connected-graph view of the wiki from the stored pages.
+ * Every page becomes a node; [[wikilinks]] become forward edges. Link targets
+ * that do not resolve to a page are added as `exists:false` placeholder nodes
+ * so missing pages are visible in the graph. Edges are deduplicated.
+ */
+export async function buildGraph(): Promise<WikiGraph> {
+  const metas = await listPages();
+  const pageIds = new Set(metas.map(m => m.id));
+
+  const nodesById = new Map<string, WikiGraphNode>();
+  const edgeKeys = new Set<string>();
+  const edges: WikiGraphEdge[] = [];
+
+  for (const meta of metas) {
+    const page = await readPage(meta.id);
+    if (!page) continue;
+    nodesById.set(page.id, {
+      id: page.id,
+      title: page.title,
+      exists: true,
+      tags: page.tags,
+      ...(page.pitch ? { pitch: page.pitch } : {}),
+      scope: page.scope,
+    });
+
+    let links: string[];
+    try {
+      links = extractWikiLinks(page.content);
+    } catch {
+      // Skip link extraction for oversized pages (graceful degradation),
+      // matching lintPages.
+      links = [];
+    }
+    for (const target of links) {
+      const edgeKey = `${page.id}\u0000${target}`;
+      if (!edgeKeys.has(edgeKey)) {
+        edgeKeys.add(edgeKey);
+        edges.push({ source: page.id, target, kind: 'link' });
+      }
+      if (!pageIds.has(target) && !nodesById.has(target)) {
+        nodesById.set(target, {
+          id: target,
+          title: target,
+          exists: false,
+          tags: [],
+          scope: page.scope,
+        });
+      }
+    }
+  }
+
+  return { nodes: [...nodesById.values()], edges };
+}

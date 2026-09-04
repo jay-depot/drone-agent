@@ -353,4 +353,99 @@ describe('Wiki Storage', () => {
       result.issues.some(i => i.type === 'orphan' && i.pageId === 'oversized')
     ).toBe(true);
   });
+
+  describe('buildGraph', () => {
+    it('returns a node per page and forward edges for wikilinks', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-a',
+        'Page A',
+        'coordinator',
+        'Links to [[page-b]] and [[page-c]].',
+        ['tagA']
+      );
+      await writePage('page-b', 'Page B', 'coordinator', 'Body');
+      await writePage('page-c', 'Page C', 'coordinator', 'Body');
+
+      const graph = await buildGraph();
+      const ids = graph.nodes.map(n => n.id).sort();
+      expect(ids).toEqual(['page-a', 'page-b', 'page-c']);
+      expect(graph.nodes.find(n => n.id === 'page-a')!.exists).toBe(true);
+      expect(graph.edges).toContainEqual({
+        source: 'page-a',
+        target: 'page-b',
+        kind: 'link',
+      });
+      expect(graph.edges).toContainEqual({
+        source: 'page-a',
+        target: 'page-c',
+        kind: 'link',
+      });
+    });
+
+    it('includes orphan pages as nodes', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage('linked', 'Linked', 'coordinator', 'Body');
+      await writePage('orphan', 'Orphan', 'coordinator', 'Body');
+
+      const graph = await buildGraph();
+      const ids = graph.nodes.map(n => n.id).sort();
+      expect(ids).toEqual(['linked', 'orphan']);
+    });
+
+    it('adds an exists:false placeholder node for a broken-link target', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-a',
+        'Page A',
+        'coordinator',
+        'See [[missing-page]] for details.'
+      );
+
+      const graph = await buildGraph();
+      const missing = graph.nodes.find(n => n.id === 'missing-page');
+      expect(missing).toBeDefined();
+      expect(missing!.exists).toBe(false);
+      expect(graph.edges).toContainEqual({
+        source: 'page-a',
+        target: 'missing-page',
+        kind: 'link',
+      });
+    });
+
+    it('deduplicates edges when a page links the same target twice', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-a',
+        'Page A',
+        'coordinator',
+        'See [[page-b]] and again [[page-b]].'
+      );
+      await writePage('page-b', 'Page B', 'coordinator', 'Body');
+
+      const graph = await buildGraph();
+      const dupes = graph.edges.filter(
+        e => e.source === 'page-a' && e.target === 'page-b'
+      );
+      expect(dupes).toHaveLength(1);
+    });
+
+    it('carries the pitch onto graph nodes when present', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-a',
+        'Page A',
+        'coordinator',
+        'Body',
+        [],
+        [],
+        'A one-sentence pitch about page A.'
+      );
+
+      const graph = await buildGraph();
+      expect(graph.nodes.find(n => n.id === 'page-a')!.pitch).toBe(
+        'A one-sentence pitch about page A.'
+      );
+    });
+  });
 });

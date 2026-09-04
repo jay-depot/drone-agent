@@ -128,6 +128,26 @@ export interface WikiTagCount {
   count: number;
 }
 
+export interface WikiGraphNode {
+  id: string;
+  title: string;
+  exists: boolean;
+  tags: string[];
+  pitch?: string;
+  scope: string;
+}
+
+export interface WikiGraphEdge {
+  source: string;
+  target: string;
+  kind: 'link';
+}
+
+export interface WikiGraph {
+  nodes: WikiGraphNode[];
+  edges: WikiGraphEdge[];
+}
+
 // Pagination types
 export interface PaginationState {
   limit: number;

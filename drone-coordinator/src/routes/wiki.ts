@@ -11,6 +11,11 @@ export default function wikiRoutes(app: FastifyInstance) {
     return listTags();
   });
 
+  app.get('/wiki/graph', async () => {
+    const { buildGraph } = await import('drone-swarm-common');
+    return buildGraph();
+  });
+
   app.get<{ Params: { pageId: string } }>(
     '/wiki/:pageId',
     async (request, reply) => {

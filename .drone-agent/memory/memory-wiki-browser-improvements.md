@@ -3,14 +3,14 @@ key: memory-wiki-browser-improvements
 tags:
   []
 created: 2026-09-04T19:20:44.200Z
-updated: 2026-09-04T22:52:18.749Z
+updated: 2026-09-04T23:24:07.305Z
 ---
 
 # Memory Wiki Browser Improvements — Organized List (from brainstorm session)
 
 Ready-to-plan list of improvements. Brought into future planning sessions.
 
-## STATUS: B, C, E1, F1, H1 COMPLETED. A (A1-A5), D1, G1 open. See plans: `plan-swarm-topology-live-ws-status` (E1), `plan-swarm-session-param-events` (F1), `plan-swarm-memory-wiki-pitch-field` (H1).
+## STATUS: B, C, E1, F1, H1, A5 COMPLETED. A1-A4, D1, G1 open. See plans: `plan-swarm-topology-live-ws-status` (E1), `plan-swarm-session-param-events` (F1), `plan-swarm-memory-wiki-pitch-field` (H1), `plan-swarm-wiki-graph-view` (A5).
 
 ## A. Wiki Browser
 
@@ -28,11 +28,9 @@ Ready-to-plan list of improvements. Brought into future planning sessions.
 ### A4. "Sources" → session logs
 - Target existing "session transcript" pages (currently raw JSON, minimal formatting); link sources to them and make those pages pretty as part of this work.
 
-### A5. Connected node graph view (OPEN / deferred)
-- On the fence, leaning toward liking it.
-- Saved as a "human prompt" for future thinking — NOT committed.
-- Possible form: tabs under sidebar items (alternatives still being explored).
-- If built: nodes = pages, edges = wikilinks; toggle vs table; static vs interactive — all open.
+### A5. Connected node graph view  ✅ COMPLETED → `plan-swarm-wiki-graph-view`
+- Interactive force-directed graph of wiki pages (nodes) and [[wikilinks]] (edges), toggled on the `/wiki` page (`?view=graph`), backed by coordinator-only `GET /api/wiki/graph`.
+- IMPLEMENTED: `buildGraph()` in `drone-swarm-common/src/wiki-storage.ts` (all pages as nodes incl. orphans, forward edges deduped, broken-link targets as `exists:false` placeholder nodes). Coordinator route added. UI: `?view=graph` toggle (sessions-style), `?node=<pageId>` focus state URL-persisted, click node → focus/expand neighborhood, inline preview panel (title/id/pitch/tags + "Open full page"), "Show all" resets, background-click clears focus, double-click opens. Graph library: `force-graph` v1.51.4 (NOT `react-force-graph` — that package is blocked by pnpm 11.8 `blockExoticSubdeps` via its `3d-force-graph-vr`→`aframe`→git-resolved `three-bmfont-text` transitive dep; user approved the underlying engine directly). Thin wrapper component (`wiki-graph.tsx`) with injectable `forceGraphFactory` for testability; `useWikiGraph(enabled)` hook gates the fetch to graph view; `buildFocusedSubgraph` pure util.
 
 ## B. Edit Pages  ✅ COMPLETED
 
@@ -45,7 +43,7 @@ Ready-to-plan list of improvements. Brought into future planning sessions.
 
 ### C1. Remove confirmation dialogs on workflow actions
 - None are destructive (End / Archive / Restore).
-- ARCHIVE-only "phantom row with undo": sessions.tsx no longer uses a `<Dialog>` for workflow actions (removed Dialog import, openDialog, handleDialogConfirm, dialog state/JSX). Direct handlers: handleTerminate, handleProcess, handleMarkProcessed, handleEnd, handleRestore, handleArchive, handleUndoArchive. handleArchive calls POST /archive, removes the row, sets a phantomArchive with a 5s (ARCHIVE_UNDO_MS=5000) timeout; Undo calls POST /restore + refresh; phantom row renders at top of table with Archived badge + Undo button. Terminate stays visually destructive but acts immediately. Tests added to sessions.test.tsx: direct-execute (no dialog), phantom+undo, phantom timeout.
+- ARCHIVE-only "phantom row with undo": sessions.tsx no longer uses a `<Dialog>` for workflow actions. Direct handlers: handleTerminate, handleProcess, handleMarkProcessed, handleEnd, handleRestore, handleArchive, handleUndoArchive. handleArchive calls POST /archive, removes the row, sets a phantomArchive with a 5s (ARCHIVE_UNDO_MS=5000) timeout; Undo calls POST /restore + refresh; phantom row renders at top of table with Archived badge + Undo button. Tests added: direct-execute (no dialog), phantom+undo, phantom timeout.
 
 ## D. Coordinator UI General
 
@@ -55,15 +53,14 @@ Ready-to-plan list of improvements. Brought into future planning sessions.
 ## E. Swarm Topology
 
 ### E1. Status indicators = live websocket state  ✅ COMPLETED → `plan-swarm-topology-live-ws-status`
-- Red when a beacon's websocket is NOT connected (previously misread "recently restarted" via a 5-min heartbeat heuristic in topology.tsx isBeaconOnline / beacon-detail.tsx isOnline).
-- IMPLEMENTED: coordinator exposes `connected` (isBeaconConnected) on GET /beacons + /beacons/:id + /ws initial beacons; beacon-ws.ts published beacon.connected/beacon.disconnected events over UI /ws and hardened half-open detection with a ping/pong startBeaconLivenessSweep (30s, isAlive, terminate dead sockets). UI topology.tsx + beacon-detail.tsx use `connected` with green/red/amber (pending=amber) dots and live-update on events. Tests: coordinator beacon-ws.test.ts + routes/beacons.test.ts; UI topology.test.tsx + beacon-detail.test.tsx.
+- Red when a beacon's websocket is NOT connected.
+- IMPLEMENTED: coordinator exposes `connected` (isBeaconConnected) on GET /beacons + /beacons/:id + /ws initial beacons; beacon-ws.ts published beacon.connected/beacon.disconnected events over UI /ws and hardened half-open detection with a ping/pong startBeaconLivenessSweep (30s, isAlive, terminate dead sockets). UI topology.tsx + beacon-detail.tsx use `connected` with green/red/amber dots and live-update. Tests: coordinator beacon-ws.test.ts + routes/beacons.test.ts; UI topology.test.tsx + beacon-detail.test.tsx.
 
 ## F. Session Transcript
 
 ### F1. Emit session-parameter events to coordinator  ✅ COMPLETED → `plan-swarm-session-param-events`
 - Persona changes, focus string changes, macro executed, plus a synthetic event at session start when it's a subagent.
-- All land in the readable transcript sent to the swarm memory ingest agent.
-- IMPLEMENTED: 4 new DroneConversationEvent kinds (personaChanged/focusChanged/macroExecuted/sessionStarted) emitted via new unified `registration.emitEvent` API (Option A) from the persona/focus/macros plugins and swarm onSessionStart (subagent). Coordinator transcript KEPT_EVENT_KINDS + renderEvent surface all 4. Tests: coordinator transcript.test.ts + agent session-param-events.test.ts + macros.test.ts.
+- IMPLEMENTED: 4 new DroneConversationEvent kinds (personaChanged/focusChanged/macroExecuted/sessionStarted) emitted via new unified `registration.emitEvent` API (Option A). Coordinator transcript KEPT_EVENT_KINDS + renderEvent surface all 4. Tests: coordinator transcript.test.ts + agent session-param-events.test.ts + macros.test.ts.
 
 ## G. Transcript tools
 
