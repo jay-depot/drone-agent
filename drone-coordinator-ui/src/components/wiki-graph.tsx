@@ -18,8 +18,11 @@ export interface ForceGraphHandle {
   nodeRelSize(size: number): ForceGraphHandle;
   nodeColor(accessor: (node: WikiGraphNode) => string): ForceGraphHandle;
   linkDirectionalArrowLength(length: number): ForceGraphHandle;
+  linkDirectionalArrowColor(
+    accessor: (link: WikiGraphEdge) => string
+  ): ForceGraphHandle;
   linkWidth(width: number): ForceGraphHandle;
-  linkColor(color: string): ForceGraphHandle;
+  linkColor(accessor: (link: WikiGraphEdge) => string): ForceGraphHandle;
   onNodeClick(cb: (node: WikiGraphNode) => void): ForceGraphHandle;
   onBackgroundClick(cb: () => void): ForceGraphHandle;
   width(px: number): ForceGraphHandle;
@@ -65,7 +68,7 @@ export default function WikiGraphView({
   cbRef.current = { onNodeFocus, onClearFocus };
   const linkColorRef = useRef(LINK_COLOR_LIGHT);
   const applyLinkColor = (fg: ForceGraphHandle) => {
-    fg.linkColor(linkColorRef.current);
+    fg.linkColor(() => linkColorRef.current);
   };
   const sizeRef = useRef({ width: 0, height: 0 });
   const measureContainer = () => {
@@ -95,7 +98,8 @@ export default function WikiGraphView({
       .linkDirectionalArrowLength(4)
       .linkWidth(1.5)
       .nodeColor(node => (node.exists ? '#2563eb' : '#d97706'))
-      .linkColor(linkColorRef.current)
+      .linkDirectionalArrowColor(() => linkColorRef.current)
+      .linkColor(() => linkColorRef.current)
       .onNodeClick(node => focus(String(node.id)))
       .onBackgroundClick(() => clear());
 

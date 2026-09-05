@@ -13,6 +13,7 @@ function makeFakeHandle() {
     nodeRelSize: ReturnType<typeof vi.fn>;
     nodeColor: ReturnType<typeof vi.fn>;
     linkDirectionalArrowLength: ReturnType<typeof vi.fn>;
+    linkDirectionalArrowColor: ReturnType<typeof vi.fn>;
     linkWidth: ReturnType<typeof vi.fn>;
     linkColor: ReturnType<typeof vi.fn>;
     onNodeClick: ReturnType<typeof vi.fn>;
@@ -30,6 +31,7 @@ function makeFakeHandle() {
   handle.nodeRelSize = vi.fn(chain);
   handle.nodeColor = vi.fn(chain);
   handle.linkDirectionalArrowLength = vi.fn(chain);
+  handle.linkDirectionalArrowColor = vi.fn(chain);
   handle.linkWidth = vi.fn(chain);
   handle.linkColor = vi.fn(chain);
   handle.onNodeClick = vi.fn(chain);
@@ -109,7 +111,12 @@ describe('WikiGraphView', () => {
     await waitFor(() => {
       expect(handle.linkColor).toHaveBeenCalled();
     });
-    expect(handle.linkColor).toHaveBeenLastCalledWith(
+    // linkColor is an accessor function; invoking it yields the themed color.
+    const colorAccessor = handle.linkColor.mock.calls.at(-1)?.[0] as (
+      _link: WikiGraphEdge
+    ) => string;
+    expect(colorAccessor).toBeTypeOf('function');
+    expect(colorAccessor({ source: 'a', target: 'b', kind: 'link' })).toBe(
       'rgba(148, 163, 184, 0.4)'
     );
   });
@@ -124,7 +131,10 @@ describe('WikiGraphView', () => {
     document.documentElement.classList.add('dark');
     // MutationObserver should fire synchronously after the class mutation.
     await waitFor(() => {
-      expect(handle.linkColor).toHaveBeenLastCalledWith(
+      const colorAccessor = handle.linkColor.mock.calls.at(-1)?.[0] as (
+        _link: WikiGraphEdge
+      ) => string;
+      expect(colorAccessor({ source: 'a', target: 'b', kind: 'link' })).toBe(
         'rgba(200, 205, 220, 0.7)'
       );
     });
