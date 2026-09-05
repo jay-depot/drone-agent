@@ -132,6 +132,35 @@ describe('WikiGraphView', () => {
     document.documentElement.classList.remove('dark');
   });
 
+  it('sizes the canvas from the container div measurements', async () => {
+    // The component measures its own container; stub getBoundingClientRect
+    // via the rendered container to return a concrete size.
+    const originalRect = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = vi.fn(
+      () =>
+        ({
+          width: 640,
+          height: 360,
+          top: 0,
+          left: 0,
+          right: 640,
+          bottom: 360,
+          x: 0,
+          y: 0,
+        }) as DOMRect
+    );
+
+    try {
+      renderView();
+      await waitFor(() => {
+        expect(handle.width).toHaveBeenCalledWith(640);
+        expect(handle.height).toHaveBeenCalledWith(360);
+      });
+    } finally {
+      Element.prototype.getBoundingClientRect = originalRect;
+    }
+  });
+
   it('renders a container for the graph', () => {
     renderView();
     expect(screen.getByTestId('wiki-graph-container')).toBeDefined();

@@ -67,6 +67,17 @@ export default function WikiGraphView({
   const applyLinkColor = (fg: ForceGraphHandle) => {
     fg.linkColor(linkColorRef.current);
   };
+  const sizeRef = useRef({ width: 0, height: 0 });
+  const measureContainer = () => {
+    const el = containerRef.current;
+    const rect = el?.getBoundingClientRect();
+    return rect ? { width: rect.width, height: rect.height } : sizeRef.current;
+  };
+  const applySize = (fg: ForceGraphHandle) => {
+    const size = measureContainer();
+    sizeRef.current = size;
+    fg.width(size.width).height(size.height);
+  };
 
   useEffect(() => {
     const el = containerRef.current;
@@ -74,6 +85,7 @@ export default function WikiGraphView({
     const fg = forceGraphFactory(el);
     handleRef.current = fg;
     linkColorRef.current = isDarkMode() ? LINK_COLOR_DARK : LINK_COLOR_LIGHT;
+    applySize(fg);
 
     const { onNodeFocus: focus, onClearFocus: clear } = cbRef.current;
     fg.nodeId('id')
@@ -100,8 +112,16 @@ export default function WikiGraphView({
       subtree: false,
     });
 
+    // Keep the canvas sized to the container when the window resizes.
+    const onResize = () => {
+      const handle = handleRef.current;
+      if (handle) applySize(handle);
+    };
+    window.addEventListener('resize', onResize);
+
     return () => {
       observer.disconnect();
+      window.removeEventListener('resize', onResize);
       (fg as unknown as { _destructor?: () => void })._destructor?.();
       handleRef.current = null;
     };
@@ -112,6 +132,8 @@ export default function WikiGraphView({
     const fg = handleRef.current;
     if (!fg) return;
     fg.graphData({ nodes, links: edges });
+    // Re-apply size in case the layout settled after mount (e.g. late CSS).
+    applySize(fg);
     if (focusedNodeId) {
       // Highlight the focused node by making it larger.
       fg.nodeRelSize(10);
