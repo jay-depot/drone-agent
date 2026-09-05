@@ -19,6 +19,7 @@ export interface ForceGraphHandle {
   nodeColor(accessor: (node: WikiGraphNode) => string): ForceGraphHandle;
   linkDirectionalArrowLength(length: number): ForceGraphHandle;
   linkWidth(width: number): ForceGraphHandle;
+  linkColor(color: string): ForceGraphHandle;
   onNodeClick(cb: (node: WikiGraphNode) => void): ForceGraphHandle;
   onBackgroundClick(cb: () => void): ForceGraphHandle;
   width(px: number): ForceGraphHandle;
@@ -32,6 +33,13 @@ function defaultFactory(el: HTMLElement): ForceGraphHandle {
   return new (
     ForceGraph as unknown as new (el: HTMLElement) => ForceGraphHandle
   )(el);
+}
+
+const LINK_COLOR_LIGHT = 'rgba(148, 163, 184, 0.55)';
+const LINK_COLOR_DARK = 'rgba(148, 163, 184, 0.35)';
+
+function isDarkMode(): boolean {
+  return document.documentElement.classList.contains('dark');
 }
 
 export default function WikiGraphView({
@@ -55,12 +63,17 @@ export default function WikiGraphView({
   // Keep latest callbacks without re-instantiating the graph.
   const cbRef = useRef({ onNodeFocus, onClearFocus });
   cbRef.current = { onNodeFocus, onClearFocus };
+  const linkColorRef = useRef(LINK_COLOR_LIGHT);
+  const applyLinkColor = (fg: ForceGraphHandle) => {
+    fg.linkColor(linkColorRef.current);
+  };
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const fg = forceGraphFactory(el);
     handleRef.current = fg;
+    linkColorRef.current = isDarkMode() ? LINK_COLOR_DARK : LINK_COLOR_LIGHT;
 
     const { onNodeFocus: focus, onClearFocus: clear } = cbRef.current;
     fg.nodeId('id')
@@ -70,10 +83,25 @@ export default function WikiGraphView({
       .linkDirectionalArrowLength(4)
       .linkWidth(1.5)
       .nodeColor(node => (node.exists ? '#2563eb' : '#d97706'))
+      .linkColor(linkColorRef.current)
       .onNodeClick(node => focus(String(node.id)))
       .onBackgroundClick(() => clear());
 
+    // Re-apply the link color when the root theme class flips (dark ⇄ light).
+    // force-graph renders to a canvas, so CSS alone can't recolor the edges;
+    // we have to push a new color through the API.
+    const observer = new MutationObserver(() => {
+      linkColorRef.current = isDarkMode() ? LINK_COLOR_DARK : LINK_COLOR_LIGHT;
+      applyLinkColor(handleRef.current!);
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+      subtree: false,
+    });
+
     return () => {
+      observer.disconnect();
       (fg as unknown as { _destructor?: () => void })._destructor?.();
       handleRef.current = null;
     };

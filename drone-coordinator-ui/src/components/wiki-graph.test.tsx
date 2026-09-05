@@ -14,6 +14,7 @@ function makeFakeHandle() {
     nodeColor: ReturnType<typeof vi.fn>;
     linkDirectionalArrowLength: ReturnType<typeof vi.fn>;
     linkWidth: ReturnType<typeof vi.fn>;
+    linkColor: ReturnType<typeof vi.fn>;
     onNodeClick: ReturnType<typeof vi.fn>;
     onBackgroundClick: ReturnType<typeof vi.fn>;
     width: ReturnType<typeof vi.fn>;
@@ -30,6 +31,7 @@ function makeFakeHandle() {
   handle.nodeColor = vi.fn(chain);
   handle.linkDirectionalArrowLength = vi.fn(chain);
   handle.linkWidth = vi.fn(chain);
+  handle.linkColor = vi.fn(chain);
   handle.onNodeClick = vi.fn(chain);
   handle.onBackgroundClick = vi.fn(chain);
   handle.width = vi.fn(chain);
@@ -97,6 +99,37 @@ describe('WikiGraphView', () => {
 
     bgClickCb();
     expect(onClearFocus).toHaveBeenCalled();
+  });
+
+  it('applies a link color matching the current theme', async () => {
+    // Ensure light root before rendering.
+    document.documentElement.classList.remove('dark');
+    renderView();
+
+    await waitFor(() => {
+      expect(handle.linkColor).toHaveBeenCalled();
+    });
+    expect(handle.linkColor).toHaveBeenLastCalledWith(
+      'rgba(148, 163, 184, 0.55)'
+    );
+  });
+
+  it('re-applies the dark link color when the root flips to dark', async () => {
+    document.documentElement.classList.remove('dark');
+    renderView();
+    await waitFor(() => {
+      expect(handle.linkColor).toHaveBeenCalled();
+    });
+
+    document.documentElement.classList.add('dark');
+    // MutationObserver should fire synchronously after the class mutation.
+    await waitFor(() => {
+      expect(handle.linkColor).toHaveBeenLastCalledWith(
+        'rgba(148, 163, 184, 0.35)'
+      );
+    });
+
+    document.documentElement.classList.remove('dark');
   });
 
   it('renders a container for the graph', () => {
