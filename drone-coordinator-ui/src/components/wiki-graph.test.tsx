@@ -110,7 +110,7 @@ describe('WikiGraphView', () => {
       expect(handle.linkColor).toHaveBeenCalled();
     });
     expect(handle.linkColor).toHaveBeenLastCalledWith(
-      'rgba(148, 163, 184, 0.55)'
+      'rgba(148, 163, 184, 0.4)'
     );
   });
 
@@ -125,7 +125,7 @@ describe('WikiGraphView', () => {
     // MutationObserver should fire synchronously after the class mutation.
     await waitFor(() => {
       expect(handle.linkColor).toHaveBeenLastCalledWith(
-        'rgba(148, 163, 184, 0.35)'
+        'rgba(200, 205, 220, 0.7)'
       );
     });
 

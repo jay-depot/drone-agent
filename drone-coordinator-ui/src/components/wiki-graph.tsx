@@ -35,8 +35,8 @@ function defaultFactory(el: HTMLElement): ForceGraphHandle {
   )(el);
 }
 
-const LINK_COLOR_LIGHT = 'rgba(148, 163, 184, 0.55)';
-const LINK_COLOR_DARK = 'rgba(148, 163, 184, 0.35)';
+const LINK_COLOR_LIGHT = 'rgba(148, 163, 184, 0.4)';
+const LINK_COLOR_DARK = 'rgba(200, 205, 220, 0.7)';
 
 function isDarkMode(): boolean {
   return document.documentElement.classList.contains('dark');
@@ -146,7 +146,7 @@ export default function WikiGraphView({
     <div
       ref={containerRef}
       data-testid="wiki-graph-container"
-      className="w-full h-[600px]"
+      className="w-full h-[calc(100vh-220px)] min-h-[480px]"
     />
   );
 }
