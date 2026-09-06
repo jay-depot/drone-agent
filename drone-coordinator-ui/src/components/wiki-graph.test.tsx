@@ -2,7 +2,10 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AugmentedGraphEdge, AugmentedGraphNode } from '@/lib/types';
-import { WIKI_TAG_SPRING_STRENGTH } from '@/lib/wiki-graph-utils';
+import {
+  WIKI_BROKEN_LINK_SPRING_STRENGTH,
+  WIKI_TAG_SPRING_STRENGTH,
+} from '@/lib/wiki-graph-utils';
 import WikiGraphView, { type ForceGraphHandle } from './wiki-graph';
 
 function makeFakeHandle() {
@@ -153,7 +156,7 @@ describe('WikiGraphView', () => {
     expect(colorAccessor(nodes[1])).toBe('#2563eb');
     expect(colorAccessor(nodes[2])).toBe('#d97706');
     expect(colorAccessor(nodes[3])).toBe('rgba(37, 99, 235, 0.15)');
-    expect(colorAccessor(nodes[4])).toBe('rgba(22, 163, 74, 0.08)');
+    expect(colorAccessor(nodes[4])).toBe('rgba(22, 163, 74, 0.18)');
   });
 
   it('hides tag nodes through transparent styling when tags are hidden', () => {
@@ -215,7 +218,7 @@ describe('WikiGraphView', () => {
       l: AugmentedGraphEdge
     ) => string;
     expect(colorAccessor(edges[1])).toBe('rgba(217, 119, 6, 0.55)');
-    expect(colorAccessor(edges[0])).toBe('rgba(148, 163, 184, 0.4)');
+    expect(colorAccessor(edges[0])).toBe('rgba(148, 163, 184, 0.3)');
 
     const widthAccessor = accessorFrom('linkWidth') as (
       l: AugmentedGraphEdge
@@ -249,6 +252,10 @@ describe('WikiGraphView', () => {
 
     zoomCb({ k: 0.5, x: 0, y: 0 });
     expect(handle.nodeRelSize).toHaveBeenLastCalledWith(12);
+    // Deep zoom-out (Round-8 layouts auto-fit around k≈0.05–0.1) must stay
+    // compensated instead of clamping into a frozen-size band.
+    zoomCb({ k: 0.1, x: 0, y: 0 });
+    expect(handle.nodeRelSize).toHaveBeenLastCalledWith(60);
     let widthAccessor = accessorFrom('linkWidth', 1) as (
       l: AugmentedGraphEdge
     ) => number;
@@ -368,14 +375,14 @@ describe('WikiGraphView', () => {
     let colorAccessor = accessorFrom('linkColor') as (
       l: AugmentedGraphEdge
     ) => string;
-    expect(colorAccessor(edges[0])).toBe('rgba(148, 163, 184, 0.4)');
+    expect(colorAccessor(edges[0])).toBe('rgba(148, 163, 184, 0.3)');
 
     document.documentElement.classList.add('dark');
     await waitFor(() => {
       colorAccessor = accessorFrom('linkColor', 1) as (
         l: AugmentedGraphEdge
       ) => string;
-      expect(colorAccessor(edges[0])).toBe('rgba(200, 205, 220, 0.7)');
+      expect(colorAccessor(edges[0])).toBe('rgba(200, 205, 220, 0.6)');
     });
     document.documentElement.classList.remove('dark');
   });
@@ -482,6 +489,11 @@ describe('WikiGraphView', () => {
     ) => number;
     // Page edges exert no layout force — display-only edges.
     expect(strengthAccessor(edges[0])).toBe(0);
+    // Broken links pull hard (edges[1] targets the missing page) so the
+    // defect's two halves sit adjacent.
+    expect(strengthAccessor(edges[1])).toBeCloseTo(
+      WIKI_BROKEN_LINK_SPRING_STRENGTH
+    );
     // Tag pull scales inversely with member count (edges[3] -> 1-member tag:x).
     expect(strengthAccessor(edges[3])).toBeCloseTo(WIKI_TAG_SPRING_STRENGTH);
 

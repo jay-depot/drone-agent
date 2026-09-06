@@ -7,6 +7,7 @@ import {
   edgeEndpointId,
   labelDegreeThreshold,
   tagSpringStrength,
+  WIKI_BROKEN_LINK_SPRING_STRENGTH,
   WIKI_CHARGE_STRENGTH,
   WIKI_TAG_LINK_DISTANCE,
   WIKI_TAG_REPULSION_STRENGTH,
@@ -88,8 +89,8 @@ function defaultFactory(el: HTMLElement): ForceGraphHandle {
 const PAGE_BLUE = '#2563eb';
 const PAGE_DIM = 'rgba(37, 99, 235, 0.15)';
 const FOCUS_RING = '#60a5fa';
-const TAG_FILL_LIGHT = 'rgba(22, 163, 74, 0.08)';
-const TAG_FILL_DARK = 'rgba(34, 197, 94, 0.08)';
+const TAG_FILL_LIGHT = 'rgba(22, 163, 74, 0.18)';
+const TAG_FILL_DARK = 'rgba(34, 197, 94, 0.18)';
 const TAG_RING_LIGHT = '#16a34a';
 const TAG_RING_DARK = '#22c55e';
 const TAG_DIM = 'rgba(34, 197, 94, 0.08)';
@@ -99,8 +100,8 @@ const PLACEHOLDER_AMBER = '#d97706';
 const PLACEHOLDER_DIM = 'rgba(217, 119, 6, 0.15)';
 const BROKEN_LINK_LIGHT = 'rgba(217, 119, 6, 0.55)';
 const BROKEN_LINK_DARK = 'rgba(217, 119, 6, 0.75)';
-const LINK_COLOR_LIGHT = 'rgba(148, 163, 184, 0.4)';
-const LINK_COLOR_DARK = 'rgba(200, 205, 220, 0.7)';
+const LINK_COLOR_LIGHT = 'rgba(148, 163, 184, 0.3)';
+const LINK_COLOR_DARK = 'rgba(200, 205, 220, 0.6)';
 const LINK_LIT_LIGHT = 'rgba(37, 99, 235, 0.75)';
 const LINK_LIT_DARK = 'rgba(147, 197, 253, 0.9)';
 const LINK_DIM_LIGHT = 'rgba(148, 163, 184, 0.08)';
@@ -108,8 +109,8 @@ const LINK_DIM_DARK = 'rgba(200, 205, 220, 0.1)';
 const TRANSPARENT = 'rgba(0, 0, 0, 0)';
 
 const BASE_NODE_REL_SIZE = 6;
-const MIN_NODE_REL_SIZE = 0.35;
-const MAX_NODE_REL_SIZE = 20;
+const MIN_NODE_REL_SIZE = 0.5;
+const MAX_NODE_REL_SIZE = 150;
 /** Screen-space link width; the engine already divides by zoom internally. */
 const BASE_LINK_WIDTH = 1.5;
 const MIN_ZOOM_K = 0.05;
@@ -354,9 +355,10 @@ export default function WikiGraphView({
     zoomStylesRef.current = applyZoomStyles;
 
     // Layout forces: wiki links between pages exert NO force (display-only
-    // edges — strength 0 makes the spring inert regardless of distance).
-    // Tag edges are short springs binding member pages to their tag node,
-    // with per-edge strength inversely proportional to the tag's member
+    // edges) except broken ones, which pull hard so a defect's two halves
+    // (linking page + missing target) sit adjacent. Tag edges are short
+    // springs binding member pages to their tag node, with per-edge strength
+    // inversely proportional to the tag's member
     // count: small distinctive tags pull hard, big tags pull weakly and
     // drift outward under tag↔tag repulsion. Accessors must return finite
     // numbers for every edge — d3 unary-pluses them into the force arrays.
@@ -368,7 +370,9 @@ export default function WikiGraphView({
           ? tagSpringStrength(
               tagMemberCountsRef.current.get(edgeEndpointId(link.target)) ?? 1
             )
-          : 0
+          : isBrokenLink(link)
+            ? WIKI_BROKEN_LINK_SPRING_STRENGTH
+            : 0
       );
     }
     const chargeForce = fg.d3Force('charge') as D3ChargeForce | undefined;

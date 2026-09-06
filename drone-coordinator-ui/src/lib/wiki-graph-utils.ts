@@ -40,6 +40,13 @@ export const WIKI_TAG_SEPARATION_STRENGTH = 90;
 export const WIKI_TAG_MAX_KICK = 50;
 
 /**
+ * Spring strength for wiki-link edges whose target page does not exist.
+ * Broken links pull hard so the two halves of a defect are visually adjacent
+ * — the linking page and its missing target end up next to each other.
+ */
+export const WIKI_BROKEN_LINK_SPRING_STRENGTH = 0.6;
+
+/**
  * Per-edge spring strength for a tag→page edge. Scales inversely with the
  * tag's member count, so the net pull on a tag stays roughly constant as it
  * grows (more members, each pulled more weakly), and members for which a tag
