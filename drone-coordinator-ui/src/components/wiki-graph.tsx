@@ -307,6 +307,21 @@ export default function WikiGraphView({
         ctx.stroke();
       }
 
+      if (node.kind === 'page') {
+        // Outline in the unlit link-edge color (theme-aware), mirroring the
+        // tag ring's per-frame stroke. Dimmed pages outline in the dimmed
+        // edge color so the spotlight reads consistently.
+        ctx.beginPath();
+        ctx.arc(positioned.x, positioned.y, radius, 0, 2 * Math.PI);
+        ctx.strokeStyle = dimmed
+          ? theme.dimLink
+          : node.exists
+            ? theme.linkColor
+            : PLACEHOLDER_AMBER;
+        ctx.lineWidth = 1.5 / globalScale;
+        ctx.stroke();
+      }
+
       if (focusedIdRef.current === node.id) {
         ctx.beginPath();
         ctx.arc(
@@ -514,7 +529,14 @@ export default function WikiGraphView({
       linkTargetsRef.current.get(sourceId)!.add(targetId);
       linkTargetsRef.current.get(targetId)!.add(sourceId);
     }
-    fg.graphData({ nodes, links: toEngineLinks(edges) });
+    // Draw order = array order in the engine (last drawn sits on top, and
+    // hover/click hit-testing picks the topmost drawn node). Stable-sort a
+    // copy so pages always layer above tag nodes — visually AND for pointer
+    // reception. The prop array itself stays unmutated for the page memo.
+    const orderedNodes = [...nodes].sort(
+      (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
+    );
+    fg.graphData({ nodes: orderedNodes, links: toEngineLinks(edges) });
     zoomStylesRef.current(fg, zoomRef.current.k);
     if (prevNodeCountRef.current !== nodes.length) {
       autoFitPendingRef.current = true;

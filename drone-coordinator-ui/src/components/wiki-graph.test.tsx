@@ -110,11 +110,76 @@ describe('WikiGraphView', () => {
 
   it('instantiates the graph and pushes data with the expected shape', () => {
     renderView();
-    expect(handle.graphData).toHaveBeenCalledWith({ nodes, links: edges });
+    const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as {
+      nodes: AugmentedGraphNode[];
+      links: AugmentedGraphEdge[];
+    };
+    // Nodes arrive kind-ordered (pages last); links arrive as canonical clones.
+    expect(pushed.links).toEqual(edges);
+    expect([...pushed.nodes].sort((a, b) => a.id.localeCompare(b.id))).toEqual(
+      [...nodes].sort((a, b) => a.id.localeCompare(b.id))
+    );
+    expect(pushed.nodes[pushed.nodes.length - 1].kind).toBe('page');
     expect(handle.nodeId).toHaveBeenCalledWith('id');
     expect(handle.linkSource).toHaveBeenCalledWith('source');
     expect(handle.linkTarget).toHaveBeenCalledWith('target');
     expect(handle.nodeCanvasObjectMode).toHaveBeenCalledWith('after');
+  });
+
+  it('orders pages after tags in the pushed data so pages layer on top', () => {
+    // Fixture is page-first; reverse it so the sort has real work to do.
+    const tagFirstNodes = [...nodes].reverse();
+    render(
+      <WikiGraphView
+        nodes={tagFirstNodes}
+        edges={edges}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as { nodes: AugmentedGraphNode[] };
+    const kinds = pushed.nodes.map(n => n.kind);
+    expect(kinds.filter(k => k === 'tag').length).toBeGreaterThan(0);
+    expect(kinds.indexOf('tag')).toBeLessThan(kinds.lastIndexOf('page'));
+    // The prop array itself stays unmutated.
+    expect(tagFirstNodes[0].kind).toBe('tag');
+  });
+
+  it('strokes page nodes with an outline in the link-edge color', () => {
+    renderView();
+    const canvasFn = accessorFrom('nodeCanvasObject') as (
+      node: AugmentedGraphNode,
+      ctx: CanvasRenderingContext2D,
+      globalScale: number
+    ) => void;
+    const ctx = {
+      beginPath: vi.fn(),
+      arc: vi.fn(),
+      stroke: vi.fn(),
+      fillRect: vi.fn(),
+      fillText: vi.fn(),
+      measureText: vi.fn(() => ({ width: 10 })),
+    } as unknown as CanvasRenderingContext2D;
+
+    const positioned = (node: AugmentedGraphNode) =>
+      ({ ...node, x: 5, y: 5 }) as (typeof nodes)[number];
+
+    canvasFn(positioned(nodes[0]), ctx, 1);
+    // A page gets exactly one stroke: its outline, in the link-edge color.
+    expect(ctx.stroke).toHaveBeenCalledTimes(1);
+    expect(ctx.strokeStyle).toBe('rgba(148, 163, 184, 0.3)');
+
+    // A missing page outlines in placeholder amber instead.
+    canvasFn(positioned(nodes[2]), ctx, 1);
+    expect(ctx.strokeStyle).toBe('#d97706');
+
+    // Tag rings use the tag color, never the page outline color.
+    canvasFn(positioned(nodes[4]), ctx, 1);
+    expect(ctx.strokeStyle).not.toBe('rgba(148, 163, 184, 0.3)');
   });
 
   it('wires node click to focus, hidden-tag clicks to nothing, and background to clear', () => {
