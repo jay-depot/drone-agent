@@ -935,6 +935,10 @@ export default function WikiGraphView({
     focusSetsRef.current = focusedNodeId
       ? buildFocusSets(edges, focusedNodeId)
       : null;
+    // The showdown candidate pool changes with focus (dimmed nodes drop
+    // out), so survivors must be recomputed for the new focus state — the
+    // pre-focus set can keep highlighted labels culled.
+    computeShowdownsRef.current();
     repaintRef.current(fg);
 
     if (focusedNodeId) {

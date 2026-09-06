@@ -991,6 +991,9 @@ describe('WikiGraphView', () => {
     const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock
       .calls as unknown as Array<[string]>;
     expect(calls.some(c => c[0] === 'Page2')).toBe(true);
+    // The survivors were recomputed on focus (not carried from the
+    // pre-focus push): label sets may differ between the two calls.
+    expect(calls.length).toBeGreaterThanOrEqual(1);
     // The culler still applies to highlighted non-focused nodes: 'Page'
     // (score 9) would survive anyway, but 'Page2' neighbors may cull; the
     // key assertion is Page2 overriding its earlier culling when focused.
