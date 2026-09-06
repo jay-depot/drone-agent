@@ -77,6 +77,15 @@ User brief: bring back some attraction on page-page links, falling off quickly a
 
 `WIKI_CHARGE_STRENGTH` −480 · `WIKI_TAG_LINK_DISTANCE` 55 · `WIKI_PAGE_LINK_DISTANCE` 180 · `WIKI_TAG_SPRING_STRENGTH` 0.1 · `WIKI_BROKEN_LINK_SPRING_STRENGTH` 0.6 · `WIKI_PAGE_LINK_SPRING_STRENGTH` 0.3 · `WIKI_TAG_REPULSION_STRENGTH` 1800 · `WIKI_TAG_REPULSION_DISTANCE_MAX` 12000 · `WIKI_TAG_MIN_SEPARATION_SCALE` 12 · `WIKI_TAG_SEPARATION_STRENGTH` 90 · `WIKI_TAG_MAX_KICK` 50 · `NODE_SIZE_SPREAD` 2 · `MIN_NODE_REL_SIZE` 0.5 / `MAX_NODE_REL_SIZE` 150 · `TAG_FILL` alpha 0.18 · `LINK_COLOR` alpha 0.3/0.6.
 
+## Round 11 (`13e6fa4`, 2026-09-06) — page-over-tag layering + page outlines
+
+User brief: pages always layer above tags (visually AND for click reception); page nodes get outlines in the link-edge color.
+
+- **Layering**: force-graph draw order = graphData array order (last drawn on top) and hit-testing picks the topmost drawn node, so ONE mechanism fixes both. Data push now stable-sorts a copy pages-last (`orderedNodes`); prop array stays unmutated for the page memo. Previously `buildAugmentedWikiGraph` emitted pages-first/tags-last, i.e. tags sat on top.
+- **Outlines**: page branch in `nodeCanvasObjectAccessor` strokes the node circle — `theme.linkColor` (unlit link-edge color, theme-aware) for existing pages, `PLACEHOLDER_AMBER` for missing, `theme.dimLink` while focus-dimmed; width 1.5/globalScale like the tag ring. Fill accessors untouched (fills stay PAGE_BLUE/amber).
+- **Tests**: tag-first fixture asserts pages-last ordering in pushed data + prop not mutated; fake-canvas asserts page = exactly 1 stroke in `rgba(148, 163, 184, 0.3)`, missing page outlines amber, tag ring never uses page-outline color; shape test rewritten content-level (pushed nodes kind-sorted, links = canonical clones) since array order changed by design.
+- **Validation**: graph tests 23/23, UI suite 136/136, tsc clean, lint clean, build ok, LSP clean.
+
 ## Notes / lessons
 
 - **many-body charge is scalar per node** — cannot repel a group from itself only; use a custom force via `d3Force(name, fn)`. Contract: `(alpha) => void` mutating vx/vy, `initialize(nodes)` re-run on graphData push.
