@@ -154,6 +154,15 @@ User: page node labels still inconsistently layered (everything else much nicer)
 - **Tests**: fake handle gained onRenderFramePost (and lost stale linkDirectionalArrowColor); label/gating/throttle tests assert via the frame pass with title-based lookups ('Page', '#t') instead of per-node invocation.
 - **Validation**: tsc clean, UI 146/146, component 29/29, lint, build, LSP clean.
 
+## Round 20 (`5efec74`, 2026-09-06) — reading-friendly label backgrounds
+
+User: labels need blur (or failing that, dark spread shadows) to stay legible over tag labels and link lines.
+
+- **Blurred scrim**: page label bands paint via `ctx.filter = 'blur(2px)'` where supported; `SUPPORTS_CANVAS_FILTER` probed once at module load (Safari's long-missing filter API falls back to a shadow-spread band: shadowColor 0.9 alpha + 3px/zoom blur around the same rect). Scrim pad widened 2→3px.
+- **Glyph shadow**: ALL labels (both kinds) draw with `shadowColor rgba(0,0,0,0.85)` + 2px/zoom blur — essential for the scrim-less green tag text.
+- **State hygiene**: every shadow/filter paint wrapped in save/restore so state never leaks into other ops.
+- **Validation**: tsc clean, UI 146/146, component 29/29 (fake ctxs gained save/restore), lint, build, LSP clean.
+
 ## Round 19 (`cdf9bcf`, 2026-09-06) — graph view fills available vertical space
 
 User: blank bit underneath the graph. Cause: container hardcoded `h-[calc(100vh-220px)]` — a magic guess at header/toolbar height that never matches the real chrome. Fix: page root becomes `flex h-full min-h-0 flex-col` in graph view (header `shrink-0`), container `flex-1 min-h-[480px]`; the engine already sizes from getBoundingClientRect on mount/resize, so the canvas tracks the corrected box. Grid view unchanged (natural scroll). No test changes — layout-only, covered by tsc/build; visual check on the real page pending user confirmation.
