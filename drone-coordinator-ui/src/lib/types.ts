@@ -132,6 +132,7 @@ export interface WikiGraphNode {
   id: string;
   title: string;
   exists: boolean;
+  wordCount: number;
   tags: string[];
   pitch?: string;
   scope: string;
@@ -146,6 +147,23 @@ export interface WikiGraphEdge {
 export interface WikiGraph {
   nodes: WikiGraphNode[];
   edges: WikiGraphEdge[];
+}
+
+export type GraphNodeKind = 'page' | 'tag';
+
+export type AugmentedGraphNode = WikiGraphNode & {
+  kind: GraphNodeKind;
+  /** force-graph nodeVal (area-proportional size); computed by applyNodeSizing. */
+  _val?: number;
+};
+
+export type AugmentedGraphEdge = Omit<WikiGraphEdge, 'kind'> & {
+  kind: 'link' | 'tag';
+};
+
+export interface AugmentedWikiGraph {
+  nodes: AugmentedGraphNode[];
+  edges: AugmentedGraphEdge[];
 }
 
 // Pagination types

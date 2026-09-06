@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import { useWikiPages } from '@/hooks/use-wiki-pages';
 import { useWikiGraph } from '@/hooks/use-wiki-graph';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
-import type { WikiPageMeta, WikiGraphNode } from '@/lib/types';
+import type { AugmentedGraphNode, WikiPageMeta } from '@/lib/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,11 @@ import { Dialog } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { paginationRange } from '@/lib/pagination';
-import { buildFocusedSubgraph } from '@/lib/wiki-graph-utils';
+import {
+  applyNodeSizing,
+  buildAugmentedWikiGraph,
+  filterOrphans,
+} from '@/lib/wiki-graph-utils';
 import WikiPageGrid from '@/components/wiki-page-grid';
 import WikiGraphView from '@/components/wiki-graph';
 
@@ -24,6 +28,8 @@ export default function WikiPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const graphView = searchParams.get('view') === 'graph';
   const focusedNodeId = searchParams.get('node');
+  const orphansVisible = searchParams.get('orphans') !== '0';
+  const tagsVisible = searchParams.get('tags') === '1';
   const { pages, setPages, loading, error } = useWikiPages();
   const { graph, error: graphError } = useWikiGraph(graphView);
   const [search, setSearch] = useState('');
@@ -50,12 +56,54 @@ export default function WikiPage() {
     setSearchParams(params);
   };
 
-  const focusedSubgraph =
-    graph && focusedNodeId ? buildFocusedSubgraph(graph, focusedNodeId) : null;
-  const focusedNode: WikiGraphNode | null =
-    graph && focusedNodeId
-      ? (graph.nodes.find(n => n.id === focusedNodeId) ?? null)
+  const setOrphansVisible = (next: boolean) => {
+    const params = new URLSearchParams(searchParams);
+    if (next) {
+      params.delete('orphans');
+    } else {
+      params.set('orphans', '0');
+    }
+    setSearchParams(params);
+  };
+
+  const setTagsVisible = (next: boolean) => {
+    const params = new URLSearchParams(searchParams);
+    if (next) {
+      params.set('tags', '1');
+    } else {
+      params.delete('tags');
+    }
+    setSearchParams(params);
+  };
+
+  const augmented = useMemo(() => {
+    if (!graph) return null;
+    const base = buildAugmentedWikiGraph(graph);
+    return {
+      nodes: applyNodeSizing(base.nodes, base.edges),
+      edges: base.edges,
+    };
+  }, [graph]);
+  const visible = useMemo(
+    () => (augmented && !orphansVisible ? filterOrphans(augmented) : augmented),
+    [augmented, orphansVisible]
+  );
+  const focusedNode =
+    visible && focusedNodeId
+      ? (visible.nodes.find(n => n.id === focusedNodeId) ?? null)
       : null;
+  const focusedTagMemberEdges =
+    visible && focusedNode?.kind === 'tag'
+      ? visible.edges.filter(
+          e => e.kind === 'tag' && e.target === focusedNode.id
+        )
+      : [];
+  const memberCount = focusedTagMemberEdges.length;
+  const memberPages = focusedTagMemberEdges
+    .map(edge =>
+      visible?.nodes.find(n => n.kind === 'page' && n.id === edge.source)
+    )
+    .filter((node): node is AugmentedGraphNode => Boolean(node));
 
   // Delete dialog
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -128,6 +176,26 @@ export default function WikiPage() {
           >
             {graphView ? 'Grid' : 'Graph'}
           </Button>
+          {graphView && (
+            <>
+              <Button
+                variant={tagsVisible ? 'outline' : 'ghost'}
+                size="sm"
+                onClick={() => setTagsVisible(!tagsVisible)}
+                title="Show tag nodes. Tag nodes also organize the layout when hidden."
+              >
+                Tags
+              </Button>
+              <Button
+                variant={orphansVisible ? 'outline' : 'ghost'}
+                size="sm"
+                onClick={() => setOrphansVisible(!orphansVisible)}
+                title="Show pages with no wiki links."
+              >
+                Orphans
+              </Button>
+            </>
+          )}
           {!graphView && (
             <Button onClick={() => navigate('/wiki/new')}>New Page</Button>
           )}
@@ -153,9 +221,15 @@ export default function WikiPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-semibold">{focusedNode.title}</h2>
-                  <p className="text-xs text-muted-foreground font-mono">
-                    {focusedNode.id}
-                  </p>
+                  {focusedNode.kind === 'page' ? (
+                    <p className="text-xs text-muted-foreground font-mono">
+                      {focusedNode.id}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Tag · {memberCount} page(s)
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -165,33 +239,56 @@ export default function WikiPage() {
                   >
                     Show all
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => navigate(`/wiki/${focusedNode.id}`)}
-                  >
-                    Open full page
-                  </Button>
+                  {focusedNode.kind === 'page' && (
+                    <Button
+                      size="sm"
+                      onClick={() => navigate(`/wiki/${focusedNode.id}`)}
+                    >
+                      Open full page
+                    </Button>
+                  )}
                 </div>
               </div>
-              {focusedNode.pitch && (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {focusedNode.pitch}
-                </p>
-              )}
-              {focusedNode.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {focusedNode.tags.map(tag => (
-                    <Badge key={tag} variant="secondary" className="text-xs">
-                      {tag}
+              {focusedNode.kind === 'tag' ? (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {memberPages.map(page => (
+                    <Badge
+                      key={page.id}
+                      variant="secondary"
+                      className="text-xs"
+                    >
+                      {page.title}
                     </Badge>
                   ))}
                 </div>
+              ) : (
+                <>
+                  {focusedNode.pitch && (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {focusedNode.pitch}
+                    </p>
+                  )}
+                  {focusedNode.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {focusedNode.tags.map(tag => (
+                        <Badge
+                          key={tag}
+                          variant="secondary"
+                          className="text-xs"
+                        >
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
           <WikiGraphView
-            nodes={focusedSubgraph?.nodes ?? graph?.nodes ?? []}
-            edges={focusedSubgraph?.edges ?? graph?.edges ?? []}
+            nodes={visible?.nodes ?? []}
+            edges={visible?.edges ?? []}
+            tagsVisible={tagsVisible}
             focusedNodeId={focusedNodeId}
             onNodeFocus={setFocusedNode}
             onClearFocus={() => setFocusedNode(null)}

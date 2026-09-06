@@ -449,6 +449,8 @@ export type WikiGraphNode = {
   title: string;
   /** False for broken-link placeholder nodes (a linked page that doesn't exist). */
   exists: boolean;
+  /** Number of whitespace-separated words in the page body (0 for placeholders). */
+  wordCount: number;
   tags: string[];
   pitch?: string;
   scope: 'beacon' | 'coordinator';
@@ -491,10 +493,12 @@ export async function buildGraph(): Promise<WikiGraph> {
   for (const meta of metas) {
     const page = await readPage(meta.id);
     if (!page) continue;
+    const wordCount = page.content.split(/\s+/).filter(Boolean).length;
     nodesById.set(page.id, {
       id: page.id,
       title: page.title,
       exists: true,
+      wordCount,
       tags: page.tags,
       ...(page.pitch ? { pitch: page.pitch } : {}),
       scope: page.scope,
@@ -519,6 +523,7 @@ export async function buildGraph(): Promise<WikiGraph> {
           id: target,
           title: target,
           exists: false,
+          wordCount: 0,
           tags: [],
           scope: page.scope,
         });

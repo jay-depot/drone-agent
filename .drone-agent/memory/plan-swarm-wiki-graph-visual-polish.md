@@ -55,7 +55,9 @@ User decisions locked during grilling (all confirmed):
 ```ts
 export type GraphNodeKind = 'page' | 'tag';
 export type AugmentedGraphNode = WikiGraphNode & { kind: GraphNodeKind };
-export type AugmentedGraphEdge = Omit<WikiGraphEdge, 'kind'> & { kind: 'link' | 'tag' };
+export type AugmentedGraphEdge = Omit<WikiGraphEdge, 'kind'> & {
+  kind: 'link' | 'tag';
+};
 ```
 
 Server `kind` stays `'link'`-only; tag edges are client-derived.

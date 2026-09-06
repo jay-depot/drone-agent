@@ -447,5 +447,39 @@ describe('Wiki Storage', () => {
         'A one-sentence pitch about page A.'
       );
     });
+
+    it('carries the word count onto graph nodes', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-a',
+        'Page A',
+        'coordinator',
+        'one two three four five'
+      );
+
+      const graph = await buildGraph();
+      expect(graph.nodes.find(n => n.id === 'page-a')!.wordCount).toBe(5);
+    });
+
+    it('counts words in whitespace-heavy content correctly', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-a',
+        'Page A',
+        'coordinator',
+        '  alpha\n\n  beta\t\tgamma  \n delta  '
+      );
+
+      const graph = await buildGraph();
+      expect(graph.nodes.find(n => n.id === 'page-a')!.wordCount).toBe(4);
+    });
+
+    it('reports wordCount 0 for broken-link placeholder nodes', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage('page-a', 'Page A', 'coordinator', 'See [[missing]].');
+
+      const graph = await buildGraph();
+      expect(graph.nodes.find(n => n.id === 'missing')!.wordCount).toBe(0);
+    });
   });
 });
