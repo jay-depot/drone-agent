@@ -105,6 +105,12 @@ User (after Round 12 made labels actually render): falloff on zoom-out should be
 - **Distinct tag labels**: `TAG_LABEL_LIGHT/DARK` (#15803d / #4ade80) through `theme.tagLabel`; tag labels draw in tag green, page labels stay white on the shared scrim band.
 - **Validation**: tsc clean, UI 137/137, graph tests 59/59, lint, build, LSP clean.
 
+## Round 14 (`c9112eb`, 2026-09-06) — tag labels centered inside their nodes
+
+- Tag label textY = `positioned.y - fontSize/2` (visual center, textBaseline 'top'); the dark scrim band is tag-skipped (green text directly on the translucent green fill reads as a chip). Page labels unchanged: below the node at `y + radius + 3/k` with the scrim.
+- Test: tag fillRect not called + tagY < node.y; page fillRect still exactly 1.
+- Validation: tsc clean, UI 137/137, component tests 24/24, lint, build, LSP clean.
+
 ## Round 11b (`ddc8e44`, 2026-09-06) — outline visibility fix
 
 User report: layering fix worked, outlines not visible. Root cause: the outline borrowed `theme.linkColor`, whose 0.3 alpha was tuned DOWN in Round 9 for receding hairline edges — correct hue, invisible as a 1.5px ring (tag rings read because they are solid hex). Fix: dedicated `PAGE_OUTLINE_LIGHT/DARK` constants at 0.8 alpha in the same slate family (`rgba(100,116,139,.8)` light / `rgba(148,163,184,.8)` dark), wired through the theme object as `theme.pageOutline`. Missing-page amber + dim behavior unchanged. Lesson: reusing a color tuned for one stroke width/context at another is a visibility bug class — when the user says "same color as X" for a STROKE, check X's alpha first.
