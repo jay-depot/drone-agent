@@ -165,10 +165,18 @@ User: page node labels still inconsistently layered (everything else much nicer)
 ## Round 22 (`198ab69`, 2026-09-06) — live wiki graph via WS wiki.changed; dark-mode label scrims
 
 **Live updates**: coordinator `PUT`/`DELETE /wiki/:pageId` now `publishMutationEvent({ sessionId: pageId, eventType: 'wiki.changed', payload: { pageId } })` (pubsub envelope is `{sessionId, eventType, payload}` — sessionId is the routing key). `useWikiGraph` subscribes via `useWebSocket().subscribe('wiki.changed')`, refetch debounced 500ms (bursts collapse), guarded by `active`. Zero `wiki-graph.tsx` changes — the component fully reacts to new `graph` objects (sizing → showdown → focus). Camera: refit on data push while zoom-to-fit armed = intended for surprise clusters.
+
 - **Tests**: route test via `vi.mock('../src/ws-pubsub.js')` with relative-count asserts (mock persists across beforeEach app rebuilds); hook tests (`use-wiki-graph.test.tsx`): mock auth+ws modules, burst of 3 events → 1 fetch, real timers + `vi.waitFor` (fake timers' advanceTimersByTimeAsync deadlocks with waitFor polling); wiki.test.tsx wraps renders in `WebSocketProvider` — AuthProvider must be OUTSIDE it (WebSocketProvider consumes useAuth).
 - **Dark label scrims**: `LABEL_SCRIM_LIGHT rgba(15,23,42,.55)` (unchanged) / `LABEL_SCRIM_DARK rgba(0,0,0,.72)` through `theme.labelScrim`, used by both blur and shadow-spread paths.
 - **Debugging war story**: fake-Subscriber literal+cast produced `sub.ws.send is not a function` even though the object had send — resolved by vi.mock instead of fake-WebSocket construction (probes proved route+test share one module instance; src vs dist are separate singletons).
 - **Validation**: coordinator tsc+tests 4/4, UI tsc+149/149 (21 files), lint, build, LSP clean.
+
+## Round 23 (`330c8c9`, 2026-09-06) — floating focus panel; focused-label showdown override
+
+- **Floating panel**: focus aside is `absolute left-4 top-4 bottom-4 z-20 w-80 shadow-lg` over the graph (relative row wrapper), no longer a flex sibling — graph regains full width, panel keeps size + independent scroll + drop shadow.
+- **Focused label override**: paintLabels bypasses the survivor gate for `focusedIdRef.current === node.id`; dimmed nodes were already excluded from candidacy, so only highlighted labels compete and the focused node can never lose its own title. Culling unchanged for all other highlighted labels.
+- **Test**: focused low-score node's label draws despite having lost the duel unfocused.
+- **Validation**: tsc clean, UI 150/150 (21 files), component 30/30, lint, build, LSP clean.
 
 ## Round 20 (`5efec74`, 2026-09-06) — reading-friendly label backgrounds
 
