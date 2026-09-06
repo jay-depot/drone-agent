@@ -30,11 +30,21 @@ export const WIKI_CHARGE_STRENGTH = -240;
  * the clusters apart. (The stock charge force repels tags from their own
  * members too — a scalar per node cannot distinguish neighbors — which
  * expelled tag nodes to the graph periphery.)
+ *
+ * Big tags need disproportionate separation: their many member springs
+ * anchor them to the same centroid when member sets overlap. The
+ * inverse-square term therefore scales with the geometric mean of the two
+ * tags' member counts, and a soft exclusion shell (sized by the tags'
+ * rendered radii) makes close crowding impossible. Per-pair kicks are
+ * clamped so stronger forces cannot launch nodes explosively.
  */
 export const WIKI_TAG_LINK_DISTANCE = 55;
 export const WIKI_TAG_SPRING_STRENGTH = 1;
-export const WIKI_TAG_REPULSION_STRENGTH = 300;
+export const WIKI_TAG_REPULSION_STRENGTH = 900;
 export const WIKI_TAG_REPULSION_DISTANCE_MAX = 500;
+export const WIKI_TAG_MIN_SEPARATION_SCALE = 4.5;
+export const WIKI_TAG_SEPARATION_STRENGTH = 40;
+export const WIKI_TAG_MAX_KICK = 25;
 
 /**
  * d3 link-force default strength (1 / min degree of the two endpoints,
@@ -49,6 +59,25 @@ export function d3DefaultLinkStrength(
   const targetDegree = totalEdgeDegrees.get(edgeEndpointId(edge.target)) ?? 0;
   const minDegree = Math.min(sourceDegree, targetDegree);
   return minDegree > 0 ? 1 / minDegree : 0;
+}
+
+/**
+ * Member count for a tag node (its rendered size source). Falls back to the
+ * single `tags` entry for synthetic fixtures.
+ */
+function tagMembers(node: SimNode): number {
+  if (node._val && node._val > 0) return node._val;
+  return node.tags.length || 1;
+}
+
+/**
+ * Rendered graph-space radius: the engine draws radius =
+ * sqrt(nodeVal) * nodeRelSize / 2, and the component's zoom compensation
+ * sets nodeRelSize ~= 6/k, canceling k at constant screen size. Uses the
+ * base 6 so the shell matches on-screen appearance at any zoom.
+ */
+function tagRadius(node: SimNode): number {
+  return (Math.sqrt(node._val ?? 1) * 6) / 2;
 }
 
 /** A simulation node as d3 sees it: position + velocity fields. */
@@ -92,11 +121,31 @@ export function createTagRepulsionForce(strength: number): TagRepulsionForce {
           dx = 1;
           distSq = 1;
         }
-        if (distSq > WIKI_TAG_REPULSION_DISTANCE_MAX ** 2) continue;
         const dist = Math.sqrt(distSq);
-        const f = k / distSq;
-        const fx = (dx / dist) * f;
-        const fy = (dy / dist) * f;
+
+        // Size-scaled inverse-square: big tags (many members) repel
+        // proportionally to the geometric mean of their member counts.
+        const sizeFactor = Math.sqrt(
+          Math.max(1, tagMembers(a)) * Math.max(1, tagMembers(b))
+        );
+        let kick = 0;
+        if (distSq <= WIKI_TAG_REPULSION_DISTANCE_MAX ** 2) {
+          kick += (k * sizeFactor) / distSq;
+        }
+
+        // Soft exclusion shell: tags may not crowd inside the sum of their
+        // rendered radii (the engine renders radius = sqrt(val) * relSize /
+        // 2 scaled by zoom compensation); spring-like push when violated.
+        const minDist =
+          tagRadius(a) + tagRadius(b) + WIKI_TAG_MIN_SEPARATION_SCALE;
+        if (dist < minDist) {
+          const overlap = minDist - dist;
+          kick += overlap * WIKI_TAG_SEPARATION_STRENGTH * alpha;
+        }
+
+        if (kick === 0) continue;
+        const fx = (dx / dist) * Math.min(kick, WIKI_TAG_MAX_KICK);
+        const fy = (dy / dist) * Math.min(kick, WIKI_TAG_MAX_KICK);
         a.vx = (a.vx ?? 0) + fx;
         a.vy = (a.vy ?? 0) + fy;
         b.vx = (b.vx ?? 0) - fx;
@@ -108,7 +157,6 @@ export function createTagRepulsionForce(strength: number): TagRepulsionForce {
   (force as TagRepulsionForce).initialize = (nodes: SimNode[]) => {
     tagNodes = nodes.filter(node => node.kind === 'tag');
   };
-
   return force as TagRepulsionForce;
 }
 

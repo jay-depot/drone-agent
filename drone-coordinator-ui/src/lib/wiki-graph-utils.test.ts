@@ -153,6 +153,87 @@ describe('createTagRepulsionForce', () => {
     expect(Math.abs(tagA.vx ?? 0)).toBeGreaterThan(0);
     expect(Math.abs(tagA.vx ?? 0)).toBeLessThan(1000);
   });
+
+  it('kicks big tags harder than small tags at the same distance', () => {
+    const force = createTagRepulsionForce(900);
+    const bigA = simNode({
+      id: 'tag:a',
+      kind: 'tag',
+      _val: 12,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    const bigB = simNode({
+      id: 'tag:b',
+      kind: 'tag',
+      _val: 12,
+      x: 60,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    force.initialize([bigA, bigB]);
+    force(0.5);
+    const bigKick = Math.abs(bigA.vx ?? 0);
+
+    const smallA = simNode({
+      id: 'tag:c',
+      kind: 'tag',
+      _val: 1,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    const smallB = simNode({
+      id: 'tag:d',
+      kind: 'tag',
+      _val: 1,
+      x: 60,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    force.initialize([smallA, smallB]);
+    force(0.5);
+    const smallKick = Math.abs(smallA.vx ?? 0);
+
+    // sizeFactor = sqrt(12*12) = 12 for the big pair, 1 for the small pair.
+    expect(bigKick).toBeCloseTo(smallKick * 12, 5);
+    expect(bigKick).toBeGreaterThan(smallKick);
+  });
+
+  it("pushes overlapping tags out of each other's rendered shell", () => {
+    const force = createTagRepulsionForce(900);
+    // _val 4 -> radius 3 each; shell = 3+3+4.5 = 10.5. Place at dist 5.
+    const tagA = simNode({
+      id: 'tag:a',
+      kind: 'tag',
+      _val: 4,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    const tagB = simNode({
+      id: 'tag:b',
+      kind: 'tag',
+      _val: 4,
+      x: 5,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    force.initialize([tagA, tagB]);
+    force(0.5);
+
+    // Inverse-square (900*0.5*4/25 = 72) plus shell (5.5*40*0.5 = 110)
+    // both exceed the per-pair clamp. A sits left of B, so A is pushed -x.
+    expect(tagA.vx).toBe(-25);
+    expect(tagB.vx).toBe(25);
+  });
 });
 
 describe('d3DefaultLinkStrength', () => {
