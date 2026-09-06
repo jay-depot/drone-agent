@@ -7,6 +7,7 @@ import {
   WIKI_PAGE_LINK_SPRING_STRENGTH,
   WIKI_TAG_SPRING_STRENGTH,
 } from '@/lib/wiki-graph-utils';
+import { SHOWDOWN_RECOMPUTE_MS } from './wiki-graph';
 import WikiGraphView, { type ForceGraphHandle } from './wiki-graph';
 
 function makeFakeHandle() {
@@ -32,6 +33,7 @@ function makeFakeHandle() {
     'onNodeClick',
     'onBackgroundClick',
     'onZoom',
+    'onEngineTick',
     'onEngineStop',
     'width',
     'height',
@@ -195,6 +197,8 @@ describe('WikiGraphView', () => {
           kind: 'tag',
         }),
         _val: 1,
+        x: 0,
+        y: 0,
       },
       {
         ...pageNode({
@@ -204,6 +208,8 @@ describe('WikiGraphView', () => {
           kind: 'tag',
         }),
         _val: 5,
+        x: 100,
+        y: 100,
       },
     ];
     render(
@@ -443,6 +449,8 @@ describe('WikiGraphView', () => {
     renderView();
     const fitCalls = () =>
       (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls.length;
+    // Engine stop must recompute showdowns before any other stop logic.
+    expect(handle.onEngineTick).toBeDefined();
     const initial = fitCalls();
 
     const stopCb = accessorFrom('onEngineStop') as () => void;
@@ -686,5 +694,156 @@ describe('WikiGraphView', () => {
     expect(strengthAccessor(edges[3])).toBeCloseTo(
       WIKI_TAG_SPRING_STRENGTH / 2
     );
+  });
+
+  it('showdown gates labels: overlapping low-score page label hides, tag and page showdowns are independent', () => {
+    // Two pages overlapping labels; high score wins the page showdown.
+    // Two tags overlapping; tag showdown is independent of pages.
+    const overlapped = [
+      ...nodes,
+      { ...pageNode({ id: 'page', title: 'Page' }), _val: 9, x: 0, y: 0 },
+      {
+        ...pageNode({ id: 'page2', title: 'Page2' }),
+        _val: 2,
+        x: 3,
+        y: 0,
+      },
+      {
+        ...pageNode({ id: 'tag:t', title: 't', tags: ['t'], kind: 'tag' }),
+        _val: 4,
+        x: 0,
+        y: 50,
+      },
+      {
+        ...pageNode({ id: 'tag:u', title: 'u', tags: ['u'], kind: 'tag' }),
+        _val: 1,
+        x: 2,
+        y: 50,
+      },
+    ];
+    render(
+      <WikiGraphView
+        nodes={overlapped}
+        edges={edges}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const canvasFn = accessorFrom('nodeCanvasObject') as (
+      node: AugmentedGraphNode,
+      ctx: CanvasRenderingContext2D,
+      globalScale: number
+    ) => void;
+    // k=4 drops the zoom threshold to 0, making every positioned node a
+    // candidate — isolating showdown behavior from threshold filtering.
+    // Firing it now recomputes survivors against the rendered fixture.
+    const zoomCb = accessorFrom('onZoom') as (t: {
+      k: number;
+      x: number;
+      y: number;
+    }) => void;
+    zoomCb({ k: 4, x: 0, y: 0 });
+    const mkCtx = () =>
+      ({
+        beginPath: vi.fn(),
+        arc: vi.fn(),
+        stroke: vi.fn(),
+        fillRect: vi.fn(),
+        fillText: vi.fn(),
+        measureText: vi.fn(() => ({ width: 10 })),
+      }) as unknown as CanvasRenderingContext2D;
+    const draw = (node: (typeof nodes)[number]) => {
+      const ctx = mkCtx();
+      canvasFn(
+        { ...node, x: node.x ?? 0, y: node.y ?? 0 } as (typeof nodes)[number],
+        ctx,
+        1
+      );
+      return (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls.length > 0;
+    };
+
+    // 'page2' (score 2) overlaps 'page' (score 9) -> culled. Tag showdown
+    // unaffected: 'tag:u' (score 1) overlaps 'tag:t' (score 4) -> culled,
+    // but only within the tag list.
+    expect(draw(overlapped[5])).toBe(true);
+    expect(draw(overlapped[6])).toBe(false);
+    expect(draw(overlapped[7])).toBe(true);
+    expect(draw(overlapped[8])).toBe(false);
+  });
+
+  it('recomputes showdowns on engine ticks, throttled to 100ms', () => {
+    const nowSpy = vi.spyOn(performance, 'now');
+    nowSpy.mockReturnValue(1000);
+    try {
+      const drifting = [
+        ...nodes,
+        { ...pageNode({ id: 'page', title: 'Page' }), _val: 9, x: 0, y: 0 },
+        {
+          ...pageNode({ id: 'page2', title: 'Page2' }),
+          _val: 2,
+          x: 0,
+          y: 200,
+        },
+      ];
+      const graphProps = {
+        nodes: drifting,
+        edges,
+        tagsVisible: true,
+        onNodeFocus: vi.fn(),
+        onClearFocus: vi.fn(),
+        forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+      };
+      render(<WikiGraphView {...graphProps} />);
+      const canvasFn = accessorFrom('nodeCanvasObject') as (
+        node: AugmentedGraphNode,
+        ctx: CanvasRenderingContext2D,
+        globalScale: number
+      ) => void;
+      const zoomCb = accessorFrom('onZoom') as (t: {
+        k: number;
+        x: number;
+        y: number;
+      }) => void;
+      // Threshold-free candidates; see the showdown-gate test above.
+      zoomCb({ k: 4, x: 0, y: 0 });
+      const tickCb = accessorFrom('onEngineTick') as () => void;
+      const draws = (node: AugmentedGraphNode) => {
+        const ctx = {
+          beginPath: vi.fn(),
+          arc: vi.fn(),
+          stroke: vi.fn(),
+          fillRect: vi.fn(),
+          fillText: vi.fn(),
+          measureText: vi.fn(() => ({ width: 10 })),
+        } as unknown as CanvasRenderingContext2D;
+        canvasFn(node, ctx, 1);
+        return (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls.length > 0;
+      };
+      const page2 = drifting[6] as (typeof drifting)[number];
+
+      // Initially far apart: both labels draw.
+      expect(draws(page2)).toBe(true);
+
+      // page2 drifts into page's label rect. The next tick recomputes and
+      // culls it. An immediate second tick within the throttle window must
+      // NOT recompute (page2 escapes the overlap; the stale culling holds).
+      page2.x = 3;
+      page2.y = 0;
+      tickCb();
+      expect(draws(page2)).toBe(false);
+      page2.x = 0;
+      page2.y = 200;
+      tickCb();
+      expect(draws(page2)).toBe(false);
+
+      // After the throttle window, a tick recomputes with fresh positions.
+      nowSpy.mockReturnValue(1000 + SHOWDOWN_RECOMPUTE_MS + 1);
+      tickCb();
+      expect(draws(page2)).toBe(true);
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 });

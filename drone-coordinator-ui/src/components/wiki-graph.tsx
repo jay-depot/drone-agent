@@ -15,6 +15,10 @@ import {
   WIKI_TAG_REPULSION_STRENGTH,
   wikiLinkDegrees,
 } from '@/lib/wiki-graph-utils';
+import {
+  selectShowdownSurvivors,
+  type ShowdownCandidate,
+} from '@/lib/label-showdown';
 import type { AugmentedGraphEdge, AugmentedGraphNode } from '@/lib/types';
 
 /**
@@ -58,6 +62,7 @@ export interface ForceGraphHandle {
   onZoom(
     cb: (transform: { k: number; x: number; y: number }) => void
   ): ForceGraphHandle;
+  onEngineTick(cb: () => void): ForceGraphHandle;
   onEngineStop(cb: () => void): ForceGraphHandle;
   d3Force(forceName: string): unknown;
   d3Force(forceName: string, forceFn: unknown): ForceGraphHandle;
@@ -151,6 +156,11 @@ const isFiniteNumber = (value: number | undefined): value is number =>
 /** Fallback destination set for pages with no wiki links. */
 const NO_LINK_TARGETS: ReadonlySet<string> = new Set();
 
+/** Showdown recomputes at most this often while the engine is ticking. */
+export const SHOWDOWN_RECOMPUTE_MS = 100;
+/** Approximate per-character width when no 2D context exists (tests/jsdom). */
+const FALLBACK_CHAR_WIDTH = 0.6;
+
 export default function WikiGraphView({
   nodes,
   edges,
@@ -197,6 +207,13 @@ export default function WikiGraphView({
   const tagMemberCountsRef = useRef(new Map<string, number>());
   /** Unique wiki-link destinations per page id; scales page-link springs. */
   const linkTargetsRef = useRef(new Map<string, Set<string>>());
+  /** Showdown survivors: labels allowed to draw this kind's labels. */
+  const pageSurvivorsRef = useRef<Set<string>>(new Set());
+  const tagSurvivorsRef = useRef<Set<string>>(new Set());
+  /** Throttle clock for tick-driven showdown recomputes. */
+  const nextTickComputeAtRef = useRef(0);
+  /** Offscreen 2D context for label measurement; null where unsupported. */
+  const measureCtxRef = useRef<CanvasRenderingContext2D | null>(null);
 
   // Set by the mount effect so later effects can restyle without re-running
   // the graph setup. Accessors live inside the mount effect: they close over
@@ -205,6 +222,74 @@ export default function WikiGraphView({
     () => {}
   );
   const repaintRef = useRef<(fg: ForceGraphHandle) => void>(() => {});
+
+  // Showdown recompute reads only refs, so every effect/callback can call the
+  // latest instance through this ref without stale-closure hazards.
+  const computeShowdownsRef = useRef(() => {});
+  computeShowdownsRef.current = () => {
+    const k = zoomRef.current.k;
+    const pageCandidates: ShowdownCandidate[] = [];
+    const tagCandidates: ShowdownCandidate[] = [];
+    if (isFiniteNumber(k) && k > 0) {
+      const measureCtx = measureCtxRef.current;
+      const measure = (label: string, fontSize: number) => {
+        if (measureCtx) {
+          measureCtx.font = `${fontSize}px Inter, system-ui, sans-serif`;
+          return measureCtx.measureText(label).width;
+        }
+        return label.length * fontSize * FALLBACK_CHAR_WIDTH;
+      };
+      for (const node of nodesRef.current) {
+        const positioned = node as PositionedNode;
+        if (positioned.x === undefined || positioned.y === undefined) continue;
+        const isTag = node.kind === 'tag';
+        if (isTag && !tagsVisibleRef.current) continue;
+        // Same candidate filter as the draw gate: the zoom-tiered threshold.
+        const degree = isTag
+          ? (node._val ?? 0)
+          : (linkDegreesRef.current.get(node.id) ?? 0);
+        const maxDegree = isTag
+          ? maxTagMembersRef.current
+          : maxLinkDegreeRef.current;
+        if (degree < labelDegreeThreshold(k, maxDegree)) continue;
+
+        const fontSize = Math.max(11 / k, 4);
+        const label = isTag ? `#${node.title}` : node.title;
+        const halfW = measure(label, fontSize) / 2 + 2 / k;
+        const radius = Math.sqrt(node._val ?? 1) * nodeRelSizeRef.current;
+        const rect = isTag
+          ? {
+              // Tag labels center inside the disc; no scrim band.
+              x1: positioned.x - halfW,
+              y1: positioned.y - fontSize / 2,
+              x2: positioned.x + halfW,
+              y2: positioned.y + fontSize / 2,
+            }
+          : {
+              // Page labels sit below the node; rect covers text + scrim.
+              x1: positioned.x - halfW,
+              y1: positioned.y + radius + 2 / k,
+              x2: positioned.x + halfW,
+              y2: positioned.y + radius + 2 / k + fontSize + 3 / k,
+            };
+        (isTag ? tagCandidates : pageCandidates).push({
+          id: node.id,
+          score: node._val ?? (isTag ? 0 : 1),
+          rect,
+        });
+      }
+    }
+    pageSurvivorsRef.current = selectShowdownSurvivors(pageCandidates);
+    tagSurvivorsRef.current = selectShowdownSurvivors(tagCandidates);
+  };
+
+  useEffect(() => {
+    const canvas = document.createElement('canvas');
+    measureCtxRef.current = canvas.getContext('2d');
+    return () => {
+      measureCtxRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -354,6 +439,15 @@ export default function WikiGraphView({
           ? maxTagMembersRef.current
           : maxLinkDegreeRef.current;
       if (degree < labelDegreeThreshold(zoomRef.current.k, maxDegree)) return;
+      // Showdown gate: the threshold picked candidates; the per-frame
+      // survivor sets (recomputed on push/zoom/throttled ticks) decide which
+      // labels actually draw. Applied unconditionally — no focus special
+      // case, since dimmed nodes already return above.
+      const survivors =
+        node.kind === 'tag'
+          ? tagSurvivorsRef.current
+          : pageSurvivorsRef.current;
+      if (!survivors.has(node.id)) return;
 
       const fontSize = Math.max(11 / globalScale, 4);
       ctx.font = `${fontSize}px Inter, system-ui, sans-serif`;
@@ -483,8 +577,17 @@ export default function WikiGraphView({
           return;
         zoomRef.current = transform;
         applyZoomStyles(fg, transform.k);
+        computeShowdownsRef.current();
+      })
+      .onEngineTick(() => {
+        const now = performance.now();
+        if (now >= nextTickComputeAtRef.current) {
+          nextTickComputeAtRef.current = now + SHOWDOWN_RECOMPUTE_MS;
+          computeShowdownsRef.current();
+        }
       })
       .onEngineStop(() => {
+        computeShowdownsRef.current();
         if (autoFitPendingRef.current) {
           if (
             nodesRef.current.some(
@@ -563,6 +666,7 @@ export default function WikiGraphView({
       (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
     );
     fg.graphData({ nodes: orderedNodes, links: toEngineLinks(edges) });
+    computeShowdownsRef.current();
     zoomStylesRef.current(fg, zoomRef.current.k);
     if (prevNodeCountRef.current !== nodes.length) {
       autoFitPendingRef.current = true;
