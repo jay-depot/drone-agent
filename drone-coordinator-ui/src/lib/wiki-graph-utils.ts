@@ -21,8 +21,8 @@ export const LABEL_THRESHOLD_MAX_DEGREE = 10;
  * Layout spread: link rest length and per-node repulsion. Higher values
  * spread connected nodes further apart; tuned for label legibility.
  */
-export const WIKI_LINK_DISTANCE = 90;
-export const WIKI_CHARGE_STRENGTH = -240;
+export const WIKI_LINK_DISTANCE = 180;
+export const WIKI_CHARGE_STRENGTH = -480;
 
 /**
  * Tag-layer forces: stiff short springs pull member pages into tight
@@ -39,12 +39,12 @@ export const WIKI_CHARGE_STRENGTH = -240;
  * clamped so stronger forces cannot launch nodes explosively.
  */
 export const WIKI_TAG_LINK_DISTANCE = 55;
-export const WIKI_TAG_SPRING_STRENGTH = 1;
-export const WIKI_TAG_REPULSION_STRENGTH = 900;
-export const WIKI_TAG_REPULSION_DISTANCE_MAX = 500;
-export const WIKI_TAG_MIN_SEPARATION_SCALE = 4.5;
-export const WIKI_TAG_SEPARATION_STRENGTH = 40;
-export const WIKI_TAG_MAX_KICK = 25;
+export const WIKI_TAG_SPRING_STRENGTH = 0.1;
+export const WIKI_TAG_REPULSION_STRENGTH = 1800;
+export const WIKI_TAG_REPULSION_DISTANCE_MAX = 12000;
+export const WIKI_TAG_MIN_SEPARATION_SCALE = 12;
+export const WIKI_TAG_SEPARATION_STRENGTH = 90;
+export const WIKI_TAG_MAX_KICK = 50;
 
 /**
  * d3 link-force default strength (1 / min degree of the two endpoints,
