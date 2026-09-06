@@ -108,6 +108,8 @@ const LINK_COLOR_LIGHT = 'rgba(148, 163, 184, 0.3)';
 const LINK_COLOR_DARK = 'rgba(200, 205, 220, 0.6)';
 const PAGE_OUTLINE_LIGHT = 'rgba(100, 116, 139, 0.8)';
 const PAGE_OUTLINE_DARK = 'rgba(148, 163, 184, 0.8)';
+const TAG_LABEL_LIGHT = '#15803d';
+const TAG_LABEL_DARK = '#4ade80';
 const LINK_LIT_LIGHT = 'rgba(37, 99, 235, 0.75)';
 const LINK_LIT_DARK = 'rgba(147, 197, 253, 0.9)';
 const LINK_DIM_LIGHT = 'rgba(148, 163, 184, 0.08)';
@@ -189,6 +191,8 @@ export default function WikiGraphView({
   const prevNodeCountRef = useRef<number | null>(null);
   /** Max wiki-link degree in the current data; scales label thresholds. */
   const maxLinkDegreeRef = useRef(0);
+  /** Max tag member count in the current data; scales tag label thresholds. */
+  const maxTagMembersRef = useRef(0);
   /** Member count per tag node id (kind-'tag' edges); scales tag springs. */
   const tagMemberCountsRef = useRef(new Map<string, number>());
   /** Unique wiki-link destinations per page id; scales page-link springs. */
@@ -217,6 +221,7 @@ export default function WikiGraphView({
       theme.tagFill = dark ? TAG_FILL_DARK : TAG_FILL_LIGHT;
       theme.tagRing = dark ? TAG_RING_DARK : TAG_RING_LIGHT;
       theme.pageOutline = dark ? PAGE_OUTLINE_DARK : PAGE_OUTLINE_LIGHT;
+      theme.tagLabel = dark ? TAG_LABEL_DARK : TAG_LABEL_LIGHT;
     };
     const theme = {
       linkColor: LINK_COLOR_LIGHT,
@@ -226,6 +231,7 @@ export default function WikiGraphView({
       tagFill: TAG_FILL_LIGHT,
       tagRing: TAG_RING_LIGHT,
       pageOutline: PAGE_OUTLINE_LIGHT,
+      tagLabel: TAG_LABEL_LIGHT,
     };
     applyThemeColors();
 
@@ -337,19 +343,24 @@ export default function WikiGraphView({
 
       if (dimmed) return;
       if (node.kind === 'tag' && !tagsVisibleRef.current) return;
-      const degree = linkDegreesRef.current.get(node.id) ?? 0;
-      if (
-        node.kind === 'page' &&
-        degree <
-          labelDegreeThreshold(zoomRef.current.k, maxLinkDegreeRef.current)
-      )
-        return;
+      // Label fade-out: pages rank by wiki-link degree, tags by member
+      // count, each against their own distribution.
+      const degree =
+        node.kind === 'tag'
+          ? (node._val ?? 0)
+          : (linkDegreesRef.current.get(node.id) ?? 0);
+      const maxDegree =
+        node.kind === 'tag'
+          ? maxTagMembersRef.current
+          : maxLinkDegreeRef.current;
+      if (degree < labelDegreeThreshold(zoomRef.current.k, maxDegree)) return;
 
       const fontSize = Math.max(11 / globalScale, 4);
       ctx.font = `${fontSize}px Inter, system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       const label = node.kind === 'tag' ? `#${node.title}` : node.title;
+      const isTag = node.kind === 'tag';
       const textWidth = ctx.measureText(label).width;
       const textY = positioned.y + radius + 3 / globalScale;
       ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
@@ -359,7 +370,9 @@ export default function WikiGraphView({
         textWidth + 4 / globalScale,
         fontSize + 3 / globalScale
       );
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      // Tag labels render in the tag-layer green (theme-aware) so they read
+      // as tag furniture at a glance; page labels stay white on the scrim.
+      ctx.fillStyle = isTag ? theme.tagLabel : 'rgba(255, 255, 255, 0.92)';
       ctx.fillText(label, positioned.x, textY);
     };
 
@@ -511,6 +524,10 @@ export default function WikiGraphView({
     nodesByIdRef.current = new Map(nodes.map(n => [n.id, n]));
     linkDegreesRef.current = wikiLinkDegrees(edges);
     maxLinkDegreeRef.current = Math.max(0, ...linkDegreesRef.current.values());
+    maxTagMembersRef.current = Math.max(
+      0,
+      ...nodes.filter(n => n.kind === 'tag').map(n => n._val ?? 0)
+    );
     tagMemberCountsRef.current = new Map();
     for (const edge of edges) {
       if (edge.kind !== 'tag') continue;

@@ -184,6 +184,78 @@ describe('WikiGraphView', () => {
     expect(ctx.strokeStyle).not.toBe('rgba(100, 116, 139, 0.8)');
   });
 
+  it('fades tag labels out on zoom-out by member count and styles them green', () => {
+    const sizedTags = [
+      ...nodes,
+      {
+        ...pageNode({
+          id: 'tag:low',
+          title: 'low',
+          tags: ['low'],
+          kind: 'tag',
+        }),
+        _val: 1,
+      },
+      {
+        ...pageNode({
+          id: 'tag:big',
+          title: 'big',
+          tags: ['big'],
+          kind: 'tag',
+        }),
+        _val: 5,
+      },
+    ];
+    render(
+      <WikiGraphView
+        nodes={sizedTags}
+        edges={edges}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const canvasFn = accessorFrom('nodeCanvasObject') as (
+      node: AugmentedGraphNode,
+      ctx: CanvasRenderingContext2D,
+      globalScale: number
+    ) => void;
+    const zoomCb = accessorFrom('onZoom') as (t: {
+      k: number;
+      x: number;
+      y: number;
+    }) => void;
+    const mkCtx = () =>
+      ({
+        beginPath: vi.fn(),
+        arc: vi.fn(),
+        stroke: vi.fn(),
+        fillRect: vi.fn(),
+        fillText: vi.fn(),
+        measureText: vi.fn(() => ({ width: 10 })),
+      }) as unknown as CanvasRenderingContext2D;
+    const tagLow = { ...sizedTags[5], x: 5, y: 5 } as AugmentedGraphNode;
+    const tagBig = { ...sizedTags[6], x: 5, y: 5 } as AugmentedGraphNode;
+
+    // Zoomed out (k=0.5): tag threshold = maxLabelThreshold(5) = 3, so the
+    // 1-member tag label is culled while the 5-member tag label stays.
+    zoomCb({ k: 0.5, x: 0, y: 0 });
+    const ctxOut = mkCtx();
+    canvasFn(tagLow, ctxOut, 1);
+    expect(ctxOut.fillText).not.toHaveBeenCalled();
+    const ctxOutBig = mkCtx();
+    canvasFn(tagBig, ctxOutBig, 1);
+    expect(ctxOutBig.fillText).toHaveBeenCalled();
+    expect(ctxOutBig.fillStyle).toBe('#15803d');
+
+    // Zoomed in (k=3): threshold drops below 1; both tags are labeled.
+    zoomCb({ k: 3, x: 0, y: 0 });
+    const ctxIn = mkCtx();
+    canvasFn(tagLow, ctxIn, 1);
+    expect(ctxIn.fillText).toHaveBeenCalledWith('#low', 5, expect.any(Number));
+  });
+
   it('wires node click to focus, hidden-tag clicks to nothing, and background to clear', () => {
     const onNodeFocus = vi.fn();
     const onClearFocus = vi.fn();

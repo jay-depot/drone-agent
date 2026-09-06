@@ -11,8 +11,12 @@ export const NODE_SIZE_SPREAD = 2;
 /** Zoom level at or below which only the highest-degree hubs are labeled. */
 export const LABEL_THRESHOLD_MIN_ZOOM = 0.75;
 
-/** Zoom level at or above which every visible node is labeled. */
-export const LABEL_THRESHOLD_MAX_ZOOM = 2.5;
+/**
+ * Zoom level at or above which every visible node is labeled. The linear
+ * fade spans MIN..MAX, so a higher MAX keeps mid zooms selective: labels
+ * fall away more aggressively on zoom-out.
+ */
+export const LABEL_THRESHOLD_MAX_ZOOM = 4;
 
 /** Wiki-link degree required for a label at or below LABEL_THRESHOLD_MIN_ZOOM. */
 export const LABEL_THRESHOLD_MAX_DEGREE = 10;
@@ -192,7 +196,7 @@ export function createTagRepulsionForce(strength: number): TagRepulsionForce {
  * zoom, so small graphs (max degree < LABEL_THRESHOLD_MAX_DEGREE) still
  * show hub labels instead of none at all.
  */
-export const LABEL_THRESHOLD_LOW_FRACTION = 0.35;
+export const LABEL_THRESHOLD_LOW_FRACTION = 0.45;
 /**
  * Stable key for an edge endpoint: engine-resolved links carry node objects
  * where our canonical edges carry id strings, so match by resolved id.

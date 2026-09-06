@@ -436,8 +436,8 @@ describe('applyNodeSizing', () => {
 
 describe('maxLabelThreshold', () => {
   it('clamps small graphs to a floor of 2', () => {
-    expect(maxLabelThreshold(5)).toBe(2);
     expect(maxLabelThreshold(1)).toBe(2);
+    expect(maxLabelThreshold(4)).toBe(2);
   });
 
   it('caps at LABEL_THRESHOLD_MAX_DEGREE', () => {
