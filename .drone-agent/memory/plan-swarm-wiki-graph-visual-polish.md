@@ -96,6 +96,15 @@ User report: outlines still invisible; and the reveal — tag rings NEVER render
 - **Empirical verification method**: esbuild-bundled probe page (IIFE, file://, no server) importing the exact node_modules force-graph 1.51.4, driven by playwright-core + the already-cached ms-playwright Chromium (the MCP playwright server demanded branded Chrome at /opt/google/chrome and `playwright install chrome` hung on a sudo prompt — passwordless sudo unavailable). Probe logged callback invocations per frame + pixel-scanned the canvas for outline colors: string mode = 0 invocations; function mode = per-frame invocations, outline pixels exactly at the disc edge.
 - **Validation**: tsc clean, UI 136/136, graph tests 58/58, lint, build, LSP clean.
 
+## Round 13 (`9dbf1c8`, 2026-09-06) — steeper label falloff, distinct tag labels, tag fade parity
+
+User (after Round 12 made labels actually render): falloff on zoom-out should be more aggressive; tag labels need visual distinction; then spotted tags had NO fade logic at all (the gate was page-only).
+
+- **Steeper falloff**: `LABEL_THRESHOLD_MAX_ZOOM` 2.5 → 4 (fade spans MIN 0.75..MAX, so mid zooms stay selective); `LABEL_THRESHOLD_LOW_FRACTION` 0.35 → 0.45 (maxLabelThreshold floor test updated: boundary moved, `maxLabelThreshold(4)=2` is the new floor-band probe).
+- **Tag fade parity**: the label gate is now kind-agnostic — pages rank by wiki-link degree, tags by member count (`node._val`) against `maxTagMembersRef` (computed in the data push over tag nodes). Both feed the same `labelDegreeThreshold(k, maxDegree)` curve, so big tags stay labeled while zoomed out and small tags fall away first.
+- **Distinct tag labels**: `TAG_LABEL_LIGHT/DARK` (#15803d / #4ade80) through `theme.tagLabel`; tag labels draw in tag green, page labels stay white on the shared scrim band.
+- **Validation**: tsc clean, UI 137/137, graph tests 59/59, lint, build, LSP clean.
+
 ## Round 11b (`ddc8e44`, 2026-09-06) — outline visibility fix
 
 User report: layering fix worked, outlines not visible. Root cause: the outline borrowed `theme.linkColor`, whose 0.3 alpha was tuned DOWN in Round 9 for receding hairline edges — correct hue, invisible as a 1.5px ring (tag rings read because they are solid hex). Fix: dedicated `PAGE_OUTLINE_LIGHT/DARK` constants at 0.8 alpha in the same slate family (`rgba(100,116,139,.8)` light / `rgba(148,163,184,.8)` dark), wired through the theme object as `theme.pageOutline`. Missing-page amber + dim behavior unchanged. Lesson: reusing a color tuned for one stroke width/context at another is a visibility bug class — when the user says "same color as X" for a STROKE, check X's alpha first.
