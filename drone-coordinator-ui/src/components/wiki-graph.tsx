@@ -2,17 +2,17 @@ import { useEffect, useRef } from 'react';
 import ForceGraph from 'force-graph';
 import {
   buildFocusSets,
+  createTagRepulsionForce,
   d3DefaultLinkStrength,
   edgeKey,
   edgeEndpointId,
   labelDegreeThreshold,
   wikiLinkDegrees,
-  WIKI_CHARGE_DISTANCE_MAX,
   WIKI_LINK_DISTANCE,
   WIKI_CHARGE_STRENGTH,
   WIKI_TAG_LINK_DISTANCE,
   WIKI_TAG_SPRING_STRENGTH,
-  WIKI_TAG_CHARGE_STRENGTH,
+  WIKI_TAG_REPULSION_STRENGTH,
 } from '@/lib/wiki-graph-utils';
 import type { AugmentedGraphEdge, AugmentedGraphNode } from '@/lib/types';
 
@@ -72,8 +72,9 @@ type D3LinkForce = {
 };
 /** d3 many-body force subset used for layout tuning (getter via d3Force). */
 type D3ChargeForce = {
-  strength(accessor: (node: AugmentedGraphNode) => number): D3ChargeForce;
-  distanceMax(max: number): D3ChargeForce;
+  strength(
+    strength: number | ((node: AugmentedGraphNode) => number)
+  ): D3ChargeForce;
 };
 
 type PositionedNode = AugmentedGraphNode & { x?: number; y?: number };
@@ -373,11 +374,16 @@ export default function WikiGraphView({
     }
     const chargeForce = fg.d3Force('charge') as D3ChargeForce | undefined;
     if (chargeForce) {
-      chargeForce.strength(node =>
-        node.kind === 'tag' ? WIKI_TAG_CHARGE_STRENGTH : WIKI_CHARGE_STRENGTH
-      );
-      chargeForce.distanceMax(WIKI_CHARGE_DISTANCE_MAX);
+      chargeForce.strength(WIKI_CHARGE_STRENGTH);
     }
+
+    // Cluster separation is tag↔tag-only (see createTagRepulsionForce); the
+    // stock charge force repels tags from their own members, which expelled
+    // them to the periphery.
+    fg.d3Force(
+      'tagRepulsion',
+      createTagRepulsionForce(WIKI_TAG_REPULSION_STRENGTH)
+    );
 
     const repaint = () => {
       // The render loop repaints continuously; re-setting an accessor-bearing

@@ -26,14 +26,15 @@ export const WIKI_CHARGE_STRENGTH = -240;
 
 /**
  * Tag-layer forces: stiff short springs pull member pages into tight
- * topical clusters, while strong tag-node charge pushes clusters apart.
- * Charge distance is capped so close-range repulsion cannot overpower the
- * springs and jitter the layout.
+ * topical clusters, while a dedicated tag↔tag-only repulsion force pushes
+ * the clusters apart. (The stock charge force repels tags from their own
+ * members too — a scalar per node cannot distinguish neighbors — which
+ * expelled tag nodes to the graph periphery.)
  */
 export const WIKI_TAG_LINK_DISTANCE = 55;
 export const WIKI_TAG_SPRING_STRENGTH = 1;
-export const WIKI_TAG_CHARGE_STRENGTH = -700;
-export const WIKI_CHARGE_DISTANCE_MAX = 420;
+export const WIKI_TAG_REPULSION_STRENGTH = 300;
+export const WIKI_TAG_REPULSION_DISTANCE_MAX = 500;
 
 /**
  * d3 link-force default strength (1 / min degree of the two endpoints,
@@ -48,6 +49,67 @@ export function d3DefaultLinkStrength(
   const targetDegree = totalEdgeDegrees.get(edgeEndpointId(edge.target)) ?? 0;
   const minDegree = Math.min(sourceDegree, targetDegree);
   return minDegree > 0 ? 1 / minDegree : 0;
+}
+
+/** A simulation node as d3 sees it: position + velocity fields. */
+export type SimNode = AugmentedGraphNode & {
+  x?: number;
+  y?: number;
+  vx?: number;
+  vy?: number;
+};
+
+/**
+ * A d3-compatible force ((alpha) => void) that repels tag nodes from each
+ * other only — pages are untouched, so clusters keep their members while
+ * separate topics drift apart. Registered via the graph engine's
+ * `d3Force(name, force)` setter; d3 re-runs `initialize` whenever the node
+ * set changes, so the tag list stays current across data pushes.
+ */
+export type TagRepulsionForce = {
+  (alpha: number): void;
+  initialize(nodes: SimNode[]): void;
+};
+
+export function createTagRepulsionForce(strength: number): TagRepulsionForce {
+  let tagNodes: SimNode[] = [];
+
+  const force = (alpha: number) => {
+    const k = strength * alpha;
+    for (let i = 0; i < tagNodes.length; i++) {
+      const a = tagNodes[i];
+      if (a.x === undefined || a.y === undefined) continue;
+      for (let j = i + 1; j < tagNodes.length; j++) {
+        const b = tagNodes[j];
+        if (b.x === undefined || b.y === undefined) continue;
+        let dx = a.x - b.x;
+        let dy = a.y - b.y;
+        let distSq = dx * dx + dy * dy;
+        if (distSq === 0) {
+          // Coincident tags: nudge apart along +x at unit distance so the
+          // kick stays bounded (f = k / distSq would explode near zero).
+          dy = 0;
+          dx = 1;
+          distSq = 1;
+        }
+        if (distSq > WIKI_TAG_REPULSION_DISTANCE_MAX ** 2) continue;
+        const dist = Math.sqrt(distSq);
+        const f = k / distSq;
+        const fx = (dx / dist) * f;
+        const fy = (dy / dist) * f;
+        a.vx = (a.vx ?? 0) + fx;
+        a.vy = (a.vy ?? 0) + fy;
+        b.vx = (b.vx ?? 0) - fx;
+        b.vy = (b.vy ?? 0) - fy;
+      }
+    }
+  };
+
+  (force as TagRepulsionForce).initialize = (nodes: SimNode[]) => {
+    tagNodes = nodes.filter(node => node.kind === 'tag');
+  };
+
+  return force as TagRepulsionForce;
 }
 
 /**

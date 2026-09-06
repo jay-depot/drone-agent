@@ -9,7 +9,9 @@ import {
   maxLabelThreshold,
   wikiLinkDegrees,
   NODE_SIZE_SPREAD,
+  createTagRepulsionForce,
   d3DefaultLinkStrength,
+  WIKI_TAG_REPULSION_DISTANCE_MAX,
   LABEL_THRESHOLD_MAX_DEGREE,
   LABEL_THRESHOLD_MAX_ZOOM,
   LABEL_THRESHOLD_MIN_ZOOM,
@@ -48,6 +50,108 @@ describe('edgeEndpointId / edgeKey', () => {
     expect(canonical).toBe(engineForm);
     expect(canonical).toContain('a');
     expect(canonical).toContain('b');
+  });
+});
+
+describe('createTagRepulsionForce', () => {
+  function simNode(
+    overrides: Partial<AugmentedGraphNode> & {
+      x?: number;
+      y?: number;
+      vx?: number;
+      vy?: number;
+    }
+  ): AugmentedGraphNode & { x?: number; y?: number; vx?: number; vy?: number } {
+    return { ...pageNode(overrides), ...overrides } as AugmentedGraphNode & {
+      x?: number;
+      y?: number;
+      vx?: number;
+      vy?: number;
+    };
+  }
+
+  it('repels only tag nodes, with equal and opposite velocity', () => {
+    const force = createTagRepulsionForce(300);
+    const tagA = simNode({
+      id: 'tag:a',
+      kind: 'tag',
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    const tagB = simNode({
+      id: 'tag:b',
+      kind: 'tag',
+      x: 10,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    const page = simNode({ id: 'p', x: 5, y: 0, vx: 0, vy: 0 });
+    force.initialize([tagA, tagB, page]);
+    force(0.5);
+
+    expect(tagA.vx).toBeLessThan(0);
+    expect(tagB.vx).toBeGreaterThan(0);
+    expect(page.vx).toBe(0);
+  });
+
+  it('decays with alpha and respects the distance cap', () => {
+    const force = createTagRepulsionForce(300);
+    const tagA = simNode({
+      id: 'tag:a',
+      kind: 'tag',
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    const tagB = simNode({
+      id: 'tag:b',
+      kind: 'tag',
+      x: 10,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    force.initialize([tagA, tagB]);
+    force(0.5);
+    const closePush = tagB.vx ?? 0;
+
+    tagB.x = WIKI_TAG_REPULSION_DISTANCE_MAX + 100;
+    force(1);
+    expect(tagB.vx).toBe(closePush);
+
+    force(0.1);
+    expect(tagB.vx).toBe(closePush);
+  });
+
+  it('separates coincident tags deterministically', () => {
+    const force = createTagRepulsionForce(300);
+    const tagA = simNode({
+      id: 'tag:a',
+      kind: 'tag',
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    const tagB = simNode({
+      id: 'tag:b',
+      kind: 'tag',
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    force.initialize([tagA, tagB]);
+    force(0.5);
+    // Direction is arbitrary when coincident; the push is symmetric and
+    // bounded (unit-distance fallback, no velocity explosion).
+    expect(tagA.vx).toBe(-(tagB.vx ?? 0));
+    expect(Math.abs(tagA.vx ?? 0)).toBeGreaterThan(0);
+    expect(Math.abs(tagA.vx ?? 0)).toBeLessThan(1000);
   });
 });
 

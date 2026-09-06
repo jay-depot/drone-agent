@@ -464,7 +464,10 @@ describe('WikiGraphView', () => {
     };
     expect(linkForce.distance).toHaveBeenCalledTimes(1);
     expect(chargeForce.strength).toHaveBeenCalledTimes(1);
-    expect(chargeForce.distanceMax).toHaveBeenCalledWith(420);
+    expect(handle.d3Force).toHaveBeenCalledWith(
+      'tagRepulsion',
+      expect.any(Function)
+    );
 
     const distanceAccessor = linkForce.distance.mock.calls[0][0] as (
       l: AugmentedGraphEdge
@@ -477,13 +480,9 @@ describe('WikiGraphView', () => {
     ) => number;
     expect(strengthAccessor(edges[3])).toBe(1);
     // Page edges reproduce d3's default: 1 / min total-layout-edge degree.
-    // a has 3 layout edges (link, broken, tag), b has 1 -> 1/1.
     expect(strengthAccessor(edges[0])).toBe(1);
 
-    const chargeAccessor = chargeForce.strength.mock.calls[0][0] as (
-      n: AugmentedGraphNode
-    ) => number;
-    expect(chargeAccessor(nodes[4])).toBe(-700);
-    expect(chargeAccessor(nodes[0])).toBe(-240);
+    // Charge is uniform again — cluster separation lives in tagRepulsion.
+    expect(chargeForce.strength).toHaveBeenCalledWith(-240);
   });
 });
