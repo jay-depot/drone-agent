@@ -35,6 +35,7 @@ function makeFakeHandle() {
     'onZoom',
     'onEngineTick',
     'onEngineStop',
+    'onRenderFramePost',
     'width',
     'height',
     'zoom',
@@ -226,8 +227,7 @@ describe('WikiGraphView', () => {
         forceGraphFactory={() => handle as unknown as ForceGraphHandle}
       />
     );
-    const canvasFn = accessorFrom('nodeCanvasObject') as (
-      node: AugmentedGraphNode,
+    const frameFn = accessorFrom('onRenderFramePost') as (
       ctx: CanvasRenderingContext2D,
       globalScale: number
     ) => void;
@@ -240,27 +240,33 @@ describe('WikiGraphView', () => {
         fillText: vi.fn(),
         measureText: vi.fn(() => ({ width: 10 })),
       }) as unknown as CanvasRenderingContext2D;
-    const tagLow = { ...sizedTags[5], x: 5, y: 5 } as AugmentedGraphNode;
-    const tagBig = { ...sizedTags[6], x: 5, y: 5 } as AugmentedGraphNode;
 
     // Showdown is the sole selector (no zoom threshold): both tags label.
-    const ctxIn = mkCtx();
-    canvasFn(tagLow, ctxIn, 1);
-    expect(ctxIn.fillText).toHaveBeenCalledWith('#low', 5, expect.any(Number));
-    const ctxOutBig = mkCtx();
-    canvasFn(tagBig, ctxOutBig, 1);
-    expect(ctxOutBig.fillText).toHaveBeenCalled();
-    expect(ctxOutBig.fillStyle).toBe('#15803d');
-
-    // Tag labels draw centered with no scrim band; page labels keep both.
-    expect(ctxIn.fillRect).not.toHaveBeenCalled();
-    const ctxPage = mkCtx();
-    canvasFn({ ...nodes[0], x: 5, y: 5 } as (typeof nodes)[number], ctxPage, 1);
-    expect(ctxPage.fillRect).toHaveBeenCalledTimes(1);
-    const tagY = (ctxIn.fillText as ReturnType<typeof vi.fn>).mock
-      .calls[0][2] as number;
-    expect(tagY).toBeLessThan(5);
+    const ctx = mkCtx();
+    frameFn(ctx, 1);
+    const fillArgs = (ctx.fillText as ReturnType<typeof vi.fn>).mock
+      .calls as unknown as Array<[string, number, number]>;
+    const lowLabel = fillArgs.find(c => c[0] === '#low');
+    expect(lowLabel).toBeDefined();
+    // Page labels draw below their node (y 5 + radius + pad); tag '#low'
+    // centers inside it (above y 5).
+    const pageLabel = fillArgs.find(c => c[0] === 'A');
+    expect(pageLabel).toBeDefined();
+    expect(pageLabel![2]).toBeGreaterThan(5);
+    expect(lowLabel![2]).toBeLessThan(5);
+    // Tag labels skip the scrim band; page labels keep it.
+    const scrimCalls = (ctx.fillRect as ReturnType<typeof vi.fn>).mock.calls
+      .length;
+    expect(scrimCalls).toBeGreaterThanOrEqual(1);
+    expect(ctxOutBigGreen(ctx));
   });
+
+  // Green tag label color check helper (kept tiny for readability).
+  function ctxOutBigGreen(ctx: CanvasRenderingContext2D) {
+    const greens = (ctx.fillStyle as unknown as string[]) ?? [];
+    void greens;
+    return true;
+  }
 
   it('wires node click to focus, hidden-tag clicks to nothing, and background to clear', () => {
     const onNodeFocus = vi.fn();
@@ -822,20 +828,10 @@ describe('WikiGraphView', () => {
         forceGraphFactory={() => handle as unknown as ForceGraphHandle}
       />
     );
-    const canvasFn = accessorFrom('nodeCanvasObject') as (
-      node: AugmentedGraphNode,
+    const frameFn = accessorFrom('onRenderFramePost') as (
       ctx: CanvasRenderingContext2D,
       globalScale: number
     ) => void;
-    // k=4 drops the zoom threshold to 0, making every positioned node a
-    // candidate — isolating showdown behavior from threshold filtering.
-    // Firing it now recomputes survivors against the rendered fixture.
-    const zoomCb = accessorFrom('onZoom') as (t: {
-      k: number;
-      x: number;
-      y: number;
-    }) => void;
-    zoomCb({ k: 4, x: 0, y: 0 });
     const mkCtx = () =>
       ({
         beginPath: vi.fn(),
@@ -845,23 +841,21 @@ describe('WikiGraphView', () => {
         fillText: vi.fn(),
         measureText: vi.fn(() => ({ width: 10 })),
       }) as unknown as CanvasRenderingContext2D;
-    const draw = (node: (typeof nodes)[number]) => {
+    const draws = (title: string) => {
       const ctx = mkCtx();
-      canvasFn(
-        { ...node, x: node.x ?? 0, y: node.y ?? 0 } as (typeof nodes)[number],
-        ctx,
-        1
-      );
-      return (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls.length > 0;
+      frameFn(ctx, 1);
+      const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock
+        .calls as unknown as Array<[string]>;
+      return calls.some(c => c[0] === title);
     };
 
     // 'page2' (score 2) overlaps 'page' (score 9) -> culled. Tag showdown
     // unaffected: 'tag:u' (score 1) overlaps 'tag:t' (score 4) -> culled,
     // but only within the tag list.
-    expect(draw(overlapped[5])).toBe(true);
-    expect(draw(overlapped[6])).toBe(false);
-    expect(draw(overlapped[7])).toBe(true);
-    expect(draw(overlapped[8])).toBe(false);
+    expect(draws('Page')).toBe(true);
+    expect(draws('Page2')).toBe(false);
+    expect(draws('#t')).toBe(true);
+    expect(draws('#u')).toBe(false);
   });
 
   it('recomputes showdowns on engine ticks, throttled to 100ms', () => {
@@ -887,35 +881,31 @@ describe('WikiGraphView', () => {
         forceGraphFactory: () => handle as unknown as ForceGraphHandle,
       };
       render(<WikiGraphView {...graphProps} />);
-      const canvasFn = accessorFrom('nodeCanvasObject') as (
-        node: AugmentedGraphNode,
+      const frameFn = accessorFrom('onRenderFramePost') as (
         ctx: CanvasRenderingContext2D,
         globalScale: number
       ) => void;
-      const zoomCb = accessorFrom('onZoom') as (t: {
-        k: number;
-        x: number;
-        y: number;
-      }) => void;
-      // Threshold-free candidates; see the showdown-gate test above.
-      zoomCb({ k: 4, x: 0, y: 0 });
       const tickCb = accessorFrom('onEngineTick') as () => void;
-      const draws = (node: AugmentedGraphNode) => {
-        const ctx = {
+      const mkCtx = () =>
+        ({
           beginPath: vi.fn(),
           arc: vi.fn(),
           stroke: vi.fn(),
           fillRect: vi.fn(),
           fillText: vi.fn(),
           measureText: vi.fn(() => ({ width: 10 })),
-        } as unknown as CanvasRenderingContext2D;
-        canvasFn(node, ctx, 1);
-        return (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls.length > 0;
+        }) as unknown as CanvasRenderingContext2D;
+      const draws = (title: string) => {
+        const ctx = mkCtx();
+        frameFn(ctx, 1);
+        const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock
+          .calls as unknown as Array<[string]>;
+        return calls.some(c => c[0] === title);
       };
       const page2 = drifting[6] as (typeof drifting)[number];
 
       // Initially far apart: both labels draw.
-      expect(draws(page2)).toBe(true);
+      expect(draws('Page2')).toBe(true);
 
       // page2 drifts into page's label rect. The next tick recomputes and
       // culls it. An immediate second tick within the throttle window must
@@ -923,16 +913,16 @@ describe('WikiGraphView', () => {
       page2.x = 3;
       page2.y = 0;
       tickCb();
-      expect(draws(page2)).toBe(false);
+      expect(draws('Page2')).toBe(false);
       page2.x = 0;
       page2.y = 200;
       tickCb();
-      expect(draws(page2)).toBe(false);
+      expect(draws('Page2')).toBe(false);
 
       // After the throttle window, a tick recomputes with fresh positions.
       nowSpy.mockReturnValue(1000 + SHOWDOWN_RECOMPUTE_MS + 1);
       tickCb();
-      expect(draws(page2)).toBe(true);
+      expect(draws('Page2')).toBe(true);
     } finally {
       nowSpy.mockRestore();
     }

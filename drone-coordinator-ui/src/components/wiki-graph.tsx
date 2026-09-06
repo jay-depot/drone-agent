@@ -61,6 +61,9 @@ export interface ForceGraphHandle {
   ): ForceGraphHandle;
   onEngineTick(cb: () => void): ForceGraphHandle;
   onEngineStop(cb: () => void): ForceGraphHandle;
+  onRenderFramePost(
+    cb: (ctx: CanvasRenderingContext2D, globalScale: number) => void
+  ): ForceGraphHandle;
   d3Force(forceName: string): unknown;
   d3Force(forceName: string, forceFn: unknown): ForceGraphHandle;
   width(px: number): ForceGraphHandle;
@@ -421,44 +424,58 @@ export default function WikiGraphView({
         ctx.lineWidth = 2 / globalScale;
         ctx.stroke();
       }
+    };
 
-      if (dimmed) return;
-      if (node.kind === 'tag' && !tagsVisibleRef.current) return;
-      // Showdown gate: the threshold picked candidates; the per-frame
-      // survivor sets (recomputed on push/zoom/throttled ticks) decide which
-      // labels actually draw. Applied unconditionally — no focus special
-      // case, since dimmed nodes already return above.
-      const survivors =
-        node.kind === 'tag'
-          ? tagSurvivorsRef.current
-          : pageSurvivorsRef.current;
-      if (!survivors.has(node.id)) return;
+    // Label pass: runs in onRenderFramePost, AFTER the full scene (nodes +
+    // links), so an overlapping node disc painted later can never bury
+    // another node's label.
+    const paintLabels = (
+      ctx: CanvasRenderingContext2D,
+      globalScale: number
+    ) => {
+      for (const node of nodesRef.current) {
+        const positioned = node as PositionedNode;
+        if (positioned.x === undefined || positioned.y === undefined) continue;
+        const focus = focusSetsRef.current;
+        const dimmed = focus !== null && !focus.neighborIds.has(node.id);
+        if (dimmed) continue;
+        if (node.kind === 'tag' && !tagsVisibleRef.current) continue;
+        // Showdown survivor sets (recomputed on push/zoom/throttled ticks)
+        // decide which labels draw. Applied unconditionally — no focus
+        // special case, since dimmed nodes already continue above.
+        const survivors =
+          node.kind === 'tag'
+            ? tagSurvivorsRef.current
+            : pageSurvivorsRef.current;
+        if (!survivors.has(node.id)) continue;
 
-      const fontSize = Math.max(11 / globalScale, 4);
-      ctx.font = `${fontSize}px Inter, system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      const label = node.kind === 'tag' ? `#${node.title}` : node.title;
-      const isTag = node.kind === 'tag';
-      const textWidth = ctx.measureText(label).width;
-      // Page labels sit below the node; tag labels center inside it, so the
-      // big translucent tag discs read as labeled chips.
-      const textY = isTag
-        ? positioned.y - fontSize / 2
-        : positioned.y + radius + 3 / globalScale;
-      if (!isTag) {
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
-        ctx.fillRect(
-          positioned.x - textWidth / 2 - 2 / globalScale,
-          textY - 1 / globalScale,
-          textWidth + 4 / globalScale,
-          fontSize + 3 / globalScale
-        );
+        const fontSize = Math.max(11 / globalScale, 4);
+        const radius = Math.sqrt(node._val ?? 1) * nodeRelSizeRef.current;
+        ctx.font = `${fontSize}px Inter, system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        const label = node.kind === 'tag' ? `#${node.title}` : node.title;
+        const isTag = node.kind === 'tag';
+        const textWidth = ctx.measureText(label).width;
+        // Page labels sit below the node; tag labels center inside it, so the
+        // big translucent tag discs read as labeled chips.
+        const textY = isTag
+          ? positioned.y - fontSize / 2
+          : positioned.y + radius + 3 / globalScale;
+        if (!isTag) {
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+          ctx.fillRect(
+            positioned.x - textWidth / 2 - 2 / globalScale,
+            textY - 1 / globalScale,
+            textWidth + 4 / globalScale,
+            fontSize + 3 / globalScale
+          );
+        }
+        // Tag labels render in the tag-layer green (theme-aware) so they read
+        // as tag furniture at a glance; page labels stay white on the scrim.
+        ctx.fillStyle = isTag ? theme.tagLabel : 'rgba(255, 255, 255, 0.92)';
+        ctx.fillText(label, positioned.x, textY);
       }
-      // Tag labels render in the tag-layer green (theme-aware) so they read
-      // as tag furniture at a glance; page labels stay white on the scrim.
-      ctx.fillStyle = isTag ? theme.tagLabel : 'rgba(255, 255, 255, 0.92)';
-      ctx.fillText(label, positioned.x, textY);
     };
 
     const applyZoomStyles = (handle: ForceGraphHandle, k: number) => {
@@ -566,6 +583,7 @@ export default function WikiGraphView({
         applyZoomStyles(fg, transform.k);
         computeShowdownsRef.current();
       })
+      .onRenderFramePost(paintLabels)
       .onEngineTick(() => {
         const now = performance.now();
         if (now >= nextTickComputeAtRef.current) {
