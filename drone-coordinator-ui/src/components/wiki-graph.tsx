@@ -46,9 +46,6 @@ export interface ForceGraphHandle {
     mode: string | ((node: AugmentedGraphNode) => string)
   ): ForceGraphHandle;
   nodeLabel(accessor: (node: AugmentedGraphNode) => string): ForceGraphHandle;
-  linkDirectionalArrowLength(
-    length: number | ((link: AugmentedGraphEdge) => number)
-  ): ForceGraphHandle;
   linkWidth(accessor: (link: AugmentedGraphEdge) => number): ForceGraphHandle;
   linkColor(accessor: (link: AugmentedGraphEdge) => string): ForceGraphHandle;
   linkLineDash(
@@ -645,7 +642,6 @@ export default function WikiGraphView({
       .linkWidth(linkWidthAccessor)
       .linkColor(linkColorAccessor)
       .linkLineDash(linkDashAccessor)
-      .linkDirectionalArrowLength(link => (link.kind === 'tag' ? 0 : 4))
       .onNodeClick(node => {
         if (node.kind === 'tag' && !isTagNodeVisible(node)) return;
         focus(String(node.id));

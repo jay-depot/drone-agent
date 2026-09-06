@@ -25,8 +25,6 @@ function makeFakeHandle() {
     'nodeCanvasObject',
     'nodeCanvasObjectMode',
     'nodeLabel',
-    'linkDirectionalArrowLength',
-    'linkDirectionalArrowColor',
     'linkWidth',
     'linkColor',
     'linkLineDash',
@@ -392,10 +390,6 @@ describe('WikiGraphView', () => {
       l: AugmentedGraphEdge
     ) => number;
     expect(widthAccessor(edges[3])).toBe(0);
-    const arrowLenAccessor = accessorFrom('linkDirectionalArrowLength') as (
-      l: AugmentedGraphEdge
-    ) => number;
-    expect(arrowLenAccessor(edges[3])).toBe(0);
   });
 
   it('compensates node and link size on zoom', () => {
