@@ -271,7 +271,7 @@ describe('WikiPage graph view', () => {
 
     // Focus from the canvas path (stub relays onNodeFocus), then clear.
     act(() => {
-      wikiGraphStub.props?.onNodeFocus('a');
+      (wikiGraphStub.props?.onNodeFocus as (id: string) => void)('a');
     });
     // The page preserves the tags param: the stub sees tagsVisible stay true
     // and the focused node appear. (MemoryRouter doesn't touch
@@ -282,7 +282,7 @@ describe('WikiPage graph view', () => {
     });
 
     act(() => {
-      wikiGraphStub.props?.onClearFocus();
+      (wikiGraphStub.props?.onClearFocus as () => void)();
     });
     await waitFor(() => {
       expect(wikiGraphStub.props?.focusedNodeId).toBeNull();
