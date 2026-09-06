@@ -5,7 +5,7 @@ tags:
   - drone-coordinator-ui
   - wiki-graph
 created: 2026-09-06T00:26:00.119Z
-updated: 2026-09-06T03:17:23.542Z
+updated: 2026-09-06T03:27:47.454Z
 ---
 
 # Plan: Wiki graph view — visual polish (v2)
@@ -25,28 +25,31 @@ User decisions locked during grilling (all confirmed):
 7. **Focus = dim-and-spotlight** + camera move; kind-aware preview panel.
 8. **Chrome kit**: legend, zoom-in/out/reset overlay, dashed amber broken-link edges, Tags toggle in header.
 9. Defaults: auto-fit on engine stop once per data change; `tags=1` persisted only when non-default.
-10. **Round 6 (user request)**: tag nodes repel each other strongly but attract their members strongly (implemented via per-kind link accessors + a dedicated tag↔tag repulsion force).
+10. **Rounds 5–7 (user requests)**: tag clusters repel each other but bind members tight; big tags need disproportionate separation.
 
-## COMPLETED 2026-09-06 — six rounds on `feat/memory-wiki-browser-improvements`
+## COMPLETED 2026-09-06 — seven rounds on `feat/memory-wiki-browser-improvements`
 
-- **Round 1 (`de9bdef`)**: full plan implementation (wordCount server-side; utils rework; component rework with accessors-in-mount-effect over refs; page wiring).
-- **Round 2 (`1642021`)**: manual-smoke fixes — NaN camera poison (guard camera calls on finite positions; ignore non-finite onZoom); container wipe (`domNode.innerHTML = ''`); zoom-clamp floors below base.
-- **Round 3 (`8958d48`)**: Orphans toggle removed; layout spread via d3Force getters; engine link-mutation fix (shallow clones into graphData; accessors match by endpoint-resolved key); label thresholds scaled to degree distribution.
-- **Round 4 (`b85dab2`)**: link-width zoom compensation removed (engine screen-scales links). Tag nodes sized by absolute member count (radius ∝ √members).
-- **Round 5 (`cd3ce3d`)**: per-kind layout forces — tag edges short stiff springs (55 / strength 1); page edges stock d3 springs via `d3DefaultLinkStrength` accessor; tag charge boosted to −700 + distanceMax cap.
-- **Round 6 (`adb6785`)**: **fixed the tag-expulsion bug from round 5** — user screenshot showed green tags scattered around the periphery instead of centered in clusters. Root cause: many-body charge is a scalar per node; boosting tag charge repelled tags from their OWN members (the dense page blob shoved tags outward, springs dangled behind). Fix: custom d3-compatible force `createTagRepulsionForce` (tag↔tag-only repulsion, O(n²), distance cap 500, unit-distance fallback for coincident pairs with bounded kick) registered via `d3Force('tagRepulsion', force)`; tag charge back to uniform −240. Verified d3 force contract in source: `(alpha) => void` mutating velocities; `initialize(nodes)` re-run by `simulation.nodes()` on every graphData push; forces called via `forces.forEach(force => force(alpha))`.
-- Validation per round: tsc clean, UI suite green (125 tests), lint, build, root fast suite (2773), LSP clean.
+- **Round 1 (`de9bdef`)**: full plan implementation.
+- **Round 2 (`1642021`)**: manual-smoke fixes — NaN camera poison; container wipe; zoom-clamp floors.
+- **Round 3 (`8958d48`)**: Orphans toggle removed; layout spread; engine link-mutation fix (shallow clones + endpoint-key matching); label thresholds scaled to degree distribution.
+- **Round 4 (`b85dab2`)**: link-width zoom compensation removed; tag nodes sized by absolute member count.
+- **Round 5 (`cd3ce3d`)**: per-kind layout forces — tag springs (55/strength 1), page springs stock via `d3DefaultLinkStrength`, tag charge −700 + distanceMax.
+- **Round 6 (`adb6785`)**: tag-expulsion bug fix (charge is scalar per node; boosted charge repelled tags from own members → periphery halo). Custom `createTagRepulsionForce` (tag↔tag-only, distance-capped, bounded coincident fallback) registered via `d3Force('tagRepulsion', fn)`; charge back to −240.
+- **Round 7 (`d1d7328`)**: big tags still clumped — their many strength-1 member springs anchor them to the same centroid when member sets overlap, overpowering the uniform kick. Fix: (a) tag↔tag inverse-square scales by geometric mean of member counts (√(mA·mB); 12-member tags repel 12× harder), base 300→900; (b) soft exclusion shell sized by rendered radii (engine: √val·relSize/2, zoom-compensated ⇒ graph-space radius √val·3) + 4.5 margin, spring-like push 40·overlap·alpha — crowding geometrically impossible; (c) per-pair kick clamp 25/tick for stability.
+- Validation per round: tsc clean, UI suite green (127 tests), lint, build, root fast suite (2773), LSP clean.
+
+## Tuning knobs (all in wiki-graph-utils.ts)
+
+`WIKI_LINK_DISTANCE` 90 · `WIKI_CHARGE_STRENGTH` −240 · `WIKI_TAG_LINK_DISTANCE` 55 · `WIKI_TAG_SPRING_STRENGTH` 1 · `WIKI_TAG_REPULSION_STRENGTH` 900 · `WIKI_TAG_REPULSION_DISTANCE_MAX` 500 · `WIKI_TAG_MIN_SEPARATION_SCALE` 4.5 · `WIKI_TAG_SEPARATION_STRENGTH` 40 · `WIKI_TAG_MAX_KICK` 25 · `NODE_SIZE_SPREAD` 2 · `LABEL_THRESHOLD_*` (0.75 / 2.5 / 10 / 0.35).
 
 ## Notes / lessons
 
-- **many-body charge CANNOT implement "repel only group X from itself"** — it is a scalar per node and applies to every pair the node participates in. Boosting a group's charge also repels it from its own neighbors. For selective repulsion, register a custom d3 force via `d3Force(name, fn)`; the contract is `(alpha) => void` mutating `vx/vy`, plus optional `initialize(nodes)` (re-run by `simulation.nodes()` on every graphData push). Guard coincident nodes: the k/distSq kick explodes near zero — fall back to a bounded unit-distance push.
-- **d3 forces take per-element accessors** (link strength/distance, charge strength); accessor outputs are unary-plussed — undefined = NaN forces. Reproduce d3 defaults (link strength 1/min-degree) in fallback branches.
-- **force-graph scaling model**: LINKS screen-space (`lineWidth = width/globalScale` in engine) — never zoom-compensate; NODES graph-space — /k compensation required.
-- **force-graph mutates edge objects passed to graphData** — feed shallow clones; match by endpoint-resolved key (`edgeKey`).
-- **Engine constructor wipes its mount element** — React chrome as siblings of a dedicated inner mount div.
-- **Camera calls guard on finite node positions**; canvas NaN asymmetry (nodes vanish, edges persist) is the fingerprint.
-- **Per-object absolute sizing beats normalized-share blends** for cross-category comparison (tag = member count).
-- **Scale absolute thresholds to the data's distribution** (labels: ceil(0.35·maxDegree) clamped [2,10]).
-- **Manual smoke is not optional**: rounds 2, 3, 4, and 6 all originated from user observation at the real canvas (screenshot diagnosis is high-value: the tag-periphery pattern was legible directly from the image).
-- **LSP can go stale across file__write rewrites**; `tsc --noEmit` is ground truth for the UI package.
-- **apply_diff reliability**: partial/interleaved application happens (watch for ADD-only hunks creating duplicates); on trouble, read full file and write the end state.
+- **many-body charge is scalar per node** — cannot repel a group from itself only; use a custom force via `d3Force(name, fn)`. Contract: `(alpha) => void` mutating vx/vy, `initialize(nodes)` re-run on graphData push.
+- **Springs vs repulsion balance**: a big tag's member springs scale with member COUNT (many strength-1 springs), so separation forces must scale with size too — geometric-mean weighting √(mA·mB) on the inverse-square term. For hard guarantees (no overlap), add a positional-exclusion shell keyed to RENDERED radii, not abstract distances.
+- **Clamp kicks** when stacking strong force terms (25/tick) — inverse-square × size-scaling × shell can launch nodes.
+- **d3 accessor outputs are unary-plussed** — undefined = NaN. Reproduce stock defaults in fallback branches.
+- **force-graph mutates edge objects passed to graphData** — shallow clones + endpoint-key matching.
+- **LINKS screen-space / NODES graph-space** in force-graph rendering — only compensate nodes on zoom.
+- **Camera calls guard on finite positions**; engine constructor wipes mount element; LSP stale across file__write; `tsc --noEmit` is ground truth.
+- **Manual smoke is not optional**: rounds 2, 3, 4, 6, 7 all originated from user observation/screenshot at the real canvas.
+- **apply_diff reliability**: ADD-only hunks create duplicates (happened twice this session); on any suspicion, grep for duplicated blocks and read the full region before continuing.
