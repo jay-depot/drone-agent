@@ -206,6 +206,17 @@ User: blank bit underneath the graph. Cause: container hardcoded `h-[calc(100vh-
 
 `linkDirectionalArrowLength` accessor call + handle method removed (tag edges already had 0 since Round 17's layering rule; page-link arrows were visual noise). Fake handle list pruned to match.
 
+## Round 26 (`0bf60d5`, 2026-09-06) — smooth add/remove animation: land, connect, let go
+
+User: new nodes from catch-up ingest "blink into existence then flash into place". Mechanics (verified in installed bundles): force-graph re-heats to alpha 1 on every graphData push (`stop().alpha(1)`), and d3-force-3d's initializeNodes places position-less nodes on an origin spiral — alpha 1 yanks them across the canvas in a few ticks.
+
+- **Landing**: data push snapshots previous ids BEFORE overwriting nodesRef (first attempt diffed after — diff was always empty, caught by the new test), assigns added nodes a random spot inside the visible graph-space rect: cx=(w/2-tx)/k, halfW=w/2/k, jitter +/-0.6*half; vx/vy = 0. Registered in driftingRef.
+- **Drift/let-go**: onEngineTick dampens drifting nodes' velocities — scale = driftFraction(t), 0.03→1 over DRIFT_MS=2000 (ease-in of physics influence). nodeVal eases radius 30%→100% over the same ramp. When the last drift ends: settlingRef=false + one deferred zoomToFit (if armed); engine-stop fits suppressed while settling.
+- **Removals (ghosts)**: removed ids -> fadingRef (now timestamp). They REMAIN in the pushed scene: nodeVal shrinks over FADE_MS=600, color = PAGE_DIM, paintLabels skips them, and tag-repulsion excludes them via new `setExcluded(Set<string>)` on TagRepulsionForce (initialize() re-filters) — invisible nodes must not push real ones. syncGhostExclusionRef re-filters after each push + during settle.
+- **Initial mount gated**: `settlingRef = prevNodeCount !== null && (adds>0 || ghosts>0)` — first load has no diff.
+- **Test gotchas**: landing-spot test needs a sized getBoundingClientRect stub (jsdom = 0 → guard skips assignment, test failed with undefined x); viewport-rect bounds are cx=640/cy=360 at k=0.5, NOT origin-centered.
+- **Validation**: tsc clean, UI 151/151 (21 files), lint, build, LSP clean.
+
 ## Notes / lessons
 
 - **many-body charge is scalar per node** — cannot repel a group from itself only; use a custom force via `d3Force(name, fn)`. Contract: `(alpha) => void` mutating vx/vy, `initialize(nodes)` re-run on graphData push.
