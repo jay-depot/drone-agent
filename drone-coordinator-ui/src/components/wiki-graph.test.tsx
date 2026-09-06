@@ -172,6 +172,8 @@ describe('WikiGraphView', () => {
       fillRect: vi.fn(),
       fillText: vi.fn(),
       measureText: vi.fn(() => ({ width: 10 })),
+      save: vi.fn(),
+      restore: vi.fn(),
     } as unknown as CanvasRenderingContext2D;
 
     const positioned = (node: AugmentedGraphNode) =>
@@ -239,6 +241,8 @@ describe('WikiGraphView', () => {
         fillRect: vi.fn(),
         fillText: vi.fn(),
         measureText: vi.fn(() => ({ width: 10 })),
+        save: vi.fn(),
+        restore: vi.fn(),
       }) as unknown as CanvasRenderingContext2D;
 
     // Showdown is the sole selector (no zoom threshold): both tags label.
@@ -840,6 +844,8 @@ describe('WikiGraphView', () => {
         fillRect: vi.fn(),
         fillText: vi.fn(),
         measureText: vi.fn(() => ({ width: 10 })),
+        save: vi.fn(),
+        restore: vi.fn(),
       }) as unknown as CanvasRenderingContext2D;
     const draws = (title: string) => {
       const ctx = mkCtx();
@@ -894,6 +900,8 @@ describe('WikiGraphView', () => {
           fillRect: vi.fn(),
           fillText: vi.fn(),
           measureText: vi.fn(() => ({ width: 10 })),
+          save: vi.fn(),
+          restore: vi.fn(),
         }) as unknown as CanvasRenderingContext2D;
       const draws = (title: string) => {
         const ctx = mkCtx();

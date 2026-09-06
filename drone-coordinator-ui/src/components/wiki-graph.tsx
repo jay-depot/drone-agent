@@ -166,6 +166,21 @@ const NO_LINK_TARGETS: ReadonlySet<string> = new Set();
 export const SHOWDOWN_RECOMPUTE_MS = 100;
 /** Approximate per-character width when no 2D context exists (tests/jsdom). */
 const FALLBACK_CHAR_WIDTH = 0.6;
+/**
+ * Whether canvas ctx.filter is supported (Safari lacks it for a long time).
+ * Probed once on an offscreen canvas; filters degrade to shadow spreads.
+ */
+const SUPPORTS_CANVAS_FILTER = (() => {
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return false;
+    ctx.filter = 'blur(1px)';
+    return ctx.filter !== 'none';
+  } catch {
+    return false;
+  }
+})();
 
 export default function WikiGraphView({
   nodes,
@@ -462,19 +477,39 @@ export default function WikiGraphView({
         const textY = isTag
           ? positioned.y - fontSize / 2
           : positioned.y + radius + 3 / globalScale;
+
+        // Legibility over tag labels and link lines: a blurred scrim behind
+        // the text where ctx.filter is supported (Chromium/Firefox), else a
+        // spread shadow painted behind an opaque band; plus a tight dark
+        // shadow under the glyphs themselves in both cases (the green tag
+        // text has no scrim band and needs it most).
+        const pad = 3 / globalScale;
+        const scrimX = positioned.x - textWidth / 2 - pad;
+        const scrimY = textY - pad;
+        const scrimW = textWidth + pad * 2;
+        const scrimH = fontSize + pad * 2;
         if (!isTag) {
-          ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
-          ctx.fillRect(
-            positioned.x - textWidth / 2 - 2 / globalScale,
-            textY - 1 / globalScale,
-            textWidth + 4 / globalScale,
-            fontSize + 3 / globalScale
-          );
+          if (SUPPORTS_CANVAS_FILTER) {
+            ctx.save();
+            ctx.filter = 'blur(2px)';
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+            ctx.fillRect(scrimX, scrimY, scrimW, scrimH);
+            ctx.restore();
+          } else {
+            ctx.save();
+            ctx.shadowColor = 'rgba(15, 23, 42, 0.9)';
+            ctx.shadowBlur = 3 / globalScale;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+            ctx.fillRect(scrimX, scrimY, scrimW, scrimH);
+            ctx.restore();
+          }
         }
-        // Tag labels render in the tag-layer green (theme-aware) so they read
-        // as tag furniture at a glance; page labels stay white on the scrim.
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+        ctx.shadowBlur = 2 / globalScale;
         ctx.fillStyle = isTag ? theme.tagLabel : 'rgba(255, 255, 255, 0.92)';
         ctx.fillText(label, positioned.x, textY);
+        ctx.restore();
       }
     };
 
