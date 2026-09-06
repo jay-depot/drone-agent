@@ -743,7 +743,7 @@ export default function WikiGraphView({
     <div
       ref={rootRef}
       data-testid="wiki-graph-container"
-      className="relative w-full h-[calc(100vh-220px)] min-h-[480px]"
+      className="relative w-full flex-1 min-h-[480px]"
     >
       {/* force-graph wipes whatever element it mounts into
           (domNode.innerHTML = '' in its init), so the canvas gets a dedicated

@@ -144,8 +144,8 @@ export default function WikiPage() {
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className={graphView ? 'flex h-full min-h-0 flex-col' : undefined}>
+      <div className="flex items-center justify-between mb-6 shrink-0">
         <div>
           <h1 className="text-2xl font-bold">Wiki</h1>
           <p className="text-muted-foreground text-sm mt-1">
