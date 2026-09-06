@@ -49,6 +49,20 @@ User brief: tag→page attraction inversely proportional to tag size (smaller ta
 - **Knobs now**: `WIKI_CHARGE_STRENGTH` −480 · `WIKI_TAG_LINK_DISTANCE` 55 · `WIKI_TAG_SPRING_STRENGTH` 0.1 (tuned in the OLD regime with stiff page springs — live-tune expected; now divided by member count per edge) · `WIKI_TAG_REPULSION_STRENGTH` 1800 · `WIKI_TAG_REPULSION_DISTANCE_MAX` 12000 · `WIKI_TAG_MIN_SEPARATION_SCALE` 12 · `WIKI_TAG_SEPARATION_STRENGTH` 90 · `WIKI_TAG_MAX_KICK` 50 · `NODE_SIZE_SPREAD` 2 · `LABEL_THRESHOLD_*` unchanged. `WIKI_LINK_DISTANCE` removed.
 - **Validation**: graph tests 52/52, UI suite 130/130, tsc --noEmit clean, eslint+prettier clean, UI build ok, LSP clean on all touched files, repo-wide grep zero stale references to the deleted exports.
 
+## Round 9 (`1152d52`, 2026-09-06) — visual tweaks + broken-link attraction + zoom-clamp sizing fix
+
+User brief: tag fill less transparent; page-page links slightly translucent; broken links pull hard. Mid-round diagnostic: "page nodes lost dynamic sizing; sizes are there but subtle, and they don't recalculate on zoom anymore even though tag nodes do."
+
+- **TAG_FILL_LIGHT/DARK** alpha 0.08 → 0.18 (TAG_DIM focus-dim unchanged).
+- **LINK_COLOR_LIGHT/DARK** alpha 0.4/0.7 → 0.3/0.6 (2 test asserts updated).
+- **Broken links pull hard**: new knob `WIKI_BROKEN_LINK_SPRING_STRENGTH = 0.6` in wiki-graph-utils; component strength accessor: tag → `tagSpringStrength`, broken link (existing `isBrokenLink`, engine-form-safe) → knob, else 0.
+- **SIZING on zoom — root cause found, NOT the sizing pipeline**: zoom compensation computes `relSize = BASE(6)/k` but clamps to `MIN 0.35 / MAX 20`. Round-8 layouts auto-fit at k ≈ 0.05–0.1, so `6/k` pins at MAX 20 — page circles freeze (engine-rendered) across the whole low-zoom band while tag rings/labels look alive (custom canvas path + `/globalScale` stroke). Raised clamp to MIN 0.5 / MAX 150, which covers the full `MIN_ZOOM_K 0.05 → MAX_ZOOM_K 10` range (needs [0.6, 120]). Added low-zoom regression assert (k=0.1 → relSize 60). Sizing pipeline (`applyNodeSizing` blend, wiki.tsx memo, nodeValAccessor, graphData push) verified intact first; `2d18d52` touched only force constants.
+- **Validation**: graph tests 52/52, UI suite 130/130, tsc clean, lint clean, build ok, LSP clean.
+
+### Knobs after Round 9
+
+`WIKI_CHARGE_STRENGTH` −480 · `WIKI_TAG_LINK_DISTANCE` 55 · `WIKI_TAG_SPRING_STRENGTH` 0.1 · `WIKI_BROKEN_LINK_SPRING_STRENGTH` 0.6 · `WIKI_TAG_REPULSION_STRENGTH` 1800 · `WIKI_TAG_REPULSION_DISTANCE_MAX` 12000 · `WIKI_TAG_MIN_SEPARATION_SCALE` 12 · `WIKI_TAG_SEPARATION_STRENGTH` 90 · `WIKI_TAG_MAX_KICK` 50 · `NODE_SIZE_SPREAD` 2 · `MIN_NODE_REL_SIZE` 0.5 / `MAX_NODE_REL_SIZE` 150 (was 0.35/20) · `TAG_FILL` alpha 0.18 · `LINK_COLOR` alpha 0.3/0.6.
+
 ## Notes / lessons
 
 - **many-body charge is scalar per node** — cannot repel a group from itself only; use a custom force via `d3Force(name, fn)`. Contract: `(alpha) => void` mutating vx/vy, `initialize(nodes)` re-run on graphData push.
