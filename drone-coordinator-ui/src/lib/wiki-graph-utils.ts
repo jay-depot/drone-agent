@@ -134,10 +134,16 @@ export type SimNode = AugmentedGraphNode & {
 export type TagRepulsionForce = {
   (alpha: number): void;
   initialize(nodes: SimNode[]): void;
+  /**
+   * Exclude nodes (e.g. fading-out ghosts) from the force entirely, so
+   * invisible nodes cannot push real ones around.
+   */
+  setExcluded(ids: Set<string>): void;
 };
 
 export function createTagRepulsionForce(strength: number): TagRepulsionForce {
   let tagNodes: SimNode[] = [];
+  let excluded: Set<string> = new Set();
 
   const force = (alpha: number) => {
     const k = strength * alpha;
@@ -191,7 +197,12 @@ export function createTagRepulsionForce(strength: number): TagRepulsionForce {
   };
 
   (force as TagRepulsionForce).initialize = (nodes: SimNode[]) => {
-    tagNodes = nodes.filter(node => node.kind === 'tag');
+    tagNodes = nodes.filter(
+      node => node.kind === 'tag' && !excluded.has(node.id)
+    );
+  };
+  (force as TagRepulsionForce).setExcluded = (ids: Set<string>) => {
+    excluded = ids;
   };
   return force as TagRepulsionForce;
 }

@@ -17,6 +17,7 @@ import {
   selectShowdownSurvivors,
   type ShowdownCandidate,
 } from '@/lib/label-showdown';
+import type { SimNode } from '@/lib/wiki-graph-utils';
 import type { AugmentedGraphEdge, AugmentedGraphNode } from '@/lib/types';
 
 /**
@@ -82,7 +83,12 @@ type D3ChargeForce = {
   ): D3ChargeForce;
 };
 
-type PositionedNode = AugmentedGraphNode & { x?: number; y?: number };
+type PositionedNode = AugmentedGraphNode & {
+  x?: number;
+  y?: number;
+  vx?: number;
+  vy?: number;
+};
 
 function defaultFactory(el: HTMLElement): ForceGraphHandle {
   // force-graph's default export is a class with the imperative API above.
@@ -181,6 +187,11 @@ const NO_LINK_TARGETS: ReadonlySet<string> = new Set();
 
 /** Showdown recomputes at most this often while the engine is ticking. */
 export const SHOWDOWN_RECOMPUTE_MS = 100;
+/** New-node drift: velocity ramp duration and near-zero start fraction. */
+const DRIFT_MS = 2000;
+const DRIFT_START_FRACTION = 0.03;
+/** Removed-node fade-out duration. */
+const FADE_MS = 600;
 /** Approximate per-character width when no 2D context exists (tests/jsdom). */
 const FALLBACK_CHAR_WIDTH = 0.6;
 /**
@@ -258,6 +269,17 @@ export default function WikiGraphView({
   const nextTickComputeAtRef = useRef(0);
   /** Offscreen 2D context for label measurement; null where unsupported. */
   const measureCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+  /**
+   * Nodes (ids) currently animating into place, with their drift start time.
+   * Landing spots are assigned in the data push; physics influence ramps
+   * from near-zero movement to full over DRIFT_MS, so new nodes land where
+   * they land, stay, then let the forces pull them into place.
+   */
+  const driftingRef = useRef(new Map<string, number>());
+  /** Removed node ids fading out: id -> removal timestamp. */
+  const fadingRef = useRef(new Map<string, number>());
+  /** True while any node is drifting or fading — suppresses reactive fits. */
+  const settlingRef = useRef(false);
 
   // Set by the mount effect so later effects can restyle without re-running
   // the graph setup. Accessors live inside the mount effect: they close over
@@ -275,7 +297,14 @@ export default function WikiGraphView({
   const zoomStylesRef = useRef<(fg: ForceGraphHandle, k: number) => void>(
     () => {}
   );
+
+  // Set inside the mount effect: fade/drift fraction helpers closing over
+  // the animation refs above. Accessors call these per frame.
+  const fadeFractionRef = useRef<(id: string, now: number) => number>(() => 1);
+  const driftFractionRef = useRef<(id: string, now: number) => number>(() => 1);
   const repaintRef = useRef<(fg: ForceGraphHandle) => void>(() => {});
+  /** Re-filters the tag-repulsion force against current ghost ids. */
+  const syncGhostExclusionRef = useRef<() => void>(() => {});
 
   // Showdown recompute reads only refs, so every effect/callback can call the
   // latest instance through this ref without stale-closure hazards.
@@ -370,6 +399,31 @@ export default function WikiGraphView({
     };
     applyThemeColors();
 
+    /** 1 for settled nodes; 1→0 across FADE_MS for removed ones. */
+    const fadeFraction = (id: string, now: number): number => {
+      const startedAt = fadingRef.current.get(id);
+      if (startedAt === undefined) return 1;
+      const fraction = 1 - (now - startedAt) / FADE_MS;
+      return fraction <= 0 ? 0 : fraction;
+    };
+    fadeFractionRef.current = fadeFraction;
+
+    /**
+     * Physics influence for a drifting (new) node: DRIFT_START_FRACTION at
+     * landing, easing to 1 across DRIFT_MS — the "let go" ramp.
+     */
+    const driftFraction = (id: string, now: number): number => {
+      const startedAt = driftingRef.current.get(id);
+      if (startedAt === undefined) return 1;
+      const fraction = (now - startedAt) / DRIFT_MS;
+      if (fraction >= 1) {
+        driftingRef.current.delete(id);
+        return 1;
+      }
+      return DRIFT_START_FRACTION + (1 - DRIFT_START_FRACTION) * fraction;
+    };
+    driftFractionRef.current = driftFraction;
+
     const isBrokenLink = (link: AugmentedGraphEdge) =>
       link.kind === 'link' &&
       nodesByIdRef.current.get(edgeEndpointId(link.target))?.exists === false;
@@ -382,6 +436,10 @@ export default function WikiGraphView({
         return dimmed ? TAG_DIM : theme.tagFill;
       }
       if (!node.exists) return dimmed ? PLACEHOLDER_DIM : PLACEHOLDER_AMBER;
+      if (fadingRef.current.has(node.id)) {
+        // Ghost: fade the fill toward transparent via a synthetic dim color.
+        return PAGE_DIM;
+      }
       return dimmed ? PAGE_DIM : PAGE_BLUE;
     };
 
@@ -423,6 +481,12 @@ export default function WikiGraphView({
     const nodeValAccessor = (node: AugmentedGraphNode): number => {
       const base = node._val ?? 1;
       if (node.kind === 'tag' && !isTagNodeVisible(node)) return base * 0.05;
+      const now = performance.now();
+      // Removed nodes shrink away; new nodes grow in from their landing.
+      const fade = fadeFractionRef.current(node.id, now);
+      if (fade < 1) return base * fade;
+      const drift = driftFractionRef.current(node.id, now);
+      if (drift < 1) return base * (0.3 + 0.7 * drift);
       return base;
     };
 
@@ -489,6 +553,7 @@ export default function WikiGraphView({
         const focus = focusSetsRef.current;
         const dimmed = focus !== null && !focus.neighborIds.has(node.id);
         if (dimmed) continue;
+        if (fadingRef.current.has(node.id)) continue;
         if (node.kind === 'tag' && !tagsVisibleRef.current) continue;
         // Showdown survivor sets (recomputed on push/zoom/throttled ticks)
         // decide which labels draw — except the focused node, which always
@@ -603,11 +668,19 @@ export default function WikiGraphView({
 
     // Cluster separation is tag↔tag-only (see createTagRepulsionForce); the
     // stock charge force repels tags from their own members, which expelled
-    // them to the periphery.
-    fg.d3Force(
-      'tagRepulsion',
-      createTagRepulsionForce(WIKI_TAG_REPULSION_STRENGTH)
+    // them to the periphery. Fading ghosts are excluded so invisible nodes
+    // cannot push real ones around.
+    const tagRepulsionForce = createTagRepulsionForce(
+      WIKI_TAG_REPULSION_STRENGTH
     );
+    fg.d3Force('tagRepulsion', tagRepulsionForce);
+    const syncGhostExclusion = () => {
+      tagRepulsionForce.setExcluded(new Set(fadingRef.current.keys()));
+      // initialize() re-runs on the next graphData push; force a re-filter
+      // now so exclusions apply to the current node set immediately.
+      tagRepulsionForce.initialize(nodesRef.current as SimNode[]);
+    };
+    syncGhostExclusionRef.current = syncGhostExclusion;
 
     const repaint = () => {
       // The render loop repaints continuously; re-setting an accessor-bearing
@@ -661,6 +734,35 @@ export default function WikiGraphView({
       .onRenderFramePost(paintLabels)
       .onEngineTick(() => {
         const now = performance.now();
+        // Drift driver: while a new node is "held", damp its velocity toward
+        // near-zero; the ramp releases it into full physics across DRIFT_MS.
+        if (driftingRef.current.size > 0) {
+          for (const node of nodesRef.current as SimNode[]) {
+            const fraction = driftFractionRef.current(node.id, now);
+            if (fraction >= 1) continue;
+            const damp =
+              DRIFT_START_FRACTION + (1 - DRIFT_START_FRACTION) * fraction;
+            const prev = fraction > 0 ? 1 : DRIFT_START_FRACTION;
+            const scale = damp / prev;
+            if (node.vx !== undefined) node.vx *= scale;
+            if (node.vy !== undefined) node.vy *= scale;
+          }
+        }
+        // Settle bookkeeping: ghosts fade on a clock; drift ends via the
+        // fraction helpers. When nothing is animating, clear the flag and
+        // do the deferred fit once.
+        for (const [ghostId, startedAt] of fadingRef.current) {
+          if (now - startedAt > FADE_MS) fadingRef.current.delete(ghostId);
+        }
+        if (settlingRef.current) {
+          syncGhostExclusionRef.current();
+          if (driftingRef.current.size === 0 && fadingRef.current.size === 0) {
+            settlingRef.current = false;
+            if (zoomToFitOnRef.current && !focusedIdRef.current) {
+              fg.zoomToFit(FIT_MS, FIT_PADDING);
+            }
+          }
+        }
         if (now >= nextTickComputeAtRef.current) {
           nextTickComputeAtRef.current = now + SHOWDOWN_RECOMPUTE_MS;
           computeShowdownsRef.current();
@@ -668,6 +770,7 @@ export default function WikiGraphView({
       })
       .onEngineStop(() => {
         computeShowdownsRef.current();
+        if (settlingRef.current) return;
         if (zoomToFitOnRef.current && !focusedIdRef.current) {
           if (
             nodesRef.current.some(
@@ -729,6 +832,7 @@ export default function WikiGraphView({
   useEffect(() => {
     const fg = handleRef.current;
     if (!fg) return;
+    const previousIds = new Set(nodesRef.current.map(n => n.id));
     nodesRef.current = nodes;
     nodesByIdRef.current = new Map(nodes.map(n => [n.id, n]));
     tagMemberCountsRef.current = new Map();
@@ -762,6 +866,52 @@ export default function WikiGraphView({
       linkTargetsRef.current.get(sourceId)!.add(targetId);
       linkTargetsRef.current.get(targetId)!.add(sourceId);
     }
+    // Diff against the previous push (ids snapshotted before nodesRef was
+    // overwritten) to find added/removed nodes, then assign landing spots
+    // to added ones BEFORE handing data to the engine, so they appear where
+    // they land instead of blinking in at the origin spiral and flashing
+    // across the canvas.
+    const nextIds = new Set(nodes.map(n => n.id));
+    const addedIds = nodes.filter(n => !previousIds.has(n.id));
+    for (const removedId of previousIds) {
+      if (!nextIds.has(removedId)) {
+        fadingRef.current.set(removedId, performance.now());
+      }
+    }
+    // Prune faded-out ghosts.
+    const now = performance.now();
+    for (const [ghostId, startedAt] of fadingRef.current) {
+      if (now - startedAt > FADE_MS) fadingRef.current.delete(ghostId);
+    }
+
+    // Landing spot: a random point in the currently visible graph-space
+    // rect, biased around the viewport center. Computed from the zoom
+    // transform + container size (screen = graph * k + translate).
+    const assignLandingSpots = () => {
+      if (addedIds.length === 0) return;
+      const { k, x: tx, y: ty } = zoomRef.current;
+      const { width, height } = containerSizeRef.current;
+      if (!isFiniteNumber(k) || k <= 0 || !width || !height) return;
+      // Visible graph-space rect.
+      const cx = (width / 2 - tx) / k;
+      const cy = (height / 2 - ty) / k;
+      const halfW = width / 2 / k;
+      const halfH = height / 2 / k;
+      for (const node of addedIds) {
+        const positioned = node as PositionedNode;
+        // Jitter inside ~the central 60% of the viewport.
+        positioned.x = cx + (Math.random() - 0.5) * halfW * 1.2;
+        positioned.y = cy + (Math.random() - 0.5) * halfH * 1.2;
+        positioned.vx = 0;
+        positioned.vy = 0;
+        driftingRef.current.set(node.id, performance.now());
+      }
+    };
+    assignLandingSpots();
+    settlingRef.current =
+      prevNodeCountRef.current !== null &&
+      (addedIds.length > 0 || fadingRef.current.size > 0);
+
     // Draw order = array order in the engine (last drawn sits on top, and
     // hover/click hit-testing picks the topmost drawn node). Stable-sort a
     // copy so pages always layer above tag nodes — visually AND for pointer
@@ -770,6 +920,7 @@ export default function WikiGraphView({
       (a, b) => (a.kind === 'page' ? 1 : 0) - (b.kind === 'page' ? 1 : 0)
     );
     fg.graphData({ nodes: orderedNodes, links: toEngineLinks(edges) });
+    syncGhostExclusionRef.current();
     computeShowdownsRef.current();
     zoomStylesRef.current(fg, zoomRef.current.k);
     prevNodeCountRef.current = nodes.length;

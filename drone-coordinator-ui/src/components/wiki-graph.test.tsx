@@ -868,6 +868,77 @@ describe('WikiGraphView', () => {
     expect(draws('#u')).toBe(false);
   });
 
+  it('assigns landing spots to added nodes instead of origin blink-in', () => {
+    // Landing spots derive from the container rect; give it a size.
+    const originalRect = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = vi.fn(
+      () =>
+        ({
+          width: 640,
+          height: 360,
+          top: 0,
+          left: 0,
+          right: 640,
+          bottom: 360,
+          x: 0,
+          y: 0,
+        }) as DOMRect
+    );
+    const graphProps = {
+      edges,
+      tagsVisible: true,
+      onNodeFocus: vi.fn(),
+      onClearFocus: vi.fn(),
+      forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+    };
+    const { rerender } = render(
+      <WikiGraphView nodes={nodes} {...graphProps} />
+    );
+    // Push again with one extra node: the diff must assign it a landing
+    // position inside the viewport rect (from the zoom transform).
+    const zoomCb = accessorFrom('onZoom') as (t: {
+      k: number;
+      x: number;
+      y: number;
+    }) => void;
+    zoomCb({ k: 0.5, x: 0, y: 0 });
+    const grown = [...nodes, pageNode({ id: 'brand-new', title: 'New' })];
+    rerender(
+      <WikiGraphView
+        nodes={grown}
+        edges={edges}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock.calls.at(
+      -1
+    )![0] as { nodes: Array<{ id: string; x?: number; y?: number }> };
+    const newNode = pushed.nodes.find(n => n.id === 'brand-new');
+    expect(newNode).toBeDefined();
+    // Landing spot assigned (not undefined => no origin-spiral blink-in).
+    expect(typeof newNode!.x).toBe('number');
+    expect(typeof newNode!.y).toBe('number');
+    // Inside the visible graph-space rect for k=0.5, translate 0: |x|,|y| <=
+    // (container/k). Container is mocked at 640x360 in a sibling test but
+    // defaults to jsdom 0 — the guard falls back to no-assignment, so force
+    // the container size through a resize is overkill; just require finite.
+    expect(Number.isFinite(newNode!.x)).toBe(true);
+    expect(Number.isFinite(newNode!.y)).toBe(true);
+    // Inside the visible rect: k=0.5, translate 0, container 640x360 =>
+    // center cx=320/0.5=640, cy=360/2/0.5=360; halfW=640, halfH=360;
+    // central-60% jitter = +/-0.6*half (x: 256..1024, y: 144..576).
+    const x = newNode!.x as number;
+    const y = newNode!.y as number;
+    expect(x).toBeGreaterThanOrEqual(640 - 0.6 * 640);
+    expect(x).toBeLessThanOrEqual(640 + 0.6 * 640);
+    expect(y).toBeGreaterThanOrEqual(360 - 0.6 * 360);
+    expect(y).toBeLessThanOrEqual(360 + 0.6 * 360);
+    Element.prototype.getBoundingClientRect = originalRect;
+  });
+
   it('focused node label always draws, overriding showdown culling', () => {
     // page2's label would lose the showdown to page; focusing page2 must
     // keep its label visible anyway.
