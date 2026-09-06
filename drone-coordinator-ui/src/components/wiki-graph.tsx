@@ -2,8 +2,12 @@ import { useEffect, useRef } from 'react';
 import ForceGraph from 'force-graph';
 import {
   buildFocusSets,
+  edgeKey,
+  edgeEndpointId,
   labelDegreeThreshold,
   wikiLinkDegrees,
+  WIKI_LINK_DISTANCE,
+  WIKI_CHARGE_STRENGTH,
 } from '@/lib/wiki-graph-utils';
 import type { AugmentedGraphEdge, AugmentedGraphNode } from '@/lib/types';
 
@@ -47,12 +51,18 @@ export interface ForceGraphHandle {
     cb: (transform: { k: number; x: number; y: number }) => void
   ): ForceGraphHandle;
   onEngineStop(cb: () => void): ForceGraphHandle;
+  d3Force(forceName: string): unknown;
   width(px: number): ForceGraphHandle;
   height(px: number): ForceGraphHandle;
   zoom(scale: number, durationMs?: number): ForceGraphHandle;
   centerAt(x?: number, y?: number, durationMs?: number): ForceGraphHandle;
   zoomToFit(durationMs?: number, padding?: number): ForceGraphHandle;
 }
+
+/** d3 link force subset used for layout tuning (getter via d3Force). */
+type D3LinkForce = { distance(distance: number): D3LinkForce };
+/** d3 many-body force subset used for layout tuning (getter via d3Force). */
+type D3ChargeForce = { strength(strength: number): D3ChargeForce };
 
 type PositionedNode = AugmentedGraphNode & { x?: number; y?: number };
 
@@ -97,6 +107,17 @@ const MAX_ZOOM_K = 10;
 const ZOOM_STEP = 1.3;
 const FIT_MS = 600;
 const FIT_PADDING = 40;
+
+/**
+ * Engine-mutation isolation: force-graph's link parsing replaces string
+ * endpoints with node references ON THE OBJECTS PASSED TO graphData (and
+ * d3-force mutates them further). Feeding it shallow clones keeps the
+ * canonical edges passed as props string-based, which the page's tag-member
+ * counting and focus logic rely on.
+ */
+function toEngineLinks(edges: AugmentedGraphEdge[]): AugmentedGraphEdge[] {
+  return edges.map(edge => ({ ...edge }));
+}
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -146,6 +167,8 @@ export default function WikiGraphView({
   const linkDegreesRef = useRef(new Map<string, number>());
   const autoFitPendingRef = useRef(true);
   const prevNodeCountRef = useRef<number | null>(null);
+  /** Max wiki-link degree in the current data; scales label thresholds. */
+  const maxLinkDegreeRef = useRef(0);
 
   // Set by the mount effect so later effects can restyle without re-running
   // the graph setup. Accessors live inside the mount effect: they close over
@@ -182,7 +205,7 @@ export default function WikiGraphView({
 
     const isBrokenLink = (link: AugmentedGraphEdge) =>
       link.kind === 'link' &&
-      nodesByIdRef.current.get(link.target)?.exists === false;
+      nodesByIdRef.current.get(edgeEndpointId(link.target))?.exists === false;
 
     const nodeColorAccessor = (node: AugmentedGraphNode): string => {
       const focus = focusSetsRef.current;
@@ -199,7 +222,7 @@ export default function WikiGraphView({
       if (link.kind === 'tag') return tagsVisibleRef.current ? 0.5 : 0;
       const focus = focusSetsRef.current;
       if (!focus) return baseLinkWidthRef.current;
-      if (focus.touchingEdges.has(link))
+      if (focus.touchingEdgeKeys.has(edgeKey(link)))
         return Math.max(2, baseLinkWidthRef.current * 2);
       return 0.05;
     };
@@ -208,12 +231,13 @@ export default function WikiGraphView({
       if (link.kind === 'tag') {
         if (!tagsVisibleRef.current) return TRANSPARENT;
         const focus = focusSetsRef.current;
-        if (focus && focus.touchingEdges.has(link)) return TAG_EDGE_LIT;
+        if (focus && focus.touchingEdgeKeys.has(edgeKey(link)))
+          return TAG_EDGE_LIT;
         return TAG_EDGE;
       }
       const focus = focusSetsRef.current;
       if (focus) {
-        return focus.touchingEdges.has(link)
+        return focus.touchingEdgeKeys.has(edgeKey(link))
           ? isBrokenLink(link)
             ? theme.brokenLink
             : theme.litLink
@@ -282,7 +306,8 @@ export default function WikiGraphView({
       const degree = linkDegreesRef.current.get(node.id) ?? 0;
       if (
         node.kind === 'page' &&
-        degree < labelDegreeThreshold(zoomRef.current.k)
+        degree <
+          labelDegreeThreshold(zoomRef.current.k, maxLinkDegreeRef.current)
       )
         return;
 
@@ -320,6 +345,13 @@ export default function WikiGraphView({
       handle.linkWidth(linkWidthAccessor);
     };
     zoomStylesRef.current = applyZoomStyles;
+
+    // Spread the layout so labels have room: longer link rest length and
+    // stronger per-node repulsion than the engine defaults.
+    const linkForce = fg.d3Force('link') as D3LinkForce | undefined;
+    if (linkForce) linkForce.distance(WIKI_LINK_DISTANCE);
+    const chargeForce = fg.d3Force('charge') as D3ChargeForce | undefined;
+    if (chargeForce) chargeForce.strength(WIKI_CHARGE_STRENGTH);
 
     const repaint = () => {
       // The render loop repaints continuously; re-setting an accessor-bearing
@@ -409,7 +441,8 @@ export default function WikiGraphView({
     nodesRef.current = nodes;
     nodesByIdRef.current = new Map(nodes.map(n => [n.id, n]));
     linkDegreesRef.current = wikiLinkDegrees(edges);
-    fg.graphData({ nodes, links: edges });
+    maxLinkDegreeRef.current = Math.max(0, ...linkDegreesRef.current.values());
+    fg.graphData({ nodes, links: toEngineLinks(edges) });
     zoomStylesRef.current(fg, zoomRef.current.k);
     if (prevNodeCountRef.current !== nodes.length) {
       autoFitPendingRef.current = true;

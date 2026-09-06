@@ -15,7 +15,6 @@ import { paginationRange } from '@/lib/pagination';
 import {
   applyNodeSizing,
   buildAugmentedWikiGraph,
-  filterOrphans,
 } from '@/lib/wiki-graph-utils';
 import WikiPageGrid from '@/components/wiki-page-grid';
 import WikiGraphView from '@/components/wiki-graph';
@@ -28,7 +27,6 @@ export default function WikiPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const graphView = searchParams.get('view') === 'graph';
   const focusedNodeId = searchParams.get('node');
-  const orphansVisible = searchParams.get('orphans') !== '0';
   const tagsVisible = searchParams.get('tags') === '1';
   const { pages, setPages, loading, error } = useWikiPages();
   const { graph, error: graphError } = useWikiGraph(graphView);
@@ -56,16 +54,6 @@ export default function WikiPage() {
     setSearchParams(params);
   };
 
-  const setOrphansVisible = (next: boolean) => {
-    const params = new URLSearchParams(searchParams);
-    if (next) {
-      params.delete('orphans');
-    } else {
-      params.set('orphans', '0');
-    }
-    setSearchParams(params);
-  };
-
   const setTagsVisible = (next: boolean) => {
     const params = new URLSearchParams(searchParams);
     if (next) {
@@ -84,10 +72,7 @@ export default function WikiPage() {
       edges: base.edges,
     };
   }, [graph]);
-  const visible = useMemo(
-    () => (augmented && !orphansVisible ? filterOrphans(augmented) : augmented),
-    [augmented, orphansVisible]
-  );
+  const visible = augmented;
   const focusedNode =
     visible && focusedNodeId
       ? (visible.nodes.find(n => n.id === focusedNodeId) ?? null)
@@ -185,14 +170,6 @@ export default function WikiPage() {
                 title="Show tag nodes. Tag nodes also organize the layout when hidden."
               >
                 Tags
-              </Button>
-              <Button
-                variant={orphansVisible ? 'outline' : 'ghost'}
-                size="sm"
-                onClick={() => setOrphansVisible(!orphansVisible)}
-                title="Show pages with no wiki links."
-              >
-                Orphans
               </Button>
             </>
           )}

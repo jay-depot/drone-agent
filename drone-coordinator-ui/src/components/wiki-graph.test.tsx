@@ -33,9 +33,15 @@ function makeFakeHandle() {
     'zoom',
     'centerAt',
     'zoomToFit',
+    'd3Force',
   ]) {
     handle[method] = vi.fn(chain);
   }
+  const linkForce = { distance: vi.fn() };
+  const chargeForce = { strength: vi.fn() };
+  handle.d3Force = vi.fn((name: string) =>
+    name === 'link' ? linkForce : name === 'charge' ? chargeForce : undefined
+  ) as unknown as typeof handle.d3Force;
   handle._destructor = vi.fn();
   return handle;
 }
@@ -433,5 +439,26 @@ describe('WikiGraphView', () => {
     const { unmount } = renderView();
     unmount();
     expect(handle._destructor).toHaveBeenCalled();
+  });
+
+  it('feeds the engine cloned links, leaving canonical edges unmutated', () => {
+    renderView();
+    const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as { links: Array<{ source: unknown; target: unknown }> };
+    expect(pushed.links).not.toBe(edges);
+    expect(pushed.links[0]).not.toBe(edges[0]);
+    expect(pushed.links[0].source).toBe('a');
+    expect(typeof pushed.links[0].source).toBe('string');
+    expect(edges[0].source).toBe('a');
+    expect(typeof edges[0].source).toBe('string');
+
+    const linkForce = handle.d3Force('link') as {
+      distance: ReturnType<typeof vi.fn>;
+    };
+    const chargeForce = handle.d3Force('charge') as {
+      strength: ReturnType<typeof vi.fn>;
+    };
+    expect(linkForce.distance).toHaveBeenCalledWith(90);
+    expect(chargeForce.strength).toHaveBeenCalledWith(-240);
   });
 });

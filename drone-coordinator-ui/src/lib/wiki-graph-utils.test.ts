@@ -3,8 +3,10 @@ import {
   applyNodeSizing,
   buildAugmentedWikiGraph,
   buildFocusSets,
-  filterOrphans,
+  edgeEndpointId,
+  edgeKey,
   labelDegreeThreshold,
+  maxLabelThreshold,
   wikiLinkDegrees,
   NODE_SIZE_SPREAD,
   LABEL_THRESHOLD_MAX_DEGREE,
@@ -15,7 +17,6 @@ import type {
   AugmentedGraphEdge,
   AugmentedGraphNode,
   WikiGraph,
-  AugmentedWikiGraph,
 } from '@/lib/types';
 
 function pageNode(overrides: Partial<AugmentedGraphNode>): AugmentedGraphNode {
@@ -30,6 +31,24 @@ function pageNode(overrides: Partial<AugmentedGraphNode>): AugmentedGraphNode {
     ...overrides,
   };
 }
+
+describe('edgeEndpointId / edgeKey', () => {
+  it('resolves node-object endpoints to ids and passes strings through', () => {
+    expect(edgeEndpointId('a')).toBe('a');
+    expect(edgeEndpointId({ id: 'a', title: 'A' })).toBe('a');
+  });
+
+  it('builds the same key for string and object endpoint forms', () => {
+    const canonical = edgeKey({ source: 'a', target: 'b' });
+    const engineForm = edgeKey({
+      source: { id: 'a', title: 'A' },
+      target: { id: 'b', title: 'B' },
+    });
+    expect(canonical).toBe(engineForm);
+    expect(canonical).toContain('a');
+    expect(canonical).toContain('b');
+  });
+});
 
 describe('wikiLinkDegrees', () => {
   it('counts in and out links per node over link edges only', () => {
@@ -104,88 +123,6 @@ describe('buildAugmentedWikiGraph', () => {
   });
 });
 
-describe('filterOrphans', () => {
-  it('drops pages with zero wiki-link degree and their tag edges', () => {
-    const graph: AugmentedWikiGraph = {
-      nodes: [
-        pageNode({ id: 'a', tags: ['x'] }),
-        pageNode({ id: 'b' }),
-        pageNode({ id: 'orphan', tags: ['x'] }),
-        pageNode({ id: 'tag:x', title: 'x', tags: ['x'], kind: 'tag' }),
-      ],
-      edges: [
-        { source: 'a', target: 'b', kind: 'link' },
-        { source: 'a', target: 'tag:x', kind: 'tag' },
-        { source: 'orphan', target: 'tag:x', kind: 'tag' },
-      ],
-    };
-    const filtered = filterOrphans(graph);
-    expect(filtered.nodes.map(n => n.id).sort()).toEqual(['a', 'b', 'tag:x']);
-    expect(
-      filtered.edges.sort(
-        (x, y) =>
-          x.kind.localeCompare(y.kind) || x.source.localeCompare(y.source)
-      )
-    ).toEqual([
-      { source: 'a', target: 'b', kind: 'link' },
-      { source: 'a', target: 'tag:x', kind: 'tag' },
-    ]);
-  });
-
-  it('drops tag nodes left without any member edge', () => {
-    const graph: AugmentedWikiGraph = {
-      nodes: [
-        pageNode({ id: 'a' }),
-        pageNode({ id: 'b' }),
-        pageNode({ id: 'lonely-page', tags: ['lonely'] }),
-        pageNode({
-          id: 'tag:lonely',
-          title: 'lonely',
-          tags: ['lonely'],
-          kind: 'tag',
-        }),
-      ],
-      edges: [
-        { source: 'a', target: 'b', kind: 'link' },
-        { source: 'lonely-page', target: 'tag:lonely', kind: 'tag' },
-      ],
-    };
-    const filtered = filterOrphans(graph);
-    expect(filtered.nodes.map(n => n.id)).toEqual(['a', 'b']);
-    expect(filtered.edges).toEqual([
-      { source: 'a', target: 'b', kind: 'link' },
-    ]);
-  });
-
-  it('keeps broken-link placeholder pages that have link degree', () => {
-    const graph: AugmentedWikiGraph = {
-      nodes: [
-        pageNode({ id: 'a' }),
-        pageNode({ id: 'missing', title: 'missing', exists: false }),
-      ],
-      edges: [{ source: 'a', target: 'missing', kind: 'link' }],
-    };
-    const filtered = filterOrphans(graph);
-    expect(filtered.nodes.map(n => n.id)).toEqual(['a', 'missing']);
-  });
-
-  it('keeps a linked page that also has no tags', () => {
-    const graph: AugmentedWikiGraph = {
-      nodes: [
-        pageNode({ id: 'a', tags: ['x'] }),
-        pageNode({ id: 'b', tags: [] }),
-        pageNode({ id: 'tag:x', title: 'x', tags: ['x'], kind: 'tag' }),
-      ],
-      edges: [
-        { source: 'a', target: 'b', kind: 'link' },
-        { source: 'a', target: 'tag:x', kind: 'tag' },
-      ],
-    };
-    const filtered = filterOrphans(graph);
-    expect(filtered.nodes.map(n => n.id).sort()).toEqual(['a', 'b', 'tag:x']);
-  });
-});
-
 describe('applyNodeSizing', () => {
   it('scales node value with the blend of degree and word count', () => {
     const nodes = [
@@ -200,14 +137,10 @@ describe('applyNodeSizing', () => {
     ];
     const sized = applyNodeSizing(nodes, edges);
     const byId = new Map(sized.map(n => [n.id, n._val ?? 0]));
-    // hub: max degree (3) and max words -> importance 1.0
     expect(byId.get('hub')).toBeCloseTo(Math.pow(1 + NODE_SIZE_SPREAD, 1.5));
-    // meaty: degree 1/3, words max -> 0.7*(1/3) + 0.3*1
     expect(byId.get('meaty')).toBeCloseTo(
       Math.pow(1 + NODE_SIZE_SPREAD * (0.7 / 3 + 0.3), 1.5)
     );
-    // sparse: degree 2/3, words ~0 -> 0.7*(2/3)
-    // (wordCount 0 keeps the words term out of the expectation)
     expect(byId.get('sparse')).toBeCloseTo(
       Math.pow(1 + NODE_SIZE_SPREAD * ((0.7 * 2) / 3), 1.5)
     );
@@ -222,7 +155,7 @@ describe('applyNodeSizing', () => {
   });
 
   it('gives tag nodes value from their member count', () => {
-    const nodes: AugmentedGraphNode[] = [
+    const nodes = [
       pageNode({ id: 'a', tags: ['x'] }),
       pageNode({ id: 'b', tags: ['x'] }),
       pageNode({ id: 'c', tags: ['y'] }),
@@ -245,24 +178,37 @@ describe('applyNodeSizing', () => {
   });
 });
 
+describe('maxLabelThreshold', () => {
+  it('clamps small graphs to a floor of 2', () => {
+    expect(maxLabelThreshold(5)).toBe(2);
+    expect(maxLabelThreshold(1)).toBe(2);
+  });
+
+  it('caps at LABEL_THRESHOLD_MAX_DEGREE', () => {
+    expect(maxLabelThreshold(100)).toBe(LABEL_THRESHOLD_MAX_DEGREE);
+  });
+
+  it('returns 0 for a graph with no links', () => {
+    expect(maxLabelThreshold(0)).toBe(0);
+  });
+});
+
 describe('labelDegreeThreshold', () => {
-  it('returns the max degree at or below the min zoom', () => {
-    expect(labelDegreeThreshold(0.5)).toBe(LABEL_THRESHOLD_MAX_DEGREE);
-    expect(labelDegreeThreshold(LABEL_THRESHOLD_MIN_ZOOM)).toBe(
-      LABEL_THRESHOLD_MAX_DEGREE
+  it('returns the graph-scaled max at or below the min zoom', () => {
+    expect(labelDegreeThreshold(0.5, 8)).toBe(maxLabelThreshold(8));
+    expect(labelDegreeThreshold(LABEL_THRESHOLD_MIN_ZOOM, 8)).toBe(
+      maxLabelThreshold(8)
     );
   });
 
   it('returns 0 at or above the max zoom', () => {
-    expect(labelDegreeThreshold(LABEL_THRESHOLD_MAX_ZOOM)).toBe(0);
-    expect(labelDegreeThreshold(5)).toBe(0);
+    expect(labelDegreeThreshold(LABEL_THRESHOLD_MAX_ZOOM, 8)).toBe(0);
+    expect(labelDegreeThreshold(5, 8)).toBe(0);
   });
 
   it('interpolates linearly between the zoom endpoints', () => {
     const mid = (LABEL_THRESHOLD_MIN_ZOOM + LABEL_THRESHOLD_MAX_ZOOM) / 2;
-    expect(labelDegreeThreshold(mid)).toBeCloseTo(
-      LABEL_THRESHOLD_MAX_DEGREE / 2
-    );
+    expect(labelDegreeThreshold(mid, 8)).toBeCloseTo(maxLabelThreshold(8) / 2);
   });
 });
 
@@ -277,18 +223,27 @@ describe('buildFocusSets', () => {
   it('collects the focus and its direct neighbors for a page focus', () => {
     const sets = buildFocusSets(edges, 'a');
     expect([...sets.neighborIds].sort()).toEqual(['a', 'b', 'c', 'tag:x']);
-    expect(sets.touchingEdges.size).toBe(3);
+    expect(sets.touchingEdgeKeys.size).toBe(3);
   });
 
   it('includes tag edges when the focus is a tag node', () => {
     const sets = buildFocusSets(edges, 'tag:x');
     expect([...sets.neighborIds].sort()).toEqual(['a', 'tag:x']);
-    expect(sets.touchingEdges.size).toBe(1);
+    expect(sets.touchingEdgeKeys.size).toBe(1);
+  });
+
+  it('matches engine-resolved link objects by endpoint key', () => {
+    const sets = buildFocusSets(edges, 'a');
+    const engineForm = {
+      source: { id: 'a', title: 'A' },
+      target: { id: 'b', title: 'B' },
+    };
+    expect(sets.touchingEdgeKeys.has(edgeKey(engineForm))).toBe(true);
   });
 
   it('returns a lone focus for an unknown id', () => {
     const sets = buildFocusSets(edges, 'nope');
     expect([...sets.neighborIds]).toEqual(['nope']);
-    expect(sets.touchingEdges.size).toBe(0);
+    expect(sets.touchingEdgeKeys.size).toBe(0);
   });
 });

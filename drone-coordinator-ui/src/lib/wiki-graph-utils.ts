@@ -18,6 +18,35 @@ export const LABEL_THRESHOLD_MAX_ZOOM = 2.5;
 export const LABEL_THRESHOLD_MAX_DEGREE = 10;
 
 /**
+ * Layout spread: link rest length and per-node repulsion. Higher values
+ * spread connected nodes further apart; tuned for label legibility.
+ */
+export const WIKI_LINK_DISTANCE = 90;
+export const WIKI_CHARGE_STRENGTH = -240;
+
+/**
+ * Fraction of the graph's max wiki-link degree that earns a label at low
+ * zoom, so small graphs (max degree < LABEL_THRESHOLD_MAX_DEGREE) still
+ * show hub labels instead of none at all.
+ */
+export const LABEL_THRESHOLD_LOW_FRACTION = 0.35;
+/**
+ * Stable key for an edge endpoint: engine-resolved links carry node objects
+ * where our canonical edges carry id strings, so match by resolved id.
+ */
+export function edgeEndpointId(endpoint: unknown): string {
+  if (typeof endpoint === 'object' && endpoint !== null) {
+    return String((endpoint as { id: unknown }).id);
+  }
+  return String(endpoint);
+}
+
+/** `source\\u0000target` key for an edge, endpoint-form agnostic. */
+export function edgeKey(edge: { source: unknown; target: unknown }): string {
+  return `${edgeEndpointId(edge.source)}\\u0000${edgeEndpointId(edge.target)}`;
+}
+
+/**
  * Count wiki-link degree (in + out) per node id, over `kind: 'link'` edges
  * only. Tag edges are excluded so heavily-tagged pages do not fake hub status.
  */
@@ -65,36 +94,6 @@ export function buildAugmentedWikiGraph(graph: WikiGraph): AugmentedWikiGraph {
   }
 
   return { nodes: [...nodes, ...tagNodes.values()], edges };
-}
-
-/**
- * Drop pages with zero wiki-link degree (orphans) together with their edges,
- * then drop tag nodes left without any edge. Tag nodes with remaining member
- * pages survive and keep pulling their neighborhoods together.
- */
-export function filterOrphans(graph: AugmentedWikiGraph): AugmentedWikiGraph {
-  const degrees = wikiLinkDegrees(graph.edges);
-  const keptNodes = graph.nodes.filter(
-    node => node.kind === 'tag' || (degrees.get(node.id) ?? 0) > 0
-  );
-  const keptIds = new Set(keptNodes.map(node => node.id));
-  const keptEdges = graph.edges.filter(
-    edge => keptIds.has(edge.source) && keptIds.has(edge.target)
-  );
-
-  const tagIdsWithEdges = new Set<string>();
-  for (const edge of keptEdges) {
-    if (edge.kind === 'tag') {
-      tagIdsWithEdges.add(edge.target);
-    }
-  }
-
-  return {
-    nodes: keptNodes.filter(
-      node => node.kind === 'page' || tagIdsWithEdges.has(node.id)
-    ),
-    edges: keptEdges,
-  };
 }
 
 /**
@@ -147,27 +146,43 @@ export function applyNodeSizing(
 }
 
 /**
+ * Highest label threshold for a graph: a fraction of its max wiki-link
+ * degree, clamped to [2, LABEL_THRESHOLD_MAX_DEGREE], so the low-zoom end
+ * always names a meaningful handful of hubs regardless of graph size.
+ */
+export function maxLabelThreshold(maxDegree: number): number {
+  if (maxDegree <= 0) return 0;
+  return Math.min(
+    LABEL_THRESHOLD_MAX_DEGREE,
+    Math.max(2, Math.ceil(maxDegree * LABEL_THRESHOLD_LOW_FRACTION))
+  );
+}
+
+/**
  * Label visibility threshold for a given zoom level: at low zoom only
  * high-degree hubs carry labels; as zoom increases the threshold drops
- * linearly to 0 (everything labeled). Clamped to [0, LABEL_THRESHOLD_MAX_DEGREE].
+ * linearly to 0 (everything labeled). Scaled to the graph's own degree
+ * distribution via maxLabelThreshold.
  */
-export function labelDegreeThreshold(k: number): number {
-  if (k <= LABEL_THRESHOLD_MIN_ZOOM) return LABEL_THRESHOLD_MAX_DEGREE;
+export function labelDegreeThreshold(k: number, maxDegree: number): number {
+  const top = maxLabelThreshold(maxDegree);
+  if (k <= LABEL_THRESHOLD_MIN_ZOOM) return top;
   if (k >= LABEL_THRESHOLD_MAX_ZOOM) return 0;
   const t =
     (k - LABEL_THRESHOLD_MIN_ZOOM) /
     (LABEL_THRESHOLD_MAX_ZOOM - LABEL_THRESHOLD_MIN_ZOOM);
-  return Math.max(
-    0,
-    Math.min(LABEL_THRESHOLD_MAX_DEGREE, LABEL_THRESHOLD_MAX_DEGREE * (1 - t))
-  );
+  return Math.max(0, Math.min(top, top * (1 - t)));
 }
 
 export interface FocusSets {
   /** The focused node id plus every neighbor reachable by one edge. */
   neighborIds: Set<string>;
-  /** Edges touching the focused node (object identity from the input array). */
-  touchingEdges: Set<AugmentedGraphEdge>;
+  /**
+   * `source\\u0000target` keys of edges touching the focused node. Keys (not
+   * object identity) because the graph engine hands accessors its own
+   * endpoint-resolved link objects, not the canonical edge instances.
+   */
+  touchingEdgeKeys: Set<string>;
 }
 
 /**
@@ -180,13 +195,13 @@ export function buildFocusSets(
   focusedId: string
 ): FocusSets {
   const neighborIds = new Set<string>([focusedId]);
-  const touchingEdges = new Set<AugmentedGraphEdge>();
+  const touchingEdgeKeys = new Set<string>();
   for (const edge of edges) {
     if (edge.source === focusedId || edge.target === focusedId) {
       neighborIds.add(edge.source);
       neighborIds.add(edge.target);
-      touchingEdges.add(edge);
+      touchingEdgeKeys.add(edgeKey(edge));
     }
   }
-  return { neighborIds, touchingEdges };
+  return { neighborIds, touchingEdgeKeys };
 }

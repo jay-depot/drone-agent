@@ -173,7 +173,7 @@ describe('WikiPage graph view', () => {
     expect(screen.getByRole('button', { name: 'Grid' })).toBeDefined();
   });
 
-  it('renders Tags and Orphans toggles and persists their URL state', async () => {
+  it('renders the Tags toggle and always includes orphan pages', async () => {
     const mockFetch = vi.fn(async (url: string) => {
       if (url === '/api/wiki/graph') {
         return {
@@ -210,8 +210,9 @@ describe('WikiPage graph view', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Tags' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Orphans' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Orphans' })).toBeNull();
 
+    // Orphans are always part of the graph now; the tag layer alone docks them.
     const nodeIds = () =>
       ((wikiGraphStub.props?.nodes as Array<{ id: string }>) ?? []).map(
         n => n.id
@@ -221,90 +222,13 @@ describe('WikiPage graph view', () => {
     });
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: 'Orphans' }));
-    await waitFor(() => {
-      expect(nodeIds()).not.toContain('lonely');
-      expect(nodeIds()).not.toContain('tag:misc');
-    });
-
     await user.click(screen.getByRole('button', { name: 'Tags' }));
     await waitFor(() => {
       expect(wikiGraphStub.props?.tagsVisible).toBe(true);
     });
-    await user.click(screen.getByRole('button', { name: 'Orphans' }));
     await waitFor(() => {
       expect(nodeIds()).toContain('lonely');
     });
-  });
-
-  it('filters orphan pages and emptied tag nodes when Orphans is off', async () => {
-    const graphWithOrphans = {
-      nodes: [
-        {
-          id: 'a',
-          title: 'Page A',
-          exists: true,
-          wordCount: 10,
-          tags: ['ops'],
-          scope: 'coordinator',
-        },
-        {
-          id: 'b',
-          title: 'Page B',
-          exists: true,
-          wordCount: 5,
-          tags: [],
-          scope: 'coordinator',
-        },
-        {
-          id: 'lonely',
-          title: 'Lonely',
-          exists: true,
-          wordCount: 5,
-          tags: ['misc'],
-          scope: 'coordinator',
-        },
-      ],
-      edges: [{ source: 'a', target: 'b', kind: 'link' }],
-    };
-    const mockFetch = vi.fn(async (url: string) => {
-      if (url === '/api/wiki/graph') {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => graphWithOrphans,
-        } as Response;
-      }
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
-    });
-    vi.stubGlobal('fetch', mockFetch);
-
-    render(
-      <AuthProvider>
-        <MemoryRouter initialEntries={['/wiki?view=graph&orphans=0']}>
-          <Routes>
-            <Route path="/wiki" element={<WikiPage />} />
-          </Routes>
-        </MemoryRouter>
-      </AuthProvider>
-    );
-
-    await waitFor(() => {
-      expect(wikiGraphStub.props).not.toBeNull();
-    });
-    const nodeIds = (
-      wikiGraphStub.props?.nodes as Array<{ id: string; kind: string }>
-    ).map(n => n.id);
-    expect(nodeIds).not.toContain('lonely');
-    expect(nodeIds).not.toContain('tag:misc');
-    expect(nodeIds).toContain('a');
-    expect(nodeIds).toContain('b');
-    expect(nodeIds).toContain('tag:ops');
-    expect(
-      (
-        wikiGraphStub.props?.edges as Array<{ source: string; target: string }>
-      ).every(e => e.source !== 'lonely' && e.target !== 'tag:misc')
-    ).toBe(true);
   });
 
   it('passes tag nodes to the graph when Tags is on', async () => {
