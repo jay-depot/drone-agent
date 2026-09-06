@@ -5,8 +5,6 @@ import {
   buildFocusSets,
   edgeEndpointId,
   edgeKey,
-  labelDegreeThreshold,
-  maxLabelThreshold,
   pageLinkSpringStrength,
   wikiLinkDegrees,
   NODE_SIZE_SPREAD,
@@ -16,9 +14,6 @@ import {
   tagSpringStrength,
   WIKI_TAG_SPRING_STRENGTH,
   WIKI_TAG_REPULSION_DISTANCE_MAX,
-  LABEL_THRESHOLD_MAX_DEGREE,
-  LABEL_THRESHOLD_MAX_ZOOM,
-  LABEL_THRESHOLD_MIN_ZOOM,
 } from './wiki-graph-utils';
 import type {
   AugmentedGraphEdge,
@@ -431,40 +426,6 @@ describe('applyNodeSizing', () => {
     const byId = new Map(sized.map(n => [n.id, n._val ?? 0]));
     expect(byId.get('tag:x')).toBe(2);
     expect(byId.get('tag:x')).toBeLessThan(byId.get('hub') ?? 0);
-  });
-});
-
-describe('maxLabelThreshold', () => {
-  it('clamps small graphs to a floor of 2', () => {
-    expect(maxLabelThreshold(1)).toBe(2);
-    expect(maxLabelThreshold(4)).toBe(2);
-  });
-
-  it('caps at LABEL_THRESHOLD_MAX_DEGREE', () => {
-    expect(maxLabelThreshold(100)).toBe(LABEL_THRESHOLD_MAX_DEGREE);
-  });
-
-  it('returns 0 for a graph with no links', () => {
-    expect(maxLabelThreshold(0)).toBe(0);
-  });
-});
-
-describe('labelDegreeThreshold', () => {
-  it('returns the graph-scaled max at or below the min zoom', () => {
-    expect(labelDegreeThreshold(0.5, 8)).toBe(maxLabelThreshold(8));
-    expect(labelDegreeThreshold(LABEL_THRESHOLD_MIN_ZOOM, 8)).toBe(
-      maxLabelThreshold(8)
-    );
-  });
-
-  it('returns 0 at or above the max zoom', () => {
-    expect(labelDegreeThreshold(LABEL_THRESHOLD_MAX_ZOOM, 8)).toBe(0);
-    expect(labelDegreeThreshold(5, 8)).toBe(0);
-  });
-
-  it('interpolates linearly between the zoom endpoints', () => {
-    const mid = (LABEL_THRESHOLD_MIN_ZOOM + LABEL_THRESHOLD_MAX_ZOOM) / 2;
-    expect(labelDegreeThreshold(mid, 8)).toBeCloseTo(maxLabelThreshold(8) / 2);
   });
 });
 

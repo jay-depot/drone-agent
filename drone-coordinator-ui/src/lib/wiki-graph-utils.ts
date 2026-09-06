@@ -8,19 +8,6 @@ import type {
 /** Spread constant for the node-size formula: `_val = (1 + SPREAD * importance)^1.5`. */
 export const NODE_SIZE_SPREAD = 2;
 
-/** Zoom level at or below which only the highest-degree hubs are labeled. */
-export const LABEL_THRESHOLD_MIN_ZOOM = 0.75;
-
-/**
- * Zoom level at or above which every visible node is labeled. The linear
- * fade spans MIN..MAX, so a higher MAX keeps mid zooms selective: labels
- * fall away more aggressively on zoom-out.
- */
-export const LABEL_THRESHOLD_MAX_ZOOM = 4;
-
-/** Wiki-link degree required for a label at or below LABEL_THRESHOLD_MIN_ZOOM. */
-export const LABEL_THRESHOLD_MAX_DEGREE = 10;
-
 /** Uniform per-node repulsion (d3 many-body charge); keeps pages readable. */
 export const WIKI_CHARGE_STRENGTH = -480;
 
@@ -192,12 +179,6 @@ export function createTagRepulsionForce(strength: number): TagRepulsionForce {
 }
 
 /**
- * Fraction of the graph's max wiki-link degree that earns a label at low
- * zoom, so small graphs (max degree < LABEL_THRESHOLD_MAX_DEGREE) still
- * show hub labels instead of none at all.
- */
-export const LABEL_THRESHOLD_LOW_FRACTION = 0.45;
-/**
  * Stable key for an edge endpoint: engine-resolved links carry node objects
  * where our canonical edges carry id strings, so match by resolved id.
  */
@@ -306,35 +287,6 @@ export function applyNodeSizing(
     const importance = 0.7 * normDegree + 0.3 * normWords;
     return { ...node, _val: Math.pow(1 + NODE_SIZE_SPREAD * importance, 1.5) };
   });
-}
-
-/**
- * Highest label threshold for a graph: a fraction of its max wiki-link
- * degree, clamped to [2, LABEL_THRESHOLD_MAX_DEGREE], so the low-zoom end
- * always names a meaningful handful of hubs regardless of graph size.
- */
-export function maxLabelThreshold(maxDegree: number): number {
-  if (maxDegree <= 0) return 0;
-  return Math.min(
-    LABEL_THRESHOLD_MAX_DEGREE,
-    Math.max(2, Math.ceil(maxDegree * LABEL_THRESHOLD_LOW_FRACTION))
-  );
-}
-
-/**
- * Label visibility threshold for a given zoom level: at low zoom only
- * high-degree hubs carry labels; as zoom increases the threshold drops
- * linearly to 0 (everything labeled). Scaled to the graph's own degree
- * distribution via maxLabelThreshold.
- */
-export function labelDegreeThreshold(k: number, maxDegree: number): number {
-  const top = maxLabelThreshold(maxDegree);
-  if (k <= LABEL_THRESHOLD_MIN_ZOOM) return top;
-  if (k >= LABEL_THRESHOLD_MAX_ZOOM) return 0;
-  const t =
-    (k - LABEL_THRESHOLD_MIN_ZOOM) /
-    (LABEL_THRESHOLD_MAX_ZOOM - LABEL_THRESHOLD_MIN_ZOOM);
-  return Math.max(0, Math.min(top, top * (1 - t)));
 }
 
 export interface FocusSets {

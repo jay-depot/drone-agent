@@ -1,11 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ForceGraph from 'force-graph';
 import {
   buildFocusSets,
   createTagRepulsionForce,
   edgeKey,
   edgeEndpointId,
-  labelDegreeThreshold,
   pageLinkSpringStrength,
   tagSpringStrength,
   WIKI_BROKEN_LINK_SPRING_STRENGTH,
@@ -13,7 +12,6 @@ import {
   WIKI_PAGE_LINK_DISTANCE,
   WIKI_TAG_LINK_DISTANCE,
   WIKI_TAG_REPULSION_STRENGTH,
-  wikiLinkDegrees,
 } from '@/lib/wiki-graph-utils';
 import {
   selectShowdownSurvivors,
@@ -179,7 +177,10 @@ export default function WikiGraphView({
   forceGraphFactory?: (el: HTMLElement) => ForceGraphHandle;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const handleRef = useRef<ForceGraphHandle | null>(null);
+  // Mirrors zoomToFitOnRef for the toggle button's pressed rendering.
+  const [zoomToFitOn, setZoomToFitOn] = useState(true);
 
   // Accessors are closures the engine calls per frame; reactive values reach
   // them through these refs rather than React state.
@@ -196,13 +197,12 @@ export default function WikiGraphView({
   const focusSetsRef = useRef<ReturnType<typeof buildFocusSets> | null>(null);
   const nodesRef = useRef<PositionedNode[]>([]);
   const nodesByIdRef = useRef(new Map<string, AugmentedGraphNode>());
-  const linkDegreesRef = useRef(new Map<string, number>());
-  const autoFitPendingRef = useRef(true);
   const prevNodeCountRef = useRef<number | null>(null);
-  /** Max wiki-link degree in the current data; scales label thresholds. */
-  const maxLinkDegreeRef = useRef(0);
-  /** Max tag member count in the current data; scales tag label thresholds. */
-  const maxTagMembersRef = useRef(0);
+  /**
+   * Reactive zoom-to-fit: when on, the camera refits on engine stop and data
+   * changes. Manual zooms (buttons, wheel) disarm it, "right before" applying.
+   */
+  const zoomToFitOnRef = useRef(true);
   /** Member count per tag node id (kind-'tag' edges); scales tag springs. */
   const tagMemberCountsRef = useRef(new Map<string, number>());
   /** Unique wiki-link destinations per page id; scales page-link springs. */
@@ -244,14 +244,8 @@ export default function WikiGraphView({
         if (positioned.x === undefined || positioned.y === undefined) continue;
         const isTag = node.kind === 'tag';
         if (isTag && !tagsVisibleRef.current) continue;
-        // Same candidate filter as the draw gate: the zoom-tiered threshold.
-        const degree = isTag
-          ? (node._val ?? 0)
-          : (linkDegreesRef.current.get(node.id) ?? 0);
-        const maxDegree = isTag
-          ? maxTagMembersRef.current
-          : maxLinkDegreeRef.current;
-        if (degree < labelDegreeThreshold(k, maxDegree)) continue;
+        // Showdown is the sole label selector: every positioned node is a
+        // candidate, ranked by score (importance), culled by overlap.
 
         const fontSize = Math.max(11 / k, 4);
         const label = isTag ? `#${node.title}` : node.title;
@@ -428,17 +422,6 @@ export default function WikiGraphView({
 
       if (dimmed) return;
       if (node.kind === 'tag' && !tagsVisibleRef.current) return;
-      // Label fade-out: pages rank by wiki-link degree, tags by member
-      // count, each against their own distribution.
-      const degree =
-        node.kind === 'tag'
-          ? (node._val ?? 0)
-          : (linkDegreesRef.current.get(node.id) ?? 0);
-      const maxDegree =
-        node.kind === 'tag'
-          ? maxTagMembersRef.current
-          : maxLinkDegreeRef.current;
-      if (degree < labelDegreeThreshold(zoomRef.current.k, maxDegree)) return;
       // Showdown gate: the threshold picked candidates; the per-frame
       // survivor sets (recomputed on push/zoom/throttled ticks) decide which
       // labels actually draw. Applied unconditionally — no focus special
@@ -588,16 +571,16 @@ export default function WikiGraphView({
       })
       .onEngineStop(() => {
         computeShowdownsRef.current();
-        if (autoFitPendingRef.current) {
+        if (zoomToFitOnRef.current && !focusedIdRef.current) {
           if (
             nodesRef.current.some(
               n => isFiniteNumber(n.x) && isFiniteNumber(n.y)
             )
           ) {
-            autoFitPendingRef.current = false;
             fg.zoomToFit(FIT_MS, FIT_PADDING);
           }
         }
+        setZoomToFitOn(zoomToFitOnRef.current);
       });
 
     // Re-apply theme colors when the root theme class flips (dark ⇄ light).
@@ -615,9 +598,29 @@ export default function WikiGraphView({
 
     window.addEventListener('resize', applySize);
 
+    // Manual zoom via scroll wheel disarms zoom-to-fit. Capture phase on the
+    // container fires BEFORE the engine's d3-zoom listener (registered on the
+    // same element non-capturing), so the toggle state is consistent with the
+    // zoom that actually applies.
+    const disarmOnWheel = (event: WheelEvent) => {
+      if (!event.defaultPrevented && event.deltaY !== 0) {
+        zoomToFitOnRef.current = false;
+        setZoomToFitOn(false);
+      }
+    };
+    const root = rootRef.current;
+    if (root) {
+      // Capture on the component root so it fires before the engine's
+      // d3-zoom listener deeper in the tree.
+      root.addEventListener('wheel', disarmOnWheel, { capture: true });
+    }
+
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', applySize);
+      rootRef.current?.removeEventListener('wheel', disarmOnWheel, {
+        capture: true,
+      });
       (fg as unknown as { _destructor?: () => void })._destructor?.();
       handleRef.current = null;
       repaintRef.current = () => {};
@@ -631,12 +634,6 @@ export default function WikiGraphView({
     if (!fg) return;
     nodesRef.current = nodes;
     nodesByIdRef.current = new Map(nodes.map(n => [n.id, n]));
-    linkDegreesRef.current = wikiLinkDegrees(edges);
-    maxLinkDegreeRef.current = Math.max(0, ...linkDegreesRef.current.values());
-    maxTagMembersRef.current = Math.max(
-      0,
-      ...nodes.filter(n => n.kind === 'tag').map(n => n._val ?? 0)
-    );
     tagMemberCountsRef.current = new Map();
     for (const edge of edges) {
       if (edge.kind !== 'tag') continue;
@@ -668,10 +665,7 @@ export default function WikiGraphView({
     fg.graphData({ nodes: orderedNodes, links: toEngineLinks(edges) });
     computeShowdownsRef.current();
     zoomStylesRef.current(fg, zoomRef.current.k);
-    if (prevNodeCountRef.current !== nodes.length) {
-      autoFitPendingRef.current = true;
-      prevNodeCountRef.current = nodes.length;
-    }
+    prevNodeCountRef.current = nodes.length;
   }, [nodes, edges]);
 
   // Focus changes restyle via refs and move the camera; the data itself is
@@ -693,9 +687,10 @@ export default function WikiGraphView({
           fg.zoom(Math.max(zoomRef.current.k, 1.6), FIT_MS);
         }
       }
-    } else {
-      // Before the simulation positions nodes, the bbox is NaN and a fit
-      // would poison the camera transform; skip until positions exist.
+    } else if (zoomToFitOnRef.current) {
+      // Clear-focus refit only while zoom-to-fit is armed. Before the
+      // simulation positions nodes the bbox is NaN and a fit would poison
+      // the camera transform; skip until positions exist.
       const positioned = nodesRef.current.some(
         n => isFiniteNumber(n.x) && isFiniteNumber(n.y)
       );
@@ -714,6 +709,7 @@ export default function WikiGraphView({
 
   return (
     <div
+      ref={rootRef}
       data-testid="wiki-graph-container"
       className="relative w-full h-[calc(100vh-220px)] min-h-[480px]"
     >
@@ -753,12 +749,15 @@ export default function WikiGraphView({
           data-testid="wiki-graph-zoom-in"
           aria-label="Zoom in"
           className="flex h-8 w-8 items-center justify-center rounded-md border bg-background/80 text-sm backdrop-blur hover:bg-accent"
-          onClick={() =>
+          onClick={() => {
+            // Manual zoom disarms zoom-to-fit right before it applies.
+            zoomToFitOnRef.current = false;
+            setZoomToFitOn(false);
             handleRef.current?.zoom(
               clamp(zoomRef.current.k * ZOOM_STEP, MIN_ZOOM_K, MAX_ZOOM_K),
               200
-            )
-          }
+            );
+          }}
         >
           +
         </button>
@@ -767,21 +766,36 @@ export default function WikiGraphView({
           data-testid="wiki-graph-zoom-out"
           aria-label="Zoom out"
           className="flex h-8 w-8 items-center justify-center rounded-md border bg-background/80 text-sm backdrop-blur hover:bg-accent"
-          onClick={() =>
+          onClick={() => {
+            zoomToFitOnRef.current = false;
+            setZoomToFitOn(false);
             handleRef.current?.zoom(
               clamp(zoomRef.current.k / ZOOM_STEP, MIN_ZOOM_K, MAX_ZOOM_K),
               200
-            )
-          }
+            );
+          }}
         >
           −
         </button>
         <button
           type="button"
           data-testid="wiki-graph-zoom-reset"
-          aria-label="Reset view"
-          className="flex h-8 w-8 items-center justify-center rounded-md border bg-background/80 text-xs backdrop-blur hover:bg-accent"
-          onClick={() => handleRef.current?.zoomToFit(FIT_MS, FIT_PADDING)}
+          aria-label="Toggle zoom to fit"
+          aria-pressed={zoomToFitOn}
+          title="Zoom to fit"
+          className={`flex h-8 w-8 items-center justify-center rounded-md border text-xs backdrop-blur hover:bg-accent ${
+            zoomToFitOn
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-background/80'
+          }`}
+          onClick={() => {
+            const next = !zoomToFitOnRef.current;
+            zoomToFitOnRef.current = next;
+            setZoomToFitOn(next);
+            if (next) {
+              handleRef.current?.zoomToFit(FIT_MS, FIT_PADDING);
+            }
+          }}
         >
           ⤢
         </button>

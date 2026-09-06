@@ -227,11 +227,6 @@ describe('WikiGraphView', () => {
       ctx: CanvasRenderingContext2D,
       globalScale: number
     ) => void;
-    const zoomCb = accessorFrom('onZoom') as (t: {
-      k: number;
-      x: number;
-      y: number;
-    }) => void;
     const mkCtx = () =>
       ({
         beginPath: vi.fn(),
@@ -244,22 +239,14 @@ describe('WikiGraphView', () => {
     const tagLow = { ...sizedTags[5], x: 5, y: 5 } as AugmentedGraphNode;
     const tagBig = { ...sizedTags[6], x: 5, y: 5 } as AugmentedGraphNode;
 
-    // Zoomed out (k=0.5): tag threshold = maxLabelThreshold(5) = 3, so the
-    // 1-member tag label is culled while the 5-member tag label stays.
-    zoomCb({ k: 0.5, x: 0, y: 0 });
-    const ctxOut = mkCtx();
-    canvasFn(tagLow, ctxOut, 1);
-    expect(ctxOut.fillText).not.toHaveBeenCalled();
+    // Showdown is the sole selector (no zoom threshold): both tags label.
+    const ctxIn = mkCtx();
+    canvasFn(tagLow, ctxIn, 1);
+    expect(ctxIn.fillText).toHaveBeenCalledWith('#low', 5, expect.any(Number));
     const ctxOutBig = mkCtx();
     canvasFn(tagBig, ctxOutBig, 1);
     expect(ctxOutBig.fillText).toHaveBeenCalled();
     expect(ctxOutBig.fillStyle).toBe('#15803d');
-
-    // Zoomed in (k=3): threshold drops below 1; both tags are labeled.
-    zoomCb({ k: 3, x: 0, y: 0 });
-    const ctxIn = mkCtx();
-    canvasFn(tagLow, ctxIn, 1);
-    expect(ctxIn.fillText).toHaveBeenCalledWith('#low', 5, expect.any(Number));
 
     // Tag labels draw centered with no scrim band; page labels keep both.
     expect(ctxIn.fillRect).not.toHaveBeenCalled();
@@ -445,20 +432,66 @@ describe('WikiGraphView', () => {
     expect(handle.nodeRelSize).toHaveBeenLastCalledWith(6);
   });
 
-  it('auto-fits once per data change on engine stop', () => {
+  it('zoom-to-fit is on by default and refits on every engine stop until disarmed', () => {
     renderView();
     const fitCalls = () =>
       (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls.length;
-    // Engine stop must recompute showdowns before any other stop logic.
-    expect(handle.onEngineTick).toBeDefined();
     const initial = fitCalls();
 
     const stopCb = accessorFrom('onEngineStop') as () => void;
     stopCb();
     expect(fitCalls()).toBe(initial + 1);
-
     stopCb();
-    expect(fitCalls()).toBe(initial + 1);
+    expect(fitCalls()).toBe(initial + 2);
+
+    const toggle = screen.getByTestId('wiki-graph-zoom-reset');
+    toggle.click();
+    stopCb();
+    // Disarmed: no further reactive fits.
+    expect(fitCalls()).toBe(initial + 2);
+  });
+
+  it('zoom-in/out buttons disarm zoom-to-fit right before zooming', async () => {
+    const user = userEvent.setup();
+    renderView();
+    const fitCalls = () =>
+      (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls.length;
+    const stopCb = accessorFrom('onEngineStop') as () => void;
+    stopCb();
+    const armed = fitCalls();
+
+    await user.click(screen.getByTestId('wiki-graph-zoom-in'));
+    const toggle = screen.getByTestId('wiki-graph-zoom-reset');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    stopCb();
+    expect(fitCalls()).toBe(armed);
+
+    // Re-arming fits immediately and reactively again.
+    await user.click(toggle);
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(fitCalls()).toBe(armed + 1);
+    stopCb();
+    expect(fitCalls()).toBe(armed + 2);
+  });
+
+  it('wheel over the canvas disarms zoom-to-fit before the engine zooms', async () => {
+    renderView();
+    const stopCb = accessorFrom('onEngineStop') as () => void;
+    stopCb();
+    const container = screen.getByTestId('wiki-graph-container');
+    container.dispatchEvent(
+      new WheelEvent('wheel', { deltaY: -120, bubbles: true })
+    );
+    const toggle = screen.getByTestId('wiki-graph-zoom-reset');
+    await waitFor(() => {
+      expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    });
+    const armed = (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls
+      .length;
+    stopCb();
+    expect(
+      (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls.length
+    ).toBe(armed);
   });
 
   it('skips camera fits until nodes have positions', () => {
@@ -488,7 +521,8 @@ describe('WikiGraphView', () => {
     expect(fitCalls()).toBe(1);
   });
 
-  it('moves the camera to the focused node and refits on clear', () => {
+  it('moves the camera to the focused node and refits on clear', async () => {
+    const user = userEvent.setup();
     const { rerender } = render(
       <WikiGraphView
         nodes={nodes}
@@ -525,6 +559,24 @@ describe('WikiGraphView', () => {
       />
     );
     expect(handle.zoomToFit).toHaveBeenCalledWith(600, 40);
+
+    // With zoom-to-fit disarmed, clearing focus must NOT refit.
+    await user.click(screen.getByTestId('wiki-graph-zoom-reset'));
+    const armed = (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls
+      .length;
+    rerender(
+      <WikiGraphView
+        nodes={nodes}
+        edges={edges}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    expect(
+      (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls.length
+    ).toBe(armed);
   });
 
   it('applies the light-theme link color and re-applies dark on theme flip', async () => {
