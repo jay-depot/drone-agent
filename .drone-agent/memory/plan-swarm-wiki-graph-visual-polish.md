@@ -202,6 +202,10 @@ User: labels need blur (or failing that, dark spread shadows) to stay legible ov
 
 User: blank bit underneath the graph. Cause: container hardcoded `h-[calc(100vh-220px)]` — a magic guess at header/toolbar height that never matches the real chrome. Fix: page root becomes `flex h-full min-h-0 flex-col` in graph view (header `shrink-0`), container `flex-1 min-h-[480px]`; the engine already sizes from getBoundingClientRect on mount/resize, so the canvas tracks the corrected box. Grid view unchanged (natural scroll). No test changes — layout-only, covered by tsc/build; visual check on the real page pending user confirmation.
 
+## Round 25 (`9528b07`, 2026-09-06) — no arrowheads anywhere
+
+`linkDirectionalArrowLength` accessor call + handle method removed (tag edges already had 0 since Round 17's layering rule; page-link arrows were visual noise). Fake handle list pruned to match.
+
 ## Notes / lessons
 
 - **many-body charge is scalar per node** — cannot repel a group from itself only; use a custom force via `d3Force(name, fn)`. Contract: `(alpha) => void` mutating vx/vy, `initialize(nodes)` re-run on graphData push.
