@@ -296,7 +296,9 @@ describe('WikiPage graph view', () => {
       expect(screen.getByText('Tag · 1 page(s)')).toBeDefined();
     });
     expect(screen.queryByRole('button', { name: 'Open full page' })).toBeNull();
-    expect(screen.getByText('Page A')).toBeDefined();
+    // Member pages are no longer listed on tag panels (they're all
+    // highlighted on the canvas anyway).
+    expect(screen.queryByText('Page A')).toBeNull();
   });
 
   it('does not fetch the graph in the default grid view', async () => {

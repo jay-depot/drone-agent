@@ -4,7 +4,7 @@ import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import { useWikiPages } from '@/hooks/use-wiki-pages';
 import { useWikiGraph } from '@/hooks/use-wiki-graph';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
-import type { AugmentedGraphNode, WikiPageMeta } from '@/lib/types';
+import type { WikiPageMeta } from '@/lib/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -84,11 +84,6 @@ export default function WikiPage() {
         )
       : [];
   const memberCount = focusedTagMemberEdges.length;
-  const memberPages = focusedTagMemberEdges
-    .map(edge =>
-      visible?.nodes.find(n => n.kind === 'page' && n.id === edge.source)
-    )
-    .filter((node): node is AugmentedGraphNode => Boolean(node));
 
   // Delete dialog
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -195,7 +190,7 @@ export default function WikiPage() {
         <>
           <div className="relative flex flex-1 min-h-0">
             {focusedNode && (
-              <aside className="absolute left-4 top-4 bottom-4 z-20 w-80 overflow-y-auto rounded-md border p-4 bg-card shadow-lg">
+              <aside className="absolute left-4 top-4 z-20 w-80 rounded-md border p-4 bg-card shadow-lg">
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-semibold">
@@ -229,19 +224,7 @@ export default function WikiPage() {
                     </Button>
                   )}
                 </div>
-                {focusedNode.kind === 'tag' ? (
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {memberPages.map(page => (
-                      <Badge
-                        key={page.id}
-                        variant="secondary"
-                        className="text-xs"
-                      >
-                        {page.title}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
+                {focusedNode.kind !== 'tag' && (
                   <>
                     {focusedNode.pitch && (
                       <p className="mt-3 text-sm text-muted-foreground">
