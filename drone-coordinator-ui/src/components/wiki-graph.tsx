@@ -152,6 +152,22 @@ function toEngineLinks(edges: AugmentedGraphEdge[]): AugmentedGraphEdge[] {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
+/**
+ * Zoom scale fitting a bbox of the given graph-space size into a container
+ * of the given pixel size, leaving `padding` px of margin.
+ */
+function fitScale(
+  bboxW: number,
+  bboxH: number,
+  containerW: number,
+  containerH: number,
+  padding: number
+): number {
+  const availW = Math.max(containerW - padding * 2, 1);
+  const availH = Math.max(containerH - padding * 2, 1);
+  return Math.min(availW / Math.max(bboxW, 1), availH / Math.max(bboxH, 1));
+}
+
 function isDarkMode(): boolean {
   return document.documentElement.classList.contains('dark');
 }
@@ -226,6 +242,8 @@ export default function WikiGraphView({
    * changes. Manual zooms (buttons, wheel) disarm it, "right before" applying.
    */
   const zoomToFitOnRef = useRef(true);
+  /** Last-known container pixel size; feeds focus-fit scale math. */
+  const containerSizeRef = useRef({ width: 0, height: 0 });
   /** Member count per tag node id (kind-'tag' edges); scales tag springs. */
   const tagMemberCountsRef = useRef(new Map<string, number>());
   /** Unique wiki-link destinations per page id; scales page-link springs. */
@@ -243,6 +261,16 @@ export default function WikiGraphView({
   // Set by the mount effect so later effects can restyle without re-running
   // the graph setup. Accessors live inside the mount effect: they close over
   // refs only, so they never need reactive dependencies.
+  /**
+   * Tag-node visibility: the global Tags toggle wins; otherwise focus mode
+   * filters — a focused page keeps only its connected tags, a focused tag
+   * hides all other tags.
+   */
+  const isTagNodeVisible = (node: AugmentedGraphNode): boolean => {
+    if (!tagsVisibleRef.current) return false;
+    if (!focusedIdRef.current) return true;
+    return focusSetsRef.current?.neighborIds.has(node.id) ?? false;
+  };
   const zoomStylesRef = useRef<(fg: ForceGraphHandle, k: number) => void>(
     () => {}
   );
@@ -268,7 +296,7 @@ export default function WikiGraphView({
         const positioned = node as PositionedNode;
         if (positioned.x === undefined || positioned.y === undefined) continue;
         const isTag = node.kind === 'tag';
-        if (isTag && !tagsVisibleRef.current) continue;
+        if (isTag && !isTagNodeVisible(node)) continue;
         // Showdown is the sole label selector: every positioned node is a
         // candidate, ranked by score (importance), culled by overlap.
 
@@ -347,7 +375,7 @@ export default function WikiGraphView({
       const focus = focusSetsRef.current;
       const dimmed = focus !== null && !focus.neighborIds.has(node.id);
       if (node.kind === 'tag') {
-        if (!tagsVisibleRef.current) return TRANSPARENT;
+        if (!isTagNodeVisible(node)) return TRANSPARENT;
         return dimmed ? TAG_DIM : theme.tagFill;
       }
       if (!node.exists) return dimmed ? PLACEHOLDER_DIM : PLACEHOLDER_AMBER;
@@ -355,7 +383,10 @@ export default function WikiGraphView({
     };
 
     const linkWidthAccessor = (link: AugmentedGraphEdge): number => {
-      if (link.kind === 'tag') return tagsVisibleRef.current ? 0.5 : 0;
+      if (link.kind === 'tag') {
+        const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
+        return tagNode && isTagNodeVisible(tagNode) ? 0.5 : 0;
+      }
       const focus = focusSetsRef.current;
       if (!focus) return baseLinkWidthRef.current;
       if (focus.touchingEdgeKeys.has(edgeKey(link)))
@@ -365,7 +396,8 @@ export default function WikiGraphView({
 
     const linkColorAccessor = (link: AugmentedGraphEdge): string => {
       if (link.kind === 'tag') {
-        if (!tagsVisibleRef.current) return TRANSPARENT;
+        const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
+        if (!tagNode || !isTagNodeVisible(tagNode)) return TRANSPARENT;
         const focus = focusSetsRef.current;
         if (focus && focus.touchingEdgeKeys.has(edgeKey(link)))
           return TAG_EDGE_LIT;
@@ -387,13 +419,13 @@ export default function WikiGraphView({
 
     const nodeValAccessor = (node: AugmentedGraphNode): number => {
       const base = node._val ?? 1;
-      if (node.kind === 'tag' && !tagsVisibleRef.current) return base * 0.05;
+      if (node.kind === 'tag' && !isTagNodeVisible(node)) return base * 0.05;
       return base;
     };
 
     const nodeLabelAccessor = (node: AugmentedGraphNode): string => {
       if (node.kind === 'tag') {
-        return tagsVisibleRef.current ? `#${node.title}` : '';
+        return isTagNodeVisible(node) ? `#${node.title}` : '';
       }
       return node.exists ? node.title : `Missing page: ${node.id}`;
     };
@@ -580,7 +612,10 @@ export default function WikiGraphView({
 
     const applySize = () => {
       const rect = containerRef.current?.getBoundingClientRect();
-      if (rect) fg.width(rect.width).height(rect.height);
+      if (rect) {
+        containerSizeRef.current = { width: rect.width, height: rect.height };
+        fg.width(rect.width).height(rect.height);
+      }
     };
     applySize();
     applyZoomStyles(fg, zoomRef.current.k);
@@ -603,7 +638,7 @@ export default function WikiGraphView({
       .linkLineDash(linkDashAccessor)
       .linkDirectionalArrowLength(link => (link.kind === 'tag' ? 0 : 4))
       .onNodeClick(node => {
-        if (node.kind === 'tag' && !tagsVisibleRef.current) return;
+        if (node.kind === 'tag' && !isTagNodeVisible(node)) return;
         focus(String(node.id));
       })
       .onBackgroundClick(() => clear())
@@ -747,11 +782,37 @@ export default function WikiGraphView({
     repaintRef.current(fg);
 
     if (focusedNodeId) {
-      const target = nodesRef.current.find(n => n.id === focusedNodeId);
-      if (target && isFiniteNumber(target.x) && isFiniteNumber(target.y)) {
-        fg.centerAt(target.x, target.y, FIT_MS);
-        if (isFiniteNumber(zoomRef.current.k)) {
-          fg.zoom(Math.max(zoomRef.current.k, 1.6), FIT_MS);
+      // Fit the highlighted neighborhood (focus + 1-hop neighbors) into the
+      // viewport: not the whole graph, not an extreme close-up of one node.
+      const highlight = focusSetsRef.current;
+      if (highlight) {
+        const points = nodesRef.current
+          .filter(n => highlight.neighborIds.has(n.id))
+          .map(n => ({
+            x: (n as PositionedNode).x,
+            y: (n as PositionedNode).y,
+          }))
+          .filter(
+            (p): p is { x: number; y: number } =>
+              isFiniteNumber(p.x) && isFiniteNumber(p.y)
+          );
+        if (points.length > 0) {
+          const xs = points.map(p => p.x);
+          const ys = points.map(p => p.y);
+          const { width: cw, height: ch } = containerSizeRef.current;
+          const k = fitScale(
+            Math.max(...xs) - Math.min(...xs),
+            Math.max(...ys) - Math.min(...ys),
+            cw,
+            ch,
+            FIT_PADDING
+          );
+          fg.centerAt(
+            (Math.max(...xs) + Math.min(...xs)) / 2,
+            (Math.max(...ys) + Math.min(...ys)) / 2,
+            FIT_MS
+          );
+          fg.zoom(clamp(k, MIN_ZOOM_K, MAX_ZOOM_K), FIT_MS);
         }
       }
     } else if (zoomToFitOnRef.current) {

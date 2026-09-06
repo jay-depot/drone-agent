@@ -193,22 +193,26 @@ export default function WikiPage() {
 
       {graphView ? (
         <>
-          {focusedNode && (
-            <div className="mb-4 rounded-md border p-4 bg-card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold">{focusedNode.title}</h2>
-                  {focusedNode.kind === 'page' ? (
-                    <p className="text-xs text-muted-foreground font-mono">
-                      {focusedNode.id}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Tag · {memberCount} page(s)
-                    </p>
-                  )}
+          <div className="flex flex-1 min-h-0 gap-4 items-stretch">
+            {focusedNode && (
+              <aside className="w-80 shrink-0 overflow-y-auto rounded-md border p-4 bg-card self-start max-h-full">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold">
+                      {focusedNode.title}
+                    </h2>
+                    {focusedNode.kind === 'page' ? (
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {focusedNode.id}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Tag · {memberCount} page(s)
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -225,51 +229,53 @@ export default function WikiPage() {
                     </Button>
                   )}
                 </div>
-              </div>
-              {focusedNode.kind === 'tag' ? (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {memberPages.map(page => (
-                    <Badge
-                      key={page.id}
-                      variant="secondary"
-                      className="text-xs"
-                    >
-                      {page.title}
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <>
-                  {focusedNode.pitch && (
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {focusedNode.pitch}
-                    </p>
-                  )}
-                  {focusedNode.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {focusedNode.tags.map(tag => (
-                        <Badge
-                          key={tag}
-                          variant="secondary"
-                          className="text-xs"
-                        >
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
+                {focusedNode.kind === 'tag' ? (
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {memberPages.map(page => (
+                      <Badge
+                        key={page.id}
+                        variant="secondary"
+                        className="text-xs"
+                      >
+                        {page.title}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    {focusedNode.pitch && (
+                      <p className="mt-3 text-sm text-muted-foreground">
+                        {focusedNode.pitch}
+                      </p>
+                    )}
+                    {focusedNode.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-3">
+                        {focusedNode.tags.map(tag => (
+                          <Badge
+                            key={tag}
+                            variant="secondary"
+                            className="text-xs"
+                          >
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </aside>
+            )}
+            <div className="flex-1 min-w-0 min-h-0 flex">
+              <WikiGraphView
+                nodes={visible?.nodes ?? []}
+                edges={visible?.edges ?? []}
+                tagsVisible={tagsVisible}
+                focusedNodeId={focusedNodeId}
+                onNodeFocus={setFocusedNode}
+                onClearFocus={() => setFocusedNode(null)}
+              />
             </div>
-          )}
-          <WikiGraphView
-            nodes={visible?.nodes ?? []}
-            edges={visible?.edges ?? []}
-            tagsVisible={tagsVisible}
-            focusedNodeId={focusedNodeId}
-            onNodeFocus={setFocusedNode}
-            onClearFocus={() => setFocusedNode(null)}
-          />
+          </div>
         </>
       ) : (
         <>

@@ -559,8 +559,18 @@ describe('WikiGraphView', () => {
         forceGraphFactory={() => handle as unknown as ForceGraphHandle}
       />
     );
-    expect(handle.centerAt).toHaveBeenCalledWith(10, 20, 600);
-    expect(handle.zoom).toHaveBeenCalledWith(1.6, 600);
+    // Focus camera fits the highlighted NEIGHBORHOOD (focus + 1-hop), not a
+    // single-node close-up: centered on the neighbor bbox, zoomed to fit it.
+    expect(handle.centerAt).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.any(Number),
+      600
+    );
+    const zoomArg = (handle.zoom as ReturnType<typeof vi.fn>).mock.calls.at(
+      -1
+    )?.[0] as number;
+    expect(zoomArg).toBeGreaterThan(0);
+    expect(zoomArg).toBeLessThan(13.68);
 
     rerender(
       <WikiGraphView
