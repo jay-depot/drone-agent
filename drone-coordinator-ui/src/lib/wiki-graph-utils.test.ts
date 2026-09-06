@@ -8,6 +8,9 @@ import {
   pageLinkSpringStrength,
   wikiLinkDegrees,
   NODE_SIZE_SPREAD,
+  NODE_SIZE_MIN_BASE,
+  brokenLinkSpringStrength,
+  WIKI_BROKEN_LINK_SPRING_STRENGTH,
   createTagRepulsionForce,
   WIKI_TAG_MAX_KICK,
   WIKI_PAGE_LINK_SPRING_STRENGTH,
@@ -256,6 +259,26 @@ describe('tagSpringStrength', () => {
   });
 });
 
+describe('brokenLinkSpringStrength', () => {
+  it('keeps a lone dead link at full strength', () => {
+    expect(brokenLinkSpringStrength(1)).toBeCloseTo(
+      WIKI_BROKEN_LINK_SPRING_STRENGTH
+    );
+    expect(brokenLinkSpringStrength(0)).toBeCloseTo(
+      WIKI_BROKEN_LINK_SPRING_STRENGTH
+    );
+  });
+
+  it('weakens as the source page accumulates dead links', () => {
+    expect(brokenLinkSpringStrength(3)).toBeCloseTo(
+      WIKI_BROKEN_LINK_SPRING_STRENGTH / 3
+    );
+    expect(brokenLinkSpringStrength(3)).toBeLessThan(
+      brokenLinkSpringStrength(1)
+    );
+  });
+});
+
 describe('pageLinkSpringStrength', () => {
   it('gives an isolated pair the minimum link strength (base/2)', () => {
     // The link edge itself puts both endpoints in each other's destination
@@ -371,12 +394,14 @@ describe('applyNodeSizing', () => {
     ];
     const sized = applyNodeSizing(nodes, edges);
     const byId = new Map(sized.map(n => [n.id, n._val ?? 0]));
-    expect(byId.get('hub')).toBeCloseTo(Math.pow(1 + NODE_SIZE_SPREAD, 1.5));
+    expect(byId.get('hub')).toBeCloseTo(
+      Math.pow(NODE_SIZE_MIN_BASE + NODE_SIZE_SPREAD, 1.5)
+    );
     expect(byId.get('meaty')).toBeCloseTo(
-      Math.pow(1 + NODE_SIZE_SPREAD * (0.7 / 3 + 0.3), 1.5)
+      Math.pow(NODE_SIZE_MIN_BASE + NODE_SIZE_SPREAD * (0.7 / 3 + 0.3), 1.5)
     );
     expect(byId.get('sparse')).toBeCloseTo(
-      Math.pow(1 + NODE_SIZE_SPREAD * ((0.7 * 2) / 3), 1.5)
+      Math.pow(NODE_SIZE_MIN_BASE + NODE_SIZE_SPREAD * ((0.7 * 2) / 3), 1.5)
     );
   });
 
@@ -384,8 +409,22 @@ describe('applyNodeSizing', () => {
     const nodes = [pageNode({ id: 'x' }), pageNode({ id: 'y' })];
     const sized = applyNodeSizing(nodes, []);
     for (const node of sized) {
-      expect(node._val).toBe(1);
+      // _val = MIN_BASE^1.5 => rendered radius = sqrt(_val) * BASE = MIN_BASE^0.75.
+      expect(node._val).toBeCloseTo(Math.pow(NODE_SIZE_MIN_BASE, 1.5));
     }
+  });
+
+  it('triples the sizing contrast: min radius 1/3 of before, max unchanged', () => {
+    // Rendered radius = sqrt(_val) * BASE_NODE_REL_SIZE (6, in the component).
+    const minRadius = Math.pow(NODE_SIZE_MIN_BASE, 0.75) * 6;
+    const maxRadius = Math.pow(NODE_SIZE_MIN_BASE + NODE_SIZE_SPREAD, 0.75) * 6;
+    // Smallest pages render at exactly 1/3 of the previous 6px minimum.
+    expect(minRadius).toBeCloseTo(2, 1);
+    // Maximum-importance pages keep their previous size.
+    expect(maxRadius).toBeCloseTo(13.68, 1);
+    // Old importance range spanned 3^0.75 = 2.28x in radius; the new span
+    // triples it.
+    expect(maxRadius / minRadius).toBeCloseTo(3 * Math.pow(3, 0.75), 1);
   });
 
   it('gives tag nodes value from their member count', () => {

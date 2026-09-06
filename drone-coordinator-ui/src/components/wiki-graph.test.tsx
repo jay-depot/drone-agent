@@ -117,8 +117,12 @@ describe('WikiGraphView', () => {
       nodes: AugmentedGraphNode[];
       links: AugmentedGraphEdge[];
     };
-    // Nodes arrive kind-ordered (pages last); links arrive as canonical clones.
-    expect(pushed.links).toEqual(edges);
+    // Nodes arrive kind-ordered (pages last); links arrive as canonical
+    // clones, stable-sorted tag edges first for paint order.
+    const sortedCanonical = [...edges].sort(
+      (a, b) => (a.kind === 'tag' ? 0 : 1) - (b.kind === 'tag' ? 0 : 1)
+    );
+    expect(pushed.links).toEqual(sortedCanonical);
     expect([...pushed.nodes].sort((a, b) => a.id.localeCompare(b.id))).toEqual(
       [...nodes].sort((a, b) => a.id.localeCompare(b.id))
     );
@@ -378,10 +382,10 @@ describe('WikiGraphView', () => {
       l: AugmentedGraphEdge
     ) => number;
     expect(widthAccessor(edges[3])).toBe(0);
-    const arrowAccessor = accessorFrom('linkDirectionalArrowColor') as (
+    const arrowLenAccessor = accessorFrom('linkDirectionalArrowLength') as (
       l: AugmentedGraphEdge
-    ) => string;
-    expect(arrowAccessor(edges[3])).toBe('rgba(0, 0, 0, 0)');
+    ) => number;
+    expect(arrowLenAccessor(edges[3])).toBe(0);
   });
 
   it('compensates node and link size on zoom', () => {
@@ -663,10 +667,13 @@ describe('WikiGraphView', () => {
   it('feeds the engine cloned links, leaving canonical edges unmutated', () => {
     renderView();
     const pushed = (handle.graphData as ReturnType<typeof vi.fn>).mock
-      .calls[0][0] as { links: Array<{ source: unknown; target: unknown }> };
+      .calls[0][0] as {
+      links: Array<{ source: unknown; target: unknown; kind?: string }>;
+    };
     expect(pushed.links).not.toBe(edges);
     expect(pushed.links[0]).not.toBe(edges[0]);
-    expect(pushed.links[0].source).toBe('a');
+    // Links arrive tag-edge-first (layering: tag edges paint before tag nodes).
+    expect(pushed.links[0].kind).toBe('tag');
     expect(typeof pushed.links[0].source).toBe('string');
     expect(edges[0].source).toBe('a');
     expect(typeof edges[0].source).toBe('string');
@@ -706,8 +713,8 @@ describe('WikiGraphView', () => {
     expect(strengthAccessor(edges[2])).toBeCloseTo(
       WIKI_PAGE_LINK_SPRING_STRENGTH / 2
     );
-    // Broken links pull hard (edges[1] targets the missing page) so the
-    // defect's two halves sit adjacent.
+    // Broken links pull hard but weaken per extra dead link on the source
+    // page (a has one dead link -> full strength).
     expect(strengthAccessor(edges[1])).toBeCloseTo(
       WIKI_BROKEN_LINK_SPRING_STRENGTH
     );
@@ -716,6 +723,38 @@ describe('WikiGraphView', () => {
 
     // Charge is uniform — cluster separation lives in tagRepulsion.
     expect(chargeForce.strength).toHaveBeenCalledWith(-480);
+  });
+
+  it('weakens broken-link springs by the source page dead-link count', () => {
+    // page 'a' gains a second dead link (dangling -> missing2): the per-edge
+    // pull halves for BOTH of a's dead links.
+    const multiDead = [
+      ...edges,
+      { source: 'a', target: 'missing2', kind: 'link' as const },
+    ];
+    const multiNodes = [
+      ...nodes,
+      pageNode({ id: 'missing2', title: 'missing2', exists: false }),
+    ];
+    render(
+      <WikiGraphView
+        nodes={multiNodes}
+        edges={multiDead}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const linkForce = handle.d3Force('link') as {
+      strength: ReturnType<typeof vi.fn>;
+    };
+    const strengthAccessor = linkForce.strength.mock.calls[0][0] as (
+      l: AugmentedGraphEdge
+    ) => number;
+    expect(strengthAccessor(edges[1])).toBeCloseTo(
+      WIKI_BROKEN_LINK_SPRING_STRENGTH / 2
+    );
   });
 
   it('weakens tag springs inversely with tag size', () => {

@@ -5,8 +5,17 @@ import type {
   WikiGraph,
 } from '@/lib/types';
 
-/** Spread constant for the node-size formula: `_val = (1 + SPREAD * importance)^1.5`. */
-export const NODE_SIZE_SPREAD = 2;
+/**
+ * Page node-size formula: `_val = (MIN_BASE + SPREAD * importance)^1.5`.
+ * Importance spans [0, 1]; the on-screen radius is sqrt(_val) *
+ * BASE_NODE_REL_SIZE. MIN_BASE is chosen so the smallest pages render at
+ * exactly 1/3 of the base radius, while SPREAD keeps maximum-importance
+ * pages at their previous size — 3x more relative contrast for sizing to
+ * breathe.
+ */
+export const NODE_SIZE_SPREAD = 2.77;
+/** Importance-zero base for the node-size formula; see NODE_SIZE_SPREAD. */
+export const NODE_SIZE_MIN_BASE = 0.231;
 
 /** Uniform per-node repulsion (d3 many-body charge); keeps pages readable. */
 export const WIKI_CHARGE_STRENGTH = -480;
@@ -26,7 +35,7 @@ export const WIKI_CHARGE_STRENGTH = -480;
  */
 export const WIKI_TAG_LINK_DISTANCE = 55;
 export const WIKI_TAG_SPRING_STRENGTH = 0.1;
-export const WIKI_TAG_REPULSION_STRENGTH = 1800;
+export const WIKI_TAG_REPULSION_STRENGTH = 2400;
 export const WIKI_TAG_REPULSION_DISTANCE_MAX = 12000;
 export const WIKI_TAG_MIN_SEPARATION_SCALE = 12;
 export const WIKI_TAG_SEPARATION_STRENGTH = 90;
@@ -38,6 +47,15 @@ export const WIKI_TAG_MAX_KICK = 50;
  * — the linking page and its missing target end up next to each other.
  */
 export const WIKI_BROKEN_LINK_SPRING_STRENGTH = 0.6;
+
+/**
+ * Per-edge spring strength for a broken wiki-link, inversely proportional to
+ * how many dead links the SOURCE page has: a lone dead link stays close to
+ * its parent, while a page with many dead links lets them clump loosely.
+ */
+export function brokenLinkSpringStrength(deadLinkCount: number): number {
+  return WIKI_BROKEN_LINK_SPRING_STRENGTH / Math.max(1, deadLinkCount);
+}
 
 /**
  * Rest length for page→page wiki-link springs. Tags and broken links bind
@@ -285,7 +303,10 @@ export function applyNodeSizing(
     const normWords =
       logMaxWords > 0 ? Math.log10(1 + node.wordCount) / logMaxWords : 0;
     const importance = 0.7 * normDegree + 0.3 * normWords;
-    return { ...node, _val: Math.pow(1 + NODE_SIZE_SPREAD * importance, 1.5) };
+    return {
+      ...node,
+      _val: Math.pow(NODE_SIZE_MIN_BASE + NODE_SIZE_SPREAD * importance, 1.5),
+    };
   });
 }
 

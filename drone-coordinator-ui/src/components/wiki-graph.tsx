@@ -4,10 +4,10 @@ import {
   buildFocusSets,
   createTagRepulsionForce,
   edgeKey,
+  brokenLinkSpringStrength,
   edgeEndpointId,
   pageLinkSpringStrength,
   tagSpringStrength,
-  WIKI_BROKEN_LINK_SPRING_STRENGTH,
   WIKI_CHARGE_STRENGTH,
   WIKI_PAGE_LINK_DISTANCE,
   WIKI_TAG_LINK_DISTANCE,
@@ -46,9 +46,8 @@ export interface ForceGraphHandle {
     mode: string | ((node: AugmentedGraphNode) => string)
   ): ForceGraphHandle;
   nodeLabel(accessor: (node: AugmentedGraphNode) => string): ForceGraphHandle;
-  linkDirectionalArrowLength(length: number): ForceGraphHandle;
-  linkDirectionalArrowColor(
-    accessor: (link: AugmentedGraphEdge) => string
+  linkDirectionalArrowLength(
+    length: number | ((link: AugmentedGraphEdge) => number)
   ): ForceGraphHandle;
   linkWidth(accessor: (link: AugmentedGraphEdge) => number): ForceGraphHandle;
   linkColor(accessor: (link: AugmentedGraphEdge) => string): ForceGraphHandle;
@@ -136,9 +135,15 @@ const FIT_PADDING = 40;
  * d3-force mutates them further). Feeding it shallow clones keeps the
  * canonical edges passed as props string-based, which the page's tag-member
  * counting and focus logic rely on.
+ *
+ * Links are also stable-sorted tag edges first: the engine paints links in
+ * array order, so this yields the draw order tag edges → tag nodes → page
+ * link edges → … (nodes always paint after all links).
  */
 function toEngineLinks(edges: AugmentedGraphEdge[]): AugmentedGraphEdge[] {
-  return edges.map(edge => ({ ...edge }));
+  return edges
+    .map(edge => ({ ...edge }))
+    .sort((a, b) => (a.kind === 'tag' ? 0 : 1) - (b.kind === 'tag' ? 0 : 1));
 }
 
 const clamp = (value: number, min: number, max: number) =>
@@ -207,6 +212,8 @@ export default function WikiGraphView({
   const tagMemberCountsRef = useRef(new Map<string, number>());
   /** Unique wiki-link destinations per page id; scales page-link springs. */
   const linkTargetsRef = useRef(new Map<string, Set<string>>());
+  /** Dead wiki-links per source page id; scales broken-link springs. */
+  const deadLinksBySourceRef = useRef(new Map<string, number>());
   /** Showdown survivors: labels allowed to draw this kind's labels. */
   const pageSurvivorsRef = useRef<Set<string>>(new Set());
   const tagSurvivorsRef = useRef<Set<string>>(new Set());
@@ -360,11 +367,6 @@ export default function WikiGraphView({
     const linkDashAccessor = (link: AugmentedGraphEdge): number[] | null =>
       isBrokenLink(link) ? [4, 3] : null;
 
-    const arrowColorAccessor = (link: AugmentedGraphEdge): string =>
-      link.kind === 'tag' && !tagsVisibleRef.current
-        ? TRANSPARENT
-        : linkColorAccessor(link);
-
     const nodeValAccessor = (node: AugmentedGraphNode): number => {
       const base = node._val ?? 1;
       if (node.kind === 'tag' && !tagsVisibleRef.current) return base * 0.05;
@@ -492,7 +494,10 @@ export default function WikiGraphView({
               tagMemberCountsRef.current.get(edgeEndpointId(link.target)) ?? 1
             )
           : isBrokenLink(link)
-            ? WIKI_BROKEN_LINK_SPRING_STRENGTH
+            ? brokenLinkSpringStrength(
+                deadLinksBySourceRef.current.get(edgeEndpointId(link.source)) ??
+                  1
+              )
             : pageLinkSpringStrength(
                 linkTargetsRef.current.get(edgeEndpointId(link.source)) ??
                   NO_LINK_TARGETS,
@@ -544,8 +549,7 @@ export default function WikiGraphView({
       .linkWidth(linkWidthAccessor)
       .linkColor(linkColorAccessor)
       .linkLineDash(linkDashAccessor)
-      .linkDirectionalArrowLength(4)
-      .linkDirectionalArrowColor(arrowColorAccessor)
+      .linkDirectionalArrowLength(link => (link.kind === 'tag' ? 0 : 4))
       .onNodeClick(node => {
         if (node.kind === 'tag' && !tagsVisibleRef.current) return;
         focus(String(node.id));
@@ -635,13 +639,23 @@ export default function WikiGraphView({
     nodesRef.current = nodes;
     nodesByIdRef.current = new Map(nodes.map(n => [n.id, n]));
     tagMemberCountsRef.current = new Map();
+    deadLinksBySourceRef.current = new Map();
     for (const edge of edges) {
-      if (edge.kind !== 'tag') continue;
-      const tagId = edgeEndpointId(edge.target);
-      tagMemberCountsRef.current.set(
-        tagId,
-        (tagMemberCountsRef.current.get(tagId) ?? 0) + 1
-      );
+      if (edge.kind === 'tag') {
+        const tagId = edgeEndpointId(edge.target);
+        tagMemberCountsRef.current.set(
+          tagId,
+          (tagMemberCountsRef.current.get(tagId) ?? 0) + 1
+        );
+      } else if (
+        nodesByIdRef.current.get(edgeEndpointId(edge.target))?.exists === false
+      ) {
+        const sourceId = edgeEndpointId(edge.source);
+        deadLinksBySourceRef.current.set(
+          sourceId,
+          (deadLinksBySourceRef.current.get(sourceId) ?? 0) + 1
+        );
+      }
     }
     linkTargetsRef.current = new Map();
     for (const edge of edges) {
