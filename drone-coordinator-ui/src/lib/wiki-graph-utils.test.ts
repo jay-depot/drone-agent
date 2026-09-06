@@ -169,12 +169,29 @@ describe('applyNodeSizing', () => {
     ];
     const sized = applyNodeSizing(nodes, edges);
     const byId = new Map(sized.map(n => [n.id, n._val ?? 0]));
-    expect(byId.get('tag:x')).toBeCloseTo(
-      Math.pow(1 + NODE_SIZE_SPREAD * 0.7, 1.5)
-    );
-    expect(byId.get('tag:y')).toBeCloseTo(
-      Math.pow(1 + NODE_SIZE_SPREAD * 0.35, 1.5)
-    );
+    // Tag area encodes absolute member count (engine radius = sqrt(val)).
+    expect(byId.get('tag:x')).toBe(2);
+    expect(byId.get('tag:y')).toBe(1);
+  });
+
+  it('scales tag size independently of the page degree distribution', () => {
+    const nodes = [
+      pageNode({ id: 'a', tags: ['x'] }),
+      pageNode({ id: 'hub', wordCount: 500 }),
+      pageNode({ id: 'b', tags: ['x'] }),
+      pageNode({ id: 'tag:x', title: 'x', tags: ['x'], kind: 'tag' }),
+    ];
+    const edges: AugmentedGraphEdge[] = [
+      { source: 'a', target: 'hub', kind: 'link' },
+      { source: 'hub', target: 'b', kind: 'link' },
+      { source: 'hub', target: 'a', kind: 'link' },
+      { source: 'a', target: 'tag:x', kind: 'tag' },
+      { source: 'b', target: 'tag:x', kind: 'tag' },
+    ];
+    const sized = applyNodeSizing(nodes, edges);
+    const byId = new Map(sized.map(n => [n.id, n._val ?? 0]));
+    expect(byId.get('tag:x')).toBe(2);
+    expect(byId.get('tag:x')).toBeLessThan(byId.get('hub') ?? 0);
   });
 });
 

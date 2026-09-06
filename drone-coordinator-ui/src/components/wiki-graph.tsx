@@ -97,11 +97,10 @@ const LINK_DIM_DARK = 'rgba(200, 205, 220, 0.1)';
 const TRANSPARENT = 'rgba(0, 0, 0, 0)';
 
 const BASE_NODE_REL_SIZE = 6;
-const BASE_LINK_WIDTH = 1.5;
 const MIN_NODE_REL_SIZE = 0.35;
 const MAX_NODE_REL_SIZE = 20;
-const MIN_LINK_WIDTH = 0.08;
-const MAX_LINK_WIDTH = 6;
+/** Screen-space link width; the engine already divides by zoom internally. */
+const BASE_LINK_WIDTH = 1.5;
 const MIN_ZOOM_K = 0.05;
 const MAX_ZOOM_K = 10;
 const ZOOM_STEP = 1.3;
@@ -223,7 +222,7 @@ export default function WikiGraphView({
       const focus = focusSetsRef.current;
       if (!focus) return baseLinkWidthRef.current;
       if (focus.touchingEdgeKeys.has(edgeKey(link)))
-        return Math.max(2, baseLinkWidthRef.current * 2);
+        return baseLinkWidthRef.current * 2;
       return 0.05;
     };
 
@@ -335,11 +334,6 @@ export default function WikiGraphView({
         BASE_NODE_REL_SIZE / k,
         MIN_NODE_REL_SIZE,
         MAX_NODE_REL_SIZE
-      );
-      baseLinkWidthRef.current = clamp(
-        BASE_LINK_WIDTH / k,
-        MIN_LINK_WIDTH,
-        MAX_LINK_WIDTH
       );
       handle.nodeRelSize(nodeRelSizeRef.current);
       handle.linkWidth(linkWidthAccessor);

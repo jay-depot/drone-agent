@@ -119,7 +119,6 @@ export function applyNodeSizing(
       );
     }
   }
-  const maxMembers = Math.max(0, ...tagMemberCounts.values());
 
   const maxWords = Math.max(
     0,
@@ -128,19 +127,16 @@ export function applyNodeSizing(
   const logMaxWords = Math.log10(1 + maxWords);
 
   return nodes.map(node => {
-    let importance: number;
     if (node.kind === 'tag') {
-      importance =
-        maxMembers > 0
-          ? 0.7 * ((tagMemberCounts.get(node.id) ?? 0) / maxMembers)
-          : 0;
-    } else {
-      const normDegree =
-        maxPageDegree > 0 ? (linkDegrees.get(node.id) ?? 0) / maxPageDegree : 0;
-      const normWords =
-        logMaxWords > 0 ? Math.log10(1 + node.wordCount) / logMaxWords : 0;
-      importance = 0.7 * normDegree + 0.3 * normWords;
+      // Tag size encodes absolute member count (area-proportional in the
+      // engine: radius = sqrt(val) * relSize), not a normalized share.
+      return { ...node, _val: tagMemberCounts.get(node.id) ?? 0 };
     }
+    const normDegree =
+      maxPageDegree > 0 ? (linkDegrees.get(node.id) ?? 0) / maxPageDegree : 0;
+    const normWords =
+      logMaxWords > 0 ? Math.log10(1 + node.wordCount) / logMaxWords : 0;
+    const importance = 0.7 * normDegree + 0.3 * normWords;
     return { ...node, _val: Math.pow(1 + NODE_SIZE_SPREAD * importance, 1.5) };
   });
 }

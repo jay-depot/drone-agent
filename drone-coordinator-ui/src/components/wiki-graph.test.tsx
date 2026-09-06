@@ -251,14 +251,16 @@ describe('WikiGraphView', () => {
     let widthAccessor = accessorFrom('linkWidth', 1) as (
       l: AugmentedGraphEdge
     ) => number;
-    expect(widthAccessor(edges[0])).toBe(3);
+    // Links are screen-space in the engine (width / globalScale); no zoom
+    // compensation, so the accessor keeps returning the constant width.
+    expect(widthAccessor(edges[0])).toBe(1.5);
 
     zoomCb({ k: 2, x: 0, y: 0 });
     expect(handle.nodeRelSize).toHaveBeenLastCalledWith(3);
     widthAccessor = accessorFrom('linkWidth', 2) as (
       l: AugmentedGraphEdge
     ) => number;
-    expect(widthAccessor(edges[0])).toBe(0.75);
+    expect(widthAccessor(edges[0])).toBe(1.5);
   });
 
   it('ignores non-finite zoom transforms instead of poisoning sizing', () => {
