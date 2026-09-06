@@ -217,6 +217,11 @@ User: new nodes from catch-up ingest "blink into existence then flash into place
 - **Test gotchas**: landing-spot test needs a sized getBoundingClientRect stub (jsdom = 0 → guard skips assignment, test failed with undefined x); viewport-rect bounds are cx=640/cy=360 at k=0.5, NOT origin-centered.
 - **Validation**: tsc clean, UI 151/151 (21 files), lint, build, LSP clean.
 
+## Round 27 (`2c528e1`, 2026-09-06) — showdown recompute on focus change
+
+User: focused tag with two well-separated members labeled only one. Cause: the focus effect set focusedIdRef/focusSetsRef and repainted, but never recomputed showdown survivors — the stale pre-focus set (different candidate pool + positions) kept culling a highlighted label. Fix: focus effect calls computeShowdownsRef.current() before repaint.
+
+## Notes / lessons
 ## Notes / lessons
 
 - **many-body charge is scalar per node** — cannot repel a group from itself only; use a custom force via `d3Force(name, fn)`. Contract: `(alpha) => void` mutating vx/vy, `initialize(nodes)` re-run on graphData push.
