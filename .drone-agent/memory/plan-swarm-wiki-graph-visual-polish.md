@@ -86,6 +86,16 @@ User brief: pages always layer above tags (visually AND for click reception); pa
 - **Tests**: tag-first fixture asserts pages-last ordering in pushed data + prop not mutated; fake-canvas asserts page = exactly 1 stroke in `rgba(148, 163, 184, 0.3)`, missing page outlines amber, tag ring never uses page-outline color; shape test rewritten content-level (pushed nodes kind-sorted, links = canonical clones) since array order changed by design.
 - **Validation**: graph tests 23/23, UI suite 136/136, tsc clean, lint clean, build ok, LSP clean.
 
+## Round 12 (`8c17e0d`, 2026-09-06) — custom node painting was DEAD since Round 1; fixed
+
+User report: outlines still invisible; and the reveal — tag rings NEVER rendered either (user preferred the translucent-solid look anyway). That invalidated the "tag rings prove the callback works" premise from Rounds 11/11b.
+
+- **Root cause (probe-proven)**: force-graph wraps every prop in `accessorFn`, which treats a STRING prop as a property NAME read per item. `nodeCanvasObjectMode('after')` evaluated `node['after']` = undefined per node, so the engine's before/after branches never matched and `nodeCanvasObject` was NEVER invoked — no tag rings, no outlines, no canvas labels, no focus rings, ever. What users saw as "rings" were the engine's native hover tooltips. Fix: `.nodeCanvasObjectMode(() => 'after')` (handle type widened to `string | fn`).
+- **Second latent bug**: engine `paintNodes` (1.51.4) draws radius `sqrt(val) * nodeRelSize` with NO `/2`; our ring/outline radius assumed `* 0.5`, i.e. half the node radius, hidden inside the disc. Ring radius matched to engine; `tagRadius` in utils corrected the same way → tag-separation shell effectively doubles.
+- **Tag hollow-ring stroke removed** per user preference (translucent-solid fill suits tags); TAG_RING_*/TAG_DIM constants retained (focused-node ring, legend, dim states).
+- **Empirical verification method**: esbuild-bundled probe page (IIFE, file://, no server) importing the exact node_modules force-graph 1.51.4, driven by playwright-core + the already-cached ms-playwright Chromium (the MCP playwright server demanded branded Chrome at /opt/google/chrome and `playwright install chrome` hung on a sudo prompt — passwordless sudo unavailable). Probe logged callback invocations per frame + pixel-scanned the canvas for outline colors: string mode = 0 invocations; function mode = per-frame invocations, outline pixels exactly at the disc edge.
+- **Validation**: tsc clean, UI 136/136, graph tests 58/58, lint, build, LSP clean.
+
 ## Round 11b (`ddc8e44`, 2026-09-06) — outline visibility fix
 
 User report: layering fix worked, outlines not visible. Root cause: the outline borrowed `theme.linkColor`, whose 0.3 alpha was tuned DOWN in Round 9 for receding hairline edges — correct hue, invisible as a 1.5px ring (tag rings read because they are solid hex). Fix: dedicated `PAGE_OUTLINE_LIGHT/DARK` constants at 0.8 alpha in the same slate family (`rgba(100,116,139,.8)` light / `rgba(148,163,184,.8)` dark), wired through the theme object as `theme.pageOutline`. Missing-page amber + dim behavior unchanged. Lesson: reusing a color tuned for one stroke width/context at another is a visibility bug class — when the user says "same color as X" for a STROKE, check X's alpha first.
