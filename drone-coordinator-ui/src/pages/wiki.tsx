@@ -193,7 +193,7 @@ export default function WikiPage() {
 
       {graphView ? (
         <>
-          <div className="relative flex-1 min-h-0">
+          <div className="relative flex flex-1 min-h-0">
             {focusedNode && (
               <aside className="absolute left-4 top-4 bottom-4 z-20 w-80 overflow-y-auto rounded-md border p-4 bg-card shadow-lg">
                 <div className="flex items-center justify-between">
