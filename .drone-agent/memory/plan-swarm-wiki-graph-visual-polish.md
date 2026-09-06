@@ -145,6 +145,15 @@ User: zoom-level filtering is no longer needed (symptom: remote clusters got no 
 - **Paint order finalized** (tag edges, tag nodes, page link edges, tag labels, page nodes, page labels): engine paints ALL links before ALL nodes in array order, so `toEngineLinks` stable-sorts tag edges first + existing pages-last node sort = the full order. Tag edges lost directional arrows (shared arrow pass paints after everything → would violate; membership arrows were noise). `linkDirectionalArrowColor` accessor removed; arrow length now a kind-aware accessor.
 - **Validation**: tsc clean, UI 146/146, graph suites 68/68, lint, build, LSP clean.
 
+## Round 18 (`84aef7b`, 2026-09-06) — labels paint in onRenderFramePost
+
+User: page node labels still inconsistently layered (everything else much nicer). Root cause: the per-node canvas callback drew each label immediately after its own node's fill — the node loop then painted later OVERLAPPING discs on top, burying earlier labels. Same mechanism could bury tag labels under any later page.
+
+- **Fix**: engine exposes `onRenderFramePost(ctx, globalScale)` (verified in the 1.51.4 bundle: runs after tickFrame paints the whole scene). Label painting extracted into a refs-only `paintLabels` loop registered there; node callback keeps outline + focus ring only. Same gates (dimmed continue, hidden tags continue, showdown survivors); paintLabels computes its own radius.
+- **Result**: the Round-17 order is now unconditional — labels are ALWAYS the topmost layer, immune to node overlap by construction.
+- **Tests**: fake handle gained onRenderFramePost (and lost stale linkDirectionalArrowColor); label/gating/throttle tests assert via the frame pass with title-based lookups ('Page', '#t') instead of per-node invocation.
+- **Validation**: tsc clean, UI 146/146, component 29/29, lint, build, LSP clean.
+
 ## Notes / lessons
 
 - **many-body charge is scalar per node** — cannot repel a group from itself only; use a custom force via `d3Force(name, fn)`. Contract: `(alpha) => void` mutating vx/vy, `initialize(nodes)` re-run on graphData push.
