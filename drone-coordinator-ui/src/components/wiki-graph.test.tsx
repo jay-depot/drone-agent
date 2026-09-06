@@ -171,7 +171,7 @@ describe('WikiGraphView', () => {
     canvasFn(positioned(nodes[0]), ctx, 1);
     // A page gets exactly one stroke: its outline, in the link-edge color.
     expect(ctx.stroke).toHaveBeenCalledTimes(1);
-    expect(ctx.strokeStyle).toBe('rgba(148, 163, 184, 0.3)');
+    expect(ctx.strokeStyle).toBe('rgba(100, 116, 139, 0.8)');
 
     // A missing page outlines in placeholder amber instead.
     canvasFn(positioned(nodes[2]), ctx, 1);
@@ -179,7 +179,7 @@ describe('WikiGraphView', () => {
 
     // Tag rings use the tag color, never the page outline color.
     canvasFn(positioned(nodes[4]), ctx, 1);
-    expect(ctx.strokeStyle).not.toBe('rgba(148, 163, 184, 0.3)');
+    expect(ctx.strokeStyle).not.toBe('rgba(100, 116, 139, 0.8)');
   });
 
   it('wires node click to focus, hidden-tag clicks to nothing, and background to clear', () => {

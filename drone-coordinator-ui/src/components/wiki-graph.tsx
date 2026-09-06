@@ -104,6 +104,8 @@ const BROKEN_LINK_LIGHT = 'rgba(217, 119, 6, 0.55)';
 const BROKEN_LINK_DARK = 'rgba(217, 119, 6, 0.75)';
 const LINK_COLOR_LIGHT = 'rgba(148, 163, 184, 0.3)';
 const LINK_COLOR_DARK = 'rgba(200, 205, 220, 0.6)';
+const PAGE_OUTLINE_LIGHT = 'rgba(100, 116, 139, 0.8)';
+const PAGE_OUTLINE_DARK = 'rgba(148, 163, 184, 0.8)';
 const LINK_LIT_LIGHT = 'rgba(37, 99, 235, 0.75)';
 const LINK_LIT_DARK = 'rgba(147, 197, 253, 0.9)';
 const LINK_DIM_LIGHT = 'rgba(148, 163, 184, 0.08)';
@@ -212,6 +214,7 @@ export default function WikiGraphView({
       theme.dimLink = dark ? LINK_DIM_DARK : LINK_DIM_LIGHT;
       theme.tagFill = dark ? TAG_FILL_DARK : TAG_FILL_LIGHT;
       theme.tagRing = dark ? TAG_RING_DARK : TAG_RING_LIGHT;
+      theme.pageOutline = dark ? PAGE_OUTLINE_DARK : PAGE_OUTLINE_LIGHT;
     };
     const theme = {
       linkColor: LINK_COLOR_LIGHT,
@@ -220,6 +223,7 @@ export default function WikiGraphView({
       dimLink: LINK_DIM_LIGHT,
       tagFill: TAG_FILL_LIGHT,
       tagRing: TAG_RING_LIGHT,
+      pageOutline: PAGE_OUTLINE_LIGHT,
     };
     applyThemeColors();
 
@@ -308,15 +312,17 @@ export default function WikiGraphView({
       }
 
       if (node.kind === 'page') {
-        // Outline in the unlit link-edge color (theme-aware), mirroring the
-        // tag ring's per-frame stroke. Dimmed pages outline in the dimmed
-        // edge color so the spotlight reads consistently.
+        // Outline in the link-edge slate hue (theme-aware), mirroring the
+        // tag ring's per-frame stroke. The unlit link alpha (0.3) is tuned
+        // for receding hairline EDGES — far too faint for a node ring — so
+        // outlines carry their own stronger constants. Dimmed pages outline
+        // in the dimmed edge color so the spotlight reads consistently.
         ctx.beginPath();
         ctx.arc(positioned.x, positioned.y, radius, 0, 2 * Math.PI);
         ctx.strokeStyle = dimmed
           ? theme.dimLink
           : node.exists
-            ? theme.linkColor
+            ? theme.pageOutline
             : PLACEHOLDER_AMBER;
         ctx.lineWidth = 1.5 / globalScale;
         ctx.stroke();
