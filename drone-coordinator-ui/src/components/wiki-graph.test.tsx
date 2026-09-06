@@ -874,6 +874,63 @@ describe('WikiGraphView', () => {
     expect(draws('#u')).toBe(false);
   });
 
+  it('focused node label always draws, overriding showdown culling', () => {
+    // page2's label would lose the showdown to page; focusing page2 must
+    // keep its label visible anyway.
+    const overlapped = [
+      ...nodes,
+      { ...pageNode({ id: 'page', title: 'Page' }), _val: 9, x: 0, y: 0 },
+      {
+        ...pageNode({ id: 'page2', title: 'Page2' }),
+        _val: 2,
+        x: 3,
+        y: 0,
+      },
+    ];
+    const { rerender } = render(
+      <WikiGraphView
+        nodes={overlapped}
+        edges={edges}
+        tagsVisible={true}
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    rerender(
+      <WikiGraphView
+        nodes={overlapped}
+        edges={edges}
+        tagsVisible={true}
+        focusedNodeId="page2"
+        onNodeFocus={vi.fn()}
+        onClearFocus={vi.fn()}
+        forceGraphFactory={() => handle as unknown as ForceGraphHandle}
+      />
+    );
+    const frameFn = accessorFrom('onRenderFramePost') as (
+      ctx: CanvasRenderingContext2D,
+      globalScale: number
+    ) => void;
+    const ctx = {
+      beginPath: vi.fn(),
+      arc: vi.fn(),
+      stroke: vi.fn(),
+      fillRect: vi.fn(),
+      fillText: vi.fn(),
+      measureText: vi.fn(() => ({ width: 10 })),
+      save: vi.fn(),
+      restore: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+    frameFn(ctx, 1);
+    const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock
+      .calls as unknown as Array<[string]>;
+    expect(calls.some(c => c[0] === 'Page2')).toBe(true);
+    // The culler still applies to highlighted non-focused nodes: 'Page'
+    // (score 9) would survive anyway, but 'Page2' neighbors may cull; the
+    // key assertion is Page2 overriding its earlier culling when focused.
+  });
+
   it('recomputes showdowns on engine ticks, throttled to 100ms', () => {
     const nowSpy = vi.spyOn(performance, 'now');
     nowSpy.mockReturnValue(1000);

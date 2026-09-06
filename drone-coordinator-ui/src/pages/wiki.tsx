@@ -193,9 +193,9 @@ export default function WikiPage() {
 
       {graphView ? (
         <>
-          <div className="flex flex-1 min-h-0 gap-4 items-stretch">
+          <div className="relative flex-1 min-h-0">
             {focusedNode && (
-              <aside className="w-80 shrink-0 overflow-y-auto rounded-md border p-4 bg-card self-start max-h-full">
+              <aside className="absolute left-4 top-4 bottom-4 z-20 w-80 overflow-y-auto rounded-md border p-4 bg-card shadow-lg">
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-semibold">
@@ -265,16 +265,14 @@ export default function WikiPage() {
                 )}
               </aside>
             )}
-            <div className="flex-1 min-w-0 min-h-0 flex">
-              <WikiGraphView
-                nodes={visible?.nodes ?? []}
-                edges={visible?.edges ?? []}
-                tagsVisible={tagsVisible}
-                focusedNodeId={focusedNodeId}
-                onNodeFocus={setFocusedNode}
-                onClearFocus={() => setFocusedNode(null)}
-              />
-            </div>
+            <WikiGraphView
+              nodes={visible?.nodes ?? []}
+              edges={visible?.edges ?? []}
+              tagsVisible={tagsVisible}
+              focusedNodeId={focusedNodeId}
+              onNodeFocus={setFocusedNode}
+              onClearFocus={() => setFocusedNode(null)}
+            />
           </div>
         </>
       ) : (

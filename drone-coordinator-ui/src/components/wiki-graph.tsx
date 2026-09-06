@@ -494,13 +494,16 @@ export default function WikiGraphView({
         if (dimmed) continue;
         if (node.kind === 'tag' && !tagsVisibleRef.current) continue;
         // Showdown survivor sets (recomputed on push/zoom/throttled ticks)
-        // decide which labels draw. Applied unconditionally — no focus
-        // special case, since dimmed nodes already continue above.
-        const survivors =
-          node.kind === 'tag'
-            ? tagSurvivorsRef.current
-            : pageSurvivorsRef.current;
-        if (!survivors.has(node.id)) continue;
+        // decide which labels draw — except the focused node, which always
+        // wins (only highlighted nodes are candidates anyway, since dimmed
+        // ones continue above).
+        if (focusedIdRef.current !== node.id) {
+          const survivors =
+            node.kind === 'tag'
+              ? tagSurvivorsRef.current
+              : pageSurvivorsRef.current;
+          if (!survivors.has(node.id)) continue;
+        }
 
         const fontSize = Math.max(11 / globalScale, 4);
         const radius = Math.sqrt(node._val ?? 1) * nodeRelSizeRef.current;
