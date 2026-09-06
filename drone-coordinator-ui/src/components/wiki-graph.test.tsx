@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { AugmentedGraphEdge, AugmentedGraphNode } from '@/lib/types';
+import { WIKI_TAG_SPRING_STRENGTH } from '@/lib/wiki-graph-utils';
 import WikiGraphView, { type ForceGraphHandle } from './wiki-graph';
 
 function makeFakeHandle() {
@@ -473,16 +474,48 @@ describe('WikiGraphView', () => {
       l: AugmentedGraphEdge
     ) => number;
     expect(distanceAccessor(edges[3])).toBe(55);
-    expect(distanceAccessor(edges[0])).toBe(90);
+    // Page-link rest length is inert: page springs have zero strength.
+    expect(distanceAccessor(edges[0])).toBe(55);
 
     const strengthAccessor = linkForce.strength.mock.calls[0][0] as (
       l: AugmentedGraphEdge
     ) => number;
-    expect(strengthAccessor(edges[3])).toBe(1);
-    // Page edges reproduce d3's default: 1 / min total-layout-edge degree.
-    expect(strengthAccessor(edges[0])).toBe(1);
+    // Page edges exert no layout force — display-only edges.
+    expect(strengthAccessor(edges[0])).toBe(0);
+    // Tag pull scales inversely with member count (edges[3] -> 1-member tag:x).
+    expect(strengthAccessor(edges[3])).toBeCloseTo(WIKI_TAG_SPRING_STRENGTH);
 
-    // Charge is uniform again — cluster separation lives in tagRepulsion.
-    expect(chargeForce.strength).toHaveBeenCalledWith(-240);
+    // Charge is uniform — cluster separation lives in tagRepulsion.
+    expect(chargeForce.strength).toHaveBeenCalledWith(-480);
+  });
+
+  it('weakens tag springs inversely with tag size', () => {
+    const graphProps = {
+      nodes,
+      edges,
+      tagsVisible: true,
+      onNodeFocus: vi.fn(),
+      onClearFocus: vi.fn(),
+      forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+    };
+    const { rerender } = render(<WikiGraphView {...graphProps} />);
+    const linkForce = handle.d3Force('link') as {
+      strength: ReturnType<typeof vi.fn>;
+    };
+    const strengthAccessor = linkForce.strength.mock.calls[0][0] as (
+      l: AugmentedGraphEdge
+    ) => number;
+    expect(strengthAccessor(edges[3])).toBeCloseTo(WIKI_TAG_SPRING_STRENGTH);
+
+    // A second page joins tag:x — the per-edge pull halves.
+    rerender(
+      <WikiGraphView
+        {...graphProps}
+        edges={[...edges, { source: 'b', target: 'tag:x', kind: 'tag' }]}
+      />
+    );
+    expect(strengthAccessor(edges[3])).toBeCloseTo(
+      WIKI_TAG_SPRING_STRENGTH / 2
+    );
   });
 });

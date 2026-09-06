@@ -3,16 +3,14 @@ import ForceGraph from 'force-graph';
 import {
   buildFocusSets,
   createTagRepulsionForce,
-  d3DefaultLinkStrength,
   edgeKey,
   edgeEndpointId,
   labelDegreeThreshold,
-  wikiLinkDegrees,
-  WIKI_LINK_DISTANCE,
+  tagSpringStrength,
   WIKI_CHARGE_STRENGTH,
   WIKI_TAG_LINK_DISTANCE,
-  WIKI_TAG_SPRING_STRENGTH,
   WIKI_TAG_REPULSION_STRENGTH,
+  wikiLinkDegrees,
 } from '@/lib/wiki-graph-utils';
 import type { AugmentedGraphEdge, AugmentedGraphNode } from '@/lib/types';
 
@@ -181,8 +179,8 @@ export default function WikiGraphView({
   const prevNodeCountRef = useRef<number | null>(null);
   /** Max wiki-link degree in the current data; scales label thresholds. */
   const maxLinkDegreeRef = useRef(0);
-  /** Degree over every layout edge (link + tag); scales d3 default springs. */
-  const layoutEdgeDegreesRef = useRef(new Map<string, number>());
+  /** Member count per tag node id (kind-'tag' edges); scales tag springs. */
+  const tagMemberCountsRef = useRef(new Map<string, number>());
 
   // Set by the mount effect so later effects can restyle without re-running
   // the graph setup. Accessors live inside the mount effect: they close over
@@ -355,21 +353,22 @@ export default function WikiGraphView({
     };
     zoomStylesRef.current = applyZoomStyles;
 
-    // Per-kind layout forces: page links get d3's stock spring (reproduced
-    // as an accessor so the tag branch can stiffen without NaN), while tag
-    // edges are short stiff springs binding member pages into topical
-    // clusters and tag nodes carry extra charge to push clusters apart.
-    // Accessors must return finite numbers for every edge/node — d3
-    // unary-pluses them into the force arrays.
+    // Layout forces: wiki links between pages exert NO force (display-only
+    // edges — strength 0 makes the spring inert regardless of distance).
+    // Tag edges are short springs binding member pages to their tag node,
+    // with per-edge strength inversely proportional to the tag's member
+    // count: small distinctive tags pull hard, big tags pull weakly and
+    // drift outward under tag↔tag repulsion. Accessors must return finite
+    // numbers for every edge — d3 unary-pluses them into the force arrays.
     const linkForce = fg.d3Force('link') as D3LinkForce | undefined;
     if (linkForce) {
-      linkForce.distance(link =>
-        link.kind === 'tag' ? WIKI_TAG_LINK_DISTANCE : WIKI_LINK_DISTANCE
-      );
+      linkForce.distance(() => WIKI_TAG_LINK_DISTANCE);
       linkForce.strength(link =>
         link.kind === 'tag'
-          ? WIKI_TAG_SPRING_STRENGTH
-          : d3DefaultLinkStrength(link, layoutEdgeDegreesRef.current)
+          ? tagSpringStrength(
+              tagMemberCountsRef.current.get(edgeEndpointId(link.target)) ?? 1
+            )
+          : 0
       );
     }
     const chargeForce = fg.d3Force('charge') as D3ChargeForce | undefined;
@@ -474,17 +473,13 @@ export default function WikiGraphView({
     nodesByIdRef.current = new Map(nodes.map(n => [n.id, n]));
     linkDegreesRef.current = wikiLinkDegrees(edges);
     maxLinkDegreeRef.current = Math.max(0, ...linkDegreesRef.current.values());
-    layoutEdgeDegreesRef.current = new Map();
+    tagMemberCountsRef.current = new Map();
     for (const edge of edges) {
-      const sourceId = edgeEndpointId(edge.source);
-      const targetId = edgeEndpointId(edge.target);
-      layoutEdgeDegreesRef.current.set(
-        sourceId,
-        (layoutEdgeDegreesRef.current.get(sourceId) ?? 0) + 1
-      );
-      layoutEdgeDegreesRef.current.set(
-        targetId,
-        (layoutEdgeDegreesRef.current.get(targetId) ?? 0) + 1
+      if (edge.kind !== 'tag') continue;
+      const tagId = edgeEndpointId(edge.target);
+      tagMemberCountsRef.current.set(
+        tagId,
+        (tagMemberCountsRef.current.get(tagId) ?? 0) + 1
       );
     }
     fg.graphData({ nodes, links: toEngineLinks(edges) });

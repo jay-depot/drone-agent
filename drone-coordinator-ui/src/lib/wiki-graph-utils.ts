@@ -17,26 +17,19 @@ export const LABEL_THRESHOLD_MAX_ZOOM = 2.5;
 /** Wiki-link degree required for a label at or below LABEL_THRESHOLD_MIN_ZOOM. */
 export const LABEL_THRESHOLD_MAX_DEGREE = 10;
 
-/**
- * Layout spread: link rest length and per-node repulsion. Higher values
- * spread connected nodes further apart; tuned for label legibility.
- */
-export const WIKI_LINK_DISTANCE = 180;
+/** Uniform per-node repulsion (d3 many-body charge); keeps pages readable. */
 export const WIKI_CHARGE_STRENGTH = -480;
 
 /**
- * Tag-layer forces: stiff short springs pull member pages into tight
- * topical clusters, while a dedicated tag↔tag-only repulsion force pushes
- * the clusters apart. (The stock charge force repels tags from their own
- * members too — a scalar per node cannot distinguish neighbors — which
- * expelled tag nodes to the graph periphery.)
- *
- * Big tags need disproportionate separation: their many member springs
- * anchor them to the same centroid when member sets overlap. The
- * inverse-square term therefore scales with the geometric mean of the two
- * tags' member counts, and a soft exclusion shell (sized by the tags'
- * rendered radii) makes close crowding impossible. Per-pair kicks are
- * clamped so stronger forces cannot launch nodes explosively.
+ * Layout forces: the only attraction is tag→page. Each tag edge is a short
+ * spring whose strength is inversely proportional to the tag's member count,
+ * so small distinctive tags bind their few pages tightly while big tags pull
+ * each member weakly and drift outward under the size-scaled tag↔tag-only
+ * repulsion (the stock charge force repels tags from their own members too —
+ * a scalar per node cannot distinguish neighbors). Wiki links between pages
+ * exert NO layout force — those edges are display-only — so a page settles
+ * toward the tags most distinctive to it. Per-pair kicks are clamped so
+ * stronger forces cannot launch nodes explosively.
  */
 export const WIKI_TAG_LINK_DISTANCE = 55;
 export const WIKI_TAG_SPRING_STRENGTH = 0.1;
@@ -47,18 +40,13 @@ export const WIKI_TAG_SEPARATION_STRENGTH = 90;
 export const WIKI_TAG_MAX_KICK = 50;
 
 /**
- * d3 link-force default strength (1 / min degree of the two endpoints,
- * counting every edge in the layout), reproduced so page-link springs keep
- * their stock behavior while tag springs are stiffened per edge kind.
+ * Per-edge spring strength for a tag→page edge. Scales inversely with the
+ * tag's member count, so the net pull on a tag stays roughly constant as it
+ * grows (more members, each pulled more weakly), and members for which a tag
+ * is distinctive feel the strongest attraction toward it.
  */
-export function d3DefaultLinkStrength(
-  edge: { source: unknown; target: unknown },
-  totalEdgeDegrees: Map<string, number>
-): number {
-  const sourceDegree = totalEdgeDegrees.get(edgeEndpointId(edge.source)) ?? 0;
-  const targetDegree = totalEdgeDegrees.get(edgeEndpointId(edge.target)) ?? 0;
-  const minDegree = Math.min(sourceDegree, targetDegree);
-  return minDegree > 0 ? 1 / minDegree : 0;
+export function tagSpringStrength(memberCount: number): number {
+  return WIKI_TAG_SPRING_STRENGTH / Math.max(1, memberCount);
 }
 
 /**

@@ -10,7 +10,9 @@ import {
   wikiLinkDegrees,
   NODE_SIZE_SPREAD,
   createTagRepulsionForce,
-  d3DefaultLinkStrength,
+  WIKI_TAG_MAX_KICK,
+  tagSpringStrength,
+  WIKI_TAG_SPRING_STRENGTH,
   WIKI_TAG_REPULSION_DISTANCE_MAX,
   LABEL_THRESHOLD_MAX_DEGREE,
   LABEL_THRESHOLD_MAX_ZOOM,
@@ -229,39 +231,30 @@ describe('createTagRepulsionForce', () => {
     force.initialize([tagA, tagB]);
     force(0.5);
 
-    // Inverse-square (900*0.5*4/25 = 72) plus shell (5.5*40*0.5 = 110)
+    // Inverse-square (900*0.5*4/25 = 72) plus shell (5.5*90*0.5 = 247.5)
     // both exceed the per-pair clamp. A sits left of B, so A is pushed -x.
-    expect(tagA.vx).toBe(-25);
-    expect(tagB.vx).toBe(25);
+    expect(tagA.vx).toBe(-WIKI_TAG_MAX_KICK);
+    expect(tagB.vx).toBe(WIKI_TAG_MAX_KICK);
   });
 });
 
-describe('d3DefaultLinkStrength', () => {
-  const degrees = new Map([
-    ['hub', 4],
-    ['leaf', 1],
-    ['pair', 2],
-  ]);
-
-  it('returns 1 over the min total-edge degree of the endpoints', () => {
-    const edge = { source: 'hub', target: 'leaf' };
-    // min(4, 1) = 1 -> strength 1 (d3's default is 1 / min degree).
-    expect(d3DefaultLinkStrength(edge, degrees)).toBe(1);
-    expect(
-      d3DefaultLinkStrength({ source: 'hub', target: 'pair' }, degrees)
-    ).toBeCloseTo(0.5);
-    expect(
-      d3DefaultLinkStrength({ source: 'pair', target: 'pair' }, degrees)
-    ).toBeCloseTo(0.5);
+describe('tagSpringStrength', () => {
+  it('uses the base strength for single-member tags', () => {
+    expect(tagSpringStrength(1)).toBe(WIKI_TAG_SPRING_STRENGTH);
+    expect(tagSpringStrength(0)).toBe(WIKI_TAG_SPRING_STRENGTH);
   });
 
-  it('resolves object endpoints and returns 0 for unknown nodes', () => {
-    expect(
-      d3DefaultLinkStrength(
-        { source: { id: 'hub' }, target: { id: 'ghost' } },
-        degrees
-      )
-    ).toBe(0);
+  it('divides the base strength by the member count', () => {
+    expect(tagSpringStrength(2)).toBeCloseTo(WIKI_TAG_SPRING_STRENGTH / 2);
+    expect(tagSpringStrength(5)).toBeCloseTo(WIKI_TAG_SPRING_STRENGTH / 5);
+  });
+
+  it('pulls small tags harder than big tags', () => {
+    expect(tagSpringStrength(2)).toBeGreaterThan(tagSpringStrength(20));
+  });
+
+  it('decays to zero for very large tags', () => {
+    expect(tagSpringStrength(100000)).toBeLessThan(0.0001);
   });
 });
 
