@@ -5,7 +5,7 @@ tags:
   - drone-coordinator-ui
   - wiki-graph
 created: 2026-09-06T00:26:00.119Z
-updated: 2026-09-06T01:05:47.338Z
+updated: 2026-09-06T01:36:57.589Z
 ---
 
 # Plan: Wiki graph view — visual polish (v2)
@@ -34,110 +34,30 @@ User decisions locked during grilling (all confirmed):
 - `drone-coordinator-ui/src/components/wiki-graph.tsx` (rework) (+ test)
 - `drone-coordinator-ui/src/pages/wiki.tsx` (+ test)
 
-## Step 1 — `wordCount` in `buildGraph()` (server)
+## Steps (all implemented)
 
-`drone-swarm-common/src/wiki-storage.ts`:
+- **Step 1** `wordCount` on `WikiGraphNode`, populated in `buildGraph()` (0 on placeholders); rebuild gate before UI work.
+- **Step 2** UI types: `wordCount` mirror + `GraphNodeKind`/`AugmentedGraphNode` (`_val`)/`AugmentedGraphEdge`/`AugmentedWikiGraph`.
+- **Step 3** Utils rework: `wikiLinkDegrees`, `buildAugmentedWikiGraph`, `filterOrphans`, `applyNodeSizing`, `labelDegreeThreshold` + constants, `buildFocusSets`; `buildFocusedSubgraph` deleted. 19 unit tests.
+- **Step 4** Component rework: accessors inside mount effect over refs; `onZoom` compensation; dim-and-spotlight + camera; dashed amber broken edges; legend + zoom buttons; auto-fit on engine stop. 17→19 component tests.
+- **Step 5** Page wiring: `?orphans=0`/`?tags=1`, Tags/Orphans toggles, kind-aware preview, prop-capturing stub. 7 page tests.
+- **Step 6** Validation: typecheck, lint, build ×8, root fast suite 2773 passed, UI suite 115 passed (117 after fix round), LSP clean.
 
-- Add `wordCount: number` to `WikiGraphNode`.
-- In `buildGraph()`, compute per page: `content.split(/\s+/).filter(Boolean).length` (content already in hand for link extraction — free).
-- Broken-link placeholder nodes: `wordCount: 0`.
-- Tests (`drone-swarm-common/test/wiki-storage.test.ts`): wordCount present on real nodes; 0 on placeholders; whitespace-heavy content counted correctly.
+## COMPLETED 2026-09-06 (commits `de9bdef`, then fix round `1642021` on `feat/memory-wiki-browser-improvements`; checkpoint `6f491c1`)
 
-**After this step run `pnpm -r run build` before UI work** — the UI resolves drone-swarm-common types from built dist/, so stale diagnostics otherwise.
+All automatable validation gates passed. Manual browser smoke caught three real bugs, fixed in `1642021`:
 
-## Step 2 — UI types
+1. **NaN camera poison**: the mount-time `zoomToFit` ran before the simulation positioned any node; `getGraphBbox` computed `undefined - r = NaN` and the engine's `Math.max/min` clamp chain propagated NaN into the d3 transform. The `onZoom` NaN storm drove `nodeRelSize(NaN)`: nodes vanish (NaN radius draws nothing), edges persist (canvas ignores NaN `lineWidth`) — the exact reported asymmetry ("dots vanish after a frame, edges stay, camera stuck top-left, zoom/drag dead"). Fix: every camera call guarded on finite node positions (mount fit, engine-stop auto-fit, refit-on-clear); non-finite `onZoom` transforms ignored; `applyZoomStyles` NaN-proof.
+2. **Container wipe**: force-graph's constructor does `domNode.innerHTML = ''` on its mount element, destroying the React-rendered legend and zoom buttons (the "legend doesn't show up" report). Fix: canvas mounts into a dedicated inner `div` (absolute inset-0); legend/buttons are siblings, never children of the mount target.
+3. **Zoom clamp floors above base**: `clamp(6/k, 3, 12)` — the floor 3 exceeds base 6/k for k>2, so at the engine's initial auto-zoom (`ZOOM2NODES_FACTOR/cbrt(N)` ≈ 17 for small N) nodes rendered ~8× on-screen size ("huge dots"). Fix: floors below base — rel size [0.35, 20], link width [0.08, 6]; zoom-button k bounds widened to [0.05, 10] (engine extent is [0.01, 1000]) so buttons no longer fight the wheel.
 
-`drone-coordinator-ui/src/lib/types.ts`:
-
-- Add `wordCount: number` to `WikiGraphNode` (mirror server).
-- Add UI-local augmented types:
-
-```ts
-export type GraphNodeKind = 'page' | 'tag';
-export type AugmentedGraphNode = WikiGraphNode & { kind: GraphNodeKind };
-export type AugmentedGraphEdge = Omit<WikiGraphEdge, 'kind'> & { kind: 'link' | 'tag' };
-```
-
-Server `kind` stays `'link'`-only; tag edges are client-derived.
-
-## Step 3 — Pure shaping utilities (rework `wiki-graph-utils.ts`)
-
-Replace `buildFocusedSubgraph` (delete it and its tests — dead code rule) with:
-
-- `wikiLinkDegrees(edges: AugmentedGraphEdge[]): Map<string, number>` — count in+out over `kind:'link'` edges only.
-- `buildAugmentedWikiGraph(graph: WikiGraph): { nodes, edges }` — one tag node per unique tag across visible pages (`id: 'tag:'+tag`, `kind:'tag'`, `title: tag`, `tags:[tag]`, `exists:true`, `wordCount:0`), one `kind:'tag'` edge per page→tag. Dedup. Tag nodes with zero member edges never occur pre-filter.
-- `filterOrphans(g): g` — drop `kind:'page'` nodes with wikiLinkDegree 0, their edges, then drop tag nodes left with no edges.
-- `applyNodeSizing(nodes, edges)` — computes the blend formula above and returns nodes with `val` (store as `_val` on the node objects for the `nodeVal` accessor).
-- `labelDegreeThreshold(k: number): number` — `k<=0.75 → 10`, `k>=2.5 → 0`, linear between; clamp. Export constants.
-- `buildFocusSets(edges: AugmentedGraphEdge[], focusedId: string)` — `{ neighborIds: Set, touchingEdgeSet: Set }` (tag edges included when the focus is a tag node).
-
-Unit tests for every function, including: degree excludes tag edges; blend normalization edge cases (all-zero graph, single node); threshold interpolation endpoints; orphan filter removes emptied tag nodes; focus sets for page-focus and tag-focus.
-
-## Step 4 — Component rework (`wiki-graph.tsx`)
-
-Extend `ForceGraphHandle` with what's needed: `nodeVal`, `nodeCanvasObject`, `nodeCanvasObjectMode`, `nodeLabel`, `onZoom`, `zoom`, `centerAt`, `zoomIn`, `zoomOut`, `linkLineDash`, `onEngineStop`, `cooldownTicks` (verify exact names against force-graph v1.51 docs during implementation).
-
-New props: `tagsVisible: boolean` (orphans/toggle filtering is done by the page before props arrive). Keep `forceGraphFactory` injectable seam.
-
-State flows through refs read by accessors (accessors are closures the engine calls per frame — props/state must reach them via `useRef` mirrors, following the existing `cbRef`/`linkColorRef` pattern):
-
-- `zoomRef` (from `onZoom`) — drives `nodeRelSize = clamp(BASE/k, 3, 12)` and `linkWidth = clamp(BASE_LW/k, 0.5, 4)` re-push, plus label threshold checks in `nodeCanvasObject`. Zoom triggers canvas redraw, so ref-reading accessors restyle next frame with no extra render plumbing.
-- `focusRef` (from `focusedNodeId` prop + `buildFocusSets` memo) — dim-and-spotlight in `nodeColor`/`linkColor`: dimmed page `rgba(37,99,235,0.15)`, dimmed link near-transparent; touching links brightened + `linkWidth` up via a link-width accessor; focused node ring drawn in `nodeCanvasObject` (stroke arc, green if tag).
-- `tagsVisibleRef` — `kind:'tag'` nodes when hidden: transparent color, no label, tiny val (force intact); clicks on them ignored; their edges transparent + width 0. When visible: green hollow ring (stroke, no fill) + always-on label + normal click-to-focus.
-- Broken-link edges (target node `exists:false`): amber `'rgba(217,119,6,0.5)'` + dashed via `linkLineDash([4,3])` accessor.
-- Labels (`nodeCanvasObject`, drawn after node shape): page labels when `wikiLinkDegree >= labelDegreeThreshold(zoomRef.k)` and node visible and not focus-dimmed; tag labels always when tags visible. Font size scales with `globalScale`; text drawn with a subtle dark backing or shadow for contrast.
-- Tooltips: `nodeLabel` accessor — page title / tag name / `Missing page: <id>` for placeholders.
-- Camera: on `focusedNodeId` change → `centerAt(node.x, node.y, 600)` + `zoom(max(k,1.6), 600)`. On clear/reset → `zoomToFit(600, 40)`. Auto-fit: `onEngineStop` → `zoomToFit(600, 40)` once per data change (flag reset in the data-push effect when node count changes, e.g. orphan toggle).
-- Data-push effect: `fg.graphData(...)` then re-apply size + zoom compensation with current k.
-- Chrome (JSX overlay inside the relative container): legend bottom-left (styled spans), zoom controls top-right (+ / − / reset) calling handle methods; both `pointer-events-auto`, canvas container `relative`.
-
-Tests (`wiki-graph.test.tsx`, fake handle): new accessors wired; zoom callback updates nodeRelSize/linkWidth; dim colors applied when focused via captured accessors invoked with fake nodes/edges; tag-hidden accessors transparent + click ignored; broken-link dash/amber; legend and zoom buttons render and invoke handle; destructor unchanged.
-
-## Step 5 — Page wiring (`pages/wiki.tsx`)
-
-- URL state: keep `view`/`node`; add `orphans` (persist `orphans=0` when hidden; default visible) and `tags` (persist `tags=1` when visible; default hidden). Both via `setSearchParams` like existing params.
-- Shape before render: `const augmented = useMemo(() => graph ? buildAugmentedWikiGraph(graph) : null, [graph])`; `const visible = orphansVisible ? augmented : filterOrphans(augmented)`.
-- Remove the `buildFocusedSubgraph` swap — pass full `visible` nodes/edges; keep `focusedNode` lookup for the preview panel; panel becomes kind-aware: tag nodes show tag name + member-page count, and no "Open full page" button.
-- Header: two small toggle buttons next to Grid/Graph — "Tags" and "Orphans" (variant reflects state; titles explain: tags organize the layout even when hidden).
-- Tests (`wiki.test.tsx`): toggles render and persist URL params; orphan-off triggers filter path (stubbed component receives fewer nodes); tag-on passes tagsVisible; preview panel for a tag focus renders without "Open full page"; existing grid/fetch tests unchanged.
-
-## Step 6 — Validation (final step; check every item)
-
-1. `pnpm -r run build` — passes (also required mid-plan after Step 1).
-2. `pnpm lint` (eslint + prettier) — zero errors. Re-read prettier-touched files before any further edit.
-3. Root fast suite `pnpm test` — passes incl. new drone-swarm-common tests.
-4. UI suite `cd drone-coordinator-ui && NODE_ENV=test npx vitest run` — passes incl. new util/component/page tests.
-5. LSP diagnostics clean on all touched files (`lsp__get_diagnostics` per file; run after the rebuild in Step 1 so dependent types are fresh).
-6. Manual smoke: run coordinator + UI dev servers; on `/wiki?view=graph` verify — auto-fit on load, zoom out keeps node screen-size + mega-hub labels, zoom in reveals more labels, tags toggle shows green hollow rings that still organize layout when hidden, orphans docked near their tag clusters and hide/refit on toggle, click = dim-and-spotlight with camera move, tag click focuses members, broken links dashed amber, legend/zoom controls work in both themes.
-
-## Validation criteria checklist
-
-- [x] `buildGraph()` nodes carry `wordCount` (0 for placeholders); drone-swarm-common tests pass; `pnpm -r run build` before UI work.
-- [x] `buildFocusedSubgraph` deleted; utils reworked with degree/sizing/augmentation/filter/threshold/focus-sets, all unit-tested.
-- [x] Zoom-compensated node/link sizing live via `onZoom`; labels zoom-tiered by wiki-link degree; hover tooltips present.
-- [x] Tag nodes: green hollow rings, labeled when visible, clickable-to-focus, layout-attracting when hidden; no page↔page overlap edges anywhere.
-- [x] Orphans visible by default, docked via tag attraction; toggle hides + re-fits; URL persistence for non-defaults (`orphans=0`, `tags=1`).
-- [x] Focus = dim-and-spotlight + camera move; preview panel kind-aware (tag focus has no "Open full page").
-- [x] Legend + zoom-in/out/reset overlay; dashed amber broken-link edges; both themes handled.
-- [x] All automatable Step-6 validation gates pass (build, lint, fast suite, UI suite, typecheck, LSP clean). Manual browser smoke remains for the user (no browser automation available in the executing session).
-
----
-
-# COMPLETED 2026-09-06
-
-Execution results (commit `de9bdef` on `feat/memory-wiki-browser-improvements`, preceded by checkpoint `6f491c1`):
-
-- **Step 1** `wordCount` on `WikiGraphNode` + populated in `buildGraph()` (`content.split(/\s+/).filter(Boolean).length`; 0 on placeholders). 3 new storage tests (36 pass). `pnpm -r run build` re-run before UI work per the plan gate.
-- **Step 2** `lib/types.ts`: `wordCount` mirrored; `GraphNodeKind`, `AugmentedGraphNode` (with optional `_val` sizing field), `AugmentedGraphEdge`, `AugmentedWikiGraph`.
-- **Step 3** `wiki-graph-utils.ts` fully reworked; `buildFocusedSubgraph` deleted (grep sweep confirmed no remaining consumers). New exports: `wikiLinkDegrees` (link edges only), `buildAugmentedWikiGraph` (tag nodes `tag:<tag>` + dedup edges), `filterOrphans` (drops degree-0 pages then emptied tag nodes), `applyNodeSizing` (0.7/0.3 blend, log-normalized words, `(1+2i)^1.5`, tag nodes sized by member count), `labelDegreeThreshold` (10→0 linear over k∈[0.75,2.5]) with exported constants, `buildFocusSets`. 19 unit tests.
-- **Step 4** `wiki-graph.tsx` rework: engine accessors all live inside the mount effect closing over refs only (no eslint-disable needed — zero-suppression policy preserved); `ForceGraphHandle` extended with `nodeVal/nodeCanvasObject/nodeCanvasObjectMode/nodeLabel/onZoom/onEngineStop/zoom/centerAt/linkLineDash` (verified against installed `force-graph.d.ts`; `zoomIn/zoomOut` do NOT exist on the engine — implemented as `zoom(k·1.3)` / `zoom(k/1.3)` from tracked transform). `nodeCanvasObjectMode('after')` keeps engine-drawn node shapes (stable pointer areas) while labels/rings/tag-strokes are custom. Zoom compensation `clamp(6/k,3,12)` + `clamp(1.5/k,0.5,4)`; dim-and-spotlight + camera move on focus; dashed amber broken-link edges; legend + zoom overlay buttons; auto-fit on `onEngineStop` once per node-count change. 17 component tests (fake handle, accessor invocation).
-- **Step 5** `pages/wiki.tsx`: `?orphans=0` / `?tags=1` params (persist non-defaults only), Tags/Orphans header toggles (graph view only), augmented→sized→filtered pipeline in `useMemo`, kind-aware preview panel (tag focus: `Tag · N page(s)` + member page badges, no open-page button), full visible graph passed to the component. Page test stub captures props via `vi.hoisted`. 7 page tests.
-- **Validation**: `tsc --noEmit` clean (caught 10 real type errors in new test files that LSP stale-cache hid — per-file LSP queries after re-touch confirmed clean); `pnpm lint` (eslint+prettier) pass; `pnpm -r run build` all 8 packages Done; root fast suite 2773 passed / 14 pre-existing skips; UI suite 115 passed (19 files); LSP clean on all touched files; only pre-existing session diagnostics remain (`session-param-events.test.ts`, `beacon-ws.test.ts` — untouched by this plan).
+Regression tests added: non-finite zoom transforms ignored; camera fits skipped until positions exist (mount, engine-stop, refit paths). UI suite 117 passing after fix round.
 
 ## Notes / lessons
 
-- **force-graph engine vs react wrapper surface**: the engine has no `zoomIn`/`zoomOut` (those are react-force-graph props). `zoom(scale, ms)` + a tracked `zoomRef` from `onZoom` is the engine-idiomatic equivalent. Always verify against the installed `.d.ts`.
-- **Ref-stored closures: TS parameter-count compatibility is unsound in practice** — a 1-param closure assigned to a 2-param ref type compiles, and the call `ref.current(fg, k)` silently binds `fg` into the closure's `k`. Produced NaN (1.5/undefined) with zero type errors. Fix: keep ref-stored function signatures exactly matching how later effects call them (pass the handle through).
-- **LSP diagnostics can go stale across `file__write` rewrites** of test files; `tsc --noEmit` is the ground truth for the UI package. Use per-file `lsp__get_diagnostics` after re-touching a file, and never trust a workspace-wide sweep as "clean" evidence on its own.
-- **Orphan-hood is wiki-link degree, not total edge degree** — a tag-only page (tag edges but no wiki links) IS an orphan. Fixture-writing in tests must tag edge kinds precisely; three test failures here were fixture bugs, not implementation bugs.
-- **Manual smoke still open**: no browser automation in the executing session; user should eyeball `/wiki?view=graph` per Step 6 item 6 (auto-fit, label tiers, tag gravity, orphan docking, dim-and-spotlight, theme swap).
+- **force-graph engine vs react wrapper surface**: no `zoomIn`/`zoomOut` on the engine (react-force-graph props only); `zoom(scale, ms)` + tracked `zoomRef` is the engine-idiomatic equivalent. Verify against the installed `.d.ts`, not docs.
+- **Ref-stored closures: TS parameter-count compatibility is unsound in practice** — a 1-param closure assigned to a 2-param ref type compiles, and `ref.current(fg, k)` silently binds `fg` into the closure's `k` (NaN with zero type errors). Keep ref-stored signatures exactly matching call sites.
+- **LSP diagnostics can go stale across `file__write` rewrites**; `tsc --noEmit` is ground truth for the UI package. Use per-file `lsp__get_diagnostics` after re-touching; never trust a workspace-wide sweep alone.
+- **Orphan-hood is wiki-link degree, not total edge degree** — a tag-only page IS an orphan. Test fixtures must tag edge kinds precisely.
+- **Engine source over assumptions**: the container wipe, NaN bbox, auto-zoom formula, and scaleExtent were all confirmed by reading `node_modules/force-graph/dist/force-graph.mjs` before fixing — worth the two greps every time.
+- **Manual smoke is not optional**: all three bugs were invisible to 117 unit tests (jsdom canvas + fake handle) and caught in seconds by a human at the real canvas.
