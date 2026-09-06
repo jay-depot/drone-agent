@@ -699,7 +699,6 @@ export default function WikiGraphView({
     applySize();
     applyZoomStyles(fg, zoomRef.current.k);
 
-    const { onNodeFocus: focus, onClearFocus: clear } = cbRef.current;
     fg.nodeId('id')
       .linkSource('source')
       .linkTarget('target')
@@ -717,9 +716,12 @@ export default function WikiGraphView({
       .linkLineDash(linkDashAccessor)
       .onNodeClick(node => {
         if (node.kind === 'tag' && !isTagNodeVisible(node)) return;
-        focus(String(node.id));
+        // Read through cbRef at call time — destructuring at mount captured
+        // first-render closures, whose page-level searchParams snapshot was
+        // stale (dropping the tags/view params on focus changes).
+        cbRef.current.onNodeFocus(String(node.id));
       })
-      .onBackgroundClick(() => clear())
+      .onBackgroundClick(() => cbRef.current.onClearFocus())
       .onZoom(transform => {
         if (
           !isFiniteNumber(transform.k) ||

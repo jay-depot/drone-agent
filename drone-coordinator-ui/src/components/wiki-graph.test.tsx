@@ -289,6 +289,46 @@ describe('WikiGraphView', () => {
     expect(onClearFocus).toHaveBeenCalled();
   });
 
+  it('invokes the LATEST onNodeFocus/onClearFocus callbacks, not mount-time ones', () => {
+    // Regression: the engine handlers were registered once at mount against
+    // destructured first-render callbacks. The page's callbacks close over
+    // searchParams, so a focus change invoked a stale URL snapshot —
+    // dropping the tags param whenever tags were enabled after mount.
+    const mountFocus = vi.fn();
+    const mountClear = vi.fn();
+    const graphProps = {
+      nodes,
+      edges,
+      tagsVisible: true,
+      onNodeFocus: mountFocus,
+      onClearFocus: mountClear,
+      forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+    };
+    const { rerender } = render(<WikiGraphView {...graphProps} />);
+
+    const lateFocus = vi.fn();
+    const lateClear = vi.fn();
+    rerender(
+      <WikiGraphView
+        {...graphProps}
+        onNodeFocus={lateFocus}
+        onClearFocus={lateClear}
+      />
+    );
+
+    const nodeClickCb = accessorFrom('onNodeClick') as (
+      n: AugmentedGraphNode
+    ) => void;
+    nodeClickCb({ ...nodes[0] });
+    expect(lateFocus).toHaveBeenCalledWith('a');
+    expect(mountFocus).not.toHaveBeenCalled();
+
+    const bgClickCb = accessorFrom('onBackgroundClick') as () => void;
+    bgClickCb();
+    expect(lateClear).toHaveBeenCalled();
+    expect(mountClear).not.toHaveBeenCalled();
+  });
+
   it('focuses visible tag nodes on click', () => {
     const onNodeFocus = vi.fn();
     renderView({ onNodeFocus, tagsVisible: true });

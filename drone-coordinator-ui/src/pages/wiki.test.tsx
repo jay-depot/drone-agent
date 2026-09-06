@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import WikiPage from './wiki';
@@ -235,6 +235,60 @@ describe('WikiPage graph view', () => {
     });
     await waitFor(() => {
       expect(nodeIds()).toContain('lonely');
+    });
+  });
+
+  it('preserves the tags param across focus set and clear (stale-closure regression)', async () => {
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url === '/api/wiki/graph') {
+        return { ok: true, status: 200, json: async () => graph } as Response;
+      }
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    // Tags enabled AFTER the graph view mounts — the same order that
+    // previously dropped the param on canvas-initiated focus changes.
+    render(
+      <AuthProvider>
+        <WebSocketProvider>
+          <MemoryRouter initialEntries={['/wiki?view=graph']}>
+            <Routes>
+              <Route path="/wiki" element={<WikiPage />} />
+            </Routes>
+          </MemoryRouter>
+        </WebSocketProvider>
+      </AuthProvider>
+    );
+    const user = userEvent.setup();
+    await waitFor(() => {
+      expect(wikiGraphStub.props).not.toBeNull();
+    });
+    await user.click(screen.getByRole('button', { name: 'Tags' }));
+    await waitFor(() => {
+      expect(wikiGraphStub.props?.tagsVisible).toBe(true);
+    });
+
+    // Focus from the canvas path (stub relays onNodeFocus), then clear.
+    act(() => {
+      wikiGraphStub.props?.onNodeFocus('a');
+    });
+    // The page preserves the tags param: the stub sees tagsVisible stay true
+    // and the focused node appear. (MemoryRouter doesn't touch
+    // window.location, so the URL is asserted via the stub's props.)
+    await waitFor(() => {
+      expect(wikiGraphStub.props?.focusedNodeId).toBe('a');
+      expect(wikiGraphStub.props?.tagsVisible).toBe(true);
+    });
+
+    act(() => {
+      wikiGraphStub.props?.onClearFocus();
+    });
+    await waitFor(() => {
+      expect(wikiGraphStub.props?.focusedNodeId).toBeNull();
+      // Regression: the stale closure rebuilt the URL from a first-render
+      // snapshot without tags=1, so tagsVisible flipped to false on clear.
+      expect(wikiGraphStub.props?.tagsVisible).toBe(true);
     });
   });
 
