@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
+import { publishMutationEvent } from '../ws-pubsub.js';
+
 export default function wikiRoutes(app: FastifyInstance) {
   app.get<{ Querystring: { tag?: string } }>('/wiki', async request => {
     const { listPages } = await import('drone-swarm-common');
@@ -55,6 +57,11 @@ export default function wikiRoutes(app: FastifyInstance) {
         sources ?? [],
         pitch ?? undefined
       );
+      publishMutationEvent({
+        sessionId: pageId,
+        eventType: 'wiki.changed',
+        payload: { pageId },
+      });
       return reply.code(200).send(page);
     } catch (err) {
       return reply.code(400).send({ error: (err as Error).message });
@@ -65,10 +72,16 @@ export default function wikiRoutes(app: FastifyInstance) {
     '/wiki/:pageId',
     async (request, reply) => {
       const { deletePage } = await import('drone-swarm-common');
-      const deleted = await deletePage(request.params.pageId);
+      const { pageId } = request.params;
+      const deleted = await deletePage(pageId);
       if (!deleted) {
         return reply.code(404).send({ error: 'Wiki page not found' });
       }
+      publishMutationEvent({
+        sessionId: pageId,
+        eventType: 'wiki.changed',
+        payload: { pageId },
+      });
       return { success: true };
     }
   );

@@ -1,4 +1,8 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+
+vi.mock('../src/ws-pubsub.js', () => ({
+  publishMutationEvent: vi.fn(),
+}));
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -51,6 +55,31 @@ describe('coordinator wiki routes', () => {
     });
     expect(read.statusCode).toBe(200);
     expect(JSON.parse(read.body).pitch).toBe('A one-sentence pitch.');
+  });
+
+  it('PUT and DELETE publish wiki.changed events over the pubsub', async () => {
+    const { publishMutationEvent } = await import('../src/ws-pubsub.js');
+    const mock = vi.mocked(publishMutationEvent);
+    const baseline = mock.mock.calls.length;
+
+    await app.inject({
+      method: 'PUT',
+      url: '/api/wiki/new-page',
+      payload: { title: 'New', content: 'Body' },
+    });
+    await app.inject({ method: 'DELETE', url: '/api/wiki/new-page' });
+
+    // Exactly one publish per successful mutation (mock persists across the
+    // shared describe-level app rebuilds, so compare against the baseline).
+    const newCalls = mock.mock.calls.slice(baseline);
+    expect(newCalls.length).toBe(2);
+    for (const [arg] of newCalls) {
+      expect(arg).toEqual({
+        sessionId: 'new-page',
+        eventType: 'wiki.changed',
+        payload: { pageId: 'new-page' },
+      });
+    }
   });
 
   it('PUT without a pitch stores the page without one', async () => {

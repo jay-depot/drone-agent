@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import WikiPage from './wiki';
 import { AuthProvider } from '@/hooks/use-auth';
+import { WebSocketProvider } from '@/hooks/use-websocket';
 
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -26,9 +27,11 @@ Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 function renderWiki() {
   return render(
     <AuthProvider>
-      <MemoryRouter>
-        <WikiPage />
-      </MemoryRouter>
+      <WebSocketProvider>
+        <MemoryRouter>
+          <WikiPage />
+        </MemoryRouter>
+      </WebSocketProvider>
     </AuthProvider>
   );
 }
@@ -154,11 +157,13 @@ describe('WikiPage graph view', () => {
 
     render(
       <AuthProvider>
-        <MemoryRouter initialEntries={['/wiki?view=graph']}>
-          <Routes>
-            <Route path="/wiki" element={<WikiPage />} />
-          </Routes>
-        </MemoryRouter>
+        <WebSocketProvider>
+          <MemoryRouter initialEntries={['/wiki?view=graph']}>
+            <Routes>
+              <Route path="/wiki" element={<WikiPage />} />
+            </Routes>
+          </MemoryRouter>
+        </WebSocketProvider>
       </AuthProvider>
     );
 
@@ -201,11 +206,13 @@ describe('WikiPage graph view', () => {
 
     render(
       <AuthProvider>
-        <MemoryRouter initialEntries={['/wiki?view=graph']}>
-          <Routes>
-            <Route path="/wiki" element={<WikiPage />} />
-          </Routes>
-        </MemoryRouter>
+        <WebSocketProvider>
+          <MemoryRouter initialEntries={['/wiki?view=graph']}>
+            <Routes>
+              <Route path="/wiki" element={<WikiPage />} />
+            </Routes>
+          </MemoryRouter>
+        </WebSocketProvider>
       </AuthProvider>
     );
 
@@ -242,11 +249,13 @@ describe('WikiPage graph view', () => {
 
     render(
       <AuthProvider>
-        <MemoryRouter initialEntries={['/wiki?view=graph&tags=1']}>
-          <Routes>
-            <Route path="/wiki" element={<WikiPage />} />
-          </Routes>
-        </MemoryRouter>
+        <WebSocketProvider>
+          <MemoryRouter initialEntries={['/wiki?view=graph&tags=1']}>
+            <Routes>
+              <Route path="/wiki" element={<WikiPage />} />
+            </Routes>
+          </MemoryRouter>
+        </WebSocketProvider>
       </AuthProvider>
     );
 
@@ -271,11 +280,15 @@ describe('WikiPage graph view', () => {
 
     render(
       <AuthProvider>
-        <MemoryRouter initialEntries={['/wiki?view=graph&tags=1&node=tag:ops']}>
-          <Routes>
-            <Route path="/wiki" element={<WikiPage />} />
-          </Routes>
-        </MemoryRouter>
+        <WebSocketProvider>
+          <MemoryRouter
+            initialEntries={['/wiki?view=graph&tags=1&node=tag:ops']}
+          >
+            <Routes>
+              <Route path="/wiki" element={<WikiPage />} />
+            </Routes>
+          </MemoryRouter>
+        </WebSocketProvider>
       </AuthProvider>
     );
 

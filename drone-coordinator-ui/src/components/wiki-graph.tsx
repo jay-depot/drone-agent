@@ -115,6 +115,10 @@ const PAGE_OUTLINE_LIGHT = 'rgba(100, 116, 139, 0.8)';
 const PAGE_OUTLINE_DARK = 'rgba(148, 163, 184, 0.8)';
 const TAG_LABEL_LIGHT = '#15803d';
 const TAG_LABEL_DARK = '#4ade80';
+const LABEL_SCRIM_LIGHT = 'rgba(15, 23, 42, 0.55)';
+// Dark mode: page text is white-on-dark; a light-mode-strength scrim washes
+// out against near-black backgrounds, so it goes stronger.
+const LABEL_SCRIM_DARK = 'rgba(0, 0, 0, 0.72)';
 const LINK_LIT_LIGHT = 'rgba(37, 99, 235, 0.75)';
 const LINK_LIT_DARK = 'rgba(147, 197, 253, 0.9)';
 const LINK_DIM_LIGHT = 'rgba(148, 163, 184, 0.08)';
@@ -354,6 +358,7 @@ export default function WikiGraphView({
       theme.tagRing = dark ? TAG_RING_DARK : TAG_RING_LIGHT;
       theme.pageOutline = dark ? PAGE_OUTLINE_DARK : PAGE_OUTLINE_LIGHT;
       theme.tagLabel = dark ? TAG_LABEL_DARK : TAG_LABEL_LIGHT;
+      theme.labelScrim = dark ? LABEL_SCRIM_DARK : LABEL_SCRIM_LIGHT;
     };
     const theme = {
       linkColor: LINK_COLOR_LIGHT,
@@ -364,6 +369,7 @@ export default function WikiGraphView({
       tagRing: TAG_RING_LIGHT,
       pageOutline: PAGE_OUTLINE_LIGHT,
       tagLabel: TAG_LABEL_LIGHT,
+      labelScrim: LABEL_SCRIM_LIGHT,
     };
     applyThemeColors();
 
@@ -524,14 +530,14 @@ export default function WikiGraphView({
           if (SUPPORTS_CANVAS_FILTER) {
             ctx.save();
             ctx.filter = 'blur(2px)';
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+            ctx.fillStyle = theme.labelScrim;
             ctx.fillRect(scrimX, scrimY, scrimW, scrimH);
             ctx.restore();
           } else {
             ctx.save();
-            ctx.shadowColor = 'rgba(15, 23, 42, 0.9)';
+            ctx.shadowColor = theme.labelScrim;
             ctx.shadowBlur = 3 / globalScale;
-            ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+            ctx.fillStyle = theme.labelScrim;
             ctx.fillRect(scrimX, scrimY, scrimW, scrimH);
             ctx.restore();
           }
