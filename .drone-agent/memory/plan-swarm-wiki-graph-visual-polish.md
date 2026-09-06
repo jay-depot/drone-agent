@@ -86,6 +86,10 @@ User brief: pages always layer above tags (visually AND for click reception); pa
 - **Tests**: tag-first fixture asserts pages-last ordering in pushed data + prop not mutated; fake-canvas asserts page = exactly 1 stroke in `rgba(148, 163, 184, 0.3)`, missing page outlines amber, tag ring never uses page-outline color; shape test rewritten content-level (pushed nodes kind-sorted, links = canonical clones) since array order changed by design.
 - **Validation**: graph tests 23/23, UI suite 136/136, tsc clean, lint clean, build ok, LSP clean.
 
+## Round 11b (`ddc8e44`, 2026-09-06) — outline visibility fix
+
+User report: layering fix worked, outlines not visible. Root cause: the outline borrowed `theme.linkColor`, whose 0.3 alpha was tuned DOWN in Round 9 for receding hairline edges — correct hue, invisible as a 1.5px ring (tag rings read because they are solid hex). Fix: dedicated `PAGE_OUTLINE_LIGHT/DARK` constants at 0.8 alpha in the same slate family (`rgba(100,116,139,.8)` light / `rgba(148,163,184,.8)` dark), wired through the theme object as `theme.pageOutline`. Missing-page amber + dim behavior unchanged. Lesson: reusing a color tuned for one stroke width/context at another is a visibility bug class — when the user says "same color as X" for a STROKE, check X's alpha first.
+
 ## Notes / lessons
 
 - **many-body charge is scalar per node** — cannot repel a group from itself only; use a custom force via `d3Force(name, fn)`. Contract: `(alpha) => void` mutating vx/vy, `initialize(nodes)` re-run on graphData push.
