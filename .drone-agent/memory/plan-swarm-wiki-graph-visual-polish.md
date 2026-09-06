@@ -137,6 +137,14 @@ User: zoom-level filtering is no longer needed (symptom: remote clusters got no 
 - **Trap**: events dispatched on the container (ancestor) do NOT trigger listeners on the inner engine mount div — capture-phase dispatch must target a root that is an ANCESTOR OF the d3-zoom element, and the listener must be registered on that same root.
 - **Validation**: tsc clean, UI 142/142 (20 files), component 28/28, lint, build, LSP clean.
 
+## Round 17 (`727d8df`, 2026-09-06) — sizing contrast, dead-link falloff, stronger tag repulsion, final paint order
+
+- **Sizing**: `NODE_SIZE_MIN_BASE = 0.231` + `NODE_SIZE_SPREAD = 2.77` — `_val = (0.231 + 2.77·importance)^1.5`. Smallest pages render at exactly 1/3 of the old minimum radius (2px vs 6px at relSize 6); max-importance pages unchanged (13.68px). Contrast triples (radius span 2.28x → 6.84x).
+- **Dead links**: `brokenLinkSpringStrength(deadLinkCount) = WIKI_BROKEN_LINK_SPRING_STRENGTH / max(1, count)`; count per SOURCE page built in the data push (`deadLinksBySourceRef`, using nodesByIdRef exists:false). Lone dead link = full hard pull; groups clump loosely.
+- **Tag repulsion**: `WIKI_TAG_REPULSION_STRENGTH` 1800 → 2400.
+- **Paint order finalized** (tag edges, tag nodes, page link edges, tag labels, page nodes, page labels): engine paints ALL links before ALL nodes in array order, so `toEngineLinks` stable-sorts tag edges first + existing pages-last node sort = the full order. Tag edges lost directional arrows (shared arrow pass paints after everything → would violate; membership arrows were noise). `linkDirectionalArrowColor` accessor removed; arrow length now a kind-aware accessor.
+- **Validation**: tsc clean, UI 146/146, graph suites 68/68, lint, build, LSP clean.
+
 ## Notes / lessons
 
 - **many-body charge is scalar per node** — cannot repel a group from itself only; use a custom force via `d3Force(name, fn)`. Contract: `(alpha) => void` mutating vx/vy, `initialize(nodes)` re-run on graphData push.
