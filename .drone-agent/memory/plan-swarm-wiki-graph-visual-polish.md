@@ -115,6 +115,18 @@ User (after Round 12 made labels actually render): falloff on zoom-out should be
 
 User report: layering fix worked, outlines not visible. Root cause: the outline borrowed `theme.linkColor`, whose 0.3 alpha was tuned DOWN in Round 9 for receding hairline edges — correct hue, invisible as a 1.5px ring (tag rings read because they are solid hex). Fix: dedicated `PAGE_OUTLINE_LIGHT/DARK` constants at 0.8 alpha in the same slate family (`rgba(100,116,139,.8)` light / `rgba(148,163,184,.8)` dark), wired through the theme object as `theme.pageOutline`. Missing-page amber + dim behavior unchanged. Lesson: reusing a color tuned for one stroke width/context at another is a visibility bug class — when the user says "same color as X" for a STROKE, check X's alpha first.
 
+## Round 15 (`c4dab90`, 2026-09-06) — "Showdown" label overlap culling
+
+User-designed algorithm, Option B architecture (pure util + cached survivor sets consulted in the draw gate).
+
+- **Util** `src/lib/label-showdown.ts`: `selectShowdownSurvivors(candidates {id,score,rect}) -> Set<id>`. Sort best-first (score desc; ties asc id = deterministic "first listed wins"), walk, survivor iff no overlap with ANY higher-ranked rect — culled rects still exclude (strict local-maxima, the user's literal lowest-first rule, NO chain rescue; flip is a one-liner if wanted live).
+- **Score = node `_val`** (user: "same rules as their sizes") — pages 0.7deg+0.3log-words, tags member count; showdown priority can never drift from visual size.
+- **Two independent showdowns** per kind (user: cross-kind overlap fine); zoom thresholds stay the candidate filter.
+- **Rects**: screen-space (graph × k); tags centered (−fontSize/2..+fontSize/2), pages below-node text+scrim box. Measure: offscreen canvas at mount with the draw font; `length × fontSize × 0.6` fallback where getContext is null (jsdom).
+- **Triggers**: data push, onZoom, onEngineTick (NEW handle method) throttled `SHOWDOWN_RECOMPUTE_MS=100` via a performance.now clock, final onEngineStop. Draw gate: after threshold check, `survivors.has(node.id)` per kind; no focus special case (dimmed already returned).
+- **Tests**: 7 util cases (incl. tie determinism from both input orders, edge-touching non-overlap); component gate test (k=4 zoom zeroes the threshold to isolate showdown; page victim culled; tag showdown independent); throttle test via `vi.spyOn(performance,'now')` reprogramming — fake timers' `toFake:['performance']` does NOT fake performance.now reliably.
+- **Validation**: tsc clean, UI 146/146 (20 files), lint, build, LSP clean.
+
 ## Notes / lessons
 
 - **many-body charge is scalar per node** — cannot repel a group from itself only; use a custom force via `d3Force(name, fn)`. Contract: `(alpha) => void` mutating vx/vy, `initialize(nodes)` re-run on graphData push.
