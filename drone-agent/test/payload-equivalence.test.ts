@@ -54,6 +54,7 @@ function captureDriver(
     mountTool: () => undefined,
     unmountTool: () => {},
     listMountedTools: () => [],
+    emitEvent: () => {},
     runWorkflow: async () => ({}),
     requestElicitation: () => undefined,
   };

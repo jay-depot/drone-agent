@@ -93,6 +93,54 @@ describe('origin-tagged wiki reads (S6)', () => {
     expect(origins).toEqual(['beacon', 'coordinator']);
   });
 
+  it('PUT accepts an optional pitch and round-trips it through the local store', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/wiki/pitch-page',
+      payload: {
+        title: 'Pitch Page',
+        content: '# Pitch\n\nBody.',
+        scope: 'beacon',
+        tags: ['pitch'],
+        sources: ['s1'],
+        pitch: 'A one-sentence pitch.',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.pitch).toBe('A one-sentence pitch.');
+    expect(body.title).toBe('Pitch Page');
+
+    // Read back through the store
+    const read = await app.inject({
+      method: 'GET',
+      url: '/wiki/pitch-page?scope=beacon',
+    });
+    expect(read.statusCode).toBe(200);
+    expect(JSON.parse(read.body).pitch).toBe('A one-sentence pitch.');
+  });
+
+  it('PUT without a pitch stores the page without one', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/wiki/no-pitch-page',
+      payload: {
+        title: 'No Pitch',
+        content: 'Body.',
+        scope: 'beacon',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.pitch).toBeUndefined();
+
+    const read = await app.inject({
+      method: 'GET',
+      url: '/wiki/no-pitch-page?scope=beacon',
+    });
+    expect(JSON.parse(read.body).pitch).toBeUndefined();
+  });
+
   it('no-scope read returns a single beacon version when the coordinator lacks the page', async () => {
     await writePage('solo-page', 'Solo', 'beacon', '# Solo\n\nOnly here.');
     proxyWikiToCoordinator.mockResolvedValue(null);

@@ -219,6 +219,7 @@ describe('swarm plugin fragment registration', () => {
       mountTool: () => undefined,
       unmountTool: () => {},
       listMountedTools: () => [],
+      emitEvent: () => {},
       hooks: {
         onPluginsLoaded: () => {},
         onSessionStart: () => {},

@@ -514,6 +514,47 @@ describe('macrosPlugin', () => {
     });
   });
 
+  it('emits a macroExecuted event when a macro runs', async () => {
+    await withTempDir(async dir => {
+      vi.spyOn(process, 'cwd').mockReturnValue(dir);
+
+      const macroDir = path.join(dir, '.drone-agent', 'macros');
+      await mkdir(macroDir, { recursive: true });
+      await writeFile(
+        path.join(macroDir, 'plan.macro'),
+        '#! /plan\n/persona select plan\n',
+        'utf-8'
+      );
+
+      const engine = createDronePluginEngine({
+        plugins: [macrosPlugin],
+        config: {
+          ...createDefaultAgentConfig(),
+          enabledPlugins: ['macros'],
+        },
+        logger: silentLogger(),
+      });
+
+      await engine.initialize();
+      await engine.runHooks('onPluginsLoaded');
+
+      const capturedEvents: string[] = [];
+      engine.onConversationEvent(event => {
+        capturedEvents.push(event.kind);
+      });
+
+      const handled = await engine.dispatchSlashCommand('/plan', {
+        logger: silentLogger(),
+        engine,
+        conversation: undefined,
+        sessionManager: undefined,
+      });
+
+      expect(handled).toBe(true);
+      expect(capturedEvents).toContain('macroExecuted');
+    });
+  });
+
   it('executes a macro with argument substitution', async () => {
     await withTempDir(async dir => {
       vi.spyOn(process, 'cwd').mockReturnValue(dir);
@@ -739,10 +780,12 @@ describe('macrosPlugin', () => {
 
       // Events should be streamed through engine hooks
       expect(capturedEvents.length).toBeGreaterThan(0);
-      expect(capturedEvents[0]?.kind).toBe('reasoning');
-      expect(capturedEvents[1]?.kind).toBe('toolCall');
-      expect(capturedEvents[2]?.kind).toBe('toolResult');
-      expect(capturedEvents[3]?.kind).toBe('assistantMessage');
+      // The macro emits a macroExecuted marker before streaming its effects.
+      expect(capturedEvents[0]?.kind).toBe('macroExecuted');
+      expect(capturedEvents[1]?.kind).toBe('reasoning');
+      expect(capturedEvents[2]?.kind).toBe('toolCall');
+      expect(capturedEvents[3]?.kind).toBe('toolResult');
+      expect(capturedEvents[4]?.kind).toBe('assistantMessage');
     });
   });
 });

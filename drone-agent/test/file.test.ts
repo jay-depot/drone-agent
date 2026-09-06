@@ -96,6 +96,7 @@ function captureRegistration(): {
     mountTool: () => undefined,
     unmountTool: () => {},
     listMountedTools: () => [],
+    emitEvent: () => {},
   };
 
   return { registration, tools, rawTools, helpText, promptFragments };

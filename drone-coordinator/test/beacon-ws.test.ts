@@ -3,20 +3,30 @@ import {
   sendBeaconCommand,
   isBeaconConnected,
   resetBeaconConnections,
+  startBeaconLivenessSweep,
   _registerTestConnection,
   _handleIncomingMessage,
+  _setLifecycleHooks,
 } from '../src/beacon-ws.js';
 import type { WebSocket } from '@fastify/websocket';
 
 function makeFakeWs() {
   const send = vi.fn((data: string, cb?: (err?: Error) => void) => cb?.());
+  const ping = vi.fn();
+  const terminate = vi.fn();
+  const handlers = new Map<string, () => void>();
   const ws = {
     send,
-    on: vi.fn(),
+    ping,
+    terminate,
+    on: vi.fn((ev: string, cb: () => void) => {
+      handlers.set(ev, cb);
+    }),
     close: vi.fn(),
     readyState: 1,
+    handlers,
   };
-  return Object.assign(ws as unknown as WebSocket, { send });
+  return Object.assign(ws as unknown as WebSocket, { send, ping, terminate });
 }
 
 beforeEach(() => {
@@ -96,5 +106,79 @@ describe('isBeaconConnected', () => {
     const ws = makeFakeWs();
     _registerTestConnection('b1', ws);
     expect(isBeaconConnected('b1')).toBe(true);
+  });
+});
+
+describe('beacon connection lifecycle events', () => {
+  it('publishes a connected event when a connection is registered', () => {
+    const onConnected = vi.fn();
+    const onDisconnected = vi.fn();
+    _setLifecycleHooks({ onConnected, onDisconnected });
+
+    _registerTestConnection('b1', makeFakeWs());
+
+    expect(onConnected).toHaveBeenCalledWith('b1');
+    expect(onDisconnected).not.toHaveBeenCalled();
+  });
+
+  it('publishes a disconnected event when a connection is removed', () => {
+    const onDisconnected = vi.fn();
+    _setLifecycleHooks({ onDisconnected });
+    _registerTestConnection('b1', makeFakeWs());
+
+    resetBeaconConnections();
+
+    expect(onDisconnected).toHaveBeenCalledWith('b1');
+  });
+});
+
+describe('startBeaconLivenessSweep', () => {
+  it('terminates a beacon that fails to pong across sweeps', () => {
+    vi.useFakeTimers();
+
+    const deadWs = makeFakeWs();
+    _registerTestConnection('dead', deadWs);
+
+    const sweep = startBeaconLivenessSweep(1000);
+    try {
+      // First sweep pings the beacon and marks it not-alive.
+      vi.advanceTimersByTime(1000);
+      expect(deadWs.ping).toHaveBeenCalledTimes(1);
+
+      // Second sweep: the beacon never ponged, so it is terminated.
+      vi.advanceTimersByTime(1000);
+      expect(deadWs.terminate).toHaveBeenCalledTimes(1);
+      expect(isBeaconConnected('dead')).toBe(false);
+    } finally {
+      clearInterval(sweep);
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a beacon that ponged alive across sweeps', () => {
+    vi.useFakeTimers();
+
+    const aliveWs = makeFakeWs();
+    _registerTestConnection('alive', aliveWs);
+
+    // registerBeaconConnection wires `pong` → restore liveness. Make the fake
+    // ws "pong back" immediately whenever it is pinged.
+    aliveWs.ping.mockImplementation(() => {
+      aliveWs.handlers.get('pong')?.();
+    });
+
+    const sweep = startBeaconLivenessSweep(1000);
+    try {
+      // First sweep pings; the beacon pongs back, restoring liveness.
+      vi.advanceTimersByTime(1000);
+      // Second sweep should ping again (not terminate).
+      vi.advanceTimersByTime(1000);
+      expect(aliveWs.ping).toHaveBeenCalledTimes(2);
+      expect(aliveWs.terminate).not.toHaveBeenCalled();
+      expect(isBeaconConnected('alive')).toBe(true);
+    } finally {
+      clearInterval(sweep);
+      vi.useRealTimers();
+    }
   });
 });

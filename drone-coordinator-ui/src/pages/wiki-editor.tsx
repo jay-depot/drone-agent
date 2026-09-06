@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import type { WikiPage, CreateWikiPageRequest } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -9,8 +9,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function WikiEditorPage() {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const authFetch = useAuthenticatedFetch();
-  const isEdit = !!pageId;
+  const createMode = searchParams.get('create') === '1';
+  const isEdit = !!pageId && !createMode;
 
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -22,10 +24,11 @@ export default function WikiEditorPage() {
   const [scope, setScope] = useState('coordinator');
   const [tags, setTags] = useState('');
   const [sources, setSources] = useState('');
+  const [pitch, setPitch] = useState('');
 
   // Load existing page for edit mode
   useEffect(() => {
-    if (!pageId) return;
+    if (!pageId || createMode) return;
 
     async function fetchPage() {
       try {
@@ -38,6 +41,7 @@ export default function WikiEditorPage() {
           setScope(p.scope);
           setTags(p.tags.join(', '));
           setSources(p.sources.join(', '));
+          setPitch(p.pitch ?? '');
         } else {
           setError('Wiki page not found');
         }
@@ -50,12 +54,19 @@ export default function WikiEditorPage() {
       }
     }
     fetchPage();
-  }, [pageId, authFetch]);
+  }, [pageId, createMode, authFetch]);
+
+  // Pre-fill the page ID from the URL when creating a page for a specific id
+  useEffect(() => {
+    if (createMode && pageId) {
+      setWikiPageId(pageId);
+    }
+  }, [createMode, pageId]);
 
   // Auto-generate pageId from title on create
   const handleTitleChange = (value: string) => {
     setTitle(value);
-    if (!isEdit) {
+    if (!isEdit && !createMode) {
       setWikiPageId(
         value
           .toLowerCase()
@@ -98,6 +109,7 @@ export default function WikiEditorPage() {
           .split(',')
           .map(s => s.trim())
           .filter(Boolean),
+        ...(pitch.trim() ? { pitch: pitch.trim() } : {}),
       };
 
       const res = await authFetch(`/api/wiki/${targetId}`, {
@@ -140,11 +152,7 @@ export default function WikiEditorPage() {
   return (
     <div>
       <div className="flex items-center gap-4 mb-6">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate(pageId ? `/wiki/${pageId}` : '/wiki')}
-        >
+        <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
           ← Back
         </Button>
         <div>
@@ -241,6 +249,21 @@ export default function WikiEditorPage() {
         </div>
 
         <div>
+          <label htmlFor="pitch" className="block text-sm font-medium mb-1">
+            Pitch
+          </label>
+          <Input
+            id="pitch"
+            value={pitch}
+            onChange={e => setPitch(e.target.value)}
+            placeholder="One-sentence summary of this page"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            One-sentence summary. Shown in swarm memory RAG results.
+          </p>
+        </div>
+
+        <div>
           <label htmlFor="content" className="block text-sm font-medium mb-1">
             Content *
           </label>
@@ -257,11 +280,7 @@ export default function WikiEditorPage() {
           <Button type="submit" disabled={saving}>
             {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Page'}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate(pageId ? `/wiki/${pageId}` : '/wiki')}
-          >
+          <Button type="button" variant="outline" onClick={() => navigate(-1)}>
             Cancel
           </Button>
         </div>

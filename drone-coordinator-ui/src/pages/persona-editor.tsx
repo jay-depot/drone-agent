@@ -129,11 +129,7 @@ export default function PersonaEditorPage() {
     return (
       <div>
         <div className="flex items-center gap-4 mb-6">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate(-1)}
-          >
+          <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
             ← Back
           </Button>
           <Skeleton className="h-8 w-48" />
@@ -151,11 +147,7 @@ export default function PersonaEditorPage() {
   return (
     <div>
       <div className="flex items-center gap-4 mb-6">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate(id ? `/personas/${id}` : '/personas')}
-        >
+        <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
           ← Back
         </Button>
         <div>
@@ -257,11 +249,7 @@ export default function PersonaEditorPage() {
           <Button type="submit" disabled={saving}>
             {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Persona'}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate(id ? `/personas/${id}` : '/personas')}
-          >
+          <Button type="button" variant="outline" onClick={() => navigate(-1)}>
             Cancel
           </Button>
         </div>

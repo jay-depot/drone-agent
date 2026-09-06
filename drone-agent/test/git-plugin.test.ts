@@ -52,6 +52,7 @@ function captureGitTools(): Map<
     mountTool: () => undefined,
     unmountTool: () => {},
     listMountedTools: () => [],
+    emitEvent: () => {},
     hooks: {
       onPluginsLoaded: () => {},
       onSessionStart: () => {},

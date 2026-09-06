@@ -5,6 +5,7 @@ export interface Beacon {
   name: string;
   host: string;
   port: number;
+  connected?: boolean;
   connectedAt: number;
   lastHeartbeat: number;
   trustStatus?: 'pending' | 'approved' | 'rejected' | null;
@@ -104,6 +105,7 @@ export interface WikiPageMeta {
   scope: string;
   tags: string[];
   sources: string[];
+  pitch?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -118,6 +120,50 @@ export interface CreateWikiPageRequest {
   scope?: string;
   tags?: string[];
   sources?: string[];
+  pitch?: string;
+}
+
+export interface WikiTagCount {
+  tag: string;
+  count: number;
+}
+
+export interface WikiGraphNode {
+  id: string;
+  title: string;
+  exists: boolean;
+  wordCount: number;
+  tags: string[];
+  pitch?: string;
+  scope: string;
+}
+
+export interface WikiGraphEdge {
+  source: string;
+  target: string;
+  kind: 'link';
+}
+
+export interface WikiGraph {
+  nodes: WikiGraphNode[];
+  edges: WikiGraphEdge[];
+}
+
+export type GraphNodeKind = 'page' | 'tag';
+
+export type AugmentedGraphNode = WikiGraphNode & {
+  kind: GraphNodeKind;
+  /** force-graph nodeVal (area-proportional size); computed by applyNodeSizing. */
+  _val?: number;
+};
+
+export type AugmentedGraphEdge = Omit<WikiGraphEdge, 'kind'> & {
+  kind: 'link' | 'tag';
+};
+
+export interface AugmentedWikiGraph {
+  nodes: AugmentedGraphNode[];
+  edges: AugmentedGraphEdge[];
 }
 
 // Pagination types

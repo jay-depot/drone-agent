@@ -56,6 +56,53 @@ describe('Wiki Storage', () => {
     expect(page).toBeNull();
   });
 
+  it('should round-trip an optional pitch through frontmatter', async () => {
+    const { writePage, readPage } = await import('../src/wiki-storage.js');
+    const page = await writePage(
+      'pitch-page',
+      'Pitch Page',
+      'coordinator',
+      '# Content',
+      ['tag'],
+      ['session-1'],
+      'A one-sentence pitch about this page.'
+    );
+    expect(page.pitch).toBe('A one-sentence pitch about this page.');
+
+    const read = await readPage('pitch-page');
+    expect(read).not.toBeNull();
+    expect(read!.pitch).toBe('A one-sentence pitch about this page.');
+  });
+
+  it('should omit pitch from frontmatter and read back undefined when not provided', async () => {
+    const { writePage, readPage } = await import('../src/wiki-storage.js');
+    const { readFile } = await import('node:fs/promises');
+    await writePage('no-pitch', 'No Pitch', 'beacon', 'content');
+
+    const raw = await readFile(`${kbDir}/no-pitch.md`, 'utf-8');
+    expect(raw).not.toContain('pitch:');
+
+    const read = await readPage('no-pitch');
+    expect(read).not.toBeNull();
+    expect(read!.pitch).toBeUndefined();
+  });
+
+  it('should include pitch in listPages metadata when present', async () => {
+    const { writePage, listPages } = await import('../src/wiki-storage.js');
+    await writePage(
+      'list-pitch',
+      'List Pitch',
+      'beacon',
+      'content',
+      [],
+      [],
+      'Listed pitch value.'
+    );
+    const pages = await listPages();
+    expect(pages).toHaveLength(1);
+    expect(pages[0].pitch).toBe('Listed pitch value.');
+  });
+
   it('should delete a wiki page', async () => {
     const { writePage, deletePage, readPage } =
       await import('../src/wiki-storage.js');
@@ -86,6 +133,59 @@ describe('Wiki Storage', () => {
     await writePage('page-2', 'Page 2', 'beacon', 'content 2');
     const pages = await listPages();
     expect(pages[0].id).toBe('page-2');
+  });
+
+  it('should filter pages by tag', async () => {
+    const { writePage, listPages } = await import('../src/wiki-storage.js');
+    await writePage('page-1', 'Page 1', 'beacon', 'content 1', ['ops']);
+    await writePage('page-2', 'Page 2', 'beacon', 'content 2', ['design']);
+    await writePage('page-3', 'Page 3', 'beacon', 'content 3', ['ops']);
+
+    const opsPages = await listPages('ops');
+    expect(opsPages).toHaveLength(2);
+    expect(opsPages.map(p => p.id).sort()).toEqual(['page-1', 'page-3']);
+
+    const designPages = await listPages('design');
+    expect(designPages).toHaveLength(1);
+    expect(designPages[0].id).toBe('page-2');
+  });
+
+  it('should return empty array when filtering by a tag with no matches', async () => {
+    const { writePage, listPages } = await import('../src/wiki-storage.js');
+    await writePage('page-1', 'Page 1', 'beacon', 'content 1', ['ops']);
+    const pages = await listPages('nonexistent');
+    expect(pages).toEqual([]);
+  });
+
+  it('should list distinct tags with counts sorted by count desc then tag asc', async () => {
+    const { writePage, listTags } = await import('../src/wiki-storage.js');
+    await writePage('page-1', 'Page 1', 'beacon', 'content 1', [
+      'ops',
+      'design',
+    ]);
+    await writePage('page-2', 'Page 2', 'beacon', 'content 2', ['ops']);
+    await writePage('page-3', 'Page 3', 'beacon', 'content 3', ['personal']);
+
+    const tags = await listTags();
+    expect(tags).toEqual([
+      { tag: 'ops', count: 2 },
+      { tag: 'design', count: 1 },
+      { tag: 'personal', count: 1 },
+    ]);
+  });
+
+  it('should reject writePage with reserved id "tags"', async () => {
+    const { writePage } = await import('../src/wiki-storage.js');
+    await expect(
+      writePage('tags', 'Tags', 'beacon', 'content')
+    ).rejects.toThrow('Page id "tags" is reserved');
+  });
+
+  it('should reject writePage with reserved id "TAGS" (case-insensitive)', async () => {
+    const { writePage } = await import('../src/wiki-storage.js');
+    await expect(
+      writePage('TAGS', 'Tags', 'beacon', 'content')
+    ).rejects.toThrow('Page id "tags" is reserved');
   });
 
   it('should search pages by title', async () => {
@@ -252,5 +352,134 @@ describe('Wiki Storage', () => {
     expect(
       result.issues.some(i => i.type === 'orphan' && i.pageId === 'oversized')
     ).toBe(true);
+  });
+
+  describe('buildGraph', () => {
+    it('returns a node per page and forward edges for wikilinks', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-a',
+        'Page A',
+        'coordinator',
+        'Links to [[page-b]] and [[page-c]].',
+        ['tagA']
+      );
+      await writePage('page-b', 'Page B', 'coordinator', 'Body');
+      await writePage('page-c', 'Page C', 'coordinator', 'Body');
+
+      const graph = await buildGraph();
+      const ids = graph.nodes.map(n => n.id).sort();
+      expect(ids).toEqual(['page-a', 'page-b', 'page-c']);
+      expect(graph.nodes.find(n => n.id === 'page-a')!.exists).toBe(true);
+      expect(graph.edges).toContainEqual({
+        source: 'page-a',
+        target: 'page-b',
+        kind: 'link',
+      });
+      expect(graph.edges).toContainEqual({
+        source: 'page-a',
+        target: 'page-c',
+        kind: 'link',
+      });
+    });
+
+    it('includes orphan pages as nodes', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage('linked', 'Linked', 'coordinator', 'Body');
+      await writePage('orphan', 'Orphan', 'coordinator', 'Body');
+
+      const graph = await buildGraph();
+      const ids = graph.nodes.map(n => n.id).sort();
+      expect(ids).toEqual(['linked', 'orphan']);
+    });
+
+    it('adds an exists:false placeholder node for a broken-link target', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-a',
+        'Page A',
+        'coordinator',
+        'See [[missing-page]] for details.'
+      );
+
+      const graph = await buildGraph();
+      const missing = graph.nodes.find(n => n.id === 'missing-page');
+      expect(missing).toBeDefined();
+      expect(missing!.exists).toBe(false);
+      expect(graph.edges).toContainEqual({
+        source: 'page-a',
+        target: 'missing-page',
+        kind: 'link',
+      });
+    });
+
+    it('deduplicates edges when a page links the same target twice', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-a',
+        'Page A',
+        'coordinator',
+        'See [[page-b]] and again [[page-b]].'
+      );
+      await writePage('page-b', 'Page B', 'coordinator', 'Body');
+
+      const graph = await buildGraph();
+      const dupes = graph.edges.filter(
+        e => e.source === 'page-a' && e.target === 'page-b'
+      );
+      expect(dupes).toHaveLength(1);
+    });
+
+    it('carries the pitch onto graph nodes when present', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-a',
+        'Page A',
+        'coordinator',
+        'Body',
+        [],
+        [],
+        'A one-sentence pitch about page A.'
+      );
+
+      const graph = await buildGraph();
+      expect(graph.nodes.find(n => n.id === 'page-a')!.pitch).toBe(
+        'A one-sentence pitch about page A.'
+      );
+    });
+
+    it('carries the word count onto graph nodes', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-a',
+        'Page A',
+        'coordinator',
+        'one two three four five'
+      );
+
+      const graph = await buildGraph();
+      expect(graph.nodes.find(n => n.id === 'page-a')!.wordCount).toBe(5);
+    });
+
+    it('counts words in whitespace-heavy content correctly', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage(
+        'page-a',
+        'Page A',
+        'coordinator',
+        '  alpha\n\n  beta\t\tgamma  \n delta  '
+      );
+
+      const graph = await buildGraph();
+      expect(graph.nodes.find(n => n.id === 'page-a')!.wordCount).toBe(4);
+    });
+
+    it('reports wordCount 0 for broken-link placeholder nodes', async () => {
+      const { writePage, buildGraph } = await import('../src/wiki-storage.js');
+      await writePage('page-a', 'Page A', 'coordinator', 'See [[missing]].');
+
+      const graph = await buildGraph();
+      expect(graph.nodes.find(n => n.id === 'missing')!.wordCount).toBe(0);
+    });
   });
 });

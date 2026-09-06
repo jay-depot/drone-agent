@@ -1,0 +1,505 @@
+import { describe, expect, it } from 'vitest';
+import {
+  applyNodeSizing,
+  buildAugmentedWikiGraph,
+  buildFocusSets,
+  edgeEndpointId,
+  edgeKey,
+  pageLinkSpringStrength,
+  wikiLinkDegrees,
+  NODE_SIZE_SPREAD,
+  NODE_SIZE_MIN_BASE,
+  brokenLinkSpringStrength,
+  WIKI_BROKEN_LINK_SPRING_STRENGTH,
+  createTagRepulsionForce,
+  WIKI_TAG_MAX_KICK,
+  WIKI_PAGE_LINK_SPRING_STRENGTH,
+  tagSpringStrength,
+  WIKI_TAG_SPRING_STRENGTH,
+  WIKI_TAG_REPULSION_DISTANCE_MAX,
+} from './wiki-graph-utils';
+import type {
+  AugmentedGraphEdge,
+  AugmentedGraphNode,
+  WikiGraph,
+} from '@/lib/types';
+
+function pageNode(overrides: Partial<AugmentedGraphNode>): AugmentedGraphNode {
+  return {
+    id: 'page',
+    title: 'Page',
+    exists: true,
+    wordCount: 0,
+    tags: [],
+    scope: 'coordinator',
+    kind: 'page',
+    ...overrides,
+  };
+}
+
+describe('edgeEndpointId / edgeKey', () => {
+  it('resolves node-object endpoints to ids and passes strings through', () => {
+    expect(edgeEndpointId('a')).toBe('a');
+    expect(edgeEndpointId({ id: 'a', title: 'A' })).toBe('a');
+  });
+
+  it('builds the same key for string and object endpoint forms', () => {
+    const canonical = edgeKey({ source: 'a', target: 'b' });
+    const engineForm = edgeKey({
+      source: { id: 'a', title: 'A' },
+      target: { id: 'b', title: 'B' },
+    });
+    expect(canonical).toBe(engineForm);
+    expect(canonical).toContain('a');
+    expect(canonical).toContain('b');
+  });
+});
+
+describe('createTagRepulsionForce', () => {
+  function simNode(
+    overrides: Partial<AugmentedGraphNode> & {
+      x?: number;
+      y?: number;
+      vx?: number;
+      vy?: number;
+    }
+  ): AugmentedGraphNode & { x?: number; y?: number; vx?: number; vy?: number } {
+    return { ...pageNode(overrides), ...overrides } as AugmentedGraphNode & {
+      x?: number;
+      y?: number;
+      vx?: number;
+      vy?: number;
+    };
+  }
+
+  it('repels only tag nodes, with equal and opposite velocity', () => {
+    const force = createTagRepulsionForce(300);
+    const tagA = simNode({
+      id: 'tag:a',
+      kind: 'tag',
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    const tagB = simNode({
+      id: 'tag:b',
+      kind: 'tag',
+      x: 10,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    const page = simNode({ id: 'p', x: 5, y: 0, vx: 0, vy: 0 });
+    force.initialize([tagA, tagB, page]);
+    force(0.5);
+
+    expect(tagA.vx).toBeLessThan(0);
+    expect(tagB.vx).toBeGreaterThan(0);
+    expect(page.vx).toBe(0);
+  });
+
+  it('decays with alpha and respects the distance cap', () => {
+    const force = createTagRepulsionForce(300);
+    const tagA = simNode({
+      id: 'tag:a',
+      kind: 'tag',
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    const tagB = simNode({
+      id: 'tag:b',
+      kind: 'tag',
+      x: 10,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    force.initialize([tagA, tagB]);
+    force(0.5);
+    const closePush = tagB.vx ?? 0;
+
+    tagB.x = WIKI_TAG_REPULSION_DISTANCE_MAX + 100;
+    force(1);
+    expect(tagB.vx).toBe(closePush);
+
+    force(0.1);
+    expect(tagB.vx).toBe(closePush);
+  });
+
+  it('separates coincident tags deterministically', () => {
+    const force = createTagRepulsionForce(300);
+    const tagA = simNode({
+      id: 'tag:a',
+      kind: 'tag',
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    const tagB = simNode({
+      id: 'tag:b',
+      kind: 'tag',
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    force.initialize([tagA, tagB]);
+    force(0.5);
+    // Direction is arbitrary when coincident; the push is symmetric and
+    // bounded (unit-distance fallback, no velocity explosion).
+    expect(tagA.vx).toBe(-(tagB.vx ?? 0));
+    expect(Math.abs(tagA.vx ?? 0)).toBeGreaterThan(0);
+    expect(Math.abs(tagA.vx ?? 0)).toBeLessThan(1000);
+  });
+
+  it('kicks big tags harder than small tags at the same distance', () => {
+    const force = createTagRepulsionForce(900);
+    const bigA = simNode({
+      id: 'tag:a',
+      kind: 'tag',
+      _val: 12,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    const bigB = simNode({
+      id: 'tag:b',
+      kind: 'tag',
+      _val: 12,
+      x: 60,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    force.initialize([bigA, bigB]);
+    force(0.5);
+    const bigKick = Math.abs(bigA.vx ?? 0);
+
+    const smallA = simNode({
+      id: 'tag:c',
+      kind: 'tag',
+      _val: 1,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    const smallB = simNode({
+      id: 'tag:d',
+      kind: 'tag',
+      _val: 1,
+      x: 60,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    force.initialize([smallA, smallB]);
+    force(0.5);
+    const smallKick = Math.abs(smallA.vx ?? 0);
+
+    // sizeFactor = sqrt(12*12) = 12 for the big pair, 1 for the small pair.
+    expect(bigKick).toBeCloseTo(smallKick * 12, 5);
+    expect(bigKick).toBeGreaterThan(smallKick);
+  });
+
+  it("pushes overlapping tags out of each other's rendered shell", () => {
+    const force = createTagRepulsionForce(900);
+    // _val 4 -> radius 12 each (engine: sqrt(val)*relSize); shell = 36+12.
+    // Place at dist 5, deep inside the shell.
+    const tagA = simNode({
+      id: 'tag:a',
+      kind: 'tag',
+      _val: 4,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    const tagB = simNode({
+      id: 'tag:b',
+      kind: 'tag',
+      _val: 4,
+      x: 5,
+      y: 0,
+      vx: 0,
+      vy: 0,
+    });
+    force.initialize([tagA, tagB]);
+    force(0.5);
+
+    // Inverse-square (900*0.5*4/25 = 72) plus shell (5.5*90*0.5 = 247.5)
+    // both exceed the per-pair clamp. A sits left of B, so A is pushed -x.
+    expect(tagA.vx).toBe(-WIKI_TAG_MAX_KICK);
+    expect(tagB.vx).toBe(WIKI_TAG_MAX_KICK);
+  });
+});
+
+describe('tagSpringStrength', () => {
+  it('uses the base strength for single-member tags', () => {
+    expect(tagSpringStrength(1)).toBe(WIKI_TAG_SPRING_STRENGTH);
+    expect(tagSpringStrength(0)).toBe(WIKI_TAG_SPRING_STRENGTH);
+  });
+
+  it('divides the base strength by the member count', () => {
+    expect(tagSpringStrength(2)).toBeCloseTo(WIKI_TAG_SPRING_STRENGTH / 2);
+    expect(tagSpringStrength(5)).toBeCloseTo(WIKI_TAG_SPRING_STRENGTH / 5);
+  });
+
+  it('pulls small tags harder than big tags', () => {
+    expect(tagSpringStrength(2)).toBeGreaterThan(tagSpringStrength(20));
+  });
+
+  it('decays to zero for very large tags', () => {
+    expect(tagSpringStrength(100000)).toBeLessThan(0.0001);
+  });
+});
+
+describe('brokenLinkSpringStrength', () => {
+  it('keeps a lone dead link at full strength', () => {
+    expect(brokenLinkSpringStrength(1)).toBeCloseTo(
+      WIKI_BROKEN_LINK_SPRING_STRENGTH
+    );
+    expect(brokenLinkSpringStrength(0)).toBeCloseTo(
+      WIKI_BROKEN_LINK_SPRING_STRENGTH
+    );
+  });
+
+  it('weakens as the source page accumulates dead links', () => {
+    expect(brokenLinkSpringStrength(3)).toBeCloseTo(
+      WIKI_BROKEN_LINK_SPRING_STRENGTH / 3
+    );
+    expect(brokenLinkSpringStrength(3)).toBeLessThan(
+      brokenLinkSpringStrength(1)
+    );
+  });
+});
+
+describe('pageLinkSpringStrength', () => {
+  it('gives an isolated pair the minimum link strength (base/2)', () => {
+    // The link edge itself puts both endpoints in each other's destination
+    // sets, so union = 2 is the floor for a real page→page link.
+    expect(pageLinkSpringStrength(new Set(['b']), new Set(['a']))).toBeCloseTo(
+      WIKI_PAGE_LINK_SPRING_STRENGTH / 2
+    );
+  });
+
+  it('divides by the union of both endpoints unique destinations', () => {
+    // Triangle a-b, a-c, b-c: edge a-b sees union {a, b, c} -> base/3.
+    expect(
+      pageLinkSpringStrength(new Set(['b', 'c']), new Set(['a', 'c']))
+    ).toBeCloseTo(WIKI_PAGE_LINK_SPRING_STRENGTH / 3);
+  });
+
+  it('counts shared destinations once', () => {
+    expect(
+      pageLinkSpringStrength(new Set(['b', 'x', 'y']), new Set(['a', 'x', 'y']))
+    ).toBeCloseTo(WIKI_PAGE_LINK_SPRING_STRENGTH / 4);
+  });
+
+  it('approaches zero for a hub linked to almost everything', () => {
+    const hub = new Set(Array.from({ length: 40 }, (_, i) => `p${i}`));
+    expect(pageLinkSpringStrength(hub, new Set(['a']))).toBeLessThan(0.01);
+  });
+});
+
+describe('wikiLinkDegrees', () => {
+  it('counts in and out links per node over link edges only', () => {
+    const edges: AugmentedGraphEdge[] = [
+      { source: 'a', target: 'b', kind: 'link' },
+      { source: 'c', target: 'a', kind: 'link' },
+      { source: 'b', target: 'a', kind: 'link' },
+      { source: 'a', target: 'tag:x', kind: 'tag' },
+      { source: 'b', target: 'tag:x', kind: 'tag' },
+    ];
+    const degrees = wikiLinkDegrees(edges);
+    expect(degrees.get('a')).toBe(3);
+    expect(degrees.get('b')).toBe(2);
+    expect(degrees.get('c')).toBe(1);
+    expect(degrees.has('tag:x')).toBe(false);
+  });
+
+  it('returns an empty map for no edges', () => {
+    expect(wikiLinkDegrees([]).size).toBe(0);
+  });
+});
+
+describe('buildAugmentedWikiGraph', () => {
+  const graph: WikiGraph = {
+    nodes: [
+      pageNode({ id: 'a', title: 'A', tags: ['x', 'y'] }),
+      pageNode({ id: 'b', title: 'B', tags: ['x'] }),
+      pageNode({ id: 'c', title: 'C', tags: [] }),
+    ],
+    edges: [{ source: 'a', target: 'b', kind: 'link' }],
+  };
+
+  it('keeps pages with kind "page" and server edges intact', () => {
+    const aug = buildAugmentedWikiGraph(graph);
+    expect(aug.nodes.filter(n => n.kind === 'page').map(n => n.id)).toEqual([
+      'a',
+      'b',
+      'c',
+    ]);
+    expect(aug.edges).toContainEqual({
+      source: 'a',
+      target: 'b',
+      kind: 'link',
+    });
+  });
+
+  it('creates one tag node per unique tag with namespaced ids', () => {
+    const aug = buildAugmentedWikiGraph(graph);
+    const tagNodes = aug.nodes.filter(n => n.kind === 'tag');
+    expect(tagNodes.map(n => n.id).sort()).toEqual(['tag:x', 'tag:y']);
+    expect(tagNodes.map(n => n.title).sort()).toEqual(['x', 'y']);
+    const tagX = tagNodes.find(n => n.id === 'tag:x')!;
+    expect(tagX.exists).toBe(true);
+    expect(tagX.wordCount).toBe(0);
+    expect(tagX.tags).toEqual(['x']);
+  });
+
+  it('creates one tag edge per page-tag pair, deduplicated', () => {
+    const aug = buildAugmentedWikiGraph(graph);
+    const tagEdges = aug.edges.filter(e => e.kind === 'tag');
+    expect(tagEdges).toEqual([
+      { source: 'a', target: 'tag:x', kind: 'tag' },
+      { source: 'a', target: 'tag:y', kind: 'tag' },
+      { source: 'b', target: 'tag:x', kind: 'tag' },
+    ]);
+  });
+
+  it('does not mutate the input graph', () => {
+    const before = JSON.stringify(graph);
+    buildAugmentedWikiGraph(graph);
+    expect(JSON.stringify(graph)).toBe(before);
+  });
+});
+
+describe('applyNodeSizing', () => {
+  it('scales node value with the blend of degree and word count', () => {
+    const nodes = [
+      pageNode({ id: 'hub', wordCount: 3000 }),
+      pageNode({ id: 'meaty', wordCount: 3000 }),
+      pageNode({ id: 'sparse', wordCount: 0 }),
+    ];
+    const edges: AugmentedGraphEdge[] = [
+      { source: 'hub', target: 'meaty', kind: 'link' },
+      { source: 'hub', target: 'sparse', kind: 'link' },
+      { source: 'sparse', target: 'hub', kind: 'link' },
+    ];
+    const sized = applyNodeSizing(nodes, edges);
+    const byId = new Map(sized.map(n => [n.id, n._val ?? 0]));
+    expect(byId.get('hub')).toBeCloseTo(
+      Math.pow(NODE_SIZE_MIN_BASE + NODE_SIZE_SPREAD, 1.5)
+    );
+    expect(byId.get('meaty')).toBeCloseTo(
+      Math.pow(NODE_SIZE_MIN_BASE + NODE_SIZE_SPREAD * (0.7 / 3 + 0.3), 1.5)
+    );
+    expect(byId.get('sparse')).toBeCloseTo(
+      Math.pow(NODE_SIZE_MIN_BASE + NODE_SIZE_SPREAD * ((0.7 * 2) / 3), 1.5)
+    );
+  });
+
+  it('returns the minimum value for every node in an all-zero graph', () => {
+    const nodes = [pageNode({ id: 'x' }), pageNode({ id: 'y' })];
+    const sized = applyNodeSizing(nodes, []);
+    for (const node of sized) {
+      // _val = MIN_BASE^1.5 => rendered radius = sqrt(_val) * BASE = MIN_BASE^0.75.
+      expect(node._val).toBeCloseTo(Math.pow(NODE_SIZE_MIN_BASE, 1.5));
+    }
+  });
+
+  it('triples the sizing contrast: min radius 1/3 of before, max unchanged', () => {
+    // Rendered radius = sqrt(_val) * BASE_NODE_REL_SIZE (6, in the component).
+    const minRadius = Math.pow(NODE_SIZE_MIN_BASE, 0.75) * 6;
+    const maxRadius = Math.pow(NODE_SIZE_MIN_BASE + NODE_SIZE_SPREAD, 0.75) * 6;
+    // Smallest pages render at exactly 1/3 of the previous 6px minimum.
+    expect(minRadius).toBeCloseTo(2, 1);
+    // Maximum-importance pages keep their previous size.
+    expect(maxRadius).toBeCloseTo(13.68, 1);
+    // Old importance range spanned 3^0.75 = 2.28x in radius; the new span
+    // triples it.
+    expect(maxRadius / minRadius).toBeCloseTo(3 * Math.pow(3, 0.75), 1);
+  });
+
+  it('gives tag nodes value from their member count', () => {
+    const nodes = [
+      pageNode({ id: 'a', tags: ['x'] }),
+      pageNode({ id: 'b', tags: ['x'] }),
+      pageNode({ id: 'c', tags: ['y'] }),
+      pageNode({ id: 'tag:x', title: 'x', tags: ['x'], kind: 'tag' }),
+      pageNode({ id: 'tag:y', title: 'y', tags: ['y'], kind: 'tag' }),
+    ];
+    const edges: AugmentedGraphEdge[] = [
+      { source: 'a', target: 'tag:x', kind: 'tag' },
+      { source: 'b', target: 'tag:x', kind: 'tag' },
+      { source: 'c', target: 'tag:y', kind: 'tag' },
+    ];
+    const sized = applyNodeSizing(nodes, edges);
+    const byId = new Map(sized.map(n => [n.id, n._val ?? 0]));
+    // Tag area encodes absolute member count (engine radius = sqrt(val)).
+    expect(byId.get('tag:x')).toBe(2);
+    expect(byId.get('tag:y')).toBe(1);
+  });
+
+  it('scales tag size independently of the page degree distribution', () => {
+    const nodes = [
+      pageNode({ id: 'a', tags: ['x'] }),
+      pageNode({ id: 'hub', wordCount: 500 }),
+      pageNode({ id: 'b', tags: ['x'] }),
+      pageNode({ id: 'tag:x', title: 'x', tags: ['x'], kind: 'tag' }),
+    ];
+    const edges: AugmentedGraphEdge[] = [
+      { source: 'a', target: 'hub', kind: 'link' },
+      { source: 'hub', target: 'b', kind: 'link' },
+      { source: 'hub', target: 'a', kind: 'link' },
+      { source: 'a', target: 'tag:x', kind: 'tag' },
+      { source: 'b', target: 'tag:x', kind: 'tag' },
+    ];
+    const sized = applyNodeSizing(nodes, edges);
+    const byId = new Map(sized.map(n => [n.id, n._val ?? 0]));
+    expect(byId.get('tag:x')).toBe(2);
+    expect(byId.get('tag:x')).toBeLessThan(byId.get('hub') ?? 0);
+  });
+});
+
+describe('buildFocusSets', () => {
+  const edges: AugmentedGraphEdge[] = [
+    { source: 'a', target: 'b', kind: 'link' },
+    { source: 'c', target: 'a', kind: 'link' },
+    { source: 'b', target: 'd', kind: 'link' },
+    { source: 'a', target: 'tag:x', kind: 'tag' },
+  ];
+
+  it('collects the focus and its direct neighbors for a page focus', () => {
+    const sets = buildFocusSets(edges, 'a');
+    expect([...sets.neighborIds].sort()).toEqual(['a', 'b', 'c', 'tag:x']);
+    expect(sets.touchingEdgeKeys.size).toBe(3);
+  });
+
+  it('includes tag edges when the focus is a tag node', () => {
+    const sets = buildFocusSets(edges, 'tag:x');
+    expect([...sets.neighborIds].sort()).toEqual(['a', 'tag:x']);
+    expect(sets.touchingEdgeKeys.size).toBe(1);
+  });
+
+  it('matches engine-resolved link objects by endpoint key', () => {
+    const sets = buildFocusSets(edges, 'a');
+    const engineForm = {
+      source: { id: 'a', title: 'A' },
+      target: { id: 'b', title: 'B' },
+    };
+    expect(sets.touchingEdgeKeys.has(edgeKey(engineForm))).toBe(true);
+  });
+
+  it('returns a lone focus for an unknown id', () => {
+    const sets = buildFocusSets(edges, 'nope');
+    expect([...sets.neighborIds]).toEqual(['nope']);
+    expect(sets.touchingEdgeKeys.size).toBe(0);
+  });
+});

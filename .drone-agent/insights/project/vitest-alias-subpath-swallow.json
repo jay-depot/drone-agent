@@ -1,0 +1,6 @@
+[
+  {
+    "timestamp": "2026-09-04T02:08:08.278Z",
+    "insight": "The root vitest.config.ts installs an alias for the base package 'drone-swarm-common' pointing at src/index.ts. Vitest's alias does prefix matching, so subpath imports like 'drone-swarm-common/wiki-storage', '/spawner', and '/tls' get swallowed by the base alias and fail to resolve from test-runnable code (routes loaded via src). The beacon wiki routes already import from the base package (which re-exports wiki-storage); the coordinator wiki routes used the subpath and their route tests 500'd with ERR_MODULE_NOT_FOUND. Fix: import from the base package in route code and test helpers. When adding a NEW subpath import of a workspace package to test-covered code, verify the alias handles it first."
+  }
+]
