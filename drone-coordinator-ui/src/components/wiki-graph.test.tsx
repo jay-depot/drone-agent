@@ -37,8 +37,8 @@ function makeFakeHandle() {
   ]) {
     handle[method] = vi.fn(chain);
   }
-  const linkForce = { distance: vi.fn() };
-  const chargeForce = { strength: vi.fn() };
+  const linkForce = { distance: vi.fn(), strength: vi.fn() };
+  const chargeForce = { strength: vi.fn(), distanceMax: vi.fn() };
   handle.d3Force = vi.fn((name: string) =>
     name === 'link' ? linkForce : name === 'charge' ? chargeForce : undefined
   ) as unknown as typeof handle.d3Force;
@@ -456,11 +456,34 @@ describe('WikiGraphView', () => {
 
     const linkForce = handle.d3Force('link') as {
       distance: ReturnType<typeof vi.fn>;
+      strength: ReturnType<typeof vi.fn>;
     };
     const chargeForce = handle.d3Force('charge') as {
       strength: ReturnType<typeof vi.fn>;
+      distanceMax: ReturnType<typeof vi.fn>;
     };
-    expect(linkForce.distance).toHaveBeenCalledWith(90);
-    expect(chargeForce.strength).toHaveBeenCalledWith(-240);
+    expect(linkForce.distance).toHaveBeenCalledTimes(1);
+    expect(chargeForce.strength).toHaveBeenCalledTimes(1);
+    expect(chargeForce.distanceMax).toHaveBeenCalledWith(420);
+
+    const distanceAccessor = linkForce.distance.mock.calls[0][0] as (
+      l: AugmentedGraphEdge
+    ) => number;
+    expect(distanceAccessor(edges[3])).toBe(55);
+    expect(distanceAccessor(edges[0])).toBe(90);
+
+    const strengthAccessor = linkForce.strength.mock.calls[0][0] as (
+      l: AugmentedGraphEdge
+    ) => number;
+    expect(strengthAccessor(edges[3])).toBe(1);
+    // Page edges reproduce d3's default: 1 / min total-layout-edge degree.
+    // a has 3 layout edges (link, broken, tag), b has 1 -> 1/1.
+    expect(strengthAccessor(edges[0])).toBe(1);
+
+    const chargeAccessor = chargeForce.strength.mock.calls[0][0] as (
+      n: AugmentedGraphNode
+    ) => number;
+    expect(chargeAccessor(nodes[4])).toBe(-700);
+    expect(chargeAccessor(nodes[0])).toBe(-240);
   });
 });

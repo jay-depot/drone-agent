@@ -2,12 +2,17 @@ import { useEffect, useRef } from 'react';
 import ForceGraph from 'force-graph';
 import {
   buildFocusSets,
+  d3DefaultLinkStrength,
   edgeKey,
   edgeEndpointId,
   labelDegreeThreshold,
   wikiLinkDegrees,
+  WIKI_CHARGE_DISTANCE_MAX,
   WIKI_LINK_DISTANCE,
   WIKI_CHARGE_STRENGTH,
+  WIKI_TAG_LINK_DISTANCE,
+  WIKI_TAG_SPRING_STRENGTH,
+  WIKI_TAG_CHARGE_STRENGTH,
 } from '@/lib/wiki-graph-utils';
 import type { AugmentedGraphEdge, AugmentedGraphNode } from '@/lib/types';
 
@@ -52,6 +57,7 @@ export interface ForceGraphHandle {
   ): ForceGraphHandle;
   onEngineStop(cb: () => void): ForceGraphHandle;
   d3Force(forceName: string): unknown;
+  d3Force(forceName: string, forceFn: unknown): ForceGraphHandle;
   width(px: number): ForceGraphHandle;
   height(px: number): ForceGraphHandle;
   zoom(scale: number, durationMs?: number): ForceGraphHandle;
@@ -60,9 +66,15 @@ export interface ForceGraphHandle {
 }
 
 /** d3 link force subset used for layout tuning (getter via d3Force). */
-type D3LinkForce = { distance(distance: number): D3LinkForce };
+type D3LinkForce = {
+  distance(accessor: (link: AugmentedGraphEdge) => number): D3LinkForce;
+  strength(accessor: (link: AugmentedGraphEdge) => number): D3LinkForce;
+};
 /** d3 many-body force subset used for layout tuning (getter via d3Force). */
-type D3ChargeForce = { strength(strength: number): D3ChargeForce };
+type D3ChargeForce = {
+  strength(accessor: (node: AugmentedGraphNode) => number): D3ChargeForce;
+  distanceMax(max: number): D3ChargeForce;
+};
 
 type PositionedNode = AugmentedGraphNode & { x?: number; y?: number };
 
@@ -168,6 +180,8 @@ export default function WikiGraphView({
   const prevNodeCountRef = useRef<number | null>(null);
   /** Max wiki-link degree in the current data; scales label thresholds. */
   const maxLinkDegreeRef = useRef(0);
+  /** Degree over every layout edge (link + tag); scales d3 default springs. */
+  const layoutEdgeDegreesRef = useRef(new Map<string, number>());
 
   // Set by the mount effect so later effects can restyle without re-running
   // the graph setup. Accessors live inside the mount effect: they close over
@@ -340,12 +354,30 @@ export default function WikiGraphView({
     };
     zoomStylesRef.current = applyZoomStyles;
 
-    // Spread the layout so labels have room: longer link rest length and
-    // stronger per-node repulsion than the engine defaults.
+    // Per-kind layout forces: page links get d3's stock spring (reproduced
+    // as an accessor so the tag branch can stiffen without NaN), while tag
+    // edges are short stiff springs binding member pages into topical
+    // clusters and tag nodes carry extra charge to push clusters apart.
+    // Accessors must return finite numbers for every edge/node — d3
+    // unary-pluses them into the force arrays.
     const linkForce = fg.d3Force('link') as D3LinkForce | undefined;
-    if (linkForce) linkForce.distance(WIKI_LINK_DISTANCE);
+    if (linkForce) {
+      linkForce.distance(link =>
+        link.kind === 'tag' ? WIKI_TAG_LINK_DISTANCE : WIKI_LINK_DISTANCE
+      );
+      linkForce.strength(link =>
+        link.kind === 'tag'
+          ? WIKI_TAG_SPRING_STRENGTH
+          : d3DefaultLinkStrength(link, layoutEdgeDegreesRef.current)
+      );
+    }
     const chargeForce = fg.d3Force('charge') as D3ChargeForce | undefined;
-    if (chargeForce) chargeForce.strength(WIKI_CHARGE_STRENGTH);
+    if (chargeForce) {
+      chargeForce.strength(node =>
+        node.kind === 'tag' ? WIKI_TAG_CHARGE_STRENGTH : WIKI_CHARGE_STRENGTH
+      );
+      chargeForce.distanceMax(WIKI_CHARGE_DISTANCE_MAX);
+    }
 
     const repaint = () => {
       // The render loop repaints continuously; re-setting an accessor-bearing
@@ -436,6 +468,19 @@ export default function WikiGraphView({
     nodesByIdRef.current = new Map(nodes.map(n => [n.id, n]));
     linkDegreesRef.current = wikiLinkDegrees(edges);
     maxLinkDegreeRef.current = Math.max(0, ...linkDegreesRef.current.values());
+    layoutEdgeDegreesRef.current = new Map();
+    for (const edge of edges) {
+      const sourceId = edgeEndpointId(edge.source);
+      const targetId = edgeEndpointId(edge.target);
+      layoutEdgeDegreesRef.current.set(
+        sourceId,
+        (layoutEdgeDegreesRef.current.get(sourceId) ?? 0) + 1
+      );
+      layoutEdgeDegreesRef.current.set(
+        targetId,
+        (layoutEdgeDegreesRef.current.get(targetId) ?? 0) + 1
+      );
+    }
     fg.graphData({ nodes, links: toEngineLinks(edges) });
     zoomStylesRef.current(fg, zoomRef.current.k);
     if (prevNodeCountRef.current !== nodes.length) {

@@ -25,6 +25,32 @@ export const WIKI_LINK_DISTANCE = 90;
 export const WIKI_CHARGE_STRENGTH = -240;
 
 /**
+ * Tag-layer forces: stiff short springs pull member pages into tight
+ * topical clusters, while strong tag-node charge pushes clusters apart.
+ * Charge distance is capped so close-range repulsion cannot overpower the
+ * springs and jitter the layout.
+ */
+export const WIKI_TAG_LINK_DISTANCE = 55;
+export const WIKI_TAG_SPRING_STRENGTH = 1;
+export const WIKI_TAG_CHARGE_STRENGTH = -700;
+export const WIKI_CHARGE_DISTANCE_MAX = 420;
+
+/**
+ * d3 link-force default strength (1 / min degree of the two endpoints,
+ * counting every edge in the layout), reproduced so page-link springs keep
+ * their stock behavior while tag springs are stiffened per edge kind.
+ */
+export function d3DefaultLinkStrength(
+  edge: { source: unknown; target: unknown },
+  totalEdgeDegrees: Map<string, number>
+): number {
+  const sourceDegree = totalEdgeDegrees.get(edgeEndpointId(edge.source)) ?? 0;
+  const targetDegree = totalEdgeDegrees.get(edgeEndpointId(edge.target)) ?? 0;
+  const minDegree = Math.min(sourceDegree, targetDegree);
+  return minDegree > 0 ? 1 / minDegree : 0;
+}
+
+/**
  * Fraction of the graph's max wiki-link degree that earns a label at low
  * zoom, so small graphs (max degree < LABEL_THRESHOLD_MAX_DEGREE) still
  * show hub labels instead of none at all.

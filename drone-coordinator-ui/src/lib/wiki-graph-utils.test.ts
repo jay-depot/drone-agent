@@ -9,6 +9,7 @@ import {
   maxLabelThreshold,
   wikiLinkDegrees,
   NODE_SIZE_SPREAD,
+  d3DefaultLinkStrength,
   LABEL_THRESHOLD_MAX_DEGREE,
   LABEL_THRESHOLD_MAX_ZOOM,
   LABEL_THRESHOLD_MIN_ZOOM,
@@ -47,6 +48,35 @@ describe('edgeEndpointId / edgeKey', () => {
     expect(canonical).toBe(engineForm);
     expect(canonical).toContain('a');
     expect(canonical).toContain('b');
+  });
+});
+
+describe('d3DefaultLinkStrength', () => {
+  const degrees = new Map([
+    ['hub', 4],
+    ['leaf', 1],
+    ['pair', 2],
+  ]);
+
+  it('returns 1 over the min total-edge degree of the endpoints', () => {
+    const edge = { source: 'hub', target: 'leaf' };
+    // min(4, 1) = 1 -> strength 1 (d3's default is 1 / min degree).
+    expect(d3DefaultLinkStrength(edge, degrees)).toBe(1);
+    expect(
+      d3DefaultLinkStrength({ source: 'hub', target: 'pair' }, degrees)
+    ).toBeCloseTo(0.5);
+    expect(
+      d3DefaultLinkStrength({ source: 'pair', target: 'pair' }, degrees)
+    ).toBeCloseTo(0.5);
+  });
+
+  it('resolves object endpoints and returns 0 for unknown nodes', () => {
+    expect(
+      d3DefaultLinkStrength(
+        { source: { id: 'hub' }, target: { id: 'ghost' } },
+        degrees
+      )
+    ).toBe(0);
   });
 });
 
