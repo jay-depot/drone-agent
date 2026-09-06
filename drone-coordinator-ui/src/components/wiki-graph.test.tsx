@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import type { AugmentedGraphEdge, AugmentedGraphNode } from '@/lib/types';
 import {
   WIKI_BROKEN_LINK_SPRING_STRENGTH,
+  WIKI_PAGE_LINK_SPRING_STRENGTH,
   WIKI_TAG_SPRING_STRENGTH,
 } from '@/lib/wiki-graph-utils';
 import WikiGraphView, { type ForceGraphHandle } from './wiki-graph';
@@ -481,14 +482,22 @@ describe('WikiGraphView', () => {
       l: AugmentedGraphEdge
     ) => number;
     expect(distanceAccessor(edges[3])).toBe(55);
-    // Page-link rest length is inert: page springs have zero strength.
-    expect(distanceAccessor(edges[0])).toBe(55);
+    // Tags and broken links bind tight; normal page links stay farther out.
+    expect(distanceAccessor(edges[0])).toBe(180);
+    expect(distanceAccessor(edges[1])).toBe(55);
 
     const strengthAccessor = linkForce.strength.mock.calls[0][0] as (
       l: AugmentedGraphEdge
     ) => number;
-    // Page edges exert no layout force — display-only edges.
-    expect(strengthAccessor(edges[0])).toBe(0);
+    // Page springs fade with linkedness: union of both endpoints' unique
+    // destinations. a->{b,missing}, b->{a}: |{a,b,missing}| = 3.
+    expect(strengthAccessor(edges[0])).toBeCloseTo(
+      WIKI_PAGE_LINK_SPRING_STRENGTH / 3
+    );
+    // d<->e pair: union {d,e} = 2.
+    expect(strengthAccessor(edges[2])).toBeCloseTo(
+      WIKI_PAGE_LINK_SPRING_STRENGTH / 2
+    );
     // Broken links pull hard (edges[1] targets the missing page) so the
     // defect's two halves sit adjacent.
     expect(strengthAccessor(edges[1])).toBeCloseTo(

@@ -21,15 +21,17 @@ export const LABEL_THRESHOLD_MAX_DEGREE = 10;
 export const WIKI_CHARGE_STRENGTH = -480;
 
 /**
- * Layout forces: the only attraction is tag→page. Each tag edge is a short
- * spring whose strength is inversely proportional to the tag's member count,
- * so small distinctive tags bind their few pages tightly while big tags pull
- * each member weakly and drift outward under the size-scaled tag↔tag-only
- * repulsion (the stock charge force repels tags from their own members too —
- * a scalar per node cannot distinguish neighbors). Wiki links between pages
- * exert NO layout force — those edges are display-only — so a page settles
- * toward the tags most distinctive to it. Per-pair kicks are clamped so
- * stronger forces cannot launch nodes explosively.
+ * Layout forces: tag→page springs organize the graph. Each tag edge is a
+ * short spring whose strength is inversely proportional to the tag's member
+ * count, so small distinctive tags bind their few pages tightly while big
+ * tags pull each member weakly and drift outward under the size-scaled
+ * tag↔tag-only repulsion (the stock charge force repels tags from their own
+ * members too — a scalar per node cannot distinguish neighbors). Wiki links
+ * between pages pull gently, fading fast with linkedness: a hub linking
+ * almost everywhere exerts nearly no force while a small cluster linking
+ * each other stays cohesive. Broken links are a third rule (fixed strength,
+ * short rest length) so defect halves sit adjacent. Per-pair kicks are
+ * clamped so stronger forces cannot launch nodes explosively.
  */
 export const WIKI_TAG_LINK_DISTANCE = 55;
 export const WIKI_TAG_SPRING_STRENGTH = 0.1;
@@ -47,6 +49,19 @@ export const WIKI_TAG_MAX_KICK = 50;
 export const WIKI_BROKEN_LINK_SPRING_STRENGTH = 0.6;
 
 /**
+ * Rest length for page→page wiki-link springs. Tags and broken links bind
+ * much tighter (WIKI_TAG_LINK_DISTANCE); page links only need to keep small
+ * clusters at conversational distance.
+ */
+export const WIKI_PAGE_LINK_DISTANCE = 180;
+
+/**
+ * Base spring strength for a page→page wiki-link, divided by the union of
+ * the two pages' unique link destinations (see pageLinkSpringStrength).
+ */
+export const WIKI_PAGE_LINK_SPRING_STRENGTH = 0.3;
+
+/**
  * Per-edge spring strength for a tag→page edge. Scales inversely with the
  * tag's member count, so the net pull on a tag stays roughly constant as it
  * grows (more members, each pulled more weakly), and members for which a tag
@@ -54,6 +69,22 @@ export const WIKI_BROKEN_LINK_SPRING_STRENGTH = 0.6;
  */
 export function tagSpringStrength(memberCount: number): number {
   return WIKI_TAG_SPRING_STRENGTH / Math.max(1, memberCount);
+}
+
+/**
+ * Per-edge spring strength for a page→page wiki link: the base divided by
+ * the number of unique link destinations across BOTH endpoints. Falls off
+ * quickly with total linkedness, so a page linking to almost everything
+ * exerts nearly no force over its links while a small cluster of pages
+ * linking each other keeps some attraction.
+ */
+export function pageLinkSpringStrength(
+  sourceTargets: ReadonlySet<string>,
+  targetTargets: ReadonlySet<string>
+): number {
+  const union = new Set(sourceTargets);
+  for (const target of targetTargets) union.add(target);
+  return WIKI_PAGE_LINK_SPRING_STRENGTH / Math.max(1, union.size);
 }
 
 /**

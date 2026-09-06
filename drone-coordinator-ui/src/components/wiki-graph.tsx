@@ -6,9 +6,11 @@ import {
   edgeKey,
   edgeEndpointId,
   labelDegreeThreshold,
+  pageLinkSpringStrength,
   tagSpringStrength,
   WIKI_BROKEN_LINK_SPRING_STRENGTH,
   WIKI_CHARGE_STRENGTH,
+  WIKI_PAGE_LINK_DISTANCE,
   WIKI_TAG_LINK_DISTANCE,
   WIKI_TAG_REPULSION_STRENGTH,
   wikiLinkDegrees,
@@ -140,6 +142,9 @@ function isDarkMode(): boolean {
 const isFiniteNumber = (value: number | undefined): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
+/** Fallback destination set for pages with no wiki links. */
+const NO_LINK_TARGETS: ReadonlySet<string> = new Set();
+
 export default function WikiGraphView({
   nodes,
   edges,
@@ -182,6 +187,8 @@ export default function WikiGraphView({
   const maxLinkDegreeRef = useRef(0);
   /** Member count per tag node id (kind-'tag' edges); scales tag springs. */
   const tagMemberCountsRef = useRef(new Map<string, number>());
+  /** Unique wiki-link destinations per page id; scales page-link springs. */
+  const linkTargetsRef = useRef(new Map<string, Set<string>>());
 
   // Set by the mount effect so later effects can restyle without re-running
   // the graph setup. Accessors live inside the mount effect: they close over
@@ -354,17 +361,21 @@ export default function WikiGraphView({
     };
     zoomStylesRef.current = applyZoomStyles;
 
-    // Layout forces: wiki links between pages exert NO force (display-only
-    // edges) except broken ones, which pull hard so a defect's two halves
-    // (linking page + missing target) sit adjacent. Tag edges are short
-    // springs binding member pages to their tag node, with per-edge strength
-    // inversely proportional to the tag's member
-    // count: small distinctive tags pull hard, big tags pull weakly and
-    // drift outward under tag↔tag repulsion. Accessors must return finite
-    // numbers for every edge — d3 unary-pluses them into the force arrays.
+    // Layout forces: tag edges are short springs binding member pages to
+    // their tag node, with per-edge strength inversely proportional to the
+    // tag's member count: small distinctive tags pull hard, big tags pull
+    // weakly and drift outward under tag↔tag repulsion. Page links pull
+    // gently, fading fast with linkedness (see pageLinkSpringStrength);
+    // broken links pull hard so a defect's two halves (linking page +
+    // missing target) sit adjacent. Accessors must return finite numbers for
+    // every edge — d3 unary-pluses them into the force arrays.
     const linkForce = fg.d3Force('link') as D3LinkForce | undefined;
     if (linkForce) {
-      linkForce.distance(() => WIKI_TAG_LINK_DISTANCE);
+      linkForce.distance(link =>
+        link.kind === 'tag' || isBrokenLink(link)
+          ? WIKI_TAG_LINK_DISTANCE
+          : WIKI_PAGE_LINK_DISTANCE
+      );
       linkForce.strength(link =>
         link.kind === 'tag'
           ? tagSpringStrength(
@@ -372,7 +383,12 @@ export default function WikiGraphView({
             )
           : isBrokenLink(link)
             ? WIKI_BROKEN_LINK_SPRING_STRENGTH
-            : 0
+            : pageLinkSpringStrength(
+                linkTargetsRef.current.get(edgeEndpointId(link.source)) ??
+                  NO_LINK_TARGETS,
+                linkTargetsRef.current.get(edgeEndpointId(link.target)) ??
+                  NO_LINK_TARGETS
+              )
       );
     }
     const chargeForce = fg.d3Force('charge') as D3ChargeForce | undefined;
@@ -485,6 +501,18 @@ export default function WikiGraphView({
         tagId,
         (tagMemberCountsRef.current.get(tagId) ?? 0) + 1
       );
+    }
+    linkTargetsRef.current = new Map();
+    for (const edge of edges) {
+      if (edge.kind !== 'link') continue;
+      const sourceId = edgeEndpointId(edge.source);
+      const targetId = edgeEndpointId(edge.target);
+      if (!linkTargetsRef.current.has(sourceId))
+        linkTargetsRef.current.set(sourceId, new Set());
+      if (!linkTargetsRef.current.has(targetId))
+        linkTargetsRef.current.set(targetId, new Set());
+      linkTargetsRef.current.get(sourceId)!.add(targetId);
+      linkTargetsRef.current.get(targetId)!.add(sourceId);
     }
     fg.graphData({ nodes, links: toEngineLinks(edges) });
     zoomStylesRef.current(fg, zoomRef.current.k);

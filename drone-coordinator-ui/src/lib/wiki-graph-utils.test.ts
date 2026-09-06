@@ -7,10 +7,12 @@ import {
   edgeKey,
   labelDegreeThreshold,
   maxLabelThreshold,
+  pageLinkSpringStrength,
   wikiLinkDegrees,
   NODE_SIZE_SPREAD,
   createTagRepulsionForce,
   WIKI_TAG_MAX_KICK,
+  WIKI_PAGE_LINK_SPRING_STRENGTH,
   tagSpringStrength,
   WIKI_TAG_SPRING_STRENGTH,
   WIKI_TAG_REPULSION_DISTANCE_MAX,
@@ -255,6 +257,34 @@ describe('tagSpringStrength', () => {
 
   it('decays to zero for very large tags', () => {
     expect(tagSpringStrength(100000)).toBeLessThan(0.0001);
+  });
+});
+
+describe('pageLinkSpringStrength', () => {
+  it('gives an isolated pair the minimum link strength (base/2)', () => {
+    // The link edge itself puts both endpoints in each other's destination
+    // sets, so union = 2 is the floor for a real page→page link.
+    expect(pageLinkSpringStrength(new Set(['b']), new Set(['a']))).toBeCloseTo(
+      WIKI_PAGE_LINK_SPRING_STRENGTH / 2
+    );
+  });
+
+  it('divides by the union of both endpoints unique destinations', () => {
+    // Triangle a-b, a-c, b-c: edge a-b sees union {a, b, c} -> base/3.
+    expect(
+      pageLinkSpringStrength(new Set(['b', 'c']), new Set(['a', 'c']))
+    ).toBeCloseTo(WIKI_PAGE_LINK_SPRING_STRENGTH / 3);
+  });
+
+  it('counts shared destinations once', () => {
+    expect(
+      pageLinkSpringStrength(new Set(['b', 'x', 'y']), new Set(['a', 'x', 'y']))
+    ).toBeCloseTo(WIKI_PAGE_LINK_SPRING_STRENGTH / 4);
+  });
+
+  it('approaches zero for a hub linked to almost everything', () => {
+    const hub = new Set(Array.from({ length: 40 }, (_, i) => `p${i}`));
+    expect(pageLinkSpringStrength(hub, new Set(['a']))).toBeLessThan(0.01);
   });
 });
 
