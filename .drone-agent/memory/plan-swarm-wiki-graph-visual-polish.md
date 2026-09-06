@@ -178,6 +178,10 @@ User: page node labels still inconsistently layered (everything else much nicer)
 - **Test**: focused low-score node's label draws despite having lost the duel unfocused.
 - **Validation**: tsc clean, UI 150/150 (21 files), component 30/30, lint, build, LSP clean.
 
+## Round 23b (`02f46d3`, 2026-09-06) — height regression fix
+
+Converting the row wrapper to `relative flex-1` dropped its `flex`, killing the flex context the graph container's `flex-1` needs → canvas collapsed to its 480px min-height (~half viewport). Fix: `relative flex flex-1 min-h-0`. Lesson: absolute-positioned overlays need the parent only to be `relative` — do not remove layout classes from the positioning context when converting a flex sibling to an overlay.
+
 ## Round 20 (`5efec74`, 2026-09-06) — reading-friendly label backgrounds
 
 User: labels need blur (or failing that, dark spread shadows) to stay legible over tag labels and link lines.
