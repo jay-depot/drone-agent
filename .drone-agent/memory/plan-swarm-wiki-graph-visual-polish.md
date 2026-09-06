@@ -162,6 +162,14 @@ User: page node labels still inconsistently layered (everything else much nicer)
 - **Tests**: fake handle gained onRenderFramePost (and lost stale linkDirectionalArrowColor); label/gating/throttle tests assert via the frame pass with title-based lookups ('Page', '#t') instead of per-node invocation.
 - **Validation**: tsc clean, UI 146/146, component 29/29, lint, build, LSP clean.
 
+## Round 22 (`198ab69`, 2026-09-06) — live wiki graph via WS wiki.changed; dark-mode label scrims
+
+**Live updates**: coordinator `PUT`/`DELETE /wiki/:pageId` now `publishMutationEvent({ sessionId: pageId, eventType: 'wiki.changed', payload: { pageId } })` (pubsub envelope is `{sessionId, eventType, payload}` — sessionId is the routing key). `useWikiGraph` subscribes via `useWebSocket().subscribe('wiki.changed')`, refetch debounced 500ms (bursts collapse), guarded by `active`. Zero `wiki-graph.tsx` changes — the component fully reacts to new `graph` objects (sizing → showdown → focus). Camera: refit on data push while zoom-to-fit armed = intended for surprise clusters.
+- **Tests**: route test via `vi.mock('../src/ws-pubsub.js')` with relative-count asserts (mock persists across beforeEach app rebuilds); hook tests (`use-wiki-graph.test.tsx`): mock auth+ws modules, burst of 3 events → 1 fetch, real timers + `vi.waitFor` (fake timers' advanceTimersByTimeAsync deadlocks with waitFor polling); wiki.test.tsx wraps renders in `WebSocketProvider` — AuthProvider must be OUTSIDE it (WebSocketProvider consumes useAuth).
+- **Dark label scrims**: `LABEL_SCRIM_LIGHT rgba(15,23,42,.55)` (unchanged) / `LABEL_SCRIM_DARK rgba(0,0,0,.72)` through `theme.labelScrim`, used by both blur and shadow-spread paths.
+- **Debugging war story**: fake-Subscriber literal+cast produced `sub.ws.send is not a function` even though the object had send — resolved by vi.mock instead of fake-WebSocket construction (probes proved route+test share one module instance; src vs dist are separate singletons).
+- **Validation**: coordinator tsc+tests 4/4, UI tsc+149/149 (21 files), lint, build, LSP clean.
+
 ## Round 20 (`5efec74`, 2026-09-06) — reading-friendly label backgrounds
 
 User: labels need blur (or failing that, dark spread shadows) to stay legible over tag labels and link lines.
