@@ -154,6 +154,10 @@ User: page node labels still inconsistently layered (everything else much nicer)
 - **Tests**: fake handle gained onRenderFramePost (and lost stale linkDirectionalArrowColor); label/gating/throttle tests assert via the frame pass with title-based lookups ('Page', '#t') instead of per-node invocation.
 - **Validation**: tsc clean, UI 146/146, component 29/29, lint, build, LSP clean.
 
+## Round 19 (`cdf9bcf`, 2026-09-06) — graph view fills available vertical space
+
+User: blank bit underneath the graph. Cause: container hardcoded `h-[calc(100vh-220px)]` — a magic guess at header/toolbar height that never matches the real chrome. Fix: page root becomes `flex h-full min-h-0 flex-col` in graph view (header `shrink-0`), container `flex-1 min-h-[480px]`; the engine already sizes from getBoundingClientRect on mount/resize, so the canvas tracks the corrected box. Grid view unchanged (natural scroll). No test changes — layout-only, covered by tsc/build; visual check on the real page pending user confirmation.
+
 ## Notes / lessons
 
 - **many-body charge is scalar per node** — cannot repel a group from itself only; use a custom force via `d3Force(name, fn)`. Contract: `(alpha) => void` mutating vx/vy, `initialize(nodes)` re-run on graphData push.
