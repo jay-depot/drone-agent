@@ -127,6 +127,16 @@ User-designed algorithm, Option B architecture (pure util + cached survivor sets
 - **Tests**: 7 util cases (incl. tie determinism from both input orders, edge-touching non-overlap); component gate test (k=4 zoom zeroes the threshold to isolate showdown; page victim culled; tag showdown independent); throttle test via `vi.spyOn(performance,'now')` reprogramming — fake timers' `toFake:['performance']` does NOT fake performance.now reliably.
 - **Validation**: tsc clean, UI 146/146 (20 files), lint, build, LSP clean.
 
+## Round 16 (`d317ae8`, 2026-09-06) — Showdown-only labels; reactive zoom-to-fit toggle
+
+User: zoom-level filtering is no longer needed (symptom: remote clusters got no labels at low zoom even when 1-2 would fit); and ⤢ should be a REACTIVE toggle (on = refit continuously; off = never; manual zoom auto-disarms right before applying; ON by default).
+
+- **Threshold filter removed**: every positioned node is a showdown candidate (ranked by `_val`, culled by overlap). Deleted LABEL_THRESHOLD_* consts, `maxLabelThreshold`/`labelDegreeThreshold`, `linkDegreesRef`/`maxLinkDegreeRef`/`maxTagMembersRef` refs, and the `wikiLinkDegrees` import — dead code per standards.
+- **Zoom-to-fit toggle**: `zoomToFitOnRef` (default true) + `useState` mirror for aria-pressed/highlight. Refits on engine stop + data push while armed and no node is focused (focus camera wins); clear-focus refit only while armed. Disarm paths: zoom-in/out buttons flip first (then zoom), capture-phase `wheel` listener on the component ROOT (fires before the engine's d3-zoom listener; the inner mount div was NOT sufficient — dispatches on an ancestor never reach child listeners, found via test). Toggle button re-arm fits immediately.
+- **Tests**: threshold describes deleted; tag label test asserts both tags label with no zoom gate; new tests: default-on refit (repeated stops keep fitting), button disarm → aria-pressed false → no reactive fit → re-arm fits immediately, wheel disarm, focus-clear refit suppressed while disarmed.
+- **Trap**: events dispatched on the container (ancestor) do NOT trigger listeners on the inner engine mount div — capture-phase dispatch must target a root that is an ANCESTOR OF the d3-zoom element, and the listener must be registered on that same root.
+- **Validation**: tsc clean, UI 142/142 (20 files), component 28/28, lint, build, LSP clean.
+
 ## Notes / lessons
 
 - **many-body charge is scalar per node** — cannot repel a group from itself only; use a custom force via `d3Force(name, fn)`. Contract: `(alpha) => void` mutating vx/vy, `initialize(nodes)` re-run on graphData push.
