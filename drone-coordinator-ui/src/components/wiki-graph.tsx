@@ -40,7 +40,9 @@ export interface ForceGraphHandle {
       globalScale: number
     ) => void
   ): ForceGraphHandle;
-  nodeCanvasObjectMode(mode: string): ForceGraphHandle;
+  nodeCanvasObjectMode(
+    mode: string | ((node: AugmentedGraphNode) => string)
+  ): ForceGraphHandle;
   nodeLabel(accessor: (node: AugmentedGraphNode) => string): ForceGraphHandle;
   linkDirectionalArrowLength(length: number): ForceGraphHandle;
   linkDirectionalArrowColor(
@@ -300,23 +302,14 @@ export default function WikiGraphView({
       if (positioned.x === undefined || positioned.y === undefined) return;
       const focus = focusSetsRef.current;
       const dimmed = focus !== null && !focus.neighborIds.has(node.id);
-      const radius = Math.sqrt(node._val ?? 1) * nodeRelSizeRef.current * 0.5;
-
-      if (node.kind === 'tag' && tagsVisibleRef.current) {
-        // Hollow ring: the engine paints a near-transparent fill; we stroke it.
-        ctx.beginPath();
-        ctx.arc(positioned.x, positioned.y, radius, 0, 2 * Math.PI);
-        ctx.strokeStyle = dimmed ? TAG_DIM : theme.tagRing;
-        ctx.lineWidth = 1.5 / globalScale;
-        ctx.stroke();
-      }
+      const radius = Math.sqrt(node._val ?? 1) * nodeRelSizeRef.current;
 
       if (node.kind === 'page') {
-        // Outline in the link-edge slate hue (theme-aware), mirroring the
-        // tag ring's per-frame stroke. The unlit link alpha (0.3) is tuned
-        // for receding hairline EDGES — far too faint for a node ring — so
-        // outlines carry their own stronger constants. Dimmed pages outline
-        // in the dimmed edge color so the spotlight reads consistently.
+        // Outline in the link-edge slate hue (theme-aware). The unlit link
+        // alpha (0.3) is tuned for receding hairline EDGES — far too faint
+        // for a node ring — so outlines carry their own stronger constants.
+        // Dimmed pages outline in the dimmed edge color so the spotlight
+        // reads consistently.
         ctx.beginPath();
         ctx.arc(positioned.x, positioned.y, radius, 0, 2 * Math.PI);
         ctx.strokeStyle = dimmed
@@ -446,7 +439,11 @@ export default function WikiGraphView({
       .nodeVal(nodeValAccessor)
       .nodeColor(nodeColorAccessor)
       .nodeCanvasObject(nodeCanvasObjectAccessor)
-      .nodeCanvasObjectMode('after')
+      // Plain strings are broken here: the engine's accessorFn treats a
+      // string prop as a property NAME to look up per node (node['after'] =
+      // undefined), so a string mode silently disables custom node painting
+      // entirely. The mode must be a function.
+      .nodeCanvasObjectMode(() => 'after')
       .nodeLabel(nodeLabelAccessor)
       .linkWidth(linkWidthAccessor)
       .linkColor(linkColorAccessor)

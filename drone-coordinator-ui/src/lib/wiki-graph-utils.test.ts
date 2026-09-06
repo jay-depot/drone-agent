@@ -211,7 +211,8 @@ describe('createTagRepulsionForce', () => {
 
   it("pushes overlapping tags out of each other's rendered shell", () => {
     const force = createTagRepulsionForce(900);
-    // _val 4 -> radius 3 each; shell = 3+3+4.5 = 10.5. Place at dist 5.
+    // _val 4 -> radius 12 each (engine: sqrt(val)*relSize); shell = 36+12.
+    // Place at dist 5, deep inside the shell.
     const tagA = simNode({
       id: 'tag:a',
       kind: 'tag',

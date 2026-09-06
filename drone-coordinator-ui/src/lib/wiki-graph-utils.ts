@@ -98,12 +98,13 @@ function tagMembers(node: SimNode): number {
 
 /**
  * Rendered graph-space radius: the engine draws radius =
- * sqrt(nodeVal) * nodeRelSize / 2, and the component's zoom compensation
- * sets nodeRelSize ~= 6/k, canceling k at constant screen size. Uses the
- * base 6 so the shell matches on-screen appearance at any zoom.
+ * sqrt(nodeVal) * nodeRelSize (verified against force-graph 1.51.4
+ * paintNodes), and the component's zoom compensation sets nodeRelSize ~= 6/k,
+ * canceling k at constant screen size. Uses the base 6 so the shell matches
+ * on-screen appearance at any zoom.
  */
 function tagRadius(node: SimNode): number {
-  return (Math.sqrt(node._val ?? 1) * 6) / 2;
+  return Math.sqrt(node._val ?? 1) * 6;
 }
 
 /** A simulation node as d3 sees it: position + velocity fields. */

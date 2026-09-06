@@ -124,7 +124,9 @@ describe('WikiGraphView', () => {
     expect(handle.nodeId).toHaveBeenCalledWith('id');
     expect(handle.linkSource).toHaveBeenCalledWith('source');
     expect(handle.linkTarget).toHaveBeenCalledWith('target');
-    expect(handle.nodeCanvasObjectMode).toHaveBeenCalledWith('after');
+    expect(handle.nodeCanvasObjectMode).toHaveBeenCalledWith(
+      expect.any(Function)
+    );
   });
 
   it('orders pages after tags in the pushed data so pages layer on top', () => {
