@@ -85,7 +85,7 @@ function createCapture(
 /** Enables swarm in the agent config the plugin reads at register(). */
 function swarmConfig() {
   return createDefaultAgentConfig({
-    swarm: { enabled: true },
+    enabledPlugins: ['swarm'],
   });
 }
 
@@ -120,7 +120,11 @@ describe('db/transcript session-parameter event emission', () => {
     it('emits sessionStarted with subagentId when isSubagent on session start', async () => {
       fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
       const capture = createCapture(swarmConfig, {
-        persona: personaCapability({ id: 'coder', name: 'Coder' }),
+        persona: personaCapability({
+          id: 'coder',
+          name: 'Coder',
+          description: 'Coder persona',
+        }),
         runtime: {
           isSubagent: true,
           subagentId: 'subagent-123',
@@ -165,7 +169,11 @@ describe('db/transcript session-parameter event emission', () => {
     it('wraps a sessionStarted event into the event buffer payload', async () => {
       fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) });
       const capture = createCapture(swarmConfig, {
-        persona: personaCapability({ id: 'coder', name: 'Coder' }),
+        persona: personaCapability({
+          id: 'coder',
+          name: 'Coder',
+          description: 'Coder persona',
+        }),
         runtime: {
           isSubagent: true,
           subagentId: 'subagent-7',
