@@ -254,6 +254,15 @@ describe('WikiGraphView', () => {
     const ctxIn = mkCtx();
     canvasFn(tagLow, ctxIn, 1);
     expect(ctxIn.fillText).toHaveBeenCalledWith('#low', 5, expect.any(Number));
+
+    // Tag labels draw centered with no scrim band; page labels keep both.
+    expect(ctxIn.fillRect).not.toHaveBeenCalled();
+    const ctxPage = mkCtx();
+    canvasFn({ ...nodes[0], x: 5, y: 5 } as (typeof nodes)[number], ctxPage, 1);
+    expect(ctxPage.fillRect).toHaveBeenCalledTimes(1);
+    const tagY = (ctxIn.fillText as ReturnType<typeof vi.fn>).mock
+      .calls[0][2] as number;
+    expect(tagY).toBeLessThan(5);
   });
 
   it('wires node click to focus, hidden-tag clicks to nothing, and background to clear', () => {

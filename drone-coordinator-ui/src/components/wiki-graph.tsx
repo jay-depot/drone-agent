@@ -362,14 +362,20 @@ export default function WikiGraphView({
       const label = node.kind === 'tag' ? `#${node.title}` : node.title;
       const isTag = node.kind === 'tag';
       const textWidth = ctx.measureText(label).width;
-      const textY = positioned.y + radius + 3 / globalScale;
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
-      ctx.fillRect(
-        positioned.x - textWidth / 2 - 2 / globalScale,
-        textY - 1 / globalScale,
-        textWidth + 4 / globalScale,
-        fontSize + 3 / globalScale
-      );
+      // Page labels sit below the node; tag labels center inside it, so the
+      // big translucent tag discs read as labeled chips.
+      const textY = isTag
+        ? positioned.y - fontSize / 2
+        : positioned.y + radius + 3 / globalScale;
+      if (!isTag) {
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+        ctx.fillRect(
+          positioned.x - textWidth / 2 - 2 / globalScale,
+          textY - 1 / globalScale,
+          textWidth + 4 / globalScale,
+          fontSize + 3 / globalScale
+        );
+      }
       // Tag labels render in the tag-layer green (theme-aware) so they read
       // as tag furniture at a glance; page labels stay white on the scrim.
       ctx.fillStyle = isTag ? theme.tagLabel : 'rgba(255, 255, 255, 0.92)';
