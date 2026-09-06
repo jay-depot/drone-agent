@@ -255,6 +255,25 @@ describe('WikiGraphView', () => {
     expect(widthAccessor(edges[0])).toBe(0.75);
   });
 
+  it('ignores non-finite zoom transforms instead of poisoning sizing', () => {
+    renderView();
+    const zoomCb = accessorFrom('onZoom') as (t: {
+      k: number;
+      x: number;
+      y: number;
+    }) => void;
+    const relCalls = () =>
+      (handle.nodeRelSize as ReturnType<typeof vi.fn>).mock.calls.length;
+    const before = relCalls();
+
+    zoomCb({ k: NaN, x: 0, y: 0 });
+    zoomCb({ k: Infinity, x: 0, y: 0 });
+    expect(relCalls()).toBe(before);
+
+    zoomCb({ k: 1, x: 0, y: 0 });
+    expect(handle.nodeRelSize).toHaveBeenLastCalledWith(6);
+  });
+
   it('auto-fits once per data change on engine stop', () => {
     renderView();
     const fitCalls = () =>
@@ -267,6 +286,33 @@ describe('WikiGraphView', () => {
 
     stopCb();
     expect(fitCalls()).toBe(initial + 1);
+  });
+
+  it('skips camera fits until nodes have positions', () => {
+    const unpositioned = nodes.map(n => ({ ...n, x: undefined, y: undefined }));
+    const fitCalls = () =>
+      (handle.zoomToFit as ReturnType<typeof vi.fn>).mock.calls.length;
+    const graphProps = {
+      tagsVisible: true,
+      onNodeFocus: vi.fn(),
+      onClearFocus: vi.fn(),
+      forceGraphFactory: () => handle as unknown as ForceGraphHandle,
+    };
+
+    const { rerender } = render(
+      <WikiGraphView nodes={unpositioned} edges={edges} {...graphProps} />
+    );
+    // Mount runs the clear-focus fit; it must be skipped pre-layout.
+    expect(fitCalls()).toBe(0);
+
+    const stopCb = accessorFrom('onEngineStop') as () => void;
+    stopCb();
+    // The auto-fit stays pending (not consumed) when nothing is positioned.
+    expect(fitCalls()).toBe(0);
+
+    rerender(<WikiGraphView nodes={nodes} edges={edges} {...graphProps} />);
+    stopCb();
+    expect(fitCalls()).toBe(1);
   });
 
   it('moves the camera to the focused node and refits on clear', () => {

@@ -88,8 +88,12 @@ const TRANSPARENT = 'rgba(0, 0, 0, 0)';
 
 const BASE_NODE_REL_SIZE = 6;
 const BASE_LINK_WIDTH = 1.5;
-const MIN_ZOOM_K = 0.25;
-const MAX_ZOOM_K = 4;
+const MIN_NODE_REL_SIZE = 0.35;
+const MAX_NODE_REL_SIZE = 20;
+const MIN_LINK_WIDTH = 0.08;
+const MAX_LINK_WIDTH = 6;
+const MIN_ZOOM_K = 0.05;
+const MAX_ZOOM_K = 10;
 const ZOOM_STEP = 1.3;
 const FIT_MS = 600;
 const FIT_PADDING = 40;
@@ -100,6 +104,9 @@ const clamp = (value: number, min: number, max: number) =>
 function isDarkMode(): boolean {
   return document.documentElement.classList.contains('dark');
 }
+
+const isFiniteNumber = (value: number | undefined): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
 
 export default function WikiGraphView({
   nodes,
@@ -298,8 +305,17 @@ export default function WikiGraphView({
     };
 
     const applyZoomStyles = (handle: ForceGraphHandle, k: number) => {
-      nodeRelSizeRef.current = clamp(BASE_NODE_REL_SIZE / k, 3, 12);
-      baseLinkWidthRef.current = clamp(BASE_LINK_WIDTH / k, 0.5, 4);
+      if (!isFiniteNumber(k) || k <= 0) return;
+      nodeRelSizeRef.current = clamp(
+        BASE_NODE_REL_SIZE / k,
+        MIN_NODE_REL_SIZE,
+        MAX_NODE_REL_SIZE
+      );
+      baseLinkWidthRef.current = clamp(
+        BASE_LINK_WIDTH / k,
+        MIN_LINK_WIDTH,
+        MAX_LINK_WIDTH
+      );
       handle.nodeRelSize(nodeRelSizeRef.current);
       handle.linkWidth(linkWidthAccessor);
     };
@@ -339,13 +355,25 @@ export default function WikiGraphView({
       })
       .onBackgroundClick(() => clear())
       .onZoom(transform => {
+        if (
+          !isFiniteNumber(transform.k) ||
+          !isFiniteNumber(transform.x) ||
+          !isFiniteNumber(transform.y)
+        )
+          return;
         zoomRef.current = transform;
         applyZoomStyles(fg, transform.k);
       })
       .onEngineStop(() => {
         if (autoFitPendingRef.current) {
-          autoFitPendingRef.current = false;
-          fg.zoomToFit(FIT_MS, FIT_PADDING);
+          if (
+            nodesRef.current.some(
+              n => isFiniteNumber(n.x) && isFiniteNumber(n.y)
+            )
+          ) {
+            autoFitPendingRef.current = false;
+            fg.zoomToFit(FIT_MS, FIT_PADDING);
+          }
         }
       });
 
@@ -402,12 +430,21 @@ export default function WikiGraphView({
 
     if (focusedNodeId) {
       const target = nodesRef.current.find(n => n.id === focusedNodeId);
-      if (target?.x !== undefined && target?.y !== undefined) {
+      if (target && isFiniteNumber(target.x) && isFiniteNumber(target.y)) {
         fg.centerAt(target.x, target.y, FIT_MS);
-        fg.zoom(Math.max(zoomRef.current.k, 1.6), FIT_MS);
+        if (isFiniteNumber(zoomRef.current.k)) {
+          fg.zoom(Math.max(zoomRef.current.k, 1.6), FIT_MS);
+        }
       }
     } else {
-      fg.zoomToFit(FIT_MS, FIT_PADDING);
+      // Before the simulation positions nodes, the bbox is NaN and a fit
+      // would poison the camera transform; skip until positions exist.
+      const positioned = nodesRef.current.some(
+        n => isFiniteNumber(n.x) && isFiniteNumber(n.y)
+      );
+      if (positioned) {
+        fg.zoomToFit(FIT_MS, FIT_PADDING);
+      }
     }
   }, [focusedNodeId, edges]);
 
@@ -420,10 +457,13 @@ export default function WikiGraphView({
 
   return (
     <div
-      ref={containerRef}
       data-testid="wiki-graph-container"
       className="relative w-full h-[calc(100vh-220px)] min-h-[480px]"
     >
+      {/* force-graph wipes whatever element it mounts into
+          (domNode.innerHTML = '' in its init), so the canvas gets a dedicated
+          child and the chrome below stays React-owned. */}
+      <div ref={containerRef} className="absolute inset-0" />
       <div
         data-testid="wiki-graph-legend"
         className="absolute bottom-3 left-3 z-10 flex flex-wrap items-center gap-3 rounded-md border bg-background/80 px-3 py-2 text-xs text-muted-foreground backdrop-blur"
