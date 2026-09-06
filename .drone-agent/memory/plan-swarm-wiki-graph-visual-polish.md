@@ -178,6 +178,13 @@ User: page node labels still inconsistently layered (everything else much nicer)
 - **Test**: focused low-score node's label draws despite having lost the duel unfocused.
 - **Validation**: tsc clean, UI 150/150 (21 files), component 30/30, lint, build, LSP clean.
 
+## Round 24 (`1d5d92a`, 2026-09-06) — content-hugging focus panel; tag panels without member list
+
+- Panel: `top-4` anchor only (no `bottom-4` stretch), no `overflow-y-auto` — sizes to contents. Short panels no longer tower over the canvas.
+- Tag focus: member-page badge list removed (members are highlighted on canvas and click-discoverable); `memberPages` derived state + unused `AugmentedGraphNode` import deleted. Page panels keep pitch + tag badges. `memberCount` stays (the "Tag · N page(s)" line).
+- Test: tag panel asserts member pages are ABSENT.
+- Validation: tsc clean, UI 150/150, lint (after unused-import fix), build.
+
 ## Round 23b (`02f46d3`, 2026-09-06) — height regression fix
 
 Converting the row wrapper to `relative flex-1` dropped its `flex`, killing the flex context the graph container's `flex-1` needs → canvas collapsed to its 480px min-height (~half viewport). Fix: `relative flex flex-1 min-h-0`. Lesson: absolute-positioned overlays need the parent only to be `relative` — do not remove layout classes from the positioning context when converting a flex sibling to an overlay.
