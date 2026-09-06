@@ -63,6 +63,20 @@ User brief: tag fill less transparent; page-page links slightly translucent; bro
 
 `WIKI_CHARGE_STRENGTH` −480 · `WIKI_TAG_LINK_DISTANCE` 55 · `WIKI_TAG_SPRING_STRENGTH` 0.1 · `WIKI_BROKEN_LINK_SPRING_STRENGTH` 0.6 · `WIKI_TAG_REPULSION_STRENGTH` 1800 · `WIKI_TAG_REPULSION_DISTANCE_MAX` 12000 · `WIKI_TAG_MIN_SEPARATION_SCALE` 12 · `WIKI_TAG_SEPARATION_STRENGTH` 90 · `WIKI_TAG_MAX_KICK` 50 · `NODE_SIZE_SPREAD` 2 · `MIN_NODE_REL_SIZE` 0.5 / `MAX_NODE_REL_SIZE` 150 (was 0.35/20) · `TAG_FILL` alpha 0.18 · `LINK_COLOR` alpha 0.3/0.6.
 
+## Round 10 (`e3423f2`, 2026-09-06) — page-link attraction restored with unique-destination falloff
+
+User brief: bring back some attraction on page-page links, falling off quickly as the total number of UNIQUE LINK DESTINATIONS among both pages increases (user refined from "total links" mid-brief) — a page linking to almost everything exerts nearly no force; a small cluster linking each other keeps some attraction.
+
+- **wiki-graph-utils**: `WIKI_PAGE_LINK_SPRING_STRENGTH = 0.3` · `WIKI_PAGE_LINK_DISTANCE = 180` (restored from the R8 removal — needed again now that page springs return) · `pageLinkSpringStrength(sourceTargets, targetTargets) = base / max(1, |union|)` over ReadonlySets of destination ids.
+- **wiki-graph.tsx**: new `linkTargetsRef` (per-page Set of unique wiki-link destinations, direction-agnostic, built over kind:'link' edges with `edgeEndpointId` resolution); strength else-branch → `pageLinkSpringStrength(...)`; distance accessor: tag|broken → 55, normal page link → 180. Broken links KEEP fixed 0.6 (R9 rule).
+- **Semantics**: union-of-destinations is dominated by the BUSIEST endpoint — the opposite of d3's `1/min-degree` default, which stiffens leaf links. The link edge itself guarantees union ≥ 2, so base/2 is the max page-link strength; shared destinations count once (duplicate links don't inflate).
+- **Tests**: `pageLinkSpringStrength` describe (isolated pair base/2, triangle base/3, shared-destinations-once base/4, 40-destination hub < 0.01); component asserts edges[0] base/3 (a→{b,missing}, b→{a}), edges[2] base/2 (d↔e), distance split 180/55, broken still 0.6.
+- **Validation**: graph tests 56/56, UI suite 134/134, tsc clean, lint clean, build ok, LSP clean.
+
+### Knobs after Round 10
+
+`WIKI_CHARGE_STRENGTH` −480 · `WIKI_TAG_LINK_DISTANCE` 55 · `WIKI_PAGE_LINK_DISTANCE` 180 · `WIKI_TAG_SPRING_STRENGTH` 0.1 · `WIKI_BROKEN_LINK_SPRING_STRENGTH` 0.6 · `WIKI_PAGE_LINK_SPRING_STRENGTH` 0.3 · `WIKI_TAG_REPULSION_STRENGTH` 1800 · `WIKI_TAG_REPULSION_DISTANCE_MAX` 12000 · `WIKI_TAG_MIN_SEPARATION_SCALE` 12 · `WIKI_TAG_SEPARATION_STRENGTH` 90 · `WIKI_TAG_MAX_KICK` 50 · `NODE_SIZE_SPREAD` 2 · `MIN_NODE_REL_SIZE` 0.5 / `MAX_NODE_REL_SIZE` 150 · `TAG_FILL` alpha 0.18 · `LINK_COLOR` alpha 0.3/0.6.
+
 ## Notes / lessons
 
 - **many-body charge is scalar per node** — cannot repel a group from itself only; use a custom force via `d3Force(name, fn)`. Contract: `(alpha) => void` mutating vx/vy, `initialize(nodes)` re-run on graphData push.
