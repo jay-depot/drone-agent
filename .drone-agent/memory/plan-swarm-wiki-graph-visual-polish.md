@@ -127,6 +127,14 @@ User-designed algorithm, Option B architecture (pure util + cached survivor sets
 - **Tests**: 7 util cases (incl. tie determinism from both input orders, edge-touching non-overlap); component gate test (k=4 zoom zeroes the threshold to isolate showdown; page victim culled; tag showdown independent); throttle test via `vi.spyOn(performance,'now')` reprogramming — fake timers' `toFake:['performance']` does NOT fake performance.now reliably.
 - **Validation**: tsc clean, UI 146/146 (20 files), lint, build, LSP clean.
 
+## Round 21 (`6e88098`, 2026-09-06) — focus view cleanup: sidebar, neighborhood fit, focus-aware tags
+
+- **Sidebar**: focused-node preview moved from the strip above the graph into a LEFT aside (`w-80`, card, `overflow-y-auto max-h-full` = independent scroll) inside a `flex flex-1 min-h-0 gap-4` row; graph flexes to remaining space and resizes via its existing getBoundingClientRect sizing.
+- **Focus camera**: fits the highlighted NEIGHBORHOOD (focus + 1-hop from `buildFocusSets`) — bbox center via centerAt, scale from `fitScale(bbox, containerSizeRef, FIT_PADDING)` clamped to MIN/MAX_ZOOM_K — replacing both whole-graph fit and the extreme close-up (`zoom(max(k,1.6))`).
+- **Tag visibility** (`isTagNodeVisible`, component scope, refs-only): Tags toggle OFF wins; page focused → only connected tags (neighborIds membership); tag focused → all other tags hidden. Consulted by node fill, nodeVal shrink, label tooltip, paintLabels candidates, tag-edge width AND color (hidden tag ⇒ TRANSPARENT edges), click hit-test.
+- **Test note**: fake-handle chain test asserting `zoom(1.6, 600)` updated to neighborhood-fit semantics (centerAt(any,any,600) + zoom in (0,13.68)).
+- **Validation**: tsc clean, UI 146/146, lint, build, LSP clean.
+
 ## Round 16 (`d317ae8`, 2026-09-06) — Showdown-only labels; reactive zoom-to-fit toggle
 
 User: zoom-level filtering is no longer needed (symptom: remote clusters got no labels at low zoom even when 1-2 would fit); and ⤢ should be a REACTIVE toggle (on = refit continuously; off = never; manual zoom auto-disarms right before applying; ON by default).
