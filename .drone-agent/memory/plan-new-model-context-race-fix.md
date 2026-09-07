@@ -8,7 +8,7 @@ tags:
   - race-condition
   - model-registry
 created: 2026-09-07T21:14:27.546Z
-updated: 2026-09-07T22:04:26.530Z
+updated: 2026-09-07T22:11:30.000Z
 ---
 
 # Plan: Fix context-window fallback for undeclared models
@@ -165,3 +165,34 @@ An undeclared OpenAI model (bare-id discovery, no `context_length`) resolves its
 - Model comparison: https://developers.openai.com/api/docs/models/compare
 - Deprecations: https://developers.openai.com/api/docs/deprecations
 - Data retrieved 2026-09-07.
+
+## Execution summary (2026-09-07)
+
+All steps completed and committed as `666a8ca` on branch `fix/new-model-context`.
+
+**Phase 1 — Race fix:** Added `await buildModelListing().catch(() => {})` at the
+top of `resolveActiveContextWindow` (drone-agent/src/plugins/llm/index.ts) so the
+discovery cache is populated before metadata resolution. Cached (60s TTL),
+non-fatal on failure. Regression test added: a driver whose `discoverModels`
+returns a model with `contextWindow` but WITHOUT a prior `listModels()` call —
+asserts `getContextWindowInfo` resolves `source: 'metadata'`. The test holds the
+discovery promise unresolved through the harness so the fire-and-forget
+onPluginsLoaded warm cannot populate the cache before the probe runs (deterministic).
+
+**Phase 2 — Bundled registry:** Created `drone-agent/src/plugins/llm/model-registry.ts`
+with `BUNDLED_MODEL_METADATA` keyed by canonical full-form id, seeded with the
+OpenAI lineup (gpt-6-astra, gpt-5.6-sol/terra/luna + gpt-5.6 alias, gpt-4.1/-mini/-nano,
+gpt-4o, o3/o3-mini/o4-mini). Wired into `resolveModelMetadata` as the fallback layer:
+**declared > alias-base > discovered > bundled > defaults**, feeding contextWindow,
+maxOutputTokens, hasVision, and supportsTools uniformly. Regression test: an
+undeclared OpenAI model (bare-id discovery, no context_length) resolves its window
+from the registry — no live probe, no discovered metadata.
+
+**Validation:** LSP clean, `pnpm -r run build` passes, `pnpm lint` passes,
+`pnpm typecheck` passes, fast suite green (196 files / 2776 tests). Both regression
+tests verified to fail against pre-fix code (via `git stash` of index.ts) and pass
+with the fix.
+
+**Deferred (unchanged):** Anthropic's `discoverAnthropicModels` still sets only
+hasVision/supportsTools, NOT contextWindow — anthropic models still fall back to
+32768 for context windows unless declared. Latent gap, separate pass.
