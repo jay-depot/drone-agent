@@ -154,6 +154,42 @@ describe('broker context-window resolution', () => {
     expect(probe).not.toHaveBeenCalled();
   });
 
+  it('resolves an undeclared Anthropic model from the bundled registry (discovery sets no contextWindow)', async () => {
+    // Regression: discoverAnthropicModels sets only hasVision/supportsTools,
+    // NOT contextWindow, so an undeclared Anthropic model previously collapsed
+    // to the session default. The bundled registry supplies the window.
+    const probe = vi.fn(async () => null);
+    const driver: LlmProtocolDriver = {
+      protocolId: 'anthropic',
+      createProvider: () => ({
+        chat: async () => ({ message: 'ok' }),
+        getContextWindowInfo: probe,
+      }),
+      // Mirrors the real driver: no contextWindow in discovery.
+      discoverModels: async () => [
+        { id: 'claude-sonnet-4-6', hasVision: true, supportsTools: true },
+      ],
+      parameterSchema: { parameters: {} },
+    };
+    const { capability } = await captureWindowCapability({
+      providers: {
+        anthropic: { protocol: 'anthropic', models: {} },
+      },
+      llmActive: 'anthropic/claude-sonnet-4-6',
+      driver,
+    });
+
+    const info = await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
+    expect(info).toEqual({
+      model: 'anthropic/claude-sonnet-4-6',
+      contextWindowTokens: 1_000_000,
+      source: 'metadata',
+    });
+    expect(probe).not.toHaveBeenCalled();
+  });
+
   it('resolves an undeclared OpenAI model from the bundled registry (no live probe, no discovered metadata)', async () => {
     // Regression: vanilla OpenAI's /models returns bare ids (no
     // context_length) and the driver has no live probe, so an undeclared

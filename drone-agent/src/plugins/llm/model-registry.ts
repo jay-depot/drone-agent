@@ -7,8 +7,10 @@ import type { DiscoveredModel } from 'drone-core';
  * metadata-poor. Vanilla OpenAI's `/models` returns bare ids (no
  * `context_length`), and the driver has no live probe — so without this
  * registry undeclared OpenAI models collapse to the session default context
- * window. OpenRouter's live catalog already carries `context_length` for most
- * models, so the registry is mainly for metadata-poor providers.
+ * window. Anthropic's discovery (`discoverAnthropicModels`) likewise sets only
+ * hasVision/supportsTools, not contextWindow. OpenRouter's live catalog already
+ * carries `context_length` for most models, so the registry is mainly for
+ * metadata-poor providers.
  *
  * This is a snapshot and goes stale as providers ship new models. Prefer the
  * live discovered catalog (which wins over this layer) and declared config
@@ -19,6 +21,27 @@ export const BUNDLED_MODEL_METADATA: Record<
   string,
   Partial<DiscoveredModel>
 > = {
+  // Anthropic (discovery sets only hasVision/supportsTools — context windows
+  // come from here). Retrieved 2026-09-07 from docs.anthropic.com.
+  'anthropic/claude-haiku-4-5': {
+    contextWindow: 200_000,
+    maxOutputTokens: 64_000,
+    hasVision: true,
+    supportsTools: true,
+  },
+  'anthropic/claude-sonnet-4-6': {
+    contextWindow: 1_000_000,
+    maxOutputTokens: 128_000,
+    hasVision: true,
+    supportsTools: true,
+  },
+  'anthropic/claude-opus-4-8': {
+    contextWindow: 1_000_000,
+    maxOutputTokens: 128_000,
+    hasVision: true,
+    supportsTools: true,
+  },
+
   // Current flagship lineup (September 2026)
   'openai/gpt-6-astra': {
     contextWindow: 1_050_000,
