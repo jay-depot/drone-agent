@@ -38,6 +38,7 @@ export const personaPlugin: DronePlugin = {
     const providers: DronePersonaProvider[] = [];
     const writers: DronePersonaWriter[] = [];
     let activePersona: DronePersonaDefinition | null = null;
+    let lastNotifiedId: string | null = null;
     const changeCallbacks: Array<
       (persona: DronePersonaDefinition | null) => void
     > = [];
@@ -223,6 +224,14 @@ export const personaPlugin: DronePlugin = {
     registration.registerPromptFragment(availablePersonasFragment);
 
     function notifyChange(): void {
+      const from = lastNotifiedId;
+      const to = activePersona?.id ?? null;
+      lastNotifiedId = to;
+      registration.emitEvent({
+        kind: 'personaChanged',
+        from,
+        to,
+      });
       applyToolPremount();
       for (const cb of changeCallbacks) {
         cb(activePersona);

@@ -56,6 +56,7 @@ function captureRegistration(): {
     mountTool: () => undefined,
     unmountTool: () => {},
     listMountedTools: () => [],
+    emitEvent: () => {},
     hooks: {
       onPluginsLoaded: callback => {
         onPluginsLoadedCallback = callback;
@@ -202,6 +203,7 @@ describe('search plugin — semantic exclude passthrough', () => {
       mountTool: () => undefined,
       unmountTool: () => {},
       listMountedTools: () => [],
+      emitEvent: () => {},
       hooks: {
         onPluginsLoaded: () => {},
         onSessionStart: () => {},
@@ -375,6 +377,7 @@ describe('search plugin — /search-files slash command', () => {
       mountTool: () => undefined,
       unmountTool: () => {},
       listMountedTools: () => [],
+      emitEvent: () => {},
       hooks: {
         onPluginsLoaded: () => {},
         onSessionStart: () => {},

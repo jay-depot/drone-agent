@@ -74,14 +74,36 @@ describe('swarm-memory prompt fragment', () => {
     const text = await render(retriever);
     expect(text).not.toBe(false);
     const body = text as string;
-    expect(body).toContain('# Swarm Memory (wiki)');
-    expect(body).toContain('reference data');
-    expect(body).toContain('not instructions');
+    expect(body).toContain('# Swarm Memory');
+    expect(body).toContain('may be relevant to this conversation');
     expect(body).toContain('wiki_read');
     expect(body).toContain('fragment-guide');
     expect(body).toContain('(coordinator)');
-    expect(body).toContain('score 0.91');
+    expect(body).toContain('score: 0.91');
     expect(body).toContain('The TTL sweep deletes expired fragments');
+  });
+
+  it('renders the stored pitch unchanged from the entry', async () => {
+    const retriever = new SwarmMemoryRetriever({
+      capability,
+      config: baseConfig(),
+      logger: { warn: vi.fn(), info: vi.fn() },
+    });
+    retriever.setCacheForTest([
+      {
+        pageId: 'pitch-page',
+        origin: 'coordinator',
+        title: 'Pitch Page',
+        tags: [],
+        score: 0.85,
+        pitch: 'A concise stored one-sentence pitch.',
+      },
+    ]);
+    const text = await render(retriever);
+    expect(text).not.toBe(false);
+    const body = text as string;
+    expect(body).toContain('pitch-page');
+    expect(body).toContain('A concise stored one-sentence pitch.');
   });
 
   it('caps the pitch to one line at ~240 chars with an ellipsis', async () => {

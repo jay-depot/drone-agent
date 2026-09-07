@@ -61,7 +61,8 @@ describe('coordinator runSessionEndHook', () => {
     expect(result).toEqual({
       ran: true,
       kind: 'command',
-      error: 'refusing to run session-end command for unsafe session id "$(touch /tmp/pwned)"',
+      error:
+        'refusing to run session-end command for unsafe session id "$(touch /tmp/pwned)"',
     });
     await expect(readFile(outFile, 'utf8')).rejects.toThrow();
   });

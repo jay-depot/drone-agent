@@ -10,6 +10,7 @@ export const SESSION_STATUSES = {
   ENDED: 'ended',
   PROCESSING: 'processing',
   PROCESSED: 'processed',
+  ARCHIVED: 'archived',
 } as const;
 
 /** Union type of all session status values. */
@@ -213,4 +214,18 @@ export type DroneConversationEvent =
   | {
       kind: 'notice';
       content: string;
+    }
+  /**
+   * Session-parameter / lifecycle events. These are emitted by plugins (via
+   * `registration.emitEvent`) outside a conversation round and intentionally
+   * carry no correlationId, so each surfaces as its own standalone line in the
+   * coordinator's readable transcript rather than being folded into a turn.
+   */
+  | { kind: 'personaChanged'; from: string | null; to: string | null }
+  | { kind: 'focusChanged'; focus: string | null }
+  | { kind: 'macroExecuted'; command: string }
+  | {
+      kind: 'sessionStarted';
+      subagentId: string | null;
+      personaId: string | null;
     };

@@ -200,6 +200,7 @@ async function captureRegistration(
       onSessionSafetyTrimApplied: cb =>
         hooks.onSessionSafetyTrimApplied.push(cb),
     },
+    emitEvent: () => {},
     offer: cap => {
       capability.value = cap;
     },
@@ -322,6 +323,7 @@ describe('createCompactionPlugin', () => {
         mountTool: () => undefined,
         unmountTool: () => {},
         listMountedTools: () => [],
+        emitEvent: () => {},
         hooks: {
           onPluginsLoaded: cb => hooks.onPluginsLoaded.push(cb),
           onSessionStart: cb => hooks.onSessionStart.push(cb),

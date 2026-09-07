@@ -35,6 +35,7 @@ function searchResponse(
     matchedChunk: string;
     tags?: string[];
     origin?: 'beacon' | 'coordinator';
+    pitch?: string;
   }>
 ): unknown {
   return {
@@ -103,6 +104,49 @@ describe('SwarmMemoryRetriever', () => {
     expect(entries[0].pitch.length).toBeLessThanOrEqual(240);
   });
 
+  it('prefers the stored pitch over the matched chunk when both are present', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        searchResponse([
+          {
+            pageId: 'fragments',
+            title: 'Fragment Guide',
+            score: 0.72,
+            matchedChunk: 'The TTL sweep deletes expired fragments.',
+            pitch: 'A curated one-sentence pitch about fragments.',
+          },
+        ])
+      )
+    );
+    const retriever = makeRetriever();
+    const entries = await retriever.maybeRefresh(parts());
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].pitch).toBe(
+      'A curated one-sentence pitch about fragments.'
+    );
+  });
+
+  it('falls back to the matched chunk when no stored pitch is present', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        searchResponse([
+          {
+            pageId: 'fragments',
+            title: 'Fragment Guide',
+            score: 0.72,
+            matchedChunk: 'The TTL sweep deletes expired fragments.',
+          },
+        ])
+      )
+    );
+    const retriever = makeRetriever();
+    const entries = await retriever.maybeRefresh(parts());
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].pitch).toBe('The TTL sweep deletes expired fragments.');
+  });
+
   it('debounces identical windows with zero additional network calls', async () => {
     fetchMock.mockResolvedValue(jsonResponse(searchResponse([])));
     const retriever = makeRetriever();
@@ -135,12 +179,8 @@ describe('SwarmMemoryRetriever', () => {
     );
     const retriever = makeRetriever();
 
-    await retriever.maybeRefresh(
-      parts({ currentQuery: 'window A' })
-    );
-    await retriever.maybeRefresh(
-      parts({ currentQuery: 'window A' })
-    );
+    await retriever.maybeRefresh(parts({ currentQuery: 'window A' }));
+    await retriever.maybeRefresh(parts({ currentQuery: 'window A' }));
 
     // Fires once (debounced); the repeat is a no-op.
     expect(notices).toEqual(['[swarm.memory: found 1 match]']);

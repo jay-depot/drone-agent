@@ -101,10 +101,11 @@ export default function wikiRoutes(app: FastifyInstance) {
       scope?: string;
       tags?: string[];
       sources?: string[];
+      pitch?: string;
     };
   }>('/wiki/:pageId', async (request, reply) => {
     const { pageId } = request.params;
-    const { title, content, scope, tags, sources } = request.body;
+    const { title, content, scope, tags, sources, pitch } = request.body;
     if (!title || !content) {
       return reply.code(400).send({ error: 'title and content are required' });
     }
@@ -131,7 +132,8 @@ export default function wikiRoutes(app: FastifyInstance) {
         (scope as 'beacon' | 'coordinator') || 'beacon',
         content,
         tags ?? [],
-        sources ?? []
+        sources ?? [],
+        pitch ?? undefined
       );
       triggerWikiReindex();
       return reply.code(200).send(page);
@@ -272,6 +274,7 @@ export default function wikiRoutes(app: FastifyInstance) {
       id: string;
       title: string;
       tags: string[];
+      pitch?: string;
     }
     const { listPages } = await import('drone-swarm-common');
     const metaByKey = new Map<string, PageMetaLite>();
@@ -280,6 +283,7 @@ export default function wikiRoutes(app: FastifyInstance) {
         id: p.id,
         title: p.title,
         tags: p.tags,
+        ...(p.pitch ? { pitch: p.pitch } : {}),
       });
     }
     if ([...byPage.values()].some(p => p.origin === 'coordinator')) {
@@ -291,16 +295,17 @@ export default function wikiRoutes(app: FastifyInstance) {
             id: m.id,
             title: m.title,
             tags: Array.isArray(m.tags) ? m.tags : [],
+            ...(m.pitch ? { pitch: m.pitch } : {}),
           });
         }
       }
     }
-
     const results: Array<{
       pageId: string;
       origin: WikiOrigin;
       title: string;
       tags: string[];
+      pitch?: string;
       score: number;
       matchedChunk: string;
     }> = [];
@@ -312,6 +317,7 @@ export default function wikiRoutes(app: FastifyInstance) {
         origin: entry.origin,
         title: meta.title,
         tags: meta.tags,
+        ...(meta.pitch ? { pitch: meta.pitch } : {}),
         score: entry.score,
         matchedChunk: entry.matchedChunk,
       });

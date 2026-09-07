@@ -42,6 +42,7 @@ async function captureContextCommand(options?: {
     mountTool: () => undefined,
     unmountTool: () => {},
     listMountedTools: () => [],
+    emitEvent: () => {},
     hooks: {
       onPluginsLoaded: cb => {
         loadedHooks.push(cb);
@@ -180,6 +181,7 @@ describe('/context command', () => {
       mountTool: () => undefined,
       unmountTool: () => {},
       listMountedTools: () => [],
+      emitEvent: () => {},
       hooks: {
         onPluginsLoaded: () => {},
         onSessionStart: () => {},

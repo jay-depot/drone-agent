@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
-import type { Beacon, AgentLocation, WsInitialMessage } from '@/lib/types';
+import type {
+  Beacon,
+  AgentLocation,
+  WsInitialMessage,
+  WsEventMessage,
+} from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,6 +43,34 @@ export default function TopologyPage() {
     };
   }, [subscribe]);
 
+  // Live beacon connection state: a beacon's reverse-channel WebSocket opening
+  // or closing is pushed to the UI so the status dot updates without a refresh.
+  useEffect(() => {
+    const updateConnected = (msg: WsEventMessage, connected: boolean) => {
+      const beaconId =
+        typeof msg.payload === 'object' && msg.payload !== null
+          ? (msg.payload as { beaconId?: string }).beaconId
+          : undefined;
+      if (!beaconId) return;
+      setBeacons(prev =>
+        prev.map(b => (b.id === beaconId ? { ...b, connected } : b))
+      );
+    };
+
+    const unsubConnected = subscribe('event', msg => {
+      const eventMsg = msg as WsEventMessage;
+      if (eventMsg.eventType === 'beacon.connected') {
+        updateConnected(eventMsg, true);
+      } else if (eventMsg.eventType === 'beacon.disconnected') {
+        updateConnected(eventMsg, false);
+      }
+    });
+
+    return () => {
+      unsubConnected();
+    };
+  }, [subscribe]);
+
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
@@ -66,10 +99,30 @@ export default function TopologyPage() {
     return agentLocations.filter(a => a.beaconId === beaconId).length;
   };
 
-  const isBeaconOnline = (beacon: Beacon): boolean => {
-    const now = Date.now();
-    const fiveMinutes = 5 * 60 * 1000;
-    return now - beacon.lastHeartbeat < fiveMinutes;
+  // Connection state drives the dot: green when the reverse-channel WebSocket
+  // is live, amber while trust is pending (never approved), red otherwise.
+  const getBeaconStatus = (
+    beacon: Beacon
+  ): { colorClass: string; label: string; online: boolean } => {
+    if (beacon.connected) {
+      return {
+        colorClass: 'bg-green-500',
+        label: 'Online',
+        online: true,
+      };
+    }
+    if (beacon.trustStatus === 'pending') {
+      return {
+        colorClass: 'bg-amber-400',
+        label: 'Pending',
+        online: false,
+      };
+    }
+    return {
+      colorClass: 'bg-red-400',
+      label: 'Offline',
+      online: false,
+    };
   };
 
   const openDialog = (
@@ -222,22 +275,20 @@ export default function TopologyPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {beacons.map(beacon => {
-            const online = isBeaconOnline(beacon);
+            const status = getBeaconStatus(beacon);
             const agentCount = getAgentCountForBeacon(beacon.id);
             return (
               <Card
                 key={beacon.id}
-                className={`${!online ? 'opacity-70' : ''} cursor-pointer hover:ring-2 hover:ring-ring/50 transition-all`}
+                className={`${!status.online ? 'opacity-70' : ''} cursor-pointer hover:ring-2 hover:ring-ring/50 transition-all`}
                 onClick={() => navigate(`/beacons/${beacon.id}`)}
               >
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">{beacon.name}</CardTitle>
                     <div
-                      className={`w-2.5 h-2.5 rounded-full ${
-                        online ? 'bg-green-500' : 'bg-red-400'
-                      }`}
-                      title={online ? 'Online' : 'Offline'}
+                      className={`w-2.5 h-2.5 rounded-full ${status.colorClass}`}
+                      title={status.label}
                     />
                   </div>
                 </CardHeader>

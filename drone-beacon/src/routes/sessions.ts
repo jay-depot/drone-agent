@@ -12,7 +12,7 @@ import { getCoordinatorClient } from './context.js';
 export default function sessionRoutes(app: FastifyInstance) {
   // List swarm sessions from the coordinator
   app.get<{
-    Querystring: { limit?: string; status?: string };
+    Querystring: { limit?: string; status?: string; exclude?: string };
   }>('/sessions', async (request, reply) => {
     const client = getCoordinatorClient();
     if (!client) {
@@ -21,6 +21,7 @@ export default function sessionRoutes(app: FastifyInstance) {
     const query: Record<string, string> = {};
     if (request.query.limit) query.limit = request.query.limit;
     if (request.query.status) query.status = request.query.status;
+    if (request.query.exclude) query.exclude = request.query.exclude;
     return client.getSessions(query);
   });
 

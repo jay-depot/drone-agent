@@ -81,7 +81,8 @@ You cannot execute shell commands, write files, run git operations, or delete wi
 1. Call skills.recall({"id": "memory-wiki"}) to load the wiki conventions
 2. Analyze the material in the user's query for key insights, decisions, and patterns
 3. Create or update wiki pages with swarm__wiki_write, ALWAYS passing scope: "coordinator" — the swarm memory wiki lives at the coordinator (the store the web UI shows). Writing to beacon scope stores the page locally where the memory read side will not find it. Cite the source session id in the sources field
-4. Summarize in your reply which pages you created or updated (page ids and titles)`;
+4. For every page you create or update, write a concise one-sentence pitch summarizing what the page is about and pass it via the pitch field to swarm__wiki_write. The pitch is shown in the swarm memory RAG retrieval fragment, so make it self-contained and useful on its own.
+5. Summarize in your reply which pages you created or updated (page ids and titles)`;
 
 export const MEMORY_WIKI_SKILL_BODY = `# Memory Wiki
 
@@ -98,6 +99,7 @@ tags:
   - reference
 sources:
   - session-abc123
+pitch: One-sentence summary of what this page is about
 ---
 \`\`\`
 
@@ -117,8 +119,9 @@ Pages support [[wiki links]] for cross-references. The wiki enforces a "no downw
 1. Treat the material in your input (typically a conversation transcript) as the content to ingest
 2. Analyze it for key insights, decisions, patterns
 3. Create or update wiki pages with swarm__wiki_write
-4. Include the session ID in the sources field
-5. Summarize in your reply which pages you created or updated
+4. Include a concise one-sentence pitch field summarizing what the page is about
+5. Include the session ID in the sources field
+6. Summarize in your reply which pages you created or updated
 
 ## Wiki vs Project Memory
 
@@ -131,12 +134,15 @@ export function isLegacyLibrarianPrompt(systemPrompt: string): boolean {
 
 /**
  * Pristine copies of the PREVIOUS seed generation (before the scope-rule
- * repair). An existing asset matching one of these verbatim was never
- * customized by the operator — safe to update in place. Anything else is
- * treated as user-customized and preserved with a warning.
+ * repair and the pitch field). An existing asset matching these markers was
+ * never customized by the operator — safe to update in place. Anything else
+ * is treated as user-customized and preserved with a warning.
  */
 const PRIOR_LIBRARIAN_PROMPT_MARKERS = [
-  '3. Create or update wiki pages with swarm__wiki_write, citing source session ids in the sources field',
+  // Present (with varying step numbers) in every pre-pitch seed generation.
+  // The current generation keeps the same phrase for its own summarize step,
+  // so this marker identifies prior seeds without tagging the current one.
+  'Summarize in your reply which pages you created or updated (page ids and titles)',
 ];
 
 function repairSeededAsset(

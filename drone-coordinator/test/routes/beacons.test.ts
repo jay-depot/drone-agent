@@ -3,11 +3,27 @@ import { setupDb, teardownDb } from '../setup.js';
 import { buildTestApp } from '../app-helper.js';
 import { setCoordinatorFingerprint } from '../../src/routes/health.js';
 import { generateVerificationCode } from 'drone-swarm-common';
+import {
+  _registerTestConnection,
+  resetBeaconConnections,
+} from '../../src/beacon-ws.js';
 import type { FastifyInstance } from 'fastify';
 
 let app: FastifyInstance;
 
+function makeFakeWs() {
+  return {
+    send: () => {},
+    ping: () => {},
+    terminate: () => {},
+    on: () => {},
+    close: () => {},
+    readyState: 1,
+  } as never;
+}
+
 beforeEach(async () => {
+  resetBeaconConnections();
   await setupDb();
   app = await buildTestApp();
 });
@@ -15,6 +31,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await app.close();
   await teardownDb();
+  resetBeaconConnections();
 });
 
 describe('Beacon Routes', () => {
@@ -145,6 +162,51 @@ describe('Beacon Routes', () => {
       url: '/api/beacons/nonexistent',
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('GET /beacons reports connected=false when the reverse channel is down', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
+    });
+    const res = await app.inject({ method: 'GET', url: '/api/beacons' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    const b1 = body.find((b: { id: string }) => b.id === 'b1');
+    expect(b1.connected).toBe(false);
+  });
+
+  it('GET /beacons reports connected=true when the reverse channel is live', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
+    });
+    _registerTestConnection('b1', makeFakeWs());
+
+    const res = await app.inject({ method: 'GET', url: '/api/beacons' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    const b1 = body.find((b: { id: string }) => b.id === 'b1');
+    expect(b1.connected).toBe(true);
+  });
+
+  it('GET /beacons/:id reports connected from the live reverse channel', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
+    });
+    _registerTestConnection('b1', makeFakeWs());
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/beacons/b1',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.connected).toBe(true);
   });
 
   // ── Beacon Trust Routes ──

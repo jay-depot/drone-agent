@@ -62,6 +62,7 @@ describe('config setValue real write path (llm.active regression)', () => {
       mountTool: () => undefined,
       unmountTool: () => {},
       listMountedTools: () => [],
+      emitEvent: () => {},
       hooks: {
         onPluginsLoaded: () => {},
         onSessionStart: () => {},

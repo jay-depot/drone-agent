@@ -380,6 +380,7 @@ describe('promptFilePlugin', () => {
       mountTool: () => undefined,
       unmountTool: () => {},
       listMountedTools: () => [],
+      emitEvent: () => {},
       hooks: {
         onPluginsLoaded: cb => captured.hooks.onPluginsLoaded.push(cb),
         onSessionStart: () => {},

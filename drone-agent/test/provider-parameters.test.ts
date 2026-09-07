@@ -36,6 +36,7 @@ async function captureBroker(
     mountTool: () => undefined,
     unmountTool: () => {},
     listMountedTools: () => [],
+    emitEvent: () => {},
     hooks: {
       onPluginsLoaded: cb => {
         loadedHooks.push(cb);

@@ -149,21 +149,24 @@ export default function swarmRoutes(app: FastifyInstance) {
   app.get<{
     Querystring: {
       status?: string;
+      exclude?: string;
       sortBy?: 'createdAt' | 'updatedAt';
       sortDirection?: 'ASC' | 'DESC';
       limit?: string;
       offset?: string;
     };
   }>('/sessions', async (request, reply) => {
-    const { status, sortBy, sortDirection, limit, offset } = request.query;
+    const { status, exclude, sortBy, sortDirection, limit, offset } =
+      request.query;
     const sessions = db.listSwarmSessions({
       status,
+      exclude,
       sortBy,
       sortDirection,
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
     });
-    const totalCount = db.countSwarmSessions({ status });
+    const totalCount = db.countSwarmSessions({ status, exclude });
     return reply.send({ sessions, count: totalCount });
   });
 
@@ -303,17 +306,56 @@ export default function swarmRoutes(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>(
     '/sessions/:id/end',
     async (request, reply) => {
-      const session = db.getSwarmSession(request.params.id);
-      if (!session) {
-        return reply.code(404).send({ error: 'Session not found' });
+      // Guarded manual end: pre-terminal statuses only. Archived sessions are
+      // terminal and must be restored before they can end. (The beacon's sync
+      // DELETE /sessions/:id remains the permissive authoritative end signal.)
+      const result = db.transitionSessionStatus(
+        request.params.id,
+        ['active', 'stale', 'processing', 'processed'],
+        'ended'
+      );
+      if ('error' in result) {
+        const statusCode = result.error === 'Session not found' ? 404 : 409;
+        return reply.code(statusCode).send(result);
       }
-      // Allow ending from any status
-      const result = db.updateSwarmSessionStatus(request.params.id, 'ended');
       return reply.send(result);
     }
   );
 
-  // PATCH /sessions/:id/persona - Update session persona
+  app.post<{ Params: { id: string } }>(
+    '/sessions/:id/archive',
+    async (request, reply) => {
+      const result = db.archiveSwarmSession(request.params.id);
+      if ('error' in result) {
+        const statusCode = result.error === 'Session not found' ? 404 : 409;
+        return reply.code(statusCode).send(result);
+      }
+      publishMutationEvent({
+        sessionId: request.params.id,
+        eventType: 'session.archived',
+        payload: { sessionId: request.params.id, status: 'archived' },
+      });
+      return reply.send({ session: result });
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/sessions/:id/restore',
+    async (request, reply) => {
+      const result = db.restoreSwarmSession(request.params.id);
+      if ('error' in result) {
+        const statusCode = result.error === 'Session not found' ? 404 : 409;
+        return reply.code(statusCode).send(result);
+      }
+      publishMutationEvent({
+        sessionId: request.params.id,
+        eventType: 'session.processed',
+        payload: { sessionId: request.params.id, status: 'processed' },
+      });
+      return reply.send({ session: result });
+    }
+  );
+
   app.patch<{
     Params: { id: string };
     Body: { personaId: string | null };

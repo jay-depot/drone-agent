@@ -14,7 +14,7 @@ The `swarm` plugin provides a `/swarm-session` slash command for recreating the 
 Lists recent swarm sessions from the coordinator, **excluding the current session**. Defaults to 10 sessions across all statuses. Each line shows `id`, `persona`, `status`, `createdAt`, and `updatedAt`.
 
 - `--limit N` — number of sessions to show (default 10)
-- `--status S` — filter by status (`active`, `stale`, `ended`, `processing`, `processed`)
+- `--status S` — filter by status (`active`, `stale`, `ended`, `processing`, `processed`, `archived`)
 
 ### `/swarm-session import <sessionId>`
 

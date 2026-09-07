@@ -29,7 +29,7 @@ beacon  ── DELETE /sync/sessions/:id ──► coordinator DELETE /api/sync/
         │                                  publishMutationEvent(session.ended)
         │                                  (session-end hook #2)
         ▼
-session status lifecycle: active → stale → ended → processing → processed
+session status lifecycle: active → stale → ended → processing → processed → archived
 ```
 
 Both layers can fire a **session-end trigger** when a session ends:
@@ -112,7 +112,12 @@ drone-swarm --coordinator session list --status ended --limit 20
 drone-swarm --coordinator session log <id>       # full transcript as JSON
 drone-swarm --coordinator session process <id>   # ended → processing (returns transcript)
 drone-swarm --coordinator session processed <id> --summary "..." --notes "..."
+drone-swarm --coordinator session archive <id>   # processed → archived
+drone-swarm --coordinator session restore <id>   # archived → processed
 ```
+
+Bare `session list` (no `--status`) excludes archived sessions by default; use
+`--status archived` to list archived sessions.
 
 Wiki commands (both layers):
 
@@ -170,4 +175,7 @@ and drain once the coordinator is reachable again.
 Sessions move through: `active` → `stale` (24h inactive, hourly sweep) →
 `ended` (agent disconnect or manual end) → `processing` (a pipeline claimed it;
 the claim response includes the full resolved transcript) → `processed`
-(pipeline finished; optional summary/notes attached).
+(pipeline finished; optional summary/notes attached) → `archived` (processed
+sessions can be archived to hide them from the default sessions list; an
+archived session can be restored to `processed`, or ended via the beacon's
+authoritative sync `DELETE`).

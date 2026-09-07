@@ -66,6 +66,7 @@ async function captureWindowCapability(options: {
     mountTool: () => undefined,
     unmountTool: () => {},
     listMountedTools: () => [],
+    emitEvent: () => {},
     hooks: {
       onPluginsLoaded: cb => {
         loadedHooks.push(cb);
@@ -326,6 +327,7 @@ describe('broker context-window resolution', () => {
       mountTool: () => undefined,
       unmountTool: () => {},
       listMountedTools: () => [],
+      emitEvent: () => {},
       hooks: {
         onPluginsLoaded: cb => {
           loadedHooks.push(cb);

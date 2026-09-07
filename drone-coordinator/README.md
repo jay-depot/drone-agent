@@ -141,6 +141,8 @@ pnpm start
 
 - `POST /sync/sessions/register` - Register a swarm session
 - `POST /sync/events/push` - Push session events
+- `POST /sessions/:id/archive` - Archive a processed session (processed → archived)
+- `POST /sessions/:id/restore` - Restore an archived session (archived → processed)
 - `GET /sessions/:id/events` - List events for a session
 - `GET /sessions/:id/events/latest` - Get latest events for a session
 - `GET /events/search?q=...` - Search events via FTS5

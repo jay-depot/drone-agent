@@ -101,6 +101,34 @@ describe('swarm tool input validation (pre-network guards)', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/wiki/real-page');
   });
 
+  it('wiki_write forwards an optional pitch in the PUT body', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'pitch-page', pitch: 'A pitch.' }),
+    });
+    const tools = wikiToolMap();
+    const parsed = JSON.parse(
+      toToolResultContent(
+        await tools.get('wiki_write')!.execute({
+          pageId: 'pitch-page',
+          title: 'Pitch Page',
+          content: 'Body.',
+          scope: 'coordinator',
+          tags: ['pitch'],
+          sources: ['s1'],
+          pitch: 'A pitch.',
+        })
+      )
+    );
+    expect(parsed.success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toContain('/wiki/pitch-page');
+    const body = JSON.parse(String(init.body));
+    expect(body.pitch).toBe('A pitch.');
+    expect(body.title).toBe('Pitch Page');
+  });
+
   it('swarm_message send requires a non-empty body', async () => {
     const ctx = createSwarmContext(
       'http://beacon.test',

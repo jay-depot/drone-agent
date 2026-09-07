@@ -100,6 +100,17 @@ export type DronePluginRegistration = {
    */
   registerSlashCommand: (command: DroneSlashCommand) => void;
   hooks: DronePluginHooks;
+  /**
+   * Emit a conversation event into the engine's shared event stream — the same
+   * one the conversation service and `_runtime.emitEvent` feed. Plugins use
+   * this to publish session-parameter and lifecycle events (`personaChanged`,
+   * `focusChanged`, `macroExecuted`, `sessionStarted`) that consumers like the
+   * swarm buffering plugin observe via `onConversationEvent`. Fire-and-forget;
+   * safe to call outside a conversation round.
+   */
+  emitEvent: (
+    event: import('./session-types.js').DroneConversationEvent
+  ) => void;
   offer: <T>(capability: T) => void;
   request: <T>(pluginId: string) => T | undefined;
   /**

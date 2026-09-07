@@ -170,6 +170,21 @@ describe('seeded librarian prompt content', () => {
       /pipe|stdin|--output-json/
     );
   });
+
+  it('teaches the librarian to write a one-sentence pitch', () => {
+    expect(WIKI_LIBRARIAN_SYSTEM_PROMPT).toContain('one-sentence pitch');
+    expect(WIKI_LIBRARIAN_SYSTEM_PROMPT).toContain('pitch field');
+  });
+
+  it('memory-wiki skill body teaches the pitch field', () => {
+    expect(MEMORY_WIKI_SKILL_BODY).toContain('pitch:');
+    expect(MEMORY_WIKI_SKILL_BODY).toContain('one-sentence pitch field');
+  });
+
+  it('seeds carry the pitch guidance in both surfaces', () => {
+    expect(WIKI_LIBRARIAN_SYSTEM_PROMPT).toContain('one-sentence pitch');
+    expect(MEMORY_WIKI_SKILL_BODY).toContain('one-sentence pitch field');
+  });
 });
 
 describe('repairSeededLibrarianAssets (scope-rule generation bump)', () => {

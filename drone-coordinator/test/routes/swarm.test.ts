@@ -136,7 +136,7 @@ describe('Swarm Routes', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('POST /sessions/:id/end is idempotent on already-ended session', async () => {
+  it('POST /sessions/:id/end rejects an already-ended session', async () => {
     await app.inject({
       method: 'POST',
       url: '/api/sync/sessions/register',
@@ -144,13 +144,185 @@ describe('Swarm Routes', () => {
     });
     // End it once
     await app.inject({ method: 'POST', url: '/api/sessions/ss1/end' });
-    // End it again — should still succeed
+    // End it again — the guarded manual end rejects already-ended sessions
     const res = await app.inject({
       method: 'POST',
       url: '/api/sessions/ss1/end',
     });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('POST /sessions/:id/end transitions stale/processing/processed to ended', async () => {
+    // ss-stale: active -> stale via the mark-stale sweep
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss-stale', beaconId: 'b1' },
+    });
+    const { getDatabase } = await import('../../src/db/init.js');
+    getDatabase()
+      .prepare("UPDATE swarm_sessions SET updatedAt = 0 WHERE id = 'ss-stale'")
+      .run();
+    await app.inject({
+      method: 'POST',
+      url: '/api/sessions/mark-stale?thresholdMs=1',
+    });
+
+    // ss-processing: active -> processing
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss-processing', beaconId: 'b1' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/sessions/ss-processing/process',
+    });
+
+    // ss-processed: active -> processing -> processed
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss-processed', beaconId: 'b1' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/sessions/ss-processed/process',
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/sessions/ss-processed/processed',
+    });
+
+    for (const id of ['ss-stale', 'ss-processing', 'ss-processed']) {
+      await app.inject({ method: 'POST', url: `/api/sessions/${id}/end` });
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/sessions/${id}`,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body).session.status).toBe('ended');
+    }
+  });
+
+  it('POST /sessions/:id/end rejects an archived session', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss1', beaconId: 'b1' },
+    });
+    // get to processed, then archived
+    await app.inject({ method: 'POST', url: '/api/sessions/ss1/process' });
+    await app.inject({ method: 'POST', url: '/api/sessions/ss1/processed' });
+    await app.inject({ method: 'POST', url: '/api/sessions/ss1/archive' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/ss1/end',
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('POST /sessions/:id/archive archives a processed session', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss1', beaconId: 'b1' },
+    });
+    await app.inject({ method: 'POST', url: '/api/sessions/ss1/process' });
+    await app.inject({ method: 'POST', url: '/api/sessions/ss1/processed' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/ss1/archive',
+    });
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body).status).toBe('ended');
+    expect(JSON.parse(res.body).session.status).toBe('archived');
+  });
+
+  it('POST /sessions/:id/archive rejects a non-processed session', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss1', beaconId: 'b1' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/ss1/archive',
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('POST /sessions/:id/archive returns 404 for missing session', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/nonexistent/archive',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('POST /sessions/:id/restore restores an archived session', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss1', beaconId: 'b1' },
+    });
+    await app.inject({ method: 'POST', url: '/api/sessions/ss1/process' });
+    await app.inject({ method: 'POST', url: '/api/sessions/ss1/processed' });
+    await app.inject({ method: 'POST', url: '/api/sessions/ss1/archive' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/ss1/restore',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).session.status).toBe('processed');
+  });
+
+  it('POST /sessions/:id/restore rejects a non-archived session', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/sync/sessions/register',
+      payload: { id: 'ss1', beaconId: 'b1' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/ss1/restore',
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('POST /sessions/:id/restore returns 404 for missing session', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/nonexistent/restore',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('GET /sessions?exclude=archived excludes archived sessions and count', async () => {
+    for (const id of ['ss1', 'ss2']) {
+      await app.inject({
+        method: 'POST',
+        url: '/api/sync/sessions/register',
+        payload: { id, beaconId: 'b1' },
+      });
+    }
+    // archive ss2 (active -> process -> processed -> archive)
+    await app.inject({ method: 'POST', url: '/api/sessions/ss2/process' });
+    await app.inject({ method: 'POST', url: '/api/sessions/ss2/processed' });
+    await app.inject({ method: 'POST', url: '/api/sessions/ss2/archive' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/sessions?exclude=archived',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.sessions.some((s: { id: string }) => s.id === 'ss1')).toBe(
+      true
+    );
+    expect(body.sessions.some((s: { id: string }) => s.id === 'ss2')).toBe(
+      false
+    );
+    expect(body.count).toBe(1);
   });
 
   it('GET /sessions count reflects total, not page size', async () => {

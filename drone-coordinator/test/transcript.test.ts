@@ -328,4 +328,60 @@ describe('buildSessionTranscript', () => {
     );
     expect(transcript).not.toContain('[user]');
   });
+
+  it('renders session-parameter events as standalone lines', async () => {
+    const events = [
+      event('e1', 'personaChanged', {
+        kind: 'personaChanged',
+        from: 'coder',
+        to: 'reviewer',
+      }),
+      event('e2', 'focusChanged', {
+        kind: 'focusChanged',
+        focus: 'Fix login bug',
+      }),
+      event('e3', 'macroExecuted', {
+        kind: 'macroExecuted',
+        command: '/shipit',
+      }),
+      event('e4', 'sessionStarted', {
+        kind: 'sessionStarted',
+        subagentId: 'subagent-123',
+        personaId: 'coder',
+      }),
+    ];
+    const transcript = await buildSessionTranscript(
+      session,
+      events,
+      resolveBlob
+    );
+    expect(transcript).toContain('persona changed: coder -> reviewer');
+    expect(transcript).toContain('focus set: Fix login bug');
+    expect(transcript).toContain('macro executed: /shipit');
+    expect(transcript).toContain('session started as subagent: subagent-123');
+  });
+
+  it('renders focusChanged cleared and null-aware persona/session lines', async () => {
+    const events = [
+      event('e1', 'focusChanged', { kind: 'focusChanged', focus: null }),
+      event('e2', 'personaChanged', {
+        kind: 'personaChanged',
+        from: null,
+        to: null,
+      }),
+      event('e3', 'sessionStarted', {
+        kind: 'sessionStarted',
+        subagentId: null,
+        personaId: 'coder',
+      }),
+    ];
+    const transcript = await buildSessionTranscript(
+      session,
+      events,
+      resolveBlob
+    );
+    expect(transcript).toContain('focus cleared');
+    expect(transcript).toContain('persona changed: none -> none');
+    expect(transcript).toContain('session started as subagent: coder');
+  });
 });

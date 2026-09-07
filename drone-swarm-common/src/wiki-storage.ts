@@ -4,6 +4,7 @@ import type {
   DroneWikiPage,
   DroneWikiPageMeta,
   DroneWikiSearchResult,
+  DroneWikiTagCount,
 } from 'drone-core';
 
 /**
@@ -72,6 +73,9 @@ function buildFrontmatter(meta: DroneWikiPageMeta): string {
   lines.push(`scope: ${meta.scope}`);
   lines.push(`tags: [${meta.tags.map(t => `"${t}"`).join(', ')}]`);
   lines.push(`sources: [${meta.sources.map(s => `"${s}"`).join(', ')}]`);
+  if (meta.pitch) {
+    lines.push(`pitch: ${meta.pitch}`);
+  }
   lines.push(`createdAt: ${meta.createdAt}`);
   lines.push(`updatedAt: ${meta.updatedAt}`);
   lines.push('---');
@@ -158,8 +162,15 @@ export async function writePage(
   scope: 'beacon' | 'coordinator',
   content: string,
   tags: string[] = [],
-  sources: string[] = []
+  sources: string[] = [],
+  pitch?: string
 ): Promise<DroneWikiPage> {
+  if (id.toLowerCase() === 'tags') {
+    throw new Error(
+      'Page id "tags" is reserved; it conflicts with the wiki tag index route.'
+    );
+  }
+
   const now = new Date().toISOString();
 
   // Check for existing page to preserve createdAt
@@ -192,6 +203,7 @@ export async function writePage(
     scope,
     tags,
     sources,
+    ...(pitch ? { pitch } : {}),
     createdAt,
     updatedAt: now,
   };
@@ -215,6 +227,7 @@ export async function readPage(pageId: string): Promise<DroneWikiPage | null> {
     // codeql[js/path-injection]
     const raw = await readFile(pagePath(pageId), 'utf-8');
     const { frontmatter, body } = parseFrontmatter(raw);
+    const pitch = frontmatter.pitch as string | undefined;
 
     return {
       id: (frontmatter.id as string) || pageId,
@@ -222,6 +235,7 @@ export async function readPage(pageId: string): Promise<DroneWikiPage | null> {
       scope: (frontmatter.scope as 'beacon' | 'coordinator') || 'beacon',
       tags: (frontmatter.tags as string[]) || [],
       sources: (frontmatter.sources as string[]) || [],
+      ...(pitch ? { pitch } : {}),
       createdAt: (frontmatter.createdAt as string) || new Date().toISOString(),
       updatedAt: (frontmatter.updatedAt as string) || new Date().toISOString(),
       content: body,
@@ -248,7 +262,7 @@ export async function deletePage(pageId: string): Promise<boolean> {
 /**
  * List all wiki pages with their metadata.
  */
-export async function listPages(): Promise<DroneWikiPageMeta[]> {
+export async function listPages(tag?: string): Promise<DroneWikiPageMeta[]> {
   try {
     const files = await readdir(getKbDir());
     const pages: DroneWikiPageMeta[] = [];
@@ -264,16 +278,38 @@ export async function listPages(): Promise<DroneWikiPageMeta[]> {
           scope: page.scope,
           tags: page.tags,
           sources: page.sources,
+          ...(page.pitch ? { pitch: page.pitch } : {}),
           createdAt: page.createdAt,
           updatedAt: page.updatedAt,
         });
       }
     }
 
-    return pages.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const filtered = tag ? pages.filter(p => p.tags.includes(tag)) : pages;
+
+    return filtered.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   } catch {
     return [];
   }
+}
+
+/**
+ * List all distinct tags across pages with their page counts,
+ * sorted by count descending then tag ascending.
+ */
+export async function listTags(): Promise<DroneWikiTagCount[]> {
+  const pages = await listPages();
+  const counts = new Map<string, number>();
+
+  for (const page of pages) {
+    for (const tag of page.tags) {
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+  }
+
+  return [...counts.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 }
 
 /**
@@ -401,4 +437,99 @@ export async function lintPages(): Promise<{
   }
 
   return { issues };
+}
+
+/**
+ * A node in the wiki connected-graph view.
+ */
+export type WikiGraphNode = {
+  /** Page id, or the raw link target for a broken-link placeholder node. */
+  id: string;
+  /** Page title, or the raw link target for a broken-link placeholder node. */
+  title: string;
+  /** False for broken-link placeholder nodes (a linked page that doesn't exist). */
+  exists: boolean;
+  /** Number of whitespace-separated words in the page body (0 for placeholders). */
+  wordCount: number;
+  tags: string[];
+  pitch?: string;
+  scope: 'beacon' | 'coordinator';
+};
+
+/**
+ * A directed edge in the wiki graph: `source` links to `target` via a
+ * [[wikilink]]. Reverse/incoming direction is derived in the UI.
+ */
+export type WikiGraphEdge = {
+  source: string;
+  target: string;
+  kind: 'link';
+};
+
+/**
+ * The full connected-graph view of the wiki: one node per page (including
+ * orphans) plus placeholder nodes for broken-link targets, and forward edges
+ * for each [[wikilink]]. Used to power the coordinator UI graph view.
+ */
+export type WikiGraph = {
+  nodes: WikiGraphNode[];
+  edges: WikiGraphEdge[];
+};
+
+/**
+ * Build the connected-graph view of the wiki from the stored pages.
+ * Every page becomes a node; [[wikilinks]] become forward edges. Link targets
+ * that do not resolve to a page are added as `exists:false` placeholder nodes
+ * so missing pages are visible in the graph. Edges are deduplicated.
+ */
+export async function buildGraph(): Promise<WikiGraph> {
+  const metas = await listPages();
+  const pageIds = new Set(metas.map(m => m.id));
+
+  const nodesById = new Map<string, WikiGraphNode>();
+  const edgeKeys = new Set<string>();
+  const edges: WikiGraphEdge[] = [];
+
+  for (const meta of metas) {
+    const page = await readPage(meta.id);
+    if (!page) continue;
+    const wordCount = page.content.split(/\s+/).filter(Boolean).length;
+    nodesById.set(page.id, {
+      id: page.id,
+      title: page.title,
+      exists: true,
+      wordCount,
+      tags: page.tags,
+      ...(page.pitch ? { pitch: page.pitch } : {}),
+      scope: page.scope,
+    });
+
+    let links: string[];
+    try {
+      links = extractWikiLinks(page.content);
+    } catch {
+      // Skip link extraction for oversized pages (graceful degradation),
+      // matching lintPages.
+      links = [];
+    }
+    for (const target of links) {
+      const edgeKey = `${page.id}\u0000${target}`;
+      if (!edgeKeys.has(edgeKey)) {
+        edgeKeys.add(edgeKey);
+        edges.push({ source: page.id, target, kind: 'link' });
+      }
+      if (!pageIds.has(target) && !nodesById.has(target)) {
+        nodesById.set(target, {
+          id: target,
+          title: target,
+          exists: false,
+          wordCount: 0,
+          tags: [],
+          scope: page.scope,
+        });
+      }
+    }
+  }
+
+  return { nodes: [...nodesById.values()], edges };
 }

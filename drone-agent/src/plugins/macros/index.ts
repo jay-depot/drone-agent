@@ -55,6 +55,7 @@ export const macrosPlugin: DronePlugin = {
           handler: async (ctx: DroneSlashCommandContext) => {
             const { args, logger: ctxLogger } = ctx;
             try {
+              registration.emitEvent({ kind: 'macroExecuted', command });
               // Process each step in order.
               for (const step of macro.steps) {
                 if (step.kind === 'slashCommand') {

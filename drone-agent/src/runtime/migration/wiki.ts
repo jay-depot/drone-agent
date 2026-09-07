@@ -56,6 +56,7 @@ export async function migrateWikiPage(
         content: data.content,
         tags: data.tags,
         sources: data.sources,
+        ...(data.pitch ? { pitch: data.pitch } : {}),
       },
       toScope,
       options.beaconHost,

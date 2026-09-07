@@ -103,6 +103,52 @@ describe('GET /wiki/semantic-search', () => {
     expect(top.matchedChunk).toContain('fragment');
   });
 
+  it('enriches results with the stored pitch when the page has one', async () => {
+    await writePage(
+      'fragment-guide',
+      'Fragment Guide',
+      'beacon',
+      '# Fragments\n\nHow the fragment TTL sweep works on the beacon.',
+      ['fragments'],
+      ['s1'],
+      'A guide to the fragment TTL sweep.'
+    );
+    const indexer = new WikiIndexer(makeProvider());
+    setWikiIndexer(indexer);
+    await runWikiIndexCycle(indexer);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/wiki/semantic-search?q=fragment%20ttl%20sweep',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    const top = body.results[0];
+    expect(top.pageId).toBe('fragment-guide');
+    expect(top.pitch).toBe('A guide to the fragment TTL sweep.');
+  });
+
+  it('omits pitch from results when the page has no stored pitch', async () => {
+    await writePage(
+      'fragment-guide',
+      'Fragment Guide',
+      'beacon',
+      '# Fragments\n\nHow the fragment TTL sweep works on the beacon.'
+    );
+    const indexer = new WikiIndexer(makeProvider());
+    setWikiIndexer(indexer);
+    await runWikiIndexCycle(indexer);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/wiki/semantic-search?q=fragment%20ttl%20sweep',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.results[0].pageId).toBe('fragment-guide');
+    expect(body.results[0].pitch).toBeUndefined();
+  });
+
   it('applies minScore filtering', async () => {
     await writePage(
       'fragment-guide',

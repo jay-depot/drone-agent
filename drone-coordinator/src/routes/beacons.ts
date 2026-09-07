@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { publishMutationEvent } from '../ws-pubsub.js';
 import { getClientCertFingerprint } from '../mtls.js';
+import { isBeaconConnected } from '../beacon-ws.js';
 import type {
   RegisterBeaconRequest,
   RegisterBeaconTrustRequest,
@@ -78,6 +79,7 @@ export default function beaconRoutes(app: FastifyInstance) {
       const trust = trustList.find(t => t.beaconId === b.id);
       return {
         ...b,
+        connected: isBeaconConnected(b.id),
         trustStatus: trust?.status ?? null,
         publicKey: trust?.publicKey ?? null,
         verificationCode: trust?.verificationCode ?? null,
@@ -96,6 +98,7 @@ export default function beaconRoutes(app: FastifyInstance) {
       }
       return {
         ...beacon,
+        connected: isBeaconConnected(request.params.id),
         beaconId: beacon?.id ?? trust?.beaconId,
         name: beacon?.name ?? trust?.name,
         host: beacon?.host ?? trust?.host,

@@ -68,6 +68,25 @@ describe('GET /sessions (beacon proxy)', () => {
       status: 'ended',
     });
   });
+
+  it('forwards the exclude query param to the coordinator', async () => {
+    const getSessions = vi.fn().mockResolvedValue({
+      sessions: [{ id: 's1', personaId: null, status: 'ended' }],
+      count: 1,
+    });
+    setCoordinatorClient(
+      makeFakeClient({ getSessions } as unknown as CoordinatorClient)
+    );
+    const res = await app.inject({
+      method: 'GET',
+      url: '/sessions?exclude=archived&limit=10',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(getSessions).toHaveBeenCalledWith({
+      exclude: 'archived',
+      limit: '10',
+    });
+  });
 });
 
 describe('GET /sessions/:id/transcript (beacon proxy)', () => {

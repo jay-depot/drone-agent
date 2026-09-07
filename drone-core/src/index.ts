@@ -235,6 +235,7 @@ export type {
   DroneWikiPageMeta,
   DroneWikiPage,
   DroneWikiSearchResult,
+  DroneWikiTagCount,
 } from './wiki-types.js';
 
 // ── Swarm prompt fragment types ──────────────────────────────────────

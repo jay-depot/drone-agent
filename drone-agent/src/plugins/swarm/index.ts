@@ -161,6 +161,9 @@ export function createSwarmPlugin(
       const runtimeInfo = registration.request<{
         debugFlags?: DebugFlagRegistry;
         emitEvent?: (event: DroneConversationEvent) => void;
+        isSubagent?: boolean;
+        subagentId?: string | null;
+        persona?: string | null;
       }>('runtime');
       const memoryRetriever = new SwarmMemoryRetriever({
         capability: swarmCap,
@@ -216,6 +219,16 @@ export function createSwarmPlugin(
           if (active) {
             const { updateSwarmSessionPersona } = await import('./hooks.js');
             await updateSwarmSessionPersona(ctx, active.id);
+          }
+          // Synthetic session-start marker for subagents so the readable
+          // transcript's ingest agent can see that a session began as a child
+          // process. Fired at the top of the session, before any real events.
+          if (runtimeInfo?.isSubagent) {
+            registration.emitEvent({
+              kind: 'sessionStarted',
+              subagentId: runtimeInfo.subagentId ?? null,
+              personaId: active?.id ?? runtimeInfo.persona ?? null,
+            });
           }
         });
       }

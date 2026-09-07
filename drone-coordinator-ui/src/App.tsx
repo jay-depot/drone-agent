@@ -22,6 +22,7 @@ import SkillEditorPage from '@/pages/skill-editor';
 import WikiPage from '@/pages/wiki';
 import WikiDetailPage from '@/pages/wiki-detail';
 import WikiEditorPage from '@/pages/wiki-editor';
+import WikiTagPage from '@/pages/wiki-tag';
 import LoginPage from '@/pages/login';
 
 const navItems = [
@@ -129,6 +130,7 @@ function AppLayout() {
           <Route path="/skills/:id/edit" element={<SkillEditorPage />} />
           <Route path="/wiki" element={<WikiPage />} />
           <Route path="/wiki/new" element={<WikiEditorPage />} />
+          <Route path="/wiki/tag/:tag" element={<WikiTagPage />} />
           <Route path="/wiki/:pageId" element={<WikiDetailPage />} />
           <Route path="/wiki/:pageId/edit" element={<WikiEditorPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
