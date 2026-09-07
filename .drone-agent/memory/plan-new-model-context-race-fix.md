@@ -8,7 +8,7 @@ tags:
   - race-condition
   - model-registry
 created: 2026-09-07T21:14:27.546Z
-updated: 2026-09-07T22:11:30.000Z
+updated: 2026-09-07T22:37:30.000Z
 ---
 
 # Plan: Fix context-window fallback for undeclared models
@@ -196,3 +196,20 @@ with the fix.
 **Deferred (unchanged):** Anthropic's `discoverAnthropicModels` still sets only
 hasVision/supportsTools, NOT contextWindow — anthropic models still fall back to
 32768 for context windows unless declared. Latent gap, separate pass.
+
+## Follow-up: Anthropic context windows added (2026-09-07, commit `aeddd39`)
+
+The deferred Anthropic gap is now closed. `discoverAnthropicModels` still sets
+only hasVision/supportsTools, but the bundled registry now supplies the context
+windows for the three discovered models (values confirmed from
+docs.anthropic.com 2026-09-07):
+
+- `anthropic/claude-haiku-4-5`: 200k context / 64k output
+- `anthropic/claude-sonnet-4-6`: 1M context / 128k output
+- `anthropic/claude-opus-4-8`: 1M context / 128k output
+
+These match the canonical values already in `drone-core/src/config-types.ts`
+and `drone-agent/src/first-run.tsx`. Regression test added: an undeclared
+Anthropic model (discovery with no contextWindow) resolves its window from the
+registry — fails pre-fix, passes post-fix. Validation green: LSP clean, build,
+lint, typecheck, fast suite (196 files / 2777 tests).
