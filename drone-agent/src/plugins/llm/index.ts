@@ -1,4 +1,5 @@
 import { registerContextCommand } from './context-command.js';
+import { BUNDLED_MODEL_METADATA } from './model-registry.js';
 import {
   DroneLlmError,
   parseModelSelection,
@@ -475,6 +476,13 @@ export const llmPlugin: DronePlugin = {
       instance: ProviderInstance,
       requestedModel?: string
     ): Promise<DroneContextWindowInfo> {
+      // Ensure the discovery cache is populated before resolving metadata.
+      // OpenRouter/OpenAI carry context windows only in the discovered
+      // catalog; without this await the cache may be empty and the window
+      // collapses to the session default. Cached (60s TTL), non-fatal.
+      await buildModelListing().catch(() => {
+        // Non-fatal — resolution falls through to probe/config defaults.
+      });
       const localModel = requestedModel || currentModel;
       const fullId = `${instance.providerId}/${localModel}`;
       const metadata = resolveModelMetadata(fullId);
@@ -532,7 +540,10 @@ export const llmPlugin: DronePlugin = {
       }
     }
 
-    /** Resolve metadata for a full-form selection: declared > discovered > undefined. */
+    /**
+     * Resolve metadata for a full-form selection:
+     * declared > alias-base > discovered > bundled > defaults.
+     */
     function resolveModelMetadata(fullId: string): {
       contextWindow?: number;
       maxOutputTokens?: number;
@@ -557,25 +568,30 @@ export const llmPlugin: DronePlugin = {
       }
 
       const discoveredMeta = discoveryCache?.listing.discovered.get(fullId);
+      const bundledMeta = BUNDLED_MODEL_METADATA[fullId];
 
       return {
         contextWindow:
           declared?.contextWindow ??
           base?.contextWindow ??
-          discoveredMeta?.contextWindow,
+          discoveredMeta?.contextWindow ??
+          bundledMeta?.contextWindow,
         maxOutputTokens:
           declared?.maxOutputTokens ??
           base?.maxOutputTokens ??
-          discoveredMeta?.maxOutputTokens,
+          discoveredMeta?.maxOutputTokens ??
+          bundledMeta?.maxOutputTokens,
         hasVision:
           declared?.hasVision ??
           base?.hasVision ??
           discoveredMeta?.hasVision ??
+          bundledMeta?.hasVision ??
           false,
         supportsTools:
           declared?.supportsTools ??
           base?.supportsTools ??
           discoveredMeta?.supportsTools ??
+          bundledMeta?.supportsTools ??
           true,
         reasoningLevel: declared?.reasoningLevel ?? base?.reasoningLevel,
         parameters: {

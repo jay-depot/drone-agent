@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
+  DiscoveredModel,
   DroneLlmCapability,
   DronePluginRegistration,
   LlmProtocolDriver,
@@ -147,6 +148,122 @@ describe('broker context-window resolution', () => {
     });
     expect(info).toEqual({
       model: 'anthropic/claude-sonnet-4-6',
+      contextWindowTokens: 1_000_000,
+      source: 'metadata',
+    });
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it('resolves an undeclared Anthropic model from the bundled registry (discovery sets no contextWindow)', async () => {
+    // Regression: discoverAnthropicModels sets only hasVision/supportsTools,
+    // NOT contextWindow, so an undeclared Anthropic model previously collapsed
+    // to the session default. The bundled registry supplies the window.
+    const probe = vi.fn(async () => null);
+    const driver: LlmProtocolDriver = {
+      protocolId: 'anthropic',
+      createProvider: () => ({
+        chat: async () => ({ message: 'ok' }),
+        getContextWindowInfo: probe,
+      }),
+      // Mirrors the real driver: no contextWindow in discovery.
+      discoverModels: async () => [
+        { id: 'claude-sonnet-4-6', hasVision: true, supportsTools: true },
+      ],
+      parameterSchema: { parameters: {} },
+    };
+    const { capability } = await captureWindowCapability({
+      providers: {
+        anthropic: { protocol: 'anthropic', models: {} },
+      },
+      llmActive: 'anthropic/claude-sonnet-4-6',
+      driver,
+    });
+
+    const info = await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
+    expect(info).toEqual({
+      model: 'anthropic/claude-sonnet-4-6',
+      contextWindowTokens: 1_000_000,
+      source: 'metadata',
+    });
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it('resolves an undeclared OpenAI model from the bundled registry (no live probe, no discovered metadata)', async () => {
+    // Regression: vanilla OpenAI's /models returns bare ids (no
+    // context_length) and the driver has no live probe, so an undeclared
+    // OpenAI model previously collapsed to the session default. The bundled
+    // model-metadata registry is the fallback layer that supplies the window.
+    const probe = vi.fn(async () => null);
+    const driver: LlmProtocolDriver = {
+      protocolId: 'openai',
+      createProvider: () => ({
+        chat: async () => ({ message: 'ok' }),
+        getContextWindowInfo: probe,
+      }),
+      // Bare-id discovery — no context_length, mirroring the real driver.
+      discoverModels: async () => [{ id: 'gpt-4.1' }],
+      parameterSchema: { parameters: {} },
+    };
+    const { capability } = await captureWindowCapability({
+      providers: {
+        openai: { protocol: 'openai', models: {} },
+      },
+      llmActive: 'openai/gpt-4.1',
+      driver,
+    });
+
+    const info = await capability.getActiveProvider().getContextWindowInfo?.({
+      model: capability.getModel().split('/').pop() ?? '',
+    });
+    expect(info).toEqual({
+      model: 'openai/gpt-4.1',
+      contextWindowTokens: 1_047_576,
+      source: 'metadata',
+    });
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it('resolves discovered context window without a prior listModels() call (race fix)', async () => {
+    // Regression: resolveActiveContextWindow must await discovery before
+    // reading the cache. Previously the cache was populated only by an
+    // explicit listModels() (or the fire-and-forget onPluginsLoaded warm),
+    // so a fresh broker with a metadata-only driver (OpenRouter/OpenAI —
+    // no live probe) collapsed to the session default.
+    //
+    // The discovery promise is held unresolved through the harness so the
+    // fire-and-forget warm cannot populate the cache before the probe runs.
+    let resolveDiscovery!: (models: DiscoveredModel[]) => void;
+    const discovery = new Promise<DiscoveredModel[]>(resolve => {
+      resolveDiscovery = resolve;
+    });
+    const probe = vi.fn(async () => null);
+    const driver: LlmProtocolDriver = {
+      protocolId: 'openrouter',
+      createProvider: () => ({
+        chat: async () => ({ message: 'ok' }),
+        getContextWindowInfo: probe,
+      }),
+      discoverModels: () => discovery,
+      parameterSchema: { parameters: {} },
+    };
+    const { capability } = await captureWindowCapability({
+      providers: {
+        openrouter: { protocol: 'openrouter', models: {} },
+      },
+      llmActive: 'openrouter/claude-sonnet-4-6',
+      driver,
+    });
+
+    // NOTE: deliberately do NOT call listModels() first — that is the race.
+    const infoPromise = capability
+      .getActiveProvider()
+      .getContextWindowInfo?.({ model: 'claude-sonnet-4-6' });
+    resolveDiscovery([{ id: 'claude-sonnet-4-6', contextWindow: 1_000_000 }]);
+    const info = await infoPromise;
+    expect(info).toEqual({
+      model: 'openrouter/claude-sonnet-4-6',
       contextWindowTokens: 1_000_000,
       source: 'metadata',
     });

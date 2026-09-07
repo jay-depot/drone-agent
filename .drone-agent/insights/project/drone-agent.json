@@ -426,5 +426,17 @@
   {
     "timestamp": "2026-09-06T23:49:02.849Z",
     "insight": "Typecheck gotcha in drone-agent/test/session-param-events.test.ts (commit 6b70288): the swarm plugin is enabled via `enabledPlugins: ['swarm']`, NOT a `swarm.enabled` config field — `DroneSwarmConfig` has no `enabled` member, so `swarm: { enabled: true }` fails TS2353. Also, `DronePersonaDefinition` requires `description`, so test literals `{ id, name }` passed to a persona capability fail TS2345. When writing plugin tests that construct configs or persona definitions, use the real type shapes (enabledPlugins for enabling, full DronePersonaDefinition with description)."
+  },
+  {
+    "timestamp": "2026-09-07T22:11:37.054Z",
+    "insight": "When writing a regression test for a fire-and-forget cache-warm race (e.g. onPluginsLoaded calling `void buildModelListing()`), a synchronous stub discoverModels lets the warm complete during the harness's `await hook()`, masking the race and making the test pass even without the fix. Hold the discovery promise unresolved through the harness (a deferred that you resolve after kicking off the probe) so the warm cannot populate the cache before the code under test reads it — this makes the race deterministic and the test genuinely red pre-fix."
+  },
+  {
+    "timestamp": "2026-09-07T22:11:37.056Z",
+    "insight": "file__apply_diff can apply the same hunk multiple times when the anchor context is not unique in the file (it matched the same `expect(probe).not.toHaveBeenCalled(); });` block three times, duplicating a test). After any apply_diff that inserts a block, grep for the new test name / unique string to confirm it landed exactly once before running tests — a duplicated test will otherwise surface as confusing failures (e.g. a stale model id in the assertion from an earlier patch iteration)."
+  },
+  {
+    "timestamp": "2026-09-07T22:37:32.235Z",
+    "insight": "When a provider's discovery is metadata-poor (e.g. Anthropic's discoverAnthropicModels sets only hasVision/supportsTools, not contextWindow), the bundled model-metadata registry is the right fallback layer — but the canonical context-window values often already exist elsewhere in the codebase (config-types.ts defaults, first-run.tsx wizard). Cross-check those before scraping docs; they're the project's own source of truth and match the live docs. The registry entry should mirror them so declared config, discovery, and bundled metadata all agree."
   }
 ]
