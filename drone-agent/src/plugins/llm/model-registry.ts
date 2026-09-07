@@ -41,6 +41,24 @@ export const BUNDLED_MODEL_METADATA: Record<
     hasVision: true,
     supportsTools: true,
   },
+  'anthropic/claude-fable-5': {
+    contextWindow: 1_000_000,
+    maxOutputTokens: 128_000,
+    hasVision: true,
+    supportsTools: true,
+  },
+  'anthropic/claude-opus-5': {
+    contextWindow: 1_000_000,
+    maxOutputTokens: 128_000,
+    hasVision: true,
+    supportsTools: true,
+  },
+  'anthropic/claude-sonnet-5': {
+    contextWindow: 1_000_000,
+    maxOutputTokens: 128_000,
+    hasVision: true,
+    supportsTools: true,
+  },
 
   // Current flagship lineup (September 2026)
   'openai/gpt-6-astra': {
