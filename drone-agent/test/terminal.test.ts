@@ -412,6 +412,7 @@ describe('terminalPlugin', () => {
           requestTimeoutMs: 5000,
           preferExternal: false,
           autoInstall: true,
+          preinstall: false,
           servers: {},
         },
         mcp: {

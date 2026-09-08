@@ -49,8 +49,7 @@ export const lspPlugin: DronePlugin = {
         const available = server.getAvailableServers();
         if (available.length > 0) {
           const availableLines = available.map(
-            s =>
-              `- ${s.language} (${s.id}): available — mount and use LSP tools for this language`
+            s => `- ${s.language} (${s.id}): available — starts on demand`
           );
           parts.push(
             `## Available LSP Servers\n\n${availableLines.join('\n')}`
@@ -116,8 +115,12 @@ filter.`,
 
       await server.initialize();
       server.markDirty();
+      // Zero connected servers at startup is normal under the lazy-start
+      // policy (ambient languages start on demand). Only warn when there is
+      // also nothing available to start on demand.
       if (
-        server.getServerStates().every(state => state.status !== 'connected')
+        server.getServerStates().every(state => state.status !== 'connected') &&
+        server.getAvailableServers().length === 0
       ) {
         registration.logger.warn('no LSP servers connected for this session');
       }

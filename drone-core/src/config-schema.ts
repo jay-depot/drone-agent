@@ -253,6 +253,7 @@ export const PartialDroneAgentConfigSchema = Type.Partial(
       requestTimeoutMs: Type.Optional(PositiveNumber),
       preferExternal: Type.Optional(Type.Boolean()),
       autoInstall: Type.Optional(Type.Boolean()),
+      preinstall: Type.Optional(Type.Boolean()),
       servers: Type.Optional(Type.Record(Type.String(), LspServerConfigSchema)),
     }),
     mcp: Type.Object({

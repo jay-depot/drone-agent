@@ -360,6 +360,12 @@ export type DroneLspConfig = {
    * false to disable auto-installation entirely.
    */
   autoInstall: boolean;
+  /**
+   * When true, known-but-not-started servers are pre-installed into the
+   * cache in the background after eager startup (no servers are spawned).
+   * Opt-in (default false) — on-demand starts already install lazily.
+   */
+  preinstall: boolean;
   servers: Record<string, DroneLspServerConfig>;
 };
 
@@ -634,6 +640,7 @@ export function createDefaultAgentConfig(
       requestTimeoutMs: 5000,
       preferExternal: false,
       autoInstall: true,
+      preinstall: false,
       servers: {},
     },
     mcp: {

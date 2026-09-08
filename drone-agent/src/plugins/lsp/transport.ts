@@ -2,6 +2,7 @@ import { type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { type Socket } from 'node:net';
 
 const HEADER_SEPARATOR = '\r\n\r\n';
+const STDERR_RING_CAPACITY = 50;
 
 type JsonRpcId = number;
 
@@ -28,15 +29,80 @@ export type RpcTransport = {
   onError: (callback: (error: Error) => void) => void;
 };
 
+export type ChildProcessTransport = RpcTransport & {
+  lastStderrTail: () => string[];
+};
+
 export type JsonRpcClient = {
   request: <T>(method: string, params?: unknown) => Promise<T>;
   notify: (method: string, params?: unknown) => void;
   disconnect: (reason?: string) => void;
 };
 
+/**
+ * Keep the last `capacity` stderr lines from a child process. Output is
+ * chunked into lines on demand, so partial lines across chunk boundaries
+ * are handled correctly.
+ */
+export function createStderrRingBuffer(capacity: number): {
+  add: (chunk: Buffer | string) => void;
+  tail: () => string[];
+} {
+  const lines: string[] = [];
+  let pending = '';
+
+  return {
+    add: chunk => {
+      const text = pending + chunk.toString('utf8');
+      const parts = text.split('\n');
+      pending = parts.pop() ?? '';
+      for (const line of parts) {
+        lines.push(line);
+        if (lines.length > capacity) {
+          lines.shift();
+        }
+      }
+    },
+    tail: () => {
+      const out = pending.length > 0 ? [...lines, pending] : [...lines];
+      return out.slice(-capacity);
+    },
+  };
+}
+
 export function createChildTransport(
   childProcess: ChildProcessWithoutNullStreams
-): RpcTransport {
+): ChildProcessTransport {
+  const stderrRing = createStderrRingBuffer(STDERR_RING_CAPACITY);
+
+  // Guarantee at least one 'error' listener on the child itself so the
+  // re-emit below (and spawn failures like ENOENT) can never become an
+  // unhandled 'error' event, even if a consumer never registers onError.
+  childProcess.on('error', () => {
+    // Intentional no-op; real handling happens via onError subscribers.
+  });
+
+  // Route stream failures into onError so markClosed runs (rejects pending
+  // requests, notifies the server layer). Without these handlers a write to
+  // a dead child's stdin surfaces as an unhandled 'error' event and kills
+  // the whole agent process (EPIPE bug).
+  childProcess.stdin.on('error', error => {
+    childProcess.emit('error', error);
+  });
+  childProcess.stdout.on('error', error => {
+    childProcess.emit('error', error);
+  });
+  // stderr is not treated as a transport error — many LSP servers log
+  // diagnostic information to stderr (e.g., taplo prints
+  // "registered request handler method=\"initialize\""). It feeds the
+  // forensics ring buffer instead.
+  childProcess.stderr.on('data', chunk => {
+    stderrRing.add(chunk);
+  });
+  childProcess.stderr.on('error', () => {
+    // Keep the ring-buffer consumer alive even if stderr itself errors.
+  });
+
   return {
     write: payload => {
       childProcess.stdin.write(payload);
@@ -58,10 +124,8 @@ export function createChildTransport(
     },
     onError: callback => {
       childProcess.on('error', callback);
-      // stderr is not treated as a transport error — many LSP servers
-      // log diagnostic information to stderr (e.g., taplo prints
-      // "registered request handler method=\"initialize\"").
     },
+    lastStderrTail: () => stderrRing.tail(),
   };
 }
 
@@ -130,9 +194,13 @@ export function createJsonRpcClient(options: {
     }
 
     const payload = JSON.stringify({ jsonrpc: '2.0', ...message });
-    options.transport.write(
-      `Content-Length: ${Buffer.byteLength(payload, 'utf8')}\r\n\r\n${payload}`
-    );
+    try {
+      options.transport.write(
+        `Content-Length: ${Buffer.byteLength(payload, 'utf8')}\r\n\r\n${payload}`
+      );
+    } catch (error) {
+      markClosed(error instanceof Error ? error.message : String(error));
+    }
   }
 
   function tryParseMessages(): void {
