@@ -49,6 +49,8 @@ export default function beaconRoutes(app: FastifyInstance) {
             name: request.body.name,
             host: request.body.host,
             port: request.body.port,
+            spawnRoots: request.body.spawnRoots,
+            defaultSpawnRoot: request.body.defaultSpawnRoot,
           });
           const response: BeaconStatusResponse = { status: trust.status };
           if (trust.verificationCode) {

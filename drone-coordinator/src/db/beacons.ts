@@ -31,6 +31,7 @@ function rowToBeacon(row: BeaconRow): Beacon {
 
 export function registerBeacon(req: RegisterBeaconRequest): Beacon {
   const now = Date.now();
+  const existing = getBeacon(req.id);
   const beacon: Beacon = {
     id: req.id,
     name: req.name,
@@ -38,8 +39,10 @@ export function registerBeacon(req: RegisterBeaconRequest): Beacon {
     port: req.port,
     connectedAt: now,
     lastHeartbeat: now,
-    spawnRoots: req.spawnRoots,
-    defaultSpawnRoot: req.defaultSpawnRoot,
+    // Omitted fields preserve the existing row (merge-on-omit): a partial
+    // re-registration must not erase the currently advertised roots.
+    spawnRoots: req.spawnRoots ?? existing?.spawnRoots,
+    defaultSpawnRoot: req.defaultSpawnRoot ?? existing?.defaultSpawnRoot,
   };
 
   const stmt = getDatabase().prepare(`

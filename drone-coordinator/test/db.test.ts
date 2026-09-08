@@ -297,6 +297,50 @@ describe('Beacon CRUD', () => {
   it('should return false when deleting non-existent beacon', () => {
     expect(deleteBeacon('nonexistent')).toBe(false);
   });
+
+  it('should preserve spawnRoots when re-registering without them (merge-on-omit)', () => {
+    registerBeacon({
+      id: 'b1',
+      name: 'B1',
+      host: 'localhost',
+      port: 3457,
+      spawnRoots: ['/home/user/'],
+      defaultSpawnRoot: '/home/user/',
+    });
+    registerBeacon({ id: 'b1', name: 'B1', host: 'localhost', port: 3457 });
+    const b = getBeacon('b1');
+    expect(b!.spawnRoots).toEqual(['/home/user/']);
+    expect(b!.defaultSpawnRoot).toBe('/home/user/');
+  });
+
+  it('should replace spawnRoots when re-registering with new ones', () => {
+    registerBeacon({
+      id: 'b1',
+      name: 'B1',
+      host: 'localhost',
+      port: 3457,
+      spawnRoots: ['/home/user/'],
+      defaultSpawnRoot: '/home/user/',
+    });
+    registerBeacon({
+      id: 'b1',
+      name: 'B1',
+      host: 'localhost',
+      port: 3457,
+      spawnRoots: ['/opt/work'],
+      defaultSpawnRoot: '/opt/work',
+    });
+    const b = getBeacon('b1');
+    expect(b!.spawnRoots).toEqual(['/opt/work']);
+    expect(b!.defaultSpawnRoot).toBe('/opt/work');
+  });
+
+  it('should leave spawnRoots undefined on a fresh registration without them', () => {
+    registerBeacon({ id: 'b1', name: 'B1', host: 'localhost', port: 3457 });
+    const b = getBeacon('b1');
+    expect(b!.spawnRoots).toBeUndefined();
+    expect(b!.defaultSpawnRoot).toBeUndefined();
+  });
 });
 
 describe('Beacon Trust', () => {
