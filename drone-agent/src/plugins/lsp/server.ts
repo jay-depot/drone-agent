@@ -1,230 +1,82 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { constants as fsConstants } from 'node:fs';
-import { access } from 'node:fs/promises';
-import { type Socket } from 'node:net';
 import path from 'node:path';
-import process from 'node:process';
-import { pathToFileURL } from 'node:url';
 import type {
-  DroneLspConfig,
   DroneLspDiagnostic,
   DroneLspServerConfig,
   DroneLspServerState,
-  DroneLogger,
 } from 'drone-core';
 import { commandExistsOnPath } from 'drone-core';
-import {
-  AmbiguousPositionError,
-  buildAmbiguousMatches,
-  HARD_CONTEXT_LINES,
-} from 'drone-core';
-import {
-  computeCacheKey,
-  ensureServerInstalled,
-  resolveCacheDir,
-  type InstallerResolution,
-  type InstallerSpec,
-} from './installer.js';
-import {
-  createChildTransport,
-  createJsonRpcClient,
-  createSocketTransport,
-  type JsonRpcClient,
-} from './transport.js';
 import {
   fromFileUri,
   normalizeFileExtensions,
   normalizeSeverity,
-  toFileUri,
 } from './normalize/index.js';
 import {
-  resolveLanguageId,
   formatServerDetail,
   getKnownServerSpec,
   KNOWN_SERVER_SPECS,
   type KnownServerSpec,
 } from './known-servers.js';
 import {
+  resolveServerCommand as resolveServerCommandImpl,
+  type ResolvedSpawn,
+} from './server/spawn-resolution.js';
+import {
+  ensureDocumentLoaded as ensureDocumentLoadedImpl,
+  syncFileIfNeeded as syncFileIfNeededImpl,
+  syncServerDocuments as syncServerDocumentsImpl,
+} from './server/documents.js';
+import {
+  createRuntimeFromConfig as createRuntimeFromConfigImpl,
+  initializeClient as initializeClientImpl,
+  type RuntimeFactoryHooks,
+} from './server/runtime-factory.js';
+import type { ServerRuntime } from './server/types.js';
+import {
+  ReferenceCache,
+  readLineFingerprint as readLineFingerprintImpl,
+  readFileSnippet as readFileSnippetImpl,
+  type ReferenceLocation,
+  type ReferenceResolution,
+} from './server/reference-cache.js';
+import {
+  resolveSymbolPosition as resolveSymbolPositionInModule,
+  resolveTextPosition as resolveTextPositionInModule,
+  type PositionContext,
+  type PositionDocument,
+  type PositionRuntime,
+} from './server/position.js';
+import {
   workspaceHasMarkers,
-  hasMatchingFiles,
-  collectWorkspaceFiles,
-  connectTcpServer,
-  readDocumentSnapshot,
   estimateTokenCount,
   sortDiagnostics,
   type PublishDiagnosticsParams,
 } from './server/helpers.js';
 import {
-  filterSymbolsByQuery,
-  flattenDocumentSymbols,
-  normalizeWorkspaceSymbols,
-  type LspDocumentSymbolResponse,
-  type LspWorkspaceSymbolResponse,
-  type NormalizedSymbol,
-} from './normalize/index.js';
+  CrashGuard,
+  createInFlightDedup,
+  killWithEscalation,
+  CRASH_GUARD_FAILURE_LIMIT,
+  CRASH_GUARD_WINDOW_MS,
+  KILL_GRACE_MS,
+} from './server/lifecycle.js';
 
-// ---------------------------------------------------------------------------
-// Internal types
-// ---------------------------------------------------------------------------
+import type { DocumentState } from './server/types.js';
+export type { DocumentState } from './server/types.js';
+import type {
+  CreateServerManagerOptions as CreateServerManagerOptionsImpl,
+  ResolvedPosition,
+  ServerManager,
+} from './server/manager-types.js';
 
-type DocumentState = {
-  uri: string;
-  languageId: string;
-  version: number;
-  text: string;
-  mtimeMs: number;
-  size: number;
-};
-
-type ServerRuntime = {
-  id: string;
-  language: string;
-  transport: 'stdio' | 'tcp';
-  ownership: 'spawned' | 'external';
-  detail: string;
-  fileExtensions: string[];
-  client: JsonRpcClient;
-  state: DroneLspServerState;
-  documents: Map<string, DocumentState>;
-  childProcess?: ChildProcessWithoutNullStreams;
-  socket?: Socket;
-};
-
-type ResolvedSpawn = {
-  command: string;
-  args: string[];
-  source: InstallerResolution['source'];
-  cacheDir?: string;
-  installStatus: DroneLspServerState['installStatus'];
-};
-
-/**
- * Check whether a handed-back surroundingText block appears as a contiguous
- * run of trimmed lines within a window around a 1-based line. The window is
- * sized to the block's line count (capped at HARD_CONTEXT_LINES), so a
- * suggested block is always found when passed back. Matching is exact,
- * modulo leading/trailing whitespace (trim only).
- */
-function matchesSurroundingBlock(
-  lines: string[],
-  line: number,
-  surroundingText: string
-): boolean {
-  const blockLines = surroundingText.split('\n').map(l => l.trim());
-  if (blockLines.length === 0) {
-    return false;
-  }
-  const window = Math.min(blockLines.length, HARD_CONTEXT_LINES);
-  const start = Math.max(0, line - 1 - window);
-  const end = Math.min(lines.length, line + window);
-  const windowLines = lines.slice(start, end).map(l => l.trim());
-  outer: for (let i = 0; i + blockLines.length <= windowLines.length; i++) {
-    for (let j = 0; j < blockLines.length; j++) {
-      if (windowLines[i + j] !== blockLines[j]) {
-        continue outer;
-      }
-    }
-    return true;
-  }
-  return false;
-}
-
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
-
-export type ResolvedPosition = {
-  runtime: ServerRuntime;
-  document: DocumentState;
-  line: number;
-  column: number;
-};
-
-export type ReferenceLocation = {
-  filePath: string;
-  line: number;
-  column: number;
-  range: {
-    start: { line: number; character: number };
-    end: { line: number; character: number };
-  };
-  /** Trimmed line text at `line` at store time, used for staleness checks. */
-  fingerprint: string;
-};
-
-export type ReferenceResolution = {
-  location: ReferenceLocation;
-  stale: boolean;
-};
-
-export type ServerManager = {
-  initialize: () => Promise<void>;
-  refreshIfNeeded: () => Promise<void>;
-  markDirty: () => void;
-  getDiagnostics: () => DroneLspDiagnostic[];
-  getServerStates: () => DroneLspServerState[];
-  renderDiagnosticsPrompt: () => string | false;
-  getAvailableServers: () => Array<{
-    id: string;
-    language: string;
-    fileExtensions: string[];
-    status: 'available';
-  }>;
-  startServerForFile: (filePath: string) => Promise<boolean>;
-  findRuntimeForFile: (filePath: string) => ServerRuntime | undefined;
-  ensureDocumentLoaded: (
-    runtime: ServerRuntime,
-    filePath: string
-  ) => Promise<DocumentState>;
-  resolveTargetFilePath: (inputPath: string) => string;
-  parsePositionInput: (
-    toolName: string,
-    input: Record<string, unknown>,
-    surroundingText?: string
-  ) => Promise<{ filePath: string; line: number; column: number }>;
-  resolveAtPosition: (
-    toolName: string,
-    input: Record<string, unknown>,
-    surroundingText?: string
-  ) => Promise<ResolvedPosition>;
-  readFileSnippet: (
-    filePath: string,
-    line: number,
-    contextLines?: number
-  ) => Promise<string>;
-  readLineFingerprint: (
-    filePath: string,
-    line: number
-  ) => Promise<string | undefined>;
-  storeReferences: (locations: ReferenceLocation[]) => Promise<string[]>;
-  resolveReference: (
-    referenceId: string
-  ) => Promise<ReferenceResolution | undefined>;
-  locationToAgentShape: (
-    locations: Array<{
-      filePath: string;
-      range: {
-        start: { line: number; character: number };
-        end: { line: number; character: number };
-      };
-    }>
-  ) => Array<{
-    filePath: string;
-    line: number;
-    column: number;
-    range: {
-      start: { line: number; character: number };
-      end: { line: number; character: number };
-    };
-  }>;
-  shutdown: () => Promise<void>;
-};
-
-type CreateServerManagerOptions = {
-  workspaceRoot: string;
-  lspConfig: DroneLspConfig;
-  logger: DroneLogger;
-};
+export type {
+  ResolvedPosition,
+  ServerManager,
+} from './server/manager-types.js';
+export type {
+  ReferenceLocation,
+  ReferenceResolution,
+} from './server/reference-cache.js';
+type CreateServerManagerOptions = CreateServerManagerOptionsImpl;
 
 // ---------------------------------------------------------------------------
 // Factory
@@ -236,6 +88,12 @@ export function createServerManager(
   const { workspaceRoot, lspConfig, logger } = options;
   const diagnosticsByFile = new Map<string, DroneLspDiagnostic[]>();
   const serverRuntimes = new Map<string, ServerRuntime>();
+  const serverStates = new Map<string, DroneLspServerState>();
+  const startDedup = createInFlightDedup<string>();
+  const installDedup = createInFlightDedup<string>();
+  const crashGuard = new CrashGuard();
+  const referenceCache = new ReferenceCache();
+  let shuttingDown = false;
   let workspaceDirty = true;
 
   // ── Internal helpers ──────────────────────────────────────────────
@@ -244,14 +102,52 @@ export function createServerManager(
     serverId: string,
     update: Partial<DroneLspServerState>
   ): void {
-    const runtime = serverRuntimes.get(serverId);
-    if (!runtime) {
+    const existing = serverStates.get(serverId);
+    if (!existing) {
       return;
     }
-    runtime.state = {
-      ...runtime.state,
+    serverStates.set(serverId, {
+      ...existing,
       ...update,
-    };
+    });
+  }
+
+  function ensureServerState(
+    serverId: string,
+    seed: DroneLspServerState
+  ): DroneLspServerState {
+    const existing = serverStates.get(serverId);
+    if (existing) {
+      return existing;
+    }
+    serverStates.set(serverId, seed);
+    return seed;
+  }
+
+  function removeServer(serverId: string): void {
+    serverRuntimes.delete(serverId);
+    serverStates.delete(serverId);
+  }
+
+  /**
+   * Handle a transport-level failure on a spawned server: the runtime is
+   * removed from the live map (so a later tool call can restart it) and the
+   * state record keeps the error + stderr tail for forensics.
+   */
+  function handleSpawnedTransportIssue(
+    runtime: ServerRuntime,
+    message: string
+  ): void {
+    if (shuttingDown) {
+      return;
+    }
+    serverRuntimes.delete(runtime.id);
+    updateServerState(runtime.id, {
+      status: 'error',
+      lastError: `${message}${runtime.childTransport ? `\nstderr tail:\n${runtime.childTransport.lastStderrTail().join('\n')}` : ''}`,
+    });
+    crashGuard.record(runtime.id);
+    logger.warn(`lsp server issue: ${runtime.id} (${message})`);
   }
 
   function getAllDiagnostics(): DroneLspDiagnostic[] {
@@ -302,154 +198,62 @@ export function createServerManager(
     diagnosticsByFile.set(filePath, normalized);
   }
 
-  async function initializeClient(runtime: ServerRuntime): Promise<void> {
-    updateServerState(runtime.id, {
-      status: 'connecting',
-      detail: runtime.detail,
-      lastError: undefined,
-    });
+  const runtimeFactoryHooks: RuntimeFactoryHooks = {
+    workspaceRoot,
+    requestTimeoutMs: lspConfig.requestTimeoutMs,
+    ensureServerState,
+    updateServerState,
+    onPublishDiagnostics: handlePublishDiagnostics,
+    getLiveRuntime: serverId => serverRuntimes.get(serverId),
+    handleSpawnedTransportIssue,
+  };
 
-    await runtime.client.request('initialize', {
-      processId: process.pid,
-      rootUri: pathToFileURL(workspaceRoot).href,
-      capabilities: {
-        textDocument: {
-          publishDiagnostics: {
-            relatedInformation: false,
-          },
-          hover: {
-            contentFormat: ['markdown', 'plaintext'],
-          },
-          textDocumentSync: {
-            didSave: false,
-            willSave: false,
-            willSaveWaitUntil: false,
-          },
-        },
-      },
-      workspaceFolders: [
-        {
-          uri: pathToFileURL(workspaceRoot).href,
-          name: path.basename(workspaceRoot),
-        },
-      ],
-    });
-    runtime.client.notify('initialized', {});
-    updateServerState(runtime.id, {
-      status: 'connected',
-      detail: runtime.detail,
-      lastError: undefined,
-    });
+  function initializeClient(runtime: ServerRuntime): Promise<void> {
+    return initializeClientImpl(runtime, runtimeFactoryHooks);
   }
 
-  async function createRuntimeFromConfig(
+  function createRuntimeFromConfig(
     serverId: string,
     language: string,
     config: DroneLspServerConfig,
     resolved: ResolvedSpawn | null
   ): Promise<ServerRuntime> {
-    const knownSpec = getKnownServerSpec(language);
-    const fileExtensions = normalizeFileExtensions(
-      config.fileExtensions ?? knownSpec?.fileExtensions ?? []
+    return createRuntimeFromConfigImpl(
+      serverId,
+      language,
+      config,
+      resolved,
+      runtimeFactoryHooks
     );
-    const state: DroneLspServerState = {
-      id: serverId,
+  }
+
+  function resolveServerCommand(
+    serverId: string,
+    language: string,
+    config: DroneLspServerConfig,
+    knownSpec: KnownServerSpec | undefined
+  ): Promise<ResolvedSpawn | null> {
+    return resolveServerCommandImpl(
+      serverId,
       language,
-      transport: config.transport === 'tcp' ? 'tcp' : 'stdio',
-      ownership: config.transport === 'tcp' ? 'external' : 'spawned',
-      status: 'connecting',
-      detail: formatServerDetail(config),
-    };
-
-    if (config.transport === 'tcp') {
-      const socket = await connectTcpServer(config, lspConfig.requestTimeoutMs);
-      const client = createJsonRpcClient({
-        transport: createSocketTransport(socket),
-        requestTimeoutMs: lspConfig.requestTimeoutMs,
-        onNotification: (method, params) => {
-          if (method === 'textDocument/publishDiagnostics') {
-            handlePublishDiagnostics(params);
-          }
-        },
-        onTransportIssue: message => {
-          updateServerState(serverId, {
-            status: 'error',
-            lastError: message,
-          });
-        },
-      });
-
-      return {
-        id: serverId,
-        language,
-        transport: 'tcp',
-        ownership: 'external',
-        detail: state.detail,
-        fileExtensions,
-        client,
-        state,
-        documents: new Map(),
-        socket,
-      };
-    }
-
-    if (!resolved) {
-      throw new Error(
-        `No executable command resolved for ${serverId} (command: ${config.command}).`
-      );
-    }
-
-    const childProcess = spawn(resolved.command, resolved.args, {
-      // Native binaries (e.g., lua-language-server) need to run from
-      // their own directory to find support files. Use cacheDir when
-      // available, falling back to workspaceRoot for PATH-based servers.
-      cwd: resolved.cacheDir ?? workspaceRoot,
-      env: process.env,
-      stdio: 'pipe',
-    });
-    const client = createJsonRpcClient({
-      transport: createChildTransport(childProcess),
-      requestTimeoutMs: lspConfig.requestTimeoutMs,
-      onNotification: (method, params) => {
-        if (method === 'textDocument/publishDiagnostics') {
-          handlePublishDiagnostics(params);
-        }
-      },
-      onTransportIssue: message => {
-        updateServerState(serverId, {
-          status: 'error',
-          lastError: message,
-        });
-      },
-    });
-
-    return {
-      id: serverId,
-      language,
-      transport: 'stdio',
-      ownership: 'spawned',
-      detail: state.detail,
-      fileExtensions,
-      client,
-      state,
-      documents: new Map(),
-      childProcess,
-    };
+      config,
+      knownSpec,
+      lspConfig.autoInstall,
+      logger
+    );
   }
 
   async function detectKnownLanguageSpecs(): Promise<KnownServerSpec[]> {
     const matches: KnownServerSpec[] = [];
     for (const spec of KNOWN_SERVER_SPECS) {
-      if (spec.rootPatterns.length > 0) {
-        // Root-marker-based detection: check for well-known files.
-        if (await workspaceHasMarkers(workspaceRoot, spec.rootPatterns)) {
-          matches.push(spec);
-        }
-      } else {
-        // Ambient language detection: scan for matching file extensions.
-        if (await hasMatchingFiles(workspaceRoot, spec.fileExtensions)) {
-          matches.push(spec);
-        }
+      // Only root-marker specs (typescript, python, rust, go, lua, svelte,
+      // php) are detected eagerly. Ambient specs (no rootPatterns) start
+      // lazily via startServerForFile when a matching file is touched.
+      if (
+        spec.rootPatterns.length > 0 &&
+        (await workspaceHasMarkers(workspaceRoot, spec.rootPatterns))
+      ) {
+        matches.push(spec);
       }
     }
     return matches;
@@ -476,90 +280,6 @@ export function createServerManager(
       });
     }
     return resolved;
-  }
-
-  async function resolveServerCommand(
-    serverId: string,
-    _language: string,
-    config: DroneLspServerConfig,
-    knownSpec: KnownServerSpec | undefined
-  ): Promise<ResolvedSpawn | null> {
-    // External (TCP) servers are user-managed — nothing to resolve.
-    if (config.transport === 'tcp') {
-      return null;
-    }
-
-    const userAutoInstall =
-      config.transport === 'stdio' && config.autoInstall !== undefined
-        ? config.autoInstall
-        : undefined;
-    const autoInstall = userAutoInstall ?? lspConfig.autoInstall;
-
-    // 1. If the user's command resolves on PATH, use it as-is.
-    if (await commandExistsOnPath(config.command)) {
-      return {
-        command: config.command,
-        args: config.args ?? [],
-        source: 'path',
-        installStatus: 'unused',
-      };
-    }
-
-    // 2. No PATH hit. Try auto-install if enabled and we have install metadata.
-    const installSpec =
-      knownSpec?.install ??
-      (config.transport === 'stdio' && config.command === knownSpec?.command
-        ? knownSpec?.install
-        : undefined);
-
-    if (!autoInstall || !installSpec) {
-      throw new Error(
-        `${config.command} not found on PATH and auto-install is disabled.`
-      );
-    }
-
-    const installerSpec: InstallerSpec = {
-      id: serverId,
-      command: config.command,
-      args: config.args ?? [],
-      install: installSpec,
-    };
-
-    const wasCached = await (async () => {
-      const cacheRoot = resolveCacheDir();
-      const cacheKey = computeCacheKey({
-        serverId,
-        version: installSpec.version,
-      });
-      const cacheDir = path.join(
-        cacheRoot,
-        serverId,
-        installSpec.version,
-        cacheKey
-      );
-      const entry = path.join(
-        cacheDir,
-        installSpec.entryPoint ?? config.command
-      );
-      try {
-        await access(entry, fsConstants.R_OK);
-        return true;
-      } catch {
-        return false;
-      }
-    })();
-
-    const resolution = await ensureServerInstalled(installerSpec, {
-      logger,
-    });
-
-    return {
-      command: resolution.command,
-      args: resolution.args,
-      cacheDir: resolution.cacheDir,
-      source: resolution.source,
-      installStatus: wasCached ? 'cached' : 'downloaded',
-    };
   }
 
   async function initializeServers(): Promise<void> {
@@ -642,43 +362,17 @@ export function createServerManager(
         logger.warn(
           `lsp server unavailable: ${candidate.serverId} (${message})`
         );
-        serverRuntimes.set(candidate.serverId, {
+        ensureServerState(candidate.serverId, {
           id: candidate.serverId,
           language: candidate.language,
           transport: candidate.config.transport === 'tcp' ? 'tcp' : 'stdio',
           ownership:
             candidate.config.transport === 'tcp' ? 'external' : 'spawned',
+          status: 'error',
           detail: formatServerDetail(candidate.config),
-          fileExtensions: normalizeFileExtensions(
-            candidate.config.fileExtensions ??
-              candidate.knownSpec?.fileExtensions ??
-              []
-          ),
-          client: createJsonRpcClient({
-            transport: {
-              write: () => undefined,
-              close: () => undefined,
-              onData: () => undefined,
-              onClose: () => undefined,
-              onError: () => undefined,
-            },
-            requestTimeoutMs: lspConfig.requestTimeoutMs,
-            onNotification: () => undefined,
-            onTransportIssue: () => undefined,
-          }),
-          state: {
-            id: candidate.serverId,
-            language: candidate.language,
-            transport: candidate.config.transport === 'tcp' ? 'tcp' : 'stdio',
-            ownership:
-              candidate.config.transport === 'tcp' ? 'external' : 'spawned',
-            status: 'error',
-            detail: formatServerDetail(candidate.config),
-            lastError: message,
-            installSource: 'path',
-            installStatus: 'failed',
-          },
-          documents: new Map(),
+          lastError: message,
+          installSource: 'path',
+          installStatus: 'failed',
         });
         continue;
       }
@@ -707,137 +401,74 @@ export function createServerManager(
         logger.warn(
           `lsp server unavailable: ${candidate.serverId} (${message})`
         );
-        serverRuntimes.set(candidate.serverId, {
+        serverRuntimes.delete(candidate.serverId);
+        ensureServerState(candidate.serverId, {
           id: candidate.serverId,
           language: candidate.language,
           transport: candidate.config.transport === 'tcp' ? 'tcp' : 'stdio',
           ownership:
             candidate.config.transport === 'tcp' ? 'external' : 'spawned',
+          status: 'error',
           detail: formatServerDetail(candidate.config),
-          fileExtensions: normalizeFileExtensions(
-            candidate.config.fileExtensions ??
-              candidate.knownSpec?.fileExtensions ??
-              []
-          ),
-          client: createJsonRpcClient({
-            transport: {
-              write: () => undefined,
-              close: () => undefined,
-              onData: () => undefined,
-              onClose: () => undefined,
-              onError: () => undefined,
-            },
-            requestTimeoutMs: lspConfig.requestTimeoutMs,
-            onNotification: () => undefined,
-            onTransportIssue: () => undefined,
-          }),
-          state: {
-            id: candidate.serverId,
-            language: candidate.language,
-            transport: candidate.config.transport === 'tcp' ? 'tcp' : 'stdio',
-            ownership:
-              candidate.config.transport === 'tcp' ? 'external' : 'spawned',
-            status: 'error',
-            detail: formatServerDetail(candidate.config),
-            lastError: message,
-            installSource: resolved?.source ?? 'path',
-            installStatus: resolved ? 'failed' : 'failed',
-          },
-          documents: new Map(),
+          lastError: message,
+          installSource: resolved?.source ?? 'path',
+          installStatus: 'failed',
         });
       }
     }
   }
 
-  async function syncServerDocuments(runtime: ServerRuntime): Promise<void> {
-    if (runtime.state.status !== 'connected') {
-      return;
-    }
+  /**
+   * Opt-in background warm-up (lsp.preinstall): install known servers that
+   * are not running and not configured, without spawning them. Uses the
+   * install-only in-flight dedup (not the spawn-start one) so installs are
+   * serialized per spec while demand starts stay independent. Failures warn
+   * and continue — the warm-up must never reject session start.
+   */
+  function knownSpecToConfig(spec: KnownServerSpec): DroneLspServerConfig {
+    return {
+      transport: 'stdio',
+      language: spec.language,
+      command: spec.command,
+      args: spec.args,
+      fileExtensions: spec.fileExtensions,
+      rootPatterns: spec.rootPatterns,
+    };
+  }
 
-    const matchingFiles = await collectWorkspaceFiles(
-      workspaceRoot,
-      runtime.fileExtensions
-    );
-    const nextFiles = new Set(
-      matchingFiles.map(filePath => path.resolve(filePath))
-    );
-
-    for (const filePath of matchingFiles) {
-      const absolutePath = path.resolve(filePath);
-      let snapshot: Awaited<ReturnType<typeof readDocumentSnapshot>>;
-      try {
-        snapshot = await readDocumentSnapshot(absolutePath);
-      } catch {
+  function preinstallKnownServers(): void {
+    const skip = new Set<string>([
+      ...serverRuntimes.keys(),
+      ...Object.keys(lspConfig.servers),
+    ]);
+    for (const spec of KNOWN_SERVER_SPECS) {
+      if (skip.has(spec.id)) {
         continue;
       }
-      if (!snapshot) {
-        continue;
-      }
-
-      const existing = runtime.documents.get(absolutePath);
-      if (
-        existing &&
-        existing.mtimeMs === snapshot.mtimeMs &&
-        existing.size === snapshot.size
-      ) {
-        continue;
-      }
-
-      const uri = toFileUri(absolutePath);
-      const languageId = resolveLanguageId(absolutePath, runtime.language);
-      if (!existing) {
-        runtime.client.notify('textDocument/didOpen', {
-          textDocument: {
-            uri,
-            languageId,
-            version: 1,
-            text: snapshot.text,
-          },
+      void installDedup
+        .run(spec.id, async () => {
+          if (crashGuard.isBlocked(spec.id)) {
+            return false;
+          }
+          if (
+            !lspConfig.autoInstall &&
+            !(await commandExistsOnPath(spec.command))
+          ) {
+            return false;
+          }
+          await resolveServerCommand(
+            spec.id,
+            spec.language,
+            knownSpecToConfig(spec),
+            spec
+          );
+          return true;
+        })
+        .catch(error => {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          logger.warn(`lsp preinstall failed: ${spec.id} (${message})`);
         });
-        runtime.documents.set(absolutePath, {
-          uri,
-          languageId,
-          version: 1,
-          text: snapshot.text,
-          mtimeMs: snapshot.mtimeMs,
-          size: snapshot.size,
-        });
-        continue;
-      }
-
-      const nextVersion = existing.version + 1;
-      runtime.client.notify('textDocument/didChange', {
-        textDocument: {
-          uri,
-          version: nextVersion,
-        },
-        contentChanges: [{ text: snapshot.text }],
-      });
-      runtime.documents.set(absolutePath, {
-        ...existing,
-        version: nextVersion,
-        text: snapshot.text,
-        mtimeMs: snapshot.mtimeMs,
-        size: snapshot.size,
-      });
-    }
-
-    for (const filePath of Array.from(runtime.documents.keys())) {
-      if (nextFiles.has(filePath)) {
-        continue;
-      }
-
-      const existing = runtime.documents.get(filePath);
-      if (!existing) {
-        continue;
-      }
-      runtime.client.notify('textDocument/didClose', {
-        textDocument: {
-          uri: existing.uri,
-        },
-      });
-      runtime.documents.delete(filePath);
-      diagnosticsByFile.delete(filePath);
     }
   }
 
@@ -847,7 +478,8 @@ export function createServerManager(
     const extension = path.extname(filePath).toLowerCase();
     for (const runtime of serverRuntimes.values()) {
       if (
-        runtime.state.status === 'connected' &&
+        (serverStates.get(runtime.id)?.status ?? 'connecting') ===
+          'connected' &&
         runtime.fileExtensions.includes(extension)
       ) {
         return runtime;
@@ -856,368 +488,43 @@ export function createServerManager(
     return undefined;
   }
 
-  async function ensureDocumentLoaded(
+  async function syncServerDocuments(runtime: ServerRuntime): Promise<void> {
+    const closedPaths = await syncServerDocumentsImpl(
+      runtime,
+      workspaceRoot,
+      () => serverStates.get(runtime.id)?.status === 'connected'
+    );
+    for (const closedPath of closedPaths) {
+      diagnosticsByFile.delete(closedPath);
+    }
+  }
+
+  function ensureDocumentLoaded(
     runtime: ServerRuntime,
     filePath: string
   ): Promise<DocumentState> {
-    await syncServerDocuments(runtime);
-    const absolutePath = path.resolve(filePath);
-    const existing = runtime.documents.get(absolutePath);
-    if (existing) {
-      return existing;
-    }
-
-    const snapshot = await readDocumentSnapshot(absolutePath);
-    if (!snapshot) {
-      throw new Error(`Could not load LSP document: ${absolutePath}`);
-    }
-
-    const documentState: DocumentState = {
-      uri: toFileUri(absolutePath),
-      languageId: resolveLanguageId(absolutePath, runtime.language),
-      version: 1,
-      text: snapshot.text,
-      mtimeMs: snapshot.mtimeMs,
-      size: snapshot.size,
-    };
-    runtime.client.notify('textDocument/didOpen', {
-      textDocument: {
-        uri: documentState.uri,
-        languageId: documentState.languageId,
-        version: documentState.version,
-        text: documentState.text,
-      },
-    });
-    runtime.documents.set(absolutePath, documentState);
-    return documentState;
+    return ensureDocumentLoadedImpl(
+      runtime,
+      filePath
+    ) as Promise<DocumentState>;
   }
 
-  /**
-   * Sync a single file from disk if it has changed since the last sync.
-   * This ensures that if the LLM wrote to a file via file__write in the
-   * same turn, the LSP server sees the latest content.
-   */
   async function syncFileIfNeeded(filePath: string): Promise<void> {
-    const absolutePath = path.resolve(filePath);
-    const runtime = findRuntimeForFile(absolutePath);
+    const runtime = findRuntimeForFile(filePath);
     if (!runtime) return;
-
-    const snapshot = await readDocumentSnapshot(absolutePath);
-    if (!snapshot) return;
-
-    const existing = runtime.documents.get(absolutePath);
-    if (!existing) {
-      // File not yet open — will be opened by ensureDocumentLoaded
-      return;
-    }
-
-    if (
-      existing.mtimeMs === snapshot.mtimeMs &&
-      existing.size === snapshot.size
-    ) {
-      return; // No change
-    }
-
-    const nextVersion = existing.version + 1;
-    runtime.client.notify('textDocument/didChange', {
-      textDocument: { uri: existing.uri, version: nextVersion },
-      contentChanges: [{ text: snapshot.text }],
-    });
-    runtime.documents.set(absolutePath, {
-      ...existing,
-      version: nextVersion,
-      text: snapshot.text,
-      mtimeMs: snapshot.mtimeMs,
-      size: snapshot.size,
-    });
+    await syncFileIfNeededImpl(runtime, filePath);
   }
 
-  /**
-   * Search file content for a text snippet and return its 1-based position.
-   * Supports surroundingText for disambiguation when multiple matches exist.
-   *
-   * 1. Exact match (case-sensitive) first
-   * 2. Fall back to case-insensitive if no exact match
-   * 3. If surroundingText is provided, filter matches by context
-   * 4. If exactly one match (after filtering), return `{ line, column }` (1-based)
-   * 5. If multiple matches, throw with each position + 2 lines of context
-   * 6. If no matches, throw
-   */
-  async function resolveTextPosition(
-    filePath: string,
-    text: string,
-    surroundingText?: string
-  ): Promise<{ line: number; column: number }> {
-    const absolutePath = path.resolve(filePath);
-    const snapshot = await readDocumentSnapshot(absolutePath);
-    if (!snapshot) {
-      throw new Error(`Could not read file: ${absolutePath}`);
-    }
-
-    const lines = snapshot.text.split('\n');
-    const matches: Array<{
-      line: number;
-      column: number;
-      context: string;
-    }> = [];
-
-    // Case-sensitive search
-    for (let i = 0; i < lines.length; i++) {
-      const col = lines[i].indexOf(text);
-      if (col !== -1) {
-        const contextLines = lines.slice(
-          Math.max(0, i - 2),
-          Math.min(lines.length, i + 3)
-        );
-        matches.push({
-          line: i + 1,
-          column: col + 1,
-          context: contextLines.join('\n'),
-        });
-      }
-    }
-
-    // Fall back to case-insensitive if no exact matches
-    if (matches.length === 0) {
-      const lowerText = text.toLowerCase();
-      for (let i = 0; i < lines.length; i++) {
-        const col = lines[i].toLowerCase().indexOf(lowerText);
-        if (col !== -1) {
-          const contextLines = lines.slice(
-            Math.max(0, i - 2),
-            Math.min(lines.length, i + 3)
-          );
-          matches.push({
-            line: i + 1,
-            column: col + 1,
-            context: contextLines.join('\n'),
-          });
-        }
-      }
-    }
-
-    if (matches.length === 0) {
-      throw new Error(`Text "${text}" not found in ${absolutePath}.`);
-    }
-
-    // If surroundingText is provided, filter matches by exact block match
-    if (surroundingText && matches.length > 1) {
-      const filteredMatches = matches.filter(m =>
-        matchesSurroundingBlock(lines, m.line, surroundingText)
-      );
-      if (filteredMatches.length === 1) {
-        return {
-          line: filteredMatches[0].line,
-          column: filteredMatches[0].column,
-        };
-      }
-      // If filtering narrows but doesn't yield a unique match, use filtered set
-      if (filteredMatches.length > 1) {
-        matches.length = 0;
-        matches.push(...filteredMatches);
-      }
-      // If filtering yields zero matches, fall through to error with original matches
-    }
-
-    if (matches.length > 1) {
-      const ambiguousMatches = await buildAmbiguousMatches(
-        matches.map(m => ({
-          filePath: absolutePath,
-          line: m.line,
-          column: m.column,
-        })),
-        async filePath => {
-          const snap = filePath === absolutePath ? snapshot : undefined;
-          return snap ? snap.text.split('\n') : undefined;
-        }
-      );
-      const details = ambiguousMatches
-        .map(
-          (m, idx) =>
-            `  ${idx + 1}. Line ${m.line}, column ${m.column}:\n${m.context
-              .split('\n')
-              .map(l => `     ${l}`)
-              .join('\n')}`
-        )
-        .join('\n');
-      throw new AmbiguousPositionError(
-        absolutePath,
-        ambiguousMatches,
-        `Text "${text}" is ambiguous — found ${matches.length} matches in ${absolutePath}:\n${details}`
-      );
-    }
-
-    return { line: matches[0].line, column: matches[0].column };
-  }
-
-  /**
-   * Search for a symbol by name and return its 1-based position.
-   *
-   * 1. Try `textDocument/documentSymbol` on the file's runtime
-   * 2. Search for exact name match, fall back to prefix match
-   * 3. Filter out symbols without position info
-   * 4. If no match, try `workspace/symbol` on the runtime
-   * 5. If exactly one match, return `{ line, column }` (1-based)
-   * 6. If multiple matches, throw with context
-   * 7. If no matches, throw
-   */
-  async function resolveSymbolPosition(
-    filePath: string,
-    symbol: string,
-    surroundingText?: string
-  ): Promise<{ line: number; column: number }> {
-    const absolutePath = path.resolve(filePath);
-    const runtime = findRuntimeForFile(absolutePath);
-    if (!runtime) {
-      throw new Error(
-        `No connected LSP server is available for ${absolutePath}.`
-      );
-    }
-
-    const document = await ensureDocumentLoaded(runtime, absolutePath);
-
-    // Try document symbols first
-    const docSymbols = await runtime.client.request<
-      LspDocumentSymbolResponse[]
-    >('textDocument/documentSymbol', { textDocument: { uri: document.uri } });
-    const flat = flattenDocumentSymbols(docSymbols);
-    const candidates = filterSymbolsByQuery(flat, symbol);
-
-    // Filter out symbols without position info
-    const withPosition = candidates.filter(
-      (s): s is NormalizedSymbol & { line: number; column: number } =>
-        s.line !== undefined && s.column !== undefined
-    );
-
-    if (withPosition.length === 1) {
-      return { line: withPosition[0].line, column: withPosition[0].column };
-    }
-    // Read the file once for context-based disambiguation and error reporting
-    const snapshot = await readDocumentSnapshot(absolutePath);
-
-    // If surroundingText provided and multiple document symbol matches, filter by exact block match
-    if (surroundingText && withPosition.length > 1) {
-      if (snapshot) {
-        const lines = snapshot.text.split('\n');
-        const filtered = withPosition.filter(s =>
-          matchesSurroundingBlock(lines, s.line, surroundingText)
-        );
-        if (filtered.length === 1) {
-          return { line: filtered[0].line, column: filtered[0].column };
-        }
-        if (filtered.length > 1) {
-          withPosition.length = 0;
-          withPosition.push(...filtered);
-        }
-      }
-    }
-
-    if (withPosition.length > 1) {
-      const ambiguousMatches = await buildAmbiguousMatches(
-        withPosition.map(s => ({
-          filePath: absolutePath,
-          line: s.line,
-          column: s.column,
-        })),
-        async filePath => {
-          if (filePath !== absolutePath) return undefined;
-          return snapshot ? snapshot.text.split('\n') : undefined;
-        }
-      );
-      const details = ambiguousMatches
-        .map((m, idx) => {
-          const orig = withPosition[idx];
-          return `  ${idx + 1}. Line ${m.line}, column ${m.column} — ${orig?.name ?? ''}`;
-        })
-        .join('\n');
-      throw new AmbiguousPositionError(
-        absolutePath,
-        ambiguousMatches,
-        `Symbol "${symbol}" is ambiguous — found ${withPosition.length} matches in ${absolutePath}:\n${details}`
-      );
-    }
-
-    // Fall back to workspace symbol
-    const wsSymbols = await runtime.client.request<
-      LspWorkspaceSymbolResponse[]
-    >('workspace/symbol', { query: symbol });
-    const wsFlat = normalizeWorkspaceSymbols(wsSymbols);
-    const wsCandidates = filterSymbolsByQuery(wsFlat, symbol);
-
-    // Filter out workspace symbols without position info
-    const wsWithPosition = wsCandidates.filter(
-      (
-        s
-      ): s is NormalizedSymbol & {
-        filePath: string;
-        line: number;
-        column: number;
-      } =>
-        s.line !== undefined &&
-        s.column !== undefined &&
-        s.filePath !== undefined
-    );
-
-    if (wsWithPosition.length === 0) {
-      throw new Error(`Symbol "${symbol}" not found in workspace.`);
-    }
-
-    if (wsWithPosition.length === 1) {
-      return {
-        line: wsWithPosition[0].line,
-        column: wsWithPosition[0].column,
-      };
-    }
-
-    // If surroundingText provided, filter workspace matches by exact block match
-    if (surroundingText && wsWithPosition.length > 1) {
-      const filtered: Array<
-        NormalizedSymbol & { filePath: string; line: number; column: number }
-      > = [];
-      for (const s of wsWithPosition) {
-        const snap = await readDocumentSnapshot(s.filePath);
-        if (!snap) continue;
-        const lines = snap.text.split('\n');
-        if (matchesSurroundingBlock(lines, s.line, surroundingText)) {
-          filtered.push(s);
-        }
-      }
-      if (filtered.length === 1) {
-        return {
-          line: filtered[0].line,
-          column: filtered[0].column,
-        };
-      }
-      if (filtered.length > 1) {
-        wsWithPosition.length = 0;
-        wsWithPosition.push(...filtered);
-      }
-    }
-
-    // Multiple workspace matches
-    const ambiguousMatches = await buildAmbiguousMatches(
-      wsWithPosition.map(s => ({
-        filePath: s.filePath,
-        line: s.line,
-        column: s.column,
-      })),
-      async filePath => {
-        const snap = await readDocumentSnapshot(filePath);
-        return snap ? snap.text.split('\n') : undefined;
-      }
-    );
-    const details = wsWithPosition
-      .map(
-        (s, idx) =>
-          `  ${idx + 1}. ${s.filePath}:${s.line}:${s.column} — ${s.name}`
-      )
-      .join('\n');
-    throw new AmbiguousPositionError(
-      undefined, // Workspace ambiguity has no single file
-      ambiguousMatches,
-      `Symbol "${symbol}" is ambiguous across the workspace — found ${wsWithPosition.length} matches:\n${details}`
-    );
-  }
+  const positionContext: PositionContext = {
+    requireRuntimeForFile: async filePath =>
+      (await requireRuntimeForFile(filePath)) as unknown as PositionRuntime,
+    ensureDocumentLoaded: async (runtime, filePath) =>
+      (await ensureDocumentLoaded(
+        runtime as unknown as ServerRuntime,
+        filePath
+      )) as unknown as PositionDocument,
+    readLineFingerprint,
+  };
 
   /**
    * Parse position input from a tool call. Accepts either:
@@ -1248,7 +555,8 @@ export function createServerManager(
       await syncFileIfNeeded(filePath);
       return {
         filePath,
-        ...(await resolveTextPosition(
+        ...(await resolveTextPositionInModule(
+          positionContext,
           filePath,
           input.text,
           effectiveSurroundingText
@@ -1259,7 +567,8 @@ export function createServerManager(
       await syncFileIfNeeded(filePath);
       return {
         filePath,
-        ...(await resolveSymbolPosition(
+        ...(await resolveSymbolPositionInModule(
+          positionContext,
           filePath,
           input.symbol,
           effectiveSurroundingText
@@ -1296,145 +605,161 @@ export function createServerManager(
       input,
       surroundingText
     );
-    const runtime = findRuntimeForFile(filePath);
-    if (!runtime) {
-      throw new Error(`No connected LSP server is available for ${filePath}.`);
-    }
+    const runtime = await requireRuntimeForFile(filePath);
     const document = await ensureDocumentLoaded(runtime, filePath);
     return { runtime, document, line, column };
   }
 
-  // ── Reference ID cache for destructive edit disambiguation ──────────
-
-  const REFERENCE_CACHE_CAP = 100;
-  const REFERENCE_TTL_MS = 10 * 60 * 1000;
-
-  const referenceCache = new Map<
-    string,
-    { location: ReferenceLocation; createdAt: number }
-  >();
-  let referenceCounter = 0;
-  // Serialize cache mutations: the conversation service runs tool calls in a
-  // turn in parallel (Promise.all), so storeReferences/resolveReference must
-  // not interleave their read-modify-write on the shared Map/counter. The lock
-  // is held only around the fast Map mutations (counter increment, set, FIFO
-  // eviction, TTL/stale delete) — NOT across the disk read in resolveReference
-  // (readLineFingerprint), which happens before acquiring the lock so unrelated
-  // references resolve concurrently. A strict per-referenceId lock is not used
-  // because storeReferences' FIFO eviction can delete any key, so all Map
-  // mutations must share one lock.
-  let cacheLock: Promise<void> = Promise.resolve();
-  function withCacheLock<T>(fn: () => Promise<T>): Promise<T> {
-    const run = cacheLock.then(fn);
-    cacheLock = run.then(
-      () => {},
-      () => {}
-    );
-    return run;
-  }
-
-  async function readLineFingerprint(
+  function readLineFingerprint(
     filePath: string,
     line: number
   ): Promise<string | undefined> {
-    const absolutePath = path.resolve(filePath);
-    let snapshot: { text: string; mtimeMs: number; size: number } | null;
-    try {
-      snapshot = await readDocumentSnapshot(absolutePath);
-    } catch {
-      return undefined;
-    }
-    if (!snapshot) {
-      return undefined;
-    }
-    const lines = snapshot.text.split('\n');
-    const target = lines[line - 1];
-    return target === undefined ? undefined : target.trim();
+    return readLineFingerprintImpl(filePath, line);
   }
 
   function storeReferences(locations: ReferenceLocation[]): Promise<string[]> {
-    return withCacheLock(async () => {
-      return locations.map(location => {
-        referenceCounter++;
-        const id = `ref_${referenceCounter}`;
-        referenceCache.set(id, { location, createdAt: Date.now() });
-        // FIFO eviction: Map preserves insertion order, so the first key is oldest.
-        while (referenceCache.size > REFERENCE_CACHE_CAP) {
-          const oldestKey = referenceCache.keys().next().value;
-          if (oldestKey === undefined) break;
-          referenceCache.delete(oldestKey);
-        }
-        return id;
-      });
-    });
+    return referenceCache.store(locations);
   }
 
-  async function resolveReference(
+  function resolveReference(
     referenceId: string
   ): Promise<ReferenceResolution | undefined> {
-    // Read the fingerprint outside the lock so unrelated references resolve
-    // concurrently — the disk read (stat+readFile) is the slow part, and
-    // serializing it behind a single session-global lock would block every
-    // other reference operation. The location is immutable once stored, so
-    // reading it here is safe; the entry is re-checked under the lock below.
-    const entry = referenceCache.get(referenceId);
-    if (!entry) {
-      return undefined;
-    }
-    const current = await readLineFingerprint(
-      entry.location.filePath,
-      entry.location.line
-    );
-    return withCacheLock(async () => {
-      // Re-check under the lock: a concurrent storeReferences FIFO eviction
-      // may have removed the entry while we were reading the fingerprint.
-      const fresh = referenceCache.get(referenceId);
-      if (!fresh) {
-        return undefined;
-      }
-      // TTL expiry
-      if (Date.now() - fresh.createdAt > REFERENCE_TTL_MS) {
-        referenceCache.delete(referenceId);
-        return undefined;
-      }
-      // Staleness: if the file is gone or the line changed, invalidate and
-      // signal the caller to re-resolve.
-      if (current === undefined || current !== fresh.location.fingerprint) {
-        referenceCache.delete(referenceId);
-        return { location: fresh.location, stale: true };
-      }
-      return { location: fresh.location, stale: false };
-    });
+    return referenceCache.resolve(referenceId, readLineFingerprintImpl);
   }
 
-  async function readFileSnippet(
+  function readFileSnippet(
     filePath: string,
     line: number,
     contextLines: number = 5
   ): Promise<string> {
-    const absolutePath = path.resolve(filePath);
-    let snapshot: { text: string; mtimeMs: number; size: number } | null;
-    try {
-      snapshot = await readDocumentSnapshot(absolutePath);
-    } catch {
-      return '';
-    }
-    if (!snapshot) {
-      return '';
-    }
-    const lines = snapshot.text.split('\n');
-    const startLine = Math.max(0, line - 1 - contextLines);
-    const endLine = Math.min(lines.length, line + contextLines);
-    const snippetLines = lines.slice(startLine, endLine);
-    const lineNumbers = snippetLines.map((l, i) => {
-      const lineNum = startLine + i + 1;
-      const marker = lineNum === line ? '>' : ' ';
-      return `${marker}${String(lineNum).padStart(4)} | ${l}`;
-    });
-    return lineNumbers.join('\n');
+    return readFileSnippetImpl(filePath, line, contextLines);
   }
 
   // ── Public API ────────────────────────────────────────────────────
+
+  async function startCandidate(
+    serverId: string,
+    language: string,
+    config: DroneLspServerConfig,
+    knownSpec: KnownServerSpec | undefined
+  ): Promise<boolean> {
+    return startDedup.run(serverId, async () => {
+      // Re-check under the dedup: another caller may have finished a start
+      // while we waited, or a runtime may already be live (even connecting).
+      const live = serverRuntimes.get(serverId);
+      if (live) {
+        return false;
+      }
+      if (crashGuard.isBlocked(serverId)) {
+        logger.warn(
+          `lsp server ${serverId} refused to start: crash guard tripped (${CRASH_GUARD_FAILURE_LIMIT} failures in ${CRASH_GUARD_WINDOW_MS}ms)`
+        );
+        return false;
+      }
+      if (shuttingDown) {
+        return false;
+      }
+
+      let resolved: ResolvedSpawn | null;
+      let installStatus: DroneLspServerState['installStatus'];
+
+      try {
+        resolved = await resolveServerCommand(
+          serverId,
+          language,
+          config,
+          knownSpec
+        );
+        installStatus = resolved?.installStatus ?? 'unused';
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.warn(`lsp server unavailable: ${serverId} (${message})`);
+        ensureServerState(serverId, {
+          id: serverId,
+          language,
+          transport: config.transport === 'tcp' ? 'tcp' : 'stdio',
+          ownership: config.transport === 'tcp' ? 'external' : 'spawned',
+          status: 'error',
+          detail: formatServerDetail(config),
+          lastError: message,
+          installSource: 'path',
+          installStatus: 'failed',
+        });
+        throw new Error(
+          `Failed to prepare LSP server ${serverId}: ${message}`,
+          { cause: error }
+        );
+      }
+
+      try {
+        const runtime = await createRuntimeFromConfig(
+          serverId,
+          language,
+          config,
+          resolved
+        );
+        if (shuttingDown) {
+          // Teardown began while this start was in flight. Kill the child
+          // immediately and register nothing (orphan prevention).
+          runtime.client.disconnect('server shutting down');
+          if (runtime.childProcess) {
+            await killWithEscalation(runtime.childProcess, KILL_GRACE_MS);
+          }
+          removeServer(serverId);
+          return false;
+        }
+        if (resolved) {
+          updateServerState(runtime.id, {
+            installSource: resolved.source,
+            installStatus,
+          });
+        }
+        serverRuntimes.set(runtime.id, runtime);
+        await initializeClient(runtime);
+        workspaceDirty = true;
+        logger.info(
+          `lsp server ready: ${runtime.id} (${runtime.ownership}, ${runtime.detail}, install=${installStatus})`
+        );
+        return true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.warn(`lsp server unavailable: ${serverId} (${message})`);
+        serverRuntimes.delete(serverId);
+        ensureServerState(serverId, {
+          id: serverId,
+          language,
+          transport: config.transport === 'tcp' ? 'tcp' : 'stdio',
+          ownership: config.transport === 'tcp' ? 'external' : 'spawned',
+          status: 'error',
+          detail: formatServerDetail(config),
+          lastError: message,
+          installSource: resolved?.source ?? 'path',
+          installStatus: 'failed',
+        });
+        crashGuard.record(serverId);
+        throw new Error(`Failed to start LSP server ${serverId}: ${message}`, {
+          cause: error,
+        });
+      }
+    });
+  }
+
+  function findConfiguredServerForExtension(
+    extension: string
+  ): { serverId: string; config: DroneLspServerConfig } | undefined {
+    for (const [serverId, config] of Object.entries(lspConfig.servers)) {
+      const language = config.language ?? serverId;
+      const extensions = normalizeFileExtensions(
+        config.fileExtensions ??
+          getKnownServerSpec(language)?.fileExtensions ??
+          []
+      );
+      if (extensions.includes(extension)) {
+        return { serverId, config };
+      }
+    }
+    return undefined;
+  }
 
   async function startServerForFile(filePath: string): Promise<boolean> {
     const ext = path.extname(filePath).toLowerCase();
@@ -1442,83 +767,69 @@ export function createServerManager(
       return false;
     }
 
-    // Check if a runtime already handles this file.
-    const existing = findRuntimeForFile(filePath);
-    if (existing) {
-      return false;
+    // A configured server whose declared extensions match the file wins —
+    // this also covers demand restarts of crashed configured servers.
+    const configured = findConfiguredServerForExtension(ext);
+    if (configured) {
+      const language = configured.config.language ?? configured.serverId;
+      return startCandidate(
+        configured.serverId,
+        language,
+        configured.config,
+        getKnownServerSpec(language)
+      );
     }
 
-    // Find a known server spec that handles this extension.
+    // Otherwise, a known spec that handles this extension (ambient lazy
+    // start for languages with no explicit config).
     const spec = KNOWN_SERVER_SPECS.find(s =>
       s.fileExtensions.some(fe => fe.toLowerCase() === ext)
     );
     if (!spec) {
       return false;
     }
+    return startCandidate(
+      spec.id,
+      spec.language,
+      knownSpecToConfig(spec),
+      spec
+    );
+  }
 
-    // Check if this server is already running (but maybe for a different
-    // language ID — skip if so).
-    if (serverRuntimes.has(spec.id)) {
-      return false;
+  /**
+   * Chokepoint for tools that need a live runtime for a specific file.
+   * Finds an existing connected runtime; on a miss, demand-starts the spec
+   * for the file's extension and re-checks; throws the tool-facing error
+   * when no server can serve the file.
+   */
+  async function requireRuntimeForFile(
+    filePath: string
+  ): Promise<ServerRuntime> {
+    const existing = findRuntimeForFile(filePath);
+    if (existing) {
+      return existing;
     }
-
-    // Start the server using the same flow as initializeServers.
-    const config: DroneLspServerConfig = {
-      transport: 'stdio',
-      language: spec.language,
-      command: spec.command,
-      args: spec.args,
-      fileExtensions: spec.fileExtensions,
-      rootPatterns: spec.rootPatterns,
-    };
-
-    let resolved: ResolvedSpawn | null;
-    let installStatus: DroneLspServerState['installStatus'];
-
-    try {
-      resolved = await resolveServerCommand(
-        spec.id,
-        spec.language,
-        config,
-        spec
+    const started = await startServerForFile(filePath).catch(error => {
+      logger.warn(
+        `lsp demand start failed for ${filePath}: ${error instanceof Error ? error.message : String(error)}`
       );
-      installStatus = resolved?.installStatus ?? 'unused';
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      logger.warn(`lsp server unavailable: ${spec.id} (${message})`);
       return false;
-    }
-
-    try {
-      const runtime = await createRuntimeFromConfig(
-        spec.id,
-        spec.language,
-        config,
-        resolved
-      );
-      if (resolved) {
-        updateServerState(runtime.id, {
-          installSource: resolved.source,
-          installStatus,
-        });
+    });
+    if (started) {
+      const runtime = findRuntimeForFile(filePath);
+      if (runtime) {
+        return runtime;
       }
-      serverRuntimes.set(runtime.id, runtime);
-      await initializeClient(runtime);
-      workspaceDirty = true;
-      logger.info(
-        `lsp server ready: ${runtime.id} (${runtime.ownership}, ${runtime.detail}, install=${installStatus})`
-      );
-      return true;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      logger.warn(`lsp server unavailable: ${spec.id} (${message})`);
-      return false;
     }
+    throw new Error(`No connected LSP server is available for ${filePath}.`);
   }
 
   return {
     initialize: async () => {
       await initializeServers();
+      if (lspConfig.preinstall) {
+        preinstallKnownServers();
+      }
       workspaceDirty = true;
     },
 
@@ -1540,8 +851,7 @@ export function createServerManager(
 
     getDiagnostics: () => getAllDiagnostics(),
 
-    getServerStates: () =>
-      Array.from(serverRuntimes.values()).map(runtime => runtime.state),
+    getServerStates: () => Array.from(serverStates.values()),
 
     getAvailableServers: () => {
       const running = new Set(serverRuntimes.keys());
@@ -1588,6 +898,7 @@ export function createServerManager(
     },
 
     findRuntimeForFile,
+    requireRuntimeForFile,
     ensureDocumentLoaded,
 
     resolveTargetFilePath: (inputPath: string) => {
@@ -1629,10 +940,14 @@ export function createServerManager(
     },
 
     shutdown: async () => {
-      for (const runtime of serverRuntimes.values()) {
+      shuttingDown = true;
+      const runtimes = Array.from(serverRuntimes.values());
+      serverRuntimes.clear();
+
+      for (const runtime of runtimes) {
         if (
           runtime.ownership === 'spawned' &&
-          runtime.state.status === 'connected'
+          serverStates.get(runtime.id)?.status === 'connected'
         ) {
           try {
             await runtime.client.request('shutdown');
@@ -1646,9 +961,12 @@ export function createServerManager(
           }
         }
 
+        // Disconnect before closing stdin: markClosed runs first so any
+        // in-flight write completion cannot surface as an EPIPE transport
+        // issue (EPIPE-safety ordering).
         runtime.client.disconnect('plugin shutdown');
-        if (runtime.ownership === 'spawned') {
-          runtime.childProcess?.kill();
+        if (runtime.ownership === 'spawned' && runtime.childProcess) {
+          await killWithEscalation(runtime.childProcess, KILL_GRACE_MS);
         }
         updateServerState(runtime.id, {
           status: 'disconnected',

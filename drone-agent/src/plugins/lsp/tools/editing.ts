@@ -313,12 +313,7 @@ export function createCodeActionTool(
           .filter(d => d.filePath === filePath);
       }
 
-      const runtime = server.findRuntimeForFile(targetFilePath);
-      if (!runtime) {
-        throw new Error(
-          `No connected LSP server is available for ${targetFilePath}.`
-        );
-      }
+      const runtime = await server.requireRuntimeForFile(targetFilePath);
       const document = await server.ensureDocumentLoaded(
         runtime,
         targetFilePath
@@ -467,12 +462,7 @@ export function createRenameTool(server: ServerManager): DroneToolDefinition {
         }
         const ref = resolution.location;
         const filePath = ref.filePath;
-        const runtime = server.findRuntimeForFile(filePath);
-        if (!runtime) {
-          throw new Error(
-            `No connected LSP server is available for ${filePath}.`
-          );
-        }
+        const runtime = await server.requireRuntimeForFile(filePath);
         const document = await server.ensureDocumentLoaded(runtime, filePath);
         resolved = {
           runtime,
@@ -600,12 +590,7 @@ export function createFormattingTool(
       }
       await server.refreshIfNeeded();
       const filePath = server.resolveTargetFilePath(input.filePath);
-      const runtime = server.findRuntimeForFile(filePath);
-      if (!runtime) {
-        throw new Error(
-          `No connected LSP server is available for ${filePath}.`
-        );
-      }
+      const runtime = await server.requireRuntimeForFile(filePath);
       const document = await server.ensureDocumentLoaded(runtime, filePath);
       const options: {
         tabSize?: number;

@@ -48,11 +48,26 @@ export type DronePromptFragment = {
   render: () => Promise<string | false>;
 };
 
+/**
+ * Payload delivered to `onAfterToolCall` callbacks. `calls` lists every tool
+ * call executed in the round that just finished — a parallel batch from one
+ * LLM response, or a single entry for slash-command-driven executions — in
+ * execution order, with the raw inputs as received.
+ */
+export type DroneAfterToolCallPayload = {
+  calls: Array<{
+    name: string;
+    arguments: Record<string, unknown>;
+  }>;
+};
+
 export type DronePluginHooks = {
   onPluginsLoaded: (callback: () => Promise<void>) => void;
   onSessionStart: (callback: () => Promise<void>) => void;
   onBeforePrompt: (callback: () => Promise<void>) => void;
-  onAfterToolCall: (callback: () => Promise<void>) => void;
+  onAfterToolCall: (
+    callback: (payload?: DroneAfterToolCallPayload) => Promise<void>
+  ) => void;
   onConversationEvent: (
     callback: (
       event: import('./session-types.js').DroneConversationEvent
@@ -332,7 +347,13 @@ export type DroneSlashCommandContext = {
       canonicalName: string,
       args: Record<string, unknown>
     ) => Promise<DroneWorkflowResult>;
-    runHooks: (hookName: DroneStandardHookName) => Promise<void>;
+    runHooks: {
+      (
+        hookName: 'onAfterToolCall',
+        payload: DroneAfterToolCallPayload
+      ): Promise<void>;
+      (hookName: DroneStandardHookName): Promise<void>;
+    };
     getCapability: <T>(pluginId: string) => T | undefined;
     /**
      * Optional — dispatch a slash command line through the engine's

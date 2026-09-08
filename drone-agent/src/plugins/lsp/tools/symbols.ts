@@ -65,10 +65,7 @@ async function executeDocumentSymbols(
   }
   await server.refreshIfNeeded();
   const filePath = server.resolveTargetFilePath(input.filePath);
-  const runtime = server.findRuntimeForFile(filePath);
-  if (!runtime) {
-    throw new Error(`No connected LSP server is available for ${filePath}.`);
-  }
+  const runtime = await server.requireRuntimeForFile(filePath);
   const document = await server.ensureDocumentLoaded(runtime, filePath);
   const response = await runtime.client.request<LspDocumentSymbolResponse[]>(
     'textDocument/documentSymbol',
