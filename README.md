@@ -50,7 +50,94 @@ Before you start: Decide if you want to set up `swarm`, and if so, choose a coor
 5. `cd drone-beacon && npm link && cd ..` This adds `drone-beacon` to your PATH. If you want to set up a swarm, you will need to configure this to run on system startup for your OS of choice. For systemd-based Linux distributions, I recommend using a user-scoped systemd unit.
 6. `cd drone-swarm && npm link && cd ..` This adds the `drone-swarm` utility to your PATH. This is optional except on your chosen coordinator host, where it will be used by your memory ingestion pipeline
 7. `cd drone-coordinator && npm link && cd ..` This adds `drone-coordinator` to your PATH. This only needs to be done on your chosen coordinator host, and you will want to configure this to start automatically in the same way you did `drone-beacon`. Important: The coordinator needs a running beacon on the same host.
-8. Configure everything
+8. Configure everything (see below)
+
+### Configuration
+
+Config files live in `.drone-agent/config.json`. Config cascades from default → user (`~/.drone-agent/config.json`) → project (`.drone-agent/config.json` in your project root), with the project level taking highest precedence.
+
+The quickest way to get configured is to run `drone-agent` in a new directory and use the `/bootstrap user` workflow, which interactively walks you through selecting a provider and model and writes `~/.drone-agent/config.json` for you.
+
+Alternatively, you can write the user config manually. The minimum required config is an LLM provider with at least one model, and an `llm.active` entry pointing to it. The `apiKey` field supports `${ENV_VAR}` interpolation so you do not need to store secrets in the file.
+
+**Anthropic (Claude):**
+
+```json
+{
+  "llm": { "active": "anthropic/claude-sonnet-4-5" },
+  "providers": {
+    "anthropic": {
+      "protocol": "anthropic",
+      "apiKey": "${ANTHROPIC_API_KEY}",
+      "models": {
+        "claude-sonnet-4-5": {}
+      }
+    }
+  },
+  "enabledPlugins": ["file", "exec", "git", "fetch", "compaction", "log"]
+}
+```
+
+**OpenAI:**
+
+```json
+{
+  "llm": { "active": "openai/gpt-4o" },
+  "providers": {
+    "openai": {
+      "protocol": "openai",
+      "apiKey": "${OPENAI_API_KEY}",
+      "baseUrl": "https://api.openai.com/v1",
+      "models": {
+        "gpt-4o": {}
+      }
+    }
+  },
+  "enabledPlugins": ["file", "exec", "git", "fetch", "compaction", "log"]
+}
+```
+
+**OpenRouter** (gives access to many models through one API key):
+
+```json
+{
+  "llm": { "active": "openrouter/claude-sonnet-4-5" },
+  "providers": {
+    "openrouter": {
+      "protocol": "openrouter",
+      "apiKey": "${OPENROUTER_API_KEY}",
+      "models": {
+        "claude-sonnet-4-5": { "model": "anthropic/claude-sonnet-4-5" }
+      }
+    }
+  },
+  "enabledPlugins": ["file", "exec", "git", "fetch", "compaction", "log"]
+}
+```
+
+**Ollama** (local models, no API key needed):
+
+```json
+{
+  "llm": { "active": "ollama/qwen2.5-coder:32b" },
+  "providers": {
+    "ollama": {
+      "protocol": "ollama",
+      "baseUrl": "http://localhost:11434",
+      "models": {
+        "qwen2.5-coder:32b": {}
+      }
+    }
+  },
+  "enabledPlugins": ["file", "exec", "git", "fetch", "compaction", "log"]
+}
+```
+
+The `enabledPlugins` list above is a reasonable baseline. See the plugin list in the Design Principles section for the full set of built-in plugins you can enable. The `config-library/` directory contains example configs, skills, macros, and personas to use as a starting point.
+
+### Swarm Configuration
+
+If you are running a swarm, you will need a `.drone-agent/config.json` on each machine that includes a `swarm` section pointing each beacon at the coordinator. See `docs/agents/swarm-plugin.md` for full configuration details.
 
 ## Design Principles
 
