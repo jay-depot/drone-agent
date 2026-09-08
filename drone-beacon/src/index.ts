@@ -6,6 +6,7 @@ import {
   mergeConfig,
   type ServerConfigFile,
   type SessionEndTrigger,
+  type SpawnRootsConfig,
 } from 'drone-swarm-common';
 import { SearchIndexer } from './search-indexer.js';
 import { WikiIndexer } from './wiki-indexer.js';
@@ -48,6 +49,11 @@ import {
   cleanupAllSpawns,
   type SpawnerConfig,
 } from './spawner.js';
+import {
+  initSpawnRoots,
+  rescanSpawnRoots,
+  setSpawnRootsChangeListener,
+} from './spawn-roots.js';
 import * as wsServer from './ws-server.js';
 import { startCoordinatorWsClient } from './coordinator-ws.js';
 import {
@@ -96,6 +102,7 @@ interface Config {
   rateLimitMax: number;
   rateLimitWindowMs: number;
   sessionEnd?: SessionEndTrigger;
+  spawnRoots?: SpawnRootsConfig;
 }
 
 async function parseArgs(): Promise<Config> {
@@ -196,6 +203,9 @@ async function parseArgs(): Promise<Config> {
     config.dbPath = (merged.dbPath as string) ?? config.dbPath;
     if (merged.sessionEnd !== undefined) {
       config.sessionEnd = merged.sessionEnd as SessionEndTrigger;
+    }
+    if (merged.spawnRoots !== undefined) {
+      config.spawnRoots = merged.spawnRoots as SpawnRootsConfig;
     }
   }
 
@@ -321,6 +331,13 @@ async function main() {
   logger.info(
     `Spawner configured: path=${resolvedSpawnAgentPath}, timeout=${config.spawnTimeoutMs}ms, max=${config.maxConcurrentSpawns}`
   );
+
+  // Initialize spawn roots (decision 8). When configured, the beacon
+  // advertises its whitelisted working directories to the coordinator and
+  // enforces the whitelist at spawn time.
+  if (config.spawnRoots) {
+    await initSpawnRoots(config.spawnRoots);
+  }
 
   // Set beacon address for routes
   setBeaconAddress(
@@ -486,6 +503,29 @@ async function main() {
     }, syncIntervalMs);
   }
 
+  // Periodic spawn-roots re-scan: re-expand globs and re-advertise to the
+  // coordinator so newly-created project dirs become available without a
+  // beacon restart. Runs on the same interval as the coordinator sync.
+  let spawnRootsRescanInterval: NodeJS.Timeout | undefined;
+  if (config.spawnRoots) {
+    setSpawnRootsChangeListener(() => {
+      coordinatorClient
+        ?.registerBeacon(identity, tlsIdentity.fingerprint)
+        .catch(err => {
+          logger.warn(`Failed to re-advertise spawn roots: ${err}`);
+        });
+    });
+    const rescanMs = config.syncIntervalMinutes * 60 * 1000;
+    spawnRootsRescanInterval = setInterval(() => {
+      void rescanSpawnRoots().catch(err => {
+        logger.warn(`Spawn roots re-scan failed: ${err}`);
+      });
+    }, rescanMs);
+    logger.info(
+      `Spawn roots re-scan scheduled every ${config.syncIntervalMinutes} minutes`
+    );
+  }
+
   if (coordinatorClient) {
     setOutboxEnabled(true);
     outboxFlusher = createOutboxFlusher({
@@ -508,6 +548,9 @@ async function main() {
     stopFragmentTtlSweep();
     if (syncInterval) {
       clearInterval(syncInterval);
+    }
+    if (spawnRootsRescanInterval) {
+      clearInterval(spawnRootsRescanInterval);
     }
     outboxFlusher?.stop();
 

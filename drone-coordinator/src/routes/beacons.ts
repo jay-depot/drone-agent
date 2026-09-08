@@ -258,4 +258,17 @@ export default function beaconRoutes(app: FastifyInstance) {
     });
     return session;
   });
+
+  // === Beacon Heartbeat ===
+
+  app.post<{ Params: { id: string } }>(
+    '/beacons/:id/heartbeat',
+    async (request, reply) => {
+      const beacon = db.heartbeatBeacon(request.params.id);
+      if (!beacon) {
+        return reply.code(404).send({ error: 'Beacon not found' });
+      }
+      return beacon;
+    }
+  );
 }

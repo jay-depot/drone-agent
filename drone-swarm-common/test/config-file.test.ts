@@ -121,6 +121,44 @@ describe('validateConfigFile', () => {
       })
     ).toEqual([]);
   });
+
+  it('accepts a valid spawnRoots config', () => {
+    expect(
+      validateConfigFile({
+        spawnRoots: {
+          paths: ['/home/user/', '/home/user/Projects/*'],
+          default: '/home/user/',
+        },
+      })
+    ).toEqual([]);
+  });
+
+  it('rejects invalid spawnRoots configs', () => {
+    expect(validateConfigFile({ spawnRoots: 'nope' })).toEqual([
+      '"spawnRoots" must be an object',
+    ]);
+    expect(validateConfigFile({ spawnRoots: {} })).toEqual([
+      '"spawnRoots.paths" must be a non-empty array of non-empty strings',
+      '"spawnRoots.default" must be a non-empty string',
+    ]);
+    expect(
+      validateConfigFile({
+        spawnRoots: { paths: [], default: '/x' },
+      })
+    ).toEqual([
+      '"spawnRoots.paths" must be a non-empty array of non-empty strings',
+    ]);
+    expect(
+      validateConfigFile({
+        spawnRoots: { paths: ['/x'], default: '' },
+      })
+    ).toEqual(['"spawnRoots.default" must be a non-empty string']);
+    expect(
+      validateConfigFile({
+        spawnRoots: { paths: ['/x'], default: '/x', extra: true },
+      })
+    ).toEqual(['unknown key "spawnRoots.extra"']);
+  });
 });
 
 describe('loadConfigFile', () => {

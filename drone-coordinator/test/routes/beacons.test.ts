@@ -164,6 +164,54 @@ describe('Beacon Routes', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('POST /beacons/:id/heartbeat updates lastHeartbeat', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/beacons/b1/heartbeat',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.id).toBe('b1');
+    expect(body.lastHeartbeat).toBeGreaterThan(0);
+  });
+
+  it('POST /beacons/:id/heartbeat returns 404 for missing beacon', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/beacons/nonexistent/heartbeat',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('GET /beacons returns spawnRoots and defaultSpawnRoot when registered', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: {
+        id: 'b1',
+        name: 'B1',
+        host: 'localhost',
+        port: 3457,
+        spawnRoots: ['/home/user/', '/home/user/Projects/a'],
+        defaultSpawnRoot: '/home/user/',
+      },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/beacons',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    const b1 = body.find((b: { id: string }) => b.id === 'b1');
+    expect(b1.spawnRoots).toEqual(['/home/user/', '/home/user/Projects/a']);
+    expect(b1.defaultSpawnRoot).toBe('/home/user/');
+  });
+
   it('GET /beacons reports connected=false when the reverse channel is down', async () => {
     await app.inject({
       method: 'POST',

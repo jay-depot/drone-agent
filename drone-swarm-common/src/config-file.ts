@@ -9,6 +9,18 @@ export type SessionEndTrigger =
   | { type: 'spawn'; persona: string; beaconId?: string };
 
 /**
+ * Beacon spawn working-directory roots. `paths` are literal absolute paths
+ * and/or `*` glob entries (globs expand to concrete immediate-child dirs at
+ * load and on periodic re-scan). `default` must be one of the expanded roots;
+ * it is validated at load and falls back to the first expanded root with a
+ * warning if not present.
+ */
+export interface SpawnRootsConfig {
+  paths: string[];
+  default: string;
+}
+
+/**
  * Shape of a JSON config file accepted by drone-beacon and drone-coordinator
  * via `--config-file`. Keys are optional so partial files merge over defaults;
  * unknown top-level keys are rejected to catch typos early.
@@ -22,6 +34,7 @@ export interface ServerConfigFile {
   useHttps?: boolean;
   autoApproveBeacons?: boolean;
   sessionEnd?: SessionEndTrigger;
+  spawnRoots?: SpawnRootsConfig;
   [key: string]: unknown;
 }
 
@@ -34,6 +47,7 @@ const ALLOWED_KEYS: ReadonlySet<string> = new Set([
   'useHttps',
   'autoApproveBeacons',
   'sessionEnd',
+  'spawnRoots',
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -87,6 +101,37 @@ function validateSessionEnd(
   return undefined;
 }
 
+function validateSpawnRoots(
+  spawnRoots: unknown,
+  errors: string[]
+): SpawnRootsConfig | undefined {
+  if (!isPlainObject(spawnRoots)) {
+    errors.push('"spawnRoots" must be an object');
+    return undefined;
+  }
+  if (
+    !Array.isArray(spawnRoots.paths) ||
+    spawnRoots.paths.length === 0 ||
+    !spawnRoots.paths.every(p => typeof p === 'string' && p.trim().length > 0)
+  ) {
+    errors.push(
+      '"spawnRoots.paths" must be a non-empty array of non-empty strings'
+    );
+  }
+  if (typeof spawnRoots.default !== 'string' || !spawnRoots.default.trim()) {
+    errors.push('"spawnRoots.default" must be a non-empty string');
+  }
+  for (const key of Object.keys(spawnRoots)) {
+    if (key !== 'paths' && key !== 'default') {
+      errors.push(`unknown key "spawnRoots.${key}"`);
+    }
+  }
+  return {
+    paths: (spawnRoots.paths as string[]) ?? [],
+    default: (spawnRoots.default as string) ?? '',
+  };
+}
+
 /**
  * Validate a parsed config file object, returning a list of error strings
  * (empty when valid).
@@ -125,6 +170,9 @@ export function validateConfigFile(value: unknown): string[] {
   }
   if (value.sessionEnd !== undefined) {
     validateSessionEnd(value.sessionEnd, errors);
+  }
+  if (value.spawnRoots !== undefined) {
+    validateSpawnRoots(value.spawnRoots, errors);
   }
   return errors;
 }

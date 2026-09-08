@@ -38,7 +38,9 @@ export function initDatabase(dataPath: string): Database.Database {
       host TEXT NOT NULL,
       port INTEGER NOT NULL,
       connectedAt INTEGER NOT NULL,
-      lastHeartbeat INTEGER NOT NULL
+      lastHeartbeat INTEGER NOT NULL,
+      spawn_roots TEXT,
+      default_spawn_root TEXT
     );
 
     CREATE TABLE IF NOT EXISTS beacon_sessions (
@@ -199,6 +201,17 @@ export function initDatabase(dataPath: string): Database.Database {
   }
   if (beaconTrustCols.some(c => c.name === 'approval_token')) {
     db.exec('ALTER TABLE beacon_trust DROP COLUMN approval_token');
+  }
+
+  // Idempotent migration: add spawn_roots + default_spawn_root to beacons.
+  const beaconCols = db.prepare('PRAGMA table_info(beacons)').all() as Array<{
+    name: string;
+  }>;
+  if (!beaconCols.some(c => c.name === 'spawn_roots')) {
+    db.exec('ALTER TABLE beacons ADD COLUMN spawn_roots TEXT');
+  }
+  if (!beaconCols.some(c => c.name === 'default_spawn_root')) {
+    db.exec('ALTER TABLE beacons ADD COLUMN default_spawn_root TEXT');
   }
 
   // Seed built-in tool definitions

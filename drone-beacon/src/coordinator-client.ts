@@ -13,6 +13,7 @@ import type { BeaconIdentity } from './identity.js';
 import type { DroneSwarmFragment } from 'drone-core';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
 import { enqueueOutbox } from './db/index.js';
+import { getDefaultSpawnRoot, getSpawnRoots } from './spawn-roots.js';
 
 type SendMode = 'direct' | 'outbox';
 
@@ -400,6 +401,8 @@ export function createCoordinatorClient(
           port: config.port,
           publicKey: identity.publicKey,
           tlsFingerprint,
+          spawnRoots: getSpawnRoots(),
+          defaultSpawnRoot: getDefaultSpawnRoot(),
         }),
       });
 
