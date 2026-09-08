@@ -14,6 +14,29 @@ import {
   createFormattingTool,
 } from './tools/index.js';
 
+const FILE_PATH_TOOLS = new Set(['read', 'write', 'apply_diff']);
+
+/**
+ * Extract the file path a file-plugin tool call operated on, if any. Only
+ * the path-bearing tools matter for LSP warm-up; `read`/`write`/`apply_diff`
+ * share the `path` input field. Accepts both the canonical form the
+ * conversation loop reports (`file__read`) and the bare form the `/tool`
+ * slash command passes through (`read`).
+ */
+export function filePathFromToolCall(
+  name: string,
+  args: Record<string, unknown>
+): string | undefined {
+  const bare = name.startsWith('file__') ? name.slice('file__'.length) : name;
+  if (!FILE_PATH_TOOLS.has(bare)) {
+    return undefined;
+  }
+  const filePath = args.path;
+  return typeof filePath === 'string' && filePath.trim().length > 0
+    ? filePath
+    : undefined;
+}
+
 export const lspPlugin: DronePlugin = {
   metadata: {
     id: 'lsp',
@@ -133,11 +156,32 @@ filter.`,
       await server.refreshIfNeeded();
     });
 
-    registration.hooks.onAfterToolCall(async () => {
+    registration.hooks.onAfterToolCall(async payload => {
       if (!lspConfig.enabled) {
         return;
       }
       server.markDirty();
+
+      // Warm ambient servers when file operations touch files they could
+      // serve, so passive diagnostics are ready before any LSP tool asks.
+      // Fire-and-forget: startup latency must never block the tool round,
+      // and the manager's start dedup collapses concurrent attempts.
+      if (!payload) {
+        return;
+      }
+      for (const call of payload.calls) {
+        const filePath = filePathFromToolCall(call.name, call.arguments);
+        if (!filePath) {
+          continue;
+        }
+        const resolved = server.resolveTargetFilePath(filePath);
+        if (server.findRuntimeForFile(resolved)) {
+          continue;
+        }
+        void server.startServerForFile(resolved).catch(() => {
+          // Failures are logged and recorded as server state by the manager.
+        });
+      }
     });
 
     registration.hooks.onShutdown(async () => {

@@ -313,12 +313,7 @@ export function createCodeActionTool(
           .filter(d => d.filePath === filePath);
       }
 
-      const runtime = server.findRuntimeForFile(targetFilePath);
-      if (!runtime) {
-        throw new Error(
-          `No connected LSP server is available for ${targetFilePath}.`
-        );
-      }
+      const runtime = await server.requireRuntimeForFile(targetFilePath);
       const document = await server.ensureDocumentLoaded(
         runtime,
         targetFilePath
