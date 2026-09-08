@@ -43,6 +43,7 @@ async function createTestServerManager(workspaceRoot: string) {
       requestTimeoutMs: 5000,
       preferExternal: false,
       autoInstall: false,
+      preinstall: false,
       servers: {},
     },
     logger: silentLogger(),
@@ -70,6 +71,9 @@ function createMockServer() {
     getServerStates: () => [],
     renderDiagnosticsPrompt: () => false,
     findRuntimeForFile: () => undefined,
+    requireRuntimeForFile: async () => {
+      throw new Error('No connected LSP server is available for x.ts.');
+    },
     ensureDocumentLoaded: async () => {
       throw new Error('not connected');
     },
@@ -1025,6 +1029,7 @@ describe('rename/code_action ambiguity returns reference IDs', () => {
         getServerStates: () => [],
         renderDiagnosticsPrompt: () => false,
         findRuntimeForFile: () => runtime,
+        requireRuntimeForFile: async () => runtime,
         ensureDocumentLoaded: async (_r: unknown, filePath: string) => {
           loadedFiles.push(filePath);
           return {
@@ -1100,6 +1105,7 @@ describe('rename/code_action ambiguity returns reference IDs', () => {
         getServerStates: () => [],
         renderDiagnosticsPrompt: () => false,
         findRuntimeForFile: () => runtime,
+        requireRuntimeForFile: async () => runtime,
         ensureDocumentLoaded: async () => ({
           uri: `file://${refFilePath}`,
           languageId: 'typescript',
@@ -1177,6 +1183,9 @@ describe('rename/code_action ambiguity returns reference IDs', () => {
         getServerStates: () => [],
         renderDiagnosticsPrompt: () => false,
         findRuntimeForFile: () => undefined,
+        requireRuntimeForFile: async () => {
+          throw new Error('No connected LSP server is available for x.ts.');
+        },
         ensureDocumentLoaded: async () => {
           throw new Error('not connected');
         },
@@ -1239,6 +1248,9 @@ describe('rename/code_action ambiguity returns reference IDs', () => {
         getServerStates: () => [],
         renderDiagnosticsPrompt: () => false,
         findRuntimeForFile: () => undefined,
+        requireRuntimeForFile: async () => {
+          throw new Error('No connected LSP server is available for x.ts.');
+        },
         ensureDocumentLoaded: async () => {
           throw new Error('not connected');
         },
@@ -1506,6 +1518,7 @@ describe('code_action query.range is 1-based', () => {
         getServerStates: () => [],
         renderDiagnosticsPrompt: () => false,
         findRuntimeForFile: () => runtime,
+        requireRuntimeForFile: async () => runtime,
         ensureDocumentLoaded: async () => ({
           uri: `file://${filePath}`,
           languageId: 'typescript',
@@ -1599,6 +1612,7 @@ describe('buildAutoExpansion dedups by file (one snippet per file)', () => {
         getServerStates: () => [],
         renderDiagnosticsPrompt: () => false,
         findRuntimeForFile: () => runtime,
+        requireRuntimeForFile: async () => runtime,
         ensureDocumentLoaded: async () => ({
           uri: `file://${filePath}`,
           languageId: 'typescript',
@@ -1696,6 +1710,7 @@ describe('call_hierarchy cross-checks empty results against references', () => {
       getServerStates: () => [],
       renderDiagnosticsPrompt: () => false,
       findRuntimeForFile: () => runtime,
+      requireRuntimeForFile: async () => runtime,
       ensureDocumentLoaded: async () => ({
         uri: 'file:///tmp/target.ts',
         languageId: 'typescript',
@@ -1832,6 +1847,7 @@ describe('symbols workspace search is exact-first and deduplicated', () => {
       ],
       renderDiagnosticsPrompt: () => false,
       findRuntimeForFile: () => runtime,
+      requireRuntimeForFile: async () => runtime,
       ensureDocumentLoaded: async () => {
         throw new Error('not connected');
       },

@@ -765,7 +765,12 @@ export function createConversationService({
           }
 
           try {
-            await engine.runHooks('onAfterToolCall');
+            await engine.runHooks('onAfterToolCall', {
+              calls: toolCalls.map(toolCall => ({
+                name: toolCall.name,
+                arguments: toolCall.arguments,
+              })),
+            });
           } catch (hookError) {
             const msg =
               hookError instanceof Error

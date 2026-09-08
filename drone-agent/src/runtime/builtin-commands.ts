@@ -249,7 +249,9 @@ const toolCommand: DroneSlashCommand = {
       await ctx.engine.runHooks('onBeforePrompt');
       const result = await ctx.engine.executeTool(toolName, parsed);
       ctx.logger.info(toToolResultContent(result));
-      await ctx.engine.runHooks('onAfterToolCall');
+      await ctx.engine.runHooks('onAfterToolCall', {
+        calls: [{ name: toolName, arguments: parsed }],
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       ctx.logger.error(`Error: ${msg}`);
@@ -276,7 +278,11 @@ const execCommand: DroneSlashCommand = {
         cwd: process.cwd(),
       });
       ctx.logger.info(toToolResultContent(result));
-      await ctx.engine.runHooks('onAfterToolCall');
+      await ctx.engine.runHooks('onAfterToolCall', {
+        calls: [
+          { name: 'exec__run', arguments: { command, cwd: process.cwd() } },
+        ],
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       ctx.logger.error(`Error: ${msg}`);

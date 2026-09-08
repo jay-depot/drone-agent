@@ -3,6 +3,7 @@ import {
   createDebugFlagRegistry,
   createRuntimeFlagRegistry,
   type DebugFlagRegistry,
+  type DroneAfterToolCallPayload,
   type DroneChatMessage,
   getCanonicalToolName,
   type RuntimeFlagRegistry,
@@ -48,7 +49,9 @@ export type DronePluginStatus = {
 
 export type StandardHookName = DroneStandardHookName;
 
-type HookBuckets = Record<StandardHookName, Array<() => Promise<void>>>;
+type HookCallback = (payload?: DroneAfterToolCallPayload) => Promise<void>;
+
+type HookBuckets = Record<StandardHookName, Array<HookCallback>>;
 
 export type DronePluginEngine = {
   initialize: () => Promise<RegisteredPluginState[]>;
@@ -73,7 +76,13 @@ export type DronePluginEngine = {
    * (built-in or previously added). Returns `true` on success.
    */
   addExternalPlugin: (plugin: DronePlugin) => Promise<boolean>;
-  runHooks: (hookName: StandardHookName) => Promise<void>;
+  runHooks: {
+    (
+      hookName: 'onAfterToolCall',
+      payload: DroneAfterToolCallPayload
+    ): Promise<void>;
+    (hookName: StandardHookName): Promise<void>;
+  };
   runSessionSafetyTrimWillRunHooks: (
     payload: DroneSessionSafetyTrimPayload
   ) => Promise<void>;
@@ -891,10 +900,13 @@ export function createDronePluginEngine({
     },
     enablePlugin: doEnablePlugin,
     addExternalPlugin: doAddExternalPlugin,
-    runHooks: async hookName => {
+    runHooks: async (
+      hookName: StandardHookName,
+      payload?: DroneAfterToolCallPayload
+    ) => {
       for (const callback of hookBuckets[hookName]) {
         try {
-          await callback();
+          await callback(payload);
         } catch (hookError) {
           // A failure in onBeforePrompt must not abort the conversation
           // turn or terminate the loop — log it and keep going so the

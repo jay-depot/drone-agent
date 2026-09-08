@@ -171,12 +171,7 @@ export function createFindReferencesTool(
           ? input.includeDeclaration
           : true;
 
-      const runtime = server.findRuntimeForFile(filePath);
-      if (!runtime) {
-        throw new Error(
-          `No connected LSP server is available for ${filePath}.`
-        );
-      }
+      const runtime = await server.requireRuntimeForFile(filePath);
 
       const document = await server.ensureDocumentLoaded(runtime, filePath);
       const references = await runtime.client.request<ReferencesResponse>(

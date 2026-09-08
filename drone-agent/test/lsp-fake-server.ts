@@ -1,104 +1,80 @@
 /**
- * Tiny in-process LSP test server. Spawns a Node subprocess that reads
- * framed JSON-RPC messages from stdin, dispatches to a route table, and
- * writes responses to stdout. Tests can swap the response per-method,
- * track incoming requests, and assert on the wire format the LSP plugin
- * produces.
+ * Tiny in-process LSP test server harness. Spawns a Node subprocess that
+ * reads framed JSON-RPC messages from stdin, dispatches to a scenario file,
+ * and writes responses to stdout.
  *
  * Usage:
- *   const server = await startFakeLspServer();
- *   server.onRequest('textDocument/hover', () => ({ contents: 'hi' }));
- *   await server.notifyInitialized();
- *   const response = await server.lastRequestBody('textDocument/hover');
+ *   const server = await startFakeLspServer({ exitAfterInitialize: true });
+ *   server.child; // ChildProcess to feed to createChildTransport
+ *   await server.waitForReady();
  *   await server.stop();
  */
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-type Handler = (params: unknown) => unknown;
-
 const SERVER_SCRIPT = path.join(__dirname, 'lsp-fake-server.mjs');
+
+export type FakeLspScenario = {
+  respondToInitialize?: boolean;
+  exitAfterInitialize?: boolean;
+  exitOnMethod?: string;
+  hangOnMethod?: string;
+  results?: Record<string, unknown>;
+};
 
 export type FakeLspServer = {
   child: ChildProcessWithoutNullStreams;
-  /** Register or replace a handler for a JSON-RPC method. */
-  onRequest: (method: string, handler: Handler | object) => void;
-  /** Remove a handler; subsequent calls receive an empty result. */
-  offRequest: (method: string) => void;
-  /** Get the most recent request body (params + id + method) for a method. */
-  lastRequestBody: (method: string) => unknown | undefined;
-  /** Wait for the server to log that it received an `initialized` notification. */
-  waitForInitialized: () => Promise<void>;
-  /** Stop the server and close the pipes. */
+  scenarioDir: string;
+  waitForReady: () => Promise<void>;
   stop: () => Promise<void>;
-  /** Direct access for low-level assertions (e.g. raw frame inspection). */
-  rawStdout: () => Buffer;
 };
 
-export async function startFakeLspServer(): Promise<FakeLspServer> {
-  const child = spawn(process.execPath, [SERVER_SCRIPT], {
+export async function startFakeLspServer(
+  scenario: FakeLspScenario = {}
+): Promise<FakeLspServer> {
+  const scenarioDir = await mkdtemp(path.join(tmpdir(), 'drone-lsp-fake-'));
+  const scenarioPath = path.join(scenarioDir, 'scenario.json');
+  await writeFile(scenarioPath, JSON.stringify(scenario), 'utf8');
+
+  const child = spawn(process.execPath, [SERVER_SCRIPT, scenarioPath], {
     stdio: ['pipe', 'pipe', 'pipe'],
     env: { ...process.env, NODE_NO_WARNINGS: '1' },
+  }) as ChildProcessWithoutNullStreams;
+
+  let readyResolve: (() => void) | undefined;
+  const readyPromise = new Promise<void>(resolve => {
+    readyResolve = resolve;
   });
 
-  let resolveInitialized: (() => void) | undefined;
-  const initializedPromise = new Promise<void>(resolve => {
-    resolveInitialized = resolve;
-  });
-
-  const handlers = new Map<string, Handler>();
-  const lastBodies = new Map<string, unknown>();
-  let stdoutBuffer = Buffer.alloc(0);
-
-  child.stdout.on('data', chunk => {
-    stdoutBuffer = Buffer.concat([stdoutBuffer, chunk]);
-    // Detect the "READY\n" prelude the script emits after parsing stdin
-    // is set up.
-    if (resolveInitialized && stdoutBuffer.includes(Buffer.from('READY\n'))) {
-      resolveInitialized();
-      resolveInitialized = undefined;
+  // READY arrives on stderr so the JSON-RPC stdout stream stays clean.
+  child.stderr.on('data', chunk => {
+    if (readyResolve && chunk.includes(Buffer.from('READY\n'))) {
+      readyResolve();
+      readyResolve = undefined;
     }
   });
 
-  child.on('error', () => {
-    // Surface errors to callers; the most common failure is the script
-    // path being wrong. Tests should call `.stop()` and check the
-    // recorded frames.
-  });
-
-  // Forward the script's stderr so test failures aren't silent.
   child.stderr.on('data', chunk => {
     process.stderr.write(`[fake-lsp-server] ${chunk.toString('utf8')}`);
   });
 
-  await initializedPromise;
-
   return {
     child,
-    onRequest: (method, handler) => {
-      const wrapped: Handler =
-        typeof handler === 'function' ? (handler as Handler) : () => handler;
-      handlers.set(method, wrapped);
-    },
-    offRequest: method => {
-      handlers.delete(method);
-    },
-    lastRequestBody: method => lastBodies.get(method),
-    waitForInitialized: () => initializedPromise,
-    rawStdout: () => stdoutBuffer,
+    scenarioDir,
+    waitForReady: () => readyPromise,
     stop: async () => {
-      handlers.clear();
-      lastBodies.clear();
       try {
         child.stdin.end();
         child.kill();
       } catch {
-        // ignore
+        // Already dead.
       }
       await new Promise<void>(resolve => {
         const timer = setTimeout(() => resolve(), 200);
@@ -107,13 +83,12 @@ export async function startFakeLspServer(): Promise<FakeLspServer> {
           resolve();
         });
       });
+      await rm(scenarioDir, { recursive: true, force: true });
     },
   };
 }
 
-/**
- * Helpers used by the fake server's child script. Don't call from tests.
- */
+/** Helpers used by the fake server's child script. Don't call from tests. */
 export const __internal = {
   SERVER_SCRIPT,
 };
