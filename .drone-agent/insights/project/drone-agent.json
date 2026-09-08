@@ -438,5 +438,17 @@
   {
     "timestamp": "2026-09-07T22:37:32.235Z",
     "insight": "When a provider's discovery is metadata-poor (e.g. Anthropic's discoverAnthropicModels sets only hasVision/supportsTools, not contextWindow), the bundled model-metadata registry is the right fallback layer — but the canonical context-window values often already exist elsewhere in the codebase (config-types.ts defaults, first-run.tsx wizard). Cross-check those before scraping docs; they're the project's own source of truth and match the live docs. The registry entry should mirror them so declared config, discovery, and bundled metadata all agree."
+  },
+  {
+    "timestamp": "2026-09-08T05:31:29.588Z",
+    "insight": "When extracting closures from a large factory file (drone-agent lsp/server.ts, 1660→977 lines), a hooks/context object is the reliable seam: move the pure logic into a module taking (deps, args), then rebind thin delegations in the factory that close over the original maps/flags. Direct parameter-threading of five dependencies through every call site caused repeated signature churn; the hooks object landed each extraction in one pass. Pair this with Python line-indexed edits (verified with awk NR dumps before deleting) instead of fuzzy apply_diff when the region contains several near-identical blocks — fuzzy matching duplicated a syncServerDocuments block three times before the switch to verified-anchor edits."
+  },
+  {
+    "timestamp": "2026-09-08T05:31:45.906Z",
+    "insight": "A test fake that shares stdout with the code under test must keep its control channel off that stdout: lsp-fake-server.mjs originally emitted a READY barrier on stdout, which corrupts Content-Length JSON-RPC framing when createChildTransport attaches to the same pipe (\"message without Content-Length\"). Move the barrier to stderr. Related: when a manager owns its own spawned child, tests must kill that child (via findRuntimeForFile().childProcess), not the harness's own instance — killing the wrong one makes demand-restart tests fail confusingly because the manager's server is still alive."
+  },
+  {
+    "timestamp": "2026-09-08T05:31:45.909Z",
+    "insight": "When a plan's validation says \"ambient specs lazy-only\", check whether the demand-start path prefers configured servers before known specs. The first implementation dispatched startServerForFile purely by KNOWN_SERVER_SPECS extension match, so a crashed *configured* server (e.g. user-configured toml) restarted as the spec default (taplo) instead of the user's command. Configured-first dispatch (findConfiguredServerForExtension) fixes restart identity. Also: file__write is for full rewrites only — a partial file draft with a placeholder token written to a real source path will ship if not caught (caught by reread here; always reread after write)."
   }
 ]
