@@ -3,6 +3,18 @@ export type CliOptions = {
   once: boolean;
   outputPlain: boolean;
   outputJson: boolean;
+  /** When true, the agent was spawned by a beacon (swarm listen-mode). */
+  swarm: boolean;
+  /** Session id assigned by the beacon spawner (drives swarm registration). */
+  sessionId?: string;
+  /** Beacon host override (falls through to swarm config). */
+  beaconHost?: string;
+  /** Beacon port override (falls through to swarm config). */
+  beaconPort?: number;
+  /** Initial task for a beacon-spawned agent (becomes the first user turn). */
+  task?: string;
+  /** Working directory for a beacon-spawned agent (already set as process cwd). */
+  workingDir?: string;
   modelOverride?: string;
   configDir?: string;
   pluginOverrides: string[];
@@ -83,6 +95,7 @@ function createDefaultCliOptions(): CliOptions {
     once: false,
     outputPlain: false,
     outputJson: false,
+    swarm: false,
     pluginOverrides: [],
     debugSubsystems: [],
   };
@@ -120,6 +133,22 @@ export function parseCliArgs(argv: string[]): CliInvocation {
         );
       }
       options.outputJson = true;
+    } else if (arg === '--swarm') {
+      options.swarm = true;
+    } else if (arg === '--session-id' && i + 1 < argv.length) {
+      options.sessionId = argv[++i];
+    } else if (arg === '--beacon-host' && i + 1 < argv.length) {
+      options.beaconHost = argv[++i];
+    } else if (arg === '--beacon-port' && i + 1 < argv.length) {
+      const parsed = Number(argv[++i]);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        throw new Error(`Invalid --beacon-port value: ${argv[i]}`);
+      }
+      options.beaconPort = parsed;
+    } else if (arg === '--task' && i + 1 < argv.length) {
+      options.task = argv[++i];
+    } else if (arg === '--working-dir' && i + 1 < argv.length) {
+      options.workingDir = argv[++i];
     } else if (arg === '--model' && i + 1 < argv.length) {
       options.modelOverride = argv[++i];
     } else if (arg === '--config-dir' && i + 1 < argv.length) {
@@ -231,6 +260,7 @@ export function parseCliArgs(argv: string[]): CliInvocation {
 
   options.subagentId ??= process.env.DRONE_SUBAGENT_ID;
   options.persona ??= process.env.DRONE_PERSONA;
+  options.sessionId ??= process.env.DRONE_SESSION_ID;
 
   return { kind: 'default', options };
 }

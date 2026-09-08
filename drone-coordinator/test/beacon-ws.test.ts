@@ -26,7 +26,12 @@ function makeFakeWs() {
     readyState: 1,
     handlers,
   };
-  return Object.assign(ws as unknown as WebSocket, { send, ping, terminate });
+  return Object.assign(ws as unknown as WebSocket, {
+    send,
+    ping,
+    terminate,
+    handlers,
+  });
 }
 
 beforeEach(() => {

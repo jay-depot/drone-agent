@@ -162,6 +162,7 @@ export function createSwarmPlugin(
         debugFlags?: DebugFlagRegistry;
         emitEvent?: (event: DroneConversationEvent) => void;
         isSubagent?: boolean;
+        swarmSpawned?: boolean;
         subagentId?: string | null;
         persona?: string | null;
       }>('runtime');
@@ -259,7 +260,12 @@ export function createSwarmPlugin(
       }
 
       // ── Lifecycle hooks ────────────────────────────────────────────────
-      registerHooks(ctx, configCap, beaconConfigInjector);
+      registerHooks(
+        ctx,
+        configCap,
+        beaconConfigInjector,
+        runtimeInfo?.swarmSpawned === true
+      );
 
       // ── Coordinator trust (TOFU) ────────────────────────────────────────
       registration.registerSlashCommand(createTrustCoordinatorCommand(baseUrl));

@@ -29,6 +29,7 @@ import {
   runInteractiveLoop,
   runJsonMode,
   runJsonListenMode,
+  runSwarmListenMode,
   getLlmCapability,
 } from './interactive.js';
 import { runMigrate } from './migrate.js';
@@ -111,6 +112,11 @@ async function main(): Promise<void> {
     sessionManager,
     ...createLlmGetters(engineRef),
     resolveContextWindow: () => budgetService.resolveContextWindow(),
+    swarmConfig: {
+      sessionId: invocation.options.sessionId,
+      beaconHost: invocation.options.beaconHost,
+      beaconPort: invocation.options.beaconPort,
+    },
     buildFragmentMessages: async () => {
       const engine = getEngine();
       const fragments = await engine.renderPromptFragments();
@@ -165,12 +171,25 @@ async function main(): Promise<void> {
       ];
     }
   }
+  // --swarm: a beacon-spawned agent. Enable the swarm plugin (it is
+  // defaultEnabled:false) so the agent connects to its beacon and runs in
+  // listen-mode. The plugin is added to enabledPlugins regardless of whether
+  // the user configured a set, mirroring the --plugin override behavior.
+  if (invocation.options.swarm) {
+    if (!resolvedConfig.config.enabledPlugins.includes('swarm')) {
+      resolvedConfig.config.enabledPlugins.push('swarm');
+    }
+  }
   const debugFlags = createDebugFlagRegistry(
     invocation.options.debugSubsystems
   );
   // The conversation is created after the engine, so expose a mutable ref that
   // the engine's `_runtime` capability closure reads at call time.
   const resetStuckDetectorsRef: { current?: () => void } = {};
+  const submitUserMessageRef: {
+    current?: (content: string) => Promise<string>;
+  } = {};
+  const cancelCurrentRequestRef: { current?: () => void } = {};
   const engine = createDronePluginEngine({
     plugins: allPlugins,
     config: resolvedConfig.config,
@@ -180,9 +199,13 @@ async function main(): Promise<void> {
     runtimeOptions: {
       subagentId: invocation.options.subagentId,
       persona: invocation.options.persona,
+      swarmSpawned: invocation.options.swarm,
     },
     buildSystemMessages: () => budgetService.buildSystemMessages(),
     resetStuckDetectors: () => resetStuckDetectorsRef.current?.(),
+    submitUserMessage: content =>
+      submitUserMessageRef.current?.(content) ?? Promise.resolve(''),
+    cancelCurrentRequest: () => cancelCurrentRequestRef.current?.(),
   });
   engineRef.current = engine;
 
@@ -316,6 +339,8 @@ async function main(): Promise<void> {
     },
   });
   resetStuckDetectorsRef.current = conversation.resetStuckDetectors;
+  submitUserMessageRef.current = conversation.submitUserMessage;
+  cancelCurrentRequestRef.current = conversation.cancelCurrentRequest;
   const registeredPlugins = await engine.initialize();
 
   // ── Elicitation wiring ──────────────────────────────────────────────
@@ -489,7 +514,11 @@ async function main(): Promise<void> {
       await engine.runHooks('onAfterToolCall');
     }
   } else if (invocation.kind === 'default' && !invocation.options.once) {
-    if (invocation.options.outputJson) {
+    if (invocation.options.swarm) {
+      // Beacon-spawned interactive agent: source turns from the swarm
+      // WebSocket (via _runtime.submitUserMessage) instead of stdin.
+      await runSwarmListenMode(engine);
+    } else if (invocation.options.outputJson) {
       // JSON listen mode: read chat events from stdin, emit NDJSON events
       await runJsonListenMode(conversation, engine);
     } else if (invocation.options.outputPlain) {

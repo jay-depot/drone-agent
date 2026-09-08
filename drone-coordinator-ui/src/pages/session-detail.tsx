@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
-import type { SwarmEvent, WsEventMessage } from '@/lib/types';
+import type { SwarmEvent, SwarmSession, WsEventMessage } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,59 @@ export default function SessionDetailPage() {
   const [events, setEvents] = useState<SwarmEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const eventsEndRef = useRef<HTMLDivElement>(null);
+  const [session, setSession] = useState<SwarmSession | null>(null);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  // Fetch session metadata to detect live + interactive (enables chat input).
+  useEffect(() => {
+    if (!sessionId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch(`/api/sessions/${sessionId}`);
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { session: SwarmSession };
+        setSession(data.session);
+      } catch {
+        // Session metadata is best-effort; the page still renders events.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, authFetch]);
+
+  const liveInteractive =
+    session !== null &&
+    session.status === 'active' &&
+    session.interactive === true;
+
+  const sendMessage = async (steer: boolean) => {
+    if (!sessionId || !input.trim()) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      const res = await authFetch(`/api/sessions/${sessionId}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: input.trim(), steer }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setSendError(body?.error ?? 'Failed to send message');
+        return;
+      }
+      setInput('');
+    } catch {
+      setSendError('Failed to send message');
+    } finally {
+      setSending(false);
+    }
+  };
 
   // Fetch events via REST
   useEffect(() => {
@@ -117,9 +170,15 @@ export default function SessionDetailPage() {
             {sessionId}
           </p>
         </div>
-        <Badge variant="default" className="text-xs ml-auto">
-          ● Live
-        </Badge>
+        {liveInteractive ? (
+          <Badge variant="default" className="text-xs ml-auto">
+            ● Live — Interactive
+          </Badge>
+        ) : session ? (
+          <Badge variant="outline" className="text-xs ml-auto">
+            {session.status}
+          </Badge>
+        ) : null}
       </div>
 
       <Card className="mb-6">
@@ -207,6 +266,48 @@ export default function SessionDetailPage() {
             );
           })}
           <div ref={eventsEndRef} />
+        </div>
+      )}
+
+      {sendError && (
+        <div className="mt-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+          {sendError}
+        </div>
+      )}
+
+      {liveInteractive && (
+        <div className="mt-4 flex items-start gap-2">
+          <textarea
+            className="flex-1 min-h-[60px] rounded-md border bg-background px-3 py-2 text-sm resize-y"
+            placeholder="Send a message to this agent…"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                void sendMessage(false);
+              }
+            }}
+            disabled={sending}
+          />
+          <div className="flex flex-col gap-2">
+            <Button
+              size="sm"
+              disabled={!input.trim() || sending}
+              onClick={() => void sendMessage(false)}
+            >
+              {sending ? 'Sending…' : 'Send'}
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={!input.trim() || sending}
+              onClick={() => void sendMessage(true)}
+              title="Stop the current turn and send this message immediately"
+            >
+              Stop & Send
+            </Button>
+          </div>
         </div>
       )}
     </div>

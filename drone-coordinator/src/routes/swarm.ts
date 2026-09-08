@@ -9,26 +9,94 @@ import {
 } from '../storage.js';
 import { buildSessionTranscript } from '../transcript.js';
 import * as db from '../db/index.js';
+import { sendBeaconCommand } from '../beacon-ws.js';
 
 export default function swarmRoutes(app: FastifyInstance) {
   // === Swarm Session Routes ===
 
-  app.post<{ Body: { id: string; personaId?: string; beaconId: string } }>(
-    '/sync/sessions/register',
-    async (request, reply) => {
-      const { id, personaId, beaconId } = request.body;
-      if (!id || !beaconId) {
-        return reply.code(400).send({ error: 'id and beaconId are required' });
-      }
-      const session = db.createSwarmSession(id, personaId ?? null, beaconId);
-      publishMutationEvent({
-        sessionId: id,
-        eventType: 'session.created',
-        payload: { sessionId: id, personaId, beaconId, status: 'active' },
-      });
-      return reply.code(201).send(session);
+  // Inject a synthetic user turn into a live interactive session. The
+  // coordinator looks up the session's beacon and pushes a deliverUserMessage
+  // command down the reverse channel; the beacon forwards it to the agent as
+  // a `userMessage` WS message, which the agent's swarm plugin turns into a
+  // real conversation turn.
+  app.post<{
+    Params: { id: string };
+    Body: { content: string; steer?: boolean };
+  }>('/sessions/:id/message', async (request, reply) => {
+    const { content, steer } = request.body;
+    if (typeof content !== 'string' || !content.trim()) {
+      return reply.code(400).send({ error: 'content is required' });
     }
-  );
+    const session = db.getSwarmSession(request.params.id);
+    if (!session) {
+      return reply.code(404).send({ error: 'Session not found' });
+    }
+    const beacon = db.getBeacon(session.beaconId);
+    if (!beacon) {
+      return reply
+        .code(503)
+        .send({ error: 'Target beacon not found', code: 'BEACON_NOT_FOUND' });
+    }
+    try {
+      const res = await sendBeaconCommand(
+        session.beaconId,
+        'deliverUserMessage',
+        {
+          toAgentId: session.id,
+          content,
+          steer: steer === true,
+        }
+      );
+      if (!res.ok) {
+        return reply.code(502).send({
+          error: 'Failed to deliver message to target beacon',
+          details:
+            res.body && typeof res.body === 'object' && 'error' in res.body
+              ? (res.body as { error: string }).error
+              : 'Unknown beacon error',
+        });
+      }
+      return { success: true, delivered: true };
+    } catch (err) {
+      return reply.code(503).send({
+        error: 'Target beacon unavailable',
+        details: err instanceof Error ? err.message : 'Unknown error',
+        code: 'BEACON_UNAVAILABLE',
+      });
+    }
+  });
+
+  app.post<{
+    Body: {
+      id: string;
+      personaId?: string;
+      beaconId: string;
+      interactive?: boolean;
+    };
+  }>('/sync/sessions/register', async (request, reply) => {
+    const { id, personaId, beaconId, interactive } = request.body;
+    if (!id || !beaconId) {
+      return reply.code(400).send({ error: 'id and beaconId are required' });
+    }
+    const session = db.createSwarmSession(
+      id,
+      personaId ?? null,
+      beaconId,
+      interactive === true
+    );
+    publishMutationEvent({
+      sessionId: id,
+      eventType: 'session.created',
+      payload: {
+        sessionId: id,
+        personaId,
+        beaconId,
+        status: 'active',
+        interactive: interactive === true,
+      },
+    });
+    return reply.code(201).send(session);
+  });
   app.post<{
     Querystring: { thresholdMs?: string };
   }>('/sessions/mark-stale', async (request, reply) => {

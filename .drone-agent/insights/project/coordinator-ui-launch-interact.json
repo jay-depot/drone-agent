@@ -1,0 +1,14 @@
+[
+  {
+    "timestamp": "2026-09-08T02:06:55.989Z",
+    "insight": "When a plan references CLI flags passed by an external spawner, enumerate the spawner actual argv (read the spawner source) before designing the parser fix. The plan for coordinator-ui-launch-interact listed only the flags it knew about, but drone-swarm-common spawner also passes --task and --working-dir, which would have thrown the same Unknown option error and still blocked boot. Reading the caller code catches the full flag set in one pass."
+  },
+  {
+    "timestamp": "2026-09-08T02:06:55.989Z",
+    "insight": "The self-improvement__insight tool in this environment rejects record calls with Invalid targetType undefined even when following the documented schema; workaround is writing the insight JSON directly to .drone-agent/insights/<targetType>/<targetId>.json. Log the tool breakage itself so future sessions do not waste retries."
+  },
+  {
+    "timestamp": "2026-09-08T02:06:55.989Z",
+    "insight": "ConversationService is a large object literal returned from createConversationService; adding a method that calls another method of the same service requires capturing the literal in a named local (const service: ConversationService = {...}; return service;) because there is no self-reference otherwise. Same pattern applies to any factory returning an object literal with mutually-referencing methods."
+  }
+]

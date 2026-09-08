@@ -45,6 +45,25 @@ export function connectWebSocket(ctx: SwarmContext): void {
           registration.logger.info(
             `Received message from ${wsMsg.payload.fromAgentId}`
           );
+        } else if (wsMsg.type === 'userMessage') {
+          // Interactive listen-mode: inject the message as a synthetic user
+          // turn so the agent's LLM responds immediately (like a chat).
+          const content = wsMsg.payload?.content;
+          if (typeof content === 'string' && content.trim()) {
+            const runtime = registration.request<{
+              submitUserMessage?: (content: string) => Promise<string>;
+              cancelCurrentRequest?: () => void;
+            }>('runtime');
+            if (wsMsg.payload?.steer === true) {
+              // "Stop & Send": soft-cancel the current turn, then submit.
+              runtime?.cancelCurrentRequest?.();
+            }
+            void runtime?.submitUserMessage?.(content).catch(err => {
+              registration.logger.error(
+                `Failed to submit user message: ${err}`
+              );
+            });
+          }
         } else if (wsMsg.type === 'connected') {
           registration.logger.info('WebSocket handshake complete');
         } else if (wsMsg.type === 'ack') {

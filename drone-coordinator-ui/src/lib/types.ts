@@ -11,6 +11,8 @@ export interface Beacon {
   trustStatus?: 'pending' | 'approved' | 'rejected' | null;
   publicKey?: string | null;
   verificationCode?: string | null;
+  spawnRoots?: string[];
+  defaultSpawnRoot?: string;
 }
 
 export interface BeaconDetail extends Beacon {
@@ -49,6 +51,7 @@ export interface SwarmSession {
   status: string;
   createdAt: number;
   updatedAt: number;
+  interactive?: boolean;
 }
 
 export interface SwarmEvent {

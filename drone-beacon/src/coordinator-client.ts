@@ -107,7 +107,8 @@ export interface CoordinatorClient {
   // Swarm session storage
   registerSwarmSession(
     sessionId: string,
-    personaId: string | null
+    personaId: string | null,
+    interactive?: boolean
   ): Promise<void>;
   updateSwarmSessionPersona(
     sessionId: string,
@@ -873,12 +874,14 @@ export function createCoordinatorClient(
     // Swarm session storage
     async registerSwarmSession(
       sessionId: string,
-      personaId: string | null
+      personaId: string | null,
+      interactive?: boolean
     ): Promise<void> {
       const body = {
         id: sessionId,
         personaId: personaId ?? undefined,
         beaconId: config.beaconId,
+        interactive,
       };
       await sendFireAndForget(
         'registerSwarmSession',

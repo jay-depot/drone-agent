@@ -214,6 +214,16 @@ export function initDatabase(dataPath: string): Database.Database {
     db.exec('ALTER TABLE beacons ADD COLUMN default_spawn_root TEXT');
   }
 
+  // Idempotent migration: add interactive flag to swarm_sessions.
+  const swarmSessionCols = db
+    .prepare('PRAGMA table_info(swarm_sessions)')
+    .all() as Array<{ name: string }>;
+  if (!swarmSessionCols.some(c => c.name === 'interactive')) {
+    db.exec(
+      'ALTER TABLE swarm_sessions ADD COLUMN interactive INTEGER NOT NULL DEFAULT 0'
+    );
+  }
+
   // Seed built-in tool definitions
   seedBuiltinToolDefinitions();
 

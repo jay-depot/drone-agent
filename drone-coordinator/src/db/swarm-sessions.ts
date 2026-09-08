@@ -8,6 +8,7 @@ export interface SwarmSession {
   createdAt: number;
   updatedAt: number;
   status: string;
+  interactive: boolean;
 }
 
 export interface SwarmEvent {
@@ -23,7 +24,8 @@ export interface SwarmEvent {
 export function createSwarmSession(
   id: string,
   personaId: string | null,
-  beaconId: string
+  beaconId: string,
+  interactive = false
 ): SwarmSession {
   const now = Date.now();
   const session: SwarmSession = {
@@ -33,11 +35,12 @@ export function createSwarmSession(
     createdAt: now,
     updatedAt: now,
     status: 'active',
+    interactive,
   };
 
   const stmt = getDatabase().prepare(`
-    INSERT INTO swarm_sessions (id, persona_id, beacon_id, createdAt, updatedAt, status)
-    VALUES (@id, @personaId, @beaconId, @createdAt, @updatedAt, @status)
+    INSERT INTO swarm_sessions (id, persona_id, beacon_id, createdAt, updatedAt, status, interactive)
+    VALUES (@id, @personaId, @beaconId, @createdAt, @updatedAt, @status, @interactive)
   `);
 
   stmt.run({
@@ -47,6 +50,7 @@ export function createSwarmSession(
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     status: session.status,
+    interactive: session.interactive ? 1 : 0,
   });
 
   logger.info(`Created swarm session: ${session.id}`);
@@ -65,6 +69,7 @@ export function getSwarmSession(id: string): SwarmSession | undefined {
         createdAt: number;
         updatedAt: number;
         status: string;
+        interactive: number;
       }
     | undefined;
   if (!row) return undefined;
@@ -75,6 +80,7 @@ export function getSwarmSession(id: string): SwarmSession | undefined {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     status: row.status,
+    interactive: row.interactive === 1,
   };
 }
 
@@ -120,6 +126,7 @@ export function listSwarmSessions(options?: {
     createdAt: number;
     updatedAt: number;
     status: string;
+    interactive: number;
   }>;
   return rows.map(row => ({
     id: row.id,
@@ -128,6 +135,7 @@ export function listSwarmSessions(options?: {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     status: row.status,
+    interactive: row.interactive === 1,
   }));
 }
 export function markStaleSessions(thresholdMs: number): SwarmSession[] {
@@ -249,6 +257,7 @@ export function getStaleSessions(thresholdMs: number): SwarmSession[] {
     createdAt: number;
     updatedAt: number;
     status: string;
+    interactive: number;
   }>;
   return rows.map(row => ({
     id: row.id,
@@ -257,6 +266,7 @@ export function getStaleSessions(thresholdMs: number): SwarmSession[] {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     status: row.status,
+    interactive: row.interactive === 1,
   }));
 }
 
