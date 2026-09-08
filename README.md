@@ -30,6 +30,28 @@ The `drone` agent platform aims to be "the Arch of AI agents": minimalist out of
 
 The `drone-agent`, `drone-beacon`, and `drone-coordinator` are all implemented and functional. The swarm mode is operational with agents connecting to beacons, and beacons coordinating through the coordinator. Cross-beacon messaging, shared session storage, swarm-wide insights and principles, and a swarm knowledge base (LLM Wiki) are all implemented. The gateway layer is in testing and the web UI is functional.
 
+## Installation
+
+Currently, installation is a little annoying, by design. The drone-agent tools are absolutely ready for use by anyone interested in helping develop it, but it's not quite there for public consumption yet. If you're interested in using it, you will need the following:
+
+- node.js version 24.x or higher
+- ollama (Even if you use another AI provider, we use this for running embedding models for semantic search locally)
+- nomic-embed-text: `$ ollama pull nomic-embed-text:v1.5`
+- tailscale or a similar service is recommended
+- pnpm 11+
+
+### Installation steps:
+Before you start: Decide if you want to set up `swarm`, and if so, choose a coordinator host. If you only intend to run on a single machine, ever, but you want access to the swarm memory RAG on that one machine, you can run the coordinator locally. Otherwise, I recommend a VPS or a Raspberry Pi and a Tailscale network.
+
+1. `$ git clone https://github.com/jay-depot/drone-agent.git`
+2. `$ cd drone-agent`
+3. `pnpm install && pnpm -r run build`
+4. `cd drone-agent && npm link && cd ..` This puts the `drone-agent` binary in your PATH. If all you want is to use it stand-alone, you can stop here
+5. `cd drone-beacon && npm link && cd ..` This adds `drone-beacon` to your PATH. If you want to set up a swarm, you will need to configure this to run on system startup for your OS of choice. For systemd-based Linux distributions, I recommend using a user-scoped systemd unit.
+6. `cd drone-swarm && npm link && cd ..` This adds the `drone-swarm` utility to your PATH. This is optional except on your chosen coordinator host, where it will be used by your memory ingestion pipeline
+7. `cd drone-coordinator && npm link && cd ..` This adds `drone-coordinator` to your PATH. This only needs to be done on your chosen coordinator host, and you will want to configure this to start automatically in the same way you did `drone-beacon`. Important: The coordinator needs a running beacon on the same host.
+8. Configure everything
+
 ## Design Principles
 
 - Minimalist: The core agent should be as minimal as possible, with most of the functionality provided through plugins. This allows users to have a very lightweight agent if they want, and only add the functionality they need. More importantly, it means we're not opinionated about _how_ basic functionality gets done. `drone-agent` provides a rich set of built-in plugins: MCP client, LSP server connections, file operations, git tools, shell execution, HTTP fetch, text search, project memory, persona management, skills management, session logging, context compaction, TODO list management, subagent spawning, swarm coordination, macros, focus management, config management, self-improvement (insights/principles), prompt file injection, startup banner, and utility tools. Almost none of it is enabled by default though, because `drone-agent` should still work, even if you replace any of these components with one that better aligns with your needs or opinions.
