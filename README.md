@@ -46,11 +46,11 @@ Before you start: Decide if you want to set up `swarm`, and if so, choose a coor
 
 1. `$ git clone https://github.com/jay-depot/drone-agent.git`
 2. `$ cd drone-agent`
-3. `pnpm install && pnpm -r run build`
-4. `cd drone-agent && npm link && cd ..` This puts the `drone-agent` binary in your PATH. If all you want is to use it stand-alone, you can stop here
-5. `cd drone-beacon && npm link && cd ..` This adds `drone-beacon` to your PATH. If you want to set up a swarm, you will need to configure this to run on system startup for your OS of choice. For systemd-based Linux distributions, I recommend using a user-scoped systemd unit.
-6. `cd drone-swarm && npm link && cd ..` This adds the `drone-swarm` utility to your PATH. This is optional except on your chosen coordinator host, where it will be used by your memory ingestion pipeline
-7. `cd drone-coordinator && npm link && cd ..` This adds `drone-coordinator` to your PATH. This only needs to be done on your chosen coordinator host, and you will want to configure this to start automatically in the same way you did `drone-beacon`. Important: The coordinator needs a running beacon on the same host.
+3. `$ pnpm install && pnpm -r run build`
+4. `$ cd drone-agent && npm link && cd ..` This puts the `drone-agent` binary in your PATH. If all you want is to use it stand-alone, you can stop here
+5. `$ cd drone-beacon && npm link && cd ..` This adds `drone-beacon` to your PATH. If you want to set up a swarm, you will need to configure this to run on system startup for your OS of choice. For systemd-based Linux distributions, I recommend using a user-scoped systemd unit.
+6. `$ cd drone-swarm && npm link && cd ..` This adds the `drone-swarm` utility to your PATH. This is optional except on your chosen coordinator host, where it will be used by your memory ingestion pipeline
+7. `$ cd drone-coordinator && npm link && cd ..` This adds `drone-coordinator` to your PATH. This only needs to be done on your chosen coordinator host, and you will want to configure this to start automatically in the same way you did `drone-beacon`. Important: The coordinator needs a running beacon on the same host.
 8. Configure everything (see below)
 
 ### Configuration
