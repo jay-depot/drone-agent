@@ -57,6 +57,30 @@ function safeParse(json: string): unknown {
   }
 }
 
+/** Server-side truncation suffix (chat-feed.ts PREVIEW_CHARS budget). */
+const TRUNCATED_PREVIEW_SUFFIX = /…\[\+(\d+) chars\]$/;
+
+function parseTruncatedPreview(
+  preview: string
+): { visible: string; hiddenChars: number } | null {
+  const match = preview.match(TRUNCATED_PREVIEW_SUFFIX);
+  if (!match) return null;
+  return {
+    visible: preview.slice(0, -match[0].length),
+    hiddenChars: Number(match[1]),
+  };
+}
+
+/** Pull display text out of a raw event payload (content endpoint shape). */
+function extractMessageText(payload: string): string {
+  const parsed = safeParse(payload);
+  if (typeof parsed === 'string') return parsed;
+  const obj = asRecord(parsed);
+  if (typeof obj?.content === 'string') return obj.content;
+  if (typeof obj?.message === 'string') return obj.message;
+  return payload;
+}
+
 export function buildToolRows(items: ChatFeedItem[]): ToolRow[] {
   const rows: ToolRow[] = [];
   const pending: ToolRow[] = [];
@@ -266,6 +290,99 @@ function ToolRowView({
   );
 }
 
+interface MessageBodyProps {
+  item: ChatFeedItem;
+  expanded: boolean;
+  onToggle: () => void;
+  contentUrlBase: string;
+  authFetch: (url: string, init?: RequestInit) => Promise<Response>;
+  markdown: boolean;
+}
+
+function MessageBody({
+  item,
+  expanded,
+  onToggle,
+  contentUrlBase,
+  authFetch,
+  markdown,
+}: MessageBodyProps) {
+  const truncated = parseTruncatedPreview(item.preview);
+  const [fullText, setFullText] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Collapse discards the fetched text. The parent's single-expansion
+  // policy means at most one message ever holds its full body.
+  useEffect(() => {
+    if (!expanded) {
+      setFullText(null);
+      setLoadError(null);
+    }
+  }, [expanded]);
+
+  useEffect(() => {
+    if (!expanded || fullText !== null || loadError !== null) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch(`${contentUrlBase}/${item.id}/content`);
+        if (cancelled) return;
+        if (!res.ok) {
+          setLoadError('Full content unavailable');
+          return;
+        }
+        const data = (await res.json()) as EventContent;
+        if (cancelled) return;
+        setFullText(extractMessageText(data.payload));
+      } catch {
+        if (!cancelled) setLoadError('Full content unavailable');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, contentUrlBase, expanded, fullText, item.id, loadError]);
+
+  if (!truncated) {
+    return <>{markdown ? <Markdown>{item.preview}</Markdown> : item.preview}</>;
+  }
+
+  if (expanded && fullText !== null) {
+    return (
+      <>
+        {markdown ? <Markdown>{fullText}</Markdown> : fullText}
+        <button
+          type="button"
+          onClick={onToggle}
+          className="text-xs opacity-70 underline decoration-dotted hover:opacity-100 cursor-pointer"
+        >
+          show less
+        </button>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {markdown ? <Markdown>{truncated.visible}</Markdown> : truncated.visible}
+      {expanded &&
+        (loadError !== null ? (
+          <span className="text-xs text-destructive"> {loadError}</span>
+        ) : (
+          <span className="text-xs opacity-60"> loading…</span>
+        ))}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="text-xs opacity-70 underline decoration-dotted hover:opacity-100 cursor-pointer"
+        title={`Load ${truncated.hiddenChars} more characters`}
+      >
+        …[+{truncated.hiddenChars} chars]
+      </button>
+    </>
+  );
+}
+
 export function SessionChat({
   sessionId,
   liveItems,
@@ -276,6 +393,16 @@ export function SessionChat({
   const authFetch = useAuthenticatedFetch();
   const contentUrlBase = `/api/sessions/${sessionId}/events`;
   const contentCache = useRef(new Map<string, EventContent>());
+
+  // Single-expansion policy: at most one message shows its full body at a
+  // time; expanding another message evicts the previous one. The expanded
+  // child discards its fetched text on collapse.
+  const [expandedMessageId, setExpandedMessageId] = useState<string | null>(
+    null
+  );
+  const toggleExpandedMessage = useCallback((id: string) => {
+    setExpandedMessageId(prev => (prev === id ? null : id));
+  }, []);
 
   const [blocks, setBlocks] = useState<ChatFeedItem[][]>([]);
   const [oldestCursor, setOldestCursor] = useState<string | null>(null);
@@ -394,6 +521,17 @@ export function SessionChat({
     return result;
   }, [allItems]);
 
+  const renderBody = (item: ChatFeedItem, markdown: boolean) => (
+    <MessageBody
+      item={item}
+      expanded={expandedMessageId === item.id}
+      onToggle={() => toggleExpandedMessage(item.id)}
+      contentUrlBase={contentUrlBase}
+      authFetch={authFetch}
+      markdown={markdown}
+    />
+  );
+
   if (loading) {
     return (
       <div className="text-center py-12 text-muted-foreground">
@@ -443,33 +581,33 @@ export function SessionChat({
                 ) : item.type === 'userMessage' ? (
                   <div key={item.id} className="flex justify-end">
                     <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-primary text-primary-foreground px-4 py-2 text-sm whitespace-pre-wrap">
-                      {item.preview}
+                      {renderBody(item, false)}
                     </div>
                   </div>
                 ) : item.type === 'assistantMessage' ? (
                   <div key={item.id} className="max-w-[90%]">
-                    <Markdown>{item.preview}</Markdown>
+                    {renderBody(item, true)}
                   </div>
                 ) : item.type === 'reasoning' ? (
                   <p
                     key={item.id}
                     className="text-sm italic text-muted-foreground whitespace-pre-wrap"
                   >
-                    {item.preview}
+                    {renderBody(item, false)}
                   </p>
                 ) : item.type === 'error' ? (
                   <p
                     key={item.id}
                     className="text-sm text-destructive whitespace-pre-wrap"
                   >
-                    {item.preview}
+                    {renderBody(item, false)}
                   </p>
                 ) : item.type === 'notice' || item.type === 'compaction' ? (
                   <p
                     key={item.id}
                     className="text-xs text-muted-foreground whitespace-pre-wrap"
                   >
-                    {item.preview}
+                    {renderBody(item, false)}
                   </p>
                 ) : item.type === 'toolCallBatch' ||
                   item.type === 'toolResultBatch' ? (

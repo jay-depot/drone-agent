@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { buildToolRows } from './session-chat';
+import { buildToolRows, SessionChat } from './session-chat';
 import type { ChatFeedItem } from '@/lib/chat-types';
 
 function item(partial: Partial<ChatFeedItem> & { id: string }): ChatFeedItem {
@@ -134,10 +134,6 @@ let mockFetch: ReturnType<typeof vi.fn>;
 vi.mock('@/hooks/use-auth', () => ({
   useAuthenticatedFetch: () => mockFetch,
 }));
-
-// Minimal SessionChat render harness (the real component is imported
-// dynamically so the mock above applies).
-import { SessionChat } from './session-chat';
 
 function Harness({ items }: { items: ChatFeedItem[] }) {
   return <SessionChat sessionId="agent-1" liveItems={items} />;
@@ -294,5 +290,117 @@ describe('SessionChat live append', () => {
     );
     expect(screen.getByText('live reply')).toBeInTheDocument();
     expect(mockFetch.mock.calls.length).toBe(before);
+  });
+});
+
+describe('SessionChat truncation-slug expansion', () => {
+  const truncationSuffix = (hidden: number) => `…[+${hidden} chars]`;
+
+  function truncatedItem(id: string, visible: string, hidden: number) {
+    return item({
+      id,
+      type: 'assistantMessage',
+      preview: `${visible}${truncationSuffix(hidden)}`,
+      hasFull: true,
+    });
+  }
+
+  it('loads full content when the truncation slug is clicked', async () => {
+    const user = userEvent.setup();
+    mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/sessions/agent-1/chat')) {
+        return Promise.resolve(
+          jsonResponse(200, {
+            items: [truncatedItem('a1', 'Long reply', 2194)],
+            hasMore: false,
+            oldestCursor: null,
+          })
+        );
+      }
+      if (url.includes('/content')) {
+        return Promise.resolve(
+          jsonResponse(200, {
+            id: 'a1',
+            type: 'assistantMessage',
+            payload: JSON.stringify({
+              content: 'Long reply with the full story.',
+            }),
+          })
+        );
+      }
+      return Promise.resolve(jsonResponse(404, {}));
+    });
+    render(<Harness items={[]} />);
+
+    const slug = await screen.findByText('…[+2194 chars]');
+    await user.click(slug);
+    expect(await screen.findByText(/full story/)).toBeInTheDocument();
+    expect(screen.queryByText('…[+2194 chars]')).not.toBeInTheDocument();
+    await user.click(screen.getByText('show less'));
+    expect(screen.getByText(/Long reply/)).toBeInTheDocument();
+    expect(screen.queryByText(/full story/)).not.toBeInTheDocument();
+  });
+
+  it('evicts the previously expanded message when another is expanded', async () => {
+    const user = userEvent.setup();
+    mockFetch = makeFetch([
+      truncatedItem('a1', 'First truncated', 500),
+      truncatedItem('a2', 'Second truncated', 600),
+    ]);
+    render(<Harness items={[]} />);
+
+    await user.click(await screen.findByText('…[+500 chars]'));
+    expect(await screen.findByText('FULL CONTENT FOR a1')).toBeInTheDocument();
+    await user.click(screen.getByText('…[+600 chars]'));
+
+    await waitFor(() => {
+      expect(screen.getByText('FULL CONTENT FOR a2')).toBeInTheDocument();
+    });
+    // Expanding a2 evicted a1: its content is gone and its slug is back.
+    expect(screen.queryByText('FULL CONTENT FOR a1')).not.toBeInTheDocument();
+    expect(screen.getByText('…[+500 chars]')).toBeInTheDocument();
+  });
+
+  it('re-expanding an evicted message refetches its content', async () => {
+    const user = userEvent.setup();
+    mockFetch = makeFetch([
+      truncatedItem('a1', 'First truncated', 500),
+      truncatedItem('a2', 'Second truncated', 600),
+    ]);
+    render(<Harness items={[]} />);
+
+    await user.click(await screen.findByText('…[+500 chars]'));
+    await screen.findByText('FULL CONTENT FOR a1');
+    await user.click(screen.getByText('…[+600 chars]'));
+    await screen.findByText('FULL CONTENT FOR a2');
+
+    await user.click(screen.getByText('…[+500 chars]'));
+    await waitFor(() => {
+      expect(
+        mockFetch.mock.calls.filter(([url]) => String(url).includes('/content'))
+      ).toHaveLength(3);
+    });
+    await screen.findByText('FULL CONTENT FOR a1');
+  });
+
+  it('shows an inline error when the content endpoint fails', async () => {
+    const user = userEvent.setup();
+    mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (!url.startsWith('/api/sessions/agent-1/chat')) {
+        return Promise.resolve(jsonResponse(500, {}));
+      }
+      return Promise.resolve(
+        jsonResponse(200, {
+          items: [truncatedItem('a1', 'Broken content', 300)],
+          hasMore: false,
+          oldestCursor: null,
+        })
+      );
+    });
+    render(<Harness items={[]} />);
+    await user.click(await screen.findByText('…[+300 chars]'));
+    expect(
+      await screen.findByText(/Full content unavailable/)
+    ).toBeInTheDocument();
   });
 });
