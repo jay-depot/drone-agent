@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
@@ -13,6 +13,21 @@ import {
 } from '@/components/ui/collapsible';
 import { Separator } from '@/components/ui/separator';
 
+// A spawned agent registers its swarm session seconds after this page
+// mounts, so the first metadata fetch can legitimately 404. A bounded
+// retry covers the agent boot window; session-lifecycle events over the
+// shared WebSocket cover late registration without a polling loop.
+const MAX_SESSION_FETCH_ATTEMPTS = 3;
+const SESSION_FETCH_RETRY_MS = 2000;
+const SESSION_LIFECYCLE_EVENT_TYPES = new Set([
+  'session.created',
+  'session.ended',
+  'session.processing',
+  'session.processed',
+  'session.archived',
+  'session.restored',
+]);
+
 export default function SessionDetailPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -22,28 +37,53 @@ export default function SessionDetailPage() {
   const [loading, setLoading] = useState(true);
   const eventsEndRef = useRef<HTMLDivElement>(null);
   const [session, setSession] = useState<SwarmSession | null>(null);
+  const localEventIdRef = useRef(0);
+  const hasSessionRef = useRef(false);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
 
   // Fetch session metadata to detect live + interactive (enables chat input).
+  const fetchSession = useCallback(async (): Promise<boolean> => {
+    if (!sessionId) return false;
+    try {
+      const res = await authFetch(`/api/sessions/${sessionId}`);
+      if (res.ok) {
+        const data = (await res.json()) as { session: SwarmSession };
+        hasSessionRef.current = true;
+        setSession(data.session);
+        return true;
+      }
+    } catch {
+      // Session metadata is best-effort; the page still renders events.
+    }
+    return false;
+  }, [sessionId, authFetch]);
+
+  // Initial fetch with bounded retry — see MAX_SESSION_FETCH_ATTEMPTS.
   useEffect(() => {
     if (!sessionId) return;
     let cancelled = false;
-    (async () => {
-      try {
-        const res = await authFetch(`/api/sessions/${sessionId}`);
-        if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { session: SwarmSession };
-        setSession(data.session);
-      } catch {
-        // Session metadata is best-effort; the page still renders events.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    hasSessionRef.current = false;
+
+    const attemptFetch = async (attempt: number): Promise<void> => {
+      if (hasSessionRef.current) return;
+      const ok = await fetchSession();
+      if (cancelled || ok || hasSessionRef.current) return;
+      if (attempt + 1 < MAX_SESSION_FETCH_ATTEMPTS) {
+        timer = setTimeout(() => {
+          void attemptFetch(attempt + 1);
+        }, SESSION_FETCH_RETRY_MS);
       }
-    })();
+    };
+
+    void attemptFetch(0);
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
-  }, [sessionId, authFetch]);
+  }, [sessionId, fetchSession]);
 
   const liveInteractive =
     session !== null &&
@@ -102,10 +142,16 @@ export default function SessionDetailPage() {
     const unsub = subscribe('event', msg => {
       const eventMsg = msg as WsEventMessage;
       if (eventMsg.sessionId === sessionId) {
+        // The session may register or change state while this page is open
+        // (e.g. right after a spawn) — refetch so the chat-input gate and
+        // the Live badge stay current without a manual reload.
+        if (SESSION_LIFECYCLE_EVENT_TYPES.has(eventMsg.eventType)) {
+          void fetchSession();
+        }
         setEvents(prev => [
           ...prev,
           {
-            id: crypto.randomUUID(),
+            id: `ws-${(localEventIdRef.current += 1)}`,
             sessionId: eventMsg.sessionId,
             correlationId: null,
             type: eventMsg.eventType,
@@ -127,7 +173,7 @@ export default function SessionDetailPage() {
       unsub();
       send({ type: 'unsubscribe', sessionId });
     };
-  }, [sessionId, subscribe, send]);
+  }, [sessionId, subscribe, send, fetchSession]);
 
   // Auto-scroll to latest events
   useEffect(() => {
