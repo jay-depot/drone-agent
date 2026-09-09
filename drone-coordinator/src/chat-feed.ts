@@ -164,17 +164,21 @@ export function toChatFeedItem(event: {
         hasFull: true,
       };
     }
-    // Blobbed payloads of other kinds keep their ref as the preview text —
-    // the content endpoint is the only way to resolve them.
-    return {
-      id: event.id,
-      type: event.type,
-      name,
-      correlationId: event.correlationId ?? null,
-      createdAt: event.createdAt,
-      preview: '(large content — expand to load)',
-      hasFull: true,
-    };
+    // Blobbed payloads of other kinds arrive with the blob already resolved
+    // by the caller (or null when unresolvable). Summarize like any other
+    // item so oversized messages get a truncated preview + expand slug;
+    // the placeholder remains only for payloads that could not be resolved.
+    if (event.payload === null) {
+      return {
+        id: event.id,
+        type: event.type,
+        name,
+        correlationId: event.correlationId ?? null,
+        createdAt: event.createdAt,
+        preview: '(large content — expand to load)',
+        hasFull: true,
+      };
+    }
   }
 
   const { preview, hasFull } = summarizePayload(event.type, event.payload);

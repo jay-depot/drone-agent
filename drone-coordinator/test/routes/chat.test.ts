@@ -211,6 +211,53 @@ describe('GET /api/sessions/:id/chat', () => {
     expect(body.items[0]!.name).toBe('file__read');
   });
 
+  it('summarizes blobbed message payloads instead of the placeholder', async () => {
+    await registerSession({ id: 'ss-chat', beaconId: 'b1' });
+    const big = 'z'.repeat(20 * 1024);
+    await pushEvents([
+      evt({
+        id: 'bigmsg',
+        type: 'userMessage',
+        payload: JSON.stringify({ kind: 'userMessage', content: big }),
+        createdAt: 1000,
+      }),
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/sessions/ss-chat/chat',
+    });
+    const body = res.json() as {
+      items: Array<{ preview: string; hasFull: boolean }>;
+    };
+    expect(body.items[0]!.hasFull).toBe(true);
+    expect(body.items[0]!.preview).toContain('…[+');
+    expect(body.items[0]!.preview).not.toContain('expand to load');
+    expect(body.items[0]!.preview.length).toBeLessThan(1200);
+  });
+
+  it('keeps the placeholder for unresolvable blob refs', async () => {
+    await registerSession({ id: 'ss-chat', beaconId: 'b1' });
+    await pushEvents([
+      evt({
+        id: 'dangling',
+        type: 'userMessage',
+        payload: 'blob:ss-chat/dangling/0000000000000000',
+        createdAt: 1000,
+      }),
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/sessions/ss-chat/chat',
+    });
+    const body = res.json() as {
+      items: Array<{ preview: string; hasFull: boolean }>;
+    };
+    expect(body.items[0]!.preview).toBe('(large content — expand to load)');
+    expect(body.items[0]!.hasFull).toBe(true);
+  });
+
   it('keyset pagination: before cursor returns strictly older events and handles createdAt ties via id', async () => {
     await registerSession({ id: 'ss-chat', beaconId: 'b1' });
     await pushEvents([

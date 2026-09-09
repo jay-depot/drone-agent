@@ -15,6 +15,24 @@ function item(partial: Partial<ChatFeedItem> & { id: string }): ChatFeedItem {
   };
 }
 
+function truncatedItem(id: string, visible: string, hidden: number) {
+  return item({
+    id,
+    type: 'assistantMessage',
+    preview: `${visible}…[+${hidden} chars]`,
+    hasFull: true,
+  });
+}
+
+function placeholderItem(id: string) {
+  return item({
+    id,
+    type: 'userMessage',
+    preview: '(large content — expand to load)',
+    hasFull: true,
+  });
+}
+
 describe('buildToolRows (batch splitting + positional pairing)', () => {
   it('pairs calls and results positionally within a turn', () => {
     const rows = buildToolRows([
@@ -90,6 +108,80 @@ describe('buildToolRows (batch splitting + positional pairing)', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.resultId).toBe('res1');
     expect(rows[0]!.resultContent).toBeNull();
+  });
+});
+
+describe('SessionChat unresolvable-placeholder expansion', () => {
+  function placeholderItem(id: string) {
+    return item({
+      id,
+      type: 'userMessage',
+      preview: '(large content — expand to load)',
+      hasFull: true,
+    });
+  }
+
+  it('loads and renders a placeholder message with local re-truncation', async () => {
+    const user = userEvent.setup();
+    const bigBody = 'z'.repeat(9000);
+    mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.startsWith('/api/sessions/agent-1/chat')) {
+        return Promise.resolve(
+          jsonResponse(200, {
+            items: [placeholderItem('a1')],
+            hasMore: false,
+            oldestCursor: null,
+          })
+        );
+      }
+      if (url.includes('/content')) {
+        return Promise.resolve(
+          jsonResponse(200, {
+            id: 'a1',
+            type: 'userMessage',
+            payload: JSON.stringify({ kind: 'userMessage', content: bigBody }),
+          })
+        );
+      }
+      return Promise.resolve(jsonResponse(404, {}));
+    });
+    render(<Harness items={[]} />);
+
+    const trigger = await screen.findByText('(large content — expand to load)');
+    expect(trigger.tagName).toBe('BUTTON');
+    await user.click(trigger);
+    expect(await screen.findByText(/^z{8192}$/)).toBeInTheDocument();
+    expect(screen.getByText('…[+808 chars]')).toBeInTheDocument();
+    expect(screen.getByText('show less')).toBeInTheDocument();
+    await user.click(screen.getByText('show less'));
+    expect(
+      screen.getByText('(large content — expand to load)')
+    ).toBeInTheDocument();
+  });
+
+  it('placeholder and slug share the one-expanded-at-a-time policy', async () => {
+    const user = userEvent.setup();
+    mockFetch = makeFetch([
+      placeholderItem('a1'),
+      truncatedItem('a2', 'Slug body', 400),
+    ]);
+    render(<Harness items={[]} />);
+
+    await user.click(
+      await screen.findByText('(large content — expand to load)')
+    );
+    expect(await screen.findByText('FULL CONTENT FOR a1')).toBeInTheDocument();
+    await user.click(screen.getByText('…[+400 chars]'));
+
+    await waitFor(() => {
+      expect(screen.getByText('FULL CONTENT FOR a2')).toBeInTheDocument();
+    });
+    // Expanding the slug evicted the placeholder: its content is gone and
+    // the placeholder trigger is back.
+    expect(screen.queryByText('FULL CONTENT FOR a1')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('(large content — expand to load)')
+    ).toBeInTheDocument();
   });
 });
 
@@ -294,17 +386,6 @@ describe('SessionChat live append', () => {
 });
 
 describe('SessionChat truncation-slug expansion', () => {
-  const truncationSuffix = (hidden: number) => `…[+${hidden} chars]`;
-
-  function truncatedItem(id: string, visible: string, hidden: number) {
-    return item({
-      id,
-      type: 'assistantMessage',
-      preview: `${visible}${truncationSuffix(hidden)}`,
-      hasFull: true,
-    });
-  }
-
   it('loads full content when the truncation slug is clicked', async () => {
     const user = userEvent.setup();
     mockFetch = vi.fn().mockImplementation((url: string) => {

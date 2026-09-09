@@ -57,6 +57,12 @@ function safeParse(json: string): unknown {
   }
 }
 
+/** Cut budget when locally truncating an unresolvable-placeholder body. */
+const PLACEHOLDER_CUT_CHARS = 8192;
+
+/** Server-side placeholder for blobbed payloads that could not be resolved. */
+const UNRESOLVED_PLACEHOLDER = '(large content — expand to load)';
+
 /** Server-side truncation suffix (chat-feed.ts PREVIEW_CHARS budget). */
 const TRUNCATED_PREVIEW_SUFFIX = /…\[\+(\d+) chars\]$/;
 
@@ -307,9 +313,14 @@ function MessageBody({
   authFetch,
   markdown,
 }: MessageBodyProps) {
+  const unresolvedPlaceholder = item.preview === UNRESOLVED_PLACEHOLDER;
   const truncated = parseTruncatedPreview(item.preview);
   const [fullText, setFullText] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const expandable =
+    truncated !== null || (unresolvedPlaceholder && item.hasFull);
+  const fullyExpanded = expanded && fullText !== null;
 
   // Collapse discards the fetched text. The parent's single-expansion
   // policy means at most one message ever holds its full body.
@@ -343,14 +354,24 @@ function MessageBody({
     };
   }, [authFetch, contentUrlBase, expanded, fullText, item.id, loadError]);
 
-  if (!truncated) {
+  if (!expandable) {
     return <>{markdown ? <Markdown>{item.preview}</Markdown> : item.preview}</>;
   }
 
-  if (expanded && fullText !== null) {
+  if (fullyExpanded) {
+    // A placeholder body can exceed sane transport limits once resolved,
+    // so re-truncate it locally at a generous budget.
+    const cut =
+      unresolvedPlaceholder && fullText.length > PLACEHOLDER_CUT_CHARS
+        ? fullText.slice(0, PLACEHOLDER_CUT_CHARS)
+        : fullText;
+    const hiddenChars = fullText.length - cut.length;
     return (
       <>
-        {markdown ? <Markdown>{fullText}</Markdown> : fullText}
+        {markdown ? <Markdown>{cut}</Markdown> : cut}
+        {hiddenChars > 0 && (
+          <span className="text-xs opacity-60">…[+{hiddenChars} chars]</span>
+        )}{' '}
         <button
           type="button"
           onClick={onToggle}
@@ -358,6 +379,29 @@ function MessageBody({
         >
           show less
         </button>
+      </>
+    );
+  }
+
+  if (truncated === null) {
+    // Expandable with no slug ⇒ unresolvable-placeholder item (never reaches
+    // here expanded with content — fullyExpanded handled that above).
+    return (
+      <>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="text-xs opacity-70 underline decoration-dotted hover:opacity-100 cursor-pointer"
+          title="Load full content"
+        >
+          {item.preview}
+        </button>
+        {expanded &&
+          (loadError !== null ? (
+            <span className="text-xs text-destructive"> {loadError}</span>
+          ) : (
+            <span className="text-xs opacity-60"> loading…</span>
+          ))}
       </>
     );
   }
