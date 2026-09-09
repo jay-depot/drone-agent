@@ -112,15 +112,6 @@ describe('buildToolRows (batch splitting + positional pairing)', () => {
 });
 
 describe('SessionChat unresolvable-placeholder expansion', () => {
-  function placeholderItem(id: string) {
-    return item({
-      id,
-      type: 'userMessage',
-      preview: '(large content — expand to load)',
-      hasFull: true,
-    });
-  }
-
   it('loads and renders a placeholder message with local re-truncation', async () => {
     const user = userEvent.setup();
     const bigBody = 'z'.repeat(9000);
