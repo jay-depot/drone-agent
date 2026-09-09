@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '@/hooks/use-auth';
 import { WebSocketProvider } from '@/hooks/use-websocket';
+import { ToastProvider } from '@/hooks/use-toast';
 import SessionsPage from './sessions';
 import { act, type ReactNode } from 'react';
 
@@ -27,9 +28,11 @@ vi.stubGlobal('WebSocket', MockWebSocket);
 
 function wrapper({ children }: { children: ReactNode }) {
   return (
-    <AuthProvider>
-      <WebSocketProvider>{children}</WebSocketProvider>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <WebSocketProvider>{children}</WebSocketProvider>
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 
@@ -59,6 +62,44 @@ const sessionPayload = (status: string, id = 's-1') => ({
   updatedAt: 1_700_000_000_000,
 });
 
+// Scripted list responses: each entry is the body returned by one successive
+// GET /api/sessions? call. The final entry repeats for any further calls.
+function scriptedFetch(
+  listResponses: unknown[],
+  actionFailures?: {
+    archive?: number;
+    restore?: number;
+  }
+) {
+  let listCallIndex = 0;
+  return vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+    const method = init?.method ?? 'GET';
+    if (method === 'GET' && url.includes('/api/sessions?')) {
+      const index = Math.min(listCallIndex, listResponses.length - 1);
+      listCallIndex++;
+      return Promise.resolve(jsonResponse(200, listResponses[index]));
+    }
+    if (url === '/api/beacons') {
+      return Promise.resolve(jsonResponse(200, []));
+    }
+    if (method === 'POST' && url.includes('/api/sessions/')) {
+      if (url.endsWith('/archive') && actionFailures?.archive) {
+        return Promise.resolve(jsonResponse(actionFailures.archive, {}));
+      }
+      if (url.endsWith('/restore') && actionFailures?.restore) {
+        return Promise.resolve(jsonResponse(actionFailures.restore, {}));
+      }
+      return Promise.resolve(jsonResponse(200, {}));
+    }
+    return Promise.resolve(jsonResponse(404, {}));
+  });
+}
+
+const listBody = (sessions: unknown[], count = sessions.length) => ({
+  sessions,
+  count,
+});
+
 describe('SessionsPage archive view', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -66,27 +107,11 @@ describe('SessionsPage archive view', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
-  function makeFetch(session: unknown) {
-    return vi.fn().mockImplementation((url: string) => {
-      if (url.includes('/api/sessions?')) {
-        return Promise.resolve(
-          jsonResponse(200, {
-            sessions: [session],
-            count: 1,
-          })
-        );
-      }
-      if (url === '/api/beacons') {
-        return Promise.resolve(jsonResponse(200, []));
-      }
-      return Promise.resolve(jsonResponse(404, {}));
-    });
-  }
-
   it('default view requests exclude=archived', async () => {
-    const mockFetch = makeFetch(sessionPayload('processed'));
+    const mockFetch = scriptedFetch([listBody([sessionPayload('processed')])]);
     vi.stubGlobal('fetch', mockFetch);
 
     render(
@@ -102,7 +127,7 @@ describe('SessionsPage archive view', () => {
   });
 
   it('toggling the archived view requests status=archived and shows Restore', async () => {
-    const mockFetch = makeFetch(sessionPayload('archived'));
+    const mockFetch = scriptedFetch([listBody([sessionPayload('archived')])]);
     vi.stubGlobal('fetch', mockFetch);
 
     const user = userEvent.setup();
@@ -129,7 +154,7 @@ describe('SessionsPage archive view', () => {
   });
 
   it('renders Archive and End actions on processed sessions', async () => {
-    const mockFetch = makeFetch(sessionPayload('processed'));
+    const mockFetch = scriptedFetch([listBody([sessionPayload('processed')])]);
     vi.stubGlobal('fetch', mockFetch);
 
     render(
@@ -155,28 +180,8 @@ describe('SessionsPage archive actions', () => {
     vi.useRealTimers();
   });
 
-  function makeFetch(session: unknown) {
-    return vi.fn().mockImplementation((url: string) => {
-      if (url.includes('/api/sessions?')) {
-        return Promise.resolve(
-          jsonResponse(200, {
-            sessions: [session],
-            count: 1,
-          })
-        );
-      }
-      if (url === '/api/beacons') {
-        return Promise.resolve(jsonResponse(200, []));
-      }
-      if (url.includes('/api/sessions/')) {
-        return Promise.resolve(jsonResponse(200, {}));
-      }
-      return Promise.resolve(jsonResponse(404, {}));
-    });
-  }
-
   it('archive executes directly without a confirmation dialog', async () => {
-    const mockFetch = makeFetch(sessionPayload('processed'));
+    const mockFetch = scriptedFetch([listBody([sessionPayload('processed')])]);
     vi.stubGlobal('fetch', mockFetch);
 
     const user = userEvent.setup();
@@ -203,8 +208,8 @@ describe('SessionsPage archive actions', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('shows a phantom row with an Undo button after archiving', async () => {
-    const mockFetch = makeFetch(sessionPayload('processed'));
+  it('shows an in-place pending row with an Undo button after archiving', async () => {
+    const mockFetch = scriptedFetch([listBody([sessionPayload('processed')])]);
     vi.stubGlobal('fetch', mockFetch);
 
     const user = userEvent.setup();
@@ -218,17 +223,21 @@ describe('SessionsPage archive actions', () => {
     await screen.findByText('Processed');
     await user.click(screen.getByRole('button', { name: 'Archive' }));
 
-    // The phantom row appears immediately with an Undo button.
+    // The pending row appears immediately with an Undo button.
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
     });
-    // The normal session row is gone (archived out of the list).
-    await screen.findByText('Undo');
+    // The row keeps its place in the list (no phantom top-row): the only
+    // agent-id text in the document is the still-present session row.
+    expect(screen.getByText('s-1')).toBeInTheDocument();
+    // The row's action buttons are replaced by Undo only.
     expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'End' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Peek' })).toBeNull();
   });
 
-  it('undo restores the archived session', async () => {
-    const mockFetch = makeFetch(sessionPayload('processed'));
+  it('undo restores the archived session and refetches', async () => {
+    const mockFetch = scriptedFetch([listBody([sessionPayload('processed')])]);
     vi.stubGlobal('fetch', mockFetch);
 
     const user = userEvent.setup();
@@ -256,16 +265,149 @@ describe('SessionsPage archive actions', () => {
         )
       ).toBe(true);
     });
-    // The phantom row disappears after undo is clicked.
+    // The undo refetches the current page so the restored row returns.
+    await waitFor(() => {
+      expect(lastSessionsCall(mockFetch)).toBeTruthy();
+      expect(
+        mockFetch.mock.calls.filter(([url]) =>
+          String(url).includes('/api/sessions?')
+        ).length
+      ).toBeGreaterThan(1);
+    });
+    await screen.findByText('Processed');
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
   });
 
-  it('phantom row disappears after the archive undo window', async () => {
-    // shouldAdvanceTime lets user-event and the setTimeout-based findBy helpers
-    // run under fake timers instead of hanging, while we still fast-forward the
-    // phantom undo window explicitly.
+  it('pending row disappears and the next row loads after the undo window', async () => {
+    // shouldAdvanceTime lets user-event and the findBy helpers run under fake
+    // timers while we fast-forward the undo window explicitly.
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const mockFetch = makeFetch(sessionPayload('processed'));
+    const first = { ...sessionPayload('processed', 's-1'), createdAt: 3000 };
+    const next = { ...sessionPayload('processed', 's-2'), createdAt: 200 };
+    const mockFetch = scriptedFetch([listBody([first]), listBody([next])]);
+    vi.stubGlobal('fetch', mockFetch);
+
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/sessions']}>
+        <SessionsPage />
+      </MemoryRouter>,
+      { wrapper }
+    );
+
+    await screen.findByText('s-1');
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+    });
+
+    // Fast-forward past the 5s undo window; the expiry refetch returns the
+    // next row, which fills the slot the pending row vacated.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5001);
+    });
+
+    await screen.findByText('s-2');
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(screen.getByText('Processed')).toBeInTheDocument();
+  });
+
+  it('a second archive leaves earlier undo rows intact', async () => {
+    const s1 = { ...sessionPayload('processed', 's-1'), createdAt: 3000 };
+    const s2 = { ...sessionPayload('processed', 's-2'), createdAt: 2000 };
+    const mockFetch = scriptedFetch([listBody([s1, s2])]);
+    vi.stubGlobal('fetch', mockFetch);
+
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/sessions']}>
+        <SessionsPage />
+      </MemoryRouter>,
+      { wrapper }
+    );
+
+    await screen.findByText('s-1');
+    await user.click(screen.getAllByRole('button', { name: 'Archive' })[0]);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+    });
+
+    // Archive the remaining processed row; both rows must now be pending.
+    await user.click(screen.getAllByRole('button', { name: 'Archive' })[0]);
+    expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Peek' })).toBeNull();
+  });
+
+  it('pending rows keep their list position', async () => {
+    const rows = [
+      { ...sessionPayload('processed', 's-top'), createdAt: 3000 },
+      { ...sessionPayload('processed', 's-mid'), createdAt: 2000 },
+      { ...sessionPayload('processed', 's-low'), createdAt: 1000 },
+    ];
+    const mockFetch = scriptedFetch([listBody(rows)]);
+    vi.stubGlobal('fetch', mockFetch);
+
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/sessions']}>
+        <SessionsPage />
+      </MemoryRouter>,
+      { wrapper }
+    );
+
+    await screen.findByText('s-top');
+    // Archive the middle row; its Archive button is the second in DOM order.
+    await user.click(screen.getAllByRole('button', { name: 'Archive' })[1]);
+
+    // The archived (pending) row must still render between its neighbours.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+    });
+    // Row order in the table body: header row first, then the three data
+    // rows in their original order — the archived row stays in the middle.
+    const dataRows = screen
+      .getAllByRole('row')
+      .slice(1)
+      .map(row => row.textContent ?? '');
+    expect(
+      ['s-top', 's-mid', 's-low'].map(id =>
+        dataRows.findIndex(text => text.includes(id))
+      )
+    ).toEqual([0, 1, 2]);
+  });
+
+  it('failed archive shows an error toast and keeps the row', async () => {
+    const mockFetch = scriptedFetch([listBody([sessionPayload('processed')])], {
+      archive: 500,
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/sessions']}>
+        <SessionsPage />
+      </MemoryRouter>,
+      { wrapper }
+    );
+
+    await screen.findByText('Processed');
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Failed to archive session'
+      );
+    });
+    // The row is untouched: normal actions remain, no Undo appears.
+    expect(screen.getByText('s-1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  });
+
+  it('failed undo shows an error toast and refetches', async () => {
+    const mockFetch = scriptedFetch([listBody([sessionPayload('processed')])], {
+      restore: 409,
+    });
     vi.stubGlobal('fetch', mockFetch);
 
     const user = userEvent.setup();
@@ -282,13 +424,20 @@ describe('SessionsPage archive actions', () => {
       expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
     });
 
-    // Fast-forward past the 5s undo window so the phantom row clears.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5001);
-    });
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
 
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Failed to restore session'
+      );
+    });
+    // The undo refetches the page even when restore failed.
+    await waitFor(() => {
+      expect(
+        mockFetch.mock.calls.filter(([url]) =>
+          String(url).includes('/api/sessions?')
+        ).length
+      ).toBeGreaterThan(1);
     });
   });
 });
