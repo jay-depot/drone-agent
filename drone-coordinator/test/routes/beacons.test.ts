@@ -164,6 +164,81 @@ describe('Beacon Routes', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('POST /beacons/:id/heartbeat updates lastHeartbeat', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: { id: 'b1', name: 'B1', host: 'localhost', port: 3457 },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/beacons/b1/heartbeat',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.id).toBe('b1');
+    expect(body.lastHeartbeat).toBeGreaterThan(0);
+  });
+
+  it('POST /beacons/:id/heartbeat returns 404 for missing beacon', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/beacons/nonexistent/heartbeat',
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('GET /beacons returns spawnRoots and defaultSpawnRoot when registered', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: {
+        id: 'b1',
+        name: 'B1',
+        host: 'localhost',
+        port: 3457,
+        spawnRoots: ['/home/user/', '/home/user/Projects/a'],
+        defaultSpawnRoot: '/home/user/',
+      },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/beacons',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    const b1 = body.find((b: { id: string }) => b.id === 'b1');
+    expect(b1.spawnRoots).toEqual(['/home/user/', '/home/user/Projects/a']);
+    expect(b1.defaultSpawnRoot).toBe('/home/user/');
+  });
+
+  it('GET /beacons returns spawnRoots when registered via the trust path (publicKey)', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: {
+        id: 'b-trust',
+        name: 'B-Trust',
+        host: 'localhost',
+        port: 3457,
+        publicKey: 'key-trust',
+        tlsFingerprint:
+          'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899',
+        spawnRoots: ['/home/user/'],
+        defaultSpawnRoot: '/home/user/',
+      },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/beacons',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    const beacon = body.find((b: { id: string }) => b.id === 'b-trust');
+    expect(beacon.spawnRoots).toEqual(['/home/user/']);
+    expect(beacon.defaultSpawnRoot).toBe('/home/user/');
+  });
+
   it('GET /beacons reports connected=false when the reverse channel is down', async () => {
     await app.inject({
       method: 'POST',
@@ -507,5 +582,76 @@ describe('Beacon Routes', () => {
       payload: { disconnectedAt: 1000, durationMs: 5000 },
     });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('re-registering via the trust path without roots preserves advertised roots', async () => {
+    const trustPayload = {
+      id: 'b-merge',
+      name: 'B-Merge',
+      host: 'localhost',
+      port: 3457,
+      publicKey: 'key-merge',
+      tlsFingerprint:
+        'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899',
+    };
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: {
+        ...trustPayload,
+        spawnRoots: ['/home/user/'],
+        defaultSpawnRoot: '/home/user/',
+      },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: trustPayload,
+    });
+    const res = await app.inject({ method: 'GET', url: '/api/beacons' });
+    const beacon = JSON.parse(res.body).find(
+      (b: { id: string }) => b.id === 'b-merge'
+    );
+    expect(beacon.spawnRoots).toEqual(['/home/user/']);
+    expect(beacon.defaultSpawnRoot).toBe('/home/user/');
+  });
+
+  it('re-registering via the trust path with new roots replaces advertised roots', async () => {
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: {
+        id: 'b-replace',
+        name: 'B-Replace',
+        host: 'localhost',
+        port: 3457,
+        publicKey: 'key-replace',
+        tlsFingerprint:
+          'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899',
+        spawnRoots: ['/home/user/'],
+        defaultSpawnRoot: '/home/user/',
+      },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      payload: {
+        id: 'b-replace',
+        name: 'B-Replace',
+        host: 'localhost',
+        port: 3457,
+        publicKey: 'key-replace',
+        tlsFingerprint:
+          'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899',
+        spawnRoots: ['/opt/work'],
+        defaultSpawnRoot: '/opt/work',
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: '/api/beacons' });
+    const beacon = JSON.parse(res.body).find(
+      (b: { id: string }) => b.id === 'b-replace'
+    );
+    expect(beacon.spawnRoots).toEqual(['/opt/work']);
+    expect(beacon.defaultSpawnRoot).toBe('/opt/work');
   });
 });

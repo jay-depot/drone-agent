@@ -3,6 +3,11 @@ import type { SpawnRequest } from '../types.js';
 import { getBeaconUrl } from './context.js';
 import * as db from '../db/index.js';
 import * as spawner from '../spawner.js';
+import {
+  getDefaultSpawnRoot,
+  getSpawnRoots,
+  isSpawnRootAllowed,
+} from '../spawn-roots.js';
 
 /**
  * Spawn a new agent. Shared by the REST route and the reverse-channel
@@ -11,7 +16,8 @@ import * as spawner from '../spawner.js';
 export async function handleSpawnAgent(
   req: SpawnRequest
 ): Promise<{ status: number; body: Record<string, unknown> }> {
-  const { personaId, task, config, spawnId } = req;
+  const { personaId, task, spawnId } = req;
+  let config = req.config;
 
   if (personaId) {
     const persona = db.getPersona(personaId);
@@ -21,6 +27,24 @@ export async function handleSpawnAgent(
         body: { error: `Persona not found: ${personaId}` },
       };
     }
+  }
+
+  // Enforce the spawnRoots whitelist (advertise == enforce by construction).
+  // A provided workingDir must be within the expanded root set; when omitted,
+  // default to the beacon's configured default root.
+  const workingDir = config?.workingDir;
+  if (workingDir) {
+    if (!isSpawnRootAllowed(workingDir)) {
+      return {
+        status: 400,
+        body: {
+          error: `workingDir "${workingDir}" is not in the spawnRoots whitelist`,
+          allowedRoots: getSpawnRoots(),
+        },
+      };
+    }
+  } else if (getDefaultSpawnRoot()) {
+    config = { ...config, workingDir: getDefaultSpawnRoot() };
   }
 
   const finalSpawnId = spawnId || randomUUID();

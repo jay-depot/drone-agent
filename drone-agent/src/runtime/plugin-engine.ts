@@ -200,6 +200,7 @@ type CreateDronePluginEngineOptions = {
   runtimeOptions?: {
     subagentId?: string;
     persona?: string;
+    swarmSpawned?: boolean;
   };
   buildSystemMessages?: () => Promise<DroneChatMessage[]>;
   /**
@@ -209,6 +210,18 @@ type CreateDronePluginEngineOptions = {
    * user-visible recovery path can clear guardrail detectors.
    */
   resetStuckDetectors?: () => void;
+  /**
+   * Optional synthetic-turn submission callback. Exposed to plugins via the
+   * `_runtime` capability so a swarm listen-mode agent can inject user turns
+   * from the WebSocket. Wired by the host after the conversation service is
+   * created (mutable ref read at call time).
+   */
+  submitUserMessage?: (content: string) => Promise<string>;
+  /**
+   * Optional soft-cancel callback for the current in-flight turn. Exposed to
+   * plugins via `_runtime` for the "Stop & Send" steer path.
+   */
+  cancelCurrentRequest?: () => void;
 };
 
 function createHookBuckets(): HookBuckets {
@@ -325,6 +338,8 @@ export function createDronePluginEngine({
   runtimeOptions,
   buildSystemMessages: buildSystemMessagesFromHost,
   resetStuckDetectors: resetStuckDetectorsFromHost,
+  submitUserMessage: submitUserMessageFromHost,
+  cancelCurrentRequest: cancelCurrentRequestFromHost,
 }: CreateDronePluginEngineOptions): DronePluginEngine {
   const systemReminders = new SystemReminderQueue();
   const pluginMap = validatePluginRegistry(plugins);
@@ -851,9 +866,12 @@ export function createDronePluginEngine({
         subagentId: runtimeOptions?.subagentId,
         persona: runtimeOptions?.persona,
         isSubagent: !!runtimeOptions?.subagentId,
+        swarmSpawned: !!runtimeOptions?.swarmSpawned,
         debugFlags,
         flags: runtimeFlagRegistry,
         resetStuckDetectors: resetStuckDetectorsFromHost,
+        submitUserMessage: submitUserMessageFromHost,
+        cancelCurrentRequest: cancelCurrentRequestFromHost,
         queueSystemReminder: (content: string) =>
           systemReminders.queue(content),
         emitEvent: (event: DroneConversationEvent) => {

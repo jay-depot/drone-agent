@@ -9,6 +9,7 @@ const session: SwarmSession = {
   createdAt: 1000,
   updatedAt: 2000,
   status: 'ended',
+  interactive: false,
 };
 
 function event(

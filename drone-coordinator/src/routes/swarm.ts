@@ -9,26 +9,117 @@ import {
 } from '../storage.js';
 import { buildSessionTranscript } from '../transcript.js';
 import * as db from '../db/index.js';
+import { sendBeaconCommand } from '../beacon-ws.js';
+import {
+  toChatFeedItem,
+  isNoiseEvent,
+  type ChatFeedItem,
+} from '../chat-feed.js';
+
+function isBlobRef(payload: string | null): boolean {
+  return payload !== null && payload.startsWith('blob:');
+}
+
+let deprecationWarned = false;
+
+function markDeprecated(
+  reply: { header: (name: string, value: string) => unknown },
+  route: string
+): void {
+  reply.header('Deprecation', 'true');
+  reply.header('Sunset', 'Wed, 01 Jul 2026 00:00:00 GMT');
+  if (!deprecationWarned) {
+    deprecationWarned = true;
+    logger.warn(`${route} is deprecated — use GET /api/sessions/:id/chat`);
+  }
+}
 
 export default function swarmRoutes(app: FastifyInstance) {
   // === Swarm Session Routes ===
 
-  app.post<{ Body: { id: string; personaId?: string; beaconId: string } }>(
-    '/sync/sessions/register',
-    async (request, reply) => {
-      const { id, personaId, beaconId } = request.body;
-      if (!id || !beaconId) {
-        return reply.code(400).send({ error: 'id and beaconId are required' });
-      }
-      const session = db.createSwarmSession(id, personaId ?? null, beaconId);
-      publishMutationEvent({
-        sessionId: id,
-        eventType: 'session.created',
-        payload: { sessionId: id, personaId, beaconId, status: 'active' },
-      });
-      return reply.code(201).send(session);
+  // Inject a synthetic user turn into a live interactive session. The
+  // coordinator looks up the session's beacon and pushes a deliverUserMessage
+  // command down the reverse channel; the beacon forwards it to the agent as
+  // a `userMessage` WS message, which the agent's swarm plugin turns into a
+  // real conversation turn.
+  app.post<{
+    Params: { id: string };
+    Body: { content: string; steer?: boolean };
+  }>('/sessions/:id/message', async (request, reply) => {
+    const { content, steer } = request.body;
+    if (typeof content !== 'string' || !content.trim()) {
+      return reply.code(400).send({ error: 'content is required' });
     }
-  );
+    const session = db.getSwarmSession(request.params.id);
+    if (!session) {
+      return reply.code(404).send({ error: 'Session not found' });
+    }
+    const beacon = db.getBeacon(session.beaconId);
+    if (!beacon) {
+      return reply
+        .code(503)
+        .send({ error: 'Target beacon not found', code: 'BEACON_NOT_FOUND' });
+    }
+    try {
+      const res = await sendBeaconCommand(
+        session.beaconId,
+        'deliverUserMessage',
+        {
+          toAgentId: session.id,
+          content,
+          steer: steer === true,
+        }
+      );
+      if (!res.ok) {
+        return reply.code(502).send({
+          error: 'Failed to deliver message to target beacon',
+          details:
+            res.body && typeof res.body === 'object' && 'error' in res.body
+              ? (res.body as { error: string }).error
+              : 'Unknown beacon error',
+        });
+      }
+      return { success: true, delivered: true };
+    } catch (err) {
+      return reply.code(503).send({
+        error: 'Target beacon unavailable',
+        details: err instanceof Error ? err.message : 'Unknown error',
+        code: 'BEACON_UNAVAILABLE',
+      });
+    }
+  });
+
+  app.post<{
+    Body: {
+      id: string;
+      personaId?: string;
+      beaconId: string;
+      interactive?: boolean;
+    };
+  }>('/sync/sessions/register', async (request, reply) => {
+    const { id, personaId, beaconId, interactive } = request.body;
+    if (!id || !beaconId) {
+      return reply.code(400).send({ error: 'id and beaconId are required' });
+    }
+    const session = db.createSwarmSession(
+      id,
+      personaId ?? null,
+      beaconId,
+      interactive === true
+    );
+    publishMutationEvent({
+      sessionId: id,
+      eventType: 'session.created',
+      payload: {
+        sessionId: id,
+        personaId,
+        beaconId,
+        status: 'active',
+        interactive: interactive === true,
+      },
+    });
+    return reply.code(201).send(session);
+  });
   app.post<{
     Querystring: { thresholdMs?: string };
   }>('/sessions/mark-stale', async (request, reply) => {
@@ -97,11 +188,22 @@ export default function swarmRoutes(app: FastifyInstance) {
         createdAt: evt.createdAt,
       });
       created.push(event);
-      publishMutationEvent({
-        sessionId: evt.sessionId,
-        eventType: evt.type,
-        payload: evt.payload,
-      });
+      if (!isNoiseEvent(evt.type)) {
+        const item = toChatFeedItem({
+          id: evt.id,
+          type: evt.type,
+          metadata: evt.metadata,
+          correlationId: evt.correlationId ?? null,
+          createdAt: evt.createdAt,
+          payload: evt.payload ?? null,
+          payloadWasBlobRef: false,
+        });
+        publishMutationEvent({
+          sessionId: evt.sessionId,
+          eventType: evt.type,
+          payload: item,
+        });
+      }
     }
     return reply.code(201).send({ count: created.length, events: created });
   });
@@ -114,11 +216,77 @@ export default function swarmRoutes(app: FastifyInstance) {
     if (!session) {
       return reply.code(404).send({ error: 'Session not found' });
     }
+    markDeprecated(reply, 'GET /sessions/:id/events');
     return db.getSwarmEvents(request.params.id, {
       correlationId: request.query.correlationId,
       limit: request.query.limit ? Number(request.query.limit) : undefined,
       offset: request.query.offset ? Number(request.query.offset) : undefined,
     });
+  });
+
+  app.get<{
+    Params: { id: string };
+    Querystring: { limit?: number; before?: string };
+  }>('/sessions/:id/chat', async (request, reply) => {
+    const session = db.getSwarmSession(request.params.id);
+    if (!session) {
+      return reply.code(404).send({ error: 'Session not found' });
+    }
+    const rawLimit = request.query.limit
+      ? Number(request.query.limit)
+      : undefined;
+    const limit = Math.min(Math.max(rawLimit ?? 100, 1), 500);
+    const page = db.getChatFeedEvents(
+      request.params.id,
+      limit,
+      request.query.before
+    );
+    const items: ChatFeedItem[] = [];
+    for (const evt of page.events) {
+      const payloadWasBlobRef = isBlobRef(evt.payload);
+      let payload = evt.payload;
+      if (payloadWasBlobRef && evt.type !== 'toolResultBatch') {
+        payload = await retrieveLargePayload(evt.payload as string);
+      }
+      const item = toChatFeedItem({
+        id: evt.id,
+        type: evt.type,
+        metadata: evt.metadata,
+        correlationId: evt.correlationId,
+        createdAt: evt.createdAt,
+        payload,
+        payloadWasBlobRef,
+      });
+      if (item) items.push(item);
+    }
+    return reply.send({
+      items,
+      hasMore: page.hasMore,
+      oldestCursor: page.oldestCursor,
+    });
+  });
+
+  app.get<{
+    Params: { id: string; eventId: string };
+  }>('/sessions/:id/events/:eventId/content', async (request, reply) => {
+    const session = db.getSwarmSession(request.params.id);
+    if (!session) {
+      return reply.code(404).send({ error: 'Session not found' });
+    }
+    const event = db.getSwarmEvent(request.params.id, request.params.eventId);
+    if (!event) {
+      return reply.code(404).send({ error: 'Event not found' });
+    }
+    let payload: string | null;
+    if (isBlobRef(event.payload)) {
+      payload = await retrieveLargePayload(event.payload as string);
+      if (payload === null) {
+        return reply.code(404).send({ error: 'content unavailable' });
+      }
+    } else {
+      payload = event.payload;
+    }
+    return reply.send({ id: event.id, type: event.type, payload });
   });
 
   app.get<{ Params: { id: string }; Querystring: { limit?: number } }>(
@@ -128,6 +296,7 @@ export default function swarmRoutes(app: FastifyInstance) {
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
       }
+      markDeprecated(reply, 'GET /sessions/:id/events/latest');
       const limit = request.query.limit ? Number(request.query.limit) : 10;
       return db.getLatestSwarmEvents(request.params.id, limit);
     }

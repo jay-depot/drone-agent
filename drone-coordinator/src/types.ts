@@ -15,6 +15,8 @@ export interface Beacon {
   port: number;
   connectedAt: number;
   lastHeartbeat: number;
+  spawnRoots?: string[];
+  defaultSpawnRoot?: string;
 }
 
 export interface RegisterBeaconRequest {
@@ -24,6 +26,8 @@ export interface RegisterBeaconRequest {
   port: number;
   publicKey?: string; // Ed25519 public key (base64)
   tlsFingerprint?: string; // SHA-256 of TLS cert for pinning
+  spawnRoots?: string[];
+  defaultSpawnRoot?: string;
 }
 
 // === Beacon Trust Types ===

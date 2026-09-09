@@ -59,3 +59,41 @@ export function handleDeliverMessage(req: CreateMessageRequest): {
 
   return { status: 201, body: message };
 }
+
+/**
+ * Deliver a synthetic user turn to an interactive agent. Unlike
+ * handleDeliverMessage (which queues into the agent's pendingMessages), this
+ * pushes a `userMessage` WS message that the agent's swarm plugin turns into
+ * an immediate conversation turn (listen-mode). Shared by the reverse-channel
+ * command handler.
+ */
+export function handleDeliverUserMessage(req: {
+  toAgentId: string;
+  content: string;
+  steer?: boolean;
+}): { status: number; body: unknown } {
+  const { toAgentId, content, steer } = req;
+  if (!toAgentId || typeof content !== 'string' || !content.trim()) {
+    return {
+      status: 400,
+      body: { error: 'toAgentId and content are required' },
+    };
+  }
+  if (!wsServer.isAgentConnected(toAgentId)) {
+    return {
+      status: 404,
+      body: { error: 'Agent not connected', code: 'AGENT_NOT_CONNECTED' },
+    };
+  }
+  const delivered = wsServer.sendToAgent(toAgentId, {
+    type: 'userMessage',
+    payload: { content, steer: steer === true },
+  });
+  if (!delivered) {
+    return {
+      status: 503,
+      body: { error: 'Failed to deliver user message to agent' },
+    };
+  }
+  return { status: 200, body: { success: true, delivered: true } };
+}

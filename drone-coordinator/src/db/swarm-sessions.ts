@@ -8,6 +8,7 @@ export interface SwarmSession {
   createdAt: number;
   updatedAt: number;
   status: string;
+  interactive: boolean;
 }
 
 export interface SwarmEvent {
@@ -23,7 +24,8 @@ export interface SwarmEvent {
 export function createSwarmSession(
   id: string,
   personaId: string | null,
-  beaconId: string
+  beaconId: string,
+  interactive = false
 ): SwarmSession {
   const now = Date.now();
   const session: SwarmSession = {
@@ -33,11 +35,12 @@ export function createSwarmSession(
     createdAt: now,
     updatedAt: now,
     status: 'active',
+    interactive,
   };
 
   const stmt = getDatabase().prepare(`
-    INSERT INTO swarm_sessions (id, persona_id, beacon_id, createdAt, updatedAt, status)
-    VALUES (@id, @personaId, @beaconId, @createdAt, @updatedAt, @status)
+    INSERT INTO swarm_sessions (id, persona_id, beacon_id, createdAt, updatedAt, status, interactive)
+    VALUES (@id, @personaId, @beaconId, @createdAt, @updatedAt, @status, @interactive)
   `);
 
   stmt.run({
@@ -47,6 +50,7 @@ export function createSwarmSession(
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     status: session.status,
+    interactive: session.interactive ? 1 : 0,
   });
 
   logger.info(`Created swarm session: ${session.id}`);
@@ -65,6 +69,7 @@ export function getSwarmSession(id: string): SwarmSession | undefined {
         createdAt: number;
         updatedAt: number;
         status: string;
+        interactive: number;
       }
     | undefined;
   if (!row) return undefined;
@@ -75,6 +80,7 @@ export function getSwarmSession(id: string): SwarmSession | undefined {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     status: row.status,
+    interactive: row.interactive === 1,
   };
 }
 
@@ -120,6 +126,7 @@ export function listSwarmSessions(options?: {
     createdAt: number;
     updatedAt: number;
     status: string;
+    interactive: number;
   }>;
   return rows.map(row => ({
     id: row.id,
@@ -128,6 +135,7 @@ export function listSwarmSessions(options?: {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     status: row.status,
+    interactive: row.interactive === 1,
   }));
 }
 export function markStaleSessions(thresholdMs: number): SwarmSession[] {
@@ -249,6 +257,7 @@ export function getStaleSessions(thresholdMs: number): SwarmSession[] {
     createdAt: number;
     updatedAt: number;
     status: string;
+    interactive: number;
   }>;
   return rows.map(row => ({
     id: row.id,
@@ -257,6 +266,7 @@ export function getStaleSessions(thresholdMs: number): SwarmSession[] {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     status: row.status,
+    interactive: row.interactive === 1,
   }));
 }
 
@@ -306,6 +316,55 @@ export function getSwarmEvents(
   return stmt.all(...params) as SwarmEvent[];
 }
 
+export function getSwarmEvent(
+  sessionId: string,
+  eventId: string
+): SwarmEvent | undefined {
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM swarm_events WHERE sessionId = ? AND id = ?'
+  );
+  const row = stmt.get(sessionId, eventId) as SwarmEvent | undefined;
+  return row;
+}
+
+export interface ChatFeedPage {
+  events: SwarmEvent[];
+  oldestCursor: string | null;
+  hasMore: boolean;
+}
+
+/**
+ * Latest-first keyset page for the chat feed. The cursor is the oldest
+ * event's `<createdAt>:<id>`; rows are returned ascending after the
+ * DESC fetch so callers can append/prepend directly.
+ */
+export function getChatFeedEvents(
+  sessionId: string,
+  limit: number,
+  beforeCursor?: string
+): ChatFeedPage {
+  let where = 'WHERE sessionId = ?';
+  const params: unknown[] = [sessionId];
+  if (beforeCursor) {
+    const sep = beforeCursor.indexOf(':');
+    const createdAt = Number(beforeCursor.slice(0, sep));
+    const id = beforeCursor.slice(sep + 1);
+    where += ' AND (createdAt < ? OR (createdAt = ? AND id < ?))';
+    params.push(createdAt, createdAt, id);
+  }
+  const stmt = getDatabase().prepare(`
+    SELECT * FROM swarm_events ${where} ORDER BY createdAt DESC, id DESC LIMIT ?
+  `);
+  const rows = stmt.all(...params, limit + 1) as SwarmEvent[];
+  const hasMore = rows.length > limit;
+  const page = rows.slice(0, limit).reverse();
+  const oldest = page[0];
+  return {
+    events: page,
+    oldestCursor: oldest ? `${oldest.createdAt}:${oldest.id}` : null,
+    hasMore,
+  };
+}
 export function getLatestSwarmEvents(
   sessionId: string,
   limit: number = 10
