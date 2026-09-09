@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
+import { ErrorBanner } from '@/components/error-banner';
 import { extractApiError, networkErrorMessage } from '@/hooks/use-api';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
 import type { Skill } from '@/lib/types';
@@ -95,11 +96,7 @@ export default function SkillsPage() {
         <Button onClick={() => navigate('/skills/new')}>New Skill</Button>
       </div>
 
-      {error && (
-        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} />
 
       {/* Search */}
       <div className="mb-4">

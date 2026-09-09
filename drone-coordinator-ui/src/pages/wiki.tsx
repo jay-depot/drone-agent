@@ -5,6 +5,7 @@ import { useWikiPages } from '@/hooks/use-wiki-pages';
 import { useWikiGraph } from '@/hooks/use-wiki-graph';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
 import { useToast } from '@/hooks/use-toast';
+import { ErrorBanner } from '@/components/error-banner';
 import { extractApiError, networkErrorMessage } from '@/hooks/use-api';
 import type { WikiPageMeta } from '@/lib/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -190,17 +191,9 @@ export default function WikiPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} />
 
-      {graphError && (
-        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-          {graphError}
-        </div>
-      )}
+      <ErrorBanner message={graphError} />
 
       {graphView ? (
         <>

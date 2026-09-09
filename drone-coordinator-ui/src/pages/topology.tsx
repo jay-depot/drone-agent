@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ErrorBanner } from '@/components/error-banner';
 
 export default function TopologyPage() {
   const navigate = useNavigate();
@@ -240,11 +241,7 @@ export default function TopologyPage() {
         </Badge>
       </div>
 
-      {error && (
-        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} />
 
       {beacons.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">

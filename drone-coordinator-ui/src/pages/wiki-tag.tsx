@@ -6,6 +6,7 @@ import type { WikiPageMeta } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { paginationRange } from '@/lib/pagination';
+import { ErrorBanner } from '@/components/error-banner';
 import WikiPageGrid from '@/components/wiki-page-grid';
 
 const PAGE_SIZE = 12;
@@ -61,11 +62,7 @@ export default function WikiTagPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} />
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
