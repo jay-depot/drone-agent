@@ -5,11 +5,7 @@ import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
 import { useToast } from '@/hooks/use-toast';
 import { ErrorBanner } from '@/components/error-banner';
-import type {
-  BeaconSession,
-  WsInitialMessage,
-  SwarmSession,
-} from '@/lib/types';
+import type { BeaconSession, WsEventMessage, SwarmSession } from '@/lib/types';
 import {
   Table,
   TableBody,
@@ -149,23 +145,45 @@ export default function SessionsPage() {
     [authFetch, archivedView]
   );
 
-  // Subscribe to WebSocket for live updates
+  // Live updates: session lifecycle events trigger a refetch of the current
+  // page (server-truth), debounced so an event burst causes one refetch.
+  // The initial snapshot is deliberately ignored — it is active-sessions-only
+  // and does not match this page's paginated, filter-aware view.
   useEffect(() => {
-    const unsubInitial = subscribe('initial', msg => {
-      const data = (msg as WsInitialMessage).data;
-      if (data.sessions.length > 0) {
-        setSessions(prev => {
-          const existingIds = new Set(prev.map(s => s.id));
-          const newSessions = data.sessions.filter(s => !existingIds.has(s.id));
-          return [...newSessions, ...prev];
-        });
+    const LIFECYCLE_EVENTS = new Set([
+      'session.created',
+      'session.ended',
+      'session.processing',
+      'session.processed',
+      'session.archived',
+    ]);
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let pending = false;
+
+    const unsubEvent = subscribe('event', msg => {
+      const eventMsg = msg as WsEventMessage;
+      if (!LIFECYCLE_EVENTS.has(eventMsg.eventType)) {
+        return;
+      }
+      pending = true;
+      if (debounceTimer === undefined) {
+        debounceTimer = setTimeout(() => {
+          debounceTimer = undefined;
+          if (pending) {
+            pending = false;
+            fetchSessions(offsetRef.current);
+          }
+        }, 100);
       }
     });
 
     return () => {
-      unsubInitial();
+      unsubEvent();
+      if (debounceTimer !== undefined) {
+        clearTimeout(debounceTimer);
+      }
     };
-  }, [subscribe]);
+  }, [subscribe, fetchSessions]);
 
   // Fetch on mount and when offset changes
   useEffect(() => {

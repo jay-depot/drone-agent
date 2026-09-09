@@ -18,6 +18,7 @@ class MockWebSocket {
   onerror: (() => void) | null = null;
   constructor(url: string) {
     this.url = url;
+    wsInstances.push(this);
   }
   send() {}
   close() {}
@@ -62,8 +63,15 @@ const sessionPayload = (status: string, id = 's-1') => ({
   updatedAt: 1_700_000_000_000,
 });
 
+const wsInstances: MockWebSocket[] = [];
+
 // Scripted list responses: each entry is the body returned by one successive
 // GET /api/sessions? call. The final entry repeats for any further calls.
+function pushWsMessage(msg: unknown) {
+  const ws = wsInstances[wsInstances.length - 1];
+  ws.onmessage?.({ data: JSON.stringify(msg) });
+}
+
 function scriptedFetch(
   listResponses: unknown[],
   actionFailures?: {
@@ -439,5 +447,186 @@ describe('SessionsPage archive actions', () => {
         ).length
       ).toBeGreaterThan(1);
     });
+  });
+});
+
+describe('SessionsPage live session events', () => {
+  beforeEach(() => {
+    // Earlier describes unstub all globals; the module-level WebSocket stub
+    // is gone by the time this block runs, so restore it per test.
+    vi.stubGlobal('WebSocket', MockWebSocket);
+    vi.restoreAllMocks();
+    wsInstances.length = 0;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  function renderSessions(initialEntry = '/sessions') {
+    return render(
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <SessionsPage />
+      </MemoryRouter>,
+      { wrapper }
+    );
+  }
+
+  function sessionsCallCount(mockFetch: ReturnType<typeof vi.fn>): number {
+    return mockFetch.mock.calls.filter(([url]) =>
+      String(url).includes('/api/sessions?')
+    ).length;
+  }
+
+  it('refetches the current page when a lifecycle event arrives', async () => {
+    const mockFetch = scriptedFetch([listBody([sessionPayload('active')])]);
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderSessions();
+    await screen.findByText('s-1');
+    expect(sessionsCallCount(mockFetch)).toBe(1);
+
+    await act(async () => {
+      pushWsMessage({
+        type: 'event',
+        sessionId: 's-9',
+        eventType: 'session.created',
+        payload: { sessionId: 's-9', beaconId: 'b1', status: 'active' },
+      });
+    });
+
+    await waitFor(() => {
+      expect(sessionsCallCount(mockFetch)).toBe(2);
+    });
+  });
+
+  it('debounces an event burst into a single refetch', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const mockFetch = scriptedFetch([listBody([sessionPayload('active')])]);
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderSessions();
+    await screen.findByText('s-1');
+    expect(sessionsCallCount(mockFetch)).toBe(1);
+
+    await act(async () => {
+      pushWsMessage({
+        type: 'event',
+        sessionId: 'a',
+        eventType: 'session.created',
+      });
+      pushWsMessage({
+        type: 'event',
+        sessionId: 'b',
+        eventType: 'session.ended',
+      });
+      pushWsMessage({
+        type: 'event',
+        sessionId: 'c',
+        eventType: 'session.archived',
+      });
+    });
+
+    // Still within the 100ms debounce window: nothing fired yet.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(sessionsCallCount(mockFetch)).toBe(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60);
+    });
+    await waitFor(() => {
+      expect(sessionsCallCount(mockFetch)).toBe(2);
+    });
+  });
+
+  it('ignores relay events that are not session lifecycle changes', async () => {
+    const mockFetch = scriptedFetch([listBody([sessionPayload('active')])]);
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderSessions();
+    await screen.findByText('s-1');
+    expect(sessionsCallCount(mockFetch)).toBe(1);
+
+    await act(async () => {
+      pushWsMessage({
+        type: 'event',
+        sessionId: 's-1',
+        eventType: 'message',
+        payload: 'hello',
+      });
+      pushWsMessage({
+        type: 'event',
+        sessionId: 's-1',
+        eventType: 'roundComplete',
+      });
+    });
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 150));
+    });
+    expect(sessionsCallCount(mockFetch)).toBe(1);
+  });
+
+  it('does not mutate the list when the initial snapshot arrives (reconnect)', async () => {
+    const mockFetch = scriptedFetch([
+      listBody([sessionPayload('archived', 's-arch')]),
+    ]);
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderSessions();
+    await screen.findByText('s-arch');
+
+    // The coordinator's reconnect snapshot is active-sessions-only; the old
+    // handler injected these at the top of the list (the original bug).
+    await act(async () => {
+      pushWsMessage({
+        type: 'initial',
+        data: {
+          beacons: [],
+          agentLocations: [],
+          sessions: [
+            {
+              id: 's-live',
+              beaconId: 'b1',
+              personaId: null,
+              status: 'active',
+              createdAt: 1_700_000_999_999,
+              updatedAt: 1_700_000_999_999,
+            },
+          ],
+        },
+      });
+    });
+
+    expect(sessionsCallCount(mockFetch)).toBe(1);
+    expect(screen.queryByText('s-live')).toBeNull();
+    expect(screen.getByText('s-arch')).toBeInTheDocument();
+  });
+
+  it('refetches in the archived view when a lifecycle event arrives', async () => {
+    const mockFetch = scriptedFetch([listBody([sessionPayload('archived')])]);
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderSessions('?view=archived');
+    await screen.findByText('s-1');
+    expect(sessionsCallCount(mockFetch)).toBe(1);
+    expect(String(lastSessionsCall(mockFetch))).toContain('status=archived');
+
+    await act(async () => {
+      pushWsMessage({
+        type: 'event',
+        sessionId: 's-2',
+        eventType: 'session.archived',
+        payload: { sessionId: 's-2', status: 'archived' },
+      });
+    });
+
+    await waitFor(() => {
+      expect(sessionsCallCount(mockFetch)).toBe(2);
+    });
+    expect(String(lastSessionsCall(mockFetch))).toContain('status=archived');
   });
 });
