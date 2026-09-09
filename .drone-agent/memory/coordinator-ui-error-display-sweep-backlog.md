@@ -1,7 +1,6 @@
 ---
 key: coordinator-ui-error-display-sweep-backlog
-tags:
-  []
+tags: []
 created: 2026-09-09T15:17:38.941Z
 updated: 2026-09-09T15:32:12.825Z
 ---
@@ -21,4 +20,5 @@ Deferred from plan `plan-coordinator-ui-archive-undo-and-error-display` (user ch
 9. **Banner swap (mechanical, 12 sites):** remaining pages still render the copy-pasted destructive banner inline (`topology.tsx` ~L262-266, `persona-editor.tsx` ~L163-167, `skill-editor.tsx` ~L166-170, `wiki-editor.tsx` ~L168-172, `wiki.tsx` ~L177-186 (two: error+graphError), `wiki-tag.tsx` ~L64-68). Swap for `<ErrorBanner message={error} />` exactly as done in sessions.tsx. The detail pages' full-page muted center text (beacon/persona/skill/wiki-detail) is a different pattern — decide whether those adopt ErrorBanner or stay.
 
 ## Separate list-integrity item (surfaced during archive-plan exploration, deliberately deferred)
+
 - `sessions.tsx` WS `initial` handler (~L129-145 pre-rework; still present) blindly PREPENDS any snapshot sessions not already in the list; the coordinator's initial snapshot is active-sessions-only (`drone-coordinator/src/index.ts` ~L437). Result: active sessions injected at the TOP of the list on WS (re)connect — including in the archived view. Needs its own design decision: proper merge semantics, or drop the `initial` subscription in favor of `session.*` event subscriptions (established pattern: `topology.tsx` ~L60-64, `session-detail.tsx` ~L49, `beacon-detail.tsx` ~L77-94). Note: after the archive rework, the prepend also lands ABOVE any merged pending-rows (which sit sorted by createdAt) — same class of wrong-position symptom the archive fix addressed.

@@ -4,6 +4,8 @@ import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import { useWikiPages } from '@/hooks/use-wiki-pages';
 import { useWikiGraph } from '@/hooks/use-wiki-graph';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
+import { useToast } from '@/hooks/use-toast';
+import { extractApiError, networkErrorMessage } from '@/hooks/use-api';
 import type { WikiPageMeta } from '@/lib/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +26,7 @@ const PAGE_SIZE = 12;
 export default function WikiPage() {
   const navigate = useNavigate();
   const authFetch = useAuthenticatedFetch();
+  const { error: showError } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const graphView = searchParams.get('view') === 'graph';
   const focusedNodeId = searchParams.get('node');
@@ -126,13 +129,15 @@ export default function WikiPage() {
       const res = await authFetch(`/api/wiki/${deleteTarget.id}`, {
         method: 'DELETE',
       });
-      if (res.ok) {
-        setPages(prev => prev.filter(p => p.id !== deleteTarget.id));
-        setDeleteOpen(false);
-        setDeleteTarget(null);
+      if (!res.ok) {
+        showError(await extractApiError(res));
+        return;
       }
-    } catch {
-      // Error handled silently
+      setPages(prev => prev.filter(p => p.id !== deleteTarget.id));
+      setDeleteOpen(false);
+      setDeleteTarget(null);
+    } catch (err) {
+      showError(networkErrorMessage(err));
     } finally {
       setDeleteLoading(false);
     }

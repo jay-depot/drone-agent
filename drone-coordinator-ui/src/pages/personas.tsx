@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
+import { extractApiError, networkErrorMessage } from '@/hooks/use-api';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
 import type { Persona } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +18,7 @@ const PAGE_SIZE = 12;
 export default function PersonasPage() {
   const navigate = useNavigate();
   const authFetch = useAuthenticatedFetch();
+  const { error: showError } = useToast();
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,13 +68,15 @@ export default function PersonasPage() {
       const res = await authFetch(`/api/personas/${deleteTarget.id}`, {
         method: 'DELETE',
       });
-      if (res.ok) {
-        setPersonas(prev => prev.filter(p => p.id !== deleteTarget.id));
-        setDeleteOpen(false);
-        setDeleteTarget(null);
+      if (!res.ok) {
+        showError(await extractApiError(res));
+        return;
       }
-    } catch {
-      // Error handled silently
+      setPersonas(prev => prev.filter(p => p.id !== deleteTarget.id));
+      setDeleteOpen(false);
+      setDeleteTarget(null);
+    } catch (err) {
+      showError(networkErrorMessage(err));
     } finally {
       setDeleteLoading(false);
     }

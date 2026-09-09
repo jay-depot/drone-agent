@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
+import { extractApiError, networkErrorMessage } from '@/hooks/use-api';
 import type { Persona } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +14,7 @@ export default function PersonaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const authFetch = useAuthenticatedFetch();
+  const { error: showError } = useToast();
   const [persona, setPersona] = useState<Persona | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,11 +48,13 @@ export default function PersonaDetailPage() {
     setDeleteLoading(true);
     try {
       const res = await authFetch(`/api/personas/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        navigate('/personas');
+      if (!res.ok) {
+        showError(await extractApiError(res));
+        return;
       }
-    } catch {
-      // Error handled silently
+      navigate('/personas');
+    } catch (err) {
+      showError(networkErrorMessage(err));
     } finally {
       setDeleteLoading(false);
     }

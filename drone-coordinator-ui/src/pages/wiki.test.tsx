@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import WikiPage from './wiki';
 import { AuthProvider } from '@/hooks/use-auth';
+import { ToastProvider } from '@/hooks/use-toast';
 import { WebSocketProvider } from '@/hooks/use-websocket';
 
 const localStorageMock = (() => {
@@ -26,13 +27,15 @@ Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
 function renderWiki() {
   return render(
-    <AuthProvider>
-      <WebSocketProvider>
-        <MemoryRouter>
-          <WikiPage />
-        </MemoryRouter>
-      </WebSocketProvider>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <WebSocketProvider>
+          <MemoryRouter>
+            <WikiPage />
+          </MemoryRouter>
+        </WebSocketProvider>
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 
@@ -156,15 +159,17 @@ describe('WikiPage graph view', () => {
     }));
 
     render(
-      <AuthProvider>
-        <WebSocketProvider>
-          <MemoryRouter initialEntries={['/wiki?view=graph']}>
-            <Routes>
-              <Route path="/wiki" element={<WikiPage />} />
-            </Routes>
-          </MemoryRouter>
-        </WebSocketProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <WebSocketProvider>
+            <MemoryRouter initialEntries={['/wiki?view=graph']}>
+              <Routes>
+                <Route path="/wiki" element={<WikiPage />} />
+              </Routes>
+            </MemoryRouter>
+          </WebSocketProvider>
+        </AuthProvider>
+      </ToastProvider>
     );
 
     await waitFor(() => {
@@ -205,15 +210,17 @@ describe('WikiPage graph view', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     render(
-      <AuthProvider>
-        <WebSocketProvider>
-          <MemoryRouter initialEntries={['/wiki?view=graph']}>
-            <Routes>
-              <Route path="/wiki" element={<WikiPage />} />
-            </Routes>
-          </MemoryRouter>
-        </WebSocketProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <WebSocketProvider>
+            <MemoryRouter initialEntries={['/wiki?view=graph']}>
+              <Routes>
+                <Route path="/wiki" element={<WikiPage />} />
+              </Routes>
+            </MemoryRouter>
+          </WebSocketProvider>
+        </AuthProvider>
+      </ToastProvider>
     );
 
     expect(screen.getByRole('button', { name: 'Tags' })).toBeDefined();
@@ -250,15 +257,17 @@ describe('WikiPage graph view', () => {
     // Tags enabled AFTER the graph view mounts — the same order that
     // previously dropped the param on canvas-initiated focus changes.
     render(
-      <AuthProvider>
-        <WebSocketProvider>
-          <MemoryRouter initialEntries={['/wiki?view=graph']}>
-            <Routes>
-              <Route path="/wiki" element={<WikiPage />} />
-            </Routes>
-          </MemoryRouter>
-        </WebSocketProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <WebSocketProvider>
+            <MemoryRouter initialEntries={['/wiki?view=graph']}>
+              <Routes>
+                <Route path="/wiki" element={<WikiPage />} />
+              </Routes>
+            </MemoryRouter>
+          </WebSocketProvider>
+        </AuthProvider>
+      </ToastProvider>
     );
     const user = userEvent.setup();
     await waitFor(() => {
@@ -302,15 +311,17 @@ describe('WikiPage graph view', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     render(
-      <AuthProvider>
-        <WebSocketProvider>
-          <MemoryRouter initialEntries={['/wiki?view=graph&tags=1']}>
-            <Routes>
-              <Route path="/wiki" element={<WikiPage />} />
-            </Routes>
-          </MemoryRouter>
-        </WebSocketProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <WebSocketProvider>
+            <MemoryRouter initialEntries={['/wiki?view=graph&tags=1']}>
+              <Routes>
+                <Route path="/wiki" element={<WikiPage />} />
+              </Routes>
+            </MemoryRouter>
+          </WebSocketProvider>
+        </AuthProvider>
+      </ToastProvider>
     );
 
     await waitFor(() => {
@@ -333,17 +344,19 @@ describe('WikiPage graph view', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     render(
-      <AuthProvider>
-        <WebSocketProvider>
-          <MemoryRouter
-            initialEntries={['/wiki?view=graph&tags=1&node=tag:ops']}
-          >
-            <Routes>
-              <Route path="/wiki" element={<WikiPage />} />
-            </Routes>
-          </MemoryRouter>
-        </WebSocketProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <WebSocketProvider>
+            <MemoryRouter
+              initialEntries={['/wiki?view=graph&tags=1&node=tag:ops']}
+            >
+              <Routes>
+                <Route path="/wiki" element={<WikiPage />} />
+              </Routes>
+            </MemoryRouter>
+          </WebSocketProvider>
+        </AuthProvider>
+      </ToastProvider>
     );
 
     await waitFor(() => {

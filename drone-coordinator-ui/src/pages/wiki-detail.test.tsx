@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
 import WikiDetailPage from './wiki-detail';
 import { AuthProvider } from '@/hooks/use-auth';
+import { ToastProvider } from '@/hooks/use-toast';
 
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -24,13 +26,16 @@ Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
 function renderDetail(initialPath = '/wiki/deploy') {
   return render(
-    <AuthProvider>
-      <MemoryRouter initialEntries={[initialPath]}>
-        <Routes>
-          <Route path="/wiki/:pageId" element={<WikiDetailPage />} />
-        </Routes>
-      </MemoryRouter>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <MemoryRouter initialEntries={[initialPath]}>
+          <Routes>
+            <Route path="/wiki/:pageId" element={<WikiDetailPage />} />
+            <Route path="/wiki" element={<div>Wiki list</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 
@@ -99,5 +104,69 @@ describe('WikiDetailPage pitch display', () => {
       expect(screen.getByText('Plain')).toBeTruthy();
     });
     expect(screen.queryByText('Pitch')).toBeNull();
+  });
+});
+
+describe('WikiDetailPage delete error handling', () => {
+  function jsonResponse(status: number, body: unknown): Response {
+    return {
+      status,
+      ok: status >= 200 && status < 300,
+      json: async () => body,
+    } as Response;
+  }
+
+  function stubFetch(deleteResponse: Response) {
+    const mockFetch = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/api/wiki/deploy' && (init?.method ?? 'GET') === 'GET') {
+        return jsonResponse(200, pageWithPitch);
+      }
+      if (url === '/api/wiki/deploy' && init?.method === 'DELETE') {
+        return deleteResponse;
+      }
+      return jsonResponse(404, { error: 'unexpected call' });
+    });
+    vi.stubGlobal('fetch', mockFetch);
+    return mockFetch;
+  }
+
+  async function confirmDelete() {
+    renderDetail();
+    await screen.findByRole('button', { name: 'Delete' });
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Delete' })
+    );
+  }
+
+  it('shows an error toast and stays on the page when delete fails', async () => {
+    stubFetch(jsonResponse(409, { error: 'Wiki page is in use' }));
+
+    await confirmDelete();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Wiki page is in use');
+    expect(screen.getByText('Pitch')).toBeInTheDocument();
+  });
+
+  it('shows a generic fallback toast when the error body has no message', async () => {
+    stubFetch(jsonResponse(500, {}));
+
+    await confirmDelete();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('HTTP 500: Unknown error');
+  });
+
+  it('navigates to the wiki list when delete succeeds', async () => {
+    stubFetch(jsonResponse(200, {}));
+
+    await confirmDelete();
+
+    await waitFor(() => {
+      expect(screen.getByText('Wiki list')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });
