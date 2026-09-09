@@ -41,6 +41,7 @@ Currently, installation is a little annoying, by design. The drone-agent tools a
 - pnpm 11+
 
 ### Installation steps:
+
 Before you start: Decide if you want to set up `swarm`, and if so, choose a coordinator host. If you only intend to run on a single machine, ever, but you want access to the swarm memory RAG on that one machine, you can run the coordinator locally. Otherwise, I recommend a VPS or a Raspberry Pi and a Tailscale network.
 
 1. `$ git clone https://github.com/jay-depot/drone-agent.git`
@@ -56,7 +57,7 @@ Before you start: Decide if you want to set up `swarm`, and if so, choose a coor
 
 Config files live in `.drone-agent/config.json`. Config cascades from default → user (`~/.drone-agent/config.json`) → project (`.drone-agent/config.json` in your project root), with the project level taking highest precedence.
 
-The quickest way to get configured is to run `drone-agent` in a new directory and use the `/bootstrap user` workflow, which interactively walks you through selecting a provider and model and writes `~/.drone-agent/config.json` for you.
+The quickest way to get configured is to simply run `drone-agent` in a new directory: when no user config exists yet, a first-run setup walks you through selecting a provider and model and writes `~/.drone-agent/config.json` for you. You can also run the bootstrap workflow explicitly with `drone-agent --workflow bootstrap__user --plugin bootstrap`.
 
 Alternatively, you can write the user config manually. The minimum required config is an LLM provider with at least one model, and an `llm.active` entry pointing to it. The `apiKey` field supports `${ENV_VAR}` interpolation so you do not need to store secrets in the file.
 
@@ -64,17 +65,29 @@ Alternatively, you can write the user config manually. The minimum required conf
 
 ```json
 {
-  "llm": { "active": "anthropic/claude-sonnet-4-5" },
+  "llm": { "active": "anthropic/claude-sonnet-4-6" },
   "providers": {
     "anthropic": {
       "protocol": "anthropic",
       "apiKey": "${ANTHROPIC_API_KEY}",
       "models": {
-        "claude-sonnet-4-5": {}
+        "claude-sonnet-4-6": {}
       }
     }
   },
-  "enabledPlugins": ["file", "exec", "git", "fetch", "compaction", "log"]
+  "enabledPlugins": [
+    "startup",
+    "config",
+    "llm",
+    "anthropic",
+    "file",
+    "exec",
+    "git",
+    "fetch",
+    "search",
+    "compaction",
+    "log"
+  ]
 }
 ```
 
@@ -93,7 +106,19 @@ Alternatively, you can write the user config manually. The minimum required conf
       }
     }
   },
-  "enabledPlugins": ["file", "exec", "git", "fetch", "compaction", "log"]
+  "enabledPlugins": [
+    "startup",
+    "config",
+    "llm",
+    "openai",
+    "file",
+    "exec",
+    "git",
+    "fetch",
+    "search",
+    "compaction",
+    "log"
+  ]
 }
 ```
 
@@ -101,21 +126,33 @@ Alternatively, you can write the user config manually. The minimum required conf
 
 ```json
 {
-  "llm": { "active": "openrouter/claude-sonnet-4-5" },
+  "llm": { "active": "openrouter/anthropic/claude-sonnet-4-6" },
   "providers": {
     "openrouter": {
       "protocol": "openrouter",
       "apiKey": "${OPENROUTER_API_KEY}",
       "models": {
-        "claude-sonnet-4-5": { "model": "anthropic/claude-sonnet-4-5" }
+        "anthropic/claude-sonnet-4-6": {}
       }
     }
   },
-  "enabledPlugins": ["file", "exec", "git", "fetch", "compaction", "log"]
+  "enabledPlugins": [
+    "startup",
+    "config",
+    "llm",
+    "openrouter",
+    "file",
+    "exec",
+    "git",
+    "fetch",
+    "search",
+    "compaction",
+    "log"
+  ]
 }
 ```
 
-**Ollama** (local models, no API key needed):
+**Ollama** (local models, no API key needed, also supports *:cloud models through local ollama proxy):
 
 ```json
 {
@@ -125,15 +162,28 @@ Alternatively, you can write the user config manually. The minimum required conf
       "protocol": "ollama",
       "baseUrl": "http://localhost:11434",
       "models": {
-        "qwen2.5-coder:32b": {}
+        "qwen2.5-coder:32b": {},
+        "glm-5.3-flash:cloud": {}
       }
     }
   },
-  "enabledPlugins": ["file", "exec", "git", "fetch", "compaction", "log"]
+  "enabledPlugins": [
+    "startup",
+    "config",
+    "llm",
+    "ollama",
+    "file",
+    "exec",
+    "git",
+    "fetch",
+    "search",
+    "compaction",
+    "log"
+  ]
 }
 ```
 
-The `enabledPlugins` list above is a reasonable baseline. See the plugin list in the Design Principles section for the full set of built-in plugins you can enable. The `config-library/` directory contains example configs, skills, macros, and personas to use as a starting point.
+The `enabledPlugins` list above is a reasonable baseline. Note that a non-empty `enabledPlugins` list replaces the default-enabled plugin set, so it must include the `llm` broker and the protocol plugin matching your provider entry's `protocol` field. See the plugin list in the Design Principles section for the full set of built-in plugins you can enable. The `config-library/` directory contains example configs, skills, macros, and personas to use as a starting point.
 
 ### Swarm Configuration
 
