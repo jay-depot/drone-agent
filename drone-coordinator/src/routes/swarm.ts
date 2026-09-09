@@ -10,6 +10,29 @@ import {
 import { buildSessionTranscript } from '../transcript.js';
 import * as db from '../db/index.js';
 import { sendBeaconCommand } from '../beacon-ws.js';
+import {
+  toChatFeedItem,
+  isNoiseEvent,
+  type ChatFeedItem,
+} from '../chat-feed.js';
+
+function isBlobRef(payload: string | null): boolean {
+  return payload !== null && payload.startsWith('blob:');
+}
+
+let deprecationWarned = false;
+
+function markDeprecated(
+  reply: { header: (name: string, value: string) => unknown },
+  route: string
+): void {
+  reply.header('Deprecation', 'true');
+  reply.header('Sunset', 'Wed, 01 Jul 2026 00:00:00 GMT');
+  if (!deprecationWarned) {
+    deprecationWarned = true;
+    logger.warn(`${route} is deprecated — use GET /api/sessions/:id/chat`);
+  }
+}
 
 export default function swarmRoutes(app: FastifyInstance) {
   // === Swarm Session Routes ===
@@ -165,11 +188,22 @@ export default function swarmRoutes(app: FastifyInstance) {
         createdAt: evt.createdAt,
       });
       created.push(event);
-      publishMutationEvent({
-        sessionId: evt.sessionId,
-        eventType: evt.type,
-        payload: evt.payload,
-      });
+      if (!isNoiseEvent(evt.type)) {
+        const item = toChatFeedItem({
+          id: evt.id,
+          type: evt.type,
+          metadata: evt.metadata,
+          correlationId: evt.correlationId ?? null,
+          createdAt: evt.createdAt,
+          payload: evt.payload ?? null,
+          payloadWasBlobRef: false,
+        });
+        publishMutationEvent({
+          sessionId: evt.sessionId,
+          eventType: evt.type,
+          payload: item,
+        });
+      }
     }
     return reply.code(201).send({ count: created.length, events: created });
   });
@@ -182,11 +216,77 @@ export default function swarmRoutes(app: FastifyInstance) {
     if (!session) {
       return reply.code(404).send({ error: 'Session not found' });
     }
+    markDeprecated(reply, 'GET /sessions/:id/events');
     return db.getSwarmEvents(request.params.id, {
       correlationId: request.query.correlationId,
       limit: request.query.limit ? Number(request.query.limit) : undefined,
       offset: request.query.offset ? Number(request.query.offset) : undefined,
     });
+  });
+
+  app.get<{
+    Params: { id: string };
+    Querystring: { limit?: number; before?: string };
+  }>('/sessions/:id/chat', async (request, reply) => {
+    const session = db.getSwarmSession(request.params.id);
+    if (!session) {
+      return reply.code(404).send({ error: 'Session not found' });
+    }
+    const rawLimit = request.query.limit
+      ? Number(request.query.limit)
+      : undefined;
+    const limit = Math.min(Math.max(rawLimit ?? 100, 1), 500);
+    const page = db.getChatFeedEvents(
+      request.params.id,
+      limit,
+      request.query.before
+    );
+    const items: ChatFeedItem[] = [];
+    for (const evt of page.events) {
+      const payloadWasBlobRef = isBlobRef(evt.payload);
+      let payload = evt.payload;
+      if (payloadWasBlobRef && evt.type !== 'toolResultBatch') {
+        payload = await retrieveLargePayload(evt.payload as string);
+      }
+      const item = toChatFeedItem({
+        id: evt.id,
+        type: evt.type,
+        metadata: evt.metadata,
+        correlationId: evt.correlationId,
+        createdAt: evt.createdAt,
+        payload,
+        payloadWasBlobRef,
+      });
+      if (item) items.push(item);
+    }
+    return reply.send({
+      items,
+      hasMore: page.hasMore,
+      oldestCursor: page.oldestCursor,
+    });
+  });
+
+  app.get<{
+    Params: { id: string; eventId: string };
+  }>('/sessions/:id/events/:eventId/content', async (request, reply) => {
+    const session = db.getSwarmSession(request.params.id);
+    if (!session) {
+      return reply.code(404).send({ error: 'Session not found' });
+    }
+    const event = db.getSwarmEvent(request.params.id, request.params.eventId);
+    if (!event) {
+      return reply.code(404).send({ error: 'Event not found' });
+    }
+    let payload: string | null;
+    if (isBlobRef(event.payload)) {
+      payload = await retrieveLargePayload(event.payload as string);
+      if (payload === null) {
+        return reply.code(404).send({ error: 'content unavailable' });
+      }
+    } else {
+      payload = event.payload;
+    }
+    return reply.send({ id: event.id, type: event.type, payload });
   });
 
   app.get<{ Params: { id: string }; Querystring: { limit?: number } }>(
@@ -196,6 +296,7 @@ export default function swarmRoutes(app: FastifyInstance) {
       if (!session) {
         return reply.code(404).send({ error: 'Session not found' });
       }
+      markDeprecated(reply, 'GET /sessions/:id/events/latest');
       const limit = request.query.limit ? Number(request.query.limit) : 10;
       return db.getLatestSwarmEvents(request.params.id, limit);
     }

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import type { SwarmEvent, SwarmSession, WsEventMessage } from '@/lib/types';
+import type { ChatFeedItem } from '@/lib/chat-types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { Separator } from '@/components/ui/separator';
+import { SessionChat } from '@/components/chat/session-chat';
 
 // A spawned agent registers its swarm session seconds after this page
 // mounts, so the first metadata fetch can legitimately 404. A bounded
@@ -42,6 +44,9 @@ export default function SessionDetailPage() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [liveChatItems, setLiveChatItems] = useState<ChatFeedItem[]>([]);
+  const view = searchParams.get('view') === 'raw' ? 'raw' : 'chat';
 
   // Fetch session metadata to detect live + interactive (enables chat input).
   const fetchSession = useCallback(async (): Promise<boolean> => {
@@ -148,21 +153,34 @@ export default function SessionDetailPage() {
         if (SESSION_LIFECYCLE_EVENT_TYPES.has(eventMsg.eventType)) {
           void fetchSession();
         }
-        setEvents(prev => [
-          ...prev,
-          {
-            id: `ws-${(localEventIdRef.current += 1)}`,
-            sessionId: eventMsg.sessionId,
-            correlationId: null,
-            type: eventMsg.eventType,
-            payload:
-              typeof eventMsg.payload === 'string'
-                ? eventMsg.payload
-                : JSON.stringify(eventMsg.payload),
-            metadata: null,
-            createdAt: Date.now(),
-          },
-        ]);
+        // Chat-feed pushes carry trimmed ChatFeedItem payloads; the raw
+        // view (legacy endpoints) synthesizes a local SwarmEvent instead.
+        const feedItem = eventMsg.payload as ChatFeedItem | undefined;
+        if (
+          view === 'chat' &&
+          feedItem &&
+          typeof feedItem === 'object' &&
+          typeof (feedItem as ChatFeedItem).id === 'string' &&
+          typeof (feedItem as ChatFeedItem).preview === 'string'
+        ) {
+          setLiveChatItems(prev => [...prev, feedItem]);
+        } else {
+          setEvents(prev => [
+            ...prev,
+            {
+              id: `ws-${(localEventIdRef.current += 1)}`,
+              sessionId: eventMsg.sessionId,
+              correlationId: null,
+              type: eventMsg.eventType,
+              payload:
+                typeof eventMsg.payload === 'string'
+                  ? eventMsg.payload
+                  : JSON.stringify(eventMsg.payload),
+              metadata: null,
+              createdAt: Date.now(),
+            },
+          ]);
+        }
       }
     });
 
@@ -204,6 +222,16 @@ export default function SessionDetailPage() {
     );
   }
 
+  const toggleView = () => {
+    const next = new URLSearchParams(searchParams);
+    if (view === 'chat') {
+      next.set('view', 'raw');
+    } else {
+      next.delete('view');
+    }
+    setSearchParams(next);
+  };
+
   return (
     <div>
       <div className="flex items-center gap-4 mb-6">
@@ -232,6 +260,11 @@ export default function SessionDetailPage() {
           <CardTitle className="text-base">Session Info</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="flex justify-end mb-2">
+            <Button size="sm" variant="outline" onClick={toggleView}>
+              {view === 'chat' ? 'Raw log' : 'Chat view'}
+            </Button>
+          </div>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-muted-foreground">Session ID</span>
@@ -245,7 +278,9 @@ export default function SessionDetailPage() {
         </CardContent>
       </Card>
 
-      {loading ? (
+      {view === 'chat' ? (
+        <SessionChat sessionId={sessionId} liveItems={liveChatItems} />
+      ) : loading ? (
         <div className="text-center py-12 text-muted-foreground">
           Loading events...
         </div>

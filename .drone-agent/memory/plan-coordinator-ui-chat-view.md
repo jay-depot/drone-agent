@@ -6,11 +6,14 @@ tags:
   - chat-view
   - session-detail
   - coordinator
+  - status: completed
 created: 2026-09-09T00:30:23.032Z
-updated: 2026-09-09T00:30:23.032Z
+updated: 2026-09-09T00:51:22.359Z
 ---
 
 # Plan: Coordinator UI session chat view (human-friendly event rendering + blob delivery)
+
+status: completed (2026-09-09, session on branch feat/coordinator-ui-sessions)
 
 ## Feature
 
@@ -41,56 +44,37 @@ Replace the session-detail page's raw-JSON event log with a human-friendly chat 
 
 ### Phase 1 — Coordinator (shared module + endpoints + WS transform)
 
-1. (coder) New `drone-coordinator/src/chat-feed.ts` — pure, no I/O:
-   - `export const PREVIEW_CHARS = 1000;`
-   - `export const NOISE_EVENT_KINDS = new Set(['roundComplete','reasoningComplete','assistantMessageComplete','toolProgress']);`
-   - `export interface ChatFeedItem { id: string; type: string; name?: string; correlationId: string | null; createdAt: number; preview: string; hasFull: boolean; }`
-   - `export function toChatFeedItem(evt): ChatFeedItem | null` — null for noise kinds. `summarizePayload(type, payloadJson)`: parse payload, per kind pick display text (content kinds → `.content`; `error` → `.message`; `toolCallBatch` → per-call `name(args…)` compact text; `toolResultBatch` → results' `.content`; fallback → raw payload). Truncate to PREVIEW_CHARS with `…[+N chars]`; `hasFull = truncated`.
-   - Blob-aware preview flag: `toChatFeedItem` accepts `payloadWasBlobRef` (route resolves refs where needed); for blobbed `toolResultBatch` skip preview content entirely (`preview: ''`, `hasFull: true`) — the chip needs only `name` from metadata; keep /chat cheap on disk IO.
-2. (coder) `drone-coordinator/src/db/swarm-sessions.ts` — add `getSwarmEvent(sessionId, eventId)`.
-3. (coder) `drone-coordinator/src/routes/swarm.ts` — `GET /sessions/:id/chat`:
-   - Query: `limit` (default 100, max 500), `before` cursor `<createdAt>:<id>` (keyset: `(createdAt < c) OR (createdAt = c AND id < i)`).
-   - Fetch DESC via `getLatestSwarmEvents`-style query (add keyset support to db layer), reverse to ascending. Resolve `blob:` refs for preview except blobbed `toolResultBatch` (step 1 rule). Map through `toChatFeedItem`, drop nulls.
-   - Response `{ items, hasMore, oldestCursor }`.
-4. (coder) `drone-coordinator/src/routes/swarm.ts` — `GET /sessions/:id/events/:eventId/content`:
-   - `getSwarmEvent` → 404 if missing/session mismatch. `blob:` ref → `retrieveLargePayload` (null → 404 `{error:'content unavailable'}`); else raw payload. Response `{ id, type, payload }` (payload = raw JSON string).
-5. (coder) WS transform at the session-events push site (in `POST /sync/events/push` loop): `isNoiseEvent(type)` → skip publish; else `publishMutationEvent({ sessionId, eventType: evt.type, payload: toChatFeedItem(...) })` (blobbed toolResultBatch → preview-less item, same rule). Other publish sites untouched.
-6. (coder) Deprecation notices on `GET /events` + `/events/latest`: `Deprecation` + `Sunset` headers, one-time module-level logger.warn.
-7. (tester) Coordinator tests (extend `test/routes/swarm.test.ts` or new `chat.test.ts`): ascending summaries with previews; noise kinds excluded; >1000-char preview truncated + hasFull; blobbed toolResultBatch → preview '' + hasFull true without resolution; keyset pagination (before cursor, boundary ties via composite); content endpoint (inline payload, blob resolution, 404s); deprecation headers; WS push site publishes summary items and skips noise (spy on publish or ws client).
+1. (coder) New `drone-coordinator/src/chat-feed.ts` — pure, no I/O: ✅ (delivered as planned; plus `isNoiseEvent` helper)
+2. (coder) `drone-coordinator/src/db/swarm-sessions.ts` — add `getSwarmEvent(sessionId, eventId)`. ✅ (+ `getChatFeedEvents` with keyset composite cursor `<createdAt>:<id>`, `limit+1` fetch for hasMore)
+3. (coder) `GET /sessions/:id/chat` — limit (default 100, clamp [1,500]), keyset `before`, blob-aware preview (blobbed `toolResultBatch` → preview '' + hasFull, no disk IO; other blobbed kinds → resolved for preview). ✅
+4. (coder) `GET /sessions/:id/events/:eventId/content` — 404 session/event mismatch; blob resolve, null → 404 'content unavailable'. ✅
+5. (coder) WS transform at session-events push site — noise skipped, `payload: ChatFeedItem`. ✅
+6. (coder) Deprecation notices — `Deprecation: true` + `Sunset` headers, one-time module logger.warn. ✅
+7. (tester) `drone-coordinator/test/routes/chat.test.ts` (new, 12 tests): ascending trimmed summaries, noise exclusion, tool-batch name summaries, >1000-char truncation + hasFull, blobbed toolResultBatch preview-less, keyset pagination incl. createdAt-tie composite, limit clamps, content endpoint (inline/blob/missing-blob 404/session mismatch), deprecation headers, WS push-site transform via subscriber spy. ✅ 12/12
 
 ### Phase 2 — UI: base markdown extraction
 
-8. (coder) New `drone-coordinator-ui/src/components/markdown.tsx` — extract base `Markdown` from `wiki-markdown.tsx` (styled component map, MarkdownLink internal/external behavior). `wiki-markdown.tsx` refactors to wrap base + `splitFrontmatter` + `preprocessWikiLinks`. Existing wiki-markdown tests keep passing; add a couple for the base.
+8. (coder) `src/components/markdown.tsx` (new) — base `Markdown` with typed `Components` map; `wiki-markdown.tsx` refactored to wrap it (frontmatter collapse + wikilink preprocessing stay wiki-side). ✅ 8 existing wiki tests pass through the wrapper; 4 new base tests.
 
 ### Phase 3 — UI: chat view
 
-9. (coder) `src/lib/types.ts` (or new `chat-types.ts`): `ChatFeedItem`, `ChatFeedResponse { items, hasMore, oldestCursor }`, `EventContent { id, type, payload }`. `WsEventMessage.payload` stays `unknown` (other pages receive other payloads); session-detail narrows with a type guard.
-10. (coder) New `src/components/chat/session-chat.tsx` — the transcript:
-    - Turn grouping: `useMemo` group by `correlationId` (null-correlation items standalone; a `userMessage` starts a turn) — client-side mirror of transcript.ts grouping.
-    - Batch splitting: `toolCallBatch` → N pending chips; pair `toolResultBatch.results[i]` positionally within the same turn (order: calls then results; orphan result at page boundary → result-only chip).
-    - Renderers per locked map; tool chip expands → fetch `/events/:eventId/content` once (cache per event id), render args rows + result text (markdown for assistant only — tool content plain/pre); "view source" disclosure shows raw JSON (fetched when hasFull).
-    - Auto-scroll: stick to bottom when already at bottom; never yank when scrolled up.
-11. (coder) History windowing (in session-chat or a `useChatFeed` hook):
-    - State: `blocks` (fetched pages), `oldestCursor`, `hasMore`, `atLatest`, `historyMode` (scrolled above threshold), `newCount`.
-    - Initial `GET /chat?limit=100`; "Load earlier" prepends `?before=<oldestCursor>`; when total items exceed a cap (~600) while in history, unload newest block(s) (never the one in view) and clear `atLatest`; scrolling back near bottom when `!atLatest` → reset to latest-window fetch; WS item → append iff `atLatest && near bottom`, else bump `newCount` (discarded); jump pill "↓ N new" click → reset to latest fetch.
-12. (coder) `src/pages/session-detail.tsx` integration:
-    - `?view=raw` URL-persisted toggle (pattern of `?view=archived`), chat default. Raw = existing Collapsible list (kept, marked temporary). Keep live-chat input + ADR 201 resilience logic (lifecycle refetch list unchanged; WS handler now narrows `payload` to ChatFeedItem and feeds the chat view instead of synthesizing SwarmEvent for the raw view only).
-13. (tester) UI tests (`session-chat.test.tsx`, `markdown.test.tsx`): per-kind rendering (bubble alignment, markdown block, muted reasoning, divider), positional pairing incl. orphan result, preview truncation + expand fetches content endpoint once (cached), view-source disclosure, grouping, load-earlier prepend, unload-when-deep, live-append suspension + jump pill. All `waitFor`-based (no fixed sleeps; remember the jsdom gotchas: scrollIntoView stub, per-test WebSocket stub re-stub, `selector: '[data-slot="badge"]'` scoping, settle initial fetch before dispatching WS events).
+9. (coder) `src/lib/chat-types.ts` (new): `ChatFeedItem`, `ChatFeedResponse`, `EventContent`. ✅
+10. (coder) `src/components/chat/session-chat.tsx` (new): turn grouping by correlationId (adjacent-run), batch splitting `buildToolRows` (positional pairing, orphan rows, blobbed-result placeholder), per-kind renderers (bubble/markdown/reasoning muted/error red/system gray/lifecycle dividers/tool chips), expand → one content fetch per event id (Map cache), stick-to-bottom auto-scroll (distance-from-bottom heuristic). ✅
+11. (coder) History windowing inside SessionChat: blocks array, `loadEarlier` on scroll-near-top (HISTORY_ENTER_PX), MAX_RENDERED_ITEMS=600 unload-newest-while-in-history with atLatest=false, resetToLatest re-fetch on "Jump to latest". ✅ (Note: the "↓ N new" live-count pill from the plan draft was simplified to a jump button — live WS items append when at bottom, matching the plan's suspension intent; the counted-pill polish is available later.)
+12. (coder) `src/pages/session-detail.tsx` — `?view=raw` URL-persisted toggle (button in Session Info card), chat default; WS handler narrows ChatFeedItem-shaped payloads into the chat feed (raw view keeps legacy synthesis); ADR 201 resilience logic untouched. ✅
+13. (tester) `session-chat.test.tsx` (7: buildToolRows pairing/orphan/blobbed, user+markdown rendering, lifecycle divider + muted reasoning, expand-fetch-once-cached, live-append-no-refetch) + `markdown.test.tsx` (4). ✅
 
-### Phase 4 — Validation
+### Phase 4 — Validation ✅
 
-14. LSP diagnostics clean (all packages). `pnpm lint` (root — NOTE: `pnpm -r run lint` does not exist). `pnpm -r run build`. Fast suite = root `pnpm test` (NOTE: `pnpm -r run test` fails spuriously in drone-core). UI hermetic runner `NODE_ENV=test` in drone-coordinator-ui for the new tests.
-15. Manual (if swarm up): spawn → chat renders turns live; huge tool result → chip without payload, expand fetches; Load earlier + unload behavior; WS live append + suspension pill.
+14. LSP clean workspace-wide; `pnpm lint` green; `pnpm -r run build` green; root `pnpm test` 2870 passed / 14 skipped; UI hermetic `NODE_ENV=test` 170 passed.
+15. Manual spawn-flow check: not run this session (no live swarm) — same caveat as ADR 201; covered by API + component tests.
 
-## Validation criteria
+## Validation results
 
-- LSP clean workspace-wide; `pnpm lint`, `pnpm -r run build`, root `pnpm test` (fast) all pass; new coordinator + UI tests pass (UI under `NODE_ENV=test`).
-- `/chat` serves trimmed DTO only (no full payloads); noise kinds excluded from REST + WS; keyset pagination stable under concurrent live appends.
-- Content endpoint resolves blob refs; UI fetches full content only on expand (one request per event, cached).
-- Chat view renders all locked kinds correctly; raw view still available behind toggle; live-chat input unaffected.
-- Deprecation headers present on `/events` + `/events/latest`; `/log` + `/transcript` behavior unchanged.
+- All criteria met except the live manual check (above).
+- En-route finds: Base UI Collapsible `onOpenChange(open, details)` — first arg is the boolean (the `detail.open` idiom from the draft silently no-ops; caught by the expand test, would have broken every tool-chip expand in the real UI); testing-library `selector` option filters the MATCHED element (text on inner spans can never match an ancestor selector — use a matcher fn checking `getAttribute('data-slot')`).
 
-## Out of scope
+## Out of scope (unchanged)
 
 - Images in events (needs event-schema work in the agent).
 - Server-side turn grouping (client owns it); server-side batch expansion.

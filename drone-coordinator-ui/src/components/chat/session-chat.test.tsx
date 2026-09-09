@@ -1,0 +1,298 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { buildToolRows } from './session-chat';
+import type { ChatFeedItem } from '@/lib/chat-types';
+
+function item(partial: Partial<ChatFeedItem> & { id: string }): ChatFeedItem {
+  return {
+    type: 'notice',
+    correlationId: null,
+    createdAt: 1000,
+    preview: '',
+    hasFull: false,
+    ...partial,
+  };
+}
+
+describe('buildToolRows (batch splitting + positional pairing)', () => {
+  it('pairs calls and results positionally within a turn', () => {
+    const rows = buildToolRows([
+      item({
+        id: 'call1',
+        type: 'toolCallBatch',
+        preview: JSON.stringify({
+          toolCalls: [
+            { name: 'file__read', arguments: { path: '/a' } },
+            { name: 'file__read', arguments: { path: '/b' } },
+          ],
+        }),
+        name: 'file__read',
+      }),
+      item({
+        id: 'res1',
+        type: 'toolResultBatch',
+        preview: JSON.stringify({
+          results: [
+            { name: 'file__read', content: 'A content' },
+            { name: 'file__read', content: 'B content' },
+          ],
+        }),
+        name: 'file__read',
+      }),
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      callId: 'call1',
+      name: 'file__read',
+      resultContent: 'A content',
+      resultId: 'res1',
+    });
+    expect(rows[1]).toMatchObject({
+      callId: 'call1',
+      name: 'file__read',
+      resultContent: 'B content',
+      resultId: 'res1',
+    });
+  });
+
+  it('renders an orphan result (page boundary) as a result-only row', () => {
+    const rows = buildToolRows([
+      item({
+        id: 'res1',
+        type: 'toolResultBatch',
+        preview: JSON.stringify({
+          results: [{ name: 'x', content: 'orphan' }],
+        }),
+      }),
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.callId).toBeNull();
+    expect(rows[0]!.resultContent).toBe('orphan');
+    expect(rows[0]!.resultId).toBe('res1');
+  });
+
+  it('flags a blobbed result (empty preview + hasFull) as pending content', () => {
+    const rows = buildToolRows([
+      item({
+        id: 'call1',
+        type: 'toolCallBatch',
+        preview: JSON.stringify({ toolCalls: [{ name: 'big' }] }),
+      }),
+      item({
+        id: 'res1',
+        type: 'toolResultBatch',
+        preview: '',
+        hasFull: true,
+        name: 'big',
+      }),
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.resultId).toBe('res1');
+    expect(rows[0]!.resultContent).toBeNull();
+  });
+});
+
+function jsonResponse(status: number, body: unknown): Response {
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    json: async () => body,
+  } as Response;
+}
+
+function makeFetch(
+  items: ChatFeedItem[],
+  options?: { hasMore?: boolean; oldestCursor?: string | null }
+) {
+  return vi.fn().mockImplementation((url: string) => {
+    if (url.startsWith('/api/sessions/agent-1/chat')) {
+      return Promise.resolve(
+        jsonResponse(200, {
+          items,
+          hasMore: options?.hasMore ?? false,
+          oldestCursor: options?.oldestCursor ?? null,
+        })
+      );
+    }
+    if (url.includes('/content')) {
+      const id = url.split('/events/')[1]?.split('/content')[0];
+      return Promise.resolve(
+        jsonResponse(200, {
+          id,
+          type: 'toolResultBatch',
+          payload: `FULL CONTENT FOR ${id}`,
+        })
+      );
+    }
+    return Promise.resolve(jsonResponse(404, {}));
+  });
+}
+
+let mockFetch: ReturnType<typeof vi.fn>;
+
+vi.mock('@/hooks/use-auth', () => ({
+  useAuthenticatedFetch: () => mockFetch,
+}));
+
+// Minimal SessionChat render harness (the real component is imported
+// dynamically so the mock above applies).
+import { SessionChat } from './session-chat';
+
+function Harness({ items }: { items: ChatFeedItem[] }) {
+  return <SessionChat sessionId="agent-1" liveItems={items} />;
+}
+
+beforeEach(() => {
+  window.HTMLElement.prototype.scrollIntoView = vi.fn();
+});
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('SessionChat rendering', () => {
+  it('renders a user bubble and an assistant markdown block', async () => {
+    mockFetch = makeFetch([
+      item({
+        id: 'u1',
+        type: 'userMessage',
+        preview: 'please help',
+        correlationId: 'c1',
+        createdAt: 1000,
+      }),
+      item({
+        id: 'a1',
+        type: 'assistantMessage',
+        preview: '# Hi\n\nDo **this**.',
+        correlationId: 'c1',
+        createdAt: 1001,
+      }),
+    ]);
+    render(<Harness items={[]} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('please help')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('heading', { name: 'Hi' })).toBeInTheDocument();
+    const strong = screen.getByText('this');
+    expect(strong.tagName).toBe('STRONG');
+  });
+
+  it('renders lifecycle events as dividers and reasoning muted', async () => {
+    mockFetch = makeFetch([
+      item({
+        id: 'p1',
+        type: 'personaChanged',
+        preview: JSON.stringify({ from: null, to: 'coder' }),
+        createdAt: 1000,
+      }),
+      item({
+        id: 'r1',
+        type: 'reasoning',
+        preview: 'pondering',
+        createdAt: 1001,
+      }),
+    ]);
+    render(<Harness items={[]} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('persona → coder')).toBeInTheDocument();
+    });
+    const reasoning = screen.getByText('pondering');
+    expect(reasoning.className).toContain('italic');
+    expect(reasoning.className).toContain('muted');
+  });
+
+  it('expands a tool chip and fetches full content once (cached)', async () => {
+    const user = userEvent.setup();
+    mockFetch = makeFetch([
+      item({
+        id: 'call1',
+        type: 'toolCallBatch',
+        preview: JSON.stringify({
+          toolCalls: [{ name: 'file__read', arguments: { path: '/big' } }],
+        }),
+        name: 'file__read',
+        correlationId: 'c1',
+      }),
+      item({
+        id: 'res1',
+        type: 'toolResultBatch',
+        preview: '',
+        hasFull: true,
+        name: 'file__read',
+        correlationId: 'c1',
+      }),
+    ]);
+    render(<Harness items={[]} />);
+
+    // Two tool rows render (call batch + result batch); each has a trigger
+    // button — click the first (the call chip) and assert one fetch total.
+    // Note: the tool name lives on an inner <span>, and the selector option
+    // filters the matched element itself — so use a matcher fn that checks
+    // the ancestor trigger's data-slot instead.
+    const triggerMatcher = (_: string, el: Element | null) =>
+      el?.getAttribute('data-slot') === 'collapsible-trigger' &&
+      (el.textContent?.includes('file__read') ?? false);
+    const chips = await screen.findAllByText(triggerMatcher);
+    await user.click(chips[0]!);
+
+    await waitFor(() => {
+      expect(
+        mockFetch.mock.calls.filter(([url]) => String(url).includes('/content'))
+      ).toHaveLength(1);
+    });
+    // The clicked row is the call chip (callId call1) — content is keyed by
+    // the event id in the URL, so the payload label reads call1.
+    await screen.findByText('FULL CONTENT FOR call1');
+
+    // Collapse and re-expand: no second content fetch.
+    const chips2 = screen.getAllByText(triggerMatcher);
+    const firstChip = chips2[0]!;
+    await user.click(firstChip);
+    await user.click(firstChip);
+    await waitFor(() => {
+      expect(
+        mockFetch.mock.calls.filter(([url]) => String(url).includes('/content'))
+      ).toHaveLength(1);
+    });
+    await screen.findByText('FULL CONTENT FOR call1');
+    expect(
+      mockFetch.mock.calls.filter(([url]) => String(url).includes('/content'))
+    ).toHaveLength(1);
+  });
+});
+
+describe('SessionChat live append', () => {
+  it('renders live items passed via props without refetching', async () => {
+    mockFetch = makeFetch([
+      item({
+        id: 'u1',
+        type: 'userMessage',
+        preview: 'hello',
+        correlationId: 'c1',
+        createdAt: 1000,
+      }),
+    ]);
+    const { rerender } = render(<Harness items={[]} />);
+    await screen.findByText('hello');
+
+    const before = mockFetch.mock.calls.length;
+    rerender(
+      <Harness
+        items={[
+          item({
+            id: 'live1',
+            type: 'assistantMessage',
+            preview: 'live reply',
+            correlationId: 'c1',
+            createdAt: 1001,
+          }),
+        ]}
+      />
+    );
+    expect(screen.getByText('live reply')).toBeInTheDocument();
+    expect(mockFetch.mock.calls.length).toBe(before);
+  });
+});

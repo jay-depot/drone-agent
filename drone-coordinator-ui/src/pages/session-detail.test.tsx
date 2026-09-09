@@ -25,9 +25,15 @@ class MockWebSocket {
   removeEventListener() {}
 }
 
-function wrapper({ children }: { children: ReactNode }) {
+function wrapper({
+  children,
+  entry = '/sessions/agent-1',
+}: {
+  children: ReactNode;
+  entry?: string;
+}) {
   return (
-    <MemoryRouter initialEntries={['/sessions/agent-1']}>
+    <MemoryRouter initialEntries={[entry]}>
       <AuthProvider>
         <WebSocketProvider>{children}</WebSocketProvider>
       </AuthProvider>
@@ -35,12 +41,12 @@ function wrapper({ children }: { children: ReactNode }) {
   );
 }
 
-function renderPage() {
+function renderPage(entry?: string) {
   return render(
     <Routes>
       <Route path="/sessions/:sessionId" element={<SessionDetailPage />} />
     </Routes>,
-    { wrapper }
+    { wrapper: ({ children }) => wrapper({ children, entry }) }
   );
 }
 
@@ -142,7 +148,7 @@ describe('SessionDetailPage live chat', () => {
     const { mock } = makeFetch();
     vi.stubGlobal('fetch', mock);
 
-    renderPage();
+    renderPage('/sessions/agent-1?view=raw');
     // Let the initial REST event fetch settle before dispatching, so the
     // fetch's setEvents([]) cannot land after the WS append and clobber it.
     await screen.findByText('No events yet');
@@ -209,7 +215,7 @@ describe('SessionDetailPage live chat', () => {
     const fetcher = makeFetch();
     vi.stubGlobal('fetch', fetcher.mock);
 
-    renderPage();
+    renderPage('/sessions/agent-1?view=raw');
 
     // Initial fetch 404s — the agent has not registered yet.
     await screen.findByText('No events yet');
@@ -235,7 +241,7 @@ describe('SessionDetailPage live chat', () => {
     const fetcher = makeFetch();
     vi.stubGlobal('fetch', fetcher.mock);
 
-    renderPage();
+    renderPage('/sessions/agent-1?view=raw');
 
     await screen.findByText('No events yet');
     expect(

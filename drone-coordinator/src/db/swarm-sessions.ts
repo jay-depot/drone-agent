@@ -316,6 +316,55 @@ export function getSwarmEvents(
   return stmt.all(...params) as SwarmEvent[];
 }
 
+export function getSwarmEvent(
+  sessionId: string,
+  eventId: string
+): SwarmEvent | undefined {
+  const stmt = getDatabase().prepare(
+    'SELECT * FROM swarm_events WHERE sessionId = ? AND id = ?'
+  );
+  const row = stmt.get(sessionId, eventId) as SwarmEvent | undefined;
+  return row;
+}
+
+export interface ChatFeedPage {
+  events: SwarmEvent[];
+  oldestCursor: string | null;
+  hasMore: boolean;
+}
+
+/**
+ * Latest-first keyset page for the chat feed. The cursor is the oldest
+ * event's `<createdAt>:<id>`; rows are returned ascending after the
+ * DESC fetch so callers can append/prepend directly.
+ */
+export function getChatFeedEvents(
+  sessionId: string,
+  limit: number,
+  beforeCursor?: string
+): ChatFeedPage {
+  let where = 'WHERE sessionId = ?';
+  const params: unknown[] = [sessionId];
+  if (beforeCursor) {
+    const sep = beforeCursor.indexOf(':');
+    const createdAt = Number(beforeCursor.slice(0, sep));
+    const id = beforeCursor.slice(sep + 1);
+    where += ' AND (createdAt < ? OR (createdAt = ? AND id < ?))';
+    params.push(createdAt, createdAt, id);
+  }
+  const stmt = getDatabase().prepare(`
+    SELECT * FROM swarm_events ${where} ORDER BY createdAt DESC, id DESC LIMIT ?
+  `);
+  const rows = stmt.all(...params, limit + 1) as SwarmEvent[];
+  const hasMore = rows.length > limit;
+  const page = rows.slice(0, limit).reverse();
+  const oldest = page[0];
+  return {
+    events: page,
+    oldestCursor: oldest ? `${oldest.createdAt}:${oldest.id}` : null,
+    hasMore,
+  };
+}
 export function getLatestSwarmEvents(
   sessionId: string,
   limit: number = 10
