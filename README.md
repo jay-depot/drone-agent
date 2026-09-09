@@ -65,13 +65,13 @@ Alternatively, you can write the user config manually. The minimum required conf
 
 ```json
 {
-  "llm": { "active": "anthropic/claude-sonnet-4-6" },
+  "llm": { "active": "anthropic/claude-sonnet-5" },
   "providers": {
     "anthropic": {
       "protocol": "anthropic",
       "apiKey": "${ANTHROPIC_API_KEY}",
       "models": {
-        "claude-sonnet-4-6": {}
+        "claude-sonnet-5": {}
       }
     }
   },
@@ -95,14 +95,14 @@ Alternatively, you can write the user config manually. The minimum required conf
 
 ```json
 {
-  "llm": { "active": "openai/gpt-4o" },
+  "llm": { "active": "openai/gpt-5.6-terra" },
   "providers": {
     "openai": {
       "protocol": "openai",
       "apiKey": "${OPENAI_API_KEY}",
       "baseUrl": "https://api.openai.com/v1",
       "models": {
-        "gpt-4o": {}
+        "gpt-5.6-terra": {}
       }
     }
   },
