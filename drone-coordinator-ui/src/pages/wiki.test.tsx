@@ -101,6 +101,53 @@ describe('WikiPage search', () => {
     const tagLink = screen.getByRole('link', { name: 'ops' });
     expect(tagLink).toHaveAttribute('href', '/wiki/tag/ops');
   });
+
+  it('shows an error toast when the search request fails', async () => {
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url === '/api/wiki') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [metaPage],
+        } as Response;
+      }
+      if (url.startsWith('/api/wiki/search')) {
+        return {
+          ok: false,
+          status: 503,
+          json: async () => ({ error: 'Search unavailable' }),
+        } as Response;
+      }
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderWiki();
+    await screen.findByText('Deployment');
+
+    const searchCalls = () =>
+      mockFetch.mock.calls.filter(([url]) =>
+        String(url).startsWith('/api/wiki/search')
+      ).length;
+
+    const user = userEvent.setup();
+    await user.type(
+      screen.getByPlaceholderText('Search wiki pages...'),
+      'deploy'
+    );
+
+    // Debounced: requests fire only once typing settles (SEARCH_DEBOUNCE_MS).
+    await waitFor(
+      () => {
+        expect(searchCalls()).toBe(1);
+      },
+      { timeout: 2000 }
+    );
+
+    const alerts = await screen.findAllByRole('alert');
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toHaveTextContent('Search unavailable');
+  });
 });
 
 describe('WikiPage graph view', () => {

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
+import { useToast } from '@/hooks/use-toast';
+import { extractApiError, networkErrorMessage } from '@/hooks/use-api';
 import type {
   Beacon,
   AgentLocation,
@@ -18,6 +20,7 @@ export default function TopologyPage() {
   const navigate = useNavigate();
   const { status, subscribe } = useWebSocket();
   const authFetch = useAuthenticatedFetch();
+  const { error: showError } = useToast();
   const [beacons, setBeacons] = useState<Beacon[]>([]);
   const [agentLocations, setAgentLocations] = useState<AgentLocation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,45 +142,23 @@ export default function TopologyPage() {
 
     setDialogLoading(true);
     try {
-      if (dialogAction === 'approve') {
-        const res = await authFetch(
-          `/api/beacons/trust/${dialogBeacon.id}/approve`,
-          {
-            method: 'POST',
-          }
-        );
-        if (res.ok) {
-          // Refresh beacon list
-          const beaconsRes = await authFetch('/api/beacons');
-          if (beaconsRes.ok) {
-            setBeacons(await beaconsRes.json());
-          }
-        }
-      } else if (dialogAction === 'reject') {
-        const res = await authFetch(
-          `/api/beacons/trust/${dialogBeacon.id}/reject`,
-          { method: 'POST' }
-        );
-        if (res.ok) {
-          const beaconsRes = await authFetch('/api/beacons');
-          if (beaconsRes.ok) {
-            setBeacons(await beaconsRes.json());
-          }
-        }
-      } else if (dialogAction === 'remove') {
-        const res = await authFetch(`/api/beacons/trust/${dialogBeacon.id}`, {
-          method: 'DELETE',
-        });
-        if (res.ok) {
-          const beaconsRes = await authFetch('/api/beacons');
-          if (beaconsRes.ok) {
-            setBeacons(await beaconsRes.json());
-          }
-        }
+      const res = await authFetch(
+        dialogAction === 'remove'
+          ? `/api/beacons/trust/${dialogBeacon.id}`
+          : `/api/beacons/trust/${dialogBeacon.id}/${dialogAction}`,
+        { method: dialogAction === 'remove' ? 'DELETE' : 'POST' }
+      );
+      if (!res.ok) {
+        showError(await extractApiError(res));
+        return;
+      }
+      const beaconsRes = await authFetch('/api/beacons');
+      if (beaconsRes.ok) {
+        setBeacons(await beaconsRes.json());
       }
       setDialogOpen(false);
-    } catch {
-      // Error handled silently
+    } catch (err) {
+      showError(networkErrorMessage(err));
     } finally {
       setDialogLoading(false);
     }

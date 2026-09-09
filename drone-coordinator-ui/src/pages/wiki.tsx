@@ -22,6 +22,8 @@ import WikiPageGrid from '@/components/wiki-page-grid';
 import WikiGraphView from '@/components/wiki-graph';
 
 const PAGE_SIZE = 12;
+// How long typing must settle before a search request fires.
+const SEARCH_DEBOUNCE_MS = 350;
 
 export default function WikiPage() {
   const navigate = useNavigate();
@@ -93,30 +95,39 @@ export default function WikiPage() {
   const [deleteTarget, setDeleteTarget] = useState<WikiPageMeta | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Search via API when query changes
+  // Search via API once the query settles; a superseded request is ignored
+  // so a slow stale response cannot overwrite a newer one's results.
   useEffect(() => {
     if (!search.trim()) return;
 
-    async function searchWiki() {
+    let stale = false;
+    const timer = setTimeout(async () => {
       try {
         const res = await authFetch(
           `/api/wiki/search?q=${encodeURIComponent(search)}`
         );
-        if (res.ok) {
-          // Search results are { page, snippet, score } wrappers; the card
-          // grid renders page metadata directly.
-          const results = await res.json();
-          setPages(
-            Array.isArray(results)
-              ? results.map((r: { page: WikiPageMeta }) => r.page)
-              : []
-          );
+        if (stale) return;
+        if (!res.ok) {
+          showError(await extractApiError(res));
+          return;
         }
-      } catch {
-        // Fall back to current list
+        // Search results are { page, snippet, score } wrappers; the card
+        // grid renders page metadata directly.
+        const results = await res.json();
+        setPages(
+          Array.isArray(results)
+            ? results.map((r: { page: WikiPageMeta }) => r.page)
+            : []
+        );
+      } catch (err) {
+        if (stale) return;
+        showError(networkErrorMessage(err));
       }
-    }
-    searchWiki();
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
   }, [search, authFetch]);
 
   const total = pages.length;

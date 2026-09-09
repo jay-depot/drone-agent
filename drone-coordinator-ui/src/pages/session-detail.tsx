@@ -2,6 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
+import { extractApiError, networkErrorMessage } from '@/hooks/use-api';
+import { ErrorBanner } from '@/components/error-banner';
 import type { SwarmEvent, WsEventMessage } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +22,7 @@ export default function SessionDetailPage() {
   const authFetch = useAuthenticatedFetch();
   const [events, setEvents] = useState<SwarmEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const eventsEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch events via REST
@@ -27,14 +30,17 @@ export default function SessionDetailPage() {
     if (!sessionId) return;
 
     async function fetchEvents() {
+      setError(null);
       try {
         const res = await authFetch(`/api/sessions/${sessionId}/events`);
-        if (res.ok) {
-          const data = await res.json();
-          setEvents(data);
+        if (!res.ok) {
+          setError(await extractApiError(res));
+          return;
         }
-      } catch {
-        // Handle error
+        const data = await res.json();
+        setEvents(data);
+      } catch (err) {
+        setError(networkErrorMessage(err));
       } finally {
         setLoading(false);
       }
@@ -121,6 +127,8 @@ export default function SessionDetailPage() {
           ● Live
         </Badge>
       </div>
+
+      <ErrorBanner message={error} />
 
       <Card className="mb-6">
         <CardHeader>
