@@ -233,22 +233,21 @@ async function maybeCompact(input: {
   const summarySystemPrompt =
     'You are a conversation summarizer. Produce a concise summary of the ' +
     'transcript below. Aim for a brief bullet list. Do not include greetings or ' +
-    'pleasantries. Stay under the requested token budget. Prioritize ' +
-    'including information in the summary according to the following ' +
-    'order from most to least important:\n' +
-    '1. User input, instruction, questions, and decisions. Preserve these ' +
-    'verbatim.\n' +
-    "2. Any context needed to understand the user's input, instructions, " +
-    'questions, and decisions. For instance, if the user says "Yes, like that," ' +
-    'whatever "that" refers to needs to be included in the summary, if ' +
-    'it is available.\n' +
-    '3. Architectural or design information.\n' +
-    '4. Any other relevant information.\n\n' +
-    'Detailed tool calls and results should be discarded. Provide a summary ' +
-    'of what was done if it is relevant and only if space allows.\n\n' +
-    `If any information is missing or ambiguous, note that in the summary. ` +
-    `Do not make anything up. If information is not in the transcript, ` +
-    `skip it. If you can't just skip it, note it.`;
+    'pleasantries. Stay under the requested token budget. Include information in ' +
+    'your summary according to the following rubric:\n\n' +
+    '1. User input, instructions, questions, and decisions are the first priority. ' +
+    'Preserve these verbatim whenever possible, and paraphrase only lightly, and ' +
+    'only when absolutely necessary. (EXCEPTION: Redact any credentials, passwords, ' +
+    'API keys, other secrets, PII, etc.)\n' +
+    '2. Assistant responses are the second priority. Summarize these concisely, ' +
+    'but be sure to include anything an outside reader would need to understand ' +
+    'the conversation.\n' +
+    '3. Use any remaining space to include a summary of any useful context from ' +
+    'tool results as your last priority. Again, keep the focus on items from the ' +
+    'higher two priorities. If you include this information, focus it on the ' +
+    'context an outside reader would need to understand the conversation.\n\n' +
+    '**Redact any credentials, passwords, API keys, other secrets, PII, etc. ' +
+    'in all cases**';
 
   // Convergence loop: keep compacting until usage is below the soft threshold
   // or no more progress can be made.
@@ -467,7 +466,7 @@ export type CompactionStatus = {
   };
   summaries: Array<{
     id: string;
-    preview: string;
+    text: string;
     tokenCount: number;
   }>;
 };
@@ -523,9 +522,7 @@ async function handleShow(
 
   ctx.logger.info('Compaction summaries (newest first):');
   for (const s of status.summaries) {
-    ctx.logger.info(
-      `  ${s.id.slice(0, 8)}  ${s.tokenCount} tokens  ${s.preview}`
-    );
+    ctx.logger.info(`  ${s.id.slice(0, 8)}  ${s.tokenCount} tokens  ${s.text}`);
   }
   ctx.logger.info(
     `Total: ${status.summaries.length} summary turn(s), ${(
@@ -734,7 +731,7 @@ export function createCompactionPlugin(
             },
             summaries: summaryTurns.map(t => ({
               id: t.id,
-              preview: t.messages[0]?.content?.slice(0, 80) ?? '',
+              text: t.messages[0]?.content ?? '',
               tokenCount: estimateTurnTokens(t),
             })),
           };
