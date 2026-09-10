@@ -48,7 +48,8 @@ export const searchPlugin: DronePlugin = {
         '(e.g. "where is rate limiting implemented?"), when you don\'t know the exact wording, ' +
         'or when a regex search returned zero or too many matches. ' +
         'Semantic results are file + score + snippet (no line numbers); follow up with file__read. ' +
-        'Semantic mode requires a beacon connection; without one it returns an explanatory note.',
+        'Semantic mode requires a beacon connection; without one it returns an explanatory note. ' +
+        'When submitting a semantic query, phrase it as a well-formed sentence or question.',
       inputSchema: {
         type: 'object',
         properties: {
