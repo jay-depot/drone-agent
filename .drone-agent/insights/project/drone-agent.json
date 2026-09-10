@@ -454,5 +454,13 @@
   {
     "timestamp": "2026-09-10T03:49:02.557Z",
     "insight": "GitHub PR workflow on this host: the `gh` CLI is not installed (command -v gh fails), so PR creation/checks must go through the mcp__github__* tools (get_me, create_pull_request — verified working for jay-depot/drone-agent; PR #99 opened via mcp__github__create_pull_request). PR-creation sessions should: (1) git branch list + status to confirm not on main and tree clean, (2) `git log main..<branch>` + full `git diff main...<branch> --stat` and targeted diffs to write an accurate PR body, (3) create PR with owner=repo owner, head=branch, base=main. Note: `gh pr list`-style \"does a PR already exist\" checks are unavailable — rely on create failing with 'A pull request already exists' if one exists, or ask the user."
+  },
+  {
+    "timestamp": "2026-09-10T15:41:37.607Z",
+    "insight": "During the wiki-delete fix execution (2026-09-10), swarm wiki page writes through the agent tool path (`swarm__wiki_write` against the live beacon on 127.0.0.1:3457, running pre-fix code) repeatedly failed with \"Failed to proxy to coordinator\" 502s, while raw-HTTP PUTs to the same beacon for the same pages succeeded — including a 6KB coordinator-scope payload. Suspected an old-code agent-tool-path quirk (the tools-wiki fetch path vs. direct HTTP); unverified because the running beacon cannot be restarted on this host mid-session. After a beacon restart onto the fixed code, verify `swarm__wiki_write` works again; if it still 502s on new code, the tool path itself has a defect worth its own ADR. Workaround when the agent-tool path fails: curl the beacon REST API directly (GET /wiki/:pageId, PUT /wiki/:pageId)."
+  },
+  {
+    "timestamp": "2026-09-10T15:41:37.608Z",
+    "insight": "Commit d651c9c (\"unblock: Fix path instructions in 'workspace' fragment\", drone-agent/src/plugins/startup.ts) pasted single-quote string-concatenation syntax into the `# Workspace` template literal: the Boundary line carries literal `' +` / `'` continuation artifacts (lines ~53-55), so every new agent session's footer fragment renders that garbage verbatim. Fix when picking this up: rewrite the template as one backtick string (or proper ${...} interpolation) with no quote-continuation artifacts, and add a test asserting the rendered fragment contains no stray quote artifacts. Known in-wiki: documented in the ADR 206 ingest entry in the project wiki log; this insight is the follow-up trigger."
   }
 ]
