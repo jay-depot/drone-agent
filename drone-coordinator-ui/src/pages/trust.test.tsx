@@ -8,6 +8,7 @@ import {
 } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from '@/hooks/use-auth';
+import { ToastProvider } from '@/hooks/use-toast';
 import { WebSocketProvider } from '@/hooks/use-websocket';
 import BeaconDetailPage from '@/pages/beacon-detail';
 import TopologyPage from '@/pages/topology';
@@ -34,9 +35,11 @@ vi.stubGlobal('WebSocket', MockWebSocket);
 
 function wrapper({ children }: { children: ReactNode }) {
   return (
-    <AuthProvider>
-      <WebSocketProvider>{children}</WebSocketProvider>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <WebSocketProvider>{children}</WebSocketProvider>
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 

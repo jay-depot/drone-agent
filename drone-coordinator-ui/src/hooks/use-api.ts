@@ -1,10 +1,26 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuthenticatedFetch } from './use-auth';
 
 interface UseApiState<T> {
   data: T | null;
   loading: boolean;
   error: string | null;
+}
+
+/**
+ * Normalize a non-ok API response into a human-readable message: the JSON
+ * body's `error` field when present, falling back to HTTP status text.
+ */
+export async function extractApiError(res: Response): Promise<string> {
+  const body = await res.json().catch(() => ({ error: res.statusText }));
+  return (
+    body.error || `HTTP ${res.status}: ${res.statusText || 'Unknown error'}`
+  );
+}
+
+/** Normalize a thrown fetch error into a human-readable message. */
+export function networkErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : 'Network error';
 }
 
 interface UseApiResult<T> extends UseApiState<T> {
@@ -26,7 +42,6 @@ export function useApi<T = unknown>(
     loading: (options?.immediate ?? true) && url !== null,
     error: null,
   });
-  const urlRef = useRef(url);
 
   const fetchData = useCallback(async () => {
     if (!url) {
@@ -39,31 +54,20 @@ export function useApi<T = unknown>(
     try {
       const res = await authFetch(url);
       if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: res.statusText }));
-        setState({
-          data: null,
-          loading: false,
-          error: body.error || `HTTP ${res.status}: ${res.statusText}`,
-        });
+        const error = await extractApiError(res);
+        setState({ data: null, loading: false, error });
         return;
       }
       const data = (await res.json()) as T;
       setState({ data, loading: false, error: null });
     } catch (err) {
-      setState({
-        data: null,
-        loading: false,
-        error: err instanceof Error ? err.message : 'Network error',
-      });
+      setState({ data: null, loading: false, error: networkErrorMessage(err) });
     }
   }, [url, authFetch]);
 
   useEffect(() => {
-    if (urlRef.current !== url) {
-      urlRef.current = url;
-      if (options?.immediate ?? true) {
-        fetchData();
-      }
+    if (options?.immediate ?? true) {
+      fetchData();
     }
   }, [url, fetchData, options?.immediate]);
 

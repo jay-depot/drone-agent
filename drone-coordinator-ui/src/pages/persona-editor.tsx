@@ -5,6 +5,7 @@ import type { Persona, CreatePersonaRequest } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ErrorBanner } from '@/components/error-banner';
 
 export default function PersonaEditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -160,11 +161,7 @@ export default function PersonaEditorPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} />
 
       <form onSubmit={handleSubmit} className="max-w-2xl space-y-4">
         <div>

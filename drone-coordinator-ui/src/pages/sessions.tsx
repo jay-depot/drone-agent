@@ -1,11 +1,13 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
+import { useToast } from '@/hooks/use-toast';
+import { ErrorBanner } from '@/components/error-banner';
 import type {
   BeaconSession,
-  WsInitialMessage,
+  WsEventMessage,
   SwarmSession,
   Beacon,
   Persona,
@@ -182,30 +184,47 @@ function NewSessionPanel({
 }
 
 const PAGE_SIZE = 20;
-// How long a just-archived session lingers as a phantom row with an undo
-// button before disappearing from view.
+// How long a just-archived session lingers as an in-place pending row with an
+// undo button before a refetch removes it from the list.
 const ARCHIVE_UNDO_MS = 5000;
 
 type SessionRow = BeaconSession & { status?: string };
 
-type PhantomArchive = {
-  session: SessionRow;
+interface PendingArchive {
+  row: SessionRow;
   timer: ReturnType<typeof setTimeout>;
-};
+}
 
 export default function SessionsPage() {
   const navigate = useNavigate();
   const { status, subscribe } = useWebSocket();
   const authFetch = useAuthenticatedFetch();
+  const { error: showError } = useToast();
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { offset, setOffset } = usePaginationOffset(PAGE_SIZE);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
-  // Phantom row for a just-archived session, offering a brief undo window.
-  const [phantomArchive, setPhantomArchive] = useState<PhantomArchive | null>(
-    null
+  // Sessions awaiting the archive undo window: ids for rendering, plus a ref
+  // holding each pending row and its expiry timer. The ref survives refetches
+  // so a pending row can be merged back into a freshly fetched page, and the
+  // timer callbacks read offsetRef instead of a captured offset to stay fresh.
+  const [archivedPendingIds, setArchivedPendingIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const pendingRef = useRef<Map<string, PendingArchive>>(new Map());
+  const offsetRef = useRef(offset);
+  useEffect(() => {
+    offsetRef.current = offset;
+  }, [offset]);
+  useEffect(
+    () => () => {
+      for (const pending of pendingRef.current.values()) {
+        clearTimeout(pending.timer);
+      }
+    },
+    []
   );
   const [showLaunchPanel, setShowLaunchPanel] = useState(false);
 
@@ -226,13 +245,6 @@ export default function SessionsPage() {
     },
     [searchParams, setOffset, setSearchParams]
   );
-
-  const cancelPhantomTimer = useCallback((phantom: PhantomArchive | null) => {
-    if (phantom) {
-      clearTimeout(phantom.timer);
-    }
-  }, []);
-
   const fetchSessions = useCallback(
     async (currentOffset: number) => {
       setLoading(true);
@@ -276,7 +288,18 @@ export default function SessionsPage() {
           beaconName: beaconMap.get(s.beaconId) ?? s.beaconId,
         }));
 
-        setSessions(rows);
+        // Re-add any pending-archive rows the server omitted (they are
+        // archived server-side, so `exclude=archived` drops them while their
+        // undo window is open), newest first, capped to one page like the
+        // server's createdAt DESC ordering.
+        const merged = [...pendingRef.current.values()]
+          .map(p => p.row)
+          .filter(row => !rows.some(r => r.id === row.id))
+          .concat(rows)
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .slice(0, PAGE_SIZE);
+
+        setSessions(merged);
         setHasMore(data.count > currentOffset + PAGE_SIZE);
       } catch {
         setError('Failed to load sessions');
@@ -287,23 +310,45 @@ export default function SessionsPage() {
     [authFetch, archivedView]
   );
 
-  // Subscribe to WebSocket for live updates
+  // Live updates: session lifecycle events trigger a refetch of the current
+  // page (server-truth), debounced so an event burst causes one refetch.
+  // The initial snapshot is deliberately ignored — it is active-sessions-only
+  // and does not match this page's paginated, filter-aware view.
   useEffect(() => {
-    const unsubInitial = subscribe('initial', msg => {
-      const data = (msg as WsInitialMessage).data;
-      if (data.sessions.length > 0) {
-        setSessions(prev => {
-          const existingIds = new Set(prev.map(s => s.id));
-          const newSessions = data.sessions.filter(s => !existingIds.has(s.id));
-          return [...newSessions, ...prev];
-        });
+    const LIFECYCLE_EVENTS = new Set([
+      'session.created',
+      'session.ended',
+      'session.processing',
+      'session.processed',
+      'session.archived',
+    ]);
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let pending = false;
+
+    const unsubEvent = subscribe('event', msg => {
+      const eventMsg = msg as WsEventMessage;
+      if (!LIFECYCLE_EVENTS.has(eventMsg.eventType)) {
+        return;
+      }
+      pending = true;
+      if (debounceTimer === undefined) {
+        debounceTimer = setTimeout(() => {
+          debounceTimer = undefined;
+          if (pending) {
+            pending = false;
+            fetchSessions(offsetRef.current);
+          }
+        }, 100);
       }
     });
 
     return () => {
-      unsubInitial();
+      unsubEvent();
+      if (debounceTimer !== undefined) {
+        clearTimeout(debounceTimer);
+      }
     };
-  }, [subscribe]);
+  }, [subscribe, fetchSessions]);
 
   // Fetch on mount and when offset changes
   useEffect(() => {
@@ -325,6 +370,30 @@ export default function SessionsPage() {
     [fetchSessions, offset]
   );
 
+  const clearPending = useCallback((id: string) => {
+    const pending = pendingRef.current.get(id);
+    if (pending) {
+      clearTimeout(pending.timer);
+      pendingRef.current.delete(id);
+    }
+    setArchivedPendingIds(prev => {
+      if (!prev.has(id)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const expirePending = useCallback(
+    (id: string) => {
+      clearPending(id);
+      fetchSessions(offsetRef.current);
+    },
+    [clearPending, fetchSessions]
+  );
+
   const handleTerminate = async (session: SessionRow) => {
     // Try to end the beacon session (may already be ended)
     try {
@@ -343,62 +412,91 @@ export default function SessionsPage() {
       // Beacon session may already be ended — that's fine
     }
     // Always update the swarm session status
-    await authFetch(`/api/sessions/${session.id}/end`, {
+    const res = await authFetch(`/api/sessions/${session.id}/end`, {
       method: 'POST',
     });
+    if (!res.ok) {
+      showError('Failed to end session');
+      return;
+    }
     refresh();
   };
 
   const handleProcess = async (session: SessionRow) => {
-    await authFetch(`/api/sessions/${session.id}/process`, {
+    const res = await authFetch(`/api/sessions/${session.id}/process`, {
       method: 'POST',
     });
+    if (!res.ok) {
+      showError('Failed to process session');
+      return;
+    }
     refresh();
   };
 
   const handleMarkProcessed = async (session: SessionRow) => {
-    await authFetch(`/api/sessions/${session.id}/processed`, {
+    const res = await authFetch(`/api/sessions/${session.id}/processed`, {
       method: 'POST',
     });
+    if (!res.ok) {
+      showError('Failed to mark session processed');
+      return;
+    }
     refresh();
   };
 
   const handleEnd = async (session: SessionRow) => {
-    await authFetch(`/api/sessions/${session.id}/end`, {
+    const res = await authFetch(`/api/sessions/${session.id}/end`, {
       method: 'POST',
     });
+    if (!res.ok) {
+      showError('Failed to end session');
+      return;
+    }
     refresh();
   };
 
   const handleRestore = async (session: SessionRow) => {
-    await authFetch(`/api/sessions/${session.id}/restore`, {
+    const res = await authFetch(`/api/sessions/${session.id}/restore`, {
       method: 'POST',
     });
+    if (!res.ok) {
+      showError('Failed to restore session');
+      return;
+    }
     refresh();
   };
 
   const handleArchive = async (session: SessionRow) => {
-    cancelPhantomTimer(phantomArchive);
-    await authFetch(`/api/sessions/${session.id}/archive`, {
+    const res = await authFetch(`/api/sessions/${session.id}/archive`, {
       method: 'POST',
     });
-    // Remove the archived session immediately and drop in a phantom row with a
-    // brief undo window.
-    setSessions(prev => prev.filter(s => s.id !== session.id));
+    if (!res.ok) {
+      showError('Failed to archive session');
+      return;
+    }
+    // Flag the row in place with an undo window; the expiry refetch pulls the
+    // next page row into the freed slot.
     const timer = setTimeout(() => {
-      setPhantomArchive(null);
+      expirePending(session.id);
     }, ARCHIVE_UNDO_MS);
-    setPhantomArchive({ session, timer });
+    pendingRef.current.set(session.id, { row: session, timer });
+    setArchivedPendingIds(prev => new Set(prev).add(session.id));
   };
 
-  const handleUndoArchive = async () => {
-    if (!phantomArchive) return;
-    cancelPhantomTimer(phantomArchive);
-    setPhantomArchive(null);
-    await authFetch(`/api/sessions/${phantomArchive.session.id}/restore`, {
+  const handleUndoArchive = async (id: string) => {
+    const pending = pendingRef.current.get(id);
+    if (!pending) {
+      return;
+    }
+    clearPending(id);
+    const res = await authFetch(`/api/sessions/${id}/restore`, {
       method: 'POST',
     });
-    refresh();
+    if (!res.ok) {
+      showError('Failed to restore session');
+    }
+    // Either way, refetch so the server's view resolves the row's slot.
+    fetchSessions(offsetRef.current);
   };
 
   const getStatusBadge = (sessionStatus?: string) => {
@@ -502,11 +600,7 @@ export default function SessionsPage() {
         />
       )}
 
-      {error && (
-        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} />
 
       {loading && sessions.length === 0 ? (
         <div className="space-y-2">
@@ -514,7 +608,7 @@ export default function SessionsPage() {
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>
-      ) : sessions.length === 0 && !phantomArchive ? (
+      ) : sessions.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           {archivedView ? (
             <>
@@ -549,136 +643,117 @@ export default function SessionsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {phantomArchive && (
-                  <TableRow key="phantom-archive">
-                    <TableCell className="font-medium">
-                      {phantomArchive.session.beaconName ??
-                        phantomArchive.session.beaconId}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {phantomArchive.session.agentId}
-                    </TableCell>
-                    <TableCell>
-                      {phantomArchive.session.personaId ? (
-                        <Badge variant="outline">
-                          {phantomArchive.session.personaId}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{getStatusBadge('archived')}</TableCell>
-                    <TableCell>
-                      {formatDuration(phantomArchive.session.connectedAt)}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {new Date(
-                        phantomArchive.session.connectedAt
-                      ).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => handleUndoArchive()}
-                      >
-                        Undo
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                )}
-                {sessions.map(session => (
-                  <TableRow key={session.id}>
-                    <TableCell className="font-medium">
-                      {session.beaconName ?? session.beaconId}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {session.agentId}
-                    </TableCell>
-                    <TableCell>
-                      {session.personaId ? (
-                        <Badge variant="outline">{session.personaId}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(session.status)}</TableCell>
-                    <TableCell>{formatDuration(session.connectedAt)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {new Date(session.connectedAt).toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            navigate(`/sessions/${session.agentId}`)
-                          }
-                        >
-                          Peek
-                        </Button>
-                        {session.status === 'active' && (
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleTerminate(session)}
-                          >
-                            Terminate
-                          </Button>
+                {sessions.map(session => {
+                  const pending = archivedPendingIds.has(session.id);
+                  return (
+                    <TableRow key={session.id}>
+                      <TableCell className="font-medium">
+                        {session.beaconName ?? session.beaconId}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {session.agentId}
+                      </TableCell>
+                      <TableCell>
+                        {session.personaId ? (
+                          <Badge variant="outline">{session.personaId}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
                         )}
-                        {(session.status === 'stale' ||
-                          session.status === 'ended') && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleProcess(session)}
-                          >
-                            Process
-                          </Button>
-                        )}
-                        {session.status === 'processing' && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleMarkProcessed(session)}
-                          >
-                            Mark Processed
-                          </Button>
-                        )}
-                        {(session.status === 'stale' ||
-                          session.status === 'processing' ||
-                          session.status === 'processed') && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEnd(session)}
-                          >
-                            End
-                          </Button>
-                        )}
-                        {session.status === 'processed' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleArchive(session)}
-                          >
-                            Archive
-                          </Button>
-                        )}
-                        {session.status === 'archived' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleRestore(session)}
-                          >
-                            Restore
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>
+                        {getStatusBadge(pending ? 'archived' : session.status)}
+                      </TableCell>
+                      <TableCell>
+                        {formatDuration(session.connectedAt)}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {new Date(session.connectedAt).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          {pending ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleUndoArchive(session.id)}
+                            >
+                              Undo
+                            </Button>
+                          ) : (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  navigate(`/sessions/${session.agentId}`)
+                                }
+                              >
+                                Peek
+                              </Button>
+                              {session.status === 'active' && (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleTerminate(session)}
+                                >
+                                  Terminate
+                                </Button>
+                              )}
+                              {(session.status === 'stale' ||
+                                session.status === 'ended') && (
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => handleProcess(session)}
+                                >
+                                  Process
+                                </Button>
+                              )}
+                              {session.status === 'processing' && (
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => handleMarkProcessed(session)}
+                                >
+                                  Mark Processed
+                                </Button>
+                              )}
+                              {(session.status === 'stale' ||
+                                session.status === 'processing' ||
+                                session.status === 'processed') && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleEnd(session)}
+                                >
+                                  End
+                                </Button>
+                              )}
+                              {session.status === 'processed' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleArchive(session)}
+                                >
+                                  Archive
+                                </Button>
+                              )}
+                              {session.status === 'archived' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleRestore(session)}
+                                >
+                                  Restore
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

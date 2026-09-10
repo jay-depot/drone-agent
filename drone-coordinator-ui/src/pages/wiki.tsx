@@ -4,6 +4,9 @@ import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import { useWikiPages } from '@/hooks/use-wiki-pages';
 import { useWikiGraph } from '@/hooks/use-wiki-graph';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
+import { useToast } from '@/hooks/use-toast';
+import { ErrorBanner } from '@/components/error-banner';
+import { extractApiError, networkErrorMessage } from '@/hooks/use-api';
 import type { WikiPageMeta } from '@/lib/types';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,10 +23,13 @@ import WikiPageGrid from '@/components/wiki-page-grid';
 import WikiGraphView from '@/components/wiki-graph';
 
 const PAGE_SIZE = 12;
+// How long typing must settle before a search request fires.
+const SEARCH_DEBOUNCE_MS = 350;
 
 export default function WikiPage() {
   const navigate = useNavigate();
   const authFetch = useAuthenticatedFetch();
+  const { error: showError } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const graphView = searchParams.get('view') === 'graph';
   const focusedNodeId = searchParams.get('node');
@@ -90,30 +96,39 @@ export default function WikiPage() {
   const [deleteTarget, setDeleteTarget] = useState<WikiPageMeta | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Search via API when query changes
+  // Search via API once the query settles; a superseded request is ignored
+  // so a slow stale response cannot overwrite a newer one's results.
   useEffect(() => {
     if (!search.trim()) return;
 
-    async function searchWiki() {
+    let stale = false;
+    const timer = setTimeout(async () => {
       try {
         const res = await authFetch(
           `/api/wiki/search?q=${encodeURIComponent(search)}`
         );
-        if (res.ok) {
-          // Search results are { page, snippet, score } wrappers; the card
-          // grid renders page metadata directly.
-          const results = await res.json();
-          setPages(
-            Array.isArray(results)
-              ? results.map((r: { page: WikiPageMeta }) => r.page)
-              : []
-          );
+        if (stale) return;
+        if (!res.ok) {
+          showError(await extractApiError(res));
+          return;
         }
-      } catch {
-        // Fall back to current list
+        // Search results are { page, snippet, score } wrappers; the card
+        // grid renders page metadata directly.
+        const results = await res.json();
+        setPages(
+          Array.isArray(results)
+            ? results.map((r: { page: WikiPageMeta }) => r.page)
+            : []
+        );
+      } catch (err) {
+        if (stale) return;
+        showError(networkErrorMessage(err));
       }
-    }
-    searchWiki();
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
   }, [search, authFetch]);
 
   const total = pages.length;
@@ -126,13 +141,15 @@ export default function WikiPage() {
       const res = await authFetch(`/api/wiki/${deleteTarget.id}`, {
         method: 'DELETE',
       });
-      if (res.ok) {
-        setPages(prev => prev.filter(p => p.id !== deleteTarget.id));
-        setDeleteOpen(false);
-        setDeleteTarget(null);
+      if (!res.ok) {
+        showError(await extractApiError(res));
+        return;
       }
-    } catch {
-      // Error handled silently
+      setPages(prev => prev.filter(p => p.id !== deleteTarget.id));
+      setDeleteOpen(false);
+      setDeleteTarget(null);
+    } catch (err) {
+      showError(networkErrorMessage(err));
     } finally {
       setDeleteLoading(false);
     }
@@ -174,17 +191,9 @@ export default function WikiPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} />
 
-      {graphError && (
-        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
-          {graphError}
-        </div>
-      )}
+      <ErrorBanner message={graphError} />
 
       {graphView ? (
         <>

@@ -7,6 +7,7 @@ import {
   Navigate,
 } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { ToastProvider } from '@/hooks/use-toast';
 import { WebSocketProvider } from '@/hooks/use-websocket';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import TopologyPage from '@/pages/topology';
@@ -142,12 +143,14 @@ function AppLayout() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <WebSocketProvider>
-        <BrowserRouter>
-          <AppLayout />
-        </BrowserRouter>
-      </WebSocketProvider>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <WebSocketProvider>
+          <BrowserRouter>
+            <AppLayout />
+          </BrowserRouter>
+        </WebSocketProvider>
+      </AuthProvider>
+    </ToastProvider>
   );
 }

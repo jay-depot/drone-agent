@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { AuthProvider } from '@/hooks/use-auth';
-import { WebSocketProvider } from '@/hooks/use-websocket';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { act, type ReactNode } from 'react';
 import SessionDetailPage from './session-detail';
+import { AuthProvider } from '@/hooks/use-auth';
+import { WebSocketProvider } from '@/hooks/use-websocket';
 
+// Mock WebSocket so the page can subscribe without a live coordinator.
 class MockWebSocket {
   static OPEN = 1;
   static instances: MockWebSocket[] = [];
@@ -23,6 +25,15 @@ class MockWebSocket {
   close() {}
   addEventListener() {}
   removeEventListener() {}
+}
+
+function jsonResponse(status: number, body: unknown): Response {
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    statusText: '',
+    json: async () => body,
+  } as Response;
 }
 
 function wrapper({
@@ -50,12 +61,27 @@ function renderPage(entry?: string) {
   );
 }
 
-function jsonResponse(status: number, body: unknown): Response {
-  return {
-    status,
-    ok: status >= 200 && status < 300,
-    json: async () => body,
-  } as Response;
+function NavigateButton({ to }: { to: string }) {
+  const navigate = useNavigate();
+  return (
+    <button type="button" onClick={() => navigate(to)}>
+      nav
+    </button>
+  );
+}
+
+// The raw view renders the REST event list (and its error banner) directly;
+// the default chat view renders SessionChat instead.
+function renderDetail(initialPath = '/sessions/s-1?view=raw') {
+  return render(
+    <>
+      <NavigateButton to="/sessions/s-2?view=raw" />
+      <Routes>
+        <Route path="/sessions/:sessionId" element={<SessionDetailPage />} />
+      </Routes>
+    </>,
+    { wrapper: ({ children }) => wrapper({ children, entry: initialPath }) }
+  );
 }
 
 const liveSession = {
@@ -131,6 +157,94 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+describe('SessionDetailPage events load', () => {
+  it('renders events after a successful load', async () => {
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url === '/api/sessions/s-1/events') {
+        return jsonResponse(200, [
+          {
+            id: 'e1',
+            sessionId: 's-1',
+            correlationId: null,
+            type: 'message',
+            payload: 'hello',
+            metadata: null,
+            createdAt: 1_700_000_000_000,
+          },
+        ]);
+      }
+      return jsonResponse(404, {});
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderDetail();
+
+    // The payload is inside a collapsed Collapsible; the visible card header
+    // carries the event-type badge.
+    await waitFor(() => {
+      expect(screen.getByText('message')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('shows an error banner and no fake empty state when the load fails', async () => {
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url === '/api/sessions/s-1/events') {
+        return jsonResponse(500, { error: 'Events unavailable' });
+      }
+      return jsonResponse(404, {});
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderDetail();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Events unavailable');
+    // The empty state stays below the banner: once WS events start flowing
+    // the page recovers visually without a refetch.
+    expect(screen.getByText('No events yet')).toBeInTheDocument();
+  });
+
+  it('clears the banner when navigating to a healthy session', async () => {
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url === '/api/sessions/s-1/events') {
+        return jsonResponse(500, { error: 'Events unavailable' });
+      }
+      if (url === '/api/sessions/s-2/events') {
+        return jsonResponse(200, []);
+      }
+      return jsonResponse(404, {});
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderDetail();
+    await screen.findByRole('alert');
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'nav' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+    expect(screen.getByText('No events yet')).toBeInTheDocument();
+  });
+
+  it('shows a fallback message when the failure carries no error body', async () => {
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url === '/api/sessions/s-1/events') {
+        return jsonResponse(500, {});
+      }
+      return jsonResponse(404, {});
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderDetail();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('HTTP 500: Unknown error');
+  });
 });
 
 describe('SessionDetailPage live chat', () => {

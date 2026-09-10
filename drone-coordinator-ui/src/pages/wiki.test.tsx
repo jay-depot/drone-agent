@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import WikiPage from './wiki';
 import { AuthProvider } from '@/hooks/use-auth';
+import { ToastProvider } from '@/hooks/use-toast';
 import { WebSocketProvider } from '@/hooks/use-websocket';
 
 const localStorageMock = (() => {
@@ -26,13 +27,15 @@ Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
 function renderWiki() {
   return render(
-    <AuthProvider>
-      <WebSocketProvider>
-        <MemoryRouter>
-          <WikiPage />
-        </MemoryRouter>
-      </WebSocketProvider>
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <WebSocketProvider>
+          <MemoryRouter>
+            <WikiPage />
+          </MemoryRouter>
+        </WebSocketProvider>
+      </AuthProvider>
+    </ToastProvider>
   );
 }
 
@@ -98,6 +101,53 @@ describe('WikiPage search', () => {
     const tagLink = screen.getByRole('link', { name: 'ops' });
     expect(tagLink).toHaveAttribute('href', '/wiki/tag/ops');
   });
+
+  it('shows an error toast when the search request fails', async () => {
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url === '/api/wiki') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [metaPage],
+        } as Response;
+      }
+      if (url.startsWith('/api/wiki/search')) {
+        return {
+          ok: false,
+          status: 503,
+          json: async () => ({ error: 'Search unavailable' }),
+        } as Response;
+      }
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderWiki();
+    await screen.findByText('Deployment');
+
+    const searchCalls = () =>
+      mockFetch.mock.calls.filter(([url]) =>
+        String(url).startsWith('/api/wiki/search')
+      ).length;
+
+    const user = userEvent.setup();
+    await user.type(
+      screen.getByPlaceholderText('Search wiki pages...'),
+      'deploy'
+    );
+
+    // Debounced: requests fire only once typing settles (SEARCH_DEBOUNCE_MS).
+    await waitFor(
+      () => {
+        expect(searchCalls()).toBe(1);
+      },
+      { timeout: 2000 }
+    );
+
+    const alerts = await screen.findAllByRole('alert');
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toHaveTextContent('Search unavailable');
+  });
 });
 
 describe('WikiPage graph view', () => {
@@ -156,15 +206,17 @@ describe('WikiPage graph view', () => {
     }));
 
     render(
-      <AuthProvider>
-        <WebSocketProvider>
-          <MemoryRouter initialEntries={['/wiki?view=graph']}>
-            <Routes>
-              <Route path="/wiki" element={<WikiPage />} />
-            </Routes>
-          </MemoryRouter>
-        </WebSocketProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <WebSocketProvider>
+            <MemoryRouter initialEntries={['/wiki?view=graph']}>
+              <Routes>
+                <Route path="/wiki" element={<WikiPage />} />
+              </Routes>
+            </MemoryRouter>
+          </WebSocketProvider>
+        </AuthProvider>
+      </ToastProvider>
     );
 
     await waitFor(() => {
@@ -205,15 +257,17 @@ describe('WikiPage graph view', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     render(
-      <AuthProvider>
-        <WebSocketProvider>
-          <MemoryRouter initialEntries={['/wiki?view=graph']}>
-            <Routes>
-              <Route path="/wiki" element={<WikiPage />} />
-            </Routes>
-          </MemoryRouter>
-        </WebSocketProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <WebSocketProvider>
+            <MemoryRouter initialEntries={['/wiki?view=graph']}>
+              <Routes>
+                <Route path="/wiki" element={<WikiPage />} />
+              </Routes>
+            </MemoryRouter>
+          </WebSocketProvider>
+        </AuthProvider>
+      </ToastProvider>
     );
 
     expect(screen.getByRole('button', { name: 'Tags' })).toBeDefined();
@@ -250,15 +304,17 @@ describe('WikiPage graph view', () => {
     // Tags enabled AFTER the graph view mounts — the same order that
     // previously dropped the param on canvas-initiated focus changes.
     render(
-      <AuthProvider>
-        <WebSocketProvider>
-          <MemoryRouter initialEntries={['/wiki?view=graph']}>
-            <Routes>
-              <Route path="/wiki" element={<WikiPage />} />
-            </Routes>
-          </MemoryRouter>
-        </WebSocketProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <WebSocketProvider>
+            <MemoryRouter initialEntries={['/wiki?view=graph']}>
+              <Routes>
+                <Route path="/wiki" element={<WikiPage />} />
+              </Routes>
+            </MemoryRouter>
+          </WebSocketProvider>
+        </AuthProvider>
+      </ToastProvider>
     );
     const user = userEvent.setup();
     await waitFor(() => {
@@ -302,15 +358,17 @@ describe('WikiPage graph view', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     render(
-      <AuthProvider>
-        <WebSocketProvider>
-          <MemoryRouter initialEntries={['/wiki?view=graph&tags=1']}>
-            <Routes>
-              <Route path="/wiki" element={<WikiPage />} />
-            </Routes>
-          </MemoryRouter>
-        </WebSocketProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <WebSocketProvider>
+            <MemoryRouter initialEntries={['/wiki?view=graph&tags=1']}>
+              <Routes>
+                <Route path="/wiki" element={<WikiPage />} />
+              </Routes>
+            </MemoryRouter>
+          </WebSocketProvider>
+        </AuthProvider>
+      </ToastProvider>
     );
 
     await waitFor(() => {
@@ -333,17 +391,19 @@ describe('WikiPage graph view', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     render(
-      <AuthProvider>
-        <WebSocketProvider>
-          <MemoryRouter
-            initialEntries={['/wiki?view=graph&tags=1&node=tag:ops']}
-          >
-            <Routes>
-              <Route path="/wiki" element={<WikiPage />} />
-            </Routes>
-          </MemoryRouter>
-        </WebSocketProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <WebSocketProvider>
+            <MemoryRouter
+              initialEntries={['/wiki?view=graph&tags=1&node=tag:ops']}
+            >
+              <Routes>
+                <Route path="/wiki" element={<WikiPage />} />
+              </Routes>
+            </MemoryRouter>
+          </WebSocketProvider>
+        </AuthProvider>
+      </ToastProvider>
     );
 
     await waitFor(() => {
