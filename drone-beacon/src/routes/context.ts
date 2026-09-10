@@ -23,6 +23,10 @@ let beaconPort = 3457;
 
 export function setCoordinatorClient(client: CoordinatorClient | undefined) {
   coordinatorClient = client;
+  // Drop the cached coordinator fetch so the next proxied call re-captures
+  // it from the (possibly new) client instead of silently reusing a stale
+  // pinned identity left over from a previous coordinator connection.
+  _coordinatorFetch = undefined;
 }
 
 export function getCoordinatorClient(): CoordinatorClient | undefined {
@@ -59,8 +63,14 @@ export function coordinatorApiPath(path: string): string {
   return path.startsWith('/api') ? path : `/api${path}`;
 }
 
-// Helper to proxy insight/principle requests to coordinator
-export async function proxyToCoordinator(
+/**
+ * Shared coordinator proxy used by every proxied route (insights,
+ * principles, wiki). Fastify rejects an empty body when the JSON
+ * content-type is set (FST_ERR_CTP_EMPTY_JSON_BODY — the same behavior the
+ * outbox flusher works around), so the content-type header and the body are
+ * sent only together.
+ */
+async function proxyCall(
   method: string,
   path: string,
   body?: unknown
@@ -72,32 +82,18 @@ export async function proxyToCoordinator(
   const url = `${client.getBaseUrl()}${coordinatorApiPath(path)}`;
   const res = await coordinatorFetch(url, {
     method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
+    headers: body != null ? { 'Content-Type': 'application/json' } : undefined,
+    body: body != null ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) return null;
   return res.json();
 }
 
-// Helper to proxy wiki requests to coordinator
-export async function proxyWikiToCoordinator(
-  method: string,
-  path: string,
-  body?: unknown
-): Promise<unknown> {
-  const client = getCoordinatorClient();
-  if (!client) {
-    return null;
-  }
-  const url = `${client.getBaseUrl()}${coordinatorApiPath(path)}`;
-  const res = await coordinatorFetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) return null;
-  return res.json();
-}
+// Proxy insight/principle requests to coordinator
+export const proxyToCoordinator = proxyCall;
+
+// Proxy wiki requests to coordinator
+export const proxyWikiToCoordinator = proxyCall;
 
 // Exported function for periodic sync (called from index.ts)
 export async function triggerCoordinatorSync(): Promise<{

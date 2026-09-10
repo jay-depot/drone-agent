@@ -125,6 +125,68 @@ describe('POST /coordinator/spawn (beacon proxy)', () => {
   });
 });
 
+describe('proxyCall header discipline (FST_ERR_CTP_EMPTY_JSON_BODY fix)', () => {
+  function installCapturingFetch(): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn().mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+    );
+    setCoordinatorClient(
+      makeFakeClient({ getFetch: vi.fn().mockReturnValue(fetchMock) })
+    );
+    return fetchMock;
+  }
+
+  it('sends no content-type header on a bodyless proxied DELETE', async () => {
+    const fetchMock = installCapturingFetch();
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/wiki/some-page?scope=coordinator',
+    });
+    expect(res.statusCode).toBe(200);
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe('DELETE');
+    expect(init.headers).toBeUndefined();
+    expect(init.body).toBeUndefined();
+  });
+
+  it('sends the JSON content-type header only together with a body', async () => {
+    const fetchMock = installCapturingFetch();
+    const payload = {
+      title: 'T',
+      content: 'C',
+      scope: 'coordinator',
+      tags: [],
+      sources: [],
+    };
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/wiki/some-page',
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe('PUT');
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
+    expect(init.body).toBe(JSON.stringify(payload));
+  });
+
+  it('sends no content-type header on a bodyless proxied GET', async () => {
+    const fetchMock = installCapturingFetch();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/wiki/some-page?scope=coordinator',
+    });
+    expect(res.statusCode).toBe(200);
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe('GET');
+    expect(init.headers).toBeUndefined();
+  });
+});
+
 describe('wiki coordinator-scope proxy (missing /api prefix + no mTLS identity fix)', () => {
   it('proxies a coordinator-scope wiki write to the /api/wiki path via the client fetch', async () => {
     const fetchMock = vi.fn().mockResolvedValue(

@@ -5,6 +5,7 @@ import {
   filterByGlobPatterns,
   toToolResultContent,
   type DronePlugin,
+  type DronePromptFragment,
   type DroneSessionSafetyTrimPayload,
   type DroneToolDescriptor,
   type DroneToolDefinition,
@@ -13,6 +14,7 @@ import {
   createDronePluginEngine,
   getDefaultEnabledPluginIds,
 } from '../src/runtime/plugin-engine.js';
+import { startupPlugin } from '../src/plugins/startup.js';
 import { createTestPlugin, silentLogger } from './helpers.js';
 
 const RUNTIME_TOOL_COUNT = 3; // runtime__list_tools, runtime__mount_tool, runtime__unmount_tool
@@ -458,6 +460,51 @@ describe('createDronePluginEngine', () => {
     expect(footerMessages).toEqual([{ role: 'system', content: 'goodbye' }]);
   });
 
+  it('startup workspace footer does not leak string-concatenation artifacts', async () => {
+    let fragment: DronePromptFragment | undefined;
+
+    await startupPlugin.register({
+      logger: silentLogger(),
+      getConfig: () => createDefaultAgentConfig(),
+      registerTool: () => {},
+      registerHelp: () => {},
+      registerWorkflow: () => {},
+      registerSlashCommand: () => {},
+      emitEvent: () => {},
+      offer: () => {},
+      request: <T>() => undefined as T | undefined,
+      runWorkflow: async () => ({}),
+      requestElicitation: () => undefined,
+      mountTool: () => undefined,
+      unmountTool: () => {},
+      unregisterPluginTools: () => {},
+      unregisterTool: () => {},
+      listMountedTools: () => [],
+      registerPromptFragment: (prompt: DronePromptFragment) => {
+        fragment = prompt;
+      },
+      hooks: {
+        onPluginsLoaded: () => {},
+        onSessionStart: () => {},
+        onBeforePrompt: () => {},
+        onAfterToolCall: () => {},
+        onConversationEvent: () => Promise.resolve(),
+        onSessionClear: () => {},
+        onShutdown: () => {},
+        onSessionSafetyTrimWillRun: () => {},
+        onSessionSafetyTrimApplied: () => {},
+      },
+    });
+
+    expect(fragment).toBeDefined();
+    const rendered = await fragment!.render();
+    expect(rendered).toContain('# Workspace');
+    expect(rendered).not.toContain("' +");
+    expect(rendered).not.toContain("' ");
+    expect(rendered).toContain(
+      '**Boundary:** Do not assume or use paths outside this workspace'
+    );
+  });
   it('merges multiple footer fragments into a single trailing system message', async () => {
     const plugins: DronePlugin[] = [
       createTestPlugin({

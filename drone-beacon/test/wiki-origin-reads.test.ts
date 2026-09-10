@@ -23,6 +23,17 @@ vi.mock('../src/routes/context.js', async importOriginal => {
   };
 });
 
+const triggerWikiReindex = vi.fn();
+
+vi.mock('../src/wiki-index-support.js', async importOriginal => {
+  const actual =
+    await importOriginal<typeof import('../src/wiki-index-support.js')>();
+  return {
+    ...actual,
+    triggerWikiReindex: () => triggerWikiReindex(),
+  };
+});
+
 const COORD_VERSION = {
   id: 'dual-page',
   title: 'Dual Page (Coordinator)',
@@ -222,5 +233,124 @@ describe('origin-tagged wiki reads (S6)', () => {
     const search = JSON.parse(res.body) as Array<{ origin?: string }>;
     const origins = search.map(r => String(r.origin)).sort();
     expect(origins).toEqual(['beacon', 'coordinator']);
+  });
+});
+
+describe('wiki delete scope semantics', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    await setupDb();
+    const kbDir = await mkdtemp(path.join(os.tmpdir(), 'wiki-kb-del-'));
+    setKnowledgeBaseDir(kbDir);
+    proxyWikiToCoordinator.mockReset();
+    triggerWikiReindex.mockReset();
+    app = await buildTestApp();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    await teardownDb();
+  });
+
+  function mockCoordinatorDelete(outcome: 'ok' | 'not-found'): void {
+    proxyWikiToCoordinator.mockImplementation(async (method: string) => {
+      if (method === 'DELETE') {
+        return outcome === 'ok' ? { success: true } : null;
+      }
+      return null;
+    });
+  }
+
+  it('scope=coordinator delete succeeds and triggers a reindex', async () => {
+    mockCoordinatorDelete('ok');
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/wiki/dual-page?scope=coordinator',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ success: true });
+    expect(triggerWikiReindex).toHaveBeenCalledTimes(1);
+  });
+
+  it('scope=coordinator delete of an absent coordinator page 404s without a reindex', async () => {
+    mockCoordinatorDelete('not-found');
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/wiki/missing-page?scope=coordinator',
+    });
+    expect(res.statusCode).toBe(404);
+    expect(triggerWikiReindex).not.toHaveBeenCalled();
+  });
+
+  it('scope=beacon delete removes only the local page', async () => {
+    await writePage('beacon-only', 'Beacon Only', 'beacon', '# B');
+    mockCoordinatorDelete('ok');
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/wiki/beacon-only?scope=beacon',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ success: true });
+    expect(proxyWikiToCoordinator).not.toHaveBeenCalled();
+    expect(triggerWikiReindex).toHaveBeenCalledTimes(1);
+  });
+
+  it('no-scope delete removes both versions of a dual-scope page', async () => {
+    await writePage('dual-page', 'Dual', 'beacon', '# Dual\n\nLocal.');
+    mockCoordinatorDelete('ok');
+    const res = await app.inject({ method: 'DELETE', url: '/wiki/dual-page' });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      success: true,
+      beaconDeleted: true,
+      coordinatorDeleted: true,
+    });
+    expect(proxyWikiToCoordinator).toHaveBeenCalledWith(
+      'DELETE',
+      '/wiki/dual-page'
+    );
+    expect(triggerWikiReindex).toHaveBeenCalledTimes(1);
+  });
+
+  it('no-scope delete of a beacon-only page still attempts the coordinator', async () => {
+    await writePage('beacon-only', 'Beacon Only', 'beacon', '# B');
+    mockCoordinatorDelete('not-found');
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/wiki/beacon-only',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      success: true,
+      beaconDeleted: true,
+      coordinatorDeleted: false,
+    });
+    expect(triggerWikiReindex).toHaveBeenCalledTimes(1);
+  });
+
+  it('no-scope delete of a coordinator-only page succeeds', async () => {
+    mockCoordinatorDelete('ok');
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/wiki/coord-only',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      success: true,
+      beaconDeleted: false,
+      coordinatorDeleted: true,
+    });
+    expect(triggerWikiReindex).toHaveBeenCalledTimes(1);
+  });
+
+  it('no-scope delete 404s when the page exists nowhere', async () => {
+    mockCoordinatorDelete('not-found');
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/wiki/missing-page',
+    });
+    expect(res.statusCode).toBe(404);
+    expect(triggerWikiReindex).not.toHaveBeenCalled();
   });
 });

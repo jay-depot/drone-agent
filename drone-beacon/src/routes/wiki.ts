@@ -142,7 +142,9 @@ export default function wikiRoutes(app: FastifyInstance) {
     }
   });
 
-  // Delete a wiki page (local or coordinator)
+  // Delete a wiki page (local, coordinator, or everywhere). Without
+  // ?scope=, the delete spans both origins — mirroring the no-scope read,
+  // which returns all versions of the page.
   app.delete<{ Params: { pageId: string }; Querystring: { scope?: string } }>(
     '/wiki/:pageId',
     async (request, reply) => {
@@ -154,16 +156,32 @@ export default function wikiRoutes(app: FastifyInstance) {
         if (!result) {
           return reply.code(404).send({ error: 'Wiki page not found' });
         }
+        triggerWikiReindex();
         return result;
       }
 
+      if (request.query.scope === 'beacon') {
+        const { deletePage } = await import('drone-swarm-common');
+        const deleted = await deletePage(request.params.pageId);
+        if (!deleted) {
+          return reply.code(404).send({ error: 'Wiki page not found' });
+        }
+        triggerWikiReindex();
+        return { success: true };
+      }
+
       const { deletePage } = await import('drone-swarm-common');
-      const deleted = await deletePage(request.params.pageId);
-      if (!deleted) {
+      const beaconDeleted = await deletePage(request.params.pageId);
+      const coordinatorResult = await proxyWikiToCoordinator(
+        'DELETE',
+        `/wiki/${request.params.pageId}`
+      );
+      const coordinatorDeleted = coordinatorResult !== null;
+      if (!beaconDeleted && !coordinatorDeleted) {
         return reply.code(404).send({ error: 'Wiki page not found' });
       }
       triggerWikiReindex();
-      return { success: true };
+      return { success: true, beaconDeleted, coordinatorDeleted };
     }
   );
 
