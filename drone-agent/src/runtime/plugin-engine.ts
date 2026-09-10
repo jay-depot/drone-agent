@@ -1020,7 +1020,15 @@ export function createDronePluginEngine({
         return buildFooterMessagesFromHost();
       }
       const fragments = await renderFragmentsByPhase('footer');
-      return fragments.map(content => ({ role: 'system' as const, content }));
+      if (fragments.length === 0) {
+        return [];
+      }
+      // Merge all footer fragments into a single trailing system message
+      // (mirrors context-budget-service.buildFooterMessages). A run of
+      // consecutive trailing system messages is an untrained shape for some
+      // chat templates; a single one is proven safe. Topic delineation is
+      // preserved via each fragment's top-level `# Heading`.
+      return [{ role: 'system' as const, content: fragments.join('\n\n') }];
     },
     unregisterPluginTools: (pluginId: string) => {
       unregisterPluginToolsImpl(pluginId);

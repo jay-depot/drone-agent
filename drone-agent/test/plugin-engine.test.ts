@@ -505,6 +505,40 @@ describe('createDronePluginEngine', () => {
       '**Boundary:** Do not assume or use paths outside this workspace'
     );
   });
+  it('merges multiple footer fragments into a single trailing system message', async () => {
+    const plugins: DronePlugin[] = [
+      createTestPlugin({
+        id: 'frag',
+        prompts: [
+          {
+            key: 'f1',
+            phase: 'footer',
+            render: async () => '# Fragment One',
+          },
+          {
+            key: 'f2',
+            phase: 'footer',
+            render: async () => '# Fragment Two',
+          },
+        ],
+      }),
+    ];
+
+    const engine = createDronePluginEngine({
+      plugins,
+      config: createDefaultAgentConfig(),
+      logger: silentLogger(),
+    });
+    await engine.initialize();
+
+    const footerMessages = await engine.buildFooterMessages?.();
+    // A run of trailing system messages is an untrained shape for some chat
+    // templates; multiple footer fragments merge into one message, with
+    // topic delineation preserved via each fragment's top-level `# Heading`.
+    expect(footerMessages).toEqual([
+      { role: 'system', content: '# Fragment One\n\n# Fragment Two' },
+    ]);
+  });
 
   it('throws when a plugin registers two prompt fragments with the same key', async () => {
     const plugins: DronePlugin[] = [
