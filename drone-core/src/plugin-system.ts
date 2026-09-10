@@ -394,8 +394,12 @@ export type DroneSlashCommandContext = {
     getRegisteredToolCount?: () => number;
     /** Render prompt fragments (for /systemprompt). */
     renderPromptFragments?: () => Promise<string[]>;
-    /** Build the full system messages as sent to the LLM (config prompt + runtime flags + prompt fragments). */
+    /** Build header system messages (config prompt + runtime flags + header prompt fragments). */
     buildSystemMessages?: () => Promise<
+      import('./session-types.js').DroneChatMessage[]
+    >;
+    /** Build footer system messages from footer prompt fragments. */
+    buildFooterMessages?: () => Promise<
       import('./session-types.js').DroneChatMessage[]
     >;
     /** Get the resolved config (for /systemprompt). */

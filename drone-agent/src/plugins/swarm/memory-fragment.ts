@@ -28,7 +28,7 @@ export function createSwarmMemoryFragment(
 ): DronePromptFragment {
   return {
     key: 'swarm-memory',
-    phase: 'header',
+    phase: 'footer',
     render: async () => {
       const cache = retriever.getCache();
       if (!retriever.isEnabled() || !cache || cache.entries.length === 0) {

@@ -11,11 +11,15 @@ import { createContextBudgetService } from '../src/runtime/context-budget-servic
 
 function makeBudgetService(
   flags?: () => ReturnType<typeof createRuntimeFlagRegistry>,
-  config: DroneAgentConfig = createDefaultAgentConfig()
+  config: DroneAgentConfig = createDefaultAgentConfig(),
+  renderPromptFragmentsByPhase?: (
+    phase: 'header' | 'footer'
+  ) => Promise<string[]>
 ) {
   return createContextBudgetService({
     config,
     renderPromptFragments: async () => [],
+    renderPromptFragmentsByPhase,
     getProvider: () => ({
       chat: async () => ({ message: '' }),
       getContextWindowInfo: async () => ({
@@ -73,6 +77,25 @@ describe('context-budget-service runtime flags injection', () => {
     expect(msgs.length).toBe(2);
     expect(msgs[1].content).toContain('# Runtime Flags');
     expect(msgs[1].content).toContain('debug: llm');
+  });
+
+  it('builds headers and footers from phase-aware renderer', async () => {
+    const svc = makeBudgetService(
+      undefined,
+      createDefaultAgentConfig(),
+      async phase =>
+        phase === 'header' ? ['header one', 'header two'] : ['footer one']
+    );
+
+    const headerMessages = await svc.buildSystemMessages();
+    const footerMessages = await svc.buildFooterMessages();
+
+    expect(headerMessages.map(msg => msg.content)).toEqual([
+      createDefaultAgentConfig().systemPrompt,
+      'header one',
+      'header two',
+    ]);
+    expect(footerMessages).toEqual([{ role: 'system', content: 'footer one' }]);
   });
 });
 

@@ -21,7 +21,7 @@ export const notepadPlugin: DronePlugin = {
 
     registration.registerPromptFragment({
       key: 'notepad-current',
-      phase: 'header',
+      phase: 'footer',
       render: async () => {
         if (!state.currentNotepad) {
           return '';

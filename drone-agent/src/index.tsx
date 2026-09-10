@@ -105,6 +105,8 @@ async function main(): Promise<void> {
   const budgetService = createContextBudgetService({
     config: resolvedConfig.config,
     renderPromptFragments: () => getEngine().renderPromptFragments(),
+    renderPromptFragmentsByPhase: phase =>
+      getEngine().renderPromptFragmentsByPhase(phase),
     runtimeFlags: () => getEngine().getRuntimeFlags(),
     ...createLlmGetters(engineRef),
   });
@@ -202,6 +204,7 @@ async function main(): Promise<void> {
       swarmSpawned: invocation.options.swarm,
     },
     buildSystemMessages: () => budgetService.buildSystemMessages(),
+    buildFooterMessages: () => budgetService.buildFooterMessages(),
     resetStuckDetectors: () => resetStuckDetectorsRef.current?.(),
     submitUserMessage: content =>
       submitUserMessageRef.current?.(content) ?? Promise.resolve(''),

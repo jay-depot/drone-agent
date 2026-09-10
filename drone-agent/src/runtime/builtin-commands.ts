@@ -142,9 +142,16 @@ const systemPromptCommand: DroneSlashCommand = {
   command: '/systemprompt',
   description: 'Show the current system prompt',
   handler: async (ctx: DroneSlashCommandContext) => {
-    const systemMessages = (await ctx.engine.buildSystemMessages?.()) ?? [];
-    const lines: string[] = ['System Messages:'];
-    for (const msg of systemMessages) {
+    const headerMessages = (await ctx.engine.buildSystemMessages?.()) ?? [];
+    const footerMessages = (await ctx.engine.buildFooterMessages?.()) ?? [];
+    const lines: string[] = ['Header System Messages:'];
+    for (const msg of headerMessages) {
+      lines.push('────────────────────────────────────────');
+      lines.push(msg.content);
+    }
+    lines.push('');
+    lines.push('Footer System Messages:');
+    for (const msg of footerMessages) {
       lines.push('────────────────────────────────────────');
       lines.push(msg.content);
     }

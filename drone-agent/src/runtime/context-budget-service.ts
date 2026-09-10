@@ -43,7 +43,8 @@ export type SafetyTrimEvaluation =
  * Narrow service that centralizes context-window budgeting.
  *
  * Responsibilities:
- * - Build system messages from config + rendered prompt fragments
+ * - Build header system messages from config + runtime flags + rendered header fragments
+ * - Build footer system messages from rendered footer fragments
  * - Resolve context-window info from the LLM provider
  * - Estimate token budgets using `estimateSessionBudget`
  * - Decide whether safety trimming is needed and compute the minimum drop count
@@ -56,9 +57,14 @@ export type SafetyTrimEvaluation =
  */
 export type ContextBudgetService = {
   /**
-   * Build the current system messages (config prompt + rendered fragments).
+   * Build the current header system messages.
    */
   buildSystemMessages: () => Promise<DroneChatMessage[]>;
+
+  /**
+   * Build footer system messages from rendered footer fragments.
+   */
+  buildFooterMessages: () => Promise<DroneChatMessage[]>;
 
   /**
    * Resolve context-window info, probing the provider or falling back to config.
@@ -117,6 +123,14 @@ type CreateContextBudgetServiceOptions = {
    * resolve the engine later (to break circular init dependencies).
    */
   renderPromptFragments: () => Promise<string[]>;
+  /**
+   * Optional phase-aware fragment renderer. When provided, header/footer
+   * prompts are rendered separately; otherwise `renderPromptFragments` is
+   * used for backward-compatible header assembly and footer remains empty.
+   */
+  renderPromptFragmentsByPhase?: (
+    phase: 'header' | 'footer'
+  ) => Promise<string[]>;
   getProvider: () => DroneLlmProvider;
   getModel: () => string;
   /**
@@ -130,6 +144,7 @@ type CreateContextBudgetServiceOptions = {
 export function createContextBudgetService({
   config,
   renderPromptFragments,
+  renderPromptFragmentsByPhase,
   getProvider,
   getModel,
   runtimeFlags,
@@ -146,11 +161,21 @@ export function createContextBudgetService({
         content: flagsContent,
       } satisfies DroneChatMessage);
     }
-    const fragments = await renderPromptFragments();
+    const fragments = renderPromptFragmentsByPhase
+      ? await renderPromptFragmentsByPhase('header')
+      : await renderPromptFragments();
     for (const content of fragments) {
       base.push({ role: 'system', content } satisfies DroneChatMessage);
     }
     return base;
+  }
+
+  async function buildFooterMessages(): Promise<DroneChatMessage[]> {
+    if (!renderPromptFragmentsByPhase) {
+      return [];
+    }
+    const fragments = await renderPromptFragmentsByPhase('footer');
+    return fragments.map(content => ({ role: 'system', content }));
   }
 
   async function resolveContextWindow(): Promise<DroneContextWindowInfo> {
@@ -257,6 +282,7 @@ export function createContextBudgetService({
 
   return {
     buildSystemMessages,
+    buildFooterMessages,
     resolveContextWindow,
     resetContextWindowCache: () => {
       contextWindowInfoPromise = undefined;
