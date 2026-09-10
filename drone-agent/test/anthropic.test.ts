@@ -66,6 +66,7 @@ function createRegistrationCapture() {
       return [];
     },
     describeImages: async images => images,
+    getUsageLedger: () => [],
   };
 
   const registration: DronePluginRegistration = {
@@ -390,5 +391,75 @@ describe('anthropic plugin', () => {
     expect(err?.name).toBe('DroneLlmError');
     expect(err.status).toBe(400);
     expect(err.retryable).toBe(false);
+  });
+});
+
+describe('anthropic usage mapping', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('maps input_tokens/output_tokens onto the response', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.anthropic.apiKey = 'test-anthropic-key';
+    capture.config.anthropic.baseUrl = 'https://api.anthropic.com';
+    capture.config.anthropic.apiVersion = '2023-06-01';
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          id: 'msg_usage',
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'hello there' }],
+          usage: { input_tokens: 80, output_tokens: 12 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await anthropicPlugin.register(capture.registration);
+    const provider = capture.getProviderViaDriver();
+    const response = await provider.chat({
+      model: 'claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'hello' }],
+    });
+
+    expect(response.usage).toEqual({
+      promptTokens: 80,
+      completionTokens: 12,
+      totalTokens: 92,
+    });
+  });
+
+  it('omits usage when the response carries none', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.anthropic.apiKey = 'test-anthropic-key';
+    capture.config.anthropic.baseUrl = 'https://api.anthropic.com';
+    capture.config.anthropic.apiVersion = '2023-06-01';
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          id: 'msg_no_usage',
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'hello there' }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await anthropicPlugin.register(capture.registration);
+    const provider = capture.getProviderViaDriver();
+    const response = await provider.chat({
+      model: 'claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'hello' }],
+    });
+
+    expect(response.usage).toBeUndefined();
   });
 });

@@ -163,6 +163,7 @@ function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
     registerProvider: () => {},
     unregisterProvider: () => {},
     describeImages: async images => images,
+    getUsageLedger: () => [],
   };
 }
 

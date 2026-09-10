@@ -251,6 +251,13 @@ describe('App', () => {
             required: false,
             defaultEnabled: true,
           },
+          {
+            id: 'todo',
+            name: 'Todo',
+            enabled: true,
+            required: false,
+            defaultEnabled: false,
+          },
         ],
         getRegisteredPluginCount: () => 2,
         getRegisteredToolCount: () => 3,
@@ -331,6 +338,119 @@ describe('App', () => {
     );
     expect(frame).toContain('TODO');
     expect(frame).toContain('3 / 5');
+  });
+
+  it('discovers widgets from plugin ids beyond the legacy hardcoded list', async () => {
+    const widget: MidPanelWidget = {
+      id: 'beancounter',
+      label: 'USED',
+      getContent: () => ['45.2k tok · $0.0421'],
+    };
+    const opts = makeOptions({
+      engine: {
+        listTools: () => [],
+        listPlugins: () => [
+          {
+            id: 'core',
+            name: 'Core',
+            enabled: true,
+            required: true,
+            defaultEnabled: true,
+          },
+          {
+            id: 'beancounter',
+            name: 'Beancounter',
+            enabled: true,
+            required: false,
+            defaultEnabled: false,
+          },
+        ],
+        getRegisteredPluginCount: () => 2,
+        getRegisteredToolCount: () => 0,
+        getMountedToolCount: () => 0,
+        getCapability: ((pluginId: string) => {
+          if (pluginId === 'beancounter') {
+            return widget;
+          }
+          return undefined;
+        }) as <T>(pluginId: string) => T | undefined,
+        getTool: () => undefined,
+        runHooks: async () => {},
+        executeTool: async () => 'ok',
+        renderPromptFragments: async () => [],
+        getConfig: () => {
+          throw new Error('getConfig not used in tui tests');
+        },
+        buildSystemMessages: async () => [],
+        getHelpSnippets: () => [],
+        dispatchSlashCommand: async () => false,
+        onConversationEvent: () => () => {},
+        setElicitation: () => {},
+        runWorkflow: async () => ({ toolResult: '{}' }),
+        getSlashCommands: () => [],
+      } as unknown as Partial<DroneTuiOptions>,
+    });
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+    const frame = await waitUntilFrame(instance, f => f.includes('USED'));
+    expect(frame).toContain('USED');
+    expect(frame).toContain('45.2k tok');
+  });
+
+  it('does not render widgets from disabled plugins', async () => {
+    const widget: MidPanelWidget = {
+      id: 'beancounter',
+      label: 'USED',
+      getContent: () => ['1 tok · $0.0000'],
+    };
+    const opts = makeOptions({
+      engine: {
+        listTools: () => [],
+        listPlugins: () => [
+          {
+            id: 'core',
+            name: 'Core',
+            enabled: true,
+            required: true,
+            defaultEnabled: true,
+          },
+          {
+            id: 'beancounter',
+            name: 'Beancounter',
+            enabled: false,
+            required: false,
+            defaultEnabled: false,
+          },
+        ],
+        getRegisteredPluginCount: () => 2,
+        getRegisteredToolCount: () => 0,
+        getMountedToolCount: () => 0,
+        getCapability: ((pluginId: string) => {
+          if (pluginId === 'beancounter') {
+            return widget;
+          }
+          return undefined;
+        }) as <T>(pluginId: string) => T | undefined,
+        getTool: () => undefined,
+        runHooks: async () => {},
+        executeTool: async () => 'ok',
+        renderPromptFragments: async () => [],
+        getConfig: () => {
+          throw new Error('getConfig not used in tui tests');
+        },
+        buildSystemMessages: async () => [],
+        getHelpSnippets: () => [],
+        dispatchSlashCommand: async () => false,
+        onConversationEvent: () => () => {},
+        setElicitation: () => {},
+        runWorkflow: async () => ({ toolResult: '{}' }),
+        getSlashCommands: () => [],
+      } as unknown as Partial<DroneTuiOptions>,
+    });
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+    await tick();
+    expect(instance.lastFrame() ?? '').not.toContain('USED');
   });
 });
 

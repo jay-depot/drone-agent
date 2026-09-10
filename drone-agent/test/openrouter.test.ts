@@ -66,6 +66,7 @@ function createRegistrationCapture() {
       return [];
     },
     describeImages: async images => images,
+    getUsageLedger: () => [],
   };
 
   const registration: DronePluginRegistration = {
@@ -409,5 +410,95 @@ describe('openrouter plugin', () => {
 
     expect(response.reasoning).toBe('Choice-level reasoning');
     expect(response.message).toBe('Final answer');
+  });
+});
+
+describe('openrouter usage', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function stubChatFetch(): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          id: 'or_usage',
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: { role: 'assistant', content: 'hey' },
+            },
+          ],
+          usage: {
+            prompt_tokens: 200,
+            completion_tokens: 30,
+            total_tokens: 230,
+            cost: 0.011,
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('maps OpenRouter usage.cost onto the response', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.openrouter.apiKey = 'test-openrouter-key';
+    capture.config.openrouter.baseUrl = 'https://openrouter.ai/api/v1';
+    stubChatFetch();
+
+    await openrouterPlugin.register(capture.registration);
+    const provider = capture.getProviderViaDriver();
+    const response = await provider.chat({
+      model: 'test/model',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+
+    expect(response.usage).toEqual({
+      promptTokens: 200,
+      completionTokens: 30,
+      totalTokens: 230,
+      cost: 0.011,
+    });
+  });
+
+  it('sends usage.include only when sendUsageInclude is configured', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.openrouter.apiKey = 'test-openrouter-key';
+    capture.config.openrouter.baseUrl = 'https://openrouter.ai/api/v1';
+    await openrouterPlugin.register(capture.registration);
+    const driver = capture.getRegisteredDriver();
+    if (!driver) throw new Error('driver not registered');
+
+    const withValve = driver.createProvider({
+      protocol: 'openrouter',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'test-openrouter-key',
+      sendUsageInclude: true,
+    });
+    const withoutValve = driver.createProvider({
+      protocol: 'openrouter',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'test-openrouter-key',
+    });
+
+    const fetchMock = stubChatFetch();
+
+    await withValve.chat({
+      model: 'test/model',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(init.body as string).usage).toEqual({ include: true });
+
+    await withoutValve.chat({
+      model: 'test/model',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+    const secondInit = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    expect(JSON.parse(secondInit.body as string).usage).toBeUndefined();
   });
 });

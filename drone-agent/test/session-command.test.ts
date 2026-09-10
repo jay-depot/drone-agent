@@ -47,6 +47,7 @@ function makeLlm(
     }),
     registerDriver: () => {},
     describeImages: async images => images,
+    getUsageLedger: () => [],
     getActiveProviderId: () => 'test',
     getAvailableProviders: () => [],
     activateProvider: () => {},
