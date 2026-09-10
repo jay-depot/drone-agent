@@ -450,5 +450,9 @@
   {
     "timestamp": "2026-09-08T05:31:45.909Z",
     "insight": "When a plan's validation says \"ambient specs lazy-only\", check whether the demand-start path prefers configured servers before known specs. The first implementation dispatched startServerForFile purely by KNOWN_SERVER_SPECS extension match, so a crashed *configured* server (e.g. user-configured toml) restarted as the spec default (taplo) instead of the user's command. Configured-first dispatch (findConfiguredServerForExtension) fixes restart identity. Also: file__write is for full rewrites only — a partial file draft with a placeholder token written to a real source path will ship if not caught (caught by reread here; always reread after write)."
+  },
+  {
+    "timestamp": "2026-09-10T03:49:02.557Z",
+    "insight": "GitHub PR workflow on this host: the `gh` CLI is not installed (command -v gh fails), so PR creation/checks must go through the mcp__github__* tools (get_me, create_pull_request — verified working for jay-depot/drone-agent; PR #99 opened via mcp__github__create_pull_request). PR-creation sessions should: (1) git branch list + status to confirm not on main and tree clean, (2) `git log main..<branch>` + full `git diff main...<branch> --stat` and targeted diffs to write an accurate PR body, (3) create PR with owner=repo owner, head=branch, base=main. Note: `gh pr list`-style \"does a PR already exist\" checks are unavailable — rely on create failing with 'A pull request already exists' if one exists, or ask the user."
   }
 ]
