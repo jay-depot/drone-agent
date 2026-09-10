@@ -165,7 +165,10 @@ function createWikiWriteTool(ctx: SwarmContext): DroneToolDefinition {
 function createWikiSearchTool(ctx: SwarmContext): DroneToolDefinition {
   return {
     name: 'wiki_search',
-    description: 'Search wiki pages in the swarm knowledge base.',
+    description:
+      'Semantically query wiki pages in the swarm knowledge base. Your query is ' +
+      'embedded with nomic, and the search works best if you format your query as ' +
+      'a well-formed question.',
     inputSchema: {
       type: 'object',
       properties: {
