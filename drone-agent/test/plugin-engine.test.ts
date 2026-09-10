@@ -5,6 +5,7 @@ import {
   filterByGlobPatterns,
   toToolResultContent,
   type DronePlugin,
+  type DronePromptFragment,
   type DroneSessionSafetyTrimPayload,
   type DroneToolDescriptor,
   type DroneToolDefinition,
@@ -211,8 +212,7 @@ describe('createDronePluginEngine', () => {
         type: 'object',
         properties: { message: { type: 'string' } },
       },
-      execute: async (input: { message: string }) =>
-        `echo:${(input as { message: string }).message}`,
+      execute: async input => `echo:${(input as { message: string }).message}`,
     };
 
     const plugins: DronePlugin[] = [
@@ -461,20 +461,39 @@ describe('createDronePluginEngine', () => {
   });
 
   it('startup workspace footer does not leak string-concatenation artifacts', async () => {
-    let fragment: { render: () => Promise<string> } | undefined;
+    let fragment: DronePromptFragment | undefined;
 
     await startupPlugin.register({
-      registerPromptFragment: (
-        prompt: { render: () => Promise<string> } | undefined
-      ) => {
+      logger: silentLogger(),
+      getConfig: () => createDefaultAgentConfig(),
+      registerTool: () => {},
+      registerHelp: () => {},
+      registerWorkflow: () => {},
+      registerSlashCommand: () => {},
+      emitEvent: () => {},
+      offer: () => {},
+      request: <T>() => undefined as T | undefined,
+      runWorkflow: async () => ({}),
+      requestElicitation: () => undefined,
+      mountTool: () => undefined,
+      unmountTool: () => {},
+      unregisterPluginTools: () => {},
+      unregisterTool: () => {},
+      listMountedTools: () => [],
+      registerPromptFragment: (prompt: DronePromptFragment) => {
         fragment = prompt;
       },
-      registerTool: () => {},
-      offer: () => {},
       hooks: {
         onPluginsLoaded: () => {},
+        onSessionStart: () => {},
+        onBeforePrompt: () => {},
+        onAfterToolCall: () => {},
+        onConversationEvent: () => Promise.resolve(),
+        onSessionClear: () => {},
+        onShutdown: () => {},
+        onSessionSafetyTrimWillRun: () => {},
+        onSessionSafetyTrimApplied: () => {},
       },
-      logger: silentLogger(),
     });
 
     expect(fragment).toBeDefined();
