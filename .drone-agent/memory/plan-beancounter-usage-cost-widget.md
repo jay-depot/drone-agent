@@ -55,6 +55,7 @@ All 8 steps executed; every validation criterion met. Commits on the branch:
 078520f (plan + insight), 19a8928 (core types + drivers + broker ledger),
 a0ec724 (beancounter plugin), aff3435 (generalized widget discovery),
 51b38bc (tests), plus the final validation/lint commit.
+PR: https://github.com/jay-depot/drone-agent/pull/104
 
 What landed:
 
