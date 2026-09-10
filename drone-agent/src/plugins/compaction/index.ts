@@ -466,7 +466,7 @@ export type CompactionStatus = {
   };
   summaries: Array<{
     id: string;
-    preview: string;
+    text: string;
     tokenCount: number;
   }>;
 };
@@ -522,9 +522,7 @@ async function handleShow(
 
   ctx.logger.info('Compaction summaries (newest first):');
   for (const s of status.summaries) {
-    ctx.logger.info(
-      `  ${s.id.slice(0, 8)}  ${s.tokenCount} tokens  ${s.preview}`
-    );
+    ctx.logger.info(`  ${s.id.slice(0, 8)}  ${s.tokenCount} tokens  ${s.text}`);
   }
   ctx.logger.info(
     `Total: ${status.summaries.length} summary turn(s), ${(
@@ -733,7 +731,7 @@ export function createCompactionPlugin(
             },
             summaries: summaryTurns.map(t => ({
               id: t.id,
-              preview: t.messages[0]?.content?.slice(0, 80) ?? '',
+              text: t.messages[0]?.content ?? '',
               tokenCount: estimateTurnTokens(t),
             })),
           };

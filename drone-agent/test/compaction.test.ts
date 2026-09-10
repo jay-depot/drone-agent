@@ -1442,11 +1442,14 @@ describe('CompactionCapability extensions', () => {
     ).toHaveLength(0);
   });
 
-  it('getStatus returns correct counts and summary previews', async () => {
+  it('getStatus returns correct counts and full summary text', async () => {
     const sessionManager = createSessionManager();
-    sessionManager.prependSystemTurn('Summary one content.', {
-      kind: 'summary',
-    });
+    sessionManager.prependSystemTurn(
+      'Summary one content. ' + 'A'.repeat(120),
+      {
+        kind: 'summary',
+      }
+    );
     sessionManager.prependSystemTurn('Summary two content.', {
       kind: 'summary',
     });
@@ -1483,7 +1486,7 @@ describe('CompactionCapability extensions', () => {
         };
         summaries: Array<{
           id: string;
-          preview: string;
+          text: string;
           tokenCount: number;
         }>;
       }>;
@@ -1498,9 +1501,14 @@ describe('CompactionCapability extensions', () => {
     expect(status.contextWindow.softThresholdPercent).toBe(50);
     expect(status.summaries).toHaveLength(2);
     // Oldest-first: the first-prepended summary is listed first.
-    expect(status.summaries[0].preview).toContain('Summary one content');
+    const firstText = status.summaries[0].text;
+    expect(firstText).toContain('Summary one content');
+    // Regression: getStatus must expose the full summary text, not a
+    // truncated preview (the 80-char cap was dropped so /compact show
+    // renders complete summaries).
+    expect(firstText.length).toBeGreaterThan(80);
     expect(status.summaries[0].tokenCount).toBeGreaterThan(0);
-    expect(status.summaries.at(-1)!.preview).toContain('Summary two content');
+    expect(status.summaries.at(-1)!.text).toContain('Summary two content');
   });
 
   it('dropSummary removes a specific summary turn by id', async () => {
@@ -1784,7 +1792,9 @@ describe('/compact slash command', () => {
 
   it('shows summaries via /compact show', async () => {
     const sessionManager = createSessionManager();
-    sessionManager.prependSystemTurn('Summary one content.', {
+    const longSummary =
+      'Summary one content. '.repeat(20) + 'TERMINAL-MARKER-XYZ';
+    sessionManager.prependSystemTurn(longSummary, {
       kind: 'summary',
     });
     sessionManager.appendUserMessage('hello');
@@ -1803,6 +1813,10 @@ describe('/compact slash command', () => {
     );
     expect(capture.logger.info).toHaveBeenCalledWith(
       expect.stringMatching(/Summary one content/)
+    );
+    // Regression: /compact show must not truncate the summary text.
+    expect(capture.logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('TERMINAL-MARKER-XYZ')
     );
   });
 
