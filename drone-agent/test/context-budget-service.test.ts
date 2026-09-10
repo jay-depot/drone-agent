@@ -84,7 +84,9 @@ describe('context-budget-service runtime flags injection', () => {
       undefined,
       createDefaultAgentConfig(),
       async phase =>
-        phase === 'header' ? ['header one', 'header two'] : ['footer one']
+        phase === 'header'
+          ? ['header one', 'header two']
+          : ['# Footer One', '# Footer Two']
     );
 
     const headerMessages = await svc.buildSystemMessages();
@@ -95,7 +97,24 @@ describe('context-budget-service runtime flags injection', () => {
       'header one',
       'header two',
     ]);
-    expect(footerMessages).toEqual([{ role: 'system', content: 'footer one' }]);
+    // Multiple footer fragments merge into a single trailing system message
+    // (a run of trailing system messages is an untrained shape for some chat
+    // templates). Topic delineation is preserved via each fragment's
+    // top-level `# Heading`.
+    expect(footerMessages).toEqual([
+      { role: 'system', content: '# Footer One\n\n# Footer Two' },
+    ]);
+  });
+
+  it('returns no footer messages when no footer fragments render', async () => {
+    const svc = makeBudgetService(
+      undefined,
+      createDefaultAgentConfig(),
+      async phase => (phase === 'header' ? ['header one'] : [])
+    );
+
+    const footerMessages = await svc.buildFooterMessages();
+    expect(footerMessages).toEqual([]);
   });
 });
 

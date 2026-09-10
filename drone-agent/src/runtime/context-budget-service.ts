@@ -175,7 +175,23 @@ export function createContextBudgetService({
       return [];
     }
     const fragments = await renderPromptFragmentsByPhase('footer');
-    return fragments.map(content => ({ role: 'system', content }));
+    if (fragments.length === 0) {
+      return [];
+    }
+    // Merge all footer fragments into a single trailing system message.
+    // A run of consecutive trailing system messages after the conversation
+    // turns is an untrained shape for some chat templates (GLM-5.3-flash
+    // intermittently ended rounds with narration and no tool call after
+    // PR #99 moved fragments to the footer). A single trailing system
+    // message is a proven-safe shape (nudges landed there pre-#99). Topic
+    // delineation is preserved because every fragment starts with a
+    // top-level `# Heading` per the project's fragment convention.
+    return [
+      {
+        role: 'system',
+        content: fragments.join('\n\n'),
+      },
+    ];
   }
 
   async function resolveContextWindow(): Promise<DroneContextWindowInfo> {
