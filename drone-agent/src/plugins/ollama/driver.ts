@@ -1,10 +1,11 @@
-import { DroneLlmError } from 'drone-core';
+import { DroneLlmError, toDroneLlmUsage } from 'drone-core';
 import type {
   DiscoveredModel,
   DroneChatRequest,
   DroneContextWindowInfo,
   DroneLogger,
   DroneLlmProvider,
+  DroneLlmUsage,
 } from 'drone-core';
 import { Ollama, type ShowResponse } from 'ollama';
 import { isTransientStatus } from '../../runtime/llm-retry.js';
@@ -446,6 +447,7 @@ export function createOllamaProvider(providerConfig: {
       const normalized: {
         message: string;
         reasoning?: string;
+        usage?: DroneLlmUsage;
         toolCalls?: Array<{
           id?: string;
           name: string;
@@ -465,6 +467,14 @@ export function createOllamaProvider(providerConfig: {
       ) {
         normalized.toolCalls =
           response.message.tool_calls.map(normalizeToolCall);
+      }
+
+      const usage = toDroneLlmUsage({
+        prompt: response.prompt_eval_count,
+        completion: response.eval_count,
+      });
+      if (usage) {
+        normalized.usage = usage;
       }
 
       return normalized;

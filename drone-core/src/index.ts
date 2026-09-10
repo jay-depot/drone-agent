@@ -111,6 +111,7 @@ export type {
   DroneToolCall,
   DroneToolDescriptor,
   DroneChatResponse,
+  DroneLlmUsage,
   DroneContextWindowInfo,
   DroneTokenEstimate,
   DroneSessionSafetyTrimPayload,
@@ -119,7 +120,7 @@ export type {
   ToolRenderState,
 } from './session-types.js';
 
-export { SESSION_STATUSES } from './session-types.js';
+export { SESSION_STATUSES, toDroneLlmUsage } from './session-types.js';
 
 // ── Skill types ────────────────────────────────────────────────────
 
@@ -215,6 +216,7 @@ export type {
   DroneConfigCapability,
   DroneSkillsCapability,
   DroneLlmCapability,
+  DroneLlmUsageLedgerEntry,
   DroneResolvedModelRole,
   DronePrincipleEntry,
   DronePrinciplesCapability,

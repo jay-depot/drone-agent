@@ -32,6 +32,7 @@ export const openrouterPlugin: DronePlugin = {
           {
             reasoningInBody: true,
             toolRoutingRetry: true,
+            sendUsageInclude: providerConfig.sendUsageInclude,
           }
         ).chat,
       }),
