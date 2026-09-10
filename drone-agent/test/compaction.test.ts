@@ -145,6 +145,7 @@ async function captureRegistration(
         registerProvider: () => {},
         unregisterProvider: () => {},
         describeImages: describeImagesOverride ?? (async images => images),
+        getUsageLedger: () => [],
         resolveModelForRole: () =>
           role
             ? {

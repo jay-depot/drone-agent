@@ -24,9 +24,7 @@ export type MidPanelWidget = {
  * Widget discovery iterates every enabled plugin's capability, so this is
  * the filter that keeps non-widget capabilities out of the mid panel.
  */
-export function isMidPanelWidget(
-  widget: unknown
-): widget is MidPanelWidget {
+export function isMidPanelWidget(widget: unknown): widget is MidPanelWidget {
   return (
     typeof widget === 'object' &&
     widget !== null &&

@@ -9,7 +9,6 @@ import {
   type DroneImageContent,
   type DroneLlmCapability,
   type DroneLlmProvider,
-  type DroneLlmUsageLedgerEntry,
   type DronePlugin,
   type DroneReasoningLevel,
   type DroneResolvedModelRole,
@@ -20,6 +19,7 @@ import {
   DEFAULT_RETRY_CONFIG,
   withBoundedSilentRetry,
 } from '../../runtime/llm-retry.js';
+import { createUsageLedger } from './usage-ledger.js';
 
 const VALID_REASONING_LEVELS: DroneReasoningLevel[] = [
   'off',
@@ -104,15 +104,15 @@ export const llmPlugin: DronePlugin = {
       return entry?.protocol === 'ollama' ? 0 : 1;
     }
 
+    // Session-lifetime ledger of provider-reported usage, recorded at this
+    // chokepoint so every broker-routed call counts exactly once (main
+    // rounds, model-role calls, the image describer).
+    const usageLedger = createUsageLedger();
+
     // Broker-enriched view of a provider instance: chat() fills the additive
     // DroneChatRequest fields (effective parameters, resolved metadata) before
     // delegating. Single interception point — wire contract intact. Used by the
     // active provider AND any model-role-resolved provider.
-    // Session-lifetime ledger of provider-reported usage, recorded at this
-    // chokepoint so every broker-routed call counts exactly once (main
-    // rounds, model-role calls, the image describer).
-    const usageLedger: DroneLlmUsageLedgerEntry[] = [];
-
     function enrichProvider(
       instance: ProviderInstance,
       role?: string
@@ -141,12 +141,11 @@ export const llmPlugin: DronePlugin = {
               hasVision: request.hasVision ?? metadata.hasVision,
             });
             if (response.usage) {
-              usageLedger.push({
+              usageLedger.record({
                 providerId: instance.providerId,
                 model: request.model,
                 ...(role === undefined ? {} : { role }),
                 usage: response.usage,
-                at: Date.now(),
               });
             }
             return response;
@@ -710,7 +709,7 @@ export const llmPlugin: DronePlugin = {
         return resolveModelMetadata(fullId).hasVision ?? false;
       },
       describeImages: describeImagesImpl,
-      getUsageLedger: () => usageLedger,
+      getUsageLedger: () => usageLedger.getAll(),
       registerProvider: provider => {
         // Legacy path — retained for the migration window. Wraps the
         // registration as a synthetic provider instance.
@@ -801,7 +800,7 @@ export const llmPlugin: DronePlugin = {
 
     // ── onSessionClear: reset the usage ledger ────────────────────────
     registration.hooks.onSessionClear(async () => {
-      usageLedger.length = 0;
+      usageLedger.clear();
     });
 
     // ── /model slash command ──────────────────────────────────────────

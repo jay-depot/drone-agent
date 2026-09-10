@@ -1,5 +1,8 @@
-import type { DroneLlmCapability, DronePlugin } from 'drone-core';
-import type { DroneLlmUsageLedgerEntry } from 'drone-core';
+import type {
+  DroneLlmCapability,
+  DroneLlmUsageLedgerEntry,
+  DronePlugin,
+} from 'drone-core';
 
 function totalTokens(entries: readonly DroneLlmUsageLedgerEntry[]): number {
   return entries.reduce((sum, entry) => sum + entry.usage.totalTokens, 0);

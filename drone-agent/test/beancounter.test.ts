@@ -165,7 +165,12 @@ describe('beancounter widget', () => {
   it('formats tokens and cost as `<n> tok · $<cost>`', async () => {
     const { llm, widget } = await createEngineWithStubDriver(() => ({
       message: 'ok',
-      usage: { promptTokens: 40000, completionTokens: 5200, totalTokens: 45200, cost: 0.0421 },
+      usage: {
+        promptTokens: 40000,
+        completionTokens: 5200,
+        totalTokens: 45200,
+        cost: 0.0421,
+      },
     }));
 
     await llm.getActiveProvider().chat({
@@ -211,7 +216,12 @@ describe('beancounter widget', () => {
   it('accumulates across calls', async () => {
     const { llm, widget } = await createEngineWithStubDriver(() => ({
       message: 'ok',
-      usage: { promptTokens: 1000, completionTokens: 0, totalTokens: 1000, cost: 0.01 },
+      usage: {
+        promptTokens: 1000,
+        completionTokens: 0,
+        totalTokens: 1000,
+        cost: 0.01,
+      },
     }));
 
     await llm.getActiveProvider().chat({

@@ -34,7 +34,9 @@ describe('toDroneLlmUsage', () => {
     expect(toDroneLlmUsage({})).toBeUndefined();
     expect(toDroneLlmUsage({ prompt: Number.NaN })).toBeUndefined();
     expect(toDroneLlmUsage({ completion: -1 })).toBeUndefined();
-    expect(toDroneLlmUsage({ prompt: '12' as unknown as number })).toBeUndefined();
+    expect(
+      toDroneLlmUsage({ prompt: '12' as unknown as number })
+    ).toBeUndefined();
   });
 
   it('treats zero as a valid count', () => {
@@ -54,7 +56,9 @@ describe('toDroneLlmUsage', () => {
   });
 
   it('keeps a zero cost but drops non-finite costs', () => {
-    expect(toDroneLlmUsage({ prompt: 1, completion: 1, cost: 0 })?.cost).toBe(0);
+    expect(toDroneLlmUsage({ prompt: 1, completion: 1, cost: 0 })?.cost).toBe(
+      0
+    );
     expect(
       toDroneLlmUsage({ prompt: 1, completion: 1, cost: Number.NaN })?.cost
     ).toBeUndefined();
