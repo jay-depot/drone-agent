@@ -38,6 +38,7 @@ export const startupPlugin: DronePlugin = {
     const homeDir = os.homedir();
     const osInfo = getOS();
     const dateTime = getFormattedDateTime();
+    const tempDir = os.tmpdir();
 
     registration.registerPromptFragment({
       key: 'startup-banner',
@@ -45,10 +46,13 @@ export const startupPlugin: DronePlugin = {
       render: async () =>
         `# Workspace
 
-**Root Directory:** ${cwd}
-**Path Rule:** All file paths in this session should be relative to this directory.
-**Boundary:** Do not assume or use paths outside this workspace (e.g., /workspace/... or /home/...) unless specifically instructed to do so by the user or unless accessing the User Home Directory listed below.
+**Working Directory:** ${cwd}
+**Path Rule:** All file paths in this session should be relative to this directory by default.
+**Boundary:** Do not assume or use paths outside this workspace (e.g., /workspace/... ' +
+'or /home/...) unless specifically instructed to do so by the user, creating temp ' +
+'files, or unless accessing the User Home Directory listed below.
 
+**temp dir**: ${tempDir}
 **User Home:** ${homeDir}
 **OS:** ${osInfo}
 **Current Time:** ${dateTime}`,
