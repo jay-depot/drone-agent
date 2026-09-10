@@ -73,16 +73,26 @@ function makeOptions(
           { role: 'system', content: 'You are a test agent.' },
         ];
         base.push({ role: 'system', content: 'Fragment header content' });
-        base.push({ role: 'system', content: 'Fragment footer content' });
         return base;
       },
+      buildFooterMessages: async () => [
+        { role: 'system', content: 'Fragment footer content' },
+      ],
       onConversationEvent: () => () => {},
       dispatchSlashCommand: async (_line, ctx) => {
         if (_line === '/systemprompt') {
-          const systemMessages =
+          const headerMessages =
             (await ctx.engine.buildSystemMessages?.()) ?? [];
-          const lines: string[] = ['System Messages:'];
-          for (const msg of systemMessages) {
+          const footerMessages =
+            (await ctx.engine.buildFooterMessages?.()) ?? [];
+          const lines: string[] = ['Header System Messages:'];
+          for (const msg of headerMessages) {
+            lines.push('────────────────────────────────────────');
+            lines.push(msg.content);
+          }
+          lines.push('');
+          lines.push('Footer System Messages:');
+          for (const msg of footerMessages) {
             lines.push('────────────────────────────────────────');
             lines.push(msg.content);
           }
@@ -146,6 +156,8 @@ describe('App — /systemprompt', () => {
     expect(frame).toContain('You are a test agent.');
     expect(frame).toContain('Fragment header content');
     expect(frame).toContain('Fragment footer content');
+    expect(frame).toContain('Header System Messages:');
+    expect(frame).toContain('Footer System Messages:');
   });
 
   it('works when no prompt fragments are registered', async () => {
@@ -181,12 +193,21 @@ describe('App — /systemprompt', () => {
           ];
           return base;
         },
+        buildFooterMessages: async () => [],
         dispatchSlashCommand: async (_line, ctx) => {
           if (_line === '/systemprompt') {
-            const systemMessages =
+            const headerMessages =
               (await ctx.engine.buildSystemMessages?.()) ?? [];
-            const lines: string[] = ['System Messages:'];
-            for (const msg of systemMessages) {
+            const footerMessages =
+              (await ctx.engine.buildFooterMessages?.()) ?? [];
+            const lines: string[] = ['Header System Messages:'];
+            for (const msg of headerMessages) {
+              lines.push('────────────────────────────────────────');
+              lines.push(msg.content);
+            }
+            lines.push('');
+            lines.push('Footer System Messages:');
+            for (const msg of footerMessages) {
               lines.push('────────────────────────────────────────');
               lines.push(msg.content);
             }

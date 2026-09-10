@@ -136,7 +136,7 @@ export const terminalPlugin: DronePlugin = {
     // ── Prompt fragment: active sessions ──────────────────────────────
     registration.registerPromptFragment({
       key: 'terminal-active-sessions',
-      phase: 'header',
+      phase: 'footer',
       render: async () => {
         const sessions = manager.list();
         if (sessions.length === 0) return false;

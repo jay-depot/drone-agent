@@ -1481,3 +1481,56 @@ describe('createConversationService — subagent__return canonical naming', () =
     expect(batchNames).toContain('subagent__return');
   });
 });
+
+describe('createConversationService — prompt fragment phase ordering', () => {
+  it('sends header messages before turns, footer messages after turns, and reminders last', async () => {
+    const engine = createMockEngine({
+      tools: [],
+      executeToolImpl: async () => 'ok',
+    });
+    const provider = makeProvider([{ message: 'done' }]);
+    const config = createDefaultAgentConfig();
+    const sessionManager = createSessionManager();
+    const budgetService = createContextBudgetService({
+      config,
+      renderPromptFragments: async () => [],
+      renderPromptFragmentsByPhase: async phase =>
+        phase === 'header' ? ['header-fragment'] : ['footer-fragment'],
+      getProvider: () => provider,
+      getModel: () => 'fake',
+    });
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+    engine.__reminderQueue.queue('queued-reminder');
+    const result = await conversation.sendUserMessage('hello');
+    expect(result).toBe('done');
+
+    const request = provider.__chatMock.mock.calls[0]?.[0] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const contents = request.messages.map(msg => msg.content);
+
+    const headerIndex = contents.indexOf('header-fragment');
+    const userIndex = contents.indexOf('hello');
+    const footerIndex = contents.indexOf('footer-fragment');
+    const reminderIndex = contents.indexOf('queued-reminder');
+
+    expect(headerIndex).toBeGreaterThanOrEqual(0);
+    expect(userIndex).toBeGreaterThanOrEqual(0);
+    expect(footerIndex).toBeGreaterThanOrEqual(0);
+    expect(reminderIndex).toBeGreaterThanOrEqual(0);
+
+    expect(headerIndex).toBeLessThan(userIndex);
+    expect(userIndex).toBeLessThan(footerIndex);
+    expect(footerIndex).toBeLessThan(reminderIndex);
+  });
+});

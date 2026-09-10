@@ -100,6 +100,9 @@ export type DronePluginEngine = {
     callback: (event: DroneConversationEvent) => void
   ) => () => void;
   renderPromptFragments: () => Promise<string[]>;
+  renderPromptFragmentsByPhase: (
+    phase: 'header' | 'footer'
+  ) => Promise<string[]>;
   getTool: (canonicalName: string) => DroneToolDefinition | undefined;
   executeTool: (
     canonicalName: string,
@@ -139,8 +142,10 @@ export type DronePluginEngine = {
   getConfig: () => DroneAgentConfig;
   /** Returns the runtime flag registry, for injecting into the system prompt. */
   getRuntimeFlags: () => RuntimeFlagRegistry;
-  /** Build the full system messages as sent to the LLM (config prompt + runtime flags + prompt fragments). */
+  /** Build header system messages (config prompt + runtime flags + header prompt fragments). */
   buildSystemMessages: () => Promise<DroneChatMessage[]>;
+  /** Build footer system messages from footer prompt fragments. */
+  buildFooterMessages?: () => Promise<DroneChatMessage[]>;
   /**
    * Drain queued one-shot system reminders for inclusion in the next LLM
    * call as non-persisted system messages. The conversation service calls
@@ -203,6 +208,7 @@ type CreateDronePluginEngineOptions = {
     swarmSpawned?: boolean;
   };
   buildSystemMessages?: () => Promise<DroneChatMessage[]>;
+  buildFooterMessages?: () => Promise<DroneChatMessage[]>;
   /**
    * Optional callback to reset the conversation's stuck-detector state
    * (identical-tool-call streak, broken-response counter). Exposed to
@@ -337,6 +343,7 @@ export function createDronePluginEngine({
   debugFlags = createDebugFlagRegistry(),
   runtimeOptions,
   buildSystemMessages: buildSystemMessagesFromHost,
+  buildFooterMessages: buildFooterMessagesFromHost,
   resetStuckDetectors: resetStuckDetectorsFromHost,
   submitUserMessage: submitUserMessageFromHost,
   cancelCurrentRequest: cancelCurrentRequestFromHost,
@@ -854,6 +861,20 @@ export function createDronePluginEngine({
     }
   }
 
+  async function renderFragmentsByPhase(
+    phase: 'header' | 'footer'
+  ): Promise<string[]> {
+    const renderedPrompts = await Promise.all(
+      promptFragments
+        .filter(fragment => fragment.phase === phase)
+        .map(fragment => fragment.render())
+    );
+    return renderedPrompts.filter(
+      (prompt): prompt is string =>
+        typeof prompt === 'string' && prompt.length > 0
+    );
+  }
+
   return captureEngine({
     initialize: async () => {
       // Register built-in slash commands before plugins load.
@@ -951,6 +972,7 @@ export function createDronePluginEngine({
           typeof prompt === 'string' && prompt.length > 0
       );
     },
+    renderPromptFragmentsByPhase: async phase => renderFragmentsByPhase(phase),
     getTool: canonicalName => toolRegistry.get(canonicalName),
     executeTool: async (canonicalName, input, onProgress, context) => {
       const tool = toolRegistry.get(canonicalName);
@@ -984,18 +1006,21 @@ export function createDronePluginEngine({
         return buildSystemMessagesFromHost();
       }
       // Fallback: assemble manually (same as the old /systemprompt behavior).
-      // Use promptFragments directly (not renderPromptFragments, which is a
-      // method on the return object and not yet accessible here).
       const base: DroneChatMessage[] = [
         { role: 'system', content: config.systemPrompt },
       ];
-      const fragments = (
-        await Promise.all(promptFragments.map(f => f.render()))
-      ).filter((p): p is string => typeof p === 'string' && p.length > 0);
+      const fragments = await renderFragmentsByPhase('header');
       for (const content of fragments) {
         base.push({ role: 'system', content });
       }
       return base;
+    },
+    buildFooterMessages: async () => {
+      if (buildFooterMessagesFromHost) {
+        return buildFooterMessagesFromHost();
+      }
+      const fragments = await renderFragmentsByPhase('footer');
+      return fragments.map(content => ({ role: 'system' as const, content }));
     },
     unregisterPluginTools: (pluginId: string) => {
       unregisterPluginToolsImpl(pluginId);

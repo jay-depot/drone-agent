@@ -150,7 +150,7 @@ export const todoPlugin: DronePlugin = {
 
     registration.registerPromptFragment({
       key: 'todo-current-list',
-      phase: 'header',
+      phase: 'footer',
       render: async () => `# Todo List\n\n${formatTodoList(items)}`,
     });
 

@@ -32,6 +32,8 @@ export function createEphemeralConversation(opts: {
   const budgetService = createContextBudgetService({
     config,
     renderPromptFragments: () => engine.renderPromptFragments(),
+    renderPromptFragmentsByPhase: phase =>
+      engine.renderPromptFragmentsByPhase(phase),
     getProvider: () => {
       const llm = engine.getCapability<DroneLlmCapability>('llm');
       if (!llm) {
