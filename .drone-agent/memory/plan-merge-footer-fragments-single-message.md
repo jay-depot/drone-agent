@@ -8,7 +8,7 @@ tags:
   - prompt-cache
   - bug-fix
 created: 2026-09-10T17:02:54.459Z
-updated: 2026-09-10T17:02:54.459Z
+updated: 2026-09-10T17:44:23.271Z
 ---
 
 PLAN: Merge trailing footer fragments into one system message (fix for GLM-5.3-flash intermittent "narration, no tool call" round-ends + elevated reasoning-only events, onset after PR #99 ce7aab2 phase-aware footer rendering).
@@ -19,4 +19,4 @@ Steps: (1) context-budget-service.ts buildFooterMessages (L173) — join rendere
 
 Validation criteria: LSP clean; lint/build/fast-suite green; phase-ordering test shows exactly one trailing system message between last turn and queued reminder.
 
-Status: proposed 2026-09-10, awaiting user go-ahead (user weighed topic-boundary loss concern; headings preserve delineation).
+STATUS: EXECUTED 2026-09-10. All steps 1-4 complete and validated (LSP clean, pnpm typecheck/lint/build green, full fast suite 205 files/2876 tests 0 failures). Committed as 3df2c76 on branch fix/merge-footer-fragments-single-message (rebased onto main; the branch had been accidentally created off fix/swarm-wiki-delete carrying PR #101 commits — reset to main, committed memory files edf6ffc, then the fix). PR #102 opened (https://github.com/jay-depot/drone-agent/pull/102). Step 5 (live A/B on GLM-5.3-flash) is the remaining follow-up — compare narration-without-tool-call incidence + reasoning-only guardrail notices + reasoning_tokens spread in OpenRouter activity vs today's baseline; if confirmed, log ADR amending #99 per meta/decision-bug-fixes-go-in-decisions.
