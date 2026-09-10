@@ -52,7 +52,11 @@ import { useElicitation } from './hooks/useElicitation.js';
 import { useLlmIndicator } from './hooks/useLlmIndicator.js';
 import { useStatusBar } from './hooks/useStatusBar.js';
 import { useTailRegion } from './hooks/useTailRegion.js';
-import type { DroneTuiOptions, MidPanelWidget } from './types.js';
+import {
+  isMidPanelWidget,
+  type DroneTuiOptions,
+  type MidPanelWidget,
+} from './types.js';
 import type { DroneColorScheme } from './theme.js';
 import type { DroneToolDescriptor } from 'drone-core';
 import { CANCEL_SENTINEL } from '../runtime/conversation-service.js';
@@ -197,18 +201,21 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
 
   // Discover mid-panel widgets from plugin capabilities on mount.
   useEffect(() => {
-    const knownWidgetPluginIds = ['todo', 'focus'];
-    for (const pluginId of knownWidgetPluginIds) {
-      const widget = opts.engine.getCapability<MidPanelWidget>(pluginId);
-      if (widget) {
-        const existingIdx = midPanelWidgetsRef.current.findIndex(
-          w => w.id === widget.id
-        );
-        if (existingIdx !== -1) {
-          midPanelWidgetsRef.current[existingIdx] = widget;
-        } else {
-          midPanelWidgetsRef.current.push(widget);
-        }
+    for (const plugin of opts.engine.listPlugins()) {
+      if (!plugin.enabled) {
+        continue;
+      }
+      const widget = opts.engine.getCapability<MidPanelWidget>(plugin.id);
+      if (!widget || !isMidPanelWidget(widget)) {
+        continue;
+      }
+      const existingIdx = midPanelWidgetsRef.current.findIndex(
+        w => w.id === widget.id
+      );
+      if (existingIdx !== -1) {
+        midPanelWidgetsRef.current[existingIdx] = widget;
+      } else {
+        midPanelWidgetsRef.current.push(widget);
       }
     }
   }, [opts.engine]);

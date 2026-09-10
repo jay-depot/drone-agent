@@ -3,11 +3,6 @@ import type {
   DroneReasoningLevel,
   DroneSlashCommandSessionManager,
 } from 'drone-core';
-/**
- * Shared types for the Ink-based TUI.
- */
-
-import type { DroneColorOverride } from './theme.js';
 import type { DronePluginEngine } from '../runtime/plugin-engine.js';
 
 /**
@@ -25,28 +20,21 @@ export type MidPanelWidget = {
 };
 
 /**
- * Capability offered by the TUI for plugins to extend.
- *
- * `pushColorOverride` / `popColorOverride` manage a stack of tints
- * applied over the base grayscale theme. The TUI cycles through the
- * stack on a timer. A plugin is responsible for popping its override
- * when it is "done" — pushed overrides are not auto-cleaned up.
- *
- * `registerMidPanelWidget` lets plugins register content that
- * appears in the mid-panel bar between the chat log and input line.
- *
- * The previous blessed-based capability also exposed
- * `registerPanel` / `registerStatusItem` / `registerKeybinding` /
- * `setStatusText`. Those were unused by any plugin; the port drops
- * the surface rather than re-implementing it. Add back later if
- * concrete plugins need it.
+ * Structural check that a capability object really is a mid-panel widget.
+ * Widget discovery iterates every enabled plugin's capability, so this is
+ * the filter that keeps non-widget capabilities out of the mid panel.
  */
-export type DroneTuiCapability = {
-  pushColorOverride: (override: DroneColorOverride) => void;
-  popColorOverride: (overrideId: string) => void;
-  /** Register a mid-panel widget. Called by plugins that offer mid-panel content. */
-  registerMidPanelWidget: (widget: MidPanelWidget) => void;
-};
+export function isMidPanelWidget(
+  widget: unknown
+): widget is MidPanelWidget {
+  return (
+    typeof widget === 'object' &&
+    widget !== null &&
+    typeof (widget as MidPanelWidget).id === 'string' &&
+    typeof (widget as MidPanelWidget).label === 'string' &&
+    typeof (widget as MidPanelWidget).getContent === 'function'
+  );
+}
 
 /**
  * A single entry in the chat log.

@@ -9,7 +9,7 @@ import type React from 'react';
  */
 
 import { Box, Text } from 'ink';
-import type { MidPanelWidget } from '../types.js';
+import { isMidPanelWidget, type MidPanelWidget } from '../types.js';
 import type { DroneColorScheme } from '../theme.js';
 
 export function MidPanel({
@@ -22,7 +22,7 @@ export function MidPanel({
   // Collect non-empty widget sections
   const sections: { label: string; content: string[] }[] = [];
   for (const widget of widgets) {
-    if (typeof widget.getContent !== 'function') continue;
+    if (!isMidPanelWidget(widget)) continue;
     const content = widget.getContent();
     if (content.length > 0) {
       sections.push({ label: widget.label, content });
