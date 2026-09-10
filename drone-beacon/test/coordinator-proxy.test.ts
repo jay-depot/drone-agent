@@ -127,11 +127,12 @@ describe('POST /coordinator/spawn (beacon proxy)', () => {
 
 describe('proxyCall header discipline (FST_ERR_CTP_EMPTY_JSON_BODY fix)', () => {
   function installCapturingFetch(): ReturnType<typeof vi.fn> {
-    const fetchMock = vi.fn().mockImplementation(async () =>
-      new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+    const fetchMock = vi.fn().mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
     );
     setCoordinatorClient(
       makeFakeClient({ getFetch: vi.fn().mockReturnValue(fetchMock) })
