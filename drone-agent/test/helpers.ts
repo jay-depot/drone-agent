@@ -190,12 +190,15 @@ export function createFakeEngine(
     initialize: async () => [],
     enablePlugin: async (_pluginId: string) => false,
     buildSystemMessages: async () => [],
+    buildFooterMessages: async () => [],
     addExternalPlugin: async (_plugin: DronePlugin) => false,
     runHooks: async () => {},
     runSessionSafetyTrimWillRunHooks: async () => {},
     runSessionSafetyTrimAppliedHooks: async () => {},
     runConversationEventHooks: async () => {},
     renderPromptFragments: async () => options.promptFragments ?? [],
+    renderPromptFragmentsByPhase: async phase =>
+      phase === 'header' ? (options.promptFragments ?? []) : [],
     getTool: () => undefined,
     executeTool: async () => '',
     listTools: () => [],
@@ -276,6 +279,8 @@ export function createMockEngine(
     runSessionSafetyTrimAppliedHooks: async () => {},
     runConversationEventHooks: async () => {},
     renderPromptFragments: async () => options.promptFragments ?? [],
+    renderPromptFragmentsByPhase: async phase =>
+      phase === 'header' ? (options.promptFragments ?? []) : [],
     getTool: () => undefined,
     executeTool:
       executeMock as unknown as import('../src/runtime/plugin-engine.js').DronePluginEngine['executeTool'],
@@ -312,6 +317,7 @@ export function createMockEngine(
     getBuiltinSlashCommands: () => [],
     enablePlugin: async (_pluginId: string) => false,
     buildSystemMessages: async () => [],
+    buildFooterMessages: async () => [],
     addExternalPlugin: async (_plugin: unknown) => false,
     __executeMock: executeMock,
     __reminderQueue: reminderQueue,

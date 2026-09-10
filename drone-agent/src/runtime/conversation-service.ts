@@ -395,12 +395,13 @@ export function createConversationService({
 
   async function estimateCurrentContextUsagePercent(): Promise<number> {
     const systemMessages = await budgetService.buildSystemMessages();
+    const footerMessages = await budgetService.buildFooterMessages();
     const contextWindow = await budgetService.resolveContextWindow();
     const tools = engine.listTools();
     const turns = sessionManager.getTurns();
 
     return budgetService.getEstimatedContextUsagePercent({
-      systemMessages,
+      systemMessages: [...systemMessages, ...footerMessages],
       contextWindow,
       turns,
       tools,
@@ -850,7 +851,8 @@ export function createConversationService({
           const tools = getLlmTools();
 
           const systemMessages = await budgetService.buildSystemMessages();
-          await ensureSafeBudget(systemMessages, tools);
+          const footerMessages = await budgetService.buildFooterMessages();
+          await ensureSafeBudget([...systemMessages, ...footerMessages], tools);
 
           const provider = llm.getActiveProvider();
 
@@ -874,6 +876,7 @@ export function createConversationService({
               const base: DroneChatMessage[] = [
                 ...systemMessages,
                 ...sessionManager.getMessages(),
+                ...footerMessages,
               ];
               if (identicalCallNudgeActive) {
                 base.push({

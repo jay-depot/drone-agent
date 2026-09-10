@@ -528,7 +528,7 @@ describe('terminalPlugin', () => {
       f => f.key === 'terminal-active-sessions'
     );
     expect(fragment).toBeDefined();
-    expect(fragment!.phase).toBe('header');
+    expect(fragment!.phase).toBe('footer');
 
     // Verify onShutdown hook is registered
     expect(shutdownHook).toBeDefined();

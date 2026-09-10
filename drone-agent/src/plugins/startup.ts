@@ -41,7 +41,7 @@ export const startupPlugin: DronePlugin = {
 
     registration.registerPromptFragment({
       key: 'startup-banner',
-      phase: 'header',
+      phase: 'footer',
       render: async () =>
         `# Workspace
 

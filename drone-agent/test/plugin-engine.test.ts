@@ -448,6 +448,14 @@ describe('createDronePluginEngine', () => {
     await engine.initialize();
     const rendered = await engine.renderPromptFragments();
     expect(rendered).toEqual(['hello', 'goodbye']);
+
+    const headers = await engine.renderPromptFragmentsByPhase('header');
+    const footers = await engine.renderPromptFragmentsByPhase('footer');
+    expect(headers).toEqual(['hello']);
+    expect(footers).toEqual(['goodbye']);
+
+    const footerMessages = await engine.buildFooterMessages?.();
+    expect(footerMessages).toEqual([{ role: 'system', content: 'goodbye' }]);
   });
 
   it('throws when a plugin registers two prompt fragments with the same key', async () => {

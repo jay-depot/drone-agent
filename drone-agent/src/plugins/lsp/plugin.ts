@@ -58,7 +58,7 @@ export const lspPlugin: DronePlugin = {
     // Register diagnostics + server status prompt fragment
     registration.registerPromptFragment({
       key: 'lsp-status',
-      phase: 'header',
+      phase: 'footer',
       render: async () => {
         const diagPrompt = server.renderDiagnosticsPrompt();
         const states = server.getServerStates();
