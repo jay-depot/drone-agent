@@ -39,6 +39,7 @@ import { todoPlugin } from './todo/index.js';
 import { utilsPlugin } from './utils.js';
 import { focusPlugin } from './focus.js';
 import { wakelockPlugin } from './wakelock/index.js';
+import { beancounterPlugin } from './beancounter.js';
 
 // Static built-ins — everything except the compaction plugin, which needs
 // access to the live engine and session manager. The CLI calls
@@ -61,6 +62,7 @@ const staticBuiltInPlugins: DronePlugin[] = [
   utilsPlugin,
   macrosPlugin,
   llmPlugin,
+  beancounterPlugin,
   lspPlugin,
   mcpPlugin,
   ollamaPlugin,
