@@ -7,11 +7,13 @@ const mockSendMessage = vi.fn();
 const mockTerminateSpawn = vi.fn();
 
 vi.mock('../src/coordinator-client.js', () => ({
-  CoordinatorClient: vi.fn().mockImplementation(() => ({
-    spawnAgent: mockSpawnAgent,
-    sendMessage: mockSendMessage,
-    terminateSpawn: mockTerminateSpawn,
-  })),
+  CoordinatorClient: vi.fn().mockImplementation(function () {
+    return {
+      spawnAgent: mockSpawnAgent,
+      sendMessage: mockSendMessage,
+      terminateSpawn: mockTerminateSpawn,
+    };
+  }),
 }));
 
 const { CoordinatorSpawnBackend } =

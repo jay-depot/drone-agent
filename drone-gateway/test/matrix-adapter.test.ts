@@ -97,8 +97,12 @@ describe('MatrixServiceAdapter', () => {
     mockSendMessage.mockResolvedValue(undefined);
     mockGetRooms.mockReturnValue([]);
     mockOpenGatewayDb.mockReturnValue({ close: mockDbClose });
-    mockSqliteSyncStore.mockImplementation(() => ({}));
-    mockSqliteCryptoStore.mockImplementation(() => ({}));
+    mockSqliteSyncStore.mockImplementation(function () {
+      return {};
+    });
+    mockSqliteCryptoStore.mockImplementation(function () {
+      return {};
+    });
   });
 
   describe('constructor', () => {

@@ -93,24 +93,26 @@ describe('ollama chat user-message injection', () => {
     chatCalls = [];
     vi.resetModules();
     vi.doMock('ollama', () => ({
-      Ollama: vi.fn().mockImplementation(() => ({
-        chat: vi.fn(
-          async ({
-            model,
-            messages,
-          }: {
-            model: string;
-            messages: unknown[];
-          }) => {
-            chatCalls.push({ model, messages });
-            return { message: { content: 'ok', thinking: '' } };
-          }
-        ),
-        show: vi.fn(async () => ({
-          model_info: { 'general.context_length': 4096 },
-        })),
-        list: vi.fn(async () => ({ models: [] })),
-      })),
+      Ollama: vi.fn().mockImplementation(function () {
+        return {
+          chat: vi.fn(
+            async ({
+              model,
+              messages,
+            }: {
+              model: string;
+              messages: unknown[];
+            }) => {
+              chatCalls.push({ model, messages });
+              return { message: { content: 'ok', thinking: '' } };
+            }
+          ),
+          show: vi.fn(async () => ({
+            model_info: { 'general.context_length': 4096 },
+          })),
+          list: vi.fn(async () => ({ models: [] })),
+        };
+      }),
       ShowResponse: class {},
       ToolCall: class {},
     }));
@@ -238,7 +240,9 @@ function makeClient(overrides: Record<string, unknown> = {}) {
 async function buildProviderWithClient(client: Record<string, unknown>) {
   vi.resetModules();
   vi.doMock('ollama', () => ({
-    Ollama: vi.fn().mockImplementation(() => client),
+    Ollama: vi.fn().mockImplementation(function () {
+      return client;
+    }),
     ShowResponse: class {},
     ToolCall: class {},
   }));
@@ -451,19 +455,21 @@ describe('ollama discovery catalog policy', () => {
   it('publishes contextWindow ONLY for cloud models (A5 trap regression)', async () => {
     vi.resetModules();
     vi.doMock('ollama', () => ({
-      Ollama: vi.fn().mockImplementation(() => ({
-        list: vi.fn(async () => ({
-          models: [
-            { name: 'deepseek-v4-flash:cloud' },
-            { name: 'nomic-embed-text:v1.5' },
-          ],
-        })),
-        show: vi.fn(async ({ model }: { model: string }) =>
-          model.includes('cloud') ? CLOUD_SHOW : LOCAL_SHOW
-        ),
-        chat: vi.fn(),
-        ps: vi.fn(),
-      })),
+      Ollama: vi.fn().mockImplementation(function () {
+        return {
+          list: vi.fn(async () => ({
+            models: [
+              { name: 'deepseek-v4-flash:cloud' },
+              { name: 'nomic-embed-text:v1.5' },
+            ],
+          })),
+          show: vi.fn(async ({ model }: { model: string }) =>
+            model.includes('cloud') ? CLOUD_SHOW : LOCAL_SHOW
+          ),
+          chat: vi.fn(),
+          ps: vi.fn(),
+        };
+      }),
       ShowResponse: class {},
       ToolCall: class {},
     }));
@@ -536,25 +542,27 @@ describe('ollama DroneLlmError conversion', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.doMock('ollama', () => ({
-      Ollama: vi.fn().mockImplementation(() => ({
-        chat: vi.fn(async () => {
-          const err = new Error('model "nope" not found, try pulling it first');
-          (err as { status_code?: number }).status_code = 404;
-          throw err;
-        }),
-        show: vi.fn(async () => ({
-          model_info: { 'general.context_length': 4096 },
-        })),
-        list: vi.fn(async () => ({ models: [] })),
-        ps: vi.fn(async () => ({ models: [] })),
-      })),
+      Ollama: vi.fn().mockImplementation(function () {
+        return {
+          chat: vi.fn(async () => {
+            const err = new Error('model "nope" not found, try pulling it first');
+            (err as { status_code?: number }).status_code = 404;
+            throw err;
+          }),
+          show: vi.fn(async () => ({
+            model_info: { 'general.context_length': 4096 },
+          })),
+          list: vi.fn(async () => ({ models: [] })),
+          ps: vi.fn(async () => ({ models: [] })),
+        };
+      }),
       ShowResponse: class {},
       ToolCall: class {},
     }));
   });
 
   afterEach(() => {
-    vi.unmock('ollama');
+    vi.doUnmock('ollama');
   });
 
   it('maps a not-found model to a 404 DroneLlmError with a pull hint', async () => {
@@ -577,18 +585,20 @@ describe('ollama DroneLlmError conversion', () => {
 
   it('marks transient ollama status codes retryable', async () => {
     vi.doMock('ollama', () => ({
-      Ollama: vi.fn().mockImplementation(() => ({
-        chat: vi.fn(async () => {
-          const err = new Error('server overloaded');
-          (err as { status_code?: number }).status_code = 503;
-          throw err;
-        }),
-        show: vi.fn(async () => ({
-          model_info: { 'general.context_length': 4096 },
-        })),
-        list: vi.fn(async () => ({ models: [] })),
-        ps: vi.fn(async () => ({ models: [] })),
-      })),
+      Ollama: vi.fn().mockImplementation(function () {
+        return {
+          chat: vi.fn(async () => {
+            const err = new Error('server overloaded');
+            (err as { status_code?: number }).status_code = 503;
+            throw err;
+          }),
+          show: vi.fn(async () => ({
+            model_info: { 'general.context_length': 4096 },
+          })),
+          list: vi.fn(async () => ({ models: [] })),
+          ps: vi.fn(async () => ({ models: [] })),
+        };
+      }),
       ShowResponse: class {},
       ToolCall: class {},
     }));
