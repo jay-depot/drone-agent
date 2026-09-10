@@ -117,6 +117,10 @@ export async function spawnAgent(
     spawnerConfig.beaconHost,
     '--beacon-port',
     String(spawnerConfig.beaconPort),
+    // Interactive listen-mode: the agent stays alive and processes turns
+    // injected over the swarm WebSocket (no --once). NDJSON structured
+    // output lets the beacon/coordinator observe the turn stream.
+    '--output-json',
   ];
 
   if (personaId) {

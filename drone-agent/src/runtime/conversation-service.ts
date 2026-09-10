@@ -51,6 +51,15 @@ export type ConversationService = {
     prompt: string,
     onEvent?: ConversationEventHandler
   ) => Promise<string>;
+  /**
+   * Concurrency-safe synthetic-turn submission. If a turn is currently in
+   * flight, the message is queued (enqueueUserMessage) and processed when the
+   * current turn completes; otherwise it is sent immediately. Multiple plugins
+   * may call this concurrently — calls are serialized through an internal
+   * mutex. Returns the final assistant reply for the immediate-send path, or
+   * an empty string when the message was queued behind an in-flight turn.
+   */
+  submitUserMessage: (content: string) => Promise<string>;
   clearSession: () => void;
   getMessages: () => DroneChatMessage[];
   getEstimatedContextUsagePercent: () => Promise<number>;
@@ -67,6 +76,8 @@ export type ConversationService = {
   enqueueUserMessage: (prompt: string) => void;
   /** Request soft cancellation of the current in-flight `sendUserMessage`. */
   cancelCurrentRequest: () => void;
+  /** True while a `sendUserMessage` turn is actively processing. */
+  isTurnInFlight: () => boolean;
   /** Get the list of currently enabled debug subsystems. */
   getDebugSubsystems: () => string[];
   /** Enable a debug subsystem by name (e.g. "llm"). */
@@ -246,6 +257,12 @@ export function createConversationService({
   // ── Message queue and cancel support ───────────────────────────────────
   const pendingMessages: string[] = [];
   let cancelled = false;
+  // True while a sendUserMessage turn is actively processing. Used by the
+  // concurrency-safe submitUserMessage path to decide queue-vs-send.
+  let turnInFlight = false;
+  // Serializes submitUserMessage calls so multiple plugins can submit
+  // concurrently without interleaving their queue/send decisions.
+  let submitChain: Promise<unknown> = Promise.resolve();
 
   function getLlmCapability(): DroneLlmCapability {
     const llm = engine.getCapability<DroneLlmCapability>('llm');
@@ -436,9 +453,10 @@ export function createConversationService({
     }
   }
 
-  return {
+  const service: ConversationService = {
     sendUserMessage: async (prompt, onEvent) => {
       try {
+        turnInFlight = true;
         hasWarnedAboutSafetyTrim = false;
 
         // Drain any messages queued during or before this call
@@ -1158,6 +1176,7 @@ export function createConversationService({
           return assistantMessage;
         }
       } finally {
+        turnInFlight = false;
         // Emit roundComplete so plugins (e.g. wakelock) can release on every
         // exit path (normal return, cancellation, shouldStopLoop, throws).
         engine
@@ -1210,9 +1229,29 @@ export function createConversationService({
     enqueueUserMessage: (prompt: string) => {
       pendingMessages.push(prompt);
     },
+    submitUserMessage: (content: string) => {
+      // Serialize concurrent submissions so the queue-vs-send decision is
+      // atomic across plugins. Each call chains onto the previous one.
+      const run = submitChain.then(async () => {
+        if (turnInFlight) {
+          // A turn is actively processing — queue the message; it will be
+          // drained at the top of the current loop iteration or the next
+          // sendUserMessage call.
+          pendingMessages.push(content);
+          return '';
+        }
+        // No turn in flight — send immediately and return the reply.
+        return service.sendUserMessage(content);
+      });
+      // Keep the chain alive regardless of individual failures so a rejected
+      // submission never blocks subsequent ones.
+      submitChain = run.catch(() => {});
+      return run;
+    },
     cancelCurrentRequest: () => {
       cancelled = true;
     },
+    isTurnInFlight: () => turnInFlight,
     resetStuckDetectors: () => {
       stuckCount = 0;
       identicalToolCallStreak = 0;
@@ -1230,6 +1269,8 @@ export function createConversationService({
       debugFlags.disable(name);
     },
   };
+
+  return service;
 }
 
 /**

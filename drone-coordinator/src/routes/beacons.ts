@@ -49,6 +49,8 @@ export default function beaconRoutes(app: FastifyInstance) {
             name: request.body.name,
             host: request.body.host,
             port: request.body.port,
+            spawnRoots: request.body.spawnRoots,
+            defaultSpawnRoot: request.body.defaultSpawnRoot,
           });
           const response: BeaconStatusResponse = { status: trust.status };
           if (trust.verificationCode) {
@@ -258,4 +260,17 @@ export default function beaconRoutes(app: FastifyInstance) {
     });
     return session;
   });
+
+  // === Beacon Heartbeat ===
+
+  app.post<{ Params: { id: string } }>(
+    '/beacons/:id/heartbeat',
+    async (request, reply) => {
+      const beacon = db.heartbeatBeacon(request.params.id);
+      if (!beacon) {
+        return reply.code(404).send({ error: 'Beacon not found' });
+      }
+      return beacon;
+    }
+  );
 }

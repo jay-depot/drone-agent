@@ -106,7 +106,10 @@ export async function updateSwarmSessionPersona(
 /**
  * Register the swarm session with the beacon.
  */
-export async function registerSwarmSession(ctx: SwarmContext): Promise<void> {
+export async function registerSwarmSession(
+  ctx: SwarmContext,
+  interactive = false
+): Promise<void> {
   try {
     const res = await fetch(`${ctx.baseUrl}/sync/sessions/register`, {
       method: 'POST',
@@ -115,6 +118,7 @@ export async function registerSwarmSession(ctx: SwarmContext): Promise<void> {
         id: ctx.sessionId,
         personaId: null,
         beaconId: ctx.sessionId,
+        interactive,
       }),
     });
     if (!res.ok) {
@@ -264,13 +268,14 @@ function registerStorageEngines(
 export function registerHooks(
   ctx: SwarmContext,
   _configCap: DroneConfigCapability | undefined,
-  _beaconConfigInjector: BeaconConfigInjector | null
+  _beaconConfigInjector: BeaconConfigInjector | null,
+  interactive = false
 ): void {
   const { registration } = ctx;
 
   registration.hooks.onPluginsLoaded(async () => {
     await reloadFromBeacon(ctx);
-    await registerSwarmSession(ctx);
+    await registerSwarmSession(ctx, interactive);
     connectWebSocket(ctx);
 
     // Register HTTP storage engines for swarm-scoped insights and principles

@@ -5,7 +5,13 @@ import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
 import { useToast } from '@/hooks/use-toast';
 import { ErrorBanner } from '@/components/error-banner';
-import type { BeaconSession, WsEventMessage, SwarmSession } from '@/lib/types';
+import type {
+  BeaconSession,
+  WsEventMessage,
+  SwarmSession,
+  Beacon,
+  Persona,
+} from '@/lib/types';
 import {
   Table,
   TableBody,
@@ -18,6 +24,164 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { paginationRange } from '@/lib/pagination';
+// ── New Session launch panel ──────────────────────────────────────────
+
+function NewSessionPanel({
+  onLaunched,
+}: {
+  onLaunched: (sessionId: string) => void;
+}) {
+  const authFetch = useAuthenticatedFetch();
+  const [beacons, setBeacons] = useState<Beacon[]>([]);
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [beaconId, setBeaconId] = useState('');
+  const [personaId, setPersonaId] = useState('');
+  const [workingDir, setWorkingDir] = useState('');
+  const [spawning, setSpawning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [beaconsRes, personasRes] = await Promise.all([
+          authFetch('/api/beacons'),
+          authFetch('/api/personas'),
+        ]);
+        if (cancelled) return;
+        const beaconList = beaconsRes.ok
+          ? ((await beaconsRes.json()) as Beacon[])
+          : [];
+        const connected = beaconList.filter(b => b.connected);
+        setBeacons(connected);
+        if (connected.length > 0) {
+          setBeaconId(connected[0].id);
+        }
+        setPersonas(
+          personasRes.ok ? ((await personasRes.json()) as Persona[]) : []
+        );
+      } catch {
+        if (!cancelled) {
+          setError('Failed to load beacons or personas');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch]);
+
+  const selectedBeacon = beacons.find(b => b.id === beaconId);
+  const spawnRoots = selectedBeacon?.spawnRoots ?? [];
+
+  // Re-seed the working dir whenever the selected beacon changes: the default
+  // root is beacon-advertised, so the previous beacon's choice is meaningless.
+  useEffect(() => {
+    setWorkingDir(selectedBeacon?.defaultSpawnRoot ?? spawnRoots[0] ?? '');
+  }, [beaconId]);
+
+  const handleSpawn = async () => {
+    if (!beaconId || !workingDir) return;
+    setSpawning(true);
+    setError(null);
+    try {
+      const res = await authFetch('/api/spawn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetBeaconId: beaconId,
+          personaId: personaId || undefined,
+          config: { workingDir },
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setError(body?.error ?? 'Spawn request failed');
+        return;
+      }
+      const data = (await res.json()) as { agentId?: string };
+      onLaunched(data.agentId ?? '');
+    } catch {
+      setError('Spawn request failed');
+    } finally {
+      setSpawning(false);
+    }
+  };
+
+  return (
+    <div className="mb-6 p-4 rounded-md border bg-card space-y-4">
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="text-xs text-muted-foreground mb-1 block">
+            Beacon (required)
+          </label>
+          <select
+            className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+            value={beaconId}
+            onChange={e => setBeaconId(e.target.value)}
+          >
+            {beacons.length === 0 && (
+              <option value="">No connected beacons</option>
+            )}
+            {beacons.map(b => (
+              <option key={b.id} value={b.id}>
+                {b.name || b.id}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground mb-1 block">
+            Persona (optional)
+          </label>
+          <select
+            className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+            value={personaId}
+            onChange={e => setPersonaId(e.target.value)}
+          >
+            <option value="">None</option>
+            {personas.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground mb-1 block">
+            CWD Root (required)
+          </label>
+          <select
+            className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+            value={workingDir}
+            onChange={e => setWorkingDir(e.target.value)}
+          >
+            {spawnRoots.length === 0 && (
+              <option value="">No roots advertised</option>
+            )}
+            {spawnRoots.map(root => (
+              <option key={root} value={root}>
+                {root}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <div className="flex justify-end">
+        <Button
+          size="sm"
+          disabled={!beaconId || !workingDir || spawning}
+          onClick={handleSpawn}
+        >
+          {spawning ? 'Launching…' : 'Launch Session'}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 const PAGE_SIZE = 20;
 // How long a just-archived session lingers as an in-place pending row with an
@@ -62,6 +226,7 @@ export default function SessionsPage() {
     },
     []
   );
+  const [showLaunchPanel, setShowLaunchPanel] = useState(false);
 
   // Archived view state, persisted in the URL (mirrors pagination offset).
   const [searchParams, setSearchParams] = useSearchParams();
@@ -394,6 +559,13 @@ export default function SessionsPage() {
         </div>
         <div className="flex items-center gap-3">
           <Button
+            variant="default"
+            size="sm"
+            onClick={() => setShowLaunchPanel(v => !v)}
+          >
+            {showLaunchPanel ? 'Close' : 'New Session'}
+          </Button>
+          <Button
             variant={archivedView ? 'default' : 'outline'}
             size="sm"
             onClick={() => setArchivedView(!archivedView)}
@@ -415,6 +587,18 @@ export default function SessionsPage() {
           </Badge>
         </div>
       </div>
+
+      {showLaunchPanel && (
+        <NewSessionPanel
+          onLaunched={agentId => {
+            setShowLaunchPanel(false);
+            if (agentId) {
+              navigate(`/sessions/${agentId}`);
+            }
+            refresh();
+          }}
+        />
+      )}
 
       <ErrorBanner message={error} />
 

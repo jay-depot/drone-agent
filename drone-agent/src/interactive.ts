@@ -340,6 +340,96 @@ export async function runJsonListenMode(
 }
 
 /**
+ * Run in swarm listen-mode (beacon-spawned interactive agent).
+ *
+ * Unlike runJsonListenMode (which reads turns from stdin), this mode keeps
+ * the process alive and sources turns from the swarm WebSocket: the swarm
+ * plugin's `userMessage` WS handler calls `_runtime.submitUserMessage`, which
+ * injects a synthetic user turn into the conversation loop. NDJSON events
+ * stream to stdout so the beacon/coordinator can observe the turn stream.
+ *
+ * The function resolves when the process receives SIGTERM/SIGINT (the beacon's
+ * terminateAgent sends SIGTERM), releasing the process for a clean exit.
+ */
+export async function runSwarmListenMode(
+  engine: CreateDronePluginEngine
+): Promise<void> {
+  const ndjsonHandler = makeNdjsonOutputEventHandler();
+
+  // Register a global conversation-event listener that streams NDJSON to
+  // stdout, mirroring runJsonListenMode's per-turn handler. This covers turns
+  // injected via _runtime.submitUserMessage (which has no per-call handler).
+  const unregister =
+    engine.onConversationEvent?.(event => {
+      switch (event.kind) {
+        case 'assistantMessage':
+          ndjsonHandler({ kind: 'assistantMessage', content: event.content });
+          break;
+        case 'reasoning':
+          ndjsonHandler({ kind: 'reasoning', content: event.content });
+          break;
+        case 'toolCall':
+          ndjsonHandler({
+            kind: 'toolCall',
+            name: event.name,
+            input: event.arguments,
+          });
+          break;
+        case 'toolCallBatch':
+          if (event.toolCalls) {
+            for (const tc of event.toolCalls) {
+              ndjsonHandler({
+                kind: 'toolCall',
+                name: tc.name,
+                input: tc.arguments,
+              });
+            }
+          }
+          break;
+        case 'toolResult':
+          ndjsonHandler({
+            kind: 'toolResult',
+            name: event.name,
+            result: event.content,
+          });
+          break;
+        case 'toolResultBatch':
+          if (event.results) {
+            for (const result of event.results) {
+              ndjsonHandler({
+                kind: 'toolResult',
+                name: result.name,
+                result: result.content,
+              });
+            }
+          }
+          break;
+        case 'error':
+          ndjsonHandler({ kind: 'error', message: event.message });
+          break;
+        case 'roundComplete':
+          ndjsonHandler({ kind: 'turnComplete' });
+          break;
+        default:
+          break;
+      }
+    }) ?? null;
+
+  try {
+    // Keep the process alive until a termination signal arrives (the beacon's
+    // terminateAgent sends SIGTERM). Resolve on the first signal so main()
+    // proceeds to onShutdown and exits cleanly.
+    await new Promise<void>(resolve => {
+      const onSignal = () => resolve();
+      process.once('SIGTERM', onSignal);
+      process.once('SIGINT', onSignal);
+    });
+  } finally {
+    unregister?.();
+  }
+}
+
+/**
  * Run the interactive chat loop using readline.
  */
 export async function runInteractiveLoop(

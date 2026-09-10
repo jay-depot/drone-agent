@@ -7,7 +7,10 @@ import {
   handleGetSpawn,
   handleTerminateSpawn,
 } from './routes/spawn-handlers.js';
-import { handleDeliverMessage } from './routes/message-handlers.js';
+import {
+  handleDeliverMessage,
+  handleDeliverUserMessage,
+} from './routes/message-handlers.js';
 
 /**
  * Beacon-side reverse-channel WebSocket client.
@@ -140,6 +143,17 @@ async function handleCommand(msg: CommandMessage): Promise<void> {
     switch (msg.command) {
       case 'spawn': {
         const result = await handleSpawnAgent(msg.payload ?? {});
+        status = result.status;
+        ok = result.status < 400;
+        body = result.body;
+        break;
+      }
+      case 'deliverUserMessage': {
+        const result = handleDeliverUserMessage(
+          (msg.payload ?? {}) as unknown as Parameters<
+            typeof handleDeliverUserMessage
+          >[0]
+        );
         status = result.status;
         ok = result.status < 400;
         body = result.body;

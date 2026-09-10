@@ -43,19 +43,26 @@ export default function syncRoutes(app: FastifyInstance) {
 
   // Proxy swarm session registration to coordinator
   app.post<{
-    Body: { id: string; personaId?: string; beaconId: string };
+    Body: {
+      id: string;
+      personaId?: string;
+      beaconId: string;
+      interactive?: boolean;
+    };
   }>('/sync/sessions/register', async (request, reply) => {
-    const { id, personaId, beaconId } = request.body;
+    const { id, personaId, beaconId, interactive } = request.body;
     if (!id || !beaconId) {
       return reply.code(400).send({ error: 'id and beaconId are required' });
     }
     const client = getCoordinatorClient();
     if (client) {
-      client.registerSwarmSession(id, personaId ?? null).catch(err => {
-        logger.warn(
-          `Failed to proxy session registration to coordinator: ${err}`
-        );
-      });
+      client
+        .registerSwarmSession(id, personaId ?? null, interactive === true)
+        .catch(err => {
+          logger.warn(
+            `Failed to proxy session registration to coordinator: ${err}`
+          );
+        });
     }
     return reply.code(201).send({ id, status: 'active' });
   });

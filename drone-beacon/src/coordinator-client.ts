@@ -13,6 +13,7 @@ import type { BeaconIdentity } from './identity.js';
 import type { DroneSwarmFragment } from 'drone-core';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
 import { enqueueOutbox } from './db/index.js';
+import { getDefaultSpawnRoot, getSpawnRoots } from './spawn-roots.js';
 
 type SendMode = 'direct' | 'outbox';
 
@@ -106,7 +107,8 @@ export interface CoordinatorClient {
   // Swarm session storage
   registerSwarmSession(
     sessionId: string,
-    personaId: string | null
+    personaId: string | null,
+    interactive?: boolean
   ): Promise<void>;
   updateSwarmSessionPersona(
     sessionId: string,
@@ -400,6 +402,8 @@ export function createCoordinatorClient(
           port: config.port,
           publicKey: identity.publicKey,
           tlsFingerprint,
+          spawnRoots: getSpawnRoots(),
+          defaultSpawnRoot: getDefaultSpawnRoot(),
         }),
       });
 
@@ -870,12 +874,14 @@ export function createCoordinatorClient(
     // Swarm session storage
     async registerSwarmSession(
       sessionId: string,
-      personaId: string | null
+      personaId: string | null,
+      interactive?: boolean
     ): Promise<void> {
       const body = {
         id: sessionId,
         personaId: personaId ?? undefined,
         beaconId: config.beaconId,
+        interactive,
       };
       await sendFireAndForget(
         'registerSwarmSession',

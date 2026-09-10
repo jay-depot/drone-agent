@@ -86,16 +86,15 @@ export function createBuiltInPlugins(
   compactionDeps: CompactionPluginDeps & {
     /** Host context-window resolver shared with the conversation service. */
     resolveContextWindow?: () => Promise<DroneContextWindowInfo>;
+    /** CLI-provided swarm overrides (--session-id/--beacon-host/--beacon-port). */
+    swarmConfig?: import('./swarm/index.js').SwarmConfig;
   }
 ): DronePlugin[] {
   return [
     ...staticBuiltInPlugins,
-    createSwarmPlugin(
-      {},
-      {
-        resolveContextWindow: compactionDeps.resolveContextWindow,
-      }
-    ),
+    createSwarmPlugin(compactionDeps.swarmConfig ?? {}, {
+      resolveContextWindow: compactionDeps.resolveContextWindow,
+    }),
     createCompactionPlugin(compactionDeps),
     createLogPlugin(compactionDeps),
   ];

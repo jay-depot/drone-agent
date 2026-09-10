@@ -65,6 +65,8 @@ export {
   updateSwarmSessionPersona,
   createSwarmEvent,
   getSwarmEvents,
+  getSwarmEvent,
+  getChatFeedEvents,
   getLatestSwarmEvents,
   searchSwarmEvents,
 } from './swarm-sessions.js';
