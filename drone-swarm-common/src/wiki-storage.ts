@@ -246,13 +246,14 @@ export async function readPage(pageId: string): Promise<DroneWikiPage | null> {
 }
 
 /**
- * Delete a wiki page.
+ * Delete a wiki page. Returns true only when a page file was actually
+ * removed; false when no page exists under this id (or removal failed).
  */
 export async function deletePage(pageId: string): Promise<boolean> {
   try {
     // pagePath sanitizes pageId to [a-zA-Z0-9_-], neutralizing traversal.
     // codeql[js/path-injection]
-    await rm(pagePath(pageId), { force: true });
+    await rm(pagePath(pageId));
     return true;
   } catch {
     return false;

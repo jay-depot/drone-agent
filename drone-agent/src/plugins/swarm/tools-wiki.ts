@@ -237,7 +237,10 @@ function createWikiListTool(ctx: SwarmContext): DroneToolDefinition {
 function createWikiDeleteTool(ctx: SwarmContext): DroneToolDefinition {
   return {
     name: 'wiki_delete',
-    description: 'Delete a wiki page from the swarm knowledge base.',
+    description:
+      'Delete a wiki page from the swarm knowledge base. Without a scope, ' +
+      'deletes ALL versions of the page (beacon and coordinator). With a ' +
+      'scope, deletes only that version.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -268,9 +271,10 @@ function createWikiDeleteTool(ctx: SwarmContext): DroneToolDefinition {
       try {
         const res = await fetch(url, { method: 'DELETE' });
         if (!res.ok) {
+          const err = await res.json();
           return JSON.stringify({
             success: false,
-            error: 'Failed to delete wiki page',
+            error: err.error || 'Failed to delete wiki page',
           });
         }
         return JSON.stringify({ success: true, result: await res.json() });

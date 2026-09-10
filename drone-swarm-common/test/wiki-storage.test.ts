@@ -112,10 +112,9 @@ describe('Wiki Storage', () => {
     expect(await readPage('test-page')).toBeNull();
   });
 
-  it('should return true when deleting non-existent page (rm with force)', async () => {
+  it('should return false when deleting a non-existent page', async () => {
     const { deletePage } = await import('../src/wiki-storage.js');
-    // rm with force:true succeeds even for non-existent files
-    expect(await deletePage('nonexistent')).toBe(true);
+    expect(await deletePage('nonexistent')).toBe(false);
   });
 
   it('should list all pages', async () => {
