@@ -48,9 +48,7 @@ export const startupPlugin: DronePlugin = {
 
 **Working Directory:** ${cwd}
 **Path Rule:** All file paths in this session should be relative to this directory by default.
-**Boundary:** Do not assume or use paths outside this workspace (e.g., /workspace/... ' +
-'or /home/...) unless specifically instructed to do so by the user, creating temp ' +
-'files, or unless accessing the User Home Directory listed below.
+**Boundary:** Do not assume or use paths outside this workspace (e.g., /workspace/... or /home/...) unless specifically instructed to do so by the user, creating temp files, or unless accessing the User Home Directory listed below.
 
 **temp dir**: ${tempDir}
 **User Home:** ${homeDir}

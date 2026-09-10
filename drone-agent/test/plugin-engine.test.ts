@@ -13,6 +13,7 @@ import {
   createDronePluginEngine,
   getDefaultEnabledPluginIds,
 } from '../src/runtime/plugin-engine.js';
+import { startupPlugin } from '../src/plugins/startup.js';
 import { createTestPlugin, silentLogger } from './helpers.js';
 
 const RUNTIME_TOOL_COUNT = 3; // runtime__list_tools, runtime__mount_tool, runtime__unmount_tool
@@ -210,7 +211,8 @@ describe('createDronePluginEngine', () => {
         type: 'object',
         properties: { message: { type: 'string' } },
       },
-      execute: async input => `echo:${(input as { message: string }).message}`,
+      execute: async (input: { message: string }) =>
+        `echo:${(input as { message: string }).message}`,
     };
 
     const plugins: DronePlugin[] = [
@@ -456,6 +458,33 @@ describe('createDronePluginEngine', () => {
 
     const footerMessages = await engine.buildFooterMessages?.();
     expect(footerMessages).toEqual([{ role: 'system', content: 'goodbye' }]);
+  });
+
+  it('startup workspace footer does not leak string-concatenation artifacts', async () => {
+    let fragment: { render: () => Promise<string> } | undefined;
+
+    await startupPlugin.register({
+      registerPromptFragment: (
+        prompt: { render: () => Promise<string> } | undefined
+      ) => {
+        fragment = prompt;
+      },
+      registerTool: () => {},
+      offer: () => {},
+      hooks: {
+        onPluginsLoaded: () => {},
+      },
+      logger: silentLogger(),
+    });
+
+    expect(fragment).toBeDefined();
+    const rendered = await fragment!.render();
+    expect(rendered).toContain('# Workspace');
+    expect(rendered).not.toContain("' +");
+    expect(rendered).not.toContain("' ");
+    expect(rendered).toContain(
+      '**Boundary:** Do not assume or use paths outside this workspace'
+    );
   });
 
   it('throws when a plugin registers two prompt fragments with the same key', async () => {
