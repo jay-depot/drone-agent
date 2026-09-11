@@ -1028,7 +1028,12 @@ export function createDronePluginEngine({
       // consecutive trailing system messages is an untrained shape for some
       // chat templates; a single one is proven safe. Topic delineation is
       // preserved via each fragment's top-level `# Heading`.
-      return [{ role: 'system' as const, content: fragments.join('\n\n') }];
+      return [
+        {
+          role: 'system' as const,
+          content: `<system-reminder>\n\n${fragments.join('\n\n')}\n\n</system-reminder>`,
+        },
+      ];
     },
     unregisterPluginTools: (pluginId: string) => {
       unregisterPluginToolsImpl(pluginId);
