@@ -38,5 +38,17 @@
   {
     "timestamp": "2026-08-25T17:26:05.205Z",
     "insight": "Adding a required field (e.g. session.retry) to a DroneSessionConfig-like type in drone-core propagates typecheck failures to EVERY hand-rolled session literal across all test files (drone-agent and drone-core). The pattern to expect and sweep: createDefaultAgentConfig-override blocks, getConfig() mocks, and inline sessionConfig literals in estimate tests. Use `pnpm typecheck` (which surfaces all of them) plus grep for the parent key to find every site; LSP diagnostics can lag behind rapid apply_diff and serve stale errors, so trust typecheck over the LSP once a file is verified. The conversation-service retry wrapper (`runWithRetry`) closure-captures `emit`/`retryConfig`/`onRetryPrompt` from the enclosing sendUserMessage scope, avoiding parameter threading — a clean pattern for adding policy that the loop owns."
+  },
+  {
+    "timestamp": "2026-09-11T18:13:32.140Z",
+    "insight": "The codebase already had a consistent command-channel rule: leading '/' on the whole user-role line = command (readline + TUI idle both use startsWith('/')). The bug was that the remote submitUserMessage path skipped that check and the TUI busy branch enqueued as text. The clean fix is to apply the EXISTING rule uniformly at every user-role entry point, not invent new slash-detection heuristics. This naturally resolves the \"quoted /command mid-sentence\" concern (leading position only; mid-utterance is language). Agent-role output is a separate channel, untouched."
+  },
+  {
+    "timestamp": "2026-09-11T18:13:32.141Z",
+    "insight": "The --now universal immediate-override flag requires a shared subcommand/flag parse layer. Backward-compat constraint from inventorying all 36 ctx.args consumers: every handler reads ctx.args as the raw whitespace-split array (subcommand = args[0], flags via indexOf/includes), so the reserved --now must be stripped BEFORE arg derivation while all other flags (/tools --all, /todo --status, /model --once, /search-files --semantic) stay in ctx.args. Structured access (ctx.flags/subcommand/invocation) must be opt-in."
+  },
+  {
+    "timestamp": "2026-09-11T18:13:32.141Z",
+    "insight": "Plan sessions should check for an existing feature branch before writing a plan (repo was already on feat/slash-commands-during-working-fix). Also, before re-diagnosing, read the ADR wiki (drone-agent-conversation-loop-tightening-design) — the read-only slash-command split was explicitly deferred \"for simplicity\" in ADR 040 (commit 5e9e263); and if a prior planning session explored the same problem, its durable page (drone-agent-slash-command-steering-path-planning) carries the exploration map — read it early."
   }
 ]
