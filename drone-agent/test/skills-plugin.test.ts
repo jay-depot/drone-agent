@@ -339,8 +339,8 @@ describe('skill remark field visibility', () => {
         );
         await engine.executeTool('skills__list', { reload: true });
 
-        const messages = await engine.buildSystemMessages();
-        const systemText = messages.map(m => m.content).join('\n');
+        const fragments = await engine.renderPromptFragmentsByPhase('header');
+        const systemText = fragments.join('\n');
         expect(systemText).toContain('# Skills');
         expect(systemText).toContain('remarked');
         expect(systemText).not.toContain(REMARK);

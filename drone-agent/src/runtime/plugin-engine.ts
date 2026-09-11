@@ -143,9 +143,9 @@ export type DronePluginEngine = {
   getConfig: () => DroneAgentConfig;
   /** Returns the runtime flag registry, for injecting into the system prompt. */
   getRuntimeFlags: () => RuntimeFlagRegistry;
-  /** Build header system messages (config prompt + runtime flags + header prompt fragments). */
-  buildSystemMessages: () => Promise<DroneChatMessage[]>;
-  /** Build footer system messages from footer prompt fragments. */
+  /** Build header system messages from the host-provided override, if any. */
+  buildSystemMessages?: () => Promise<DroneChatMessage[]>;
+  /** Build footer system messages from the host-provided override, if any. */
   buildFooterMessages?: () => Promise<DroneChatMessage[]>;
   /**
    * Drain queued one-shot system reminders for inclusion in the next LLM
@@ -1055,40 +1055,8 @@ export function createDronePluginEngine({
     getMountedToolCount: () => toolRegistry.getMountedCount(),
     getConfig: () => config,
     getRuntimeFlags: () => runtimeFlagRegistry,
-    buildSystemMessages: async () => {
-      if (buildSystemMessagesFromHost) {
-        return buildSystemMessagesFromHost();
-      }
-      // Fallback: assemble manually (same as the old /systemprompt behavior).
-      const base: DroneChatMessage[] = [
-        { role: 'system', content: config.systemPrompt },
-      ];
-      const fragments = await renderFragmentsByPhase('header');
-      for (const content of fragments) {
-        base.push({ role: 'system', content });
-      }
-      return base;
-    },
-    buildFooterMessages: async () => {
-      if (buildFooterMessagesFromHost) {
-        return buildFooterMessagesFromHost();
-      }
-      const fragments = await renderFragmentsByPhase('footer');
-      if (fragments.length === 0) {
-        return [];
-      }
-      // Merge all footer fragments into a single trailing system message
-      // (mirrors context-budget-service.buildFooterMessages). A run of
-      // consecutive trailing system messages is an untrained shape for some
-      // chat templates; a single one is proven safe. Topic delineation is
-      // preserved via each fragment's top-level `# Heading`.
-      return [
-        {
-          role: 'system' as const,
-          content: `<system-reminder>\n\n${fragments.join('\n\n')}\n\n</system-reminder>`,
-        },
-      ];
-    },
+    buildSystemMessages: buildSystemMessagesFromHost,
+    buildFooterMessages: buildFooterMessagesFromHost,
     unregisterPluginTools: (pluginId: string) => {
       unregisterPluginToolsImpl(pluginId);
     },

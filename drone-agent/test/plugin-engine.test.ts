@@ -457,14 +457,9 @@ describe('createDronePluginEngine', () => {
     expect(footers).toEqual(['goodbye']);
 
     const footerMessages = await engine.buildFooterMessages?.();
-    // Footer fragments are merged into a single trailing system message
-    // wrapped in explicit <system-reminder> tags (commit d829e2d).
-    expect(footerMessages).toEqual([
-      {
-        role: 'system',
-        content: '<system-reminder>\n\ngoodbye\n\n</system-reminder>',
-      },
-    ]);
+    // The engine does not own a fallback footer builder anymore; host code
+    // must provide the canonical budget-system implementation instead.
+    expect(footerMessages).toBeUndefined();
   });
 
   it('startup workspace footer does not leak string-concatenation artifacts', async () => {
@@ -539,16 +534,7 @@ describe('createDronePluginEngine', () => {
     await engine.initialize();
 
     const footerMessages = await engine.buildFooterMessages?.();
-    // A run of trailing system messages is an untrained shape for some chat
-    // templates; multiple footer fragments merge into one message, with
-    // topic delineation preserved via each fragment's top-level `# Heading`.
-    expect(footerMessages).toEqual([
-      {
-        role: 'system',
-        content:
-          '<system-reminder>\n\n# Fragment One\n\n# Fragment Two\n\n</system-reminder>',
-      },
-    ]);
+    expect(footerMessages).toBeUndefined();
   });
 
   it('throws when a plugin registers two prompt fragments with the same key', async () => {

@@ -1523,7 +1523,7 @@ describe('createConversationService — prompt fragment phase ordering', () => {
 
     const headerIndex = contents.indexOf('header-fragment');
     const userIndex = contents.indexOf('hello');
-    const footerIndex = contents.indexOf('footer-fragment');
+    const footerIndex = contents.findIndex(c => c.includes('footer-fragment'));
     const reminderIndex = contents.indexOf('queued-reminder');
 
     expect(headerIndex).toBeGreaterThanOrEqual(0);

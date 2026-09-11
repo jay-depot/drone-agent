@@ -16,9 +16,10 @@ All 10 steps completed on `feat/slash-commands-during-working-fix`. Full suite g
 typecheck`, `pnpm -r run build`, and `pnpm lint` all clean; LSP clean on every touched file.
 
 ### What landed
+
 1. **drone-core** — `DroneSlashInvocation` (`{ subcommand, flags }`), `busyBehavior?:
-   boolean | ((inv) => boolean)` on `DroneSlashCommand`, opt-in `ctx.subcommand/flags/
-   invocation`, `ctx.conversation.enqueueSlashCommand`. Exported `DroneSlashInvocation`.
+boolean | ((inv) => boolean)` on `DroneSlashCommand`, opt-in `ctx.subcommand/flags/
+invocation`, `ctx.conversation.enqueueSlashCommand`. Exported `DroneSlashInvocation`.
 2. **slash-parse.ts** (new runtime util) — `parseSlashInvocation` + `stripNowFlag`
    (first `--now` only, whitespace-delimited). 12 unit tests.
 3. **plugin-engine** — `classifySlashCommand(line)` returns unknown | { command, behavior,
@@ -37,7 +38,7 @@ typecheck`, `pnpm -r run build`, and `pnpm lint` all clean; LSP clean on every t
    notice + `enqueueSlashCommand`; unknown → error. Rich host ctx (colored logger/exit/
    printHelp) wired via `setSlashCommandContext` on mount.
 6. **busyBehavior metadata** — all 23 slash commands: builtins immediate (`/exit /quit /help
-   /plugins /tools /systemprompt`) / queue (`/clear /tool /exec /debug`); plugins subcommand-
+/plugins /tools /systemprompt`) / queue (`/clear /tool /exec /debug`); plugins subcommand-
    aware (focus show/model no-arg/reasoning no-arg/context/search-files/skills-non-create/
    todo show/compact show/swarm-memory status/swarm-session list immediate; focus set|clear/
    persona select|create/skills create/todo add|clear/compact drop|force/swarm-memory
@@ -57,6 +58,7 @@ typecheck`, `pnpm -r run build`, and `pnpm lint` all clean; LSP clean on every t
    semantics.
 
 ### Notable findings
+
 - The TUI busy-immediate branch originally called `runSlashCommand`, which toggles
   `isLlmActive` in a finally — clearing the busy spinner for a genuine in-flight turn and
   flipping the next submit back to the idle branch. Extracted `dispatchSlashLine`
