@@ -490,5 +490,9 @@
   {
     "timestamp": "2026-09-10T18:43:31.626Z",
     "insight": "Human follow-up to the checkpoint-race insight: ensure that the project-wiki metadata always includes the correct pull request *description* in addition to the hash, so the next agent can figure out what commit you *mean* even if if the hashes don't match after squash-merge."
+  },
+  {
+    "timestamp": "2026-09-11T04:58:43.998Z",
+    "insight": "Plan B (coordinator config pipeline) execution: the highest-risk seam was wiring `rebuild()` so the swarm underlay reaches the llm broker/budget service. The engine (plugin-engine.ts getConfig/registration.getConfig) and the conversation service all close over the SAME mutable config object passed to createDronePluginEngine. So rebuild() computes a fresh merged config and then mutates that shared object in place (providers/llm/compaction/session), making the underlay visible to every consumer at call time with no engine-refresh path. Verified by a regression test. Also: better-sqlite3 db.transaction() does not reliably persist multi-statement exec DDL/DML in the vitest fork pool — composite-PK migration and replaceSwarmConfig silently no-op'd inside the transaction wrapper; running statements directly via db.exec() fixed it (confirmed with a PRAGMA table_info debug test)."
   }
 ]
