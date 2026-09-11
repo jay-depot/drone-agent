@@ -21,6 +21,7 @@ import type {
   DroneLlmProvider,
   DroneLogger,
   DroneSessionSafetyTrimPayload,
+  DroneSlashCommandContext,
   DroneToolCall,
   DroneToolDescriptor,
   DroneToolExecutionContext,
@@ -74,6 +75,22 @@ export type ConversationService = {
    * preserved and will be drained at the start of the next call.
    */
   enqueueUserMessage: (prompt: string) => void;
+  /**
+   * Enqueue a slash-command line to be processed when the current loop
+   * iteration completes. Entries share a single ordered queue with
+   * `enqueueUserMessage` (arrival order preserved across kinds).
+   */
+  enqueueSlashCommand?: (line: string) => void;
+  /**
+   * Host wiring for slash-command dispatch. When the host has a richer
+   * command context (e.g. the TUI's colored logger + exit + printHelp), it
+   * supplies a builder via this setter so queued and remote-dispatched
+   * commands (submitUserMessage path) run with the same context. Falls
+   * back to a bare context (the service's own logger) when unset.
+   */
+  setSlashCommandContext?: (
+    builder: () => Omit<DroneSlashCommandContext, 'line' | 'args'>
+  ) => void;
   /** Request soft cancellation of the current in-flight `sendUserMessage`. */
   cancelCurrentRequest: () => void;
   /** True while a `sendUserMessage` turn is actively processing. */
@@ -254,8 +271,13 @@ export function createConversationService({
   let identicalCallNudgeActive = false;
   let brokenResponseHintActive = false;
 
-  // ── Message queue and cancel support ───────────────────────────────────
-  const pendingMessages: string[] = [];
+  // ── Unified ordered entries queue and cancel support ──────────────────
+  // Single source of truth for ALL deferred user intent: steering text and
+  // pending slash commands share one queue so arrival order is preserved
+  // across kinds (ADR 040 immediate/queued split, v6).
+  type PendingEntry =
+    { kind: 'text'; content: string } | { kind: 'slash'; line: string };
+  const pendingEntries: PendingEntry[] = [];
   let cancelled = false;
   // True while a sendUserMessage turn is actively processing. Used by the
   // concurrency-safe submitUserMessage path to decide queue-vs-send.
@@ -302,23 +324,88 @@ export function createConversationService({
       : allTools.filter(t => !t.defaultHidden);
   }
 
+  // ── Slash-command dispatch context ─────────────────────────────────────
+  // Queued and remote-dispatched (submitUserMessage) slash commands run via
+  // engine.dispatchSlashCommand with a context built by the host. The TUI
+  // wires its colored logger + exit + printHelp once mounted; the default is
+  // a bare context with the service's own logger (no exit/printHelp).
+  let slashCommandContextBuilder:
+    (() => Omit<DroneSlashCommandContext, 'line' | 'args'>) | undefined;
+
+  function buildBareSlashCommandContext(): Omit<
+    DroneSlashCommandContext,
+    'line' | 'args'
+  > {
+    return {
+      logger,
+      engine,
+      conversation: {
+        getModel: () => service.getModel(),
+        setModel: m => service.setModel(m),
+        getReasoningLevel: () => service.getReasoningLevel(),
+        setReasoningLevel: l => service.setReasoningLevel(l),
+        sendUserMessage: (p, onEvent) => service.sendUserMessage(p, onEvent),
+        clearSession: () => service.clearSession(),
+        enqueueUserMessage: p => service.enqueueUserMessage(p),
+        enqueueSlashCommand: line => service.enqueueSlashCommand?.(line),
+        cancelCurrentRequest: () => service.cancelCurrentRequest(),
+        getDebugSubsystems: () => service.getDebugSubsystems(),
+        enableDebugSubsystem: name => service.enableDebugSubsystem(name),
+        disableDebugSubsystem: name => service.disableDebugSubsystem(name),
+      },
+      sessionManager,
+    };
+  }
+
   /**
-   * Drain the pending message queue by appending each queued message as a
-   * user turn in the session. Called at the top of the sendUserMessage loop
-   * and at the start of a fresh sendUserMessage call.
+   * Run a queued slash command through the engine's dispatch. Called from
+   * both drain points (finally-on-completion and start-of-next-send). Uses
+   * the host-supplied context builder when wired, else the bare context.
    */
-  function drainPendingMessages(): void {
-    while (pendingMessages.length > 0) {
-      const queued = pendingMessages.shift()!;
-      sessionManager.appendUserMessage(queued);
-      engine
-        .runConversationEventHooks({
-          kind: 'userMessage',
-          content: queued,
-        })
-        .catch(err => {
-          logger.warn(`Conversation event hook threw: ${err}`);
-        });
+  async function dispatchQueuedSlash(line: string): Promise<void> {
+    const ctx =
+      slashCommandContextBuilder?.() ?? buildBareSlashCommandContext();
+    await engine.dispatchSlashCommand(line, ctx);
+  }
+
+  /**
+   * Drain the unified pending-entries queue. `mode` controls how text
+   * entries are handled:
+   *   - `'append'`  — append to the session as user turns (bundled into the
+   *                   upcoming round; used at the start of sendUserMessage).
+   *   - `'own-round'` — run each text entry as its OWN full round so the
+   *                   agent answers it even if no new sendUserMessage
+   *                   arrives (used in the finally drain on normal
+   *                   completion). Slash entries are dispatched (awaited)
+   *                   in BOTH modes.
+   * Drains until empty (each entry is processed exactly once). Assumes the
+   * caller has set turnInFlight=false before invoking.
+   */
+  async function drainPendingEntries(
+    mode: 'append' | 'own-round'
+  ): Promise<void> {
+    while (pendingEntries.length > 0) {
+      const entry = pendingEntries.shift()!;
+      if (entry.kind === 'slash') {
+        await dispatchQueuedSlash(entry.line);
+      } else if (mode === 'append') {
+        sessionManager.appendUserMessage(entry.content);
+        engine
+          .runConversationEventHooks({
+            kind: 'userMessage',
+            content: entry.content,
+          })
+          .catch(err => {
+            logger.warn(`Conversation event hook threw: ${err}`);
+          });
+      } else {
+        // own-round: the queued text becomes its own full conversation round,
+        // with the host-level prompt hooks around it (mirrors the TUI host's
+        // onBeforePrompt/sendUserMessage/onAfterToolCall sequence).
+        await engine.runHooks('onBeforePrompt');
+        await service.sendUserMessage(entry.content);
+        await engine.runHooks('onAfterToolCall');
+      }
     }
   }
 
@@ -456,13 +543,22 @@ export function createConversationService({
 
   const service: ConversationService = {
     sendUserMessage: async (prompt, onEvent) => {
+      // True when the turn reached a real-content return (assistant reply,
+      // empty-string from a broken-response limit, or stopLoop early exit).
+      // NOT set when cancelled (CANCEL_SENTINEL) or on a thrown error — the
+      // finally drain only runs for normally-completed turns (Q10).
+      let completedNormally = false;
       try {
-        turnInFlight = true;
         hasWarnedAboutSafetyTrim = false;
 
-        // Drain any messages queued during or before this call
-        // (e.g. from a previous cancelled request — preserve policy).
-        drainPendingMessages();
+        // Drain point B: at the start of the next sendUserMessage, BEFORE
+        // turnInFlight=true and before appending the new prompt. Slash
+        // entries dispatch (awaited); text entries append only (bundled
+        // into this upcoming round). Entries preserved from a cancelled
+        // request also drain here (Q6/Q10).
+        await drainPendingEntries('append');
+
+        turnInFlight = true;
 
         sessionManager.appendUserMessage(prompt);
 
@@ -844,8 +940,6 @@ export function createConversationService({
             return CANCEL_SENTINEL;
           }
 
-          // ── Drain queued messages ──
-          drainPendingMessages();
           // Re-fetch tools each iteration so dynamic changes (MCP mount/unmount,
           // persona switches) are reflected immediately.
           const tools = getLlmTools();
@@ -998,6 +1092,7 @@ export function createConversationService({
                 continue;
               }
             }
+            completedNormally = true;
             return '';
           }
 
@@ -1163,6 +1258,7 @@ export function createConversationService({
             // If a tool signaled the loop to stop (e.g. subagent__return),
             // exit the conversation loop now instead of continuing to the LLM.
             if (shouldStopLoop) {
+              completedNormally = true;
               return response.message ?? '';
             }
 
@@ -1176,6 +1272,7 @@ export function createConversationService({
             emit({ kind: 'assistantMessage', content: assistantMessage });
             emit({ kind: 'assistantMessageComplete' });
           }
+          completedNormally = true;
           return assistantMessage;
         }
       } finally {
@@ -1187,12 +1284,27 @@ export function createConversationService({
           .catch(err => {
             logger.warn(`Conversation event hook threw: ${err}`);
           });
+        // Drain point A: on NORMAL completion, after turnInFlight=false and
+        // roundComplete, drain any remaining entries. Slash entries dispatch
+        // (awaited); text entries run as their OWN full round so the agent
+        // answers them. NOT drained on cancel/throw (preserved per Q6) —
+        // the completedNormally flag gates this.
+        if (completedNormally) {
+          // Drain while entries remain and no turn is in flight; each entry
+          // is processed exactly once. An own-round text entry sets its own
+          // turnInFlight and emits its own roundComplete in its own finally.
+          while (pendingEntries.length > 0 && !turnInFlight) {
+            await drainPendingEntries('own-round');
+          }
+        }
       }
     },
 
     clearSession: () => {
       hasWarnedAboutSafetyTrim = false;
-      pendingMessages.length = 0;
+      // Flush BOTH kinds of pending entries (text + slash) — nothing deferred
+      // survives a clear (Q9: clearSession flushes).
+      pendingEntries.length = 0;
       cancelled = false;
       stuckCount = 0;
       identicalToolCallStreak = 0;
@@ -1230,26 +1342,58 @@ export function createConversationService({
       reasoningLevel = level;
     },
     enqueueUserMessage: (prompt: string) => {
-      pendingMessages.push(prompt);
+      pendingEntries.push({ kind: 'text', content: prompt });
+    },
+    enqueueSlashCommand: (line: string) => {
+      pendingEntries.push({ kind: 'slash', line });
     },
     submitUserMessage: (content: string) => {
       // Serialize concurrent submissions so the queue-vs-send decision is
       // atomic across plugins. Each call chains onto the previous one.
       const run = submitChain.then(async () => {
-        if (turnInFlight) {
-          // A turn is actively processing — queue the message; it will be
-          // drained at the top of the current loop iteration or the next
-          // sendUserMessage call.
-          pendingMessages.push(content);
+        // Leading `/` — command channel. A slash command is NEVER sent as
+        // plain text (ADR 040 unified channel).
+        if (content.startsWith('/')) {
+          const cls = engine.classifySlashCommand(content);
+          if (cls.kind === 'unknown') {
+            logger.warn(
+              `Unknown command: ${content}. Type /help for available commands.`
+            );
+            return '';
+          }
+          // Immediate (declared busyBehavior true, subcommand-aware fn, or the
+          // universal --now override) OR no turn in flight → dispatch now.
+          // The line passed to dispatch has --now already stripped
+          // (classifySlashCommand does this).
+          if (cls.behavior || !turnInFlight) {
+            const ctx =
+              slashCommandContextBuilder?.() ?? buildBareSlashCommandContext();
+            await engine.dispatchSlashCommand(cls.strippedLine, ctx);
+            return '';
+          }
+          // Busy + queued → push the stripped line for drain at the next
+          // loop boundary.
+          pendingEntries.push({ kind: 'slash', line: cls.strippedLine });
           return '';
         }
-        // No turn in flight — send immediately and return the reply.
+        // Plain text.
+        if (turnInFlight) {
+          // A turn is actively processing — queue it; drained at the start
+          // of the next sendUserMessage call (or as its own round on
+          // completion).
+          pendingEntries.push({ kind: 'text', content });
+          return '';
+        }
+        // Idle — send immediately and return the reply.
         return service.sendUserMessage(content);
       });
       // Keep the chain alive regardless of individual failures so a rejected
       // submission never blocks subsequent ones.
       submitChain = run.catch(() => {});
       return run;
+    },
+    setSlashCommandContext: builder => {
+      slashCommandContextBuilder = builder;
     },
     cancelCurrentRequest: () => {
       cancelled = true;

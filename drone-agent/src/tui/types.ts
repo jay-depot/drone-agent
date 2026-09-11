@@ -112,6 +112,7 @@ export type DroneTuiOptions = {
     | 'onConversationEvent'
     | 'runWorkflow'
     | 'getSlashCommands'
+    | 'classifySlashCommand'
     | 'getTool'
   >;
   conversation: {
@@ -128,6 +129,15 @@ export type DroneTuiOptions = {
     getReasoningLevel: () => DroneReasoningLevel | undefined;
     setReasoningLevel: (level: DroneReasoningLevel | undefined) => void;
     enqueueUserMessage?: (prompt: string) => void;
+    /** Enqueue a slash-command line for the next loop boundary. */
+    enqueueSlashCommand?: (line: string) => void;
+    /** Wire the host's slash-command context (colored logger/exit/printHelp). */
+    setSlashCommandContext?: (
+      builder: () => Omit<
+        import('drone-core').DroneSlashCommandContext,
+        'line' | 'args'
+      >
+    ) => void;
     cancelCurrentRequest?: () => void;
     getDebugSubsystems: () => string[];
     enableDebugSubsystem: (name: string) => void;

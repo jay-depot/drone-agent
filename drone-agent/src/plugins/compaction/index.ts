@@ -758,6 +758,11 @@ export function createCompactionPlugin(
       registration.registerSlashCommand({
         command: '/compact',
         description: 'Manage context compaction: show, drop, or force compact',
+        // `show` is read-only and instant -> immediate while the LLM works.
+        // `drop`/force-compact mutate the session context mid-turn, so they
+        // queue unless --now is passed.
+        busyBehavior: (invocation: { subcommand: string | undefined }) =>
+          invocation.subcommand === 'show',
         handler: async (ctx: DroneSlashCommandContext) => {
           const sub = ctx.args[0]?.toLowerCase();
 

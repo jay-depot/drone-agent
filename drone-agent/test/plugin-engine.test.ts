@@ -457,7 +457,14 @@ describe('createDronePluginEngine', () => {
     expect(footers).toEqual(['goodbye']);
 
     const footerMessages = await engine.buildFooterMessages?.();
-    expect(footerMessages).toEqual([{ role: 'system', content: 'goodbye' }]);
+    // Footer fragments are merged into a single trailing system message
+    // wrapped in explicit <system-reminder> tags (commit d829e2d).
+    expect(footerMessages).toEqual([
+      {
+        role: 'system',
+        content: '<system-reminder>\n\ngoodbye\n\n</system-reminder>',
+      },
+    ]);
   });
 
   it('startup workspace footer does not leak string-concatenation artifacts', async () => {
@@ -536,7 +543,11 @@ describe('createDronePluginEngine', () => {
     // templates; multiple footer fragments merge into one message, with
     // topic delineation preserved via each fragment's top-level `# Heading`.
     expect(footerMessages).toEqual([
-      { role: 'system', content: '# Fragment One\n\n# Fragment Two' },
+      {
+        role: 'system',
+        content:
+          '<system-reminder>\n\n# Fragment One\n\n# Fragment Two\n\n</system-reminder>',
+      },
     ]);
   });
 

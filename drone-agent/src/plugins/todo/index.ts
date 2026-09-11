@@ -287,6 +287,11 @@ export const todoPlugin: DronePlugin = {
     registration.registerSlashCommand({
       command: '/todo',
       description: 'Todo management: show, add, clear',
+      // Read-only `show` runs immediately while the LLM works; `add`/`clear`
+      // mutate shared todo state mid-turn, so they queue unless --now is
+      // passed (the universal escape hatch).
+      busyBehavior: (invocation: { subcommand: string | undefined }) =>
+        invocation.subcommand === 'show',
       handler: async (ctx: DroneSlashCommandContext) => {
         const subcommand = ctx.args[0] ?? '';
 

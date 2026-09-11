@@ -102,6 +102,8 @@ export const searchPlugin: DronePlugin = {
     registration.registerSlashCommand({
       command: '/search-files',
       description: 'Search files: regex (default) or semantic (--semantic)',
+      // Read-only search — runs immediately while the LLM works.
+      busyBehavior: true,
       handler: async (ctx: DroneSlashCommandContext) => {
         const parsed = parseSearchFilesArgs(ctx.args);
         if (!parsed) {

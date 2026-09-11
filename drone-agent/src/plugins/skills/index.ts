@@ -277,6 +277,11 @@ export const skillsPlugin: DronePlugin = {
     registration.registerSlashCommand({
       command: '/skills',
       description: 'Manage skills: list, create, recall, reload.',
+      // Read-only subcommands (list, recall, reload) run immediately while
+      // the LLM works; `create` launches an interactive wizard that mutates
+      // session state, so it queues unless --now is passed.
+      busyBehavior: (invocation: { subcommand: string | undefined }) =>
+        invocation.subcommand !== 'create',
       handler: async ctx => {
         const subcommand = ctx.args[0] ?? '';
 

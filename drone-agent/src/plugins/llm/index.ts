@@ -854,6 +854,11 @@ function registerModelCommand(
     command: '/model',
     description:
       'List models or switch. /model <provider/model> persists to user config; /model --once <pick> switches for this invocation only.',
+    // No-argument browse is read-only and instant -> immediate while the LLM
+    // works; an actual model switch mutates the active model mid-turn, so it
+    // queues unless --now is passed.
+    busyBehavior: (invocation: { subcommand: string | undefined }) =>
+      invocation.subcommand === undefined || invocation.subcommand === '',
     handler: async ctx => {
       const llm = ctx.engine.getCapability<DroneLlmCapability>('llm');
       if (!llm) {
@@ -979,6 +984,11 @@ function registerReasoningCommand(
     command: '/reasoning',
     description:
       'Show or set reasoning level. Levels: off, low, medium, high, max. Use --raw <value> to pass through unvalidated.',
+    // No-argument browse is read-only and instant -> immediate while the LLM
+    // works; actually setting a level mutates the active model mid-turn, so it
+    // queues unless --now is passed.
+    busyBehavior: (invocation: { subcommand: string | undefined }) =>
+      invocation.subcommand === undefined || invocation.subcommand === '',
     handler: async ctx => {
       if (!ctx.conversation) {
         ctx.logger.warn(

@@ -75,6 +75,9 @@ export function createTrustCoordinatorCommand(
     command: '/trust-coordinator',
     description:
       'Confirm the coordinator identity by entering the verification code shown in the coordinator web UI (enables swarm sync)',
+    // Requires a verification code argument; read-only status/usage display.
+    // Network round-trip only — safe to run while the LLM is working.
+    busyBehavior: true,
     handler: async ctx => {
       const verificationCode = ctx.args[0];
       if (!verificationCode) {

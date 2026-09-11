@@ -104,6 +104,7 @@ function makeOptions(
       setElicitation: () => {},
       runWorkflow: async () => ({ toolResult: '{}' }),
       getSlashCommands: () => [],
+      classifySlashCommand: () => ({ kind: 'unknown' }),
     },
     conversation: {
       sendUserMessage: async () => 'reply',
@@ -219,6 +220,7 @@ describe('App — /systemprompt', () => {
         setElicitation: () => {},
         runWorkflow: async () => ({ toolResult: '{}' }),
         getSlashCommands: () => [],
+        classifySlashCommand: () => ({ kind: 'unknown' }),
       },
     });
     const instance = render(<App {...opts} />);

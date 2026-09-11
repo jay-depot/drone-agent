@@ -15,6 +15,11 @@ export function createSwarmMemoryCommand(
     command: '/swarm-memory',
     description:
       'Inspect or control proactive swarm-memory retrieval (status | refresh | session-scope on|off)',
+    // `status` is read-only and instant -> immediate while the LLM works;
+    // `refresh`/`session-scope` mutate the retriever state mid-turn, so they
+    // queue unless --now is passed.
+    busyBehavior: (invocation: { subcommand: string | undefined }) =>
+      invocation.subcommand === 'status',
     handler: async ctx => {
       const sub = ctx.args[0] ?? 'status';
       if (sub === 'status') {
