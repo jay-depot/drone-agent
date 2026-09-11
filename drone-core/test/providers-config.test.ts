@@ -54,6 +54,34 @@ describe('providers config schema', () => {
     ).toThrow();
   });
 
+  it('accepts sendUsageInclude and preserves it through parsing', () => {
+    const parsed = parseConfigWithSchema(
+      {
+        providers: {
+          cloud: { protocol: 'openrouter', sendUsageInclude: true },
+        },
+      },
+      'test'
+    );
+    expect(parsed.providers?.['cloud']?.sendUsageInclude).toBe(true);
+  });
+
+  it('rejects non-boolean sendUsageInclude', () => {
+    expect(() =>
+      parseConfigWithSchema(
+        {
+          providers: {
+            cloud: {
+              protocol: 'openrouter',
+              sendUsageInclude: 'yes' as never,
+            },
+          },
+        },
+        'test'
+      )
+    ).toThrow();
+  });
+
   it('rejects invalid llm.active (must be provider/model)', () => {
     expect(() =>
       parseConfigWithSchema({ llm: { active: 'justamodel' } }, 'test')

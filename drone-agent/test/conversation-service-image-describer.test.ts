@@ -80,6 +80,7 @@ function makeLlmCapability(
     unregisterProvider: () => {},
     hasVision: () => overrides.hasVision ?? false,
     describeImages,
+    getUsageLedger: () => [],
   };
 }
 

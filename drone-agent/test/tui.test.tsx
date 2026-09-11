@@ -51,6 +51,115 @@ async function waitUntilFrame(
 /** Wait one macrotask so Ink's (asynchronous) render has flushed. */
 const tick = () => new Promise(r => setTimeout(r, 10));
 
+type EngineMockOptions = {
+  pluginStatuses?: ReturnType<DroneTuiOptions['engine']['listPlugins']>;
+  tools?: ReturnType<DroneTuiOptions['engine']['listTools']>;
+  pluginCount?: number;
+  toolCount?: number;
+  capability?: (pluginId: string) => unknown;
+};
+
+/**
+ * Full engine mock covering every member of the TUI's engine Pick.
+ * Tests customize the plugin statuses, tools, or capability map; the
+ * remaining members are inert stubs.
+ */
+function makeEngine(
+  options: EngineMockOptions = {}
+): DroneTuiOptions['engine'] {
+  const tools = options.tools ?? [
+    { name: 'tool-a', description: 'Tool A' },
+    { name: 'tool-b', description: 'Tool B' },
+    { name: 'tool-c', description: 'Tool C' },
+  ];
+  const pluginStatuses = options.pluginStatuses ?? [
+    {
+      id: 'core',
+      name: 'Core',
+      enabled: true,
+      required: true,
+      defaultEnabled: true,
+    },
+    {
+      id: 'persona',
+      name: 'Persona',
+      enabled: true,
+      required: false,
+      defaultEnabled: true,
+    },
+  ];
+  return {
+    listTools: () => tools,
+    listPlugins: () => pluginStatuses,
+    getRegisteredPluginCount: () =>
+      options.pluginCount ?? pluginStatuses.length,
+    getRegisteredToolCount: () => options.toolCount ?? tools.length,
+    getMountedToolCount: () => 0,
+    getCapability: (options.capability ??
+      (() => undefined)) as DroneTuiOptions['engine']['getCapability'],
+    getTool: () => undefined,
+    runHooks: async () => {},
+    executeTool: async () => 'ok',
+    renderPromptFragments: async () => [],
+    getConfig: () => {
+      throw new Error('getConfig not used in tui tests');
+    },
+    buildSystemMessages: async () => [],
+    getHelpSnippets: () => [],
+    dispatchSlashCommand: async (_line, ctx) => {
+      if (_line === '/help' || _line === '?') {
+        if (ctx.printHelp) {
+          ctx.printHelp();
+        }
+        return true;
+      }
+      return false;
+    },
+    onConversationEvent: () => () => {},
+    setElicitation: () => {},
+    runWorkflow: async () => ({ toolResult: '{}' }),
+    getSlashCommands: () => [
+      {
+        command: '/help',
+        description: 'Show this help',
+        handler: async () => true,
+      },
+      {
+        command: '/clear',
+        description: 'Clear session',
+        handler: async () => true,
+      },
+      {
+        command: '/plugins',
+        description: 'List plugins',
+        handler: async () => true,
+      },
+      {
+        command: '/tools',
+        description: 'List registered tools (/tools --all for full list)',
+        handler: async () => true,
+      },
+      {
+        command: '/systemprompt',
+        description: 'Show system prompt',
+        handler: async () => true,
+      },
+      {
+        command: '/tool',
+        description: 'Run a tool',
+        handler: async () => true,
+      },
+      {
+        command: '/exec',
+        description: 'Run a command',
+        handler: async () => true,
+      },
+      { command: '/exit', description: 'Exit', handler: async () => true },
+      { command: '/quit', description: 'Exit', handler: async () => true },
+    ],
+  };
+}
+
 function makeOptions(
   overrides: Partial<DroneTuiOptions> = {}
 ): DroneTuiOptions {
@@ -58,94 +167,7 @@ function makeOptions(
   return {
     model,
     logger: silentLogger(),
-    engine: {
-      listTools: () => [
-        { name: 'tool-a', description: 'Tool A' },
-        { name: 'tool-b', description: 'Tool B' },
-        { name: 'tool-c', description: 'Tool C' },
-      ],
-      listPlugins: () => [
-        {
-          id: 'core',
-          name: 'Core',
-          enabled: true,
-          required: true,
-          defaultEnabled: true,
-        },
-        {
-          id: 'persona',
-          name: 'Persona',
-          enabled: true,
-          required: false,
-          defaultEnabled: true,
-        },
-      ],
-      getRegisteredPluginCount: () => 2,
-      getRegisteredToolCount: () => 3,
-      getMountedToolCount: () => 0,
-      getCapability: () => undefined,
-      getTool: () => undefined,
-      runHooks: async () => {},
-      executeTool: async () => 'ok',
-      renderPromptFragments: async () => [],
-      getConfig: () => {
-        throw new Error('getConfig not used in tui tests');
-      },
-      buildSystemMessages: async () => [],
-      getHelpSnippets: () => [],
-      dispatchSlashCommand: async (_line, ctx) => {
-        // Handle built-in commands for testing
-        if (_line === '/help' || _line === '?') {
-          if (ctx.printHelp) {
-            ctx.printHelp();
-          }
-          return true;
-        }
-        return false;
-      },
-      onConversationEvent: () => () => {},
-      setElicitation: () => {},
-      runWorkflow: async () => ({ toolResult: '{}' }),
-      getSlashCommands: () => [
-        {
-          command: '/help',
-          description: 'Show this help',
-          handler: async () => true,
-        },
-        {
-          command: '/clear',
-          description: 'Clear session',
-          handler: async () => true,
-        },
-        {
-          command: '/plugins',
-          description: 'List plugins',
-          handler: async () => true,
-        },
-        {
-          command: '/tools',
-          description: 'List registered tools (/tools --all for full list)',
-          handler: async () => true,
-        },
-        {
-          command: '/systemprompt',
-          description: 'Show system prompt',
-          handler: async () => true,
-        },
-        {
-          command: '/tool',
-          description: 'Run a tool',
-          handler: async () => true,
-        },
-        {
-          command: '/exec',
-          description: 'Run a command',
-          handler: async () => true,
-        },
-        { command: '/exit', description: 'Exit', handler: async () => true },
-        { command: '/quit', description: 'Exit', handler: async () => true },
-      ],
-    },
+    engine: makeEngine(),
     conversation: {
       sendUserMessage: async () => 'reply',
       clearSession: () => {},
@@ -230,13 +252,8 @@ describe('App', () => {
       getContent: () => ['3 / 5'],
     };
     const opts = makeOptions({
-      engine: {
-        listTools: () => [
-          { name: 'tool-a', description: 'Tool A' },
-          { name: 'tool-b', description: 'Tool B' },
-          { name: 'tool-c', description: 'Tool C' },
-        ],
-        listPlugins: () => [
+      engine: makeEngine({
+        pluginStatuses: [
           {
             id: 'core',
             name: 'Core',
@@ -251,77 +268,16 @@ describe('App', () => {
             required: false,
             defaultEnabled: true,
           },
+          {
+            id: 'todo',
+            name: 'Todo',
+            enabled: true,
+            required: false,
+            defaultEnabled: false,
+          },
         ],
-        getRegisteredPluginCount: () => 2,
-        getRegisteredToolCount: () => 3,
-        getMountedToolCount: () => 0,
-        getCapability: ((pluginId: string) => {
-          if (pluginId === 'todo') {
-            return widget;
-          }
-          return undefined;
-        }) as <T>(pluginId: string) => T | undefined,
-        getTool: () => undefined,
-        runHooks: async () => {},
-        executeTool: async () => 'ok',
-        renderPromptFragments: async () => [],
-        getConfig: () => {
-          throw new Error('getConfig not used in tui tests');
-        },
-        buildSystemMessages: async () => [],
-        getHelpSnippets: () => [],
-        dispatchSlashCommand: async (_line, ctx) => {
-          if (_line === '/help' || _line === '?') {
-            if (ctx.printHelp) {
-              ctx.printHelp();
-            }
-            return true;
-          }
-          return false;
-        },
-        onConversationEvent: () => () => {},
-        setElicitation: () => {},
-        runWorkflow: async () => ({ toolResult: '{}' }),
-        getSlashCommands: () => [
-          {
-            command: '/help',
-            description: 'Show this help',
-            handler: async () => true,
-          },
-          {
-            command: '/clear',
-            description: 'Clear session',
-            handler: async () => true,
-          },
-          {
-            command: '/plugins',
-            description: 'List plugins',
-            handler: async () => true,
-          },
-          {
-            command: '/tools',
-            description: 'List registered tools (/tools --all for full list)',
-            handler: async () => true,
-          },
-          {
-            command: '/systemprompt',
-            description: 'Show system prompt',
-            handler: async () => true,
-          },
-          {
-            command: '/tool',
-            description: 'Run a tool',
-            handler: async () => true,
-          },
-          {
-            command: '/exec',
-            description: 'Run a command',
-            handler: async () => true,
-          },
-          { command: '/exit', description: 'Exit', handler: async () => true },
-          { command: '/quit', description: 'Exit', handler: async () => true },
-        ],
-      },
+        capability: pluginId => (pluginId === 'todo' ? widget : undefined),
+      }),
     });
     const instance = render(<App {...opts} />);
     cleanup = instance.cleanup;
@@ -331,6 +287,75 @@ describe('App', () => {
     );
     expect(frame).toContain('TODO');
     expect(frame).toContain('3 / 5');
+  });
+
+  it('discovers widgets from plugin ids beyond the legacy hardcoded list', async () => {
+    const widget: MidPanelWidget = {
+      id: 'beancounter',
+      label: 'USED',
+      getContent: () => ['45.2k tok · $0.0421'],
+    };
+    const opts = makeOptions({
+      engine: makeEngine({
+        pluginStatuses: [
+          {
+            id: 'core',
+            name: 'Core',
+            enabled: true,
+            required: true,
+            defaultEnabled: true,
+          },
+          {
+            id: 'beancounter',
+            name: 'Beancounter',
+            enabled: true,
+            required: false,
+            defaultEnabled: false,
+          },
+        ],
+        capability: pluginId =>
+          pluginId === 'beancounter' ? widget : undefined,
+      }),
+    });
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+    const frame = await waitUntilFrame(instance, f => f.includes('USED'));
+    expect(frame).toContain('USED');
+    expect(frame).toContain('45.2k tok');
+  });
+
+  it('does not render widgets from disabled plugins', async () => {
+    const widget: MidPanelWidget = {
+      id: 'beancounter',
+      label: 'USED',
+      getContent: () => ['1 tok · $0.0000'],
+    };
+    const opts = makeOptions({
+      engine: makeEngine({
+        pluginStatuses: [
+          {
+            id: 'core',
+            name: 'Core',
+            enabled: true,
+            required: true,
+            defaultEnabled: true,
+          },
+          {
+            id: 'beancounter',
+            name: 'Beancounter',
+            enabled: false,
+            required: false,
+            defaultEnabled: false,
+          },
+        ],
+        capability: pluginId =>
+          pluginId === 'beancounter' ? widget : undefined,
+      }),
+    });
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+    await tick();
+    expect(instance.lastFrame() ?? '').not.toContain('USED');
   });
 });
 

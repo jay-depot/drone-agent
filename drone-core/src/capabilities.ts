@@ -76,7 +76,7 @@ import type {
   DroneLlmProviderRegistration,
 } from './provider-types.js';
 import type { LlmProtocolDriver } from './provider-config-types.js';
-import type { DroneImageContent } from './session-types.js';
+import type { DroneImageContent, DroneLlmUsage } from './session-types.js';
 
 // ── Config capability ──────────────────────────────────────────────
 
@@ -158,6 +158,20 @@ export type DroneResolvedModelRole = {
  * Capability offered by the LLM broker plugin. Lets other plugins and
  * the host resolve the active LLM provider and manage model selection.
  */
+/**
+ * One provider-reported usage event in the broker's session-lifetime
+ * ledger. Recorded per successful chat call, tagged with the broker path
+ * that produced it ('main', the model-role name, or 'image_describer').
+ */
+export type DroneLlmUsageLedgerEntry = {
+  providerId: string;
+  model: string;
+  role?: string;
+  usage: DroneLlmUsage;
+  /** Date.now() at recording time. */
+  at: number;
+};
+
 export type DroneLlmCapability = {
   /** Get the active DroneLlmProvider implementation. */
   getActiveProvider: () => DroneLlmProvider;
@@ -199,6 +213,13 @@ export type DroneLlmCapability = {
    * no vision-capable model is available, images are returned unchanged.
    */
   describeImages: (images: DroneImageContent[]) => Promise<DroneImageContent[]>;
+  /**
+   * Session-lifetime ledger of provider-reported usage: one entry per
+   * successful broker-routed chat call (main rounds, model roles, the
+   * image describer). Cleared on session clear. Returns a readonly view —
+   * callers must not mutate the ledger.
+   */
+  getUsageLedger: () => readonly DroneLlmUsageLedgerEntry[];
   /** Register a provider. Providers are sorted by precedence (ascending). */
   registerProvider: (registration: DroneLlmProviderRegistration) => void;
   /** Unregister a provider by id. */

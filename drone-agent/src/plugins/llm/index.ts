@@ -19,6 +19,7 @@ import {
   DEFAULT_RETRY_CONFIG,
   withBoundedSilentRetry,
 } from '../../runtime/llm-retry.js';
+import { createUsageLedger } from './usage-ledger.js';
 
 const VALID_REASONING_LEVELS: DroneReasoningLevel[] = [
   'off',
@@ -103,11 +104,19 @@ export const llmPlugin: DronePlugin = {
       return entry?.protocol === 'ollama' ? 0 : 1;
     }
 
+    // Session-lifetime ledger of provider-reported usage, recorded at this
+    // chokepoint so every broker-routed call counts exactly once (main
+    // rounds, model-role calls, the image describer).
+    const usageLedger = createUsageLedger();
+
     // Broker-enriched view of a provider instance: chat() fills the additive
     // DroneChatRequest fields (effective parameters, resolved metadata) before
     // delegating. Single interception point — wire contract intact. Used by the
     // active provider AND any model-role-resolved provider.
-    function enrichProvider(instance: ProviderInstance): DroneLlmProvider {
+    function enrichProvider(
+      instance: ProviderInstance,
+      role?: string
+    ): DroneLlmProvider {
       const inner = instance.provider;
       return {
         chat: async request => {
@@ -120,7 +129,7 @@ export const llmPlugin: DronePlugin = {
           );
           warnUnknownParameters(instance, effectiveParameters);
           try {
-            return await inner.chat({
+            const response = await inner.chat({
               ...request,
               parameters: effectiveParameters,
               extra: {
@@ -131,6 +140,15 @@ export const llmPlugin: DronePlugin = {
                 request.maxOutputTokens ?? metadata.maxOutputTokens,
               hasVision: request.hasVision ?? metadata.hasVision,
             });
+            if (response.usage) {
+              usageLedger.record({
+                providerId: instance.providerId,
+                model: request.model,
+                ...(role === undefined ? {} : { role }),
+                usage: response.usage,
+              });
+            }
+            return response;
           } catch (error) {
             if (error instanceof DroneLlmError && !error.providerId) {
               error.providerId = instance.providerId;
@@ -150,7 +168,7 @@ export const llmPlugin: DronePlugin = {
     const warnedFallbackRoles = new Set<string>();
     const announcedRoleDivergence = new Set<string>();
 
-    function activeFallback(): DroneResolvedModelRole {
+    function activeFallback(role?: string): DroneResolvedModelRole {
       const instance = getInstance(activeProviderId);
       if (!instance) {
         throw new Error(
@@ -158,7 +176,7 @@ export const llmPlugin: DronePlugin = {
         );
       }
       return {
-        provider: enrichProvider(instance),
+        provider: enrichProvider(instance, role),
         providerId: activeProviderId,
         model: currentModel,
       };
@@ -173,7 +191,7 @@ export const llmPlugin: DronePlugin = {
       const config = registration.getConfig();
       const raw = config.llm?.modelRoles?.[role];
       if (!raw) {
-        return activeFallback();
+        return activeFallback(role);
       }
       const selection = parseModelSelection(raw);
       const instance = selection && getInstance(selection.providerId);
@@ -184,7 +202,7 @@ export const llmPlugin: DronePlugin = {
             `Model role "${role}" (${raw}) could not be resolved; falling back to the active selection.`
           );
         }
-        return activeFallback();
+        return activeFallback(role);
       }
       if (
         instance.providerId !== activeProviderId ||
@@ -198,7 +216,7 @@ export const llmPlugin: DronePlugin = {
         }
       }
       return {
-        provider: enrichProvider(instance),
+        provider: enrichProvider(instance, role),
         providerId: instance.providerId,
         model: selection.modelLocalId,
         reasoningLevel: resolveConfiguredReasoningLevel(config, selection),
@@ -232,7 +250,7 @@ export const llmPlugin: DronePlugin = {
           const fullId = `${pinned.providerId}/${pinned.modelLocalId}`;
           if (resolveModelMetadata(fullId).hasVision) {
             return {
-              provider: enrichProvider(pinnedInstance),
+              provider: enrichProvider(pinnedInstance, 'image_describer'),
               providerId: pinned.providerId,
               model: pinned.modelLocalId,
               reasoningLevel: resolveConfiguredReasoningLevel(config, pinned),
@@ -247,7 +265,7 @@ export const llmPlugin: DronePlugin = {
         const activeFullId = `${activeProviderId}/${currentModel}`;
         if (resolveModelMetadata(activeFullId).hasVision) {
           return {
-            provider: enrichProvider(activeInstance),
+            provider: enrichProvider(activeInstance, 'image_describer'),
             providerId: activeProviderId,
             model: currentModel,
           };
@@ -266,7 +284,7 @@ export const llmPlugin: DronePlugin = {
               const fullId = `${pinned.providerId}/${modelId}`;
               if (resolveModelMetadata(fullId).hasVision) {
                 return {
-                  provider: enrichProvider(pinnedInstance),
+                  provider: enrichProvider(pinnedInstance, 'image_describer'),
                   providerId: pinned.providerId,
                   model: modelId,
                   reasoningLevel: resolveConfiguredReasoningLevel(config, {
@@ -293,7 +311,7 @@ export const llmPlugin: DronePlugin = {
           const fullId = `${providerId}/${modelId}`;
           if (resolveModelMetadata(fullId).hasVision) {
             return {
-              provider: enrichProvider(instance),
+              provider: enrichProvider(instance, 'image_describer'),
               providerId,
               model: modelId,
               reasoningLevel: resolveConfiguredReasoningLevel(config, {
@@ -629,7 +647,7 @@ export const llmPlugin: DronePlugin = {
             'No active LLM provider. Ensure a providers config entry exists and its protocol plugin is enabled.'
           );
         }
-        return enrichProvider(instance);
+        return enrichProvider(instance, 'main');
       },
       resolveModelForRole: resolveModelForRoleImpl,
       getActiveProviderId: () => activeProviderId,
@@ -691,6 +709,7 @@ export const llmPlugin: DronePlugin = {
         return resolveModelMetadata(fullId).hasVision ?? false;
       },
       describeImages: describeImagesImpl,
+      getUsageLedger: () => usageLedger.getAll(),
       registerProvider: provider => {
         // Legacy path — retained for the migration window. Wraps the
         // registration as a synthetic provider instance.
@@ -777,6 +796,11 @@ export const llmPlugin: DronePlugin = {
           // Non-fatal — listing recomputes on demand.
         });
       }
+    });
+
+    // ── onSessionClear: reset the usage ledger ────────────────────────
+    registration.hooks.onSessionClear(async () => {
+      usageLedger.clear();
     });
 
     // ── /model slash command ──────────────────────────────────────────

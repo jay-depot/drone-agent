@@ -5,6 +5,7 @@ import type {
   DroneToolCall,
   DroneToolDescriptor,
 } from 'drone-core';
+import { toDroneLlmUsage } from 'drone-core';
 import { anthropicThinkingBudget } from './anthropic-driver.js';
 
 export type AnthropicTextBlock = {
@@ -277,6 +278,14 @@ export function fromAnthropicResponse(
 
   if (toolCalls.length > 0) {
     result.toolCalls = toolCalls;
+  }
+
+  const usage = toDroneLlmUsage({
+    prompt: response.usage?.input_tokens,
+    completion: response.usage?.output_tokens,
+  });
+  if (usage) {
+    result.usage = usage;
   }
 
   return result;

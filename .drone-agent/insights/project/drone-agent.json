@@ -466,5 +466,13 @@
   {
     "timestamp": "2026-09-10T18:27:59.908Z",
     "insight": "Wiki-ingest checkpoint race: meta.json's last_commit tracks a branch tip, but `main` advances independently while work happens on feature branches. The ADR 206 ingest (2026-09-10, checkpoint 9a3b915 on fix/swarm-wiki-delete) left PRs #97/#98/#99/#100 — which had merged to main in that window — permanently skipped: the next ingest diffed from 9a3b915 and never saw them. PR #99 (phase-aware footer rendering) went un-ingested for a full day and needed backfill coverage inside ADR 207. Fix for future ingests: before diffing from the checkpoint, also diff `main..origin/main` (or `git log <checkpoint>..main --oneline` restricted to main-ancestry) and backfill any main-side commits the checkpoint skipped; when a checkpoint and current branch diverge, enumerate BOTH tails (checkpoint→main and checkpoint→HEAD) before writing the log entry."
+  },
+  {
+    "timestamp": "2026-09-10T18:43:31.626Z",
+    "insight": "Follow-up to the checkpoint-race insight: after squash-merges, `meta.json` must point at the MAIN tip, never a feature-branch tip. The ADR 207 ingest set last_commit = 1ffe742 (a memory-only commit on the feature branch); both PRs then squash-merged (PR #102 → 2e034bf, PR #101 → 9da2e26), orphaning every branch SHA — the checkpoint pointed at a commit that is not an ancestor of main, which would have made the next `git log <checkpoint>..main` diff garbage. En route facts: the squash of the first-merged PR carries ALL of that branch's commits (PR #101's branch carried both the ADR 206 wiki-delete work and the startup-footer fix, so the single squash commit 9da2e26 holds both); memory-only commits from branch tails are not preserved at all. When updating the checkpoint after squash merges, map PR numbers → new squash SHAs and note the mapping in the log entry so future readers can trace branch-SHA citations to their canonical home."
+  },
+  {
+    "timestamp": "2026-09-10T18:43:31.626Z",
+    "insight": "Human follow-up to the checkpoint-race insight: ensure that the project-wiki metadata always includes the correct pull request *description* in addition to the hash, so the next agent can figure out what commit you *mean* even if if the hashes don't match after squash-merge."
   }
 ]

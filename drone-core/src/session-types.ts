@@ -106,10 +106,81 @@ export type DroneToolDescriptor = {
   defaultHidden?: boolean;
 };
 
+/**
+ * Provider-reported usage for a single LLM API call, normalized across
+ * providers. Tokens come from every provider that reports them; `cost`
+ * (USD) is currently OpenRouter-only. Absent fields mean the provider did
+ * not report them — consumers must treat missing cost as zero and never
+ * estimate pricing client-side.
+ */
+export type DroneLlmUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  /** Provider-reported cost in USD. Absent = not reported. */
+  cost?: number;
+  /** Prompt tokens served from the provider's cache (OpenRouter). */
+  cachedPromptTokens?: number;
+  /** Hidden-reasoning tokens itemized by the provider (OpenRouter). */
+  reasoningTokens?: number;
+};
+
+/**
+ * Build a DroneLlmUsage from provider-specific possibly-missing counts.
+ * Returns undefined when neither prompt nor completion tokens are usable
+ * numbers, so callers can simply skip recording. `total` falls back to
+ * prompt + completion when the provider omits it.
+ */
+export function toDroneLlmUsage(input: {
+  prompt?: number;
+  completion?: number;
+  total?: number;
+  cost?: number;
+  cached?: number;
+  reasoning?: number;
+}): DroneLlmUsage | undefined {
+  const promptTokens = normalizeCount(input.prompt);
+  const completionTokens = normalizeCount(input.completion);
+  if (promptTokens === undefined && completionTokens === undefined) {
+    return undefined;
+  }
+  const usage: DroneLlmUsage = {
+    promptTokens: promptTokens ?? 0,
+    completionTokens: completionTokens ?? 0,
+    totalTokens:
+      normalizeCount(input.total) ??
+      (promptTokens ?? 0) + (completionTokens ?? 0),
+  };
+  const cost = normalizeCount(input.cost);
+  if (cost !== undefined) {
+    usage.cost = cost;
+  }
+  const cached = normalizeCount(input.cached);
+  if (cached !== undefined) {
+    usage.cachedPromptTokens = cached;
+  }
+  const reasoning = normalizeCount(input.reasoning);
+  if (reasoning !== undefined) {
+    usage.reasoningTokens = reasoning;
+  }
+  return usage;
+}
+
+function normalizeCount(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}
+
 export type DroneChatResponse = {
   message?: string;
   reasoning?: string;
   toolCalls?: DroneToolCall[];
+  /**
+   * Provider-reported usage for this individual API call. Additive: every
+   * existing DroneLlmProvider remains valid without setting it.
+   */
+  usage?: DroneLlmUsage;
 };
 
 /**
