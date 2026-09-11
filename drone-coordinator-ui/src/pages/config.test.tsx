@@ -111,18 +111,13 @@ describe('ConfigPage', () => {
       if (url === '/api/config' && (init?.method ?? 'GET') === 'GET') {
         return jsonResponse(200, []);
       }
-      if (
-        url === '/api/config/providers.openai' &&
-        init?.method === 'PUT'
-      ) {
+      if (url === '/api/config/providers.openai' && init?.method === 'PUT') {
         const body = JSON.parse(String(init.body ?? '{}')) as Record<
           string,
           unknown
         >;
         expect(body.secret).toBe(true);
-        expect(body.value).toBe(
-          JSON.stringify({ apiKey: 'sk-test' })
-        );
+        expect(body.value).toBe(JSON.stringify({ apiKey: 'sk-test' }));
         return jsonResponse(200, { ...secretEntry, value: '••••test' });
       }
       return jsonResponse(404, { error: 'unexpected call' });
@@ -136,17 +131,15 @@ describe('ConfigPage', () => {
     // Controlled input + userEvent.type races in React 19 (only the first
     // character commits), so fire a single change event carrying the value
     // via target.value (the canonical RTL pattern for controlled inputs).
-    fireEvent.change(
-      within(dialog).getByPlaceholderText('providers.openai'),
-      { target: { value: 'providers.openai' } }
-    );
+    fireEvent.change(within(dialog).getByPlaceholderText('providers.openai'), {
+      target: { value: 'providers.openai' },
+    });
     // The JSON value contains `{`/`}` which userEvent.type parses as
     // keyboard-modifier descriptors, so fire a change event directly on the
     // textarea.
-    fireEvent.change(
-      within(dialog).getByPlaceholderText('{}'),
-      { target: { value: JSON.stringify({ apiKey: 'sk-test' }) } }
-    );
+    fireEvent.change(within(dialog).getByPlaceholderText('{}'), {
+      target: { value: JSON.stringify({ apiKey: 'sk-test' }) },
+    });
     await userEvent.click(within(dialog).getByRole('checkbox'));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
@@ -177,9 +170,7 @@ describe('ConfigPage', () => {
 
     renderConfig();
     await screen.findByText('providers.openai');
-    await userEvent.click(
-      screen.getAllByRole('button', { name: 'Edit' })[0]
-    );
+    await userEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]);
 
     const dialog = await screen.findByRole('dialog');
     // Leave the value textarea empty (write-only keep-current sentinel).
@@ -189,7 +180,8 @@ describe('ConfigPage', () => {
       expect(screen.getByText('providers.openai')).toBeInTheDocument();
     });
     const putCalls = mockFetch.mock.calls.filter(
-      call => call[0] === '/api/config/providers.openai' &&
+      call =>
+        call[0] === '/api/config/providers.openai' &&
         (call[1] as RequestInit | undefined)?.method === 'PUT'
     );
     expect(putCalls.length).toBe(1);
@@ -208,12 +200,12 @@ describe('ConfigPage', () => {
 
     renderConfig();
     await screen.findByText('providers.openai');
-    await userEvent.click(
-      screen.getAllByRole('button', { name: 'Delete' })[0]
-    );
+    await userEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
 
     const dialog = await screen.findByRole('dialog');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Delete' })
+    );
 
     await waitFor(() => {
       expect(screen.queryByText('providers.openai')).toBeNull();
@@ -237,12 +229,12 @@ describe('ConfigPage', () => {
 
     renderConfig();
     await screen.findByText('providers.openai');
-    await userEvent.click(
-      screen.getAllByRole('button', { name: 'Delete' })[0]
-    );
+    await userEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
 
     const dialog = await screen.findByRole('dialog');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Delete' })
+    );
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Config key is in use');

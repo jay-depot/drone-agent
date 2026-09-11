@@ -65,7 +65,9 @@ export function getBeaconConfig(
   return row ? rowToEntry(row) : undefined;
 }
 
-export function listBeaconConfig(scope?: 'local' | 'swarm'): BeaconConfigEntry[] {
+export function listBeaconConfig(
+  scope?: 'local' | 'swarm'
+): BeaconConfigEntry[] {
   if (scope) {
     const stmt = getDatabase().prepare(
       'SELECT * FROM beacon_config WHERE scope = ? ORDER BY key'
@@ -116,7 +118,12 @@ export function replaceSwarmConfig(entries: CoordinatorConfigEntry[]): void {
   `);
   const now = Date.now();
   for (const entry of entries) {
-    insert.run(entry.key, entry.value, entry.updatedAt || now, entry.updatedAt || now);
+    insert.run(
+      entry.key,
+      entry.value,
+      entry.updatedAt || now,
+      entry.updatedAt || now
+    );
   }
   logger.info(`Replaced swarm config with ${entries.length} entries`);
 }

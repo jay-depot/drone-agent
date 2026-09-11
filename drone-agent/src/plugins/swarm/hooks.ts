@@ -312,9 +312,7 @@ export function registerHooks(
         `Applied swarm config underlay at session start (active: ${rebuilt.llm?.active ?? rebuilt.llm?.provider}, providers: ${providerCount})`
       );
     } catch (err) {
-      registration.logger.warn(
-        `Failed to apply swarm config underlay: ${err}`
-      );
+      registration.logger.warn(`Failed to apply swarm config underlay: ${err}`);
     }
   });
 

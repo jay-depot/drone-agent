@@ -305,9 +305,7 @@ export function initDatabase(dataPath: string): Database.Database {
       DROP TABLE beacon_config;
       ALTER TABLE beacon_config_new RENAME TO beacon_config;
     `);
-    logger.info(
-      'Migrated beacon_config to composite PRIMARY KEY (scope, key)'
-    );
+    logger.info('Migrated beacon_config to composite PRIMARY KEY (scope, key)');
   }
 
   logger.info('Beacon database initialized successfully');

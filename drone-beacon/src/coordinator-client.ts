@@ -12,12 +12,7 @@ import {
   getObservedCoordinatorFingerprint,
   setBeaconVerificationCode,
 } from './coordinator-trust.js';
-import type {
-  Persona,
-  Skill,
-  CoordinatorConfig,
-  Knowledge,
-} from './types.js';
+import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
 import type { CoordinatorConfigEntry } from 'drone-core';
 import type { DroneSwarmFragment } from 'drone-core';
@@ -563,9 +558,7 @@ export function createCoordinatorClient(
       }
       const res = await cfetch(`${baseUrl}/api/config`);
       if (!res.ok) {
-        throw new Error(
-          `Failed to fetch coordinator config: ${res.status}`
-        );
+        throw new Error(`Failed to fetch coordinator config: ${res.status}`);
       }
       const data = (await res.json()) as unknown;
       const entries = data as CoordinatorConfigEntry[];

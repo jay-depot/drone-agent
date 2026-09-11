@@ -62,9 +62,8 @@ export default function ConfigPage() {
 
   // Delete dialog state.
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<CoordinatorConfigEntry | null>(
-    null
-  );
+  const [deleteTarget, setDeleteTarget] =
+    useState<CoordinatorConfigEntry | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
@@ -122,11 +121,14 @@ export default function ConfigPage() {
         body.value = value;
       }
 
-      const res = await authFetch(`/api/config/${encodeURIComponent(editKey)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      const res = await authFetch(
+        `/api/config/${encodeURIComponent(editKey)}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }
+      );
       if (!res.ok) {
         showError(await extractApiError(res));
         return;
