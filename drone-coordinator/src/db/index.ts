@@ -104,3 +104,13 @@ export {
   deleteFragment,
 } from './fragments.js';
 export type { CoordinatorFragmentRow } from './fragments.js';
+export {
+  listCoordinatorConfig,
+  getCoordinatorConfig,
+  upsertCoordinatorConfig,
+  deleteCoordinatorConfig,
+} from './config.js';
+export type {
+  CoordinatorConfigEntry,
+  UpsertCoordinatorConfigRequest,
+} from './config.js';

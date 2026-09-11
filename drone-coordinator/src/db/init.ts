@@ -155,6 +155,15 @@ export function initDatabase(dataPath: string): Database.Database {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS coordinator_config (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,            -- JSON string
+      secret INTEGER NOT NULL DEFAULT 0,
+      description TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS tool_definitions (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,

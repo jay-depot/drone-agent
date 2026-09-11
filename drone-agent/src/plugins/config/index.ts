@@ -6,6 +6,7 @@ import { ConfigSetBlock } from '../../tui/components/ConfigSetBlock.js';
 import {
   applyAgentConfigLayer,
   createDefaultAgentConfig,
+  KNOWN_CONFIG_KEYS,
   type DroneAgentConfig,
   type DroneConfigInjector,
   type DroneConfigLayer,
@@ -83,82 +84,6 @@ function unregisterInjector(injectorId: string): void {
 function getInjectors(): import('drone-core').DroneConfigInjector[] {
   return [...configInjectors];
 }
-
-// ---------------------------------------------------------------------------
-// Known config key paths (for validation in config.set)
-// ---------------------------------------------------------------------------
-
-const KNOWN_CONFIG_KEYS: string[] = [
-  // Top-level
-  'enabledPlugins',
-  'externalPlugins',
-  'trustedPlugins',
-  'systemPrompt',
-  'activePersona',
-  'ollama',
-  'session',
-  'lsp',
-  'mcp',
-  'compaction',
-  'memory',
-  'log',
-  'promptFile',
-  'search',
-  // ollama.*
-  'ollama.host',
-  'ollama.model',
-  // session.*
-  'session.contextWindowTokens',
-  'session.responseReserveTokens',
-  'session.maxToolIterations',
-  'session.promptOnToolIterationLimit',
-  'session.maxToolResultTokensPercent',
-  'session.retry.maxRetries',
-  'session.retry.maxWaitMs',
-  'session.retry.promptOnError',
-  'session.retry.backoffBaseMs',
-  'session.retry.backoffFactor',
-  // llm.*
-  'llm.active',
-  'llm.reasoningLevel',
-  // lsp.*
-  // lsp.*
-  'lsp.enabled',
-  'lsp.diagnosticTokenBudget',
-  'lsp.requestTimeoutMs',
-  'lsp.preferExternal',
-  'lsp.autoInstall',
-  // mcp.*
-  'mcp.enabled',
-  'mcp.requestTimeoutMs',
-  'mcp.retryCount',
-  'mcp.retryDelayMs',
-  'mcp.maxListPages',
-  'mcp.maxListItems',
-  'mcp.compatibilityMode',
-  // compaction.*
-  'compaction.enabled',
-  'compaction.strategy',
-  'compaction.softThresholdPercent',
-  'compaction.slicePercent',
-  'compaction.minTurnsToCompact',
-  'compaction.summaryMaxTokens',
-  'compaction.summaryBudgetPercent',
-  // memory.*
-  'memory.enabled',
-  // log.*
-  'log.enabled',
-  // promptFile.*
-  'promptFile.enabled',
-  'promptFile.files',
-  // search.*
-  'search.enabled',
-  'search.paths',
-  'search.userEmbeddingProvider',
-  'search.projectEmbeddingProvider',
-  // wakelock.enabled
-  'wakelock.enabled',
-];
 
 // ---------------------------------------------------------------------------
 // Helpers
