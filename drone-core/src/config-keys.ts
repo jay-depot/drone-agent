@@ -116,3 +116,16 @@ export function isUnderlayAllowed(key: string): boolean {
     return key === pattern;
   });
 }
+
+/**
+ * Wire shape of a config entry as distributed by the coordinator's /api/config
+ * and consumed by the beacon's pull + the coordinator UI. `value` is always a
+ * JSON string; secret entries are masked on read and never returned in full.
+ */
+export interface CoordinatorConfigEntry {
+  key: string;
+  value: string; // JSON string
+  secret: boolean;
+  description?: string | null;
+  updatedAt: number;
+}

@@ -101,6 +101,7 @@ export {
 // ── Config key allowlists ─────────────────────────────────────────────
 
 export {
+  CoordinatorConfigEntry,
   KNOWN_CONFIG_KEYS,
   UNDERLAY_ALLOWLIST,
   isUnderlayAllowed,
