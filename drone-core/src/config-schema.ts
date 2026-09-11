@@ -96,6 +96,7 @@ export const DroneProviderSchema = Type.Object({
   headers: Type.Optional(Type.Record(Type.String(), Type.String())),
   parameters: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
   extra: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+  sendUsageInclude: Type.Optional(Type.Boolean()),
   autoImport: Type.Optional(
     Type.Union([
       Type.Literal('off'),

@@ -608,3 +608,66 @@ describe('ollama DroneLlmError conversion', () => {
     expect(err.retryable).toBe(true);
   });
 });
+
+describe('ollama usage mapping', () => {
+  afterEach(() => {
+    vi.doUnmock('ollama');
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('maps prompt_eval_count/eval_count onto the response', async () => {
+    const { provider, client } = await buildProviderWithClient({
+      show: vi.fn(async () => LOCAL_SHOW),
+      ps: vi.fn(async () => ({ models: [] })),
+      chat: vi.fn(async () => ({
+        model: 'llama3.1',
+        created_at: new Date(),
+        message: { role: 'assistant', content: 'ok' },
+        done: true,
+        done_reason: 'stop',
+        total_duration: 1,
+        load_duration: 0,
+        prompt_eval_count: 50,
+        prompt_eval_duration: 2,
+        eval_count: 8,
+        eval_duration: 3,
+      })),
+      list: vi.fn(async () => ({ models: [] })),
+    });
+
+    const response = await provider.chat({
+      model: 'llama3.1',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+
+    expect(response.usage).toEqual({
+      promptTokens: 50,
+      completionTokens: 8,
+      totalTokens: 58,
+    });
+    expect(client.chat).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits usage when the SDK response lacks eval counts', async () => {
+    const { provider } = await buildProviderWithClient({
+      show: vi.fn(async () => LOCAL_SHOW),
+      ps: vi.fn(async () => ({ models: [] })),
+      chat: vi.fn(async () => ({
+        model: 'llama3.1',
+        created_at: new Date(),
+        message: { role: 'assistant', content: 'ok' },
+        done: true,
+        done_reason: 'stop',
+      })),
+      list: vi.fn(async () => ({ models: [] })),
+    });
+
+    const response = await provider.chat({
+      model: 'llama3.1',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+
+    expect(response.usage).toBeUndefined();
+  });
+});

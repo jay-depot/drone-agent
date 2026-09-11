@@ -66,6 +66,7 @@ function createRegistrationCapture() {
       return [];
     },
     describeImages: async images => images,
+    getUsageLedger: () => [],
   };
 
   const registration: DronePluginRegistration = {
@@ -469,5 +470,89 @@ describe('openai plugin', () => {
     expect(err.status).toBe(429);
     expect(err.retryAfterMs).toBe(2000);
     expect(err.retryable).toBe(true);
+  });
+});
+
+describe('openai usage mapping', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('maps provider-reported usage incl. cost and details onto the response', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.openai.apiKey = 'test-key';
+    capture.config.openai.baseUrl = 'https://api.openai.com/v1';
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          id: 'resp_usage',
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: { role: 'assistant', content: 'hello there' },
+            },
+          ],
+          usage: {
+            prompt_tokens: 100,
+            completion_tokens: 20,
+            total_tokens: 120,
+            cost: 0.0042,
+            prompt_tokens_details: { cached_tokens: 60 },
+            completion_tokens_details: { reasoning_tokens: 5 },
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await openaiPlugin.register(capture.registration);
+    const provider = capture.getProviderViaDriver();
+    const response = await provider.chat({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'hello' }],
+    });
+
+    expect(response.usage).toEqual({
+      promptTokens: 100,
+      completionTokens: 20,
+      totalTokens: 120,
+      cost: 0.0042,
+      cachedPromptTokens: 60,
+      reasoningTokens: 5,
+    });
+  });
+
+  it('omits usage when the response carries none', async () => {
+    const capture = createRegistrationCapture();
+    capture.config.openai.apiKey = 'test-key';
+    capture.config.openai.baseUrl = 'https://api.openai.com/v1';
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          id: 'resp_no_usage',
+          choices: [
+            {
+              finish_reason: 'stop',
+              message: { role: 'assistant', content: 'hello there' },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await openaiPlugin.register(capture.registration);
+    const provider = capture.getProviderViaDriver();
+    const response = await provider.chat({
+      model: 'gpt-4o',
+      messages: [{ role: 'user', content: 'hello' }],
+    });
+
+    expect(response.usage).toBeUndefined();
   });
 });

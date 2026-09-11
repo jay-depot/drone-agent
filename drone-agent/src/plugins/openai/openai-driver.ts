@@ -147,6 +147,8 @@ export function createOpenAiProvider(
     reasoningInBody?: boolean;
     /** OpenRouter's require_parameters retry on tool-routing 404s. */
     toolRoutingRetry?: boolean;
+    /** Send `usage: { include: true }` (OpenRouter usage accounting). */
+    sendUsageInclude?: boolean;
   } = {}
 ) {
   const baseUrl = config.baseUrl ?? '';
@@ -176,6 +178,10 @@ export function createOpenAiProvider(
 
     if (providerHints) {
       body.provider = providerHints;
+    }
+
+    if (options.sendUsageInclude) {
+      body.usage = { include: true };
     }
 
     return body as OpenAiChatRequest;

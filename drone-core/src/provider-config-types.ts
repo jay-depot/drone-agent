@@ -52,6 +52,13 @@ export type DroneProviderConfig = {
   parameters?: Record<string, unknown>;
   /** Raw passthrough bag merged silently into native request payloads. */
   extra?: Record<string, unknown>;
+  /**
+   * OpenRouter usage-accounting opt-in: send `usage: { include: true }` on
+   * chat request bodies. Default false — OpenRouter already returns usage
+   * and cost without it, and vanilla OpenAI-compatible endpoints may reject
+   * unknown body keys.
+   */
+  sendUsageInclude?: boolean;
   /** Whether discovered models are persisted as `{}` stubs. Default 'onSelect'. */
   autoImport?: DroneAutoImportMode;
   /** Declared models keyed by local reference id. */

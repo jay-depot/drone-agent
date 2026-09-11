@@ -4,6 +4,7 @@ import type {
   DroneToolCall,
   DroneToolDescriptor,
 } from 'drone-core';
+import { toDroneLlmUsage } from 'drone-core';
 export type OpenAiContentPart =
   | { type: 'text'; text: string }
   | {
@@ -55,6 +56,9 @@ export type OpenAiUsage = {
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
+  cost?: number;
+  prompt_tokens_details?: { cached_tokens?: number };
+  completion_tokens_details?: { reasoning_tokens?: number };
 };
 
 export type OpenAiChatResponse = {
@@ -164,6 +168,18 @@ export function fromOpenAiResponse(
         arguments: parsedArgs,
       } satisfies DroneToolCall;
     });
+  }
+
+  const usage = toDroneLlmUsage({
+    prompt: openAi.usage?.prompt_tokens,
+    completion: openAi.usage?.completion_tokens,
+    total: openAi.usage?.total_tokens,
+    cost: openAi.usage?.cost,
+    cached: openAi.usage?.prompt_tokens_details?.cached_tokens,
+    reasoning: openAi.usage?.completion_tokens_details?.reasoning_tokens,
+  });
+  if (usage) {
+    result.usage = usage;
   }
 
   return result;
