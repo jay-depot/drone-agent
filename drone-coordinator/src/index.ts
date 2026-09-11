@@ -16,6 +16,7 @@ import {
   initDatabase,
   closeDatabase,
   approveBeaconById,
+  getBeaconTrust,
   listBeaconTrust,
   listBeacons,
   listAllAgentLocations,
@@ -214,6 +215,20 @@ async function handleApproveBeacon(config: Config) {
 
   const trust = approveBeaconById(config.beaconId);
   if (!trust) {
+    const existing = getBeaconTrust(config.beaconId);
+    if (!existing) {
+      console.error('Error: Beacon trust not found');
+      closeDatabase();
+      process.exit(1);
+    }
+    if (existing.fingerprintConfirmedAt === null) {
+      console.error(
+        'Error: Beacon has not confirmed the coordinator fingerprint yet. ' +
+          'Run /trust-coordinator <code> on the beacon first.'
+      );
+      closeDatabase();
+      process.exit(1);
+    }
     console.error('Error: Beacon trust not found or already approved');
     closeDatabase();
     process.exit(1);

@@ -2,6 +2,13 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { setupDb, teardownDb } from './setup.js';
 import { buildTestApp } from './app-helper.js';
 import type { FastifyInstance } from 'fastify';
+import { setCoordinatorClient } from '../src/routes/context.js';
+import {
+  setPendingCoordinatorFingerprint,
+  setBeaconVerificationCode,
+  resetCoordinatorTrust,
+} from '../src/coordinator-trust.js';
+import type { CoordinatorClient } from '../src/coordinator-client.js';
 import * as db from '../src/db/index.js';
 import { getDatabase } from '../src/db/index.js';
 import { SearchIndexer } from '../src/search-indexer.js';
@@ -23,12 +30,24 @@ vi.mock('../src/ws-server.js', () => ({
 
 let app: FastifyInstance;
 
+function makeFakeClient(
+  overrides: Partial<CoordinatorClient> = {}
+): CoordinatorClient {
+  return {
+    getBaseUrl: () => 'http://coordinator:3456',
+    getFetch: () => fetch as typeof fetch,
+    ...overrides,
+  } as unknown as CoordinatorClient;
+}
+
 beforeEach(async () => {
   await setupDb();
   app = await buildTestApp();
 });
 
 afterEach(async () => {
+  setCoordinatorClient(undefined);
+  resetCoordinatorTrust();
   await app.close();
   await teardownDb();
 });
@@ -344,6 +363,29 @@ describe('Coordinator Trust Routes', () => {
       payload: {},
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('POST /coordinator/trust with a matching code fires confirmFingerprint on the coordinator client', async () => {
+    const confirmFingerprint = vi.fn().mockResolvedValue(undefined);
+    setCoordinatorClient(
+      makeFakeClient({
+        confirmFingerprint,
+      } as unknown as CoordinatorClient)
+    );
+    setPendingCoordinatorFingerprint(
+      'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899'
+    );
+    setBeaconVerificationCode('acorn-badge-cabin-daisy');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/coordinator/trust',
+      payload: { verificationCode: 'acorn-badge-cabin-daisy' },
+    });
+    expect(res.statusCode).toBe(200);
+    // The beacon announces its fingerprint confirmation to the coordinator so
+    // the approve gate unlocks (fire-and-forget).
+    expect(confirmFingerprint).toHaveBeenCalledTimes(1);
   });
 });
 

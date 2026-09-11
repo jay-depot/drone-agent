@@ -11,6 +11,7 @@ export interface Beacon {
   trustStatus?: 'pending' | 'approved' | 'rejected' | null;
   publicKey?: string | null;
   verificationCode?: string | null;
+  fingerprintConfirmed?: boolean | null;
   spawnRoots?: string[];
   defaultSpawnRoot?: string;
 }
@@ -19,6 +20,7 @@ export interface BeaconDetail extends Beacon {
   beaconId?: string;
   tlsFingerprint?: string | null;
   verificationCode?: string | null;
+  fingerprintConfirmed?: boolean | null;
 }
 
 export interface AgentLocation {

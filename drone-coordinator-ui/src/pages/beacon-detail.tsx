@@ -167,6 +167,15 @@ export default function BeaconDetailPage() {
         />
       </div>
 
+      {/* Trust warning: the human's job here is to recognize the beacon
+          (id/name/host), not just match codes — a rogue beacon that registers
+          directly with the real coordinator produces matching codes. */}
+      <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900">
+        Do not approve beacons you did not start or do not expect. Verify the
+        beacon's identity (name/id/host) and that the verification code matches
+        the one shown on the beacon's side before approving.
+      </div>
+
       {/* Beacon Info */}
       <Card className="mb-6">
         <CardHeader>
@@ -219,6 +228,35 @@ export default function BeaconDetailPage() {
                 {new Date(beacon.lastHeartbeat).toLocaleString()}
               </p>
             </div>
+            {beacon.trustStatus === 'pending' && (
+              <div className="col-span-2">
+                <span className="text-muted-foreground">
+                  Coordinator Fingerprint
+                </span>
+                <p className="mt-0.5">
+                  {beacon.fingerprintConfirmed === true ? (
+                    <Badge variant="default" className="text-xs">
+                      confirmed
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-xs">
+                      awaiting confirmation
+                    </Badge>
+                  )}
+                </p>
+                {beacon.fingerprintConfirmed !== true && (
+                  <ol className="text-xs text-muted-foreground mt-1 list-decimal">
+                    <li>
+                      On the beacon's agent run{' '}
+                      <code className="bg-muted px-1 rounded">
+                        /trust-coordinator {beacon.verificationCode}
+                      </code>
+                    </li>
+                    <li>Return here — Approve is now enabled.</li>
+                  </ol>
+                )}
+              </div>
+            )}
             {beacon.verificationCode && (
               <div className="col-span-2">
                 <span className="text-muted-foreground">Verification Code</span>

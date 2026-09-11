@@ -20,6 +20,7 @@ import {
   getBeaconTrust,
   listBeaconTrust,
   approveBeaconById,
+  confirmBeaconFingerprint,
   rejectBeacon,
   deleteBeaconTrust,
   createBeaconSession,
@@ -352,7 +353,43 @@ describe('Beacon Trust', () => {
     await teardownDb();
   });
 
-  it('should auto-approve localhost beacons', () => {
+  it('should auto-approve beacons from a loopback socket', () => {
+    const trust = registerBeaconTrust(
+      {
+        id: 'b1',
+        name: 'B1',
+        host: 'localhost',
+        port: 3457,
+        publicKey: 'key1',
+      },
+      {
+        socketIsLocal: true,
+      }
+    );
+    expect(trust.status).toBe('approved');
+    expect(trust.verificationCode).toBeTruthy();
+    expect(trust.approvedAt).not.toBeNull();
+  });
+
+  it('should auto-approve 127.0.0.1 beacons from a loopback socket', () => {
+    const trust = registerBeaconTrust(
+      {
+        id: 'b1',
+        name: 'B1',
+        host: '127.0.0.1',
+        port: 3457,
+        publicKey: 'key1',
+      },
+      {
+        socketIsLocal: true,
+      }
+    );
+    expect(trust.status).toBe('approved');
+  });
+
+  it('should NOT auto-approve a body-claimed localhost from a non-loopback socket', () => {
+    // Regression for the spoof: host is a body claim; locality must come from
+    // the socket. A remote attacker POSTing host:"localhost" stays pending.
     const trust = registerBeaconTrust({
       id: 'b1',
       name: 'B1',
@@ -360,20 +397,76 @@ describe('Beacon Trust', () => {
       port: 3457,
       publicKey: 'key1',
     });
-    expect(trust.status).toBe('approved');
-    expect(trust.verificationCode).toBeTruthy();
-    expect(trust.approvedAt).not.toBeNull();
+    expect(trust.status).toBe('pending');
+    expect(trust.approvedAt).toBeNull();
   });
 
-  it('should auto-approve 127.0.0.1 beacons', () => {
+  it('should mark a loopback beacon fingerprint confirmed at registration', () => {
+    const trust = registerBeaconTrust(
+      {
+        id: 'b1',
+        name: 'B1',
+        host: 'localhost',
+        port: 3457,
+        publicKey: 'key1',
+      },
+      {
+        socketIsLocal: true,
+      }
+    );
+    expect(trust.fingerprintConfirmedAt).not.toBeNull();
+  });
+
+  it('should persist fingerprintConfirmed when the beacon announces it', () => {
     const trust = registerBeaconTrust({
       id: 'b1',
       name: 'B1',
-      host: '127.0.0.1',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'key1',
+      fingerprintConfirmed: true,
+    });
+    expect(trust.fingerprintConfirmedAt).not.toBeNull();
+  });
+
+  it('should re-register with fingerprintConfirmed and set the column when previously null', () => {
+    registerBeaconTrust({
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.1',
       port: 3457,
       publicKey: 'key1',
     });
-    expect(trust.status).toBe('approved');
+    const updated = registerBeaconTrust({
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.2',
+      port: 3458,
+      publicKey: 'key1',
+      fingerprintConfirmed: true,
+    });
+    expect(updated.fingerprintConfirmedAt).not.toBeNull();
+    expect(getBeaconTrust('b1')!.fingerprintConfirmedAt).not.toBeNull();
+  });
+
+  it('should NOT re-register with fingerprintConfirmed once already set and not re-announced', () => {
+    registerBeaconTrust({
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'key1',
+      fingerprintConfirmed: true,
+    });
+    const updated = registerBeaconTrust({
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.2',
+      port: 3458,
+      publicKey: 'key1',
+    });
+    // Already-set timestamp is preserved.
+    expect(updated.fingerprintConfirmedAt).not.toBeNull();
   });
 
   it('should create pending trust with verification code for remote beacons', () => {
@@ -389,13 +482,18 @@ describe('Beacon Trust', () => {
   });
 
   it('should re-register with matching public key and update connection info', () => {
-    registerBeaconTrust({
-      id: 'b1',
-      name: 'B1',
-      host: 'localhost',
-      port: 3457,
-      publicKey: 'key1',
-    });
+    registerBeaconTrust(
+      {
+        id: 'b1',
+        name: 'B1',
+        host: 'localhost',
+        port: 3457,
+        publicKey: 'key1',
+      },
+      {
+        socketIsLocal: true,
+      }
+    );
     const updated = registerBeaconTrust({
       id: 'b1',
       name: 'B1',
@@ -475,14 +573,73 @@ describe('Beacon Trust', () => {
       host: '10.0.0.1',
       port: 3457,
       publicKey: 'key1',
+      fingerprintConfirmed: true,
     });
     const approved = approveBeaconById(trust.beaconId);
     expect(approved).not.toBeNull();
     expect(approved!.status).toBe('approved');
   });
 
-  it('should return null for a beacon that is not pending', () => {
+  it('should return null when approving a non-existent beacon', () => {
     expect(approveBeaconById('nonexistent')).toBeNull();
+  });
+
+  it('should REFUSE to approve a pending beacon that has not confirmed the fingerprint', () => {
+    registerBeaconTrust({
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'key1',
+    });
+    expect(approveBeaconById('b1')).toBeNull();
+    expect(getBeaconTrust('b1')!.status).toBe('pending');
+  });
+
+  it('should approve a pending beacon once the fingerprint is confirmed', () => {
+    registerBeaconTrust({
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'key1',
+      fingerprintConfirmed: true,
+    });
+    const approved = approveBeaconById('b1');
+    expect(approved).not.toBeNull();
+    expect(approved!.status).toBe('approved');
+  });
+
+  it('should approve a loopback beacon without an explicit announce (locked Q4)', () => {
+    registerBeaconTrust(
+      {
+        id: 'b1',
+        name: 'B1',
+        host: 'localhost',
+        port: 3457,
+        publicKey: 'key1',
+      },
+      {
+        socketIsLocal: true,
+      }
+    );
+    // Already auto-approved; re-approving is a no-op returning null.
+    expect(approveBeaconById('b1')).toBeNull();
+    expect(getBeaconTrust('b1')!.status).toBe('approved');
+  });
+
+  it('should confirm a fingerprint via confirmBeaconFingerprint', () => {
+    registerBeaconTrust({
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'key1',
+    });
+    const confirmed = confirmBeaconFingerprint('b1');
+    expect(confirmed).not.toBeNull();
+    expect(confirmed!.fingerprintConfirmedAt).not.toBeNull();
+    expect(getBeaconTrust('b1')!.fingerprintConfirmedAt).not.toBeNull();
   });
 
   it('should reject a beacon', () => {

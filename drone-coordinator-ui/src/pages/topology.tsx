@@ -243,6 +243,15 @@ export default function TopologyPage() {
 
       <ErrorBanner message={error} />
 
+      {/* Trust warning: the human's job in the approve UI is to recognize the
+          beacon (id/name/host), not just match codes — a rogue beacon that
+          registers directly with the real coordinator produces matching codes. */}
+      <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900">
+        Do not approve beacons you did not start or do not expect. Verify the
+        beacon's identity (name/id/host) and that the verification code matches
+        the one shown on the beacon's side before approving.
+      </div>
+
       {beacons.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <p className="text-lg">No beacons registered</p>
@@ -255,6 +264,9 @@ export default function TopologyPage() {
           {beacons.map(beacon => {
             const status = getBeaconStatus(beacon);
             const agentCount = getAgentCountForBeacon(beacon.id);
+            const pendingUnconfirmed =
+              beacon.trustStatus === 'pending' &&
+              beacon.fingerprintConfirmed !== true;
             return (
               <Card
                 key={beacon.id}
@@ -303,6 +315,18 @@ export default function TopologyPage() {
                       </span>
                       <span className="font-medium">{agentCount}</span>
                     </div>
+                    {beacon.trustStatus === 'pending' && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          Fingerprint
+                        </span>
+                        <span>
+                          {beacon.fingerprintConfirmed === true
+                            ? 'confirmed'
+                            : 'awaiting confirmation'}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">
                         Last Heartbeat
@@ -323,10 +347,21 @@ export default function TopologyPage() {
                         <Button
                           variant="default"
                           size="sm"
+                          disabled={pendingUnconfirmed}
+                          title={
+                            pendingUnconfirmed
+                              ? 'The beacon must first run /trust-coordinator with the verification code from this page'
+                              : undefined
+                          }
                           onClick={() => openDialog('approve', beacon)}
                         >
                           Approve
                         </Button>
+                        {pendingUnconfirmed && (
+                          <span className="text-xs text-muted-foreground">
+                            waits for /trust-coordinator
+                          </span>
+                        )}
                         <Button
                           variant="destructive"
                           size="sm"

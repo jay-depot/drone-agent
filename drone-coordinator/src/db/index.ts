@@ -32,6 +32,7 @@ export {
   getBeaconTrust,
   listBeaconTrust,
   approveBeaconById,
+  confirmBeaconFingerprint,
   rejectBeacon,
   deleteBeaconTrust,
 } from './beacon-trust.js';

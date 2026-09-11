@@ -199,6 +199,11 @@ export function initDatabase(dataPath: string): Database.Database {
   if (!beaconTrustCols.some(c => c.name === 'verification_code')) {
     db.exec('ALTER TABLE beacon_trust ADD COLUMN verification_code TEXT');
   }
+  if (!beaconTrustCols.some(c => c.name === 'fingerprint_confirmed_at')) {
+    db.exec(
+      'ALTER TABLE beacon_trust ADD COLUMN fingerprint_confirmed_at INTEGER'
+    );
+  }
   if (beaconTrustCols.some(c => c.name === 'approval_token')) {
     db.exec('ALTER TABLE beacon_trust DROP COLUMN approval_token');
   }

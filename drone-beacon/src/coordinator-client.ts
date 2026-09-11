@@ -1,10 +1,14 @@
 import https from 'https';
 import http from 'http';
 import type { PeerCertificate, TLSSocket } from 'tls';
-import { generateVerificationCode } from 'drone-swarm-common';
+import {
+  generateVerificationCode,
+  signBeaconPayload,
+} from 'drone-swarm-common';
 import { logger } from './logger.js';
 import {
   isSwarmReady,
+  isCoordinatorTrusted,
   getObservedCoordinatorFingerprint,
   setBeaconVerificationCode,
 } from './coordinator-trust.js';
@@ -73,6 +77,7 @@ export interface CoordinatorClient {
     status: 'pending' | 'approved' | 'rejected';
     verificationCode?: string;
   }>;
+  confirmFingerprint(): Promise<void>;
   pollForApproval(): Promise<BeaconStatusResponse>;
   heartbeat(): Promise<void>;
   fetchPersonas(): Promise<Persona[]>;
@@ -402,6 +407,7 @@ export function createCoordinatorClient(
           port: config.port,
           publicKey: identity.publicKey,
           tlsFingerprint,
+          fingerprintConfirmed: isCoordinatorTrusted(),
           spawnRoots: getSpawnRoots(),
           defaultSpawnRoot: getDefaultSpawnRoot(),
         }),
@@ -432,6 +438,36 @@ export function createCoordinatorClient(
         status: data.status,
         verificationCode,
       };
+    },
+
+    async confirmFingerprint(): Promise<void> {
+      const timestamp = Date.now();
+      const payload = `${config.beaconId}:${timestamp}`;
+      const signature = signBeaconPayload(
+        options.identity.privateKeyPem,
+        payload
+      );
+      try {
+        const res = await cfetch(
+          `${baseUrl}/api/beacons/trust/${config.beaconId}/confirm-fingerprint`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              beaconId: config.beaconId,
+              timestamp,
+              signature,
+            }),
+          }
+        );
+        if (!res.ok) {
+          logger.warn(
+            `Failed to announce fingerprint confirmation: ${res.status} ${await res.text()}`
+          );
+        }
+      } catch (err) {
+        logger.warn(`Failed to announce fingerprint confirmation: ${err}`);
+      }
     },
 
     async pollForApproval(): Promise<BeaconStatusResponse> {

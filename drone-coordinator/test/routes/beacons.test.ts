@@ -124,6 +124,7 @@ describe('Beacon Routes', () => {
     await app.inject({
       method: 'POST',
       url: '/api/beacons',
+      remoteAddress: '10.0.0.1',
       payload: {
         id: 'b2',
         name: 'B2',
@@ -403,16 +404,18 @@ describe('Beacon Routes', () => {
 
   // ── Approval Routes ──
 
-  it('POST /beacons/trust/:id/approve approves a pending beacon by ID', async () => {
+  it('POST /beacons/trust/:id/approve approves a beacon once its fingerprint is confirmed', async () => {
     const createRes = await app.inject({
       method: 'POST',
       url: '/api/beacons/trust',
+      remoteAddress: '10.0.0.1',
       payload: {
         id: 'b1',
         name: 'B1',
         host: '10.0.0.1',
         port: 3457,
         publicKey: 'key1',
+        fingerprintConfirmed: true,
       },
     });
     const created = JSON.parse(createRes.body);
