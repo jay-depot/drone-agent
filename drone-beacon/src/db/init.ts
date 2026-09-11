@@ -291,23 +291,20 @@ export function initDatabase(dataPath: string): Database.Database {
   const hasCompositePk =
     beaconConfigPk && beaconConfigPk.sql.includes('PRIMARY KEY (scope, key)');
   if (!hasCompositePk) {
-    const database = getDatabase();
-    database.transaction(() => {
-      database.exec(`
-        CREATE TABLE beacon_config_new (
-          key TEXT NOT NULL,
-          value TEXT NOT NULL,  -- JSON string
-          scope TEXT NOT NULL DEFAULT 'local',  -- 'local' or 'swarm' (synced from coordinator)
-          createdAt INTEGER NOT NULL,
-          updatedAt INTEGER NOT NULL,
-          PRIMARY KEY (scope, key)
-        );
-        INSERT INTO beacon_config_new (key, value, scope, createdAt, updatedAt)
-          SELECT key, value, scope, createdAt, updatedAt FROM beacon_config;
-        DROP TABLE beacon_config;
-        ALTER TABLE beacon_config_new RENAME TO beacon_config;
-      `);
-    });
+    db.exec(`
+      CREATE TABLE beacon_config_new (
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,  -- JSON string
+        scope TEXT NOT NULL DEFAULT 'local',  -- 'local' or 'swarm' (synced from coordinator)
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL,
+        PRIMARY KEY (scope, key)
+      );
+      INSERT INTO beacon_config_new (key, value, scope, createdAt, updatedAt)
+        SELECT key, value, scope, createdAt, updatedAt FROM beacon_config;
+      DROP TABLE beacon_config;
+      ALTER TABLE beacon_config_new RENAME TO beacon_config;
+    `);
     logger.info(
       'Migrated beacon_config to composite PRIMARY KEY (scope, key)'
     );

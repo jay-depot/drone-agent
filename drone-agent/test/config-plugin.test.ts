@@ -493,5 +493,49 @@ describe('config plugin', () => {
       );
       expect(written.ollama.model).toBe('capability-model');
     });
+
+    it('rebuild runs injectors in precedence order and mutates the shared engine config', async () => {
+      const { projectDir } = await setupDirs();
+      process.chdir(projectDir);
+
+      const engine = createDronePluginEngine({
+        plugins: [configPlugin],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+
+      await engine.initialize();
+
+      const cap = engine.getCapability<DroneConfigCapability>('config')!;
+
+      // Register two injectors with overlapping keys. Lower precedence runs
+      // first (underlay); the higher-precedence injector's value must win
+      // for the same key ("most local wins").
+      cap.registerInjector({
+        id: 'underlay',
+        precedence: 50,
+        inject: async () => ({
+          llm: { active: 'underlay/model', provider: 'underlay' },
+        }),
+      });
+      cap.registerInjector({
+        id: 'local',
+        precedence: 100,
+        inject: async () => ({
+          llm: { active: 'local/model', provider: 'local' },
+        }),
+      });
+
+      const rebuilt = await cap.rebuild();
+      expect(rebuilt.llm.active).toBe('local/model');
+      expect(rebuilt.llm.provider).toBe('local');
+
+      // The engine's shared config (registration.getConfig()) must also be
+      // mutated in place so consumers like the llm broker / budget service
+      // observe the underlay without an engine refresh path.
+      const shared = engine.getConfig();
+      expect(shared.llm.active).toBe('local/model');
+      expect(shared.llm.provider).toBe('local');
+    });
   });
 });

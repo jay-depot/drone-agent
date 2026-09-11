@@ -57,12 +57,12 @@ export function createBeaconConfig(
 export function getBeaconConfig(
   key: string,
   scope: 'local' | 'swarm' = 'local'
-): BeaconConfigEntry | null {
+): BeaconConfigEntry | undefined {
   const stmt = getDatabase().prepare(
     'SELECT * FROM beacon_config WHERE key = ? AND scope = ?'
   );
   const row = stmt.get(key, scope) as BeaconConfigRow | undefined;
-  return row ? rowToEntry(row) : null;
+  return row ? rowToEntry(row) : undefined;
 }
 
 export function listBeaconConfig(scope?: 'local' | 'swarm'): BeaconConfigEntry[] {
@@ -109,17 +109,15 @@ export function listMergedConfig(): BeaconConfigEntry[] {
  */
 export function replaceSwarmConfig(entries: CoordinatorConfigEntry[]): void {
   const db = getDatabase();
-  db.transaction(() => {
-    db.prepare("DELETE FROM beacon_config WHERE scope = 'swarm'").run();
-    const insert = db.prepare(`
-      INSERT INTO beacon_config (key, value, scope, createdAt, updatedAt)
-      VALUES (?, ?, 'swarm', ?, ?)
-    `);
-    const now = Date.now();
-    for (const entry of entries) {
-      insert.run(entry.key, entry.value, entry.updatedAt || now, entry.updatedAt || now);
-    }
-  });
+  db.prepare("DELETE FROM beacon_config WHERE scope = 'swarm'").run();
+  const insert = db.prepare(`
+    INSERT INTO beacon_config (key, value, scope, createdAt, updatedAt)
+    VALUES (?, ?, 'swarm', ?, ?)
+  `);
+  const now = Date.now();
+  for (const entry of entries) {
+    insert.run(entry.key, entry.value, entry.updatedAt || now, entry.updatedAt || now);
+  }
   logger.info(`Replaced swarm config with ${entries.length} entries`);
 }
 
@@ -138,7 +136,7 @@ export function updateBeaconConfig(
   `);
   stmt.run(value, now, key, scope);
   logger.info(`Updated beacon config: ${key} (scope: ${scope})`);
-  return getBeaconConfig(key, scope);
+  return getBeaconConfig(key, scope) ?? null;
 }
 
 export function deleteBeaconConfig(
