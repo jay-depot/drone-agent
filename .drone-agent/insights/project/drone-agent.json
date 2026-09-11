@@ -466,5 +466,13 @@
   {
     "timestamp": "2026-09-10T18:27:59.908Z",
     "insight": "Wiki-ingest checkpoint race: meta.json's last_commit tracks a branch tip, but `main` advances independently while work happens on feature branches. The ADR 206 ingest (2026-09-10, checkpoint 9a3b915 on fix/swarm-wiki-delete) left PRs #97/#98/#99/#100 — which had merged to main in that window — permanently skipped: the next ingest diffed from 9a3b915 and never saw them. PR #99 (phase-aware footer rendering) went un-ingested for a full day and needed backfill coverage inside ADR 207. Fix for future ingests: before diffing from the checkpoint, also diff `main..origin/main` (or `git log <checkpoint>..main --oneline` restricted to main-ancestry) and backfill any main-side commits the checkpoint skipped; when a checkpoint and current branch diverge, enumerate BOTH tails (checkpoint→main and checkpoint→HEAD) before writing the log entry."
+  },
+  {
+    "timestamp": "2026-09-11T01:43:12.005Z",
+    "insight": "The beacon↔coordinator verification code proves CHANNEL INTEGRITY to whichever party computed it, not MACHINE OWNERSHIP. A rogue beacon that registers directly with the real coordinator produces matching codes (both compute sha256(pubkey||beaconTlsFp||coordTlsFp) from the real coordinator's inputs). So the human's job in the approve UI is to recognize the beacon (id/name/host), not just match codes — the \"don't approve unexpected beacons\" warning is load-bearing, not nice-to-have. This shaped Plan A's design: the announce-gated approve is a UI/UX gate, and a signed announce binds to beacon identity but is NOT proof-of-human."
+  },
+  {
+    "timestamp": "2026-09-11T01:43:12.007Z",
+    "insight": "Never derive security-locality decisions from unauthenticated request-body fields when the socket has the truth. registerBeaconTrust (drone-coordinator/src/db/beacon-trust.ts:108) auto-approves when `req.host === 'localhost' || '127.0.0.1'` — and req.host is the BODY-CLAIMED value, so a remote attacker can POST /api/beacons with host:\"localhost\" + their own self-signed cert/key and get auto-approved (bypassing every approve gate). The registration anti-spoof check (cert fingerprint vs claimed tlsFingerprint) does not stop this — the attacker claims their OWN cert. Fix pattern: derive locality from the socket peer address (req.ip, handling ::ffff: IPv4-mapped), keep the body host for display/connect-back only. General rule: trust-relevant inputs must come from the transport, not the message."
   }
 ]
