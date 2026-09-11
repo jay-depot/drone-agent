@@ -474,5 +474,13 @@
   {
     "timestamp": "2026-09-11T01:43:12.007Z",
     "insight": "Never derive security-locality decisions from unauthenticated request-body fields when the socket has the truth. registerBeaconTrust (drone-coordinator/src/db/beacon-trust.ts:108) auto-approves when `req.host === 'localhost' || '127.0.0.1'` — and req.host is the BODY-CLAIMED value, so a remote attacker can POST /api/beacons with host:\"localhost\" + their own self-signed cert/key and get auto-approved (bypassing every approve gate). The registration anti-spoof check (cert fingerprint vs claimed tlsFingerprint) does not stop this — the attacker claims their OWN cert. Fix pattern: derive locality from the socket peer address (req.ip, handling ::ffff: IPv4-mapped), keep the body host for display/connect-back only. General rule: trust-relevant inputs must come from the transport, not the message."
+  },
+  {
+    "timestamp": "2026-09-11T02:44:46.181Z",
+    "insight": "Node's crypto Ed25519 signing has a compile-vs-runtime API mismatch: the project's @types/node@24 types allow crypto.createSign('ed25519')/createVerify('ed25519') (streaming API), but the runtime here is Node 25.8.1 which THROWS \"Invalid digest\" for that call — it requires the one-shot crypto.sign(null, Buffer.from(data), key) / crypto.verify(null, Buffer.from(data), key, signature) with a null algorithm (derived from the key type). Typecheck and build both pass while the code crashes at test-runtime. Verify crypto primitives against the ACTUAL runtime (node --version + a quick REPL probe), not just the declared types, before shipping signature code."
+  },
+  {
+    "timestamp": "2026-09-11T02:44:46.183Z",
+    "insight": "When a plan hardens an HTTP trust check to use the socket peer address (e.g. A2 socket-derived locality for localhost auto-approve), every existing route test that uses Fastify's app.inject() silently breaks: light-my-request defaults inject() remoteAddress to '127.0.0.1' (loopback), so beacons registered in tests now auto-approve instead of landing 'pending'. The fix is to pass remoteAddress: '<non-loopback-ip>' in the inject() options of any test that must simulate a remote caller — grep for all inject() calls to trust-related routes when landing such a change, and rerun the full suite, not just the new tests."
   }
 ]
