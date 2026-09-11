@@ -104,6 +104,14 @@ export interface CreateSkillRequest {
   scope?: string;
 }
 
+export interface CoordinatorConfigEntry {
+  key: string;
+  value: string;
+  secret: boolean;
+  description?: string | null;
+  updatedAt: number;
+}
+
 export interface WikiPageMeta {
   id: string;
   title: string;
