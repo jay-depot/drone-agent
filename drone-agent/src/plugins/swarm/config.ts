@@ -16,7 +16,12 @@ export const DEFAULT_BEACON_HOST = 'localhost';
 export const DEFAULT_BEACON_PORT = 3457;
 
 /**
- * BeaconConfigInjector fetches config from the beacon and provides it as an underlay.
+ * BeaconConfigInjector fetches config from the beacon and provides it as an
+ * underlay. The beacon's GET /config returns the MERGED view — coordinator-
+ * pushed entries (scope='swarm', pulled from the coordinator's /api/config on
+ * the 5-minute sync) overlaid with beacon-local overrides, one row per key.
+ * No separate coordinator injector exists: the merged view rides this single
+ * beacon underlay (locked decision Q8).
  */
 export class BeaconConfigInjector {
   id = 'beacon';

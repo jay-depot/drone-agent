@@ -47,6 +47,16 @@ export type DroneConfigCapability = {
   unregisterInjector: (injectorId: string) => void;
   /** Get all registered injectors sorted by precedence. */
   getInjectors: () => DroneConfigInjector[];
+  /**
+   * Rebuild the engine's resolved config by running all registered
+   * injectors in precedence order (lowest first = underlay = most-local
+   * wins) and merging their output on top of the default config. The
+   * allowlisted sections (providers, llm, compaction, session) are applied
+   * in place onto the engine's shared config object so already-constructed
+   * consumers (llm broker, budget service) observe the underlay. Returns
+   * the fully merged config.
+   */
+  rebuild: () => Promise<DroneAgentConfig>;
 };
 
 // ---------------------------------------------------------------------------
@@ -462,6 +472,28 @@ export const configPlugin: DronePlugin = {
         unregisterInjector(injectorId);
       },
       getInjectors: () => getInjectors(),
+      rebuild: async () => {
+        // Injectors are sorted ascending by precedence (lower = underlay =
+        // runs first). Merging in that order means a later injector's value
+        // wins for conflicting keys — the intended "most local wins" rule
+        // (beacon underlay layers under project/user disk config).
+        let rebuilt = createDefaultAgentConfig();
+        for (const injector of getInjectors()) {
+          rebuilt = applyAgentConfigLayer(rebuilt, await injector.inject());
+        }
+        // The engine's getConfig()/registration.getConfig() and the
+        // conversation service all share the SAME config object (index.tsx
+        // passes resolvedConfig.config to all of them). Consumers read it at
+        // call time, so apply the allowlisted underlay sections in place and
+        // every consumer observes the refreshed values without an engine
+        // refresh path.
+        const shared = registration.getConfig();
+        shared.providers = rebuilt.providers;
+        shared.llm = rebuilt.llm;
+        shared.compaction = rebuilt.compaction;
+        shared.session = rebuilt.session;
+        return rebuilt;
+      },
     };
     registration.offer(capability);
 

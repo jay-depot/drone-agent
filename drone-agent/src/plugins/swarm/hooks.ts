@@ -267,8 +267,8 @@ function registerStorageEngines(
  */
 export function registerHooks(
   ctx: SwarmContext,
-  _configCap: DroneConfigCapability | undefined,
-  _beaconConfigInjector: BeaconConfigInjector | null,
+  configCap: DroneConfigCapability | undefined,
+  beaconConfigInjector: BeaconConfigInjector | null,
   interactive = false
 ): void {
   const { registration } = ctx;
@@ -293,6 +293,29 @@ export function registerHooks(
   registration.hooks.onBeforePrompt(async () => {
     ctx.currentCorrelationId = generateUuid();
     registration.logger.info(`New correlationId: ${ctx.currentCorrelationId}`);
+  });
+
+  // Apply the coordinator/beacon config underlay at session start, before
+  // the first user message: rebuild() runs injectors in precedence order
+  // (beacon rides the swarm scope at 75, under the agent's local config at
+  // 100) and mutates the shared engine config in place, so the llm broker
+  // and budget service observe providers / llm.active / compaction / session
+  // config for this session.
+  registration.hooks.onSessionStart(async () => {
+    if (!configCap || !beaconConfigInjector) {
+      return;
+    }
+    try {
+      const rebuilt = await configCap.rebuild();
+      const providerCount = Object.keys(rebuilt.providers ?? {}).length;
+      registration.logger.info(
+        `Applied swarm config underlay at session start (active: ${rebuilt.llm?.active ?? rebuilt.llm?.provider}, providers: ${providerCount})`
+      );
+    } catch (err) {
+      registration.logger.warn(
+        `Failed to apply swarm config underlay: ${err}`
+      );
+    }
   });
 
   registration.hooks.onConversationEvent(async event => {
