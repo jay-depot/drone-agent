@@ -1,106 +1,38 @@
 ---
 key: plan-coordinator-config-ui-and-secret-handling
 tags:
-  - plan
-  - config
-  - coordinator
-  - ui
-  - secret-handling
-  - underlay
-  - ready
+  []
 created: 2026-09-11T01:41:33.900Z
-updated: 2026-09-11T01:41:33.900Z
+updated: 2026-09-11T04:57:00.599Z
 ---
 
 # PLAN B — Coordinator Config Pipeline + UI + Secret Handling
 
-Status: READY FOR EXECUTION. Branch: feat/coordinator-config-ui-and-secure-storage. DEPENDS ON Plan A (plan-coordinator-trust-hardening): Plan A's server-side status enforcement is what makes distributing secrets safe.
+Status: ✅ COMPLETED (executed 2026-09-11). Branch: feat/coordinator-config-ui-and-secure-storage. Commits: B1-3 (9a24458), B4 (6611473), B5 (8c4b9df), B6 (8be9d82), B7 (53c62dd), B8 (a3390df), B9 formatting (d4527ac). All validation green (build/typecheck/lint exit 0, fast suite 208 files/2951 tests, UI 32 files/236 tests, LSP clean).
 
 ## Feature summary
 
-A dedicated coordinator UI page (/config) to manage a GLOBAL, ALLOWLISTED set of config entries (e.g. LLM provider entries w/ API keys, llm.active, compaction settings) distributed coordinator→beacon→agent and applied as a config underlay at agent session start. API keys: plaintext at rest (explicitly DEFERRED: encryption-at-rest is a documented follow-up, user-approved), masked on read, write-only on edit, ${VAR} templates preserved (receiver-side interpolation). Locked decisions Q5–Q10: (Q5) global allowlisted KV store, not per-beacon/raw-JSON; (Q6) plaintext+masked+write-only; (Q7) canonical allowlist moved into drone-core, narrow MVP; (Q8) coordinator = source of truth, beacon PULLS on existing 5-min sync, direction strictly coordinator→beacon→agent; (Q9) applies at agent session start via rebuild(); (Q10) dedicated /config page modeled on personas.tsx.
+A dedicated coordinator UI page (/config) to manage a GLOBAL, ALLOWLISTED set of config entries (LLM provider entries w/ API keys, llm.active, compaction settings) distributed coordinator→beacon→agent and applied as a config underlay at agent session start. API keys: plaintext at rest (encryption-at-rest DEFERRED as follow-up), masked on read, write-only on edit, ${VAR} templates preserved (receiver-side interpolation).
 
-## Critical verified context
+## What shipped (per step)
 
-The "existing infrastructure" is DEAD plumbing: DroneConfigCapability.rebuild() declared (drone-core/src/capabilities.ts:113-117) but NEVER implemented (config plugin type omits it); nothing calls inject()/getInjectors()/rebuild() anywhere (grep-verified); runtime loader (runtime/config.ts loadAgentConfig:126-222) merges default→user→project ONLY. Only injector = BeaconConfigInjector (swarm/config.ts:20-56, precedence 75) — registered (swarm/index.ts:254), unregistered (heartbeat.ts:44-45), NEVER invoked (hooks.ts:270-273 underscore params). Beacon has beacon_config table + CRUD (beacon/db/config.ts, routes/config.ts), scope 'swarm' column DEAD; triggerCoordinatorSync (beacon/routes/context.ts:99-167) syncs personas/skills/knowledge/fragments only. Coordinator: NO config table, NO /config route. CONFIG_MERGE_SPEC + applyAgentConfigLayer at drone-core/config-types.ts:518,778. Provider apiKey = literal OR ${VAR} (drone-core/provider-config-types.ts:39-47). KNOWN_CONFIG_KEYS allowlist currently in drone-agent/src/plugins/config/index.ts:117-216.
+- B1 (drone-core): NEW src/config-keys.ts — KNOWN_CONFIG_KEYS (moved verbatim from config plugin) + UNDERLAY_ALLOWLIST (providers.*, llm.active, llm.reasoningLevel, compaction.enabled, compaction.strategy, session.guardrail.*) + isUnderlayAllowed() + CoordinatorConfigEntry wire type; re-exported from index.ts. Config plugin imports KNOWN_CONFIG_KEYS from drone-core (stale local copy removed).
+- B2 (coordinator): coordinator_config table (key PK, value JSON, secret, description, timestamps) in db/init.ts; NEW db/config.ts CRUD (list/get/upsert/deleteCoordinatorConfig); exported via db/index.ts.
+- B3 (coordinator): NEW routes/config.ts — GET /config, GET /config/:key, PUT /config/:key (allowlist-validated via isUnderlayAllowed → 400 + valid patterns on reject; masked response), DELETE /config/:key (404 if absent); maskSecretValue() masks apiKey/api_key/*Key inside provider JSON + scalar → •••• + last4, ${VAR} preserved. Registered under /api in routes/index.ts. Web-port web-auth protected; primary-port mTLS approved-only (Plan A).
+- B4 (beacon): CoordinatorClient.getCoordinatorConfig() (cfetch GET /api/config, coordinatorTrusted()-gated) + interface; beacon_config composite-PK migration (key → PRIMARY KEY (scope,key)) in db/init.ts; db/config.ts rewritten — scoped getBeaconConfig(key, scope='local')/listBeaconConfig(scope?)/update/delete, NEW listMergedConfig() (local wins, one row per key) + replaceSwarmConfig(CoordinatorConfigEntry[]) (swarm-scope-only replace); triggerCoordinatorSync pulls config after fragments + adds configs count; beacon GET /config → listMergedConfig.
+- B5 (agent): config plugin DroneConfigCapability gained `rebuild` (type + impl) — createDefaultAgentConfig + applyAgentConfigLayer over injectors in precedence order, then MUTATES the shared engine config object in place (providers/llm/compaction/session) so all consumers (llm broker, budget service) observe the underlay. swarm/hooks.ts registerHooks: renamed underscore params → configCap/beaconConfigInjector; added TOP-LEVEL onSessionStart hook calling configCap.rebuild(). swarm/config.ts BeaconConfigInjector docstring updated (merged view, Q8).
+- B6 (coordinator UI): lib/types.ts CoordinatorConfigEntry; NEW pages/config.tsx (table, add/edit dialog with secret-masking + write-only keep-current sentinel, delete confirm, persistent amber trust warning banner); App.tsx nav item + /config route; config.test.tsx (5 tests).
+- B7 (docs): swarm-plugin.md underlays section rewritten (coordinator→beacon→agent reality, allowlist, masking, ~5-min propagation); AGENTS.md config-cascade rewritten (coordinator values ride beacon merged underlay @75, applied at session start) — no longer aspirational.
+- B8 (tests): drone-coordinator/test/routes/config.test.ts (13 tests: db CRUD + routes incl. masking/allowlist validation/upsert/404); drone-beacon/test/db.test.ts extended Beacon Config CRUD (composite-PK coexist, scoped update/delete/list, merged local-wins, replaceSwarmConfig swarm-only) — all 102 pass; drone-agent/test/config-plugin.test.ts rebuild() precedence + shared-config-mutation test (21 pass).
 
-## Steps (executor: code persona; atomic + testable)
+## KEY GOTCHAS (log for future plans)
 
-### B1 — drone-core: canonical config-key allowlist
+1. **better-sqlite3 `db.transaction(() => {...})` does NOT reliably persist multi-statement `exec` DDL/DML (CREATE/ALTER TABLE ... RENAME, DELETE+INSERT) in the vitest fork pool.** The composite-PK migration and replaceSwarmConfig both silently no-op'd when wrapped in db.transaction(). Fix: run the statements via db.exec()/prepare().run() directly (matching init.ts's existing pattern). Verified empirically with a debug test (transaction-wrapped → PK unchanged; direct exec → composite PK).
+2. **`getBeaconConfig` returns `undefined` for missing rows (not null)** — matches the pre-existing CRUD tests (`toBeUndefined`); `updateBeaconConfig` returns `null` (`toBeNull`). New tests/accessors must respect this distinction; the composite-PK scoped versions preserved it.
+3. **Plan A gotchas** (from plan-coordinator-trust-hardening): Node ed25519 needs one-shot crypto.sign, app.inject defaults remoteAddress to loopback (auto-approves), cfetch writes bodies via req.write.
 
-- NEW drone-core/src/config-keys.ts: export `KNOWN_CONFIG_KEYS` (moved verbatim from drone-agent/src/plugins/config/index.ts:117-216) + `UNDERLAY_ALLOWLIST` (narrow MVP): any `providers.<id>` (whole-entry unit), `llm.active`, `llm.reasoningLevel`, `compaction.enabled`, `compaction.strategy`, `session.guardrail.*`. Re-export from drone-core/src/index.ts.
-- drone-agent/src/plugins/config/index.ts: import KNOWN_CONFIG_KEYS from drone-core (delete local copy).
-- **RUN `pnpm -r run build` immediately after the drone-core edit** (dependent packages resolve from dist/, per project principle) before LSP/typecheck.
+## Out of scope / follow-ups
 
-### B2 — Coordinator storage: coordinator_config table
-
-- drone-coordinator/src/db/init.ts:
-
-```sql
-CREATE TABLE IF NOT EXISTS coordinator_config (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,            -- JSON string
-  secret INTEGER NOT NULL DEFAULT 0,
-  description TEXT,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-```
-
-- NEW drone-coordinator/src/db/config.ts: listCoordinatorConfig(), getCoordinatorConfig(key), upsertCoordinatorConfig({key,value,secret,description}), deleteCoordinatorConfig(key). Export via db/index.ts.
-
-### B3 — Coordinator API routes
-
-- NEW drone-coordinator/src/routes/config.ts; register in routes/index.ts (inside /api prefix).
-  - GET /api/config — list; secret=1 → mask value (mask apiKey inside provider JSON: `••••` + last 4; scalar → `••••` + last 4). Return {key, value(masked), secret, description, updatedAt}.
-  - GET /api/config/:key — single (masked if secret).
-  - PUT /api/config/:key — body {value, secret?, description?}; validate key against UNDERLAY_ALLOWLIST (400 + valid patterns list on rejection); store JSON string; return masked entry.
-  - DELETE /api/config/:key — 404 if absent.
-- All /api → web-port web-auth protected; primary-port mTLS approved-only (Plan A).
-
-### B4 — Beacon pulls coordinator config (source of truth = coordinator)
-
-- drone-beacon/coordinator-client.ts: `getCoordinatorConfig(): Promise<CoordinatorConfigEntry[]>` via cfetch GET `${baseUrl}/api/config` (trust-gated like fetchPersonas).
-- drone-beacon/src/db/init.ts: migrate beacon_config PK `key` → composite PRIMARY KEY (scope, key): recreate-table migration (create beacon_config_new w/ composite PK, copy local rows, drop old, rename). Low risk (scope column currently unused in prod); existing db tests updated. NOTE: use file__write/mkdir carefully; run `pnpm build` for drone-swarm-common if types move.
-- drone-beacon/src/db/config.ts: `replaceSwarmConfig(entries)`: DELETE WHERE scope='swarm', INSERT coordinator entries as scope='swarm'. Keep local rows + existing accessors.
-- drone-beacon/routes/context.ts triggerCoordinatorSync: after fragments, pull + replaceSwarmConfig (mirrors persona/skill/fragment sync).
-- drone-beacon/routes/config.ts GET /config: return MERGED view — one row per key, LOCAL wins over swarm (query all, dedupe by key keeping local). CRITICAL: the agent injector loops `cachedConfig[entry.key] = JSON.parse(entry.value)` — two rows per key would silently last-write-wins; must pre-merge.
-
-### B5 — Agent: implement rebuild() + apply underlays at session start
-
-- drone-agent/src/plugins/config/index.ts: add `rebuild` to offered capability AND to the local DroneConfigCapability type: `let cfg = createDefaultAgentConfig(); for (const inj of getInjectors()) cfg = applyAgentConfigLayer(cfg, await inj.inject()); return cfg;` (injectors already sorted ascending = lower precedence first = underlay = most-local-wins).
-- drone-agent/src/plugins/swarm/hooks.ts: `_configCap`/`_beaconConfigInjector` currently unused (lines ~270-273). Wire onSessionStart: call configCap.rebuild() and make the ENGINE's resolved config for the session reflect the underlay (providers / llm.active must be visible to budget service + llm broker before first turn). **HIGHEST-RISK SEAM**: locate the engine config getter (search getConfig() consumers; runtime/plugin-engine.ts) and either add an engine refresh path or thread rebuild()'s result where budget/llm read config. Add LSP-find-references sweep. Fallback (documented, NOT acceptable for MVP): underlay never applies — so engine-refresh is required.
-- drone-agent/src/plugins/swarm/config.ts: BeaconConfigInjector unchanged (precedence 75, GET {beacon}/config) — it now carries coordinator-merged values. NO separate CoordinatorConfigInjector (merged view rides beacon underlay per locked Q8). Update docstrings; adjust precedence note in capabilities.ts comment + AGENTS.md (B7).
-- onSessionStart timing: fires before first user message → broker activateProvider reads refreshed config → OK if refresh done in the hook.
-
-### B6 — Coordinator UI: /config page
-
-- drone-coordinator-ui/src/App.tsx: nav item `{ to: '/config', label: 'Config', icon: '▤' }` (check icon collisions) + route `<Route path="/config" element={<ConfigPage />} />`.
-- NEW drone-coordinator-ui/src/pages/config.tsx (model on personas.tsx): table (Key mono / Value preview masked `••••`+last4 for secret else ~60 chars / Secret badge / Updated / Edit / Delete); Add/Edit dialog (Key disabled on edit; Secret checkbox on create; Value textarea — provider entries are JSON; on edit-of-secret: "leave empty to keep current" sentinel → omit value from PUT); Delete confirmation dialog; persistent amber warning banner: "Configuration (including LLM provider API keys) is distributed to APPROVED beacons only. Verify each beacon before approving. Secrets are stored on this coordinator and never shown in full after saving." Use useAuthenticatedFetch + useToast + ErrorBanner + extractApiError/networkErrorMessage.
-- drone-coordinator-ui/src/lib/types.ts: `CoordinatorConfigEntry { key, value, secret: boolean, description?: string|null, updatedAt: number }`.
-- Test drone-coordinator-ui/src/pages/config.test.tsx: list masks secret; add dialog PUTs; edit-empty-keeps-current omits value; delete DELETEs; error path toasts.
-
-### B7 — Docs
-
-- docs/agents/swarm-plugin.md "LLM provider config via swarm underlays": update to describe coordinator UI /api/config (global allowlist: providers._, llm.active, llm.reasoningLevel, compaction._, session.guardrail.*), beacon pull on 5-min sync → scope='swarm', merged /config (beacon-local wins), applied at agent session start, secrets masked + write-only, ${VAR} preserved, ~5-min propagation, encryption-at-rest = documented follow-up.
-- AGENTS.md ~line 106 config-cascade sentence: rewrite "Coordinator (50) → Beacon (75)" to reflect reality (coordinator values ride the beacon merged underlay at precedence 75; beacon-local wins within it; applied at session start) — no longer aspirational.
-
-### B8 — Tests (coordinator, beacon, agent)
-
-- drone-coordinator/test/: config db CRUD; route allowlist validation (unknown key 400, providers.foo accepted); secret masking on GET; PUT upsert.
-- drone-beacon/test/: composite-PK migration; replaceSwarmConfig; merged /config local-wins.
-- drone-agent/test/config-plugin.test.ts: rebuild() invokes injectors in precedence order (mock 2 injectors w/ overlapping keys → higher precedence wins); KNOWN_CONFIG_KEYS now from drone-core (existing tests still pass).
-- drone-agent/test (config or swarm): onSessionStart triggers rebuild and engine config exposes underlay llm.active (the B5 seam test).
-- UI config page tests (B6).
-
-### B9 — Validation (FINAL STEP — must all pass)
-
-- `pnpm -r run build` FIRST (after B1 drone-core change), then typecheck.
-- LSP: zero NEW errors vs baseline (pre-existing getUsageLedger errors untouched).
-- `pnpm -r run lint`, `pnpm -r run typecheck`, `pnpm -r run build` zero errors.
-- `pnpm -r run test` (fast suite) + `cd drone-coordinator-ui && pnpm test` pass.
-- Manual smoke: UI add provider entry (secret) → beacon syncs ≤5 min → agent session start sees provider via llm broker; GET never returns full secret; edit-empty keeps current.
-
-## Validation criteria (Plan B)
-
-- All B8 tests pass. LSP delta-zero. lint/typecheck/build zero errors. Fast + UI suites pass. E2E: pushed config applies as underlay at agent session start; secrets masked on read + write-only on edit; ${VAR} preserved; beacon-local overrides coordinator for same key.
+- Encryption-at-rest for secret config values (documented follow-up; currently plaintext-at-rest by locked Q6 decision).
+- WS push / live mid-session re-apply of config (5-min pull only; applied at next session start).
+- Manual E2E smoke runbook (UI add secret provider → beacon sync ≤5 min → agent session start sees provider) still worth running against live services.
