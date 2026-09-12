@@ -1,14 +1,17 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import {
   sendBeaconCommand,
   isBeaconConnected,
   resetBeaconConnections,
   startBeaconLivenessSweep,
+  resolveBeaconWsAdmission,
   _registerTestConnection,
   _handleIncomingMessage,
   _setLifecycleHooks,
 } from '../src/beacon-ws.js';
 import type { WebSocket } from '@fastify/websocket';
+import { setupDb, teardownDb } from './setup.js';
+import { registerBeaconTrust, approveBeaconById } from '../src/db/index.js';
 
 function makeFakeWs() {
   const send = vi.fn((data: string, cb?: (err?: Error) => void) => cb?.());
@@ -185,5 +188,46 @@ describe('startBeaconLivenessSweep', () => {
       clearInterval(sweep);
       vi.useRealTimers();
     }
+  });
+});
+
+describe('resolveBeaconWsAdmission', () => {
+  beforeEach(async () => {
+    await setupDb();
+  });
+
+  afterEach(async () => {
+    await teardownDb();
+  });
+
+  it('refuses a PENDING beacon with close code 4002', () => {
+    registerBeaconTrust({
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'key1',
+    });
+    const refusal = resolveBeaconWsAdmission('b1');
+    expect(refusal).toEqual({ code: 4002, reason: 'Beacon not yet approved' });
+  });
+
+  it('refuses an unknown beacon with close code 4002', () => {
+    const refusal = resolveBeaconWsAdmission('unknown');
+    expect(refusal).not.toBeNull();
+    expect(refusal!.code).toBe(4002);
+  });
+
+  it('admits an approved beacon', () => {
+    registerBeaconTrust({
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'key1',
+      fingerprintConfirmed: true,
+    });
+    approveBeaconById('b1');
+    expect(resolveBeaconWsAdmission('b1')).toBeNull();
   });
 });

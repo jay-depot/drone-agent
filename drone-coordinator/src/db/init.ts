@@ -155,6 +155,15 @@ export function initDatabase(dataPath: string): Database.Database {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS coordinator_config (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,            -- JSON string
+      secret INTEGER NOT NULL DEFAULT 0,
+      description TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS tool_definitions (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -198,6 +207,11 @@ export function initDatabase(dataPath: string): Database.Database {
     .all() as Array<{ name: string }>;
   if (!beaconTrustCols.some(c => c.name === 'verification_code')) {
     db.exec('ALTER TABLE beacon_trust ADD COLUMN verification_code TEXT');
+  }
+  if (!beaconTrustCols.some(c => c.name === 'fingerprint_confirmed_at')) {
+    db.exec(
+      'ALTER TABLE beacon_trust ADD COLUMN fingerprint_confirmed_at INTEGER'
+    );
   }
   if (beaconTrustCols.some(c => c.name === 'approval_token')) {
     db.exec('ALTER TABLE beacon_trust DROP COLUMN approval_token');

@@ -103,6 +103,7 @@ export async function triggerCoordinatorSync(): Promise<{
     skills: number;
     knowledge: number;
     fragments: number;
+    configs: number;
   };
   error?: string;
 }> {
@@ -148,8 +149,19 @@ export async function triggerCoordinatorSync(): Promise<{
       logger.warn(`Fragment mirror sync failed: ${err}`);
     }
 
+    // Pull coordinator config entries as the swarm underlay. Stored as
+    // scope='swarm'; beacon-local entries keep precedence (Q8).
+    let configCount = 0;
+    try {
+      const configs = await client.getCoordinatorConfig();
+      db.replaceSwarmConfig(configs);
+      configCount = configs.length;
+    } catch (err) {
+      logger.warn(`Coordinator config sync failed: ${err}`);
+    }
+
     logger.info(
-      `Synced ${personas.length} personas, ${skills.length} skills, ${knowledgeCount} knowledge entries, and ${fragmentCount} fragments from coordinator`
+      `Synced ${personas.length} personas, ${skills.length} skills, ${knowledgeCount} knowledge entries, ${fragmentCount} fragments, and ${configCount} config entries from coordinator`
     );
     return {
       success: true,
@@ -158,6 +170,7 @@ export async function triggerCoordinatorSync(): Promise<{
         skills: skills.length,
         knowledge: knowledgeCount,
         fragments: fragmentCount,
+        configs: configCount,
       },
     };
   } catch (err) {

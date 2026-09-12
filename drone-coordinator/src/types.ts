@@ -26,6 +26,7 @@ export interface RegisterBeaconRequest {
   port: number;
   publicKey?: string; // Ed25519 public key (base64)
   tlsFingerprint?: string; // SHA-256 of TLS cert for pinning
+  fingerprintConfirmed?: boolean; // Beacon has confirmed coordinator fingerprint (TOFU)
   spawnRoots?: string[];
   defaultSpawnRoot?: string;
 }
@@ -43,6 +44,7 @@ export interface BeaconTrust {
   status: BeaconTrustStatus;
   approvedAt: number | null;
   tlsFingerprint: string | null;
+  fingerprintConfirmedAt: number | null;
   verificationCode: string;
   createdAt: number;
   updatedAt: number;
@@ -55,11 +57,13 @@ export interface RegisterBeaconTrustRequest {
   port: number;
   publicKey: string;
   tlsFingerprint?: string;
+  fingerprintConfirmed?: boolean; // Beacon has confirmed coordinator fingerprint (TOFU)
 }
 
 export interface BeaconStatusResponse {
   status: BeaconTrustStatus;
   verificationCode?: string; // Human-readable code for MitM verification
+  fingerprintConfirmed?: boolean; // True once the beacon confirmed the coordinator fingerprint
 }
 
 export interface BeaconSession {

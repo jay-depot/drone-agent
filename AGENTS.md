@@ -103,7 +103,7 @@ Providers are sorted by precedence (lower number = higher priority). Duplicate I
 
 ### Config System
 
-Config cascades: **Default → User → Project** (last-write-wins per key, except `enabledPlugins` which is additive at the project level). When the swarm plugin is active, beacon and coordinator config values are injected as additional underlays via the `DroneConfigInjector` capability, not through the file-based config loader. Config injectors are priority-ordered: System Defaults (0) → Coordinator (50) → Beacon (75) → Agent Local (100).
+Config cascades: **Default → User → Project** (last-write-wins per key, except `enabledPlugins` which is additive at the project level). When the swarm plugin is active, the beacon's config is injected as an additional underlay via the `DroneConfigInjector` capability rather than the file-based loader. Coordinator-level values ride that single beacon underlay (precedence 75): the beacon pulls the coordinator's allowlisted `/api/config` entries on its 5-minute sync, stores them as `beacon_config scope='swarm'`, and serves the merged view where beacon-local entries win for the same key; the agent applies the merged underlay at session start via the config plugin's `rebuild()`. There is no separate coordinator injector — the merged view rides the beacon underlay.
 
 Config files live in `.drone-agent/config.json` at each scope. The config loader (`runtime/config.ts`) walks up the directory tree looking for `.drone-agent/` directories.
 

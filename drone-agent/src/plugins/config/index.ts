@@ -6,6 +6,7 @@ import { ConfigSetBlock } from '../../tui/components/ConfigSetBlock.js';
 import {
   applyAgentConfigLayer,
   createDefaultAgentConfig,
+  KNOWN_CONFIG_KEYS,
   type DroneAgentConfig,
   type DroneConfigInjector,
   type DroneConfigLayer,
@@ -46,6 +47,16 @@ export type DroneConfigCapability = {
   unregisterInjector: (injectorId: string) => void;
   /** Get all registered injectors sorted by precedence. */
   getInjectors: () => DroneConfigInjector[];
+  /**
+   * Rebuild the engine's resolved config by running all registered
+   * injectors in precedence order (lowest first = underlay = most-local
+   * wins) and merging their output on top of the default config. The
+   * allowlisted sections (providers, llm, compaction, session) are applied
+   * in place onto the engine's shared config object so already-constructed
+   * consumers (llm broker, budget service) observe the underlay. Returns
+   * the fully merged config.
+   */
+  rebuild: () => Promise<DroneAgentConfig>;
 };
 
 // ---------------------------------------------------------------------------
@@ -83,82 +94,6 @@ function unregisterInjector(injectorId: string): void {
 function getInjectors(): import('drone-core').DroneConfigInjector[] {
   return [...configInjectors];
 }
-
-// ---------------------------------------------------------------------------
-// Known config key paths (for validation in config.set)
-// ---------------------------------------------------------------------------
-
-const KNOWN_CONFIG_KEYS: string[] = [
-  // Top-level
-  'enabledPlugins',
-  'externalPlugins',
-  'trustedPlugins',
-  'systemPrompt',
-  'activePersona',
-  'ollama',
-  'session',
-  'lsp',
-  'mcp',
-  'compaction',
-  'memory',
-  'log',
-  'promptFile',
-  'search',
-  // ollama.*
-  'ollama.host',
-  'ollama.model',
-  // session.*
-  'session.contextWindowTokens',
-  'session.responseReserveTokens',
-  'session.maxToolIterations',
-  'session.promptOnToolIterationLimit',
-  'session.maxToolResultTokensPercent',
-  'session.retry.maxRetries',
-  'session.retry.maxWaitMs',
-  'session.retry.promptOnError',
-  'session.retry.backoffBaseMs',
-  'session.retry.backoffFactor',
-  // llm.*
-  'llm.active',
-  'llm.reasoningLevel',
-  // lsp.*
-  // lsp.*
-  'lsp.enabled',
-  'lsp.diagnosticTokenBudget',
-  'lsp.requestTimeoutMs',
-  'lsp.preferExternal',
-  'lsp.autoInstall',
-  // mcp.*
-  'mcp.enabled',
-  'mcp.requestTimeoutMs',
-  'mcp.retryCount',
-  'mcp.retryDelayMs',
-  'mcp.maxListPages',
-  'mcp.maxListItems',
-  'mcp.compatibilityMode',
-  // compaction.*
-  'compaction.enabled',
-  'compaction.strategy',
-  'compaction.softThresholdPercent',
-  'compaction.slicePercent',
-  'compaction.minTurnsToCompact',
-  'compaction.summaryMaxTokens',
-  'compaction.summaryBudgetPercent',
-  // memory.*
-  'memory.enabled',
-  // log.*
-  'log.enabled',
-  // promptFile.*
-  'promptFile.enabled',
-  'promptFile.files',
-  // search.*
-  'search.enabled',
-  'search.paths',
-  'search.userEmbeddingProvider',
-  'search.projectEmbeddingProvider',
-  // wakelock.enabled
-  'wakelock.enabled',
-];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -537,6 +472,28 @@ export const configPlugin: DronePlugin = {
         unregisterInjector(injectorId);
       },
       getInjectors: () => getInjectors(),
+      rebuild: async () => {
+        // Injectors are sorted ascending by precedence (lower = underlay =
+        // runs first). Merging in that order means a later injector's value
+        // wins for conflicting keys — the intended "most local wins" rule
+        // (beacon underlay layers under project/user disk config).
+        let rebuilt = createDefaultAgentConfig();
+        for (const injector of getInjectors()) {
+          rebuilt = applyAgentConfigLayer(rebuilt, await injector.inject());
+        }
+        // The engine's getConfig()/registration.getConfig() and the
+        // conversation service all share the SAME config object (index.tsx
+        // passes resolvedConfig.config to all of them). Consumers read it at
+        // call time, so apply the allowlisted underlay sections in place and
+        // every consumer observes the refreshed values without an engine
+        // refresh path.
+        const shared = registration.getConfig();
+        shared.providers = rebuilt.providers;
+        shared.llm = rebuilt.llm;
+        shared.compaction = rebuilt.compaction;
+        shared.session = rebuilt.session;
+        return rebuilt;
+      },
     };
     registration.offer(capability);
 

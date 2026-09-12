@@ -306,3 +306,51 @@ export function generateVerificationCode(
 
   return words.join('-');
 }
+
+/**
+ * Verify a beacon's Ed25519 signature over a payload, using the beacon's
+ * public key (base64 SPKI) as presented at registration.
+ */
+export function verifyBeaconSignature(
+  publicKeyBase64: string,
+  payload: string,
+  signatureBase64: string
+): boolean {
+  try {
+    const publicKeyDer = Buffer.from(publicKeyBase64, 'base64');
+    const publicKey = crypto.createPublicKey({
+      key: publicKeyDer,
+      format: 'der',
+      type: 'spki',
+    });
+    return crypto.verify(
+      null,
+      Buffer.from(payload, 'utf-8'),
+      publicKey,
+      Buffer.from(signatureBase64, 'base64')
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sign a payload with an Ed25519 private key (PKCS8 PEM), producing a base64
+ * signature. The beacon uses this to announce its fingerprint confirmation
+ * to the coordinator, binding the claim to its identity.
+ */
+export function signBeaconPayload(
+  privateKeyPem: string,
+  payload: string
+): string {
+  const privateKey = crypto.createPrivateKey({
+    key: privateKeyPem,
+    format: 'pem',
+    type: 'pkcs8',
+  });
+  // Algorithm is derived from the key type (Ed25519); passing it explicitly
+  // (e.g. 'ed25519') is rejected by the runtime ("Invalid digest").
+  return crypto
+    .sign(null, Buffer.from(payload, 'utf-8'), privateKey)
+    .toString('base64');
+}

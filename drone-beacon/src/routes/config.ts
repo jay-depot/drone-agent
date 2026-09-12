@@ -2,9 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import * as db from '../db/index.js';
 
 export default function configRoutes(app: FastifyInstance) {
-  // Get all beacon config overrides
+  // Get the merged beacon config: beacon-local wins over coordinator-pushed
+  // swarm entries, one row per key (the agent injector loops this directly).
   app.get('/config', async () => {
-    return db.listBeaconConfig();
+    return db.listMergedConfig();
   });
 
   // Get specific config value

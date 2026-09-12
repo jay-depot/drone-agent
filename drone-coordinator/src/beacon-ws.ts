@@ -6,8 +6,26 @@ import {
   getClientCertFingerprint,
   resolveBeaconIdByFingerprint,
 } from './mtls.js';
+import { getBeaconTrust } from './db/index.js';
 import { publishMutationEvent } from './ws-pubsub.js';
 import { logger } from './logger.js';
+
+/**
+ * Decide whether a beacon connection over the reverse channel should be
+ * admitted. A PENDING (or unknown) beacon's certificate resolves via the
+ * fingerprint map, but it must not receive spawn/message commands until the
+ * operator approves it. Returns the WebSocket close code + reason to refuse,
+ * or null to admit the connection.
+ */
+export function resolveBeaconWsAdmission(
+  beaconId: string
+): { code: number; reason: string } | null {
+  const trust = getBeaconTrust(beaconId);
+  if (!trust || trust.status !== 'approved') {
+    return { code: 4002, reason: 'Beacon not yet approved' };
+  }
+  return null;
+}
 
 /**
  * Reverse-channel WebSocket registry on the coordinator side.
@@ -108,6 +126,15 @@ export function registerBeaconWebSocket(app: FastifyInstance): void {
         4001,
         'Unauthorized: client certificate not a registered beacon'
       );
+      return;
+    }
+
+    const refusal = resolveBeaconWsAdmission(beaconId);
+    if (refusal) {
+      logger.warn(
+        `Rejected beacon WebSocket connection: beacon ${beaconId} not yet approved`
+      );
+      socket.close(refusal.code, refusal.reason);
       return;
     }
 

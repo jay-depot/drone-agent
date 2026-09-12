@@ -279,6 +279,35 @@ export function initDatabase(dataPath: string): Database.Database {
     );
   }
 
+  // Idempotent migration: beacon_config key must be scoped so local and
+  // swarm-scoped entries can coexist (coordinator-pushed config rides the
+  // swarm scope). Recreate the table with a composite PRIMARY KEY (scope,
+  // key), copying existing rows (all implicitly 'local').
+  const beaconConfigPk = db
+    .prepare(
+      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'beacon_config'`
+    )
+    .get() as { sql: string } | undefined;
+  const hasCompositePk =
+    beaconConfigPk && beaconConfigPk.sql.includes('PRIMARY KEY (scope, key)');
+  if (!hasCompositePk) {
+    db.exec(`
+      CREATE TABLE beacon_config_new (
+        key TEXT NOT NULL,
+        value TEXT NOT NULL,  -- JSON string
+        scope TEXT NOT NULL DEFAULT 'local',  -- 'local' or 'swarm' (synced from coordinator)
+        createdAt INTEGER NOT NULL,
+        updatedAt INTEGER NOT NULL,
+        PRIMARY KEY (scope, key)
+      );
+      INSERT INTO beacon_config_new (key, value, scope, createdAt, updatedAt)
+        SELECT key, value, scope, createdAt, updatedAt FROM beacon_config;
+      DROP TABLE beacon_config;
+      ALTER TABLE beacon_config_new RENAME TO beacon_config;
+    `);
+    logger.info('Migrated beacon_config to composite PRIMARY KEY (scope, key)');
+  }
+
   logger.info('Beacon database initialized successfully');
   return db;
 }

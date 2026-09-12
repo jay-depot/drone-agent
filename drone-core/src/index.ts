@@ -21,6 +21,7 @@
 //   - config-schema.ts     : Config schema and parsing
 //   - wiki-types.ts       : Wiki page types for swarm knowledge base
 //   - swarm-fragment-types.ts : Swarm prompt fragment types
+//   - config-keys.ts      : Config key allowlists
 //
 // -----------------------------------------------------------------------
 
@@ -96,6 +97,15 @@ export {
   createDefaultAgentConfig,
   applyAgentConfigLayer,
 } from './config-types.js';
+
+// ── Config key allowlists ─────────────────────────────────────────────
+
+export {
+  CoordinatorConfigEntry,
+  KNOWN_CONFIG_KEYS,
+  UNDERLAY_ALLOWLIST,
+  isUnderlayAllowed,
+} from './config-keys.js';
 
 // ── Session types ────────────────────────────────────────────────────
 

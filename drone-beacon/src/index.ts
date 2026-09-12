@@ -43,6 +43,7 @@ import {
   confirmCoordinatorFingerprint,
   getPendingCoordinatorFingerprint,
   setBeaconApproved,
+  isCoordinatorTrusted,
 } from './coordinator-trust.js';
 import {
   initSpawner,
@@ -405,6 +406,15 @@ async function main() {
 
       if (result.status === 'pending') {
         logger.info('Beacon pending approval.');
+        if (isCoordinatorTrusted()) {
+          logger.info(
+            'The beacon has confirmed the coordinator fingerprint — Approve is now enabled in the coordinator web UI.'
+          );
+        } else {
+          logger.info(
+            'The beacon has not yet confirmed the coordinator fingerprint; the coordinator cannot approve it until it does.'
+          );
+        }
         logger.info(
           'Approve via the coordinator web UI (beacon detail page) or: drone-coordinator --approve-beacon <id>'
         );

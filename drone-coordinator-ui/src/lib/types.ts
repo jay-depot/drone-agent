@@ -11,6 +11,7 @@ export interface Beacon {
   trustStatus?: 'pending' | 'approved' | 'rejected' | null;
   publicKey?: string | null;
   verificationCode?: string | null;
+  fingerprintConfirmed?: boolean | null;
   spawnRoots?: string[];
   defaultSpawnRoot?: string;
 }
@@ -19,6 +20,7 @@ export interface BeaconDetail extends Beacon {
   beaconId?: string;
   tlsFingerprint?: string | null;
   verificationCode?: string | null;
+  fingerprintConfirmed?: boolean | null;
 }
 
 export interface AgentLocation {
@@ -100,6 +102,14 @@ export interface CreateSkillRequest {
   trigger: string;
   body: string;
   scope?: string;
+}
+
+export interface CoordinatorConfigEntry {
+  key: string;
+  value: string;
+  secret: boolean;
+  description?: string | null;
+  updatedAt: number;
 }
 
 export interface WikiPageMeta {

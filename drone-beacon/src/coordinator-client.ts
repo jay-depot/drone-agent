@@ -1,15 +1,20 @@
 import https from 'https';
 import http from 'http';
 import type { PeerCertificate, TLSSocket } from 'tls';
-import { generateVerificationCode } from 'drone-swarm-common';
+import {
+  generateVerificationCode,
+  signBeaconPayload,
+} from 'drone-swarm-common';
 import { logger } from './logger.js';
 import {
   isSwarmReady,
+  isCoordinatorTrusted,
   getObservedCoordinatorFingerprint,
   setBeaconVerificationCode,
 } from './coordinator-trust.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
+import type { CoordinatorConfigEntry } from 'drone-core';
 import type { DroneSwarmFragment } from 'drone-core';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
 import { enqueueOutbox } from './db/index.js';
@@ -73,11 +78,13 @@ export interface CoordinatorClient {
     status: 'pending' | 'approved' | 'rejected';
     verificationCode?: string;
   }>;
+  confirmFingerprint(): Promise<void>;
   pollForApproval(): Promise<BeaconStatusResponse>;
   heartbeat(): Promise<void>;
   fetchPersonas(): Promise<Persona[]>;
   fetchSkills(): Promise<Skill[]>;
   fetchCoordinatorFragments(): Promise<DroneSwarmFragment[]>;
+  getCoordinatorConfig(): Promise<CoordinatorConfigEntry[]>;
 
   // Session management
   registerSession(agentId: string, personaId: string | null): Promise<void>;
@@ -402,6 +409,7 @@ export function createCoordinatorClient(
           port: config.port,
           publicKey: identity.publicKey,
           tlsFingerprint,
+          fingerprintConfirmed: isCoordinatorTrusted(),
           spawnRoots: getSpawnRoots(),
           defaultSpawnRoot: getDefaultSpawnRoot(),
         }),
@@ -432,6 +440,36 @@ export function createCoordinatorClient(
         status: data.status,
         verificationCode,
       };
+    },
+
+    async confirmFingerprint(): Promise<void> {
+      const timestamp = Date.now();
+      const payload = `${config.beaconId}:${timestamp}`;
+      const signature = signBeaconPayload(
+        options.identity.privateKeyPem,
+        payload
+      );
+      try {
+        const res = await cfetch(
+          `${baseUrl}/api/beacons/trust/${config.beaconId}/confirm-fingerprint`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              beaconId: config.beaconId,
+              timestamp,
+              signature,
+            }),
+          }
+        );
+        if (!res.ok) {
+          logger.warn(
+            `Failed to announce fingerprint confirmation: ${res.status} ${await res.text()}`
+          );
+        }
+      } catch (err) {
+        logger.warn(`Failed to announce fingerprint confirmation: ${err}`);
+      }
     },
 
     async pollForApproval(): Promise<BeaconStatusResponse> {
@@ -512,6 +550,22 @@ export function createCoordinatorClient(
       }
       // Normalize scope; coordinator rows are implicitly coordinator-scoped.
       return fragments.map(f => ({ ...f, scope: 'coordinator' as const }));
+    },
+
+    async getCoordinatorConfig(): Promise<CoordinatorConfigEntry[]> {
+      if (!coordinatorTrusted()) {
+        return [];
+      }
+      const res = await cfetch(`${baseUrl}/api/config`);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch coordinator config: ${res.status}`);
+      }
+      const data = (await res.json()) as unknown;
+      const entries = data as CoordinatorConfigEntry[];
+      if (!Array.isArray(entries)) {
+        throw new Error('Malformed config response from coordinator');
+      }
+      return entries;
     },
 
     // Session management
