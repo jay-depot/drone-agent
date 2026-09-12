@@ -5,8 +5,9 @@ tags:
   - swarm
   - config
   - secrets
+  - completed
 created: 2026-09-12T20:37:55.649Z
-updated: 2026-09-12T20:51:25.714Z
+updated: 2026-09-12T20:52:45.587Z
 ---
 
 # PLAN — Receiver-side ${VAR} interpolation for the swarm config underlay
