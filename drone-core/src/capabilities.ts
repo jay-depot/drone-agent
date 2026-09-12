@@ -94,7 +94,12 @@ export type DroneConfigInjector = {
    * Recommended: coordinator=50, beacon=75, agent=100.
    */
   precedence: number;
-  /** Inject config values that will be merged as underlay. */
+  /**
+   * Inject config values that will be merged as underlay. The value must be
+   * a NESTED partial config: applyAgentConfigLayer has no dotted-key
+   * semantics, so producers of flat dotted-key rows (e.g. the beacon's
+   * config store) must normalize them before returning.
+   */
   inject: () => Promise<PartialDroneAgentConfig>;
 };
 

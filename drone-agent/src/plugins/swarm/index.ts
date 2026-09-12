@@ -250,7 +250,9 @@ export function createSwarmPlugin(
           'config'
         );
       if (configCap) {
-        beaconConfigInjector = new BeaconConfigInjector(baseUrl);
+        beaconConfigInjector = new BeaconConfigInjector(baseUrl, message => {
+          registration.logger.warn(message);
+        });
         configCap.registerInjector(beaconConfigInjector);
         registration.logger.info('Registered beacon config injector');
       } else {

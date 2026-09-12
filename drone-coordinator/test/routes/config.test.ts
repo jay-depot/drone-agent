@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { setupDb, teardownDb } from '../setup.js';
 import { buildTestApp } from '../app-helper.js';
 import type { FastifyInstance } from 'fastify';
+import { maskSecretValue } from '../../src/routes/config.js';
 import {
   upsertCoordinatorConfig,
   getCoordinatorConfig,
@@ -191,5 +192,39 @@ describe('CoordinatorConfig Routes', () => {
       url: '/api/config/llm.active',
     });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('maskSecretValue', () => {
+  it('preserves ${VAR} templates verbatim (scalar)', () => {
+    expect(maskSecretValue('${OPENROUTER_API_KEY}')).toBe(
+      '${OPENROUTER_API_KEY}'
+    );
+  });
+
+  it('preserves ${VAR} templates inside provider JSON apiKey fields', () => {
+    const value = JSON.stringify({
+      protocol: 'openrouter',
+      apiKey: '${OPENROUTER_API_KEY}',
+    });
+    expect(maskSecretValue(value)).toBe(value);
+  });
+
+  it('masks plain scalar secrets to bullets + last 4', () => {
+    expect(maskSecretValue('sk-plain-secret-1234')).toBe('••••1234');
+  });
+
+  it('masks short scalars fully', () => {
+    expect(maskSecretValue('abc')).toBe('••••');
+  });
+
+  it('masks nested provider apiKey fields', () => {
+    expect(maskSecretValue(JSON.stringify({ apiKey: 'sk-secret-5678' }))).toBe(
+      JSON.stringify({ apiKey: '••••5678' })
+    );
+  });
+
+  it('masks strings that only embed a template mid-string', () => {
+    expect(maskSecretValue('prefix ${VAR}')).toBe('••••VAR}');
   });
 });

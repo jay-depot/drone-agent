@@ -536,6 +536,89 @@ describe('config plugin', () => {
       const shared = engine.getConfig();
       expect(shared.llm.active).toBe('local/model');
       expect(shared.llm.provider).toBe('local');
+
+      // The injector registry is module-level: unregister fakes so they
+      // cannot leak into other tests' rebuild() calls.
+      cap.unregisterInjector('underlay');
+      cap.unregisterInjector('local');
+    });
+  });
+
+  describe('rebuild underlay + disk preservation', () => {
+    it('preserves disk config (providers, llm.active, modelRoles) and applies the underlay on top', async () => {
+      const { homeDir, projectDir } = await setupDirs();
+      process.chdir(projectDir);
+      await writeJson(path.join(homeDir, '.drone-agent', 'config.json'), {
+        llm: {
+          active: 'local/model',
+          modelRoles: { image_describer: 'openai/vision-model' },
+        },
+        providers: {
+          openrouter: {
+            protocol: 'openrouter',
+            baseUrl: 'https://openrouter.ai/api/v1',
+            apiKey: '${TEST_API_KEY}',
+          },
+        },
+      });
+      process.env.TEST_API_KEY = 'sk-test-1234';
+
+      const engine = createDronePluginEngine({
+        plugins: [configPlugin],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+
+      const cap = engine.getCapability<DroneConfigCapability>('config')!;
+      cap.registerInjector({
+        id: 'beacon',
+        precedence: 75,
+        inject: async () => ({ compaction: { enabled: false } }),
+      });
+      const rebuilt = await cap.rebuild();
+      delete process.env.TEST_API_KEY;
+      const shared = engine.getConfig();
+
+      expect(shared.providers.openrouter).toMatchObject({
+        protocol: 'openrouter',
+        apiKey: 'sk-test-1234',
+      });
+      expect(shared.llm.active).toBe('local/model');
+      expect(shared.llm.modelRoles?.image_describer).toBe(
+        'openai/vision-model'
+      );
+      expect(shared.compaction.enabled).toBe(false);
+      expect(rebuilt.providers.openrouter).toBeDefined();
+      expect(rebuilt.llm.active).toBe('local/model');
+      cap.unregisterInjector('beacon');
+    });
+
+    it('lets disk config win over underlay values for the same key', async () => {
+      const { homeDir, projectDir } = await setupDirs();
+      process.chdir(projectDir);
+      await writeJson(path.join(homeDir, '.drone-agent', 'config.json'), {
+        llm: { active: 'local/model' },
+      });
+
+      const engine = createDronePluginEngine({
+        plugins: [configPlugin],
+        config: createDefaultAgentConfig(),
+        logger: silentLogger(),
+      });
+      await engine.initialize();
+
+      const cap = engine.getCapability<DroneConfigCapability>('config')!;
+      cap.registerInjector({
+        id: 'beacon',
+        precedence: 75,
+        inject: async () => ({ llm: { active: 'swarm/model' } }),
+      });
+
+      await cap.rebuild();
+
+      expect(engine.getConfig().llm.active).toBe('local/model');
+      cap.unregisterInjector('beacon');
     });
   });
 });

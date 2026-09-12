@@ -514,5 +514,13 @@
   {
     "timestamp": "2026-09-12T19:15:22.730Z",
     "insight": "Two latent defects found en route to the rebuild() root cause: (1) deepMerge/applyAgentConfigLayer (drone-core) have NO dotted-key semantics — a flat overlay like {'llm.active': x} from BeaconConfigInjector.inject() lands as a garbage top-level key named 'llm.active'; the B8 rebuild() test passed only because its fake injectors returned nested shapes. Regression tests for merge pipelines must use the real producer's payload shape as a contract fixture. (2) coordinator maskSecretValue (routes/config.ts) masks apiKey/*Key string fields AND scalars, so '${VAR}' templates become '••••VAR}' — contradicting its own docstring ('${VAR} templates are preserved verbatim') — and the beacon persists the masked value verbatim as a swarm row, while the agent-side underlay path has no receiver-side ${VAR} interpolation (interpolation only runs in the disk-file config loader). As shipped, coordinator-pushed secret provider entries can never deliver a working key."
+  },
+  {
+    "timestamp": "2026-09-12T20:04:56.462Z",
+    "insight": "Execution of fix-swarm-config-underlay-rebuild: the plan's literal step-2 snippet (seed rebuild() from disk layers, then apply injectors ascending) would have made the beacon injector WIN over disk config for shared keys — contradicting the plan's own jsdoc intent, AGENTS.md's cascade, and the DroneConfigInjector type docs. Lesson: when a plan's code snippet contradicts its own stated invariant, implement the invariant and pin the corrected composition with a test ('disk wins over underlay for the same key'). The correct composition is: createDefaultAgentConfig() → injectors ascending → disk user/project layers LAST, with the default layer skipped on re-application (re-applying defaults would clobber underlay values)."
+  },
+  {
+    "timestamp": "2026-09-12T20:05:00.296Z",
+    "insight": "Two test-design lessons from the underlay-fix execution: (1) the config plugin's injector registry is MODULE-LEVEL state — fake injectors from an earlier test in the same file silently leak into later tests' rebuild() calls (the old B8 fakes made a new disk-preservation test falsely pass during the red phase); every test that registers injectors must unregister them, and a red-phase test that unexpectedly passes should immediately raise suspicion of cross-test leakage. (2) transformEnvVars runs at LAYER LOAD time, and rebuild() re-discovers/re-parses disk layers — so a test that sets an env var for a ${VAR} user-config key must keep it set until AFTER rebuild() completes (deleting it right after engine.initialize() makes the re-parse throw 'references unset environment variable')."
   }
 ]

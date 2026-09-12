@@ -49,10 +49,11 @@ export type DroneConfigCapability = {
   getInjectors: () => DroneConfigInjector[];
   /**
    * Rebuild the engine's resolved config by running all registered
-   * injectors in precedence order (lowest first = underlay = most-local
-   * wins) and merging their output on top of the default config. The
-   * allowlisted sections (providers, llm, compaction, session) are applied
-   * in place onto the engine's shared config object so already-constructed
+   * injectors in precedence order (lowest first = underlay), then applying
+   * the on-disk user/project layers on top, so the most-local config wins
+   * conflicts (default → injectors → user → project). The allowlisted
+   * sections (providers, llm, compaction, session) are applied in place
+   * onto the engine's shared config object so already-constructed
    * consumers (llm broker, budget service) observe the underlay. Returns
    * the fully merged config.
    */
@@ -473,13 +474,21 @@ export const configPlugin: DronePlugin = {
       },
       getInjectors: () => getInjectors(),
       rebuild: async () => {
-        // Injectors are sorted ascending by precedence (lower = underlay =
-        // runs first). Merging in that order means a later injector's value
-        // wins for conflicting keys — the intended "most local wins" rule
-        // (beacon underlay layers under project/user disk config).
+        // Precedence order, lowest first: injectors run as the underlay
+        // (the beacon rides scope 75), then the on-disk user and project
+        // layers apply on top so the most-local config wins conflicts —
+        // the same default → user → project cascade the startup loader
+        // uses. The default layer is skipped: it is already the seed, and
+        // re-applying it would clobber underlay values back to defaults.
         let rebuilt = createDefaultAgentConfig();
         for (const injector of getInjectors()) {
           rebuilt = applyAgentConfigLayer(rebuilt, await injector.inject());
+        }
+        for (const layer of await discoverLayers()) {
+          if (layer.scope === 'default') {
+            continue;
+          }
+          rebuilt = applyAgentConfigLayer(rebuilt, layer.config);
         }
         // The engine's getConfig()/registration.getConfig() and the
         // conversation service all share the SAME config object (index.tsx

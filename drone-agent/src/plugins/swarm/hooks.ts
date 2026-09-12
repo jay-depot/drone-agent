@@ -296,11 +296,12 @@ export function registerHooks(
   });
 
   // Apply the coordinator/beacon config underlay at session start, before
-  // the first user message: rebuild() runs injectors in precedence order
-  // (beacon rides the swarm scope at 75, under the agent's local config at
-  // 100) and mutates the shared engine config in place, so the llm broker
-  // and budget service observe providers / llm.active / compaction / session
-  // config for this session.
+  // the first user message: rebuild() merges injectors as the underlay
+  // (the beacon rides precedence 75), then re-applies the on-disk user and
+  // project layers on top so the most-local config wins conflicts, and
+  // mutates the shared engine config in place, so the llm broker and budget
+  // service observe providers / llm.active / compaction / session config
+  // for this session.
   registration.hooks.onSessionStart(async () => {
     if (!configCap || !beaconConfigInjector) {
       return;

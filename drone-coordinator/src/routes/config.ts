@@ -5,8 +5,11 @@ import * as db from '../db/index.js';
 /**
  * Mask a secret config value for read endpoints: `••••` + last 4 chars of the
  * raw value. Nested JSON provider entries get their `apiKey` field masked too;
- * scalar values are masked directly. `${VAR}` templates are preserved verbatim
- * (receiver-side interpolation) so a masked display never leaks the literal.
+ * scalar values are masked directly. A value that is entirely a `${VAR}`
+ * template is preserved verbatim — a template is not itself a secret, and
+ * masking it would corrupt the entry before the receiver could interpolate it
+ * (receiver-side interpolation of underlay values is a documented follow-up).
+ * Templates embedded mid-string are still masked.
  */
 export function maskSecretValue(value: string): string {
   try {
@@ -33,6 +36,12 @@ export function maskSecretValue(value: string): string {
 
 function maskScalar(raw: string): string {
   const trimmed = raw.trim();
+  // Whole-value ${VAR} templates must survive masking round-trips intact:
+  // the beacon stores the masked value verbatim as a swarm-scope row and the
+  // agent underlay consumes it as-is.
+  if (/^\$\{[^}]+\}$/.test(trimmed)) {
+    return raw;
+  }
   if (trimmed.length <= 4) {
     return '••••';
   }

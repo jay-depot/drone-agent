@@ -5,41 +5,36 @@ tags:
   - bugfix
   - swarm
   - config
+  - completed
 created: 2026-09-12T19:15:46.824Z
-updated: 2026-09-12T19:15:46.824Z
+updated: 2026-09-12T20:05:32.456Z
 ---
 
 # PLAN — Fix swarm config underlay rebuild (clobbers providers/llm) + ${VAR} secret delivery
 
-Status: PLANNED (2026-09-12). Root cause confirmed by commit-level evidence; not yet executed.
-Branch: feat/coordinator-config-ui-and-secure-storage (Plan B work). Bugs shipped in B4 (6611473) + B5 (8c4b9df); B6/B8 tests missed all three defects below.
+Status: ✅ COMPLETED (executed 2026-09-12). Branch: feat/coordinator-config-ui-and-secure-storage. Automated validation green: `pnpm -r run build` exit 0, `pnpm lint` (ESLint + Prettier) exit 0, fast suite 211 files / 2992 tests passed (3 pre-existing skips), LSP clean. RED→GREEN confirmed: all new regression tests failed against pre-fix code exactly as predicted, pass post-fix (46/46 across the three touched suites). Manual live smoke (fresh TUI session: `/model`, `/context`) handed back to the user — the beacon on this host was still running the pre-fix build at execution time.
 
-## Root cause (verified)
+## Root cause (verified pre-execution)
 
-1. PRIMARY — B5 `config` plugin `rebuild()` (drone-agent/src/plugins/config/index.ts ~L475): recomputes `createDefaultAgentConfig()` + registered injectors ONLY, then mutates the shared engine config in place (`shared.providers/llm/compaction/session`). NO disk-config injector exists (only ever-registered injector = BeaconConfigInjector, swarm/index.ts:254), so after the swarm `onSessionStart` hook runs, shared `config.providers`={} and `llm.active`/`llm.modelRoles` revert to bare defaults.
-   - Chat survives (broker captured instances + active selection at onPluginsLoaded, pre-rebuild); bare `/model` lists nothing (buildModelListing() re-reads shared providers at call time; 60s discovery cache warmed pre-rebuild masks it briefly); `/context` falls to `source: config` (metadata dead → probe/fallback). Also nukes `session.retry/guardrail` and `compaction` to defaults.
-2. LATENT — BeaconConfigInjector.inject() (swarm/config.ts) returns FLAT dotted keys (`'llm.active'`, `'providers.openrouter'`); deepMerge has no dotted-key semantics → garbage top-level keys. B8 rebuild() test passed only because fake injectors returned nested shapes.
-3. DESIGN DEFECT — coordinator maskSecretValue (routes/config.ts) masks `apiKey`/`*Key` JSON fields AND scalars, so `${VAR}` templates become `••••VAR}` (docstring claims templates are preserved); beacon persists masked values verbatim as swarm rows; agent underlay path has no receiver-side `${VAR}` interpolation (only the disk-file loader interpolates). Coordinator-pushed secret provider entries can never deliver a working key as designed.
+1. PRIMARY — B5 `rebuild()` recomputed from `createDefaultAgentConfig()` + registered injectors ONLY (no disk-config injector exists), then mutated shared engine config in place → after swarm `onSessionStart`, providers={} and llm.active/modelRoles lost. Chat survived (broker captured state pre-rebuild); bare `/model` empty (listing re-reads providers at call time, 60s stale cache); `/context` → source:config.
+2. LATENT — `BeaconConfigInjector.inject()` returned FLAT dotted keys; `deepMerge` has no dotted-key semantics. B8 test passed only because fake injectors used nested shapes.
+3. DESIGN DEFECT — coordinator `maskSecretValue` masked `${VAR}` templates ('${OPENROUTER_API_KEY}' → '••••KEY}'), corrupting entries the beacon persists and the underlay consumes.
 
-Host evidence: live beacon DB (~/.drone-beacon/drone-beacon.db) still pre-B4 schema, 0 config rows → injector returns {} → only defect 1 manifests here. User config: llm.active, providers.ollama.protocol, providers.openrouter.{protocol,baseUrl,apiKey}, llm.modelRoles.image_describer; no declared models.
+## What shipped (per step)
 
-## Steps
+- Fix 1 (injector shape): drone-agent/src/plugins/swarm/config.ts — exported `normalizeFlatUnderlay(flat)`: nests dotted keys via `deepSet` (prototype-pollution-safe, never throws), filters keys with `isUnderlayAllowed`, returns `{config, skippedKeys}`. `inject()` JSON.parses per row (unparseable → dropped, one-time warn per key via injectable `warn` callback wired from swarm/index.ts to registration.logger.warn), normalizes, caches; cache-fallback on fetch failure preserved. New test file drone-agent/test/swarm/config-injector.test.ts (5 tests).
+- Fix 2 (rebuild, precedence-faithful — DEVIATION): config/index.ts rebuild() composes default → injectors ascending → disk user/project layers LAST (default layer skipped on re-application). The plan's literal snippet (disk first, then injectors) would have let the beacon WIN over disk for shared keys, contradicting the plan's own jsdoc, AGENTS.md cascade, and DroneConfigInjector docs — implemented the invariant, pinned it with a test. Shared-object in-place mutation kept.
+- Fix 3: drone-coordinator/src/routes/config.ts — maskScalar returns raw verbatim for whole-value `${VAR}` templates (/^\$\{[^}]+\}$/ on trimmed); mid-string templates still masked; nested JSON apiKey masking unchanged; docstrings now factual.
+- Steps 4+5: swarm/hooks.ts onSessionStart comment corrected (no phantom injector-at-100); docs/agents/swarm-plugin.md rewritten to current-state: masking preserves whole-value templates, receiver-side interpolation of underlay values explicitly NOT yet implemented (documented follow-up → memory seed-receiver-side-env-var-interpolation).
+- Step 6 tests: 2 rebuild disk-preservation/precedence tests + B8-fake unregister cleanup (module-level registry leakage); 6 maskSecretValue unit tests. All red pre-fix, green post-fix.
+- Step 7 sweep: 3 applyAgentConfigLayer consumers total (rebuild ×2, startup loader, provenance merge) — no other flat-map producers; drone-core DroneConfigInjector.inject jsdoc now documents the nested-shape contract (drone-core/src/capabilities.ts).
 
-1. (coder) drone-agent/src/plugins/swarm/config.ts — BeaconConfigInjector.inject(): normalize flat dotted keys into nested PartialDroneAgentConfig. Snippet: build nested object via `deepSet`-style walk (config plugin's helpers.deepSet is the existing dotted-key writer; extract a `deepGetPath`-style setter into drone-core or reuse). Keys not in KNOWN_CONFIG_KEYS → skip + logger.warn once.
-2. (coder) drone-agent/src/plugins/config/index.ts — rebuild(): seed from re-resolved disk layers instead of bare defaults: `let rebuilt = mergeLayers(await discoverLayers());` then apply injectors ascending. Update jsdoc ("disk config wins over underlay" now actually true). Keep shared-object in-place mutation (providers/llm/compaction/session) — consumers read at call time.
-3. (coder) drone-coordinator/src/routes/config.ts — maskSecretValue(): only mask when value is NOT a `${VAR}` template (`/^\$\{[^}]+\}$/.test(trimmed)` → return verbatim); keep nested apiKey/*Key masking for non-template strings.
-4. (coder, optional but recommended) beacon rows + agent underlay: document that secret provider entries must be delivered as `${VAR}` templates; receiver-side interpolation for underlay-provided provider values is OUT of scope (disk loader already interpolates for disk files; underlay values arrive pre-interpolated only if the beacon stores raw templates — step 3 restores that property).
-5. (coder) swarm/hooks.ts onSessionStart — keep rebuild() call; it now preserves disk config. No change needed beyond comment accuracy.
-6. (tester) Tests — fix the B8 test's producer-shape contract: add a rebuild() test with a BeaconConfigInjector-shaped FLAT payload asserting nested resolution AND disk-config preservation (llm.active from user config survives; providers from disk survive). Add maskSecretValue unit tests: `${VAR}` scalar preserved; `${VAR}` inside provider JSON apiKey preserved; plain scalar masked; nested apiKey masked. Add config-schema-style test that inject() output passes through transformEnvVars-equivalent (or explicitly assert no interpolation, per step 4 decision).
-7. (reviewer) Cross-cutting sweep: any other consumer of `applyAgentConfigLayer` receiving flat maps (grep `applyAgentConfigLayer(`); verify drone-core `DroneConfigInjector.inject` jsdoc documents nested-shape contract; run `pnpm -r run build` (drone-core + drone-swarm-common dist staleness bit us at the merge).
+## Deviations from plan (recorded)
 
-## Dependencies
+1. Underlay key filter = `isUnderlayAllowed` (UNDERLAY_ALLOWLIST) instead of the plan's KNOWN_CONFIG_KEYS — plan gap: KNOWN_CONFIG_KEYS has no `providers.*` entries and would have silently dropped coordinator-pushed provider entries, defeating the feature.
+2. rebuild() composition inverted vs. the plan's literal step-2 snippet, to honor the plan's own "most local wins" invariant (test-pinned).
 
-1 → 2 (injector shape must be fixed before rebuild seeding makes underlay meaningful); 3 independent; 6 after 1-3; 7 last.
+## Validation status
 
-## Validation criteria
-
-- LSP clean (after `pnpm --filter drone-core run build && pnpm --filter drone-swarm-common run build` + `pnpm -r run build`).
-- `pnpm -r run lint` (ESLint + Prettier) zero errors.
-- `pnpm -r run test` fast suite green, including the new regression tests (flat-payload rebuild, disk-config preservation, maskSecretValue template preservation).
-- Manual smoke: session with swarm connected → `/model` lists ollama + openrouter models; `/context` shows source: metadata/provider (not config); `config.get providers.openrouter` still shows disk values after onSessionStart.
+- LSP clean; `pnpm -r run build` exit 0; `pnpm lint` exit 0; fast suite 2992 passed / 14 skipped (pre-existing skips), exit 0.
+- Pending: manual live smoke on a restarted agent session (beacon + coordinator must be restarted to pick up rebuilt dist).

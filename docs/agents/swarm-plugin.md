@@ -7,22 +7,29 @@ coordinator's global allowlisted entries on its existing 5-minute
 scope='swarm'`, and serves the merged view from its `GET /config` (beacon-local
 entries win for the same key, one row per key). The agent's swarm plugin then
 applies that merged underlay at session start via the config plugin's
-`rebuild()` (which runs injectors in precedence order and mutates the engine's
-shared config in place, so the llm broker and budget service observe the
-values before the first turn). Direction is strictly coordinator → beacon →
-agent.
+order, re-applies the on-disk user/project layers on top so the most-local
+config wins conflicts, and mutates the engine's shared config in place, so
+the llm broker and budget service observe the values before the first turn).
+Direction is strictly coordinator → beacon → agent. The agent injector
+normalizes the beacon's flat dotted-key rows into nested config keys and
+drops rows outside the underlay allowlist (with a one-time warning per
+unparseable row).
 
 The coordinator UI's **Config** page manages the allowed entries (global
 allowlist in `drone-core`'s `UNDERLAY_ALLOWLIST`): `providers.*` (whole-entry
 units), `llm.active`, `llm.reasoningLevel`, `compaction.enabled`,
 `compaction.strategy`, and `session.guardrail.*`. API keys are stored
-plaintext-at-rest on the coordinator, masked on read (`••••` + last 4),
-write-only on edit ("leave empty to keep current"), and `${VAR}` templates are
-preserved for receiver-side interpolation — so a distributed
-`"apiKey": "${OPENROUTER_API_KEY}"` resolves per-agent. Distribution only
-reaches **approved** beacons (Plan A server-side status enforcement), with a
-persistent warning banner in the UI. Encryption-at-rest is a documented
-follow-up.
+plaintext-at-rest on the coordinator, masked on read (`••••` + last 4;
+whole-value `${VAR}` templates are preserved verbatim so masking round-trips
+never corrupt them), and write-only on edit ("leave empty to keep current").
+Secret entries should be distributed as raw `${VAR}` templates — a template
+is not itself a secret, and masking it would corrupt the entry before the
+receiver could use it. Receiver-side interpolation of underlay-provided
+values is NOT yet implemented (templates survive masking and sync intact;
+only disk-file config layers are interpolated at parse time). Distribution
+only reaches **approved** beacons (Plan A server-side status enforcement),
+with a persistent warning banner in the UI. Encryption-at-rest is a
+documented follow-up.
 
 Valid underlay content includes:
 
@@ -35,11 +42,14 @@ Valid underlay content includes:
 - `compaction.enabled` / `compaction.strategy` — compaction tuning.
 - `session.guardrail.*` — guardrail thresholds.
 
-`${VAR}` interpolation runs receiver-side at layer parse time (each node
-resolves against its own environment), so a swarm-distributed template like
-`"apiKey": "${OPENROUTER_API_KEY}"` resolves per-agent. Plaintext keys in
-underlays are allowed (swarm is a trusted channel); project-scope files may
-NOT define `providers` at all — that combination fails startup validation.
+`${VAR}` interpolation runs receiver-side at disk-layer parse time (each node
+resolves against its own environment). Underlay-provided values are consumed
+verbatim as-is, so a swarm-distributed `"apiKey": "${OPENROUTER_API_KEY}"`
+survives masking and sync but does not yet resolve per-agent — wiring
+receiver-side interpolation for underlay values is a documented follow-up.
+Plaintext keys in underlays are allowed (swarm is a trusted channel);
+project-scope files may NOT define `providers` at all — that combination
+fails startup validation.
 Changes propagate on the next sync (≤ ~5 minutes) and are applied at the next
 agent session start; there is no live mid-session re-apply.
 
