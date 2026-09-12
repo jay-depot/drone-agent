@@ -474,5 +474,9 @@
   {
     "timestamp": "2026-09-10T18:43:31.626Z",
     "insight": "Human follow-up to the checkpoint-race insight: ensure that the project-wiki metadata always includes the correct pull request *description* in addition to the hash, so the next agent can figure out what commit you *mean* even if if the hashes don't match after squash-merge."
+  },
+  {
+    "timestamp": "2026-09-12T01:48:23.844Z",
+    "insight": "When system reminders are wrapped in an envelope before delivery (e.g. a synthetic user-role message wrapped in <system-reminder> tags per ADR 207's single-trailing-system-message invariant), tests that assert the reminder via exact whole-string `contents.indexOf('queued-reminder')` break — the delivered content is now `<system-reminder>\\n\\nqueued-reminder\\n\\n</system-reminder>`. Use `contents.findIndex(c => c.includes('queued-reminder'))` for reminder/footer content assertions so they survive envelope wrapping. This was the failing 'prompt fragment phase ordering' test fixed in commit 712b4a6 (after commit 0d92490 changed reminder delivery from a trailing system message to a wrapped user-turn)."
   }
 ]
