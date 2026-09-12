@@ -14,31 +14,37 @@ const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {
 
 // Mock the spawn backends so we don't need actual implementations
 vi.mock('../src/local-spawn-backend.js', () => ({
-  LocalSpawnBackend: vi.fn().mockImplementation(() => ({
-    type: 'local',
-    spawnSession: vi.fn(),
-    sendMessage: vi.fn(),
-    terminateSession: vi.fn(),
-  })),
+  LocalSpawnBackend: vi.fn().mockImplementation(function () {
+    return {
+      type: 'local',
+      spawnSession: vi.fn(),
+      sendMessage: vi.fn(),
+      terminateSession: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('../src/coordinator-spawn-backend.js', () => ({
-  CoordinatorSpawnBackend: vi.fn().mockImplementation(() => ({
-    type: 'coordinator',
-    spawnSession: vi.fn(),
-    sendMessage: vi.fn(),
-    terminateSession: vi.fn(),
-  })),
+  CoordinatorSpawnBackend: vi.fn().mockImplementation(function () {
+    return {
+      type: 'coordinator',
+      spawnSession: vi.fn(),
+      sendMessage: vi.fn(),
+      terminateSession: vi.fn(),
+    };
+  }),
 }));
 
 // Mock engine so main() doesn't actually start anything
 const mockEngineStart = vi.fn();
 const mockEngineStop = vi.fn();
 vi.mock('../src/engine.js', () => ({
-  GatewayEngine: vi.fn().mockImplementation(() => ({
-    start: mockEngineStart,
-    stop: mockEngineStop,
-  })),
+  GatewayEngine: vi.fn().mockImplementation(function () {
+    return {
+      start: mockEngineStart,
+      stop: mockEngineStop,
+    };
+  }),
 }));
 
 const { parseArgs, loadConfig, createSpawnBackend, main } =

@@ -8,23 +8,27 @@ import type { SpawnBackend } from '../src/spawn-backend.js';
 
 // Mock CoordinatorClient since GatewayEngine creates one internally
 vi.mock('../src/coordinator-client.js', () => ({
-  CoordinatorClient: vi.fn().mockImplementation(() => ({
+  CoordinatorClient: vi.fn().mockImplementation(function () {
+    return {
     spawnAgent: vi.fn(),
     sendMessage: vi.fn(),
     terminateSpawn: vi.fn(),
-  })),
+    };
+  }),
 }));
 
 // Mock the matrix adapter module so engine can import it without matrix-js-sdk
 vi.mock('../src/adapters/matrix.js', () => ({
-  MatrixServiceAdapter: vi.fn().mockImplementation((id: string) => ({
-    id,
-    type: 'matrix',
-    start: vi.fn(),
-    stop: vi.fn(),
-    sendMessage: vi.fn(),
-    onMessage: vi.fn(),
-  })),
+  MatrixServiceAdapter: vi.fn().mockImplementation(function (id: string) {
+    return {
+      id,
+      type: 'matrix',
+      start: vi.fn(),
+      stop: vi.fn(),
+      sendMessage: vi.fn(),
+      onMessage: vi.fn(),
+    };
+  }),
 }));
 
 const { GatewayEngine } = await import('../src/engine.js');
