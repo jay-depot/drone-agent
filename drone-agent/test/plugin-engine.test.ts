@@ -462,8 +462,8 @@ describe('createDronePluginEngine', () => {
     expect(footerMessages).toBeUndefined();
   });
 
-  it('startup workspace footer does not leak string-concatenation artifacts', async () => {
-    let fragment: DronePromptFragment | undefined;
+  it('splits startup workspace context from the runtime clock reminder', async () => {
+    const fragments: DronePromptFragment[] = [];
 
     await startupPlugin.register({
       logger: silentLogger(),
@@ -483,7 +483,7 @@ describe('createDronePluginEngine', () => {
       unregisterTool: () => {},
       listMountedTools: () => [],
       registerPromptFragment: (prompt: DronePromptFragment) => {
-        fragment = prompt;
+        fragments.push(prompt);
       },
       hooks: {
         onPluginsLoaded: () => {},
@@ -498,14 +498,25 @@ describe('createDronePluginEngine', () => {
       },
     });
 
-    expect(fragment).toBeDefined();
-    const rendered = await fragment!.render();
-    expect(rendered).toContain('# Workspace');
-    expect(rendered).not.toContain("' +");
-    expect(rendered).not.toContain("' ");
-    expect(rendered).toContain(
+    expect(fragments.map(fragment => fragment.phase)).toContain('header');
+    expect(fragments.map(fragment => fragment.phase)).toContain('footer');
+
+    const header = fragments.find(fragment => fragment.phase === 'header');
+    const footer = fragments.find(fragment => fragment.phase === 'footer');
+    expect(header).toBeDefined();
+    expect(footer).toBeDefined();
+
+    const headerRendered = await header!.render();
+    const footerRendered = await footer!.render();
+
+    expect(headerRendered).toContain('# Workspace');
+    expect(headerRendered).not.toContain('Current Time');
+    expect(headerRendered).not.toContain("' +");
+    expect(headerRendered).not.toContain("' ");
+    expect(headerRendered).toContain(
       '**Boundary:** Do not assume or use paths outside this workspace'
     );
+    expect(footerRendered).toContain('Current Time');
   });
   it('merges multiple footer fragments into a single trailing system message', async () => {
     const plugins: DronePlugin[] = [
