@@ -17,12 +17,13 @@ Status: CONSUMED 2026-09-12 — planning complete; the design decisions and impl
 Original purpose: kickoff context for receiver-side ${VAR} interpolation of swarm config underlay values. Prerequisite fix-swarm-config-underlay-rebuild landed (feb18d2).
 
 ## Resolution summary (2026-09-12 grilling session)
+
 1. Placement: injector-local — inside BeaconConfigInjector.inject() via pure helper resolveEnvTemplates (wraps drone-core transformEnvVars); generic injector contract unchanged.
 2. Failure: row-level drop + once-per-key warn; inject() never throws (allowlist "whole-entry unit" semantics).
 3. Scope: whole-unit interpolation, symmetric with disk path.
 4. Template canon: three definitions coexist by role (resolution/classification/masking); document, don't unify.
 5. Masked-display contract: verified already intact (maskScalar pass-through + UI write-only keep-current sentinel) — no change.
 6. Timing: document-only; resolves at session start.
-Plus: spawn-env audit confirmed all spawn paths pass full parent env to the agent (beacon env for relayed spawns); no sanitization anywhere.
+   Plus: spawn-env audit confirmed all spawn paths pass full parent env to the agent (beacon env for relayed spawns); no sanitization anywhere.
 
 Full plan: project memory plan-receiver-side-env-var-interpolation.

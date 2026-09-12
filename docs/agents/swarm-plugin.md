@@ -7,13 +7,15 @@ coordinator's global allowlisted entries on its existing 5-minute
 scope='swarm'`, and serves the merged view from its `GET /config` (beacon-local
 entries win for the same key, one row per key). The agent's swarm plugin then
 applies that merged underlay at session start via the config plugin's
-order, re-applies the on-disk user/project layers on top so the most-local
-config wins conflicts, and mutates the engine's shared config in place, so
-the llm broker and budget service observe the values before the first turn).
+`rebuild()` (which runs registered injectors in precedence order, re-applies
+the on-disk user/project layers on top so the most-local config wins
+conflicts, and mutates the engine's shared config in place, so the llm
+broker and budget service observe the values before the first turn).
 Direction is strictly coordinator → beacon → agent. The agent injector
 normalizes the beacon's flat dotted-key rows into nested config keys and
-drops rows outside the underlay allowlist (with a one-time warning per
-unparseable row).
+drops rows outside the underlay allowlist, rows that fail to parse, and rows
+whose `${VAR}` templates reference unset environment variables (one-time
+warning per row and failure kind).
 
 The coordinator UI's **Config** page manages the allowed entries (global
 allowlist in `drone-core`'s `UNDERLAY_ALLOWLIST`): `providers.*` (whole-entry
@@ -24,9 +26,8 @@ whole-value `${VAR}` templates are preserved verbatim so masking round-trips
 never corrupt them), and write-only on edit ("leave empty to keep current").
 Secret entries should be distributed as raw `${VAR}` templates — a template
 is not itself a secret, and masking it would corrupt the entry before the
-receiver could use it. Receiver-side interpolation of underlay-provided
-values is NOT yet implemented (templates survive masking and sync intact;
-only disk-file config layers are interpolated at parse time). Distribution
+receiver could use it. Templates survive masking and sync intact; the agent
+resolves them receiver-side at underlay apply time (see below). Distribution
 only reaches **approved** beacons (Plan A server-side status enforcement),
 with a persistent warning banner in the UI. Encryption-at-rest is a
 documented follow-up.
@@ -42,16 +43,30 @@ Valid underlay content includes:
 - `compaction.enabled` / `compaction.strategy` — compaction tuning.
 - `session.guardrail.*` — guardrail thresholds.
 
-`${VAR}` interpolation runs receiver-side at disk-layer parse time (each node
-resolves against its own environment). Underlay-provided values are consumed
-verbatim as-is, so a swarm-distributed `"apiKey": "${OPENROUTER_API_KEY}"`
-survives masking and sync but does not yet resolve per-agent — wiring
-receiver-side interpolation for underlay values is a documented follow-up.
+`${VAR}` interpolation runs receiver-side in both config paths: disk-layer
+files are interpolated at parse time, and underlay rows are interpolated by
+the agent's beacon injector at session-start apply time — each node resolves
+against its own process environment. A swarm-distributed
+`"apiKey": "${OPENROUTER_API_KEY}"` therefore authenticates once the
+variable exists in the agent's environment. An underlay row referencing an
+unset variable is dropped whole (provider entries are whole-entry units; a
+half-resolved provider that lists but cannot authenticate is worse than an
+honest absence) with a one-time warning per key naming the variable. Set the
+env var before launching the agent; env changes take effect at the next
+session start, usually the next agent process. Two known gaps, shared with
+the disk path: non-identifier variable names like `${FOO-BAR}` are
+unresolvable and stay literal, and mid-string templates inside
+`secret:true` entries cannot round-trip the UI's write-only keep-current
+contract — secrets must be whole-value `${VAR}` templates to survive.
 Plaintext keys in underlays are allowed (swarm is a trusted channel);
 project-scope files may NOT define `providers` at all — that combination
 fails startup validation.
 Changes propagate on the next sync (≤ ~5 minutes) and are applied at the next
-agent session start; there is no live mid-session re-apply.
+agent session start; there is no live mid-session re-apply. Spawn-env
+asymmetry: coordinator-relayed spawns run with the beacon host's environment
+(the shared spawner passes the beacon process's `process.env` plus additive
+`config.env`), so a spawned agent resolves `${VAR}` templates against the
+beacon host's env, not the coordinator's or gateway's.
 
 # Swarm Plugin
 
