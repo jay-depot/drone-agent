@@ -60,11 +60,7 @@ export default defineConfig({
     globals: false,
     // Force single fork to avoid hanging on process cleanup
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
+    maxWorkers: 1,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],
