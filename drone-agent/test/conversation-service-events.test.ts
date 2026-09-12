@@ -253,7 +253,7 @@ describe('conversation service — new batch events', () => {
 // ---------------------------------------------------------------------------
 
 describe('conversation service — system reminders', () => {
-  it('delivers a queued reminder exactly once as a non-persisted system message', async () => {
+  it('delivers a queued reminder exactly once as a synthetic user-tail message', async () => {
     const engine = createMockEngine({
       tools: [],
       executeToolImpl: async () => '',
@@ -285,12 +285,12 @@ describe('conversation service — system reminders', () => {
     await conversation.sendUserMessage('hello one', () => {});
     const firstCallMessages = provider.__chatMock.mock.calls[0][0]
       .messages as DroneChatMessage[];
-    const remindersInFirstCall = firstCallMessages.filter(
+    const reminderUserTurns = firstCallMessages.filter(
       message =>
-        message.role === 'system' &&
+        message.role === 'user' &&
         message.content.includes('approaching the compaction threshold')
     );
-    expect(remindersInFirstCall).toHaveLength(1);
+    expect(reminderUserTurns).toHaveLength(1);
 
     // One-shot: the reminder must not appear in the next call, and it must
     // never enter session history.
@@ -300,13 +300,13 @@ describe('conversation service — system reminders', () => {
     expect(
       secondCallMessages.filter(
         message =>
-          message.role === 'system' &&
+          message.role === 'user' &&
           message.content.includes('approaching the compaction threshold')
       )
     ).toHaveLength(0);
     expect(
-      sessionManager.getMessages().filter(m => m.role === 'system')
-    ).toHaveLength(0);
+      sessionManager.getMessages().filter(m => m.role === 'user')
+    ).toHaveLength(2);
   });
 
   it('clears queued reminders on session clear', async () => {

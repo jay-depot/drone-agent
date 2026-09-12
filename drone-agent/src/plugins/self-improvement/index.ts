@@ -78,10 +78,10 @@ export const selfImprovementPlugin: DronePlugin = {
       createMarkExaminedTool(personaCap, skillsCap, defaultInsightEngine)
     );
 
-    // ── Prompt fragment: principles (footer) ──────────────────────────
+    // ── Prompt fragment: principles (header) ─────────────────────────
     registration.registerPromptFragment({
       key: 'principles',
-      phase: 'footer',
+      phase: 'header',
       render: async () =>
         renderPrinciplesFragment(
           projectDir,

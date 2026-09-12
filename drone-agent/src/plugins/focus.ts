@@ -37,6 +37,13 @@ export const focusPlugin: DronePlugin = {
     registration.registerSlashCommand({
       command: '/focus',
       description: 'Session focus management: set, clear, show',
+      // Read-only `show` runs immediately while the LLM works; `set`/`clear`
+      // mutate shared focus state mid-turn, so they queue unless --now is
+      // passed (the universal escape hatch).
+      busyBehavior: (invocation: { subcommand: string | undefined }) =>
+        invocation.subcommand === 'show' ||
+        invocation.subcommand === undefined ||
+        invocation.subcommand === '',
       handler: async (ctx: DroneSlashCommandContext) => {
         const subcommand = ctx.args[0] ?? '';
 

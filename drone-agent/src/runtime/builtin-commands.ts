@@ -18,6 +18,9 @@ import {
 const exitCommand: DroneSlashCommand = {
   command: '/exit',
   description: 'Exit the application',
+  // Host-special: exits immediately even while the LLM is working (matches
+  // Ctrl-C as the immediate exit path). Always runs, never queues.
+  busyBehavior: true,
   handler: async (ctx: DroneSlashCommandContext) => {
     if (ctx.exit) {
       ctx.exit();
@@ -31,6 +34,8 @@ const exitCommand: DroneSlashCommand = {
 const quitCommand: DroneSlashCommand = {
   command: '/quit',
   description: 'Exit the application',
+  // Same exit semantics as /exit — immediate, never queued.
+  busyBehavior: true,
   handler: async (ctx: DroneSlashCommandContext) => {
     if (ctx.exit) {
       ctx.exit();
@@ -46,6 +51,8 @@ const quitCommand: DroneSlashCommand = {
 const helpCommand: DroneSlashCommand = {
   command: '/help',
   description: 'Show this help',
+  // Read-only, instant — safe to run while the LLM is working.
+  busyBehavior: true,
   handler: async (ctx: DroneSlashCommandContext) => {
     // If the host provides a printHelp function, use it.
     if (ctx.printHelp) {
@@ -87,6 +94,8 @@ const clearCommand: DroneSlashCommand = {
 const pluginsCommand: DroneSlashCommand = {
   command: '/plugins',
   description: 'List enabled plugins',
+  // Read-only, instant — safe to run while the LLM is working.
+  busyBehavior: true,
   handler: async (ctx: DroneSlashCommandContext) => {
     const plugins = ctx.engine.listPlugins?.() ?? [];
     const lines = plugins
@@ -105,6 +114,8 @@ const pluginsCommand: DroneSlashCommand = {
 const toolsCommand: DroneSlashCommand = {
   command: '/tools',
   description: 'List mounted tools (/tools --all for all registered tools)',
+  // Read-only, instant — safe to run while the LLM is working.
+  busyBehavior: true,
   handler: async (ctx: DroneSlashCommandContext) => {
     const showAll = ctx.args.includes('--all');
 
@@ -141,6 +152,8 @@ const toolsCommand: DroneSlashCommand = {
 const systemPromptCommand: DroneSlashCommand = {
   command: '/systemprompt',
   description: 'Show the current system prompt',
+  // Read-only, instant — safe to run while the LLM is working.
+  busyBehavior: true,
   handler: async (ctx: DroneSlashCommandContext) => {
     const headerMessages = (await ctx.engine.buildSystemMessages?.()) ?? [];
     const footerMessages = (await ctx.engine.buildFooterMessages?.()) ?? [];

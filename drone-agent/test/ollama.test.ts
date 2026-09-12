@@ -168,7 +168,7 @@ describe('ollama chat user-message injection', () => {
     });
   }
 
-  it('prepends a placeholder user message when no user role is present', async () => {
+  it('passes through the provided messages without injecting a workaround user turn', async () => {
     const provider = await captureProvider();
     await provider.chat({
       model: 'fake',
@@ -183,11 +183,11 @@ describe('ollama chat user-message injection', () => {
       role: string;
       content: string;
     }>;
-    expect(sent[0]).toEqual({
-      role: 'user',
-      content: '(Continuing from summaries)',
-    });
-    expect(sent.map(m => m.role)).toEqual(['user', 'system', 'assistant']);
+    expect(sent.map(m => m.role)).toEqual(['system', 'assistant']);
+    expect(sent[0]).not.toHaveProperty(
+      'content',
+      '(Continuing from summaries)'
+    );
   });
 
   it('does not inject a placeholder when a user message already exists', async () => {

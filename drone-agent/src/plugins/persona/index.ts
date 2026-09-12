@@ -536,6 +536,10 @@ export const personaPlugin: DronePlugin = {
     registration.registerSlashCommand({
       command: '/persona',
       description: 'Manage personas: list, create, select, current.',
+      // Read-only subcommands (list, current) run immediately while the LLM
+      // works; select/create mutate session state -> queue unless --now.
+      busyBehavior: (invocation: { subcommand: string | undefined }) =>
+        invocation.subcommand === 'list' || invocation.subcommand === 'current',
       handler: async ctx => {
         const subcommand = ctx.args[0] ?? '';
 

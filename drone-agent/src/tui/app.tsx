@@ -552,7 +552,76 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
     return () => unregister?.();
   }, [opts.engine]);
 
+  // ── Host slash-command context ────────────────────────────────────────
+  // Wire the TUI's rich context (colored logger, exit, printHelp) into the
+  // conversation service so queued and remote-dispatched (submitUserMessage)
+  // slash commands run with the same UX as interactive ones — falling back
+  // to the service's bare logger otherwise.
+  useEffect(() => {
+    opts.conversation.setSlashCommandContext?.(() => ({
+      logger: {
+        info: msg => log(msg, 'user'),
+        warn: msg => log(msg, 'error'),
+        error: msg => log(msg, 'error'),
+      },
+      engine: opts.engine,
+      conversation: opts.conversation,
+      sessionManager: opts.sessionManager,
+      exit: () => exit(),
+      printHelp: () => printHelp(opts, log),
+    }));
+  }, [opts.engine, opts.conversation, opts.sessionManager, log]);
+
   // ── Slash command handlers ──────────────────────────────────────────
+  type SlashDispatchCtx = Omit<
+    import('drone-core').DroneSlashCommandContext,
+    'line' | 'args'
+  >;
+  const buildSlashDispatchCtx = useCallback(
+    (): SlashDispatchCtx => ({
+      logger: {
+        info: (msg: string) => log(msg, 'user'),
+        warn: (msg: string) => log(msg, 'error'),
+        error: (msg: string) => log(msg, 'error'),
+      },
+      engine: opts.engine,
+      conversation: opts.conversation,
+      sessionManager: opts.sessionManager,
+      exit: () => exit(),
+      printHelp: () => printHelp(opts, log),
+    }),
+    [opts, log, exit]
+  );
+
+  /**
+   * Dispatch a slash line WITHOUT toggling the LLM-active indicator. Used by
+   * busy-immediate commands (busyBehavior true subcommand, or the universal
+   * --now override) so a genuinely in-flight LLM turn keeps its spinner while
+   * the side command runs, and the busy branch stays active for the next
+   * input.
+   */
+  const dispatchSlashLine = useCallback(
+    async (line: string) => {
+      const trimmed = line.trim();
+      if (trimmed.length === 0) return;
+
+      log(`> ${trimmed}`, 'user');
+
+      if (trimmed.startsWith('/')) {
+        const handled = await opts.engine.dispatchSlashCommand(
+          trimmed,
+          buildSlashDispatchCtx()
+        );
+        if (handled) return;
+        log(
+          `Unknown command: ${trimmed}. Type /help for available commands.`,
+          'error'
+        );
+      }
+    },
+    [opts.engine, buildSlashDispatchCtx, log]
+  );
+
   const runSlashCommand = useCallback(
     async (line: string) => {
       const trimmed = line.trim();
@@ -563,18 +632,10 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
       if (trimmed.startsWith('/')) {
         setIsLlmActive(true);
         try {
-          const handled = await opts.engine.dispatchSlashCommand(trimmed, {
-            logger: {
-              info: msg => log(msg, 'user'),
-              warn: msg => log(msg, 'error'),
-              error: msg => log(msg, 'error'),
-            },
-            engine: opts.engine,
-            conversation: opts.conversation,
-            sessionManager: opts.sessionManager,
-            exit: () => exit(),
-            printHelp: () => printHelp(opts, log),
-          });
+          const handled = await opts.engine.dispatchSlashCommand(
+            trimmed,
+            buildSlashDispatchCtx()
+          );
           if (handled) return;
           log(
             `Unknown command: ${trimmed}. Type /help for available commands.`,
@@ -601,7 +662,7 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         setIsLlmActive(false);
       }
     },
-    [opts, log, exit, setIsLlmActive]
+    [opts, log, buildSlashDispatchCtx, setIsLlmActive]
   );
 
   // ── Unified keybindings ──────────────────────────────────────────────
@@ -747,6 +808,35 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
             if (trimmed === '/cancel') {
               opts.conversation.cancelCurrentRequest?.();
               log('Cancelled current request.', 'info');
+              return;
+            }
+            if (trimmed.startsWith('/')) {
+              // Command channel while busy: classify the line (never send a
+              // slash command as plain text — ADR 040 unified channel).
+              const cls = opts.engine.classifySlashCommand(trimmed);
+              if (cls.kind === 'unknown') {
+                log(
+                  `Unknown command: ${trimmed}. Type /help for available commands.`,
+                  'error'
+                );
+                return;
+              }
+              if (cls.behavior) {
+                // Immediate (declared busyBehavior true, subcommand-aware fn,
+                // or the universal --now override). Dispatch directly WITHOUT
+                // toggling isLlmActive — no spinner clear for an immediate
+                // command.
+                void dispatchSlashLine(cls.strippedLine);
+                return;
+              }
+              // Queued: defer until the current task finishes (the --now
+              // escape hatch was already consumed by classify).
+              log(`> ${trimmed}`, 'user');
+              log(
+                `${cls.command.command} (deferred — runs when the current task finishes)`,
+                'notice'
+              );
+              opts.conversation.enqueueSlashCommand?.(cls.strippedLine);
               return;
             }
             opts.conversation.enqueueUserMessage?.(trimmed);

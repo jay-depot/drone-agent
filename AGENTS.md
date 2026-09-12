@@ -139,6 +139,26 @@ Custom slash commands defined in `.macro` files. The `macros` plugin loads them 
 
 All slash commands (built-in and plugin-registered) are dispatched through the engine's unified registry. Built-in commands (`/exit`, `/quit`, `/help`, `/clear`, `/plugins`, `/tools`, `/systemprompt`, `/tool`, `/exec`) have lower precedence than plugin commands, allowing plugins to override them. Unrecognized slash commands display an error instead of being sent to the LLM. The `?` alias for `/help` has been removed.
 
+**Slash commands while the LLM is working.** A slash command typed while a turn is in
+flight is NEVER sent as plain text. Every entry point (TUI input line, readline loop,
+remote steering via `_runtime.submitUserMessage`) routes leading-`/` lines through the
+engine's classifier and dispatches or defers them uniformly:
+
+- **`busyBehavior`** — each `DroneSlashCommand` can declare how it behaves when the LLM
+  is busy: `true` runs immediately (read-only, instant commands like `/help`, `/plugins`,
+  `/context`, `/focus show`), `false`/unset queues the command until the current task
+  finishes (mutating commands like `/focus set`, `/clear`), and a function receives the
+  parsed `invocation` (`{ subcommand, flags }`) for subcommand-aware decisions (e.g.
+  `/todo show` immediate, `/todo add` queued).
+- **`--now` escape hatch** — appending `--now` to ANY command overrides queue → immediate
+  (including destructive ones like `/clear --now` and `/exec --now`), so you can force a
+  queued command to run mid-turn. `--now` is stripped from the line before dispatch and
+  never leaks into the handler's args.
+- **Queued commands** log a `(deferred — runs when the current task finishes)` notice,
+  share one ordered queue with deferred steering text, and drain at the next loop
+  boundary (or run as their own full round on normal completion). Queued entries are
+  preserved across an Escape-cancel and flushed by `/clear`.
+
 ### Specialized Subsystems
 
 The following subsystems have dedicated documentation in `docs/agents/`:

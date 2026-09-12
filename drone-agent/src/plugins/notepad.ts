@@ -20,13 +20,21 @@ export const notepadPlugin: DronePlugin = {
     };
 
     registration.registerPromptFragment({
+      key: 'notepad-static',
+      phase: 'header',
+      render: async () => {
+        return `# Session Notepad\n\nUse the \`notepad__*\` tools to maintain compact working memory for the current session. This is useful for temporary constraints, intermediate facts, and open tasks that should remain visible while working through a complex problem.`;
+      },
+    });
+
+    registration.registerPromptFragment({
       key: 'notepad-current',
       phase: 'footer',
       render: async () => {
         if (!state.currentNotepad) {
-          return '';
+          return false;
         }
-        return `# Session Notepad\n\n===\n\n${state.currentNotepad}\n\n===\n\nUse the \`notepad__*\` tools to maintain a "working memory" for the current session. This is ideal for tracking complex constraints, temporary variables, or specific notes that should remain visible above the conversational noise. Refer to this notepad to maintain continuity during complex multi-step tasks.`;
+        return `# Session Notepad\n\n===\n\n${state.currentNotepad}\n\n===`;
       },
     });
 

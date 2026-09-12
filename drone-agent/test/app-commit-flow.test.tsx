@@ -85,6 +85,7 @@ describe('App commit flow', () => {
         setElicitation: () => {},
         runWorkflow: async () => ({ toolResult: '{}' }),
         getSlashCommands: () => [],
+        classifySlashCommand: () => ({ kind: 'unknown' }),
       },
       conversation: {
         sendUserMessage: async () => 'reply',

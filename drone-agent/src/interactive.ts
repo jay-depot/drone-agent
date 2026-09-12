@@ -483,6 +483,8 @@ export async function runInteractiveLoop(
             sendUserMessage: (p, onEvent) =>
               conversation.sendUserMessage(p, onEvent),
             clearSession: () => conversation.clearSession(),
+            enqueueSlashCommand: (line: string) =>
+              conversation.enqueueSlashCommand?.(line),
             getDebugSubsystems: () => conversation.getDebugSubsystems(),
             enableDebugSubsystem: name =>
               conversation.enableDebugSubsystem(name),

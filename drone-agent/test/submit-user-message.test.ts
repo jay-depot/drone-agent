@@ -94,9 +94,12 @@ describe('submitUserMessage — concurrency-safe synthetic turns', () => {
   });
 
   it('queues when a turn is in flight, returning an empty string', async () => {
+    // The held first chat call (below) supplies 'first reply' WITHOUT
+    // consuming the base queue — mockImplementationOnce bypasses the base
+    // implementation's shift(), so the base array must NOT include it.
     const provider = makeProvider([
-      { message: 'first reply' },
       { message: 'second reply' },
+      { message: 'third reply' },
     ]);
     const conversation = makeConversation(provider);
 
@@ -123,22 +126,24 @@ describe('submitUserMessage — concurrency-safe synthetic turns', () => {
     const firstReply = await firstTurn;
     expect(firstReply).toBe('first reply');
 
-    // The queued message ('second') is drained and appended as a user turn at
-    // the start of the next sendUserMessage call, which processes 'third'.
-    const secondReply = await conversation.submitUserMessage('third');
+    // After a NORMAL completion, the queued text ('second') drains at point A
+    // as its OWN full round (ADR 040 v6) — the agent answers it via the next
+    // chat call, which resolves 'second reply'. The queue is now empty.
     expect(conversation.getMessages().some(m => m.content === 'second')).toBe(
       true
     );
     expect(conversation.getMessages().some(m => m.content === 'third')).toBe(
+      false
+    );
+    expect(provider.__chatMock).toHaveBeenCalledTimes(2);
+
+    // With the queue empty, the next submission sends immediately and
+    // returns its own reply ('third reply').
+    const secondReply = await conversation.submitUserMessage('third');
+    expect(secondReply).toBe('third reply');
+    expect(conversation.getMessages().some(m => m.content === 'third')).toBe(
       true
     );
-    // The held first chat call resolved via its own promise (not the queue),
-    // so the queue still holds ['first reply', 'second reply'] and the next
-    // chat call shifts 'first reply'.
-    // The held first chat call resolved via its own promise (not the queue),
-    // so the queue still holds ['first reply', 'second reply'] and the next
-    // chat call shifts 'first reply'.
-    expect(secondReply).toBe('first reply');
   });
 
   it('serializes concurrent submissions so decisions do not interleave', async () => {

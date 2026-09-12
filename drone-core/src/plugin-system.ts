@@ -320,6 +320,20 @@ export type DroneSlashCommandSessionManager = {
 };
 
 /**
+ * Parsed positional/flag structure of the portion of a slash-command line
+ * that follows the command token. `subcommand` is the first non-flag token
+ * (e.g. `"set"` in `/focus set clear`); `flags` lists every dash-prefixed
+ * token in order (e.g. `["all"]` for `/tools --all`). Handlers use this to
+ * make subcommand-aware decisions (e.g. `busyBehavior` classifiers).
+ */
+export type DroneSlashInvocation = {
+  /** First non-flag token after the command token, if any. */
+  subcommand: string | undefined;
+  /** Dash-prefixed tokens after the command token, in order. */
+  flags: string[];
+};
+
+/**
  * Context passed to a slash command handler. Bundles the host-side
  * services a handler needs (engine for tool execution/capabilities,
  * conversation for model switching, session manager, and a logger)
@@ -332,6 +346,20 @@ export type DroneSlashCommandContext = {
   line: string;
   /** The subcommand arguments after the command string, split by whitespace. */
   args: string[];
+  /**
+   * Opt-in parsed invocation: the first non-flag token after the command
+   * token (e.g. `"set"` for `/focus set clear`). Set by the engine when it
+   * parses the line; absent when a minimal host constructs the context.
+   */
+  subcommand?: string | undefined;
+  /**
+   * Opt-in parsed invocation: dash-prefixed tokens after the command token
+   * (e.g. `["all"]` for `/tools --all`), in order. Set by the engine when it
+   * parses the line.
+   */
+  flags?: string[];
+  /** Opt-in parsed invocation bundling `subcommand` and `flags`. */
+  invocation?: DroneSlashInvocation;
   /** Logger for user-facing output (info/warn/error). */
   logger: import('./session-types.js').DroneLogger;
   /** Engine handle for executing tools, running workflows, accessing capabilities. */
@@ -424,6 +452,8 @@ export type DroneSlashCommandContext = {
     clearSession?: () => void;
     /** Enqueue a message to be processed at the next loop boundary. */
     enqueueUserMessage?: (prompt: string) => void;
+    /** Enqueue a slash-command line to be processed at the next loop boundary. */
+    enqueueSlashCommand?: (line: string) => void;
     /** Soft-cancel the current in-flight request. */
     cancelCurrentRequest?: () => void;
     /** Get the list of currently enabled debug subsystems. */
@@ -454,6 +484,15 @@ export type DroneSlashCommand = {
   command: string;
   /** Description for help output. */
   description: string;
+  /**
+   * How the host behaves when this command is submitted while the LLM is
+   * actively working:
+   *   - `undefined` or `false` → queue the command; it runs when the current
+   *     task finishes (the universal `--now` flag overrides to immediate);
+   *   - `true` → run immediately without queueing;
+   *   - `(invocation) => boolean` → subcommand/flag-aware decision.
+   */
+  busyBehavior?: boolean | ((invocation: DroneSlashInvocation) => boolean);
   /**
    * Handler invoked when the user enters a line starting with `command`.
    * Receives the full raw line and host-side services. Return `true` if

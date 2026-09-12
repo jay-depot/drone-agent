@@ -51,12 +51,41 @@ async function waitUntilFrame(
 /** Wait one macrotask so Ink's (asynchronous) render has flushed. */
 const tick = () => new Promise(r => setTimeout(r, 10));
 
+/**
+ * Type a line into the TUI with per-character pacing above the
+ * `useBracketedPaste` debounce threshold (30ms), then press Enter. The
+ * debounce buffers rapid characters, so a batch write + Enter races and can
+ * concatenate two submissions (`/blocking/help`). Pacing each character like
+ * human typing makes every `onSubmit` deterministic.
+ */
+async function typeAndSubmit(
+  instance: ReturnType<typeof render>,
+  line: string
+): Promise<void> {
+  for (const ch of line) {
+    instance.stdin.write(ch);
+    await new Promise(r => setTimeout(r, 40));
+  }
+  await new Promise(r => setTimeout(r, 40));
+  instance.stdin.write('\r');
+  await new Promise(r => setTimeout(r, 100));
+}
+
 type EngineMockOptions = {
   pluginStatuses?: ReturnType<DroneTuiOptions['engine']['listPlugins']>;
   tools?: ReturnType<DroneTuiOptions['engine']['listTools']>;
   pluginCount?: number;
   toolCount?: number;
   capability?: (pluginId: string) => unknown;
+  /** Override the slash-command classifier (default: always unknown). */
+  classifySlashCommand?: (
+    line: string
+  ) => ReturnType<DroneTuiOptions['engine']['classifySlashCommand']>;
+  /** Override slash-command dispatch (default: /help + '?' are handled). */
+  dispatchSlashCommand?: (
+    line: string,
+    ctx: Omit<import('drone-core').DroneSlashCommandContext, 'line' | 'args'>
+  ) => Promise<boolean>;
 };
 
 /**
@@ -67,6 +96,21 @@ type EngineMockOptions = {
 function makeEngine(
   options: EngineMockOptions = {}
 ): DroneTuiOptions['engine'] {
+  const defaultDispatch = async (
+    _line: string,
+    ctx: Omit<import('drone-core').DroneSlashCommandContext, 'line' | 'args'>
+  ) => {
+    if (_line === '/help' || _line === '?') {
+      if (ctx.printHelp) {
+        ctx.printHelp();
+      }
+      return true;
+    }
+    return false;
+  };
+  const defaultClassify = (): ReturnType<
+    DroneTuiOptions['engine']['classifySlashCommand']
+  > => ({ kind: 'unknown' }) as const;
   const tools = options.tools ?? [
     { name: 'tool-a', description: 'Tool A' },
     { name: 'tool-b', description: 'Tool B' },
@@ -106,15 +150,8 @@ function makeEngine(
     },
     buildSystemMessages: async () => [],
     getHelpSnippets: () => [],
-    dispatchSlashCommand: async (_line, ctx) => {
-      if (_line === '/help' || _line === '?') {
-        if (ctx.printHelp) {
-          ctx.printHelp();
-        }
-        return true;
-      }
-      return false;
-    },
+    dispatchSlashCommand: (options.dispatchSlashCommand ??
+      defaultDispatch) as DroneTuiOptions['engine']['dispatchSlashCommand'],
     onConversationEvent: () => () => {},
     setElicitation: () => {},
     runWorkflow: async () => ({ toolResult: '{}' }),
@@ -157,6 +194,8 @@ function makeEngine(
       { command: '/exit', description: 'Exit', handler: async () => true },
       { command: '/quit', description: 'Exit', handler: async () => true },
     ],
+    classifySlashCommand: (options.classifySlashCommand ??
+      defaultClassify) as DroneTuiOptions['engine']['classifySlashCommand'],
   };
 }
 
@@ -356,6 +395,185 @@ describe('App', () => {
     cleanup = instance.cleanup;
     await tick();
     expect(instance.lastFrame() ?? '').not.toContain('USED');
+  });
+
+  // ── Busy-state slash-command routing (ADR 040) ──────────────────────
+  // While the LLM is active (isLlmActive true), a typed slash command must
+  // NEVER be sent as plain text: immediate commands dispatch without toggling
+  // the indicator, queued commands log a deferred notice + enqueue, and
+  // unknown commands log an error.
+
+  it('defers a queued slash command while busy with a notice and enqueues it', async () => {
+    const enqueueSlash = vi.fn();
+    // A never-resolving dispatch keeps runSlashCommand in flight so the TUI
+    // stays in the busy (isLlmActive) branch for the next submission.
+    const dispatch = vi.fn(async (line: string) => {
+      if (line === '/blocking') return new Promise<boolean>(() => {});
+      return false;
+    });
+    const classify = (
+      line: string
+    ): ReturnType<DroneTuiOptions['engine']['classifySlashCommand']> =>
+      line === '/focus set clear'
+        ? {
+            kind: 'command',
+            command: {
+              command: '/focus',
+              description: 'Set focus',
+              handler: async () => true,
+            },
+            behavior: false,
+            invocation: { subcommand: 'set', flags: [] },
+            strippedLine: '/focus set clear',
+          }
+        : ({ kind: 'unknown' } as const);
+    const opts = makeOptions({
+      engine: makeEngine({
+        classifySlashCommand: classify,
+        dispatchSlashCommand: dispatch,
+      }),
+      conversation: {
+        sendUserMessage: async () => 'reply',
+        clearSession: () => {},
+        getEstimatedContextUsagePercent: async () => 12,
+        setModel: () => {},
+        getModel: () => 'llama3.1:latest',
+        getReasoningLevel: () => undefined,
+        setReasoningLevel: () => {},
+        enqueueUserMessage: () => {},
+        enqueueSlashCommand: enqueueSlash,
+        cancelCurrentRequest: () => {},
+        getDebugSubsystems: () => [],
+        enableDebugSubsystem: () => {},
+        disableDebugSubsystem: () => {},
+      },
+    });
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+    await tick();
+
+    // Enter a blocking command to make the LLM busy.
+    await typeAndSubmit(instance, '/blocking');
+
+    // While busy, submit a queued slash command.
+    await typeAndSubmit(instance, '/focus set clear');
+    const frame = await waitUntilFrame(
+      instance,
+      f =>
+        f.includes('deferred') &&
+        f.includes('runs when the current task finishes')
+    );
+    expect(frame).toContain('deferred');
+    expect(enqueueSlash).toHaveBeenCalledTimes(1);
+    expect(enqueueSlash).toHaveBeenCalledWith('/focus set clear');
+    // The queued command is NOT dispatched while busy.
+    expect(dispatch).not.toHaveBeenCalledWith(
+      '/focus set clear',
+      expect.anything()
+    );
+  });
+
+  it('dispatches an immediate command while busy without enqueueing', async () => {
+    const enqueueSlash = vi.fn();
+    const dispatch = vi.fn(async (line: string) => {
+      if (line === '/blocking') return new Promise<boolean>(() => {});
+      return false;
+    });
+    const classify = (
+      line: string
+    ): ReturnType<DroneTuiOptions['engine']['classifySlashCommand']> =>
+      line === '/help'
+        ? {
+            kind: 'command',
+            command: {
+              command: '/help',
+              description: 'Show this help',
+              handler: async () => true,
+            },
+            behavior: true,
+            invocation: { subcommand: undefined, flags: [] },
+            strippedLine: '/help',
+          }
+        : ({ kind: 'unknown' } as const);
+    const opts = makeOptions({
+      engine: makeEngine({
+        classifySlashCommand: classify,
+        dispatchSlashCommand: dispatch,
+      }),
+      conversation: {
+        sendUserMessage: async () => 'reply',
+        clearSession: () => {},
+        getEstimatedContextUsagePercent: async () => 12,
+        setModel: () => {},
+        getModel: () => 'llama3.1:latest',
+        getReasoningLevel: () => undefined,
+        setReasoningLevel: () => {},
+        enqueueUserMessage: () => {},
+        enqueueSlashCommand: enqueueSlash,
+        cancelCurrentRequest: () => {},
+        getDebugSubsystems: () => [],
+        enableDebugSubsystem: () => {},
+        disableDebugSubsystem: () => {},
+      },
+    });
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+    await tick();
+
+    // Enter a blocking command to make the LLM busy.
+    await typeAndSubmit(instance, '/blocking');
+
+    // While busy, submit an immediate command — dispatched directly, NOT
+    // enqueued, and the busy indicator is NOT toggled by dispatchSlashLine.
+    await typeAndSubmit(instance, '/help');
+    const frame = await waitUntilFrame(instance, f => f.includes('> /help'));
+    expect(frame).toContain('> /help');
+    expect(dispatch).toHaveBeenCalledWith('/help', expect.anything());
+    expect(enqueueSlash).not.toHaveBeenCalled();
+  });
+
+  it('logs an unknown command error while busy without enqueueing', async () => {
+    const enqueueSlash = vi.fn();
+    const dispatch = vi.fn(async (line: string) => {
+      if (line === '/blocking') return new Promise<boolean>(() => {});
+      return false;
+    });
+    const opts = makeOptions({
+      engine: makeEngine({
+        classifySlashCommand: () => ({ kind: 'unknown' }) as const,
+        dispatchSlashCommand: dispatch,
+      }),
+      conversation: {
+        sendUserMessage: async () => 'reply',
+        clearSession: () => {},
+        getEstimatedContextUsagePercent: async () => 12,
+        setModel: () => {},
+        getModel: () => 'llama3.1:latest',
+        getReasoningLevel: () => undefined,
+        setReasoningLevel: () => {},
+        enqueueUserMessage: () => {},
+        enqueueSlashCommand: enqueueSlash,
+        cancelCurrentRequest: () => {},
+        getDebugSubsystems: () => [],
+        enableDebugSubsystem: () => {},
+        disableDebugSubsystem: () => {},
+      },
+    });
+    const instance = render(<App {...opts} />);
+    cleanup = instance.cleanup;
+    await tick();
+
+    // Enter a blocking command to make the LLM busy.
+    await typeAndSubmit(instance, '/blocking');
+
+    // While busy, submit an unknown command — error only, no enqueue.
+    await typeAndSubmit(instance, '/bogus');
+    const frame = await waitUntilFrame(instance, f =>
+      f.includes('Unknown command: /bogus')
+    );
+    expect(frame).toContain('Unknown command: /bogus');
+    expect(enqueueSlash).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalledWith('/bogus', expect.anything());
   });
 });
 

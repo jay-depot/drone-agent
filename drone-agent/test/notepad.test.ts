@@ -59,8 +59,9 @@ describe('notepad manage tool', () => {
     const { registration, tools, prompts } = createMockRegistration();
     await notepadPlugin.register(registration);
     const manageTool = tools.find(t => t.name === 'manage')!;
-    const fragment = prompts[0];
-    return { manageTool, fragment };
+    const staticFragment = prompts.find(p => p.key === 'notepad-static');
+    const currentFragment = prompts.find(p => p.key === 'notepad-current');
+    return { manageTool, staticFragment, currentFragment };
   }
 
   it('rejects unknown action instead of silently succeeding', async () => {
@@ -84,14 +85,14 @@ describe('notepad manage tool', () => {
   });
 
   it('leaves notepad state untouched after failed actions', async () => {
-    const { manageTool, fragment } = await setup();
+    const { manageTool, currentFragment } = await setup();
     await manageTool.execute({ action: 'bogus' });
     await manageTool.execute({});
-    expect(await fragment.render()).toBe('');
+    expect(await currentFragment!.render()).toBe(false);
   });
 
-  it('set replaces contents and renders in the prompt fragment', async () => {
-    const { manageTool, fragment } = await setup();
+  it('moves static guidance into the header and keeps the live note compact', async () => {
+    const { manageTool, staticFragment, currentFragment } = await setup();
 
     const result = await manageTool.execute({
       action: 'set',
@@ -99,36 +100,34 @@ describe('notepad manage tool', () => {
     });
     expect(JSON.parse(toToolResultContent(result)).success).toBe(true);
 
-    const second = await manageTool.execute({
-      action: 'set',
-      content: 'second note',
-    });
-    expect(JSON.parse(toToolResultContent(second)).success).toBe(true);
+    expect(staticFragment).toBeDefined();
+    expect(await staticFragment!.render()).toContain('working memory');
+    expect(await staticFragment!.render()).toContain('notepad__');
 
-    const rendered = await fragment.render();
+    const rendered = await currentFragment!.render();
     expect(rendered).toContain('Session Notepad');
-    expect(rendered).toContain('second note');
-    expect(rendered).not.toContain('first note');
+    expect(rendered).toContain('first note');
+    expect(rendered).not.toContain('Use the `notepad__*` tools');
   });
 
   it('append adds to existing contents', async () => {
-    const { manageTool, fragment } = await setup();
+    const { manageTool, currentFragment } = await setup();
 
     await manageTool.execute({ action: 'set', content: 'line one' });
     await manageTool.execute({ action: 'append', content: 'line two' });
 
-    const rendered = await fragment.render();
+    const rendered = await currentFragment!.render();
     expect(rendered).toContain('line one');
     expect(rendered).toContain('line two');
   });
 
   it('clear empties the notepad', async () => {
-    const { manageTool, fragment } = await setup();
+    const { manageTool, currentFragment } = await setup();
 
     await manageTool.execute({ action: 'set', content: 'temporary' });
     const result = await manageTool.execute({ action: 'clear' });
     expect(JSON.parse(toToolResultContent(result)).success).toBe(true);
-    expect(await fragment.render()).toBe('');
+    expect(await currentFragment!.render()).toBe(false);
   });
 
   it('rejects non-string content for set and append', async () => {

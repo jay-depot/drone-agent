@@ -277,6 +277,103 @@ describe('focus plugin focusChanged emission', () => {
     expect(focusEvent).toBeDefined();
     expect(focusEvent.focus).toBeNull();
   });
+
+  it('classifies /focus subcommands with subcommand-aware busyBehavior', async () => {
+    const engine = createDronePluginEngine({
+      plugins: [focusPlugin],
+      config: {
+        ...createDefaultAgentConfig(),
+        enabledPlugins: ['focus'],
+      },
+      logger: silentLogger(),
+    });
+    await engine.initialize();
+    await engine.runHooks('onPluginsLoaded');
+
+    // `show` (read-only) → immediate.
+    const show = engine.classifySlashCommand('/focus show');
+    expect(show.kind).toBe('command');
+    if (show.kind === 'command') {
+      expect(show.behavior).toBe(true);
+      expect(show.invocation.subcommand).toBe('show');
+    }
+
+    // `set` (mutating) → queued.
+    const set = engine.classifySlashCommand('/focus set clear');
+    expect(set.kind).toBe('command');
+    if (set.kind === 'command') {
+      expect(set.behavior).toBe(false);
+      expect(set.invocation.subcommand).toBe('set');
+    }
+
+    // `clear` (mutating) → queued.
+    const clear = engine.classifySlashCommand('/focus clear');
+    expect(clear.kind).toBe('command');
+    if (clear.kind === 'command') {
+      expect(clear.behavior).toBe(false);
+      expect(clear.invocation.subcommand).toBe('clear');
+    }
+  });
+
+  it('strips the universal --now flag and overrides queue -> immediate', async () => {
+    const engine = createDronePluginEngine({
+      plugins: [focusPlugin],
+      config: {
+        ...createDefaultAgentConfig(),
+        enabledPlugins: ['focus'],
+      },
+      logger: silentLogger(),
+    });
+    await engine.initialize();
+    await engine.runHooks('onPluginsLoaded');
+
+    // The --now override forces a queued command to immediate, and the
+    // stripped line no longer contains --now (ready for dispatch).
+    const cls = engine.classifySlashCommand('/focus set clear --now');
+    expect(cls.kind).toBe('command');
+    if (cls.kind === 'command') {
+      expect(cls.behavior).toBe(true);
+      expect(cls.strippedLine).toBe('/focus set clear');
+      expect(cls.invocation).toEqual({ subcommand: 'set', flags: [] });
+    }
+  });
+
+  it('dispatch strips --now so it never leaks into handler args', async () => {
+    const engine = createDronePluginEngine({
+      plugins: [focusPlugin],
+      config: {
+        ...createDefaultAgentConfig(),
+        enabledPlugins: ['focus'],
+      },
+      logger: silentLogger(),
+    });
+    await engine.initialize();
+    await engine.runHooks('onPluginsLoaded');
+
+    const capturedEvents: DroneConversationEvent[] = [];
+    engine.onConversationEvent(event => {
+      capturedEvents.push(event);
+    });
+
+    // Dispatch a mutating command WITH --now: it must still run (the handler
+    // never sees --now in args) and emit focusChanged.
+    const handled = await engine.dispatchSlashCommand(
+      '/focus set Fix login --now',
+      {
+        logger: silentLogger(),
+        engine,
+        conversation: undefined,
+        sessionManager: undefined,
+      }
+    );
+    expect(handled).toBe(true);
+
+    const focusEvent = capturedEvents.find(
+      e => e.kind === 'focusChanged'
+    ) as Extract<DroneConversationEvent, { kind: 'focusChanged' }>;
+    expect(focusEvent).toBeDefined();
+    expect(focusEvent.focus).toBe('Fix login');
+  });
 });
 
 describe('persona plugin personaChanged emission', () => {
