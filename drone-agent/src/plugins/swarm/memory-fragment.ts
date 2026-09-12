@@ -1,13 +1,12 @@
+import { MAX_PITCH_CHARS } from 'drone-swarm-common';
 import type { DronePromptFragment } from 'drone-core';
 
 import type { SwarmMemoryRetriever } from './memory-retrieval.js';
 
-const PITCH_LINE_MAX = 240;
-
 function pitchOf(text: string): string {
   const oneLine = text.replace(/\s+/g, ' ').trim();
-  if (oneLine.length <= PITCH_LINE_MAX) return oneLine;
-  return `${oneLine.slice(0, PITCH_LINE_MAX - 1)}…`;
+  if (oneLine.length <= MAX_PITCH_CHARS) return oneLine;
+  return `${oneLine.slice(0, MAX_PITCH_CHARS)}…`;
 }
 
 /**

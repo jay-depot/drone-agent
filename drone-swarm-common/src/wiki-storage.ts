@@ -98,6 +98,20 @@ function pagePath(pageId: string): string {
  */
 const MAX_WIKI_CONTENT_LENGTH = 1_000_000;
 
+/** Maximum length of a wiki page `pitch` field, enforced on write. */
+export const MAX_PITCH_CHARS = 400;
+
+function validatePitch(pitch: string | undefined): string | undefined {
+  if (!pitch) return undefined;
+  const trimmed = pitch.trim();
+  if (trimmed.length > MAX_PITCH_CHARS) {
+    throw new Error(
+      `Pitch is too long. Keep it under ${MAX_PITCH_CHARS} characters and describe only when this memory is relevant. Use the \`utils__string\` tool to count the exact length before saving.`
+    );
+  }
+  return trimmed;
+}
+
 /**
  * Extract [[wiki links]] from markdown content.
  * Returns a list of linked page IDs.
@@ -197,13 +211,15 @@ export async function writePage(
     }
   }
 
+  const normalizedPitch = validatePitch(pitch);
+
   const meta: DroneWikiPageMeta = {
     id,
     title,
     scope,
     tags,
     sources,
-    ...(pitch ? { pitch } : {}),
+    ...(normalizedPitch ? { pitch: normalizedPitch } : {}),
     createdAt,
     updatedAt: now,
   };

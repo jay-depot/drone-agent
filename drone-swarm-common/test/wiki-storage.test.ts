@@ -103,6 +103,24 @@ describe('Wiki Storage', () => {
     expect(pages[0].pitch).toBe('Listed pitch value.');
   });
 
+  it('rejects pitches longer than 400 characters with an explicit length message', async () => {
+    const { writePage } = await import('../src/wiki-storage.js');
+
+    await expect(
+      writePage(
+        'long-pitch',
+        'Long Pitch',
+        'beacon',
+        'content',
+        [],
+        [],
+        'x'.repeat(401)
+      )
+    ).rejects.toThrow(
+      /under 400 characters.*utils__string|utils__string.*under 400 characters/i
+    );
+  });
+
   it('should delete a wiki page', async () => {
     const { writePage, deletePage, readPage } =
       await import('../src/wiki-storage.js');

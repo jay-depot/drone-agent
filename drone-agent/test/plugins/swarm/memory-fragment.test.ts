@@ -106,7 +106,7 @@ describe('swarm-memory prompt fragment', () => {
     expect(body).toContain('A concise stored one-sentence pitch.');
   });
 
-  it('caps the pitch to one line at ~240 chars with an ellipsis', async () => {
+  it('caps the pitch to one line at ~400 chars with an ellipsis', async () => {
     const retriever = new SwarmMemoryRetriever({
       capability,
       config: baseConfig(),
@@ -124,7 +124,7 @@ describe('swarm-memory prompt fragment', () => {
     ]);
     const body = (await render(retriever)) as string;
     const bullet = body.split('\n').find(l => l.startsWith('- ')) ?? '';
-    expect(bullet.length).toBeLessThan(320);
+    expect(bullet.length).toBeLessThan(500);
     expect(bullet).toContain('…');
     expect(bullet.split('\n')).toHaveLength(1);
   });
