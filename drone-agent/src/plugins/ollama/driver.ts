@@ -379,16 +379,7 @@ export function createOllamaProvider(providerConfig: {
       let response;
       const options = buildOllamaOptions({ parameters, extra });
 
-      // Ollama requires at least one user message in the chat context. When
-      // a session contains no user-role message (e.g. all the user turns
-      // have been compacted into summaries), prepend a neutral placeholder
-      // so the request is still valid.
-      const outboundMessages = messages.some(m => m.role === 'user')
-        ? messages.map(toOllamaMessage)
-        : [
-            { role: 'user', content: '(Continuing from summaries)' },
-            ...messages.map(toOllamaMessage),
-          ];
+      const outboundMessages = messages.map(toOllamaMessage);
 
       if (debug) {
         console.error(`[llm:request] ollama.chat({ model: ${model}, ... })`);

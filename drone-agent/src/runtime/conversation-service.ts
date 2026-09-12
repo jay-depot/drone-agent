@@ -987,7 +987,10 @@ export function createConversationService({
                 });
               }
               for (const reminder of engine.drainSystemReminders()) {
-                base.push({ role: 'system', content: reminder });
+                base.push({
+                  role: 'user',
+                  content: `<system-reminder>\n\n${reminder}\n\n</system-reminder>`,
+                });
               }
               // Lazy description (D3): when a non-vision model is about to
               // receive an undescribed image, describe it now (once-cached into
