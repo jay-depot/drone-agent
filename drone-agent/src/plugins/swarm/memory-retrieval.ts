@@ -1,3 +1,4 @@
+import { MAX_PITCH_CHARS } from 'drone-swarm-common';
 import type { DroneSwarmCapability, DroneSwarmMemoryConfig } from 'drone-core';
 
 import { buildQueryInputs } from './memory-query.js';
@@ -47,8 +48,6 @@ export interface SwarmMemoryRetrieverDeps {
   fetchImpl?: typeof fetch;
 }
 
-const PITCH_MAX_CHARS = 240;
-
 function formatCacheReport(cache: SwarmMemoryCache | null): string {
   if (!cache) {
     return 'Swarm memory: ON, no retrieval yet (waiting for the next prompt).';
@@ -65,10 +64,15 @@ function formatCacheReport(cache: SwarmMemoryCache | null): string {
   return lines.join('\n');
 }
 
+/**
+ * Collapse whitespace and cap a pitch to one line. Pitches at the storage
+ * maximum (`MAX_PITCH_CHARS`) pass through untouched; anything longer is
+ * truncated and gains a trailing ellipsis (one char past the max).
+ */
 function truncatePitch(text: string): string {
   const oneLine = text.replace(/\s+/g, ' ').trim();
-  if (oneLine.length <= PITCH_MAX_CHARS) return oneLine;
-  return `${oneLine.slice(0, PITCH_MAX_CHARS - 1)}…`;
+  if (oneLine.length <= MAX_PITCH_CHARS) return oneLine;
+  return `${oneLine.slice(0, MAX_PITCH_CHARS)}…`;
 }
 
 /**

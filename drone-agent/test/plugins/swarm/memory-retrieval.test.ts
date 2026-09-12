@@ -101,7 +101,7 @@ describe('SwarmMemoryRetriever', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0].pageId).toBe('fragments');
     expect(entries[0].pitch).toContain('TTL sweep');
-    expect(entries[0].pitch.length).toBeLessThanOrEqual(240);
+    expect(entries[0].pitch.length).toBeLessThanOrEqual(401);
   });
 
   it('prefers the stored pitch over the matched chunk when both are present', async () => {

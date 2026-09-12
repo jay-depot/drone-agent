@@ -32,6 +32,7 @@ import { BUILT_IN_SLASH_COMMANDS } from './builtin-commands.js';
 import { SystemReminderQueue } from './system-reminders.js';
 import { createEphemeralConversation } from './ephemeral-conversation.js';
 import { buildKickEnvelope } from './kick-envelope.js';
+import { parseSlashInvocation, stripNowFlag } from './slash-parse.js';
 
 export type RegisteredPluginState = {
   plugin: DronePlugin;
@@ -142,9 +143,9 @@ export type DronePluginEngine = {
   getConfig: () => DroneAgentConfig;
   /** Returns the runtime flag registry, for injecting into the system prompt. */
   getRuntimeFlags: () => RuntimeFlagRegistry;
-  /** Build header system messages (config prompt + runtime flags + header prompt fragments). */
-  buildSystemMessages: () => Promise<DroneChatMessage[]>;
-  /** Build footer system messages from footer prompt fragments. */
+  /** Build header system messages from the host-provided override, if any. */
+  buildSystemMessages?: () => Promise<DroneChatMessage[]>;
+  /** Build footer system messages from the host-provided override, if any. */
   buildFooterMessages?: () => Promise<DroneChatMessage[]>;
   /**
    * Drain queued one-shot system reminders for inclusion in the next LLM
@@ -185,6 +186,28 @@ export type DronePluginEngine = {
     line: string,
     ctx: Omit<DroneSlashCommandContext, 'line' | 'args'>
   ) => Promise<boolean>;
+  /**
+   * Classify a user-entered line WITHOUT executing it. Used by hosts that
+   * route user input while the LLM is busy (TUI onSubmit, remote steering
+   * via `submitUserMessage`). Returns:
+   *   - `{ kind: 'unknown' }` — no registered command matches the line;
+   *   - `{ kind: 'command', command, behavior, invocation, strippedLine }` —
+   *     the matching `DroneSlashCommand`, its resolved busy behavior
+   *     (with a universal `--now` flag overriding queue→immediate), the
+   *     parsed invocation, and the line with `--now` stripped (ready for
+   *     dispatch — `--now` never leaks into handler args).
+   * The match rule is identical to `dispatchSlashCommand` (plugin commands
+   * checked before built-in commands; exact match or command+space/tab).
+   */
+  classifySlashCommand: (line: string) =>
+    | { kind: 'unknown' }
+    | {
+        kind: 'command';
+        command: DroneSlashCommand;
+        behavior: boolean;
+        invocation: import('drone-core').DroneSlashInvocation;
+        strippedLine: string;
+      };
   /** Returns all slash commands (plugin + built-in) for help listings. */
   getSlashCommands: () => DroneSlashCommand[];
   /**
@@ -369,6 +392,37 @@ export function createDronePluginEngine({
   const helpSnippets = new Map<string, string[]>();
   const slashCommands = new Map<string, DroneSlashCommand[]>();
   const builtInSlashCommands: DroneSlashCommand[] = [];
+
+  /**
+   * Resolve the first matching registered slash command for a line. Shared
+   * by both classification and dispatch so their match rule is guaranteed
+   * identical (plugin commands first, then built-ins; exact match or
+   * command+space/tab).
+   */
+  function resolveSlashCommand(line: string): DroneSlashCommand | undefined {
+    const match = (commands: DroneSlashCommand[]) => {
+      for (const cmd of commands) {
+        if (
+          line === cmd.command ||
+          line.startsWith(cmd.command + ' ') ||
+          line.startsWith(cmd.command + '\t')
+        ) {
+          return cmd;
+        }
+      }
+      return undefined;
+    };
+    // First: check plugin slash commands (higher precedence).
+    for (const [pluginId, commands] of slashCommands) {
+      if (!enabledPluginIds.has(pluginId)) continue;
+      const cmd = match(commands);
+      if (cmd) {
+        return cmd;
+      }
+    }
+    return match(builtInSlashCommands);
+  }
+
   // Self-reference so closures created before the return object (e.g. the
   // workflow ctx.agent binding) can reach the fully-assembled engine.
   const engineRef: { current?: DronePluginEngine } = {};
@@ -1001,35 +1055,8 @@ export function createDronePluginEngine({
     getMountedToolCount: () => toolRegistry.getMountedCount(),
     getConfig: () => config,
     getRuntimeFlags: () => runtimeFlagRegistry,
-    buildSystemMessages: async () => {
-      if (buildSystemMessagesFromHost) {
-        return buildSystemMessagesFromHost();
-      }
-      // Fallback: assemble manually (same as the old /systemprompt behavior).
-      const base: DroneChatMessage[] = [
-        { role: 'system', content: config.systemPrompt },
-      ];
-      const fragments = await renderFragmentsByPhase('header');
-      for (const content of fragments) {
-        base.push({ role: 'system', content });
-      }
-      return base;
-    },
-    buildFooterMessages: async () => {
-      if (buildFooterMessagesFromHost) {
-        return buildFooterMessagesFromHost();
-      }
-      const fragments = await renderFragmentsByPhase('footer');
-      if (fragments.length === 0) {
-        return [];
-      }
-      // Merge all footer fragments into a single trailing system message
-      // (mirrors context-budget-service.buildFooterMessages). A run of
-      // consecutive trailing system messages is an untrained shape for some
-      // chat templates; a single one is proven safe. Topic delineation is
-      // preserved via each fragment's top-level `# Heading`.
-      return [{ role: 'system' as const, content: fragments.join('\n\n') }];
-    },
+    buildSystemMessages: buildSystemMessagesFromHost,
+    buildFooterMessages: buildFooterMessagesFromHost,
     unregisterPluginTools: (pluginId: string) => {
       unregisterPluginToolsImpl(pluginId);
     },
@@ -1052,47 +1079,50 @@ export function createDronePluginEngine({
     },
     getElicitation: () => elicitationCapability,
     runWorkflow,
+    classifySlashCommand: line => {
+      const cmd = resolveSlashCommand(line);
+      if (!cmd) return { kind: 'unknown' };
+      // A universal `--now` overrides queue→immediate for ANY command and is
+      // stripped from the line before dispatch, so it never leaks into args.
+      const { line: strippedLine, hadNow } = stripNowFlag(line);
+      const invocation = parseSlashInvocation(
+        strippedLine.slice(cmd.command.length)
+      );
+      const behavior =
+        hadNow ||
+        (typeof cmd.busyBehavior === 'function'
+          ? cmd.busyBehavior(invocation)
+          : (cmd.busyBehavior ?? false));
+      return {
+        kind: 'command',
+        command: cmd,
+        behavior,
+        invocation,
+        strippedLine,
+      };
+    },
+
     dispatchSlashCommand: async (line, ctx) => {
-      // First: check plugin slash commands (higher precedence).
-      for (const [pluginId, commands] of slashCommands) {
-        if (!enabledPluginIds.has(pluginId)) continue;
-        for (const cmd of commands) {
-          // Match if the line is exactly the command, or starts with
-          // the command followed by a space/tab (subcommand or args).
-          if (
-            line === cmd.command ||
-            line.startsWith(cmd.command + ' ') ||
-            line.startsWith(cmd.command + '\t')
-          ) {
-            const args = line
-              .slice(cmd.command.length)
-              .trim()
-              .split(/\s+/)
-              .filter(Boolean);
-            const handled = await cmd.handler({ ...ctx, line, args });
-            if (handled) return true;
-          }
-        }
-      }
-
-      // Second: check built-in slash commands (lower precedence).
-      for (const cmd of builtInSlashCommands) {
-        if (
-          line === cmd.command ||
-          line.startsWith(cmd.command + ' ') ||
-          line.startsWith(cmd.command + '\t')
-        ) {
-          const args = line
-            .slice(cmd.command.length)
-            .trim()
-            .split(/\s+/)
-            .filter(Boolean);
-          const handled = await cmd.handler({ ...ctx, line, args });
-          if (handled) return true;
-        }
-      }
-
-      return false;
+      const cmd = resolveSlashCommand(line);
+      if (!cmd) return false;
+      const { line: strippedLine } = stripNowFlag(line);
+      const args = strippedLine
+        .slice(cmd.command.length)
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+      const invocation = parseSlashInvocation(
+        strippedLine.slice(cmd.command.length)
+      );
+      const handled = await cmd.handler({
+        ...ctx,
+        line: strippedLine,
+        args,
+        subcommand: invocation.subcommand,
+        flags: invocation.flags,
+        invocation,
+      });
+      return handled;
     },
     getSlashCommands: () => {
       const result: DroneSlashCommand[] = [];

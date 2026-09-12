@@ -232,6 +232,7 @@ export function createFakeEngine(
     onConversationEvent: () => () => {},
     registerBuiltinSlashCommand: () => {},
     getBuiltinSlashCommands: () => [],
+    classifySlashCommand: () => ({ kind: 'unknown' }),
     __elicitation: options.elicit,
   };
 }
@@ -251,6 +252,21 @@ export type MockEngineOptions = {
   promptFragments?: string[];
   /** Optional custom getCapability override. Defaults to returning {} for 'llm'. */
   getCapability?: <T>(id: string) => T | undefined;
+  /**
+   * Optional slash-command classifier. Defaults to returning
+   * `{ kind: 'unknown' }` (no registered commands). Override for tests that
+   * exercise slash-command routing in the conversation service.
+   */
+  classifySlashCommand?: (
+    line: string
+  ) => ReturnType<
+    import('../src/runtime/plugin-engine.js').DronePluginEngine['classifySlashCommand']
+  >;
+  /** Optional slash-command dispatch. Defaults to returning false. */
+  dispatchSlashCommand?: (
+    line: string,
+    ctx: Omit<import('drone-core').DroneSlashCommandContext, 'line' | 'args'>
+  ) => Promise<boolean>;
 };
 
 /**
@@ -319,6 +335,18 @@ export function createMockEngine(
     buildSystemMessages: async () => [],
     buildFooterMessages: async () => [],
     addExternalPlugin: async (_plugin: unknown) => false,
+    ...(options.classifySlashCommand
+      ? {
+          classifySlashCommand:
+            options.classifySlashCommand as import('../src/runtime/plugin-engine.js').DronePluginEngine['classifySlashCommand'],
+        }
+      : { classifySlashCommand: () => ({ kind: 'unknown' as const }) }),
+    ...(options.dispatchSlashCommand
+      ? {
+          dispatchSlashCommand:
+            options.dispatchSlashCommand as import('../src/runtime/plugin-engine.js').DronePluginEngine['dispatchSlashCommand'],
+        }
+      : {}),
     __executeMock: executeMock,
     __reminderQueue: reminderQueue,
   };

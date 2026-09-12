@@ -37,12 +37,11 @@ export const startupPlugin: DronePlugin = {
     const cwd = process.cwd();
     const homeDir = os.homedir();
     const osInfo = getOS();
-    const dateTime = getFormattedDateTime();
     const tempDir = os.tmpdir();
 
     registration.registerPromptFragment({
       key: 'startup-banner',
-      phase: 'footer',
+      phase: 'header',
       render: async () =>
         `# Workspace
 
@@ -52,8 +51,15 @@ export const startupPlugin: DronePlugin = {
 
 **temp dir**: ${tempDir}
 **User Home:** ${homeDir}
-**OS:** ${osInfo}
-**Current Time:** ${dateTime}`,
+**OS:** ${osInfo}`,
+    });
+
+    registration.registerPromptFragment({
+      key: 'startup-clock',
+      phase: 'footer',
+      render: async () => `# Current Time
+
+${getFormattedDateTime()}`,
     });
 
     registration.registerTool({

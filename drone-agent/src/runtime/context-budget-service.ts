@@ -186,12 +186,8 @@ export function createContextBudgetService({
     // message is a proven-safe shape (nudges landed there pre-#99). Topic
     // delineation is preserved because every fragment starts with a
     // top-level `# Heading` per the project's fragment convention.
-    return [
-      {
-        role: 'system',
-        content: fragments.join('\n\n'),
-      },
-    ];
+    const content = `<system-reminder>\n\n${fragments.join('\n\n')}\n\n</system-reminder>`;
+    return [{ role: 'system', content }];
   }
 
   async function resolveContextWindow(): Promise<DroneContextWindowInfo> {

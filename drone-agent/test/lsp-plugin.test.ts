@@ -75,12 +75,15 @@ describe('lsp plugin integration', () => {
     expect(tools.size).toBe(10);
   });
 
-  it('registers lsp-status prompt fragment', async () => {
+  it('splits LSP status into the header and diagnostics into the footer', async () => {
+    const fragments: Array<{ key: string; phase: 'header' | 'footer' }> = [];
     const registration: DronePluginRegistration = {
       logger: silentLogger(),
       getConfig: () => createDefaultAgentConfig(),
       registerTool: () => {},
-      registerPromptFragment: () => {},
+      registerPromptFragment: fragment => {
+        fragments.push({ key: fragment.key, phase: fragment.phase });
+      },
       registerHelp: () => {},
       registerSlashCommand: () => {},
       registerWorkflow: () => {},
@@ -106,7 +109,14 @@ describe('lsp plugin integration', () => {
       runWorkflow: async () => ({ toolResult: '{}' }),
       requestElicitation: () => undefined,
     };
-    // Just verify no crash during registration
+
     await lspPlugin.register(registration);
+
+    expect(
+      fragments.find(fragment => fragment.key === 'lsp-status')?.phase
+    ).toBe('header');
+    expect(
+      fragments.find(fragment => fragment.key === 'lsp-diagnostics')?.phase
+    ).toBe('footer');
   });
 });

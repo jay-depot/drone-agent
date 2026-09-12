@@ -226,6 +226,11 @@ export function createSwarmSessionCommand(
     command: '/swarm-session',
     description:
       'Manage swarm sessions: list recent sessions, or import an old session into the current context.',
+    // `list` is read-only and instant -> immediate while the LLM works;
+    // `import` mutates the current session context mid-turn, so it queues
+    // unless --now is passed.
+    busyBehavior: (invocation: { subcommand: string | undefined }) =>
+      invocation.subcommand === 'list',
     handler: async ctx => {
       const subcommand = ctx.args[0] ?? '';
       if (subcommand === 'list') {

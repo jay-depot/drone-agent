@@ -16,6 +16,8 @@ export function registerContextCommand(
     command: '/context',
     description:
       'Show the active model, its resolved context window + provenance, and estimated usage.',
+    // Read-only status display — safe to run while the LLM is working.
+    busyBehavior: true,
     handler: async ctx => {
       let provider;
       try {

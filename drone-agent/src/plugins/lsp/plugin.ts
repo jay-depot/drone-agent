@@ -55,12 +55,10 @@ export const lspPlugin: DronePlugin = {
       logger: registration.logger,
     });
 
-    // Register diagnostics + server status prompt fragment
     registration.registerPromptFragment({
       key: 'lsp-status',
-      phase: 'footer',
+      phase: 'header',
       render: async () => {
-        const diagPrompt = server.renderDiagnosticsPrompt();
         const states = server.getServerStates();
         const parts: string[] = [];
 
@@ -79,12 +77,14 @@ export const lspPlugin: DronePlugin = {
           );
         }
 
-        if (diagPrompt) {
-          parts.push(diagPrompt);
-        }
-
         return parts.length > 0 ? parts.join('\n\n') : false;
       },
+    });
+
+    registration.registerPromptFragment({
+      key: 'lsp-diagnostics',
+      phase: 'footer',
+      render: async () => server.renderDiagnosticsPrompt() ?? false,
     });
 
     // Static usage guidance for the LSP tools

@@ -1,7 +1,6 @@
 ---
 key: plan-coordinator-config-ui-and-secret-handling
-tags:
-  []
+tags: []
 created: 2026-09-11T01:41:33.900Z
 updated: 2026-09-11T04:57:00.599Z
 ---
@@ -16,7 +15,7 @@ A dedicated coordinator UI page (/config) to manage a GLOBAL, ALLOWLISTED set of
 
 ## What shipped (per step)
 
-- B1 (drone-core): NEW src/config-keys.ts — KNOWN_CONFIG_KEYS (moved verbatim from config plugin) + UNDERLAY_ALLOWLIST (providers.*, llm.active, llm.reasoningLevel, compaction.enabled, compaction.strategy, session.guardrail.*) + isUnderlayAllowed() + CoordinatorConfigEntry wire type; re-exported from index.ts. Config plugin imports KNOWN_CONFIG_KEYS from drone-core (stale local copy removed).
+- B1 (drone-core): NEW src/config-keys.ts — KNOWN_CONFIG_KEYS (moved verbatim from config plugin) + UNDERLAY_ALLOWLIST (providers._, llm.active, llm.reasoningLevel, compaction.enabled, compaction.strategy, session.guardrail._) + isUnderlayAllowed() + CoordinatorConfigEntry wire type; re-exported from index.ts. Config plugin imports KNOWN_CONFIG_KEYS from drone-core (stale local copy removed).
 - B2 (coordinator): coordinator_config table (key PK, value JSON, secret, description, timestamps) in db/init.ts; NEW db/config.ts CRUD (list/get/upsert/deleteCoordinatorConfig); exported via db/index.ts.
 - B3 (coordinator): NEW routes/config.ts — GET /config, GET /config/:key, PUT /config/:key (allowlist-validated via isUnderlayAllowed → 400 + valid patterns on reject; masked response), DELETE /config/:key (404 if absent); maskSecretValue() masks apiKey/api_key/*Key inside provider JSON + scalar → •••• + last4, ${VAR} preserved. Registered under /api in routes/index.ts. Web-port web-auth protected; primary-port mTLS approved-only (Plan A).
 - B4 (beacon): CoordinatorClient.getCoordinatorConfig() (cfetch GET /api/config, coordinatorTrusted()-gated) + interface; beacon_config composite-PK migration (key → PRIMARY KEY (scope,key)) in db/init.ts; db/config.ts rewritten — scoped getBeaconConfig(key, scope='local')/listBeaconConfig(scope?)/update/delete, NEW listMergedConfig() (local wins, one row per key) + replaceSwarmConfig(CoordinatorConfigEntry[]) (swarm-scope-only replace); triggerCoordinatorSync pulls config after fragments + adds configs count; beacon GET /config → listMergedConfig.

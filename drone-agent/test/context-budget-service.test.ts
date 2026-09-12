@@ -102,7 +102,11 @@ describe('context-budget-service runtime flags injection', () => {
     // templates). Topic delineation is preserved via each fragment's
     // top-level `# Heading`.
     expect(footerMessages).toEqual([
-      { role: 'system', content: '# Footer One\n\n# Footer Two' },
+      {
+        role: 'system',
+        content:
+          '<system-reminder>\n\n# Footer One\n\n# Footer Two\n\n</system-reminder>',
+      },
     ]);
   });
 

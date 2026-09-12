@@ -52,6 +52,9 @@ export const macrosPlugin: DronePlugin = {
         registerSlashCommand({
           command,
           description: macro.description,
+          // Per-macro execution mutates the session (dispatch + chat steps),
+          // so it queues while the LLM is working unless --now is passed.
+          // (unset = queue; --now overrides to immediate universally)
           handler: async (ctx: DroneSlashCommandContext) => {
             const { args, logger: ctxLogger } = ctx;
             try {
@@ -129,6 +132,7 @@ export const macrosPlugin: DronePlugin = {
     registerSlashCommand({
       command: '/macro',
       description: 'Manage macros: list, show, reload.',
+      busyBehavior: true,
       handler: async ctx => {
         const subcommand = ctx.args[0] ?? '';
         if (subcommand === 'list') {

@@ -280,6 +280,7 @@ export type {
   DroneSlashCommandSessionManager,
   DroneSlashCommandContext,
   DroneSlashCommand,
+  DroneSlashInvocation,
 } from './plugin-system.js';
 
 // ── Utils ───────────────────────────────────────────────────────────

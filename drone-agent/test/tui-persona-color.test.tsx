@@ -61,6 +61,7 @@ function makeOptions(personaCap?: PersonaCap): DroneTuiOptions {
     getSlashCommands: () => [],
     registerBuiltinSlashCommand: () => {},
     getBuiltinSlashCommands: () => [],
+    classifySlashCommand: () => ({ kind: 'unknown' }) as const,
   };
   return {
     model,
