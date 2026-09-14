@@ -14,8 +14,7 @@ import {
 } from './coordinator-trust.js';
 import type { Persona, Skill, CoordinatorConfig, Knowledge } from './types.js';
 import type { BeaconIdentity } from './identity.js';
-import type { CoordinatorConfigEntry } from 'drone-core';
-import type { DroneSwarmFragment } from 'drone-core';
+import type { DroneSwarmFragment, ResolvedConfigEntry } from 'drone-core';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
 import { enqueueOutbox } from './db/index.js';
 import { getDefaultSpawnRoot, getSpawnRoots } from './spawn-roots.js';
@@ -84,7 +83,7 @@ export interface CoordinatorClient {
   fetchPersonas(): Promise<Persona[]>;
   fetchSkills(): Promise<Skill[]>;
   fetchCoordinatorFragments(): Promise<DroneSwarmFragment[]>;
-  getCoordinatorConfig(): Promise<CoordinatorConfigEntry[]>;
+  getCoordinatorDistribution(): Promise<ResolvedConfigEntry[]>;
 
   // Session management
   registerSession(agentId: string, personaId: string | null): Promise<void>;
@@ -552,18 +551,21 @@ export function createCoordinatorClient(
       return fragments.map(f => ({ ...f, scope: 'coordinator' as const }));
     },
 
-    async getCoordinatorConfig(): Promise<CoordinatorConfigEntry[]> {
+    async getCoordinatorDistribution(): Promise<ResolvedConfigEntry[]> {
       if (!coordinatorTrusted()) {
         return [];
       }
-      const res = await cfetch(`${baseUrl}/api/config`);
+      const res = await cfetch(`${baseUrl}/api/config/distribution`);
       if (!res.ok) {
-        throw new Error(`Failed to fetch coordinator config: ${res.status}`);
+        throw new Error(
+          `Failed to fetch coordinator config distribution: ${res.status}`
+        );
       }
       const data = (await res.json()) as unknown;
-      const entries = data as CoordinatorConfigEntry[];
+      const payload = data as { entries?: ResolvedConfigEntry[] };
+      const entries = Array.isArray(payload) ? payload : payload.entries;
       if (!Array.isArray(entries)) {
-        throw new Error('Malformed config response from coordinator');
+        throw new Error('Malformed config distribution response from coordinator');
       }
       return entries;
     },

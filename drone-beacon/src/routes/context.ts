@@ -2,6 +2,7 @@ import type { SearchIndexer } from '../search-indexer.js';
 import type { CoordinatorClient } from '../coordinator-client.js';
 import { logger } from '../logger.js';
 import * as db from '../db/index.js';
+import { setSecretOverlay } from '../secret-overlay.js';
 import { pushFragmentSyncToAllConnected } from '../ws-server.js';
 
 // Lazy-initialized fetch wrapper that accepts the coordinator's self-signed TLS cert
@@ -149,12 +150,17 @@ export async function triggerCoordinatorSync(): Promise<{
       logger.warn(`Fragment mirror sync failed: ${err}`);
     }
 
-    // Pull coordinator config entries as the swarm underlay. Stored as
-    // scope='swarm'; beacon-local entries keep precedence (Q8).
+    // Pull coordinator config entries as the swarm underlay. Non-secret
+    // entries persist to beacon_config as scope='swarm'; beacon-local entries
+    // keep precedence. Entries carrying resolved secret values
+    // (`containsSecrets`) are held memory-only and never persisted — a
+    // beacon compromise at rest yields zero secret material. On throw, BOTH
+    // stores are left untouched (no partial update).
     let configCount = 0;
     try {
-      const configs = await client.getCoordinatorConfig();
-      db.replaceSwarmConfig(configs);
+      const configs = await client.getCoordinatorDistribution();
+      db.replaceSwarmConfig(configs.filter(e => !e.containsSecrets));
+      setSecretOverlay(configs.filter(e => e.containsSecrets));
       configCount = configs.length;
     } catch (err) {
       logger.warn(`Coordinator config sync failed: ${err}`);

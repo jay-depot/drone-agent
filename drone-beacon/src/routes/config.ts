@@ -1,11 +1,28 @@
 import type { FastifyInstance } from 'fastify';
 import * as db from '../db/index.js';
+import { overlayEntries } from '../secret-overlay.js';
 
 export default function configRoutes(app: FastifyInstance) {
   // Get the merged beacon config: beacon-local wins over coordinator-pushed
   // swarm entries, one row per key (the agent injector loops this directly).
+  // Secret-bearing rows (memory-only overlay, never persisted) contribute
+  // only their resolved values for keys not already present — beacon-local
+  // and persisted coordinator rows keep precedence.
   app.get('/config', async () => {
-    return db.listMergedConfig();
+    const merged = db.listMergedConfig();
+    const byKey = new Map(merged.map(e => [e.key, e]));
+    for (const overlay of overlayEntries()) {
+      if (!byKey.has(overlay.key)) {
+        byKey.set(overlay.key, {
+          key: overlay.key,
+          value: overlay.value,
+          scope: 'swarm',
+          createdAt: overlay.updatedAt,
+          updatedAt: overlay.updatedAt,
+        });
+      }
+    }
+    return [...byKey.values()].sort((a, b) => a.key.localeCompare(b.key));
   });
 
   // Get specific config value
