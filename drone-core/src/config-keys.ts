@@ -129,3 +129,42 @@ export interface CoordinatorConfigEntry {
   description?: string | null;
   updatedAt: number;
 }
+
+/**
+ * Matches a `${secret:NAME}` reference to a coordinator-stored secret.
+ * NAME uses the same charset as environment variables ([A-Za-z0-9_]+), so
+ * the receiver-side env-var resolver (which matches [A-Za-z0-9_]+ only)
+ * can never confuse a secret reference with an env template — the colon
+ * breaks its pattern.
+ *
+ * Flagged global: never use `.test()`/`.exec()` on this shared instance
+ * (lastIndex state leaks between calls); build a fresh RegExp from
+ * `.source` when a boolean check is needed.
+ */
+export const SECRET_REF_PATTERN = /\$\{secret:([A-Za-z0-9_]+)\}/g;
+
+/**
+ * Extract the stored-secret names referenced by a config value, in first-
+ * occurrence order, deduplicated. Uses a fresh RegExp per call so external
+ * mutation of SECRET_REF_PATTERN.lastIndex can never skew the scan.
+ */
+export function extractSecretRefs(value: string): string[] {
+  const names = new Set<string>();
+  for (const match of value.matchAll(
+    new RegExp(SECRET_REF_PATTERN.source, SECRET_REF_PATTERN.flags)
+  )) {
+    names.add(match[1]);
+  }
+  return [...names];
+}
+
+/**
+ * Wire shape of a config entry on the beacon-facing distribution payload
+ * (coordinator `GET /api/config/distribution`): every `${secret:NAME}`
+ * reference has been substituted with the real stored value. `containsSecrets`
+ * marks entries whose resolved value carries secret material — beacons must
+ * hold these memory-only and never persist them to disk.
+ */
+export interface ResolvedConfigEntry extends CoordinatorConfigEntry {
+  containsSecrets: boolean;
+}

@@ -102,9 +102,12 @@ export {
 
 export {
   CoordinatorConfigEntry,
+  ResolvedConfigEntry,
   KNOWN_CONFIG_KEYS,
   UNDERLAY_ALLOWLIST,
   isUnderlayAllowed,
+  SECRET_REF_PATTERN,
+  extractSecretRefs,
 } from './config-keys.js';
 
 // ── Session types ────────────────────────────────────────────────────
