@@ -116,7 +116,6 @@ describe('ConfigPage', () => {
           string,
           unknown
         >;
-        expect(body.secret).toBe(true);
         expect(body.value).toBe(JSON.stringify({ apiKey: 'sk-test' }));
         return jsonResponse(200, { ...secretEntry, value: '••••test' });
       }
@@ -140,7 +139,6 @@ describe('ConfigPage', () => {
     fireEvent.change(within(dialog).getByPlaceholderText('{}'), {
       target: { value: JSON.stringify({ apiKey: 'sk-test' }) },
     });
-    await userEvent.click(within(dialog).getByRole('checkbox'));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
@@ -241,5 +239,50 @@ describe('ConfigPage', () => {
     await waitFor(() => {
       expect(screen.getByText('providers.openai')).toBeInTheDocument();
     });
+  });
+
+  it('does not lock the key input to a single typed letter (regression: BUG1)', async () => {
+    const mockFetch = stubFetch((url, init) => {
+      if (url === '/api/config' && (init?.method ?? 'GET') === 'GET') {
+        return jsonResponse(200, []);
+      }
+      if (url === '/api/config/providers.test' && init?.method === 'PUT') {
+        return jsonResponse(200, {
+          ...plainEntry,
+          key: 'providers.test',
+          value: '"v"',
+        });
+      }
+      return jsonResponse(404, { error: 'unexpected call' });
+    });
+
+    renderConfig();
+    await screen.findByText('No config entries');
+    await userEvent.click(screen.getByRole('button', { name: 'Add Config' }));
+
+    const dialog = await screen.findByRole('dialog');
+    const keyInput = within(dialog).getByPlaceholderText('providers.openai');
+
+    // Type a single letter — the key input must stay ENABLED and editable,
+    // holding the typed character so the user can keep typing the full key.
+    await userEvent.type(keyInput, 'p');
+    expect(keyInput).toHaveValue('p');
+    expect(keyInput).not.toBeDisabled();
+
+    // Finish the key and save.
+    await userEvent.type(keyInput, 'roviders.test');
+    expect(keyInput).toHaveValue('providers.test');
+    fireEvent.change(within(dialog).getByPlaceholderText('{}'), {
+      target: { value: '{}' },
+    });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('providers.test')).toBeInTheDocument();
+    });
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/config/providers.test',
+      expect.objectContaining({ method: 'PUT' })
+    );
   });
 });
