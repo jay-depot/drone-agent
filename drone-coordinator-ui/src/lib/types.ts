@@ -112,6 +112,13 @@ export interface CoordinatorConfigEntry {
   updatedAt: number;
 }
 
+export interface StoredSecretEntry {
+  name: string;
+  maskedValue: string;
+  updatedAt: number;
+  referencedBy: string[];
+}
+
 export interface WikiPageMeta {
   id: string;
   title: string;

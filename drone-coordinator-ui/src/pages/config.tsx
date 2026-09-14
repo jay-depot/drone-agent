@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import StoredSecretsModal from '@/components/stored-secrets-modal';
 
 /** Show a masked preview: `••••` + last 4 chars for the full stored value. */
 function maskValue(value: string): string {
@@ -43,6 +44,8 @@ export default function ConfigPage() {
   const [entries, setEntries] = useState<CoordinatorConfigEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [secretsOpen, setSecretsOpen] = useState(false);
 
   // Add/Edit dialog state. `isNew` distinguishes an adding entry (key input
   // editable) from an existing one (key fixed) — the discriminator is a
@@ -184,7 +187,7 @@ export default function ConfigPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => {}}>
+          <Button variant="outline" onClick={() => setSecretsOpen(true)}>
             Stored Secrets
           </Button>
           <Button onClick={openAdd}>Add Config</Button>
@@ -381,6 +384,12 @@ export default function ConfigPage() {
         confirmLabel="Delete"
         variant="destructive"
         loading={deleteLoading}
+      />
+
+      {/* Stored Secrets manager */}
+      <StoredSecretsModal
+        open={secretsOpen}
+        onClose={() => setSecretsOpen(false)}
       />
     </div>
   );
