@@ -1,7 +1,14 @@
 import type { FastifyInstance } from 'fastify';
-import { isUnderlayAllowed, UNDERLAY_ALLOWLIST } from 'drone-core';
+import {
+  extractSecretRefs,
+  isUnderlayAllowed,
+  UNDERLAY_ALLOWLIST,
+} from 'drone-core';
 import * as db from '../db/index.js';
 import { maskSecretValue } from '../mask.js';
+import { buildDistributionEntries } from '../config-resolve.js';
+import { notifyConfigChanged } from '../beacon-ws.js';
+import { logger } from '../logger.js';
 
 export default function configRoutes(app: FastifyInstance) {
   // List all config entries. Secret values are masked on read.
@@ -34,10 +41,32 @@ export default function configRoutes(app: FastifyInstance) {
     }
   );
 
+  /**
+   * Beacon-facing distribution payload: every `${secret:NAME}` reference has
+   * been substituted with the real stored value, and each entry carries a
+   * `containsSecrets` flag. RESOLVED SECRET VALUES MUST NEVER BE SURFACED via
+   * the UI-facing `/config` GETs above — resolve only here, on the payload
+   * the beacon consumes. Dangling references drop the row (per design): a
+   * row stays out of distribution until its references resolve or it is
+   * removed.
+   */
+  app.get('/config/distribution', async () => {
+    const { entries, dropped } = buildDistributionEntries(
+      db.listCoordinatorConfig(),
+      db.getSecretValue
+    );
+    for (const drop of dropped) {
+      logger.warn(
+        `Dropping config entry "${drop.key}" from distribution: unknown secret reference(s) ${drop.missing.join(', ')}`
+      );
+    }
+    return { entries };
+  });
+
   // Create or update a config entry. The key must match the underlay allowlist.
   app.put<{
     Params: { key: string };
-    Body: { value: string; secret?: boolean; description?: string | null };
+    Body: { value?: string; secret?: boolean; description?: string | null };
   }>('/config/:key', async (request, reply) => {
     const key = request.params.key;
     if (!isUnderlayAllowed(key)) {
@@ -46,15 +75,43 @@ export default function configRoutes(app: FastifyInstance) {
       });
     }
     const { value, secret, description } = request.body ?? {};
-    if (typeof value !== 'string') {
-      return reply.code(400).send({ error: 'value must be a JSON string' });
+    const existing = db.getCoordinatorConfig(key);
+
+    // Reject references to stored secrets that do not (yet) exist.
+    if (typeof value === 'string' && value !== '') {
+      const unknown = extractSecretRefs(value).filter(
+        name => !db.getSecretValue(name)
+      );
+      if (unknown.length > 0) {
+        return reply.code(400).send({
+          error: `Unknown stored secret reference(s): ${unknown.join(', ')}. Create the secret in the Stored Secrets manager first.`,
+        });
+      }
     }
+
+    // Secrets are write-only: an omitted or empty value on an existing
+    // secret entry means "keep the current stored value".
+    let effectiveValue = value;
+    if (
+      typeof effectiveValue !== 'string' ||
+      effectiveValue.trim() === ''
+    ) {
+      if (existing?.secret === true) {
+        effectiveValue = existing.value;
+      } else {
+        return reply
+          .code(400)
+          .send({ error: 'value must be a JSON string' });
+      }
+    }
+
     const entry = db.upsertCoordinatorConfig({
       key,
-      value,
-      secret: secret ?? false,
-      description: description ?? null,
+      value: effectiveValue,
+      secret: secret ?? existing?.secret ?? false,
+      description: description ?? existing?.description ?? null,
     });
+    notifyConfigChanged();
     return {
       key: entry.key,
       value: entry.secret ? maskSecretValue(entry.value) : entry.value,
@@ -72,6 +129,7 @@ export default function configRoutes(app: FastifyInstance) {
       if (!deleted) {
         return reply.code(404).send({ error: 'Config key not found' });
       }
+      notifyConfigChanged();
       return { success: true };
     }
   );

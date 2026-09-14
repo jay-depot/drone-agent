@@ -8,6 +8,7 @@ import {
   getCoordinatorConfig,
   listCoordinatorConfig,
   deleteCoordinatorConfig,
+  upsertSecret,
 } from '../../src/db/index.js';
 
 let app: FastifyInstance;
@@ -226,5 +227,83 @@ describe('maskSecretValue', () => {
 
   it('masks strings that only embed a template mid-string', () => {
     expect(maskSecretValue('prefix ${VAR}')).toBe('••••VAR}');
+  });
+});
+
+describe('Config secret-reference validation + distribution', () => {
+  it('PUT rejects a reference to an unknown stored secret with 400', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/config/providers.openai',
+      payload: { value: JSON.stringify({ apiKey: '${secret:MISSING}' }) },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toContain('MISSING');
+    expect(getCoordinatorConfig('providers.openai')).toBeUndefined();
+  });
+
+  it('PUT accepts a reference to a known stored secret', async () => {
+    upsertSecret({ name: 'KNOWN', value: 'sk-known-1234' });
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/config/providers.openai',
+      payload: { value: JSON.stringify({ apiKey: '${secret:KNOWN}' }) },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('PUT with an omitted/empty value keeps the current stored secret', async () => {
+    upsertCoordinatorConfig({
+      key: 'providers.openai',
+      value: '{"apiKey":"sk-current-9999"}',
+      secret: true,
+    });
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/config/providers.openai',
+      payload: { description: 'new desc' },
+    });
+    expect(res.statusCode).toBe(200);
+    const stored = getCoordinatorConfig('providers.openai')!;
+    expect(stored.value).toBe('{"apiKey":"sk-current-9999"}');
+    expect(stored.description).toBe('new desc');
+  });
+
+  it('GET /config/distribution resolves refs and flags containsSecrets', async () => {
+    upsertSecret({ name: 'KNOWN', value: 'sk-real-1234' });
+    upsertCoordinatorConfig({
+      key: 'providers.openai',
+      value: JSON.stringify({ apiKey: '${secret:KNOWN}' }),
+    });
+    upsertCoordinatorConfig({ key: 'llm.active', value: '"openai/main"' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/config/distribution',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as {
+      entries: Array<{ key: string; value: string; containsSecrets: boolean }>;
+    };
+    const provider = body.entries.find(e => e.key === 'providers.openai')!;
+    expect(provider.value).toContain('sk-real-1234');
+    expect(provider.containsSecrets).toBe(true);
+    const active = body.entries.find(e => e.key === 'llm.active')!;
+    expect(active.containsSecrets).toBe(false);
+  });
+
+  it('GET /config/distribution drops rows with dangling references', async () => {
+    upsertCoordinatorConfig({
+      key: 'providers.broken',
+      value: '{"apiKey":"${secret:GONE}"}',
+    });
+    upsertCoordinatorConfig({ key: 'llm.active', value: '"x"' });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/config/distribution',
+    });
+    const body = JSON.parse(res.body) as { entries: Array<{ key: string }> };
+    expect(body.entries.find(e => e.key === 'providers.broken')).toBeUndefined();
+    expect(body.entries.find(e => e.key === 'llm.active')).toBeDefined();
   });
 });
