@@ -3,9 +3,11 @@
 Coordinator-level config is distributed to agents as a config underlay through
 the beacon. The coordinator is the source of truth; the beacon PULLS the
 coordinator's global allowlisted entries on its existing 5-minute
-`triggerCoordinatorSync` (plus startup), stores them as `beacon_config
-scope='swarm'`, and serves the merged view from its `GET /config` (beacon-local
-entries win for the same key, one row per key). The agent's swarm plugin then
+`triggerCoordinatorSync` (plus startup), persists the non-secret ones as
+`beacon_config scope='swarm'` (secret-bearing rows stay in a memory-only
+overlay — see the Stored Secrets section below), and serves the merged view
+from its `GET /config` (beacon-local entries win for the same key, one row per
+key). The agent's swarm plugin then
 applies that merged underlay at session start via the config plugin's
 `rebuild()` (which runs registered injectors in precedence order, re-applies
 the on-disk user/project layers on top so the most-local config wins
@@ -20,17 +22,35 @@ warning per row and failure kind).
 The coordinator UI's **Config** page manages the allowed entries (global
 allowlist in `drone-core`'s `UNDERLAY_ALLOWLIST`): `providers.*` (whole-entry
 units), `llm.active`, `llm.reasoningLevel`, `compaction.enabled`,
-`compaction.strategy`, and `session.guardrail.*`. API keys are stored
-plaintext-at-rest on the coordinator, masked on read (`••••` + last 4;
-whole-value `${VAR}` templates are preserved verbatim so masking round-trips
-never corrupt them), and write-only on edit ("leave empty to keep current").
-Secret entries should be distributed as raw `${VAR}` templates — a template
-is not itself a secret, and masking it would corrupt the entry before the
-receiver could use it. Templates survive masking and sync intact; the agent
-resolves them receiver-side at underlay apply time (see below). Distribution
-only reaches **approved** beacons (Plan A server-side status enforcement),
-with a persistent warning banner in the UI. Encryption-at-rest is a
-documented follow-up.
+`compaction.strategy`, and `session.guardrail.*`. API keys and other secrets
+are managed through the **Stored Secrets** manager (button at the top of the
+Config page) and referenced from settings via the distinct `${secret:NAME}`
+token — the coordinator resolves those tokens into the real stored values at
+beacon-pull time on the beacon-facing `/api/config/distribution` payload.
+Stored values are plaintext-at-rest on the coordinator, masked on read
+(`••••` + last 4) and write-only on edit, and never shown in full after
+saving. Reference names use the environment-variable charset
+`[A-Za-z0-9_]+`, so `${secret:NAME}` can never collide with a receiver-side
+`${VAR}` env template (the env regex does not match the colon), and the PUT
+route rejects references to secrets that do not exist (400).
+
+Secrets are resolved ONLY on the beacon-facing distribution payload; the
+UI-facing `/api/config` listing stays unresolved and masked, so a resolved
+value never reaches the UI. Distribution only reaches **approved** beacons
+(Plan A server-side status enforcement), with a persistent warning banner in
+the UI. Encryption-at-rest is a documented follow-up.
+
+A setting whose `${secret:NAME}` reference cannot be resolved (the secret was
+deleted or renamed after save) is dropped from distribution with a warning,
+and stays out of every pull until the reference is valid again or the
+setting is removed. Legacy `secret:true` rows without a reference are still
+honored: their value ships on the distribution payload flagged
+`containsSecrets` so the beacon keeps it memory-only.
+
+When a stored secret is added/rotated/deleted or a referenced setting is
+saved/deleted, the coordinator fires a payload-less `configChanged` nudge over
+the reverse channel; each connected beacon re-pulls immediately. The 5-minute
+periodic sync + startup sync remain the correctness floor.
 
 Valid underlay content includes:
 
@@ -53,14 +73,17 @@ unset variable is dropped whole (provider entries are whole-entry units; a
 half-resolved provider that lists but cannot authenticate is worse than an
 honest absence) with a one-time warning per key naming the variable. Set the
 env var before launching the agent; env changes take effect at the next
-session start, usually the next agent process. Two known gaps, shared with
-the disk path: non-identifier variable names like `${FOO-BAR}` are
-unresolvable and stay literal, and mid-string templates inside
-`secret:true` entries cannot round-trip the UI's write-only keep-current
-contract — secrets must be whole-value `${VAR}` templates to survive.
-Plaintext keys in underlays are allowed (swarm is a trusted channel);
-project-scope files may NOT define `providers` at all — that combination
-fails startup validation.
+session start, usually the next agent process. A known gap shared with the
+disk path: non-identifier variable names like `${FOO-BAR}` are unresolvable
+and stay literal. Plaintext keys in underlays are allowed (swarm is a trusted
+channel); project-scope files may NOT define `providers` at all — that
+combination fails startup validation.
+
+Resolved `${secret:NAME}` values are injected into agents at session start
+and are never retained by the beacon: the beacon holds secret-bearing entries
+in a memory-only overlay (`containsSecrets`), keeps them out of `beacon_config`
+SQLite, and wipes them on process exit. A beacon compromise at rest therefore
+yields zero secret material.
 Changes propagate on the next sync (≤ ~5 minutes) and are applied at the next
 agent session start; there is no live mid-session re-apply. Spawn-env
 asymmetry: coordinator-relayed spawns run with the beacon host's environment
