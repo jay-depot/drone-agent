@@ -114,3 +114,11 @@ export type {
   CoordinatorConfigEntry,
   UpsertCoordinatorConfigRequest,
 } from './config.js';
+export {
+  listSecrets,
+  getSecretValue,
+  getSecretNames,
+  upsertSecret,
+  deleteSecret,
+} from './secrets.js';
+export type { StoredSecret } from './secrets.js';

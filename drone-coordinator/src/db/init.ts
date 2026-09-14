@@ -164,6 +164,13 @@ export function initDatabase(dataPath: string): Database.Database {
       updated_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS coordinator_secrets (
+      name TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS tool_definitions (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,

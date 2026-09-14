@@ -54,6 +54,11 @@ import {
   listPrinciples,
   getPrinciple,
   deletePrinciple,
+  listSecrets,
+  getSecretValue,
+  getSecretNames,
+  upsertSecret,
+  deleteSecret,
 } from '../src/db/index.js';
 import type { CreatePersonaRequest, CreateSkillRequest } from '../src/types.js';
 
@@ -1080,5 +1085,63 @@ describe('Principle CRUD', () => {
 
   it('should return false when deleting non-existent principle', () => {
     expect(deletePrinciple('nonexistent')).toBe(false);
+  });
+});
+
+describe('Stored secrets CRUD', () => {
+  beforeEach(async () => {
+    await setupDb();
+  });
+
+  afterEach(async () => {
+    await teardownDb();
+  });
+
+  it('should store and list secrets with masked values only', () => {
+    upsertSecret({ name: 'OPENROUTER_API_KEY', value: 'sk-or-abc12345' });
+    upsertSecret({ name: 'OPENAI_API_KEY', value: 'sk-oai-6789' });
+
+    const secrets = listSecrets();
+    expect(secrets).toHaveLength(2);
+    const or = secrets.find(s => s.name === 'OPENROUTER_API_KEY');
+    expect(or?.maskedValue).toBe('••••2345');
+    expect(JSON.stringify(secrets)).not.toContain('sk-or-abc12345');
+
+    expect(getSecretNames()).toEqual(['OPENAI_API_KEY', 'OPENROUTER_API_KEY']);
+    expect(getSecretValue('OPENROUTER_API_KEY')).toBe('sk-or-abc12345');
+    expect(getSecretValue('MISSING')).toBeUndefined();
+  });
+
+  it('should mask short values fully', () => {
+    upsertSecret({ name: 'SHORT', value: 'abc' });
+    expect(listSecrets()[0]?.maskedValue).toBe('••••');
+  });
+
+  it('should preserve templates verbatim in maskedValue', () => {
+    upsertSecret({ name: 'TEMPLATE', value: '${HOST_ENV_VAR}' });
+    expect(listSecrets()[0]?.maskedValue).toBe('${HOST_ENV_VAR}');
+  });
+
+  it('should rotate a secret and preserve createdAt while bumping updatedAt', async () => {
+    const created = upsertSecret({ name: 'ROT', value: 'first-value-1111' });
+    expect(created.createdAt).toBeGreaterThan(0);
+
+    await new Promise(resolve => setTimeout(resolve, 5));
+    const rotated = upsertSecret({ name: 'ROT', value: 'second-value-2222' });
+    expect(rotated.createdAt).toBe(created.createdAt);
+    expect(rotated.updatedAt).toBeGreaterThanOrEqual(created.updatedAt);
+    expect(rotated.maskedValue).toBe('••••2222');
+    expect(getSecretValue('ROT')).toBe('second-value-2222');
+  });
+
+  it('should delete a secret', () => {
+    upsertSecret({ name: 'GONE', value: 'value-1234' });
+    expect(deleteSecret('GONE')).toBe(true);
+    expect(getSecretValue('GONE')).toBeUndefined();
+    expect(listSecrets()).toHaveLength(0);
+  });
+
+  it('should return false when deleting a non-existent secret', () => {
+    expect(deleteSecret('nonexistent')).toBe(false);
   });
 });
