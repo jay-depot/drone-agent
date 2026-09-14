@@ -240,6 +240,41 @@ export function isBeaconConnected(beaconId: string): boolean {
   return connections.has(beaconId);
 }
 
+/** Ids of all beacons with an open reverse-channel connection. */
+export function getConnectedBeaconIds(): string[] {
+  return [...connections.keys()];
+}
+
+/**
+ * Fire a payload-less command at every connected beacon over its reverse
+ * channel. Best-effort: one failed send never throws to the caller, and a
+ * beacon that is offline simply misses the nudge (it self-heals on its next
+ * periodic sync, which remains the source of truth).
+ */
+export function broadcastBeaconCommand(command: string): void {
+  for (const beaconId of getConnectedBeaconIds()) {
+    const conn = connections.get(beaconId);
+    if (!conn) continue;
+    const message = JSON.stringify({
+      type: 'command',
+      id: randomUUID(),
+      command,
+    });
+    conn.ws.send(message, (err?: Error) => {
+      if (err) {
+        logger.warn(
+          `Failed to broadcast "${command}" to beacon ${beaconId}: ${err}`
+        );
+      }
+    });
+  }
+}
+
+/** Nudge every connected beacon to re-pull coordinator config immediately. */
+export function notifyConfigChanged(): void {
+  broadcastBeaconCommand('configChanged');
+}
+
 /**
  * Test-only helper: register a connection with a fake WebSocket so
  * `sendBeaconCommand` can be exercised without a live server.

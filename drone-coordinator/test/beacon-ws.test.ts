@@ -2,6 +2,9 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import {
   sendBeaconCommand,
   isBeaconConnected,
+  getConnectedBeaconIds,
+  broadcastBeaconCommand,
+  notifyConfigChanged,
   resetBeaconConnections,
   startBeaconLivenessSweep,
   resolveBeaconWsAdmission,
@@ -229,5 +232,44 @@ describe('resolveBeaconWsAdmission', () => {
     });
     approveBeaconById('b1');
     expect(resolveBeaconWsAdmission('b1')).toBeNull();
+  });
+});
+
+describe('getConnectedBeaconIds / broadcastBeaconCommand', () => {
+  it('lists only connected beacons', () => {
+    const ws = makeFakeWs();
+    _registerTestConnection('b1', ws);
+    expect(getConnectedBeaconIds()).toEqual(['b1']);
+    resetBeaconConnections();
+    expect(getConnectedBeaconIds()).toEqual([]);
+  });
+
+  it('broadcasts a payload-less command to every connected beacon', () => {
+    const ws1 = makeFakeWs();
+    const ws2 = makeFakeWs();
+    _registerTestConnection('b1', ws1);
+    _registerTestConnection('b2', ws2);
+
+    broadcastBeaconCommand('configChanged');
+    expect(ws1.send).toHaveBeenCalledTimes(1);
+    expect(ws2.send).toHaveBeenCalledTimes(1);
+    const sent = JSON.parse(String(ws1.send.mock.calls[0][0]));
+    expect(sent.type).toBe('command');
+    expect(sent.command).toBe('configChanged');
+    expect(sent.payload).toBeUndefined();
+    expect(sent.id).toBeTruthy();
+  });
+
+  it('is a no-op that never throws when no beacons are connected', () => {
+    expect(() => broadcastBeaconCommand('configChanged')).not.toThrow();
+    expect(() => notifyConfigChanged()).not.toThrow();
+  });
+
+  it('notifyConfigChanged broadcasts the configChanged command', () => {
+    const ws = makeFakeWs();
+    _registerTestConnection('b1', ws);
+    notifyConfigChanged();
+    const sent = JSON.parse(String(ws.send.mock.calls[0][0]));
+    expect(sent.command).toBe('configChanged');
   });
 });
