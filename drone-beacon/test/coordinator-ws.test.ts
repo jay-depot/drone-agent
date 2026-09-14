@@ -57,8 +57,7 @@ vi.mock('ws', () => ({ default: FakeWebSocket }));
 const { handleSpawnAgent } = await import('../src/routes/spawn-handlers.js');
 const { startCoordinatorWsClient, resetCoordinatorWsClient } =
   await import('../src/coordinator-ws.js');
-const { triggerCoordinatorSync } =
-  await import('../src/routes/context.js');
+const { triggerCoordinatorSync } = await import('../src/routes/context.js');
 
 type SpawnResults = Awaited<ReturnType<typeof handleSpawnAgent>>;
 

@@ -303,7 +303,9 @@ describe('Config secret-reference validation + distribution', () => {
       url: '/api/config/distribution',
     });
     const body = JSON.parse(res.body) as { entries: Array<{ key: string }> };
-    expect(body.entries.find(e => e.key === 'providers.broken')).toBeUndefined();
+    expect(
+      body.entries.find(e => e.key === 'providers.broken')
+    ).toBeUndefined();
     expect(body.entries.find(e => e.key === 'llm.active')).toBeDefined();
   });
 });

@@ -92,16 +92,11 @@ export default function configRoutes(app: FastifyInstance) {
     // Secrets are write-only: an omitted or empty value on an existing
     // secret entry means "keep the current stored value".
     let effectiveValue = value;
-    if (
-      typeof effectiveValue !== 'string' ||
-      effectiveValue.trim() === ''
-    ) {
+    if (typeof effectiveValue !== 'string' || effectiveValue.trim() === '') {
       if (existing?.secret === true) {
         effectiveValue = existing.value;
       } else {
-        return reply
-          .code(400)
-          .send({ error: 'value must be a JSON string' });
+        return reply.code(400).send({ error: 'value must be a JSON string' });
       }
     }
 

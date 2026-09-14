@@ -17,9 +17,9 @@ describe('extractSecretRefs', () => {
 
   it('extracts references embedded mid-string', () => {
     expect(extractSecretRefs('pre-${secret:A}-post')).toEqual(['A']);
-    expect(
-      extractSecretRefs('{"apiKey":"${secret:K1}","user":"joe"}')
-    ).toEqual(['K1']);
+    expect(extractSecretRefs('{"apiKey":"${secret:K1}","user":"joe"}')).toEqual(
+      ['K1']
+    );
   });
 
   it('extracts multiple references in first-occurrence order, deduplicated', () => {

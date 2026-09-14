@@ -58,7 +58,9 @@ let mockFetch: ReturnType<typeof vi.fn>;
 function stubFetch(
   handler: (url: string, init?: RequestInit) => Response
 ): void {
-  mockFetch = vi.fn(async (url: string, init?: RequestInit) => handler(url, init));
+  mockFetch = vi.fn(async (url: string, init?: RequestInit) =>
+    handler(url, init)
+  );
   vi.stubGlobal('fetch', mockFetch);
 }
 
@@ -89,7 +91,8 @@ describe('StoredSecretsModal', () => {
 
   it('lists secrets with masked values and referenced-by badges', async () => {
     stubFetch(url => {
-      if (url === '/api/secrets' && 'GET') return jsonResponse(200, secretsResponse);
+      if (url === '/api/secrets' && 'GET')
+        return jsonResponse(200, secretsResponse);
       return jsonResponse(404, { error: 'unexpected call' });
     });
 
@@ -148,7 +151,9 @@ describe('StoredSecretsModal', () => {
 
     const form = await findFormDialog();
     expect(
-      within(form).getByText('Leave the value empty to keep the current secret unchanged.')
+      within(form).getByText(
+        'Leave the value empty to keep the current secret unchanged.'
+      )
     ).toBeInTheDocument();
     await userEvent.click(within(form).getByRole('button', { name: 'Save' }));
 
@@ -175,13 +180,13 @@ describe('StoredSecretsModal', () => {
 
     renderModal();
     await screen.findByText('OPENROUTER_API_KEY');
-    await userEvent.click(
-      screen.getAllByRole('button', { name: 'Delete' })[0]
-    );
+    await userEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
 
     const confirm = await findFormDialog();
     expect(confirm).toHaveTextContent(confirmCopy);
-    await userEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
+    await userEvent.click(
+      within(confirm).getByRole('button', { name: 'Delete' })
+    );
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(

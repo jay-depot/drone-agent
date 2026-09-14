@@ -4,7 +4,10 @@ import { useToast } from '@/hooks/use-toast';
 import { ErrorBanner } from '@/components/error-banner';
 import { extractApiError, networkErrorMessage } from '@/hooks/use-api';
 import type { CoordinatorConfigEntry } from '@/lib/types';
-import { ALLOWLIST_PATTERNS, computeKeySuggestions } from '@/lib/config-completions';
+import {
+  ALLOWLIST_PATTERNS,
+  computeKeySuggestions,
+} from '@/lib/config-completions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

@@ -60,7 +60,6 @@ export default function StoredSecretsModal({
     if (open) {
       loadSecrets();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const openAdd = () => {
@@ -113,9 +112,12 @@ export default function StoredSecretsModal({
     if (!deleteName) return;
     setDeleting(true);
     try {
-      const res = await authFetch(`/api/secrets/${encodeURIComponent(deleteName)}`, {
-        method: 'DELETE',
-      });
+      const res = await authFetch(
+        `/api/secrets/${encodeURIComponent(deleteName)}`,
+        {
+          method: 'DELETE',
+        }
+      );
       if (!res.ok) {
         showError(await extractApiError(res));
         return;
@@ -168,9 +170,7 @@ export default function StoredSecretsModal({
             <tbody>
               {secrets.map(secret => (
                 <tr key={secret.name} className="border-b">
-                  <td className="py-2 px-2 font-mono text-xs">
-                    {secret.name}
-                  </td>
+                  <td className="py-2 px-2 font-mono text-xs">{secret.name}</td>
                   <td className="py-2 px-2 font-mono text-xs">
                     {secret.maskedValue}
                   </td>

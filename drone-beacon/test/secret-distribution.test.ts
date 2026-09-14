@@ -7,10 +7,12 @@ import {
   triggerCoordinatorSync,
 } from '../src/routes/context.js';
 import { setSecretOverlay, overlayEntries } from '../src/secret-overlay.js';
-import { setPendingCoordinatorFingerprint, resetCoordinatorTrust } from '../src/coordinator-trust.js';
+import {
+  setPendingCoordinatorFingerprint,
+  resetCoordinatorTrust,
+} from '../src/coordinator-trust.js';
 import type { CoordinatorClient } from '../src/coordinator-client.js';
 import type { ResolvedConfigEntry } from 'drone-core';
-import * as db from '../src/db/index.js';
 import { getDatabase } from '../src/db/index.js';
 import { resetCoordinatorWsClient } from '../src/coordinator-ws.js';
 
@@ -66,7 +68,9 @@ async function fakeSyncEntries(
     ? vi.fn().mockRejectedValue(new Error('coordinator down'))
     : vi.fn().mockResolvedValue(entries);
   setCoordinatorClient(
-    makeFakeClient({ getCoordinatorDistribution } as unknown as CoordinatorClient)
+    makeFakeClient({
+      getCoordinatorDistribution,
+    } as unknown as CoordinatorClient)
   );
   await triggerCoordinatorSync();
 }
@@ -100,7 +104,11 @@ describe('secret-overlay', () => {
       resolvedEntry('a', 'x', true),
       resolvedEntry('b', 'y', true),
     ]);
-    expect(overlayEntries().map(e => e.key).sort()).toEqual(['a', 'b']);
+    expect(
+      overlayEntries()
+        .map(e => e.key)
+        .sort()
+    ).toEqual(['a', 'b']);
     setSecretOverlay([]);
     expect(overlayEntries()).toEqual([]);
   });

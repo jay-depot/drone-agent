@@ -23,15 +23,6 @@ interface CoordinatorSecretsRow {
   updated_at: number;
 }
 
-function rowToStored(row: CoordinatorSecretsRow): StoredSecret {
-  return {
-    name: row.name,
-    maskedValue: maskScalar(row.value),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
 export function listSecrets(): StoredSecret[] {
   const rows = getDatabase()
     .prepare(

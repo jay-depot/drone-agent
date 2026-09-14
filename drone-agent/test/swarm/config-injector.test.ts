@@ -153,12 +153,10 @@ describe('BeaconConfigInjector.inject', () => {
           '{"protocol":"openrouter","apiKey":"${DRONE_TEST_UNDERLAY_KEY}"}',
       },
     ];
-    const fetchMock = vi
-      .spyOn(global, 'fetch')
-      .mockResolvedValue({
-        ok: true,
-        json: async () => entries,
-      } as unknown as Response);
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => entries,
+    } as unknown as Response);
     const injector = new BeaconConfigInjector('http://localhost:3457');
 
     const result = await injector.inject();

@@ -565,7 +565,9 @@ export function createCoordinatorClient(
       const payload = data as { entries?: ResolvedConfigEntry[] };
       const entries = Array.isArray(payload) ? payload : payload.entries;
       if (!Array.isArray(entries)) {
-        throw new Error('Malformed config distribution response from coordinator');
+        throw new Error(
+          'Malformed config distribution response from coordinator'
+        );
       }
       return entries;
     },
