@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { setupDb, teardownDb } from '../setup.js';
 import { buildTestApp } from '../app-helper.js';
 import type { FastifyInstance } from 'fastify';
-import { maskSecretValue } from '../../src/routes/config.js';
+import { maskSecretValue } from '../../src/mask.js';
 import {
   upsertCoordinatorConfig,
   getCoordinatorConfig,
