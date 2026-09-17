@@ -252,3 +252,59 @@ catch (e) { console.log(e.message); }   // "Pitch is too long. Keep it under 400
 - The `Content-Type` header must keep being sent only together with a body (ADR 206 — `FST_ERR_CTP_EMPTY_JSON_BODY`).
 - `drone-beacon/test/routes.test.ts` PUTs are personas/skills/memory/config — untouched.
 - Per AGENTS.md, commit `.drone-agent` memories/insights/principles with the changes on this feature branch; do not commit memory-only changes to `main`.
+
+---
+
+## ✅ COMPLETED 2026-09-17 (commit 849f2c8, branch feat/coordinator-config-ui-and-secure-storage)
+
+All 7 steps executed; every validation criterion satisfied. This was fixed in place on the
+existing feature branch, with the smallest change that resolves the reported bug.
+
+### What shipped
+
+1. **`drone-beacon/src/routes/context.ts`** — extracted `fetchCoordinator(method, path, body)`
+   (returns `Response | null`; null when no client; throws on transport failure), preserving
+   the ADR-206 header discipline. `proxyCall` refactored to delegate to it and kept
+   **byte-identical** (`null` on no-client and non-2xx; throws on transport failure and on a
+   non-JSON 2xx body). Added `ERROR_BODY_MAX_CHARS = 500`, `readErrorBody` (JSON object
+   passes through verbatim; otherwise `{ error: <trimmed text, truncated> }`),
+   `CoordinatorProxyResult` (`{ responded, status?, body? }`), and
+   `proxyToCoordinatorDetailed` (never throws; `responded:false` = no coordinator response).
+2. **`drone-beacon/src/routes/wiki.ts`** — the `PUT` coordinator branch and both `DELETE`
+   branches now consume `proxyToCoordinatorDetailed`: forward the coordinator's real status +
+   body; `502 Failed to proxy to coordinator` strictly means "no coordinator response".
+   No-scope DELETE preserves ADR-206 partial-delete semantics (the real error is forwarded
+   only when nothing was deleted; a successful local delete still returns
+   `{ success:true, beaconDeleted:true, coordinatorDeleted:false }`). All GET call sites
+   left on `proxyWikiToCoordinator`.
+3. **Tests** — `drone-beacon/test/coordinator-proxy.test.ts` +5 (400 forwarded with body;
+   transport → generic 502; DELETE 500 forwarded instead of 404; DELETE 404 still mapped;
+   `proxyToCoordinator` still collapses non-2xx to `null`). `drone-beacon/test/wiki-origin-reads.test.ts`
+   stub repointed to `proxyToCoordinatorDetailed` (returns `{ responded, status, body }`) and
+   +4 (non-JSON error body → `{ error }`; no-scope partial preserved on coordinator 500;
+   no-scope forwards the error when nothing was deleted; unreachable → generic 502).
+4. **ADR** — `decisions/210-beacon-proxy-error-forwarding.md`, its `decisions/index.md` row,
+   and `index.md` count 208 → 210 + latest pointer.
+
+### Validation results
+
+- LSP clean on all four touched files; `pnpm -r run build` exit 0 (re-run after prettier);
+  `pnpm typecheck` exit 0; `pnpm lint` exit 0; `pnpm test` 3053 passed / 14 skipped, exit 0.
+- **Red-first evidence**: with only the two source files stashed (tests kept), 11 of 39 tests
+  failed — including the key PUT case `expected 502 to be 400`, exactly the predicted masking
+  symptom. Fix restored (byte-compared against saved copies) and all 39 pass.
+- **E2E smoke**: a temporary test drove a real HTTP round trip through the actual
+  `createCoordinatorFetch` path to a live coordinator-shaped server — the coordinator saw
+  `PUT /api/wiki/smoke-page` and the beacon relayed its `400` with the exact error body
+  (temp test removed after the run).
+
+### Deviations / findings
+
+- **Closed a pre-existing index gap**: ADR file `209-stored-secrets-config-split.md` had no
+  row in `decisions/index.md` (210 files vs 209 indexed). Since this change asserts
+  "All 210 … live in [[decisions/index]]", the 209 row was added to make that true.
+- `prettier` (run via `pnpm lint`) reformatted the four touched files plus three
+  `.drone-agent` files — cosmetic only (line wrapping, table alignment, markdown italics,
+  trailing newline). Build/typecheck were re-run afterwards.
+- One `apply_diff` hunk mis-anchored the `mockReset` into the wrong `describe` block,
+  producing a spy-leak test failure; corrected by moving it to the delete-scope block.
