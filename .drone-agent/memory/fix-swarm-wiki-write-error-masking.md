@@ -21,15 +21,15 @@ Status: READY FOR EXECUTION. Branch: `feat/coordinator-config-ui-and-secure-stor
 `swarm__wiki_write` with `scope: "coordinator"` returns the useless `{"success":false,"error":"Failed to proxy to coordinator"}`.
 Reproduced end-to-end:
 
-| Layer | Behavior |
-|---|---|
+| Layer                                                                        | Behavior                                                                                            |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `writePage()` → `validatePitch()` (`drone-swarm-common/src/wiki-storage.ts`) | Throws `Pitch is too long. Keep it under 400 characters…` (observed payload pitch = 625, cap = 400) |
-| Coordinator `PUT /api/wiki/:id` | Returns **400** + `{"error":"Pitch is too long…"}` — already correct |
-| Beacon `proxyCall` (`drone-beacon/src/routes/context.ts`) | `if (!res.ok) return null` — **collapses the 400 and its body to `null`** |
-| Beacon wiki `PUT` coordinator branch | `if (!result)` → **502 `Failed to proxy to coordinator`** — the mask |
-| Agent `wiki_write` (`drone-agent/src/plugins/swarm/tools-wiki.ts`) | Already surfaces `err.error` — would work if the real body arrived |
+| Coordinator `PUT /api/wiki/:id`                                              | Returns **400** + `{"error":"Pitch is too long…"}` — already correct                                |
+| Beacon `proxyCall` (`drone-beacon/src/routes/context.ts`)                    | `if (!res.ok) return null` — **collapses the 400 and its body to `null`**                           |
+| Beacon wiki `PUT` coordinator branch                                         | `if (!result)` → **502 `Failed to proxy to coordinator`** — the mask                                |
+| Agent `wiki_write` (`drone-agent/src/plugins/swarm/tools-wiki.ts`)           | Already surfaces `err.error` — would work if the real body arrived                                  |
 
-The beacon-scope branch already surfaces the real message (`catch → 400 {error: err.message}`); **only the proxy path masks it.** The LLM therefore cannot see *why* the write failed and retries blindly.
+The beacon-scope branch already surfaces the real message (`catch → 400 {error: err.message}`); **only the proxy path masks it.** The LLM therefore cannot see _why_ the write failed and retries blindly.
 
 **Fix:** make the beacon forward the coordinator's real status + body on the wiki write/delete proxy paths, reserving `502 Failed to proxy to coordinator` for the case where no coordinator response exists at all.
 
@@ -38,7 +38,7 @@ The beacon-scope branch already surfaces the real message (`catch → 400 {error
 - **Q1** Keep reject-on-write. No change to validation behavior. Fix error propagation only.
 - **Q2/Q3** The pitch cap is **400 on both sides already** (read side imports the same `MAX_PITCH_CHARS`). The "200" was a red herring; there is nothing to unify. **No numeric change** — keep both the ingest limit and the output trim exactly as-is.
 - **Q4** Add ONE reusable detailed proxy helper in `context.ts`; refactor the existing `proxyCall` to delegate to a shared low-level fetch so its behavior stays **byte-identical** (insights/principles: zero blast radius). Only the wiki write/delete branches consume the detailed result.
-- **Q5** When the coordinator responded, **forward its status + body verbatim**. `502 Failed to proxy to coordinator` is reserved for *no coordinator response* (not configured, or transport failure).
+- **Q5** When the coordinator responded, **forward its status + body verbatim**. `502 Failed to proxy to coordinator` is reserved for _no coordinator response_ (not configured, or transport failure).
 - **Q6** The documented 502-on-non-2xx convention (`drone-agent-swarm-coordinator-proxy-principle`) is **superseded by experience**; the swarm wiki page will be reconciled by the ingest agent.
 - **Q7** Include the two DELETE branches (same defect, same file).
 - **Q8** No-scope DELETE: preserve ADR-206 partial-delete semantics; forward the coordinator's real error **only when nothing was deleted**.
@@ -79,14 +79,18 @@ async function fetchCoordinator(
 
 // UNCHANGED behavior (byte-identical): null on no-client and on non-2xx;
 // throws on transport failure and non-JSON 2xx (routes still propagate it).
-async function proxyCall(method: string, path: string, body?: unknown): Promise<unknown> {
+async function proxyCall(
+  method: string,
+  path: string,
+  body?: unknown
+): Promise<unknown> {
   const res = await fetchCoordinator(method, path, body);
   if (!res || !res.ok) return null;
   return res.json();
 }
 
-export const proxyToCoordinator = proxyCall;      // insights/principles — unchanged
-export const proxyWikiToCoordinator = proxyCall;  // remaining wiki GET call sites — unchanged
+export const proxyToCoordinator = proxyCall; // insights/principles — unchanged
+export const proxyWikiToCoordinator = proxyCall; // remaining wiki GET call sites — unchanged
 
 const ERROR_BODY_MAX_CHARS = 500;
 
@@ -133,7 +137,11 @@ export async function proxyToCoordinatorDetailed(
   if (res.ok) {
     return { responded: true, status: res.status, body: await res.json() };
   }
-  return { responded: true, status: res.status, body: await readErrorBody(res) };
+  return {
+    responded: true,
+    status: res.status,
+    body: await readErrorBody(res),
+  };
 }
 ```
 
@@ -142,9 +150,14 @@ export async function proxyToCoordinatorDetailed(
 Import `proxyToCoordinatorDetailed` (keep `proxyWikiToCoordinator` for the untouched GET call sites).
 
 **PUT coordinator branch** (~L110):
+
 ```ts
 if (scope === 'coordinator') {
-  const result = await proxyToCoordinatorDetailed('PUT', `/wiki/${pageId}`, request.body);
+  const result = await proxyToCoordinatorDetailed(
+    'PUT',
+    `/wiki/${pageId}`,
+    request.body
+  );
   if (!result.responded) {
     return reply.code(502).send({ error: 'Failed to proxy to coordinator' });
   }
@@ -153,14 +166,19 @@ if (scope === 'coordinator') {
 ```
 
 **DELETE `scope=coordinator` branch** (~L151):
+
 ```ts
 if (request.query.scope === 'coordinator') {
-  const result = await proxyToCoordinatorDetailed('DELETE', `/wiki/${request.params.pageId}`);
+  const result = await proxyToCoordinatorDetailed(
+    'DELETE',
+    `/wiki/${request.params.pageId}`
+  );
   if (!result.responded) {
     return reply.code(502).send({ error: 'Failed to proxy to coordinator' });
   }
   const status = result.status ?? 502;
-  if (status === 404) return reply.code(404).send({ error: 'Wiki page not found' });
+  if (status === 404)
+    return reply.code(404).send({ error: 'Wiki page not found' });
   if (status >= 400) return reply.code(status).send(result.body);
   triggerWikiReindex();
   return result.body;
@@ -168,13 +186,19 @@ if (request.query.scope === 'coordinator') {
 ```
 
 **DELETE no-scope branch** (~L173, Q8):
+
 ```ts
 const { deletePage } = await import('drone-swarm-common');
 const beaconDeleted = await deletePage(request.params.pageId);
-const coordinatorResult = await proxyToCoordinatorDetailed('DELETE', `/wiki/${request.params.pageId}`);
+const coordinatorResult = await proxyToCoordinatorDetailed(
+  'DELETE',
+  `/wiki/${request.params.pageId}`
+);
 const status = coordinatorResult.status ?? 0;
-const coordinatorDeleted = coordinatorResult.responded && status >= 200 && status < 300;
-const coordinatorErrored = !coordinatorResult.responded || (status >= 400 && status !== 404);
+const coordinatorDeleted =
+  coordinatorResult.responded && status >= 200 && status < 300;
+const coordinatorErrored =
+  !coordinatorResult.responded || (status >= 400 && status !== 404);
 // Surface the coordinator's real error only when NOTHING was deleted;
 // otherwise keep ADR-206 partial-delete semantics.
 if (coordinatorErrored && !beaconDeleted) {

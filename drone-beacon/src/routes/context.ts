@@ -65,28 +65,42 @@ export function coordinatorApiPath(path: string): string {
 }
 
 /**
+ * Low-level coordinator fetch shared by every proxy. Returns null when no
+ * coordinator client is configured; throws on transport failure. Fastify
+ * rejects an empty body when the JSON content-type is set
+ * (FST_ERR_CTP_EMPTY_JSON_BODY — the same behavior the outbox flusher works
+ * around), so the content-type header and the body are sent only together.
+ */
+async function fetchCoordinator(
+  method: string,
+  path: string,
+  body?: unknown
+): Promise<Response | null> {
+  const client = getCoordinatorClient();
+  if (!client) {
+    return null;
+  }
+  const url = `${client.getBaseUrl()}${coordinatorApiPath(path)}`;
+  return coordinatorFetch(url, {
+    method,
+    headers: body != null ? { 'Content-Type': 'application/json' } : undefined,
+    body: body != null ? JSON.stringify(body) : undefined,
+  });
+}
+
+/**
  * Shared coordinator proxy used by every proxied route (insights,
- * principles, wiki). Fastify rejects an empty body when the JSON
- * content-type is set (FST_ERR_CTP_EMPTY_JSON_BODY — the same behavior the
- * outbox flusher works around), so the content-type header and the body are
- * sent only together.
+ * principles, wiki). Collapses every failure to `null` — callers that need
+ * the coordinator's real error should use `proxyToCoordinatorDetailed`
+ * instead.
  */
 async function proxyCall(
   method: string,
   path: string,
   body?: unknown
 ): Promise<unknown> {
-  const client = getCoordinatorClient();
-  if (!client) {
-    return null;
-  }
-  const url = `${client.getBaseUrl()}${coordinatorApiPath(path)}`;
-  const res = await coordinatorFetch(url, {
-    method,
-    headers: body != null ? { 'Content-Type': 'application/json' } : undefined,
-    body: body != null ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) return null;
+  const res = await fetchCoordinator(method, path, body);
+  if (!res || !res.ok) return null;
   return res.json();
 }
 
@@ -95,6 +109,72 @@ export const proxyToCoordinator = proxyCall;
 
 // Proxy wiki requests to coordinator
 export const proxyWikiToCoordinator = proxyCall;
+
+/** Maximum length of a non-JSON coordinator error body forwarded to callers. */
+const ERROR_BODY_MAX_CHARS = 500;
+
+/**
+ * Read a non-2xx coordinator body for forwarding. A JSON object is passed
+ * through untouched (the coordinator's own `{ error }` shape reaches the
+ * caller verbatim); anything else becomes `{ error }` keyed on the raw text
+ * so downstream readers that look for `error` still find a message.
+ */
+async function readErrorBody(res: Response): Promise<unknown> {
+  let text: string;
+  try {
+    text = await res.text();
+  } catch {
+    return { error: `Coordinator error (HTTP ${res.status})` };
+  }
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (parsed && typeof parsed === 'object') return parsed;
+  } catch {
+    // Not JSON — fall through to the text fallback.
+  }
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return { error: `Coordinator error (HTTP ${res.status})` };
+  }
+  return { error: trimmed.slice(0, ERROR_BODY_MAX_CHARS) };
+}
+
+export interface CoordinatorProxyResult {
+  /** True iff a coordinator HTTP response was received (any status). */
+  responded: boolean;
+  /** Coordinator status (present iff `responded`). */
+  status?: number;
+  /** Parsed 2xx body, or `{ error }` for a non-2xx body. */
+  body?: unknown;
+}
+
+/**
+ * Detailed coordinator proxy: surfaces the coordinator's real status and
+ * body instead of collapsing every failure to `null`. Never throws —
+ * `responded: false` means no coordinator response existed at all (no client
+ * configured, or transport failure).
+ */
+export async function proxyToCoordinatorDetailed(
+  method: string,
+  path: string,
+  body?: unknown
+): Promise<CoordinatorProxyResult> {
+  let res: Response | null;
+  try {
+    res = await fetchCoordinator(method, path, body);
+  } catch {
+    return { responded: false };
+  }
+  if (!res) return { responded: false };
+  if (res.ok) {
+    return { responded: true, status: res.status, body: await res.json() };
+  }
+  return {
+    responded: true,
+    status: res.status,
+    body: await readErrorBody(res),
+  };
+}
 
 // Exported function for periodic sync (called from index.ts)
 export async function triggerCoordinatorSync(): Promise<{

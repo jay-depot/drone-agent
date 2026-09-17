@@ -12,6 +12,7 @@ import { buildTestApp } from './app-helper.js';
 import type { FastifyInstance } from 'fastify';
 
 const proxyWikiToCoordinator = vi.fn();
+const proxyToCoordinatorDetailed = vi.fn();
 
 vi.mock('../src/routes/context.js', async importOriginal => {
   const actual =
@@ -20,6 +21,8 @@ vi.mock('../src/routes/context.js', async importOriginal => {
     ...actual,
     proxyWikiToCoordinator: (...args: unknown[]) =>
       proxyWikiToCoordinator(...args),
+    proxyToCoordinatorDetailed: (...args: unknown[]) =>
+      proxyToCoordinatorDetailed(...args),
   };
 });
 
@@ -244,6 +247,7 @@ describe('wiki delete scope semantics', () => {
     const kbDir = await mkdtemp(path.join(os.tmpdir(), 'wiki-kb-del-'));
     setKnowledgeBaseDir(kbDir);
     proxyWikiToCoordinator.mockReset();
+    proxyToCoordinatorDetailed.mockReset();
     triggerWikiReindex.mockReset();
     app = await buildTestApp();
   });
@@ -254,11 +258,17 @@ describe('wiki delete scope semantics', () => {
   });
 
   function mockCoordinatorDelete(outcome: 'ok' | 'not-found'): void {
-    proxyWikiToCoordinator.mockImplementation(async (method: string) => {
-      if (method === 'DELETE') {
-        return outcome === 'ok' ? { success: true } : null;
+    proxyToCoordinatorDetailed.mockImplementation(async (method: string) => {
+      if (method !== 'DELETE') {
+        return { responded: false };
       }
-      return null;
+      return outcome === 'ok'
+        ? { responded: true, status: 200, body: { success: true } }
+        : {
+            responded: true,
+            status: 404,
+            body: { error: 'Wiki page not found' },
+          };
     });
   }
 
@@ -292,7 +302,7 @@ describe('wiki delete scope semantics', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ success: true });
-    expect(proxyWikiToCoordinator).not.toHaveBeenCalled();
+    expect(proxyToCoordinatorDetailed).not.toHaveBeenCalled();
     expect(triggerWikiReindex).toHaveBeenCalledTimes(1);
   });
 
@@ -306,7 +316,7 @@ describe('wiki delete scope semantics', () => {
       beaconDeleted: true,
       coordinatorDeleted: true,
     });
-    expect(proxyWikiToCoordinator).toHaveBeenCalledWith(
+    expect(proxyToCoordinatorDetailed).toHaveBeenCalledWith(
       'DELETE',
       '/wiki/dual-page'
     );
@@ -351,6 +361,65 @@ describe('wiki delete scope semantics', () => {
       url: '/wiki/missing-page',
     });
     expect(res.statusCode).toBe(404);
+    expect(triggerWikiReindex).not.toHaveBeenCalled();
+  });
+
+  it('falls back to { error } for a non-JSON coordinator error body', async () => {
+    proxyToCoordinatorDetailed.mockResolvedValue({
+      responded: true,
+      status: 500,
+      body: { error: '<html>boom</html>' },
+    });
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/wiki/dual-page?scope=coordinator',
+    });
+    expect(res.statusCode).toBe(500);
+    expect(JSON.parse(res.body)).toEqual({ error: '<html>boom</html>' });
+  });
+
+  it('no-scope delete keeps the partial result when the coordinator errors but the local page was deleted', async () => {
+    await writePage('dual-page', 'Dual', 'beacon', '# Dual\n\nLocal.');
+    proxyToCoordinatorDetailed.mockResolvedValue({
+      responded: true,
+      status: 500,
+      body: { error: 'coordinator exploded' },
+    });
+    const res = await app.inject({ method: 'DELETE', url: '/wiki/dual-page' });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      success: true,
+      beaconDeleted: true,
+      coordinatorDeleted: false,
+    });
+    expect(triggerWikiReindex).toHaveBeenCalledTimes(1);
+  });
+
+  it('no-scope delete forwards the coordinator error when nothing was deleted', async () => {
+    proxyToCoordinatorDetailed.mockResolvedValue({
+      responded: true,
+      status: 500,
+      body: { error: 'coordinator exploded' },
+    });
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/wiki/missing-page',
+    });
+    expect(res.statusCode).toBe(500);
+    expect(JSON.parse(res.body)).toEqual({ error: 'coordinator exploded' });
+    expect(triggerWikiReindex).not.toHaveBeenCalled();
+  });
+
+  it('no-scope delete returns the generic 502 when the coordinator is unreachable and nothing was deleted', async () => {
+    proxyToCoordinatorDetailed.mockResolvedValue({ responded: false });
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/wiki/missing-page',
+    });
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Failed to proxy to coordinator',
+    });
     expect(triggerWikiReindex).not.toHaveBeenCalled();
   });
 });
