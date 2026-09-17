@@ -522,5 +522,9 @@
   {
     "timestamp": "2026-09-12T20:05:00.296Z",
     "insight": "Two test-design lessons from the underlay-fix execution: (1) the config plugin's injector registry is MODULE-LEVEL state — fake injectors from an earlier test in the same file silently leak into later tests' rebuild() calls (the old B8 fakes made a new disk-preservation test falsely pass during the red phase); every test that registers injectors must unregister them, and a red-phase test that unexpectedly passes should immediately raise suspicion of cross-test leakage. (2) transformEnvVars runs at LAYER LOAD time, and rebuild() re-discovers/re-parses disk layers — so a test that sets an env var for a ${VAR} user-config key must keep it set until AFTER rebuild() completes (deleting it right after engine.initialize() makes the re-parse throw 'references unset environment variable')."
+  },
+  {
+    "timestamp": "2026-09-17T21:37:31.438Z",
+    "insight": "A knowingly-accepted limitation on a SHARED helper is not scoped to the route that accepted it. ADR 206 recorded \"the proxy still collapses coordinator 5xx to null\" as an acceptable trade-off for the wiki DELETE path, but `proxyCall` (drone-beacon/src/routes/context.ts) is shared by wiki + insights + principles, so the collapse reappeared as a fresh, undiagnosable bug on the wiki PUT path (swarm__wiki_write masking a 400 pitch-validation error as \"Failed to proxy to coordinator\"). When accepting a limitation, note the blast radius of the helper, not just the calling route — or fix the helper. Any beacon \"Failed to proxy to coordinator\" symptom means the real error is upstream at the coordinator and can only be recovered by reading the coordinator's actual response/status."
   }
 ]
