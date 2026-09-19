@@ -526,5 +526,13 @@
   {
     "timestamp": "2026-09-17T21:37:31.438Z",
     "insight": "A knowingly-accepted limitation on a SHARED helper is not scoped to the route that accepted it. ADR 206 recorded \"the proxy still collapses coordinator 5xx to null\" as an acceptable trade-off for the wiki DELETE path, but `proxyCall` (drone-beacon/src/routes/context.ts) is shared by wiki + insights + principles, so the collapse reappeared as a fresh, undiagnosable bug on the wiki PUT path (swarm__wiki_write masking a 400 pitch-validation error as \"Failed to proxy to coordinator\"). When accepting a limitation, note the blast radius of the helper, not just the calling route — or fix the helper. Any beacon \"Failed to proxy to coordinator\" symptom means the real error is upstream at the coordinator and can only be recovered by reading the coordinator's actual response/status."
+  },
+  {
+    "timestamp": "2026-09-19T00:59:14.992Z",
+    "insight": "Plan memories can complete without ever receiving wiki coverage, because the project wiki's ingest checkpoint advances by *session/git commit*, not by plan. Six completed plans in this repo had no ADR despite their commits being in tree: plan-coordinator-trust-hardening, plan-coordinator-config-ui-and-secret-handling, plan-receiver-side-env-var-interpolation, fix-swarm-config-underlay-rebuild, plan-swarm-session-import-provider-fixes, slash-commands-during-work-fix. When deleting completed plans from project memory, do not assume prior ingests covered them — verify each plan's expected artifacts exist in the wiki (search for a distinctive symbol/type name such as `resolveEnvTemplates` or `busyBehavior`, NOT the plan's own name) before removing the memory. Recorded 2026-09-18 while backfilling ADRs 211–215."
+  },
+  {
+    "timestamp": "2026-09-19T00:59:14.994Z",
+    "insight": "Concept/spec pages can describe dead plumbing as though it works. `concepts/beacon-config-override-spec.md` documented a Coordinator config injector at precedence 50 and beacon-side CRUD as the primary config interface; in reality no coordinator injector was ever registered (coordinator values ride the single beacon underlay at precedence 75, the beacon serves a read-optimized merged view, and the coordinator owns writes). The documented \"Coordinator (50) → Beacon (75)\" cascade was docs-only until ADR 212. Lesson: when a plan touches an area that has a concept page, re-read that page against the code and correct it in the same pass — a stale spec is worse than a missing one because it gets cited as fact."
   }
 ]

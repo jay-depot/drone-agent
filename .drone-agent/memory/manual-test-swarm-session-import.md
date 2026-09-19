@@ -12,7 +12,7 @@ updated: 2026-08-25T15:24:59.125Z
 
 # Manual Testing Runbook: `/swarm-session` (branch feat/swarm-session-import)
 
-Companion to plan memory `plan-swarm-session-import-provider-fixes`. Execute AFTER deploying the branch build to the Pi beacon AND landing the provider-fix code steps. Kept as a standalone reference memory (not a plan) so wiki ingest does not consume it.
+Runbook for the `/swarm-session` feature. Execute AFTER deploying the branch build to the Pi beacon. The companion provider-fix plan (`plan-swarm-session-import-provider-fixes`) was completed and **deleted after ingest** — its durable content now lives in the project wiki at [[decisions/214-swarm-session-import-provider-repair]] (with the feature itself in [[decisions/146-swarm-session-import]]), so this runbook intentionally stands alone.
 
 ## Environment / verified pre-conditions
 
