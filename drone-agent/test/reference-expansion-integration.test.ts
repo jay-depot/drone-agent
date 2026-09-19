@@ -316,7 +316,10 @@ describe('macro chat-prompt steps route through expansion', () => {
     const handled = await handler!({
       args: ['@fixture.ts'],
       logger: silentLogger(),
-      engine: { runHooks: async () => {}, dispatchSlashCommand: async () => true },
+      engine: {
+        runHooks: async () => {},
+        dispatchSlashCommand: async () => true,
+      },
       conversation,
       sessionManager: conversation,
     });

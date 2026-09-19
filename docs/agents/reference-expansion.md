@@ -6,16 +6,16 @@ prompt without spending a tool call.
 
 ## Grammar
 
-| Form | Meaning |
-| --- | --- |
-| `@src/foo.ts` | Insert the file's contents (bare path resolves against the CWD). |
-| `@~/notes.md` | `~/` expands to your home directory. |
-| `@/etc/hosts`, `@./x`, `@../x` | Absolute and relative paths. |
-| `@{path with spaces.md}` | Braced form for paths containing whitespace. |
-| `@src/` | A directory expands to a recursive, name-only listing. |
-| `@*.ts` | A glob expands to the matching files (capped at 30). |
-| `@skill:code-review` | Insert a skill's body (see below). |
-| `\@` | A literal `@` (the backslash is removed). |
+| Form                           | Meaning                                                          |
+| ------------------------------ | ---------------------------------------------------------------- |
+| `@src/foo.ts`                  | Insert the file's contents (bare path resolves against the CWD). |
+| `@~/notes.md`                  | `~/` expands to your home directory.                             |
+| `@/etc/hosts`, `@./x`, `@../x` | Absolute and relative paths.                                     |
+| `@{path with spaces.md}`       | Braced form for paths containing whitespace.                     |
+| `@src/`                        | A directory expands to a recursive, name-only listing.           |
+| `@*.ts`                        | A glob expands to the matching files (capped at 30).             |
+| `@skill:code-review`           | Insert a skill's body (see below).                               |
+| `\@`                           | A literal `@` (the backslash is removed).                        |
 
 Recognition rules:
 
@@ -32,15 +32,17 @@ Recognition rules:
 The user's prose is preserved verbatim (including the `@token` as a readable
 anchor). Resolved references are appended once, in order, under a trailer:
 
-```
+````
 <prose verbatim>
 
 --- Referenced content ---
 ### @src/foo.ts
 ```ts
 <contents>
-```
+````
+
 ### @skill:code-review
+
 <skill body>
 ```
 

@@ -22,9 +22,7 @@ export type ReferenceToken = {
   end: number;
 };
 
-export type TextToken =
-  | { type: 'text'; text: string }
-  | ReferenceToken;
+export type TextToken = { type: 'text'; text: string } | ReferenceToken;
 
 const KIND_RE = /^[a-z][a-z0-9-]*$/;
 

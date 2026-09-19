@@ -22,7 +22,7 @@ Register agent-side tools that give a persona direct access to session transcrip
 Two intended uses:
 
 1. **Human-guided memory pipeline** — a stand-alone building block for users who want to curate what gets ingested (a human in the loop), instead of an automated session-end trigger.
-2. **Eidetic memory for one persona** — *very* accurate (and deliberately distracting) recall of specific past sessions.
+2. **Eidetic memory for one persona** — _very_ accurate (and deliberately distracting) recall of specific past sessions.
 
 ## Why `defaultHidden`
 

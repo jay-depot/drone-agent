@@ -121,7 +121,9 @@ async function buildFileBlock(
   }
 
   const remaining = budget.limit - budget.used;
-  let { buf, truncated } = await readBounded(absPath, Math.min(MAX_BYTES, remaining));
+  const read = await readBounded(absPath, Math.min(MAX_BYTES, remaining));
+  const buf = read.buf;
+  let truncated = read.truncated;
 
   if (buf.subarray(0, BINARY_SNIFF_BYTES).includes(0)) {
     return {
@@ -181,7 +183,11 @@ async function resolveGlob(
 ): Promise<DroneReferenceResolution> {
   const all = await globMatches(value, ctx);
   if (all.length === 0) {
-    return { block: '', images: [], notice: `[unresolved reference: @${value}]` };
+    return {
+      block: '',
+      images: [],
+      notice: `[unresolved reference: @${value}]`,
+    };
   }
   const shown = all.slice(0, MAX_GLOB_MATCHES);
   const parts: string[] = [];
@@ -261,7 +267,11 @@ export async function resolveFileReference(
   try {
     stats = await stat(absPath);
   } catch {
-    return { block: '', images: [], notice: `[unresolved reference: @${value}]` };
+    return {
+      block: '',
+      images: [],
+      notice: `[unresolved reference: @${value}]`,
+    };
   }
 
   if (stats.isDirectory()) {
@@ -271,6 +281,10 @@ export async function resolveFileReference(
   try {
     return await buildFileBlock(value, absPath, budget);
   } catch {
-    return { block: '', images: [], notice: `[unresolved reference: @${value}]` };
+    return {
+      block: '',
+      images: [],
+      notice: `[unresolved reference: @${value}]`,
+    };
   }
 }

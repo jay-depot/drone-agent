@@ -113,8 +113,7 @@ describe('createReferenceCapability', () => {
     await rm(home, { recursive: true, force: true });
   });
 
-  const makeCap = () =>
-    createReferenceCapability({ cwd: dir, homedir: home });
+  const makeCap = () => createReferenceCapability({ cwd: dir, homedir: home });
 
   it('fast-paths text without @', async () => {
     const cap = makeCap();
@@ -176,7 +175,10 @@ describe('createReferenceCapability', () => {
 
   it('expands globs and caps matches', async () => {
     for (let i = 0; i < 40; i++) {
-      await writeFile(path.join(dir, `f${String(i).padStart(2, '0')}.txt`), 'x');
+      await writeFile(
+        path.join(dir, `f${String(i).padStart(2, '0')}.txt`),
+        'x'
+      );
     }
     const cap = makeCap();
     const result = await cap.expandUserMessage('@*.txt');
@@ -225,7 +227,9 @@ describe('createReferenceCapability', () => {
 
   it('rejects an invalid kind name', () => {
     const cap = makeCap();
-    expect(() => cap.registerKind('Bad Name', async () => ({ block: '', images: [] }))).toThrow();
+    expect(() =>
+      cap.registerKind('Bad Name', async () => ({ block: '', images: [] }))
+    ).toThrow();
   });
 
   it('expands via the home directory', async () => {

@@ -18,6 +18,10 @@ import type { CompletionItem } from '../src/tui/completion.js';
 
 const tick = () => new Promise(r => setTimeout(r, 15));
 
+/** Strip SGR color codes so adjacent <Text> nodes read contiguously. */
+const stripAnsi = (s: string): string =>
+  s.replace(/\u001b\[[0-9;]*m/g, '');
+
 const items: CompletionItem[] = Array.from({ length: 13 }, (_, i) => ({
   id: `item-${i}`,
   display: `item-${i}`,
@@ -28,7 +32,11 @@ const items: CompletionItem[] = Array.from({ length: 13 }, (_, i) => ({
 describe('CompletionMenu', () => {
   it('renders nothing for an empty list', () => {
     const { lastFrame, cleanup } = render(
-      <CompletionMenu items={[]} selectedIndex={0} scheme={DEFAULT_GRAYSCALE_SCHEME} />
+      <CompletionMenu
+        items={[]}
+        selectedIndex={0}
+        scheme={DEFAULT_GRAYSCALE_SCHEME}
+      />
     );
     expect(lastFrame() ?? '').toBe('');
     cleanup();
@@ -43,7 +51,7 @@ describe('CompletionMenu', () => {
       />
     );
     await tick();
-    const frame = lastFrame() ?? '';
+    const frame = stripAnsi(lastFrame() ?? '');
     expect(frame).toContain('▶ item-1');
     expect(frame).toContain('first');
     cleanup();
@@ -149,9 +157,7 @@ describe('useCompletion', () => {
   }
 
   it('opens a slash menu and filters by prefix', async () => {
-    const { stdin, cleanup } = render(
-      <Harness initial="/mo" onResult={() => {}} />
-    );
+    const { cleanup } = render(<Harness initial="/mo" onResult={() => {}} />);
     await tick();
     (
       globalThis as unknown as { __completion: { open: () => void } }
@@ -162,7 +168,11 @@ describe('useCompletion', () => {
     const accepted = (
       globalThis as unknown as {
         __completion: {
-          accept: () => { value: string; caret: number; reopen: boolean } | null;
+          accept: () => {
+            value: string;
+            caret: number;
+            reopen: boolean;
+          } | null;
         };
       }
     ).__completion.accept();
@@ -182,7 +192,11 @@ describe('useCompletion', () => {
     const dirAccept = (
       globalThis as unknown as {
         __completion: {
-          accept: () => { value: string; caret: number; reopen: boolean } | null;
+          accept: () => {
+            value: string;
+            caret: number;
+            reopen: boolean;
+          } | null;
         };
       }
     ).__completion.accept();

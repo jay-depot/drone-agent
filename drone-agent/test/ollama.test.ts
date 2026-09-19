@@ -545,7 +545,9 @@ describe('ollama DroneLlmError conversion', () => {
       Ollama: vi.fn().mockImplementation(function () {
         return {
           chat: vi.fn(async () => {
-            const err = new Error('model "nope" not found, try pulling it first');
+            const err = new Error(
+              'model "nope" not found, try pulling it first'
+            );
             (err as { status_code?: number }).status_code = 404;
             throw err;
           }),

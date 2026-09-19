@@ -75,11 +75,16 @@ describe('applyCompletion', () => {
   });
 
   it('is a no-op for the none context', () => {
-    const result = applyCompletion('hello', 5, { kind: 'none' }, {
-      id: 'x',
-      display: 'x',
-      apply: 'x',
-    });
+    const result = applyCompletion(
+      'hello',
+      5,
+      { kind: 'none' },
+      {
+        id: 'x',
+        display: 'x',
+        apply: 'x',
+      }
+    );
     expect(result).toEqual({ value: 'hello', caret: 5 });
   });
 });
@@ -181,7 +186,10 @@ describe('listFileCandidates', () => {
 
   it('caps the candidate list at 50', async () => {
     for (let i = 0; i < 60; i++) {
-      await writeFile(path.join(dir, `f${String(i).padStart(2, '0')}.txt`), 'x');
+      await writeFile(
+        path.join(dir, `f${String(i).padStart(2, '0')}.txt`),
+        'x'
+      );
     }
     const items = await listFileCandidates('f', ctx());
     expect(items.length).toBe(50);
