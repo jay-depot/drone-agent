@@ -1,4 +1,5 @@
 import {
+  DRONE_REFERENCE_CAPABILITY_ID,
   insertSortedByPrecedence,
   removeById,
   insertWriterSorted,
@@ -15,6 +16,7 @@ import type {
   DroneSkillProvider,
   DroneSkillWriter,
   DroneSkillsCapability,
+  DroneReferenceCapability,
 } from 'drone-core';
 import { skillsCreateWorkflow } from './wizard.js';
 
@@ -29,7 +31,10 @@ export const skillsPlugin: DronePlugin = {
     description:
       'Broker for skill providers. Provides skills.recall, skills.list, skills.reload, skills.create tools.',
     defaultEnabled: false,
-    dependencies: [{ id: 'persona', optional: true }],
+    dependencies: [
+      { id: 'persona', optional: true },
+      { id: DRONE_REFERENCE_CAPABILITY_ID, optional: true },
+    ],
   },
   register: async registration => {
     const providers: DroneSkillProvider[] = [];
@@ -56,6 +61,28 @@ export const skillsPlugin: DronePlugin = {
         if (skill) return skill;
       }
       return undefined;
+    }
+
+    function findSkill(id: string): DroneSkillDefinition | undefined {
+      const lower = id.trim().toLowerCase();
+      return (
+        getSkillById(lower) ??
+        getAllSkills().find(s => s.id.toLowerCase() === lower)
+      );
+    }
+
+    /**
+     * Render a skill body with recall enhancers applied — the same path
+     * `skills__recall` uses. Returns undefined when the id is unknown.
+     */
+    async function renderSkillBody(id: string): Promise<string | undefined> {
+      const skill = findSkill(id);
+      if (!skill) return undefined;
+      let body = skill.body;
+      for (const enhancer of recallEnhancers) {
+        body = await enhancer(skill.id, body);
+      }
+      return body;
     }
 
     const skillsFragment: DronePromptFragment = {
@@ -103,6 +130,7 @@ export const skillsPlugin: DronePlugin = {
     const capability: DroneSkillsCapability = {
       getSkills: () => getAllSkills(),
       getSkill: (id: string) => getSkillById(id),
+      renderSkillBody,
       reloadSkills: async () => {
         for (const provider of providers) {
           await provider.reloadSkills();
@@ -138,6 +166,22 @@ export const skillsPlugin: DronePlugin = {
     };
     registration.offer(capability);
 
+    const reference = registration.request<DroneReferenceCapability>(
+      DRONE_REFERENCE_CAPABILITY_ID
+    );
+    reference?.registerKind('skill', async value => {
+      const id = value.trim().toLowerCase();
+      const body = await renderSkillBody(id);
+      return body === undefined
+        ? {
+            block: '',
+            images: [],
+            notice: `[unknown skill: ${id}]`,
+            dedupKey: `skill:${id}`,
+          }
+        : { block: body, images: [], dedupKey: `skill:${id}` };
+    });
+
     registration.hooks.onPluginsLoaded(async () => {
       await capability.reloadSkills();
       const all = getAllSkills();
@@ -167,7 +211,7 @@ export const skillsPlugin: DronePlugin = {
           throw new Error('skills.recall requires a non-empty id string.');
         }
 
-        const skill = getSkillById(id);
+        const skill = findSkill(id);
         if (!skill) {
           const all = getAllSkills();
           throw new Error(
@@ -175,11 +219,7 @@ export const skillsPlugin: DronePlugin = {
           );
         }
 
-        // Run recall enhancers (e.g. self-improvement principles injection)
-        let body = skill.body;
-        for (const enhancer of recallEnhancers) {
-          body = await enhancer(id, body);
-        }
+        const body = (await renderSkillBody(id)) ?? skill.body;
 
         return JSON.stringify(
           {
