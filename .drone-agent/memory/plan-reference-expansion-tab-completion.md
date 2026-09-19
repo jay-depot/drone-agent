@@ -8,7 +8,8 @@ tags:
   - skills
   - conversation-service
 created: 2026-09-19T23:11:41.128Z
-updated: 2026-09-19T23:20:50.946Z
+updated: 2026-09-19T23:44:10.679Z
+status: completed
 ---
 
 # Plan: `@`-reference expansion + tab completion (drone-agent)
@@ -360,3 +361,31 @@ Walk the validation criteria; fix failures. Emit an ADR in the swarm wiki coveri
 - Glob precedent: `file.ts` `fg(pattern,{cwd,absolute:true})`; fast-glob in drone-agent/package.json:38.
 - Path-expansion precedent: `plugins/prompt-file/index.ts:19-64` `resolvePromptFilePath`.
 - No `@`-reference handling exists anywhere today (TUI or runtime); Tab is unbound in Ink.
+
+
+---
+
+## Execution Summary — COMPLETED (2026-09-19T23:44:10.679Z, branch feat/inline-object-refs)
+
+**All 15 steps executed; validation green** (`pnpm -r run build` exit 0, `pnpm lint` exit 0, full suite **3150 passed / 14 skipped / 0 failed**; LSP clean).
+
+As-built (all per plan; deviations noted):
+- **S1** `drone-core/src/reference-types.ts` (types, `DRONE_REFERENCE_CAPABILITY_ID`, `RESERVED_REFERENCE_KINDS`); `renderSkillBody` on `DroneSkillsCapability`; index re-exports.
+- **S2** `runtime/reference-expansion/parse.ts` — split `TextToken`/`ReferenceToken` and added a `body` field to the reference token (unknown-kind-prefix tokens need the whole body to fall back to a file path: `@a:b.ts`).
+- **S3** `file-kinds.ts` — path forms, `fast-glob` globs (cap 30), recursive dir listing (cap 500), binary skip, 2000-line/256 KB cap, budget, `realpath` dedup, fence/lang hint.
+- **S4** `capability.ts` + `index.ts`; `file` kind registered by default; serialized budget via a promise chain; fast-path when no `@`. 27 unit tests.
+- **S5** engine seeds `reference` in `initialize()` right after `_runtime`; `index.tsx` builds + passes it into the engine.
+- **S6** conversation-service `expandUserMessage` option + `expandAndAppend` at the 3 direct append sites; `userMessage` event carries expanded text; own-round NOT expanded.
+- **S7** skills plugin `renderSkillBody`/`findSkill`, `registerKind('skill')`, optional dep `{id:'reference'}`; `skills__recall` shares the helper. 4 tests.
+- **S8** `MultilineTextInput` controlled `cursorOffset`/`onCursorChange`/`completionActive` (uncontrolled fallback retained). 4 tests.
+- **S9** `InputLine` pass-through.
+- **S10** `tui/completion.ts` (pure). 19 tests.
+- **S11** `useCompletion` hook + `CompletionMenu`. 5 tests.
+- **S12** `app.tsx` wiring (caret state, menu key handling, render). *Deviation:* the completion engine param was narrowed to a structural `{getSlashCommands, getCapability}` slice (and `listSlashCandidates` to `SlashCommandSource`) because the TUI exposes only a `Pick` of `DronePluginEngine`, not the full engine.
+- **S13** verified no extra `renderSkillBody` mocks needed (test capability mocks are loose `unknown` objects; only the skills plugin implements the full type).
+- **S14** `test/reference-expansion-integration.test.ts` (6 tests incl. the own-round exactly-once regression) + `docs/agents/reference-expansion.md` + AGENTS.md link.
+- **S15** validation + swarm-wiki ADR `reference-expansion-and-tab-completion`.
+
+Commits: 8e90edba (S1–6), 8e67109a (S7), c4d7ee8d (S8), 50e33a97 (S9), a9181997 (S10), 2701028f (S11), 08babe33 (S12), e9e85baf (S14), plus S15 lint/test fixes.
+
+**Execution hazard discovered:** `file__apply_diff`'s fuzzy matching duplicated/mangled the tail of `plugin-engine.ts` and silently dropped two hunks (an import + a destructure) while reporting success; repaired with deterministic python exact-replace over `exec__run`. Recommend python exact-replace for risky drone-agent edits and always verifying with `npx tsc -b` (LSP diagnostics go stale after exec-based writes).

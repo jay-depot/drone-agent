@@ -562,5 +562,9 @@
   {
     "timestamp": "2026-09-19T23:11:50.180Z",
     "insight": "`conversation-service.ts` has no single user-text transform point. A user string becomes a session turn at exactly three DIRECT append sites — `sendUserMessage` (append ~L596), the `drainPendingEntries('append')` branch (~L425), and the steering loop (~L983) — but the `drainPendingEntries('own-round')` branch (~L437) RE-ENTERS `sendUserMessage`, so anything applied at the `sendUserMessage` entry runs twice for deferred messages. Any future feature that rewrites/annotates inbound user text (reference expansion, redaction, templating) must expand at the three direct sites and never at the entry or the own-round branch. Prefer one shared `expandAndAppend(content)` helper returning the transformed text so the `userMessage` event stays consistent with what was appended."
+  },
+  {
+    "timestamp": "2026-09-19T23:44:01.000Z",
+    "insight": "Reference expansion (`@` refs) + TUI tab completion landed on feat/inline-object-refs via plan-reference-expansion-tab-completion. Key architecture: a `reference` capability seeded by the engine BEFORE plugin registration (so the skills plugin registers the `skill:` kind during register()); core owns the `file:` kind. Expansion runs in the conversation service at the 3 direct append sites (sendUserMessage, drainPendingEntries('append'), steering loop) — the `'own-round'` drain re-enters sendUserMessage so it must NOT be expanded directly. TUI completion required lifting the caret into App (MultilineTextInput got controlled cursorOffset/onCursorChange/completionActive). Docs: docs/agents/reference-expansion.md."
   }
 ]
