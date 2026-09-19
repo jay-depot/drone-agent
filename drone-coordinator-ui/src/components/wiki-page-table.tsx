@@ -14,15 +14,28 @@ import { Button } from '@/components/ui/button';
 
 const MAX_VISIBLE_TAGS = 3;
 
-type SortableColumn = { key: WikiSortKey; label: string };
+/**
+ * Column widths. The table uses a fixed layout capped at the container width,
+ * so these narrow columns hold their size while the (unsized) Title column
+ * absorbs the remaining space and truncates its overflow.
+ */
+const COL_TAGS = 'w-[180px]';
+const COL_DATE = 'w-[96px] text-center';
+const COL_WORDS = 'w-[104px]';
+const COL_SOURCES = 'w-[132px] text-center';
+const COL_ACTIONS = 'w-[92px] text-right';
 
-const COLUMNS: (SortableColumn | { key: null; label: string })[] = [
+const COLUMNS: {
+  key: WikiSortKey | null;
+  label: string;
+  className?: string;
+}[] = [
   { key: 'title', label: 'Title' },
-  { key: null, label: 'Tags' },
-  { key: 'created', label: 'Created' },
-  { key: 'updated', label: 'Updated' },
-  { key: 'words', label: 'Word Count' },
-  { key: 'sources', label: 'Source Sessions' },
+  { key: null, label: 'Tags', className: COL_TAGS },
+  { key: 'created', label: 'Created', className: COL_DATE },
+  { key: 'updated', label: 'Updated', className: COL_DATE },
+  { key: 'words', label: 'Word Count', className: COL_WORDS },
+  { key: 'sources', label: 'Source Sessions', className: COL_SOURCES },
 ];
 
 function sortIndicator(
@@ -50,11 +63,11 @@ export default function WikiPageTable({
   const navigate = useNavigate();
 
   return (
-    <Table>
+    <Table className="table-fixed">
       <TableHeader>
         <TableRow>
           {COLUMNS.map(column => (
-            <TableHead key={column.label}>
+            <TableHead key={column.label} className={column.className}>
               {column.key === null ? (
                 column.label
               ) : (
@@ -71,7 +84,7 @@ export default function WikiPageTable({
               )}
             </TableHead>
           ))}
-          {onDelete && <TableHead className="text-right">Actions</TableHead>}
+          {onDelete && <TableHead className={COL_ACTIONS}>Actions</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -81,8 +94,10 @@ export default function WikiPageTable({
             className="cursor-pointer"
             onClick={() => navigate(`/wiki/${page.id}`)}
           >
-            <TableCell className="font-medium">{page.title}</TableCell>
-            <TableCell>
+            <TableCell className="font-medium">
+              <div className="truncate">{page.title}</div>
+            </TableCell>
+            <TableCell className={COL_TAGS}>
               <div
                 className="flex flex-wrap items-center gap-1"
                 title={page.tags.join(', ')}
@@ -105,20 +120,22 @@ export default function WikiPageTable({
                 )}
               </div>
             </TableCell>
-            <TableCell className="text-xs text-muted-foreground">
+            <TableCell className={`${COL_DATE} text-xs text-muted-foreground`}>
               {new Date(page.createdAt).toLocaleDateString()}
             </TableCell>
-            <TableCell className="text-xs text-muted-foreground">
+            <TableCell className={`${COL_DATE} text-xs text-muted-foreground`}>
               {new Date(page.updatedAt).toLocaleDateString()}
             </TableCell>
-            <TableCell className="text-xs text-muted-foreground">
+            <TableCell className={`${COL_WORDS} text-xs text-muted-foreground`}>
               {page.wordCount}
             </TableCell>
-            <TableCell className="text-xs text-muted-foreground">
+            <TableCell
+              className={`${COL_SOURCES} text-xs text-muted-foreground`}
+            >
               <span title={page.sources.join(', ')}>{page.sources.length}</span>
             </TableCell>
             {onDelete && (
-              <TableCell className="text-right">
+              <TableCell className={COL_ACTIONS}>
                 <Button
                   variant="destructive"
                   size="sm"

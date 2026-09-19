@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import WikiPageTable from './wiki-page-table';
@@ -69,6 +69,42 @@ describe('WikiPageTable', () => {
     // Tags is a plain (non-sortable) header, so no button.
     expect(screen.getByRole('columnheader', { name: 'Tags' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Tags/ })).toBeNull();
+  });
+
+  it('uses a fixed layout so the Title column truncates and the rest hold width', () => {
+    renderTable([
+      page({ title: 'A very long wiki page title that should be truncated' }),
+    ]);
+
+    expect(screen.getByRole('table').className).toContain('table-fixed');
+    const title = screen.getByText(
+      'A very long wiki page title that should be truncated'
+    );
+    expect(title.className).toContain('truncate');
+  });
+
+  it('centers the Created, Updated, and Source Sessions columns', () => {
+    renderTable([
+      page({
+        createdAt: '2026-01-05T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      }),
+    ]);
+
+    for (const label of ['Created', 'Updated', 'Source Sessions']) {
+      expect(
+        screen.getByRole('columnheader', { name: new RegExp(label) }).className
+      ).toContain('text-center');
+    }
+
+    // Body cells line up under the centered headers (0=Title, 1=Tags,
+    // 2=Created, 3=Updated, 4=Word Count, 5=Sources).
+    const bodyRow = screen.getAllByRole('row')[1];
+    const cells = within(bodyRow).getAllByRole('cell');
+    expect(cells[2].className).toContain('text-center');
+    expect(cells[3].className).toContain('text-center');
+    expect(cells[5].className).toContain('text-center');
+    expect(cells[0].className).not.toContain('text-center');
   });
 
   it('caps the tag badges at 3 and shows a +N chip', () => {
