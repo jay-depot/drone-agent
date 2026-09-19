@@ -1,0 +1,331 @@
+/**
+ * Integration tests for `@`-reference expansion at the conversation-service
+ * append sites. Uses a real conversation service (mock engine/provider) with an
+ * injected `expandUserMessage`, so the expansion contract is exercised the way
+ * every host (TUI, readline, swarm, macros) reaches it.
+ */
+
+import { describe, expect, it, vi, afterEach } from 'vitest';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
+import {
+  createDefaultAgentConfig,
+  type DroneChatResponse,
+  type DroneContextWindowInfo,
+  type DroneConversationEvent,
+  type DroneLlmCapability,
+  type DroneLlmProvider,
+  type DroneReferenceExpansion,
+} from 'drone-core';
+import {
+  CANCEL_SENTINEL,
+  createConversationService,
+} from '../src/runtime/conversation-service.js';
+import { createContextBudgetService } from '../src/runtime/context-budget-service.js';
+import { createSessionManager } from '../src/runtime/session-manager.js';
+import { createMockEngine, silentLogger } from './helpers.js';
+import { macrosPlugin } from '../src/plugins/macros/index.js';
+
+// ---------------------------------------------------------------------------
+// Fixtures (mirrors conversation-service-steering.test.ts)
+// ---------------------------------------------------------------------------
+
+function makeProvider(
+  chatResponses: DroneChatResponse[]
+): DroneLlmProvider & { __chatMock: ReturnType<typeof vi.fn> } {
+  const chatMock = vi.fn(async () => {
+    if (chatResponses.length === 0) {
+      return { message: 'no more responses queued' };
+    }
+    return chatResponses.shift() as DroneChatResponse;
+  });
+  return {
+    chat: chatMock,
+    getContextWindowInfo: async () =>
+      ({
+        model: 'fake',
+        contextWindowTokens: 1_000_000,
+        source: 'config',
+      }) satisfies DroneContextWindowInfo,
+    __chatMock: chatMock,
+  };
+}
+
+function makeLlmCapability(provider: DroneLlmProvider): DroneLlmCapability {
+  return {
+    getActiveProvider: () => provider,
+    resolveModelForRole: () => ({
+      provider,
+      providerId: 'test-provider',
+      model: 'fake',
+    }),
+    getActiveProviderId: () => 'test-provider',
+    getAvailableProviders: () => [{ id: 'test-provider', precedence: 1000 }],
+    activateProvider: () => {},
+    getModel: () => 'fake',
+    setModel: () => {},
+    getReasoningLevel: () => undefined,
+    setReasoningLevel: (_level: unknown) => {},
+    listModels: async () => ['fake'],
+    registerDriver: () => {},
+    registerProvider: () => {},
+    unregisterProvider: () => {},
+    describeImages: async images => images,
+    getUsageLedger: () => [],
+  };
+}
+
+/** A counting expander that appends a `--- Referenced content ---` trailer. */
+function makeExpander(): {
+  expand: (text: string) => Promise<DroneReferenceExpansion>;
+  spy: ReturnType<typeof vi.fn>;
+} {
+  const spy = vi.fn(async (text: string) => {
+    if (!text.includes('@')) {
+      return { text, images: [], notices: [] };
+    }
+    return {
+      text: `${text}\n\n--- Referenced content ---\n### @fixture.ts\n\`\`\`ts\nbody\n\`\`\``,
+      images: [],
+      notices: ['[expanded @fixture.ts (1 lines, 4 B)]'],
+    };
+  });
+  return { expand: spy, spy };
+}
+
+function makeConversation(
+  provider: DroneLlmProvider,
+  expandUserMessage: (text: string) => Promise<DroneReferenceExpansion>
+) {
+  const engine = createMockEngine({
+    tools: [],
+    executeToolImpl: async () => 'ok',
+  });
+  const config = createDefaultAgentConfig();
+  const budgetService = createContextBudgetService({
+    config,
+    renderPromptFragments: async () => [],
+    getProvider: () => provider,
+    getModel: () => 'fake',
+  });
+  const sessionManager = createSessionManager();
+  const conversation = createConversationService({
+    engine: engine as unknown as DronePluginEngine,
+    config,
+    logger: silentLogger(),
+    sessionManager,
+    budgetService,
+    expandUserMessage,
+  });
+  (engine as { getCapability: (id: string) => unknown }).getCapability = (
+    id: string
+  ) => (id === 'llm' ? makeLlmCapability(provider) : undefined);
+
+  const events: DroneConversationEvent[] = [];
+  engine.runConversationEventHooks = async event => {
+    events.push(event);
+  };
+  return { conversation, engine, events };
+}
+
+function holdFirstChat(
+  provider: ReturnType<typeof makeProvider>,
+  resolveValue: DroneChatResponse
+): { release: () => void } {
+  let release: (() => void) | undefined;
+  provider.__chatMock.mockImplementationOnce(
+    () =>
+      new Promise<DroneChatResponse>(resolve => {
+        release = () => resolve(resolveValue);
+      })
+  );
+  return { release: () => release?.() };
+}
+
+const tick = () => new Promise(r => setTimeout(r, 10));
+
+const toolCallResponse = (name = 't'): DroneChatResponse => ({
+  toolCalls: [{ id: 'c1', name, arguments: {} }],
+});
+
+// ---------------------------------------------------------------------------
+
+describe('reference expansion at the conversation service', () => {
+  it('expands an idle sendUserMessage, emits a notice, and appends the trailer', async () => {
+    const provider = makeProvider([{ message: 'done' }]);
+    const { expand, spy } = makeExpander();
+    const { conversation, events } = makeConversation(provider, expand);
+
+    await conversation.sendUserMessage('look at @fixture.ts');
+
+    const userTurn = conversation
+      .getMessages()
+      .find(m => m.role === 'user' && m.content.includes('@fixture.ts'));
+    expect(userTurn?.content).toContain('--- Referenced content ---');
+    expect(userTurn?.content).toContain('### @fixture.ts');
+    // The `userMessage` event carries the EXPANDED text.
+    const um = events.find(e => e.kind === 'userMessage');
+    expect(um && 'content' in um && um.content).toContain(
+      '--- Referenced content ---'
+    );
+    // A receipt notice was emitted.
+    expect(
+      events.some(e => e.kind === 'notice' && e.content.includes('[expanded'))
+    ).toBe(true);
+    expect(spy).toHaveBeenCalledWith('look at @fixture.ts');
+  });
+
+  it('leaves a message without `@` untouched', async () => {
+    const provider = makeProvider([{ message: 'done' }]);
+    const { expand, spy } = makeExpander();
+    const conversation = makeConversation(provider, expand);
+    await conversation.conversation.sendUserMessage('plain text');
+    expect(spy).toHaveBeenCalledWith('plain text');
+    const turn = conversation.conversation
+      .getMessages()
+      .find(m => m.role === 'user');
+    expect(turn?.content).toBe('plain text');
+  });
+
+  it("expands deferred text at the 'append' drain (preserved across cancel)", async () => {
+    const provider = makeProvider([{ message: 'never' }]);
+    const { expand, spy } = makeExpander();
+    const { conversation } = makeConversation(provider, expand);
+
+    // Force a second iteration, then cancel so the queued text is preserved.
+    const held = holdFirstChat(provider, toolCallResponse());
+    const turn = conversation.sendUserMessage('first');
+    await tick();
+    conversation.enqueueUserMessage('queued @fixture.ts');
+    conversation.cancelCurrentRequest();
+    held.release();
+    expect(await turn).toBe(CANCEL_SENTINEL);
+
+    // The NEXT sendUserMessage drains the preserved entry via 'append'.
+    await conversation.sendUserMessage('second');
+
+    const drained = conversation
+      .getMessages()
+      .find(m => m.role === 'user' && m.content.includes('queued'));
+    expect(drained?.content).toContain('--- Referenced content ---');
+    expect(spy).toHaveBeenCalledWith('queued @fixture.ts');
+  });
+
+  it("expands a queued message EXACTLY ONCE via the 'own-round' drain", async () => {
+    const provider = makeProvider([{ message: 'final' }]);
+    const { expand, spy } = makeExpander();
+    const { conversation } = makeConversation(provider, expand);
+
+    // Hold the first call, enqueue text, then let the round complete normally
+    // so the finally-drain runs the queued text as its own round.
+    const held = holdFirstChat(provider, { message: 'first-done' });
+    const turn = conversation.sendUserMessage('first');
+    await tick();
+    conversation.enqueueUserMessage('own @fixture.ts');
+    held.release();
+    await turn;
+    // Give the async own-round send a tick to finish.
+    await tick();
+
+    // The expander must run once for the queued content — never twice (the
+    // own-round drain re-enters sendUserMessage, which is the single site).
+    const calls = spy.mock.calls.filter(
+      c => typeof c[0] === 'string' && c[0].includes('own @fixture.ts')
+    );
+    expect(calls).toHaveLength(1);
+
+    const appended = conversation
+      .getMessages()
+      .filter(m => m.role === 'user' && m.content.includes('own @fixture.ts'));
+    expect(appended).toHaveLength(1);
+    expect(appended[0].content).toContain('--- Referenced content ---');
+  });
+
+  it('expands a mid-round /steer message at the steering append', async () => {
+    const provider = makeProvider([{ message: 'final' }]);
+    const { expand, spy } = makeExpander();
+    const { conversation } = makeConversation(provider, expand);
+
+    const held = holdFirstChat(provider, toolCallResponse());
+    const turn = conversation.sendUserMessage('first');
+    await tick();
+    await conversation.steerMessage('steer @fixture.ts');
+    held.release();
+    await turn;
+
+    const steered = conversation
+      .getMessages()
+      .find(m => m.role === 'user' && m.content.includes('steer'));
+    expect(steered?.content).toContain('--- Referenced content ---');
+    expect(spy).toHaveBeenCalledWith('steer @fixture.ts');
+  });
+});
+
+describe('macro chat-prompt steps route through expansion', () => {
+  let dir: string | undefined;
+
+  afterEach(async () => {
+    if (dir) {
+      await rm(dir, { recursive: true, force: true });
+      dir = undefined;
+    }
+  });
+
+  it('expands an `@ref` inside a macro chat step argument', async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'ref-macro-'));
+    await mkdir(path.join(dir, '.drone-agent', 'macros'), { recursive: true });
+    await writeFile(
+      path.join(dir, '.drone-agent', 'macros', 'look.macro'),
+      '#! /look Look at something\nLook at $1\n',
+      'utf-8'
+    );
+
+    // Capture the macro's slash-command handler via a minimal registration.
+    const handlers = new Map<
+      string,
+      (ctx: Record<string, unknown>) => Promise<boolean>
+    >();
+    const originalCwd = process.cwd;
+    process.cwd = () => dir!;
+    try {
+      await macrosPlugin.register({
+        logger: silentLogger(),
+        registerSlashCommand: (cmd: { command: string; handler: unknown }) =>
+          handlers.set(
+            cmd.command,
+            cmd.handler as (ctx: Record<string, unknown>) => Promise<boolean>
+          ),
+        registerHelp: () => {},
+        registerWorkflow: () => {},
+        offer: () => {},
+        emitEvent: () => {},
+        getConfig: () => createDefaultAgentConfig(),
+      } as unknown as Parameters<typeof macrosPlugin.register>[0]);
+    } finally {
+      process.cwd = originalCwd;
+    }
+
+    const provider = makeProvider([{ message: 'done' }]);
+    const { expand } = makeExpander();
+    const { conversation } = makeConversation(provider, expand);
+
+    const handler = handlers.get('/look');
+    expect(handler).toBeDefined();
+    const handled = await handler!({
+      args: ['@fixture.ts'],
+      logger: silentLogger(),
+      engine: { runHooks: async () => {}, dispatchSlashCommand: async () => true },
+      conversation,
+      sessionManager: conversation,
+    });
+    expect(handled).toBe(true);
+
+    const turn = conversation
+      .getMessages()
+      .find(m => m.role === 'user' && m.content.includes('@fixture.ts'));
+    expect(turn?.content).toContain('Look at @fixture.ts');
+    expect(turn?.content).toContain('--- Referenced content ---');
+  });
+});

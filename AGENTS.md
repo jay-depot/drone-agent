@@ -172,6 +172,7 @@ engine's classifier and dispatches or defers them uniformly:
 
 The following subsystems have dedicated documentation in `docs/agents/`:
 
+- **Reference Expansion** (`docs/agents/reference-expansion.md`) — `@`-references in user messages (`@file`, `@skill:`, `~/`/cwd resolution, dir/glob inline caps) expanded at the conversation-service append sites, plus TUI tab completion
 - **Bootstrap Plugin** (`docs/agents/bootstrap-plugin.md`) — Setup workflows for new projects and users
 - **Swarm Plugin** (`docs/agents/swarm-plugin.md`) — Beacon/coordinator integration for swarm-wide personas, skills, and config
 - **External Plugin Loading** (`docs/agents/external-plugin-loading.md`) — User and project-scope plugin discovery, trust model, engine integration
