@@ -35,6 +35,7 @@ import {
 import type { DronePluginEngine } from './plugin-engine.js';
 import type { DroneSessionManager } from './session-manager.js';
 import type { ContextBudgetService } from './context-budget-service.js';
+import { buildAsideMessages } from './aside.js';
 import { deduplicateToolCalls, toolCallSignature } from './tool-call-utils.js';
 
 export type ConversationEventHandler = (event: DroneConversationEvent) => void;
@@ -93,6 +94,14 @@ export type ConversationService = {
   ) => void;
   /** Request soft cancellation of the current in-flight `sendUserMessage`. */
   cancelCurrentRequest: () => void;
+  /**
+   * Inject a message into the current in-flight round at the next loop
+   * boundary, so the model sees it on its very next call. When no turn is in
+   * flight, sends the message as a normal round instead.
+   */
+  steerMessage: (content: string) => Promise<void>;
+  /** Ask an ephemeral side question against a copy of the current context. */
+  askAside: (question: string) => Promise<string>;
   /** True while a `sendUserMessage` turn is actively processing. */
   isTurnInFlight: () => boolean;
   /** Get the list of currently enabled debug subsystems. */
@@ -278,6 +287,10 @@ export function createConversationService({
   type PendingEntry =
     { kind: 'text'; content: string } | { kind: 'slash'; line: string };
   const pendingEntries: PendingEntry[] = [];
+  // Opt-in mid-round steering (/steer). Kept separate from pendingEntries
+  // because its drain point differs: a steering message is absorbed INSIDE the
+  // current round, not deferred to a round boundary.
+  const steeringMessages: string[] = [];
   let cancelled = false;
   // True while a sendUserMessage turn is actively processing. Used by the
   // concurrency-safe submitUserMessage path to decide queue-vs-send.
@@ -304,6 +317,24 @@ export function createConversationService({
       return personaLimit;
     }
     return maxToolIterations ?? config.session.maxToolIterations ?? 50;
+  }
+
+  /**
+   * Resolve the effective reasoning level: session override → selected model
+   * entry → llm-level config (shared helper). Used by the main loop and by the
+   * `/btw` side-query so both inherit the same level.
+   */
+  function resolveEffectiveReasoningLevel(
+    providerId: string,
+    model: string
+  ): DroneReasoningLevel | undefined {
+    const selection = parseModelSelection(`${providerId}/${model}`);
+    return (
+      reasoningLevel ??
+      (selection
+        ? resolveConfiguredReasoningLevel(config, selection)
+        : undefined)
+    );
   }
 
   function getCurrentModel(): string {
@@ -349,6 +380,8 @@ export function createConversationService({
         enqueueUserMessage: p => service.enqueueUserMessage(p),
         enqueueSlashCommand: line => service.enqueueSlashCommand?.(line),
         cancelCurrentRequest: () => service.cancelCurrentRequest(),
+        steerMessage: c => service.steerMessage(c),
+        askAside: q => service.askAside(q),
         getDebugSubsystems: () => service.getDebugSubsystems(),
         enableDebugSubsystem: name => service.enableDebugSubsystem(name),
         disableDebugSubsystem: name => service.disableDebugSubsystem(name),
@@ -940,6 +973,44 @@ export function createConversationService({
             return CANCEL_SENTINEL;
           }
 
+          // Absorb any /steer messages queued since the previous iteration.
+          // Each becomes a real user turn in THIS round, so the model sees it
+          // on the very next call. Emitted via the engine hook directly (the
+          // per-call onEvent is not involved), matching the pre-loop
+          // userMessage emission.
+          while (steeringMessages.length > 0) {
+            const steer = steeringMessages.shift()!;
+            sessionManager.appendUserMessage(steer);
+            engine
+              .runConversationEventHooks({
+                kind: 'userMessage',
+                content: steer,
+              })
+              .catch(err => {
+                logger.warn(`Conversation event hook threw: ${err}`);
+              });
+            // Confirm the injection now that it has actually reached the round
+            // (a message that never reaches this boundary is discarded with a
+            // different notice in the finally).
+            engine
+              .runConversationEventHooks({
+                kind: 'notice',
+                content: `[steering: ${steer}]`,
+              })
+              .catch(err => {
+                logger.warn(`Conversation event hook threw: ${err}`);
+              });
+            // A steer is genuine user intervention: clear the degeneracy
+            // guards so a stale streak cannot immediately re-trip, but leave
+            // iterationCount alone (tool-call depth stays a hard safety limit).
+            identicalToolCallStreak = 0;
+            lastIdenticalToolCall = null;
+            emptyResponseCount = 0;
+            reasoningOnlyResponseCount = 0;
+            identicalCallNudgeActive = false;
+            brokenResponseHintActive = false;
+          }
+
           // Re-fetch tools each iteration so dynamic changes (MCP mount/unmount,
           // persona switches) are reflected immediately.
           const tools = getLlmTools();
@@ -950,17 +1021,10 @@ export function createConversationService({
 
           const provider = llm.getActiveProvider();
 
-          // Resolve reasoning level: session override → selected model entry →
-          // llm-level config (shared helper). Cross-wired legacy fallbacks to
-          // inactive providers' sections are gone.
-          const selection = parseModelSelection(
-            `${activeProviderId}/${currentModel}`
+          const effectiveReasoningLevel = resolveEffectiveReasoningLevel(
+            activeProviderId,
+            currentModel
           );
-          const effectiveReasoningLevel =
-            reasoningLevel ??
-            (selection
-              ? resolveConfiguredReasoningLevel(config, selection)
-              : undefined);
 
           const targetHasVision =
             (await llm.hasVision?.(currentModel)) ?? false;
@@ -1280,6 +1344,22 @@ export function createConversationService({
         }
       } finally {
         turnInFlight = false;
+        // Any steering messages that never reached a loop boundary targeted a
+        // round that is now over. Discard them and tell the user. The local
+        // `emit` is out of scope here, so use the engine hook directly (same
+        // fire-and-forget pattern as the loop-top absorption).
+        if (steeringMessages.length > 0) {
+          for (const msg of steeringMessages.splice(0)) {
+            engine
+              .runConversationEventHooks({
+                kind: 'notice',
+                content: `[steering: discarded late steering message: "${msg}"]`,
+              })
+              .catch(err => {
+                logger.warn(`Conversation event hook threw: ${err}`);
+              });
+          }
+        }
         // Emit roundComplete so plugins (e.g. wakelock) can release on every
         // exit path (normal return, cancellation, shouldStopLoop, throws).
         engine
@@ -1308,6 +1388,7 @@ export function createConversationService({
       // Flush BOTH kinds of pending entries (text + slash) — nothing deferred
       // survives a clear (Q9: clearSession flushes).
       pendingEntries.length = 0;
+      steeringMessages.length = 0;
       cancelled = false;
       stuckCount = 0;
       identicalToolCallStreak = 0;
@@ -1400,6 +1481,88 @@ export function createConversationService({
     },
     cancelCurrentRequest: () => {
       cancelled = true;
+    },
+    steerMessage: async (content: string) => {
+      if (turnInFlight) {
+        steeringMessages.push(content);
+        return;
+      }
+      // Idle: a steer is just a normal round, with the host lifecycle hooks
+      // (mirrors drainPendingEntries('own-round') and the TUI chat branch).
+      // Errors are surfaced as an event rather than thrown — a slash handler
+      // must never leave an unhandled rejection.
+      try {
+        await engine.runHooks('onBeforePrompt');
+        await service.sendUserMessage(content);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        engine
+          .runConversationEventHooks({
+            kind: 'error',
+            message: `/steer failed: ${message}`,
+          })
+          .catch(hookErr => {
+            logger.warn(`Conversation event hook threw: ${hookErr}`);
+          });
+      } finally {
+        await engine.runHooks('onAfterToolCall').catch(err => {
+          logger.warn(`onAfterToolCall hook threw: ${err}`);
+        });
+      }
+    },
+    askAside: async (question: string) => {
+      const llm = getLlmCapability();
+      const provider = llm.getActiveProvider();
+      const model = llm.getModel();
+
+      let answer: string;
+      try {
+        const header = await budgetService.buildSystemMessages();
+        const footer = await budgetService.buildFooterMessages();
+        const base = buildAsideMessages({
+          header,
+          sessionMessages: sessionManager.getMessages(),
+          footer,
+          question,
+        });
+
+        // Presentation transform only. Deliberately skip
+        // describeUndescribedImages (it mutates stored image objects and spends
+        // extra LLM calls, and this call can run concurrently with the main
+        // loop).
+        const hasVision = (await llm.hasVision?.(model)) ?? false;
+        const messages = prepareRequestMessages(base, hasVision);
+
+        const response = await provider.chat({
+          model,
+          messages,
+          reasoningLevel: resolveEffectiveReasoningLevel(
+            llm.getActiveProviderId(),
+            model
+          ),
+        });
+        answer = (response.message ?? '').trim();
+      } catch (err) {
+        // A slash handler must never leave an unhandled rejection: surface the
+        // failure as an event and return an empty answer.
+        const message = err instanceof Error ? err.message : String(err);
+        engine
+          .runConversationEventHooks({
+            kind: 'error',
+            message: `/btw failed: ${message}`,
+          })
+          .catch(hookErr => {
+            logger.warn(`Conversation event hook threw: ${hookErr}`);
+          });
+        return '';
+      }
+
+      engine
+        .runConversationEventHooks({ kind: 'aside', question, answer })
+        .catch(err => {
+          logger.warn(`Conversation event hook threw: ${err}`);
+        });
+      return answer;
     },
     isTurnInFlight: () => turnInFlight,
     resetStuckDetectors: () => {

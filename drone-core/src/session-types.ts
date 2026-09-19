@@ -299,4 +299,10 @@ export type DroneConversationEvent =
       kind: 'sessionStarted';
       subagentId: string | null;
       personaId: string | null;
-    };
+    }
+  /**
+   * A `/btw` side-query: an ephemeral question answered against a copy of the
+   * current context. Never part of session history; carries no correlation
+   * semantics of its own.
+   */
+  | { kind: 'aside'; question: string; answer: string };

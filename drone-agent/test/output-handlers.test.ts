@@ -49,4 +49,18 @@ describe('makePlainOutputEventHandler', () => {
     expect(writtenLines().join('')).toContain('thinking');
     expect(writtenLines().join('')).toContain('boom');
   });
+
+  it('renders an aside with the question and answer, without throwing', () => {
+    const handler = makePlainOutputEventHandler();
+    expect(() =>
+      handler({
+        kind: 'aside',
+        question: 'what is the plan?',
+        answer: 'it is make deploy.',
+      })
+    ).not.toThrow();
+    const out = writtenLines().join('');
+    expect(out).toContain('what is the plan?');
+    expect(out).toContain('it is make deploy.');
+  });
 });
