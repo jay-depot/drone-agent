@@ -66,6 +66,7 @@ describe('BeaconDetailPage verification code', () => {
             host: '10.0.0.1',
             port: 3457,
             trustStatus: 'pending',
+            fingerprintConfirmed: true,
             verificationCode: 'acorn-badge-cabin-daisy',
           })
         );
@@ -115,6 +116,7 @@ describe('TopologyPage approve by beacon ID', () => {
                 connectedAt: Date.now(),
                 lastHeartbeat: Date.now(),
                 trustStatus: 'pending',
+                fingerprintConfirmed: true,
                 verificationCode: 'acorn-badge-cabin-daisy',
               },
             ])
@@ -169,5 +171,150 @@ describe('TopologyPage approve by beacon ID', () => {
       );
       expect(approveCall).toBeTruthy();
     });
+  });
+
+  it('disables Approve until the beacon confirms the coordinator fingerprint', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockImplementation((url: string, _init?: RequestInit) => {
+        if (url === '/api/beacons') {
+          return Promise.resolve(
+            jsonResponse(200, [
+              {
+                id: 'b1',
+                name: 'B1',
+                host: '10.0.0.1',
+                port: 3457,
+                connectedAt: Date.now(),
+                lastHeartbeat: Date.now(),
+                trustStatus: 'pending',
+                fingerprintConfirmed: false,
+                verificationCode: 'acorn-badge-cabin-daisy',
+              },
+            ])
+          );
+        }
+        if (url === '/api/agents/location') {
+          return Promise.resolve(jsonResponse(200, []));
+        }
+        return Promise.resolve(jsonResponse(404, {}));
+      });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<TopologyPage />} />
+        </Routes>
+      </MemoryRouter>,
+      { wrapper }
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Approve')).toBeInTheDocument();
+    });
+
+    // The warning copy is always visible so the human knows to recognize the
+    // beacon (id/name/host), not just match codes.
+    expect(
+      screen.getByText(
+        /Do not approve beacons you did not start or do not expect/
+      )
+    ).toBeInTheDocument();
+
+    const approveButton = screen.getByRole('button', { name: 'Approve' });
+    expect(approveButton).toBeDisabled();
+
+    // No dialog can open while unconfirmed.
+    fireEvent.click(approveButton);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('marks the fingerprint as awaiting confirmation until announced', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockImplementation((url: string, _init?: RequestInit) => {
+        if (url === '/api/beacons') {
+          return Promise.resolve(
+            jsonResponse(200, [
+              {
+                id: 'b1',
+                name: 'B1',
+                host: '10.0.0.1',
+                port: 3457,
+                connectedAt: Date.now(),
+                lastHeartbeat: Date.now(),
+                trustStatus: 'pending',
+                fingerprintConfirmed: false,
+                verificationCode: 'acorn-badge-cabin-daisy',
+              },
+            ])
+          );
+        }
+        if (url === '/api/agents/location') {
+          return Promise.resolve(jsonResponse(200, []));
+        }
+        return Promise.resolve(jsonResponse(404, {}));
+      });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<TopologyPage />} />
+        </Routes>
+      </MemoryRouter>,
+      { wrapper }
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('awaiting confirmation')).toBeInTheDocument();
+    });
+  });
+
+  it('beacon detail shows the trust step CTA when pending and unconfirmed', async () => {
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url === '/api/beacons/b1') {
+        return Promise.resolve(
+          jsonResponse(200, {
+            id: 'b1',
+            name: 'B1',
+            host: '10.0.0.1',
+            port: 3457,
+            trustStatus: 'pending',
+            fingerprintConfirmed: false,
+            verificationCode: 'acorn-badge-cabin-daisy',
+          })
+        );
+      }
+      if (url === '/api/beacons/b1/sessions') {
+        return Promise.resolve(jsonResponse(200, []));
+      }
+      if (url === '/api/agents/location?beaconId=b1') {
+        return Promise.resolve(jsonResponse(200, []));
+      }
+      return Promise.resolve(jsonResponse(404, {}));
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(
+      <MemoryRouter initialEntries={['/beacons/b1']}>
+        <Routes>
+          <Route path="/beacons/:id" element={<BeaconDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+      { wrapper }
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Return here — Approve is now enabled.')
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(
+        /Do not approve beacons you did not start or do not expect/
+      )
+    ).toBeInTheDocument();
   });
 });

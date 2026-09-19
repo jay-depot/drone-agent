@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { publishMutationEvent } from '../ws-pubsub.js';
 import { getClientCertFingerprint } from '../mtls.js';
 import { isBeaconConnected } from '../beacon-ws.js';
+import { isLoopbackIp } from '../ip.js';
 import type {
   RegisterBeaconRequest,
   RegisterBeaconTrustRequest,
@@ -10,6 +11,7 @@ import type {
   BeaconStatusResponse,
 } from '../types.js';
 import * as db from '../db/index.js';
+import { verifyBeaconSignature } from 'drone-swarm-common';
 
 export default function beaconRoutes(app: FastifyInstance) {
   // === Beacon Routes (Legacy - for backwards compatibility) ===
@@ -40,9 +42,12 @@ export default function beaconRoutes(app: FastifyInstance) {
           port: request.body.port,
           publicKey: request.body.publicKey,
           tlsFingerprint: request.body.tlsFingerprint,
+          fingerprintConfirmed: request.body.fingerprintConfirmed,
         };
         try {
-          const trust = db.registerBeaconTrust(trustReq);
+          const trust = db.registerBeaconTrust(trustReq, {
+            socketIsLocal: isLoopbackIp(request.ip),
+          });
           // Also register in the beacons table so GET /beacons returns it
           db.registerBeacon({
             id: request.body.id,
@@ -71,6 +76,52 @@ export default function beaconRoutes(app: FastifyInstance) {
       }
       const beacon = db.registerBeacon(request.body);
       return reply.code(201).send(beacon);
+    }
+  );
+
+  // Confirm the coordinator fingerprint. Called by the beacon the moment its
+  // compare-only /trust-coordinator handshake matches. The signature binds the
+  // announce to the beacon's Ed25519 identity (not proof-of-human — that is the
+  // warning copy + the human checking the beacon id/name/host in the UI).
+  app.post<{ Params: { id: string }; Body: unknown }>(
+    '/beacons/trust/:id/confirm-fingerprint',
+    async (request, reply) => {
+      const trust = db.getBeaconTrust(request.params.id);
+      if (!trust) {
+        return reply.code(404).send({ error: 'Beacon trust not found' });
+      }
+
+      const body = (request.body ?? {}) as {
+        beaconId?: string;
+        timestamp?: number;
+        signature?: string;
+      };
+      if (!body.beaconId || body.beaconId !== request.params.id) {
+        return reply.code(400).send({ error: 'beaconId mismatch' });
+      }
+      if (typeof body.timestamp !== 'number' || !body.signature) {
+        return reply
+          .code(400)
+          .send({ error: 'timestamp and signature required' });
+      }
+      // Reject stale/replayed announces.
+      const skew = Math.abs(Date.now() - body.timestamp);
+      if (skew > 60_000) {
+        return reply.code(400).send({ error: 'timestamp skew too large' });
+      }
+
+      if (
+        !verifyBeaconSignature(
+          trust.publicKey,
+          body.beaconId + ':' + body.timestamp,
+          body.signature
+        )
+      ) {
+        return reply.code(400).send({ error: 'invalid signature' });
+      }
+
+      db.confirmBeaconFingerprint(request.params.id);
+      return { success: true };
     }
   );
 
@@ -120,7 +171,9 @@ export default function beaconRoutes(app: FastifyInstance) {
     '/beacons/trust',
     async (request, reply) => {
       try {
-        const trust = db.registerBeaconTrust(request.body);
+        const trust = db.registerBeaconTrust(request.body, {
+          socketIsLocal: isLoopbackIp(request.ip),
+        });
         const response: BeaconStatusResponse = { status: trust.status };
         if (trust.verificationCode) {
           response.verificationCode = trust.verificationCode;
@@ -147,7 +200,10 @@ export default function beaconRoutes(app: FastifyInstance) {
       if (!trust) {
         return reply.code(404).send({ error: 'Beacon trust not found' });
       }
-      const response: BeaconStatusResponse = { status: trust.status };
+      const response: BeaconStatusResponse = {
+        status: trust.status,
+        fingerprintConfirmed: trust.fingerprintConfirmedAt !== null,
+      };
       return response;
     }
   );
@@ -173,7 +229,14 @@ export default function beaconRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const trust = db.approveBeaconById(request.params.id);
       if (!trust) {
-        return reply.code(404).send({ error: 'Beacon trust not found' });
+        const existing = db.getBeaconTrust(request.params.id);
+        if (!existing) {
+          return reply.code(404).send({ error: 'Beacon trust not found' });
+        }
+        return reply.code(409).send({
+          error:
+            'Beacon has not confirmed the coordinator fingerprint yet. Run /trust-coordinator <code> on the beacon first.',
+        });
       }
       publishMutationEvent({
         sessionId: trust.beaconId,

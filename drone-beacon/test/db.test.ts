@@ -44,6 +44,8 @@ import {
   createBeaconConfig,
   getBeaconConfig,
   listBeaconConfig,
+  listMergedConfig,
+  replaceSwarmConfig,
   updateBeaconConfig,
   deleteBeaconConfig,
   createEventLog,
@@ -664,6 +666,68 @@ describe('Beacon Config CRUD', () => {
     createBeaconConfig({ key: 'k1', value: 'v1' });
     expect(deleteBeaconConfig('k1')).toBe(true);
     expect(getBeaconConfig('k1')).toBeUndefined();
+  });
+
+  it('should store local and swarm entries with the same key (composite PK)', () => {
+    createBeaconConfig({ key: 'k1', value: '"local-value"', scope: 'local' });
+    createBeaconConfig({ key: 'k1', value: '"swarm-value"', scope: 'swarm' });
+    const local = getBeaconConfig('k1', 'local');
+    const swarm = getBeaconConfig('k1', 'swarm');
+    expect(local).not.toBeNull();
+    expect(swarm).not.toBeNull();
+    expect(local!.value).toBe('"local-value"');
+    expect(swarm!.value).toBe('"swarm-value"');
+  });
+
+  it('should scope update and delete by scope', () => {
+    createBeaconConfig({ key: 'k1', value: '"local"', scope: 'local' });
+    createBeaconConfig({ key: 'k1', value: '"swarm"', scope: 'swarm' });
+
+    const updated = updateBeaconConfig('k1', '"updated-local"', 'local');
+    expect(updated!.value).toBe('"updated-local"');
+    // The swarm copy is untouched.
+    expect(getBeaconConfig('k1', 'swarm')!.value).toBe('"swarm"');
+
+    expect(deleteBeaconConfig('k1', 'local')).toBe(true);
+    expect(getBeaconConfig('k1', 'local')).toBeUndefined();
+    expect(getBeaconConfig('k1', 'swarm')).not.toBeNull();
+  });
+
+  it('should list only a given scope when requested', () => {
+    createBeaconConfig({ key: 'local-only', value: '"1"', scope: 'local' });
+    createBeaconConfig({ key: 'swarm-only', value: '"2"', scope: 'swarm' });
+    expect(listBeaconConfig('local').map(e => e.key)).toEqual(['local-only']);
+    expect(listBeaconConfig('swarm').map(e => e.key)).toEqual(['swarm-only']);
+  });
+
+  it('should merge config with local winning over swarm', () => {
+    createBeaconConfig({ key: 'same', value: '"local"', scope: 'local' });
+    createBeaconConfig({ key: 'same', value: '"swarm"', scope: 'swarm' });
+    createBeaconConfig({ key: 'swarm-only', value: '"only"', scope: 'swarm' });
+
+    const merged = listMergedConfig();
+    const byKey = Object.fromEntries(merged.map(e => [e.key, e.value]));
+    expect(byKey['same']).toBe('"local"'); // local wins
+    expect(byKey['swarm-only']).toBe('"only"');
+    expect(merged).toHaveLength(2); // one row per key
+  });
+
+  it('should replace only the swarm scope via replaceSwarmConfig', () => {
+    createBeaconConfig({ key: 'k1', value: '"local"', scope: 'local' });
+    createBeaconConfig({ key: 'k1', value: '"old-swarm"', scope: 'swarm' });
+    createBeaconConfig({ key: 'k2', value: '"old-swarm"', scope: 'swarm' });
+
+    replaceSwarmConfig([
+      { key: 'k1', value: '"new-swarm"', secret: false, updatedAt: 1 },
+      { key: 'k3', value: '"brand-new"', secret: true, updatedAt: 2 },
+    ]);
+
+    // Local row untouched.
+    expect(getBeaconConfig('k1', 'local')!.value).toBe('"local"');
+    // Swarm scope replaced wholesale.
+    expect(getBeaconConfig('k1', 'swarm')!.value).toBe('"new-swarm"');
+    expect(getBeaconConfig('k2', 'swarm')).toBeUndefined(); // removed
+    expect(getBeaconConfig('k3', 'swarm')!.value).toBe('"brand-new"');
   });
 });
 

@@ -65,6 +65,8 @@ export {
   createBeaconConfig,
   getBeaconConfig,
   listBeaconConfig,
+  listMergedConfig,
+  replaceSwarmConfig,
   updateBeaconConfig,
   deleteBeaconConfig,
 } from './config.js';

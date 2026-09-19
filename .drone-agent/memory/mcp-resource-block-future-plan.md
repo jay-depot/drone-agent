@@ -11,7 +11,7 @@ updated: 2026-08-27T22:12:35.866Z
 
 # MCP `resource` content blocks — future handling note
 
-During planning of `image-content-refactor-v2`, we decided V2 will DROP MCP non-text/non-image content blocks (e.g. `{type:'resource', resource:{uri,mimeType,text?|blob?}}`) in the structured result helper. We deliberately kept the helper minimal so it can be replaced when ready to handle them.
+During planning of the image-content-refactor V2 work (wiki: [[decisions/167-image-content-refactor-v2]]), we decided V2 will DROP MCP non-text/non-image content blocks (e.g. `{type:'resource', resource:{uri,mimeType,text?|blob?}}`) in the structured result helper. We deliberately kept the helper minimal so it can be replaced when ready to handle them.
 
 ## How to use resource blocks effectively (future plan, NOT in V2)
 

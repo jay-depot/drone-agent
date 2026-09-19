@@ -187,6 +187,100 @@ describe('proxyCall header discipline (FST_ERR_CTP_EMPTY_JSON_BODY fix)', () => 
   });
 });
 
+describe('wiki proxy forwards the coordinator status + error body', () => {
+  function installFetchWith(response: Response): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn().mockResolvedValue(response);
+    setCoordinatorClient(
+      makeFakeClient({ getFetch: vi.fn().mockReturnValue(fetchMock) })
+    );
+    return fetchMock;
+  }
+
+  const wikiWrite = {
+    title: 'T',
+    content: 'C',
+    scope: 'coordinator',
+    tags: [],
+    sources: [],
+  };
+
+  it('forwards a coordinator 400 and its error body on a coordinator-scope PUT', async () => {
+    installFetchWith(
+      new Response(
+        JSON.stringify({
+          error: 'Pitch is too long. Keep it under 400 characters.',
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/wiki/some-page',
+      payload: wikiWrite,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Pitch is too long. Keep it under 400 characters.',
+    });
+  });
+
+  it('returns the generic 502 only when the coordinator is unreachable', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValue(new Error('connect ECONNREFUSED'));
+    setCoordinatorClient(
+      makeFakeClient({ getFetch: vi.fn().mockReturnValue(fetchMock) })
+    );
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/wiki/some-page',
+      payload: wikiWrite,
+    });
+    expect(res.statusCode).toBe(502);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Failed to proxy to coordinator',
+    });
+  });
+
+  it('forwards a coordinator 500 on a scope=coordinator delete instead of a 404', async () => {
+    installFetchWith(
+      new Response(JSON.stringify({ error: 'coordinator exploded' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/wiki/some-page?scope=coordinator',
+    });
+    expect(res.statusCode).toBe(500);
+    expect(JSON.parse(res.body)).toEqual({ error: 'coordinator exploded' });
+  });
+
+  it('still maps a coordinator 404 delete to the beacon 404 message', async () => {
+    installFetchWith(
+      new Response(JSON.stringify({ error: 'Wiki page not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/wiki/some-page?scope=coordinator',
+    });
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Wiki page not found' });
+  });
+
+  it('leaves proxyToCoordinator collapsing a non-2xx to null (unchanged contract)', async () => {
+    installFetchWith(new Response('nope', { status: 500 }));
+    const { proxyToCoordinator } = await import('../src/routes/context.js');
+    await expect(
+      proxyToCoordinator('GET', '/wiki/some-page')
+    ).resolves.toBeNull();
+  });
+});
+
 describe('wiki coordinator-scope proxy (missing /api prefix + no mTLS identity fix)', () => {
   it('proxies a coordinator-scope wiki write to the /api/wiki path via the client fetch', async () => {
     const fetchMock = vi.fn().mockResolvedValue(

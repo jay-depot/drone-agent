@@ -27,5 +27,5 @@ Option C: bake a default echo config into the beacon Docker image (simplest, but
 
 Notes:
 
-- The echo LLM plugin requires `--plugin echo --plugin llm` (defaultEnabled: false) per plan-integration-test-beacon-isolation Category 4.
+- The echo LLM plugin requires `--plugin echo --plugin llm` (defaultEnabled: false) — established by the integration-test isolation work (wiki: [[decisions/137-integration-test-isolation]]).
 - dummy-agent works because IT gets the env vars + a baked /root/.drone-agent/config.json in its Dockerfile.

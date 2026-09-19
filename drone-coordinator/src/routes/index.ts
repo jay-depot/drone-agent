@@ -11,6 +11,8 @@ import wiki from './wiki.js';
 import swarm from './swarm.js';
 import messages from './messages.js';
 import spawn from './spawn.js';
+import config from './config.js';
+import secrets from './secrets.js';
 
 export async function registerRoutes(app: FastifyInstance) {
   // Health stays at root level (exempted by SPA fallback)
@@ -30,6 +32,8 @@ export async function registerRoutes(app: FastifyInstance) {
       swarm(api);
       messages(api);
       spawn(api);
+      config(api);
+      secrets(api);
     },
     { prefix: '/api' }
   );

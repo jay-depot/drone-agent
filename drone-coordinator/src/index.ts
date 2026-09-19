@@ -16,6 +16,7 @@ import {
   initDatabase,
   closeDatabase,
   approveBeaconById,
+  getBeaconTrust,
   listBeaconTrust,
   listBeacons,
   listAllAgentLocations,
@@ -68,8 +69,8 @@ const DEFAULT_WEB_HOST = '127.0.0.1';
 const DEFAULT_COMMAND_TIMEOUT_MS = 30000;
 const DEFAULT_CONFIG_DIR = path.join(os.homedir(), '.drone-coordinator');
 const DEFAULT_DB_FILENAME = 'drone-coordinator.db';
-const DEFAULT_RATE_LIMIT_MAX = 1000;
-const DEFAULT_RATE_LIMIT_WINDOW_MS = 60000;
+const DEFAULT_RATE_LIMIT_MAX = 100;
+const DEFAULT_RATE_LIMIT_WINDOW_MS = 1000;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -214,6 +215,20 @@ async function handleApproveBeacon(config: Config) {
 
   const trust = approveBeaconById(config.beaconId);
   if (!trust) {
+    const existing = getBeaconTrust(config.beaconId);
+    if (!existing) {
+      console.error('Error: Beacon trust not found');
+      closeDatabase();
+      process.exit(1);
+    }
+    if (existing.fingerprintConfirmedAt === null) {
+      console.error(
+        'Error: Beacon has not confirmed the coordinator fingerprint yet. ' +
+          'Run /trust-coordinator <code> on the beacon first.'
+      );
+      closeDatabase();
+      process.exit(1);
+    }
     console.error('Error: Beacon trust not found or already approved');
     closeDatabase();
     process.exit(1);

@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { listBeaconTrust } from './db/index.js';
+import { listBeaconTrust, getBeaconTrust } from './db/index.js';
 import { logger } from './logger.js';
 
 /**
@@ -55,8 +55,19 @@ export function createMtlsMiddleware(opts?: { httpsEnabled?: boolean }) {
       return;
     }
 
-    // Beacon registration is verified in-route.
-    if (req.method === 'POST' && req.url.startsWith('/api/beacons')) {
+    // Bootstrap routes a PENDING beacon must still reach, verified in-route
+    // rather than here (they need no approval status):
+    // - POST /api/beacons — registration (cert-vs-claim checked in the handler)
+    // - GET  /api/beacons/trust/:id — approval poll (deadlocks otherwise)
+    // - POST /api/beacons/trust/:id/confirm-fingerprint — announce
+    if (
+      (req.method === 'POST' && req.url === '/api/beacons') ||
+      (req.method === 'GET' &&
+        req.url.startsWith('/api/beacons/trust/') &&
+        req.url.endsWith('/approve') === false &&
+        req.url.includes('/confirm-fingerprint') === false) ||
+      (req.method === 'POST' && req.url.includes('/confirm-fingerprint'))
+    ) {
       return;
     }
 
@@ -85,6 +96,18 @@ export function createMtlsMiddleware(opts?: { httpsEnabled?: boolean }) {
       return reply.code(401).send({
         error: 'Unauthorized',
         message: 'Client certificate is not a registered beacon',
+      });
+    }
+
+    // Approval status is enforced here: a PENDING beacon's certificate is in
+    // beacon_trust (so the fingerprint resolves), but it must not reach data
+    // routes until the coordinator's operator has approved it. The beacon
+    // completes the bootstrap handshake on the exempt routes above.
+    const trust = getBeaconTrust(beaconId);
+    if (!trust || trust.status !== 'approved') {
+      return reply.code(403).send({
+        error: 'Unauthorized',
+        message: 'Beacon is not yet approved',
       });
     }
   };

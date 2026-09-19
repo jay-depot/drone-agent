@@ -1,5 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { proxyWikiToCoordinator } from './context.js';
+import {
+  proxyToCoordinatorDetailed,
+  proxyWikiToCoordinator,
+} from './context.js';
 import { searchWikiChunksByVector } from '../db/index.js';
 import type { WikiOrigin } from '../db/index.js';
 import {
@@ -111,17 +114,17 @@ export default function wikiRoutes(app: FastifyInstance) {
     }
 
     if (scope === 'coordinator') {
-      const result = await proxyWikiToCoordinator(
+      const result = await proxyToCoordinatorDetailed(
         'PUT',
         `/wiki/${pageId}`,
         request.body
       );
-      if (!result) {
+      if (!result.responded) {
         return reply
           .code(502)
           .send({ error: 'Failed to proxy to coordinator' });
       }
-      return reply.code(200).send(result);
+      return reply.code(result.status ?? 502).send(result.body);
     }
 
     const { writePage } = await import('drone-swarm-common');
@@ -149,15 +152,24 @@ export default function wikiRoutes(app: FastifyInstance) {
     '/wiki/:pageId',
     async (request, reply) => {
       if (request.query.scope === 'coordinator') {
-        const result = await proxyWikiToCoordinator(
+        const result = await proxyToCoordinatorDetailed(
           'DELETE',
           `/wiki/${request.params.pageId}`
         );
-        if (!result) {
+        if (!result.responded) {
+          return reply
+            .code(502)
+            .send({ error: 'Failed to proxy to coordinator' });
+        }
+        const status = result.status ?? 502;
+        if (status === 404) {
           return reply.code(404).send({ error: 'Wiki page not found' });
         }
+        if (status >= 400) {
+          return reply.code(status).send(result.body);
+        }
         triggerWikiReindex();
-        return result;
+        return result.body;
       }
 
       if (request.query.scope === 'beacon') {
@@ -172,11 +184,20 @@ export default function wikiRoutes(app: FastifyInstance) {
 
       const { deletePage } = await import('drone-swarm-common');
       const beaconDeleted = await deletePage(request.params.pageId);
-      const coordinatorResult = await proxyWikiToCoordinator(
+      const coordinatorResult = await proxyToCoordinatorDetailed(
         'DELETE',
         `/wiki/${request.params.pageId}`
       );
-      const coordinatorDeleted = coordinatorResult !== null;
+      const status = coordinatorResult.status ?? 0;
+      const coordinatorDeleted =
+        coordinatorResult.responded && status >= 200 && status < 300;
+      const coordinatorErrored =
+        !coordinatorResult.responded || (status >= 400 && status !== 404);
+      if (coordinatorErrored && !beaconDeleted) {
+        return coordinatorResult.responded
+          ? reply.code(status).send(coordinatorResult.body)
+          : reply.code(502).send({ error: 'Failed to proxy to coordinator' });
+      }
       if (!beaconDeleted && !coordinatorDeleted) {
         return reply.code(404).send({ error: 'Wiki page not found' });
       }

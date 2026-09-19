@@ -445,11 +445,25 @@ describe('Coordinator Client', () => {
       const { loadOrCreateIdentity } = await import('../src/identity.js');
       const { loadOrCreateTlsIdentity } =
         await import('../../drone-swarm-common/src/tls.js');
+      const { isCoordinatorTrusted } =
+        await import('../src/coordinator-trust.js');
 
       const identity = await loadOrCreateIdentity('test-beacon', configDir);
       const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
 
-      setupMockHttpResponse(201, { status: 'approved' });
+      // Capture the request body: cfetch writes it to the socket via `write`.
+      let writtenBody: string | undefined;
+      mockRequest.mockImplementation(
+        (_opts: unknown, callback: (res: MockResponse) => void) => {
+          callback(makeMockResponse(201, { status: 'approved' }));
+          const req = new EventEmitter() as unknown as MockClientRequest;
+          req.write = vi.fn((data: string) => {
+            writtenBody = data;
+          });
+          req.end = vi.fn();
+          return req;
+        }
+      );
 
       const client = createCoordinatorClient(
         {
@@ -466,6 +480,11 @@ describe('Coordinator Client', () => {
         tlsIdentity.fingerprint
       );
       expect(result.status).toBe('approved');
+      // Re-announces fingerprint confirmation state: once the beacon has
+      // confirmed the coordinator fingerprint (TOFU), the registration body
+      // carries it so the coordinator can unlock the approve gate on restart.
+      const body = JSON.parse(writtenBody ?? '{}');
+      expect(body.fingerprintConfirmed).toBe(isCoordinatorTrusted());
     });
 
     it('computes the verification code with the observed coordinator fingerprint', async () => {
@@ -539,6 +558,69 @@ describe('Coordinator Client', () => {
       await expect(
         client.registerBeacon(identity, tlsIdentity.fingerprint)
       ).rejects.toThrow();
+    });
+  });
+
+  describe('confirmFingerprint', () => {
+    it('POSTs a signed beaconId:timestamp announcement to the coordinator', async () => {
+      const { createCoordinatorClient } =
+        await import('../src/coordinator-client.js');
+      const { loadOrCreateIdentity } = await import('../src/identity.js');
+      const { loadOrCreateTlsIdentity } =
+        await import('../../drone-swarm-common/src/tls.js');
+      const { verifyBeaconSignature } = await import('drone-swarm-common');
+
+      const identity = await loadOrCreateIdentity('test-beacon', configDir);
+      const tlsIdentity = await loadOrCreateTlsIdentity(configDir);
+
+      // Capture the request body: cfetch writes it to the socket via `write`.
+      let writtenBody: string | undefined;
+      mockRequest.mockImplementation(
+        (_opts: unknown, callback: (res: MockResponse) => void) => {
+          callback(makeMockResponse(200, { success: true }));
+          const req = new EventEmitter() as unknown as MockClientRequest;
+          req.write = vi.fn((data: string) => {
+            writtenBody = data;
+          });
+          req.end = vi.fn();
+          return req;
+        }
+      );
+
+      const client = createCoordinatorClient(
+        {
+          host: 'localhost',
+          port: 3456,
+          beaconId: 'test-beacon',
+          beaconName: 'Test Beacon',
+        },
+        { identity, tlsIdentity, useHttps: false }
+      );
+
+      await client.confirmFingerprint();
+
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: '/api/beacons/trust/test-beacon/confirm-fingerprint',
+          method: 'POST',
+        }),
+        expect.any(Function)
+      );
+
+      // The announcement body must be an Ed25519-signed payload bound to the
+      // beacon's identity (beaconId:timestamp), verifiable against the public
+      // key the coordinator stored at registration.
+      const body = JSON.parse(writtenBody ?? '{}');
+      expect(body.beaconId).toBe('test-beacon');
+      expect(typeof body.timestamp).toBe('number');
+      expect(typeof body.signature).toBe('string');
+      expect(
+        verifyBeaconSignature(
+          identity.publicKey,
+          `${body.beaconId}:${body.timestamp}`,
+          body.signature
+        )
+      ).toBe(true);
     });
   });
 

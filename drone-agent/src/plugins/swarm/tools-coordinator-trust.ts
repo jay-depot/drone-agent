@@ -106,7 +106,8 @@ export function createTrustCoordinatorCommand(
         }
         ctx.logger.info(
           'Verification code matched. Coordinator fingerprint confirmed. ' +
-            'Swarm sync with the coordinator is now enabled (pending beacon approval).'
+            'Swarm sync with the coordinator is now enabled (pending beacon approval). ' +
+            'Return to the coordinator web UI — Approve is now enabled for this beacon.'
         );
       } catch (err) {
         ctx.logger.warn(`Failed to confirm coordinator: ${err}`);

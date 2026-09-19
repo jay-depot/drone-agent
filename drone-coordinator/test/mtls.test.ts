@@ -6,7 +6,7 @@ import {
   getClientCertFingerprint,
   resolveBeaconIdByFingerprint,
 } from '../src/mtls.js';
-import { registerBeaconTrust } from '../src/db/index.js';
+import { registerBeaconTrust, approveBeaconById } from '../src/db/index.js';
 
 const TEST_FP =
   'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
@@ -88,6 +88,42 @@ describe('createMtlsMiddleware', () => {
     expect(reply._code()).toBe(0);
   });
 
+  it('exempts the approval poll for a pending beacon', async () => {
+    registerBeaconTrust({
+      id: 'b-mtls',
+      name: 'MTLS Beacon',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'pubkey',
+      tlsFingerprint: TEST_FP,
+    });
+    const middleware = createMtlsMiddleware({ httpsEnabled: true });
+    const reply = makeReply();
+    await middleware(
+      makeReq('/api/beacons/trust/b-mtls', 'GET', TEST_FP),
+      reply
+    );
+    expect(reply._code()).toBe(0);
+  });
+
+  it('exempts the fingerprint confirm-fingerprint announce for a pending beacon', async () => {
+    registerBeaconTrust({
+      id: 'b-mtls',
+      name: 'MTLS Beacon',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'pubkey',
+      tlsFingerprint: TEST_FP,
+    });
+    const middleware = createMtlsMiddleware({ httpsEnabled: true });
+    const reply = makeReply();
+    await middleware(
+      makeReq('/api/beacons/trust/b-mtls/confirm-fingerprint', 'POST', TEST_FP),
+      reply
+    );
+    expect(reply._code()).toBe(0);
+  });
+
   it('exempts non-API routes', async () => {
     const middleware = createMtlsMiddleware({ httpsEnabled: true });
     const reply = makeReply();
@@ -110,14 +146,49 @@ describe('createMtlsMiddleware', () => {
   });
 
   it('allows API requests with a registered beacon cert', async () => {
+    registerBeaconTrust(
+      {
+        id: 'b-mtls',
+        name: 'MTLS Beacon',
+        host: 'localhost',
+        port: 3457,
+        publicKey: 'pubkey',
+        tlsFingerprint: TEST_FP,
+      },
+      { socketIsLocal: true }
+    );
+    const middleware = createMtlsMiddleware({ httpsEnabled: true });
+    const reply = makeReply();
+    await middleware(makeReq('/api/personas', 'GET', TEST_FP), reply);
+    expect(reply._code()).toBe(0);
+  });
+
+  it('blocks API data routes for a PENDING beacon (403)', async () => {
     registerBeaconTrust({
       id: 'b-mtls',
       name: 'MTLS Beacon',
-      host: 'localhost',
+      host: '10.0.0.1',
       port: 3457,
       publicKey: 'pubkey',
       tlsFingerprint: TEST_FP,
     });
+    const middleware = createMtlsMiddleware({ httpsEnabled: true });
+    const reply = makeReply();
+    await middleware(makeReq('/api/personas', 'GET', TEST_FP), reply);
+    expect(reply._code()).toBe(403);
+  });
+
+  it('allows API data routes for an approved beacon', async () => {
+    registerBeaconTrust({
+      id: 'b-mtls',
+      name: 'MTLS Beacon',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'pubkey',
+      tlsFingerprint: TEST_FP,
+      fingerprintConfirmed: true,
+    });
+    approveBeaconById('b-mtls');
     const middleware = createMtlsMiddleware({ httpsEnabled: true });
     const reply = makeReply();
     await middleware(makeReq('/api/personas', 'GET', TEST_FP), reply);

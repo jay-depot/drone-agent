@@ -18,6 +18,7 @@ interface BeaconTrustRow {
   status: BeaconTrustStatus;
   approved_at: number | null;
   tls_fingerprint: string | null;
+  fingerprint_confirmed_at: number | null;
   verification_code: string | null;
   created_at: number;
   updated_at: number;
@@ -33,6 +34,7 @@ function rowToBeaconTrust(row: BeaconTrustRow): BeaconTrust {
     status: row.status,
     approvedAt: row.approved_at,
     tlsFingerprint: row.tls_fingerprint,
+    fingerprintConfirmedAt: row.fingerprint_confirmed_at ?? null,
     verificationCode: row.verification_code ?? '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -40,7 +42,8 @@ function rowToBeaconTrust(row: BeaconTrustRow): BeaconTrust {
 }
 
 export function registerBeaconTrust(
-  req: RegisterBeaconTrustRequest
+  req: RegisterBeaconTrustRequest,
+  opts: { socketIsLocal?: boolean } = {}
 ): BeaconTrust {
   const now = Date.now();
 
@@ -66,11 +69,15 @@ export function registerBeaconTrust(
       req.tlsFingerprint ?? '',
       getCoordinatorFingerprint() ?? ''
     );
+    const fingerprintConfirmedAt =
+      req.fingerprintConfirmed && existing.fingerprintConfirmedAt === null
+        ? now
+        : existing.fingerprintConfirmedAt;
 
     // Update connection info but preserve status and public key
     const stmt = getDatabase().prepare(`
       UPDATE beacon_trust 
-      SET host = @host, port = @port, tls_fingerprint = @tlsFingerprint, verification_code = @verificationCode, updated_at = @updatedAt
+      SET host = @host, port = @port, tls_fingerprint = @tlsFingerprint, verification_code = @verificationCode, fingerprint_confirmed_at = @fingerprintConfirmedAt, updated_at = @updatedAt
       WHERE beacon_id = @beaconId
     `);
 
@@ -80,6 +87,7 @@ export function registerBeaconTrust(
       port: req.port,
       tlsFingerprint: req.tlsFingerprint ?? null,
       verificationCode,
+      fingerprintConfirmedAt,
       updatedAt: now,
     });
 
@@ -92,6 +100,7 @@ export function registerBeaconTrust(
       host: req.host,
       port: req.port,
       tlsFingerprint: req.tlsFingerprint ?? null,
+      fingerprintConfirmedAt,
       verificationCode,
       updatedAt: now,
     };
@@ -103,13 +112,17 @@ export function registerBeaconTrust(
     req.tlsFingerprint ?? '',
     getCoordinatorFingerprint() ?? ''
   );
-  const isLocal = req.host === 'localhost' || req.host === '127.0.0.1';
+  const isLocal = opts.socketIsLocal === true;
 
   // Test/integration deployments opt into auto-approval (setAutoApproveBeacons
   // at startup); the mTLS fingerprint-vs-claim anti-spoof check is unaffected.
   const status: BeaconTrustStatus =
     isLocal || isAutoApproveBeacons() ? 'approved' : 'pending';
   const approvedAt = isLocal || isAutoApproveBeacons() ? now : null;
+  // A localhost beacon is the same host as the coordinator (no MITM channel),
+  // so its fingerprint is considered confirmed at registration (locked Q4).
+  const fingerprintConfirmedAt =
+    req.fingerprintConfirmed === true || isLocal ? now : null;
 
   const trust: BeaconTrust = {
     beaconId: req.id,
@@ -120,6 +133,7 @@ export function registerBeaconTrust(
     status,
     approvedAt,
     tlsFingerprint: req.tlsFingerprint ?? null,
+    fingerprintConfirmedAt,
     verificationCode,
     createdAt: now,
     updatedAt: now,
@@ -127,8 +141,8 @@ export function registerBeaconTrust(
 
   const stmt = getDatabase().prepare(`
     INSERT INTO beacon_trust 
-    (beacon_id, name, public_key, host, port, status, approved_at, tls_fingerprint, verification_code, created_at, updated_at)
-    VALUES (@beaconId, @name, @publicKey, @host, @port, @status, @approvedAt, @tlsFingerprint, @verificationCode, @createdAt, @updatedAt)
+    (beacon_id, name, public_key, host, port, status, approved_at, tls_fingerprint, fingerprint_confirmed_at, verification_code, created_at, updated_at)
+    VALUES (@beaconId, @name, @publicKey, @host, @port, @status, @approvedAt, @tlsFingerprint, @fingerprintConfirmedAt, @verificationCode, @createdAt, @updatedAt)
   `);
 
   stmt.run({
@@ -140,6 +154,7 @@ export function registerBeaconTrust(
     status: trust.status,
     approvedAt: trust.approvedAt,
     tlsFingerprint: trust.tlsFingerprint,
+    fingerprintConfirmedAt: trust.fingerprintConfirmedAt,
     verificationCode: trust.verificationCode,
     createdAt: trust.createdAt,
     updatedAt: trust.updatedAt,
@@ -173,7 +188,7 @@ export function approveBeaconById(beaconId: string): BeaconTrust | null {
   const stmt = getDatabase().prepare(`
     UPDATE beacon_trust 
     SET status = 'approved', approved_at = ?, updated_at = ?
-    WHERE beacon_id = ? AND status = 'pending'
+    WHERE beacon_id = ? AND status = 'pending' AND fingerprint_confirmed_at IS NOT NULL
   `);
   const result = stmt.run(now, now, beaconId);
 
@@ -185,6 +200,23 @@ export function approveBeaconById(beaconId: string): BeaconTrust | null {
   if (!updated) return null;
 
   logger.info(`Approved beacon: ${updated.beaconId}`);
+  return updated;
+}
+
+export function confirmBeaconFingerprint(beaconId: string): BeaconTrust | null {
+  const now = Date.now();
+  const stmt = getDatabase().prepare(`
+    UPDATE beacon_trust
+    SET fingerprint_confirmed_at = ?, updated_at = ?
+    WHERE beacon_id = ?
+  `);
+  const result = stmt.run(now, now, beaconId);
+  if (result.changes === 0) {
+    return null;
+  }
+  const updated = getBeaconTrust(beaconId);
+  if (!updated) return null;
+  logger.info(`Beacon confirmed coordinator fingerprint: ${updated.beaconId}`);
   return updated;
 }
 

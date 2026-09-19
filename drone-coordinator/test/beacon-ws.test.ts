@@ -1,14 +1,20 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import {
   sendBeaconCommand,
   isBeaconConnected,
+  getConnectedBeaconIds,
+  broadcastBeaconCommand,
+  notifyConfigChanged,
   resetBeaconConnections,
   startBeaconLivenessSweep,
+  resolveBeaconWsAdmission,
   _registerTestConnection,
   _handleIncomingMessage,
   _setLifecycleHooks,
 } from '../src/beacon-ws.js';
 import type { WebSocket } from '@fastify/websocket';
+import { setupDb, teardownDb } from './setup.js';
+import { registerBeaconTrust, approveBeaconById } from '../src/db/index.js';
 
 function makeFakeWs() {
   const send = vi.fn((data: string, cb?: (err?: Error) => void) => cb?.());
@@ -185,5 +191,85 @@ describe('startBeaconLivenessSweep', () => {
       clearInterval(sweep);
       vi.useRealTimers();
     }
+  });
+});
+
+describe('resolveBeaconWsAdmission', () => {
+  beforeEach(async () => {
+    await setupDb();
+  });
+
+  afterEach(async () => {
+    await teardownDb();
+  });
+
+  it('refuses a PENDING beacon with close code 4002', () => {
+    registerBeaconTrust({
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'key1',
+    });
+    const refusal = resolveBeaconWsAdmission('b1');
+    expect(refusal).toEqual({ code: 4002, reason: 'Beacon not yet approved' });
+  });
+
+  it('refuses an unknown beacon with close code 4002', () => {
+    const refusal = resolveBeaconWsAdmission('unknown');
+    expect(refusal).not.toBeNull();
+    expect(refusal!.code).toBe(4002);
+  });
+
+  it('admits an approved beacon', () => {
+    registerBeaconTrust({
+      id: 'b1',
+      name: 'B1',
+      host: '10.0.0.1',
+      port: 3457,
+      publicKey: 'key1',
+      fingerprintConfirmed: true,
+    });
+    approveBeaconById('b1');
+    expect(resolveBeaconWsAdmission('b1')).toBeNull();
+  });
+});
+
+describe('getConnectedBeaconIds / broadcastBeaconCommand', () => {
+  it('lists only connected beacons', () => {
+    const ws = makeFakeWs();
+    _registerTestConnection('b1', ws);
+    expect(getConnectedBeaconIds()).toEqual(['b1']);
+    resetBeaconConnections();
+    expect(getConnectedBeaconIds()).toEqual([]);
+  });
+
+  it('broadcasts a payload-less command to every connected beacon', () => {
+    const ws1 = makeFakeWs();
+    const ws2 = makeFakeWs();
+    _registerTestConnection('b1', ws1);
+    _registerTestConnection('b2', ws2);
+
+    broadcastBeaconCommand('configChanged');
+    expect(ws1.send).toHaveBeenCalledTimes(1);
+    expect(ws2.send).toHaveBeenCalledTimes(1);
+    const sent = JSON.parse(String(ws1.send.mock.calls[0][0]));
+    expect(sent.type).toBe('command');
+    expect(sent.command).toBe('configChanged');
+    expect(sent.payload).toBeUndefined();
+    expect(sent.id).toBeTruthy();
+  });
+
+  it('is a no-op that never throws when no beacons are connected', () => {
+    expect(() => broadcastBeaconCommand('configChanged')).not.toThrow();
+    expect(() => notifyConfigChanged()).not.toThrow();
+  });
+
+  it('notifyConfigChanged broadcasts the configChanged command', () => {
+    const ws = makeFakeWs();
+    _registerTestConnection('b1', ws);
+    notifyConfigChanged();
+    const sent = JSON.parse(String(ws.send.mock.calls[0][0]));
+    expect(sent.command).toBe('configChanged');
   });
 });

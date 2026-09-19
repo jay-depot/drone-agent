@@ -18,6 +18,12 @@ vi.mock('../src/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock('../src/routes/context.js', async () => {
+  return {
+    triggerCoordinatorSync: vi.fn().mockResolvedValue({ success: true }),
+  };
+});
+
 /**
  * Capture the WebSocket instances the client constructs so tests can drive
  * the message loop. Declared before the dynamic imports below because the
@@ -51,6 +57,7 @@ vi.mock('ws', () => ({ default: FakeWebSocket }));
 const { handleSpawnAgent } = await import('../src/routes/spawn-handlers.js');
 const { startCoordinatorWsClient, resetCoordinatorWsClient } =
   await import('../src/coordinator-ws.js');
+const { triggerCoordinatorSync } = await import('../src/routes/context.js');
 
 type SpawnResults = Awaited<ReturnType<typeof handleSpawnAgent>>;
 
@@ -171,5 +178,24 @@ describe('beacon reverse-channel client', () => {
     expect(response.ok).toBe(false);
     expect(response.status).toBe(400);
     expect(response.body.error).toContain('Unknown command');
+  });
+
+  it('handles a configChanged nudge by re-pulling coordinator config', async () => {
+    const ws = startClient();
+    (triggerCoordinatorSync as ReturnType<typeof vi.fn>).mockClear();
+    (triggerCoordinatorSync as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      success: true,
+    });
+
+    const responsePromise = nextResponse(ws);
+    respond(ws, { type: 'command', id: 'r5', command: 'configChanged' });
+
+    const response = JSON.parse(await responsePromise) as {
+      ok: boolean;
+      status: number;
+    };
+    expect(response.ok).toBe(true);
+    expect(response.status).toBe(200);
+    expect(triggerCoordinatorSync).toHaveBeenCalledTimes(1);
   });
 });

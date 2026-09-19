@@ -1,4 +1,6 @@
 import type { FastifyInstance } from 'fastify';
+import { getCoordinatorClient } from './context.js';
+import { logger } from '../logger.js';
 import {
   confirmCoordinatorFingerprint,
   getBeaconVerificationCode,
@@ -47,6 +49,16 @@ export default function coordinatorTrustRoutes(app: FastifyInstance) {
       const fp = getPendingCoordinatorFingerprint();
       if (fp) {
         confirmCoordinatorFingerprint(fp);
+        // Announce the confirmation to the coordinator so its approve gate
+        // unlocks (and the web UI flips to "ready to approve"). Fire-and-forget:
+        // a failed announce is retried on the next /coordinator/trust or at
+        // registration (fingerprintConfirmed is re-sent then), and the beacon
+        // already keeps this fingerprint trusted locally regardless.
+        getCoordinatorClient()
+          ?.confirmFingerprint()
+          .catch(err =>
+            logger.warn(`Failed to announce fingerprint confirmation: ${err}`)
+          );
       }
       return { success: true };
     }

@@ -215,7 +215,13 @@ describe('TopologyPage trust dialog', () => {
 
   it('shows an error toast and keeps the dialog open when approve fails', async () => {
     stubTrustApi(
-      [makeBeacon({ trustStatus: 'pending', connected: false })],
+      [
+        makeBeacon({
+          trustStatus: 'pending',
+          connected: false,
+          fingerprintConfirmed: true,
+        }),
+      ],
       '/api/beacons/trust/b1/approve',
       'POST',
       jsonResponse(409, { error: 'Beacon revoked the request' })

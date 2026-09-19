@@ -1,6 +1,7 @@
 import WebSocket from 'ws';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
 import { logger } from './logger.js';
+import { triggerCoordinatorSync } from './routes/context.js';
 import {
   handleSpawnAgent,
   handleListSpawns,
@@ -186,6 +187,14 @@ async function handleCommand(msg: CommandMessage): Promise<void> {
         status = result.status;
         ok = result.status < 400;
         body = result.body;
+        break;
+      }
+      case 'configChanged': {
+        // Coordinator nudge: re-pull config immediately. The periodic sync
+        // remains the source of truth — this just collapses the latency.
+        void triggerCoordinatorSync().catch(err => {
+          logger.warn(`configChanged sync failed: ${err}`);
+        });
         break;
       }
       default:
