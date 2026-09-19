@@ -8,8 +8,11 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DroneReferenceContext, DroneSkillsCapability } from 'drone-core';
-import type { DronePluginEngine } from '../runtime/plugin-engine.js';
+import type {
+  DroneReferenceContext,
+  DroneSkillsCapability,
+  DroneSlashCommand,
+} from 'drone-core';
 import {
   applyCompletion,
   detectCompletionContext,
@@ -31,7 +34,10 @@ export type CompletionAccept = {
 export function useCompletion(opts: {
   value: string;
   caret: number;
-  engine: DronePluginEngine;
+  engine: {
+    getSlashCommands: () => DroneSlashCommand[];
+    getCapability: <T>(pluginId: string) => T | undefined;
+  };
   cwd: string;
   homedir: string;
 }): {

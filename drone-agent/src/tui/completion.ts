@@ -7,8 +7,16 @@
 
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
-import type { DroneReferenceContext, DroneSkillsCapability } from 'drone-core';
-import type { DronePluginEngine } from '../runtime/plugin-engine.js';
+import type {
+  DroneReferenceContext,
+  DroneSkillsCapability,
+  DroneSlashCommand,
+} from 'drone-core';
+
+/** The engine slice needed to list slash-command completions. */
+export type SlashCommandSource = {
+  getSlashCommands: () => DroneSlashCommand[];
+};
 
 export type CompletionItem = {
   id: string;
@@ -140,7 +148,7 @@ export async function listFileCandidates(
 /** List slash-command candidates for a slash-context prefix. */
 export function listSlashCandidates(
   prefix: string,
-  engine: DronePluginEngine
+  engine: SlashCommandSource
 ): CompletionItem[] {
   const lower = prefix.toLowerCase();
   return engine

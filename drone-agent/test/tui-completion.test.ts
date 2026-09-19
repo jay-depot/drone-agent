@@ -6,7 +6,8 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { DronePluginEngine, DroneSkillsCapability } from 'drone-core';
+import type { DroneSkillsCapability } from 'drone-core';
+import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import {
   detectCompletionContext,
   applyCompletion,
