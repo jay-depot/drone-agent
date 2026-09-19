@@ -43,6 +43,8 @@ const COORD_VERSION = {
   scope: 'coordinator',
   tags: ['dual'],
   sources: ['s1'],
+  wordCount: 0,
+  linkCount: 0,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-02T00:00:00Z',
 };

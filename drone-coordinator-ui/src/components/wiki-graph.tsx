@@ -215,6 +215,7 @@ export default function WikiGraphView({
   edges,
   focusedNodeId,
   tagsVisible,
+  filterActiveIds,
   onNodeFocus,
   onClearFocus,
   forceGraphFactory = defaultFactory,
@@ -223,6 +224,7 @@ export default function WikiGraphView({
   edges: AugmentedGraphEdge[];
   focusedNodeId?: string | null;
   tagsVisible: boolean;
+  filterActiveIds?: ReadonlySet<string> | null;
   onNodeFocus: (pageId: string) => void;
   onClearFocus: () => void;
   forceGraphFactory?: (el: HTMLElement) => ForceGraphHandle;
@@ -243,6 +245,10 @@ export default function WikiGraphView({
   const baseLinkWidthRef = useRef(BASE_LINK_WIDTH);
   const tagsVisibleRef = useRef(tagsVisible);
   tagsVisibleRef.current = tagsVisible;
+  const filterActiveIdsRef = useRef<ReadonlySet<string> | null>(
+    filterActiveIds ?? null
+  );
+  filterActiveIdsRef.current = filterActiveIds ?? null;
 
   const focusedIdRef = useRef<string | null>(focusedNodeId ?? null);
   const focusSetsRef = useRef<ReturnType<typeof buildFocusSets> | null>(null);
@@ -428,9 +434,19 @@ export default function WikiGraphView({
       link.kind === 'link' &&
       nodesByIdRef.current.get(edgeEndpointId(link.target))?.exists === false;
 
+    // A node passes the filter when no filter is active (null) or its id is in
+    // the active set. Broken-link placeholder targets are absent from the set,
+    // so they dim like any non-matching node.
+    const nodePassesFilter = (id: string): boolean => {
+      const filter = filterActiveIdsRef.current;
+      return filter === null || filter.has(id);
+    };
+
     const nodeColorAccessor = (node: AugmentedGraphNode): string => {
       const focus = focusSetsRef.current;
-      const dimmed = focus !== null && !focus.neighborIds.has(node.id);
+      const dimmed =
+        (focus !== null && !focus.neighborIds.has(node.id)) ||
+        !nodePassesFilter(node.id);
       if (node.kind === 'tag') {
         if (!isTagNodeVisible(node)) return TRANSPARENT;
         return dimmed ? TAG_DIM : theme.tagFill;
@@ -446,8 +462,14 @@ export default function WikiGraphView({
     const linkWidthAccessor = (link: AugmentedGraphEdge): number => {
       if (link.kind === 'tag') {
         const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
-        return tagNode && isTagNodeVisible(tagNode) ? 0.5 : 0;
+        if (!tagNode || !isTagNodeVisible(tagNode)) return 0;
+        if (!nodePassesFilter(tagNode.id)) return 0.05;
+        return 0.5;
       }
+      const filterDim =
+        !nodePassesFilter(edgeEndpointId(link.source)) ||
+        !nodePassesFilter(edgeEndpointId(link.target));
+      if (filterDim) return 0.05;
       const focus = focusSetsRef.current;
       if (!focus) return baseLinkWidthRef.current;
       if (focus.touchingEdgeKeys.has(edgeKey(link)))
@@ -459,11 +481,16 @@ export default function WikiGraphView({
       if (link.kind === 'tag') {
         const tagNode = nodesByIdRef.current.get(edgeEndpointId(link.target));
         if (!tagNode || !isTagNodeVisible(tagNode)) return TRANSPARENT;
+        if (!nodePassesFilter(tagNode.id)) return theme.dimLink;
         const focus = focusSetsRef.current;
         if (focus && focus.touchingEdgeKeys.has(edgeKey(link)))
           return TAG_EDGE_LIT;
         return TAG_EDGE;
       }
+      const filterDim =
+        !nodePassesFilter(edgeEndpointId(link.source)) ||
+        !nodePassesFilter(edgeEndpointId(link.target));
+      if (filterDim) return theme.dimLink;
       const focus = focusSetsRef.current;
       if (focus) {
         return focus.touchingEdgeKeys.has(edgeKey(link))
@@ -505,7 +532,9 @@ export default function WikiGraphView({
       const positioned = node as PositionedNode;
       if (positioned.x === undefined || positioned.y === undefined) return;
       const focus = focusSetsRef.current;
-      const dimmed = focus !== null && !focus.neighborIds.has(node.id);
+      const dimmed =
+        (focus !== null && !focus.neighborIds.has(node.id)) ||
+        !nodePassesFilter(node.id);
       const radius = Math.sqrt(node._val ?? 1) * nodeRelSizeRef.current;
 
       if (node.kind === 'page') {
@@ -551,7 +580,9 @@ export default function WikiGraphView({
         const positioned = node as PositionedNode;
         if (positioned.x === undefined || positioned.y === undefined) continue;
         const focus = focusSetsRef.current;
-        const dimmed = focus !== null && !focus.neighborIds.has(node.id);
+        const dimmed =
+          (focus !== null && !focus.neighborIds.has(node.id)) ||
+          !nodePassesFilter(node.id);
         if (dimmed) continue;
         if (fadingRef.current.has(node.id)) continue;
         if (node.kind === 'tag' && !tagsVisibleRef.current) continue;
@@ -996,6 +1027,13 @@ export default function WikiGraphView({
     if (!fg) return;
     repaintRef.current(fg);
   }, [tagsVisible]);
+
+  // Filter dimming is ref-only state; repaint so accessors pick it up.
+  useEffect(() => {
+    const fg = handleRef.current;
+    if (!fg) return;
+    repaintRef.current(fg);
+  }, [filterActiveIds]);
 
   return (
     <div

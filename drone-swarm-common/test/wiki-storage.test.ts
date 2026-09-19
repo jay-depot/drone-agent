@@ -499,4 +499,81 @@ describe('Wiki Storage', () => {
       expect(graph.nodes.find(n => n.id === 'missing')!.wordCount).toBe(0);
     });
   });
+
+  describe('derived wordCount / linkCount', () => {
+    it('countWords handles empty, whitespace-only, and typical bodies', async () => {
+      const { countWords } = await import('../src/wiki-storage.js');
+      expect(countWords('')).toBe(0);
+      expect(countWords('   \n\t  ')).toBe(0);
+      expect(countWords('one two three')).toBe(3);
+      expect(countWords('  alpha\n\n  beta\t\tgamma  \n delta  ')).toBe(4);
+    });
+
+    it('readPage returns wordCount and linkCount', async () => {
+      const { writePage, readPage } = await import('../src/wiki-storage.js');
+      await writePage(
+        'derived-read',
+        'Derived Read',
+        'beacon',
+        'one two three [[alpha]] four [[beta]]'
+      );
+
+      const read = await readPage('derived-read');
+      expect(read).not.toBeNull();
+      expect(read!.wordCount).toBe(6);
+      expect(read!.linkCount).toBe(2);
+    });
+
+    it('readPage reports linkCount 0 for an oversized page without throwing', async () => {
+      const { readPage } = await import('../src/wiki-storage.js');
+      const { writeFile } = await import('node:fs/promises');
+      const path = await import('node:path');
+      const oversized = 'x'.repeat(1_000_001) + ' [[never-parsed]]';
+      const raw = `---\nid: oversized-read\ntitle: Oversized Read\nscope: beacon\ntags: []\nsources: []\ncreatedAt: ${new Date().toISOString()}\nupdatedAt: ${new Date().toISOString()}\n---\n${oversized}`;
+      await writeFile(path.join(kbDir, 'oversized-read.md'), raw, 'utf-8');
+
+      const read = await readPage('oversized-read');
+      expect(read).not.toBeNull();
+      expect(read!.linkCount).toBe(0);
+      expect(read!.wordCount).toBeGreaterThan(0);
+    });
+
+    it('writePage returns both fields and never persists them to frontmatter', async () => {
+      const { writePage } = await import('../src/wiki-storage.js');
+      const { readFile } = await import('node:fs/promises');
+      const page = await writePage(
+        'derived-write',
+        'Derived Write',
+        'beacon',
+        'alpha beta [[gamma]]'
+      );
+      expect(page.wordCount).toBe(3);
+      expect(page.linkCount).toBe(1);
+
+      const raw = await readFile(`${kbDir}/derived-write.md`, 'utf-8');
+      expect(raw).not.toContain('wordCount');
+      expect(raw).not.toContain('linkCount');
+    });
+
+    it('listPages projects wordCount and linkCount', async () => {
+      const { writePage, listPages } = await import('../src/wiki-storage.js');
+      await writePage('p-1', 'P1', 'beacon', 'one two [[three]]');
+
+      const pages = await listPages();
+      expect(pages).toHaveLength(1);
+      expect(pages[0].wordCount).toBe(3);
+      expect(pages[0].linkCount).toBe(1);
+    });
+
+    it('buildGraph node wordCount matches the page meta wordCount', async () => {
+      const { writePage, listPages, buildGraph } =
+        await import('../src/wiki-storage.js');
+      await writePage('p-1', 'P1', 'coordinator', 'one two three four');
+
+      const meta = (await listPages()).find(p => p.id === 'p-1');
+      const node = (await buildGraph()).nodes.find(n => n.id === 'p-1');
+      expect(node!.wordCount).toBe(meta!.wordCount);
+      expect(node!.wordCount).toBe(4);
+    });
+  });
 });

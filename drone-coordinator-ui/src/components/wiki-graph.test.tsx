@@ -432,6 +432,98 @@ describe('WikiGraphView', () => {
     expect(widthAccessor(edges[3])).toBe(0);
   });
 
+  it('dims page nodes that do not pass an active filter set', () => {
+    renderView({ filterActiveIds: new Set(['a']) });
+
+    const colorAccessor = accessorFrom('nodeColor') as (
+      n: AugmentedGraphNode
+    ) => string;
+    // 'a' passes the filter → lit; 'b'/'c' do not → dimmed; the missing-page
+    // placeholder target is absent from the set → dimmed amber.
+    expect(colorAccessor(nodes[0])).toBe('#2563eb');
+    expect(colorAccessor(nodes[1])).toBe('rgba(37, 99, 235, 0.15)');
+    expect(colorAccessor(nodes[3])).toBe('rgba(37, 99, 235, 0.15)');
+    expect(colorAccessor(nodes[2])).toBe('rgba(217, 119, 6, 0.15)');
+  });
+
+  it('does not dim when the filter set is null (no filters active)', () => {
+    renderView({ filterActiveIds: null });
+
+    const colorAccessor = accessorFrom('nodeColor') as (
+      n: AugmentedGraphNode
+    ) => string;
+    expect(colorAccessor(nodes[0])).toBe('#2563eb');
+    expect(colorAccessor(nodes[1])).toBe('#2563eb');
+    expect(colorAccessor(nodes[3])).toBe('#2563eb');
+  });
+
+  it('keeps a selected tag lit and dims an unselected tag node', () => {
+    renderView({ filterActiveIds: new Set(['a']) });
+    let colorAccessor = accessorFrom('nodeColor') as (
+      n: AugmentedGraphNode
+    ) => string;
+    // tag:x is not in the set → dimmed green.
+    expect(colorAccessor(nodes[4])).toBe('rgba(34, 197, 94, 0.08)');
+
+    handle = makeFakeHandle();
+    renderView({ filterActiveIds: new Set(['a', 'tag:x']) });
+    colorAccessor = accessorFrom('nodeColor') as (
+      n: AugmentedGraphNode
+    ) => string;
+    // Selected tag stays at its normal fill, and it keeps its tag edge lit.
+    expect(colorAccessor(nodes[4])).toBe('rgba(22, 163, 74, 0.18)');
+  });
+
+  it('dims a link when either endpoint is filtered out', () => {
+    renderView({ filterActiveIds: new Set(['a']) });
+
+    const widthAccessor = accessorFrom('linkWidth') as (
+      l: AugmentedGraphEdge
+    ) => number;
+    const colorAccessor = accessorFrom('linkColor') as (
+      l: AugmentedGraphEdge
+    ) => string;
+    // a→b: b is filtered out → dimmed width + dim link color.
+    expect(widthAccessor(edges[0])).toBe(0.05);
+    expect(colorAccessor(edges[0])).toBe('rgba(148, 163, 184, 0.08)');
+    // a→tag:x: the tag is filtered out → dimmed tag edge.
+    expect(widthAccessor(edges[3])).toBe(0.05);
+  });
+
+  it('leaves a link at full width when both endpoints pass the filter', () => {
+    renderView({
+      filterActiveIds: new Set(['a', 'b', 'missing', 'd', 'e', 'tag:x']),
+    });
+
+    const widthAccessor = accessorFrom('linkWidth') as (
+      l: AugmentedGraphEdge
+    ) => number;
+    const colorAccessor = accessorFrom('linkColor') as (
+      l: AugmentedGraphEdge
+    ) => string;
+    expect(widthAccessor(edges[0])).toBe(1.5);
+    expect(colorAccessor(edges[0])).toBe('rgba(148, 163, 184, 0.3)');
+  });
+
+  it('intersects focus and filter (a node must be in both to stay lit)', () => {
+    // Focus 'a' ⇒ neighbors {a, b, missing, tag:x}. Filter keeps {a, b}.
+    renderView({
+      focusedNodeId: 'a',
+      filterActiveIds: new Set(['a', 'b']),
+    });
+
+    const colorAccessor = accessorFrom('nodeColor') as (
+      n: AugmentedGraphNode
+    ) => string;
+    // 'a' and 'b' are in focus ∩ filter → lit.
+    expect(colorAccessor(nodes[0])).toBe('#2563eb');
+    expect(colorAccessor(nodes[1])).toBe('#2563eb');
+    // 'missing' is a focus neighbor but filtered out → dimmed.
+    expect(colorAccessor(nodes[2])).toBe('rgba(217, 119, 6, 0.15)');
+    // 'c' passes no focus → dimmed even though the filter would keep others.
+    expect(colorAccessor(nodes[3])).toBe('rgba(37, 99, 235, 0.15)');
+  });
+
   it('compensates node and link size on zoom', () => {
     renderView();
     const zoomCb = accessorFrom('onZoom') as (t: {

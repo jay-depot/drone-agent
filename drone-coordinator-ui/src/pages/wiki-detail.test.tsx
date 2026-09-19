@@ -45,6 +45,8 @@ const pageWithPitch = {
   scope: 'coordinator',
   tags: ['ops'],
   sources: [],
+  wordCount: 12,
+  linkCount: 0,
   pitch: 'A one-sentence pitch about deployment.',
   createdAt: '2026-09-01T00:00:00.000Z',
   updatedAt: '2026-09-01T00:00:00.000Z',
@@ -168,5 +170,63 @@ describe('WikiDetailPage delete error handling', () => {
       expect(screen.getByText('Wiki list')).toBeInTheDocument();
     });
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('WikiDetailPage source session links', () => {
+  const pageWithSources = {
+    ...pageWithPitch,
+    sources: ['session-abc', 'session-def'],
+  };
+
+  beforeEach(() => {
+    localStorageMock.clear();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('renders each source as a link to its session page', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => pageWithSources,
+      })) as unknown as typeof fetch
+    );
+
+    renderDetail();
+    await screen.findByText('Sources');
+
+    expect(screen.getByRole('link', { name: 'session-abc' })).toHaveAttribute(
+      'href',
+      '/sessions/session-abc'
+    );
+    expect(screen.getByRole('link', { name: 'session-def' })).toHaveAttribute(
+      'href',
+      '/sessions/session-def'
+    );
+  });
+
+  it('navigates to the filtered wiki list from a source Filter button', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => pageWithSources,
+      })) as unknown as typeof fetch
+    );
+
+    renderDetail();
+    await screen.findByText('Sources');
+
+    const user = userEvent.setup();
+    const filterButtons = screen.getAllByRole('button', { name: 'Filter' });
+    await user.click(filterButtons[0]);
+    expect(screen.getByText('Wiki list')).toBeInTheDocument();
   });
 });
