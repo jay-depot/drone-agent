@@ -534,5 +534,13 @@
   {
     "timestamp": "2026-09-19T00:59:14.994Z",
     "insight": "Concept/spec pages can describe dead plumbing as though it works. `concepts/beacon-config-override-spec.md` documented a Coordinator config injector at precedence 50 and beacon-side CRUD as the primary config interface; in reality no coordinator injector was ever registered (coordinator values ride the single beacon underlay at precedence 75, the beacon serves a read-optimized merged view, and the coordinator owns writes). The documented \"Coordinator (50) → Beacon (75)\" cascade was docs-only until ADR 212. Lesson: when a plan touches an area that has a concept page, re-read that page against the code and correct it in the same pass — a stale spec is worse than a missing one because it gets cited as fact."
+  },
+  {
+    "timestamp": "2026-09-19T21:21:25.010Z",
+    "insight": "`pnpm lint` is a destructive command in this repo: its `lint:prettier` step is `prettier --write .`, which reformats EVERY file, not just changed ones. On a branch with a different prettier version's expected formatting (this run: prettier 3.9.6), it rewrote `pnpm-lock.yaml` (5863-line diff, flow→block `resolution:` style), two unrelated test files, and unrelated `.drone-agent` memory/insight files. These incidental reformats must be reverted (`git checkout -- <files>`) before committing a feature, or they bloat/derail the commit. To verify formatting WITHOUT side effects, use `npx prettier --check <paths>` (checks only, never writes). AGENTS.md already warns \"if you run the linter, you will need to re-read all files\" — the stronger truth is it will also MODIFY unrelated files."
+  },
+  {
+    "timestamp": "2026-09-19T21:21:25.012Z",
+    "insight": "`pnpm test` (vitest via esbuild) does NOT typecheck test files — esbuild strips types. So a change that breaks the types of a test file (e.g. adding a required method to a shared type, or a test helper that passes partial object literals) will pass `pnpm test` while failing `pnpm typecheck`. The drone-agent package `typecheck` script is `tsc -b`, which also excludes tests (its tsconfig `include` is `src/**` only). The ONLY gate that covers test files is the root `tsc -p tsconfig.test.json` (included in the root `pnpm typecheck` script via `tsc -p tsconfig.test.json --pretty false`). Always run `npx tsc -p tsconfig.test.json` after touching tests or shared types; the LSP server does cover tests, so `lsp__get_diagnostics` on the file is a faster alternative."
   }
 ]
