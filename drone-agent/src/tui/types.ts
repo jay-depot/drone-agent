@@ -59,7 +59,8 @@ export type ChatEntry = {
     | 'success'
     | 'markdown'
     | 'compaction'
-    | 'notice';
+    | 'notice'
+    | 'aside';
   /** Primary text. Multi-line strings render with hard newlines. */
   text: string;
   /**
@@ -139,6 +140,10 @@ export type DroneTuiOptions = {
       >
     ) => void;
     cancelCurrentRequest?: () => void;
+    /** Inject a message into the in-flight round (wired from the service). */
+    steerMessage?: (content: string) => Promise<void>;
+    /** Ask an ephemeral side question (wired from the service). */
+    askAside?: (question: string) => Promise<string>;
     getDebugSubsystems: () => string[];
     enableDebugSubsystem: (name: string) => void;
     disableDebugSubsystem: (name: string) => void;

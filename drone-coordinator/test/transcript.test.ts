@@ -385,4 +385,39 @@ describe('buildSessionTranscript', () => {
     expect(transcript).toContain('persona changed: none -> none');
     expect(transcript).toContain('session started as subagent: coder');
   });
+
+  it('renders an aside event as question and answer lines', async () => {
+    const events = [
+      event('e1', 'aside', {
+        kind: 'aside',
+        question: 'what is the deploy command?',
+        answer: 'It is make deploy.',
+      }),
+    ];
+    const transcript = await buildSessionTranscript(
+      session,
+      events,
+      resolveBlob
+    );
+    expect(transcript).toContain('[aside Q] what is the deploy command?');
+    expect(transcript).toContain('[aside A] It is make deploy.');
+  });
+
+  it('still drops non-listed event kinds', async () => {
+    const events = [
+      event('e1', 'aside', { kind: 'aside', question: 'q', answer: 'a' }),
+      event('e2', 'toolProgress', {
+        kind: 'toolProgress',
+        name: 'x',
+        content: 'still-noise',
+      }),
+    ];
+    const transcript = await buildSessionTranscript(
+      session,
+      events,
+      resolveBlob
+    );
+    expect(transcript).toContain('[aside Q] q');
+    expect(transcript).not.toContain('still-noise');
+  });
 });

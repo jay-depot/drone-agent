@@ -547,6 +547,15 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
           logFn(event.content, 'notice');
           break;
         }
+        case 'aside': {
+          // Commit immediately (no tail item) so the side-query cannot
+          // collide with a streaming main reply.
+          appendFn({
+            text: `${event.question}\n${event.answer}`,
+            kind: 'aside',
+          });
+          break;
+        }
       }
     });
     return () => unregister?.();

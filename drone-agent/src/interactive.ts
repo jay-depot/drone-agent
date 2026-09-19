@@ -410,6 +410,13 @@ export async function runSwarmListenMode(
         case 'roundComplete':
           ndjsonHandler({ kind: 'turnComplete' });
           break;
+        case 'aside':
+          ndjsonHandler({
+            kind: 'aside',
+            question: event.question,
+            answer: event.answer,
+          });
+          break;
         default:
           break;
       }
@@ -483,6 +490,8 @@ export async function runInteractiveLoop(
             sendUserMessage: (p, onEvent) =>
               conversation.sendUserMessage(p, onEvent),
             clearSession: () => conversation.clearSession(),
+            steerMessage: c => conversation.steerMessage(c),
+            askAside: q => conversation.askAside(q),
             enqueueSlashCommand: (line: string) =>
               conversation.enqueueSlashCommand?.(line),
             getDebugSubsystems: () => conversation.getDebugSubsystems(),

@@ -118,6 +118,14 @@ function renderEntry(
           <ColorTag color={scheme.notice}>{entry.text}</ColorTag>
         </Text>
       );
+    case 'aside':
+      return (
+        <Text>
+          <ColorTag color={scheme.info}>{'💬 btw'}</ColorTag>
+          {'\n'}
+          <ColorTag color={scheme.info}>{entry.text}</ColorTag>
+        </Text>
+      );
     case 'markdown':
       return (
         <Markdown

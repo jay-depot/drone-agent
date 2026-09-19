@@ -456,6 +456,10 @@ export type DroneSlashCommandContext = {
     enqueueSlashCommand?: (line: string) => void;
     /** Soft-cancel the current in-flight request. */
     cancelCurrentRequest?: () => void;
+    /** Inject a message into the in-flight round; sends normally when idle. */
+    steerMessage?: (content: string) => Promise<void>;
+    /** Ask an ephemeral side question against a copy of the current context. */
+    askAside?: (question: string) => Promise<string>;
     /** Get the list of currently enabled debug subsystems. */
     getDebugSubsystems: () => string[];
     /** Enable a debug subsystem by name (e.g. "llm"). */

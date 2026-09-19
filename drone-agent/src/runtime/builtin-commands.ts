@@ -364,6 +364,53 @@ const debugCommand: DroneSlashCommand = {
   },
 };
 
+// ── /steer ────────────────────────────────────────────────────────────
+
+const steerCommand: DroneSlashCommand = {
+  command: '/steer',
+  description:
+    'Inject a message into the current turn (or send normally when idle)',
+  // Must run mid-round — queuing would defer it to a later round and defeat
+  // the purpose.
+  busyBehavior: true,
+  handler: async (ctx: DroneSlashCommandContext) => {
+    const message = ctx.line.slice('/steer '.length).trim();
+    if (!message) {
+      ctx.logger.error('Usage: /steer <message>');
+      return true;
+    }
+    if (!ctx.conversation?.steerMessage) {
+      ctx.logger.error('/steer: not available in this host');
+      return true;
+    }
+    await ctx.conversation.steerMessage(message);
+    return true;
+  },
+};
+
+// ── /btw ──────────────────────────────────────────────────────────────
+
+const btwCommand: DroneSlashCommand = {
+  command: '/btw',
+  description:
+    'Ask a side question about the current context (ephemeral; not added to history)',
+  // The side-query is independent of the main loop and runs concurrently.
+  busyBehavior: true,
+  handler: async (ctx: DroneSlashCommandContext) => {
+    const question = ctx.line.slice('/btw '.length).trim();
+    if (!question) {
+      ctx.logger.error('Usage: /btw <question>');
+      return true;
+    }
+    if (!ctx.conversation?.askAside) {
+      ctx.logger.error('/btw: not available in this host');
+      return true;
+    }
+    await ctx.conversation.askAside(question);
+    return true;
+  },
+};
+
 // ── All built-in commands ─────────────────────────────────────────────
 
 export const BUILT_IN_SLASH_COMMANDS: DroneSlashCommand[] = [
@@ -377,4 +424,6 @@ export const BUILT_IN_SLASH_COMMANDS: DroneSlashCommand[] = [
   toolCommand,
   execCommand,
   debugCommand,
+  steerCommand,
+  btwCommand,
 ];

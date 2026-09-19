@@ -36,6 +36,9 @@ const KEPT_EVENT_KINDS = new Set([
   'toolCallBatch',
   'toolResultBatch',
   'error',
+  // A `/btw` side-query: ephemeral Q&A that never enters session history.
+  // Kept so asides are auditable in the readable transcript.
+  'aside',
   // Session-parameter / lifecycle events emitted by plugins via
   // registration.emitEvent (personaChanged, focusChanged, macroExecuted,
   // sessionStarted). These carry no correlationId, so each renders as its own
@@ -59,6 +62,8 @@ type ParsedEvent = {
   command?: string;
   subagentId?: string | null;
   personaId?: string | null;
+  question?: string;
+  answer?: string;
   toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>;
   results?: Array<{
     name: string;
@@ -111,6 +116,8 @@ async function parseEvent(
   if ('personaId' in parsed) {
     result.personaId = parsed.personaId as string | null;
   }
+  if (typeof parsed.question === 'string') result.question = parsed.question;
+  if (typeof parsed.answer === 'string') result.answer = parsed.answer;
   if (Array.isArray(parsed.toolCalls)) {
     result.toolCalls = parsed.toolCalls as ParsedEvent['toolCalls'];
   }
@@ -170,6 +177,11 @@ function renderEvent(event: ParsedEvent): string[] {
         `session started as subagent: ${
           event.subagentId ?? event.personaId ?? ''
         }`,
+      ];
+    case 'aside':
+      return [
+        `[aside Q] ${event.question ?? ''}`,
+        `[aside A] ${event.answer ?? ''}`,
       ];
     default:
       return [];

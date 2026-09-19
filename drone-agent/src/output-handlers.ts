@@ -11,7 +11,8 @@ export type OutputEvent =
   | { kind: 'toolResult'; name: string; result: string }
   | { kind: 'error'; message: string }
   | { kind: 'return'; result: string; error?: string; subagentId?: string }
-  | { kind: 'turnComplete' };
+  | { kind: 'turnComplete' }
+  | { kind: 'aside'; question: string; answer: string };
 
 /**
  * Builds a plain-text event handler for `sendUserMessage` that mirrors what
@@ -39,6 +40,8 @@ export function makePlainOutputEventHandler(options?: {
     message?: string;
     toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>;
     results?: Array<{ name: string; content: string }>;
+    question?: string;
+    answer?: string;
   }): void => {
     switch (event.kind) {
       case 'reasoning':
@@ -87,6 +90,11 @@ export function makePlainOutputEventHandler(options?: {
         break;
       case 'notice':
         output.write(`\x1b[33m⚠ ${event.content}\x1b[0m\n`);
+        break;
+      case 'aside':
+        output.write(
+          `\x1b[36m💬 btw: ${event.question ?? ''}\n${event.answer ?? ''}\x1b[0m\n`
+        );
         break;
     }
   };
