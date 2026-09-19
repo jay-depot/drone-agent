@@ -558,5 +558,9 @@
   {
     "timestamp": "2026-09-19T03:38:46.500Z",
     "insight": "In this vitest+jsdom+jest-dom UI package, `waitFor` does NOT reliably drive vitest fake timers; a `waitFor` after `vi.advanceTimersByTimeAsync(...)` only passes because its FIRST check is synchronous. When a state update is still behind an un-awaited promise chain, the assertion can miss. For deterministic debounce tests, prefer the pattern already used by the passing sibling test: `vi.useFakeTimers({ shouldAdvanceTime: true })` + wrap the WS push in `act` + `await act(async () => { await vi.advanceTimersByTimeAsync(N) })` past the debounce window, then assert. Also: raising a `waitFor` timeout is NOT a valid diagnostic for \"expected N to be M\" — if a generous timeout still fails, the event/callback is genuinely not firing (a race or a dropped message), so look for the lost registration rather than the clock."
+  },
+  {
+    "timestamp": "2026-09-19T23:11:50.180Z",
+    "insight": "`conversation-service.ts` has no single user-text transform point. A user string becomes a session turn at exactly three DIRECT append sites — `sendUserMessage` (append ~L596), the `drainPendingEntries('append')` branch (~L425), and the steering loop (~L983) — but the `drainPendingEntries('own-round')` branch (~L437) RE-ENTERS `sendUserMessage`, so anything applied at the `sendUserMessage` entry runs twice for deferred messages. Any future feature that rewrites/annotates inbound user text (reference expansion, redaction, templating) must expand at the three direct sites and never at the entry or the own-round branch. Prefer one shared `expandAndAppend(content)` helper returning the transformed text so the `userMessage` event stays consistent with what was appended."
   }
 ]
