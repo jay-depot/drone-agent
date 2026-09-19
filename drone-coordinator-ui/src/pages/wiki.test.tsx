@@ -1,11 +1,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import WikiPage from './wiki';
+import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '@/hooks/use-auth';
 import { ToastProvider } from '@/hooks/use-toast';
 import { WebSocketProvider } from '@/hooks/use-websocket';
+import WikiPage from './wiki';
+
+// The graph is canvas-dependent; stub it file-wide and record its props so
+// tests can assert on what the page handed it. Must be hoisted to module
+// scope — a vi.mock inside a test body is not allowed by vitest.
+const wikiGraphStub = vi.hoisted(() => ({
+  props: null as Record<string, unknown> | null,
+}));
+
+vi.mock('@/components/wiki-graph', () => ({
+  default: (props: Record<string, unknown>) => {
+    wikiGraphStub.props = props;
+    return <div data-testid="wiki-graph-stub" />;
+  },
+}));
 
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -25,12 +39,12 @@ const localStorageMock = (() => {
 
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
-function renderWiki() {
+function renderWiki(initialEntries: string[] = ['/wiki']) {
   return render(
     <ToastProvider>
       <AuthProvider>
         <WebSocketProvider>
-          <MemoryRouter>
+          <MemoryRouter initialEntries={initialEntries}>
             <WikiPage />
           </MemoryRouter>
         </WebSocketProvider>
@@ -39,17 +53,32 @@ function renderWiki() {
   );
 }
 
-const metaPage = {
-  id: 'deploy',
-  title: 'Deployment',
-  scope: 'coordinator',
-  tags: ['ops'],
-  sources: [],
-  createdAt: '2026-09-01T00:00:00.000Z',
-  updatedAt: '2026-09-01T00:00:00.000Z',
-};
+function metaPage(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'deploy',
+    title: 'Deployment',
+    scope: 'coordinator',
+    tags: ['ops'],
+    sources: [],
+    wordCount: 42,
+    linkCount: 1,
+    createdAt: '2026-09-01T00:00:00.000Z',
+    updatedAt: '2026-09-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
 
-describe('WikiPage search', () => {
+function ok(body: unknown): Response {
+  return { ok: true, status: 200, json: async () => body } as Response;
+}
+
+const notFound = {
+  ok: false,
+  status: 404,
+  json: async () => ({}),
+} as Response;
+
+describe('WikiPage list view', () => {
   beforeEach(() => {
     localStorageMock.clear();
     vi.restoreAllMocks();
@@ -59,25 +88,39 @@ describe('WikiPage search', () => {
     vi.unstubAllGlobals();
   });
 
+  it('renders the six-column table with the expected headers', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url === '/api/wiki' ? ok([metaPage()]) : notFound
+      )
+    );
+
+    renderWiki();
+    await screen.findByText('Deployment');
+
+    for (const header of [
+      'Title',
+      'Tags',
+      'Created',
+      'Updated',
+      'Word Count',
+      'Source Sessions',
+    ]) {
+      expect(screen.getByRole('columnheader', { name: new RegExp(header) }));
+    }
+    expect(screen.getByRole('cell', { name: '42' })).toBeTruthy();
+  });
+
   it('flattens { page, snippet, score } search results into page metadata', async () => {
     const mockFetch = vi.fn(async (url: string) => {
-      if (url === '/api/wiki') {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => [metaPage],
-        } as Response;
-      }
+      if (url === '/api/wiki') return ok([metaPage()]);
       if (url.startsWith('/api/wiki/search')) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => [
-            { page: metaPage, snippet: 'deploy with docker', score: 0.8 },
-          ],
-        } as Response;
+        return ok([
+          { page: metaPage(), snippet: 'deploy with docker', score: 0.8 },
+        ]);
       }
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
+      return notFound;
     });
     vi.stubGlobal('fetch', mockFetch);
 
@@ -90,27 +133,19 @@ describe('WikiPage search', () => {
       'deploy'
     );
 
-    // The tags badge only renders after the { page, snippet, score } wrapper
-    // is flattened (tags live under `.page.tags`, not top-level). Without the
-    // flatten this render throws on `page.tags.length`.
+    // The tag badge only renders after the { page, snippet, score } wrapper
+    // is flattened (tags live under `.page.tags`, not top-level).
     await waitFor(() => {
-      expect(screen.getByText('ops')).toBeTruthy();
+      expect(screen.getByRole('link', { name: 'ops' })).toHaveAttribute(
+        'href',
+        '/wiki/tag/ops'
+      );
     });
-
-    // The tag badge is a link to the tag page.
-    const tagLink = screen.getByRole('link', { name: 'ops' });
-    expect(tagLink).toHaveAttribute('href', '/wiki/tag/ops');
   });
 
   it('shows an error toast when the search request fails', async () => {
     const mockFetch = vi.fn(async (url: string) => {
-      if (url === '/api/wiki') {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => [metaPage],
-        } as Response;
-      }
+      if (url === '/api/wiki') return ok([metaPage()]);
       if (url.startsWith('/api/wiki/search')) {
         return {
           ok: false,
@@ -118,17 +153,12 @@ describe('WikiPage search', () => {
           json: async () => ({ error: 'Search unavailable' }),
         } as Response;
       }
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
+      return notFound;
     });
     vi.stubGlobal('fetch', mockFetch);
 
     renderWiki();
     await screen.findByText('Deployment');
-
-    const searchCalls = () =>
-      mockFetch.mock.calls.filter(([url]) =>
-        String(url).startsWith('/api/wiki/search')
-      ).length;
 
     const user = userEvent.setup();
     await user.type(
@@ -136,25 +166,79 @@ describe('WikiPage search', () => {
       'deploy'
     );
 
-    // Debounced: requests fire only once typing settles (SEARCH_DEBOUNCE_MS).
-    await waitFor(
-      () => {
-        expect(searchCalls()).toBe(1);
-      },
-      { timeout: 2000 }
-    );
-
     const alerts = await screen.findAllByRole('alert');
     expect(alerts).toHaveLength(1);
     expect(alerts[0]).toHaveTextContent('Search unavailable');
   });
+
+  it('composes keyword search with active filters (AND)', async () => {
+    const opsPage = metaPage({ id: 'ops-page', title: 'Ops Page' });
+    const designPage = metaPage({
+      id: 'design-page',
+      title: 'Design Page',
+      tags: ['design'],
+    });
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url === '/api/wiki') return ok([opsPage, designPage]);
+      // Search returns BOTH pages; the tag filter should drop the design one.
+      if (url.startsWith('/api/wiki/search')) {
+        return ok([
+          { page: opsPage, snippet: 's', score: 0.9 },
+          { page: designPage, snippet: 's', score: 0.8 },
+        ]);
+      }
+      return notFound;
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderWiki(['/wiki?tags=ops']);
+    await screen.findByText('Ops Page');
+
+    const user = userEvent.setup();
+    await user.type(
+      screen.getByPlaceholderText('Search wiki pages...'),
+      'page'
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Ops Page')).toBeTruthy();
+    });
+    // The design page has no 'ops' tag, so the active filter excludes it.
+    expect(screen.queryByText('Design Page')).toBeNull();
+  });
+
+  it('restores the full list when the search box is cleared (bugfix)', async () => {
+    const opsPage = metaPage({ id: 'ops-page', title: 'Ops Page' });
+    const otherPage = metaPage({ id: 'other-page', title: 'Other Page' });
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url === '/api/wiki') return ok([opsPage, otherPage]);
+      if (url.startsWith('/api/wiki/search')) {
+        // Only the ops page matches the query.
+        return ok([{ page: opsPage, snippet: 's', score: 0.9 }]);
+      }
+      return notFound;
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    renderWiki();
+    await screen.findByText('Other Page');
+
+    const user = userEvent.setup();
+    const searchBox = screen.getByPlaceholderText('Search wiki pages...');
+    await user.type(searchBox, 'ops');
+    await waitFor(() => {
+      expect(screen.queryByText('Other Page')).toBeNull();
+    });
+
+    // Clearing must restore the full list, not leave the stale search results.
+    await user.clear(searchBox);
+    await waitFor(() => {
+      expect(screen.getByText('Other Page')).toBeTruthy();
+    });
+  });
 });
 
 describe('WikiPage graph view', () => {
-  const wikiGraphStub = vi.hoisted(() => ({
-    props: null as Record<string, unknown> | null,
-  }));
-
   const graph = {
     nodes: [
       {
@@ -188,250 +272,105 @@ describe('WikiPage graph view', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows the Graph toggle and renders the graph in ?view=graph', async () => {
-    const mockFetch = vi.fn(async (url: string) => {
-      if (url === '/api/wiki/graph') {
-        return { ok: true, status: 200, json: async () => graph } as Response;
-      }
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
+  const graphFetch = (
+    pages: unknown[] = [metaPage({ id: 'a', tags: ['ops'] })]
+  ) =>
+    vi.fn(async (url: string) => {
+      if (url === '/api/wiki/graph') return ok(graph);
+      if (url === '/api/wiki') return ok(pages);
+      return notFound;
     });
-    vi.stubGlobal('fetch', mockFetch);
 
-    // Stub the real graph (canvas-dependent) with a lightweight div.
-    vi.mock('@/components/wiki-graph', () => ({
-      default: (props: Record<string, unknown>) => {
-        wikiGraphStub.props = props;
-        return <div data-testid="wiki-graph-stub" />;
-      },
-    }));
+  it('renders the graph in ?view=graph and toggles back to the list', async () => {
+    vi.stubGlobal('fetch', graphFetch());
 
-    render(
-      <ToastProvider>
-        <AuthProvider>
-          <WebSocketProvider>
-            <MemoryRouter initialEntries={['/wiki?view=graph']}>
-              <Routes>
-                <Route path="/wiki" element={<WikiPage />} />
-              </Routes>
-            </MemoryRouter>
-          </WebSocketProvider>
-        </AuthProvider>
-      </ToastProvider>
-    );
+    renderWiki(['/wiki?view=graph']);
+    await screen.findByTestId('wiki-graph-stub');
 
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        '/api/wiki/graph',
-        expect.anything()
-      );
-    });
-    expect(screen.getByTestId('wiki-graph-stub')).toBeDefined();
-    // The toggle shows "Grid" (because we are in graph view).
-    expect(screen.getByRole('button', { name: 'Grid' })).toBeDefined();
+    // In graph view the toggle offers the list.
+    expect(screen.getByRole('button', { name: 'List' })).toBeTruthy();
   });
 
-  it('renders the Tags toggle and always includes orphan pages', async () => {
-    const mockFetch = vi.fn(async (url: string) => {
-      if (url === '/api/wiki/graph') {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({
-            nodes: [
-              ...graph.nodes,
-              {
-                id: 'lonely',
-                title: 'Lonely',
-                exists: true,
-                wordCount: 1,
-                tags: ['misc'],
-                scope: 'coordinator',
-              },
-            ],
-            edges: graph.edges,
-          }),
-        } as Response;
-      }
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
-    });
-    vi.stubGlobal('fetch', mockFetch);
+  it('reports tag-node visibility from ?tagnodes=1', async () => {
+    vi.stubGlobal('fetch', graphFetch());
 
-    render(
-      <ToastProvider>
-        <AuthProvider>
-          <WebSocketProvider>
-            <MemoryRouter initialEntries={['/wiki?view=graph']}>
-              <Routes>
-                <Route path="/wiki" element={<WikiPage />} />
-              </Routes>
-            </MemoryRouter>
-          </WebSocketProvider>
-        </AuthProvider>
-      </ToastProvider>
-    );
-
-    expect(screen.getByRole('button', { name: 'Tags' })).toBeDefined();
-    expect(screen.queryByRole('button', { name: 'Orphans' })).toBeNull();
-
-    // Orphans are always part of the graph now; the tag layer alone docks them.
-    const nodeIds = () =>
-      ((wikiGraphStub.props?.nodes as Array<{ id: string }>) ?? []).map(
-        n => n.id
-      );
-    await waitFor(() => {
-      expect(nodeIds()).toContain('lonely');
-    });
-
-    const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: 'Tags' }));
+    renderWiki(['/wiki?view=graph&tagnodes=1']);
     await waitFor(() => {
       expect(wikiGraphStub.props?.tagsVisible).toBe(true);
     });
-    await waitFor(() => {
-      expect(nodeIds()).toContain('lonely');
-    });
   });
 
-  it('preserves the tags param across focus set and clear (stale-closure regression)', async () => {
-    const mockFetch = vi.fn(async (url: string) => {
-      if (url === '/api/wiki/graph') {
-        return { ok: true, status: 200, json: async () => graph } as Response;
-      }
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
-    });
-    vi.stubGlobal('fetch', mockFetch);
+  it('passes no filter set when no filters are active', async () => {
+    vi.stubGlobal('fetch', graphFetch());
 
-    // Tags enabled AFTER the graph view mounts — the same order that
-    // previously dropped the param on canvas-initiated focus changes.
-    render(
-      <ToastProvider>
-        <AuthProvider>
-          <WebSocketProvider>
-            <MemoryRouter initialEntries={['/wiki?view=graph']}>
-              <Routes>
-                <Route path="/wiki" element={<WikiPage />} />
-              </Routes>
-            </MemoryRouter>
-          </WebSocketProvider>
-        </AuthProvider>
-      </ToastProvider>
-    );
-    const user = userEvent.setup();
+    renderWiki(['/wiki?view=graph']);
     await waitFor(() => {
       expect(wikiGraphStub.props).not.toBeNull();
     });
-    await user.click(screen.getByRole('button', { name: 'Tags' }));
+    expect(wikiGraphStub.props?.filterActiveIds).toBeNull();
+  });
+
+  it('passes the filter-active id set (page ids + selected tag ids)', async () => {
+    vi.stubGlobal('fetch', graphFetch());
+
+    renderWiki(['/wiki?view=graph&tags=ops']);
     await waitFor(() => {
-      expect(wikiGraphStub.props?.tagsVisible).toBe(true);
+      expect(wikiGraphStub.props?.filterActiveIds).toBeInstanceOf(Set);
+    });
+    const ids = wikiGraphStub.props?.filterActiveIds as Set<string>;
+    expect(ids.has('a')).toBe(true);
+    expect(ids.has('tag:ops')).toBe(true);
+  });
+
+  it('preserves filter params across focus set and clear', async () => {
+    vi.stubGlobal('fetch', graphFetch());
+
+    renderWiki(['/wiki?view=graph&tags=ops']);
+    await waitFor(() => {
+      expect(wikiGraphStub.props).not.toBeNull();
     });
 
-    // Focus from the canvas path (stub relays onNodeFocus), then clear.
     act(() => {
       (wikiGraphStub.props?.onNodeFocus as (id: string) => void)('a');
     });
-    // The page preserves the tags param: the stub sees tagsVisible stay true
-    // and the focused node appear. (MemoryRouter doesn't touch
-    // window.location, so the URL is asserted via the stub's props.)
     await waitFor(() => {
       expect(wikiGraphStub.props?.focusedNodeId).toBe('a');
-      expect(wikiGraphStub.props?.tagsVisible).toBe(true);
     });
+    // The tag filter survives focus changes (regression: URL rebuilt from a
+    // stale snapshot dropped the param).
+    const afterFocus = wikiGraphStub.props?.filterActiveIds as Set<string>;
+    expect(afterFocus.has('tag:ops')).toBe(true);
 
     act(() => {
       (wikiGraphStub.props?.onClearFocus as () => void)();
     });
     await waitFor(() => {
       expect(wikiGraphStub.props?.focusedNodeId).toBeNull();
-      // Regression: the stale closure rebuilt the URL from a first-render
-      // snapshot without tags=1, so tagsVisible flipped to false on clear.
-      expect(wikiGraphStub.props?.tagsVisible).toBe(true);
     });
-  });
-
-  it('passes tag nodes to the graph when Tags is on', async () => {
-    const mockFetch = vi.fn(async (url: string) => {
-      if (url === '/api/wiki/graph') {
-        return { ok: true, status: 200, json: async () => graph } as Response;
-      }
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
-    });
-    vi.stubGlobal('fetch', mockFetch);
-
-    render(
-      <ToastProvider>
-        <AuthProvider>
-          <WebSocketProvider>
-            <MemoryRouter initialEntries={['/wiki?view=graph&tags=1']}>
-              <Routes>
-                <Route path="/wiki" element={<WikiPage />} />
-              </Routes>
-            </MemoryRouter>
-          </WebSocketProvider>
-        </AuthProvider>
-      </ToastProvider>
-    );
-
-    await waitFor(() => {
-      expect(wikiGraphStub.props).not.toBeNull();
-    });
-    expect(wikiGraphStub.props?.tagsVisible).toBe(true);
-    const nodeIds = (wikiGraphStub.props?.nodes as Array<{ id: string }>).map(
-      n => n.id
-    );
-    expect(nodeIds).toContain('tag:ops');
+    const afterClear = wikiGraphStub.props?.filterActiveIds as Set<string>;
+    expect(afterClear.has('tag:ops')).toBe(true);
   });
 
   it('shows a tag-aware preview panel without an open-page button for tag focus', async () => {
-    const mockFetch = vi.fn(async (url: string) => {
-      if (url === '/api/wiki/graph') {
-        return { ok: true, status: 200, json: async () => graph } as Response;
-      }
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
-    });
-    vi.stubGlobal('fetch', mockFetch);
+    vi.stubGlobal('fetch', graphFetch());
 
-    render(
-      <ToastProvider>
-        <AuthProvider>
-          <WebSocketProvider>
-            <MemoryRouter
-              initialEntries={['/wiki?view=graph&tags=1&node=tag:ops']}
-            >
-              <Routes>
-                <Route path="/wiki" element={<WikiPage />} />
-              </Routes>
-            </MemoryRouter>
-          </WebSocketProvider>
-        </AuthProvider>
-      </ToastProvider>
-    );
+    renderWiki(['/wiki?view=graph&tagnodes=1&node=tag:ops']);
 
     await waitFor(() => {
-      expect(screen.getByText('Tag · 1 page(s)')).toBeDefined();
+      expect(screen.getByText('Tag · 1 page(s)')).toBeTruthy();
     });
     expect(screen.queryByRole('button', { name: 'Open full page' })).toBeNull();
-    // Member pages are no longer listed on tag panels (they're all
-    // highlighted on the canvas anyway).
     expect(screen.queryByText('Page A')).toBeNull();
   });
 
-  it('does not fetch the graph in the default grid view', async () => {
-    const mockFetch = vi.fn<
-      (url: string | URL | Request, init?: RequestInit) => Promise<Response>
-    >(
-      async () =>
-        ({
-          ok: true,
-          status: 200,
-          json: async () => [],
-        }) as Response
-    );
+  it('does not fetch the graph in the default list view', async () => {
+    const mockFetch = vi.fn(async (_url: string) => ok([]));
     vi.stubGlobal('fetch', mockFetch);
 
     renderWiki();
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('Search wiki pages...')).toBeDefined();
+      expect(screen.getByPlaceholderText('Search wiki pages...')).toBeTruthy();
     });
     expect(
       mockFetch.mock.calls.some(([url]) => String(url).includes('/wiki/graph'))

@@ -187,11 +187,30 @@ export default function WikiDetailPage() {
           {page.sources.length > 0 && (
             <div className="mt-3">
               <span className="text-sm text-muted-foreground">Sources</span>
-              <div className="flex flex-wrap gap-1 mt-1">
+              <div className="flex flex-wrap gap-2 mt-1">
                 {page.sources.map(source => (
-                  <Badge key={source} variant="outline" className="text-xs">
-                    {source}
-                  </Badge>
+                  <div key={source} className="flex items-center gap-1">
+                    <Link to={`/sessions/${source}`}>
+                      <Badge
+                        variant="outline"
+                        className="text-xs"
+                        title={`Open session ${source}`}
+                      >
+                        {source}
+                      </Badge>
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      title="Filter the wiki list by this source"
+                      onClick={() => {
+                        const params = new URLSearchParams({ srcs: source });
+                        navigate(`/wiki?${params.toString()}`);
+                      }}
+                    >
+                      Filter
+                    </Button>
+                  </div>
                 ))}
               </div>
             </div>

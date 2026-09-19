@@ -14,7 +14,7 @@ updated: 2026-09-19T02:43:18.780Z
 
 # Plan: Coordinator UI Wiki Browser Upgrade (A1–A4 + filter-aware graph)
 
-**Status:** Ready for execution.
+**Status:** ✅ EXECUTED 2026-09-18 on branch `feat/swarm-memory-table-redesign` (see "Execution log" below).
 **Source:** `memory-wiki-browser-improvements` items A1–A4 (the "ready-to-plan" backlog; B/C/E1/F1/H1/A5 already shipped as ADRs 191–195).
 **Package root:** `drone-coordinator-ui/` (plus `drone-core/` and `drone-swarm-common/` for the derived-field foundation).
 
@@ -309,3 +309,23 @@ All of the following must pass. No exceptions for tests, and no exceptions for c
 - `plan-transcript-tools-eidetic-memory` (G1 seed).
 - `followup-graph-view-derived-fields` (graph optimization + the `wiki-graph.tsx` split).
 - `memory-wiki-browser-improvements`: A1–A4 closed by this plan; **D1** remains open.
+
+## Execution log (2026-09-18, branch `feat/swarm-memory-table-redesign`)
+
+All 21 steps executed. Baseline commit `fca6890` (memory seeds).
+
+**Phase 0 — foundation.** `drone-core/src/wiki-types.ts`: `wordCount` + `linkCount` added to `DroneWikiPageMeta` (required). `drone-swarm-common/src/wiki-storage.ts`: new exported `countWords(content)`; `readPage` computes `wordCount` + guards `linkCount` (oversized page ⇒ 0, no throw); `writePage` reuses the `links` already computed for the downward-link check; `listPages` projects both; `buildGraph` now reads `meta.wordCount` instead of recomputing. Swept every construction site (LSP find-refs + grep): 4 beacon test fixtures + `drone-coordinator-ui/src/lib/types.ts`. 43 storage tests pass (incl. frontmatter round-trip proving neither field is persisted).
+
+**Phase 1 — pure UI logic.** New `lib/wiki-filters.ts` (`applyWikiFilters`, `countActiveFilters`, `filtersAreDefault`, `parseWikiFilters`, `RECENT_WINDOW_DAYS = 7`), `lib/wiki-sort.ts`, `lib/wiki-filter-suggestions.ts` (comma-token aware), `hooks/use-wiki-filter-state.ts` (URL-backed, resets `offset`, sort asc→desc cycle, `updated` defaults to `desc`). 36 tests.
+
+**Phase 2 — components.** New `wiki-suggest-input.tsx`, `wiki-filter-bar.tsx`, `wiki-page-table.tsx` (6 cols; replaces the deleted `wiki-page-grid.tsx`); `pages/wiki.tsx` rewritten (table + filter bar in both views, search composes with filters via one shared predicate, **search-clear refetch bugfix**, `?tagnodes=1` rename, `filterActiveIds`); `wiki-tag.tsx` → table + sorting (no filter bar/search, keeps server-side `?tag=`); `wiki-detail.tsx` source badges → `/sessions/:id` + per-source "Filter" affordance. `PAGE_SIZE` 12 → 25.
+
+**Phase 3 — filter-aware graph.** `filterActiveIds` (page ids passing the filter + selected `tag:<t>` ids; `null` when no filters) built in `wiki.tsx` by joining the already-loaded page list. `wiki-graph.tsx` got a purely additive change: `filterActiveIds` prop → ref → repaint effect cloned from `tagsVisible`; the dim predicate at the 4 node sites and the link accessors now OR-in filter dimming (focus ∩ filter). No `nodes`/`edges` identity change ⇒ no d3 reheat. 6 new graph tests; the 32 pre-existing graph tests unchanged.
+
+**Two bugs found and fixed en route.**
+1. Pre-existing `wiki.test.tsx` had `vi.mock('@/components/wiki-graph', …)` **inside a test body** → vitest hoisting error; the file failed on the base tree too. Fixed by hoisting the mock to module scope (that file was rewritten anyway).
+2. The first filter-bar implementation reformatted the input from parsed tokens on every keystroke, which **ate the comma as you typed it** (a second tag was unenterable). Fixed with a raw-text draft that only re-seeds on external token changes.
+
+**Validation.** `pnpm -r run build`, `pnpm run typecheck`, `pnpm --filter drone-coordinator-ui exec tsc --noEmit`, root `pnpm lint`, and LSP diagnostics all clean. Fast suite `pnpm test`: 3059 passed. Feature tests: 111/111. **Known residual:** `pnpm --filter drone-coordinator-ui test` is flaky in its pre-existing `sessions.test.tsx` "live session events" refetch tests (a WS subscribe/connect race sensitive to file-parallelism CPU contention; the file fails on the base tree too, and is untouched by this plan — see the project insight logged this session). **Manual canvas smoke** (auto-fit, label tiers, tag gravity, dim, filter-dim, focus∩filter, both themes) remains the one non-automatable gate for a human.
+
+**Note for whoever picks up the follow-ups:** the note in §1 that the derived fields "double as the graph's de-duplication of its own inline word count" was satisfied — `buildGraph` no longer recomputes word counts. The remaining graph perf win (dropping its second `readPage`) is scoped to `followup-graph-view-derived-fields`.
