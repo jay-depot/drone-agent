@@ -20,6 +20,7 @@ import type {
   DroneLlmCapability,
   DroneLlmProvider,
   DroneLogger,
+  DroneReferenceExpansion,
   DroneSessionSafetyTrimPayload,
   DroneSlashCommandContext,
   DroneToolCall,
@@ -182,6 +183,12 @@ type CreateConversationServiceOptions = {
    * instead of prompting — this is the non-interactive behavior.
    */
   onRetryPrompt?: (error: DroneLlmError, attempt: number) => Promise<boolean>;
+  /**
+   * Expand `@` references in a user string before it becomes a session turn.
+   * Applied at every direct-append site (sendUserMessage, the deferred
+   * 'append' drain, and the mid-round steering loop). Defaults to identity.
+   */
+  expandUserMessage?: (text: string) => Promise<DroneReferenceExpansion>;
 };
 
 export function createConversationService({
@@ -198,6 +205,7 @@ export function createConversationService({
   onBrokenResponseLimitReached,
   onIdenticalToolCallLimitReached,
   onRetryPrompt,
+  expandUserMessage = async text => ({ text, images: [], notices: [] }),
 }: CreateConversationServiceOptions): ConversationService {
   let hasWarnedAboutSafetyTrim = false;
   let reasoningLevel: DroneReasoningLevel | undefined;
@@ -391,6 +399,29 @@ export function createConversationService({
   }
 
   /**
+   * Expand `@` references in a user string, append it as a session turn (with
+   * any attached images), emit an expansion notice per reference, and return
+   * the expanded text for the caller's `userMessage` event. Expansion runs at
+   * exactly the direct-append sites; the `'own-round'` drain re-enters
+   * `sendUserMessage`, so it is covered indirectly and not expanded here.
+   */
+  async function expandAndAppend(content: string): Promise<string> {
+    const result = await expandUserMessage(content);
+    sessionManager.appendUserMessage(
+      result.text,
+      result.images.length > 0 ? result.images : undefined
+    );
+    for (const notice of result.notices) {
+      engine
+        .runConversationEventHooks({ kind: 'notice', content: notice })
+        .catch(err => {
+          logger.warn(`Conversation event hook threw: ${err}`);
+        });
+    }
+    return result.text;
+  }
+
+  /**
    * Run a queued slash command through the engine's dispatch. Called from
    * both drain points (finally-on-completion and start-of-next-send). Uses
    * the host-supplied context builder when wired, else the bare context.
@@ -422,11 +453,11 @@ export function createConversationService({
       if (entry.kind === 'slash') {
         await dispatchQueuedSlash(entry.line);
       } else if (mode === 'append') {
-        sessionManager.appendUserMessage(entry.content);
+        const expanded = await expandAndAppend(entry.content);
         engine
           .runConversationEventHooks({
             kind: 'userMessage',
-            content: entry.content,
+            content: expanded,
           })
           .catch(err => {
             logger.warn(`Conversation event hook threw: ${err}`);
@@ -593,7 +624,7 @@ export function createConversationService({
 
         turnInFlight = true;
 
-        sessionManager.appendUserMessage(prompt);
+        const expandedPrompt = await expandAndAppend(prompt);
 
         // A new user message resets the identical-tool-call streak and
         // the broken-response counter (this is a fresh turn).
@@ -608,7 +639,7 @@ export function createConversationService({
         engine
           .runConversationEventHooks({
             kind: 'userMessage',
-            content: prompt,
+            content: expandedPrompt,
           })
           .catch(err => {
             logger.warn(`Conversation event hook threw: ${err}`);
@@ -980,11 +1011,11 @@ export function createConversationService({
           // userMessage emission.
           while (steeringMessages.length > 0) {
             const steer = steeringMessages.shift()!;
-            sessionManager.appendUserMessage(steer);
+            const expandedSteer = await expandAndAppend(steer);
             engine
               .runConversationEventHooks({
                 kind: 'userMessage',
-                content: steer,
+                content: expandedSteer,
               })
               .catch(err => {
                 logger.warn(`Conversation event hook threw: ${err}`);

@@ -15,6 +15,7 @@ import { createTui } from './tui/index.js';
 import { createConversationService } from './runtime/conversation-service.js';
 import { createContextBudgetService } from './runtime/context-budget-service.js';
 import { loadAgentConfig } from './runtime/config.js';
+import { createReferenceCapability } from './runtime/reference-expansion/index.js';
 import {
   createDronePluginEngine,
   getDefaultEnabledPluginIds,
@@ -192,12 +193,14 @@ async function main(): Promise<void> {
     current?: (content: string) => Promise<string>;
   } = {};
   const cancelCurrentRequestRef: { current?: () => void } = {};
+  const reference = createReferenceCapability();
   const engine = createDronePluginEngine({
     plugins: allPlugins,
     config: resolvedConfig.config,
     logger,
     logToStderr: invocation.options.outputJson,
     debugFlags,
+    referenceCapability: reference,
     runtimeOptions: {
       subagentId: invocation.options.subagentId,
       persona: invocation.options.persona,

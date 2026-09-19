@@ -133,6 +133,8 @@ export type DroneConfigCapability = {
 export type DroneSkillsCapability = {
   getSkills: () => DroneSkillDefinition[];
   getSkill: (id: string) => DroneSkillDefinition | undefined;
+  /** Render a skill body with recall enhancers applied (same path as skills__recall). */
+  renderSkillBody: (id: string) => Promise<string | undefined>;
   reloadSkills: () => Promise<void>;
   registerProvider: (provider: DroneSkillProvider) => void;
   unregisterProvider: (providerId: string) => void;

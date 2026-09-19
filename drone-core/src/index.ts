@@ -244,6 +244,20 @@ export type {
   DroneSwarmCapability,
 } from './capabilities.js';
 
+// ── Reference types ──────────────────────────────────────────────────
+
+export type {
+  DroneReferenceContext,
+  DroneReferenceResolution,
+  DroneReferenceKindResolver,
+  DroneReferenceExpansion,
+  DroneReferenceCapability,
+} from './reference-types.js';
+export {
+  DRONE_REFERENCE_CAPABILITY_ID,
+  RESERVED_REFERENCE_KINDS,
+} from './reference-types.js';
+
 // ── Wiki types ────────────────────────────────────────────────────────
 
 export type {
