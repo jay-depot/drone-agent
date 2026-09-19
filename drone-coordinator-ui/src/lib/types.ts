@@ -126,6 +126,8 @@ export interface WikiPageMeta {
   tags: string[];
   sources: string[];
   pitch?: string;
+  wordCount: number;
+  linkCount: number;
   createdAt: string;
   updatedAt: string;
 }

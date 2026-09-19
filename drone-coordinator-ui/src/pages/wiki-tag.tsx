@@ -1,15 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
+import { useWikiFilterState } from '@/hooks/use-wiki-filter-state';
 import type { WikiPageMeta } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { paginationRange } from '@/lib/pagination';
+import { sortWikiPages } from '@/lib/wiki-sort';
 import { ErrorBanner } from '@/components/error-banner';
-import WikiPageGrid from '@/components/wiki-page-grid';
+import WikiPageTable from '@/components/wiki-page-table';
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 25;
 
 export default function WikiTagPage() {
   const { tag = '' } = useParams<{ tag: string }>();
@@ -18,6 +20,7 @@ export default function WikiTagPage() {
   const [pages, setPages] = useState<WikiPageMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { sort, setSort } = useWikiFilterState();
   const { offset, setOffset } = usePaginationOffset(PAGE_SIZE);
 
   useEffect(() => {
@@ -45,8 +48,13 @@ export default function WikiTagPage() {
     };
   }, [tag, authFetch]);
 
-  const total = pages.length;
-  const paged = pages.slice(offset, offset + PAGE_SIZE);
+  const sorted = useMemo(
+    () => (sort.key ? sortWikiPages(pages, sort.key, sort.dir) : pages),
+    [pages, sort]
+  );
+
+  const total = sorted.length;
+  const paged = sorted.slice(offset, offset + PAGE_SIZE);
 
   return (
     <div>
@@ -65,13 +73,9 @@ export default function WikiTagPage() {
       <ErrorBanner message={error} />
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="rounded-xl ring-1 ring-foreground/10 p-4">
-              <Skeleton className="h-5 w-32 mb-2" />
-              <Skeleton className="h-4 w-full mb-2" />
-              <Skeleton className="h-4 w-3/4" />
-            </div>
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map(i => (
+            <Skeleton key={i} className="h-10 w-full" />
           ))}
         </div>
       ) : paged.length === 0 ? (
@@ -80,7 +84,12 @@ export default function WikiTagPage() {
         </div>
       ) : (
         <>
-          <WikiPageGrid pages={paged} />
+          <WikiPageTable
+            pages={paged}
+            sortKey={sort.key}
+            sortDir={sort.dir}
+            onSort={setSort}
+          />
 
           {total > PAGE_SIZE && (
             <div className="flex items-center justify-between mt-4">

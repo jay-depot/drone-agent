@@ -54,6 +54,8 @@ const BEACON_PAGE_META = {
   scope: 'beacon' as const,
   tags: ['fragments'],
   sources: ['session-1'],
+  wordCount: 0,
+  linkCount: 0,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
 };
@@ -64,6 +66,8 @@ const COORDINATOR_PAGE_META = {
   scope: 'coordinator' as const,
   tags: ['fragments'],
   sources: ['session-2'],
+  wordCount: 0,
+  linkCount: 0,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-02-01T00:00:00Z',
 };

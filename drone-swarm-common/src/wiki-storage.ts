@@ -113,6 +113,13 @@ function validatePitch(pitch: string | undefined): string | undefined {
 }
 
 /**
+ * Count words in markdown content (whitespace-delimited tokens).
+ */
+export function countWords(content: string): number {
+  return content.split(/\s+/).filter(Boolean).length;
+}
+
+/**
  * Extract [[wiki links]] from markdown content.
  * Returns a list of linked page IDs.
  */
@@ -220,6 +227,8 @@ export async function writePage(
     tags,
     sources,
     ...(normalizedPitch ? { pitch: normalizedPitch } : {}),
+    wordCount: countWords(content),
+    linkCount: links.length,
     createdAt,
     updatedAt: now,
   };
@@ -245,6 +254,15 @@ export async function readPage(pageId: string): Promise<DroneWikiPage | null> {
     const { frontmatter, body } = parseFrontmatter(raw);
     const pitch = frontmatter.pitch as string | undefined;
 
+    const wordCount = countWords(body);
+    let linkCount = 0;
+    try {
+      linkCount = extractWikiLinks(body).length;
+    } catch {
+      // Oversized page: skip link counting (graceful degradation,
+      // matching buildGraph/lintPages).
+    }
+
     return {
       id: (frontmatter.id as string) || pageId,
       title: (frontmatter.title as string) || pageId,
@@ -252,6 +270,8 @@ export async function readPage(pageId: string): Promise<DroneWikiPage | null> {
       tags: (frontmatter.tags as string[]) || [],
       sources: (frontmatter.sources as string[]) || [],
       ...(pitch ? { pitch } : {}),
+      wordCount,
+      linkCount,
       createdAt: (frontmatter.createdAt as string) || new Date().toISOString(),
       updatedAt: (frontmatter.updatedAt as string) || new Date().toISOString(),
       content: body,
@@ -296,6 +316,8 @@ export async function listPages(tag?: string): Promise<DroneWikiPageMeta[]> {
           tags: page.tags,
           sources: page.sources,
           ...(page.pitch ? { pitch: page.pitch } : {}),
+          wordCount: page.wordCount,
+          linkCount: page.linkCount,
           createdAt: page.createdAt,
           updatedAt: page.updatedAt,
         });
@@ -510,12 +532,11 @@ export async function buildGraph(): Promise<WikiGraph> {
   for (const meta of metas) {
     const page = await readPage(meta.id);
     if (!page) continue;
-    const wordCount = page.content.split(/\s+/).filter(Boolean).length;
     nodesById.set(page.id, {
       id: page.id,
       title: page.title,
       exists: true,
-      wordCount,
+      wordCount: meta.wordCount,
       tags: page.tags,
       ...(page.pitch ? { pitch: page.pitch } : {}),
       scope: page.scope,

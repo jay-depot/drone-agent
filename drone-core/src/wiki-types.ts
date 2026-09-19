@@ -16,6 +16,10 @@ export type DroneWikiPageMeta = {
   sources: string[];
   /** Optional one-sentence summary (the "pitch"). Shown in RAG results. */
   pitch?: string;
+  /** Derived from the page body; never written to frontmatter. */
+  wordCount: number;
+  /** Count of outgoing [[wikilinks]]; never written to frontmatter. */
+  linkCount: number;
   /** ISO-8601 timestamp of creation. */
   createdAt: string;
   /** ISO-8601 timestamp of last update. */

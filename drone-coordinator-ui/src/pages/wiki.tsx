@@ -4,25 +4,28 @@ import { useAuthenticatedFetch } from '@/hooks/use-auth';
 import { useWikiPages } from '@/hooks/use-wiki-pages';
 import { useWikiGraph } from '@/hooks/use-wiki-graph';
 import { usePaginationOffset } from '@/hooks/use-pagination-offset';
+import { useWikiFilterState } from '@/hooks/use-wiki-filter-state';
 import { useToast } from '@/hooks/use-toast';
 import { ErrorBanner } from '@/components/error-banner';
 import { extractApiError, networkErrorMessage } from '@/hooks/use-api';
 import type { WikiPageMeta } from '@/lib/types';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Dialog } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { paginationRange } from '@/lib/pagination';
+import { applyWikiFilters, filtersAreDefault } from '@/lib/wiki-filters';
+import { sortWikiPages } from '@/lib/wiki-sort';
 import {
   applyNodeSizing,
   buildAugmentedWikiGraph,
 } from '@/lib/wiki-graph-utils';
-import WikiPageGrid from '@/components/wiki-page-grid';
+import WikiPageTable from '@/components/wiki-page-table';
+import WikiFilterBar from '@/components/wiki-filter-bar';
 import WikiGraphView from '@/components/wiki-graph';
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 25;
 // How long typing must settle before a search request fires.
 const SEARCH_DEBOUNCE_MS = 350;
 
@@ -33,10 +36,16 @@ export default function WikiPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const graphView = searchParams.get('view') === 'graph';
   const focusedNodeId = searchParams.get('node');
-  const tagsVisible = searchParams.get('tags') === '1';
+  const tagsVisible = searchParams.get('tagnodes') === '1';
   const { pages, setPages, loading, error } = useWikiPages();
+  const { filters, sort, setFilters, setSort, clearFilters } =
+    useWikiFilterState();
   const { graph, error: graphError } = useWikiGraph(graphView);
   const [search, setSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<WikiPageMeta[] | null>(
+    null
+  );
+  const [searching, setSearching] = useState(false);
   const { offset, setOffset } = usePaginationOffset(PAGE_SIZE);
 
   const setGraphView = (next: boolean) => {
@@ -63,12 +72,80 @@ export default function WikiPage() {
   const setTagsVisible = (next: boolean) => {
     const params = new URLSearchParams(searchParams);
     if (next) {
-      params.set('tags', '1');
+      params.set('tagnodes', '1');
     } else {
-      params.delete('tags');
+      params.delete('tagnodes');
     }
     setSearchParams(params);
   };
+
+  // Search via API once the query settles; a superseded request is ignored
+  // so a slow stale response cannot overwrite a newer one's results. Clearing
+  // the box restores the full list (searchResults back to null).
+  useEffect(() => {
+    const query = search.trim();
+    if (!query) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+
+    let stale = false;
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await authFetch(
+          `/api/wiki/search?q=${encodeURIComponent(query)}`
+        );
+        if (stale) return;
+        if (!res.ok) {
+          showError(await extractApiError(res));
+          return;
+        }
+        // Search results are { page, snippet, score } wrappers; the table
+        // renders page metadata directly.
+        const results = await res.json();
+        setSearchResults(
+          Array.isArray(results)
+            ? results.map((r: { page: WikiPageMeta }) => r.page)
+            : []
+        );
+      } catch (err) {
+        if (stale) return;
+        showError(networkErrorMessage(err));
+      } finally {
+        if (!stale) setSearching(false);
+      }
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [search, authFetch]);
+
+  const candidates = searchResults ?? pages;
+
+  const filtered = useMemo(
+    () => candidates.filter(page => applyWikiFilters(page, filters)),
+    [candidates, filters]
+  );
+
+  const sorted = useMemo(
+    () => (sort.key ? sortWikiPages(filtered, sort.key, sort.dir) : filtered),
+    [filtered, sort]
+  );
+
+  // Graph dimming set: page-node ids that pass the filters, plus the selected
+  // tag nodes. `null` means no filters are active (no dimming).
+  const filterActiveIds = useMemo(() => {
+    if (filtersAreDefault(filters)) return null;
+    const ids = new Set<string>();
+    for (const page of pages) {
+      if (applyWikiFilters(page, filters)) ids.add(page.id);
+    }
+    for (const tag of filters.tags) ids.add(`tag:${tag}`);
+    return ids;
+  }, [pages, filters]);
 
   const augmented = useMemo(() => {
     if (!graph) return null;
@@ -91,48 +168,20 @@ export default function WikiPage() {
       : [];
   const memberCount = focusedTagMemberEdges.length;
 
+  const deleteTargetFrom = (page: WikiPageMeta) => {
+    setPages(prev => prev.filter(p => p.id !== page.id));
+    setSearchResults(prev =>
+      prev ? prev.filter(p => p.id !== page.id) : prev
+    );
+  };
+
   // Delete dialog
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<WikiPageMeta | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Search via API once the query settles; a superseded request is ignored
-  // so a slow stale response cannot overwrite a newer one's results.
-  useEffect(() => {
-    if (!search.trim()) return;
-
-    let stale = false;
-    const timer = setTimeout(async () => {
-      try {
-        const res = await authFetch(
-          `/api/wiki/search?q=${encodeURIComponent(search)}`
-        );
-        if (stale) return;
-        if (!res.ok) {
-          showError(await extractApiError(res));
-          return;
-        }
-        // Search results are { page, snippet, score } wrappers; the card
-        // grid renders page metadata directly.
-        const results = await res.json();
-        setPages(
-          Array.isArray(results)
-            ? results.map((r: { page: WikiPageMeta }) => r.page)
-            : []
-        );
-      } catch (err) {
-        if (stale) return;
-        showError(networkErrorMessage(err));
-      }
-    }, SEARCH_DEBOUNCE_MS);
-    return () => {
-      stale = true;
-      clearTimeout(timer);
-    };
-  }, [search, authFetch]);
-
-  const total = pages.length;
-  const paged = pages.slice(offset, offset + PAGE_SIZE);
+  const total = sorted.length;
+  const paged = sorted.slice(offset, offset + PAGE_SIZE);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -145,7 +194,7 @@ export default function WikiPage() {
         showError(await extractApiError(res));
         return;
       }
-      setPages(prev => prev.filter(p => p.id !== deleteTarget.id));
+      deleteTargetFrom(deleteTarget);
       setDeleteOpen(false);
       setDeleteTarget(null);
     } catch (err) {
@@ -169,21 +218,19 @@ export default function WikiPage() {
             variant={graphView ? 'outline' : 'default'}
             size="sm"
             onClick={() => setGraphView(!graphView)}
-            title={graphView ? 'Show wiki as a grid' : 'Show wiki as a graph'}
+            title={graphView ? 'Show wiki as a list' : 'Show wiki as a graph'}
           >
-            {graphView ? 'Grid' : 'Graph'}
+            {graphView ? 'List' : 'Graph'}
           </Button>
           {graphView && (
-            <>
-              <Button
-                variant={tagsVisible ? 'outline' : 'ghost'}
-                size="sm"
-                onClick={() => setTagsVisible(!tagsVisible)}
-                title="Show tag nodes. Tag nodes also organize the layout when hidden."
-              >
-                Tags
-              </Button>
-            </>
+            <Button
+              variant={tagsVisible ? 'outline' : 'ghost'}
+              size="sm"
+              onClick={() => setTagsVisible(!tagsVisible)}
+              title="Show tag nodes. Tag nodes also organize the layout when hidden."
+            >
+              Tags
+            </Button>
           )}
           {!graphView && (
             <Button onClick={() => navigate('/wiki/new')}>New Page</Button>
@@ -191,87 +238,92 @@ export default function WikiPage() {
         </div>
       </div>
 
+      <WikiFilterBar
+        filters={filters}
+        onChange={setFilters}
+        onClear={clearFilters}
+        pages={pages}
+      />
+
       <ErrorBanner message={error} />
 
       <ErrorBanner message={graphError} />
 
       {graphView ? (
-        <>
-          <div className="relative flex flex-1 min-h-0">
-            {focusedNode && (
-              <aside className="absolute left-4 top-4 z-20 w-80 rounded-md border p-4 bg-card shadow-lg">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold">
-                      {focusedNode.title}
-                    </h2>
-                    {focusedNode.kind === 'page' ? (
-                      <p className="text-xs text-muted-foreground font-mono">
-                        {focusedNode.id}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        Tag · {memberCount} page(s)
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setFocusedNode(null)}
-                  >
-                    Show all
-                  </Button>
-                  {focusedNode.kind === 'page' && (
-                    <Button
-                      size="sm"
-                      onClick={() => navigate(`/wiki/${focusedNode.id}`)}
-                    >
-                      Open full page
-                    </Button>
+        <div className="relative flex flex-1 min-h-0">
+          {focusedNode && (
+            <aside className="absolute left-4 top-4 z-20 w-80 rounded-md border p-4 bg-card shadow-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold">{focusedNode.title}</h2>
+                  {focusedNode.kind === 'page' ? (
+                    <p className="text-xs text-muted-foreground font-mono">
+                      {focusedNode.id}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Tag · {memberCount} page(s)
+                    </p>
                   )}
                 </div>
-                {focusedNode.kind !== 'tag' && (
-                  <>
-                    {focusedNode.pitch && (
-                      <p className="mt-3 text-sm text-muted-foreground">
-                        {focusedNode.pitch}
-                      </p>
-                    )}
-                    {focusedNode.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-3">
-                        {focusedNode.tags.map(tag => (
-                          <Badge
-                            key={tag}
-                            variant="secondary"
-                            className="text-xs"
-                          >
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFocusedNode(null)}
+                >
+                  Show all
+                </Button>
+                {focusedNode.kind === 'page' && (
+                  <Button
+                    size="sm"
+                    onClick={() => navigate(`/wiki/${focusedNode.id}`)}
+                  >
+                    Open full page
+                  </Button>
                 )}
-              </aside>
-            )}
-            <WikiGraphView
-              nodes={visible?.nodes ?? []}
-              edges={visible?.edges ?? []}
-              tagsVisible={tagsVisible}
-              focusedNodeId={focusedNodeId}
-              onNodeFocus={setFocusedNode}
-              onClearFocus={() => setFocusedNode(null)}
-            />
-          </div>
-        </>
+              </div>
+              {focusedNode.kind !== 'tag' && (
+                <>
+                  {focusedNode.pitch && (
+                    <p className="mt-3 text-sm text-muted-foreground">
+                      {focusedNode.pitch}
+                    </p>
+                  )}
+                  {focusedNode.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-3">
+                      {focusedNode.tags.map(tag => (
+                        <Badge
+                          key={tag}
+                          variant="secondary"
+                          className="text-xs"
+                        >
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </aside>
+          )}
+          <WikiGraphView
+            nodes={visible?.nodes ?? []}
+            edges={visible?.edges ?? []}
+            tagsVisible={tagsVisible}
+            focusedNodeId={focusedNodeId}
+            filterActiveIds={filterActiveIds}
+            onNodeFocus={setFocusedNode}
+            onClearFocus={() => setFocusedNode(null)}
+          />
+        </div>
       ) : (
         <>
           {/* Search */}
-          <div className="mb-4">
+          <div className="mb-4 flex items-center gap-3">
             <Input
+              className="max-w-md"
               placeholder="Search wiki pages..."
               value={search}
               onChange={e => {
@@ -279,20 +331,17 @@ export default function WikiPage() {
                 setOffset(0);
               }}
             />
+            {searchResults !== null && sort.key === null && (
+              <span className="text-xs text-muted-foreground">
+                Sorted by relevance
+              </span>
+            )}
           </div>
 
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <Card key={i}>
-                  <CardHeader className="pb-2">
-                    <Skeleton className="h-5 w-32" />
-                  </CardHeader>
-                  <CardContent>
-                    <Skeleton className="h-4 w-full mb-2" />
-                    <Skeleton className="h-4 w-3/4" />
-                  </CardContent>
-                </Card>
+          {loading || searching ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map(i => (
+                <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
           ) : paged.length === 0 ? (
@@ -300,25 +349,31 @@ export default function WikiPage() {
               <p className="text-lg">
                 {search
                   ? 'No wiki pages match your search'
-                  : 'No wiki pages yet'}
+                  : filtersAreDefault(filters)
+                    ? 'No wiki pages yet'
+                    : 'No wiki pages match these filters'}
               </p>
               <p className="text-sm mt-1">
                 {search
                   ? 'Try a different search term.'
-                  : 'Wiki pages are built from session logs and shared knowledge across the swarm.'}
+                  : filtersAreDefault(filters)
+                    ? 'Wiki pages are built from session logs and shared knowledge across the swarm.'
+                    : 'Adjust or clear the filters to see more.'}
               </p>
             </div>
           ) : (
             <>
-              <WikiPageGrid
+              <WikiPageTable
                 pages={paged}
+                sortKey={sort.key}
+                sortDir={sort.dir}
+                onSort={setSort}
                 onDelete={wikiPage => {
                   setDeleteTarget(wikiPage);
                   setDeleteOpen(true);
                 }}
               />
 
-              {/* Pagination */}
               {total > PAGE_SIZE && (
                 <div className="flex items-center justify-between mt-4">
                   <p className="text-sm text-muted-foreground">
