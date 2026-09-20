@@ -20,7 +20,7 @@ const tick = () => new Promise(r => setTimeout(r, 15));
 
 /** Strip SGR color codes so adjacent <Text> nodes read contiguously. */
 const stripAnsi = (s: string): string =>
-  s.replace(/\u001b\[[0-9;]*m/g, '');
+  s.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*m', 'g'), '');
 
 const items: CompletionItem[] = Array.from({ length: 13 }, (_, i) => ({
   id: `item-${i}`,

@@ -362,7 +362,6 @@ Walk the validation criteria; fix failures. Emit an ADR in the swarm wiki coveri
 - Path-expansion precedent: `plugins/prompt-file/index.ts:19-64` `resolvePromptFilePath`.
 - No `@`-reference handling exists anywhere today (TUI or runtime); Tab is unbound in Ink.
 
-
 ---
 
 ## Execution Summary — COMPLETED (2026-09-19T23:44:10.679Z, branch feat/inline-object-refs)
@@ -370,6 +369,7 @@ Walk the validation criteria; fix failures. Emit an ADR in the swarm wiki coveri
 **All 15 steps executed; validation green** (`pnpm -r run build` exit 0, `pnpm lint` exit 0, full suite **3150 passed / 14 skipped / 0 failed**; LSP clean).
 
 As-built (all per plan; deviations noted):
+
 - **S1** `drone-core/src/reference-types.ts` (types, `DRONE_REFERENCE_CAPABILITY_ID`, `RESERVED_REFERENCE_KINDS`); `renderSkillBody` on `DroneSkillsCapability`; index re-exports.
 - **S2** `runtime/reference-expansion/parse.ts` — split `TextToken`/`ReferenceToken` and added a `body` field to the reference token (unknown-kind-prefix tokens need the whole body to fall back to a file path: `@a:b.ts`).
 - **S3** `file-kinds.ts` — path forms, `fast-glob` globs (cap 30), recursive dir listing (cap 500), binary skip, 2000-line/256 KB cap, budget, `realpath` dedup, fence/lang hint.
@@ -381,7 +381,7 @@ As-built (all per plan; deviations noted):
 - **S9** `InputLine` pass-through.
 - **S10** `tui/completion.ts` (pure). 19 tests.
 - **S11** `useCompletion` hook + `CompletionMenu`. 5 tests.
-- **S12** `app.tsx` wiring (caret state, menu key handling, render). *Deviation:* the completion engine param was narrowed to a structural `{getSlashCommands, getCapability}` slice (and `listSlashCandidates` to `SlashCommandSource`) because the TUI exposes only a `Pick` of `DronePluginEngine`, not the full engine.
+- **S12** `app.tsx` wiring (caret state, menu key handling, render). _Deviation:_ the completion engine param was narrowed to a structural `{getSlashCommands, getCapability}` slice (and `listSlashCandidates` to `SlashCommandSource`) because the TUI exposes only a `Pick` of `DronePluginEngine`, not the full engine.
 - **S13** verified no extra `renderSkillBody` mocks needed (test capability mocks are loose `unknown` objects; only the skills plugin implements the full type).
 - **S14** `test/reference-expansion-integration.test.ts` (6 tests incl. the own-round exactly-once regression) + `docs/agents/reference-expansion.md` + AGENTS.md link.
 - **S15** validation + swarm-wiki ADR `reference-expansion-and-tab-completion`.
