@@ -17,6 +17,7 @@ import {
   type DroneConversationEvent,
   type DroneLlmCapability,
   type DroneLlmProvider,
+  type DroneReferenceCapability,
   type DroneReferenceExpansion,
 } from 'drone-core';
 import {
@@ -25,6 +26,7 @@ import {
 } from '../src/runtime/conversation-service.js';
 import { createContextBudgetService } from '../src/runtime/context-budget-service.js';
 import { createSessionManager } from '../src/runtime/session-manager.js';
+import { createReferenceCapability } from '../src/runtime/reference-expansion/index.js';
 import { createMockEngine, silentLogger } from './helpers.js';
 import { macrosPlugin } from '../src/plugins/macros/index.js';
 
@@ -330,5 +332,74 @@ describe('macro chat-prompt steps route through expansion', () => {
       .find(m => m.role === 'user' && m.content.includes('@fixture.ts'));
     expect(turn?.content).toContain('Look at @fixture.ts');
     expect(turn?.content).toContain('--- Referenced content ---');
+  });
+});
+
+describe('host wiring: the engine capability is the default expander', () => {
+  let dir: string | undefined;
+
+  afterEach(async () => {
+    if (dir) {
+      await rm(dir, { recursive: true, force: true });
+      dir = undefined;
+    }
+  });
+
+  function makeHostConversation(
+    provider: DroneLlmProvider,
+    capability: DroneReferenceCapability | undefined
+  ) {
+    const engine = createMockEngine({
+      tools: [],
+      executeToolImpl: async () => 'ok',
+    });
+    const config = createDefaultAgentConfig();
+    const budgetService = createContextBudgetService({
+      config,
+      renderPromptFragments: async () => [],
+      getProvider: () => provider,
+      getModel: () => 'fake',
+    });
+    const sessionManager = createSessionManager();
+    // No `expandUserMessage` — the host must resolve it from the capability.
+    const conversation = createConversationService({
+      engine: engine as unknown as DronePluginEngine,
+      config,
+      logger: silentLogger(),
+      sessionManager,
+      budgetService,
+    });
+    (engine as { getCapability: (id: string) => unknown }).getCapability = (
+      id: string
+    ) => {
+      if (id === 'llm') return makeLlmCapability(provider);
+      if (id === 'reference') return capability;
+      return undefined;
+    };
+    return { conversation, engine };
+  }
+
+  it('inlines a real @file reference with no expandUserMessage option', async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'ref-host-'));
+    await writeFile(path.join(dir, 'notes.md'), 'hello from disk\n', 'utf-8');
+    const provider = makeProvider([{ message: 'done' }]);
+    const capability = createReferenceCapability({ cwd: dir, homedir: dir });
+    const { conversation } = makeHostConversation(provider, capability);
+
+    await conversation.sendUserMessage('see @notes.md');
+
+    const turn = conversation.getMessages().find(m => m.role === 'user');
+    expect(turn?.content).toContain('--- Referenced content ---');
+    expect(turn?.content).toContain('hello from disk');
+  });
+
+  it('falls back to identity when no reference capability is registered', async () => {
+    const provider = makeProvider([{ message: 'done' }]);
+    const { conversation } = makeHostConversation(provider, undefined);
+
+    await conversation.sendUserMessage('see @notes.md');
+
+    const turn = conversation.getMessages().find(m => m.role === 'user');
+    expect(turn?.content).toBe('see @notes.md');
   });
 });

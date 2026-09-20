@@ -5,6 +5,7 @@ import {
   parseModelSelection,
   resolveConfiguredReasoningLevel,
   toToolResultContent,
+  DRONE_REFERENCE_CAPABILITY_ID,
   type DroneGuardrailConfig,
   type DroneGuardrailThresholdConfig,
   type DebugFlagRegistry,
@@ -20,6 +21,7 @@ import type {
   DroneLlmCapability,
   DroneLlmProvider,
   DroneLogger,
+  DroneReferenceCapability,
   DroneReferenceExpansion,
   DroneSessionSafetyTrimPayload,
   DroneSlashCommandContext,
@@ -205,7 +207,7 @@ export function createConversationService({
   onBrokenResponseLimitReached,
   onIdenticalToolCallLimitReached,
   onRetryPrompt,
-  expandUserMessage = async text => ({ text, images: [], notices: [] }),
+  expandUserMessage,
 }: CreateConversationServiceOptions): ConversationService {
   let hasWarnedAboutSafetyTrim = false;
   let reasoningLevel: DroneReasoningLevel | undefined;
@@ -315,6 +317,28 @@ export function createConversationService({
     return llm;
   }
 
+  /**
+   * Default `@`-reference expander: resolves the engine's `reference`
+   * capability lazily (it is seeded during `initialize()`, after this service
+   * is constructed) and falls back to identity when no capability is
+   * registered. This makes the capability the single source of truth for every
+   * host, so a host never has to remember to wire an expander.
+   */
+  async function defaultExpandUserMessage(
+    text: string
+  ): Promise<DroneReferenceExpansion> {
+    const capability = engine.getCapability<DroneReferenceCapability>(
+      DRONE_REFERENCE_CAPABILITY_ID
+    );
+    if (!capability) {
+      return { text, images: [], notices: [] };
+    }
+    return capability.expandUserMessage(text);
+  }
+
+  const resolveExpandUserMessage =
+    expandUserMessage ?? defaultExpandUserMessage;
+
   function resolveEffectiveMaxToolIterations(): number {
     // Check active persona's toolCallLimit first
     const personaCap = engine.getCapability<{
@@ -406,7 +430,7 @@ export function createConversationService({
    * `sendUserMessage`, so it is covered indirectly and not expanded here.
    */
   async function expandAndAppend(content: string): Promise<string> {
-    const result = await expandUserMessage(content);
+    const result = await resolveExpandUserMessage(content);
     sessionManager.appendUserMessage(
       result.text,
       result.images.length > 0 ? result.images : undefined

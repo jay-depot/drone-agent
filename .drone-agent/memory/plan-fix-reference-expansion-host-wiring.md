@@ -122,27 +122,26 @@ to `getLlmCapability` (which starts at line ~310, so this is a natural home and
 keeps the "capability read" pattern in one place):
 
 ```ts
-  /**
-   * Default `@`-reference expander: resolves the engine's `reference`
-   * capability lazily (it is seeded during `initialize()`, after this service
-   * is constructed) and falls back to identity when no capability is
-   * registered. This makes the capability the single source of truth for every
-   * host, so a host never has to remember to wire an expander.
-   */
-  async function defaultExpandUserMessage(
-    text: string
-  ): Promise<DroneReferenceExpansion> {
-    const capability = engine.getCapability<DroneReferenceCapability>(
-      DRONE_REFERENCE_CAPABILITY_ID
-    );
-    if (!capability) {
-      return { text, images: [], notices: [] };
-    }
-    return capability.expandUserMessage(text);
+/**
+ * Default `@`-reference expander: resolves the engine's `reference`
+ * capability lazily (it is seeded during `initialize()`, after this service
+ * is constructed) and falls back to identity when no capability is
+ * registered. This makes the capability the single source of truth for every
+ * host, so a host never has to remember to wire an expander.
+ */
+async function defaultExpandUserMessage(
+  text: string
+): Promise<DroneReferenceExpansion> {
+  const capability = engine.getCapability<DroneReferenceCapability>(
+    DRONE_REFERENCE_CAPABILITY_ID
+  );
+  if (!capability) {
+    return { text, images: [], notices: [] };
   }
+  return capability.expandUserMessage(text);
+}
 
-  const resolveExpandUserMessage =
-    expandUserMessage ?? defaultExpandUserMessage;
+const resolveExpandUserMessage = expandUserMessage ?? defaultExpandUserMessage;
 ```
 
 Place `resolveExpandUserMessage` where `expandAndAppend` can close over it
@@ -152,13 +151,13 @@ Place `resolveExpandUserMessage` where `expandAndAppend` can close over it
 change:
 
 ```ts
-    const result = await expandUserMessage(content);
+const result = await expandUserMessage(content);
 ```
 
 to:
 
 ```ts
-    const result = await resolveExpandUserMessage(content);
+const result = await resolveExpandUserMessage(content);
 ```
 
 That is the ONLY call site (`grep -n expandUserMessage conversation-service.ts`
@@ -239,9 +238,7 @@ describe('host wiring: the engine capability is the default expander', () => {
 
     await conversation.sendUserMessage('see @notes.md');
 
-    const turn = conversation
-      .getMessages()
-      .find(m => m.role === 'user');
+    const turn = conversation.getMessages().find(m => m.role === 'user');
     expect(turn?.content).toContain('--- Referenced content ---');
     expect(turn?.content).toContain('hello from disk');
   });
@@ -252,9 +249,7 @@ describe('host wiring: the engine capability is the default expander', () => {
 
     await conversation.sendUserMessage('see @notes.md');
 
-    const turn = conversation
-      .getMessages()
-      .find(m => m.role === 'user');
+    const turn = conversation.getMessages().find(m => m.role === 'user');
     expect(turn?.content).toBe('see @notes.md');
   });
 });
@@ -324,10 +319,10 @@ field accurate.
 ### Step 6 — Log the insight (any)
 
 Record a `self-improvement__insight` against `targetType: "project"` capturing the
-general lesson: *a plugin-extensible capability that is seeded into the engine but
+general lesson: _a plugin-extensible capability that is seeded into the engine but
 consumed by the conversation service needs a default-resolution path from the
 service to the engine; otherwise each host must remember to wire it and the seam
-is untested when tests inject a mock.* Include the concrete instance (reference
+is untested when tests inject a mock._ Include the concrete instance (reference
 expansion, missing S13).
 
 ## Dependencies / ordering
@@ -379,3 +374,66 @@ All must pass before the work is considered done.
    `--- Referenced content ---` trailer and a `[expanded @README.md …]` notice.
    Repeat once with `@~/some-real-file` to confirm `~/` expansion end to end.
 9. **Final step** — re-read this plan and verify every step's "done when" was met.
+
+---
+
+## EXECUTION SUMMARY (2026-09-20) — COMPLETE
+
+Executed on branch `feat/inline-object-refs`. All steps done.
+
+### What changed
+- **Step 1** — `drone-agent/src/runtime/conversation-service.ts`: removed the
+  identity default from the `expandUserMessage` destructuring; added
+  `defaultExpandUserMessage` (lazy `engine.getCapability('reference')`, identity
+  fallback) and `const resolveExpandUserMessage = expandUserMessage ??
+  defaultExpandUserMessage`; `expandAndAppend` now calls the resolver. Imports
+  `DRONE_REFERENCE_CAPABILITY_ID` + `type DroneReferenceCapability`.
+- **Step 2** — `drone-agent/test/reference-expansion-integration.test.ts`: new
+  `describe('host wiring: the engine capability is the default expander')` with
+  two tests (real capability, NO injected expander → inlined; no capability →
+  identity). Observed RED pre-Step-1, GREEN post.
+- **Step 3** — new `drone-agent/test/workflow-agent-expansion.test.ts`: drives
+  `createEphemeralConversation` with a real capability and asserts the provider
+  saw the expanded user turn.
+- **Step 4** — `docs/agents/reference-expansion.md`: documented the
+  default-resolution contract; also corrected a FALSE claim (see deviation).
+  `AGENTS.md` line 175 left unchanged (still accurate).
+- **Step 5** — coordinator wiki `reference-expansion-and-tab-completion`:
+  corrected the "every host behaves identically" mechanism + added Fix history.
+- **Step 6** — project insight logged (capability-seeded-in-engine /
+  consumed-by-service default-resolution lesson).
+
+### Deviations from the plan (and why)
+1. **V8's `[expanded @…]` notice is UNSATISFIABLE.** The plan (and the doc, and
+   the integration-test mock) assume a per-expansion receipt notice that **does
+   not exist in production code**. `grep -rn "expanded @" drone-agent/src` is
+   empty; `file-kinds.ts` emits only problem notices. The string lives only in
+   the test mock. I did NOT implement the notice (out of plan scope) and instead
+   corrected the false doc/wiki text. Logged as a separate project insight. The
+   trailer half of V8 DOES pass (see below). Open design question flagged: was
+   the receipt intended-but-unimplemented, or dropped by design?
+2. **`pnpm -r run lint` does not exist** (lint is a root script: `pnpm lint`).
+   Ran the root script; it also runs prettier `--write`, which reflowed
+   `pnpm-lock.yaml` (5863 lines, unrelated). Reverted that churn (no deps added).
+3. **V5 "fast suite must pass" is blocked by PRE-EXISTING failures**, not this
+   change. Proven via stash baseline: `drone-agent` has 10 pre-existing
+   ANSI/width TUI failures (Markdown 6, pretty-tool-output 2, tui-persona-color
+   2) unchanged by this work; `tui-completion-menu` is flaky under concurrency
+   but passes 3/3 standalone with AND without the change. `drone-coordinator-ui
+   sessions.test.tsx` is the known `NODE_ENV` run-env artifact — passes 16/16 via
+   `NODE_ENV=test`. None of these suites import `conversation-service`.
+
+### Validation results
+V1 LSP clean · V2 typecheck 0 · V3 build 0 · V4 lint 0 · V5 targeted suites
+68/68 pass, pre-existing failures unchanged · V6 regression proof captured (RED→
+GREEN) · V7 no host passes `expandUserMessage` · V8 trailer PASS end-to-end on
+the built dist (`@README.md` and `@~/.drone-agent/HOST.md` inlined; model
+answered from content; confirmed in the log plugin's persisted session turn),
+notice requirement unsatisfiable (deviation 1) · V9 done-when re-check passed.
+
+### Verification command (manual, reproducible)
+```
+echo '{"type":"chat","message":"… @README.md"}' | node drone-agent/bin/drone-agent --output-json
+# then inspect the newest ~/.drone-agent/logs/default/*.json turn for the
+# "--- Referenced content ---" trailer.
+```

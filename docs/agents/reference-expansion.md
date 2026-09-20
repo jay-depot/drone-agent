@@ -46,8 +46,10 @@ anchor). Resolved references are appended once, in order, under a trailer:
 <skill body>
 ```
 
-A `notice` event (`[expanded @src/foo.ts (120 lines, 4.2 KB)]`) reports each
-expansion; the TUI logs the raw `> …` line separately.
+A successful expansion emits no notice — the trailer itself is the record. A
+`notice` event is emitted only for problems: `[unresolved reference: @…]`,
+`[skipped binary: @…]`, and `[expansion budget exceeded; @… not included]`.
+The TUI logs the raw `> …` line separately.
 
 ## Limits
 
@@ -61,7 +63,8 @@ expansion; the TUI logs the raw `> …` line separately.
 
 Expansion runs in the conversation service, so **every host** behaves
 identically: the TUI, plain readline (`--output-plain`), JSON listen mode, the
-swarm WS, and `/steer`. It is applied at the three direct-append sites:
+swarm WS, workflow `ctx.agent` steps, and `/steer`. It is applied at the three
+direct-append sites:
 
 - `sendUserMessage` (direct prompts),
 - `drainPendingEntries('append')` (deferred/busy text),
@@ -69,6 +72,14 @@ swarm WS, and `/steer`. It is applied at the three direct-append sites:
 
 The `'own-round'` drain re-enters `sendUserMessage`, so it is covered indirectly
 and never double-expands.
+
+The expander **defaults to the engine's `reference` capability**, resolved lazily
+at each append site (the capability is seeded during engine initialization,
+after the conversation service is constructed, so it must be looked up per
+call). A host therefore never has to wire expansion: it is on by default in
+every host because the capability is seeded before plugin registration. A host
+supplies `expandUserMessage` only to override the default (the tests do this,
+and an unregistered `reference` capability falls back to identity).
 
 Macro **chat-prompt** steps expand (they route through `sendUserMessage`).
 Slash-command arguments — macro **slash** steps, `/exec`, `/tool` — are **never**
