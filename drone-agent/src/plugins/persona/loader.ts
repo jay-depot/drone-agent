@@ -110,7 +110,7 @@ function _parsePersonaMdInternal(
       currentPremountPlugin = null;
     }
 
-    const kvMatch = line.match(/^(\s*)(\w+):\s*(.*)$/);
+    const kvMatch = line.match(/^(\s*)([\w-]+):\s*(.*)$/);
     if (!kvMatch) continue;
 
     const indent = kvMatch[1];
