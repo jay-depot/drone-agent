@@ -185,6 +185,24 @@ describe('createReferenceCapability', () => {
     expect(result.text).toContain('matched 40, showing 30');
   });
 
+  it('emits one aggregate receipt for a glob (count + total size)', async () => {
+    await writeFile(path.join(dir, 'a.txt'), 'aaaa');
+    await writeFile(path.join(dir, 'b.txt'), 'bb');
+    const cap = makeCap();
+    const result = await cap.expandUserMessage('@*.txt');
+    expect(result.notices).toEqual(['[expanded @*.txt (2 files, 6 B)]']);
+  });
+
+  it('uses the singular form for a one-file glob and notes skips', async () => {
+    await writeFile(path.join(dir, 'only.txt'), 'ok');
+    await writeFile(path.join(dir, 'bin.dat'), Buffer.from([1, 0, 2]));
+    const cap = makeCap();
+    const result = await cap.expandUserMessage('@*.{txt,dat}');
+    expect(result.notices).toEqual([
+      '[expanded @*.{txt,dat} (1 file, 2 B, 1 skipped)]',
+    ]);
+  });
+
   it('truncates a file beyond MAX_LINES', async () => {
     const lines = Array.from({ length: 2100 }, (_, i) => `line ${i}`);
     await writeFile(path.join(dir, 'big.txt'), lines.join('\n'));

@@ -227,6 +227,19 @@ export async function runJsonListenMode(
   const rl = createInterface({ input });
   const ndjsonHandler = makeNdjsonOutputEventHandler();
 
+  // Reference-expansion notices (the `[expanded @…]` receipt, unresolved/binary
+  // warnings) are emitted through the engine's conversation-event hooks, which
+  // do NOT reach the per-turn handler passed to sendUserMessage. A global
+  // listener is therefore the only seam that sees them. It is scoped to
+  // `notice` so it cannot duplicate the kinds the per-turn handler already
+  // forwards.
+  const unregisterNotices =
+    engine.onConversationEvent?.(event => {
+      if (event.kind === 'notice') {
+        ndjsonHandler({ kind: 'notice', content: event.content });
+      }
+    }) ?? null;
+
   try {
     for await (const line of rl) {
       const trimmed = line.trim();
@@ -335,6 +348,7 @@ export async function runJsonListenMode(
       await engine.runHooks('onAfterToolCall');
     }
   } finally {
+    unregisterNotices?.();
     rl.close();
   }
 }
@@ -406,6 +420,9 @@ export async function runSwarmListenMode(
           break;
         case 'error':
           ndjsonHandler({ kind: 'error', message: event.message });
+          break;
+        case 'notice':
+          ndjsonHandler({ kind: 'notice', content: event.content });
           break;
         case 'roundComplete':
           ndjsonHandler({ kind: 'turnComplete' });

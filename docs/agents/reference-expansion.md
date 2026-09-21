@@ -48,9 +48,13 @@ anchor). Resolved references are appended once, in order, under a trailer:
 
 A successful file expansion emits a receipt as a `notice` event
 (`[expanded @src/foo.ts (120 lines, 4.2 KB)]`), shown by the TUI and the plain
-handler; the TUI also logs the raw `> …` line separately. A `notice` is emitted
-for problems too: `[unresolved reference: @…]`, `[skipped binary: @…]`, and
-`[expansion budget exceeded; @… not included]`.
+handler; the TUI also logs the raw `> …` line separately. A glob emits one
+aggregate line instead of one per file: `[expanded @*.ts (30 files, 120.4 KB)]`
+(singular `file` for one; a `, N skipped` suffix when binary/budget drops
+matches). A `notice` is emitted for problems too: `[unresolved reference: @…]`,
+`[skipped binary: @…]`, and `[expansion budget exceeded; @… not included]`.
+Notices are forwarded by every host that has a notice seam: the TUI, the plain
+handler, and the NDJSON streams of JSON listen mode and swarm listen mode.
 
 ## Limits
 

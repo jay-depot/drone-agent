@@ -12,6 +12,7 @@ export type OutputEvent =
   | { kind: 'error'; message: string }
   | { kind: 'return'; result: string; error?: string; subagentId?: string }
   | { kind: 'turnComplete' }
+  | { kind: 'notice'; content: string }
   | { kind: 'aside'; question: string; answer: string };
 
 /**

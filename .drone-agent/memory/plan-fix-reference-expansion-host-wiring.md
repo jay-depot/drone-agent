@@ -408,7 +408,7 @@ defaultExpandUserMessage`; `expandAndAppend` now calls the resolver. Imports
 
 1. **V8's `[expanded @…]` notice — initially missed, then implemented.** At the
    time this plan ran, production emitted NO success receipt: `grep -rn "expanded
-   @" drone-agent/src` was empty, and `file-kinds.ts` produced notices only for
+@" drone-agent/src` was empty, and `file-kinds.ts` produced notices only for
    unresolved/binary/budget. The string existed only in the integration-test
    mock. I initially mis-read this as "the docs are wrong" and edited the docs to
    say no receipt exists — **that was backwards.** The original plan (recovered
@@ -429,7 +429,7 @@ defaultExpandUserMessage`; `expandAndAppend` now calls the resolver. Imports
    ANSI/width TUI failures (Markdown 6, pretty-tool-output 2, tui-persona-color 2)
    unchanged by this work; `tui-completion-menu` is flaky under concurrency but
    passes 3/3 standalone with AND without the change. `drone-coordinator-ui
-   sessions.test.tsx` is the known `NODE_ENV` run-env artifact — passes 16/16 via
+sessions.test.tsx` is the known `NODE_ENV` run-env artifact — passes 16/16 via
    `NODE_ENV=test`. None of these suites import `conversation-service`.
 
 ### Validation results

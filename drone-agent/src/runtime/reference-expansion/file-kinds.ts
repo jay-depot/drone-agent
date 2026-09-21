@@ -118,16 +118,24 @@ async function readBounded(
   }
 }
 
+/** Internal resolution plus the content metrics needed to aggregate glob receipts. */
+type BuiltFileBlock = DroneReferenceResolution & {
+  bytes: number;
+  lines: number;
+};
+
 async function buildFileBlock(
   displayPath: string,
   absPath: string,
   budget: ExpansionBudget
-): Promise<DroneReferenceResolution> {
+): Promise<BuiltFileBlock> {
   if (budget.used >= budget.limit) {
     return {
       block: '',
       images: [],
       notice: `[expansion budget exceeded; @${displayPath} not included]`,
+      bytes: 0,
+      lines: 0,
     };
   }
 
@@ -141,6 +149,8 @@ async function buildFileBlock(
       block: '',
       images: [],
       notice: `[skipped binary: @${displayPath}]`,
+      bytes: 0,
+      lines: 0,
     };
   }
 
@@ -159,11 +169,14 @@ async function buildFileBlock(
     block += '\n[… truncated]';
   }
   const bytes = Buffer.byteLength(text);
+  const contentLines = countLines(text);
   return {
     block,
     images: [],
     dedupKey: await dedupKeyFor(absPath),
-    notice: `[expanded @${displayPath} (${countLines(text)} lines, ${formatBytes(bytes)})]`,
+    notice: `[expanded @${displayPath} (${contentLines} lines, ${formatBytes(bytes)})]`,
+    bytes,
+    lines: contentLines,
   };
 }
 
@@ -208,18 +221,31 @@ async function resolveGlob(
   }
   const shown = all.slice(0, MAX_GLOB_MATCHES);
   const parts: string[] = [];
+  let included = 0;
+  let skipped = 0;
+  let bytes = 0;
   for (const abs of shown) {
     const display = path.relative(ctx.cwd, abs) || abs;
     const res = await buildFileBlock(display, abs, budget);
     if (res.block) {
       parts.push(`**${display}**\n${res.block}`);
+      included += 1;
+      bytes += res.bytes;
+    } else {
+      skipped += 1;
     }
   }
   let block = parts.join('\n\n');
   if (all.length > MAX_GLOB_MATCHES) {
     block += `\n\n[… matched ${all.length}, showing ${MAX_GLOB_MATCHES}]`;
   }
-  return { block, images: [], dedupKey: `glob:${value}` };
+  let notice: string | undefined;
+  if (included > 0) {
+    const fileWord = included === 1 ? 'file' : 'files';
+    const skipSuffix = skipped > 0 ? `, ${skipped} skipped` : '';
+    notice = `[expanded @${value} (${included} ${fileWord}, ${formatBytes(bytes)}${skipSuffix})]`;
+  }
+  return { block, images: [], dedupKey: `glob:${value}`, notice };
 }
 
 async function resolveDirectory(
