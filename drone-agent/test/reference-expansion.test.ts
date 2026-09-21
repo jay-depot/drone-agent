@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -255,5 +255,199 @@ describe('createReferenceCapability', () => {
     const cap = makeCap();
     const result = await cap.expandUserMessage('@~/notes.md');
     expect(result.text).toContain('home note');
+  });
+});
+
+describe('image references', () => {
+  let dir: string;
+  let home: string;
+
+  const PNG_BYTES = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00,
+  ]);
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'refimg-'));
+    home = await mkdtemp(path.join(tmpdir(), 'refimghome-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
+  });
+
+  const makeCap = (
+    overrides?: Parameters<typeof createReferenceCapability>[0]
+  ) => createReferenceCapability({ cwd: dir, homedir: home, ...overrides });
+
+  it('attaches an image instead of inlining it as text, with no block', async () => {
+    await writeFile(path.join(dir, 'pic.png'), PNG_BYTES);
+    const cap = makeCap();
+    const result = await cap.expandUserMessage('describe @pic.png');
+
+    expect(result.images).toHaveLength(1);
+    expect(result.images[0].mimeType).toBe('image/png');
+    expect(result.images[0].data).toBe(PNG_BYTES.toString('base64'));
+    // No text block: the prose is preserved and no trailer is appended.
+    expect(result.text).toBe('describe @pic.png');
+    expect(result.text).not.toContain('--- Referenced content ---');
+    expect(result.notices).toEqual([
+      `[expanded @pic.png (image/png, ${PNG_BYTES.length} B)]`,
+    ]);
+  });
+
+  it('does not report an image as skipped binary', async () => {
+    await writeFile(path.join(dir, 'pic.png'), PNG_BYTES);
+    const cap = makeCap();
+    const result = await cap.expandUserMessage('@pic.png');
+    expect(result.notices).toEqual([
+      `[expanded @pic.png (image/png, ${PNG_BYTES.length} B)]`,
+    ]);
+  });
+
+  it('leaves a text reference unchanged (still a fenced block, no images)', async () => {
+    await writeFile(path.join(dir, 'notes.md'), 'hello\n');
+    const cap = makeCap();
+    const result = await cap.expandUserMessage('see @notes.md');
+    expect(result.images).toEqual([]);
+    expect(result.text).toContain('--- Referenced content ---');
+    expect(result.text).toContain('hello');
+    expect(result.notices).toEqual(['[expanded @notes.md (1 lines, 6 B)]']);
+  });
+
+  it('recognizes every supported image extension', async () => {
+    const cases: Array<[string, string]> = [
+      ['a.jpg', 'image/jpeg'],
+      ['b.jpeg', 'image/jpeg'],
+      ['c.png', 'image/png'],
+      ['d.webp', 'image/webp'],
+      ['e.gif', 'image/gif'],
+    ];
+    for (const [name] of cases) {
+      await writeFile(path.join(dir, name), PNG_BYTES);
+    }
+    const cap = makeCap();
+    for (const [name, mime] of cases) {
+      const result = await cap.expandUserMessage(`@${name}`);
+      expect(result.images).toHaveLength(1);
+      expect(result.images[0].mimeType).toBe(mime);
+    }
+  });
+
+  it('is case-insensitive about the extension', async () => {
+    await writeFile(path.join(dir, 'SHOT.PNG'), PNG_BYTES);
+    const cap = makeCap();
+    const result = await cap.expandUserMessage('@SHOT.PNG');
+    expect(result.images).toHaveLength(1);
+    expect(result.images[0].mimeType).toBe('image/png');
+  });
+
+  it('skips an oversize image with a size notice and attaches nothing', async () => {
+    await writeFile(path.join(dir, 'big.png'), PNG_BYTES);
+    const cap = makeCap({ maxImageBytes: 4 });
+    const result = await cap.expandUserMessage('@big.png');
+    expect(result.images).toEqual([]);
+    expect(result.text).toBe('@big.png');
+    expect(result.notices).toEqual([
+      `[image too large: @big.png (${PNG_BYTES.length} B > 4 B)]`,
+    ]);
+  });
+
+  it('accepts an image exactly at the size limit', async () => {
+    await writeFile(path.join(dir, 'exact.png'), PNG_BYTES);
+    const cap = makeCap({ maxImageBytes: PNG_BYTES.length });
+    const result = await cap.expandUserMessage('@exact.png');
+    expect(result.images).toHaveLength(1);
+    expect(result.notices).toEqual([
+      `[expanded @exact.png (image/png, ${PNG_BYTES.length} B)]`,
+    ]);
+  });
+
+  it('attaches glob-matched images and aggregates the receipt', async () => {
+    await writeFile(path.join(dir, 'one.png'), PNG_BYTES);
+    await writeFile(path.join(dir, 'two.png'), PNG_BYTES);
+    await writeFile(path.join(dir, 'notes.md'), 'ignored\n');
+    const cap = makeCap();
+    const result = await cap.expandUserMessage('@*.png');
+    expect(result.images).toHaveLength(2);
+    expect(result.images.map(i => i.mimeType)).toEqual([
+      'image/png',
+      'image/png',
+    ]);
+    // Images contribute no block, so there is no trailer.
+    expect(result.text).toBe('@*.png');
+    expect(result.notices).toEqual([
+      `[expanded @*.png (2 files, ${PNG_BYTES.length * 2} B)]`,
+    ]);
+  });
+
+  it('mixes images and text in one glob (text fenced, images attached)', async () => {
+    await writeFile(path.join(dir, 'pic.png'), PNG_BYTES);
+    await writeFile(path.join(dir, 'note.md'), 'note body\n');
+    const cap = makeCap();
+    // A dotted pattern, so the aggregate receipt is not suppressed by the
+    // path-like notice-gating rule (bare `@*` is treated as prose).
+    const result = await cap.expandUserMessage('@*.{png,md}');
+    expect(result.images).toHaveLength(1);
+    expect(result.images[0].mimeType).toBe('image/png');
+    expect(result.text).toContain('--- Referenced content ---');
+    expect(result.text).toContain('note body');
+    expect(result.text).toContain('**note.md**');
+    expect(result.notices).toEqual([
+      `[expanded @*.{png,md} (2 files, ${PNG_BYTES.length + 10} B)]`,
+    ]);
+  });
+
+  it('does not charge the text budget for images', async () => {
+    // An image larger than the 1 MiB text budget, referenced BEFORE a text
+    // file: if images charged the budget, the text ref would be suppressed.
+    const huge = Buffer.alloc(1024 * 1024 + 64 * 1024, 0x89);
+    await writeFile(path.join(dir, 'huge.png'), huge);
+    await writeFile(path.join(dir, 'notes.md'), 'still inlined\n');
+    const cap = makeCap();
+    const result = await cap.expandUserMessage('@huge.png @notes.md');
+
+    expect(result.images).toHaveLength(1);
+    expect(result.text).toContain('still inlined');
+    expect(
+      result.notices.some(n => n.includes('expansion budget exceeded'))
+    ).toBe(false);
+  });
+
+  it('keeps the directory listing name-only (no image attachment)', async () => {
+    await writeFile(path.join(dir, 'pic.png'), PNG_BYTES);
+    const cap = makeCap();
+    const result = await cap.expandUserMessage('@./');
+    expect(result.images).toEqual([]);
+    expect(result.text).toContain('pic.png');
+    expect(result.notices).toEqual([]);
+  });
+
+  it('notices a missing image with the unresolved notice (ENOENT)', async () => {
+    const cap = makeCap();
+    const result = await cap.expandUserMessage('@nope.png');
+    expect(result.images).toEqual([]);
+    expect(result.notices).toEqual(['[unresolved reference: @nope.png]']);
+  });
+
+  it('notices an unreadable file uniformly for text and image', async () => {
+    // Running as root bypasses permission bits, so there is nothing to assert.
+    if (typeof process.getuid === 'function' && process.getuid() === 0) {
+      return;
+    }
+    const textPath = path.join(dir, 'secret.md');
+    const imgPath = path.join(dir, 'secret.png');
+    await writeFile(textPath, 'top secret\n');
+    await writeFile(imgPath, PNG_BYTES);
+    await chmod(textPath, 0o000);
+    await chmod(imgPath, 0o000);
+
+    const cap = makeCap();
+    const textResult = await cap.expandUserMessage('@secret.md');
+    const imgResult = await cap.expandUserMessage('@secret.png');
+
+    expect(textResult.notices).toEqual(['[could not read: @secret.md]']);
+    expect(imgResult.notices).toEqual(['[could not read: @secret.png]']);
+    expect(imgResult.images).toEqual([]);
   });
 });

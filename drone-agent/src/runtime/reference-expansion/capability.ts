@@ -14,25 +14,34 @@ import type {
 } from 'drone-core';
 import { RESERVED_REFERENCE_KINDS } from 'drone-core';
 import { tokenizeText } from './parse.js';
-import { resolveFileReference, type ExpansionBudget } from './file-kinds.js';
+import {
+  resolveFileReference,
+  type ExpansionBudget,
+  type ReferenceLimits,
+} from './file-kinds.js';
 
 const KIND_NAME_RE = /^[a-z][a-z0-9-]*$/;
 const FILE_KIND = 'file';
 const TOTAL_BUDGET_BYTES = 1024 * 1024;
+const DEFAULT_MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
 export function createReferenceCapability(opts?: {
   cwd?: string;
   homedir?: string;
+  maxImageBytes?: number;
 }): DroneReferenceCapability {
   const baseCtx: DroneReferenceContext = {
     cwd: opts?.cwd ?? process.cwd(),
     homedir: opts?.homedir ?? os.homedir(),
   };
+  const limits: ReferenceLimits = {
+    maxImageBytes: opts?.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES,
+  };
 
   const kinds = new Map<string, DroneReferenceKindResolver>();
   let activeBudget: ExpansionBudget = { used: 0, limit: TOTAL_BUDGET_BYTES };
   kinds.set(FILE_KIND, (value, ctx) =>
-    resolveFileReference(value, ctx, activeBudget)
+    resolveFileReference(value, ctx, activeBudget, limits)
   );
 
   // Expansion mutates `activeBudget`, so concurrent calls are serialized.

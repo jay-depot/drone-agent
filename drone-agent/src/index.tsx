@@ -193,7 +193,9 @@ async function main(): Promise<void> {
     current?: (content: string) => Promise<string>;
   } = {};
   const cancelCurrentRequestRef: { current?: () => void } = {};
-  const reference = createReferenceCapability();
+  const reference = createReferenceCapability({
+    maxImageBytes: resolvedConfig.config.session.maxImageSizeBytes,
+  });
   const engine = createDronePluginEngine({
     plugins: allPlugins,
     config: resolvedConfig.config,

@@ -14,6 +14,7 @@ prompt without spending a tool call.
 | `@{path with spaces.md}`       | Braced form for paths containing whitespace.                     |
 | `@src/`                        | A directory expands to a recursive, name-only listing.           |
 | `@*.ts`                        | A glob expands to the matching files (capped at 30).             |
+| `@pic.png`                     | An image file is attached to the turn (see below).               |
 | `@skill:code-review`           | Insert a skill's body (see below).                               |
 | `\@`                           | A literal `@` (the backslash is removed).                        |
 
@@ -51,17 +52,30 @@ A successful file expansion emits a receipt as a `notice` event
 handler; the TUI also logs the raw `> …` line separately. A glob emits one
 aggregate line instead of one per file: `[expanded @*.ts (30 files, 120.4 KB)]`
 (singular `file` for one; a `, N skipped` suffix when binary/budget drops
-matches). A `notice` is emitted for problems too: `[unresolved reference: @…]`,
-`[skipped binary: @…]`, and `[expansion budget exceeded; @… not included]`.
+matches). An image receipt swaps the line count for the MIME type:
+`[expanded @pic.png (image/png, 12.3 KB)]`. A `notice` is emitted for problems
+too: `[unresolved reference: @…]`, `[skipped binary: @…]`,
+`[expansion budget exceeded; @… not included]`, `[image too large: @…]`, and
+`[could not read: @…]`. The `could not read` notice is **uniform for text and
+images** — both are produced by the same read path — and `unresolved reference`
+is used only when the path does not exist (`ENOENT`).
 Notices are forwarded by every host that has a notice seam: the TUI, the plain
 handler, and the NDJSON streams of JSON listen mode and swarm listen mode.
 
 ## Limits
 
-- Per file: 2000 lines / 256 KB, truncated with a `[… truncated]` note.
+- Per text file: 2000 lines / 256 KB, truncated with a `[… truncated]` note.
 - Binary files (a NUL byte in the first 8000 bytes) are skipped with a notice.
+- **Images** are recognized by extension (`.jpg`, `.jpeg`, `.png`, `.webp`,
+  `.gif` — the same set `file__read_image` accepts). Each image is bounded by
+  `session.maxImageSizeBytes` (default 20 MB); an oversize image is skipped
+  with an `[image too large: @…]` notice. A single message attaches at most
+  `session.maxImagesPerMessage` images (default 20, kept-first-N; the remainder
+  are dropped with an `[… additional images omitted. Retrieve them individually
+if needed.]` marker). Images are carried on the vision channel, so they do
+  **not** consume the text budget below.
 - Directories list at most 500 entries; a total-expansion budget bounds one
-  message across all references.
+  message across all references (text only).
 - Identical resolved paths are deduplicated.
 
 ## Where expansion happens
@@ -118,8 +132,11 @@ and skills append a space. Matching is case-insensitive prefix matching
 
 ## Deferred
 
-- Image references (`@pic.png`) that attach via the vision path — the
-  `images[]` field exists in the expansion contract and is threaded through
-  `appendUserMessage`; the follow-up adds MIME detection in the file resolver.
+- Inlining a directory's _contents_ (expanding a listing into the referenced
+  files/images) — a directory reference stays a name-only listing.
+- Fs-level read retry: a failed read is reported once, not retried (the causes
+  are rare and mostly stable, so a retry would only add latency).
+- Partial-write detection: referencing a file mid-write yields a truncated
+  image (no retry fixes a half-written file).
 - Non-TUI tab completion (plain readline and JSON hosts get expansion but no
   completion menu).

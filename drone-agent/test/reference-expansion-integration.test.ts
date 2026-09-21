@@ -414,4 +414,63 @@ describe('host wiring: the engine capability is the default expander', () => {
     const turn = conversation.getMessages().find(m => m.role === 'user');
     expect(turn?.content).toBe('see @notes.md');
   });
+
+  it('attaches an image reference to the SESSION user turn (end to end)', async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'ref-host-img-'));
+    const png = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00,
+    ]);
+    await writeFile(path.join(dir, 'pic.png'), png);
+    const provider = makeProvider([{ message: 'done' }]);
+    const capability = createReferenceCapability({ cwd: dir, homedir: dir });
+    const { conversation, events } = makeHostConversation(provider, capability);
+
+    await conversation.sendUserMessage('describe @pic.png');
+
+    const turn = conversation
+      .getMessages()
+      .find(m => m.role === 'user' && m.content.includes('@pic.png'));
+    // The seam is live: the image reached the session store, not just the
+    // expansion result, and no text block was appended.
+    expect(turn?.images).toHaveLength(1);
+    expect(turn?.images?.[0].mimeType).toBe('image/png');
+    expect(turn?.images?.[0].data).toBe(png.toString('base64'));
+    expect(turn?.content).toBe('describe @pic.png');
+    expect(turn?.content).not.toContain('--- Referenced content ---');
+    expect(turn?.content).not.toContain('[skipped binary');
+    // The real capability emitted the image receipt.
+    expect(
+      events.some(
+        e =>
+          e.kind === 'notice' &&
+          e.content === `[expanded @pic.png (image/png, ${png.length} B)]`
+      )
+    ).toBe(true);
+  });
+
+  it('caps user-turn images to maxImagesPerMessage with the reference marker', async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'ref-host-cap-'));
+    const png = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00,
+    ]);
+    for (let i = 0; i < 25; i++) {
+      await writeFile(
+        path.join(dir, `p${String(i).padStart(2, '0')}.png`),
+        png
+      );
+    }
+    const provider = makeProvider([{ message: 'done' }]);
+    const capability = createReferenceCapability({ cwd: dir, homedir: dir });
+    const { conversation } = makeHostConversation(provider, capability);
+
+    await conversation.sendUserMessage('look at @*.png');
+
+    const turn = conversation
+      .getMessages()
+      .find(m => m.role === 'user' && m.content.includes('@*.png'));
+    expect(turn?.images).toHaveLength(20);
+    expect(turn?.content).toContain(
+      '[5 additional images omitted. Retrieve them individually if needed.]'
+    );
+  });
 });

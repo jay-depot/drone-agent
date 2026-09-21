@@ -1,17 +1,20 @@
 // ── `file:` reference kind ──────────────────────────────────────────
 //
-// Resolves `@<path>` references: files are inlined as a fenced block,
-// directories as a recursive name-only listing, and globs as the matching
-// files. Paths default to the CWD, with `~/` expanding to the home directory.
-// Binary files are skipped, and content is bounded per-file (lines + bytes)
-// and across the whole message by a shared budget.
+// Resolves `@<path>` references: text files are inlined as a fenced block,
+// image files are attached to the turn via the vision channel, directories as a
+// recursive name-only listing, and globs as the matching files. Paths default to
+// the CWD, with `~/` expanding to the home directory. Binary files are skipped,
+// and text content is bounded per-file (lines + bytes) and across the whole
+// message by a shared budget (images are bounded by the vision caps instead).
 
-import { open, readdir, stat, realpath } from 'node:fs/promises';
+import { open, readFile, readdir, stat, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import fg from 'fast-glob';
-import type {
-  DroneReferenceContext,
-  DroneReferenceResolution,
+import {
+  imageMimeForPath,
+  type DroneImageContent,
+  type DroneReferenceContext,
+  type DroneReferenceResolution,
 } from 'drone-core';
 
 export const MAX_LINES = 2000;
@@ -21,6 +24,11 @@ export const MAX_GLOB_MATCHES = 30;
 const BINARY_SNIFF_BYTES = 8000;
 
 export type ExpansionBudget = { used: number; limit: number };
+
+export type ReferenceLimits = {
+  /** Reject (skip) any single image larger than this many bytes. */
+  maxImageBytes: number;
+};
 
 const LANG_HINTS: Record<string, string> = {
   '.ts': 'ts',
@@ -127,7 +135,8 @@ type BuiltFileBlock = DroneReferenceResolution & {
 async function buildFileBlock(
   displayPath: string,
   absPath: string,
-  budget: ExpansionBudget
+  budget: ExpansionBudget,
+  limits: ReferenceLimits
 ): Promise<BuiltFileBlock> {
   if (budget.used >= budget.limit) {
     return {
@@ -135,6 +144,29 @@ async function buildFileBlock(
       images: [],
       notice: `[expansion budget exceeded; @${displayPath} not included]`,
       bytes: 0,
+      lines: 0,
+    };
+  }
+
+  const mimeType = imageMimeForPath(absPath);
+  if (mimeType) {
+    const { size } = await stat(absPath);
+    if (size > limits.maxImageBytes) {
+      return {
+        block: '',
+        images: [],
+        notice: `[image too large: @${displayPath} (${formatBytes(size)} > ${formatBytes(limits.maxImageBytes)})]`,
+        bytes: 0,
+        lines: 0,
+      };
+    }
+    const buf = await readFile(absPath);
+    return {
+      block: '',
+      images: [{ mimeType, data: buf.toString('base64') }],
+      dedupKey: await dedupKeyFor(absPath),
+      notice: `[expanded @${displayPath} (${mimeType}, ${formatBytes(size)})]`,
+      bytes: size,
       lines: 0,
     };
   }
@@ -209,7 +241,8 @@ async function globMatches(
 async function resolveGlob(
   value: string,
   ctx: DroneReferenceContext,
-  budget: ExpansionBudget
+  budget: ExpansionBudget,
+  limits: ReferenceLimits
 ): Promise<DroneReferenceResolution> {
   const all = await globMatches(value, ctx);
   if (all.length === 0) {
@@ -221,14 +254,19 @@ async function resolveGlob(
   }
   const shown = all.slice(0, MAX_GLOB_MATCHES);
   const parts: string[] = [];
+  const images: DroneImageContent[] = [];
   let included = 0;
   let skipped = 0;
   let bytes = 0;
   for (const abs of shown) {
     const display = path.relative(ctx.cwd, abs) || abs;
-    const res = await buildFileBlock(display, abs, budget);
+    const res = await buildFileBlock(display, abs, budget, limits);
     if (res.block) {
       parts.push(`**${display}**\n${res.block}`);
+      included += 1;
+      bytes += res.bytes;
+    } else if (res.images.length > 0) {
+      images.push(...res.images);
       included += 1;
       bytes += res.bytes;
     } else {
@@ -245,7 +283,7 @@ async function resolveGlob(
     const skipSuffix = skipped > 0 ? `, ${skipped} skipped` : '';
     notice = `[expanded @${value} (${included} ${fileWord}, ${formatBytes(bytes)}${skipSuffix})]`;
   }
-  return { block, images: [], dedupKey: `glob:${value}`, notice };
+  return { block, images, dedupKey: `glob:${value}`, notice };
 }
 
 async function resolveDirectory(
@@ -294,14 +332,15 @@ async function resolveDirectory(
 export async function resolveFileReference(
   value: string,
   ctx: DroneReferenceContext,
-  budget: ExpansionBudget
+  budget: ExpansionBudget,
+  limits: ReferenceLimits
 ): Promise<DroneReferenceResolution> {
   if (value === '') {
     return { block: '', images: [] };
   }
 
   if (value.includes('*') || value.includes('?')) {
-    return resolveGlob(value, ctx, budget);
+    return resolveGlob(value, ctx, budget, limits);
   }
 
   const absPath = resolveReferencePath(value, ctx);
@@ -322,12 +361,16 @@ export async function resolveFileReference(
   }
 
   try {
-    return await buildFileBlock(value, absPath, budget);
-  } catch {
+    return await buildFileBlock(value, absPath, budget, limits);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
     return {
       block: '',
       images: [],
-      notice: `[unresolved reference: @${value}]`,
+      notice:
+        code === 'ENOENT'
+          ? `[unresolved reference: @${value}]`
+          : `[could not read: @${value}]`,
     };
   }
 }

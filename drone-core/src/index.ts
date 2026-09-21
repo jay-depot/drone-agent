@@ -12,6 +12,7 @@
 //   - persona-types.ts    : Persona definition and capability types
 //   - domain-types.ts     : Domain types for beacon/coordinator
 //   - provider-types.ts   : Provider types for brokers
+//   - image-mime.ts       : Extension → image MIME type detection
 //   - capabilities.ts     : Capability registry types
 //   - plugin-system.ts    : Plugin infrastructure types
 //   - utils.ts            : Utility functions
@@ -257,6 +258,15 @@ export {
   DRONE_REFERENCE_CAPABILITY_ID,
   RESERVED_REFERENCE_KINDS,
 } from './reference-types.js';
+
+// ── Image MIME detection ─────────────────────────────────────────────
+
+export {
+  IMAGE_MIME_BY_EXT,
+  SUPPORTED_IMAGE_EXTENSIONS,
+  imageMimeForExtension,
+  imageMimeForPath,
+} from './image-mime.js';
 
 // ── Wiki types ────────────────────────────────────────────────────────
 

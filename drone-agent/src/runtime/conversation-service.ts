@@ -40,6 +40,12 @@ import type { DroneSessionManager } from './session-manager.js';
 import type { ContextBudgetService } from './context-budget-service.js';
 import { buildAsideMessages } from './aside.js';
 import { deduplicateToolCalls, toolCallSignature } from './tool-call-utils.js';
+import {
+  DEFAULT_MAX_IMAGES_PER_MESSAGE,
+  capImages,
+  referenceImageOmissionMarker,
+  toolImageOmissionMarker,
+} from './image-cap.js';
 
 export type ConversationEventHandler = (event: DroneConversationEvent) => void;
 // Re-export for convenience — used by interactive.ts and tui/types.ts
@@ -431,9 +437,17 @@ export function createConversationService({
    */
   async function expandAndAppend(content: string): Promise<string> {
     const result = await resolveExpandUserMessage(content);
+    const capped = capImages(
+      result.images,
+      config.session.maxImagesPerMessage ?? DEFAULT_MAX_IMAGES_PER_MESSAGE
+    );
+    let text = result.text;
+    if (capped.omitted > 0) {
+      text = `${text}\n\n${referenceImageOmissionMarker(capped.omitted)}`;
+    }
     sessionManager.appendUserMessage(
-      result.text,
-      result.images.length > 0 ? result.images : undefined
+      text,
+      capped.images.length > 0 ? capped.images : undefined
     );
     for (const notice of result.notices) {
       engine
@@ -442,7 +456,7 @@ export function createConversationService({
           logger.warn(`Conversation event hook threw: ${err}`);
         });
     }
-    return result.text;
+    return text;
   }
 
   /**
@@ -859,7 +873,9 @@ export function createConversationService({
           // stays bounded. Over-cap images are dropped (kept-first-N) and a
           // marker is appended to content telling the model how to retrieve
           // the rest.
-          const maxImagesPerMessage = config.session.maxImagesPerMessage ?? 20;
+          const maxImagesPerMessage =
+            config.session.maxImagesPerMessage ??
+            DEFAULT_MAX_IMAGES_PER_MESSAGE;
           const bufferedResults: Array<{
             name: string;
             content: string;
@@ -871,11 +887,12 @@ export function createConversationService({
             let content = toolResult.content;
             let images =
               toolResult.kind === 'ok' ? toolResult.images : undefined;
-            if (images && images.length > maxImagesPerMessage) {
-              const kept = images.slice(0, maxImagesPerMessage);
-              const omitted = images.length - kept.length;
-              images = kept;
-              content = `${content}\n\n[${omitted} additional images omitted. Request a narrower/range selection to retrieve them.]`;
+            if (images && images.length > 0) {
+              const capped = capImages(images, maxImagesPerMessage);
+              if (capped.omitted > 0) {
+                images = capped.images;
+                content = `${content}\n\n${toolImageOmissionMarker(capped.omitted)}`;
+              }
             }
             bufferedResults.push({
               name: result.name,

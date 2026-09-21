@@ -9,4 +9,4 @@ export {
   MAX_DIR_ENTRIES,
   MAX_GLOB_MATCHES,
 } from './file-kinds.js';
-export type { ExpansionBudget } from './file-kinds.js';
+export type { ExpansionBudget, ReferenceLimits } from './file-kinds.js';
