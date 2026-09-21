@@ -590,5 +590,13 @@
   {
     "timestamp": "2026-09-21T02:32:43.148Z",
     "insight": "`swarm__wiki_list` is unbounded: a bare call returned 300+ pages and blew the ~157K-token output limit (reported full output ~293K tokens, truncated). To locate a page id, use `swarm__wiki_search` (semantic) instead, which returns just the top matches. Use `wiki_list` only when the full inventory is genuinely needed and expect truncation."
+  },
+  {
+    "timestamp": "2026-09-21T02:52:30.404Z",
+    "insight": "A reserved-but-always-empty contract field is a strong signal that a feature is one resolver branch away, not a build. `DroneReferenceResolution.images` was documented \"v1: always empty; reserved for image refs\" and `expandAndAppend` already forwarded it into `appendUserMessage(text, images?)`; the whole describe/present/budget/compaction pipeline was already role-agnostic. So image inlining in `@`-references needed exactly one new branch in `file-kinds.ts` plus caps/notices — no new plumbing. Before planning a \"new\" feature, grep the types for fields documented as reserved/unused and trace whether the consumption path already exists."
+  },
+  {
+    "timestamp": "2026-09-21T02:52:30.407Z",
+    "insight": "The `file` reference resolver's binary sniff (NUL byte in the first 8000 bytes) classifies ALL image formats as binary, because PNG/JPEG/GIF/WebP all contain NUL bytes in their headers. Any content-based \"is this binary\" heuristic will misclassify images. The fix ordered the check as: extension→MIME lookup first (images), then the NUL sniff (other binaries), then the text path. If a future binary-sniff heuristic is added anywhere in the codebase, it must be image-aware or it will silently swallow image files."
   }
 ]
