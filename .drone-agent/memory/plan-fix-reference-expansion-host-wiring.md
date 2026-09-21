@@ -20,7 +20,7 @@ updated: 2026-09-20T23:44:29.734Z
 
 ## Summary
 
-`@`-reference expansion does not fire in the real app. Tab completion works, the
+`@`-reference expansion does not fire in the real app. Tab completion works, theZ~
 tokenizer works, the file resolver works, and the conversation-service append
 sites are correct — but every host runs the **identity** expander because the
 `reference` capability is handed to the **engine** and never reaches the
