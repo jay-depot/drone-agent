@@ -46,10 +46,11 @@ anchor). Resolved references are appended once, in order, under a trailer:
 <skill body>
 ```
 
-A successful expansion emits no notice — the trailer itself is the record. A
-`notice` event is emitted only for problems: `[unresolved reference: @…]`,
-`[skipped binary: @…]`, and `[expansion budget exceeded; @… not included]`.
-The TUI logs the raw `> …` line separately.
+A successful file expansion emits a receipt as a `notice` event
+(`[expanded @src/foo.ts (120 lines, 4.2 KB)]`), shown by the TUI and the plain
+handler; the TUI also logs the raw `> …` line separately. A `notice` is emitted
+for problems too: `[unresolved reference: @…]`, `[skipped binary: @…]`, and
+`[expansion budget exceeded; @… not included]`.
 
 ## Limits
 

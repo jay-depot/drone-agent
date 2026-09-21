@@ -130,7 +130,7 @@ describe('createReferenceCapability', () => {
     expect(result.text).toContain('### @foo.ts');
     expect(result.text).toContain('```ts');
     expect(result.text).toContain('const x = 1;');
-    expect(result.notices).toEqual([]);
+    expect(result.notices).toEqual(['[expanded @foo.ts (1 lines, 13 B)]']);
   });
 
   it('leaves an unresolved non-pathlike token silent', async () => {
@@ -209,7 +209,7 @@ describe('createReferenceCapability', () => {
     const cap = makeCap();
     const result = await cap.expandUserMessage('@a:b.ts');
     expect(result.text).toContain('content');
-    expect(result.notices).toEqual([]);
+    expect(result.notices).toEqual(['[expanded @a:b.ts (1 lines, 7 B)]']);
   });
 
   it('registers and uses a custom kind resolver', async () => {

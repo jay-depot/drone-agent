@@ -376,7 +376,11 @@ describe('host wiring: the engine capability is the default expander', () => {
       if (id === 'reference') return capability;
       return undefined;
     };
-    return { conversation, engine };
+    const events: DroneConversationEvent[] = [];
+    engine.runConversationEventHooks = async event => {
+      events.push(event);
+    };
+    return { conversation, engine, events };
   }
 
   it('inlines a real @file reference with no expandUserMessage option', async () => {
@@ -384,13 +388,21 @@ describe('host wiring: the engine capability is the default expander', () => {
     await writeFile(path.join(dir, 'notes.md'), 'hello from disk\n', 'utf-8');
     const provider = makeProvider([{ message: 'done' }]);
     const capability = createReferenceCapability({ cwd: dir, homedir: dir });
-    const { conversation } = makeHostConversation(provider, capability);
+    const { conversation, events } = makeHostConversation(provider, capability);
 
     await conversation.sendUserMessage('see @notes.md');
 
     const turn = conversation.getMessages().find(m => m.role === 'user');
     expect(turn?.content).toContain('--- Referenced content ---');
     expect(turn?.content).toContain('hello from disk');
+    // The success receipt is emitted by the REAL capability (never mocked here).
+    expect(
+      events.some(
+        e =>
+          e.kind === 'notice' &&
+          e.content === '[expanded @notes.md (1 lines, 16 B)]'
+      )
+    ).toBe(true);
   });
 
   it('falls back to identity when no reference capability is registered', async () => {

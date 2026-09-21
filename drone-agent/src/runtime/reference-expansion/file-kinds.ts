@@ -57,6 +57,17 @@ function fenceFor(content: string): string {
   return '`'.repeat(Math.max(3, longest + 1));
 }
 
+/** A trailing newline does not start a new line (editor convention). */
+function countLines(text: string): number {
+  if (text.length === 0) return 0;
+  const normalized = text.endsWith('\n') ? text.slice(0, -1) : text;
+  return normalized.split('\n').length;
+}
+
+function formatBytes(bytes: number): string {
+  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+}
+
 function langHint(filePath: string): string {
   return LANG_HINTS[path.extname(filePath).toLowerCase()] ?? '';
 }
@@ -147,7 +158,13 @@ async function buildFileBlock(
   if (truncated) {
     block += '\n[… truncated]';
   }
-  return { block, images: [], dedupKey: await dedupKeyFor(absPath) };
+  const bytes = Buffer.byteLength(text);
+  return {
+    block,
+    images: [],
+    dedupKey: await dedupKeyFor(absPath),
+    notice: `[expanded @${displayPath} (${countLines(text)} lines, ${formatBytes(bytes)})]`,
+  };
 }
 
 async function globMatches(

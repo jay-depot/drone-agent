@@ -382,11 +382,12 @@ All must pass before the work is considered done.
 Executed on branch `feat/inline-object-refs`. All steps done.
 
 ### What changed
+
 - **Step 1** — `drone-agent/src/runtime/conversation-service.ts`: removed the
   identity default from the `expandUserMessage` destructuring; added
   `defaultExpandUserMessage` (lazy `engine.getCapability('reference')`, identity
   fallback) and `const resolveExpandUserMessage = expandUserMessage ??
-  defaultExpandUserMessage`; `expandAndAppend` now calls the resolver. Imports
+defaultExpandUserMessage`; `expandAndAppend` now calls the resolver. Imports
   `DRONE_REFERENCE_CAPABILITY_ID` + `type DroneReferenceCapability`.
 - **Step 2** — `drone-agent/test/reference-expansion-integration.test.ts`: new
   `describe('host wiring: the engine capability is the default expander')` with
@@ -404,34 +405,52 @@ Executed on branch `feat/inline-object-refs`. All steps done.
   consumed-by-service default-resolution lesson).
 
 ### Deviations from the plan (and why)
-1. **V8's `[expanded @…]` notice is UNSATISFIABLE.** The plan (and the doc, and
-   the integration-test mock) assume a per-expansion receipt notice that **does
-   not exist in production code**. `grep -rn "expanded @" drone-agent/src` is
-   empty; `file-kinds.ts` emits only problem notices. The string lives only in
-   the test mock. I did NOT implement the notice (out of plan scope) and instead
-   corrected the false doc/wiki text. Logged as a separate project insight. The
-   trailer half of V8 DOES pass (see below). Open design question flagged: was
-   the receipt intended-but-unimplemented, or dropped by design?
+
+1. **V8's `[expanded @…]` notice — initially missed, then implemented.** At the
+   time this plan ran, production emitted NO success receipt: `grep -rn "expanded
+   @" drone-agent/src` was empty, and `file-kinds.ts` produced notices only for
+   unresolved/binary/budget. The string existed only in the integration-test
+   mock. I initially mis-read this as "the docs are wrong" and edited the docs to
+   say no receipt exists — **that was backwards.** The original plan (recovered
+   from git: `git show 5a08aa52:.drone-agent/memory/plan-reference-expansion-tab-completion.md`)
+   explicitly specifies the receipt: §2 diagram "notice events ─► TUI / plain
+   handler", S12 "the receipt arrives separately as a `notice`", and S14's test
+   "... + a `notice`". So the mock was faithful and the CODE was missing the
+   feature. Follow-up session implemented it in `buildFileBlock`
+   (`countLines`/`formatBytes` helpers + a `notice` on success), updated the two
+   unit tests that had encoded the buggy `notices === []`, added a real-capability
+   receipt assertion, and reverted the doc/wiki wrong-direction edits. See the
+   wiki page's "Repair 2".
 2. **`pnpm -r run lint` does not exist** (lint is a root script: `pnpm lint`).
    Ran the root script; it also runs prettier `--write`, which reflowed
    `pnpm-lock.yaml` (5863 lines, unrelated). Reverted that churn (no deps added).
 3. **V5 "fast suite must pass" is blocked by PRE-EXISTING failures**, not this
    change. Proven via stash baseline: `drone-agent` has 10 pre-existing
-   ANSI/width TUI failures (Markdown 6, pretty-tool-output 2, tui-persona-color
-   2) unchanged by this work; `tui-completion-menu` is flaky under concurrency
-   but passes 3/3 standalone with AND without the change. `drone-coordinator-ui
+   ANSI/width TUI failures (Markdown 6, pretty-tool-output 2, tui-persona-color 2)
+   unchanged by this work; `tui-completion-menu` is flaky under concurrency but
+   passes 3/3 standalone with AND without the change. `drone-coordinator-ui
    sessions.test.tsx` is the known `NODE_ENV` run-env artifact — passes 16/16 via
    `NODE_ENV=test`. None of these suites import `conversation-service`.
 
 ### Validation results
+
 V1 LSP clean · V2 typecheck 0 · V3 build 0 · V4 lint 0 · V5 targeted suites
 68/68 pass, pre-existing failures unchanged · V6 regression proof captured (RED→
 GREEN) · V7 no host passes `expandUserMessage` · V8 trailer PASS end-to-end on
 the built dist (`@README.md` and `@~/.drone-agent/HOST.md` inlined; model
-answered from content; confirmed in the log plugin's persisted session turn),
-notice requirement unsatisfiable (deviation 1) · V9 done-when re-check passed.
+answered from content; confirmed in the log plugin's persisted session turn) ·
+V9 done-when re-check passed.
+
+### Follow-up (success receipt) — 2026-09-20
+
+After the plan was executed, the receipt was implemented (see deviation 1) and
+verified end-to-end in the real TUI:
+`> > Just say OK. @README.md` → `[expanded @README.md (201 lines, 11.7 KB)]` →
+`OK`. Scoped to single-file expansions; globs/dirs/skills receipts and
+JSON/swarm-host notice forwarding remain deferred (design unspecified).
 
 ### Verification command (manual, reproducible)
+
 ```
 echo '{"type":"chat","message":"… @README.md"}' | node drone-agent/bin/drone-agent --output-json
 # then inspect the newest ~/.drone-agent/logs/default/*.json turn for the
