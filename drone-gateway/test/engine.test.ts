@@ -10,9 +10,9 @@ import type { SpawnBackend } from '../src/spawn-backend.js';
 vi.mock('../src/coordinator-client.js', () => ({
   CoordinatorClient: vi.fn().mockImplementation(function () {
     return {
-    spawnAgent: vi.fn(),
-    sendMessage: vi.fn(),
-    terminateSpawn: vi.fn(),
+      spawnAgent: vi.fn(),
+      sendMessage: vi.fn(),
+      terminateSpawn: vi.fn(),
     };
   }),
 }));
