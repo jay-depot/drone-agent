@@ -358,3 +358,32 @@ Add `import { announceFingerprint } from '../fingerprint-announce.js';`. Remove 
 
 - `GET /beacons/:id` also omits `tlsFingerprint`, which `beacon-detail.tsx` tries to render — same-class latent bug, outside the agreed four. Optional: fold into `buildBeaconView` later.
 - Unrelated slash-command quirks (e.g. `--now` rest-of-line handling) are untouched.
+
+---
+
+## ✅ COMPLETED 2026-09-24 (branch `fix/trust-coordinator-approve-gate`)
+
+All 8 steps executed. Commits: `406e69b0` (feature) on top of `b0055684` (repo-wide prettier pass, committed per user request; pure formatting — lockfile has zero non-format content lines, safe under CI `pnpm install --frozen-lockfile`).
+
+### What landed
+
+- **Step 1/3:** new `drone-coordinator/src/beacon-view.ts` — `buildBeaconView(beaconId, trust)` (returns `{connected, trustStatus, publicKey, verificationCode, fingerprintConfirmed}`) plus `buildInitialBeaconList()` (the WS `initial` snapshot). `GET /beacons`, `GET /beacons/:id`, and `index.ts`'s WS `initial` builder all use it — the field can no longer be forgotten per-site, and the `initial` snapshot no longer clobbers the fetched list. `isBeaconConnected` imports removed from `routes/beacons.ts` and `index.ts` (now unused).
+- **Step 2:** confirm-fingerprint route publishes `beacon.fingerprintConfirmed` `{beaconId}`.
+- **Step 4:** `topology.tsx` (lifted `fetchData` into a `useCallback`) and `beacon-detail.tsx` (per-beacon refetch) both debounce-refetch (~100 ms) on `beacon.fingerprintConfirmed` and `beacon.approved`, mirroring `sessions.tsx`.
+- **Step 5/6:** new `drone-beacon/src/fingerprint-announce.ts` — `announceFingerprint({force})` (skip unless trusted-and-unapproved; 5-min throttle unless forced; `resetFingerprintAnnounce()` test hook). Wired to the `/trust-coordinator` command (`force:true`), the 30 s pending poll loop (throttled), and the reverse-channel WS `open` handler (throttled). The route's old inline gated announce + its now-unused `getCoordinatorClient`/`logger` imports were removed.
+- **Step 7:** tests — `drone-coordinator/test/beacon-view.test.ts` (new), `drone-coordinator/test/routes/beacons.test.ts` (+3: fingerprintConfirmed false→true on both GETs, publish assertion), `drone-beacon/test/fingerprint-announce.test.ts` (new), `drone-beacon/test/routes.test.ts` (+1 repeat-command recovery), `drone-coordinator-ui/src/pages/topology.test.tsx` (+2), `beacon-detail.test.tsx` (+2).
+- Plan memory (this file) committed with the feature.
+
+### Validation (Step 8)
+
+- LSP: clean on all touched files (no errors/warnings).
+- **`pnpm -r run lint` does NOT exist** in this repo (no package has a `lint` script). The project's lint process is the root **`pnpm lint`** (= `eslint . --fix` + `prettier --write .`). Ran that → exit 0. Noted as an AGENTS.md/plan discrepancy (code is source of truth).
+- `pnpm -r run build` → exit 0 (all 8 projects).
+- `pnpm -r run test` (fast): drone-core 152, drone-coordinator-ui 317, drone-gateway 160, drone-swarm-common 107 all pass; drone-coordinator **450 pass / 1 fail** — the single failure is `test/wiki-routes.test.ts > GET /api/wiki/graph returns nodes and edges from the coordinator store`, which was **verified pre-existing** by stashing the whole change set and reproducing the identical failure on the clean tree (+ confirmed independent of a stray `knowledge-base/` artifact). Not a regression.
+- Reproduction closed: the new coordinator tests fail pre-fix (field absent → `undefined`) and pass post-fix; the UI tests prove the event-driven refetch. The `drone-coordinator-ui` tests require `NODE_ENV=test` (baked into that package's `test` script) — running vitest without it yields `React.act is not a function` across the whole suite (environment, not code).
+
+### Notes / follow-ups
+
+- `GET /beacons/:id` still omits `tlsFingerprint` (which `beacon-detail.tsx` renders) — same class as the fixed bug, left out of the agreed scope; the shared `buildBeaconView` makes folding it in a one-line change later.
+- Manual smoke (live beacon+coordinator) not run from this session; the plan recommends it pre-release.
+- Stray artifacts cleaned before commit: test-generated `drone-beacon/knowledge-base/` and `drone-coordinator/knowledge-base/` (created by the wiki-route tests) and non-task prettier churn confined to the dedicated prettier commit.
