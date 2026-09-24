@@ -1,4 +1,5 @@
 import fastify, { type FastifyInstance } from 'fastify';
+import { buildInitialBeaconList } from './beacon-view.js';
 import fastifyStatic from '@fastify/static';
 import fastifyCors from '@fastify/cors';
 import '@fastify/websocket';
@@ -51,7 +52,6 @@ import {
 import { createWebAuthMiddleware, isLocalRequest } from './web-auth.js';
 import { createMtlsMiddleware } from './mtls.js';
 import {
-  isBeaconConnected,
   registerBeaconWebSocket,
   startBeaconLivenessSweep,
 } from './beacon-ws.js';
@@ -444,10 +444,7 @@ async function attachUi(
     const sub = addSubscriber(socket);
 
     try {
-      const beacons = listBeacons().map(b => ({
-        ...b,
-        connected: isBeaconConnected(b.id),
-      }));
+      const beacons = buildInitialBeaconList();
       const agentLocations = listAllAgentLocations();
       const swarmSessions = listSwarmSessions({ status: 'active' });
       const sessions = swarmSessions.map(s => {

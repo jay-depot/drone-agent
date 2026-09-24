@@ -45,6 +45,7 @@ import {
   setBeaconApproved,
   isCoordinatorTrusted,
 } from './coordinator-trust.js';
+import { announceFingerprint } from './fingerprint-announce.js';
 import {
   initSpawner,
   cleanupAllSpawns,
@@ -429,6 +430,9 @@ async function main() {
         // Poll for approval
         const pollInterval = setInterval(async () => {
           try {
+            // Re-announce (throttled) so a beacon that confirmed the
+            // fingerprint but whose announce never landed recovers within 5m.
+            announceFingerprint();
             const status = await coordinatorClient!.pollForApproval();
             if (status.status === 'approved') {
               logger.info('Beacon approved!');

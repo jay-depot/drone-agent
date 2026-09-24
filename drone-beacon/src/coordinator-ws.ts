@@ -1,6 +1,7 @@
 import WebSocket from 'ws';
 import type { TlsIdentity } from 'drone-swarm-common/tls';
 import { logger } from './logger.js';
+import { announceFingerprint } from './fingerprint-announce.js';
 import { triggerCoordinatorSync } from './routes/context.js';
 import {
   handleSpawnAgent,
@@ -96,6 +97,9 @@ function connect(): void {
 
   ws.on('open', () => {
     logger.info('Connected to coordinator reverse channel');
+    // Post-reconnect (e.g. wake from sleep): re-announce the fingerprint
+    // confirmation if the coordinator has not yet approved the beacon.
+    announceFingerprint();
   });
 
   ws.on('message', data => {

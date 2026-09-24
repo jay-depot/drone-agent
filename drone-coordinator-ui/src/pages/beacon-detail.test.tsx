@@ -166,3 +166,54 @@ describe('BeaconDetailPage beacon status dots', () => {
     });
   });
 });
+
+describe('BeaconDetailPage live trust events', () => {
+  beforeEach(() => {
+    wsInstances.length = 0;
+    vi.restoreAllMocks();
+  });
+
+  function countBeaconFetches(mockFetch: ReturnType<typeof vi.fn>): number {
+    return mockFetch.mock.calls.filter(([url]) => url === '/api/beacons/b1')
+      .length;
+  }
+
+  it('refetches this beacon on a matching beacon.fingerprintConfirmed event', async () => {
+    const mockFetch = mockApi(
+      makeBeacon({ trustStatus: 'pending', connected: false })
+    );
+    renderDetail();
+    await screen.findByText('B1');
+    const before = countBeaconFetches(mockFetch);
+
+    pushWsMessage({
+      type: 'event',
+      sessionId: 'b1',
+      eventType: 'beacon.fingerprintConfirmed',
+      payload: { beaconId: 'b1' },
+    });
+
+    await waitFor(() => {
+      expect(countBeaconFetches(mockFetch)).toBe(before + 1);
+    });
+  });
+
+  it('ignores a beacon.fingerprintConfirmed event for a different beacon', async () => {
+    const mockFetch = mockApi(
+      makeBeacon({ trustStatus: 'pending', connected: false })
+    );
+    renderDetail();
+    await screen.findByText('B1');
+    const before = countBeaconFetches(mockFetch);
+
+    pushWsMessage({
+      type: 'event',
+      sessionId: 'other',
+      eventType: 'beacon.fingerprintConfirmed',
+      payload: { beaconId: 'other' },
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 250));
+    expect(countBeaconFetches(mockFetch)).toBe(before);
+  });
+});
