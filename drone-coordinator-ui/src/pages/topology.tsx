@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useAuthenticatedFetch } from '@/hooks/use-auth';
@@ -75,29 +75,59 @@ export default function TopologyPage() {
     };
   }, [subscribe]);
 
-  useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
-      setError(null);
-      try {
-        const [beaconsRes, agentsRes] = await Promise.all([
-          authFetch('/api/beacons'),
-          authFetch('/api/agents/location'),
-        ]);
-        if (beaconsRes.ok) {
-          setBeacons(await beaconsRes.json());
-        }
-        if (agentsRes.ok) {
-          setAgentLocations(await agentsRes.json());
-        }
-      } catch {
-        setError('Failed to load topology data');
-      } finally {
-        setLoading(false);
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [beaconsRes, agentsRes] = await Promise.all([
+        authFetch('/api/beacons'),
+        authFetch('/api/agents/location'),
+      ]);
+      if (beaconsRes.ok) {
+        setBeacons(await beaconsRes.json());
       }
+      if (agentsRes.ok) {
+        setAgentLocations(await agentsRes.json());
+      }
+    } catch {
+      setError('Failed to load topology data');
+    } finally {
+      setLoading(false);
     }
-    fetchData();
   }, [authFetch]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Trust transitions (fingerprint confirmed, beacon approved) change a row's
+  // Approve affordance; refetch server-truth on a debounced event burst.
+  useEffect(() => {
+    const TRUST_EVENTS = new Set([
+      'beacon.fingerprintConfirmed',
+      'beacon.approved',
+    ]);
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let pending = false;
+    const unsub = subscribe('event', msg => {
+      const eventMsg = msg as WsEventMessage;
+      if (!TRUST_EVENTS.has(eventMsg.eventType)) return;
+      pending = true;
+      if (debounceTimer === undefined) {
+        debounceTimer = setTimeout(() => {
+          debounceTimer = undefined;
+          if (pending) {
+            pending = false;
+            fetchData();
+          }
+        }, 100);
+      }
+    });
+    return () => {
+      unsub();
+      if (debounceTimer !== undefined) clearTimeout(debounceTimer);
+    };
+  }, [subscribe, fetchData]);
 
   const getAgentCountForBeacon = (beaconId: string): number => {
     return agentLocations.filter(a => a.beaconId === beaconId).length;

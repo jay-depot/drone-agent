@@ -290,3 +290,55 @@ describe('TopologyPage trust dialog', () => {
     expect(beaconsCalls).toHaveLength(2);
   });
 });
+
+describe('TopologyPage live trust events', () => {
+  beforeEach(() => {
+    wsInstances.length = 0;
+    vi.restoreAllMocks();
+  });
+
+  function countBeaconFetches(mockFetch: ReturnType<typeof vi.fn>): number {
+    return mockFetch.mock.calls.filter(([url]) => url === '/api/beacons')
+      .length;
+  }
+
+  it('refetches beacons when a beacon.fingerprintConfirmed event arrives', async () => {
+    const mockFetch = mockApi([
+      makeBeacon({ trustStatus: 'pending', connected: false }),
+    ]);
+    renderTopology();
+    await screen.findByText('B1');
+    const before = countBeaconFetches(mockFetch);
+
+    pushWsMessage({
+      type: 'event',
+      sessionId: 'b1',
+      eventType: 'beacon.fingerprintConfirmed',
+      payload: { beaconId: 'b1' },
+    });
+
+    await waitFor(() => {
+      expect(countBeaconFetches(mockFetch)).toBe(before + 1);
+    });
+  });
+
+  it('refetches beacons when a beacon.approved event arrives', async () => {
+    const mockFetch = mockApi([
+      makeBeacon({ trustStatus: 'pending', connected: false }),
+    ]);
+    renderTopology();
+    await screen.findByText('B1');
+    const before = countBeaconFetches(mockFetch);
+
+    pushWsMessage({
+      type: 'event',
+      sessionId: 'b1',
+      eventType: 'beacon.approved',
+      payload: { beaconId: 'b1' },
+    });
+
+    await waitFor(() => {
+      expect(countBeaconFetches(mockFetch)).toBe(before + 1);
+    });
+  });
+});

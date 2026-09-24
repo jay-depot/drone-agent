@@ -5,9 +5,11 @@ import type { FastifyInstance } from 'fastify';
 import { setCoordinatorClient } from '../src/routes/context.js';
 import {
   setPendingCoordinatorFingerprint,
+  confirmCoordinatorFingerprint,
   setBeaconVerificationCode,
   resetCoordinatorTrust,
 } from '../src/coordinator-trust.js';
+import { resetFingerprintAnnounce } from '../src/fingerprint-announce.js';
 import type { CoordinatorClient } from '../src/coordinator-client.js';
 import * as db from '../src/db/index.js';
 import { getDatabase } from '../src/db/index.js';
@@ -48,6 +50,7 @@ beforeEach(async () => {
 afterEach(async () => {
   setCoordinatorClient(undefined);
   resetCoordinatorTrust();
+  resetFingerprintAnnounce();
   await app.close();
   await teardownDb();
 });
@@ -385,6 +388,34 @@ describe('Coordinator Trust Routes', () => {
     expect(res.statusCode).toBe(200);
     // The beacon announces its fingerprint confirmation to the coordinator so
     // the approve gate unlocks (fire-and-forget).
+    expect(confirmFingerprint).toHaveBeenCalledTimes(1);
+  });
+
+  it('POST /coordinator/trust re-announces when already trusted (no pending fingerprint)', async () => {
+    const confirmFingerprint = vi.fn().mockResolvedValue(undefined);
+    setCoordinatorClient(
+      makeFakeClient({
+        confirmFingerprint,
+      } as unknown as CoordinatorClient)
+    );
+    // Confirm locally first: promoting the pending fingerprint clears it, so a
+    // repeat command has no pending value left to confirm.
+    setPendingCoordinatorFingerprint(
+      'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899'
+    );
+    confirmCoordinatorFingerprint(
+      'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899'
+    );
+    setBeaconVerificationCode('acorn-badge-cabin-daisy');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/coordinator/trust',
+      payload: { verificationCode: 'acorn-badge-cabin-daisy' },
+    });
+    expect(res.statusCode).toBe(200);
+    // The announce must still fire so a previously failed announce recovers by
+    // re-running /trust-coordinator (the recovery path).
     expect(confirmFingerprint).toHaveBeenCalledTimes(1);
   });
 });

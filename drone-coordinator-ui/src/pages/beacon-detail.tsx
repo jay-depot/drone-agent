@@ -102,6 +102,49 @@ export default function BeaconDetailPage() {
     };
   }, [id, subscribe]);
 
+  // Trust transitions (fingerprint confirmed, beacon approved) change the
+  // Approve affordance and the fingerprint badge; refetch this beacon on a
+  // debounced event burst.
+  useEffect(() => {
+    if (!id) return;
+    const TRUST_EVENTS = new Set([
+      'beacon.fingerprintConfirmed',
+      'beacon.approved',
+    ]);
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let pending = false;
+
+    const refetchBeacon = async () => {
+      const res = await authFetch(`/api/beacons/${id}`);
+      if (res.ok) setBeacon(await res.json());
+    };
+
+    const unsub = subscribe('event', msg => {
+      const eventMsg = msg as WsEventMessage;
+      if (!TRUST_EVENTS.has(eventMsg.eventType)) return;
+      const payload =
+        typeof eventMsg.payload === 'object' && eventMsg.payload !== null
+          ? (eventMsg.payload as { beaconId?: string })
+          : undefined;
+      if (payload?.beaconId && payload.beaconId !== id) return;
+      pending = true;
+      if (debounceTimer === undefined) {
+        debounceTimer = setTimeout(() => {
+          debounceTimer = undefined;
+          if (pending) {
+            pending = false;
+            void refetchBeacon();
+          }
+        }, 100);
+      }
+    });
+
+    return () => {
+      unsub();
+      if (debounceTimer !== undefined) clearTimeout(debounceTimer);
+    };
+  }, [id, subscribe, authFetch]);
+
   const status =
     beacon && beacon.connected
       ? { colorClass: 'bg-green-500', label: 'Online' }

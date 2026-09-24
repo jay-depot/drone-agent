@@ -20,7 +20,7 @@ SEED/note only (recorded 2026-09-18 while planning `memory-wiki-browser-improvem
 
 - `buildGraph()` (`drone-swarm-common/src/wiki-storage.ts:502`) currently DOUBLE-READS every page: it calls `listPages()` (which already `readPage`s each file) and then `readPage(meta.id)` again per page. Word count is recomputed inline (`page.content.split(/\s+/).filter(Boolean).length`).
 - With `wordCount` on the meta, the graph can take the count from the meta instead of recomputing, and the shared `countWords` helper de-duplicates the logic.
-- Caveat: `linkCount` alone does NOT replace the edge computation — `buildGraph` still needs the actual link *targets* (edges) from page content, so a content read cannot be avoided entirely. The win is the avoided second read + shared helpers.
+- Caveat: `linkCount` alone does NOT replace the edge computation — `buildGraph` still needs the actual link _targets_ (edges) from page content, so a content read cannot be avoided entirely. The win is the avoided second read + shared helpers.
 - Related: there is no per-page backlinks endpoint; the UI derives degree/backlinks client-side from the full graph (`lib/wiki-graph-utils.ts`).
 
 ## Also consider when revisiting

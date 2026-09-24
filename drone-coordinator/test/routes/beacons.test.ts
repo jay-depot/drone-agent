@@ -1,12 +1,17 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import crypto from 'node:crypto';
 import { setupDb, teardownDb } from '../setup.js';
 import { buildTestApp } from '../app-helper.js';
 import { setCoordinatorFingerprint } from '../../src/routes/health.js';
-import { generateVerificationCode } from 'drone-swarm-common';
+import {
+  generateVerificationCode,
+  signBeaconPayload,
+} from 'drone-swarm-common';
 import {
   _registerTestConnection,
   resetBeaconConnections,
 } from '../../src/beacon-ws.js';
+import { addSubscriber, removeSubscriber } from '../../src/ws-pubsub.js';
 import type { FastifyInstance } from 'fastify';
 
 let app: FastifyInstance;
@@ -656,5 +661,116 @@ describe('Beacon Routes', () => {
     );
     expect(beacon.spawnRoots).toEqual(['/opt/work']);
     expect(beacon.defaultSpawnRoot).toBe('/opt/work');
+  });
+});
+
+describe('beacon view fingerprintConfirmed + confirm-fingerprint announce', () => {
+  function makeIdentity() {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+    return {
+      publicKeyBase64: publicKey
+        .export({ type: 'spki', format: 'der' })
+        .toString('base64'),
+      privateKeyPem: privateKey
+        .export({ type: 'pkcs8', format: 'pem' })
+        .toString(),
+    };
+  }
+
+  async function announce(
+    beaconId: string,
+    identity: ReturnType<typeof makeIdentity>
+  ) {
+    const timestamp = Date.now();
+    const signature = signBeaconPayload(
+      identity.privateKeyPem,
+      `${beaconId}:${timestamp}`
+    );
+    return app.inject({
+      method: 'POST',
+      url: `/api/beacons/trust/${beaconId}/confirm-fingerprint`,
+      payload: { beaconId, timestamp, signature },
+    });
+  }
+
+  it('GET /beacons reports fingerprintConfirmed false before and true after the announce', async () => {
+    const identity = makeIdentity();
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      remoteAddress: '10.0.0.1',
+      payload: {
+        id: 'b1',
+        name: 'B1',
+        host: '10.0.0.1',
+        port: 3457,
+        publicKey: identity.publicKeyBase64,
+      },
+    });
+
+    const before = JSON.parse(
+      (await app.inject({ method: 'GET', url: '/api/beacons' })).body
+    ).find((b: { id: string }) => b.id === 'b1');
+    expect(before.fingerprintConfirmed).toBe(false);
+
+    await announce('b1', identity);
+
+    const after = JSON.parse(
+      (await app.inject({ method: 'GET', url: '/api/beacons' })).body
+    ).find((b: { id: string }) => b.id === 'b1');
+    expect(after.fingerprintConfirmed).toBe(true);
+  });
+
+  it('GET /beacons/:id reports fingerprintConfirmed after the announce', async () => {
+    const identity = makeIdentity();
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      remoteAddress: '10.0.0.1',
+      payload: {
+        id: 'b1',
+        name: 'B1',
+        host: '10.0.0.1',
+        port: 3457,
+        publicKey: identity.publicKeyBase64,
+      },
+    });
+
+    await announce('b1', identity);
+
+    const body = JSON.parse(
+      (await app.inject({ method: 'GET', url: '/api/beacons/b1' })).body
+    );
+    expect(body.fingerprintConfirmed).toBe(true);
+  });
+
+  it('confirm-fingerprint publishes beacon.fingerprintConfirmed over the pubsub', async () => {
+    const identity = makeIdentity();
+    await app.inject({
+      method: 'POST',
+      url: '/api/beacons',
+      remoteAddress: '10.0.0.1',
+      payload: {
+        id: 'b1',
+        name: 'B1',
+        host: '10.0.0.1',
+        port: 3457,
+        publicKey: identity.publicKeyBase64,
+      },
+    });
+
+    const sent: string[] = [];
+    const sub = addSubscriber({ send: (m: string) => sent.push(m) } as never);
+    try {
+      await announce('b1', identity);
+    } finally {
+      removeSubscriber(sub);
+    }
+
+    const event = sent
+      .map(m => JSON.parse(m) as { eventType?: string; payload?: unknown })
+      .find(m => m.eventType === 'beacon.fingerprintConfirmed');
+    expect(event).toBeDefined();
+    expect(event!.payload).toEqual({ beaconId: 'b1' });
   });
 });
