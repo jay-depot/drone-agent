@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { publishMutationEvent } from '../ws-pubsub.js';
 import { getClientCertFingerprint } from '../mtls.js';
-import { isBeaconConnected } from '../beacon-ws.js';
+import { buildBeaconView } from '../beacon-view.js';
 import { isLoopbackIp } from '../ip.js';
 import type {
   RegisterBeaconRequest,
@@ -121,6 +121,11 @@ export default function beaconRoutes(app: FastifyInstance) {
       }
 
       db.confirmBeaconFingerprint(request.params.id);
+      publishMutationEvent({
+        sessionId: request.params.id,
+        eventType: 'beacon.fingerprintConfirmed',
+        payload: { beaconId: request.params.id },
+      });
       return { success: true };
     }
   );
@@ -128,17 +133,10 @@ export default function beaconRoutes(app: FastifyInstance) {
   app.get('/beacons', async () => {
     const beacons = db.listBeacons();
     const trustList = db.listBeaconTrust();
-    const beaconsWithTrust = beacons.map(b => {
+    return beacons.map(b => {
       const trust = trustList.find(t => t.beaconId === b.id);
-      return {
-        ...b,
-        connected: isBeaconConnected(b.id),
-        trustStatus: trust?.status ?? null,
-        publicKey: trust?.publicKey ?? null,
-        verificationCode: trust?.verificationCode ?? null,
-      };
+      return { ...b, ...buildBeaconView(b.id, trust) };
     });
-    return beaconsWithTrust;
   });
 
   app.get<{ Params: { id: string } }>(
@@ -151,16 +149,13 @@ export default function beaconRoutes(app: FastifyInstance) {
       }
       return {
         ...beacon,
-        connected: isBeaconConnected(request.params.id),
+        ...buildBeaconView(request.params.id, trust),
         beaconId: beacon?.id ?? trust?.beaconId,
         name: beacon?.name ?? trust?.name,
         host: beacon?.host ?? trust?.host,
         port: beacon?.port ?? trust?.port,
         connectedAt: beacon?.connectedAt,
         lastHeartbeat: beacon?.lastHeartbeat,
-        trustStatus: trust?.status ?? null,
-        publicKey: trust?.publicKey ?? null,
-        verificationCode: trust?.verificationCode ?? null,
       };
     }
   );
