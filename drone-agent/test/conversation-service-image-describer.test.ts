@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import type { DronePluginEngine } from '../src/runtime/plugin-engine.js';
 import {
   createDefaultAgentConfig,
@@ -8,12 +11,14 @@ import {
   type DroneLlmCapability,
   type DroneLlmProvider,
   type DroneReasoningLevel,
+  type DroneReferenceCapability,
   type DroneToolResult,
 } from 'drone-core';
 import { createConversationService } from '../src/runtime/conversation-service.js';
 import { createContextBudgetService } from '../src/runtime/context-budget-service.js';
 import type { ContextBudgetService } from '../src/runtime/context-budget-service.js';
 import { createSessionManager } from '../src/runtime/session-manager.js';
+import { createReferenceCapability } from '../src/runtime/reference-expansion/index.js';
 import { createMockEngine, silentLogger } from './helpers.js';
 
 function makeProvider(
@@ -98,6 +103,7 @@ async function setup(options: {
   logEnabled?: boolean;
   swarmActive?: boolean;
   maxImagesPerMessage?: number;
+  referenceCapability?: DroneReferenceCapability;
   executeToolImpl?: () => Promise<string | DroneToolResult>;
 }): Promise<Harness> {
   const engine = createMockEngine({
@@ -147,6 +153,7 @@ async function setup(options: {
     if (id === 'llm') return llm;
     if (id === 'swarm' && options.swarmActive)
       return { getBeaconUrl: () => '' };
+    if (id === 'reference') return options.referenceCapability;
     return undefined;
   };
   const send = (prompt: string) => conversation.sendUserMessage(prompt);
@@ -349,6 +356,51 @@ describe('conversation-service image describer (request seam)', () => {
     const messages = h.sessionManager.getMessages();
     const userMsg = messages.find(m => m.role === 'user' && m.images);
     expect(userMsg?.images?.[0].description).toBeUndefined();
+  });
+
+  it('describes an IMAGE REFERENCE on a user turn for a non-vision model', async () => {
+    // The `@pic.png` reference attaches the image to the USER turn; the
+    // describe/present pipeline is role-agnostic, so a non-vision model must
+    // still receive the description exactly as it would for a tool result.
+    const dir = await mkdtemp(path.join(tmpdir(), 'ref-describer-'));
+    try {
+      const png = Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00,
+      ]);
+      await writeFile(path.join(dir, 'pic.png'), png);
+      const describeImages = vi.fn(async (images: DroneImageContent[]) =>
+        images.map(img => ({ ...img, description: 'a tiny png' }))
+      );
+      const h = await setup({
+        chatResponses: [{ message: 'done' }],
+        llmOverrides: { hasVision: false, describeImages },
+        logEnabled: false,
+        referenceCapability: createReferenceCapability({
+          cwd: dir,
+          homedir: dir,
+        }),
+      });
+
+      await h.send('describe @pic.png');
+
+      // The describer ran for the user-turn image (role-agnostic path).
+      expect(describeImages).toHaveBeenCalledTimes(1);
+      const userTurn = h.sessionManager
+        .getMessages()
+        .find(m => m.role === 'user' && m.content.includes('@pic.png'));
+      expect(userTurn?.images).toHaveLength(1);
+      expect(userTurn?.images?.[0].description).toBe('a tiny png');
+      // The non-vision request carries the description text and omits the image.
+      const lastChat = h.provider.__chatMock.mock.calls.at(-1)?.[0];
+      const sent = lastChat.messages.find(
+        (m: { role: string; content: string }) =>
+          m.role === 'user' && m.content.includes('a tiny png')
+      );
+      expect(sent).toBeDefined();
+      expect(sent.images).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
 

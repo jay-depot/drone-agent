@@ -1,7 +1,11 @@
 import { readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import fg from 'fast-glob';
-import type { DronePlugin } from 'drone-core';
+import {
+  SUPPORTED_IMAGE_EXTENSIONS,
+  imageMimeForPath,
+  type DronePlugin,
+} from 'drone-core';
 import { FileReadBlock } from '../tui/components/FileReadBlock.js';
 import { FileWriteBlock } from '../tui/components/FileWriteBlock.js';
 import { FileApplyDiffBlock } from '../tui/components/FileApplyDiffBlock.js';
@@ -535,18 +539,11 @@ export const filePlugin: DronePlugin = {
         }
         const filePath = path.resolve(input.path.trim());
 
-        const ext = path.extname(filePath).toLowerCase();
-        const mimeMap: Record<string, string> = {
-          '.jpg': 'image/jpeg',
-          '.jpeg': 'image/jpeg',
-          '.png': 'image/png',
-          '.webp': 'image/webp',
-          '.gif': 'image/gif',
-        };
-        const mimeType = mimeMap[ext];
+        const mimeType = imageMimeForPath(filePath);
         if (!mimeType) {
           throw new Error(
-            `file__read_image: unsupported image format "${ext}". Supported formats: .jpg, .jpeg, .png, .webp, .gif`
+            `file__read_image: unsupported image format "${path.extname(filePath)}". ` +
+              `Supported formats: ${SUPPORTED_IMAGE_EXTENSIONS.join(', ')}`
           );
         }
 

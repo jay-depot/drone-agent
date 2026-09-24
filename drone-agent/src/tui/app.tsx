@@ -38,6 +38,7 @@ import path from 'node:path';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AssistantMessageBlock } from './components/AssistantMessageBlock.js';
 import { ChatLog } from './components/ChatLog.js';
+import { CompletionMenu } from './components/CompletionMenu.js';
 import { ElicitationPrompt } from './components/ElicitationPrompt.js';
 import { InputLine } from './components/InputLine.js';
 import { MidPanel } from './components/MidPanel.js';
@@ -46,6 +47,7 @@ import { StatusBar } from './components/StatusBar.js';
 import { ToolCallProgress } from './components/ToolCallProgress.js';
 import { useChatLog } from './hooks/useChatLog.js';
 import { useColorOverrides } from './hooks/useColorOverrides.js';
+import { useCompletion } from './hooks/useCompletion.js';
 import { useDebouncedWindowSize } from './hooks/useDebouncedWindowSize.js';
 import { usePerformanceDrain } from './hooks/usePerformanceDrain.js';
 import { useElicitation } from './hooks/useElicitation.js';
@@ -224,6 +226,17 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
   const [input, setInput] = useState<string>('');
   const inputValueRef = useRef<string>('');
   inputValueRef.current = input;
+
+  // Controlled caret + completion menu. The caret lives here so accepting
+  // a completion can reposition it; the menu recomputes from (input, caret).
+  const [cursorOffset, setCursorOffset] = useState<number>(0);
+  const completion = useCompletion({
+    value: input,
+    caret: cursorOffset,
+    engine: opts.engine,
+    cwd,
+    homedir: os.homedir(),
+  });
 
   // ── Tail item tracking refs (for event listener) ────────────────────
   const currentReasoningId = useRef<string | null>(null);
@@ -713,6 +726,42 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
       return;
     }
 
+    // ── Completion menu (below elicitation, above the global bindings) ──
+    if (completion.open) {
+      if (key.escape) {
+        completion.close();
+        return;
+      }
+      if (key.tab && key.shift) {
+        completion.move(-1);
+        return;
+      }
+      if (key.tab) {
+        completion.move(1);
+        return;
+      }
+      if (key.upArrow) {
+        completion.move(-1);
+        return;
+      }
+      if (key.downArrow) {
+        completion.move(1);
+        return;
+      }
+      if (key.return) {
+        const accepted = completion.accept();
+        if (accepted) {
+          setInput(accepted.value);
+          setCursorOffset(accepted.caret);
+        }
+        return;
+      }
+      // Any other key falls through; typing continues to filter live.
+    } else if (key.tab && activeQuestion === null) {
+      completion.openAt();
+      return;
+    }
+
     // ── Global keybindings (fall through) ─────────────────────────────
     if (key.escape) {
       if (isLlmActive) {
@@ -861,7 +910,17 @@ export function App(opts: DroneTuiOptions): React.JSX.Element {
         llmColor={llmColor}
         disabled={activeQuestion !== null}
         columns={columns}
+        cursorOffset={cursorOffset}
+        onCursorChange={setCursorOffset}
+        completionActive={completion.open}
       />
+      {completion.open ? (
+        <CompletionMenu
+          items={completion.items}
+          selectedIndex={completion.index}
+          scheme={scheme}
+        />
+      ) : null}
       {activeQuestion ? (
         <ElicitationPrompt
           question={activeQuestion}

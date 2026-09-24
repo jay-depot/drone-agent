@@ -5,6 +5,8 @@ import {
   type DebugFlagRegistry,
   type DroneAfterToolCallPayload,
   type DroneChatMessage,
+  type DroneReferenceCapability,
+  DRONE_REFERENCE_CAPABILITY_ID,
   getCanonicalToolName,
   type RuntimeFlagRegistry,
   type DroneAgentConfig,
@@ -33,6 +35,7 @@ import { SystemReminderQueue } from './system-reminders.js';
 import { createEphemeralConversation } from './ephemeral-conversation.js';
 import { buildKickEnvelope } from './kick-envelope.js';
 import { parseSlashInvocation, stripNowFlag } from './slash-parse.js';
+import { createReferenceCapability } from './reference-expansion/index.js';
 
 export type RegisteredPluginState = {
   plugin: DronePlugin;
@@ -225,6 +228,7 @@ type CreateDronePluginEngineOptions = {
   logger?: DroneLogger;
   logToStderr?: boolean;
   debugFlags?: DebugFlagRegistry;
+  referenceCapability?: DroneReferenceCapability;
   runtimeOptions?: {
     subagentId?: string;
     persona?: string;
@@ -364,6 +368,7 @@ export function createDronePluginEngine({
   logger = createConsoleLogger('plugin-engine'),
   logToStderr = false,
   debugFlags = createDebugFlagRegistry(),
+  referenceCapability,
   runtimeOptions,
   buildSystemMessages: buildSystemMessagesFromHost,
   buildFooterMessages: buildFooterMessagesFromHost,
@@ -955,6 +960,13 @@ export function createDronePluginEngine({
           });
         },
       });
+
+      // Seed the reference-expansion capability BEFORE plugin registration so
+      // plugins (e.g. skills) can register their kinds during register().
+      capabilities.set(
+        DRONE_REFERENCE_CAPABILITY_ID,
+        referenceCapability ?? createReferenceCapability()
+      );
 
       logger.info(`initializing ${sortedPlugins.length} plugin(s)`);
       for (const plugin of sortedPlugins) {

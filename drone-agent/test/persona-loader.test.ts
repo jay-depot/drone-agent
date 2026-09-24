@@ -325,4 +325,42 @@ describe('loadPersonas — premountedTools field', () => {
       expect(p?.systemPromptOverride).toBe('You are a combined persona.');
     });
   });
+
+  it('parses plugin ids containing hyphens and does not leak their tools into neighbours', async () => {
+    await withProjectDir(async dir => {
+      const personaDir = path.join(dir, '.drone-agent', 'personas');
+      await mkdir(personaDir, { recursive: true });
+      await writePersona(
+        personaDir,
+        'hyphenated',
+        [
+          '---',
+          'name: Hyphenated',
+          'premountedTools:',
+          '  file:',
+          '    - read',
+          '  self-improvement:',
+          '    - insight',
+          '    - principle',
+          '    - mark_examined',
+          '  lsp:',
+          '    - inspect',
+          '---',
+          '',
+        ].join('\n')
+      );
+
+      const personas = await loadPersonas(dir);
+      const p = personas.get('hyphenated');
+      // The hyphenated plugin id must survive with exactly its own tools...
+      expect(p?.premountedTools).toEqual({
+        file: ['read'],
+        'self-improvement': ['insight', 'principle', 'mark_examined'],
+        lsp: ['inspect'],
+      });
+      // ...and must not leak into the keys around it.
+      expect(p?.premountedTools?.file).toEqual(['read']);
+      expect(p?.premountedTools?.lsp).toEqual(['inspect']);
+    });
+  });
 });

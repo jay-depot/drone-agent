@@ -30,6 +30,9 @@ export function InputLine({
   llmColor,
   disabled,
   columns,
+  cursorOffset,
+  onCursorChange,
+  completionActive,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -59,6 +62,10 @@ export function InputLine({
   disabled?: boolean;
   /** Terminal width for visual line calculation. */
   columns: number;
+  /** Controlled caret offset, forwarded to MultilineTextInput. */
+  cursorOffset?: number;
+  onCursorChange?: (offset: number) => void;
+  completionActive?: boolean;
 }): React.JSX.Element {
   const textWidth =
     columns - 4 - (llmFrame ? 2 : 0) - (promptLabel ? promptLabel.length : 0);
@@ -86,6 +93,9 @@ export function InputLine({
           onSubmit={onSubmit}
           columns={textWidth}
           focus={!disabled}
+          cursorOffset={cursorOffset}
+          onCursorChange={onCursorChange}
+          completionActive={completionActive}
         />
       </Box>
     </Box>

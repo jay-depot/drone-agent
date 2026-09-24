@@ -5,6 +5,7 @@ import {
   parseModelSelection,
   resolveConfiguredReasoningLevel,
   toToolResultContent,
+  DRONE_REFERENCE_CAPABILITY_ID,
   type DroneGuardrailConfig,
   type DroneGuardrailThresholdConfig,
   type DebugFlagRegistry,
@@ -20,6 +21,8 @@ import type {
   DroneLlmCapability,
   DroneLlmProvider,
   DroneLogger,
+  DroneReferenceCapability,
+  DroneReferenceExpansion,
   DroneSessionSafetyTrimPayload,
   DroneSlashCommandContext,
   DroneToolCall,
@@ -37,6 +40,12 @@ import type { DroneSessionManager } from './session-manager.js';
 import type { ContextBudgetService } from './context-budget-service.js';
 import { buildAsideMessages } from './aside.js';
 import { deduplicateToolCalls, toolCallSignature } from './tool-call-utils.js';
+import {
+  DEFAULT_MAX_IMAGES_PER_MESSAGE,
+  capImages,
+  referenceImageOmissionMarker,
+  toolImageOmissionMarker,
+} from './image-cap.js';
 
 export type ConversationEventHandler = (event: DroneConversationEvent) => void;
 // Re-export for convenience — used by interactive.ts and tui/types.ts
@@ -182,6 +191,12 @@ type CreateConversationServiceOptions = {
    * instead of prompting — this is the non-interactive behavior.
    */
   onRetryPrompt?: (error: DroneLlmError, attempt: number) => Promise<boolean>;
+  /**
+   * Expand `@` references in a user string before it becomes a session turn.
+   * Applied at every direct-append site (sendUserMessage, the deferred
+   * 'append' drain, and the mid-round steering loop). Defaults to identity.
+   */
+  expandUserMessage?: (text: string) => Promise<DroneReferenceExpansion>;
 };
 
 export function createConversationService({
@@ -198,6 +213,7 @@ export function createConversationService({
   onBrokenResponseLimitReached,
   onIdenticalToolCallLimitReached,
   onRetryPrompt,
+  expandUserMessage,
 }: CreateConversationServiceOptions): ConversationService {
   let hasWarnedAboutSafetyTrim = false;
   let reasoningLevel: DroneReasoningLevel | undefined;
@@ -307,6 +323,28 @@ export function createConversationService({
     return llm;
   }
 
+  /**
+   * Default `@`-reference expander: resolves the engine's `reference`
+   * capability lazily (it is seeded during `initialize()`, after this service
+   * is constructed) and falls back to identity when no capability is
+   * registered. This makes the capability the single source of truth for every
+   * host, so a host never has to remember to wire an expander.
+   */
+  async function defaultExpandUserMessage(
+    text: string
+  ): Promise<DroneReferenceExpansion> {
+    const capability = engine.getCapability<DroneReferenceCapability>(
+      DRONE_REFERENCE_CAPABILITY_ID
+    );
+    if (!capability) {
+      return { text, images: [], notices: [] };
+    }
+    return capability.expandUserMessage(text);
+  }
+
+  const resolveExpandUserMessage =
+    expandUserMessage ?? defaultExpandUserMessage;
+
   function resolveEffectiveMaxToolIterations(): number {
     // Check active persona's toolCallLimit first
     const personaCap = engine.getCapability<{
@@ -391,6 +429,37 @@ export function createConversationService({
   }
 
   /**
+   * Expand `@` references in a user string, append it as a session turn (with
+   * any attached images), emit an expansion notice per reference, and return
+   * the expanded text for the caller's `userMessage` event. Expansion runs at
+   * exactly the direct-append sites; the `'own-round'` drain re-enters
+   * `sendUserMessage`, so it is covered indirectly and not expanded here.
+   */
+  async function expandAndAppend(content: string): Promise<string> {
+    const result = await resolveExpandUserMessage(content);
+    const capped = capImages(
+      result.images,
+      config.session.maxImagesPerMessage ?? DEFAULT_MAX_IMAGES_PER_MESSAGE
+    );
+    let text = result.text;
+    if (capped.omitted > 0) {
+      text = `${text}\n\n${referenceImageOmissionMarker(capped.omitted)}`;
+    }
+    sessionManager.appendUserMessage(
+      text,
+      capped.images.length > 0 ? capped.images : undefined
+    );
+    for (const notice of result.notices) {
+      engine
+        .runConversationEventHooks({ kind: 'notice', content: notice })
+        .catch(err => {
+          logger.warn(`Conversation event hook threw: ${err}`);
+        });
+    }
+    return text;
+  }
+
+  /**
    * Run a queued slash command through the engine's dispatch. Called from
    * both drain points (finally-on-completion and start-of-next-send). Uses
    * the host-supplied context builder when wired, else the bare context.
@@ -422,11 +491,11 @@ export function createConversationService({
       if (entry.kind === 'slash') {
         await dispatchQueuedSlash(entry.line);
       } else if (mode === 'append') {
-        sessionManager.appendUserMessage(entry.content);
+        const expanded = await expandAndAppend(entry.content);
         engine
           .runConversationEventHooks({
             kind: 'userMessage',
-            content: entry.content,
+            content: expanded,
           })
           .catch(err => {
             logger.warn(`Conversation event hook threw: ${err}`);
@@ -593,7 +662,7 @@ export function createConversationService({
 
         turnInFlight = true;
 
-        sessionManager.appendUserMessage(prompt);
+        const expandedPrompt = await expandAndAppend(prompt);
 
         // A new user message resets the identical-tool-call streak and
         // the broken-response counter (this is a fresh turn).
@@ -608,7 +677,7 @@ export function createConversationService({
         engine
           .runConversationEventHooks({
             kind: 'userMessage',
-            content: prompt,
+            content: expandedPrompt,
           })
           .catch(err => {
             logger.warn(`Conversation event hook threw: ${err}`);
@@ -804,7 +873,9 @@ export function createConversationService({
           // stays bounded. Over-cap images are dropped (kept-first-N) and a
           // marker is appended to content telling the model how to retrieve
           // the rest.
-          const maxImagesPerMessage = config.session.maxImagesPerMessage ?? 20;
+          const maxImagesPerMessage =
+            config.session.maxImagesPerMessage ??
+            DEFAULT_MAX_IMAGES_PER_MESSAGE;
           const bufferedResults: Array<{
             name: string;
             content: string;
@@ -816,11 +887,12 @@ export function createConversationService({
             let content = toolResult.content;
             let images =
               toolResult.kind === 'ok' ? toolResult.images : undefined;
-            if (images && images.length > maxImagesPerMessage) {
-              const kept = images.slice(0, maxImagesPerMessage);
-              const omitted = images.length - kept.length;
-              images = kept;
-              content = `${content}\n\n[${omitted} additional images omitted. Request a narrower/range selection to retrieve them.]`;
+            if (images && images.length > 0) {
+              const capped = capImages(images, maxImagesPerMessage);
+              if (capped.omitted > 0) {
+                images = capped.images;
+                content = `${content}\n\n${toolImageOmissionMarker(capped.omitted)}`;
+              }
             }
             bufferedResults.push({
               name: result.name,
@@ -980,11 +1052,11 @@ export function createConversationService({
           // userMessage emission.
           while (steeringMessages.length > 0) {
             const steer = steeringMessages.shift()!;
-            sessionManager.appendUserMessage(steer);
+            const expandedSteer = await expandAndAppend(steer);
             engine
               .runConversationEventHooks({
                 kind: 'userMessage',
-                content: steer,
+                content: expandedSteer,
               })
               .catch(err => {
                 logger.warn(`Conversation event hook threw: ${err}`);

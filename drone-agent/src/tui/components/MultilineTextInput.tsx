@@ -52,6 +52,9 @@ export function MultilineTextInput({
   onSubmit,
   focus = true,
   columns,
+  cursorOffset: controlledCursorOffset,
+  onCursorChange,
+  completionActive = false,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -59,8 +62,30 @@ export function MultilineTextInput({
   focus?: boolean;
   /** Terminal width for visual line calculation. */
   columns: number;
+  /**
+   * Controlled caret offset. When provided (with onCursorChange) the parent
+   * owns the caret, so it can reposition it after accepting a completion.
+   */
+  cursorOffset?: number;
+  onCursorChange?: (offset: number) => void;
+  /** When true, Tab/Enter/Up/Down are left for the parent's completion menu. */
+  completionActive?: boolean;
 }): React.JSX.Element {
-  const [cursorOffset, setCursorOffset] = useState(value.length);
+  const [internalCursor, setInternalCursor] = useState(value.length);
+  const isControlled = controlledCursorOffset !== undefined;
+  // The effective caret: the parent's value when controlled, else internal
+  // state. Clamped to the value length so an external value shrink (e.g.
+  // after submit) cannot leave the caret past the end.
+  const cursorOffset = Math.min(
+    isControlled ? controlledCursorOffset : internalCursor,
+    value.length
+  );
+  const setCursorOffset = (next: number): void => {
+    onCursorChange?.(next);
+    if (!isControlled) {
+      setInternalCursor(next);
+    }
+  };
 
   // Preferred column for Up/Down navigation. Reset on horizontal
   // movement or typing.
@@ -92,6 +117,16 @@ export function MultilineTextInput({
       // inputParser emits as valid CSI sequences. These are not text
       // input and should not be inserted into the value.
       if (input.startsWith('[<')) {
+        return;
+      }
+
+      // While the completion menu is open, Tab/Enter/Up/Down belong to the
+      // menu (handled by the parent's global input handler). Ignore them here
+      // so the keystroke is not double-handled.
+      if (
+        completionActive &&
+        (key.tab || key.return || key.upArrow || key.downArrow)
+      ) {
         return;
       }
 
