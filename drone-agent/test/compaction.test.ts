@@ -428,7 +428,7 @@ describe('createCompactionPlugin', () => {
       minTurnsToCompact: 2,
     });
 
-    const provider = makeProvider({ contextWindow: 200 });
+    const provider = makeProvider({ contextWindow: 256 });
     const plugin = createCompactionPlugin({
       sessionManager,
     });
@@ -1011,7 +1011,7 @@ describe('createCompactionPlugin', () => {
       minTurnsToCompact: 2,
     });
 
-    const provider = makeProvider({ contextWindow: 200 });
+    const provider = makeProvider({ contextWindow: 256 });
     const plugin = createCompactionPlugin({
       sessionManager,
     });
@@ -1381,7 +1381,7 @@ it('emits a compaction event when self-purging old summaries', async () => {
     minTurnsToCompact: 2,
   });
 
-  const provider = makeProvider({ contextWindow: 200 });
+  const provider = makeProvider({ contextWindow: 256 });
   const emitEvent = vi.fn();
   const plugin = createCompactionPlugin({
     sessionManager,

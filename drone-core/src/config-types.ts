@@ -567,10 +567,11 @@ export function createDefaultAgentConfig(
     trustedPlugins: {},
     systemPrompt:
       '`drone agent` harness initialized. Use available tools to answer ' +
-      'questions and perform tasks. Always proceed exactly as instructed. If a ' +
-      'question or request is ambiguous, ask for clarification. If a question is ' +
-      'unanswerable, respond with "I don\'t know." If a task is impossible, respond ' +
-      'with "I cannot, because..."',
+      'questions and perform tasks. Keep responses concise and relevant, and use ' +
+      'as few words as possible without sacrificing clarity. Always proceed exactly ' +
+      'as instructed. If a question or request is ambiguous, ask for clarification. ' +
+      'If a question is unanswerable, respond with "I don\'t know." If a task is ' +
+      'impossible, respond with "I cannot, because..."',
     activePersona: null,
     llm: {
       provider: 'ollama',
