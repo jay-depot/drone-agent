@@ -7,9 +7,34 @@ import { validateConversationId } from './files.js';
 import type {
   GatewayConfig,
   ResolvedServiceAdapter,
+  ResolvedConversation,
   ControlSurfaceSpec,
   SpawnBackendType,
 } from '../types.js';
+
+/**
+ * Reads the optional `config.targetBeaconId` override on a control surface.
+ * It must be a non-empty string; anything else is warned about and dropped so
+ * the conversation falls back to the gateway-wide default.
+ */
+function sanitizeSurfaceConfig(
+  config: Record<string, unknown> | undefined,
+  adapterId: string,
+  file: string,
+  convId: string
+): Record<string, unknown> | undefined {
+  if (!config) return config;
+  const override = config.targetBeaconId;
+  if (override === undefined) return config;
+  if (typeof override === 'string' && override.trim() !== '') return config;
+  logger.warn(
+    { adapterId, file, convId },
+    `Control surface targetBeaconId in "${file}" is not a non-empty string; ignoring the override`
+  );
+  const rest = { ...config };
+  delete rest.targetBeaconId;
+  return rest;
+}
 
 /**
  * Load and validate the full gateway configuration from a folder hierarchy.
@@ -71,11 +96,48 @@ export async function loadGatewayConfig(
     );
   }
 
+  // Validate targetBeaconId: required for coordinator mode, inert for local
+  const rawTargetBeaconId = gatewayConfig.targetBeaconId as string | undefined;
+  let targetBeaconId: string | undefined;
+  if (rawTargetBeaconId === undefined) {
+    targetBeaconId = undefined;
+  } else if (
+    typeof rawTargetBeaconId !== 'string' ||
+    rawTargetBeaconId.trim() === ''
+  ) {
+    if (spawnBackend === 'coordinator') {
+      throw new Error(
+        'Config field targetBeaconId must be a non-empty string. ' +
+          'This field is required when spawnBackend is "coordinator".'
+      );
+    }
+    logger.warn(
+      'Config field targetBeaconId is not a non-empty string; ignoring it.'
+    );
+    targetBeaconId = undefined;
+  } else {
+    targetBeaconId = rawTargetBeaconId;
+  }
+
+  if (spawnBackend === 'coordinator' && !targetBeaconId) {
+    throw new Error(
+      'Config missing required field: targetBeaconId. ' +
+        'This field is required when spawnBackend is "coordinator".'
+    );
+  }
+
+  if (spawnBackend === 'local' && targetBeaconId) {
+    logger.warn(
+      'Config sets targetBeaconId but spawnBackend is "local" — the value has no effect.'
+    );
+  }
+
   // Build the base config
   const config: GatewayConfig = {
     coordinatorUrl: coordinatorUrl ?? '',
     coordinatorToken: gatewayConfig.coordinatorToken as string | undefined,
     spawnBackend,
+    targetBeaconId,
     agentPath: gatewayConfig.agentPath as string | undefined,
     serviceAdapters: [],
   };
@@ -143,7 +205,7 @@ async function loadAdapter(
   const { type: _type, ...restConfig } = adapterData;
 
   // Load conversations
-  const conversations = new Map<string, ControlSurfaceSpec[]>();
+  const conversations = new Map<string, ResolvedConversation>();
   const convDir = path.join(adapterDir, 'conversations');
 
   try {
@@ -217,12 +279,20 @@ async function loadAdapter(
       specs.push({
         type: spec.type as string,
         personaId: spec.personaId as string | undefined,
-        config: spec.config as Record<string, unknown> | undefined,
+        config: sanitizeSurfaceConfig(
+          spec.config as Record<string, unknown> | undefined,
+          adapterId,
+          file,
+          convId
+        ),
       });
     }
 
     if (specs.length > 0) {
-      conversations.set(convId, specs);
+      conversations.set(convId, {
+        allowedSenders: parseAllowedSenders(convData, adapterId, file),
+        surfaces: specs,
+      });
     }
   }
 
@@ -232,4 +302,30 @@ async function loadAdapter(
     config: restConfig as Record<string, unknown>,
     conversations,
   };
+}
+
+/**
+ * Reads the optional `allowedSenders` field from a conversation file. It must
+ * be an array of strings; anything else is warned about and ignored (so the
+ * conversation falls back to allowing every sender).
+ */
+function parseAllowedSenders(
+  convData: Record<string, unknown>,
+  adapterId: string,
+  file: string
+): string[] | undefined {
+  const raw = convData.allowedSenders;
+  if (raw === undefined) return undefined;
+  if (
+    !Array.isArray(raw) ||
+    !raw.every(entry => typeof entry === 'string') ||
+    raw.length === 0
+  ) {
+    logger.warn(
+      { adapterId, file },
+      `Conversation file "${file}" has an invalid allowedSenders field (expected a non-empty array of strings); ignoring it`
+    );
+    return undefined;
+  }
+  return raw as string[];
 }

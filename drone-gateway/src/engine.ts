@@ -6,27 +6,55 @@ import type {
   GatewayConfig,
   ResolvedServiceAdapter,
   ControlSurfaceSpec,
-  SpawnSession,
 } from './types.js';
 import type { SpawnBackend } from './spawn-backend.js';
+import type { SwarmApi } from './console/swarm-api.js';
+import { SurfaceRegistry } from './surfaces/registry.js';
+import { registerBuiltInSurfaces } from './surfaces/builtins.js';
+import type { SurfaceContext } from './surfaces/types.js';
+
+/**
+ * A conversation's instantiated surfaces plus its optional sender allowlist.
+ */
+type InstantiatedConversation = {
+  allowedSenders?: string[];
+  surfaces: DroneControlSurface[];
+};
+
+/**
+ * Map<adapterId, Map<conversationId, InstantiatedConversation>>
+ *
+ * Each conversation gets a dedicated ordered list of control surface
+ * instances, created at start() time. The key "*" is the per-adapter
+ * wildcard catch-all, evaluated last.
+ */
+type AdapterSurfaces = Map<string, InstantiatedConversation>;
+
+function senderAllowed(
+  allowed: string[] | undefined,
+  senderId: string | undefined
+): boolean {
+  if (!allowed) return true;
+  return senderId !== undefined && allowed.includes(senderId);
+}
 
 export class GatewayEngine {
   private adapters: Map<string, DroneServiceAdapter> = new Map();
-  /**
-   * Map<adapterId, Map<conversationId, DroneControlSurface[]>>
-   *
-   * Each conversation gets a dedicated ordered list of control surface
-   * instances, created at start() time. The key "*" is the per-adapter
-   * wildcard catch-all, evaluated last.
-   */
-  private controlSurfaces: Map<string, Map<string, DroneControlSurface[]>> =
-    new Map();
+  private controlSurfaces: Map<string, AdapterSurfaces> = new Map();
   private config: GatewayConfig;
   private spawnBackend: SpawnBackend;
+  private swarm: SwarmApi | undefined;
+  private surfaceRegistry = new SurfaceRegistry();
 
-  constructor(config: GatewayConfig, spawnBackend: SpawnBackend) {
+  constructor(
+    config: GatewayConfig,
+    spawnBackend: SpawnBackend,
+    swarm?: SwarmApi
+  ) {
     this.config = config;
     this.spawnBackend = spawnBackend;
+    this.swarm = swarm;
+    registerBuiltInSurfaces(this.surfaceRegistry);
   }
 
   async start(): Promise<void> {
@@ -43,13 +71,15 @@ export class GatewayEngine {
       await adapter.start();
       this.adapters.set(adapterConfig.id, adapter);
 
-      // Create per-conversation dedicated control surface instances
-      const byConv = new Map<string, DroneControlSurface[]>();
-      for (const [convId, specs] of adapterConfig.conversations) {
-        const instances = specs.map(spec =>
+      const byConv: AdapterSurfaces = new Map();
+      for (const [convId, conv] of adapterConfig.conversations) {
+        const surfaces = conv.surfaces.map(spec =>
           this.createControlSurface(spec, convId)
         );
-        byConv.set(convId, instances);
+        byConv.set(convId, {
+          allowedSenders: conv.allowedSenders,
+          surfaces,
+        });
       }
       this.controlSurfaces.set(adapterConfig.id, byConv);
 
@@ -69,10 +99,17 @@ export class GatewayEngine {
     const byConv = this.controlSurfaces.get(msg.adapterId);
     if (!byConv) return;
 
-    // Try exact conversation match first, then wildcard
+    // A conversation whose allowlist excludes this sender is not a match, so
+    // dispatch falls through to the wildcard.
+    const exact = byConv.get(msg.conversationId);
+    const wildcard = byConv.get('*');
     const candidates: DroneControlSurface[] = [
-      ...(byConv.get(msg.conversationId) ?? []),
-      ...(byConv.get('*') ?? []),
+      ...(exact && senderAllowed(exact.allowedSenders, msg.senderId)
+        ? exact.surfaces
+        : []),
+      ...(wildcard && senderAllowed(wildcard.allowedSenders, msg.senderId)
+        ? wildcard.surfaces
+        : []),
     ];
 
     for (const surface of candidates) {
@@ -84,11 +121,10 @@ export class GatewayEngine {
             await adapter.sendMessage(msg.conversationId, result.response);
           }
         }
-        return; // first matching surface handles it
+        return;
       }
     }
 
-    // No surface handled the message — log as unhandled
     logger.debug(
       { adapterId: msg.adapterId, conversationId: msg.conversationId },
       'Message unhandled by any control surface'
@@ -127,88 +163,37 @@ export class GatewayEngine {
     spec: ControlSurfaceSpec,
     conversationId: string
   ): DroneControlSurface {
-    switch (spec.type) {
-      case 'persona-assignment': {
-        if (!spec.personaId) {
-          throw new Error(
-            'persona-assignment control surface requires personaId'
-          );
-        }
-        return this.createPersonaAssignmentSurface(
-          conversationId,
-          spec.personaId
-        );
-      }
-      case 'discard': {
-        return this.createDiscardSurface(conversationId);
-      }
-      default:
-        throw new Error(
-          `No control surface implementation available for type "${spec.type}". ` +
-            `Supported types: persona-assignment, discard`
-        );
+    const factory = this.surfaceRegistry.get(spec.type);
+    if (!factory) {
+      throw new Error(
+        `No control surface implementation available for type "${spec.type}". ` +
+          `Supported types: ${this.surfaceRegistry.types().join(', ')}`
+      );
     }
-  }
-
-  private createPersonaAssignmentSurface(
-    conversationId: string,
-    personaId: string
-  ): DroneControlSurface {
-    let session: SpawnSession | null = null;
-
-    return {
-      id: `persona-assignment-${conversationId}`,
-      type: 'persona-assignment',
-      handleMessage: async (msg: AdapterMessage) => {
-        // The engine guarantees this surface is only invoked for its
-        // own conversation — no conversationId re-check needed.
-        try {
-          // Ensure we have a session for this conversation
-          if (!session) {
-            session = await this.spawnBackend.spawnSession(
-              conversationId,
-              personaId
-            );
-          }
-
-          // Send the message and get the response
-          const response = await this.spawnBackend.sendMessage(
-            session,
-            msg.text
-          );
-
-          return { response, handled: true };
-        } catch (err) {
-          logger.error(
-            { err, conversationId, personaId },
-            'Error handling message via persona-assignment surface'
-          );
-          return {
-            response: `Error: ${err instanceof Error ? err.message : 'Unknown error'}`,
-            handled: true,
-          };
-        }
-      },
-    };
+    return factory(
+      spec,
+      conversationId,
+      this.surfaceContext(this.resolveTargetBeaconId(spec))
+    );
   }
 
   /**
-   * Creates a discard control surface that silently consumes messages.
-   * Always returns { response: null, handled: true }.
-   * Used for explicit "/dev/null" routing (e.g., wildcard catch-all for
-   * unknown DMs).
+   * The beacon a conversation's spawns target: the surface override when
+   * present, otherwise the gateway-wide default. Always undefined in local
+   * mode, where there is no beacon.
    */
-  private createDiscardSurface(conversationId: string): DroneControlSurface {
+  private resolveTargetBeaconId(spec: ControlSurfaceSpec): string | undefined {
+    if (this.spawnBackend.type !== 'coordinator') return undefined;
+    const override = spec.config?.targetBeaconId;
+    if (typeof override === 'string' && override.trim() !== '') return override;
+    return this.config.targetBeaconId;
+  }
+
+  private surfaceContext(targetBeaconId: string | undefined): SurfaceContext {
     return {
-      id: `discard-${conversationId}`,
-      type: 'discard',
-      handleMessage: async (_msg: AdapterMessage) => {
-        logger.debug(
-          { conversationId },
-          'Message discarded via discard control surface'
-        );
-        return { response: null, handled: true };
-      },
+      spawnBackend: this.spawnBackend,
+      swarm: this.swarm,
+      targetBeaconId,
     };
   }
 }

@@ -2,11 +2,11 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type {
   GatewayConfig,
   ResolvedServiceAdapter,
+  ResolvedConversation,
   ControlSurfaceSpec,
 } from '../src/types.js';
 import type { SpawnBackend } from '../src/spawn-backend.js';
 
-// Mock CoordinatorClient since GatewayEngine creates one internally
 vi.mock('../src/coordinator-client.js', () => ({
   CoordinatorClient: vi.fn().mockImplementation(function () {
     return {
@@ -42,6 +42,22 @@ function makeMockSpawnBackend(): SpawnBackend {
   };
 }
 
+function makeRespondingSpawnBackend(
+  type: 'local' | 'coordinator' = 'local'
+): SpawnBackend {
+  return {
+    type,
+    spawnSession: vi.fn(async (conversationId: string, personaId: string) => ({
+      conversationId,
+      personaId,
+      processId: 'agent-1',
+      startedAt: 0,
+    })),
+    sendMessage: vi.fn(async () => 'PERSONA-RESPONSE'),
+    terminateSession: vi.fn(),
+  };
+}
+
 function makeMinimalConfig(
   overrides: Partial<GatewayConfig> = {}
 ): GatewayConfig {
@@ -72,8 +88,46 @@ function makeConvSpec(
   return { type, ...overrides };
 }
 
+function conv(
+  surfaces: ControlSurfaceSpec[],
+  allowedSenders?: string[]
+): ResolvedConversation {
+  return { allowedSenders, surfaces };
+}
+
+type SentMessage = { conversationId: string; text: string };
+
+async function startAndDrive(
+  config: GatewayConfig,
+  spawnBackend: SpawnBackend,
+  message: { conversationId: string; text: string; senderId?: string }
+): Promise<SentMessage[]> {
+  const sent: SentMessage[] = [];
+  const engine = new GatewayEngine(config, spawnBackend);
+  await engine.start();
+  const matrix = (await import('../src/adapters/matrix.js'))
+    .MatrixServiceAdapter as unknown as ReturnType<typeof vi.fn>;
+  const adapter = matrix.mock.results.at(-1)?.value as {
+    onMessage: ReturnType<typeof vi.fn>;
+    sendMessage: ReturnType<typeof vi.fn>;
+  };
+  adapter.sendMessage.mockImplementation(
+    async (conversationId: string, text: string) => {
+      sent.push({ conversationId, text });
+    }
+  );
+  const handler = adapter.onMessage.mock.calls[0][0] as (m: {
+    adapterId: string;
+    conversationId: string;
+    text: string;
+    senderId?: string;
+  }) => void;
+  handler({ adapterId: 'matrix-1', ...message });
+  await vi.waitFor(() => expect(sent).toHaveLength(1));
+  return sent;
+}
+
 describe('GatewayEngine', () => {
-  let engine: InstanceType<typeof GatewayEngine>;
   let mockSpawnBackend: SpawnBackend;
 
   beforeEach(() => {
@@ -83,16 +137,14 @@ describe('GatewayEngine', () => {
 
   describe('constructor', () => {
     it('creates an engine instance', () => {
-      const config = makeMinimalConfig();
-      engine = new GatewayEngine(config, mockSpawnBackend);
+      const engine = new GatewayEngine(makeMinimalConfig(), mockSpawnBackend);
       expect(engine).toBeDefined();
     });
   });
 
   describe('start', () => {
     it('starts successfully with no adapters', async () => {
-      const config = makeMinimalConfig();
-      engine = new GatewayEngine(config, mockSpawnBackend);
+      const engine = new GatewayEngine(makeMinimalConfig(), mockSpawnBackend);
       await expect(engine.start()).resolves.toBeUndefined();
     });
 
@@ -102,12 +154,12 @@ describe('GatewayEngine', () => {
           makeAdapter({
             id: 'matrix-1',
             conversations: new Map([
-              ['!room:server', [makeConvSpec('discard')]],
+              ['!room:server', conv([makeConvSpec('discard')])],
             ]),
           }),
         ],
       });
-      engine = new GatewayEngine(config, mockSpawnBackend);
+      const engine = new GatewayEngine(config, mockSpawnBackend);
       await expect(engine.start()).resolves.toBeUndefined();
     });
 
@@ -122,7 +174,7 @@ describe('GatewayEngine', () => {
           },
         ],
       });
-      engine = new GatewayEngine(config, mockSpawnBackend);
+      const engine = new GatewayEngine(config, mockSpawnBackend);
 
       await expect(engine.start()).rejects.toThrow(
         'No adapter implementation available for type "slack"'
@@ -135,50 +187,216 @@ describe('GatewayEngine', () => {
           makeAdapter({
             id: 'matrix-1',
             conversations: new Map([
-              ['!room1:server', [makeConvSpec('discard')]],
-              ['!room2:server', [makeConvSpec('discard')]],
+              ['!room1:server', conv([makeConvSpec('discard')])],
+              ['!room2:server', conv([makeConvSpec('discard')])],
             ]),
           }),
         ],
       });
-      engine = new GatewayEngine(config, mockSpawnBackend);
+      const engine = new GatewayEngine(config, mockSpawnBackend);
       await engine.start();
-      // If it didn't throw, per-conversation instances were created
       expect(true).toBe(true);
     });
-  });
 
-  describe('stop', () => {
-    it('stops cleanly after starting with no adapters', async () => {
-      const config = makeMinimalConfig();
-      engine = new GatewayEngine(config, mockSpawnBackend);
-      await engine.start();
-      await expect(engine.stop()).resolves.toBeUndefined();
-    });
-
-    it('stops cleanly without starting first', async () => {
-      const config = makeMinimalConfig();
-      engine = new GatewayEngine(config, mockSpawnBackend);
-      await expect(engine.stop()).resolves.toBeUndefined();
-    });
-  });
-
-  describe('discard control surface', () => {
-    it('discard surface handles messages without response', async () => {
+    it('throws when a surface type has no registered implementation', async () => {
       const config = makeMinimalConfig({
         serviceAdapters: [
           makeAdapter({
             id: 'matrix-1',
             conversations: new Map([
-              ['!room:server', [makeConvSpec('discard')]],
+              ['!room:server', conv([makeConvSpec('mystery-surface')])],
             ]),
           }),
         ],
       });
-      engine = new GatewayEngine(config, mockSpawnBackend);
+      const engine = new GatewayEngine(config, mockSpawnBackend);
+
+      await expect(engine.start()).rejects.toThrow(
+        'No control surface implementation available for type "mystery-surface". ' +
+          'Supported types: discard, persona-assignment, swarm-console'
+      );
+    });
+  });
+
+  describe('stop', () => {
+    it('stops cleanly after starting with no adapters', async () => {
+      const engine = new GatewayEngine(makeMinimalConfig(), mockSpawnBackend);
       await engine.start();
-      // The engine started successfully with a discard surface
-      expect(true).toBe(true);
+      await expect(engine.stop()).resolves.toBeUndefined();
+    });
+
+    it('stops cleanly without starting first', async () => {
+      const engine = new GatewayEngine(makeMinimalConfig(), mockSpawnBackend);
+      await expect(engine.stop()).resolves.toBeUndefined();
+    });
+  });
+
+  describe('swarm-console surface wiring', () => {
+    it('reports the coordinator-backend error in local mode', async () => {
+      const config = makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              ['dm:@me:server', conv([makeConvSpec('swarm-console')])],
+            ]),
+          }),
+        ],
+      });
+      const sent = await startAndDrive(config, mockSpawnBackend, {
+        conversationId: 'dm:@me:server',
+        text: 'swarm.beacon.list',
+      });
+      expect(sent[0].text).toContain('requires the coordinator spawn backend');
+    });
+  });
+
+  describe('allowedSenders gate', () => {
+    function gateConfig(): GatewayConfig {
+      return makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv(
+                  [makeConvSpec('persona-assignment', { personaId: 'me' })],
+                  ['@me:server']
+                ),
+              ],
+              ['*', conv([makeConvSpec('swarm-console')])],
+            ]),
+          }),
+        ],
+      });
+    }
+
+    it('dispatches to the exact conversation when the sender is allowed', async () => {
+      const sent = await startAndDrive(
+        gateConfig(),
+        makeRespondingSpawnBackend(),
+        {
+          conversationId: 'dm:@me:server',
+          text: 'hello',
+          senderId: '@me:server',
+        }
+      );
+      expect(sent[0].text).toBe('PERSONA-RESPONSE');
+    });
+
+    it('falls through to the wildcard when the sender is not allowed', async () => {
+      const sent = await startAndDrive(
+        gateConfig(),
+        makeRespondingSpawnBackend(),
+        {
+          conversationId: 'dm:@me:server',
+          text: 'swarm.beacon.list',
+          senderId: '@intruder:server',
+        }
+      );
+      expect(sent[0].text).toContain('requires the coordinator spawn backend');
+    });
+
+    it('allows every sender when allowedSenders is unset', async () => {
+      const config = makeMinimalConfig({
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([makeConvSpec('persona-assignment', { personaId: 'me' })]),
+              ],
+              ['*', conv([makeConvSpec('swarm-console')])],
+            ]),
+          }),
+        ],
+      });
+      const sent = await startAndDrive(config, makeRespondingSpawnBackend(), {
+        conversationId: 'dm:@me:server',
+        text: 'hello',
+        senderId: '@anyone:server',
+      });
+      expect(sent[0].text).toBe('PERSONA-RESPONSE');
+    });
+  });
+
+  describe('spawn target beacon resolution', () => {
+    function beaconConfig(
+      spawnBackend: 'local' | 'coordinator',
+      overrides: Partial<GatewayConfig> = {}
+    ): GatewayConfig {
+      return makeMinimalConfig({
+        spawnBackend,
+        targetBeaconId: 'beacon-default',
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([makeConvSpec('persona-assignment', { personaId: 'me' })]),
+              ],
+            ]),
+          }),
+        ],
+        ...overrides,
+      });
+    }
+
+    function spawnedBeacon(backend: SpawnBackend): unknown {
+      const spy = backend.spawnSession as unknown as ReturnType<typeof vi.fn>;
+      return spy.mock.calls[0][2];
+    }
+
+    it('uses the gateway default when the conversation sets no override', async () => {
+      const backend = makeRespondingSpawnBackend('coordinator');
+      await startAndDrive(beaconConfig('coordinator'), backend, {
+        conversationId: 'dm:@me:server',
+        text: 'hello',
+      });
+      expect(spawnedBeacon(backend)).toEqual({
+        targetBeaconId: 'beacon-default',
+      });
+    });
+
+    it('prefers the per-conversation override', async () => {
+      const backend = makeRespondingSpawnBackend('coordinator');
+      const config = beaconConfig('coordinator', {
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([
+                  makeConvSpec('persona-assignment', {
+                    personaId: 'me',
+                    config: { targetBeaconId: 'beacon-override' },
+                  }),
+                ]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      await startAndDrive(config, backend, {
+        conversationId: 'dm:@me:server',
+        text: 'hello',
+      });
+      expect(spawnedBeacon(backend)).toEqual({
+        targetBeaconId: 'beacon-override',
+      });
+    });
+
+    it('resolves to undefined in local mode', async () => {
+      const backend = makeRespondingSpawnBackend('local');
+      await startAndDrive(beaconConfig('local'), backend, {
+        conversationId: 'dm:@me:server',
+        text: 'hello',
+      });
+      expect(spawnedBeacon(backend)).toEqual({ targetBeaconId: undefined });
     });
   });
 });

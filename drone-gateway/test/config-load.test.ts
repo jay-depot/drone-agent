@@ -1,8 +1,9 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import type { GatewayConfig } from '../src/types.js';
 import {
   convIdToFilename,
   filenameToConvId,
@@ -125,10 +126,163 @@ describe('loadGatewayConfig coordinatorUrl validation', () => {
     const configPath = await writeConfig({
       coordinatorUrl: 'http://coordinator:8080',
       spawnBackend: 'coordinator',
+      targetBeaconId: 'beacon-1',
     });
 
     const { loadGatewayConfig } = await import('../src/config/load.js');
     const config = await loadGatewayConfig(configPath);
     expect(config.coordinatorUrl).toBe('http://coordinator:8080');
+    expect(config.targetBeaconId).toBe('beacon-1');
+  });
+});
+
+describe('loadGatewayConfig targetBeaconId validation', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), 'gateway-beacon-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  async function writeConfig(config: Record<string, unknown>): Promise<string> {
+    const configPath = path.join(tmpDir, 'config.json');
+    writeFileSync(configPath, JSON.stringify(config));
+    return configPath;
+  }
+
+  it('throws when targetBeaconId is missing in coordinator mode', async () => {
+    const configPath = await writeConfig({
+      coordinatorUrl: 'http://coordinator:8080',
+      spawnBackend: 'coordinator',
+    });
+
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    await expect(loadGatewayConfig(configPath)).rejects.toThrow(
+      'targetBeaconId'
+    );
+  });
+
+  it('accepts a targetBeaconId in coordinator mode', async () => {
+    const configPath = await writeConfig({
+      coordinatorUrl: 'http://coordinator:8080',
+      spawnBackend: 'coordinator',
+      targetBeaconId: 'beacon-9',
+    });
+
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    const config = await loadGatewayConfig(configPath);
+    expect(config.targetBeaconId).toBe('beacon-9');
+  });
+
+  it('throws when targetBeaconId is not a string in coordinator mode', async () => {
+    const configPath = await writeConfig({
+      coordinatorUrl: 'http://coordinator:8080',
+      spawnBackend: 'coordinator',
+      targetBeaconId: 42,
+    });
+
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    await expect(loadGatewayConfig(configPath)).rejects.toThrow(
+      'targetBeaconId'
+    );
+  });
+
+  it('warns but loads when targetBeaconId is set in local mode', async () => {
+    const configPath = await writeConfig({
+      spawnBackend: 'local',
+      targetBeaconId: 'beacon-9',
+    });
+
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    const config = await loadGatewayConfig(configPath);
+    expect(config.targetBeaconId).toBe('beacon-9');
+    expect(config.spawnBackend).toBe('local');
+  });
+});
+
+describe('loadGatewayConfig conversation parsing', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), 'gateway-conv-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeConversation(
+    adapterId: string,
+    file: string,
+    data: Record<string, unknown>
+  ): void {
+    const convDir = path.join(tmpDir, 'adapters', adapterId, 'conversations');
+    mkdirSync(convDir, { recursive: true });
+    writeFileSync(path.join(convDir, file), JSON.stringify(data));
+  }
+
+  async function load(): Promise<GatewayConfig> {
+    const configPath = path.join(tmpDir, 'config.json');
+    writeFileSync(configPath, JSON.stringify({ spawnBackend: 'local' }));
+    writeFileSync(
+      path.join(tmpDir, 'adapters', 'matrix', 'adapter.json'),
+      JSON.stringify({ type: 'matrix' })
+    );
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    return loadGatewayConfig(configPath);
+  }
+
+  it('parses a conversation with surfaces and no allowlist', async () => {
+    writeConversation('matrix', 'room.json', {
+      conversationId: '!room:server',
+      controlSurfaces: [{ type: 'swarm-console' }],
+    });
+    const config = await load();
+    const conversations = config.serviceAdapters[0].conversations;
+    const conversation = conversations.get('!room:server');
+    expect(conversation?.surfaces).toEqual([{ type: 'swarm-console' }]);
+    expect(conversation?.allowedSenders).toBeUndefined();
+  });
+
+  it('parses a valid allowedSenders array', async () => {
+    writeConversation('matrix', 'dm.json', {
+      conversationId: 'dm:@me:server',
+      allowedSenders: ['@me:server'],
+      controlSurfaces: [{ type: 'swarm-console' }],
+    });
+    const config = await load();
+    expect(
+      config.serviceAdapters[0].conversations.get('dm:@me:server')
+        ?.allowedSenders
+    ).toEqual(['@me:server']);
+  });
+
+  it('ignores a non-array allowedSenders', async () => {
+    writeConversation('matrix', 'dm.json', {
+      conversationId: 'dm:@me:server',
+      allowedSenders: '@me:server',
+      controlSurfaces: [{ type: 'swarm-console' }],
+    });
+    const config = await load();
+    expect(
+      config.serviceAdapters[0].conversations.get('dm:@me:server')
+        ?.allowedSenders
+    ).toBeUndefined();
+  });
+
+  it('ignores an allowedSenders array with non-string entries', async () => {
+    writeConversation('matrix', 'dm.json', {
+      conversationId: 'dm:@me:server',
+      allowedSenders: ['@me:server', 42],
+      controlSurfaces: [{ type: 'swarm-console' }],
+    });
+    const config = await load();
+    expect(
+      config.serviceAdapters[0].conversations.get('dm:@me:server')
+        ?.allowedSenders
+    ).toBeUndefined();
   });
 });
