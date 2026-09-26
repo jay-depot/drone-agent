@@ -46,7 +46,7 @@ The plumbing is already in place and deliberately reserved for this:
 
 - `DroneReferenceResolution.images` / `DroneReferenceExpansion.images` exist and
   are documented in `drone-core/src/reference-types.ts:26-27` as
-  *"v1: always empty; reserved for image refs"*.
+  _"v1: always empty; reserved for image refs"_.
 - `expandAndAppend` (`drone-agent/src/runtime/conversation-service.ts:426-446`)
   **already forwards** `result.images` into
   `sessionManager.appendUserMessage(text, images?)`.
@@ -61,20 +61,20 @@ So the work is: teach the `file` resolver to recognize images, return them via
 
 ### Locked decisions (all 12)
 
-| # | Decision |
-|---|----------|
-| Q1 | **Extension-based** recognition inside the existing `file` kind. No new `@image:` namespace, no magic-byte sniffing. Reuse `read_image`'s extension set. |
-| Q2 | Image references produce **no text block** — `block: ''`; the image rides only in `images[]`. |
-| Q3 | Reuse `session.maxImageSizeBytes` (per image) and **generalize `session.maxImagesPerMessage` to all messages** via one shared cap helper. |
-| Q4 | Adopt the **established tool-image standard verbatim** (size cap, count cap kept-first-N, omission marker, `max(256,desc)` accounting). The 1 MiB reference text budget is **untouched** (images never charge it). |
-| Q5 | Success receipt: `[expanded @pic.png (image/png, 12.3 KB)]` — same `[expanded @…]` vocabulary; MIME type replaces the line count. |
-| Q6 | **Direct file refs AND glob refs** attach images. Directory listings stay name-only (never attach). |
-| Q7 | Directory-listing expansion ("inlining a directory's images") is **DEFERRED**. |
-| Q8 | The extension→MIME helper lives in **`drone-core`** (the user anticipates coordinator use). |
-| Q9 | Oversize image → **skip + notice** `[image too large: @pic.png (24.5 MB > 20 MB)]`, checked **before reading the file**. |
+| #   | Decision                                                                                                                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Q1  | **Extension-based** recognition inside the existing `file` kind. No new `@image:` namespace, no magic-byte sniffing. Reuse `read_image`'s extension set.                                                                       |
+| Q2  | Image references produce **no text block** — `block: ''`; the image rides only in `images[]`.                                                                                                                                  |
+| Q3  | Reuse `session.maxImageSizeBytes` (per image) and **generalize `session.maxImagesPerMessage` to all messages** via one shared cap helper.                                                                                      |
+| Q4  | Adopt the **established tool-image standard verbatim** (size cap, count cap kept-first-N, omission marker, `max(256,desc)` accounting). The 1 MiB reference text budget is **untouched** (images never charge it).             |
+| Q5  | Success receipt: `[expanded @pic.png (image/png, 12.3 KB)]` — same `[expanded @…]` vocabulary; MIME type replaces the line count.                                                                                              |
+| Q6  | **Direct file refs AND glob refs** attach images. Directory listings stay name-only (never attach).                                                                                                                            |
+| Q7  | Directory-listing expansion ("inlining a directory's images") is **DEFERRED**.                                                                                                                                                 |
+| Q8  | The extension→MIME helper lives in **`drone-core`** (the user anticipates coordinator use).                                                                                                                                    |
+| Q9  | Oversize image → **skip + notice** `[image too large: @pic.png (24.5 MB > 20 MB)]`, checked **before reading the file**.                                                                                                       |
 | Q10 | Read failure → **`[could not read: @…]`**, **uniform for text and image**. Split by error code: `ENOENT` → `[unresolved reference: @…]` (unchanged), everything else → `[could not read: @…]`. **Fs-level retry is DEFERRED**. |
-| Q11 | Over-cap marker: `[N additional images omitted. Retrieve them individually if needed.]`. Globs do **not** enumerate the omitted names. |
-| Q12 | The capability learns the image size limit via a **constructor option** on `createReferenceCapability`, threaded from `index.tsx`. |
+| Q11 | Over-cap marker: `[N additional images omitted. Retrieve them individually if needed.]`. Globs do **not** enumerate the omitted names.                                                                                         |
+| Q12 | The capability learns the image size limit via a **constructor option** on `createReferenceCapability`, threaded from `index.tsx`.                                                                                             |
 
 ### Accepted consequences
 
@@ -161,24 +161,24 @@ Executed on branch `feat/inline-object-refs`. All 8 steps done; commit `7d6c0355
 
 ### Files touched
 
-| File | Change |
-|---|---|
-| `drone-core/src/image-mime.ts` | new |
-| `drone-core/src/index.ts` | re-export + module-map comment |
-| `drone-agent/src/plugins/file.ts` | consume core MIME helper |
-| `drone-agent/src/runtime/reference-expansion/file-kinds.ts` | image branch + limits + glob + notice split |
-| `drone-agent/src/runtime/reference-expansion/index.ts` | export `ReferenceLimits` |
-| `drone-agent/src/runtime/reference-expansion/capability.ts` | `maxImageBytes` option |
-| `drone-agent/src/index.tsx` | thread `maxImageSizeBytes` |
-| `drone-agent/src/runtime/image-cap.ts` | new |
-| `drone-agent/src/runtime/conversation-service.ts` | shared cap at both sites |
-| `drone-core/test/image-mime.test.ts` | new |
-| `drone-agent/test/image-cap.test.ts` | new |
-| `drone-agent/test/reference-expansion.test.ts` | image suite |
-| `drone-agent/test/reference-expansion-integration.test.ts` | 2 e2e tests |
-| `drone-agent/test/conversation-service-image-describer.test.ts` | user-turn describer test |
-| `docs/agents/reference-expansion.md` | docs |
-| `AGENTS.md` | bullet |
+| File                                                            | Change                                      |
+| --------------------------------------------------------------- | ------------------------------------------- |
+| `drone-core/src/image-mime.ts`                                  | new                                         |
+| `drone-core/src/index.ts`                                       | re-export + module-map comment              |
+| `drone-agent/src/plugins/file.ts`                               | consume core MIME helper                    |
+| `drone-agent/src/runtime/reference-expansion/file-kinds.ts`     | image branch + limits + glob + notice split |
+| `drone-agent/src/runtime/reference-expansion/index.ts`          | export `ReferenceLimits`                    |
+| `drone-agent/src/runtime/reference-expansion/capability.ts`     | `maxImageBytes` option                      |
+| `drone-agent/src/index.tsx`                                     | thread `maxImageSizeBytes`                  |
+| `drone-agent/src/runtime/image-cap.ts`                          | new                                         |
+| `drone-agent/src/runtime/conversation-service.ts`               | shared cap at both sites                    |
+| `drone-core/test/image-mime.test.ts`                            | new                                         |
+| `drone-agent/test/image-cap.test.ts`                            | new                                         |
+| `drone-agent/test/reference-expansion.test.ts`                  | image suite                                 |
+| `drone-agent/test/reference-expansion-integration.test.ts`      | 2 e2e tests                                 |
+| `drone-agent/test/conversation-service-image-describer.test.ts` | user-turn describer test                    |
+| `docs/agents/reference-expansion.md`                            | docs                                        |
+| `AGENTS.md`                                                     | bullet                                      |
 
 ### Deviations from the plan (and why)
 
@@ -210,8 +210,8 @@ All criteria passed.
 4. **`pnpm lint`** — exit 0. Prettier re-dirtied `pnpm-lock.yaml` on both runs
    (pure reformatting, no dependency change); reverted each time per the plan.
 5. **`pnpm test`** — 229 files, **3194 passed**, 14 skipped, 0 failed, exit 0.
-   *The plan's "~10 pre-existing TUI failures" note is stale — the suite is fully
-   green at this commit.*
+   _The plan's "~10 pre-existing TUI failures" note is stale — the suite is fully
+   green at this commit._
 6. **Behavioural checks** (proved against the **built dist**):
    image bytes match the file; no text block; correct receipt; a >1 MiB image does
    **not** charge the text budget (a following `@notes.md` still inlines); over-cap

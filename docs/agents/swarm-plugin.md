@@ -102,6 +102,7 @@ The `swarm` plugin connects to a `drone-beacon` instance to provide swarm-wide p
 - Registers HTTP storage engines for swarm-scoped insights and principles
 - Registers wiki and coordinator tools using the list/mount pattern (3 meta-tools: `list_tools`, `mount_tool`, `unmount_tool`)
 - Pushes conversation events to the coordinator
+- Registers the `swarm.status` and `swarm.identity` header fragments (see below)
 
 > **Coordinator traffic proxies through the beacon.** The agent never talks to the coordinator directly. All coordinator reads and mutations (session import/list, spawn, list beacons/agents, terminate spawn) hit the **beacon's** `/coordinator/*` proxy routes, which forward to the coordinator via the beacon's trust-gated `CoordinatorClient`. This keeps the beacon as the sole coordinator-facing trust gate (TOFU fingerprint + beacon approval). The now-removed `coordinatorUrl` agent config is gone — the swarm plugin only needs `beaconHost`/`beaconPort`.
 
@@ -183,12 +184,23 @@ The primary key is `(id, target)`: the same id can exist as a targeted row and a
 broadcast simultaneously. `POST /agents` rejects registering an agentId of
 `broadcast` (reserved sentinel).
 
-### Delivery and rendering
+### Agent-rendered fragments (status, identity, stored fragments)
 
-The swarm plugin registers two prompt fragments — `swarm.fragments.header`
-(phase `header`) and `swarm.fragments.footer` (phase `footer`) — whose render
-functions read an in-memory store only (no network I/O in the render path, and
-prompts are stable whether or not the beacon is reachable). The beacon pushes:
+The swarm plugin registers four prompt fragments:
+
+| Key                      | Phase    | Renders                                                                |
+| ------------------------ | -------- | ---------------------------------------------------------------------- |
+| `swarm.status`           | `header` | `# Swarm Status` — local beacon, coordinator, registered beacon roster |
+| `swarm.identity`         | `header` | `# Swarm Identity` — reserved free-text identity (below)               |
+| `swarm.fragments.header` | `header` | `# Swarm Fragments` — stored header-phase fragments                    |
+| `swarm.fragments.footer` | `footer` | `# Swarm Directives` — stored footer-phase fragments                   |
+
+Registration order fixes the header order: `# Swarm Status` → `# Swarm Identity`
+→ `# Swarm Fragments`. Every render function reads an in-memory store only (no
+network I/O in the render path, and prompts are stable whether or not the
+beacon is reachable).
+
+The beacon pushes stored-fragment changes as:
 
 - On every WS connect: `fragmentSync` — the full merged current set for the
   connecting agent (targeted-for-agent + all broadcasts, TTL-filtered,
@@ -201,7 +213,7 @@ prompts are stable whether or not the beacon is reachable). The beacon pushes:
 - Coordinator mirror changes arrive during the beacon→coordinator sync interval
   (default 5 min); on change the beacon fans out `fragmentSync` to all agents.
 
-Render format (ids are model-visible for reference):
+Render format for stored fragments (ids are model-visible for reference):
 
 ```
 # Swarm Fragments
@@ -211,30 +223,94 @@ Render format (ids are model-visible for reference):
 The wiki analytics collector is down until 14:00 UTC.
 ```
 
-Footer-phase fragments render identically under `# Swarm Directives`. Fragments
-render after all other plugin fragments.
+Footer-phase fragments render identically under `# Swarm Directives`.
+
+### Swarm status fragment (`# Swarm Status`)
+
+The `swarm.status` header fragment describes the connected swarm so the model
+knows which swarm it runs in. It is always on when the swarm plugin is loaded
+(no config key) and hides itself entirely (renders `false`) until it has data.
+It reads a cache only — never the network — and the cache is refreshed:
+
+- at plugin load (`onPluginsLoaded`),
+- on every WS connect/reconnect, and
+- on a 60s interval.
+
+Sources:
+
+| Field              | Source                                                          |
+| ------------------ | --------------------------------------------------------------- |
+| Local beacon       | `GET /info` (`{ id, name, coordinatorHost, coordinatorPort }`)  |
+| Coordinator        | `coordinatorHost[:coordinatorPort]` from `/info`                |
+| Registered beacons | beacon proxy `GET /coordinator/beacons` (name/host/port/status) |
+
+The beacon also pushes the same `/info` payload in the WS `connected`
+handshake, so the cache self-heals after a beacon restart or reconfiguration
+without waiting for a fetch. A failed refresh keeps the last known values and
+never regresses the roster to empty (only a successful response replaces it).
+
+Render shape:
+
+```
+# Swarm Status
+
+- Local beacon: home-office (localhost:3457)
+- Coordinator: coord.example:3456
+- Registered beacons (2):
+  - home-office (localhost:3457)
+  - workshop (10.0.0.2:3457) · offline
+```
+
+The coordinator line is omitted when no coordinator is configured. A roster
+entry gets a `· offline` marker when not connected and a `· pending approval` /
+`· rejected` marker when its trust status is not `approved`.
+
+### Swarm identity fragment (`# Swarm Identity`)
+
+The `swarm-identity` fragment is a **reserved, user-authored broadcast**: free
+text describing the swarm, written from the coordinator web UI's **Identity**
+page and rendered as its own top-level `# Swarm Identity` section. It is stored
+in the coordinator `fragments` table (`target: 'broadcast'`, `phase: 'header'`)
+and rides the normal coordinator → beacon mirror → WS `fragmentSync` path. The
+reserved id is excluded from the `# Swarm Fragments` bucket, so it never
+double-renders.
+
+Reserved fragments have their own policy (implemented in the shared
+`drone-swarm-common` limits module): they may only target `broadcast`, are
+excluded from the broadcast/targeted count caps (their own budget), and never
+expire (the TTL sweep skips them). The plugin renders `swarm.identity` as its
+own fragment and hides it (`false`) until the row exists.
+
+Coordinator authoring uses the general fragment routes
+`PUT /api/fragments/:id` and `DELETE /api/fragments/:id`; a write fires the
+reverse-channel `fragmentsChanged` nudge, which makes each connected beacon
+re-pull immediately (the 5-minute periodic sync remains the floor).
 
 ### Limits (provisional constants)
 
-| Limit                              | Value                      |
-| ---------------------------------- | -------------------------- |
-| Max broadcast fragments per beacon | 5                          |
-| Max targeted fragments per agent   | 50                         |
-| Max content size                   | 16 KB                      |
-| Default targeted TTL               | 24h (implicit `expiresAt`) |
-| TTL sweep interval                 | 60s                        |
+| Limit                              | Value                            |
+| ---------------------------------- | -------------------------------- |
+| Max broadcast fragments per beacon | 5 (system-reserved ids excluded) |
+| Max targeted fragments per agent   | 50                               |
+| Max content size                   | 16 KB                            |
+| Default targeted TTL               | 24h (implicit `expiresAt`)       |
+| TTL sweep interval                 | 60s                              |
+
+Reserved ids (`swarm-identity`) are excluded from the broadcast/targeted caps
+and never expire, so the identity can always be saved even at the broadcast cap
+and saving it does not consume a user broadcast slot.
 
 ### CLI usage
 
 ```sh
-# Beacon authoring (list also works against the coordinator, read-only)
+# Beacon authoring (list also works against the coordinator)
 drone-swarm --beacon http://localhost:3457 fragments set maintenance-window \
   --target broadcast --content "Collector down until 14:00 UTC"
 drone-swarm --beacon http://localhost:3457 fragments list
 drone-swarm --beacon http://localhost:3457 fragments list --target agent-123
 drone-swarm --beacon http://localhost:3457 fragments delete maintenance-window --target broadcast
 
-# Coordinator-side list (read-only v1; authoring arrives with the persistent-WS rework)
+# Coordinator-side list
 drone-swarm --coordinator http://localhost:3456 fragments list
 ```
 
@@ -243,18 +319,16 @@ drone-swarm --coordinator http://localhost:3456 fragments list
 The coordinator serves `GET /api/fragments` (with `?target=` filter) from its
 own `fragments` table. The beacon pulls it on the persona-precedent sync
 interval (default 5 min), stores rows with `scope: 'coordinator'`, and fans out
-a resync to connected agents when the merged set changes. This sync-hop is
-scaffolding for the coming persistent-WS rework (which moves coordinator
-authoring + push to a dedicated reverse channel); agent-side behavior is
-unchanged by that rework.
+`fragmentSync` to connected agents when the merged set changes. The coordinator
+also accepts `PUT /api/fragments/:id` and `DELETE /api/fragments/:id` (the
+Identity page is a thin client over the reserved `swarm-identity` id); each
+write fires the reverse-channel `fragmentsChanged` nudge so connected beacons
+re-pull immediately.
 
 ### Security note
 
-Fragments are prompt content injected by whoever can reach the beacon's write
-API. This is a deliberate trade-off for the single-user swarm: the beacon binds
-localhost/LAN (secure by default; tailscale for remote access) and requires
-careful TOFU confirmation on coordinator trust. Do not expose a beacon's
-fragment write routes to untrusted networks before release.
-
-> Coordinator-side storage/serving is scaffolding for the persistent-WS rework
-> branch; the swarm-internal prompt-injection surface above is accepted for v1.
+Fragments are prompt content injected by whoever can reach the beacon's or
+coordinator's write API. This is a deliberate trade-off for the single-user
+swarm: the beacon binds localhost/LAN (secure by default; tailscale for remote
+access) and requires careful TOFU confirmation on coordinator trust. Do not
+expose a beacon's fragment write routes to untrusted networks before release.

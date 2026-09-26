@@ -1,7 +1,6 @@
 ---
 key: plan-swarm-identity-status-fragments
-tags:
-  []
+tags: []
 created: 2026-09-26T21:15:01.143Z
 updated: 2026-09-26T21:15:01.143Z
 ---
@@ -46,16 +45,20 @@ Why: agents currently have no idea which swarm they run in or what it is for. Th
 ## Step 1 — Extract fragment validation to `drone-swarm-common` + reserved-id policy — **coder**
 
 **Files**
+
 - NEW `drone-swarm-common/src/fragments-limits.ts` (moved from `drone-beacon/src/fragments-limits.ts`)
 - EDIT `drone-swarm-common/src/index.ts` (add `export * from './fragments-limits.js';`)
 - DELETE `drone-beacon/src/fragments-limits.ts`
 
 **Changes**
+
 - Move the module verbatim, then add:
 
 ```ts
 export const SWARM_IDENTITY_FRAGMENT_ID = 'swarm-identity';
-export const RESERVED_FRAGMENT_IDS: readonly string[] = [SWARM_IDENTITY_FRAGMENT_ID];
+export const RESERVED_FRAGMENT_IDS: readonly string[] = [
+  SWARM_IDENTITY_FRAGMENT_ID,
+];
 
 export function isReservedFragmentId(id: string): boolean {
   return RESERVED_FRAGMENT_IDS.includes(id);
@@ -72,9 +75,23 @@ export function countNonReserved(fragments: Array<{ id: string }>): number {
 ```ts
 if (isReservedFragmentId(raw.id)) {
   if (raw.target !== BROADCAST_TARGET) {
-    return { ok: false, error: `Reserved fragment id "${raw.id}" may only target ${BROADCAST_TARGET}`, code: 'validation' };
+    return {
+      ok: false,
+      error: `Reserved fragment id "${raw.id}" may only target ${BROADCAST_TARGET}`,
+      code: 'validation',
+    };
   }
-  return { ok: true, normalized: { id: raw.id, target: raw.target, content: raw.content, phase, scope, expiresAt: null } };
+  return {
+    ok: true,
+    normalized: {
+      id: raw.id,
+      target: raw.target,
+      content: raw.content,
+      phase,
+      scope,
+      expiresAt: null,
+    },
+  };
 }
 ```
 
@@ -89,6 +106,7 @@ if (isReservedFragmentId(raw.id)) {
 ## Step 2 — Beacon: `GET /info` + WS identity handshake — **coder**
 
 **Files**
+
 - EDIT `drone-beacon/src/routes/context.ts` — add beacon-identity state + accessors:
 
 ```ts
@@ -99,10 +117,19 @@ export type BeaconInfo = {
   coordinatorPort: number | null;
 };
 
-let beaconInfo: BeaconInfo = { id: 'unknown', name: 'unknown', coordinatorHost: null, coordinatorPort: null };
+let beaconInfo: BeaconInfo = {
+  id: 'unknown',
+  name: 'unknown',
+  coordinatorHost: null,
+  coordinatorPort: null,
+};
 
-export function setBeaconInfo(info: BeaconInfo) { beaconInfo = info; }
-export function getBeaconInfo(): BeaconInfo { return beaconInfo; }
+export function setBeaconInfo(info: BeaconInfo) {
+  beaconInfo = info;
+}
+export function getBeaconInfo(): BeaconInfo {
+  return beaconInfo;
+}
 ```
 
 - NEW `drone-beacon/src/routes/info.ts`:
@@ -131,7 +158,12 @@ setBeaconInfo({
 - EDIT `drone-beacon/src/ws-server.ts` (~line 406) — add `info` to the `connected` payload:
 
 ```ts
-socket.send(JSON.stringify({ type: 'connected', payload: { agentId, info: getBeaconInfo() } }));
+socket.send(
+  JSON.stringify({
+    type: 'connected',
+    payload: { agentId, info: getBeaconInfo() },
+  })
+);
 ```
 
 **Tests** (`drone-beacon/test/routes-info.test.ts` or the existing route-test harness): `/info` returns the set identity, defaults to `unknown` when unset; WS `connected` payload carries `info`.
@@ -143,6 +175,7 @@ socket.send(JSON.stringify({ type: 'connected', payload: { agentId, info: getBea
 ## Step 3 — Beacon: `fragmentsChanged` command + shared-limits import — **coder**
 
 **Files**
+
 - EDIT `drone-beacon/src/coordinator-ws.ts` — add a case beside `configChanged` in the command switch:
 
 ```ts
@@ -159,8 +192,10 @@ case 'fragmentsChanged': {
 ```ts
 const result = validateFragmentUpsert(request.body, {
   scope: 'local',
-  countBroadcasts: () => countNonReserved(db.listFragments({ target: 'broadcast' })),
-  countTargetedForAgent: target => countNonReserved(db.listFragments({ target })),
+  countBroadcasts: () =>
+    countNonReserved(db.listFragments({ target: 'broadcast' })),
+  countTargetedForAgent: target =>
+    countNonReserved(db.listFragments({ target })),
 });
 ```
 
@@ -173,6 +208,7 @@ const result = validateFragmentUpsert(request.body, {
 ## Step 4 — Coordinator: fragment authoring routes + nudge — **coder**
 
 **Files**
+
 - EDIT `drone-coordinator/src/beacon-ws.ts`:
 
 ```ts
@@ -186,11 +222,18 @@ export function notifyFragmentsChanged(): void {
 
 ```ts
 export function upsertFragment(
-  fragment: Omit<DroneSwarmFragment, 'createdAt' | 'updatedAt'> & { createdAt?: number }
+  fragment: Omit<DroneSwarmFragment, 'createdAt' | 'updatedAt'> & {
+    createdAt?: number;
+  }
 ): DroneSwarmFragment {
   const now = Date.now();
   const existing = getFragment(fragment.id, fragment.target);
-  const row: DroneSwarmFragment = { ...fragment, scope: 'coordinator', createdAt: existing?.createdAt ?? fragment.createdAt ?? now, updatedAt: now };
+  const row: DroneSwarmFragment = {
+    ...fragment,
+    scope: 'coordinator',
+    createdAt: existing?.createdAt ?? fragment.createdAt ?? now,
+    updatedAt: now,
+  };
   // INSERT ... ON CONFLICT(id, target) DO UPDATE SET content/phase/scope/updatedAt/expiresAt (createdAt NOT updated)
 }
 ```
@@ -198,23 +241,35 @@ export function upsertFragment(
 - EDIT `drone-coordinator/src/routes/fragments.ts` — add `PUT /fragments/:id` and `DELETE /fragments/:id`:
 
 ```ts
-app.put<{ Params: { id: string }; Body: unknown }>('/fragments/:id', async (request, reply) => {
-  const body = { ...(request.body as Record<string, unknown>), id: request.params.id };
-  const result = validateFragmentUpsert(body, {
-    scope: 'coordinator',
-    countBroadcasts: () => countNonReserved(db.listFragments({ target: BROADCAST_TARGET })),
-    countTargetedForAgent: target => countNonReserved(db.listFragments({ target })),
-  });
-  if (!result.ok) return reply.code(400).send({ error: result.error, code: result.code });
-  const fragment = db.upsertFragment(result.normalized);
-  notifyFragmentsChanged();
-  return reply.code(200).send({ ok: true, fragment });
-});
+app.put<{ Params: { id: string }; Body: unknown }>(
+  '/fragments/:id',
+  async (request, reply) => {
+    const body = {
+      ...(request.body as Record<string, unknown>),
+      id: request.params.id,
+    };
+    const result = validateFragmentUpsert(body, {
+      scope: 'coordinator',
+      countBroadcasts: () =>
+        countNonReserved(db.listFragments({ target: BROADCAST_TARGET })),
+      countTargetedForAgent: target =>
+        countNonReserved(db.listFragments({ target })),
+    });
+    if (!result.ok)
+      return reply.code(400).send({ error: result.error, code: result.code });
+    const fragment = db.upsertFragment(result.normalized);
+    notifyFragmentsChanged();
+    return reply.code(200).send({ ok: true, fragment });
+  }
+);
 
-app.delete<{ Params: { id: string }; Querystring: { target?: string } }>('/fragments/:id', async (request, reply) => {
-  // mirror the beacon's semantics: 404 when absent; require ?target= when the id exists under multiple targets
-  // on success: notifyFragmentsChanged(); return { ok: true }
-});
+app.delete<{ Params: { id: string }; Querystring: { target?: string } }>(
+  '/fragments/:id',
+  async (request, reply) => {
+    // mirror the beacon's semantics: 404 when absent; require ?target= when the id exists under multiple targets
+    // on success: notifyFragmentsChanged(); return { ok: true }
+  }
+);
 ```
 
 Remove the "Read-only in v1" comment; keep `GET /fragments` unchanged. The route file is mounted under `/api` already.
@@ -228,16 +283,29 @@ Remove the "Read-only in v1" comment; keep `GET /fragments` unchanged. The route
 ## Step 5 — Agent: swarm-info cache, status fragment, identity fragment, store reserved handling — **coder**
 
 **Files**
+
 - NEW `drone-agent/src/plugins/swarm/swarm-info.ts` — pure cache + best-effort refresh:
 
 ```ts
-export type BeaconInfo = { id: string; name: string; coordinatorHost: string | null; coordinatorPort: number | null };
-export type RosterEntry = { id: string; name: string; host: string; port: number; connected: boolean; trustStatus: string | null };
+export type BeaconInfo = {
+  id: string;
+  name: string;
+  coordinatorHost: string | null;
+  coordinatorPort: number | null;
+};
+export type RosterEntry = {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  connected: boolean;
+  trustStatus: string | null;
+};
 
 export class SwarmInfoStore {
   constructor(private readonly localAddress: string) {}
-  applyBeaconInfo(info: BeaconInfo): void;          // overwrite
-  replaceRoster(entries: RosterEntry[]): void;      // callers only call on success
+  applyBeaconInfo(info: BeaconInfo): void; // overwrite
+  replaceRoster(entries: RosterEntry[]): void; // callers only call on success
   getInfo(): BeaconInfo | null;
   getRoster(): RosterEntry[];
   getLocalAddress(): string;
@@ -245,14 +313,24 @@ export class SwarmInfoStore {
 
 export const SWARM_INFO_REFRESH_MS = 60_000;
 
-export async function refreshSwarmInfo(store: SwarmInfoStore, baseUrl: string, logger: { warn: (m: string) => void }): Promise<void> {
+export async function refreshSwarmInfo(
+  store: SwarmInfoStore,
+  baseUrl: string,
+  logger: { warn: (m: string) => void }
+): Promise<void> {
   // GET `${baseUrl}/info` -> applyBeaconInfo (on ok)
   // GET `${baseUrl}/coordinator/beacons` -> if Array, replaceRoster(entries mapped from Beacon ⊕ BeaconView)
   // both wrapped in try/catch: failures keep the last known values (never regress roster to empty)
 }
 
-export function startSwarmInfoRefresh(store: SwarmInfoStore, baseUrl: string, logger: Logger): NodeJS.Timeout {
-  const interval = setInterval(() => { void refreshSwarmInfo(store, baseUrl, logger); }, SWARM_INFO_REFRESH_MS);
+export function startSwarmInfoRefresh(
+  store: SwarmInfoStore,
+  baseUrl: string,
+  logger: Logger
+): NodeJS.Timeout {
+  const interval = setInterval(() => {
+    void refreshSwarmInfo(store, baseUrl, logger);
+  }, SWARM_INFO_REFRESH_MS);
   interval.unref();
   return interval;
 }
@@ -261,7 +339,9 @@ export function startSwarmInfoRefresh(store: SwarmInfoStore, baseUrl: string, lo
 - NEW `drone-agent/src/plugins/swarm/status-fragment.ts`:
 
 ```ts
-export function createSwarmStatusFragment(store: SwarmInfoStore): DronePromptFragment {
+export function createSwarmStatusFragment(
+  store: SwarmInfoStore
+): DronePromptFragment {
   return {
     key: 'status',
     phase: 'header',
@@ -270,15 +350,24 @@ export function createSwarmStatusFragment(store: SwarmInfoStore): DronePromptFra
       const roster = store.getRoster();
       if (!info?.name && roster.length === 0) return false;
       const lines = ['# Swarm Status', ''];
-      if (info?.name) lines.push(`- Local beacon: ${info.name} (${store.getLocalAddress()})`);
-      if (info?.coordinatorHost) lines.push(`- Coordinator: ${info.coordinatorHost}${info.coordinatorPort ? `:${info.coordinatorPort}` : ''}`);
+      if (info?.name)
+        lines.push(`- Local beacon: ${info.name} (${store.getLocalAddress()})`);
+      if (info?.coordinatorHost)
+        lines.push(
+          `- Coordinator: ${info.coordinatorHost}${info.coordinatorPort ? `:${info.coordinatorPort}` : ''}`
+        );
       if (roster.length > 0) {
         lines.push(`- Registered beacons (${roster.length}):`);
         for (const b of roster) {
           const markers: string[] = [];
           if (!b.connected) markers.push('offline');
-          if (b.trustStatus && b.trustStatus !== 'approved') markers.push(b.trustStatus === 'rejected' ? 'rejected' : 'pending approval');
-          lines.push(`  - ${b.name} (${b.host}:${b.port})${markers.length ? ` · ${markers.join(' · ')}` : ''}`);
+          if (b.trustStatus && b.trustStatus !== 'approved')
+            markers.push(
+              b.trustStatus === 'rejected' ? 'rejected' : 'pending approval'
+            );
+          lines.push(
+            `  - ${b.name} (${b.host}:${b.port})${markers.length ? ` · ${markers.join(' · ')}` : ''}`
+          );
         }
       }
       return lines.join('\n');
@@ -290,8 +379,14 @@ export function createSwarmStatusFragment(store: SwarmInfoStore): DronePromptFra
 - NEW `drone-agent/src/plugins/swarm/identity-fragment.ts`:
 
 ```ts
-export function createSwarmIdentityFragment(store: SwarmFragmentStore): DronePromptFragment {
-  return { key: 'identity', phase: 'header', render: async () => store.renderIdentity() };
+export function createSwarmIdentityFragment(
+  store: SwarmFragmentStore
+): DronePromptFragment {
+  return {
+    key: 'identity',
+    phase: 'header',
+    render: async () => store.renderIdentity(),
+  };
 }
 ```
 
@@ -313,7 +408,7 @@ renderIdentity() {
 }
 ```
 
-  (Single reserved id today; a heading map keyed by id is the extension point if more are added.)
+(Single reserved id today; a heading map keyed by id is the extension point if more are added.)
 
 - EDIT `drone-agent/src/plugins/swarm/context.ts` — add `swarmInfo: SwarmInfoStore` to `SwarmContext` and construct it in `createSwarmContext(...)` (needs `localAddress`). Extend `createSwarmContext`'s signature with `localAddress: string`.
 - EDIT `drone-agent/src/plugins/swarm/websocket.ts` — in the `connected` branch cache the pushed info, and refresh on open:
@@ -325,7 +420,8 @@ renderIdentity() {
 }
 ```
 
-  and in `ctx.ws.onopen`: `void refreshSwarmInfo(ctx.swarmInfo, ctx.baseUrl, registration.logger);`
+and in `ctx.ws.onopen`: `void refreshSwarmInfo(ctx.swarmInfo, ctx.baseUrl, registration.logger);`
+
 - EDIT `drone-agent/src/plugins/swarm/hooks.ts` — in `onPluginsLoaded`, alongside `reloadFromBeacon` / `connectWebSocket`: `void refreshSwarmInfo(ctx.swarmInfo, ctx.baseUrl, registration.logger);`
 - EDIT `drone-agent/src/plugins/swarm/heartbeat.ts` — extend `registerShutdown` to clear the new interval.
 - EDIT `drone-agent/src/plugins/swarm/index.ts`:
@@ -334,12 +430,22 @@ renderIdentity() {
 
 ```ts
 registration.registerPromptFragment(createSwarmStatusFragment(ctx.swarmInfo));
-registration.registerPromptFragment(createSwarmIdentityFragment(ctx.fragmentStore));
-registration.registerPromptFragment({ key: 'fragments.header', phase: 'header', render: () => Promise.resolve(ctx.fragmentStore.renderHeader()) });
-registration.registerPromptFragment({ key: 'fragments.footer', phase: 'footer', render: () => Promise.resolve(ctx.fragmentStore.renderFooter()) });
+registration.registerPromptFragment(
+  createSwarmIdentityFragment(ctx.fragmentStore)
+);
+registration.registerPromptFragment({
+  key: 'fragments.header',
+  phase: 'header',
+  render: () => Promise.resolve(ctx.fragmentStore.renderHeader()),
+});
+registration.registerPromptFragment({
+  key: 'fragments.footer',
+  phase: 'footer',
+  render: () => Promise.resolve(ctx.fragmentStore.renderFooter()),
+});
 ```
 
-  - Start the refresh interval next to `startHeartbeat(ctx)` and pass it to `registerShutdown`.
+- Start the refresh interval next to `startHeartbeat(ctx)` and pass it to `registerShutdown`.
 
 **Tests** (`drone-agent/test/`): `swarm-fragment-store` reserved-exclusion + `renderIdentity` (present/absent/multiple-reserved); `status-fragment` render (full data, no-coordinator, roster markers, `false` when empty, `false` before any fetch); `swarm-info` refresh (applies on success, keeps last-known on failure, never regresses roster to empty); `websocket` `connected` caching; `index` registration order (assert `renderPromptFragments()` order is `# Swarm Status` → `# Swarm Identity` → `# Swarm Fragments`).
 
@@ -350,13 +456,19 @@ registration.registerPromptFragment({ key: 'fragments.footer', phase: 'footer', 
 ## Step 6 — Coordinator UI: Identity page — **coder**
 
 **Files**
+
 - EDIT `drone-coordinator-ui/src/lib/types.ts`:
 
 ```ts
 export interface SwarmFragment {
-  id: string; target: string; content: string;
-  phase: 'header' | 'footer'; scope: 'local' | 'coordinator';
-  createdAt: number; updatedAt: number; expiresAt: number | null;
+  id: string;
+  target: string;
+  content: string;
+  phase: 'header' | 'footer';
+  scope: 'local' | 'coordinator';
+  createdAt: number;
+  updatedAt: number;
+  expiresAt: number | null;
 }
 ```
 
@@ -401,7 +513,7 @@ Walk the criteria below in order; do not declare done until every item passes.
 
 1. **Build**: `pnpm -r run build` passes with zero errors. Because `drone-swarm-common` and `drone-core` are consumed from built `dist/`, run `pnpm -r run build` immediately after step 1 and again before relying on LSP/typecheck in dependents.
 2. **Lint**: `pnpm -r run lint` passes with zero errors (eslint then prettier; re-read files after it runs).
-3. **LSP**: zero diagnostics (errors *and* warnings) in every touched file, across `drone-swarm-common`, `drone-beacon`, `drone-coordinator`, `drone-agent`, `drone-coordinator-ui`.
+3. **LSP**: zero diagnostics (errors _and_ warnings) in every touched file, across `drone-swarm-common`, `drone-beacon`, `drone-coordinator`, `drone-agent`, `drone-coordinator-ui`.
 4. **Fast tests**: `pnpm -r run test` passes, including all new tests in steps 1–6. Every new module/route/component has direct unit coverage; the reserved-fragment policy has explicit tests.
 5. **Behavior — status fragment**: with a beacon and coordinator running, a fresh agent's system prompt contains `# Swarm Status` with the local beacon name + dialed address, the coordinator host:port (line absent when no coordinator is configured), and the registered-beacon roster; an offline or non-approved beacon shows the marker; the section is absent when neither info nor roster has ever loaded.
 6. **Behavior — identity fragment**: `PUT /api/fragments/swarm-identity` from the UI page (or curl) causes the beacon's next sync to mirror the row and push `fragmentSync`; a connected agent then renders `# Swarm Identity` with the authored text, positioned after `# Swarm Status` and before `# Swarm Fragments`; the same row no longer renders under `# Swarm Fragments`; `DELETE` removes the section.

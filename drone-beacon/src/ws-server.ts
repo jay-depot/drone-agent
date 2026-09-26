@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
 import * as db from './db/index.js';
 import { logger } from './logger.js';
+import { getBeaconInfo } from './beacon-info.js';
 
 // Error codes
 export const ERROR_MISSING_AGENT_ID = 4001;
@@ -403,7 +404,12 @@ export async function registerWebSocketServer(
     });
 
     // Send welcome message
-    socket.send(JSON.stringify({ type: 'connected', payload: { agentId } }));
+    socket.send(
+      JSON.stringify({
+        type: 'connected',
+        payload: { agentId, info: getBeaconInfo() },
+      })
+    );
   });
 
   logger.info(

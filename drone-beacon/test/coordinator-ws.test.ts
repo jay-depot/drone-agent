@@ -198,4 +198,23 @@ describe('beacon reverse-channel client', () => {
     expect(response.status).toBe(200);
     expect(triggerCoordinatorSync).toHaveBeenCalledTimes(1);
   });
+
+  it('handles a fragmentsChanged nudge by re-pulling coordinator state', async () => {
+    const ws = startClient();
+    (triggerCoordinatorSync as ReturnType<typeof vi.fn>).mockClear();
+    (triggerCoordinatorSync as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      success: true,
+    });
+
+    const responsePromise = nextResponse(ws);
+    respond(ws, { type: 'command', id: 'r6', command: 'fragmentsChanged' });
+
+    const response = JSON.parse(await responsePromise) as {
+      ok: boolean;
+      status: number;
+    };
+    expect(response.ok).toBe(true);
+    expect(response.status).toBe(200);
+    expect(triggerCoordinatorSync).toHaveBeenCalledTimes(1);
+  });
 });

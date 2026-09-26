@@ -25,6 +25,7 @@ import WikiDetailPage from '@/pages/wiki-detail';
 import WikiEditorPage from '@/pages/wiki-editor';
 import WikiTagPage from '@/pages/wiki-tag';
 import ConfigPage from '@/pages/config';
+import IdentityPage from '@/pages/identity';
 import LoginPage from '@/pages/login';
 
 const navItems = [
@@ -34,6 +35,7 @@ const navItems = [
   { to: '/skills', label: 'Skills', icon: '⚙' },
   { to: '/wiki', label: 'Wiki', icon: '◈' },
   { to: '/config', label: 'Config', icon: '▤' },
+  { to: '/identity', label: 'Identity', icon: '◆' },
 ];
 
 function DarkModeToggle() {
@@ -137,6 +139,7 @@ function AppLayout() {
           <Route path="/wiki/:pageId" element={<WikiDetailPage />} />
           <Route path="/wiki/:pageId/edit" element={<WikiEditorPage />} />
           <Route path="/config" element={<ConfigPage />} />
+          <Route path="/identity" element={<IdentityPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

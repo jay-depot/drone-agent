@@ -275,6 +275,11 @@ export function notifyConfigChanged(): void {
   broadcastBeaconCommand('configChanged');
 }
 
+/** Nudge every connected beacon to re-pull coordinator fragments immediately. */
+export function notifyFragmentsChanged(): void {
+  broadcastBeaconCommand('fragmentsChanged');
+}
+
 /**
  * Test-only helper: register a connection with a fake WebSocket so
  * `sendBeaconCommand` can be exercised without a live server.
