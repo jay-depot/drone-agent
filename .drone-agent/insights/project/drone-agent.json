@@ -606,5 +606,9 @@
   {
     "timestamp": "2026-09-26T18:39:57.505Z",
     "insight": "Roadmap drift is real and cheap to miss: the `roadmap` memory was last updated 2026-08-01 but the code had moved to 2026-09-24 (ADRs up to 222). A full audit found 2 hard contradictions (5.4 Distributed Memory and 5.6 Bootstrap Swarm Workflow both marked \"Not started\" but shipped), 2 stale labels (5.9/5.10 marked In Progress/Design but shipped), a fully-wrong `swarm` config block (0 of 8 documented keys existed), and an outdated package inventory. Also: AGENTS.md and the root README both say \"seven packages\" but pnpm-workspace.yaml lists 8 (`drone-swarm` is missing from both). Re-audit the roadmap when it is >1 month stale."
+  },
+  {
+    "timestamp": "2026-09-26T18:56:39.813Z",
+    "insight": "The gateway's `CoordinatorClient.sendMessage` posts `{toAgentId, body}` to `POST /api/messages/relay`, but the coordinator route requires `fromBeaconId`, `fromAgentId`, `toAgentId`, AND `body` (400s otherwise). So the whole gateway→coordinator message-relay path (persona-assignment via CoordinatorSpawnBackend) always fails. Separately, `CoordinatorSpawnBackend.terminateSession` passes `session.processId` (the agentId) where `DELETE /api/spawn/:beaconId/:spawnId` needs the spawnId, and defaults `targetBeaconId` to the literal `'default'`. Both are pre-existing and unfixed; the new swarm-console does both correctly, which is what surfaced the inconsistency. Worth a dedicated fix (and a gateway-side integration test) before the gateway is used in anger."
   }
 ]
