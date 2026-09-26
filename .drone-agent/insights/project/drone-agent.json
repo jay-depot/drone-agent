@@ -598,5 +598,13 @@
   {
     "timestamp": "2026-09-21T02:52:30.407Z",
     "insight": "The `file` reference resolver's binary sniff (NUL byte in the first 8000 bytes) classifies ALL image formats as binary, because PNG/JPEG/GIF/WebP all contain NUL bytes in their headers. Any content-based \"is this binary\" heuristic will misclassify images. The fix ordered the check as: extension→MIME lookup first (images), then the NUL sniff (other binaries), then the text path. If a future binary-sniff heuristic is added anywhere in the codebase, it must be image-aware or it will silently swallow image files."
+  },
+  {
+    "timestamp": "2026-09-26T18:39:57.503Z",
+    "insight": "Two latent swarm bugs found while planning the gateway console (2026-09-26): (1) `agent_locations` in the coordinator is likely never populated — `POST /api/agents/location` exists and the beacon client has `registerAgentLocation`, but no production caller invokes it, so `GET /api/agents/location/:agentId` may return nothing in a live swarm. Do not build features that depend on it until this is verified. (2) The coordinator UI's session \"Terminate\" button does NOT kill the agent process; it calls `DELETE /api/beacons/:id/sessions/:agentId` + `POST /api/sessions/:id/end`, both of which only mutate records. The process-kill endpoint (`DELETE /api/spawn/:beaconId/:spawnId`) exists but is unexercised by any client."
+  },
+  {
+    "timestamp": "2026-09-26T18:39:57.505Z",
+    "insight": "Roadmap drift is real and cheap to miss: the `roadmap` memory was last updated 2026-08-01 but the code had moved to 2026-09-24 (ADRs up to 222). A full audit found 2 hard contradictions (5.4 Distributed Memory and 5.6 Bootstrap Swarm Workflow both marked \"Not started\" but shipped), 2 stale labels (5.9/5.10 marked In Progress/Design but shipped), a fully-wrong `swarm` config block (0 of 8 documented keys existed), and an outdated package inventory. Also: AGENTS.md and the root README both say \"seven packages\" but pnpm-workspace.yaml lists 8 (`drone-swarm` is missing from both). Re-audit the roadmap when it is >1 month stale."
   }
 ]

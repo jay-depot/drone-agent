@@ -3,7 +3,7 @@ key: roadmap
 tags:
   - roadmap
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-08-01T21:39:32.314Z
+updated: 2026-09-26T18:37:49.896Z
 ---
 
 # Swarm Roadmap
@@ -72,6 +72,13 @@ A **swarm** is a personal AI workforce - multiple agents working in concert for 
 └─────────────────────────────────────────────────────┘
 ```
 
+**Full package set (8 workspace packages).** The four layers above are drawn from `drone-gateway`, `drone-coordinator`, `drone-beacon`, and `drone-agent`. Three supporting packages are not shown in the diagram:
+
+- `drone-core` — shared types, contracts, config defaults, token estimation (used by every package)
+- `drone-swarm-common` — shared beacon/coordinator utilities (TLS, wiki storage, spawner, verification, config-file loader, search primitives)
+- `drone-coordinator-ui` — the coordinator's React/Vite web dashboard
+- `drone-swarm` — a standalone REST CLI for the session pipeline and wiki (also not shown)
+
 **Failure Mode: Graceful Degradation**
 
 - **Offline:** Agent works with project/user config files. Beacon adds host-wide skills/memory.
@@ -84,7 +91,9 @@ A **swarm** is a personal AI workforce - multiple agents working in concert for 
 
 ## Self-Improvement System
 
-The drone-agent swarm includes a **self-improving architecture** that enables continuous learning across all your agents:
+The drone-agent swarm includes a **self-improving architecture** that enables continuous learning across all your agents.
+
+> **Status (2026-09-26):** the *plumbing* exists — full session lifecycle with `ended` detection, `command|spawn` session-end triggers, a proven end-to-end auto pipeline (session end → headless librarian agent → **wiki** ingest, shipped as `bootstrap__swarm-memory`), insight/principle storage with prompt-fragment injection and swarm HTTP storage engines, and per-turn hook seams. The *learning semantics* do not: there is no per-turn background review, no automatic session→insight extraction, no automatic insight→principle derivation, and no session-reviewing persona. See Phase 5.2.
 
 ### Components
 
@@ -140,18 +149,35 @@ Your Agent Turn Ends
 
 ### Config Integration
 
+The `swarm` config section as it actually exists today (`drone-core/src/config-types.ts`):
+
 ```typescript
 swarm: {
-  enabled: boolean,
-  coordinatorUrl: string,
-  shareSessions: boolean,      // Push your sessions to coordinator
-  shareMemory: boolean,       // Share your memory across YOUR agents
-  shareSkills: boolean,         // Sync your skills across your beacons
-  localNudgeInterval: number,      // default: 10 turns
-  swarmReviewIntervalMinutes: number,
-  searchableByDefault: boolean,
+  knowledgeSync?: {
+    enabled?: boolean;
+    pushInsights?: boolean;
+    pullOnStartup?: boolean;
+    pullIntervalMinutes?: number;
+  },
+  sessionImport?: {
+    maxChunks?: number;
+    chunkTokenBudgetPercent?: number;
+  },
+  memory?: {
+    enabled: boolean;        // swarm-memory RAG retrieval (opt-in)
+    topK?: number;
+    minScore?: number;
+    anchors?: { tags: string[]; boostPerTag?: number; boostTitle?: string };
+    window?: { maxQueryTokens?: number; maxQuerySegments?: number };
+  },
+  beaconHost?: string,
+  beaconPort?: number,
+  beaconUseHttps?: boolean,
+  sessionId?: string,
 }
 ```
+
+> **Correction (2026-09-26):** an earlier version of this block listed `enabled`, `coordinatorUrl`, `shareSessions`, `shareMemory`, `shareSkills`, `localNudgeInterval`, `swarmReviewIntervalMinutes`, `searchableByDefault`. **None of those keys exist.** `coordinatorUrl` was removed from the agent config deliberately (the agent must never talk to the coordinator directly — the beacon is the sole coordinator-facing trust gate); the sharing/review knobs were superseded by `knowledgeSync` and `sessionImport`.
 
 ---
 
@@ -169,20 +195,23 @@ The standalone coding agent - your AI assistant, whether solo or as part of your
 - Plain text output mode
 - Plugin system with dynamic enabling
   - External plugin loading with trust management (`~/.drone-agent/plugins/`, `<project>/.drone-agent/plugins/`)
-- Built-in plugins: skills, persona, memory, lsp, mcp, git, compact, bootstrap
-  - Also: subagent, terminal emulator, macros, lightpanda, session logging, focus, notepad, prompt-file, utility tools (calculator, string ops), TODO list, echo LLM provider (testing), LLM provider broker, multiple LLM providers (Anthropic, OpenAI, OpenRouter, Ollama), shared utilities (diff-renderer, patch-applier)
-- Config system with cascade (Project > User > Default)
+- Built-in plugins (**38** as of 2026-09-26): skills, persona, memory, lsp, mcp, git, **compaction**, bootstrap, subagent, terminal, macros, lightpanda, log (session logging), focus, notepad, prompt-file, utils (calculator + string ops), todo, echo, llm (provider broker), anthropic, openai, openrouter, ollama, config, exec, file, fetch, search, startup, wakelock, beancounter, self-improvement, swarm, and the four broker providers (skill-provider-project/-user, persona-provider-project/-user)
+  - **Correction:** the plugin id is `compaction`, not `compact`; and the list above is the complete registration set (`drone-agent/src/plugins/index.ts`) — earlier revisions of this document omitted about fourteen plugins.
+- Config system with cascade (Project > User > Default, plus Beacon/Coordinator underlays — see below)
   - First-run setup wizard (LLM provider probing)
 - Session management (disposable workers)
 - Persona management (persistent identities)
 - Skills system (load from disk)
-- Memory system (JSON files in .drone-agent/)
+- Memory system (**Markdown files with YAML frontmatter** in `.drone-agent/memory/`)
+  - **Correction:** earlier revisions said "JSON files"; the store serializes `.md` with a YAML frontmatter block.
 - MCP client integration
-- LSP integration with auto-download
+- LSP integration with auto-download (tarball-based auto-install from npm / GitHub releases)
 - Context budgeting and compaction
 - Self-improvement/insights system
 - **Swarm plugin** for connecting to beacon
-- Migration system (promote/demote skills and personas between scopes)
+- Migration system (promote/demote skills and personas between scopes) — `drone-agent/src/migrate.ts`, bin `drone-migrate`
+
+**Config cascade (full):** default → coordinator underlay (precedence 50) → beacon underlay (precedence 75) → user/project files (precedence 100). When the swarm plugin is active, the beacon supplies the merged underlay via the `DroneConfigInjector` capability rather than the file-based loader.
 
 **Key Files:**
 
@@ -191,6 +220,7 @@ The standalone coding agent - your AI assistant, whether solo or as part of your
 - `drone-agent/src/runtime/conversation-service.ts` - LLM loop
 - `drone-agent/src/plugins/index.ts` - Built-in plugins
 - `drone-agent/src/plugins/swarm/index.ts` - Swarm plugin (connects to beacon)
+- `drone-agent/src/migrate.ts` - Migration CLI (`drone-migrate`)
 - `drone-core/src/index.ts` - Shared types
 
 ---
@@ -205,7 +235,7 @@ Local coordination layer for YOUR swarm on one machine.
 
 - Fastify HTTP server (port 3457 by default)
 - SQLite database (better-sqlite3) with tables for personas, skills, agent sessions, memory, events, wiki, insights, principles
-  - Also: messages (with 24h cleanup), spawns (lifecycle tracking), beacon_config, knowledge_cache
+  - Also: messages (with 24h cleanup), spawns (lifecycle tracking), beacon_config, knowledge_cache, outbox, fragments, search_* (sqlite-vec)
   - Memory TTL with periodic cleanup
 - REST API endpoints for all CRUD operations
   - Wiki CRUD + search + lint
@@ -244,7 +274,7 @@ Local coordination layer for YOUR swarm on one machine.
 
 ### ✅ PHASE 3: drone-coordinator (SUBSTANTIALLY COMPLETE)
 
-**Status:** Substantially Complete — core infrastructure, security, session storage, knowledge management, wiki, insights/principles, migration tool, monitoring web UI, comprehensive test coverage, and inter-beacon spawn routing are all implemented. A few small items remain.
+**Status:** Substantially Complete — core infrastructure, security, session storage, knowledge management, wiki, insights/principles, migration tool, monitoring web UI, comprehensive test coverage, and inter-beacon spawn routing are all implemented. One item remains (3.8).
 
 Personal control plane for YOUR swarm across machines.
 
@@ -273,7 +303,15 @@ Personal control plane for YOUR swarm across machines.
 - WebSocket pub/sub for real-time updates
 - Dual-server architecture (API port 3456 + web port 8080 with auth)
 
-#### ⏳ 3.8 Make `--https` Default — Pending
+#### ⏳ 3.8 Make `--https` Default — PARTIAL (coordinator done, beacon diverges)
+
+- **Coordinator:** HTTPS is now **on by default** (`useHttps: true`; `--no-https` disables). No env var is read.
+- **Beacon:** HTTPS is still **off by default** (`BEACON_HTTPS === 'true'` required).
+- **Remaining gaps:**
+  1. Beacon/coordinator divergence — the two servers no longer share a default.
+  2. `useHttps` in `--config-file` is declared and allowlisted by `drone-swarm-common/src/config-file.ts` but **ignored** by both servers (neither reads `merged.useHttps`).
+  3. Env-var asymmetry — the beacon honors `BEACON_HTTPS`; the coordinator honors none.
+  4. No doc states that the two servers differ.
 
 #### ✅ 3.9 Inter-Beacon Spawn Routing — Complete
 
@@ -302,7 +340,11 @@ Personal control plane for YOUR swarm across machines.
 
 #### ✅ 4.3 Persona Assignment Control Surface — Complete
 
-#### ⏳ 4.4 Swarm Console Control Surface — Not started
+#### 🚧 4.4 Swarm Console Control Surface — In progress (plan ready)
+
+Locked design (2026-09-26, plan `plan-swarm-console-control-surface`): a gateway-side `swarm-console` control surface that parses dot-notation `swarm.<ns>.<cmd>` commands and maps each onto an existing coordinator REST endpoint. Direct REST, no LLM/agent. Optional per-conversation `allowedSenders` gate enforced by the engine. Engine-level surface registry extracted (surface types become registered factories). v1 command set: `swarm.help`, `swarm.broadcast`, `swarm.persona.{list,create,update,delete}`, `swarm.skill.{list,create,update,delete}`, `swarm.session.{list,get}`, `swarm.beacon.{list,status,spawn}`, `swarm.agent.{status,terminate,inject,persona}`.
+
+Deferred (need new coordinator endpoints; tracked separately, see `followup-swarm-console-unbacked-commands`): `swarm.agent.focus`, `swarm.agent.interrupt`, `swarm.beacon.policy`, `swarm.session.search`, `swarm.session.delete`.
 
 #### ⏳ 4.5 Mention Router Control Surface — Not started
 
@@ -310,29 +352,46 @@ Personal control plane for YOUR swarm across machines.
 
 #### ⏳ 4.7 Slack Service Adapter — Not started
 
+**Current gateway inventory (2026-09-26):** 2 control surfaces implemented (`persona-assignment`, `discard`), 1 service adapter implemented (Matrix). `telegram`, `slack`, `swarm-console`, and `mention-router` appear only in type comments, the glossary, and ADRs — never in executable code.
+
 ---
 
 ### 🔜 PHASE 5: Advanced Features
 
-**Status:** Design phase (portions implemented — see 5.3)
+**Status:** Design phase (portions implemented — see 5.3, 5.4, 5.5, 5.9, 5.10)
 
 #### 5.1 Conversation Log Migration — Not started
 
-#### 5.2 Automated Learning Loop — Aspirational, not yet implemented
+No conversation/session-log migration code or CLI exists. (`drone-agent/src/migrate.ts` handles skill/persona scope promotion only. `/swarm-session import` recreates an *old swarm session's context* into the current session — related but distinct.)
+
+#### 5.2 Automated Learning Loop — Aspirational; plumbing present, semantics missing
+
+What exists (reusable substrate): full session lifecycle with `ended` detection; `command|spawn` session-end triggers at beacon and coordinator; the `bootstrap__swarm-memory` end-to-end pipeline (session end → headless librarian → **wiki** ingest, with self-ingest guard, catch-up cron, atomic config writes, smoke test); insight/principle storage with prompt-fragment injection and swarm HTTP storage engines; per-turn hook seams (`onAfterToolCall`, `onConversationEvent`); a `reflect` persona premounting `insight`/`principle`/`mark_examined`.
+
+What is missing (the actual feature): per-turn background review; automatic session→insight extraction (insights are recorded only by explicit tool calls); automatic insight→principle derivation; a *session-reviewing* persona (the librarian writes wiki pages only; `review` is a code reviewer; `reflect` is manual); cross-beacon session search; a periodic swarm-wide review task on the coordinator.
 
 #### ✅ 5.3 Model Provider Plugin System — Complete
 
-#### 5.4 Distributed Memory & Task Routing — Not started
+#### ✅ 5.4 Distributed Memory & Task Routing — PARTIALLY IMPLEMENTED (label corrected 2026-09-26)
 
-#### ✅ 5.5 Web UI Management Console — Mostly Complete
+- **Distributed memory retrieval IS implemented:** swarm-memory RAG over the merged beacon+coordinator wiki (ADR 179), with a bit-signature prefilter (ADR 181) and the retrieval trigger fixed to use the current user message (ADR 184). Opt-in via `swarm.memory`.
+- **Deterministic spawn/message routing IS implemented:** inter-beacon spawn routing (3.9) and cross-beacon message relay.
+- **Still missing:** an *intelligent* task-routing layer (e.g. route a task to the node with the best model for the job). That remains aspirational.
 
-#### 5.6 Bootstrap Swarm Workflow — Not started
+#### ✅ 5.5 Web UI Management Console — Complete
+
+Topology, Beacons, Sessions, Personas (+editor), Skills (+editor), Wiki (+detail/editor/tag/graph), **Config** (+secrets), Login. The `/config` page is a real CRUD surface over `GET/PUT/DELETE /api/config/:key` with secret masking and stored-secret management (ADRs 209, 212).
+
+#### 🚧 5.6 Bootstrap Swarm Workflow — PARTIAL
+
+- **`bootstrap__swarm-memory` IS implemented** (`drone-agent/src/plugins/bootstrap/swarm-memory.ts`, ADR 180): writes `session-end-ingest.sh` + `catch-up-ingest.sh` into `~/.drone-swarm-memory/bin/`, merges the `sessionEnd` command trigger into the coordinator (and optionally beacon) config, installs an hourly catch-up cron, restarts ask-first, and runs a confirm-first smoke test.
+- **Still missing:** the general `bootstrap__swarm` setup workflow (docs/agents/bootstrap-plugin.md still lists it under future workflows). Registered bootstrap workflows today: `bootstrap__project`, `bootstrap__user`, `bootstrap__swarm-memory`.
 
 #### 5.7 MCP Server Description Cache Invalidation
 
 **Status:** Not started — deferred from MCP list/mount + server descriptions feature (2026-07-12)
 
-Currently, MCP server descriptions generated by the LLM are cached at `~/.drone-agent/cache/mcp/server-descriptions.json` and never invalidated automatically. If a server's tool list changes significantly (e.g., a server adds a new toolset or changes its purpose), the cached description becomes stale.
+Currently, MCP server descriptions generated by the LLM are cached at `~/.drone-agent/cache/mcp/server-descriptions.json` and never invalidated automatically (an entry stores `generatedAt` but no code reads it for TTL; no tool-list hash; no manual refresh). If a server's tool list changes significantly, the cached description becomes stale.
 
 **Options to revisit:**
 
@@ -346,40 +405,25 @@ Currently, MCP server descriptions generated by the LLM are cached at `~/.drone-
 
 **Status:** Not started — deferred from tool reduction follow-up plan (2026-07-12)
 
-After seeing list/mount live for a while (git, swarm, MCP), check in on whether some tools should be pre-mounted by default. Some commonly-used tools (e.g., git status, git diff) might benefit from being always available, while less common ones (e.g., git stash, swarm_spawn) stay in the cache. This is a UX decision that needs real-world observation.
+The pre-mount *mechanism* now exists: every tool starts unmounted in the runtime-level `ToolRegistry` (only `runtime__list_tools`/`mount_tool`/`unmount_tool` are auto-mounted), and personas can opt in per-persona via `premountedTools`. There is **no global default pre-mount policy** — the "check-in" on whether some tools (e.g. git status, git diff) should be always-available is still open and needs real-world observation.
 
 **Dependencies:** Tool reduction follow-up plan must be executed first
 
-#### 5.9 LSP Ergonomics for LLM
+#### ✅ 5.9 LSP Ergonomics for LLM — COMPLETE (label corrected 2026-09-26)
 
-**Status:** In Progress — symbol-based resolution for all line/column-based LSP tools is implemented (all 12 position-sensitive tools support both `symbol` and `text` parameters, with a document-symbols → workspace-symbols fallback cascade), but reducing the total tool count and improving ergonomics is still in progress.
+- All position-sensitive LSP tools accept `symbol` / `text` / `surroundingText` (anchor-based resolution): `go_to`, `find_references`, `inspect`, `completion`, `call_hierarchy`, `code_action`, `rename`. The remaining three (`get_diagnostics`, `symbols`, `formatting`) are position-less by nature.
+- The LSP tool count is down from 16 to **10** (registered in `plugin.ts`).
+- Deferral is handled by the **runtime-level list/mount** pattern (`ToolRegistry` + `runtime__*` meta-tools); the plugin itself registers its tools directly and holds no cache.
+- A header-phase `lsp-usage` prompt fragment teaches symbol-over-text and `surroundingText` disambiguation.
+- **Open concern (unchanged):** LSP tools are still not used as often as expected. Evaluate alongside 5.8 before further changes.
 
-**Note:** Despite the symbol/text resolution being fully implemented, LSP tools are not being used as often as expected. This may indicate the tool count is still too high, or that the LLM needs better guidance on when to reach for LSP tools. This should be evaluated alongside the list/mount pattern (5.8) before further changes.
+#### 5.10 Multi-Language LSP Support — 5.10.1 COMPLETE; 5.10.2 NOT STARTED
 
-When we get to converting LSP to list/mount (or otherwise improving LSP tool ergonomics), we want to:
+**5.10.1 Auto-install for popular languages — COMPLETE.** 14 known server specs ship in `known-servers.ts` (typescript, pyright, rust-analyzer, gopls, lua-language-server, bash, yaml, json, dockerfile, taplo, css, html, svelte, intelephense), each with a pinned version and sha512 integrity. The installer supports five install types — `npm | cargo | pip | go | github-release` — though only `npm` and `go` are exercised by shipped specs (cargo/pip URL plumbing exists but is unused).
 
-- Give the LLM a way to provide the text it's looking at for "cursor position" based tools (hover, go-to-definition, etc.) rather than requiring it to guess line/column numbers
-- Figure out the correct cursor position ourselves from the text context
-- Otherwise find ways to make LSP more ergonomic for the model
+**5.10.2 LLM-assisted server suggestion — NOT STARTED.** No suggest/LLM path exists. Note the roadmap's own earlier hint holds up: a macro template or slash command the user can customize may be a better fit than a complex built-in system.
 
-**Dependencies:** None (can be done independently, but should be informed by the list/mount pattern's real-world performance)
-
-#### 5.10 Multi-Language LSP Support
-
-**Status:** Design phase
-
-The LSP plugin currently only has a known server spec for TypeScript (with auto-install from npm). Users can configure other servers manually via `lsp.servers`, but there's no auto-detection or auto-install for other popular languages.
-
-**Sub-items:**
-
-- **5.10.1 Auto-install for popular languages** — Add known server specs for Rust (rust-analyzer, cargo install), Python (pyright/pylsp, pip), Go (gopls, go install), and other popular languages. The auto-install system currently only supports npm tarballs; needs extension for other package managers (cargo, pip, go install, etc.). This is the easy win.
-
-- **5.10.2 LLM-assisted server suggestion** — When heuristic detection fails to identify the project language or find a matching server, ask the LLM to analyze the project structure and suggest an appropriate LSP server. Design questions to resolve:
-  - When does this trigger? (on session start? on demand via a tool? as a prompt fragment?)
-  - How does the suggestion get surfaced to the user? (config write? log message? slash command?)
-  - One promising approach: provide a macro template or slash command that the user can customize for their own setup, rather than building a complex built-in system
-
-**Dependencies:** 5.10.1 is independent. 5.10.2 depends on the LLM being available at the time of suggestion.
+**Detection today:** root-marker eager detection + extension-based lazy start on file touch. No LLM involvement.
 
 ---
 
@@ -423,9 +467,9 @@ Phase 5 (Advanced)
 - Recovery: Does agent `git commit` before every tool call?
 - Cross-beacon file access: "Don't support it, use git for merge coordination"
 - Default experience: Ephemeral vs persistent (persona as default)
-- Hot-reload: Skills and personality on next LLM turn without restart
+- **Hot-reload: PARTIAL.** Skills and personas can be reloaded explicitly (`/skills reload`, `skills__list{reload:true}`, `reloadPersonas()` capability, wizard paths reload after writes), but there is no automatic watcher or per-turn re-read — a disk edit is not picked up "on the next LLM turn" by default.
 - Sync vs independence: Beacon down → your agent works with cached state (eventually consistent)
-- Coordinator maintenance: Must always have beacon on same host
+- **Coordinator maintenance: documented, not enforced.** "The coordinator must always have a beacon on the same host" is a deployment convention (README + design draft); no runtime check exists — the coordinator boots and serves fine with zero beacons. The only coupling is that self-maintenance (spawn) and coordinator session-end `spawn` triggers require a beacon.
 - How many agents should one human manage? (Start small, expand as needed)
 
 ---
@@ -436,7 +480,7 @@ Phase 5 (Advanced)
 2. **Phase 2:** Your multiple agents on same host share YOUR skills/personas/memory via beacon ✅
 3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; migration tool moves assets between scopes; monitoring web UI for viewing swarm state; comprehensive test coverage; inter-beacon spawn routing ✅
 4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses (partial — gateway core + persona-assignment + Matrix adapter + config-model refactor done; remaining adapters and control surfaces pending)
-5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support (multi-model ✅ via 5.3), automated learning (pending)
+5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support (multi-model ✅ via 5.3; distributed memory retrieval ✅ via 5.4; intelligent routing + automated learning pending)
 
 ---
 
@@ -454,4 +498,4 @@ Phase 5 (Advanced)
 
 ---
 
-_Last updated: 2026-08-01 (added 5.10 Multi-Language LSP Support with auto-install and LLM-assisted suggestion sub-items)_
+_Last updated: 2026-09-26 (full accuracy audit against HEAD `f2d487e`: corrected the plugin list and memory-format claims, corrected the `swarm` config block, fixed package inventory, corrected Phase 5.4/5.5/5.6/5.9/5.10 statuses, updated 3.8 to PARTIAL, and marked 4.4 in progress). Previous update: 2026-08-01 (added 5.10 Multi-Language LSP Support)._
