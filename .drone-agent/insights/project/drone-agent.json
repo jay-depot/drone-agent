@@ -610,5 +610,17 @@
   {
     "timestamp": "2026-09-26T18:56:39.813Z",
     "insight": "The gateway's `CoordinatorClient.sendMessage` posts `{toAgentId, body}` to `POST /api/messages/relay`, but the coordinator route requires `fromBeaconId`, `fromAgentId`, `toAgentId`, AND `body` (400s otherwise). So the whole gateway→coordinator message-relay path (persona-assignment via CoordinatorSpawnBackend) always fails. Separately, `CoordinatorSpawnBackend.terminateSession` passes `session.processId` (the agentId) where `DELETE /api/spawn/:beaconId/:spawnId` needs the spawnId, and defaults `targetBeaconId` to the literal `'default'`. Both are pre-existing and unfixed; the new swarm-console does both correctly, which is what surfaced the inconsistency. Worth a dedicated fix (and a gateway-side integration test) before the gateway is used in anger."
+  },
+  {
+    "timestamp": "2026-09-26T20:18:30.755Z",
+    "insight": "Plan-execution insight (gateway targetBeaconId, commit c4632e29): a plan snippet that shows a new private helper's *definition* but not its *invocation* leaves the call site unchanged — here `createControlSurface` still called `this.surfaceContext()` with no args after `surfaceContext(targetBeaconId)` gained a required parameter, producing a TS2554 that only the LSP/build caught. When executing a plan that adds/changes a helper signature, always grep for existing call sites of that helper before declaring the step done; the plan's code blocks are illustrative, not exhaustive."
+  },
+  {
+    "timestamp": "2026-09-26T20:18:30.758Z",
+    "insight": "Doc/code discrepancy: AGENTS.md's Standards say `pnpm -r run lint` must pass, but no workspace package defines a `lint` script — `pnpm -r run lint` exits non-zero with ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT (\"None of the selected packages has a lint script\"). The working command is the root `pnpm lint` (eslint --fix then prettier --write), which lints the whole monorepo. Note also that `pnpm lint` reformats files repo-wide (it touched unrelated memory/insight files in this session); revert incidental churn with `git checkout -- <path>` before committing to keep the change focused."
+  },
+  {
+    "timestamp": "2026-09-26T20:18:30.762Z",
+    "insight": "Tooling friction: `lsp__get_diagnostics` returned stale results after `file__write`/`file__apply_diff` in this session — it reported the OLD file contents (e.g. still showing the 3-arg `CoordinatorSpawnBackend(...)` after the file on disk had the 2-arg form, and an `await`-outside-async error after the test was already `async`). Verify with `file__read`/`exec` (sed) when a diagnostic contradicts what you just wrote; the authoritative check is `pnpm -r run build` (tsc -b). Do not chase phantom errors from a stale diagnostic payload."
   }
 ]
