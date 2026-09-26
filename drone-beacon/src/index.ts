@@ -25,6 +25,7 @@ import {
   registerRoutes,
   setCoordinatorClient,
   setBeaconAddress,
+  setBeaconInfo,
   triggerCoordinatorSync,
   setSearchIndexer,
 } from './routes/index.js';
@@ -346,6 +347,13 @@ async function main() {
     config.host === '0.0.0.0' ? 'localhost' : config.host,
     config.port
   );
+
+  setBeaconInfo({
+    id: config.beaconId,
+    name: config.beaconName,
+    coordinatorHost: config.coordinatorHost ?? null,
+    coordinatorPort: config.coordinatorPort ?? null,
+  });
 
   // Set up coordinator client if configured
   let coordinatorClient: CoordinatorClient | undefined;

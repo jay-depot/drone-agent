@@ -201,6 +201,15 @@ async function handleCommand(msg: CommandMessage): Promise<void> {
         });
         break;
       }
+      case 'fragmentsChanged': {
+        // Coordinator nudge: re-pull fragments immediately. Same sync path
+        // as configChanged (one sync pulls both); the distinct command keeps
+        // the two triggers distinguishable in logs.
+        void triggerCoordinatorSync().catch(err => {
+          logger.warn(`fragmentsChanged sync failed: ${err}`);
+        });
+        break;
+      }
       default:
         status = 400;
         ok = false;

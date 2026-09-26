@@ -75,7 +75,7 @@ import {
   listMergedForAgent,
   mergedContentHash,
 } from '../src/db/index.js';
-import { validateFragmentUpsert } from '../src/fragments-limits.js';
+import { validateFragmentUpsert } from 'drone-swarm-common';
 import type {
   CreatePersonaRequest,
   CreateSkillRequest,

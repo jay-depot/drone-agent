@@ -11,6 +11,7 @@ import {
   handleFragmentMessage,
   handleFragmentSyncMessage,
 } from './fragment-messages.js';
+import { refreshSwarmInfo, type SwarmBeaconInfo } from './swarm-info.js';
 
 interface FragmentWsPayload {
   op?: 'set' | 'remove';
@@ -29,6 +30,7 @@ export function connectWebSocket(ctx: SwarmContext): void {
     ctx.ws.onopen = () => {
       registration.logger.info('WebSocket connected to beacon');
       ctx.wsReconnectAttempts = 0;
+      void refreshSwarmInfo(ctx.swarmInfo, ctx.baseUrl, registration.logger);
       while (ctx.messageQueue.length > 0) {
         const msg = ctx.messageQueue.shift();
         if (ctx.ws && ctx.ws.readyState === WebSocket.OPEN) {
@@ -66,6 +68,15 @@ export function connectWebSocket(ctx: SwarmContext): void {
           }
         } else if (wsMsg.type === 'connected') {
           registration.logger.info('WebSocket handshake complete');
+          const info = wsMsg.payload?.info as SwarmBeaconInfo | undefined;
+          if (info) {
+            ctx.swarmInfo.applyBeaconInfo(info);
+          }
+          void refreshSwarmInfo(
+            ctx.swarmInfo,
+            ctx.baseUrl,
+            registration.logger
+          );
         } else if (wsMsg.type === 'ack') {
           registration.logger.info(
             `Message ${wsMsg.payload.messageId} acknowledged`

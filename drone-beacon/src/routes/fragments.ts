@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { DroneSwarmFragment } from 'drone-core';
 import * as db from '../db/index.js';
-import { validateFragmentUpsert } from '../fragments-limits.js';
+import { validateFragmentUpsert, countNonReserved } from 'drone-swarm-common';
 import {
   pushFragmentToAgent,
   pushFragmentSyncToAllConnected,
@@ -45,8 +45,11 @@ export default function fragmentRoutes(app: FastifyInstance) {
   // unknown agentIds)
   app.post<{ Body: unknown }>('/fragments', async (request, reply) => {
     const result = validateFragmentUpsert(request.body, {
-      countBroadcasts: () => db.listFragments({ target: 'broadcast' }).length,
-      countTargetedForAgent: target => db.listFragments({ target }).length,
+      scope: 'local',
+      countBroadcasts: () =>
+        countNonReserved(db.listFragments({ target: 'broadcast' })),
+      countTargetedForAgent: target =>
+        countNonReserved(db.listFragments({ target })),
     });
 
     if (!result.ok) {

@@ -18,17 +18,21 @@ import sync from './sync.js';
 import sessions from './sessions.js';
 import coordinatorTrust from './coordinator-trust.js';
 import coordinator from './coordinator.js';
+import info from './info.js';
 
 // Re-export helpers from context for external use
 export {
   setCoordinatorClient,
   setSearchIndexer,
   setBeaconAddress,
+  setBeaconInfo,
   triggerCoordinatorSync,
 } from './context.js';
+export type { BeaconInfo } from './context.js';
 
 export async function registerRoutes(app: FastifyInstance) {
   health(app);
+  info(app);
   personas(app);
   skills(app);
   channels(app);

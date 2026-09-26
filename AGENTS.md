@@ -174,7 +174,7 @@ The following subsystems have dedicated documentation in `docs/agents/`:
 
 - **Reference Expansion** (`docs/agents/reference-expansion.md`) — `@`-references in user messages (`@file`, `@skill:`, image files via the vision path, `~/`/cwd resolution, dir/glob inline caps) expanded at the conversation-service append sites, plus TUI tab completion
 - **Bootstrap Plugin** (`docs/agents/bootstrap-plugin.md`) — Setup workflows for new projects and users
-- **Swarm Plugin** (`docs/agents/swarm-plugin.md`) — Beacon/coordinator integration for swarm-wide personas, skills, and config
+- **Swarm Plugin** (`docs/agents/swarm-plugin.md`) — Beacon/coordinator integration for swarm-wide personas, skills, and config; the `# Swarm Status` header fragment (local beacon + coordinator + beacon roster, cached), the reserved-`swarm-identity` `# Swarm Identity` fragment authored from the coordinator UI's Identity page (`PUT`/`DELETE /api/fragments/:id` + the `fragmentsChanged` reverse-channel nudge), and the shared `drone-swarm-common` fragment limits module (reserved ids have their own budget and never expire)
 - **External Plugin Loading** (`docs/agents/external-plugin-loading.md`) — User and project-scope plugin discovery, trust model, engine integration
 - **MCP Plugin** (`docs/agents/mcp-plugin.md`) — Deferred list/mount pattern for tool loading, `ToolMountingCache`, server descriptions, persona filtering
 

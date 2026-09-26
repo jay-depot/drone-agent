@@ -106,6 +106,34 @@ describe('swarm fragment store', () => {
     expect(store.renderHeader()).toBe(false);
     expect(store.renderFooter()).toBe(false);
   });
+
+  it('excludes reserved ids from the Swarm Fragments bucket', () => {
+    const store = createSwarmFragmentStore();
+    store.applySet(
+      makeFragment({ id: 'swarm-identity', content: 'who we are' })
+    );
+    store.applySet(makeFragment({ id: 'user-note', content: 'a note' }));
+    const header = store.renderHeader() as string;
+    expect(header).toContain('## [user-note]');
+    expect(header).not.toContain('swarm-identity');
+  });
+
+  it('renderIdentity is false when no reserved row exists', () => {
+    const store = createSwarmFragmentStore();
+    expect(store.renderIdentity()).toBe(false);
+    store.applySet(makeFragment({ id: 'user-note' }));
+    expect(store.renderIdentity()).toBe(false);
+  });
+
+  it('renderIdentity renders reserved rows under a top-level heading', () => {
+    const store = createSwarmFragmentStore();
+    store.applySet(
+      makeFragment({ id: 'swarm-identity', content: 'We are the test swarm.' })
+    );
+    expect(store.renderIdentity()).toBe(
+      '# Swarm Identity\n\nWe are the test swarm.'
+    );
+  });
 });
 
 describe('swarm fragment WS message handlers', () => {
@@ -126,7 +154,8 @@ describe('swarm fragment WS message handlers', () => {
       'http://beacon.test',
       'agent-1',
       registration,
-      'ws://beacon.test/ws'
+      'ws://beacon.test/ws',
+      'localhost:3457'
     );
     return { ctx, emitEvent, notices };
   }
@@ -249,16 +278,36 @@ describe('swarm plugin fragment registration', () => {
       const plugin = createSwarmPlugin({});
       await plugin.register(registration);
 
-      const headerPrompt = promptFragments.find(f => f.phase === 'header');
-      const footerPrompt = promptFragments.find(f => f.phase === 'footer');
-      expect(headerPrompt).toBeDefined();
-      expect(footerPrompt).toBeDefined();
-      expect(headerPrompt?.key).toBe('fragments.header');
-      expect(footerPrompt?.key).toBe('fragments.footer');
+      const byKey = (key: string) => promptFragments.find(f => f.key === key);
+      expect(byKey('status')).toBeDefined();
+      expect(byKey('identity')).toBeDefined();
+      expect(byKey('fragments.header')).toBeDefined();
+      expect(byKey('fragments.footer')).toBeDefined();
 
       // Renders return false on an empty store even while the WS is fake.
-      await expect(headerPrompt?.render()).resolves.toBe(false);
-      await expect(footerPrompt?.render()).resolves.toBe(false);
+      await expect(byKey('status')?.render()).resolves.toBe(false);
+      await expect(byKey('identity')?.render()).resolves.toBe(false);
+      await expect(byKey('fragments.header')?.render()).resolves.toBe(false);
+      await expect(byKey('fragments.footer')?.render()).resolves.toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('registers the header fragments in status → identity → fragments order', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
+    );
+    try {
+      const { registration, promptFragments } = makeRegistrationCapture();
+      const plugin = createSwarmPlugin({});
+      await plugin.register(registration);
+
+      const headerKeys = promptFragments
+        .filter(f => f.phase === 'header')
+        .map(f => f.key);
+      expect(headerKeys).toEqual(['status', 'identity', 'fragments.header']);
     } finally {
       vi.unstubAllGlobals();
     }

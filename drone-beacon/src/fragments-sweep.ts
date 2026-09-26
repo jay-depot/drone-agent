@@ -1,7 +1,7 @@
 import * as db from './db/index.js';
 import { pushFragmentToAgent, isAgentConnected } from './ws-server.js';
 import { logger } from './logger.js';
-import { TTL_SWEEP_INTERVAL_MS } from './fragments-limits.js';
+import { TTL_SWEEP_INTERVAL_MS } from 'drone-swarm-common';
 
 let sweepInterval: NodeJS.Timeout | null = null;
 

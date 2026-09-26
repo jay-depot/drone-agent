@@ -8,6 +8,8 @@
 
 import type { SwarmFragmentStore } from './fragment-store.js';
 import { createSwarmFragmentStore } from './fragment-store.js';
+import type { SwarmInfoStore } from './swarm-info.js';
+import { createSwarmInfoStore } from './swarm-info.js';
 import type {
   DronePersonaDefinition,
   DronePluginRegistration,
@@ -71,6 +73,11 @@ export interface SwarmContext {
   fragmentStore: SwarmFragmentStore;
   /** True once the first fragmentSync (or reconnect resync) has been applied. */
   fragmentsResynced: boolean;
+  /**
+   * Cached beacon identity + roster for the `# Swarm Status` fragment.
+   * Refreshed out-of-band (plugin load, WS reconnect, slow interval).
+   */
+  swarmInfo: SwarmInfoStore;
 }
 
 /**
@@ -80,7 +87,8 @@ export function createSwarmContext(
   baseUrl: string,
   sessionId: string,
   registration: DronePluginRegistration,
-  wsUrl: string
+  wsUrl: string,
+  localAddress: string
 ): SwarmContext {
   return {
     baseUrl,
@@ -101,5 +109,6 @@ export function createSwarmContext(
     wsUrl,
     fragmentStore: createSwarmFragmentStore(),
     fragmentsResynced: false,
+    swarmInfo: createSwarmInfoStore(localAddress),
   };
 }

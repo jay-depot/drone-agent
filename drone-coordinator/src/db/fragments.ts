@@ -18,14 +18,27 @@ function rowToFragment(row: Record<string, unknown>): CoordinatorFragmentRow {
 }
 
 /**
- * Authoring surfaces (write endpoints) arrive with the persistent-WS
- * rework; the DB functions are the scaffolding that rework will consume.
- * v1 serves rows read-only via GET /api/fragments and the beacon mirror
- * pull.
+ * Insert or update a coordinator-scoped fragment, preserving `createdAt`
+ * across updates. `createdAt`/`updatedAt` may be omitted; the current time is
+ * stamped. Rows are always coordinator-scoped.
  */
 export function upsertFragment(
-  fragment: DroneSwarmFragment
+  fragment: Omit<
+    DroneSwarmFragment,
+    'createdAt' | 'updatedAt' | 'scope'
+  > & {
+    createdAt?: number;
+    scope?: DroneSwarmFragment['scope'];
+  }
 ): DroneSwarmFragment {
+  const now = Date.now();
+  const existing = getFragment(fragment.id, fragment.target);
+  const row: DroneSwarmFragment = {
+    ...fragment,
+    scope: 'coordinator',
+    createdAt: existing?.createdAt ?? fragment.createdAt ?? now,
+    updatedAt: now,
+  };
   const stmt = getDatabase().prepare(`
     INSERT INTO fragments (id, target, content, phase, scope, createdAt, updatedAt, expiresAt)
     VALUES (@id, @target, @content, @phase, @scope, @createdAt, @updatedAt, @expiresAt)
@@ -33,13 +46,12 @@ export function upsertFragment(
       content = excluded.content,
       phase = excluded.phase,
       scope = excluded.scope,
-      createdAt = excluded.createdAt,
       updatedAt = excluded.updatedAt,
       expiresAt = excluded.expiresAt
   `);
-  stmt.run(fragment);
-  logger.info(`Upserted fragment: ${fragment.id} -> ${fragment.target}`);
-  return fragment;
+  stmt.run(row);
+  logger.info(`Upserted fragment: ${row.id} -> ${row.target}`);
+  return row;
 }
 
 export function getFragment(

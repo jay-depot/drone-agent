@@ -17,6 +17,7 @@ import type { SwarmContext } from './context.js';
 import { reloadFromBeacon } from './providers.js';
 import { connectWebSocket } from './websocket.js';
 import { BeaconConfigInjector } from './config.js';
+import { refreshSwarmInfo } from './swarm-info.js';
 
 // JSON shapes returned by the beacon's /insights and /principles endpoints.
 interface BeaconInsightRecord {
@@ -276,6 +277,7 @@ export function registerHooks(
   registration.hooks.onPluginsLoaded(async () => {
     await reloadFromBeacon(ctx);
     await registerSwarmSession(ctx, interactive);
+    void refreshSwarmInfo(ctx.swarmInfo, ctx.baseUrl, registration.logger);
     connectWebSocket(ctx);
 
     // Register HTTP storage engines for swarm-scoped insights and principles
