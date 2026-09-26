@@ -149,14 +149,25 @@ describe('createSpawnBackend', () => {
     expect(backend.type).toBe('local');
   });
 
-  it('returns CoordinatorSpawnBackend for coordinator type', () => {
+  it('constructs CoordinatorSpawnBackend with url and token only', async () => {
     const config = {
       coordinatorUrl: 'http://localhost:8080',
+      coordinatorToken: 'secret-token',
       spawnBackend: 'coordinator' as const,
+      targetBeaconId: 'beacon-1',
       serviceAdapters: [],
     };
     const backend = createSpawnBackend(config);
     expect(backend.type).toBe('coordinator');
+    const { CoordinatorSpawnBackend } =
+      await import('../src/coordinator-spawn-backend.js');
+    const coordinatorCtor = CoordinatorSpawnBackend as unknown as ReturnType<
+      typeof vi.fn
+    >;
+    expect(coordinatorCtor).toHaveBeenCalledWith(
+      'http://localhost:8080',
+      'secret-token'
+    );
   });
 
   it('exits with error for unknown type', () => {

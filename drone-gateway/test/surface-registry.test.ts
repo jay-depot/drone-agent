@@ -105,7 +105,38 @@ describe('registerBuiltInSurfaces', () => {
       text: 'hi',
     });
     expect(result).toEqual({ response: 'hello back', handled: true });
-    expect(spawnBackend.spawnSession).toHaveBeenCalledWith('conv-1', 'coder');
+    expect(spawnBackend.spawnSession).toHaveBeenCalledWith('conv-1', 'coder', {
+      targetBeaconId: undefined,
+    });
+  });
+
+  it('persona-assignment forwards the resolved target beacon', async () => {
+    const spawnBackend = {
+      spawnSession: vi.fn(async () => ({
+        conversationId: 'conv-1',
+        personaId: 'coder',
+        processId: 'agent-1',
+        startedAt: 0,
+      })),
+      sendMessage: vi.fn(async () => 'hello back'),
+      terminateSession: vi.fn(),
+      type: 'coordinator' as const,
+    };
+    const registry = new SurfaceRegistry();
+    registerBuiltInSurfaces(registry);
+    const surface = registry.get('persona-assignment')!(
+      { type: 'persona-assignment', personaId: 'coder' },
+      'conv-1',
+      { spawnBackend, swarm: undefined, targetBeaconId: 'beacon-9' }
+    );
+    await surface.handleMessage({
+      adapterId: 'a',
+      conversationId: 'conv-1',
+      text: 'hi',
+    });
+    expect(spawnBackend.spawnSession).toHaveBeenCalledWith('conv-1', 'coder', {
+      targetBeaconId: 'beacon-9',
+    });
   });
 
   it('persona-assignment reports spawn errors as a response', async () => {

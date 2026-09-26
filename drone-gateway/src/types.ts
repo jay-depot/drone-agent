@@ -77,6 +77,11 @@ export interface GatewayConfig {
   coordinatorUrl: string;
   coordinatorToken?: string;
   spawnBackend: SpawnBackendType;
+  /**
+   * Gateway-wide default beacon for coordinator-mode spawns. Required when
+   * `spawnBackend` is "coordinator"; inert (and warned about) in local mode.
+   */
+  targetBeaconId?: string;
   agentPath?: string; // path to drone-agent binary (local mode)
   serviceAdapters: ResolvedServiceAdapter[];
 }
@@ -103,4 +108,11 @@ export interface SpawnSession {
   personaId: string;
   processId: string; // opaque identifier for the backend
   startedAt: number;
+  /** The beacon the spawn was placed on. Coordinator mode only. */
+  targetBeaconId?: string;
+}
+
+export interface SpawnSessionOptions {
+  /** Beacon to spawn on. Required in coordinator mode. */
+  targetBeaconId?: string;
 }

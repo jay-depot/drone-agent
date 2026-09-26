@@ -170,10 +170,30 @@ export class GatewayEngine {
           `Supported types: ${this.surfaceRegistry.types().join(', ')}`
       );
     }
-    return factory(spec, conversationId, this.surfaceContext());
+    return factory(
+      spec,
+      conversationId,
+      this.surfaceContext(this.resolveTargetBeaconId(spec))
+    );
   }
 
-  private surfaceContext(): SurfaceContext {
-    return { spawnBackend: this.spawnBackend, swarm: this.swarm };
+  /**
+   * The beacon a conversation's spawns target: the surface override when
+   * present, otherwise the gateway-wide default. Always undefined in local
+   * mode, where there is no beacon.
+   */
+  private resolveTargetBeaconId(spec: ControlSurfaceSpec): string | undefined {
+    if (this.spawnBackend.type !== 'coordinator') return undefined;
+    const override = spec.config?.targetBeaconId;
+    if (typeof override === 'string' && override.trim() !== '') return override;
+    return this.config.targetBeaconId;
+  }
+
+  private surfaceContext(targetBeaconId: string | undefined): SurfaceContext {
+    return {
+      spawnBackend: this.spawnBackend,
+      swarm: this.swarm,
+      targetBeaconId,
+    };
   }
 }

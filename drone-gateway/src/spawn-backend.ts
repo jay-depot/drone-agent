@@ -1,4 +1,8 @@
-import type { SpawnSession, SpawnBackendType } from './types.js';
+import type {
+  SpawnSession,
+  SpawnBackendType,
+  SpawnSessionOptions,
+} from './types.js';
 
 /**
  * Pluggable spawn backend interface.
@@ -16,10 +20,15 @@ export interface SpawnBackend {
    * Spawn a new persistent agent session for a conversation.
    * If a session already exists for this conversation, it should be
    * returned (idempotent).
+   *
+   * Callers in coordinator mode must supply `opts.targetBeaconId`.
+   * Implementations may ignore `opts` when beacon targeting is not
+   * applicable (local mode).
    */
   spawnSession(
     conversationId: string,
-    personaId: string
+    personaId: string,
+    opts?: SpawnSessionOptions
   ): Promise<SpawnSession>;
 
   /**

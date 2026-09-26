@@ -10,6 +10,12 @@ export interface SurfaceContext {
   spawnBackend: SpawnBackend;
   /** Undefined in local spawn-backend mode (no coordinator to talk to). */
   swarm: SwarmApi | undefined;
+  /**
+   * Resolved by the engine: the conversation's
+   * `controlSurfaces[].config.targetBeaconId` if valid, otherwise the
+   * gateway-wide default. Absent in local spawn-backend mode.
+   */
+  targetBeaconId?: string;
 }
 
 export type SurfaceFactory = (

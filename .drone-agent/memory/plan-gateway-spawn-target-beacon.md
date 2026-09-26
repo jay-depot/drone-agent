@@ -28,25 +28,25 @@ This is latent: the only surface that spawns through the default path is `person
 
 - A **gateway-wide default** `targetBeaconId` in `config.json`, required whenever `spawnBackend: "coordinator"`.
 - A **per-conversation override** at `controlSurfaces[].config.targetBeaconId`, resolved by the engine as `override ?? gateway default`.
-- The **backend stops holding ambient state**: `spawnSession` takes the beacon explicitly, `SpawnSession` records the beacon it actually used, and `terminateSession` kills on *that* beacon — so a per-conversation override cannot terminate the wrong target.
+- The **backend stops holding ambient state**: `spawnSession` takes the beacon explicitly, `SpawnSession` records the beacon it actually used, and `terminateSession` kills on _that_ beacon — so a per-conversation override cannot terminate the wrong target.
 - The `'default'` fallback string is **deleted**.
 
 ---
 
 ## 2. Decisions (locked during planning)
 
-| # | Question | Decision |
-|---|----------|----------|
-| Q1 | Resolution strategy for the beacon | **(A)** Config-only. No dynamic `listBeacons()` auto-selection. |
-| Q2 | Where the gateway-level requirement is enforced | **(A1)** In the config loader, hard-failing in coordinator mode — mirrors the existing `coordinatorUrl` validation. Constructor param type loses its optionality. |
-| Q3 | Per-conversation override in scope? | **(B)** Yes — gateway-wide default **plus** per-conversation override. |
-| Q3b | Where the override lives | **(B)** In the surface config bag: `controlSurfaces[].config.targetBeaconId`. **Not** a conversation-level field. |
-| Q4 | Termination targeting | **(B)** `spawnSession` receives the beacon explicitly; the backend holds **no** ambient beacon field; `SpawnSession.targetBeaconId` records it; `terminateSession` uses `session.targetBeaconId`. |
-| Q5 | Precedence resolution site | **(A)** The engine resolves `spec.config.targetBeaconId ?? config.targetBeaconId` once per conversation and injects the resolved value into that conversation's `SurfaceContext.targetBeaconId`. Surfaces never read raw config. |
-| Q6 | `targetBeaconId` configured while `spawnBackend: "local"` | **(B)** Warn (non-fatal) at load, ignore it; engine passes `undefined` into the context in local mode. |
-| Q7 | Field name and validation | Name `targetBeaconId`. Gateway-level: non-empty string, **throw** if invalid in coordinator mode, **warn-and-ignore** if invalid in local mode. Per-conversation override: **warn-and-ignore** (fall back to gateway default) if invalid — mirroring `parseAllowedSenders`. |
-| Q8 | Docs and live config | **(A)** In scope: new ADR 004, `drone-gateway/CONTEXT.md` updates, roadmap inventory update. The live `"ambiorix"` value is a **documented post-merge manual step** — there is no `~/.drone-gateway/` on this host to edit. |
-| Q9 | Test scope | As enumerated in Step 10. Coordinator backend additionally throws a clear local error if invoked without a beacon (defensive; unreachable given loader validation). |
+| #   | Question                                                  | Decision                                                                                                                                                                                                                                                                    |
+| --- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q1  | Resolution strategy for the beacon                        | **(A)** Config-only. No dynamic `listBeacons()` auto-selection.                                                                                                                                                                                                             |
+| Q2  | Where the gateway-level requirement is enforced           | **(A1)** In the config loader, hard-failing in coordinator mode — mirrors the existing `coordinatorUrl` validation. Constructor param type loses its optionality.                                                                                                           |
+| Q3  | Per-conversation override in scope?                       | **(B)** Yes — gateway-wide default **plus** per-conversation override.                                                                                                                                                                                                      |
+| Q3b | Where the override lives                                  | **(B)** In the surface config bag: `controlSurfaces[].config.targetBeaconId`. **Not** a conversation-level field.                                                                                                                                                           |
+| Q4  | Termination targeting                                     | **(B)** `spawnSession` receives the beacon explicitly; the backend holds **no** ambient beacon field; `SpawnSession.targetBeaconId` records it; `terminateSession` uses `session.targetBeaconId`.                                                                           |
+| Q5  | Precedence resolution site                                | **(A)** The engine resolves `spec.config.targetBeaconId ?? config.targetBeaconId` once per conversation and injects the resolved value into that conversation's `SurfaceContext.targetBeaconId`. Surfaces never read raw config.                                            |
+| Q6  | `targetBeaconId` configured while `spawnBackend: "local"` | **(B)** Warn (non-fatal) at load, ignore it; engine passes `undefined` into the context in local mode.                                                                                                                                                                      |
+| Q7  | Field name and validation                                 | Name `targetBeaconId`. Gateway-level: non-empty string, **throw** if invalid in coordinator mode, **warn-and-ignore** if invalid in local mode. Per-conversation override: **warn-and-ignore** (fall back to gateway default) if invalid — mirroring `parseAllowedSenders`. |
+| Q8  | Docs and live config                                      | **(A)** In scope: new ADR 004, `drone-gateway/CONTEXT.md` updates, roadmap inventory update. The live `"ambiorix"` value is a **documented post-merge manual step** — there is no `~/.drone-gateway/` on this host to edit.                                                 |
+| Q9  | Test scope                                                | As enumerated in Step 10. Coordinator backend additionally throws a clear local error if invoked without a beacon (defensive; unreachable given loader validation).                                                                                                         |
 
 **Explicitly out of scope:** dynamic beacon discovery/auto-selection; validating the beacon id against the coordinator at startup (the coordinator may be unreachable at boot, and a bad value now fails honestly on first spawn).
 
@@ -132,41 +132,41 @@ Change the `spawnSession` signature to take `opts?: SpawnSessionOptions` (snippe
 **(a) Gateway-level.** Immediately after the existing `coordinatorUrl` validation block (it ends with the `logger.warn(...)` for local mode), insert:
 
 ```ts
-  // targetBeaconId: required for coordinator mode; inert (warned) for local
-  const rawTargetBeaconId = gatewayConfig.targetBeaconId as string | undefined;
-  let targetBeaconId: string | undefined;
-  if (rawTargetBeaconId === undefined) {
-    targetBeaconId = undefined;
-  } else if (
-    typeof rawTargetBeaconId !== 'string' ||
-    rawTargetBeaconId.trim() === ''
-  ) {
-    if (spawnBackend === 'coordinator') {
-      throw new Error(
-        'Config field targetBeaconId must be a non-empty string. ' +
-          'This field is required when spawnBackend is "coordinator".'
-      );
-    }
-    logger.warn(
-      'Config field targetBeaconId is not a non-empty string; ignoring it.'
-    );
-    targetBeaconId = undefined;
-  } else {
-    targetBeaconId = rawTargetBeaconId;
-  }
-
-  if (spawnBackend === 'coordinator' && !targetBeaconId) {
+// targetBeaconId: required for coordinator mode; inert (warned) for local
+const rawTargetBeaconId = gatewayConfig.targetBeaconId as string | undefined;
+let targetBeaconId: string | undefined;
+if (rawTargetBeaconId === undefined) {
+  targetBeaconId = undefined;
+} else if (
+  typeof rawTargetBeaconId !== 'string' ||
+  rawTargetBeaconId.trim() === ''
+) {
+  if (spawnBackend === 'coordinator') {
     throw new Error(
-      'Config missing required field: targetBeaconId. ' +
+      'Config field targetBeaconId must be a non-empty string. ' +
         'This field is required when spawnBackend is "coordinator".'
     );
   }
+  logger.warn(
+    'Config field targetBeaconId is not a non-empty string; ignoring it.'
+  );
+  targetBeaconId = undefined;
+} else {
+  targetBeaconId = rawTargetBeaconId;
+}
 
-  if (spawnBackend === 'local' && targetBeaconId) {
-    logger.warn(
-      'Config sets targetBeaconId but spawnBackend is "local" — the value has no effect.'
-    );
-  }
+if (spawnBackend === 'coordinator' && !targetBeaconId) {
+  throw new Error(
+    'Config missing required field: targetBeaconId. ' +
+      'This field is required when spawnBackend is "coordinator".'
+  );
+}
+
+if (spawnBackend === 'local' && targetBeaconId) {
+  logger.warn(
+    'Config sets targetBeaconId but spawnBackend is "local" — the value has no effect.'
+  );
+}
 ```
 
 Then add `targetBeaconId,` to the `const config: GatewayConfig = { ... }` object literal (alongside `coordinatorUrl`, `coordinatorToken`, etc.).
@@ -202,16 +202,16 @@ function sanitizeSurfaceConfig(
 Use it in the surface-parsing loop where the spec is pushed:
 
 ```ts
-      specs.push({
-        type: spec.type as string,
-        personaId: spec.personaId as string | undefined,
-        config: sanitizeSurfaceConfig(
-          spec.config as Record<string, unknown> | undefined,
-          adapterId,
-          file,
-          convId
-        ),
-      });
+specs.push({
+  type: spec.type as string,
+  personaId: spec.personaId as string | undefined,
+  config: sanitizeSurfaceConfig(
+    spec.config as Record<string, unknown> | undefined,
+    adapterId,
+    file,
+    convId
+  ),
+});
 ```
 
 ### Step 4 — `drone-gateway/src/coordinator-spawn-backend.ts` (coder)
@@ -281,11 +281,9 @@ Use it in the surface-parsing loop where the spec is pushed:
 Pass the context's resolved beacon through:
 
 ```ts
-          session = await ctx.spawnBackend.spawnSession(
-            conversationId,
-            personaId,
-            { targetBeaconId: ctx.targetBeaconId }
-          );
+session = await ctx.spawnBackend.spawnSession(conversationId, personaId, {
+  targetBeaconId: ctx.targetBeaconId,
+});
 ```
 
 ### Step 7 — `drone-gateway/src/engine.ts` (coder)
@@ -311,11 +309,11 @@ Add a resolver and thread the value into the context:
 Update `createControlSurface` to pass it through, and `surfaceContext` to accept it:
 
 ```ts
-    return factory(
-      spec,
-      conversationId,
-      this.surfaceContext(this.resolveTargetBeaconId(spec))
-    );
+return factory(
+  spec,
+  conversationId,
+  this.surfaceContext(this.resolveTargetBeaconId(spec))
+);
 ```
 
 ```ts
@@ -357,6 +355,7 @@ Grep the package for `'default'` as a beacon value and for any remaining `target
 All additions go in the existing files. `pnpm test` inside `drone-gateway` runs the suite.
 
 ### `test/config-load.test.ts`
+
 - **throws when coordinator mode lacks `targetBeaconId`** — `{ coordinatorUrl, spawnBackend: 'coordinator' }` → rejects with a message containing `targetBeaconId`.
 - **accepts `targetBeaconId` in coordinator mode** — loaded value equals the configured string.
 - **throws when the gateway-level value is not a string** in coordinator mode (e.g. `42`).
@@ -365,10 +364,12 @@ All additions go in the existing files. `pnpm test` inside `drone-gateway` runs 
 - **per-conversation override: invalid is dropped** — `config: { targetBeaconId: 42 }` → parsed surface has no `targetBeaconId` key (other `config` keys preserved), and load did not reject.
 
 ### `test/index.test.ts`
+
 - extend `createSpawnBackend` coverage: the coordinator case still returns a coordinator-typed backend (two-argument construction), and `CoordinatorSpawnBackend` is constructed with exactly `(coordinatorUrl, coordinatorToken)` — assert via the mocked constructor's `mock.calls`.
 - add `targetBeaconId: 'beacon-1'` to the coordinator-mode fixture configs and assert the backend is still constructed (no third argument).
 
 ### `test/coordinator-spawn-backend.test.ts`
+
 - constructor becomes `(url, token)` — update `beforeEach`.
 - **spawnSession passes the supplied beacon**: `spawnSession('conv-1', 'coder', { targetBeaconId: 'beacon-1' })` → `spawnAgent` called with `targetBeaconId: 'beacon-1'`; returned session's `targetBeaconId === 'beacon-1'`.
 - **spawnSession throws without a beacon**: omit `opts` → rejects with `/requires a targetBeaconId/`; `spawnAgent` not called.
@@ -378,18 +379,23 @@ All additions go in the existing files. `pnpm test` inside `drone-gateway` runs 
 - keep the existing "warns on failure but does not throw" case.
 
 ### `test/local-spawn-backend.test.ts`
+
 No changes required (two-argument calls remain valid). Optionally add one case asserting a session spawned by the local backend has no `targetBeaconId`.
 
 ### `test/surface-registry.test.ts`
+
 - the persona-assignment success assertion becomes
   `expect(spawnBackend.spawnSession).toHaveBeenCalledWith('conv-1', 'coder', { targetBeaconId: undefined });`
 - add a case where the context supplies `targetBeaconId: 'beacon-9'` and assert it is forwarded.
 
 ### `test/swarm-console-surface.test.ts`
+
 No functional change. The shared `makeSurface` helper may optionally accept `targetBeaconId` in its `Partial<SurfaceContext>` overrides — the field is optional, so nothing must change.
 
 ### `test/engine.test.ts`
+
 Add a `describe('spawn target beacon resolution')` block driving a `persona-assignment` conversation and asserting the value the spawn backend received:
+
 - **gateway default used when no override** — config `targetBeaconId: 'beacon-default'`, conversation `persona-assignment` with no `config` → `spawnSession` called with `{ targetBeaconId: 'beacon-default' }`.
 - **per-conversation override wins** — conversation spec `config: { targetBeaconId: 'beacon-override' }` → `spawnSession` called with `{ targetBeaconId: 'beacon-override' }`.
 - **local mode yields undefined** — `spawnBackend: 'local'` with a configured gateway default → `spawnSession` called with `{ targetBeaconId: undefined }`.
@@ -401,7 +407,7 @@ Note: `makeRespondingSpawnBackend()`'s `vi.fn` currently declares two parameters
 ## 6. Step 11 — Documentation (coder)
 
 1. **New file `drone-gateway/docs/adr/004-gateway-spawn-targeting.md`.** Follow the ADR house style of 001–003 (Status / Context / Decision N / Rationale / Alternatives considered / Consequences). It must record: config-only targeting (dynamic `listBeacons()` resolution rejected); loader-level hard requirement in coordinator mode mirroring `coordinatorUrl`; the per-conversation override living in `controlSurfaces[].config.targetBeaconId` with engine-side precedence resolution; that the spawning backend holds no ambient beacon and `terminateSession` uses the session's own beacon (with the wrong-target hazard called out); the local-mode warn; and the deleted `'default'` fallback.
-2. **`drone-gateway/CONTEXT.md`.** In the Config Layout block add `targetBeaconId?: string  # Gateway-wide default spawn beacon; required when spawnBackend is "coordinator"` next to `coordinatorUrl`, and show the override in the `controlSurfaces` example (e.g. `{ type: "persona-assignment", personaId: "...", config: { targetBeaconId: "other-beacon" } }`). Add a short glossary entry **Spawn Target Beacon** defining the resolved value and its precedence, and reference it from the *Persona Assignment* entry.
+2. **`drone-gateway/CONTEXT.md`.** In the Config Layout block add `targetBeaconId?: string  # Gateway-wide default spawn beacon; required when spawnBackend is "coordinator"` next to `coordinatorUrl`, and show the override in the `controlSurfaces` example (e.g. `{ type: "persona-assignment", personaId: "...", config: { targetBeaconId: "other-beacon" } }`). Add a short glossary entry **Spawn Target Beacon** defining the resolved value and its precedence, and reference it from the _Persona Assignment_ entry.
 3. **Roadmap.** Update the `roadmap` project memory's Phase 4 gateway inventory to note that coordinator-mode spawn targeting is wired (gateway default + per-conversation override), replacing the silent `'default'`.
 4. Record `targetBeaconId: "ambiorix"` in the gateway `config.json` as a **post-merge manual step** in the plan's completion note (not a code task).
 
@@ -424,6 +430,7 @@ Then walk §8 line by line and confirm each criterion is met, reporting any that
 ## 8. Validation criteria
 
 **Functional**
+
 1. `GatewayConfig` has `targetBeaconId?: string`; `SpawnSession` has `targetBeaconId?: string`; `SpawnSessionOptions` exists and is exported.
 2. `SpawnBackend.spawnSession` accepts `opts?: SpawnSessionOptions`; both built-in backends still satisfy the interface; `LocalSpawnBackend` compiles without an unused-parameter lint error.
 3. The string literal `'default'` no longer appears anywhere as a beacon fallback in `drone-gateway/src`.
@@ -436,11 +443,7 @@ Then walk §8 line by line and confirm each criterion is met, reporting any that
 10. `CoordinatorSpawnBackend.terminateSession` targets `session.targetBeaconId`; a session lacking one is warned about and skipped without a network call.
 11. `CoordinatorSpawnBackend.spawnSession` throws a clear error when invoked without a beacon.
 
-**Tooling (mandatory)**
-12. LSP diagnostics clean across the workspace (`pnpm -r run build`, i.e. `tsc -b`, passes with zero errors).
-13. `pnpm -r run lint` passes with zero errors (this runs ESLint and then Prettier).
-14. `pnpm test` (the fast suite) passes; `drone-gateway`'s vitest suite is green.
-15. Every new behavior above is covered by a unit test in the files listed in Step 10; no dead code, unused bindings, or fluff comments are introduced (per `AGENTS.md` standards).
+**Tooling (mandatory)** 12. LSP diagnostics clean across the workspace (`pnpm -r run build`, i.e. `tsc -b`, passes with zero errors). 13. `pnpm -r run lint` passes with zero errors (this runs ESLint and then Prettier). 14. `pnpm test` (the fast suite) passes; `drone-gateway`'s vitest suite is green. 15. Every new behavior above is covered by a unit test in the files listed in Step 10; no dead code, unused bindings, or fluff comments are introduced (per `AGENTS.md` standards).
 
 ---
 
@@ -453,6 +456,7 @@ Then walk §8 line by line and confirm each criterion is met, reporting any that
 - **Post-merge manual step (not a code task):** set `"targetBeaconId": "ambiorix"` in the gateway `config.json` on the machine that runs the gateway.
 
 ## Related memory
+
 - `followup-swarm-spawn-terminate-beacon-restart` — spawn termination is lost across a beacon restart (separate, still-open issue; this plan does not address it).
 - `followup-swarm-console-unbacked-commands` — swarm-console commands awaiting coordinator endpoints.
 - `roadmap` — Phase 4 gateway inventory.

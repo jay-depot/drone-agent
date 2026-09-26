@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { logger } from './logger.js';
 import { CoordinatorClient } from './coordinator-client.js';
 import type { SpawnBackend } from './spawn-backend.js';
-import type { SpawnSession } from './types.js';
+import type { SpawnSession, SpawnSessionOptions } from './types.js';
 
 /**
  * CoordinatorSpawnBackend delegates agent spawning to the coordinator's
@@ -17,36 +17,38 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
 
   private coordinatorClient: CoordinatorClient;
   private sessions: Map<string, SpawnSession> = new Map();
-  private targetBeaconId: string;
 
-  constructor(
-    coordinatorUrl: string,
-    coordinatorToken: string | undefined,
-    targetBeaconId?: string
-  ) {
+  constructor(coordinatorUrl: string, coordinatorToken: string | undefined) {
     this.coordinatorClient = new CoordinatorClient(
       coordinatorUrl,
       coordinatorToken
     );
-    this.targetBeaconId = targetBeaconId || 'default';
   }
 
   async spawnSession(
     conversationId: string,
-    personaId: string
+    personaId: string,
+    opts?: SpawnSessionOptions
   ): Promise<SpawnSession> {
     const existing = this.sessions.get(conversationId);
     if (existing) {
       return existing;
     }
 
+    const targetBeaconId = opts?.targetBeaconId;
+    if (!targetBeaconId) {
+      throw new Error(
+        'CoordinatorSpawnBackend.spawnSession requires a targetBeaconId.'
+      );
+    }
+
     logger.info(
-      `Spawning agent on coordinator for conversation ${conversationId} (persona: ${personaId})`
+      `Spawning agent on beacon "${targetBeaconId}" for conversation ${conversationId} (persona: ${personaId})`
     );
 
     const spawnId = randomUUID();
     const result = await this.coordinatorClient.spawnAgent({
-      targetBeaconId: this.targetBeaconId,
+      targetBeaconId,
       personaId,
       spawnId,
     });
@@ -62,6 +64,7 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
       personaId,
       processId: spawnResult.agentId || spawnResult.spawnId,
       startedAt: Date.now(),
+      targetBeaconId,
     };
 
     this.sessions.set(conversationId, session);
@@ -84,9 +87,17 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
   async terminateSession(session: SpawnSession): Promise<void> {
     logger.info(`Terminating agent ${session.processId} via coordinator`);
 
+    if (!session.targetBeaconId) {
+      logger.warn(
+        `Cannot terminate agent ${session.processId}: no target beacon recorded on the session`
+      );
+      this.sessions.delete(session.conversationId);
+      return;
+    }
+
     try {
       await this.coordinatorClient.terminateSpawn(
-        this.targetBeaconId,
+        session.targetBeaconId,
         session.processId
       );
     } catch (err) {

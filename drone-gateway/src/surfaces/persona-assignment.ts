@@ -23,7 +23,8 @@ export const createPersonaAssignmentSurface: SurfaceFactory = (
         if (!session) {
           session = await ctx.spawnBackend.spawnSession(
             conversationId,
-            personaId
+            personaId,
+            { targetBeaconId: ctx.targetBeaconId }
           );
         }
 

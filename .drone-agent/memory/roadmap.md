@@ -3,7 +3,7 @@ key: roadmap
 tags:
   - roadmap
 created: 2026-06-24T01:49:32.293Z
-updated: 2026-09-26T18:37:49.896Z
+updated: 2026-09-26T20:15:38.710Z
 ---
 
 # Swarm Roadmap
@@ -346,13 +346,9 @@ Implemented 2026-09-26 (plan `plan-swarm-console-control-surface`, commit `5fdc5
 
 Deferred (need new coordinator endpoints; tracked separately, see `followup-swarm-console-unbacked-commands`): `swarm.agent.focus`, `swarm.agent.interrupt`, `swarm.beacon.policy`, `swarm.session.search`, `swarm.session.delete`.
 
-#### ⏳ 4.5 Mention Router Control Surface — Not started
+#### ✅ Gateway Spawn Targeting — Complete (2026-09-26, ADR 004)
 
-#### ⏳ 4.6 Telegram Service Adapter — Not started
-
-#### ⏳ 4.7 Slack Service Adapter — Not started
-
-**Current gateway inventory (2026-09-26):** 3 control surfaces implemented (`persona-assignment`, `discard`, `swarm-console`), 1 service adapter implemented (Matrix). `telegram`, `slack`, and `mention-router` appear only in type comments, the glossary, and ADRs — never in executable code.
+Coordinator-mode spawns now target a configurable beacon instead of the unreachable silent `'default'`. A gateway-wide `targetBeaconId` in `config.json` is required when `spawnBackend` is `"coordinator"` (loader-enforced, mirroring `coordinatorUrl`) and is merely warned about in local mode. A per-conversation override lives at `controlSurfaces[].config.targetBeaconId`; the engine resolves `override ?? gateway default` per conversation and injects the value into that conversation's `SurfaceContext`. `SpawnBackend.spawnSession` takes the beacon explicitly via `SpawnSessionOptions`, the backend holds no ambient beacon, records the beacon on the returned `SpawnSession`, and terminates on that recorded beacon (so a per-conversation override cannot terminate the wrong target). `persona-assignment` forwards `ctx.targetBeaconId`; the `'default'` fallback is deleted. Post-merge manual step: set `"targetBeaconId": "ambiorix"` in the gateway `config.json` on the gateway host.
 
 #### ⏳ 4.5 Mention Router Control Surface — Not started
 
@@ -360,7 +356,7 @@ Deferred (need new coordinator endpoints; tracked separately, see `followup-swar
 
 #### ⏳ 4.7 Slack Service Adapter — Not started
 
-**Current gateway inventory (2026-09-26):** 2 control surfaces implemented (`persona-assignment`, `discard`), 1 service adapter implemented (Matrix). `telegram`, `slack`, `swarm-console`, and `mention-router` appear only in type comments, the glossary, and ADRs — never in executable code.
+**Current gateway inventory (2026-09-26):** 3 control surfaces implemented (`persona-assignment`, `discard`, `swarm-console`), 1 service adapter implemented (Matrix), configurable per-conversation spawn targeting (ADR 004). `telegram`, `slack`, and `mention-router` appear only in type comments, the glossary, and ADRs — never in executable code.
 
 ---
 
@@ -487,7 +483,7 @@ Phase 5 (Advanced)
 1. **Phase 1:** Agent can bootstrap itself and work on its own codebase ✅
 2. **Phase 2:** Your multiple agents on same host share YOUR skills/personas/memory via beacon ✅
 3. **Phase 3:** YOUR multiple hosts coordinate via coordinator; migration tool moves assets between scopes; monitoring web UI for viewing swarm state; comprehensive test coverage; inter-beacon spawn routing ✅
-4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses (partial — gateway core + persona-assignment + Matrix adapter + config-model refactor done; remaining adapters and control surfaces pending)
+4. **Phase 4:** Chat messages from Discord/Slack spawn YOUR agents and get responses (partial — gateway core + persona-assignment + Matrix adapter + config-model refactor + swarm-console + configurable spawn targeting done; remaining adapters and control surfaces pending)
 5. **Phase 5:** YOUR distributed memory, intelligent task routing, multi-model support (multi-model ✅ via 5.3; distributed memory retrieval ✅ via 5.4; intelligent routing + automated learning pending)
 
 ---
@@ -506,4 +502,4 @@ Phase 5 (Advanced)
 
 ---
 
-_Last updated: 2026-09-26 (full accuracy audit against HEAD `f2d487e`: corrected the plugin list and memory-format claims, corrected the `swarm` config block, fixed package inventory, corrected Phase 5.4/5.5/5.6/5.9/5.10 statuses, updated 3.8 to PARTIAL, and marked 4.4 in progress). Previous update: 2026-08-01 (added 5.10 Multi-Language LSP Support)._
+_Last updated: 2026-09-26 (gateway spawn targeting wired per ADR 004 — added Phase 4 "Gateway Spawn Targeting" entry and collapsed a duplicated/stale Phase 4 inventory block). Previous update: 2026-09-26 (full accuracy audit against HEAD `f2d487e`: corrected the plugin list and memory-format claims, corrected the `swarm` config block, fixed package inventory, corrected Phase 5.4/5.5/5.6/5.9/5.10 statuses, updated 3.8 to PARTIAL, and marked 4.4 in progress). Previous update: 2026-08-01 (added 5.10 Multi-Language LSP Support)._

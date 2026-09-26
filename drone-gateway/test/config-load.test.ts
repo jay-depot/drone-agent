@@ -126,11 +126,80 @@ describe('loadGatewayConfig coordinatorUrl validation', () => {
     const configPath = await writeConfig({
       coordinatorUrl: 'http://coordinator:8080',
       spawnBackend: 'coordinator',
+      targetBeaconId: 'beacon-1',
     });
 
     const { loadGatewayConfig } = await import('../src/config/load.js');
     const config = await loadGatewayConfig(configPath);
     expect(config.coordinatorUrl).toBe('http://coordinator:8080');
+    expect(config.targetBeaconId).toBe('beacon-1');
+  });
+});
+
+describe('loadGatewayConfig targetBeaconId validation', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(os.tmpdir(), 'gateway-beacon-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  async function writeConfig(config: Record<string, unknown>): Promise<string> {
+    const configPath = path.join(tmpDir, 'config.json');
+    writeFileSync(configPath, JSON.stringify(config));
+    return configPath;
+  }
+
+  it('throws when targetBeaconId is missing in coordinator mode', async () => {
+    const configPath = await writeConfig({
+      coordinatorUrl: 'http://coordinator:8080',
+      spawnBackend: 'coordinator',
+    });
+
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    await expect(loadGatewayConfig(configPath)).rejects.toThrow(
+      'targetBeaconId'
+    );
+  });
+
+  it('accepts a targetBeaconId in coordinator mode', async () => {
+    const configPath = await writeConfig({
+      coordinatorUrl: 'http://coordinator:8080',
+      spawnBackend: 'coordinator',
+      targetBeaconId: 'beacon-9',
+    });
+
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    const config = await loadGatewayConfig(configPath);
+    expect(config.targetBeaconId).toBe('beacon-9');
+  });
+
+  it('throws when targetBeaconId is not a string in coordinator mode', async () => {
+    const configPath = await writeConfig({
+      coordinatorUrl: 'http://coordinator:8080',
+      spawnBackend: 'coordinator',
+      targetBeaconId: 42,
+    });
+
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    await expect(loadGatewayConfig(configPath)).rejects.toThrow(
+      'targetBeaconId'
+    );
+  });
+
+  it('warns but loads when targetBeaconId is set in local mode', async () => {
+    const configPath = await writeConfig({
+      spawnBackend: 'local',
+      targetBeaconId: 'beacon-9',
+    });
+
+    const { loadGatewayConfig } = await import('../src/config/load.js');
+    const config = await loadGatewayConfig(configPath);
+    expect(config.targetBeaconId).toBe('beacon-9');
+    expect(config.spawnBackend).toBe('local');
   });
 });
 

@@ -42,9 +42,11 @@ function makeMockSpawnBackend(): SpawnBackend {
   };
 }
 
-function makeRespondingSpawnBackend(): SpawnBackend {
+function makeRespondingSpawnBackend(
+  type: 'local' | 'coordinator' = 'local'
+): SpawnBackend {
   return {
-    type: 'local' as const,
+    type,
     spawnSession: vi.fn(async (conversationId: string, personaId: string) => ({
       conversationId,
       personaId,
@@ -317,6 +319,84 @@ describe('GatewayEngine', () => {
         senderId: '@anyone:server',
       });
       expect(sent[0].text).toBe('PERSONA-RESPONSE');
+    });
+  });
+
+  describe('spawn target beacon resolution', () => {
+    function beaconConfig(
+      spawnBackend: 'local' | 'coordinator',
+      overrides: Partial<GatewayConfig> = {}
+    ): GatewayConfig {
+      return makeMinimalConfig({
+        spawnBackend,
+        targetBeaconId: 'beacon-default',
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([makeConvSpec('persona-assignment', { personaId: 'me' })]),
+              ],
+            ]),
+          }),
+        ],
+        ...overrides,
+      });
+    }
+
+    function spawnedBeacon(backend: SpawnBackend): unknown {
+      const spy = backend.spawnSession as unknown as ReturnType<typeof vi.fn>;
+      return spy.mock.calls[0][2];
+    }
+
+    it('uses the gateway default when the conversation sets no override', async () => {
+      const backend = makeRespondingSpawnBackend('coordinator');
+      await startAndDrive(beaconConfig('coordinator'), backend, {
+        conversationId: 'dm:@me:server',
+        text: 'hello',
+      });
+      expect(spawnedBeacon(backend)).toEqual({
+        targetBeaconId: 'beacon-default',
+      });
+    });
+
+    it('prefers the per-conversation override', async () => {
+      const backend = makeRespondingSpawnBackend('coordinator');
+      const config = beaconConfig('coordinator', {
+        serviceAdapters: [
+          makeAdapter({
+            id: 'matrix-1',
+            conversations: new Map([
+              [
+                'dm:@me:server',
+                conv([
+                  makeConvSpec('persona-assignment', {
+                    personaId: 'me',
+                    config: { targetBeaconId: 'beacon-override' },
+                  }),
+                ]),
+              ],
+            ]),
+          }),
+        ],
+      });
+      await startAndDrive(config, backend, {
+        conversationId: 'dm:@me:server',
+        text: 'hello',
+      });
+      expect(spawnedBeacon(backend)).toEqual({
+        targetBeaconId: 'beacon-override',
+      });
+    });
+
+    it('resolves to undefined in local mode', async () => {
+      const backend = makeRespondingSpawnBackend('local');
+      await startAndDrive(beaconConfig('local'), backend, {
+        conversationId: 'dm:@me:server',
+        text: 'hello',
+      });
+      expect(spawnedBeacon(backend)).toEqual({ targetBeaconId: undefined });
     });
   });
 });

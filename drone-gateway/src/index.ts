@@ -87,7 +87,9 @@ export function createSpawnBackend(config: GatewayConfig): SpawnBackend {
       );
       return new LocalSpawnBackend(config.agentPath);
     case 'coordinator':
-      logger.info('Using coordinator spawn backend');
+      logger.info(
+        `Using coordinator spawn backend (default beacon: ${config.targetBeaconId ?? '(none)'})`
+      );
       return new CoordinatorSpawnBackend(
         config.coordinatorUrl,
         config.coordinatorToken
