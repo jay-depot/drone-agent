@@ -340,11 +340,19 @@ Personal control plane for YOUR swarm across machines.
 
 #### ✅ 4.3 Persona Assignment Control Surface — Complete
 
-#### 🚧 4.4 Swarm Console Control Surface — In progress (plan ready)
+#### ✅ 4.4 Swarm Console Control Surface — Complete
 
-Locked design (2026-09-26, plan `plan-swarm-console-control-surface`): a gateway-side `swarm-console` control surface that parses dot-notation `swarm.<ns>.<cmd>` commands and maps each onto an existing coordinator REST endpoint. Direct REST, no LLM/agent. Optional per-conversation `allowedSenders` gate enforced by the engine. Engine-level surface registry extracted (surface types become registered factories). v1 command set: `swarm.help`, `swarm.broadcast`, `swarm.persona.{list,create,update,delete}`, `swarm.skill.{list,create,update,delete}`, `swarm.session.{list,get}`, `swarm.beacon.{list,status,spawn}`, `swarm.agent.{status,terminate,inject,persona}`.
+Implemented 2026-09-26 (plan `plan-swarm-console-control-surface`, commit `5fdc520b`, ADR 003): a gateway-side `swarm-console` control surface that parses dot-notation `swarm.<ns>.<cmd>` commands and maps each onto an existing coordinator REST endpoint. Direct REST, no LLM/agent. Optional per-conversation `allowedSenders` gate enforced by the engine. Engine-level surface registry extracted — surface types are now registered factories (`persona-assignment`, `discard`, `swarm-console`), replacing the hardcoded `switch`. v1 command set: `swarm.help`, `swarm.broadcast`, `swarm.persona.{list,create,update,delete}`, `swarm.skill.{list,create,update,delete}`, `swarm.session.{list,get}`, `swarm.beacon.{list,status,spawn}`, `swarm.agent.{status,terminate,inject,persona}`. Live-swarm manual acceptance not yet performed (no coordinator/Matrix adapter available at implementation time).
 
 Deferred (need new coordinator endpoints; tracked separately, see `followup-swarm-console-unbacked-commands`): `swarm.agent.focus`, `swarm.agent.interrupt`, `swarm.beacon.policy`, `swarm.session.search`, `swarm.session.delete`.
+
+#### ⏳ 4.5 Mention Router Control Surface — Not started
+
+#### ⏳ 4.6 Telegram Service Adapter — Not started
+
+#### ⏳ 4.7 Slack Service Adapter — Not started
+
+**Current gateway inventory (2026-09-26):** 3 control surfaces implemented (`persona-assignment`, `discard`, `swarm-console`), 1 service adapter implemented (Matrix). `telegram`, `slack`, and `mention-router` appear only in type comments, the glossary, and ADRs — never in executable code.
 
 #### ⏳ 4.5 Mention Router Control Surface — Not started
 
