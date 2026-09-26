@@ -52,10 +52,21 @@ export interface ResolvedServiceAdapter {
   type: string;
   config: Record<string, unknown>;
   /**
-   * Map of conversationId → ordered list of control surface specs.
+   * Map of conversationId → resolved conversation.
    * Key "*" is the per-adapter wildcard catch-all, evaluated last.
    */
-  conversations: Map<string, ControlSurfaceSpec[]>;
+  conversations: Map<string, ResolvedConversation>;
+}
+
+/**
+ * A conversation's control surface specs plus its optional sender allowlist.
+ * When `allowedSenders` is set, the engine only dispatches to this
+ * conversation for senders in the list; other senders fall through to the
+ * wildcard. Unset means every sender is allowed.
+ */
+export interface ResolvedConversation {
+  allowedSenders?: string[];
+  surfaces: ControlSurfaceSpec[];
 }
 
 // === Config Types ===

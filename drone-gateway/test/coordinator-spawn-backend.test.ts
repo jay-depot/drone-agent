@@ -41,7 +41,8 @@ describe('CoordinatorSpawnBackend', () => {
 
       const session = await backend.spawnSession('conv-1', 'coder');
 
-      expect(mockSpawnAgent).toHaveBeenCalledWith('beacon-1', {
+      expect(mockSpawnAgent).toHaveBeenCalledWith({
+        targetBeaconId: 'beacon-1',
         personaId: 'coder',
         spawnId: expect.any(String),
       });

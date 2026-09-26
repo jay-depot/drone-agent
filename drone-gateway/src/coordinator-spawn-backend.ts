@@ -35,7 +35,6 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
     conversationId: string,
     personaId: string
   ): Promise<SpawnSession> {
-    // Return existing session if one exists
     const existing = this.sessions.get(conversationId);
     if (existing) {
       return existing;
@@ -46,13 +45,11 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
     );
 
     const spawnId = randomUUID();
-    const result = await this.coordinatorClient.spawnAgent(
-      this.targetBeaconId,
-      {
-        personaId,
-        spawnId,
-      }
-    );
+    const result = await this.coordinatorClient.spawnAgent({
+      targetBeaconId: this.targetBeaconId,
+      personaId,
+      spawnId,
+    });
 
     const spawnResult = result as {
       spawnId: string;
@@ -72,17 +69,10 @@ export class CoordinatorSpawnBackend implements SpawnBackend {
   }
 
   async sendMessage(session: SpawnSession, message: string): Promise<string> {
-    // For coordinator mode, we send a message to the agent via the
-    // coordinator's message relay. The agent processes it and responds.
-    // This is a simplified implementation — full persistent session
-    // support via the coordinator requires the coordinator's messaging
-    // system to be fully operational.
     logger.info(
       `Sending message to agent ${session.processId} via coordinator`
     );
 
-    // Send the message to the agent via the coordinator's message API
-    // The coordinator routes it to the appropriate beacon/agent
     const response = await this.coordinatorClient.sendMessage(
       session.processId,
       message

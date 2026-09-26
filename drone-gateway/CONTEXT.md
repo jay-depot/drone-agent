@@ -33,8 +33,16 @@ A control surface that routes all messages in a conversation to a specific perso
 _Avoid_: Persona router, persona mapper, persona binding
 
 **Swarm Console**:
-A control surface that exposes coordinator commands (spawn, status, terminate, list beacons, etc.) as chat-accessible commands. Users type commands like `!spawn`, `!status`, `!beacons`, `!terminate` to manage the swarm from chat.
+A control surface that exposes coordinator commands as chat-accessible dot-notation commands of the form `swarm.<namespace>.<command> [args] [--flags]`. It parses the line itself and calls coordinator REST endpoints directly (no LLM, no agent), and requires the `coordinator` spawn backend. v1 commands: `swarm.help`, `swarm.broadcast`, `swarm.persona.{list,create,update,delete}`, `swarm.skill.{list,create,update,delete}`, `swarm.session.{list,get}`, `swarm.beacon.{list,status,spawn}`, `swarm.agent.{status,terminate,inject,persona}`. A command that needs a coordinator endpoint that does not yet exist (`swarm.agent.focus`, `swarm.agent.interrupt`, `swarm.beacon.policy`, `swarm.session.search`, `swarm.session.delete`) is not in the grammar.
 _Avoid_: Admin console, swarm shell, command surface
+
+**Surface Registry**:
+The engine's lookup table from a control surface `type` to the factory that builds per-conversation surface instances. Factories receive `(spec, conversationId, ctx)` where `ctx` is a `SurfaceContext` (`spawnBackend` + optional `swarm` API). Replaced the earlier hardcoded `switch` in the engine.
+_Avoid_: Surface table, factory map
+
+**Allowed Senders**:
+An optional per-conversation allowlist (`allowedSenders: string[]`) enforced by the engine at dispatch time. When set, only listed `senderId`s match the conversation; other senders fall through to the wildcard. Unset means every sender is allowed. Authorization lives at the conversation level, never inside a surface.
+_Avoid_: ACL, permission list, access list
 
 **Mention Router**:
 A control surface that watches for `!persona` mentions in a conversation and routes those messages to the specified persona. Falls through (unhandled) if no mention is detected, allowing other control surfaces to process the message.
@@ -72,8 +80,12 @@ _Avoid_: Coordinator API, coordinator proxy, coordinator connector
       conversations/
         <conv-id>.json              # One file per conversation
           conversationId: string     # Canonical ID (not derived from filename)
+          allowedSenders?: string[]  # Optional: only these senderIds match this
+                                     # conversation; others fall through to the
+                                     # wildcard. Unset = every sender allowed.
           controlSurfaces: [
             { type: "persona-assignment", personaId: "..." },
+            { type: "swarm-console" },
             { type: "discard" }
           ]
         _default_.json              # Wildcard catch-all (convId = "*")

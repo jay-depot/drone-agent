@@ -5,6 +5,7 @@ import { logger } from './logger.js';
 import { GatewayEngine } from './engine.js';
 import { LocalSpawnBackend } from './local-spawn-backend.js';
 import { CoordinatorSpawnBackend } from './coordinator-spawn-backend.js';
+import { CoordinatorClient } from './coordinator-client.js';
 import { loadGatewayConfig } from './config/load.js';
 import { cleanupAdapter } from './cleanup.js';
 import type { GatewayConfig, SpawnBackendType } from './types.js';
@@ -119,7 +120,11 @@ export async function main(): Promise<void> {
   const config = await loadConfig(cliConfig.configPath);
 
   const spawnBackend = createSpawnBackend(config);
-  const engine = new GatewayEngine(config, spawnBackend);
+  const swarm =
+    config.spawnBackend === 'coordinator'
+      ? new CoordinatorClient(config.coordinatorUrl, config.coordinatorToken)
+      : undefined;
+  const engine = new GatewayEngine(config, spawnBackend, swarm);
 
   const shutdown = async () => {
     logger.info('Shutting down...');

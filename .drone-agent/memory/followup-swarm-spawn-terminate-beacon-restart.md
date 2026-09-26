@@ -22,9 +22,10 @@ updated: 2026-09-26T18:33:21.533Z
 
 coordinator `DELETE /api/spawn/:beaconId/:spawnId` → reverse-channel `terminateSpawn` → beacon `handleTerminateSpawn(spawnId)` → `spawner.terminateAgent(spawnId)` → `sharedTerminateAgent` → `activeSpawns.get(spawnId).process.kill('SIGTERM')`, then `SIGKILL` after 5s.
 
-If the beacon process has restarted since the spawn, `activeSpawns` is empty, `terminateAgent` returns false, and the beacon replies **400**. The spawn *record* still exists with status `running`, but the process can no longer be killed through this path — and nothing reconciles it.
+If the beacon process has restarted since the spawn, `activeSpawns` is empty, `terminateAgent` returns false, and the beacon replies **400**. The spawn _record_ still exists with status `running`, but the process can no longer be killed through this path — and nothing reconciles it.
 
 Evidence:
+
 - `drone-swarm-common/src/spawner.ts:231-262` — `sharedTerminateAgent` reads the in-memory `activeSpawns` map.
 - `drone-beacon/src/routes/spawn-handlers.ts:123-146` — `handleTerminateSpawn`, 400 guard unless status is `running`/`spawning`.
 - `drone-beacon/src/db/init.ts:74-84` — `spawns` table has an `agent_id` column but **no pid**; the spawn object carries `id, agentId, personaId, task, configJson, status, error, createdAt, startedAt, terminatedAt, exitCode`.

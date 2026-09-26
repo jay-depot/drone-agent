@@ -7,6 +7,7 @@ import { validateConversationId } from './files.js';
 import type {
   GatewayConfig,
   ResolvedServiceAdapter,
+  ResolvedConversation,
   ControlSurfaceSpec,
   SpawnBackendType,
 } from '../types.js';
@@ -143,7 +144,7 @@ async function loadAdapter(
   const { type: _type, ...restConfig } = adapterData;
 
   // Load conversations
-  const conversations = new Map<string, ControlSurfaceSpec[]>();
+  const conversations = new Map<string, ResolvedConversation>();
   const convDir = path.join(adapterDir, 'conversations');
 
   try {
@@ -222,7 +223,10 @@ async function loadAdapter(
     }
 
     if (specs.length > 0) {
-      conversations.set(convId, specs);
+      conversations.set(convId, {
+        allowedSenders: parseAllowedSenders(convData, adapterId, file),
+        surfaces: specs,
+      });
     }
   }
 
@@ -232,4 +236,30 @@ async function loadAdapter(
     config: restConfig as Record<string, unknown>,
     conversations,
   };
+}
+
+/**
+ * Reads the optional `allowedSenders` field from a conversation file. It must
+ * be an array of strings; anything else is warned about and ignored (so the
+ * conversation falls back to allowing every sender).
+ */
+function parseAllowedSenders(
+  convData: Record<string, unknown>,
+  adapterId: string,
+  file: string
+): string[] | undefined {
+  const raw = convData.allowedSenders;
+  if (raw === undefined) return undefined;
+  if (
+    !Array.isArray(raw) ||
+    !raw.every(entry => typeof entry === 'string') ||
+    raw.length === 0
+  ) {
+    logger.warn(
+      { adapterId, file },
+      `Conversation file "${file}" has an invalid allowedSenders field (expected a non-empty array of strings); ignoring it`
+    );
+    return undefined;
+  }
+  return raw as string[];
 }
