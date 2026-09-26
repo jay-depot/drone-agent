@@ -405,3 +405,42 @@ Depends on: Step 8. Run the full validation criteria below and report results.
 
 - `followup-swarm-console-unbacked-commands` — coordinator endpoints for `focus`, `interrupt`, `beacon.policy`, `session.search`, `session.delete`.
 - `followup-swarm-spawn-terminate-beacon-restart` — persistent spawn identity / startup reconciliation so termination survives a beacon restart.
+
+---
+
+## COMPLETED — 2026-09-26 (branch `feat/gateway-swarm-console`)
+
+Executed all 9 steps. Commits: `3444c81e` (memory prep, prior session), `5fdc520b` (feature).
+
+### What shipped
+
+- **Console** (`drone-gateway/src/console/`): `swarm-api.ts` (`SwarmApi` abstraction), `types.ts`, `tokenize.ts` (shell-like tokenizer), `registry.ts`, `parse.ts`, `format.ts` (pure formatters), `commands.ts` (19 commands + `swarm.help`). Direct REST, no LLM/agent.
+- **Surfaces** (`drone-gateway/src/surfaces/`): `types.ts` (`SurfaceContext`/`SurfaceFactory`), `registry.ts` (`SurfaceRegistry`), `builtins.ts`, `persona-assignment.ts`, `discard.ts`, `swarm-console.ts`. The engine's hardcoded `switch` is gone.
+- **Engine**: registry-backed dispatch; conversation-level `allowedSenders` gate (engine-enforced, `senderId`-only, falls through to wildcard).
+- **Config**: `ResolvedConversation` (`{ allowedSenders?, surfaces }`); `parseAllowedSenders` validates a non-empty string array, warns+ignores otherwise.
+- **Client**: `CoordinatorClient implements SwarmApi`; added `listSessions`, `getSession`, `sendSessionMessage`, `setSessionPersona`, `broadcast`, persona/skill CRUD. `spawnAgent` moved to an object arg (with optional `spawnId` to preserve `CoordinatorSpawnBackend` idempotency).
+- **Docs**: `docs/adr/003-surface-registry-and-swarm-console.md`; `CONTEXT.md` glossary (Swarm Console rewritten, Surface Registry + Allowed Senders added) and config layout.
+
+### Deviations from the written plan
+1. `SwarmApi.spawnAgent` gained an optional `spawnId` (the plan's snippet omitted it; `CoordinatorSpawnBackend` needs it). Superset — no regression.
+2. `--json` was added to the `ParsedCommand`/`ConsoleRunInput` surface (implied by decision 6; not in the Step 2 snippet).
+3. Empty `allowedSenders: []` is rejected at load (warn + ignore) rather than silently denying every sender.
+
+### Review round (Step 8) — issues found and fixed
+- Blocker: `test/surface-registry.test.ts` asserted 2 surface types after `swarm-console` was registered → updated to 3.
+- Blocker: unused `ResolvedConversation` import in `engine.ts` → removed.
+- Dead code: `CoordinatorClient.listAgents`/`getSpawn` had no callers → removed (+ their tests).
+- Fluff comments in `coordinator-spawn-backend.ts` → removed.
+- Terminate resolution now skips spawns with a missing id (no `DELETE …//`).
+- `swarm-console.ts` unknown-command branch de-branched (`parseCommand` cannot return null once `startsWith('swarm.')` holds).
+- Prettier reformat pass (6 files).
+
+### Validation results (all pass)
+- LSP clean; `pnpm lint` exit 0; `pnpm -r run build` exit 0; `pnpm test` → **238 files passed / 3 skipped; 3328 tests passed / 14 skipped / 0 failed**.
+- Node smoke test on the built `dist`: all commands parse; `--task "fix the bug"` and `--limit/--offset` group correctly; `swarm.agent.focus` and non-`swarm.` lines are correctly unknown; 19 commands registered.
+- Manual live-swarm acceptance (criterion 6) was NOT run — no live coordinator/Matrix adapter was available in this session.
+
+### Not done / follow-ups
+- `followup-swarm-console-unbacked-commands` — 5 commands need new coordinator endpoints.
+- `followup-swarm-spawn-terminate-beacon-restart` — spawn termination is lost across a beacon restart.
+- Pre-existing defects surfaced (NOT introduced, NOT fixed here): `CoordinatorClient.sendMessage` posts `{toAgentId, body}` but the coordinator relay route requires `fromBeaconId`, `fromAgentId`, `toAgentId`, `body` (so the relay path always 400s); `CoordinatorSpawnBackend.terminateSession` passes `agentId` where `spawnId` is required and defaults `targetBeaconId` to the literal `'default'`. The console's `swarm.agent.terminate` does this correctly, making the inconsistency visible.
