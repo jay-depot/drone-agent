@@ -1,8 +1,9 @@
 ---
 key: plan-swarm-identity-status-fragments
 tags: []
+status: completed
 created: 2026-09-26T21:15:01.143Z
-updated: 2026-09-26T21:15:01.143Z
+updated: 2026-09-26T21:29:21.000Z
 ---
 
 # Plan: Swarm Status + Swarm Identity prompt fragments (with coordinator-UI Identity page)
@@ -521,3 +522,41 @@ Walk the criteria below in order; do not declare done until every item passes.
 8. **Budget policy**: writing 5 broadcast fragments does not block saving `swarm-identity`, and saving `swarm-identity` does not consume a user broadcast slot.
 9. **No regressions**: existing fragment behavior (targeted fragments, TTL sweep, coordinator mirror, `fragmentSync`/`fragment` handling) is unchanged; the beacon's `POST /fragments` and `DELETE /fragments/:id` are behaviorally identical to before (aside from reserved-id handling).
 10. **Optional (discretionary)**: `pnpm docker:smoke-test`, and a beacon↔coordinator integration test covering the write → nudge → mirror → agent-prompt path.
+
+---
+
+## Completion Summary (2026-09-26)
+
+**Status: COMPLETED.** Shipped on branch `feat/coordinator-status-prompts` as commit `7e8c9d4a` (44 files, +2177/-174).
+
+All 8 steps executed; all 10 validation criteria pass.
+
+### What was built
+
+**Step 1 — shared limits module.** Moved `drone-beacon/src/fragments-limits.ts` → `drone-swarm-common/src/fragments-limits.ts` (exported from the barrel). Added `SWARM_IDENTITY_FRAGMENT_ID`, `RESERVED_FRAGMENT_IDS`, `isReservedFragmentId()`, `countNonReserved()`; `validateFragmentUpsert` gained a `scope` ctx field and reserved-id handling (broadcast-only, cap-bypassing, forced `expiresAt: null`). Beacon's copy deleted; `fragments-sweep.ts` now imports `TTL_SWEEP_INTERVAL_MS` from the shared module. Tests: `drone-swarm-common/test/fragments-limits.test.ts` (11).
+
+**Step 2 — beacon self-description.** New leaf module `drone-beacon/src/beacon-info.ts` (`BeaconInfo` type + get/set; placed in a leaf because `ws-server` cannot import `routes/context` without a cycle). New `GET /info` route (`routes/info.ts`, registered in `routes/index.ts`); `setBeaconInfo(...)` called in `index.ts` after `setBeaconAddress`; WS `connected` payload now carries `info`. Re-exported from `routes/index.ts`. Tests: `drone-beacon/test/info.test.ts` (3, including a real-WS handshake assertion).
+
+**Step 3 — beacon nudge + reserved budget.** Added `fragmentsChanged` case to the reverse-channel switch in `coordinator-ws.ts` (maps to `triggerCoordinatorSync()`). Beacon `routes/fragments.ts` POST now passes `scope: 'local'` and counts via `countNonReserved`. Tests: `coordinator-ws.test.ts` (+1), `routes.test.ts` (+1 reserved-at-cap case).
+
+**Step 4 — coordinator authoring.** `beacon-ws.ts`: `notifyFragmentsChanged()` → `broadcastBeaconCommand('fragmentsChanged')`. `db/fragments.ts`: `upsertFragment` now preserves `createdAt` on update, accepts an omitted `createdAt`/`scope` (always writes `scope: 'coordinator'`). `routes/fragments.ts`: added `PUT /fragments/:id` (validate → upsert → nudge) and `DELETE /fragments/:id` (mirrors beacon semantics: 404 absent, 400 ambiguous, `?target=` disambiguation); removed the "Read-only in v1" scaffolding comment. Tests: `test/routes/fragments.test.ts` rewritten (11).
+
+**Step 5 — agent side.** New `swarm-info.ts` (`SwarmInfoStore` cache + `refreshSwarmInfo` best-effort fetch + `startSwarmInfoRefresh` 60s unref'd interval; failed fetches keep last-known, non-array responses never regress the roster). New `status-fragment.ts` (`# Swarm Status`) and `identity-fragment.ts` (`# Swarm Identity`). `fragment-store.ts`: `renderHeader`/`renderFooter`/`renderAll` exclude reserved ids; added `renderIdentity()`. `context.ts`: `SwarmContext.swarmInfo` + 5th `localAddress` ctor arg. `websocket.ts`: caches pushed info in the `connected` branch + refreshes on `onopen`. `hooks.ts`: refreshes in `onPluginsLoaded`. `heartbeat.ts`: `registerShutdown` clears the new interval. `index.ts`: registers `status` → `identity` → `fragments.header` → `fragments.footer`. Tests: `swarm-info.test.ts` (5), `status-fragment.test.ts` (4), `websocket-info.test.ts` (2), plus `fragments.test.ts` extensions (+3 store cases, +1 order test).
+
+**Step 6 — UI.** `lib/types.ts`: `SwarmFragment`. New `lib/fragments.ts` (mirrored constants). New `pages/identity.tsx` (load `GET /api/fragments?target=broadcast`, prefill, Save via `PUT`, Clear via `DELETE` + confirm dialog, 16 KB byte counter, Save disabled when unchanged/empty/over). `App.tsx`: nav entry + route. Tests: `pages/identity.test.tsx` (6).
+
+**Step 7 — docs.** `docs/agents/swarm-plugin.md` gained agent-rendered-fragments table, `# Swarm Status` and `# Swarm Identity` sections, updated limits table and coordinator-scope/CLI notes. `AGENTS.md` swarm-plugin bullet extended.
+
+### Validation results
+- `pnpm -r run build` — 8/8 packages pass.
+- `pnpm lint:eslint` — clean (one unused-import error found and fixed).
+- `pnpm lint:prettier` — applied.
+- LSP — clean across all touched files.
+- `pnpm test` (authoritative root suite, matching CI) — 3249 passed, 14 skipped, 0 failed.
+- `drone-coordinator-ui` `pnpm test` — 323 passed.
+
+### Notes / deviations
+- **Pre-existing failure discovered, not caused by this work:** `drone-coordinator/test/wiki-routes.test.ts` → "GET /api/wiki/graph" fails only under the **package-local** vitest invocation (`pnpm --filter drone-coordinator exec vitest`), because that invocation resolves `drone-swarm-common` to `dist/` while the test imports `src/` (two module instances). Verified pre-existing by stashing all changes at HEAD (still fails) and by passing cleanly from the root config. CI and `pnpm test` use the root config with source aliases. Worth a follow-up insight.
+- The beacon-info state lives in a **leaf module** (`beacon-info.ts`), not `routes/context.ts` as the plan sketched, to avoid a `ws-server` ↔ `routes/context` import cycle.
+- `drone-coordinator`'s `upsertFragment` input type uses `Omit<..., 'scope'>` with an optional `scope`, matching the `replaceCoordinatorFragments` precedent.
+- `file__apply_diff` fuzzy matching scrambled two files mid-implementation (`App.tsx`, `swarm-plugin.md`) by duplicating content at EOF; both were detected via build failures / grep and fully rewritten. This is a real tool-reliability data point (see insight).
