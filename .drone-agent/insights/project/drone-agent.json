@@ -622,5 +622,13 @@
   {
     "timestamp": "2026-09-26T20:18:30.762Z",
     "insight": "Tooling friction: `lsp__get_diagnostics` returned stale results after `file__write`/`file__apply_diff` in this session — it reported the OLD file contents (e.g. still showing the 3-arg `CoordinatorSpawnBackend(...)` after the file on disk had the 2-arg form, and an `await`-outside-async error after the test was already `async`). Verify with `file__read`/`exec` (sed) when a diagnostic contradicts what you just wrote; the authoritative check is `pnpm -r run build` (tsc -b). Do not chase phantom errors from a stale diagnostic payload."
+  },
+  {
+    "timestamp": "2026-09-26T20:27:38.812Z",
+    "insight": "Project-wiki ingest discipline (reconfirms the established workflow): the drone-agent project wiki is a SEPARATE git repo at `/home/unleet/Obsidian/drone-agent-project`, tracking the last-ingested commit in `meta.json.last_commit`. For the ADR 224 ingest the checkpoint was `0406f508` and HEAD `3926708f`, so `git diff 0406f508..HEAD --stat` yielded the exact 4-commit range (feature `c4632e29`, memory `170bf620`/`3b4e45e4`, doc fix `3926708f`). Two repos are committed independently: wiki first (commit `6904e91`), then the drone-agent repo. Always `file__read` `meta.json` first — it, not the project's HEAD, defines the ingest range."
+  },
+  {
+    "timestamp": "2026-09-26T20:27:38.815Z",
+    "insight": "Follow-up to the earlier `pnpm -r run lint` insight: AGENTS.md has now been corrected on branch `feat/gateway-swarm-console` (commit `3926708f`, \"fix: remove AGENTS.md misinformation\") — the Standards block reads `pnpm run lint` and `pnpm run test` (root scripts) instead of `pnpm -r run lint`/`pnpm -r run test`. The underlying fact is unchanged: no workspace package defines a `lint` script, so the recursive form exits `ERR_PNPM_RECURSIVE_RUN_NO_SCRIPT`; root `pnpm lint` is the real gate. The wiki's ADR 223 page already records this gotcha."
   }
 ]
