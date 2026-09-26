@@ -22,6 +22,9 @@ let coordinatorClient: CoordinatorClient | undefined;
 let beaconHost = 'localhost';
 let beaconPort = 3457;
 
+export { setBeaconInfo, getBeaconInfo } from '../beacon-info.js';
+export type { BeaconInfo } from '../beacon-info.js';
+
 export function setCoordinatorClient(client: CoordinatorClient | undefined) {
   coordinatorClient = client;
   // Drop the cached coordinator fetch so the next proxied call re-captures

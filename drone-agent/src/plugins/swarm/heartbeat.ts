@@ -33,12 +33,14 @@ export function startHeartbeat(ctx: SwarmContext): NodeJS.Timeout {
 export function registerShutdown(
   ctx: SwarmContext,
   heartbeatInterval: NodeJS.Timeout,
+  swarmInfoInterval: NodeJS.Timeout,
   beaconConfigInjector: BeaconConfigInjector | null,
   configCap: DroneConfigCapability | undefined
 ): void {
   ctx.registration.hooks.onShutdown(async () => {
     ctx.shuttingDown = true;
     clearInterval(heartbeatInterval);
+    clearInterval(swarmInfoInterval);
     if (ctx.ws) ctx.ws.close();
     await flushEventBuffer(ctx);
     if (beaconConfigInjector && configCap) {

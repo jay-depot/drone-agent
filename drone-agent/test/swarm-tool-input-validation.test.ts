@@ -18,7 +18,8 @@ function wikiToolMap(
     'http://beacon.test',
     's1',
     registration,
-    'ws://beacon.test'
+    'ws://beacon.test',
+    'localhost:3457'
   )
 ) {
   return new Map(createWikiTools(ctx).map(t => [t.name, t]));
@@ -134,7 +135,8 @@ describe('swarm tool input validation (pre-network guards)', () => {
       'http://beacon.test',
       's1',
       registration,
-      'ws://beacon.test'
+      'ws://beacon.test',
+      'localhost:3457'
     );
     const tool = createSwarmMessageTool(ctx);
 

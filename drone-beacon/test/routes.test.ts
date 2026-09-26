@@ -1348,6 +1348,32 @@ describe('Fragment Routes', () => {
     expect(JSON.parse(sixth.body).code).toBe('limit');
   });
 
+  it('accepts a reserved broadcast fragment even at the broadcast cap', async () => {
+    for (let i = 0; i < 5; i++) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/fragments',
+        payload: { id: `bc-${i}`, target: 'broadcast', content: 'c' },
+      });
+      expect(res.statusCode).toBe(200);
+    }
+    const reserved = await app.inject({
+      method: 'POST',
+      url: '/fragments',
+      payload: {
+        id: 'swarm-identity',
+        target: 'broadcast',
+        content: 'We are the test swarm.',
+      },
+    });
+    expect(reserved.statusCode).toBe(200);
+    const body = JSON.parse(reserved.body);
+    expect(body.fragment.expiresAt).toBeNull();
+
+    const list = await app.inject({ method: 'GET', url: '/fragments' });
+    expect(JSON.parse(list.body).fragments).toHaveLength(6);
+  });
+
   it('enforces the per-agent count cap', async () => {
     for (let i = 0; i < 50; i++) {
       const res = await app.inject({

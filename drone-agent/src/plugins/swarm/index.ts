@@ -40,6 +40,9 @@ import { ConversationWindowTracker } from './memory-window.js';
 import { createSwarmMemoryFragment } from './memory-fragment.js';
 import { createSwarmMemoryCommand } from './slash-swarm-memory.js';
 import { startHeartbeat, registerShutdown } from './heartbeat.js';
+import { startSwarmInfoRefresh } from './swarm-info.js';
+import { createSwarmStatusFragment } from './status-fragment.js';
+import { createSwarmIdentityFragment } from './identity-fragment.js';
 
 export type { SwarmConfig } from './config.js';
 
@@ -93,6 +96,7 @@ export function createSwarmPlugin(
       const baseUrl = `${protocol}://${beaconHost}:${beaconPort}`;
       const wsProtocol = beaconUseHttps ? 'wss' : 'ws';
       const wsUrl = `${wsProtocol}://${beaconHost}:${beaconPort}/ws?agentId=${sessionId}`;
+      const localAddress = `${beaconHost}:${beaconPort}`;
 
       registration.logger.info(
         `Connecting to beacon at ${baseUrl} (session: ${sessionId})`
@@ -128,11 +132,23 @@ export function createSwarmPlugin(
       }
 
       // Create shared context
-      const ctx = createSwarmContext(baseUrl, sessionId, registration, wsUrl);
+      const ctx = createSwarmContext(
+        baseUrl,
+        sessionId,
+        registration,
+        wsUrl,
+        localAddress
+      );
 
       // Register prompt fragments unconditionally at registration time so
       // render output is stable whether or not the beacon is reachable;
       // render() reads the in-memory store only (no network).
+      registration.registerPromptFragment(
+        createSwarmStatusFragment(ctx.swarmInfo)
+      );
+      registration.registerPromptFragment(
+        createSwarmIdentityFragment(ctx.fragmentStore)
+      );
       registration.registerPromptFragment({
         key: 'fragments.header',
         phase: 'header',
@@ -304,7 +320,18 @@ export function createSwarmPlugin(
 
       // ── Heartbeat ───────────────────────────────────────────────────────
       const heartbeatInterval = startHeartbeat(ctx);
-      registerShutdown(ctx, heartbeatInterval, beaconConfigInjector, configCap);
+      const swarmInfoInterval = startSwarmInfoRefresh(
+        ctx.swarmInfo,
+        baseUrl,
+        registration.logger
+      );
+      registerShutdown(
+        ctx,
+        heartbeatInterval,
+        swarmInfoInterval,
+        beaconConfigInjector,
+        configCap
+      );
     },
   };
 }

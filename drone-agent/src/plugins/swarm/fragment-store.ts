@@ -2,13 +2,14 @@
  * Pure, in-memory fragment store for the swarm plugin.
  *
  * Holds the current fragment set delivered by the beacon (targeted rows +
- * broadcasts, merged and TTL-filtered server-side) and renders the two
- * prompt seams. No network I/O — the beacon pushes deltas (`fragment`)
+ * broadcasts, merged and TTL-filtered server-side) and renders the prompt
+ * seams. No network I/O — the beacon pushes deltas (`fragment`)
  * and full-state resyncs (`fragmentSync`) over WS; render() only reads
  * this Map so prompt rendering never blocks on the swarm.
  */
 
 import type { DroneSwarmFragment } from 'drone-core';
+import { isReservedFragmentId } from 'drone-swarm-common';
 
 type StoredFragment = Pick<
   DroneSwarmFragment,
@@ -25,6 +26,7 @@ export interface SwarmFragmentStore {
   replaceAll(fragments: DroneSwarmFragment[]): FragmentReplaceResult;
   renderHeader(): string | false;
   renderFooter(): string | false;
+  renderIdentity(): string | false;
   size(): number;
 }
 
@@ -55,12 +57,12 @@ function renderAll(map: Map<string, StoredFragment>): {
     header:
       renderBucket(
         'Swarm Fragments',
-        values.filter(f => f.phase === 'header')
+        values.filter(f => f.phase === 'header' && !isReservedFragmentId(f.id))
       ) || '',
     footer:
       renderBucket(
         'Swarm Directives',
-        values.filter(f => f.phase === 'footer')
+        values.filter(f => f.phase === 'footer' && !isReservedFragmentId(f.id))
       ) || '',
   };
 }
@@ -114,15 +116,30 @@ export function createSwarmFragmentStore(): SwarmFragmentStore {
     renderHeader() {
       return renderBucket(
         'Swarm Fragments',
-        Array.from(fragments.values()).filter(f => f.phase === 'header')
+        Array.from(fragments.values()).filter(
+          f => f.phase === 'header' && !isReservedFragmentId(f.id)
+        )
       );
     },
 
     renderFooter() {
       return renderBucket(
         'Swarm Directives',
-        Array.from(fragments.values()).filter(f => f.phase === 'footer')
+        Array.from(fragments.values()).filter(
+          f => f.phase === 'footer' && !isReservedFragmentId(f.id)
+        )
       );
+    },
+
+    renderIdentity() {
+      const reserved = Array.from(fragments.values()).filter(f =>
+        isReservedFragmentId(f.id)
+      );
+      if (reserved.length === 0) {
+        return false;
+      }
+      const sorted = [...reserved].sort((a, b) => a.id.localeCompare(b.id));
+      return `# Swarm Identity\n\n${sorted.map(f => f.content).join('\n\n')}`;
     },
 
     size() {

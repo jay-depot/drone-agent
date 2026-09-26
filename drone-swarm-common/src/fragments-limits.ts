@@ -7,8 +7,29 @@ export const MAX_FRAGMENT_CONTENT_BYTES = 16 * 1024;
 export const DEFAULT_TARGETED_TTL_MS = 24 * 60 * 60 * 1000;
 export const TTL_SWEEP_INTERVAL_MS = 60_000;
 
+/**
+ * Fragment ids owned by the swarm system rather than by users. Reserved rows
+ * have their own budget (they are excluded from the broadcast/targeted count
+ * caps), never expire, and may only target `broadcast`.
+ */
+export const SWARM_IDENTITY_FRAGMENT_ID = 'swarm-identity';
+export const RESERVED_FRAGMENT_IDS: readonly string[] = [
+  SWARM_IDENTITY_FRAGMENT_ID,
+];
+
+export function isReservedFragmentId(id: string): boolean {
+  return RESERVED_FRAGMENT_IDS.includes(id);
+}
+
+/** Count fragments excluding system-reserved ids (reserved rows have their own budget). */
+export function countNonReserved(fragments: Array<{ id: string }>): number {
+  return fragments.filter(f => !isReservedFragmentId(f.id)).length;
+}
+
 export const FRAGMENT_PHASES = ['header', 'footer'] as const;
 export type FragmentPhase = (typeof FRAGMENT_PHASES)[number];
+
+export type FragmentScope = 'local' | 'coordinator';
 
 export type FragmentUpsertInput = {
   id: string;
@@ -23,13 +44,20 @@ export type NormalizedFragmentUpsert = {
   target: string;
   content: string;
   phase: FragmentPhase;
-  scope: 'local';
+  scope: FragmentScope;
   expiresAt: number | null;
 };
 
 export type FragmentUpsertResult =
   | { ok: true; normalized: NormalizedFragmentUpsert }
   | { ok: false; error: string; code: 'validation' | 'limit' };
+
+export type FragmentUpsertContext = {
+  scope?: FragmentScope;
+  now?: number;
+  countBroadcasts: () => number;
+  countTargetedForAgent: (target: string) => number;
+};
 
 function isFiniteEpochMs(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
@@ -39,17 +67,14 @@ function isFiniteEpochMs(value: unknown): value is number {
  * Validate and normalize a fragment upsert request body. Applies TTL
  * stamping (targeted + no expiresAt => now + 24h; broadcast + no expiresAt
  * => never expires), phase defaulting, and the broadcast / per-agent count
- * caps.
+ * caps. Reserved ids are exempt from the caps and always non-expiring.
  */
 export function validateFragmentUpsert(
   body: unknown,
-  ctx: {
-    now?: number;
-    countBroadcasts: () => number;
-    countTargetedForAgent: (target: string) => number;
-  }
+  ctx: FragmentUpsertContext
 ): FragmentUpsertResult {
   const now = ctx.now ?? Date.now();
+  const scope = ctx.scope ?? 'local';
   const raw = (body ?? {}) as Partial<FragmentUpsertInput> & {
     phase?: unknown;
     expiresAt?: unknown;
@@ -106,6 +131,27 @@ export function validateFragmentUpsert(
     phase = raw.phase as FragmentPhase;
   }
 
+  if (isReservedFragmentId(raw.id)) {
+    if (raw.target !== BROADCAST_TARGET) {
+      return {
+        ok: false,
+        error: `Reserved fragment id "${raw.id}" may only target ${BROADCAST_TARGET}`,
+        code: 'validation',
+      };
+    }
+    return {
+      ok: true,
+      normalized: {
+        id: raw.id,
+        target: raw.target,
+        content: raw.content,
+        phase,
+        scope,
+        expiresAt: null,
+      },
+    };
+  }
+
   let expiresAt: number | null;
   if (raw.expiresAt === undefined || raw.expiresAt === null) {
     expiresAt =
@@ -148,7 +194,7 @@ export function validateFragmentUpsert(
       target: raw.target,
       content: raw.content,
       phase,
-      scope: 'local',
+      scope,
       expiresAt,
     },
   };

@@ -112,6 +112,17 @@ export interface CoordinatorConfigEntry {
   updatedAt: number;
 }
 
+export interface SwarmFragment {
+  id: string;
+  target: string;
+  content: string;
+  phase: 'header' | 'footer';
+  scope: 'local' | 'coordinator';
+  createdAt: number;
+  updatedAt: number;
+  expiresAt: number | null;
+}
+
 export interface StoredSecretEntry {
   name: string;
   maskedValue: string;
